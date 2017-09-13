@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/conn"
@@ -223,9 +224,12 @@ func TestPopulateShard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(item.Value()) == 0 {
-		t.Errorf("value for uid 1 predicate name not found\n")
-	}
+	require.NoError(t, item.Value(func(val []byte) error {
+		if len(val) == 0 {
+			return x.Errorf("value for uid 1 predicate name not found\n")
+		}
+		return nil
+	}))
 	deletePLs(t, "name", 0, 5, psLeader) // delete in leader, should be deleted in follower also
 	deletePLs(t, "name", 94, 5, psLeader)
 	deletePLs(t, "name", 47, 5, psLeader)
@@ -250,16 +254,22 @@ func TestPopulateShard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(item.Value()) != 0 {
-		t.Errorf("value for uid 1 predicate name shouldn't be present\n")
-	}
+	require.NoError(t, item.Value(func(val []byte) error {
+		if len(val) != 0 {
+			return x.Errorf("value for uid 1 predicate name shouldn't be present\n")
+		}
+		return nil
+	}))
 	err = psFollower.Get(x.DataKey("name", 110), &item)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(item.Value()) != 0 {
-		t.Errorf("value for uid 110 predicate name shouldn't be present\n")
-	}
+	require.NoError(t, item.Value(func(val []byte) error {
+		if len(val) != 0 {
+			return x.Errorf("value for uid 1 predicate name shouldn't be present\n")
+		}
+		return nil
+	}))
 
 	// We have delete and added new pl's
 	// Nothing is present for group2

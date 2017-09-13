@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/table"
+	bo "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -166,7 +166,7 @@ func (ld *loader) reduceStage() {
 	opt.ValueDir = opt.Dir
 	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
-	opt.MapTablesTo = table.MemoryMap
+	opt.TableLoadingMode = bo.MemoryMap
 	ld.kv, err = badger.NewKV(&opt)
 	x.Check(err)
 

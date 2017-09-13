@@ -170,15 +170,19 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	if err != nil {
 		x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, l.key)
 	}
-	val := item.Value()
-	x.BytesRead.Add(int64(len(val)))
-
 	l.plist = new(protos.PostingList)
-	if item.UserMeta() == bitUidPostings {
-		l.plist.Uids = val
-	} else if val != nil {
-		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
-	}
+	err = item.Value(func(val []byte) error {
+		x.BytesRead.Add(int64(len(val)))
+		if item.UserMeta() == bitUidPostings {
+			l.plist.Uids = make([]byte, len(val))
+			copy(l.plist.Uids, val)
+		} else if val != nil {
+			x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
+		}
+		return nil
+	})
+	x.Checkf(err, "While trying to get Value from badger for key: %v", key)
+
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 	return l
 }
@@ -746,7 +750,7 @@ func (l *List) LastCompactionTs() time.Time {
 }
 
 // Copies the val if it's uid only posting, be careful
-func UnmarshalWithCopy(val []byte, metadata byte, pl *protos.PostingList) {
+func UnmarshalOrCopy(val []byte, metadata byte, pl *protos.PostingList) {
 	if metadata == bitUidPostings {
 		buf := make([]byte, len(val))
 		copy(buf, val)
