@@ -77,6 +77,12 @@ func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
 		slc, err := r.ReadSlice('\n')
+		if err == bufio.ErrBufferFull {
+			// This should only happen infrequently.
+			var str string
+			str, err = r.ReadString('\n')
+			slc = []byte(str)
+		}
 		if err == io.EOF {
 			batch.Write(slc)
 			return batch, err
@@ -107,7 +113,7 @@ func (ld *loader) mapStage() {
 		x.Check(err)
 		defer f.Close()
 		if !strings.HasSuffix(rdfFile, ".gz") {
-			readers = append(readers, bufio.NewReaderSize(f, 32<<20))
+			readers = append(readers, bufio.NewReaderSize(f, 1<<20))
 		} else {
 			gzr, err := gzip.NewReader(f)
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
