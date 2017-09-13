@@ -21,6 +21,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/pkg/errors"
 )
 
 type mapper struct {
@@ -107,7 +108,7 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		if err == rdf.ErrEmpty {
 			return nil
 		}
-		return err
+		return errors.Wrapf(err, "while parsing line %q:", rdfLine)
 	}
 
 	sid := m.um.assignUID(nq.GetSubject())
