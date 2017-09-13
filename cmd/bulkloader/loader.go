@@ -114,7 +114,7 @@ func (ld *loader) mapStage() {
 		}
 	}
 	var lineBuf bytes.Buffer
-	const rdfBatchSize = 1000
+	const rdfBatchSize = 10000
 	batch := rdfBatch{rdfs: make([]string, 0, rdfBatchSize)}
 	for _, r := range readers {
 		for {
