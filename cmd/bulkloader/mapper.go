@@ -52,14 +52,16 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
 }
 
 func (m *mapper) run() {
-	for rdf := range m.rdfCh {
-		x.Check(m.parseRDF(rdf))
-		atomic.AddInt64(&m.prog.rdfCount, 1)
-		if m.sz >= m.opt.mapBufSize {
-			m.mu.Lock() // One write at a time.
-			go m.writeMapEntriesToFile(m.mapEntries)
-			m.mapEntries = nil
-			m.sz = 0
+	for rdfBatch := range m.rdfCh {
+		for _, rdf := range rdfBatch.rdfs {
+			x.Check(m.parseRDF(rdf))
+			atomic.AddInt64(&m.prog.rdfCount, 1)
+			if m.sz >= m.opt.mapBufSize {
+				m.mu.Lock() // One write at a time.
+				go m.writeMapEntriesToFile(m.mapEntries)
+				m.mapEntries = nil
+				m.sz = 0
+			}
 		}
 	}
 	if len(m.mapEntries) > 0 {

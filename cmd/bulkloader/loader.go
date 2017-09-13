@@ -32,12 +32,16 @@ type options struct {
 	skipExpandEdges bool
 }
 
+type rdfBatch struct {
+	rdfs []string
+}
+
 type state struct {
 	opt       options
 	prog      *progress
 	um        *uidMap
 	ss        *schemaStore
-	rdfCh     chan string
+	rdfCh     chan rdfBatch
 	mapFileId uint32 // Used atomically to name the output files of the mappers.
 	kv        *badger.KV
 }
@@ -58,7 +62,7 @@ func newLoader(opt options) *loader {
 		prog:  newProgress(),
 		um:    newUIDMap(),
 		ss:    newSchemaStore(initialSchema),
-		rdfCh: make(chan string, 10000),
+		rdfCh: make(chan rdfBatch, 1000),
 	}
 	ld := &loader{
 		state:   st,
@@ -110,6 +114,8 @@ func (ld *loader) mapStage() {
 		}
 	}
 	var lineBuf bytes.Buffer
+	const rdfBatchSize = 1000
+	batch := rdfBatch{rdfs: make([]string, 0, rdfBatchSize)}
 	for _, r := range readers {
 		for {
 			lineBuf.Reset()
@@ -119,9 +125,14 @@ func (ld *loader) mapStage() {
 				break
 			}
 			x.Check(err)
-			ld.rdfCh <- lineBuf.String()
+			batch.rdfs = append(batch.rdfs, lineBuf.String())
+			if len(batch.rdfs) >= rdfBatchSize {
+				ld.rdfCh <- batch
+				batch.rdfs = make([]string, 0, rdfBatchSize)
+			}
 		}
 	}
+	ld.rdfCh <- batch
 
 	close(ld.rdfCh)
 	mapperWg.Wait()
