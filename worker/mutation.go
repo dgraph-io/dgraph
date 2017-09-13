@@ -237,6 +237,9 @@ func hasEdges(attr string) bool {
 }
 
 func checkSchema(s *protos.SchemaUpdate) error {
+	if len(s.Predicate) == 0 {
+		return x.Errorf("No predicate specified in schema mutation")
+	}
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == protos.SchemaUpdate_INDEX {
 		// index on uid type

@@ -33,7 +33,7 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool)
 	// Raft index starts from 1
 	n.syncAllMarks(ctx, rv.Index-1)
 
-	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Attr %s index mismatch, rebuild %v",
+	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Predicate %s index mismatch, rebuild %v",
 		attr, rebuild)
 	// Remove index edges
 	// For delete we since mutations would have been applied, we needn't
@@ -56,7 +56,7 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	// Raft index starts from 1
 	n.syncAllMarks(ctx, rv.Index-1)
 
-	x.AssertTruef(schema.State().IsReversed(attr) == rebuild, "Attr %s reverse mismatch", attr)
+	x.AssertTruef(schema.State().IsReversed(attr) == rebuild, "Predicate %s reverse mismatch", attr)
 	posting.DeleteReverseEdges(ctx, attr)
 	if rebuild {
 		// Remove reverse edges
