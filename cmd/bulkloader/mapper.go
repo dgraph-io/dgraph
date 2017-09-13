@@ -21,6 +21,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/pkg/errors"
 )
 
 type mapper struct {
@@ -144,7 +145,7 @@ func (m *mapper) parseRDF(rdfLine string) error {
 func parseNQuad(line string) (gql.NQuad, error) {
 	nq, err := rdf.Parse(line)
 	if err != nil {
-		return gql.NQuad{}, err
+		return gql.NQuad{}, errors.Wrapf(err, "while parsing line %q:", line)
 	}
 	return gql.NQuad{NQuad: &nq}, nil
 }
