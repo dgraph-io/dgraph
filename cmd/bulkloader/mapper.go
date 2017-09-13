@@ -60,7 +60,6 @@ outerFor:
 	for {
 
 		var batchBuf *bytes.Buffer
-	innerFor:
 		for {
 			var ok bool
 			select {
@@ -68,7 +67,6 @@ outerFor:
 				if !ok {
 					break outerFor
 				}
-				break innerFor
 			default:
 				time.Sleep(3 * time.Second)
 			}
