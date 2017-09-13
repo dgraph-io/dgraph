@@ -10,7 +10,7 @@ import (
 type shard struct {
 	sync.Mutex
 	xidToUid map[string]uint64
-	lastUID  uint64
+	lastUsed uint64
 	lease    uint64
 }
 
@@ -43,10 +43,12 @@ func (m *uidMap) assignUID(str string) uint64 {
 	if ok {
 		return uid
 	}
-	if sh.lastUID == sh.lease {
-		sh.lease = atomic.AddUint64(&m.lease, 10000)
+	const leaseChunk = 1e5
+	if sh.lastUsed == sh.lease {
+		sh.lease = atomic.AddUint64(&m.lease, leaseChunk)
+		sh.lastUsed = sh.lease - leaseChunk
 	}
-	sh.lastUID++
-	sh.xidToUid[str] = sh.lastUID
-	return sh.lastUID
+	sh.lastUsed++
+	sh.xidToUid[str] = sh.lastUsed
+	return sh.lastUsed
 }
