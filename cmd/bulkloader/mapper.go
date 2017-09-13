@@ -56,7 +56,6 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
 
 func (m *mapper) run() {
 	for batchBuf := range m.batchCh {
-		atomic.AddInt64(&m.prog.mappersRunning, 1)
 		done := false
 		for !done {
 			rdf, err := batchBuf.ReadString('\n')
@@ -77,7 +76,6 @@ func (m *mapper) run() {
 				m.sz = 0
 			}
 		}
-		atomic.AddInt64(&m.prog.mappersRunning, -1)
 	}
 	if len(m.mapEntries) > 0 {
 		m.mu.Lock() // One write at a time.

@@ -60,9 +60,8 @@ func newLoader(opt options) *loader {
 		ss:   newSchemaStore(initialSchema),
 
 		// Lots of gz readers, so not much channel buffer needed.
-		batchCh: make(chan *bytes.Buffer, *opt.numGoroutines),
+		batchCh: make(chan *bytes.Buffer, opt.numGoroutines),
 	}
-	st.prog.lenBatchCh = func() int { return len(st.batchCh) }
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.numGoroutines),
