@@ -198,9 +198,10 @@ func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry
 	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
 		var e raftpb.Entry
-		if err := item.Value(func(val []byte) error {
+		err := item.Value(func(val []byte) error {
 			return x.Wrapf(e.Unmarshal(val), "While unmarshal raftpb.Entry")
-		}); err != nil {
+		})
+		if err != nil {
 			return es, err
 		}
 		es = append(es, e)

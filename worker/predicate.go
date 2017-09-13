@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
-	"encoding/binary"
 	"io"
 
 	"github.com/dgraph-io/badger"
@@ -81,28 +80,6 @@ func writeBatch(ctx context.Context, pstore *badger.KV, kv chan *protos.KV, che 
 	che <- nil
 }
 
-// Since snapshot is a rare event we can calculate checksum here instead of calculating
-// at every write unless we have some other use case.
-func checkSum(pl *protos.PostingList) []byte {
-	var pitr posting.PIterator
-	pitr.Init(pl, 0)
-	h := md5.New()
-	count := 0
-	var ubuf [16]byte
-	for ; pitr.Valid(); pitr.Next() {
-		p := pitr.Posting()
-		// Checksum code.
-		n := binary.PutVarint(ubuf[:], int64(count))
-		h.Write(ubuf[0:n])
-		n = binary.PutUvarint(ubuf[:], p.Uid)
-		h.Write(ubuf[0:n])
-		h.Write(p.Value)
-		h.Write([]byte(p.Label))
-		count++
-	}
-	return h.Sum(nil)
-}
-
 func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataClient, groupId uint32) error {
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
@@ -133,19 +110,18 @@ func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataCl
 			continue
 		}
 
-		var pl protos.PostingList
-		if err := iterItem.Value(func(val []byte) error {
-			posting.UnmarshalOrCopy(val, iterItem.UserMeta(), &pl)
-			return nil
-		}); err != nil {
-			return err
-		}
-
 		kdup := make([]byte, len(k))
 		copy(kdup, k)
 		key := &protos.KC{
-			Key:      kdup,
-			Checksum: checkSum(&pl),
+			Key: kdup,
+		}
+		err := iterItem.Value(func(val []byte) error {
+			checksum := md5.Sum(val)
+			key.Checksum = checksum[:]
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 		g.Keys = append(g.Keys, key)
 		if len(g.Keys) >= 1000 {
@@ -304,12 +280,13 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 
 		// No checksum check for schema keys
 		var v []byte
-		if err := iterItem.Value(func(val []byte) error {
+		err := iterItem.Value(func(val []byte) error {
 			v = make([]byte, len(val))
 			// Copy it as we have to access it outside.
 			copy(v, val)
 			return nil
-		}); err != nil {
+		})
+		if err != nil {
 			return err
 		}
 
@@ -334,7 +311,8 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 				// Different keys would have the same prefix. So, check Checksum first,
 				// it would be cheaper when there's no match.
 				// TODO: What if checksum collides ?
-				if bytes.Equal(checkSum(&pl), t.Checksum) {
+				checksum := md5.Sum(v)
+				if bytes.Equal(checksum[:], t.Checksum) {
 					it.Next()
 					continue
 				}

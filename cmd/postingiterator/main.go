@@ -45,18 +45,18 @@ func main() {
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()
 
-	it := ps.NewIterator(badger.DefaultIteratorOptions)
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.PrefetchValues = false
+	it := ps.NewIterator(iterOpt)
 	defer it.Close()
 
 	for it.Rewind(); it.Valid(); it.Next() {
 		iterItem := it.Item()
 		k := iterItem.Key()
 		pk := x.Parse(k)
-		iterItem.Value(func(val []byte) error {
-			if len(val) > 10000000 {
-				fmt.Printf("key: %+v, len(val): %v\n", pk, len(val))
-			}
-			return nil
-		})
+		estSize := iterItem.EstimatedSize()
+		if estSize > 1e7 {
+			fmt.Printf("key: %+v, len(val): %v\n", pk, estSize)
+		}
 	}
 }
