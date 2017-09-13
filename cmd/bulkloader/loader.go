@@ -107,7 +107,7 @@ func (ld *loader) mapStage() {
 		x.Check(err)
 		defer f.Close()
 		if !strings.HasSuffix(rdfFile, ".gz") {
-			readers = append(readers, bufio.NewReaderSize(f, 1<<20))
+			readers = append(readers, bufio.NewReaderSize(f, 32<<20))
 		} else {
 			gzr, err := gzip.NewReader(f)
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
