@@ -107,6 +107,7 @@ func findRDFFiles(dir string) []string {
 		if strings.HasSuffix(path, ".rdf") || strings.HasSuffix(path, ".rdf.gz") {
 			files = append(files, path)
 		}
+		return nil
 	}))
 	return files
 }
