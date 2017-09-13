@@ -56,6 +56,9 @@ func (req *Req) Request() *protos.Request {
 }
 
 func checkSchema(schema protos.SchemaUpdate) error {
+	if len(schema.Predicate) == 0 {
+		return x.Errorf("No predicate specified for schemaUpdate")
+	}
 	typ := types.TypeID(schema.ValueType)
 	if typ == types.UidID && schema.Directive == protos.SchemaUpdate_INDEX {
 		// index on uid type
