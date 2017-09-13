@@ -117,14 +117,18 @@ func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
 // process is used to process the Mark channel. This is not thread-safe,
 // so only run one goroutine for process. One is sufficient, because
 // all goroutine ops use purely memory and cpu.
+// Each index has to emit atleast one begin watermak in serial order otherwise waiters
+// can get blocked idefinitely. Example: We had an watermark at 100 and a waiter at 101,
+// if no watermark is emitted at index 101 then waiter would get stuck idefinitely as it
+// can't decide whether the task at 101 has decided not to emit watermak or it didn't get
+// scheduled yet.
 func (w *WaterMark) process() {
-	var indices, waiterIndices uint64Heap
+	var indices uint64Heap
 	// pending maps raft proposal index to the number of pending mutations for this proposal.
 	pending := make(map[uint64]int)
 	waiters := make(map[uint64][]chan struct{})
 
 	heap.Init(&indices)
-	heap.Init(&waiterIndices)
 	var loop uint64
 
 	processOne := func(index uint64, done bool) {
@@ -165,21 +169,13 @@ func (w *WaterMark) process() {
 			until = min
 			loops++
 		}
-		if until != doneUntil {
-			for len(waiterIndices) > 0 {
-				min := waiterIndices[0]
-				if min > until {
-					break
-				}
-				// Partly duplicated with what's above.
-				heap.Pop(&waiterIndices)
-				toNotify := waiters[min]
-				for _, ch := range toNotify {
-					close(ch)
-				}
-				delete(waiters, min)
+		for i := doneUntil + 1; i <= until; i++ {
+			toNotify := waiters[i]
+			for _, ch := range toNotify {
+				close(ch)
 			}
-
+		}
+		if until != doneUntil {
 			AssertTrue(atomic.CompareAndSwapUint64(&w.doneUntil, doneUntil, until))
 			w.elog.Printf("%s: Done until %d. Loops: %d\n", w.Name, until, loops)
 		}
@@ -193,7 +189,6 @@ func (w *WaterMark) process() {
 			} else {
 				ws, ok := waiters[mark.index]
 				if !ok {
-					heap.Push(&waiterIndices, mark.index)
 					waiters[mark.index] = []chan struct{}{mark.waiter}
 				} else {
 					waiters[mark.index] = append(ws, mark.waiter)
