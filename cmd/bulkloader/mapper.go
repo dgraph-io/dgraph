@@ -70,7 +70,9 @@ outerFor:
 				}
 				break innerFor
 			default:
+				atomic.AddInt64(&m.prog.mappersYielding, 1)
 				time.Sleep(10 * time.Second)
+				atomic.AddInt64(&m.prog.mappersYielding, -1)
 			}
 		}
 

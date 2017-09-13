@@ -22,8 +22,9 @@ type progress struct {
 	reduceEdgeCount int64
 	reduceKeyCount  int64
 
-	mappersRunning int64
-	lenBatchCh     func() int
+	mappersRunning  int64
+	mappersYielding int64
+	lenBatchCh      func() int
 
 	start       time.Time
 	startReduce time.Time
@@ -67,13 +68,14 @@ func (p *progress) reportOnce() {
 	case mapPhase:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
-		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec DEBUG(MR:%d LBC:%d)\n",
+		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec DEBUG(MR:%d MY:%d LBC:%d)\n",
 			fixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
 			niceFloat(float64(mapEdgeCount)),
 			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),
 			atomic.LoadInt64(&p.mappersRunning),
+			atomic.LoadInt64(&p.mappersYielding),
 			p.lenBatchCh(),
 		)
 	case reducePhase:
