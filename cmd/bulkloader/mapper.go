@@ -105,7 +105,7 @@ func (m *mapper) addMapEntry(key []byte, posting *protos.Posting) {
 func (m *mapper) parseRDF(rdfLine string) error {
 	nq, err := parseNQuad(rdfLine)
 	if err != nil {
-		if errors.Cause(err) == rdf.ErrEmpty {
+		if err == rdf.ErrEmpty {
 			return nil
 		}
 		return err
