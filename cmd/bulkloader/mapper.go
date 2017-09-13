@@ -69,7 +69,7 @@ func (m *mapper) run() {
 			// more efficient way.
 			rdf = strings.TrimSpace(rdf)
 
-			x.Check(m.parseRDF(rdf))
+			//x.Check(m.parseRDF(rdf))
 			atomic.AddInt64(&m.prog.rdfCount, 1)
 			if m.sz >= m.opt.mapBufSize {
 				m.mu.Lock() // One write at a time.
