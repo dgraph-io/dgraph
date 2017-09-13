@@ -66,14 +66,6 @@ func (w *Wal) schemaKey(gid uint32, idx uint64) []byte {
 	return b
 }
 
-func (w *Wal) schemaPrefix(gid uint32) []byte {
-	b := make([]byte, 14)
-	binary.BigEndian.PutUint64(b[0:8], w.id)
-	copy(b[8:10], []byte("sk"))
-	binary.BigEndian.PutUint32(b[10:14], gid)
-	return b
-}
-
 func (w *Wal) entryKey(gid uint32, term, idx uint64) []byte {
 	b := make([]byte, 28)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
@@ -127,6 +119,13 @@ func (w *Wal) SchemaState(gid uint32, idx uint64) ([]byte, error) {
 	})
 	return data, err
 }
+
+func (w *Wal) RemoveSchemaState(gid uint32, idx uint64) {
+	key := w.schemaKey(gid, idx)
+	// Don't care about error
+	w.wals.Delete(key)
+}
+
 func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	wb := make([]*badger.Entry, 0, 100)
 	if raft.IsEmptySnap(s) {

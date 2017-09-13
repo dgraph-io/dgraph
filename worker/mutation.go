@@ -93,15 +93,8 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, action byte) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	n := groups().Node(rv.Group)
-	// Wait for applied watermark to reach till previous index
-	// All mutations before this should use old schema and after this
-	// should use new schema
-	n.waitForSyncMark(n.ctx, rv.Index-1)
 	if !groups().ServesGroup(group.BelongsTo(update.Predicate)) {
 		return x.Errorf("Predicate fingerprint doesn't match this instance")
-	}
-	if err := checkSchema(update); err != nil {
-		return err
 	}
 	current := schema.From(update)
 	updateSchema(update.Predicate, current, rv.Index, rv.Group)

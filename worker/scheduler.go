@@ -100,18 +100,11 @@ func (s *scheduler) schemaActions(p *protos.Proposal, index uint64) ([]byte, err
 	// Generate and store to wal
 	schemaActions := make([]byte, len(p.Mutations.Schema))
 	for i, s := range p.Mutations.Schema {
-		old, ok := schema.State().Get(s.Predicate)
-		if !ok {
-			if s.Directive == protos.SchemaUpdate_INDEX {
-				schemaActions[i] = rebuild_index
-			} else if s.Directive == protos.SchemaUpdate_REVERSE {
-				schemaActions[i] = rebuild_reverse
-			}
-			if s.Count {
-				schemaActions[i] |= rebuild_count
-			}
-			continue
+		if err := checkSchema(s); err != nil {
+			return nil, err
 		}
+		old, _ := schema.State().Get(s.Predicate)
+
 		if needReindexing(old, *s) {
 			schemaActions[i] = rebuild_index
 		} else if needsRebuildingReverses(old, *s) {
@@ -120,6 +113,7 @@ func (s *scheduler) schemaActions(p *protos.Proposal, index uint64) ([]byte, err
 		if s.Count != old.Count {
 			schemaActions[i] |= rebuild_count
 		}
+		schema.State().Set(s.Predicate, *s)
 	}
 	if err := s.n.Wal.StoreSchemaState(s.n.gid, index, schemaActions); err != nil {
 		return nil, err
@@ -136,6 +130,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	x.ActiveMutations.Add(int64(total))
 
 	if len(proposal.Mutations.Schema) > 0 {
+		n.waitForSyncMark(n.ctx, index-1)
 		schemaActions, err := s.schemaActions(proposal, index)
 		if err != nil {
 			n.props.Done(proposal.Id, err)
@@ -149,6 +144,11 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 				return err
 			}
 		}
+		go func() {
+			w := posting.SyncMarkFor(n.gid)
+			w.WaitForMark(n.ctx, index)
+			n.Wal.RemoveSchemaState(n.gid, index)
+		}()
 	}
 	if total == 0 {
 		n.props.Done(proposal.Id, nil)
