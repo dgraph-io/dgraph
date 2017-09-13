@@ -58,7 +58,7 @@ func newLoader(opt options) *loader {
 		prog:    newProgress(),
 		um:      newUIDMap(),
 		ss:      newSchemaStore(initialSchema),
-		batchCh: make(chan *bytes.Buffer, 4*opt.numGoroutines),
+		batchCh: make(chan *bytes.Buffer, 16*opt.numGoroutines),
 	}
 	ld := &loader{
 		state:   st,
