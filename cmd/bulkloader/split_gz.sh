@@ -14,7 +14,8 @@ rm -rf $outDir
 mkdir $outDir
 for inputFile in $inDir/*.rdf.gz; do
 		echo Processing: $inputFile
-		gunzip < $inputFile | split --lines=10000000 - $outDir/
+		base=$(basename $inputFile | cut -f 1 -d '.')
+		gunzip < $inputFile | split --lines=10000000 - $outDir/$base$(echo _)
 done
 for chunkedFile in $outDir/*; do
 	echo "Zipping: $chunkedFile"
