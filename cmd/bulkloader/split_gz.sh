@@ -14,5 +14,5 @@ rm -rf $outDir
 mkdir $outDir
 for inputFile in $inDir/*.rdf.gz; do
 		echo Processing: $inputFile
-		gunzip < $inputFile | split --lines=1000000 --filter='gzip > $FILE.gz' - $outDir/
+		gunzip < $inputFile | split --lines=10000000 --filter='gzip > $FILE.gz' - $outDir/
 done
