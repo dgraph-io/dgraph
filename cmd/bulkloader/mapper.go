@@ -110,7 +110,9 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		if err == rdf.ErrEmpty {
 			return nil
 		}
-		return errors.Wrapf(err, "while parsing line %q:", rdfLine)
+		// TODO: XXX: Handle error properly. For now, just logging.
+		//return errors.Wrapf(err, "while parsing line %q:", rdfLine)
+		log.Print(errors.Wrapf(err, "while parsing line %q:", rdfLine))
 	}
 
 	sid := m.um.assignUID(nq.GetSubject())
