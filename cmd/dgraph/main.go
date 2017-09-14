@@ -288,7 +288,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	fmt.Println(" -------> Past ParseQueryAndMutation")
 
 	var cancel context.CancelFunc
 	// set timeout if schema mutation not present

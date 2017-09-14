@@ -20,7 +20,6 @@ package worker
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -192,8 +191,6 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
-	fmt.Printf("Propose and wait for %v\n", proposal)
-	defer fmt.Printf("Proposal done: %v\n", proposal)
 	// TODO: Should be based on number of edges (amount of work)
 	pendingProposals <- struct{}{}
 	x.PendingProposals.Add(1)
@@ -241,12 +238,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		return err
 	}
 
-	fmt.Println("Raft propose")
-	//	we don't timeout on a mutation which has already been proposed.
-	n.Raft()
-	fmt.Println("Raft propose. Start")
+	// We don't timeout on a mutation which has already been proposed.
 	if err = n.Raft().Propose(ctx, slice[:upto]); err != nil {
-		fmt.Println("Raft propose. Failed")
 		return x.Wrapf(err, "While proposing")
 	}
 
@@ -263,9 +256,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		log.Fatalf("Unknown proposal")
 	}
 
-	fmt.Println("Wait for error")
 	err = <-che
-	fmt.Println("Wait for error. DONE")
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
@@ -580,13 +571,12 @@ func (n *node) Run() {
 			}
 			n.Raft().Advance()
 			if firstRun && n.canCampaign {
-				fmt.Printf("===> Campaigned")
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
 
 		case <-n.stop:
-			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
+			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
 				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				go func() {
 					select {
@@ -711,21 +701,20 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
-		found := groups().HasMe()
-		if !found && groups().HasPeer(n.gid) {
+		found := groups().HasMeInState()
+		_, hasPeer := groups().MyPeer()
+		if !found && hasPeer {
 			n.joinPeers()
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
-		if groups().HasPeer(n.gid) {
-			fmt.Println("=======> Has peer")
+		if _, hasPeer := groups().MyPeer(); hasPeer {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 		} else {
-			fmt.Println("------> No peer")
 			peers := []raft.Peer{{ID: n.Id}}
 			n.SetRaft(raft.StartNode(n.Cfg, peers))
 			// Trigger election, so this node can become the leader of this single-node cluster.

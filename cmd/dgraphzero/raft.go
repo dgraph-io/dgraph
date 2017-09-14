@@ -274,7 +274,6 @@ func (n *node) Run() {
 						x.Printf("While applying proposal: %v\n", err)
 					}
 					n.props.Done(pid, err)
-					fmt.Printf("State: %v\n", n.server.membershipState())
 
 				} else {
 					x.Printf("Unhandled entry: %+v\n", entry)

@@ -377,9 +377,15 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	if node == nil || node.Raft() == nil {
 		return nil, errNoNode
 	}
-	if rc.Group != node.RaftContext.Group || rc.Id == node.RaftContext.Id {
-		return nil, errNoNode
+	// Check that the new node is from the same group as me.
+	if rc.Group != node.RaftContext.Group {
+		return nil, x.Errorf("Raft group mismatch")
 	}
+	// Also check that the new node is not me.
+	if rc.Id == node.RaftContext.Id {
+		return nil, x.Errorf("Same Raft ID")
+	}
+	// Check that the new node is not already part of the group.
 	if _, ok := node.GetPeer(rc.Id); ok {
 		return &protos.Payload{}, x.Errorf("Node id already part of group.")
 	}

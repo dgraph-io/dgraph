@@ -195,6 +195,8 @@ func writeToFile(fpath string, ch chan []byte) error {
 }
 
 // Export creates a export of data by exporting it as an RDF gzip.
+// TODO: Make it so that export checks if the tablet is served by us,
+// before exporting it.
 func export(bdir string) error {
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)

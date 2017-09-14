@@ -321,7 +321,6 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	_, addr := groups().Leader(0)
 	// TODO: Leader, AnyServer should both return a healthy connection back.
-	conn.Get().Connect(addr)
 	p, err := conn.Get().Get(addr)
 	if err != nil {
 		return nil, err

@@ -154,7 +154,7 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 // Connect is used to connect the very first time with group zero.
 func (s *Server) Connect(ctx context.Context,
 	m *protos.Member) (resp *protos.MembershipState, err error) {
-	fmt.Printf("Got connection request: %+v\n", m)
+	x.Printf("Got connection request: %+v\n", m)
 	if ctx.Err() != nil {
 		return &emptyMembershipState, ctx.Err()
 	}
