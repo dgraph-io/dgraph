@@ -2194,34 +2194,28 @@ func parseFacetsInMutation(mu *gql.Mutation) error {
 }
 
 func (sg *SubGraph) upsert(ctx context.Context) (uint64, error) {
+	// First we assign a uid. Then we do the mutation corresponding to the upsert condition.
+	// Finally we run ProcessGraph again to get the actual uid back in case someone else might
+	// have set it.
+
 	res, err := worker.AssignUidsOverNetwork(ctx, &protos.Num{Val: 1})
 	if err != nil {
-		return 0, x.Wrapf(err, "While running upsert query.")
+		return 0, x.Wrapf(err, "While assigning uid during upsert query.")
 	}
 
-	val, err := types.ObjectValue(types.StringID, sg.SrcFunc[2])
-	if err != nil {
-		return 0, err
-	}
 	edge := protos.DirectedEdge{
 		Op:     protos.DirectedEdge_SET,
 		Entity: res.StartId,
 		Attr:   sg.Attr,
 		Lang:   sg.SrcFunc[1],
+		Value:  []byte(sg.SrcFunc[2]),
 	}
-
-	nq := gql.NQuad{
-		&protos.NQuad{ObjectValue: val},
-	}
-	if edge.Value, err = gql.ByteVal(nq); err != nil {
-		return 0, err
-	}
-
 	m := protos.Mutations{}
 	m.Edges = append(m.Edges, &edge)
 	m.IndexKey = x.IndexKey(sg.Attr, sg.SrcFunc[2])
+
 	if err = ApplyMutations(ctx, &m); err != nil {
-		return 0, x.Wrapf(err, "While running upsert query.")
+		return 0, x.Wrapf(err, "While running upsert mutation.")
 	}
 
 	che := make(chan error, 1)
