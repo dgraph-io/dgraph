@@ -2369,7 +2369,9 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 					continue
 				}
 
-				x.AssertTrue(len(sg.DestUIDs.Uids) > 0)
+				if len(sg.DestUIDs.Uids) == 0 {
+					continue
+				}
 				if allocatedUids == nil {
 					allocatedUids = make(map[string]uint64)
 				}
