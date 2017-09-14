@@ -1852,6 +1852,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if sg.IsGroupBy() {
 		// Add the attrs required by groupby nodes
 		for _, it := range sg.Params.groupbyAttrs {
+			// TODO - Throw error if Attr is of list type.
 			sg.Children = append(sg.Children, &SubGraph{
 				Attr: it.Attr,
 				Params: params{
@@ -2374,9 +2375,9 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 				if sg.Params.Var != "" {
 					allocatedUids[sg.Params.Var] = uid
 				} else {
-					// There can only be one upsert per query, so the key can be
-					// upsert-idx
-					allocatedUids[fmt.Sprintf("upsert-%d", i)] = uid
+					// There can only be one upsert per query block, so the key can be
+					// the Alias for the block.
+					allocatedUids[sg.Params.Alias] = uid
 				}
 			}
 		}

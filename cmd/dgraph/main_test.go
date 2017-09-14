@@ -1500,7 +1500,7 @@ func TestUpsert(t *testing.T) {
 
 	res, err := runQuery(query)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"me":[{"name":"XYZ"}],"uids":{"upsert-0":"0xd"}}}`, res)
+	require.Equal(t, `{"data": {"me":[{"name":"XYZ"}],"uids":{"me":"0xd"}}}`, res)
 }
 
 func TestUpsert2(t *testing.T) {
@@ -1512,7 +1512,7 @@ func TestUpsert2(t *testing.T) {
 
 	mutation {
 		schema {
-			name: string @index(exact) .
+			name: string @index(term) .
 			age: int @index(int) .
 		}
 		set {
