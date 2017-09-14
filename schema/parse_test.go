@@ -25,7 +25,6 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -55,7 +54,7 @@ name: string .
 
 func TestSchema(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaVal), 1))
-	checkSchema(t, State().get(1).predicate, []nameType{
+	checkSchema(t, State().predicate, []nameType{
 		{"name", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 		}},
@@ -117,7 +116,7 @@ address: string @index(term) .`
 
 func TestSchemaIndex(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal1), 1))
-	require.Equal(t, 2, len(State().IndexedFields(1)))
+	require.Equal(t, 2, len(State().IndexedFields()))
 }
 
 var schemaIndexVal2 = `
@@ -169,7 +168,7 @@ friend  : uid @reverse @count .
 
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
-	checkSchema(t, State().get(1).predicate, []nameType{
+	checkSchema(t, State().predicate, []nameType{
 		{"_predicate_", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			List:      true,
@@ -204,7 +203,7 @@ func TestSchemaIndexCustom(t *testing.T) {
 	require.True(t, State().IsIndexed("name"))
 	require.False(t, State().IsReversed("name"))
 	require.Equal(t, "int", State().Tokenizer("age")[0].Name())
-	require.Equal(t, 4, len(State().IndexedFields(1)))
+	require.Equal(t, 4, len(State().IndexedFields()))
 }
 
 func TestParse(t *testing.T) {
@@ -342,7 +341,6 @@ func TestMain(m *testing.M) {
 	kvOpt.ValueDir = dir
 	ps, err = badger.NewKV(&kvOpt)
 	x.Check(err)
-	x.Check(group.ParseGroupConfig("groups.conf"))
 	Init(ps)
 
 	r := m.Run()

@@ -25,7 +25,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -97,7 +96,6 @@ func TestValidateEdgeTypeError(t *testing.T) {
 }
 
 func TestAddToMutationArray(t *testing.T) {
-	group.ParseGroupConfig("")
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -122,7 +120,6 @@ func TestAddToMutationArray(t *testing.T) {
 }
 
 func TestCheckSchema(t *testing.T) {
-	group.ParseGroupConfig("")
 	dir, _ := initTest(t, "name:string @index(term) .")
 	defer os.RemoveAll(dir)
 	// non uid to uid

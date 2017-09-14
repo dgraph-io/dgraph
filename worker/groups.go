@@ -93,6 +93,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	}
 
 	// Successfully connect with the peer, before doing anything else.
+	// TODO: PerrAddr should be mandatory
 	if len(Config.PeerAddr) > 0 && Config.PeerAddr != Config.MyAddr {
 		p := conn.Get().Connect(Config.PeerAddr)
 		// TODO: Get rid of this whole release.
@@ -117,6 +118,10 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 		gr.applyState(state)
 	}
 
+	if Config.InMemoryComm {
+		gr.state = &protos.MembershipState{}
+		atomic.StoreUint32(&gr.gid, 1)
+	}
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
 	gid := gr.groupId()
 	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
@@ -125,7 +130,9 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 
 	x.UpdateHealthStatus(true)
 	// TODO: Run this again.
-	go gr.periodicSyncMemberships() // Now set it to be run periodically.
+	if !Config.InMemoryComm {
+		go gr.periodicSyncMemberships() // Now set it to be run periodically.
+	}
 }
 
 // No locks are acquired while accessing this function.
@@ -185,7 +192,9 @@ func (g *groupi) BelongsTo(key string) uint32 {
 }
 
 func (g *groupi) ServesTablet(key string) bool {
-	fmt.Printf("Asking if I serve tablet: %v\n", key)
+	if Config.InMemoryComm {
+		return true
+	}
 	g.RLock()
 	gid := g.tablets[key]
 	g.RUnlock()
@@ -193,6 +202,7 @@ func (g *groupi) ServesTablet(key string) bool {
 		return gid == g.groupId()
 	}
 
+	fmt.Printf("Asking if I serve tablet: %v\n", key)
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
 	zaddr := g.AnyServer(0)

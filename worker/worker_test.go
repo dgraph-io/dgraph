@@ -52,7 +52,7 @@ func delEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
 }
 
 func getOrCreate(key []byte) *posting.List {
-	l := posting.Get(key, 1)
+	l := posting.Get(key)
 	return l
 }
 
@@ -618,5 +618,12 @@ func TestMain(m *testing.M) {
 	x.Init()
 	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
+	gr = new(groupi)
+	gr.gid = 1
+	gr.tablets = make(map[string]uint32)
+	gr.tablets["name"] = 1
+	gr.tablets["age"] = 1
+	gr.tablets["friend"] = 1
+	gr.tablets[""] = 1
 	os.Exit(m.Run())
 }
