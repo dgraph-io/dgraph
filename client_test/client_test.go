@@ -106,9 +106,7 @@ func TestClientDelete(t *testing.T) {
 		}
 	}`, alice)
 	req.SetQuery(aliceQuery)
-	fmt.Printf("here\n")
 	resp, err := dgraphClient.Run(context.Background(), &req)
-	fmt.Printf("here\n")
 	x.Check(err)
 
 	var r Res
