@@ -32,10 +32,11 @@ import (
 )
 
 var (
-	ErrNoConnection    = fmt.Errorf("No connection exists")
-	errNoPeerPoolEntry = fmt.Errorf("no peerPool entry")
-	errNoPeerPool      = fmt.Errorf("no peerPool pool, could not connect")
-	echoDuration       = time.Minute
+	ErrNoConnection        = fmt.Errorf("No connection exists")
+	ErrUnhealthyConnection = fmt.Errorf("Unhealthy connection")
+	errNoPeerPoolEntry     = fmt.Errorf("no peerPool entry")
+	errNoPeerPool          = fmt.Errorf("no peerPool pool, could not connect")
+	echoDuration           = time.Minute
 )
 
 // "Pool" is used to manage the grpc client connection(s) for communicating with other
@@ -72,6 +73,9 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 	pool, ok := p.all[addr]
 	if !ok {
 		return nil, ErrNoConnection
+	}
+	if !pool.IsHealthy() {
+		return nil, ErrUnhealthyConnection
 	}
 	return pool, nil
 }

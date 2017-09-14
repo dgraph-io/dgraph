@@ -370,27 +370,23 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 	}
 
 	// I'm not the leader. Relay to someone who I think is.
-	var addrs []string
+	var pools []*conn.Pool
 	{
 		// Try in order: leader of given group, any server from given group, leader of group zero.
-		_, addr := groups().Leader(gid)
-		addrs = append(addrs, addr)
-		addrs = append(addrs, groups().AnyServer(gid))
-		_, addr = groups().Leader(0)
-		addrs = append(addrs, addr)
+		pl := groups().Leader(gid)
+		if pl != nil {
+			pools = append(pools, pl)
+		}
+
+		pl = groups().Leader(0)
+		if pl != nil {
+			pools = append(pools, pl)
+		}
 	}
 
-	var pl *conn.Pool
 	var gconn *grpc.ClientConn
 	var err error
-	for _, addr := range addrs {
-		pl, err = conn.Get().Get(addr)
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(err.Error())
-			}
-			continue
-		}
+	for _, pl := range pools {
 		gconn = pl.Get()
 
 		if tr, ok := trace.FromContext(ctx); ok {
