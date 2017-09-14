@@ -136,6 +136,9 @@ func processWithBackupRequest(
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	attr := q.Attr
 	gid := groups().BelongsTo(attr)
+	if gid == 0 {
+		return &protos.Result{}, errUnservedTablet
+	}
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("attr: %v groupId: %v", attr, gid)
 	}

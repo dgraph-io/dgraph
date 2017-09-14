@@ -19,24 +19,27 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	context "golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
@@ -63,7 +66,59 @@ var m = `
 	}
 `
 
+// For now same as in query_test but would change the implementation here later for integration tests
+type zeroServer struct {
+	sync.Mutex
+	nextLeaseId uint64
+}
+
+func (z *zeroServer) AssignUids(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
+	a := &protos.AssignedIds{}
+	z.Lock()
+	defer z.Unlock()
+	a.StartId = z.nextLeaseId
+	z.nextLeaseId += n.Val
+	a.EndId = z.nextLeaseId - 1
+	return a, nil
+}
+
+func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.MembershipState, error) {
+	m := &protos.MembershipState{}
+	m.Zeros = make(map[uint64]*protos.Member)
+	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12341"}
+	m.Groups = make(map[uint32]*protos.Group)
+	g := &protos.Group{}
+	g.Members = make(map[uint64]*protos.Member)
+	g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
+	m.Groups[1] = g
+	return m, nil
+}
+
+func (z *zeroServer) Update(ctx context.Context, in *protos.Group) (*protos.MembershipState, error) {
+	return &protos.MembershipState{}, nil
+}
+
+func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*protos.Tablet, error) {
+	in.GroupId = 1
+	return in, nil
+}
+
+func StartDummyZero() *grpc.Server {
+	ln, err := net.Listen("tcp", "localhost:12341")
+	x.Check(err)
+	x.Printf("zero listening at address: %v", ln.Addr())
+
+	s := grpc.NewServer()
+	z := &zeroServer{}
+	// some uids are used in queries so setting some high value which is not used.
+	z.nextLeaseId = 10000
+	protos.RegisterZeroServer(s, z)
+	go s.Serve(ln)
+	return s
+}
+
 func prepare() (dir1, dir2 string, rerr error) {
+	StartDummyZero()
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -81,9 +136,10 @@ func prepare() (dir1, dir2 string, rerr error) {
 	dgraph.State = dgraph.NewServerState()
 
 	posting.Init(dgraph.State.Pstore)
-	x.Check(group.ParseGroupConfig(""))
 	schema.Init(dgraph.State.Pstore)
 	worker.Init(dgraph.State.Pstore)
+	worker.Config.PeerAddr = "localhost:12341"
+	worker.Config.RaftId = 1
 	worker.StartRaftNodes(dgraph.State.WALstore, false)
 	return dir1, dir2, nil
 }

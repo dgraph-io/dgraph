@@ -29,7 +29,6 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -77,7 +76,7 @@ func deletePl(t *testing.T) {
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 1)
 
-	l := Get(key, 1)
+	l := Get(key)
 
 	edge := &protos.DirectedEdge{
 		ValueId: 9,
@@ -122,7 +121,7 @@ func TestAddMutation(t *testing.T) {
 	require.EqualValues(t, "anti-testing", p.Label)
 
 	// Try reading the same data in another PostingList.
-	dl := Get(key, 1)
+	dl := Get(key)
 	checkUids(t, dl, uids)
 	deletePl(t)
 	ps.Delete(dl.key)
@@ -168,7 +167,7 @@ func TestAddMutation_Value(t *testing.T) {
 
 func TestAddMutation_jchiu1(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := Get(key, 1)
+	ol := Get(key)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
@@ -216,7 +215,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 
 func TestAddMutation_jchiu2(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := Get(key, 1)
+	ol := Get(key)
 
 	// Del a value cars and but don't merge.
 	edge := &protos.DirectedEdge{
@@ -247,7 +246,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 
 func TestAddMutation_jchiu3(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := Get(key, 1)
+	ol := Get(key)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
@@ -302,7 +301,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 
 func TestAddMutation_mrjn1(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := Get(key, 1)
+	ol := Get(key)
 
 	// Set a value cars and merge.
 	edge := &protos.DirectedEdge{
@@ -680,7 +679,6 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	Init(ps)
 
-	group.ParseGroupConfig("")
 	r := m.Run()
 
 	os.RemoveAll(dir)

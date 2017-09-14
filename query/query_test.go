@@ -19,16 +19,19 @@ package query
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"reflect"
 	"sort"
 	"testing"
 	"time"
+
+	context "golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -39,7 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 
@@ -6885,8 +6887,76 @@ graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
 `
 
+// Duplicate implemention as in cmd/dgraph/main_test.go
+// TODO: Change the implementation in cmd/dgraph to test for network failure
+type raftServer struct {
+}
+
+func (c *raftServer) Echo(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
+	return in, nil
+}
+
+func (c *raftServer) RaftMessage(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
+	return &protos.Payload{}, nil
+}
+
+func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*protos.Payload, error) {
+	return &protos.Payload{}, nil
+}
+
+type zeroServer struct {
+}
+
+func (z *zeroServer) AssignUids(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
+	return &protos.AssignedIds{}, nil
+}
+
+func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.MembershipState, error) {
+	m := &protos.MembershipState{}
+	m.Zeros = make(map[uint64]*protos.Member)
+	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
+	m.Groups = make(map[uint32]*protos.Group)
+	g := &protos.Group{}
+	g.Members = make(map[uint64]*protos.Member)
+	g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
+	m.Groups[1] = g
+	return m, nil
+}
+
+// Used by sync membership
+func (z *zeroServer) Update(ctx context.Context, in *protos.Group) (*protos.MembershipState, error) {
+	m := &protos.MembershipState{}
+	m.Zeros = make(map[uint64]*protos.Member)
+	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
+	m.Groups = make(map[uint32]*protos.Group)
+	g := &protos.Group{}
+	g.Members = make(map[uint64]*protos.Member)
+	g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
+	m.Groups[1] = g
+	return m, nil
+}
+
+func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*protos.Tablet, error) {
+	in.GroupId = 1
+	return in, nil
+}
+
+func StartDummyZero() *grpc.Server {
+	ln, err := net.Listen("tcp", "localhost:12340")
+	x.Check(err)
+	x.Printf("zero listening at address: %v", ln.Addr())
+
+	s := grpc.NewServer()
+	protos.RegisterZeroServer(s, &zeroServer{})
+	protos.RegisterRaftServer(s, &raftServer{})
+	go s.Serve(ln)
+	return s
+}
+
 func TestMain(m *testing.M) {
 	x.Init()
+
+	StartDummyZero()
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
@@ -6902,7 +6972,8 @@ func TestMain(m *testing.M) {
 	worker.Config.RaftId = 1
 	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
-	group.ParseGroupConfig("")
+	worker.Config.PeerAddr = "localhost:12340"
+	worker.Config.RaftId = 1
 	schema.Init(ps)
 	posting.Init(ps)
 	worker.Init(ps)

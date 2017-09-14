@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -56,7 +55,7 @@ func checkShard(ps *badger.KV) (int, []byte) {
 func writePLs(t *testing.T, pred string, startIdx int, count int, vid uint64) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i+startIdx))
-		list := posting.Get(k, 1)
+		list := posting.Get(k)
 
 		de := &protos.DirectedEdge{
 			ValueId: vid,
@@ -117,7 +116,6 @@ func serve(s *grpc.Server, ln net.Listener) {
 
 func TestPopulateShard(t *testing.T) {
 	x.SetTestRun()
-	group.ParseGroupConfig("")
 	var err error
 	dir, err := ioutil.TempDir("", "store0")
 	if err != nil {
@@ -178,7 +176,7 @@ func TestPopulateShard(t *testing.T) {
 		t.Fatalf("Expected key to be: %v. Got %v", "099", string(k))
 	}
 
-	l := posting.Get(k, 1)
+	l := posting.Get(k)
 	if l.Length(0) != 1 {
 		t.Error("Unable to find added elements in posting list")
 	}

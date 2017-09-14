@@ -35,11 +35,16 @@ import (
 )
 
 const (
-	set = "set"
-	del = "delete"
+	set            = "set"
+	del            = "delete"
+	leaseBandwidth = uint64(10000)
 )
 
-var errUnservedTablet = x.Errorf("Tablet isn't being served by this instance.")
+var (
+	errUnservedTablet = x.Errorf("Tablet isn't being served by this instance.")
+	allocator         x.EmbeddedUidAllocator
+	emptyAssignedIds  = &protos.AssignedIds{}
+)
 
 // runMutation goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
@@ -319,6 +324,9 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 }
 
 func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	if Config.InMemoryComm {
+		return allocator.AssignUids(ctx, num)
+	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection

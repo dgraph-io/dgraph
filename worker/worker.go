@@ -54,7 +54,9 @@ func Init(ps *badger.KV) {
 	pstore = ps
 	// needs to be initialized after group config
 	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
-	if !Config.InMemoryComm {
+	if Config.InMemoryComm {
+		allocator.Init(ps)
+	} else {
 		workerServer = grpc.NewServer(
 			grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxSendMsgSize(x.GrpcMaxSize),
