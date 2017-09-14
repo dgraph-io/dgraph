@@ -297,7 +297,7 @@ func Get(key []byte) (rlist *List) {
 
 // getOrMutate is similar to GetLru the only difference being that for index and count keys it also
 // does a SetIfAbsentAsync. This function should be called by functions in the mutation path only.
-func getOrMutate(key []byte, group uint32) (rlist *List) {
+func getOrMutate(key []byte) (rlist *List) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
 		x.CacheHit.Add(1)
@@ -308,7 +308,7 @@ func getOrMutate(key []byte, group uint32) (rlist *List) {
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l := getNew(key, pstore)
-	l.water = marks.Get(group)
+	l.water = marks
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 

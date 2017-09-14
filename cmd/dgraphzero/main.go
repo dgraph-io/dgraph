@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/table"
+	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -148,7 +148,7 @@ func main() {
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = *w
 	kvOpt.ValueDir = *w
-	kvOpt.MapTablesTo = table.MemoryMap
+	kvOpt.TableLoadingMode = options.MemoryMap
 	kv, err := badger.NewKV(&kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	wal := raftwal.Init(kv, *nodeId)

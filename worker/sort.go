@@ -29,7 +29,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -377,7 +376,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
 func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
-	gid := group.BelongsTo(ts.Order[0].Attr)
+	gid := groups().BelongsTo(ts.Order[0].Attr)
 	if err := waitLinearizableRead(ctx, gid); err != nil {
 		return &emptySortResult, err
 	}
