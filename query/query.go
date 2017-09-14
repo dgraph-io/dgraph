@@ -1349,7 +1349,6 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 
 	if len(sg.Filters) > 0 {
 		sg.updateUidMatrix()
-
 	}
 	for _, child := range sg.Children {
 		sgPath = append(sgPath, sg) // Add the current node to path
@@ -1849,6 +1848,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		} else if sg.FilterOp == "and" {
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		} else {
+			// We need to also intersect the original dest uids in this case to get the final
+			// DestUIDs.
+			// me(func: eq(key, "key1")) @filter(eq(key, "key2"))
 			lists = append(lists, sg.DestUIDs)
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
