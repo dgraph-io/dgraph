@@ -1851,6 +1851,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// We need to also intersect the original dest uids in this case to get the final
 			// DestUIDs.
 			// me(func: eq(key, "key1")) @filter(eq(key, "key2"))
+
+			// TODO - See if the server performing the filter can intersect with the srcUIDs before
+			// returning them in this case.
 			lists = append(lists, sg.DestUIDs)
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
