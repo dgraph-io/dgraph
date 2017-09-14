@@ -225,6 +225,12 @@ func (ld *loader) reduceStage() {
 	// Run reducers.
 	var badgerWg sync.WaitGroup
 	pending := make(chan struct{}, ld.opt.numGoroutines)
+	go func() {
+		for {
+			time.Sleep(time.Second)
+			fmt.Printf("Reducers:%d ShuffleOutputLen:%d\n", len(pending), len(shuffleOutputCh))
+		}
+	}()
 	for batch := range shuffleOutputCh {
 		pending <- struct{}{}
 		badgerWg.Add(1)
