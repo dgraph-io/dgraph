@@ -375,13 +375,12 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		mu.Schema = append(mu.Schema, schema)
 	}
 
-	if len(m.IndexKey) > 0 {
-		pk := x.Parse(m.IndexKey)
-		gid := group.BelongsTo(pk.Attr)
+	if m.Upsert != nil {
+		gid := group.BelongsTo(m.Upsert.Attr)
 		mu := mutationMap[gid]
 		// There should also be a corresponding mutation for this attribute when doing upsert.
 		x.AssertTrue(mu != nil)
-		mu.IndexKey = m.IndexKey
+		mu.Upsert = m.Upsert
 	}
 }
 

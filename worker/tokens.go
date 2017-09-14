@@ -66,7 +66,7 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	}
 }
 
-func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
+func pickNonLossyTok(attr string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
 		return nil, x.Errorf("Attribute %s is not indexed.", attr)
@@ -82,6 +82,17 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 		}
 	}
 
+	return tokenizer, nil
+
+}
+
+func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
+	tokenizer, err := pickNonLossyTok(attr)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenizers := schema.State().Tokenizer(attr)
 	// If function is eq and we found a tokenizer thats !Lossy(), lets return
 	// it to avoid the second lookup.
 	if f == "eq" && tokenizer != nil {

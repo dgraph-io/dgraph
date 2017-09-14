@@ -49,6 +49,7 @@
 		Membership
 		MembershipUpdate
 		DirectedEdge
+		Upsert
 		Mutations
 		Proposal
 		KV

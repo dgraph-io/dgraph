@@ -119,11 +119,16 @@ message DirectedEdge {
 	repeated Facet facets = 9;
 }
 
+message Upsert {
+	string attr = 1;
+	string arg =2;
+}
+
 message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
 	repeated SchemaUpdate schema = 3;
-	bytes indexKey = 4; // Used for upsert.
+	Upsert upsert = 4;
 }
 
 message Proposal {

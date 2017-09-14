@@ -30,10 +30,10 @@ import (
 )
 
 type task struct {
-	rid      uint64 // raft index corresponding to the task
-	pid      uint32 // proposal id corresponding to the task
-	edge     *protos.DirectedEdge
-	indexKey []byte // index key. We get PL for this and check the length before applying the edge.
+	rid    uint64 // raft index corresponding to the task
+	pid    uint32 // proposal id corresponding to the task
+	edge   *protos.DirectedEdge
+	upsert *protos.Upsert
 }
 
 type scheduler struct {
@@ -133,10 +133,10 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 
 	for _, edge := range proposal.Mutations.Edges {
 		t := &task{
-			rid:      index,
-			pid:      proposal.Id,
-			edge:     edge,
-			indexKey: proposal.Mutations.IndexKey,
+			rid:    index,
+			pid:    proposal.Id,
+			edge:   edge,
+			upsert: proposal.Mutations.Upsert,
 		}
 		if s.register(t) {
 			s.tch <- t

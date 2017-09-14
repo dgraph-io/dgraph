@@ -2212,7 +2212,10 @@ func (sg *SubGraph) upsert(ctx context.Context) (uint64, error) {
 	}
 	m := protos.Mutations{}
 	m.Edges = append(m.Edges, &edge)
-	m.IndexKey = x.IndexKey(sg.Attr, sg.SrcFunc[2])
+	m.Upsert = &protos.Upsert{
+		Attr: sg.Attr,
+		Arg:  sg.SrcFunc[2],
+	}
 
 	if err = ApplyMutations(ctx, &m); err != nil {
 		return 0, x.Wrapf(err, "While running upsert mutation.")
@@ -2356,6 +2359,10 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 			// mutation (i.e. the upsert operation).
 			sg := req.Subgraphs[i]
 			if sg.Params.upsert && (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) {
+				if len(sg.Filters) > 0 {
+					ferr = fmt.Errorf("Upsert query cannot have filters.")
+					continue
+				}
 				uid, err := sg.upsert(ctx)
 				if err != nil {
 					ferr = err

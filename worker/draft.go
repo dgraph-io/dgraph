@@ -32,10 +32,12 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -547,21 +549,71 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
+func (n *node) handleUpsert(task *task) (bool, error) {
+	if task.upsert == nil {
+		return true, nil
+	}
+
+	edge := task.edge
+	attr := task.upsert.Attr
+	if attr != edge.Attr {
+		return true, nil
+	}
+
+	t, err := pickNonLossyTok(attr)
+	if err != nil {
+		return false, err
+	}
+	if t == nil {
+		return false, x.Errorf("Attr: %s doesn't have appropriate tokenizer for eq", attr)
+	}
+
+	typ, err := schema.State().TypeOf(attr)
+	if err != nil {
+		return false, err
+	}
+
+	v, err := types.Convert(types.Val{types.StringID, []byte(task.upsert.Arg)}, typ)
+	if err != nil {
+		return false, err
+	}
+	tokens, err := t.Tokens(v)
+	if err != nil || len(tokens) == 0 {
+		return false, x.Wrapf(fmt.Errorf("Couldn't tokenize the term: %s"), task.upsert.Arg)
+	}
+
+	x.AssertTrue(len(tokens) == 1)
+	key := x.IndexKey(attr, tokens[0])
+	l := posting.GetOrCreate(key, group.BelongsTo(edge.Attr))
+	de := &protos.DirectedEdge{
+		Op:      protos.DirectedEdge_SET,
+		Attr:    edge.Attr,
+		ValueId: edge.Entity,
+	}
+
+	added, err := l.AddIfEmpty(n.ctx, de)
+	if err != nil {
+		return false, err
+	}
+	// If we didn't add anything that means index already had a uid, hence we don't need to do the
+	// corresponding mutation.
+	if !added {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 func (n *node) processMutation(task *task) error {
 	pid := task.pid
 	ridx := task.rid
 	edge := task.edge
 
-	if len(task.indexKey) > 0 {
-		// Handle upserts.
-		l := posting.Get(task.indexKey)
-		if l.Length(0) > 0 {
-			// Someone else might have done an upsert.
-			return nil
-		}
-		// Lock so that concurrent upserts don't end up creating duplicate entries.
-		l.Lock()
-		defer l.Unlock()
+	if cont, err := n.handleUpsert(task); err != nil {
+		return err
+	} else if !cont {
+		// If we found a uid in the index PL, then we don't want to continue and can return.
+		return nil
 	}
 
 	var ctx context.Context
@@ -1082,7 +1134,6 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 		}
 		idx += sz
 	}
-	// fmt.Printf("Got %d messages\n", count)
 	return &protos.Payload{}, nil
 }
 
