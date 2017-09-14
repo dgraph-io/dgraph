@@ -78,18 +78,23 @@ func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch.Grow(10 << 20)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
 		slc, err := r.ReadSlice('\n')
-		if err == bufio.ErrBufferFull {
-			// This should only happen infrequently.
-			var tmpBuf bytes.Buffer
-			tmpBuf.Write(slc)
-			var str string
-			str, err = r.ReadString('\n')
-			tmpBuf.WriteString(str)
-			slc = tmpBuf.Bytes()
-		}
 		if err == io.EOF {
 			batch.Write(slc)
 			return batch, err
+		}
+		if err == bufio.ErrBufferFull {
+			// This should only happen infrequently.
+			batch.Write(slc)
+			var str string
+			str, err = r.ReadString('\n')
+			if err == io.EOF {
+				batch.WriteString(str)
+				return batch, err
+			}
+			if err != nil {
+				return nil, err
+			}
+			batch.WriteString(str)
 		}
 		if err != nil {
 			return nil, err
