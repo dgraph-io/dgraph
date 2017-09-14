@@ -32,9 +32,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -342,6 +340,7 @@ func export(bdir string) error {
 }
 
 // TODO: How do we want to handle export for group, do we pause mutations, sync all and then export ?
+// TODO: Should we move export logic to dgraphzero?
 func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
 	n := groups().Node
 	if n != nil && n.AmLeader() {
@@ -369,35 +368,10 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		}
 	}
 
-	// I'm not the leader. Relay to someone who I think is.
-	var pools []*conn.Pool
-	{
-		// Try in order: leader of given group, any server from given group, leader of group zero.
-		pl := groups().Leader(gid)
-		if pl != nil {
-			pools = append(pools, pl)
-		}
-
-		pl = groups().Leader(0)
-		if pl != nil {
-			pools = append(pools, pl)
-		}
-	}
-
-	var gconn *grpc.ClientConn
-	var err error
-	for _, pl := range pools {
-		gconn = pl.Get()
-
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Relaying export request for group %d to %q", gid, pl.Addr)
-		}
-		break
-	}
-
-	// Unable to find any connection to any of these servers. This should be exceedingly rare.
-	// But probably not worthy of crashing the server. We can just skip the export.
-	if gconn == nil {
+	pl := groups().Leader(gid)
+	if pl == nil {
+		// Unable to find any connection to any of these servers. This should be exceedingly rare.
+		// But probably not worthy of crashing the server. We can just skip the export.
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Unable to find a server to export group: %d", gid)
 		}
@@ -408,7 +382,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		}
 	}
 
-	c := protos.NewWorkerClient(gconn)
+	c := protos.NewWorkerClient(pl.Get())
 	nr := &protos.ExportPayload{
 		ReqId:   reqId,
 		GroupId: gid,
