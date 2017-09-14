@@ -33,7 +33,7 @@ type task struct {
 	rid    uint64 // raft index corresponding to the task
 	pid    uint32 // proposal id corresponding to the task
 	edge   *protos.DirectedEdge
-	upsert *protos.Upsert
+	upsert *protos.Query
 }
 
 type scheduler struct {
@@ -69,15 +69,21 @@ func (s *scheduler) processTasks() {
 	}
 }
 
-func taskKey(attribute string, uid uint64) uint32 {
-	key := fmt.Sprintf("%s|%d", attribute, uid)
+func (t *task) key() uint32 {
+	if t.upsert != nil && t.upsert.Attr == t.edge.Attr {
+		// Serialize upserts by predicate.
+		return farm.Fingerprint32([]byte(t.edge.Attr))
+	}
+
+	key := fmt.Sprintf("%s|%d", t.edge.Attr, t.edge.Entity)
 	return farm.Fingerprint32([]byte(key))
 }
 
 func (s *scheduler) register(t *task) bool {
 	s.Lock()
 	defer s.Unlock()
-	key := taskKey(t.edge.Attr, t.edge.Entity)
+	key := t.key()
+
 	if tasks, ok := s.tasks[key]; ok {
 		tasks = append(tasks, t)
 		s.tasks[key] = tasks
@@ -149,7 +155,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 func (s *scheduler) nextTask(t *task) *task {
 	s.Lock()
 	defer s.Unlock()
-	key := taskKey(t.edge.Attr, t.edge.Entity)
+	key := t.key()
 	var nextTask *task
 	tasks, ok := s.tasks[key]
 	x.AssertTrue(ok)

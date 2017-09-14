@@ -950,12 +950,3 @@ func (l *List) Facets(param *protos.Param, langs []string) (fs []*protos.Facet,
 	}
 	return facets.CopyFacets(p.Facets, param), nil
 }
-
-func (l *List) AddIfEmpty(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
-	l.Lock()
-	defer l.Unlock()
-	if l.length(0) > 0 {
-		return false, nil
-	}
-	return l.addMutation(ctx, t)
-}

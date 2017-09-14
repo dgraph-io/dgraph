@@ -2212,11 +2212,7 @@ func (sg *SubGraph) upsert(ctx context.Context) (uint64, error) {
 	}
 	m := protos.Mutations{}
 	m.Edges = append(m.Edges, &edge)
-	m.Upsert = &protos.Upsert{
-		Attr: sg.Attr,
-		Arg:  sg.SrcFunc[2],
-	}
-
+	m.Upsert = createTaskQuery(sg)
 	if err = ApplyMutations(ctx, &m); err != nil {
 		return 0, x.Wrapf(err, "While running upsert mutation.")
 	}

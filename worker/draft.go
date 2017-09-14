@@ -31,13 +31,13 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -560,47 +560,14 @@ func (n *node) handleUpsert(task *task) (bool, error) {
 		return true, nil
 	}
 
-	t, err := pickNonLossyTok(attr)
+	res, err := processTask(n.ctx, task.upsert, group.BelongsTo(attr))
 	if err != nil {
 		return false, err
 	}
-	if t == nil {
-		return false, x.Errorf("Attr: %s doesn't have appropriate tokenizer for eq", attr)
-	}
-
-	typ, err := schema.State().TypeOf(attr)
-	if err != nil {
-		return false, err
-	}
-
-	v, err := types.Convert(types.Val{types.StringID, []byte(task.upsert.Arg)}, typ)
-	if err != nil {
-		return false, err
-	}
-	tokens, err := t.Tokens(v)
-	if err != nil || len(tokens) == 0 {
-		return false, x.Wrapf(fmt.Errorf("Couldn't tokenize the term: %s"), task.upsert.Arg)
-	}
-
-	x.AssertTrue(len(tokens) == 1)
-	key := x.IndexKey(attr, tokens[0])
-	l := posting.GetOrCreate(key, group.BelongsTo(edge.Attr))
-	de := &protos.DirectedEdge{
-		Op:      protos.DirectedEdge_SET,
-		Attr:    edge.Attr,
-		ValueId: edge.Entity,
-	}
-
-	added, err := l.AddIfEmpty(n.ctx, de)
-	if err != nil {
-		return false, err
-	}
-	// If we didn't add anything that means index already had a uid, hence we don't need to do the
-	// corresponding mutation.
-	if !added {
+	uids := algo.MergeSorted(res.UidMatrix)
+	if len(uids.Uids) > 0 {
 		return false, nil
 	}
-
 	return true, nil
 }
 
