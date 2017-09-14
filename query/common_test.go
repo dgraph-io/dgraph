@@ -68,7 +68,7 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 			ValueType: edge.ValueType,
 		})
 	}
-	l := posting.Get(x.DataKey(attr, src), 1)
+	l := posting.Get(x.DataKey(attr, src))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
 }

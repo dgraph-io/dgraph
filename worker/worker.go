@@ -59,7 +59,9 @@ func Init(ps *badger.KV) {
 			grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxSendMsgSize(x.GrpcMaxSize),
 			grpc.MaxConcurrentStreams(math.MaxInt32))
+		return
 	}
+	allocator.Init()
 }
 
 // grpcWorker struct implements the gRPC server interface.

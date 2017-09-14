@@ -202,7 +202,7 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 		Entity: src,
 		Op:     protos.DirectedEdge_SET,
 	}
-	l := Get(x.DataKey(attr, src), 1)
+	l := Get(x.DataKey(attr, src))
 	// No index entries added here as we do not call AddMutationWithIndex.
 	ok, err := l.AddMutation(context.Background(), edge)
 	require.NoError(t, err)
@@ -219,7 +219,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      protos.DirectedEdge_SET,
 	}
-	l := Get(x.DataKey(attr, src), 1)
+	l := Get(x.DataKey(attr, src))
 	// No index entries added here as we do not call AddMutationWithIndex.
 	ok, err := l.AddMutation(context.Background(), edge)
 	require.NoError(t, err)
@@ -292,10 +292,10 @@ func TestRebuildIndex(t *testing.T) {
 	require.EqualValues(t, 20, uids1[0])
 	require.EqualValues(t, 1, uids2[0])
 
-	l1 := Get(x.DataKey("name", 1), 1)
+	l1 := Get(x.DataKey("name", 1))
 	deletePl(t)
 	ps.Delete(l1.key)
-	l2 := Get(x.DataKey("name", 20), 1)
+	l2 := Get(x.DataKey("name", 20))
 	deletePl(t)
 	ps.Delete(l2.key)
 }

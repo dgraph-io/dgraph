@@ -35,7 +35,6 @@ import (
 	"github.com/twpayne/go-geom/encoding/wkb"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
@@ -76,7 +75,6 @@ func populateGraphExport(t *testing.T) {
 }
 
 func initTestExport(t *testing.T, schemaStr string) (string, *badger.KV) {
-	group.ParseGroupConfig("groups.conf")
 	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -101,6 +99,7 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.KV) {
 	return dir, ps
 }
 
+// TODO: Add Test cases to test backup for cluster
 func TestExport(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
 	dir, ps := initTestExport(t, "name:string @index .")
@@ -117,11 +116,11 @@ func TestExport(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	err = export(group.BelongsTo("friend"), bdir)
+	err = export(bdir)
 	require.NoError(t, err)
 
 	// We have 2 name type edges(with index). FP("name")%10 =7.
-	err = export(group.BelongsTo("name"), bdir)
+	err = export(bdir)
 	require.NoError(t, err)
 
 	searchDir := bdir
@@ -138,103 +137,99 @@ func TestExport(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
+	require.Equal(t, 1, len(fileList))
 
-	var counts []int
-	for _, file := range fileList {
-		f, err := os.Open(file)
+	file := fileList[0]
+	f, err := os.Open(file)
+	require.NoError(t, err)
+
+	r, err := gzip.NewReader(f)
+	require.NoError(t, err)
+
+	scanner := bufio.NewScanner(r)
+	count := 0
+	for scanner.Scan() {
+		nq, err := rdf.Parse(scanner.Text())
 		require.NoError(t, err)
-
-		r, err := gzip.NewReader(f)
-		require.NoError(t, err)
-
-		scanner := bufio.NewScanner(r)
-		count := 0
-		for scanner.Scan() {
-			nq, err := rdf.Parse(scanner.Text())
-			require.NoError(t, err)
-			// Subject should have uid 1/2/3/4.
-			require.Contains(t, []string{"_:uid1", "_:uid2", "_:uid3", "_:uid4"}, nq.Subject)
-			// The only value we set was "photon".
-			if nq.ObjectValue != nil {
-				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\\ton"}},
-					nq.ObjectValue)
-				// Test objecttype
-				if nq.Subject == "_:uid1" {
-					require.Equal(t, int32(0), nq.ObjectType)
-				} else if nq.Subject == "_:uid2" {
-					// string type because of lang @en
-					require.Equal(t, int32(9), nq.ObjectType)
-				}
+		// Subject should have uid 1/2/3/4.
+		require.Contains(t, []string{"_:uid1", "_:uid2", "_:uid3", "_:uid4"}, nq.Subject)
+		// The only value we set was "photon".
+		if nq.ObjectValue != nil {
+			require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\\ton"}},
+				nq.ObjectValue)
+			// Test objecttype
+			if nq.Subject == "_:uid1" {
+				require.Equal(t, int32(0), nq.ObjectType)
+			} else if nq.Subject == "_:uid2" {
+				// string type because of lang @en
+				require.Equal(t, int32(9), nq.ObjectType)
 			}
-
-			// The only objectId we set was uid 5.
-			if nq.ObjectId != "" {
-				require.Equal(t, "_:uid5", nq.ObjectId)
-			}
-			// Test lang.
-			if nq.Subject == "_:uid2" && nq.Predicate == "name" {
-				require.Equal(t, "en", nq.Lang)
-			}
-			// Test facets.
-			if nq.Subject == "_:uid4" {
-				require.Equal(t, "age", nq.Facets[0].Key)
-				require.Equal(t, "close", nq.Facets[1].Key)
-				require.Equal(t, "game", nq.Facets[2].Key)
-				require.Equal(t, "since", nq.Facets[3].Key)
-				// byte representation for facets.
-				require.Equal(t, []byte{0x21, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, nq.Facets[0].Value)
-				require.Equal(t, []byte{0x1}, nq.Facets[1].Value)
-				require.Equal(t, []byte("football"), nq.Facets[2].Value)
-				require.Equal(t, "\x01\x00\x00\x00\x0e\xba\b8e\x00\x00\x00\x00\xff\xff",
-					string(nq.Facets[3].Value))
-				// valtype for facets.
-				require.Equal(t, 1, int(nq.Facets[0].ValType))
-				require.Equal(t, 3, int(nq.Facets[1].ValType))
-				require.Equal(t, 0, int(nq.Facets[2].ValType))
-				require.Equal(t, 4, int(nq.Facets[3].ValType))
-			}
-			// Test label
-			if nq.Subject != "_:uid3" {
-				require.Equal(t, "author0", nq.Label)
-			} else {
-				require.Equal(t, "", nq.Label)
-			}
-			count++
 		}
-		counts = append(counts, count)
-		require.NoError(t, scanner.Err())
+
+		// The only objectId we set was uid 5.
+		if nq.ObjectId != "" {
+			require.Equal(t, "_:uid5", nq.ObjectId)
+		}
+		// Test lang.
+		if nq.Subject == "_:uid2" && nq.Predicate == "name" {
+			require.Equal(t, "en", nq.Lang)
+		}
+		// Test facets.
+		if nq.Subject == "_:uid4" {
+			require.Equal(t, "age", nq.Facets[0].Key)
+			require.Equal(t, "close", nq.Facets[1].Key)
+			require.Equal(t, "game", nq.Facets[2].Key)
+			require.Equal(t, "since", nq.Facets[3].Key)
+			// byte representation for facets.
+			require.Equal(t, []byte{0x21, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, nq.Facets[0].Value)
+			require.Equal(t, []byte{0x1}, nq.Facets[1].Value)
+			require.Equal(t, []byte("football"), nq.Facets[2].Value)
+			require.Equal(t, "\x01\x00\x00\x00\x0e\xba\b8e\x00\x00\x00\x00\xff\xff",
+				string(nq.Facets[3].Value))
+			// valtype for facets.
+			require.Equal(t, 1, int(nq.Facets[0].ValType))
+			require.Equal(t, 3, int(nq.Facets[1].ValType))
+			require.Equal(t, 0, int(nq.Facets[2].ValType))
+			require.Equal(t, 4, int(nq.Facets[3].ValType))
+		}
+		// Test label
+		if nq.Subject != "_:uid3" {
+			require.Equal(t, "author0", nq.Label)
+		} else {
+			require.Equal(t, "", nq.Label)
+		}
+		count++
 	}
+	require.NoError(t, scanner.Err())
 	// This order will be presereved due to file naming.
-	require.Equal(t, []int{4, 2}, counts)
+	require.Equal(t, 6, count)
 
-	var schemaCounts []int
-	for _, file := range schemaFileList {
-		f, err := os.Open(file)
+	require.Equal(t, 1, len(schemaFileList))
+	file = schemaFileList[0]
+	f, err = os.Open(file)
+	require.NoError(t, err)
+
+	r, err = gzip.NewReader(f)
+	require.NoError(t, err)
+
+	scanner = bufio.NewScanner(r)
+	count = 0
+	for scanner.Scan() {
+		schemas, err := schema.Parse(scanner.Text())
 		require.NoError(t, err)
-
-		r, err := gzip.NewReader(f)
-		require.NoError(t, err)
-
-		scanner := bufio.NewScanner(r)
-		count := 0
-		for scanner.Scan() {
-			schemas, err := schema.Parse(scanner.Text())
-			require.NoError(t, err)
-			require.Equal(t, 1, len(schemas))
-			// We wrote schema for only two predicates
-			if schemas[0].Predicate == "friend" {
-				require.Equal(t, "uid", types.TypeID(schemas[0].ValueType).Name())
-			} else {
-				require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range", schemas[0].Predicate)
-				require.Equal(t, "uid", types.TypeID(schemas[0].ValueType).Name())
-			}
-			count = len(schemas)
+		require.Equal(t, 1, len(schemas))
+		// We wrote schema for only two predicates
+		if schemas[0].Predicate == "friend" {
+			require.Equal(t, "uid", types.TypeID(schemas[0].ValueType).Name())
+		} else {
+			require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range", schemas[0].Predicate)
+			require.Equal(t, "uid", types.TypeID(schemas[0].ValueType).Name())
 		}
-		schemaCounts = append(schemaCounts, count)
-		require.NoError(t, scanner.Err())
+		count = len(schemas)
 	}
+	require.NoError(t, scanner.Err())
 	// This order will be preserved due to file naming
-	require.Equal(t, []int{1, 0}, schemaCounts)
+	require.Equal(t, 1, count)
 }
 
 func generateBenchValues() []kv {
