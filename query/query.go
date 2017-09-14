@@ -1349,6 +1349,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 
 	if len(sg.Filters) > 0 {
 		sg.updateUidMatrix()
+
 	}
 	for _, child := range sg.Children {
 		sgPath = append(sgPath, sg) // Add the current node to path
@@ -1845,7 +1846,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		} else if sg.FilterOp == "not" {
 			x.AssertTrue(len(sg.Filters) == 1)
 			sg.DestUIDs = algo.Difference(sg.DestUIDs, sg.Filters[0].DestUIDs)
+		} else if sg.FilterOp == "and" {
+			sg.DestUIDs = algo.IntersectSorted(lists)
 		} else {
+			lists = append(lists, sg.DestUIDs)
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
 	}
@@ -2054,11 +2058,11 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	sg.uidMatrix = result.UidMatrix
 	// Update the destUids as we might have removed some UIDs for which we didn't find any values
 	// while sorting.
-	sg.updateDestUids(ctx)
+	sg.updateDestUids()
 	return nil
 }
 
-func (sg *SubGraph) updateDestUids(ctx context.Context) {
+func (sg *SubGraph) updateDestUids() {
 	// Update sg.destUID. Iterate over the UID matrix (which is not sorted by
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
@@ -2122,7 +2126,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 	}
 
 	// Update the destUids as we might have removed some UIDs.
-	sg.updateDestUids(ctx)
+	sg.updateDestUids()
 	return nil
 }
 
@@ -2162,7 +2166,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	}
 
 	// Update the destUids as we might have removed some UIDs.
-	sg.updateDestUids(ctx)
+	sg.updateDestUids()
 	return nil
 }
 
