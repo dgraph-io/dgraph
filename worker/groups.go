@@ -188,6 +188,7 @@ func (g *groupi) BelongsTo(key string) uint32 {
 	g.RLock()
 	gid = g.tablets[key]
 	g.RUnlock()
+	x.AssertTrue(gid > 0)
 	return gid
 }
 
@@ -217,6 +218,7 @@ func (g *groupi) ServesTablet(key string) bool {
 	tablet := &protos.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
+		// TODO: Retry
 		fmt.Printf("Error while asking if I should server: %v\n", err)
 		return false
 	}

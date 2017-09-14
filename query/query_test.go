@@ -6906,8 +6906,17 @@ func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.Me
 	return m, nil
 }
 
+// Used by sync membership
 func (z *zeroServer) Update(ctx context.Context, in *protos.Group) (*protos.MembershipState, error) {
-	return &protos.MembershipState{}, nil
+	m := &protos.MembershipState{}
+	m.Zeros = make(map[uint64]*protos.Member)
+	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
+	m.Groups = make(map[uint32]*protos.Group)
+	g := &protos.Group{}
+	g.Members = make(map[uint64]*protos.Member)
+	g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
+	m.Groups[1] = g
+	return m, nil
 }
 
 func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*protos.Tablet, error) {
