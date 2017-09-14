@@ -39,7 +39,6 @@ import (
 var (
 	pstore           *badger.KV
 	workerServer     *grpc.Server
-	leasePred        string
 	pendingProposals chan struct{}
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
