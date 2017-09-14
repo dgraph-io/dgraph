@@ -19,10 +19,7 @@ package worker
 
 import (
 	"bytes"
-	"encoding/binary"
-	"errors"
 	"math/rand"
-	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -45,7 +42,7 @@ const (
 
 var (
 	errUnservedTablet = x.Errorf("Tablet isn't being served by this instance.")
-	allocator         embeddedUidAllocator
+	allocator         x.EmbeddedUidAllocator
 	emptyAssignedIds  = &protos.AssignedIds{}
 )
 
@@ -326,72 +323,9 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 	return nil
 }
 
-type embeddedUidAllocator struct {
-	sync.Mutex
-	nextLeaseId uint64
-	maxLeaseId  uint64
-}
-
-// Start lease from 2, 1 is used by _lease_
-func (e *embeddedUidAllocator) Init() {
-	var item badger.KVItem
-	// All keys start with 0x00 or 0x01 so shouldn't collide
-	pstore.Get([]byte("uid_lease"), &item)
-	e.maxLeaseId = 1
-	var n int
-	err := item.Value(func(val []byte) error {
-		if len(val) > 0 {
-			e.maxLeaseId, n = binary.Uvarint(val)
-			x.AssertTrue(n > 0)
-		}
-		return nil
-	})
-	x.Check(err)
-	e.nextLeaseId = e.maxLeaseId + 1
-}
-
-func (e *embeddedUidAllocator) assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	x.AssertTrue(Config.InMemoryComm)
-
-	val := int(num.Val)
-	if val == 0 {
-		return emptyAssignedIds, x.Errorf("Nothing to be marked or assigned")
-	}
-
-	e.Lock()
-	e.Unlock()
-
-	howMany := leaseBandwidth
-	if num.Val > leaseBandwidth {
-		howMany = num.Val + leaseBandwidth
-	}
-
-	if e.nextLeaseId == 0 {
-		return nil, errors.New("Server not initialized.")
-	}
-
-	available := e.maxLeaseId - e.nextLeaseId + 1
-
-	if available < num.Val {
-		e.maxLeaseId += howMany
-		val := make([]byte, 10)
-		n := binary.PutUvarint(val, e.maxLeaseId)
-		err := pstore.Set([]byte("uid_lease"), val[:n], 0x01)
-		if err != nil {
-			return emptyAssignedIds, err
-		}
-	}
-
-	out := &protos.AssignedIds{}
-	out.StartId = e.nextLeaseId
-	out.EndId = out.StartId + num.Val - 1
-	e.nextLeaseId = out.EndId + 1
-	return out, nil
-}
-
 func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	if Config.InMemoryComm {
-		return allocator.assignUids(ctx, num)
+		return allocator.AssignUids(ctx, num)
 	}
 	_, addr := groups().Leader(0)
 	// TODO: Leader, AnyServer should both return a healthy connection back.

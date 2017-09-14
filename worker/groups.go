@@ -188,7 +188,6 @@ func (g *groupi) BelongsTo(key string) uint32 {
 	g.RLock()
 	gid = g.tablets[key]
 	g.RUnlock()
-	x.AssertTrue(gid > 0)
 	return gid
 }
 
