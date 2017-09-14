@@ -33,6 +33,14 @@ type mapper struct {
 	buf bytes.Buffer
 }
 
+func newMapper(st *state) *mapper {
+	return &mapper{
+		state:           st,
+		shardMapEntries: make([][]*protos.MapEntry, st.opt.numShards),
+		shardSize:       make([]int64, st.opt.numShards),
+	}
+}
+
 func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, shard int) {
 	sort.Slice(mapEntries, func(i, j int) bool {
 		return bytes.Compare(mapEntries[i].Key, mapEntries[j].Key) < 0

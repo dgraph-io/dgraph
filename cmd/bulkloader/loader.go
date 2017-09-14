@@ -68,12 +68,7 @@ func newLoader(opt options) *loader {
 		mappers: make([]*mapper, opt.numGoroutines),
 	}
 	for i := 0; i < opt.numGoroutines; i++ {
-		// TODO: Consider using a proper ctor.
-		ld.mappers[i] = &mapper{
-			state:           st,
-			shardMapEntries: make([][]*protos.MapEntry, opt.numShards),
-			shardSize:       make([]int64, opt.numShards),
-		}
+		ld.mappers[i] = newMapper(st)
 	}
 	go ld.prog.report()
 	return ld
