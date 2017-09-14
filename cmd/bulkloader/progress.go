@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -21,6 +22,9 @@ type progress struct {
 	mapEdgeCount    int64
 	reduceEdgeCount int64
 	reduceKeyCount  int64
+
+	debugMu sync.Mutex
+	debug   func() string
 
 	start       time.Time
 	startReduce time.Time
@@ -59,17 +63,24 @@ func (p *progress) report() {
 
 func (p *progress) reportOnce() {
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
+	var debug string
+	p.debugMu.Lock()
+	if p.debug != nil {
+		debug = " " + p.debug()
+	}
+	p.debugMu.Unlock()
 	switch phase(atomic.LoadInt32((*int32)(&p.phase))) {
 	case nothing:
 	case mapPhase:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
-		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
+		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec%s\n",
 			fixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
 			niceFloat(float64(mapEdgeCount)),
 			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),
+			debug,
 		)
 	case reducePhase:
 		now := time.Now()
@@ -85,13 +96,14 @@ func (p *progress) reportOnce() {
 			pct = fmt.Sprintf("[%.2f%%] ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
 		}
 		fmt.Printf("REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
-			"plist_count:%s plist_speed:%s/sec\n",
+			"plist_count:%s plist_speed:%s/sec%s\n",
 			fixedDuration(now.Sub(p.start)),
 			pct,
 			niceFloat(float64(reduceEdgeCount)),
 			niceFloat(float64(reduceEdgeCount)/elapsed.Seconds()),
 			niceFloat(float64(reduceKeyCount)),
 			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
+			debug,
 		)
 	default:
 		x.AssertTruef(false, "invalid phase")
