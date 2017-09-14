@@ -46,6 +46,7 @@ type Pool struct {
 
 	Addr string
 	// Requires a lock on poolsi.
+	// TODO: Remove the refcounting. Let grpc take care of closing connections.
 	refcount int64
 }
 

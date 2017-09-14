@@ -27,7 +27,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -40,25 +39,24 @@ const (
 	del = "delete"
 )
 
+var errUnservedTablet = x.Errorf("Tablet isn't being served by this instance.")
+
 // runMutation goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
 func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
-	gid := group.BelongsTo(edge.Attr)
-	if !groups().ServesGroup(gid) {
-		return x.Errorf("Predicate fingerprint doesn't match this instance")
+	if !groups().ServesTablet(edge.Attr) {
+		return errUnservedTablet
 	}
 
 	rv := ctx.Value("raft").(x.RaftValue)
-	x.AssertTruef(rv.Group == gid, "fingerprint mismatch between raft and group conf")
-
 	typ, err := schema.State().TypeOf(edge.Attr)
 	x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
 	if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
-		waitForSyncMark(ctx, gid, rv.Index-1)
+		waitForSyncMark(ctx, 0, rv.Index-1)
 		if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
 			return err
 		}
@@ -72,7 +70,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 	key := x.DataKey(edge.Attr, edge.Entity)
 
 	t := time.Now()
-	plist := posting.Get(key, gid)
+	plist := posting.Get(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("GetLru took %v", dur)
@@ -94,8 +92,8 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	// All mutations before this should use old schema and after this
 	// should use new schema
 	n.waitForSyncMark(n.ctx, rv.Index-1)
-	if !groups().ServesGroup(group.BelongsTo(update.Predicate)) {
-		return x.Errorf("Predicate fingerprint doesn't match this instance")
+	if !groups().ServesTablet(update.Predicate) {
+		return errUnservedTablet
 	}
 	if err := checkSchema(update); err != nil {
 		return err
@@ -188,7 +186,7 @@ func updateSchema(attr string, s protos.SchemaUpdate, raftIndex uint64, group ui
 		Attr:   attr,
 		Schema: s,
 		Index:  raftIndex,
-		Water:  posting.SyncMarkFor(group),
+		Water:  posting.SyncMarks(),
 	}
 	schema.State().Update(ce)
 }
@@ -322,6 +320,7 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 
 func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	_, addr := groups().Leader(0)
+	// TODO: Leader, AnyServer should both return a healthy connection back.
 	p, err := conn.Get().Get(addr)
 	if err != nil {
 		return nil, err
@@ -372,7 +371,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 // taking into account the op(operation) and the attribute.
 func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutations) {
 	for _, edge := range m.Edges {
-		gid := group.BelongsTo(edge.Attr)
+		gid := groups().BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
 		if mu == nil {
 			mu = &protos.Mutations{GroupId: gid}
@@ -381,7 +380,7 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		mu.Edges = append(mu.Edges, edge)
 	}
 	for _, schema := range m.Schema {
-		gid := group.BelongsTo(schema.Predicate)
+		gid := groups().BelongsTo(schema.Predicate)
 		mu := mutationMap[gid]
 		if mu == nil {
 			mu = &protos.Mutations{GroupId: gid}
@@ -399,6 +398,9 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 
 	errorCh := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {
+		if gid == 0 {
+			return errUnservedTablet
+		}
 		go proposeOrSend(ctx, gid, mu, errorCh)
 	}
 
@@ -423,6 +425,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 		return &protos.Payload{}, ctx.Err()
 	}
 
+	// TODO: Use ServesTablet instead.
 	if !groups().ServesGroup(m.GroupId) {
 		return &protos.Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}

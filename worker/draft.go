@@ -108,7 +108,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	// Since the tasks are executed in goroutines we need on guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
 	pd.n.Applied.Done(pd.index)
-	posting.SyncMarkFor(pd.n.gid).Done(pd.index)
+	posting.SyncMarks().Done(pd.index)
 }
 
 func (p *proposals) Has(pid uint32) bool {
@@ -137,7 +137,7 @@ type node struct {
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
-	x.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
+	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
 
 	rc := &protos.RaftContext{
 		Addr:  myAddr,
@@ -238,7 +238,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		return err
 	}
 
-	//	we don't timeout on a mutation which has already been proposed.
+	// We don't timeout on a mutation which has already been proposed.
 	if err = n.Raft().Propose(ctx, slice[:upto]); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
@@ -314,14 +314,14 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
 	n.Applied.Done(e.Index)
-	posting.SyncMarkFor(n.gid).Done(e.Index)
+	posting.SyncMarks().Done(e.Index)
 }
 
 func (n *node) processApplyCh() {
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
 			n.Applied.Done(e.Index)
-			posting.SyncMarkFor(n.gid).Done(e.Index)
+			posting.SyncMarks().Done(e.Index)
 			continue
 		}
 
@@ -376,7 +376,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
-	posting.EvictGroup(n.gid)
+	posting.EvictLRU()
 	if _, err := populateShard(n.ctx, pstore, pool, n.gid); err != nil {
 		// TODO: We definitely don't want to just fall flat on our face if we can't
 		// retrieve a simple snapshot.
@@ -384,7 +384,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
-	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
+	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
 }
 
 type linReadReq struct {
@@ -548,7 +548,7 @@ func (n *node) Run() {
 				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
 				// possible sequentially
 				n.Applied.Begin(entry.Index)
-				posting.SyncMarkFor(n.gid).Begin(entry.Index)
+				posting.SyncMarks().Begin(entry.Index)
 
 				if !leader && entry.Type == raftpb.EntryConfChange {
 					// Config changes in followers must be applied straight away.
@@ -576,7 +576,7 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
-			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
+			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
 				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				go func() {
 					select {
@@ -641,7 +641,7 @@ func (n *node) snapshot(skip uint64) {
 		// regenerate the state on a crash. Therefore, don't take snapshots.
 		return
 	}
-	water := posting.SyncMarkFor(n.gid)
+	water := posting.SyncMarks()
 	le := water.DoneUntil()
 
 	existing, err := n.Store.Snapshot()
@@ -697,19 +697,20 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	idx, restart, err := n.InitFromWal(wal)
 	x.Check(err)
 	n.Applied.SetDoneUntil(idx)
-	posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
+	posting.SyncMarks().SetDoneUntil(idx)
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
-		_, found := groups().Server(Config.RaftId, n.gid)
-		if !found && groups().HasPeer(n.gid) {
+		found := groups().HasMeInState()
+		_, hasPeer := groups().MyPeer()
+		if !found && hasPeer {
 			n.joinPeers()
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
-		if groups().HasPeer(n.gid) {
+		if _, hasPeer := groups().MyPeer(); hasPeer {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 

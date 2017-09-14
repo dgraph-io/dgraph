@@ -83,6 +83,7 @@ func (s *Server) assignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 	if available < num.Val {
 		var proposal protos.ZeroProposal
 		proposal.MaxLeaseId = maxLease + howMany
+
 		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
 			return nil, err
 		}

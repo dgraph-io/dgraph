@@ -19,6 +19,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -49,6 +50,9 @@ func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
 	}
 	p.Lock()
 	defer p.Unlock()
+	if p.ids == nil {
+		p.ids = make(map[uint32]*proposalCtx)
+	}
 	if _, has := p.ids[pid]; has {
 		return false
 	}
@@ -100,6 +104,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal
 			break
 		}
 	}
+	fmt.Printf(" ===> Proposal: %+v\n", proposal)
 	data, err := proposal.Marshal()
 	if err != nil {
 		return err
@@ -123,6 +128,13 @@ var (
 	errInvalidProposal = errors.New("Invalid group proposal")
 )
 
+func newGroup() *protos.Group {
+	return &protos.Group{
+		Members: make(map[uint64]*protos.Member),
+		Tablets: make(map[string]*protos.Tablet),
+	}
+}
+
 func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	var p protos.ZeroProposal
 	if err := p.Unmarshal(e.Data); err != nil {
@@ -131,17 +143,21 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	if p.Id == 0 {
 		return 0, errInvalidProposal
 	}
-	x.Printf("Received proposal: %+v\n", p)
+	x.Printf("Applying proposal: %+v\n", p)
 
 	n.server.Lock()
 	defer n.server.Unlock()
 
+	state := n.server.state
 	if p.Member != nil {
 		if p.Member.GroupId == 0 {
 			return 0, errInvalidProposal
 		}
-		state := n.server.state
 		group := state.Groups[p.Member.GroupId]
+		if group == nil {
+			group = newGroup()
+			state.Groups[p.Member.GroupId] = group
+		}
 		_, has := group.Members[p.Member.Id]
 		if !has && len(group.Members) >= n.server.NumReplicas {
 			// We shouldn't allow more members than the number of replicas.
@@ -153,12 +169,15 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		if p.Tablet.GroupId == 0 {
 			return 0, errInvalidProposal
 		}
-		state := n.server.state
 		group := state.Groups[p.Tablet.GroupId]
+		if group == nil {
+			group = newGroup()
+			state.Groups[p.Tablet.GroupId] = group
+		}
 		group.Tablets[p.Tablet.Predicate] = p.Tablet
 	}
 	if p.MaxLeaseId > 0 {
-		n.server.state.MaxLeaseId = p.MaxLeaseId
+		state.MaxLeaseId = p.MaxLeaseId
 	}
 	return p.Id, nil
 }
@@ -205,7 +224,9 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	} else {
-		peers := []raft.Peer{{ID: n.Id}}
+		data, err := n.RaftContext.Marshal()
+		x.Check(err)
+		peers := []raft.Peer{{ID: n.Id, Context: data}}
 		n.SetRaft(raft.StartNode(n.Cfg, peers))
 	}
 
@@ -249,6 +270,9 @@ func (n *node) Run() {
 
 				} else if entry.Type == raftpb.EntryNormal {
 					pid, err := n.applyProposal(entry)
+					if err != nil {
+						x.Printf("While applying proposal: %v\n", err)
+					}
 					n.props.Done(pid, err)
 
 				} else {

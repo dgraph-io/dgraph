@@ -19,6 +19,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"sync"
 
@@ -56,11 +57,22 @@ type Server struct {
 	nextGroup uint32
 }
 
+func (s *Server) Init() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.state = &protos.MembershipState{
+		Groups: make(map[uint32]*protos.Group),
+		Zeros:  make(map[uint64]*protos.Member),
+	}
+	s.nextLeaseId = 1
+	s.nextGroup = 1
+}
+
 // Do not modify the membership state out of this.
 func (s *Server) membershipState() *protos.MembershipState {
 	s.RLock()
 	defer s.RUnlock()
-
 	return s.state
 }
 
@@ -142,6 +154,7 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 // Connect is used to connect the very first time with group zero.
 func (s *Server) Connect(ctx context.Context,
 	m *protos.Member) (resp *protos.MembershipState, err error) {
+	x.Printf("Got connection request: %+v\n", m)
 	if ctx.Err() != nil {
 		return &emptyMembershipState, ctx.Err()
 	}
@@ -149,6 +162,7 @@ func (s *Server) Connect(ctx context.Context,
 		return &emptyMembershipState, errInvalidId
 	}
 	if len(m.Addr) == 0 {
+		fmt.Println("No address provided.")
 		return &emptyMembershipState, errInvalidAddress
 	}
 	// Create a connection and check validity of the address by doing an Echo.

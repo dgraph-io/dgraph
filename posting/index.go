@@ -30,7 +30,6 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/bp128"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -110,16 +109,9 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
-	var groupId uint32
-	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-		groupId = rv.Group
-	}
-	if groupId == 0 {
-		groupId = group.BelongsTo(edge.Attr)
-	}
 
 	t := time.Now()
-	plist := getOrMutate(key, groupId)
+	plist := getOrMutate(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("getOrMutate took %v", dur)
@@ -152,9 +144,7 @@ type countParams struct {
 
 func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	groupId := group.BelongsTo(t.Attr)
-
-	plist := Get(key, groupId)
+	plist := Get(key)
 
 	x.AssertTrue(plist != nil)
 	edge := &protos.DirectedEdge{
@@ -257,9 +247,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
-	groupId := group.BelongsTo(t.Attr)
-
-	plist := getOrMutate(key, groupId)
+	plist := getOrMutate(key)
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)

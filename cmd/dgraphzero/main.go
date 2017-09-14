@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/table"
+	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -66,8 +66,6 @@ type state struct {
 }
 
 func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
-	defer wg.Done()
-
 	s := grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
@@ -80,35 +78,41 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 	m := conn.NewNode(&rc)
 	st.rs = &conn.RaftServer{Node: m}
 
-	st.node = &node{Node: m, server: st.zero, ctx: context.Background()}
+	st.node = &node{Node: m, ctx: context.Background()}
 	st.zero = &Server{NumReplicas: *numReplicas, Node: st.node}
+	st.zero.Init()
+	st.node.server = st.zero
 
 	protos.RegisterZeroServer(s, st.zero)
 	protos.RegisterRaftServer(s, st.rs)
 
-	err := s.Serve(l)
-	log.Printf("gRpc server stopped : %s", err.Error())
-	s.GracefulStop()
+	go func() {
+		defer wg.Done()
+		err := s.Serve(l)
+		log.Printf("gRpc server stopped : %s", err.Error())
+		s.GracefulStop()
+	}()
 }
 
 func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
-	defer wg.Done()
-
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
 		IdleTimeout:  2 * time.Minute,
 	}
 
-	err := srv.Serve(l)
-	log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
-	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
-	defer cancel()
-	err = srv.Shutdown(ctx)
-	log.Printf("All http(s) requests finished.")
-	if err != nil {
-		log.Printf("Http(s) shutdown err: %v", err.Error())
-	}
+	go func() {
+		defer wg.Done()
+		err := srv.Serve(l)
+		log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
+		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
+		defer cancel()
+		err = srv.Shutdown(ctx)
+		log.Printf("All http(s) requests finished.")
+		if err != nil {
+			log.Printf("Http(s) shutdown err: %v", err.Error())
+		}
+	}()
 }
 
 func main() {
@@ -135,8 +139,8 @@ func main() {
 	wg.Add(3)
 	// Initilize the servers.
 	var st state
-	go st.serveGRPC(grpcListener, &wg)
-	go st.serveHTTP(httpListener, &wg)
+	st.serveGRPC(grpcListener, &wg)
+	st.serveHTTP(httpListener, &wg)
 
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(*w, 0700), "Error while creating WAL dir.")
@@ -144,7 +148,7 @@ func main() {
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = *w
 	kvOpt.ValueDir = *w
-	kvOpt.MapTablesTo = table.MemoryMap
+	kvOpt.TableLoadingMode = options.MemoryMap
 	kv, err := badger.NewKV(&kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	wal := raftwal.Init(kv, *nodeId)
