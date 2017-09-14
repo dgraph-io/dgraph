@@ -23,6 +23,11 @@ var mePool = sync.Pool{
 		return new(protos.MapEntry)
 	},
 }
+var entPool = sync.Pool{
+	New: func() interface{} {
+		return new(badger.Entry)
+	},
+}
 
 func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 	fd, err := os.Open(filename)
@@ -130,7 +135,8 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()
 		// list when the value is read by dgraph.  For a value posting list,
 		// the full protos.Posting type is used (which internally contains the
 		// delta packed UID list).
-		e := &badger.Entry{Key: currentKey}
+		e := entPool.Get().(*badger.Entry)
+		e.Key = currentKey
 		if len(pl.Postings) == 0 {
 			e.Value = bp128.DeltaPack(uids)
 			e.UserMeta = 0x01
@@ -167,6 +173,8 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()
 		x.Check(err)
 		for _, e := range entries {
 			x.Check(e.Error)
+			*e = badger.Entry{}
+			entPool.Put(e)
 		}
 		// Reuse map entries.
 		for _, me := range batch {
