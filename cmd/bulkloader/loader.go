@@ -101,6 +101,7 @@ func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 				return nil, err
 			}
 			batch.WriteString(str)
+			continue
 		}
 		if err != nil {
 			return nil, err

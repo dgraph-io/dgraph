@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -euo pipefail
-set -x
 
 scriptDir=$(dirname "$(readlink -f "$0")")
 
@@ -22,7 +21,7 @@ done
 
 tmp=${tmp:-tmp}
 
-go install -race github.com/dgraph-io/dgraph/cmd/bulkloader
+go install github.com/dgraph-io/dgraph/cmd/bulkloader
 
 function run_test {
 	[[ $# == 2 ]] || { echo "bad args"; exit 1; }
