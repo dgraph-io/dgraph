@@ -41,6 +41,7 @@ func main() {
 		"Clean up the tmp directory after the loader finishes")
 	flag.BoolVar(&opt.skipExpandEdges, "skip_expand_edges", false,
 		"Don't generate edges that allow nodes to be expanded using _predicate_ or expand(...).")
+	flag.IntVar(&opt.numShards, "shards", 1, "Number of reducer shards.")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {

@@ -26,14 +26,14 @@ import (
 
 type mapper struct {
 	*state
-	mapEntries []*protos.MapEntry
-	sz         int64
+	shardMapEntries [][]*protos.MapEntry
+	shardSize       []int64
 
 	mu  sync.Mutex
 	buf bytes.Buffer
 }
 
-func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
+func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, shard int) {
 	sort.Slice(mapEntries, func(i, j int) bool {
 		return bytes.Compare(mapEntries[i].Key, mapEntries[j].Key) < 0
 	})
@@ -48,7 +48,10 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
 	}
 
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
-	filename := filepath.Join(m.opt.tmpDir, fmt.Sprintf("%06d.map", fileNum))
+	filename := filepath.Join(
+		m.opt.tmpDir,
+		fmt.Sprintf("%d_%06d.map", shard, fileNum),
+	)
 	x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
 	m.buf.Reset()
 	m.mu.Unlock() // Locked by caller.
@@ -69,23 +72,29 @@ func (m *mapper) run() {
 
 			x.Check(m.parseRDF(rdf))
 			atomic.AddInt64(&m.prog.rdfCount, 1)
-			if m.sz >= m.opt.mapBufSize {
-				m.mu.Lock() // One write at a time.
-				go m.writeMapEntriesToFile(m.mapEntries)
-				m.mapEntries = nil
-				m.sz = 0
+			for i := range m.shardSize {
+				if m.shardSize[i] >= m.opt.mapBufSize {
+					m.mu.Lock() // One write at a time.
+					go m.writeMapEntriesToFile(m.shardMapEntries[i], i)
+					m.shardMapEntries[i] = nil
+					m.shardSize[i] = 0
+				}
 			}
 		}
 	}
-	if len(m.mapEntries) > 0 {
-		m.mu.Lock() // One write at a time.
-		m.writeMapEntriesToFile(m.mapEntries)
+	for i, mapEntries := range m.shardMapEntries {
+		if len(mapEntries) > 0 {
+			m.mu.Lock() // One write at a time.
+			m.writeMapEntriesToFile(mapEntries, i)
+		}
 	}
 	m.mu.Lock() // Ensure that the last file write finishes.
 }
 
 func (m *mapper) addMapEntry(key []byte, posting *protos.Posting) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
+
+	shard := farm.Fingerprint64(key) % uint64(m.opt.numShards)
 
 	me := &protos.MapEntry{
 		Key: key,
@@ -95,8 +104,8 @@ func (m *mapper) addMapEntry(key []byte, posting *protos.Posting) {
 	} else {
 		me.Posting = posting
 	}
-	m.sz += int64(me.Size())
-	m.mapEntries = append(m.mapEntries, me)
+	m.shardSize[shard] += int64(me.Size())
+	m.shardMapEntries[shard] = append(m.shardMapEntries[shard], me)
 }
 
 func (m *mapper) parseRDF(rdfLine string) error {

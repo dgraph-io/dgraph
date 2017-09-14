@@ -30,6 +30,7 @@ type options struct {
 	numGoroutines   int
 	mapBufSize      int64
 	skipExpandEdges bool
+	numShards       int
 }
 
 type state struct {
@@ -67,7 +68,12 @@ func newLoader(opt options) *loader {
 		mappers: make([]*mapper, opt.numGoroutines),
 	}
 	for i := 0; i < opt.numGoroutines; i++ {
-		ld.mappers[i] = &mapper{state: st}
+		// TODO: Consider using a proper ctor.
+		ld.mappers[i] = &mapper{
+			state:           st,
+			shardMapEntries: make([][]*protos.MapEntry, opt.numShards),
+			shardSize:       make([]int64, opt.numShards),
+		}
 	}
 	go ld.prog.report()
 	return ld
@@ -187,41 +193,42 @@ func (ld *loader) writeLease() {
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	// Read output from map stage.
-	var mapOutput []string
-	err := filepath.Walk(ld.opt.tmpDir, func(path string, _ os.FileInfo, err error) error {
-		if !strings.HasSuffix(path, ".map") {
-			return nil
-		}
-		mapOutput = append(mapOutput, path)
-		return nil
-	})
-	x.Checkf(err, "While walking the map output.")
-
-	shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutput))
-	for i, mappedFile := range mapOutput {
-		shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
-		go readMapOutput(mappedFile, shuffleInputChs[i])
-	}
-
 	opt := badger.DefaultOptions
 	opt.Dir = ld.opt.badgerDir
 	opt.ValueDir = opt.Dir
 	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
 	opt.TableLoadingMode = bo.MemoryMap
+	var err error
 	ld.kv, err = badger.NewKV(&opt)
 	x.Check(err)
 
-	// Shuffle concurrently with reduce.
-	ci := &countIndexer{state: ld.state}
-	// Small buffer size since each element has a lot of data.
-	reduceCh := make(chan []*protos.MapEntry, 3)
-	go shufflePostings(reduceCh, shuffleInputChs, ld.prog, ci)
+	// Orchestrate finalisation of shufflers.
+	var shuffleWg sync.WaitGroup
+	shuffleWg.Add(ld.opt.numShards)
+	shuffleOutputCh := make(chan []*protos.MapEntry, 100)
+	go func() {
+		shuffleWg.Wait()
+		close(shuffleOutputCh)
+	}()
 
-	// Reduce stage.
+	// Start shufflers.
+	mapOutputShards := ld.findMapOutputFiles()
+	for _, mapOutput := range mapOutputShards {
+		shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutput))
+		for i, mappedFile := range mapOutput {
+			shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
+			go readMapOutput(mappedFile, shuffleInputChs[i])
+		}
+		go func() {
+			shufflePostings(shuffleOutputCh, shuffleInputChs, ld.prog)
+			shuffleWg.Done()
+		}()
+	}
+
+	// Run reducers.
 	pending := make(chan struct{}, ld.opt.numGoroutines)
-	for batch := range reduceCh {
+	for batch := range shuffleOutputCh {
 		pending <- struct{}{}
 		go func(batch []*protos.MapEntry) {
 			reduce(batch, ld.kv, ld.prog)
@@ -231,7 +238,22 @@ func (ld *loader) reduceStage() {
 	for i := 0; i < ld.opt.numGoroutines; i++ {
 		pending <- struct{}{}
 	}
-	ci.wait()
+}
+
+func (ld *loader) findMapOutputFiles() [][]string {
+	shards := make([][]string, ld.opt.numShards)
+	x.Checkf(filepath.Walk(ld.opt.tmpDir, func(path string, _ os.FileInfo, err error) error {
+		if !strings.HasSuffix(path, ".map") {
+			return nil
+		}
+		var shard, fileNum int
+		base := filepath.Base(path)
+		x.Check2(fmt.Sscanf(base, "%d_%d.map", &shard, &fileNum))
+		x.AssertTruef(shard < len(shards), "map filename doesn't match number of shards: %q", base)
+		shards[shard] = append(shards[shard], path)
+		return nil
+	}), "while looking for map output files")
+	return shards
 }
 
 func (ld *loader) writeSchema() {
