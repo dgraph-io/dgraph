@@ -116,7 +116,7 @@ func (h *postingHeap) Pop() interface{} {
 	return elem
 }
 
-func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress) {
+func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()) {
 	var currentKey []byte
 	var uids []uint64
 	pl := new(protos.PostingList)
@@ -163,14 +163,16 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress) {
 	}
 	outputPostingList()
 
-	err := kv.BatchSet(entries)
-	x.Check(err)
-	for _, e := range entries {
-		x.Check(e.Error)
-	}
-	// Reuse map entries.
-	for _, me := range batch {
-		me.Reset()
-		mePool.Put(me)
-	}
+	kv.BatchSetAsync(entries, func(err error) {
+		x.Check(err)
+		for _, e := range entries {
+			x.Check(e.Error)
+		}
+		// Reuse map entries.
+		for _, me := range batch {
+			me.Reset()
+			mePool.Put(me)
+		}
+		done()
+	})
 }

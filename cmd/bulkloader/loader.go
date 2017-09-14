@@ -223,17 +223,17 @@ func (ld *loader) reduceStage() {
 	}
 
 	// Run reducers.
+	var badgerWg sync.WaitGroup
 	pending := make(chan struct{}, ld.opt.numGoroutines)
 	for batch := range shuffleOutputCh {
 		pending <- struct{}{}
+		badgerWg.Add(1)
 		go func(batch []*protos.MapEntry) {
-			reduce(batch, ld.kv, ld.prog)
+			reduce(batch, ld.kv, ld.prog, badgerWg.Done)
 			<-pending
 		}(batch)
 	}
-	for i := 0; i < ld.opt.numGoroutines; i++ {
-		pending <- struct{}{}
-	}
+	badgerWg.Wait()
 }
 
 func (ld *loader) findMapOutputFiles() [][]string {
