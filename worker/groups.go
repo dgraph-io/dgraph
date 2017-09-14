@@ -185,7 +185,6 @@ func (g *groupi) BelongsTo(key string) uint32 {
 }
 
 func (g *groupi) ServesTablet(key string) bool {
-	fmt.Printf("Asking if I serve tablet: %v\n", key)
 	g.RLock()
 	gid := g.tablets[key]
 	g.RUnlock()
@@ -195,19 +194,15 @@ func (g *groupi) ServesTablet(key string) bool {
 
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
-	zaddr := g.AnyServer(0)
-	pl, err := conn.Get().Get(zaddr)
-	if err != nil {
-		fmt.Printf("Unable to get a connection to %v\n", zaddr)
+	pl := g.AnyServer(0)
+	if pl == nil {
 		return false
 	}
-	defer conn.Get().Release(pl)
 	zc := protos.NewZeroClient(pl.Get())
 
 	tablet := &protos.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
-		fmt.Printf("Error while asking if I should server: %v\n", err)
 		return false
 	}
 	g.Lock()
@@ -261,14 +256,17 @@ func (g *groupi) members(gid uint32) map[uint64]*protos.Member {
 	return group.Members
 }
 
-func (g *groupi) AnyServer(gid uint32) string {
+func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 	members := g.members(gid)
 	if members != nil {
 		for _, m := range members {
-			return m.Addr
+			pl, err := conn.Get().Get(m.Addr)
+			if err == nil {
+				return pl
+			}
 		}
 	}
-	return ""
+	return nil
 }
 
 func (g *groupi) MyPeer() (uint64, bool) {
@@ -285,21 +283,21 @@ func (g *groupi) MyPeer() (uint64, bool) {
 
 // Leader will try to return the leader of a given group, based on membership information.
 // There is currently no guarantee that the returned server is the leader of the group.
-func (g *groupi) Leader(gid uint32) (uint64, string) {
+func (g *groupi) Leader(gid uint32) *conn.Pool {
 	members := g.members(gid)
 	if members == nil {
-		return 0, ""
+		return nil
 	}
-	var first *protos.Member
 	for _, m := range members {
-		if first == nil {
-			first = m
-		}
 		if m.Leader {
-			return m.Id, m.Addr
+			if pl, err := conn.Get().Get(m.Addr); err == nil {
+				return pl
+			}
 		}
 	}
-	return first.Id, first.Addr
+	// Unable to find a healthy connection to leader. Get connection to any other server in the
+	// group.
+	return g.AnyServer(gid)
 }
 
 func (g *groupi) KnownGroups() (gids []uint32) {
@@ -317,20 +315,12 @@ func (g *groupi) syncMembershipState() {
 	// TODO: Instead of getting an address first, then finding a connection to that address,
 	// we should pick up a healthy connection from any server in the provided group.
 	// This way, if a server goes down, AnyServer can avoid giving a connection to that server.
-	addr := g.AnyServer(0)
+	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
-	if len(addr) == 0 {
+	if pl == nil {
 		x.Printf("WARNING: We don't have address of any dgraphzero server.")
 		return
 	}
-	var pl *conn.Pool
-	pl, err := conn.Get().Get(addr)
-	if err == conn.ErrNoConnection {
-		x.Printf("Unable to sync memberships. No connection to dgraphzero server at: %v", addr)
-		go conn.Get().Connect(addr) // Try to connect in a goroutine.
-		return
-	}
-	x.Check(err)
 
 	member := &protos.Member{
 		Id:      Config.RaftId,
@@ -346,7 +336,6 @@ func (g *groupi) syncMembershipState() {
 
 	c := protos.NewZeroClient(pl.Get())
 	state, err := c.Update(context.Background(), group)
-	conn.Get().Release(pl)
 
 	if err != nil || state == nil {
 		x.Printf("Unable to sync memberships. Error: %v", err)

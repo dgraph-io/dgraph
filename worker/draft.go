@@ -358,13 +358,13 @@ func (n *node) processApplyCh() {
 }
 
 func (n *node) retrieveSnapshot(peerID uint64) {
-	pool, err := n.GetPeerPool(peerID)
+	addr, _ := n.Peer(peerID)
+	pool, err := conn.Get().Get(addr)
 	if err != nil {
 		// err is just going to be errNoConnection
 		log.Fatalf("Cannot retrieve snapshot from peer %v, no connection.  Error: %v\n",
 			peerID, err)
 	}
-	defer conn.Get().Release(pool)
 
 	// Get index of last committed.
 	lastIndex, err := n.Store.LastIndex()
@@ -666,15 +666,10 @@ func (n *node) snapshot(skip uint64) {
 
 func (n *node) joinPeers() {
 	// Get leader information for MY group.
-	pid, paddr := groups().Leader(n.gid)
-	n.Connect(pid, paddr)
-	x.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
-
-	pool, err := conn.Get().Get(paddr)
-	if err != nil {
-		log.Fatalf("Unable to get pool for addr: %q for peer: %d, error: %v\n", paddr, pid, err)
+	pl := groups().Leader(n.gid)
+	if pl == nil {
+		log.Fatalf("Unable to reach leader or any other server in group %d", n.gid)
 	}
-	defer conn.Get().Release(pool)
 
 	// Bring the instance up to speed first.
 	// Raft would decide whether snapshot needs to fetched or not
@@ -682,11 +677,11 @@ func (n *node) joinPeers() {
 	// _, err := populateShard(n.ctx, pool, n.gid)
 	// x.Checkf(err, "Error while populating shard")
 
-	gconn := pool.Get()
+	gconn := pl.Get()
 
 	c := protos.NewRaftClient(gconn)
 	x.Printf("Calling JoinCluster")
-	_, err = c.JoinCluster(n.ctx, n.RaftContext)
+	_, err := c.JoinCluster(n.ctx, n.RaftContext)
 	// TODO: This should keep on indefinitely trying to join the cluster, instead of crashing.
 	x.Checkf(err, "Error while joining cluster")
 	x.Printf("Done with JoinCluster call\n")

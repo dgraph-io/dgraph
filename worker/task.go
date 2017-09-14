@@ -59,7 +59,6 @@ func invokeNetworkRequest(
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
 	}
-	defer conn.Get().Release(pl)
 
 	conn := pl.Get()
 	if tr, ok := trace.FromContext(ctx); ok {

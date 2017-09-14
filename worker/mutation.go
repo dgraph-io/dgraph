@@ -319,15 +319,12 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 }
 
 func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	_, addr := groups().Leader(0)
-	// TODO: Leader, AnyServer should both return a healthy connection back.
-	p, err := conn.Get().Get(addr)
-	if err != nil {
-		return nil, err
+	pl := groups().Leader(0)
+	if pl == nil {
+		return nil, conn.ErrNoConnection
 	}
-	defer conn.Get().Release(p)
 
-	conn := p.Get()
+	conn := pl.Get()
 	c := protos.NewZeroClient(conn)
 	return c.AssignUids(ctx, num)
 }
@@ -341,28 +338,27 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 		return
 	}
 
-	_, addr := groups().Leader(gid)
-	pl, err := conn.Get().Get(addr)
-	if err != nil {
+	pl := groups().Leader(gid)
+	if pl == nil {
+		err := conn.ErrNoConnection
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
 		che <- err
 		return
 	}
-	defer conn.Get().Release(pl)
 	conn := pl.Get()
 
 	c := protos.NewWorkerClient(conn)
 	ch := make(chan error, 1)
 	go func() {
-		_, err = c.Mutate(ctx, m)
+		_, err := c.Mutate(ctx, m)
 		ch <- err
 	}()
 	select {
 	case <-ctx.Done():
 		che <- ctx.Err()
-	case err = <-ch:
+	case err := <-ch:
 		che <- err
 	}
 }

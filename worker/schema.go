@@ -141,13 +141,11 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.SchemaReque
 		return
 	}
 
-	_, addr := groups().Leader(gid)
-	pl, err := conn.Get().Get(addr)
-	if err != nil {
-		ch <- resultErr{err: err}
+	pl := groups().Leader(gid)
+	if pl == nil {
+		ch <- resultErr{err: conn.ErrNoConnection}
 		return
 	}
-	defer conn.Get().Release(pl)
 	conn := pl.Get()
 	c := protos.NewWorkerClient(conn)
 	schema, e := c.Schema(ctx, s)

@@ -166,8 +166,7 @@ func (s *Server) Connect(ctx context.Context,
 		return &emptyMembershipState, errInvalidAddress
 	}
 	// Create a connection and check validity of the address by doing an Echo.
-	pl := conn.Get().Connect(m.Addr)
-	defer conn.Get().Release(pl)
+	conn.Get().Connect(m.Addr)
 
 	createProposal := func() *protos.ZeroProposal {
 		s.Lock()
