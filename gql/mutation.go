@@ -180,7 +180,7 @@ func typeValFrom(val *protos.Value) types.Val {
 	return types.Val{types.StringID, ""}
 }
 
-func ByteVal(nq NQuad) ([]byte, error) {
+func byteVal(nq NQuad) ([]byte, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
 	p := typeValFrom(nq.ObjectValue)
@@ -373,7 +373,7 @@ func (nq *NQuad) ExpandVariables(newToUid map[string]uint64, subjectUids []uint6
 
 func copyValue(out *protos.DirectedEdge, nq NQuad) error {
 	var err error
-	if out.Value, err = ByteVal(nq); err != nil {
+	if out.Value, err = byteVal(nq); err != nil {
 		return err
 	}
 	out.ValueType = uint32(nq.ObjectType)
