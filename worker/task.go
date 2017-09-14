@@ -553,6 +553,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	if q.Reverse && !schema.State().IsReversed(attr) {
 		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
 	}
+
 	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}

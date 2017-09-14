@@ -317,7 +317,8 @@ func validateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 	return nil
 }
 
-// runMutate is used to run the mutations on an instance.
+// proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
+// the leader of the group gid for proposing.
 func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che chan error) {
 	if groups().ServesGroup(gid) {
 		node := groups().Node(gid)
@@ -373,10 +374,19 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		}
 		mu.Schema = append(mu.Schema, schema)
 	}
+
+	if len(m.IndexKey) > 0 {
+		pk := x.Parse(m.IndexKey)
+		gid := group.BelongsTo(pk.Attr)
+		mu := mutationMap[gid]
+		// There should also be a corresponding mutation for this attribute when doing upsert.
+		x.AssertTrue(mu != nil)
+		mu.IndexKey = m.IndexKey
+	}
 }
 
 // MutateOverNetwork checks which group should be running the mutations
-// according to fingerprint of the predicate and sends it to that instance.
+// according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	mutationMap := make(map[uint32]*protos.Mutations)
 	addToMutationMap(mutationMap, m)

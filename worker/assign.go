@@ -18,8 +18,6 @@
 package worker
 
 import (
-	"fmt"
-
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -58,7 +56,6 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 	}
 	out.StartId = startId
 	out.EndId = startId + num.Val - 1
-	fmt.Println("out", out)
 	return out, nil
 }
 

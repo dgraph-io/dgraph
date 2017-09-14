@@ -547,13 +547,29 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(pid uint32, index uint64, edge *protos.DirectedEdge) error {
+func (n *node) processMutation(task *task) error {
+	pid := task.pid
+	ridx := task.rid
+	edge := task.edge
+
+	if len(task.indexKey) > 0 {
+		// Handle upserts.
+		l := posting.Get(task.indexKey)
+		if l.Length(0) > 0 {
+			// Someone else might have done an upsert.
+			return nil
+		}
+		// Lock so that concurrent upserts don't end up creating duplicate entries.
+		l.Lock()
+		defer l.Unlock()
+	}
+
 	var ctx context.Context
 	var has bool
 	if ctx, has = n.props.Ctx(pid); !has {
 		ctx = n.ctx
 	}
-	rv := x.RaftValue{Group: n.gid, Index: index}
+	rv := x.RaftValue{Group: n.gid, Index: ridx}
 	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runMutation(ctx, edge); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {

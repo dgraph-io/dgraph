@@ -783,9 +783,11 @@ L:
 			case "ignorereflex":
 				gq.IgnoreReflex = true
 			case "upsert":
-				// TODO - Check what if the user gives variables as values?
 				if gq.Func == nil || gq.Func.Name != "eq" {
 					return nil, x.Errorf("Upsert query can only be done with eq function.")
+				}
+				if len(gq.Func.Args) != 1 {
+					return nil, x.Errorf("Upsert query can only have one argument.")
 				}
 				gq.Upsert = true
 			default:

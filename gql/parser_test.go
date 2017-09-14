@@ -4169,7 +4169,7 @@ func TestUpsertQuery(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestUpsertQueryError(t *testing.T) {
+func TestUpsertQueryError1(t *testing.T) {
 	query := `
 	{
 		director(func:uid(1)) @upsert
@@ -4179,4 +4179,16 @@ func TestUpsertQueryError(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Upsert query can only be done with eq function.")
+}
+
+func TestUpsertQueryError2(t *testing.T) {
+	query := `
+	{
+		director(func:eq(name, ["a", "b"])) @upsert
+	}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Upsert query can only have one argument.")
 }

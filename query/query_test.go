@@ -412,7 +412,7 @@ func TestReturnUids(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -1054,7 +1054,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
 }
 
@@ -1510,7 +1510,7 @@ func TestDoubleOrder(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -1555,7 +1555,7 @@ func TestVarInIneqError(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 
 	require.Error(t, err)
 }
@@ -1753,7 +1753,7 @@ func TestShortestPath_ExpandError(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -1949,7 +1949,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -2173,7 +2173,7 @@ func TestDebug1(t *testing.T) {
 
 	ctx := context.WithValue(defaultContext(), "debug", "true")
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 
 	require.NoError(t, err)
 
@@ -2239,7 +2239,7 @@ func TestDebug3(t *testing.T) {
 	ctx := context.WithValue(defaultContext(), "debug", "true")
 
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -2438,7 +2438,7 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -2742,7 +2742,7 @@ func TestQueryPassword(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
+	_, err = queryRequest.ProcessQuery(defaultContext())
 
 	require.NotNil(t, err)
 }
@@ -5428,7 +5428,7 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
+	_, err = queryRequest.ProcessQuery(defaultContext())
 
 	require.NotNil(t, err)
 }
@@ -5447,7 +5447,7 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
+	_, err = queryRequest.ProcessQuery(defaultContext())
 
 	require.NotNil(t, err)
 }
@@ -5466,7 +5466,7 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
+	_, err = queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -7117,7 +7117,7 @@ func TestBoolIndexgeRoot(t *testing.T) {
 		}`
 	res, _ := gql.Parse(gql.Request{Str: q})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err := queryRequest.ProcessQuery(defaultContext())
+	_, err := queryRequest.ProcessQuery(defaultContext())
 	require.NotNil(t, err)
 }
 
@@ -7153,7 +7153,7 @@ func TestBoolSort(t *testing.T) {
 	`
 	res, _ := gql.Parse(gql.Request{Str: q, Http: true})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err := queryRequest.ProcessQuery(defaultContext())
+	_, err := queryRequest.ProcessQuery(defaultContext())
 	require.NotNil(t, err)
 }
 
@@ -7285,7 +7285,7 @@ func TestHashTokGeqErr(t *testing.T) {
 	`
 	res, _ := gql.Parse(gql.Request{Str: query})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err := queryRequest.ProcessQuery(defaultContext())
+	_, err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -7304,7 +7304,7 @@ func TestNameNotIndexed(t *testing.T) {
 	`
 	res, _ := gql.Parse(gql.Request{Str: query})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err := queryRequest.ProcessQuery(defaultContext())
+	_, err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -7343,7 +7343,7 @@ func TestDuplicateAlias(t *testing.T) {
 		}`
 	res, _ := gql.Parse(gql.Request{Str: query})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err := queryRequest.ProcessQuery(defaultContext())
+	_, err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -7429,7 +7429,7 @@ func TestDebugUid(t *testing.T) {
 	ctx := context.WithValue(defaultContext(), "debug", "true")
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(ctx)
+	_, err = queryRequest.ProcessQuery(ctx)
 	require.NoError(t, err)
 	var buf bytes.Buffer
 	err = ToJson(queryRequest.Latency, queryRequest.Subgraphs, &buf, nil, false)
@@ -7982,7 +7982,7 @@ func TestMathVarCrash(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
+	_, err = queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -8136,7 +8136,7 @@ func TestMultipleGtError(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
+	_, err = queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -8600,7 +8600,7 @@ func TestUidInFunctionAtRoot(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -8712,7 +8712,7 @@ func TestUseVariableBeforeDefinitionError(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Variable: [avgAge] used before definition.")
 }
@@ -9032,6 +9032,7 @@ func TestMultipleValueSortError(t *testing.T) {
 }
 
 func TestMultipleValueGroupByError(t *testing.T) {
+	t.Skip()
 	populateGraph(t)
 	query := `
 	{
@@ -9139,15 +9140,4 @@ func TestNearPointMultiPolygon(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me":[{"name":"Rick Grimes"}]}}`, js)
-}
-
-func TestUpsertName(t *testing.T) {
-	populateGraph(t)
-
-	query := `{
-		me(func: eq(name, "XYZ")) @upsert
-	}`
-
-	js := processToFastJSON(t, query)
-	fmt.Println(js)
 }
