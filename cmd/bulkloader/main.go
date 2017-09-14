@@ -24,7 +24,7 @@ func main() {
 	runtime.GOMAXPROCS(128)
 
 	var opt options
-	flag.StringVar(&opt.rdfFiles, "r", "", "Location of rdf files to load (comma separated)")
+	flag.StringVar(&opt.rdfDir, "r", "", "Directory containing *.rdf or *.rdf.gz files to load")
 	flag.StringVar(&opt.schemaFile, "s", "", "Location of schema file to load")
 	flag.StringVar(&opt.badgerDir, "p", "p", "Location of the final Dgraph directory")
 	flag.StringVar(&opt.leaseFile, "l", "LEASE", "Location to write the lease file")
@@ -48,7 +48,7 @@ func main() {
 		fmt.Println("No free args allowed, but got:", flag.Args())
 		os.Exit(1)
 	}
-	if opt.rdfFiles == "" || opt.schemaFile == "" {
+	if opt.rdfDir == "" || opt.schemaFile == "" {
 		flag.Usage()
 		fmt.Println("RDF and schema file(s) must be specified.")
 		os.Exit(1)
