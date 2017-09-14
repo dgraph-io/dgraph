@@ -128,6 +128,7 @@ func (h *postingHeap) Pop() interface{} {
 	h.nodes = h.nodes[:len(h.nodes)-1]
 	return elem
 }
+
 func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress) {
 	var currentKey []byte
 	var uids []uint64
