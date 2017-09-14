@@ -36,7 +36,7 @@ var (
 	ErrUnhealthyConnection = fmt.Errorf("Unhealthy connection")
 	errNoPeerPoolEntry     = fmt.Errorf("no peerPool entry")
 	errNoPeerPool          = fmt.Errorf("no peerPool pool, could not connect")
-	echoDuration           = time.Minute
+	echoDuration           = 10 * time.Second
 )
 
 // "Pool" is used to manage the grpc client connection(s) for communicating with other
@@ -101,6 +101,7 @@ func (p *Pools) Connect(addr string) *Pool {
 		p.Unlock()
 		return existingPool
 	}
+	x.Printf("== CONNECT ==> Setting %v\n", addr)
 	p.all[addr] = pool
 	p.Unlock()
 	return pool
@@ -116,7 +117,7 @@ func NewPool(addr string) (*Pool, error) {
 	if err != nil {
 		return nil, err
 	}
-	pl := &Pool{conn: conn, Addr: addr}
+	pl := &Pool{conn: conn, Addr: addr, lastEcho: time.Now()}
 	go pl.MonitorHealth()
 	return pl, nil
 }
@@ -140,18 +141,22 @@ func (p *Pool) MonitorHealth() {
 
 		c := protos.NewRaftClient(conn)
 		resp, err := c.Echo(context.Background(), query)
+		var lastEcho time.Time
 		if err == nil {
 			x.AssertTruef(bytes.Equal(resp.Data, query.Data),
 				"non-matching Echo response value from %v", p.Addr)
-			p.Lock()
-			p.lastEcho = time.Now()
-			p.Unlock()
+			lastEcho = time.Now()
+		} else {
+			x.Printf("Echo error from %v. Err: %v\n", p.Addr, err)
 		}
+		p.Lock()
+		p.lastEcho = lastEcho
+		p.Unlock()
 	}
 }
 
 func (p *Pool) IsHealthy() bool {
 	p.RLock()
 	defer p.RUnlock()
-	return time.Since(p.lastEcho) < 3*echoDuration
+	return time.Since(p.lastEcho) < 2*echoDuration
 }

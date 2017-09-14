@@ -185,7 +185,6 @@ func (g *groupi) BelongsTo(key string) uint32 {
 }
 
 func (g *groupi) ServesTablet(key string) bool {
-	fmt.Printf("Asking if I serve tablet: %v\n", key)
 	g.RLock()
 	gid := g.tablets[key]
 	g.RUnlock()
@@ -196,8 +195,7 @@ func (g *groupi) ServesTablet(key string) bool {
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
 	pl := g.AnyServer(0)
-	if pl != nil {
-		fmt.Printf("Unable to get a connection to dgraphzero.")
+	if pl == nil {
 		return false
 	}
 	zc := protos.NewZeroClient(pl.Get())
@@ -205,7 +203,6 @@ func (g *groupi) ServesTablet(key string) bool {
 	tablet := &protos.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
-		fmt.Printf("Error while asking if I should server: %v\n", err)
 		return false
 	}
 	g.Lock()

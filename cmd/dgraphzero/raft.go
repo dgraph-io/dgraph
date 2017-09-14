@@ -212,7 +212,6 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		if p == nil {
 			return errInvalidAddress
 		}
-		defer conn.Get().Release(p)
 
 		gconn := p.Get()
 		c := protos.NewRaftClient(gconn)
