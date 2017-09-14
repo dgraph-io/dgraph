@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -19,6 +21,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/pkg/errors"
 )
 
 type mapper struct {
@@ -52,14 +55,26 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
 }
 
 func (m *mapper) run() {
-	for rdf := range m.rdfCh {
-		x.Check(m.parseRDF(rdf))
-		atomic.AddInt64(&m.prog.rdfCount, 1)
-		if m.sz >= m.opt.mapBufSize {
-			m.mu.Lock() // One write at a time.
-			go m.writeMapEntriesToFile(m.mapEntries)
-			m.mapEntries = nil
-			m.sz = 0
+	for chunkBuf := range m.rdfChunkCh {
+		done := false
+		for !done {
+			rdf, err := chunkBuf.ReadString('\n')
+			if err == io.EOF {
+				// Process the last RDF rather than breaking immediately.
+				done = true
+			} else {
+				x.Check(err)
+			}
+			rdf = strings.TrimSpace(rdf)
+
+			x.Check(m.parseRDF(rdf))
+			atomic.AddInt64(&m.prog.rdfCount, 1)
+			if m.sz >= m.opt.mapBufSize {
+				m.mu.Lock() // One write at a time.
+				go m.writeMapEntriesToFile(m.mapEntries)
+				m.mapEntries = nil
+				m.sz = 0
+			}
 		}
 	}
 	if len(m.mapEntries) > 0 {
@@ -90,7 +105,7 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		if err == rdf.ErrEmpty {
 			return nil
 		}
-		return err
+		return errors.Wrapf(err, "while parsing line %q", rdfLine)
 	}
 
 	sid := m.um.assignUID(nq.GetSubject())

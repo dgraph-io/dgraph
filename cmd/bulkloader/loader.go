@@ -22,7 +22,7 @@ import (
 )
 
 type options struct {
-	rdfFiles        string
+	rdfDir          string
 	schemaFile      string
 	badgerDir       string
 	leaseFile       string
@@ -33,13 +33,13 @@ type options struct {
 }
 
 type state struct {
-	opt       options
-	prog      *progress
-	um        *uidMap
-	ss        *schemaStore
-	rdfCh     chan string
-	mapFileId uint32 // Used atomically to name the output files of the mappers.
-	kv        *badger.KV
+	opt        options
+	prog       *progress
+	um         *uidMap
+	ss         *schemaStore
+	rdfChunkCh chan *bytes.Buffer
+	mapFileId  uint32 // Used atomically to name the output files of the mappers.
+	kv         *badger.KV
 }
 
 type loader struct {
@@ -54,11 +54,13 @@ func newLoader(opt options) *loader {
 	x.Checkf(err, "Could not parse schema.")
 
 	st := &state{
-		opt:   opt,
-		prog:  newProgress(),
-		um:    newUIDMap(),
-		ss:    newSchemaStore(initialSchema),
-		rdfCh: make(chan string, 10000),
+		opt:  opt,
+		prog: newProgress(),
+		um:   newUIDMap(),
+		ss:   newSchemaStore(initialSchema),
+
+		// Lots of gz readers, so not much channel buffer needed.
+		rdfChunkCh: make(chan *bytes.Buffer, opt.numGoroutines),
 	}
 	ld := &loader{
 		state:   st,
@@ -71,17 +73,49 @@ func newLoader(opt options) *loader {
 	return ld
 }
 
-func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
-	isPrefix := true
-	var err error
-	for isPrefix && err == nil {
-		var line []byte
-		line, isPrefix, err = r.ReadLine()
-		if err == nil {
-			buf.Write(line)
+func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
+	batch := new(bytes.Buffer)
+	batch.Grow(10 << 20)
+	for lineCount := 0; lineCount < 1e5; lineCount++ {
+		slc, err := r.ReadSlice('\n')
+		if err == io.EOF {
+			batch.Write(slc)
+			return batch, err
 		}
+		if err == bufio.ErrBufferFull {
+			// This should only happen infrequently.
+			batch.Write(slc)
+			var str string
+			str, err = r.ReadString('\n')
+			if err == io.EOF {
+				batch.WriteString(str)
+				return batch, err
+			}
+			if err != nil {
+				return nil, err
+			}
+			batch.WriteString(str)
+		}
+		if err != nil {
+			return nil, err
+		}
+		batch.Write(slc)
 	}
-	return err
+	return batch, nil
+}
+
+func findRDFFiles(dir string) []string {
+	var files []string
+	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(path, ".rdf") || strings.HasSuffix(path, ".rdf.gz") {
+			files = append(files, path)
+		}
+		return nil
+	}))
+	return files
 }
 
 func (ld *loader) mapStage() {
@@ -97,33 +131,42 @@ func (ld *loader) mapStage() {
 	}
 
 	var readers []*bufio.Reader
-	for _, rdfFile := range strings.Split(ld.opt.rdfFiles, ",") {
+	for _, rdfFile := range findRDFFiles(ld.opt.rdfDir) {
 		f, err := os.Open(rdfFile)
 		x.Check(err)
 		defer f.Close()
 		if !strings.HasSuffix(rdfFile, ".gz") {
-			readers = append(readers, bufio.NewReader(f))
+			readers = append(readers, bufio.NewReaderSize(f, 1<<20))
 		} else {
 			gzr, err := gzip.NewReader(f)
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
 			readers = append(readers, bufio.NewReader(gzr))
 		}
 	}
-	var lineBuf bytes.Buffer
+
+	pending := make(chan struct{}, ld.opt.numGoroutines)
 	for _, r := range readers {
-		for {
-			lineBuf.Reset()
-			err := readLine(r, &lineBuf)
-			if err == io.EOF {
-				x.AssertTrue(lineBuf.Len() == 0)
-				break
+		pending <- struct{}{}
+		go func(r *bufio.Reader) {
+			for {
+				chunkBuf, err := readChunk(r)
+				if err == io.EOF {
+					if chunkBuf.Len() != 0 {
+						ld.rdfChunkCh <- chunkBuf
+					}
+					break
+				}
+				x.Check(err)
+				ld.rdfChunkCh <- chunkBuf
 			}
-			x.Check(err)
-			ld.rdfCh <- lineBuf.String()
-		}
+			<-pending
+		}(r)
+	}
+	for i := 0; i < ld.opt.numGoroutines; i++ {
+		pending <- struct{}{}
 	}
 
-	close(ld.rdfCh)
+	close(ld.rdfChunkCh)
 	mapperWg.Wait()
 
 	// Allow memory to GC before the reduce phase.
