@@ -325,7 +325,6 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Get().Release(p)
 
 	conn := p.Get()
 	c := protos.NewZeroClient(conn)
@@ -350,7 +349,6 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 		che <- err
 		return
 	}
-	defer conn.Get().Release(pl)
 	conn := pl.Get()
 
 	c := protos.NewWorkerClient(conn)

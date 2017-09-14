@@ -411,7 +411,6 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 			GroupId: gid,
 		}
 	}
-	defer conn.Get().Release(pl)
 
 	c := protos.NewWorkerClient(gconn)
 	nr := &protos.ExportPayload{

@@ -201,7 +201,6 @@ func (g *groupi) ServesTablet(key string) bool {
 		fmt.Printf("Unable to get a connection to %v\n", zaddr)
 		return false
 	}
-	defer conn.Get().Release(pl)
 	zc := protos.NewZeroClient(pl.Get())
 
 	tablet := &protos.Tablet{GroupId: g.groupId(), Predicate: key}
@@ -346,7 +345,6 @@ func (g *groupi) syncMembershipState() {
 
 	c := protos.NewZeroClient(pl.Get())
 	state, err := c.Update(context.Background(), group)
-	conn.Get().Release(pl)
 
 	if err != nil || state == nil {
 		x.Printf("Unable to sync memberships. Error: %v", err)

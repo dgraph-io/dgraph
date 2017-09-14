@@ -49,7 +49,7 @@ type Node struct {
 	Cfg         *raft.Config
 	MyAddr      string
 	Id          uint64
-	peers       PeerPool
+	peers       map[uint64]string
 	messages    chan sendmsg
 	RaftContext *protos.RaftContext
 	Store       *raft.MemoryStorage
@@ -62,9 +62,6 @@ type Node struct {
 }
 
 func NewNode(rc *protos.RaftContext) *Node {
-	peers := PeerPool{
-		peers: make(map[uint64]PeerPoolEntry),
-	}
 	store := raft.NewMemoryStorage()
 	n := &Node{
 		Id:    rc.Id,
@@ -87,7 +84,7 @@ func NewNode(rc *protos.RaftContext) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		peers:       peers,
+		peers:       make(map[uint64]string),
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
 		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
@@ -129,21 +126,18 @@ func (n *Node) ConfState() *raftpb.ConfState {
 	return n._confState
 }
 
-// Never returns ("", true)
-func (n *Node) GetPeer(pid uint64) (string, bool) {
-	return n.peers.get(pid)
-}
-
-// You must call release on the pool.  Can error for some pid's for which GetPeer
-// succeeds.
-func (n *Node) GetPeerPool(pid uint64) (*Pool, error) {
-	return n.peers.getPool(pid)
+func (n *Node) Peer(pid uint64) (string, bool) {
+	n.RLock()
+	defer n.RUnlock()
+	addr, ok := n.peers[pid]
+	return addr, ok
 }
 
 // addr must not be empty.
-func (n *Node) SetPeer(pid uint64, addr string, poolOrNil *Pool) {
+func (n *Node) SetPeer(pid uint64, addr string) {
 	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
-	n.peers.set(pid, addr, poolOrNil)
+	Get().Connect(addr)
+	n.peers[pid] = addr
 }
 
 func (n *Node) Send(m raftpb.Message) {
@@ -282,13 +276,13 @@ func (n *Node) doSendMessage(to uint64, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	pool, err := n.GetPeerPool(to)
-	if err != nil {
+	addr, has := n.peers[to]
+	pool, err := Get().Get(addr)
+	if !has || err != nil {
 		// No such peer exists or we got handed a bogus config (bad addr), so we
 		// can't send messages to this peer.
 		return
 	}
-	defer Get().Release(pool)
 	client := pool.Get()
 
 	c := protos.NewRaftClient(client)
@@ -317,7 +311,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 	if pid == n.Id {
 		return
 	}
-	if paddr, ok := n.GetPeer(pid); ok && paddr == addr {
+	if paddr, ok := n.peers[pid]; ok && paddr == addr {
 		// Already connected.
 		return
 	}
@@ -327,15 +321,15 @@ func (n *Node) Connect(pid uint64, addr string) {
 	if addr == n.MyAddr {
 		// TODO: Note this fact in more general peer health info somehow.
 		x.Printf("Peer %d claims same host as me\n", pid)
-		n.SetPeer(pid, addr, nil)
+		n.peers[pid] = addr
 		return
 	}
-	p := Get().Connect(addr)
-	n.SetPeer(pid, addr, p)
+	Get().Connect(addr)
+	n.peers[pid] = addr
 }
 
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
-	addr, ok := n.GetPeer(pid)
+	addr, ok := n.peers[pid]
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
 	rc := &protos.RaftContext{
 		Addr:  addr,
@@ -386,7 +380,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 		return nil, x.Errorf("Same Raft ID")
 	}
 	// Check that the new node is not already part of the group.
-	if _, ok := node.GetPeer(rc.Id); ok {
+	if _, ok := node.peers[rc.Id]; ok {
 		return &protos.Payload{}, x.Errorf("Node id already part of group.")
 	}
 	node.Connect(rc.Id, rc.Addr)

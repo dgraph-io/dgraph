@@ -358,13 +358,13 @@ func (n *node) processApplyCh() {
 }
 
 func (n *node) retrieveSnapshot(peerID uint64) {
-	pool, err := n.GetPeerPool(peerID)
+	addr, _ := n.Peer(peerID)
+	pool, err := conn.Get().Get(addr)
 	if err != nil {
 		// err is just going to be errNoConnection
 		log.Fatalf("Cannot retrieve snapshot from peer %v, no connection.  Error: %v\n",
 			peerID, err)
 	}
-	defer conn.Get().Release(pool)
 
 	// Get index of last committed.
 	lastIndex, err := n.Store.LastIndex()
@@ -674,7 +674,6 @@ func (n *node) joinPeers() {
 	if err != nil {
 		log.Fatalf("Unable to get pool for addr: %q for peer: %d, error: %v\n", paddr, pid, err)
 	}
-	defer conn.Get().Release(pool)
 
 	// Bring the instance up to speed first.
 	// Raft would decide whether snapshot needs to fetched or not
