@@ -579,7 +579,7 @@ func (n *node) processMutation(task *task) error {
 	if cont, err := n.handleUpsert(task); err != nil {
 		return err
 	} else if !cont {
-		// If we found a uid in the index PL, then we don't want to continue and can return.
+		// We found a uid which has this value, so don't continue.
 		return nil
 	}
 
