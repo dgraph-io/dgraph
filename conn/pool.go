@@ -32,7 +32,9 @@ import (
 )
 
 var (
-	ErrNoConnection = fmt.Errorf("No connection exists")
+	ErrNoConnection    = fmt.Errorf("No connection exists")
+	errNoPeerPoolEntry = fmt.Errorf("no peerPool entry")
+	errNoPeerPool      = fmt.Errorf("no peerPool pool, could not connect")
 )
 
 // "Pool" is used to manage the grpc client connection(s) for communicating with other
@@ -157,7 +159,7 @@ func TestConnection(p *Pool) error {
 	query.Data = make([]byte, 10)
 	x.Check2(rand.Read(query.Data))
 
-	c := protos.NewWorkerClient(conn)
+	c := protos.NewRaftClient(conn)
 	resp, err := c.Echo(context.Background(), query)
 	if err != nil {
 		return err
@@ -190,4 +192,58 @@ func (p *Pool) Get() *grpc.ClientConn {
 // AddOwner adds 1 to the refcount for the pool (atomically).
 func (p *Pool) AddOwner() {
 	atomic.AddInt64(&p.refcount, 1)
+}
+
+type PeerPoolEntry struct {
+	// Never the empty string.  Possibly a bogus address -- bad port number, the value
+	// of *myAddr, or some screwed up Raft config.
+	addr string
+	// An owning reference to a pool for this peer (or nil if addr is sufficiently bogus).
+	poolOrNil *Pool
+}
+
+// peerPool stores the peers' addresses and our connections to them.  It has exactly one
+// entry for every peer other than ourselves.  Some of these peers might be unreachable or
+// have bogus (but never empty) addresses.
+type PeerPool struct {
+	sync.RWMutex
+	peers map[uint64]PeerPoolEntry
+}
+
+// getPool returns the non-nil pool for a peer.  This might error even if get(id)
+// succeeds, if the pool is nil.  This happens if the peer was configured so badly (it had
+// a totally bogus addr) we can't make a pool.  (A reasonable refactoring would have us
+// make a pool, one that has a nil gRPC connection.)
+//
+// You must call pools().release on the pool.
+func (p *PeerPool) getPool(id uint64) (*Pool, error) {
+	p.RLock()
+	defer p.RUnlock()
+	ent, ok := p.peers[id]
+	if !ok {
+		return nil, errNoPeerPoolEntry
+	}
+	if ent.poolOrNil == nil {
+		return nil, errNoPeerPool
+	}
+	ent.poolOrNil.AddOwner()
+	return ent.poolOrNil, nil
+}
+
+func (p *PeerPool) get(id uint64) (string, bool) {
+	p.RLock()
+	defer p.RUnlock()
+	ret, ok := p.peers[id]
+	return ret.addr, ok
+}
+
+func (p *PeerPool) set(id uint64, addr string, pl *Pool) {
+	p.Lock()
+	defer p.Unlock()
+	if old, ok := p.peers[id]; ok {
+		if old.poolOrNil != nil {
+			Get().Release(old.poolOrNil)
+		}
+	}
+	p.peers[id] = PeerPoolEntry{addr, pl}
 }
