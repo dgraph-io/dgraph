@@ -99,10 +99,8 @@ func (m *mapper) run() {
 	m.mu.Lock() // Ensure that the last file write finishes.
 }
 
-func (m *mapper) addMapEntry(key []byte, posting *protos.Posting) {
+func (m *mapper) addMapEntry(key []byte, posting *protos.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
-
-	shard := farm.Fingerprint64(key) % uint64(m.opt.NumShards)
 
 	me := &protos.MapEntry{
 		Key: key,
@@ -137,18 +135,19 @@ func (m *mapper) parseRDF(rdfLine string) error {
 	}
 
 	fwd, rev := m.createPostings(nq, de)
-	key := x.DataKey(nq.GetPredicate(), sid)
-	m.addMapEntry(key, fwd)
+	shard := m.state.sm.shardFor(nq.Predicate)
+	key := x.DataKey(nq.Predicate, sid)
+	m.addMapEntry(key, fwd, shard)
 
 	if rev != nil {
-		key = x.ReverseKey(nq.GetPredicate(), oid)
-		m.addMapEntry(key, rev)
+		key = x.ReverseKey(nq.Predicate, oid)
+		m.addMapEntry(key, rev, shard)
 	}
 
 	if !m.opt.SkipExpandEdges {
 		key = x.DataKey("_predicate_", sid)
-		pp := m.createPredicatePosting(nq.GetPredicate())
-		m.addMapEntry(key, pp)
+		pp := m.createPredicatePosting(nq.Predicate)
+		m.addMapEntry(key, pp, shard)
 	}
 
 	m.addIndexMapEntries(nq, de)
@@ -243,6 +242,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 					Uid:         de.GetEntity(),
 					PostingType: protos.Posting_REF,
 				},
+				m.state.sm.shardFor(nq.Predicate),
 			)
 		}
 	}

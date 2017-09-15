@@ -24,7 +24,7 @@ import (
 type options struct {
 	RDFDir                 string
 	SchemaFile             string
-	BadgerDir              string
+	DgraphsDir             string
 	LeaseFile              string
 	TmpDir                 string
 	NumGoroutines          int
@@ -36,6 +36,8 @@ type options struct {
 	CleanupTmp             bool
 	MaxPendingBadgerWrites int
 	NumShufflers           int
+
+	shardOutputDirs []string
 }
 
 type state struct {
@@ -43,9 +45,9 @@ type state struct {
 	prog       *progress
 	um         *uidMap
 	ss         *schemaStore
+	sm         *shardMap
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	kv         *badger.KV
 }
 
 type loader struct {
@@ -64,6 +66,7 @@ func newLoader(opt options) *loader {
 		prog: newProgress(),
 		um:   newUIDMap(),
 		ss:   newSchemaStore(initialSchema),
+		sm:   newShardMap(opt.NumShards),
 
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
@@ -191,42 +194,53 @@ func (ld *loader) writeLease() {
 	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))
 }
 
+type shuffleOutput struct {
+	kv      *badger.KV
+	entries []*protos.MapEntry
+}
+
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
-
-	opt := badger.DefaultOptions
-	opt.Dir = ld.opt.BadgerDir
-	opt.ValueDir = opt.Dir
-	opt.ValueGCRunInterval = time.Hour * 100
-	opt.SyncWrites = false
-	opt.TableLoadingMode = bo.LoadToRAM
-	var err error
-	ld.kv, err = badger.NewKV(&opt)
-	x.Check(err)
 
 	// Orchestrate finalisation of shufflers.
 	var shuffleWg sync.WaitGroup
 	shuffleWg.Add(ld.opt.NumShards)
-	shuffleOutputCh := make(chan []*protos.MapEntry, 1000)
+	shuffleOutputCh := make(chan shuffleOutput, 1000)
 	go func() {
 		shuffleWg.Wait()
 		close(shuffleOutputCh)
 	}()
 
 	// Run shufflers
+	var badgers []*badger.KV
 	pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
 	go func() {
-		pendingShufflers <- struct{}{}
-		for _, mapOutput := range ld.findMapOutputFiles() {
-			shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutput))
-			for i, mappedFile := range mapOutput {
+		mapOutputs := ld.findMapOutputFiles()
+		x.AssertTrue(len(mapOutputs) == ld.opt.NumShards)
+		x.AssertTrue(len(ld.opt.shardOutputDirs) == ld.opt.NumShards)
+
+		for i := 0; i < ld.opt.NumShards; i++ {
+			pendingShufflers <- struct{}{}
+
+			opt := badger.DefaultOptions
+			opt.Dir = ld.opt.shardOutputDirs[i]
+			opt.ValueDir = opt.Dir
+			opt.ValueGCRunInterval = time.Hour * 100
+			opt.SyncWrites = false
+			opt.TableLoadingMode = bo.LoadToRAM
+			kv, err := badger.NewKV(&opt)
+			x.Check(err)
+			badgers = append(badgers, kv)
+
+			shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutputs[i]))
+			for i, mappedFile := range mapOutputs[i] {
 				shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
 				go readMapOutput(mappedFile, shuffleInputChs[i])
 			}
 			go func() {
-				shufflePostings(shuffleOutputCh, shuffleInputChs, ld.prog)
-				shuffleWg.Done()
+				shufflePostings(shuffleOutputCh, shuffleInputChs, kv, ld.prog)
 				<-pendingShufflers
+				shuffleWg.Done()
 			}()
 		}
 	}()
@@ -234,18 +248,22 @@ func (ld *loader) reduceStage() {
 	// Run reducers.
 	var badgerWg sync.WaitGroup
 	pendingReducers := make(chan struct{}, ld.opt.NumGoroutines)
-	for batch := range shuffleOutputCh {
+	for reduceJob := range shuffleOutputCh {
 		pendingReducers <- struct{}{}
 		NumReducers.Add(1)
 		NumQueuedReduceJobs.Add(-1)
 		badgerWg.Add(1)
-		go func(batch []*protos.MapEntry) {
-			reduce(batch, ld.kv, ld.prog, badgerWg.Done)
+		go func(job shuffleOutput) {
+			reduce(job.entries, job.kv, ld.prog, badgerWg.Done)
 			<-pendingReducers
 			NumReducers.Add(-1)
-		}(batch)
+		}(reduceJob)
 	}
+
 	badgerWg.Wait()
+	for _, kv := range badgers {
+		x.Check(kv.Close())
+	}
 }
 
 func (ld *loader) findMapOutputFiles() [][]string {
@@ -265,10 +283,16 @@ func (ld *loader) findMapOutputFiles() [][]string {
 }
 
 func (ld *loader) writeSchema() {
-	ld.ss.write(ld.kv)
+	// TODO: Schema should be written to KVs. Does a copy go to each KV? Or
+	// only on a per schema basis?
+
+	// TODO: It occurs to me that the predicate -> shard mapping might better
+	// belong in the schema store, since we already look up by schema there.
+
+	//ld.ss.write(ld.kv)
 }
 
 func (ld *loader) cleanup() {
 	ld.prog.endSummary()
-	x.Check(ld.kv.Close())
+	//x.Check(ld.kv.Close())
 }

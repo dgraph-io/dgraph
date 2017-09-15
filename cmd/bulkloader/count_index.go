@@ -1,14 +1,6 @@
 package main
 
-import (
-	"sort"
-	"sync"
-
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/bp128"
-	"github.com/dgraph-io/dgraph/x"
-)
-
+/*
 type current struct {
 	pred  string
 	rev   bool
@@ -72,3 +64,4 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 func (c *countIndexer) wait() {
 	c.wg.Wait()
 }
+*/

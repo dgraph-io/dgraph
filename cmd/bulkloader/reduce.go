@@ -48,8 +48,8 @@ func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 	close(mapEntryCh)
 }
 
-func shufflePostings(batchCh chan<- []*protos.MapEntry,
-	mapEntryChs []chan *protos.MapEntry, prog *progress) {
+func shufflePostings(batchCh chan<- shuffleOutput,
+	mapEntryChs []chan *protos.MapEntry, kv *badger.KV, prog *progress) {
 
 	var ph postingHeap
 	for _, ch := range mapEntryChs {
@@ -71,7 +71,7 @@ func shufflePostings(batchCh chan<- []*protos.MapEntry,
 		}
 
 		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
-			batchCh <- batch
+			batchCh <- shuffleOutput{entries: batch, kv: kv}
 			NumQueuedReduceJobs.Add(1)
 			batch = make([]*protos.MapEntry, 0, batchAlloc)
 		}
@@ -79,7 +79,7 @@ func shufflePostings(batchCh chan<- []*protos.MapEntry,
 		batch = append(batch, me)
 	}
 	if len(batch) > 0 {
-		batchCh <- batch
+		batchCh <- shuffleOutput{entries: batch, kv: kv}
 		NumQueuedReduceJobs.Add(1)
 	}
 }

@@ -8,7 +8,9 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -24,7 +26,7 @@ func main() {
 	flag.IntVar(&opt.BlockRate, "block", 0, "Block profiling rate")
 	flag.StringVar(&opt.RDFDir, "r", "", "Directory containing *.rdf or *.rdf.gz files to load")
 	flag.StringVar(&opt.SchemaFile, "s", "", "Location of schema file to load")
-	flag.StringVar(&opt.BadgerDir, "p", "p", "Location of the final Dgraph directory")
+	flag.StringVar(&opt.DgraphsDir, "out", "out", "Location to write the final dgraph data directories.")
 	flag.StringVar(&opt.LeaseFile, "l", "LEASE", "Location to write the lease file")
 	flag.StringVar(&opt.TmpDir, "tmp", "tmp", "Temp directory used to use for on-disk "+
 		"scratch space. Requires free space proportional to the size of the RDF file.")
@@ -69,9 +71,13 @@ func main() {
 		runtime.SetBlockProfileRate(opt.BlockRate)
 	}
 
-	// Ensure the badger output dir is empty.
-	x.Check(os.RemoveAll(opt.BadgerDir))
-	x.Check(os.MkdirAll(opt.BadgerDir, 0700))
+	// Delete and recreate the output dirs to ensure they are empty.
+	x.Check(os.RemoveAll(opt.DgraphsDir))
+	for i := 0; i < opt.NumShards; i++ {
+		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i))
+		x.Check(os.MkdirAll(dir, 0700))
+		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
+	}
 
 	// Create a directory just for bulk loader's usage.
 	if !opt.SkipMapPhase {
