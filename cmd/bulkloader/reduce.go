@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
@@ -17,22 +16,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 )
-
-var mePool = sync.Pool{
-	New: func() interface{} {
-		return new(protos.MapEntry)
-	},
-}
-var entPool = sync.Pool{
-	New: func() interface{} {
-		return new(badger.Entry)
-	},
-}
-var plBufPool = sync.Pool{
-	New: func() interface{} {
-		return []byte(nil)
-	},
-}
 
 func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 	fd, err := os.Open(filename)
@@ -58,9 +41,9 @@ func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 		}
 		x.Check2(io.ReadFull(r, unmarshalBuf[:sz]))
 
-		mapEntry := mePool.Get().(*protos.MapEntry)
-		x.Check(proto.Unmarshal(unmarshalBuf[:sz], mapEntry))
-		mapEntryCh <- mapEntry
+		me := new(protos.MapEntry)
+		x.Check(proto.Unmarshal(unmarshalBuf[:sz], me))
+		mapEntryCh <- me
 	}
 	close(mapEntryCh)
 }
@@ -144,22 +127,15 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV,
 		// list when the value is read by dgraph.  For a value posting list,
 		// the full protos.Posting type is used (which internally contains the
 		// delta packed UID list).
-		e := entPool.Get().(*badger.Entry)
-		e.Key = currentKey
+		e := &badger.Entry{Key: currentKey}
 		if len(pl.Postings) == 0 {
 			e.Value = bp128.DeltaPack(uids)
 			e.UserMeta = 0x01
 		} else {
 			pl.Uids = bp128.DeltaPack(uids)
-			plSz := pl.Size()
-			e.Value = plBufPool.Get().([]byte)
-			if cap(e.Value) < plSz {
-				// Throw away buffers that are too small.
-				e.Value = make([]byte, plSz)
-			} else {
-				e.Value = e.Value[:plSz]
-			}
-			x.Check2(pl.MarshalTo(e.Value))
+			var err error
+			e.Value, err = pl.Marshal()
+			x.Check(err)
 		}
 		entries = append(entries, e)
 
@@ -190,14 +166,6 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV,
 		x.Check(err)
 		for _, e := range entries {
 			x.Check(e.Error)
-			plBufPool.Put(e.Value)
-			*e = badger.Entry{}
-			entPool.Put(e)
-		}
-		// Reuse map entries.
-		for _, me := range batch {
-			me.Reset()
-			mePool.Put(me)
 		}
 		NumBadgerWrites.Add(-1)
 		<-pendingBadgerWrites
