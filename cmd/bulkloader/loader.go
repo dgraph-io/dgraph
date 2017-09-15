@@ -228,7 +228,7 @@ func (ld *loader) reduceStage() {
 
 	// Run reducers.
 	pendingReducers := make(chan struct{}, ld.opt.NumGoroutines)
-	pendingBadgerWrites := make(chan struct{}, 1000) // TODO: Make configurable.
+	pendingBadgerWrites := make(chan struct{}, opt.MaxPendingBadgerWrites)
 	for batch := range shuffleOutputCh {
 		pendingReducers <- struct{}{}
 		NumReducers.Add(1)
@@ -239,7 +239,7 @@ func (ld *loader) reduceStage() {
 			NumReducers.Add(-1)
 		}(batch)
 	}
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < opt.MaxPendingBadgerWrites; i++ {
 		pendingBadgerWrites <- struct{}{}
 	}
 }

@@ -88,16 +88,16 @@ func shufflePostings(batchCh chan<- []*protos.MapEntry,
 		}
 
 		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
-			NumQueuedReduceJobs.Add(1)
 			batchCh <- batch
+			NumQueuedReduceJobs.Add(1)
 			batch = make([]*protos.MapEntry, 0, batchAlloc)
 		}
 		prevKey = me.Key
 		batch = append(batch, me)
 	}
 	if len(batch) > 0 {
-		NumQueuedReduceJobs.Add(1)
 		batchCh <- batch
+		NumQueuedReduceJobs.Add(1)
 	}
 }
 
