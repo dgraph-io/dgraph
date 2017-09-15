@@ -698,6 +698,8 @@ func setupServer(che chan error) {
 		log.Fatal(err)
 	}
 
+	// TODO: Consider removing the cmux here. We already separated gprc and http listeners to
+	// different ports.
 	httpMux := cmux.New(httpListener)
 	httpl := httpMux.Match(cmux.HTTP1Fast())
 	http2 := httpMux.Match(cmux.HTTP2())
