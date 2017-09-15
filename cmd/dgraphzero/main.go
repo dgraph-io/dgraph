@@ -39,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/jsonpb"
 )
 
 var (
@@ -56,6 +57,7 @@ var (
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
 	laddr := fmt.Sprintf("%s:%d", addr, port)
+	fmt.Printf("Setting up listener at: %v\n", laddr)
 	return net.Listen("tcp", laddr)
 }
 
@@ -115,6 +117,23 @@ func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	}()
 }
 
+func (st *state) getState(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
+	mstate := st.zero.membershipState()
+	if mstate == nil {
+		x.SetStatus(w, x.ErrorNoData, "No membership state found.")
+		return
+	}
+
+	m := jsonpb.Marshaler{}
+	if err := m.Marshal(w, mstate); err != nil {
+		x.SetStatus(w, x.ErrorNoData, err.Error())
+		return
+	}
+}
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	flag.Parse()
@@ -137,10 +156,12 @@ func main() {
 
 	var wg sync.WaitGroup
 	wg.Add(3)
-	// Initilize the servers.
+	// Initialize the servers.
 	var st state
 	st.serveGRPC(grpcListener, &wg)
 	st.serveHTTP(httpListener, &wg)
+
+	http.HandleFunc("/state", st.getState)
 
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(*w, 0700), "Error while creating WAL dir.")
