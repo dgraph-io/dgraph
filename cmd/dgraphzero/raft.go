@@ -98,7 +98,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal
 		ctx: ctx,
 	}
 	for {
-		id := rand.Uint32()
+		id := rand.Uint32() + 1
 		if n.props.Store(id, pctx) {
 			proposal.Id = id
 			break
@@ -137,6 +137,10 @@ func newGroup() *protos.Group {
 
 func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	var p protos.ZeroProposal
+	// Raft commits empty entry on becoming a leader.
+	if len(e.Data) == 0 {
+		return 0, nil
+	}
 	if err := p.Unmarshal(e.Data); err != nil {
 		return 0, err
 	}
