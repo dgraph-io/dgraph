@@ -9329,3 +9329,33 @@ func TestMultiSort7Paginate(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`, js)
 }
+
+func TestFilterRootOverride(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		a as var(func: eq(name, "Michonne")) @filter(eq(name, "Rick Grimes"))
+
+		me(func: uid(a)) {
+			_uid_
+			name
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
+
+func TestFilterRoot(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		me(func: eq(name, "Michonne")) @filter(eq(name, "Rick Grimes")) {
+			_uid_
+			name
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
