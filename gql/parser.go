@@ -133,8 +133,9 @@ type FilterTree struct {
 }
 
 type Arg struct {
-	Value      string
-	IsValueVar bool // If argument is val(a)
+	Value        string
+	IsValueVar   bool // If argument is val(a)
+	IsGraphQLVar bool
 }
 
 // Function holds the information about gql functions.
@@ -430,6 +431,9 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		}
 
 		for idx, v := range gq.Func.Args {
+			if !v.IsGraphQLVar {
+				continue
+			}
 			if err := substituteVar(v.Value, &gq.Func.Args[idx].Value, vmap); err != nil {
 				return err
 			}
@@ -1558,7 +1562,7 @@ L:
 					}
 					gq.Args["id"] = val
 				} else {
-					g.Args = append(g.Args, Arg{Value: val})
+					g.Args = append(g.Args, Arg{Value: val, IsGraphQLVar: true})
 				}
 				expectArg = false
 				continue

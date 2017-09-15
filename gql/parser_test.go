@@ -4256,3 +4256,16 @@ func TestMultipleOrderError2(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Sorting by an attribute: [alias] can only be done once")
 }
+
+func TestEqArg(t *testing.T) {
+	query := `
+	{
+		ab(func: eq(name@en, "$pringfield (or, How)")) {
+			uid
+		}
+	}
+	`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, gql.Query[0].Func.Args[0].Value, `$pringfield (or, How)`)
+}
