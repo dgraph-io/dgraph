@@ -4257,7 +4257,8 @@ func TestMultipleOrderError2(t *testing.T) {
 	require.Contains(t, err.Error(), "Sorting by an attribute: [alias] can only be done once")
 }
 
-func TestEqArg(t *testing.T) {
+func TestEqArgWithDollar(t *testing.T) {
+	// This is a fix for #1444.
 	query := `
 	{
 		ab(func: eq(name@en, "$pringfield (or, How)")) {
@@ -4268,4 +4269,16 @@ func TestEqArg(t *testing.T) {
 	gql, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, gql.Query[0].Func.Args[0].Value, `$pringfield (or, How)`)
+}
+
+func TestLangWithDash(t *testing.T) {
+	query := `{
+		q(func: uid(1)) {
+			text@en-us
+		}
+	}`
+
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, []string{"en-us"}, gql.Query[0].Children[0].Langs)
 }

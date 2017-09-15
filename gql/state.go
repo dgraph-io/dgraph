@@ -340,14 +340,25 @@ func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
 // lexDirectiveOrLangList is called right after we see a @.
 func lexDirectiveOrLangList(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
-	if r == period {
-		l.Emit(itemName)
-		return l.Mode
-	} else if !isNameBegin(r) {
+	// Check first character.
+	if !isNameBegin(r) && r != period {
 		return l.Errorf("Unrecognized character in lexDirective: %#U", r)
 	}
-
 	l.Backup()
+
+	for {
+		r := l.Next()
+		if r == period {
+			l.Emit(itemName)
+			return l.Mode
+		}
+		if isLangOrDirective(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemName)
+		break
+	}
 	return l.Mode
 }
 
@@ -521,6 +532,16 @@ func isEndLiteral(r rune) bool {
 // isEndArg returns true if rune is a comma or right round bracket.
 func isEndArg(r rune) bool {
 	return r == comma || r == ')'
+}
+
+func isLangOrDirective(r rune) bool {
+	if isNameBegin(r) {
+		return true
+	}
+	if r == '-' {
+		return true
+	}
+	return false
 }
 
 // isNameBegin returns true if the rune is an alphabet or an '_' or '~'.
