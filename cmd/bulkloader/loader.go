@@ -198,7 +198,7 @@ func (ld *loader) reduceStage() {
 	opt.ValueDir = opt.Dir
 	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
-	opt.TableLoadingMode = bo.MemoryMap
+	opt.TableLoadingMode = bo.LoadToRAM
 	var err error
 	ld.kv, err = badger.NewKV(&opt)
 	x.Check(err)
