@@ -40,6 +40,8 @@ func main() {
 	flag.BoolVar(&opt.SkipExpandEdges, "skip_expand_edges", false,
 		"Don't generate edges that allow nodes to be expanded using _predicate_ or expand(...).")
 	flag.IntVar(&opt.NumShards, "shards", 1, "Number of reducer shards.")
+	flag.IntVar(&opt.MaxPendingBadgerWrites, "max_pending_badger_writes", 1000,
+		"Maximum number of pending badger writes allowed at any time.")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {

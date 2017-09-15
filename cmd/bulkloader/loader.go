@@ -22,18 +22,19 @@ import (
 )
 
 type options struct {
-	RDFDir          string
-	SchemaFile      string
-	BadgerDir       string
-	LeaseFile       string
-	TmpDir          string
-	NumGoroutines   int
-	MapBufSize      int64
-	SkipExpandEdges bool
-	NumShards       int
-	BlockRate       int
-	SkipMapPhase    bool
-	CleanupTmp      bool
+	RDFDir                 string
+	SchemaFile             string
+	BadgerDir              string
+	LeaseFile              string
+	TmpDir                 string
+	NumGoroutines          int
+	MapBufSize             int64
+	SkipExpandEdges        bool
+	NumShards              int
+	BlockRate              int
+	SkipMapPhase           bool
+	CleanupTmp             bool
+	MaxPendingBadgerWrites int
 }
 
 type state struct {
@@ -226,20 +227,21 @@ func (ld *loader) reduceStage() {
 	}
 
 	// Run reducers.
-	var badgerWg sync.WaitGroup
-	pending := make(chan struct{}, ld.opt.NumGoroutines)
+	pendingReducers := make(chan struct{}, ld.opt.NumGoroutines)
+	pendingBadgerWrites := make(chan struct{}, 1000) // TODO: Make configurable.
 	for batch := range shuffleOutputCh {
-		pending <- struct{}{}
+		pendingReducers <- struct{}{}
 		NumReducers.Add(1)
-		badgerWg.Add(1)
 		NumQueuedReduceJobs.Add(-1)
 		go func(batch []*protos.MapEntry) {
-			reduce(batch, ld.kv, ld.prog, badgerWg.Done)
-			<-pending
+			reduce(batch, ld.kv, ld.prog, pendingBadgerWrites)
+			<-pendingReducers
 			NumReducers.Add(-1)
 		}(batch)
 	}
-	badgerWg.Wait()
+	for i := 0; i < 1000; i++ {
+		pendingBadgerWrites <- struct{}{}
+	}
 }
 
 func (ld *loader) findMapOutputFiles() [][]string {
