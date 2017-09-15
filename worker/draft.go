@@ -718,8 +718,6 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	}
 	go n.processApplyCh()
 	go n.Run()
-	// TODO: Find a better way to snapshot, so we don't lose the membership
-	// state information, which isn't persisted.
 	go n.snapshotPeriodically()
 	go n.BatchAndSendMessages()
 }

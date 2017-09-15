@@ -92,12 +92,17 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 		}
 	}
 
-	// Successfully connect with the peer, before doing anything else.
-	// TODO: PerrAddr should be mandatory
-	if len(Config.PeerAddr) > 0 && Config.PeerAddr != Config.MyAddr {
+	if Config.InMemoryComm {
+		gr.state = &protos.MembershipState{}
+		atomic.StoreUint32(&gr.gid, 1)
+
+	} else {
+		x.AssertTruef(len(Config.PeerAddr) > 0, "Providing dgraphzero address is mandatory.")
+		x.AssertTruef(Config.PeerAddr != Config.MyAddr,
+			"Dgraphzero address and Dgraph address can't be the same.")
+
+		// Successfully connect with dgraphzero, before doing anything else.
 		p := conn.Get().Connect(Config.PeerAddr)
-		// TODO: Get rid of this whole release.
-		// defer conn.Get().Release(p)
 
 		// Connect with dgraphzero and figure out what group we should belong to.
 		zc := protos.NewZeroClient(p.Get())
@@ -118,10 +123,6 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 		gr.applyState(state)
 	}
 
-	if Config.InMemoryComm {
-		gr.state = &protos.MembershipState{}
-		atomic.StoreUint32(&gr.gid, 1)
-	}
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
 	gid := gr.groupId()
 	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
@@ -129,7 +130,6 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	gr.Node.InitAndStartNode(gr.wal)
 
 	x.UpdateHealthStatus(true)
-	// TODO: Run this again.
 	if !Config.InMemoryComm {
 		go gr.periodicSyncMemberships() // Now set it to be run periodically.
 	}
@@ -139,6 +139,44 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 // Don't acquire RW lock during this, otherwise we might deadlock.
 func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
+}
+
+func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
+	// Only calculate these, if I'm the leader.
+	if !g.Node.AmLeader() {
+		return nil
+	}
+
+	opt := badger.DefaultIteratorOptions
+	opt.PrefetchValues = false
+	itr := pstore.NewIterator(opt)
+	defer itr.Close()
+
+	gid := g.groupId()
+	tablets := make(map[string]*protos.Tablet)
+
+	for itr.Rewind(); itr.Valid(); {
+		item := itr.Item()
+
+		pk := x.Parse(item.Key())
+		if pk.IsSchema() {
+			itr.Seek(pk.SkipSchema())
+			continue
+		}
+
+		tablet, has := tablets[pk.Attr]
+		if !has {
+			if !g.ServesTablet(pk.Attr) {
+				itr.Seek(pk.SkipPredicate())
+				continue
+			}
+			tablet = &protos.Tablet{GroupId: gid, Predicate: pk.Attr}
+			tablets[pk.Attr] = tablet
+		}
+		tablet.Size_ += item.EstimatedSize()
+		itr.Next()
+	}
+	return tablets
 }
 
 func (g *groupi) applyState(state *protos.MembershipState) {
@@ -343,7 +381,7 @@ func (g *groupi) syncMembershipState() {
 		Members: make(map[uint64]*protos.Member),
 	}
 	group.Members[member.Id] = member
-	// TODO: Add sizes of tablets.
+	group.Tablets = g.calculateTabletSizes()
 
 	c := protos.NewZeroClient(pl.Get())
 	state, err := c.Update(context.Background(), group)
