@@ -343,7 +343,7 @@ func export(bdir string) error {
 // TODO: Should we move export logic to dgraphzero?
 func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
 	n := groups().Node
-	if n != nil && n.AmLeader() {
+	if gid == groups().groupId() && n != nil && n.AmLeader() {
 		lastIndex, _ := n.Store.LastIndex()
 		n.syncAllMarks(n.ctx, lastIndex)
 		if tr, ok := trace.FromContext(ctx); ok {

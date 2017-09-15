@@ -138,6 +138,7 @@ func prepare() (dir1, dir2 string, rerr error) {
 	posting.Init(dgraph.State.Pstore)
 	schema.Init(dgraph.State.Pstore)
 	worker.Init(dgraph.State.Pstore)
+	worker.Config.MyAddr = "localhost:12345"
 	worker.Config.PeerAddr = "localhost:12341"
 	worker.Config.RaftId = 1
 	worker.StartRaftNodes(dgraph.State.WALstore, false)

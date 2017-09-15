@@ -61,7 +61,7 @@ pushd cmd/dgraphloader &> /dev/null
 # Delete client directory to clear checkpoints.
 rm -rf c
 go build .
-./dgraphloader -r $benchmark/goldendata.rdf.gz -x true
+./dgraphloader -r $benchmark/goldendata.rdf.gz -x true -d "localhost:8080,localhost:8082"
 popd &> /dev/null
 
 
@@ -90,6 +90,7 @@ popd &> /dev/null
 pushd cmd/dgraph &> /dev/null
 start
 echo -e "\nTrying to export data."
+rm -rf export/*
 curl http://localhost:8080/admin/export
 echo -e "\nExport done."
 
