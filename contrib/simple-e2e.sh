@@ -20,7 +20,7 @@ pushd cmd/dgraphzero &> /dev/null
 echo -e "\nBuilding and running Dgraph Zero."
 go build .
 
-./dgraphzero -w $BUILD/wz -port 12340 -id 3 &
+./dgraphzero -w $BUILD/wz0 -port 12340 -id 3 &
 popd &> /dev/null
 
 pushd cmd/dgraph &> /dev/null
