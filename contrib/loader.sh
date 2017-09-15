@@ -25,6 +25,13 @@ ls -la goldendata.rdf.gz
 benchmark=$(pwd)
 popd &> /dev/null
 
+pushd cmd/dgraphzero &> /dev/null
+echo -e "\nBuilding and running Dgraph Zero."
+go build .
+
+startZero
+popd &> /dev/null
+
 pushd cmd/dgraph &> /dev/null
 echo -e "\nBuilding and running Dgraph."
 go build .
@@ -54,13 +61,18 @@ pushd cmd/dgraphloader &> /dev/null
 # Delete client directory to clear checkpoints.
 rm -rf c
 go build .
-./dgraphloader -r $benchmark/goldendata.rdf.gz -x true
+./dgraphloader -r $benchmark/goldendata.rdf.gz -x true -d "localhost:8080,localhost:8082"
 popd &> /dev/null
 
 
 # Restart Dgraph so that we are sure that index keys are persisted.
 quit 0
 # Wait for a clean shutdown.
+echo -e "\nClean Shutdown Done"
+pushd cmd/dgraphzero &> /dev/null
+startZero
+popd &> /dev/null
+
 pushd cmd/dgraph &> /dev/null
 start
 popd &> /dev/null
@@ -71,9 +83,14 @@ echo -e "\nShutting down Dgraph"
 quit 0
 
 echo -e "\nTrying to restart Dgraph and match export count"
+pushd cmd/dgraphzero &> /dev/null
+startZero
+popd &> /dev/null
+
 pushd cmd/dgraph &> /dev/null
 start
 echo -e "\nTrying to export data."
+rm -rf export/*
 curl http://localhost:8080/admin/export
 echo -e "\nExport done."
 

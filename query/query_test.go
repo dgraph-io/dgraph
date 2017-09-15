@@ -6974,6 +6974,7 @@ func TestMain(m *testing.M) {
 	posting.Config.CommitFraction = 0.10
 	worker.Config.PeerAddr = "localhost:12340"
 	worker.Config.RaftId = 1
+	worker.Config.MyAddr = "localhost:12345"
 	schema.Init(ps)
 	posting.Init(ps)
 	worker.Init(ps)

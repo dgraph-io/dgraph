@@ -5,6 +5,13 @@ source ./contrib/functions.sh
 
 BUILD=$1
 
+pushd cmd/dgraphzero &> /dev/null
+echo -e "\nBuilding and running Dgraph Zero."
+go build .
+
+startZero
+popd &> /dev/null
+
 pushd cmd/dgraph &> /dev/null
 go build .
 # Start dgraph in the background.
