@@ -22,15 +22,18 @@ import (
 )
 
 type options struct {
-	rdfDir          string
-	schemaFile      string
-	badgerDir       string
-	leaseFile       string
-	tmpDir          string
-	numGoroutines   int
-	mapBufSize      int64
-	skipExpandEdges bool
-	numShards       int
+	RDFDir          string
+	SchemaFile      string
+	BadgerDir       string
+	LeaseFile       string
+	TmpDir          string
+	NumGoroutines   int
+	MapBufSize      int64
+	SkipExpandEdges bool
+	NumShards       int
+	BlockRate       int
+	SkipMapPhase    bool
+	CleanupTmp      bool
 }
 
 type state struct {
@@ -49,7 +52,7 @@ type loader struct {
 }
 
 func newLoader(opt options) *loader {
-	schemaBuf, err := ioutil.ReadFile(opt.schemaFile)
+	schemaBuf, err := ioutil.ReadFile(opt.SchemaFile)
 	x.Checkf(err, "Could not load schema.")
 	initialSchema, err := schema.Parse(string(schemaBuf))
 	x.Checkf(err, "Could not parse schema.")
@@ -61,13 +64,13 @@ func newLoader(opt options) *loader {
 		ss:   newSchemaStore(initialSchema),
 
 		// Lots of gz readers, so not much channel buffer needed.
-		rdfChunkCh: make(chan *bytes.Buffer, opt.numGoroutines),
+		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 	}
 	ld := &loader{
 		state:   st,
-		mappers: make([]*mapper, opt.numGoroutines),
+		mappers: make([]*mapper, opt.NumGoroutines),
 	}
-	for i := 0; i < opt.numGoroutines; i++ {
+	for i := 0; i < opt.NumGoroutines; i++ {
 		ld.mappers[i] = newMapper(st)
 	}
 	go ld.prog.report()
@@ -133,7 +136,7 @@ func (ld *loader) mapStage() {
 	}
 
 	var readers []*bufio.Reader
-	for _, rdfFile := range findRDFFiles(ld.opt.rdfDir) {
+	for _, rdfFile := range findRDFFiles(ld.opt.RDFDir) {
 		f, err := os.Open(rdfFile)
 		x.Check(err)
 		defer f.Close()
@@ -146,7 +149,7 @@ func (ld *loader) mapStage() {
 		}
 	}
 
-	pending := make(chan struct{}, ld.opt.numGoroutines)
+	pending := make(chan struct{}, ld.opt.NumGoroutines)
 	for _, r := range readers {
 		pending <- struct{}{}
 		go func(r *bufio.Reader) {
@@ -164,7 +167,7 @@ func (ld *loader) mapStage() {
 			<-pending
 		}(r)
 	}
-	for i := 0; i < ld.opt.numGoroutines; i++ {
+	for i := 0; i < ld.opt.NumGoroutines; i++ {
 		pending <- struct{}{}
 	}
 
@@ -183,14 +186,14 @@ func (ld *loader) mapStage() {
 func (ld *loader) writeLease() {
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%d\n", ld.um.lease)
-	x.Check(ioutil.WriteFile(ld.opt.leaseFile, buf.Bytes(), 0644))
+	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))
 }
 
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
 	opt := badger.DefaultOptions
-	opt.Dir = ld.opt.badgerDir
+	opt.Dir = ld.opt.BadgerDir
 	opt.ValueDir = opt.Dir
 	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
@@ -201,7 +204,7 @@ func (ld *loader) reduceStage() {
 
 	// Orchestrate finalisation of shufflers.
 	var shuffleWg sync.WaitGroup
-	shuffleWg.Add(ld.opt.numShards)
+	shuffleWg.Add(ld.opt.NumShards)
 	shuffleOutputCh := make(chan []*protos.MapEntry, 100)
 	go func() {
 		shuffleWg.Wait()
@@ -224,7 +227,7 @@ func (ld *loader) reduceStage() {
 
 	// Run reducers.
 	var badgerWg sync.WaitGroup
-	pending := make(chan struct{}, ld.opt.numGoroutines)
+	pending := make(chan struct{}, ld.opt.NumGoroutines)
 	ld.prog.debugMu.Lock()
 	ld.prog.debug = func() string {
 		return fmt.Sprintf("Reducers:%d ShuffleOutputLen:%d", len(pending), len(shuffleOutputCh))
@@ -242,8 +245,8 @@ func (ld *loader) reduceStage() {
 }
 
 func (ld *loader) findMapOutputFiles() [][]string {
-	shards := make([][]string, ld.opt.numShards)
-	x.Checkf(filepath.Walk(ld.opt.tmpDir, func(path string, _ os.FileInfo, err error) error {
+	shards := make([][]string, ld.opt.NumShards)
+	x.Checkf(filepath.Walk(ld.opt.TmpDir, func(path string, _ os.FileInfo, err error) error {
 		if !strings.HasSuffix(path, ".map") {
 			return nil
 		}

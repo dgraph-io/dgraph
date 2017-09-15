@@ -33,7 +33,7 @@ func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	defer fd.Close()
-	r := bufio.NewReaderSize(fd, 1<<20)
+	r := bufio.NewReaderSize(fd, 16<<10)
 
 	unmarshalBuf := make([]byte, 1<<10)
 	for {

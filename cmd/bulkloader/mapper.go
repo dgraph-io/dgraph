@@ -36,8 +36,8 @@ type mapper struct {
 func newMapper(st *state) *mapper {
 	return &mapper{
 		state:           st,
-		shardMapEntries: make([][]*protos.MapEntry, st.opt.numShards),
-		shardSize:       make([]int64, st.opt.numShards),
+		shardMapEntries: make([][]*protos.MapEntry, st.opt.NumShards),
+		shardSize:       make([]int64, st.opt.NumShards),
 	}
 }
 
@@ -57,7 +57,7 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, shard int)
 
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
-		m.opt.tmpDir,
+		m.opt.TmpDir,
 		fmt.Sprintf("%d_%06d.map", shard, fileNum),
 	)
 	x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
@@ -81,7 +81,7 @@ func (m *mapper) run() {
 			x.Check(m.parseRDF(rdf))
 			atomic.AddInt64(&m.prog.rdfCount, 1)
 			for i := range m.shardSize {
-				if m.shardSize[i] >= m.opt.mapBufSize {
+				if m.shardSize[i] >= m.opt.MapBufSize {
 					m.mu.Lock() // One write at a time.
 					go m.writeMapEntriesToFile(m.shardMapEntries[i], i)
 					m.shardMapEntries[i] = nil
@@ -102,7 +102,7 @@ func (m *mapper) run() {
 func (m *mapper) addMapEntry(key []byte, posting *protos.Posting) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
-	shard := farm.Fingerprint64(key) % uint64(m.opt.numShards)
+	shard := farm.Fingerprint64(key) % uint64(m.opt.NumShards)
 
 	me := &protos.MapEntry{
 		Key: key,
@@ -145,7 +145,7 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		m.addMapEntry(key, rev)
 	}
 
-	if !m.opt.skipExpandEdges {
+	if !m.opt.SkipExpandEdges {
 		key = x.DataKey("_predicate_", sid)
 		pp := m.createPredicatePosting(nq.GetPredicate())
 		m.addMapEntry(key, pp)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -12,10 +13,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	blockRate = flag.Int("block", 0, "Block profiling rate")
-)
-
 func main() {
 
 	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
@@ -24,24 +21,25 @@ func main() {
 	runtime.GOMAXPROCS(128)
 
 	var opt options
-	flag.StringVar(&opt.rdfDir, "r", "", "Directory containing *.rdf or *.rdf.gz files to load")
-	flag.StringVar(&opt.schemaFile, "s", "", "Location of schema file to load")
-	flag.StringVar(&opt.badgerDir, "p", "p", "Location of the final Dgraph directory")
-	flag.StringVar(&opt.leaseFile, "l", "LEASE", "Location to write the lease file")
-	flag.StringVar(&opt.tmpDir, "tmp", "tmp", "Temp directory used to use for on-disk "+
+	flag.IntVar(&opt.BlockRate, "block", 0, "Block profiling rate")
+	flag.StringVar(&opt.RDFDir, "r", "", "Directory containing *.rdf or *.rdf.gz files to load")
+	flag.StringVar(&opt.SchemaFile, "s", "", "Location of schema file to load")
+	flag.StringVar(&opt.BadgerDir, "p", "p", "Location of the final Dgraph directory")
+	flag.StringVar(&opt.LeaseFile, "l", "LEASE", "Location to write the lease file")
+	flag.StringVar(&opt.TmpDir, "tmp", "tmp", "Temp directory used to use for on-disk "+
 		"scratch space. Requires free space proportional to the size of the RDF file.")
-	flag.IntVar(&opt.numGoroutines, "j", runtime.NumCPU(),
+	flag.IntVar(&opt.NumGoroutines, "j", runtime.NumCPU(),
 		"Number of worker threads to use (defaults to one less than logical CPUs)")
-	flag.Int64Var(&opt.mapBufSize, "mapoutput_mb", 128,
+	flag.Int64Var(&opt.MapBufSize, "mapoutput_mb", 128,
 		"The estimated size of each map file output. This directly affects the memory usage.")
 	httpAddr := flag.String("http", "localhost:8080", "Address to serve http (pprof)")
-	skipMapPhase := flag.Bool("skip_map_phase", false,
+	flag.BoolVar(&opt.SkipMapPhase, "skip_map_phase", false,
 		"Skip the map phase (assumes that map output files already exist)")
-	cleanUpTmp := flag.Bool("cleanup_tmp", true,
+	flag.BoolVar(&opt.CleanupTmp, "cleanup_tmp", true,
 		"Clean up the tmp directory after the loader finishes")
-	flag.BoolVar(&opt.skipExpandEdges, "skip_expand_edges", false,
+	flag.BoolVar(&opt.SkipExpandEdges, "skip_expand_edges", false,
 		"Don't generate edges that allow nodes to be expanded using _predicate_ or expand(...).")
-	flag.IntVar(&opt.numShards, "shards", 1, "Number of reducer shards.")
+	flag.IntVar(&opt.NumShards, "shards", 1, "Number of reducer shards.")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {
@@ -49,36 +47,40 @@ func main() {
 		fmt.Println("No free args allowed, but got:", flag.Args())
 		os.Exit(1)
 	}
-	if opt.rdfDir == "" || opt.schemaFile == "" {
+	if opt.RDFDir == "" || opt.SchemaFile == "" {
 		flag.Usage()
 		fmt.Println("RDF and schema file(s) must be specified.")
 		os.Exit(1)
 	}
 
-	opt.mapBufSize = opt.mapBufSize << 20 // Convert from MB to B.
+	opt.MapBufSize = opt.MapBufSize << 20 // Convert from MB to B.
+
+	optBuf, err := json.MarshalIndent(&opt, "", "\t")
+	x.Check(err)
+	fmt.Println(string(optBuf))
 
 	go func() {
 		log.Fatal(http.ListenAndServe(*httpAddr, nil))
 	}()
-	if *blockRate > 0 {
-		runtime.SetBlockProfileRate(*blockRate)
+	if opt.BlockRate > 0 {
+		runtime.SetBlockProfileRate(opt.BlockRate)
 	}
 
 	// Ensure the badger output dir is empty.
-	x.Check(os.RemoveAll(opt.badgerDir))
-	x.Check(os.MkdirAll(opt.badgerDir, 0700))
+	x.Check(os.RemoveAll(opt.BadgerDir))
+	x.Check(os.MkdirAll(opt.BadgerDir, 0700))
 
 	// Create a directory just for bulk loader's usage.
-	if !*skipMapPhase {
-		x.Check(os.RemoveAll(opt.tmpDir))
-		x.Check(os.MkdirAll(opt.tmpDir, 0700))
+	if !opt.SkipMapPhase {
+		x.Check(os.RemoveAll(opt.TmpDir))
+		x.Check(os.MkdirAll(opt.TmpDir, 0700))
 	}
-	if *cleanUpTmp {
-		defer os.RemoveAll(opt.tmpDir)
+	if opt.CleanupTmp {
+		defer os.RemoveAll(opt.TmpDir)
 	}
 
 	loader := newLoader(opt)
-	if !*skipMapPhase {
+	if !opt.SkipMapPhase {
 		loader.mapStage()
 	}
 	loader.reduceStage()
