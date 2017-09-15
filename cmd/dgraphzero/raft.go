@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 )
 
 type proposalCtx struct {
@@ -204,11 +205,20 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {
-	_, restart, err := n.InitFromWal(wal)
+	idx, restart, err := n.InitFromWal(wal)
 	x.Check(err)
+	n.Applied.SetDoneUntil(idx)
 
 	if restart {
 		x.Println("Restarting node for dgraphzero")
+		sp, err := n.Store.Snapshot()
+		var state protos.MembershipState
+		x.Check(state.Unmarshal(sp.Data))
+		n.server.Lock()
+		n.server.state = &state
+		n.server.Unlock()
+
+		x.Checkf(err, "Unable to get existing snapshot")
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	} else if len(*peer) > 0 {
@@ -234,9 +244,41 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	}
 
 	go n.Run()
-	// go n.snapshotPeriodically()
+	go n.snapshotPeriodically()
 	go n.BatchAndSendMessages()
 	return err
+}
+
+func (n *node) snapshotPeriodically() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			existing, err := n.Store.Snapshot()
+			x.Checkf(err, "Unable to get existing snapshot")
+			si := existing.Metadata.Index
+
+			n.server.Lock()
+			idx := n.Applied.DoneUntil()
+			if idx <= si {
+				n.server.Unlock()
+				return
+			}
+			data, err := n.server.state.Marshal()
+			x.Check(err)
+			n.server.Unlock()
+
+			if tr, ok := trace.FromContext(n.ctx); ok {
+				tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
+			}
+			s, err := n.Store.CreateSnapshot(idx, n.ConfState(), data)
+			x.Checkf(err, "While creating snapshot")
+			x.Checkf(n.Store.Compact(idx), "While compacting snapshot")
+			x.Check(n.Wal.StoreSnapshot(0, s))
+		}
+	}
 }
 
 func (n *node) Run() {
@@ -268,6 +310,7 @@ func (n *node) Run() {
 			}
 
 			for _, entry := range rd.CommittedEntries {
+				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
 
@@ -281,6 +324,7 @@ func (n *node) Run() {
 				} else {
 					x.Printf("Unhandled entry: %+v\n", entry)
 				}
+				n.Applied.Done(entry.Index)
 			}
 
 			// TODO: Should we move this to the top?
