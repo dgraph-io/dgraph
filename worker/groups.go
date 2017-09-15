@@ -131,7 +131,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 
 	x.UpdateHealthStatus(true)
 	if !Config.InMemoryComm {
-		go gr.periodicSyncMemberships() // Now set it to be run periodically.
+		go gr.periodicMembershipUpdate() // Now set it to be run periodically.
 	}
 }
 
@@ -358,55 +358,78 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	return
 }
 
-// TODO: This could be better done via a uni-directional or bi-directional stream, so it's
-// instantenous.
-// If node is the leader, every sync involves calculating tablet sizes and sending them to
-// dgraphzero.
-func (g *groupi) syncMembershipState() {
-	// TODO: Instead of getting an address first, then finding a connection to that address,
-	// we should pick up a healthy connection from any server in the provided group.
-	// This way, if a server goes down, AnyServer can avoid giving a connection to that server.
+func (g *groupi) streamUpdates(stream protos.Zero_UpdateClient, ctx context.Context,
+	cancel context.CancelFunc, done chan struct{}) {
+	ticker := time.NewTicker(time.Minute)
+	amLeader := g.Node.AmLeader()
+	lastUpdate := time.Now()
+	for {
+		select {
+		case <-ticker.C:
+			// Wait till either leader change happens or it's 10 minutes since lastupdate
+			if amLeader == g.Node.AmLeader() && time.Since(lastUpdate) < time.Minute*10 {
+				break
+			}
+			member := &protos.Member{
+				Id:      Config.RaftId,
+				GroupId: g.groupId(),
+				Addr:    Config.MyAddr,
+				Leader:  g.Node.AmLeader(),
+			}
+			group := &protos.Group{
+				Members: make(map[uint64]*protos.Member),
+			}
+			group.Members[member.Id] = member
+			group.Tablets = g.calculateTabletSizes()
+
+			lastUpdate = time.Now()
+			amLeader = g.Node.AmLeader()
+			if err := stream.Send(group); err != nil {
+				cancel()
+				stream.CloseSend()
+				done <- struct{}{}
+				return
+			}
+		case <-ctx.Done():
+			stream.CloseSend()
+			done <- struct{}{}
+			return
+		}
+	}
+}
+
+func (g *groupi) periodicMembershipUpdate() {
+START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		x.Printf("WARNING: We don't have address of any dgraphzero server.")
-		return
+		time.Sleep(time.Minute)
+		goto START
 	}
-
-	member := &protos.Member{
-		Id:      Config.RaftId,
-		GroupId: g.groupId(),
-		Addr:    Config.MyAddr,
-		Leader:  g.Node.AmLeader(),
-	}
-	group := &protos.Group{
-		Members: make(map[uint64]*protos.Member),
-	}
-	group.Members[member.Id] = member
-	group.Tablets = g.calculateTabletSizes()
 
 	c := protos.NewZeroClient(pl.Get())
-	state, err := c.Update(context.Background(), group)
-
-	if err != nil || state == nil {
-		x.Printf("Unable to sync memberships. Error: %v", err)
-		return
+	ctx, cancel := context.WithCancel(context.Background())
+	stream, err := c.Update(ctx)
+	if err != nil {
+		x.Printf("Error while calling update %v\n", err)
+		goto START
 	}
-	// fmt.Printf("Got a updated state: %v\n", state)
-	g.applyState(state)
-}
+	done := make(chan struct{}, 1)
+	go g.streamUpdates(stream, ctx, cancel, done)
 
-func (g *groupi) periodicSyncMemberships() {
-	t := time.NewTicker(time.Minute)
-	// TODO: We don't need to send membership information every 10 seconds, if we get a stream of
-	// MembershipState from dgraphzero. That way, we'll have the latest state update.
 	for {
-		select {
-		case <-t.C:
-			g.syncMembershipState()
-		case <-g.ctx.Done():
-			return
+		state, err := stream.Recv()
+		if err != nil || state == nil {
+			x.Printf("Unable to sync memberships. Error: %v", err)
+			// Context could have been closed when we fail to send over the stream
+			if ctx.Err() == nil {
+				cancel()
+			}
+			<-done
+			goto START
 		}
+		g.applyState(state)
 	}
 }
 

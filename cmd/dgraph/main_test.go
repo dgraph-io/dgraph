@@ -128,6 +128,7 @@ func StartDummyZero() *grpc.Server {
 	// some uids are used in queries so setting some high value which is not used.
 	z.nextLeaseId = 10000
 	protos.RegisterZeroServer(s, z)
+	protos.RegisterRaftServer(s, &raftServer{})
 	go s.Serve(ln)
 	return s
 }
