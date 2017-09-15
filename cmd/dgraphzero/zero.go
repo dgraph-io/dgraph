@@ -20,8 +20,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -253,34 +255,61 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
-func (s *Server) Update(
-	ctx context.Context, group *protos.Group) (state *protos.MembershipState, err error) {
-	if ctx.Err() != nil {
-		return &emptyMembershipState, ctx.Err()
-	}
-
-	proposals, err := s.createProposals(group)
-	if err != nil {
-		return &emptyMembershipState, err
-	}
-
-	errCh := make(chan error)
-	for _, pr := range proposals {
-		go func(pr *protos.ZeroProposal) {
-			x.Printf("Proposing: %+v\n", pr)
-			errCh <- s.Node.proposeAndWait(ctx, pr)
-		}(pr)
-	}
-
-	for range proposals {
-		select {
-		case err := <-errCh:
-			if err != nil {
-				return &emptyMembershipState, err
+func (s *Server) Update(stream protos.Zero_UpdateServer) error {
+	che := make(chan error, 1)
+	var m sync.Mutex
+	// Server side cancellation can only be done by existing the handler
+	// since Recv is blocking we need to run it in a goroutine.
+	go func(che chan error) {
+		for {
+			group, err := stream.Recv()
+			if err == io.EOF {
+				che <- nil
 			}
-		case <-ctx.Done():
-			return &emptyMembershipState, ctx.Err()
+			if err != nil {
+				che <- err
+			}
+			proposals, err := s.createProposals(group)
+			if err != nil {
+				che <- err
+			}
+
+			errCh := make(chan error)
+			for _, pr := range proposals {
+				go func(pr *protos.ZeroProposal) {
+					x.Printf("Proposing: %+v\n", pr)
+					errCh <- s.Node.proposeAndWait(context.Background(), pr)
+				}(pr)
+			}
+
+			for range proposals {
+				// Store no-nil error
+				if e := <-errCh; e != nil {
+					err = e
+				}
+			}
+			if err != nil {
+				che <- err
+			}
+			m.Lock()
+			if err := stream.Send(s.membershipState()); err != nil {
+				m.Unlock()
+				che <- err
+			}
+			m.Unlock()
+		}
+	}(che)
+
+	ticker := time.NewTicker(time.Minute)
+	// TODO: Trigger on applyproposal
+	for {
+		select {
+		case err := <-che:
+			return err
+		case <-ticker.C:
+			// Check if lagging, if yes then return
+		case <-stream.Context().Done():
+			return stream.Context().Err()
 		}
 	}
-	return s.membershipState(), nil
 }

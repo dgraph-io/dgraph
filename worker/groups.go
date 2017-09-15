@@ -359,13 +359,14 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 }
 
 func (g *groupi) streamUpdates(stream protos.Zero_UpdateClient, ctx context.Context,
-	cancel context.CancelFunc, done chan struct{}) {
+	cancel context.CancelFunc) {
 	ticker := time.NewTicker(time.Minute)
 	amLeader := g.Node.AmLeader()
 	lastUpdate := time.Now()
 	for {
 		select {
 		case <-ticker.C:
+			// TODO: Tirgger immediately on leadger change.
 			// Wait till either leader change happens or it's 10 minutes since lastupdate
 			if amLeader == g.Node.AmLeader() && time.Since(lastUpdate) < time.Minute*10 {
 				break
@@ -385,14 +386,13 @@ func (g *groupi) streamUpdates(stream protos.Zero_UpdateClient, ctx context.Cont
 			lastUpdate = time.Now()
 			amLeader = g.Node.AmLeader()
 			if err := stream.Send(group); err != nil {
-				cancel()
+				// Stream.Recv is blocking so need to cancel the context.
 				stream.CloseSend()
-				done <- struct{}{}
+				cancel()
 				return
 			}
 		case <-ctx.Done():
 			stream.CloseSend()
-			done <- struct{}{}
 			return
 		}
 	}
@@ -415,18 +415,17 @@ START:
 		x.Printf("Error while calling update %v\n", err)
 		goto START
 	}
-	done := make(chan struct{}, 1)
-	go g.streamUpdates(stream, ctx, cancel, done)
+	go g.streamUpdates(stream, ctx, cancel)
 
 	for {
 		state, err := stream.Recv()
+		// TODO: May be we don't need to shift to other group zero server on all errors.
 		if err != nil || state == nil {
 			x.Printf("Unable to sync memberships. Error: %v", err)
 			// Context could have been closed when we fail to send over the stream
 			if ctx.Err() == nil {
 				cancel()
 			}
-			<-done
 			goto START
 		}
 		g.applyState(state)
