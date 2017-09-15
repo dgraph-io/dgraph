@@ -328,6 +328,7 @@ func TestSchemaMutation(t *testing.T) {
 	schema.ParseBytes([]byte(""), 1)
 	expected := map[string]*protos.SchemaUpdate{
 		"name": {
+			Predicate: "name",
 			Tokenizer: []string{"term", "exact"},
 			ValueType: uint32(types.StringID),
 			Directive: protos.SchemaUpdate_INDEX,
