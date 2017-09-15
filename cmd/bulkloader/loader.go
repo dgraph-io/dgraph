@@ -206,7 +206,7 @@ func (ld *loader) reduceStage() {
 	// Orchestrate finalisation of shufflers.
 	var shuffleWg sync.WaitGroup
 	shuffleWg.Add(ld.opt.NumShards)
-	shuffleOutputCh := make(chan []*protos.MapEntry, 100)
+	shuffleOutputCh := make(chan []*protos.MapEntry, 1000)
 	go func() {
 		shuffleWg.Wait()
 		close(shuffleOutputCh)
