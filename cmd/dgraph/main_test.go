@@ -167,6 +167,7 @@ func TestDeletePredicate(t *testing.T) {
 		delete {
 			* <friend> * .
 			* <name> * .
+			* <salary> * .
 		}
 	}
 	`
@@ -180,6 +181,7 @@ func TestDeletePredicate(t *testing.T) {
 			<0x2> <name> "Alice1" .
 			<0x3> <name> "Alice2" .
 			<0x3> <age> "13" .
+			<0x11> <salary> "100000" . # should be deleted from schema after we delete the predicate
 		}
 	}
 	`
@@ -278,6 +280,10 @@ func TestDeletePredicate(t *testing.T) {
 
 	err = runMutation(m2)
 	require.NoError(t, err)
+
+	output, err = runQuery(`schema{}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"age","type":"default"},{"predicate":"friend","type":"uid","reverse":true},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]}]}}`, output)
 
 	output, err = runQuery(q1)
 	require.JSONEq(t, `{"data": {}}`, output)

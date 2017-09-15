@@ -109,6 +109,26 @@ func (s *stateGroup) update(se SyncEntry) {
 	x.Printf(logUpdate(se.Schema, se.Attr))
 }
 
+// Delete updates the schema in memory and sends an entry to syncCh so that it can be
+// committed later
+func (s *state) Delete(pred string) {
+	s.get(group.BelongsTo(pred)).delete(pred)
+}
+
+func (s *stateGroup) delete(pred string) {
+	s.Lock()
+	defer s.Unlock()
+
+	delete(s.predicate, pred)
+	syncCh <- SyncEntry{
+		Schema: protos.SchemaUpdate{
+			Directive: protos.SchemaUpdate_DELETE,
+		},
+	}
+	s.elog.Printf("Deleting schema for attr: %s", pred)
+	x.Printf("Deleting schema for attr: %s", pred)
+}
+
 // Set sets the schema for given predicate in memory
 // schema mutations must flow through update function, which are
 // synced to db
@@ -371,6 +391,10 @@ func batchSync() {
 		loop++
 		State().elog.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
 		for _, e := range entries {
+			if e.Schema.Directive == protos.SchemaUpdate_DELETE {
+				wb = badger.EntriesDelete(wb, x.SchemaKey(e.Attr))
+				continue
+			}
 			val, err := e.Schema.Marshal()
 			x.Checkf(err, "Error while marshalling schema description")
 			wb = badger.EntriesSet(wb, x.SchemaKey(e.Attr), val)
