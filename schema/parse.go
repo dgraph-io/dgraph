@@ -32,7 +32,9 @@ func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
 		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
 			Directive: protos.SchemaUpdate_REVERSE,
-			Count:     s.Count}
+			Count:     s.Count,
+			Explicit:  s.Explicit,
+		}
 	} else if s.Directive == protos.SchemaUpdate_INDEX {
 		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
@@ -40,9 +42,15 @@ func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
 			Tokenizer: s.Tokenizer,
 			Count:     s.Count,
 			List:      s.List,
+			Explicit:  s.Explicit,
 		}
 	}
-	return protos.SchemaUpdate{ValueType: s.ValueType, Count: s.Count, List: s.List}
+	return protos.SchemaUpdate{
+		ValueType: s.ValueType,
+		Count:     s.Count,
+		List:      s.List,
+		Explicit:  s.Explicit,
+	}
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset
@@ -108,7 +116,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 		return nil, x.Errorf("Invalid ending while trying to parse schema.")
 	}
 	next := it.Item()
-	schema := &protos.SchemaUpdate{Predicate: predicate}
+	schema := &protos.SchemaUpdate{Predicate: predicate, Explicit: true}
 	// Could be list type.
 	if next.Typ == itemLeftSquare {
 		schema.List = true

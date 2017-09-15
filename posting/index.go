@@ -784,24 +784,14 @@ func DeletePredicate(ctx context.Context, attr string) error {
 		}
 	}
 
-	// If the predicate is of type default or of type uid but doesn't have count/reverse, we can
-	// delete it from the schema because this means that the user didn't set the schema explicitly
-	// and the schema can be derived again from the next mutation.
-	typ, err := schema.State().TypeOf(attr)
-	if err != nil {
+	s, ok := schema.State().Get(attr)
+	if !ok {
 		return fmt.Errorf("Expected type to exist for pred: %s while deleting it.", attr)
 	}
 
-	// User set an explicit type so we don't want to delete the schema entry.
-	if typ != types.DefaultID && typ != types.UidID {
-		return nil
+	if !s.Explicit {
+		schema.State().Delete(attr)
 	}
-
-	if typ == types.UidID && reversed || hasCountIndex {
-		return nil
-	}
-
-	schema.State().Delete(attr)
 	// Delete predicate from schema.
 	return nil
 }
