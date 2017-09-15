@@ -4256,3 +4256,38 @@ func TestMultipleOrderError2(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Sorting by an attribute: [alias] can only be done once")
 }
+
+func TestUpsertQuery(t *testing.T) {
+	query := `
+	{
+		director(func:eq(name, "Michonne")) @upsert
+	}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestUpsertQueryError1(t *testing.T) {
+	query := `
+	{
+		director(func:uid(1)) @upsert
+	}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Upsert query can only be done with eq function.")
+}
+
+func TestUpsertQueryError2(t *testing.T) {
+	query := `
+	{
+		director(func:eq(name, ["a", "b"])) @upsert
+	}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Upsert query can only have one argument.")
+}

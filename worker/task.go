@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
+	"github.com/coreos/etcd/raft"
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -537,6 +538,31 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 	return nil
 }
 
+// This function should only be used by upsert. Upsert mutation also does a query which will wait
+// for the mutation to complete and hence would get stuck. Therefore, we only need to wait till
+// index - 1.
+func processUpsertTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
+	// This code is copied from waitLinearizableRead only difference being that we wait till
+	// index-1.
+	n := groups().Node
+	replyCh, err := n.readIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	select {
+	case index := <-replyCh:
+		if index == raft.None {
+			return nil, x.Errorf("cannot get linearized read (time expired or no configured leader)")
+		}
+		if err := n.Applied.WaitForMark(ctx, index-1); err != nil {
+			return nil, err
+		}
+		return helpProcessTask(ctx, q, gid)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	if err := waitLinearizableRead(ctx, gid); err != nil {
@@ -557,6 +583,7 @@ func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.
 	if q.Reverse && !schema.State().IsReversed(attr) {
 		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
 	}
+
 	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}

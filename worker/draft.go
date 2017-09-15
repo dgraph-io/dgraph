@@ -30,6 +30,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -105,7 +106,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	delete(p.ids, pid)
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
-	// Since the tasks are executed in goroutines we need on guarding watermark which
+	// Since the tasks are executed in goroutines we need one guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
 	pd.n.Applied.Done(pd.index)
 	posting.SyncMarks().Done(pd.index)
@@ -265,13 +266,46 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	return err
 }
 
-func (n *node) processMutation(pid uint32, index uint64, edge *protos.DirectedEdge) error {
+func (n *node) handleUpsert(task *task) (bool, error) {
+	if task.upsert == nil {
+		return true, nil
+	}
+
+	edge := task.edge
+	attr := task.upsert.Attr
+	if attr != edge.Attr {
+		return true, nil
+	}
+
+	res, err := processUpsertTask(n.ctx, task.upsert, groups().BelongsTo(attr))
+	if err != nil {
+		return false, err
+	}
+	uids := algo.MergeSorted(res.UidMatrix)
+	if len(uids.Uids) > 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (n *node) processMutation(task *task) error {
+	pid := task.pid
+	ridx := task.rid
+	edge := task.edge
+
+	if cont, err := n.handleUpsert(task); err != nil {
+		return err
+	} else if !cont {
+		// We found a uid which has this value, so don't continue.
+		return nil
+	}
+
 	var ctx context.Context
 	var has bool
 	if ctx, has = n.props.Ctx(pid); !has {
 		ctx = n.ctx
 	}
-	rv := x.RaftValue{Group: n.gid, Index: index}
+	rv := x.RaftValue{Group: n.gid, Index: ridx}
 	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runMutation(ctx, edge); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -554,7 +588,6 @@ func (n *node) Run() {
 					// Config changes in followers must be applied straight away.
 					n.applyConfChange(entry)
 				} else {
-					// Just queue up to be processed. Don't wait on them.
 					// TODO: Stop accepting requests when applyCh is full
 					// Just queue up to be processed. Don't wait on them.
 					n.applyCh <- entry

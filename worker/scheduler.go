@@ -30,9 +30,10 @@ import (
 )
 
 type task struct {
-	rid  uint64 // raft index corresponding to the task
-	pid  uint32 // proposal id corresponding to the task
-	edge *protos.DirectedEdge
+	rid    uint64 // raft index corresponding to the task
+	pid    uint32 // proposal id corresponding to the task
+	edge   *protos.DirectedEdge
+	upsert *protos.Query
 }
 
 type scheduler struct {
@@ -60,7 +61,7 @@ func (s *scheduler) processTasks() {
 	for t := range s.tch {
 		nextTask := t
 		for nextTask != nil {
-			err := s.n.processMutation(nextTask.pid, nextTask.rid, nextTask.edge)
+			err := s.n.processMutation(nextTask)
 			n.props.Done(nextTask.pid, err)
 			x.ActiveMutations.Add(-1)
 			nextTask = s.nextTask(nextTask)
@@ -68,15 +69,21 @@ func (s *scheduler) processTasks() {
 	}
 }
 
-func taskKey(attribute string, uid uint64) uint32 {
-	key := fmt.Sprintf("%s|%d", attribute, uid)
+func (t *task) key() uint32 {
+	if t.upsert != nil && t.upsert.Attr == t.edge.Attr {
+		// Serialize upserts by predicate.
+		return farm.Fingerprint32([]byte(t.edge.Attr))
+	}
+
+	key := fmt.Sprintf("%s|%d", t.edge.Attr, t.edge.Entity)
 	return farm.Fingerprint32([]byte(key))
 }
 
 func (s *scheduler) register(t *task) bool {
 	s.Lock()
 	defer s.Unlock()
-	key := taskKey(t.edge.Attr, t.edge.Entity)
+	key := t.key()
+
 	if tasks, ok := s.tasks[key]; ok {
 		tasks = append(tasks, t)
 		s.tasks[key] = tasks
@@ -106,11 +113,12 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	}
 
 	// Scheduler tracks tasks at subject, predicate level, so doing
-	// schema stuff here simplies the design and we needn't worrying about
+	// schema stuff here simplies the design and we needn't worry about
 	// serializing the mutations per predicate or schema mutations
 	// We derive the schema here if it's not present
 	// Since raft committed logs are serialized, we can derive
 	// schema here without any locking
+
 	// stores a map of predicate and type of first mutation for each predicate
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
@@ -131,9 +139,10 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 
 	for _, edge := range proposal.Mutations.Edges {
 		t := &task{
-			rid:  index,
-			pid:  proposal.Id,
-			edge: edge,
+			rid:    index,
+			pid:    proposal.Id,
+			edge:   edge,
+			upsert: proposal.Mutations.Upsert,
 		}
 		if s.register(t) {
 			s.tch <- t
@@ -146,7 +155,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 func (s *scheduler) nextTask(t *task) *task {
 	s.Lock()
 	defer s.Unlock()
-	key := taskKey(t.edge.Attr, t.edge.Entity)
+	key := t.key()
 	var nextTask *task
 	tasks, ok := s.tasks[key]
 	x.AssertTrue(ok)

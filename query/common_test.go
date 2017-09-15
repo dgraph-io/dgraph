@@ -196,7 +196,7 @@ func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (s
 		return "", err
 	}
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(ctx)
+	_, err = queryRequest.ProcessQuery(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -233,7 +233,7 @@ func processToPB(t *testing.T, query string, variables map[string]string,
 	}
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(ctx)
+	_, err = queryRequest.ProcessQuery(ctx)
 	require.NoError(t, err)
 
 	pb, err := ToProtocolBuf(queryRequest.Latency, queryRequest.Subgraphs)
