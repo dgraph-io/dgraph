@@ -121,6 +121,7 @@ func (s *stateGroup) delete(pred string) {
 
 	delete(s.predicate, pred)
 	syncCh <- SyncEntry{
+		Attr: pred,
 		Schema: protos.SchemaUpdate{
 			Directive: protos.SchemaUpdate_DELETE,
 		},
