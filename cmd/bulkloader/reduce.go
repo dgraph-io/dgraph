@@ -111,8 +111,7 @@ func (h *postingHeap) Pop() interface{} {
 	return elem
 }
 
-func reduce(batch []*protos.MapEntry, kv *badger.KV,
-	prog *progress, pendingBadgerWrites chan struct{}) {
+func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()) {
 
 	var currentKey []byte
 	var uids []uint64
@@ -160,7 +159,6 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV,
 	}
 	outputPostingList()
 
-	pendingBadgerWrites <- struct{}{}
 	NumBadgerWrites.Add(1)
 	kv.BatchSetAsync(entries, func(err error) {
 		x.Check(err)
@@ -168,6 +166,6 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV,
 			x.Check(e.Error)
 		}
 		NumBadgerWrites.Add(-1)
-		<-pendingBadgerWrites
+		done()
 	})
 }

@@ -228,21 +228,20 @@ func (ld *loader) reduceStage() {
 	}
 
 	// Run reducers.
+	var badgerWg sync.WaitGroup
 	pendingReducers := make(chan struct{}, ld.opt.NumGoroutines)
-	pendingBadgerWrites := make(chan struct{}, ld.opt.MaxPendingBadgerWrites)
 	for batch := range shuffleOutputCh {
 		pendingReducers <- struct{}{}
 		NumReducers.Add(1)
 		NumQueuedReduceJobs.Add(-1)
+		badgerWg.Add(1)
 		go func(batch []*protos.MapEntry) {
-			reduce(batch, ld.kv, ld.prog, pendingBadgerWrites)
+			reduce(batch, ld.kv, ld.prog, badgerWg.Done)
 			<-pendingReducers
 			NumReducers.Add(-1)
 		}(batch)
 	}
-	for i := 0; i < ld.opt.MaxPendingBadgerWrites; i++ {
-		pendingBadgerWrites <- struct{}{}
-	}
+	badgerWg.Wait()
 }
 
 func (ld *loader) findMapOutputFiles() [][]string {
