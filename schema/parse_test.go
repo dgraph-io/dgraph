@@ -57,6 +57,7 @@ func TestSchema(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaVal), 1))
 	checkSchema(t, State().get(1).predicate, []nameType{
 		{"name", &protos.SchemaUpdate{
+			Predicate: "name",
 			ValueType: uint32(types.StringID),
 			Explicit:  true,
 		}},
@@ -64,12 +65,17 @@ func TestSchema(t *testing.T) {
 			ValueType: uint32(types.StringID),
 			List:      true,
 		}},
-		{"address", &protos.SchemaUpdate{ValueType: uint32(types.StringID), Explicit: true}},
+		{"address", &protos.SchemaUpdate{
+			Predicate: "address",
+			ValueType: uint32(types.StringID),
+			Explicit:  true}},
 		{"http://scalar.com/helloworld/", &protos.SchemaUpdate{
+			Predicate: "http://scalar.com/helloworld/",
 			ValueType: uint32(types.StringID),
 			Explicit:  true,
 		}},
 		{"age", &protos.SchemaUpdate{
+			Predicate: "age",
 			ValueType: uint32(types.IntID),
 			Explicit:  true,
 		}},
@@ -178,6 +184,7 @@ func TestSchemaIndexCustom(t *testing.T) {
 			List:      true,
 		}},
 		{"name", &protos.SchemaUpdate{
+			Predicate: "name",
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact"},
 			Directive: protos.SchemaUpdate_INDEX,
@@ -185,18 +192,21 @@ func TestSchemaIndexCustom(t *testing.T) {
 			Explicit:  true,
 		}},
 		{"address", &protos.SchemaUpdate{
+			Predicate: "address",
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"term"},
 			Directive: protos.SchemaUpdate_INDEX,
 			Explicit:  true,
 		}},
 		{"age", &protos.SchemaUpdate{
+			Predicate: "age",
 			ValueType: uint32(types.IntID),
 			Tokenizer: []string{"int"},
 			Directive: protos.SchemaUpdate_INDEX,
 			Explicit:  true,
 		}},
 		{"id", &protos.SchemaUpdate{
+			Predicate: "id",
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact", "term"},
 			Directive: protos.SchemaUpdate_INDEX,
@@ -204,6 +214,7 @@ func TestSchemaIndexCustom(t *testing.T) {
 		}},
 		{"friend", &protos.SchemaUpdate{
 			ValueType: uint32(types.UidID),
+			Predicate: "friend",
 			Directive: protos.SchemaUpdate_REVERSE,
 			Count:     true,
 			Explicit:  true,

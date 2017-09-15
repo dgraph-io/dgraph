@@ -27,32 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
-	if s.Directive == protos.SchemaUpdate_REVERSE {
-		return protos.SchemaUpdate{
-			ValueType: s.ValueType,
-			Directive: protos.SchemaUpdate_REVERSE,
-			Count:     s.Count,
-			Explicit:  s.Explicit,
-		}
-	} else if s.Directive == protos.SchemaUpdate_INDEX {
-		return protos.SchemaUpdate{
-			ValueType: s.ValueType,
-			Directive: protos.SchemaUpdate_INDEX,
-			Tokenizer: s.Tokenizer,
-			Count:     s.Count,
-			List:      s.List,
-			Explicit:  s.Explicit,
-		}
-	}
-	return protos.SchemaUpdate{
-		ValueType: s.ValueType,
-		Count:     s.Count,
-		List:      s.List,
-		Explicit:  s.Explicit,
-	}
-}
-
 // ParseBytes parses the byte array which holds the schema. We will reset
 // all the globals.
 // Overwrites schema blindly - called only during initilization in testing
@@ -67,7 +41,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	}
 
 	for _, update := range updates {
-		State().Set(update.Predicate, From(update))
+		State().Set(update.Predicate, *update)
 	}
 	State().Set("_predicate_", protos.SchemaUpdate{
 		ValueType: uint32(types.StringID),
