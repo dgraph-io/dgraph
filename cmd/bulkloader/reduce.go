@@ -56,7 +56,7 @@ func shufflePostings(batchCh chan<- []*protos.MapEntry,
 		heap.Push(&ph, heapNode{mapEntry: <-ch, ch: ch})
 	}
 
-	const batchSize = 1e5
+	const batchSize = 1e4
 	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*protos.MapEntry, 0, batchAlloc)
 	var prevKey []byte

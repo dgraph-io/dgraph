@@ -217,6 +217,7 @@ func (ld *loader) reduceStage() {
 	for _, mapOutput := range mapOutputShards {
 		shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutput))
 		for i, mappedFile := range mapOutput {
+			fmt.Println(mappedFile)
 			shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
 			go readMapOutput(mappedFile, shuffleInputChs[i])
 		}
