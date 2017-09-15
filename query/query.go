@@ -153,6 +153,7 @@ type params struct {
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
+	upsert         bool
 }
 
 // Function holds the information about gql functions.
@@ -891,6 +892,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		IgnoreReflex: gq.IgnoreReflex,
 		IsEmpty:      gq.IsEmpty,
 		Order:        gq.Order,
+		upsert:       gq.Upsert,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1952,10 +1954,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if sg.IsGroupBy() {
 		// Add the attrs required by groupby nodes
 		for _, it := range sg.Params.groupbyAttrs {
-			if schema.State().IsList(it.Attr) {
-				rch <- x.Errorf("Groupby not allowed for attr: %s of type list", it.Attr)
-				return
-			}
+			// TODO - Throw error if Attr is of list type.
 			sg.Children = append(sg.Children, &SubGraph{
 				Attr: it.Attr,
 				Params: params{
@@ -2313,6 +2312,42 @@ func parseFacetsInMutation(mu *gql.Mutation) error {
 	return nil
 }
 
+func (sg *SubGraph) upsert(ctx context.Context) (uint64, error) {
+	// First we assign a uid. Then we do the mutation corresponding to the upsert condition.
+	// Finally we run ProcessGraph again to get the actual uid back in case someone else might
+	// have set it.
+
+	res, err := worker.AssignUidsOverNetwork(ctx, &protos.Num{Val: 1})
+	if err != nil {
+		return 0, x.Wrapf(err, "While assigning uid during upsert query.")
+	}
+
+	edge := protos.DirectedEdge{
+		Op:     protos.DirectedEdge_SET,
+		Entity: res.StartId,
+		Attr:   sg.Attr,
+		Value:  []byte(sg.SrcFunc.Args[0].Value),
+	}
+	if len(sg.Params.Langs) > 0 {
+		// Lang in function argument is also stored in Langs.
+		edge.Lang = sg.Params.Langs[0]
+	}
+
+	m := protos.Mutations{}
+	m.Edges = append(m.Edges, &edge)
+	if m.Upsert, err = createTaskQuery(sg); err != nil {
+		return 0, x.Wrapf(err, "While creating upsert query.")
+	}
+	if err = ApplyMutations(ctx, &m); err != nil {
+		return 0, x.Wrapf(err, "While running upsert mutation.")
+	}
+
+	// TODO - Optionally ApplyMutations could return the uid and thne we can avoid this call.
+	che := make(chan error, 1)
+	ProcessGraph(ctx, sg, nil, che)
+	return res.StartId, <-che
+}
+
 // QueryRequest wraps the state that is used when executing query.
 // Initially Latency and GqlQuery needs to be set. Subgraphs, Vars
 // and schemaUpdate are filled when processing query.
@@ -2328,8 +2363,10 @@ type QueryRequest struct {
 
 // ProcessQuery processes query part of the request (without mutations).
 // Fills Subgraphs and Vars.
-func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
+// It optionally also returns a map of the allocated uids in case of an upsert request.
+func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, error) {
 	var err error
+	var allocatedUids map[string]uint64
 
 	// doneVars stores the processed variables.
 	req.vars = make(map[string]varValue)
@@ -2344,11 +2381,11 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
-			return err
+			return nil, err
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Query parsed")
@@ -2401,7 +2438,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 
 			err = sg.recursiveFillVars(req.vars)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			hasExecuted[idx] = true
 			numQueriesDone++
@@ -2438,10 +2475,40 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 				if tr, ok := trace.FromContext(ctx); ok {
 					tr.LazyPrintf("Error while processing Query: %+v", err)
 				}
+				continue
+			}
+			// We didn't get back any uids. So we would have to assign the uid and perform the
+			// mutation (i.e. the upsert operation).
+			sg := req.Subgraphs[i]
+			if sg.Params.upsert && (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) {
+				if len(sg.Filters) > 0 {
+					ferr = fmt.Errorf("Upsert query cannot have filters.")
+					continue
+				}
+				uid, err := sg.upsert(ctx)
+				if err != nil {
+					ferr = err
+					continue
+				}
+
+				if len(sg.DestUIDs.Uids) == 0 {
+					ferr = fmt.Errorf("Expected a uid to be assigned while doing upsert.")
+					continue
+				}
+				if allocatedUids == nil {
+					allocatedUids = make(map[string]uint64)
+				}
+				if sg.Params.Var != "" {
+					allocatedUids[sg.Params.Var] = uid
+				} else {
+					// There can only be one upsert per query block, so the key can be
+					// the Alias for the block.
+					allocatedUids[sg.Params.Alias] = uid
+				}
 			}
 		}
 		if ferr != nil {
-			return ferr
+			return nil, ferr
 		}
 
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
@@ -2450,11 +2517,11 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			var sgPath []*SubGraph
 			err = sg.populateVarMap(req.vars, sgPath)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			err = sg.populatePostAggregation(req.vars, []*SubGraph{}, nil)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
@@ -2462,7 +2529,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 	// Ensure all the queries are executed.
 	for _, it := range hasExecuted {
 		if !it {
-			return x.Errorf("Query couldn't be executed")
+			return nil, x.Errorf("Query couldn't be executed")
 		}
 	}
 	req.Latency.Processing += time.Since(execStart)
@@ -2471,7 +2538,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 	if len(shortestSg) != 0 {
 		req.Subgraphs = append(req.Subgraphs, shortestSg...)
 	}
-	return nil
+	return allocatedUids, nil
 }
 
 var MutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
@@ -2525,7 +2592,7 @@ func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads, ne
 type ExecuteResult struct {
 	Subgraphs   []*SubGraph
 	SchemaNode  []*protos.SchemaNode
-	Allocations map[string]uint64
+	Allocations map[string]uint64 // Blank node => uid map returned for a mutation request.
 }
 
 func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResult, err error) {
@@ -2570,9 +2637,17 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		return er, nil
 	}
 
-	err = qr.ProcessQuery(ctx)
+	uids, err := qr.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
+	}
+	if uids != nil {
+		if er.Allocations == nil {
+			er.Allocations = make(map[string]uint64)
+		}
+		for s, uid := range uids {
+			er.Allocations[s] = uid
+		}
 	}
 	er.Subgraphs = qr.Subgraphs
 

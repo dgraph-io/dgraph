@@ -376,10 +376,18 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		}
 		mu.Schema = append(mu.Schema, schema)
 	}
+
+	if m.Upsert != nil {
+		gid := group.BelongsTo(m.Upsert.Attr)
+		mu := mutationMap[gid]
+		// There should also be a corresponding mutation for this attribute when doing upsert.
+		x.AssertTrue(mu != nil)
+		mu.Upsert = m.Upsert
+	}
 }
 
 // MutateOverNetwork checks which group should be running the mutations
-// according to fingerprint of the predicate and sends it to that instance.
+// according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	mutationMap := make(map[uint32]*protos.Mutations)
 	addToMutationMap(mutationMap, m)

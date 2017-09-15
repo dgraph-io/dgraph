@@ -114,7 +114,7 @@ func processToFastJSON(q string) string {
 	var l query.Latency
 	ctx := defaultContext()
 	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err = qr.ProcessQuery(ctx)
 
 	if err != nil {
 		log.Fatal(err)
@@ -1476,6 +1476,97 @@ func TestListTypeSchemaChange(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"occupations","type":"string"}]}}`, res)
 
+}
+
+func TestUpsertError(t *testing.T) {
+	query := `
+	mutation {
+		schema {
+			name: string .
+		}
+	}
+
+	{
+		me(func: eq(name, "XYZ")) @upsert
+	}`
+
+	_, err := runQuery(query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Attribute name is not indexed.")
+}
+
+func TestUpsert(t *testing.T) {
+	query := `
+	mutation {
+		schema {
+			name: string @index(exact) .
+		}
+	}
+
+	{
+		me(func: eq(name, "XYZ")) @upsert {
+			name
+		}
+	}
+	`
+
+	res, err := runQuery(query)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {"me":[{"name":"XYZ"}],"uids":{"me":"0xa"}}}`, res)
+}
+
+func TestUpsert2(t *testing.T) {
+	query := `
+	{
+		a as var(func: eq(name, "person")) @upsert
+		b as var(func: eq(age, 20)) @upsert
+	}
+
+	mutation {
+		schema {
+			name: string @index(term) .
+			age: int @index(int) .
+		}
+		set {
+			uid(a) <age> "13" .
+			uid(a) <friend> <100> .
+			<100> <name> "Friend1" .
+			uid(b) <name> "person2" .
+		}
+	}
+
+	`
+
+	res, err := runQuery(query)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"uids":{"b":"0xc","a":"0xb"}}}`, res)
+
+	m := make(map[string]interface{})
+	require.NoError(t, json.Unmarshal([]byte(res), &m))
+	uids := m["data"].(map[string]interface{})["uids"].(map[string]interface{})
+	require.Equal(t, 2, len(uids))
+
+	// Upsert shouldn't assign a new _uid_ now.
+	query = `
+	{
+		me(func: eq(name, "person")) @upsert {
+			name
+			age
+			friend {
+				name
+			}
+		}
+
+		me(func: eq(age, 20)) {
+			name
+			age
+		}
+	}
+	`
+	res, err = runQuery(query)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[{"name":"person","age":13,"friend":[{"name":"Friend1"}]},{"name":"person2","age":20}]}}`,
+		res)
 }
 
 func TestMain(m *testing.M) {
