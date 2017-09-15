@@ -169,6 +169,7 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()
 	}
 	outputPostingList()
 
+	NumBadgerWrites.Add(1)
 	kv.BatchSetAsync(entries, func(err error) {
 		x.Check(err)
 		for _, e := range entries {
@@ -182,5 +183,6 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()
 			mePool.Put(me)
 		}
 		done()
+		NumBadgerWrites.Add(-1)
 	})
 }
