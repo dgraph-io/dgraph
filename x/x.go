@@ -87,6 +87,16 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	}
 }
 
+func AddCorsHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers",
+		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token,"+
+			"X-Auth-Token, Cache-Control, X-Requested-With")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Connection", "close")
+}
+
 type QueryResWithData struct {
 	Errors []errRes `json:"errors"`
 	Data   *string  `json:"data"`

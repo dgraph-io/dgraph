@@ -48,7 +48,7 @@ type keywords struct {
 
 // Used to return a list of keywords, so that UI can show them for autocompletion.
 func keywordHandler(w http.ResponseWriter, r *http.Request) {
-	addCorsHeaders(w)
+	x.AddCorsHeaders(w)
 	if r.Method != "GET" {
 		http.Error(w, x.ErrorInvalidMethod, http.StatusBadRequest)
 		return

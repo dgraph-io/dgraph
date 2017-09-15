@@ -204,18 +204,8 @@ func stopProfiling() {
 	}
 }
 
-func addCorsHeaders(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token,"+
-			"X-Auth-Token, Cache-Control, X-Requested-With")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-	w.Header().Set("Connection", "close")
-}
-
 func healthCheck(w http.ResponseWriter, r *http.Request) {
-	addCorsHeaders(w)
+	x.AddCorsHeaders(w)
 	if err := x.HealthCheck(); err == nil {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
@@ -225,7 +215,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
-	addCorsHeaders(w)
+	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := x.HealthCheck(); err != nil {
@@ -412,7 +402,7 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 	var rawQuery []byte
 
 	w.Header().Set("Content-Type", "application/json")
-	addCorsHeaders(w)
+	x.AddCorsHeaders(w)
 	if r.Method != "POST" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
@@ -464,7 +454,7 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 
 // storeStatsHandler outputs some basic stats for data store.
 func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
-	addCorsHeaders(w)
+	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte("<pre>"))
 	w.Write([]byte(worker.StoreStats()))

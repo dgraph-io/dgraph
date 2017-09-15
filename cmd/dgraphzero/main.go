@@ -117,18 +117,8 @@ func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	}()
 }
 
-func addCorsHeaders(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token,"+
-			"X-Auth-Token, Cache-Control, X-Requested-With")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-	w.Header().Set("Connection", "close")
-}
-
 func (st *state) getState(w http.ResponseWriter, r *http.Request) {
-	addCorsHeaders(w)
+	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
 	mstate := st.zero.membershipState()
