@@ -61,7 +61,8 @@ export function isNotEmpty(response) {
 }
 
 export function sortStrings(a, b) {
-  var nameA = a.toLowerCase(), nameB = b.toLowerCase();
+  var nameA = a.toLowerCase(),
+    nameB = b.toLowerCase();
   if (
     nameA < nameB //sort string ascending
   )
@@ -121,8 +122,7 @@ export function readCookie(name) {
   let ca = document.cookie.split(";");
   for (let i = 0; i < ca.length; i++) {
     var c = ca[i];
-    while (c.charAt(0) === " ")
-      c = c.substring(1, c.length);
+    while (c.charAt(0) === " ") c = c.substring(1, c.length);
     if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
   }
 
@@ -195,8 +195,8 @@ export function collapseQuery(query) {
   return ret;
 }
 
-export function executeQuery(query) {
-  const endpoint = getEndpoint("query", { debug: true });
+export function executeQuery(query, debug) {
+  const endpoint = getEndpoint("query", { debug: debug });
 
   return fetch(endpoint, {
     method: "POST",
