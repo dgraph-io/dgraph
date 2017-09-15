@@ -28,6 +28,11 @@ var entPool = sync.Pool{
 		return new(badger.Entry)
 	},
 }
+var plBufPool = sync.Pool{
+	New: func() interface{} {
+		return []byte(nil)
+	},
+}
 
 func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 	fd, err := os.Open(filename)
@@ -141,10 +146,16 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()
 			e.Value = bp128.DeltaPack(uids)
 			e.UserMeta = 0x01
 		} else {
-			var err error
 			pl.Uids = bp128.DeltaPack(uids)
-			e.Value, err = pl.Marshal()
-			x.Check(err)
+			plSz := pl.Size()
+			e.Value = plBufPool.Get().([]byte)
+			if cap(e.Value) < plSz {
+				// Throw away buffers that are too small.
+				e.Value = make([]byte, plSz)
+			} else {
+				e.Value = e.Value[:plSz]
+			}
+			x.Check2(pl.MarshalTo(e.Value))
 		}
 		entries = append(entries, e)
 
@@ -174,6 +185,7 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()
 		x.Check(err)
 		for _, e := range entries {
 			x.Check(e.Error)
+			plBufPool.Put(e.Value)
 			*e = badger.Entry{}
 			entPool.Put(e)
 		}
