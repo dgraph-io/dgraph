@@ -58,17 +58,20 @@ func TestSchema(t *testing.T) {
 	checkSchema(t, State().get(1).predicate, []nameType{
 		{"name", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
+			Explicit:  true,
 		}},
 		{"_predicate_", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			List:      true,
 		}},
-		{"address", &protos.SchemaUpdate{ValueType: uint32(types.StringID)}},
+		{"address", &protos.SchemaUpdate{ValueType: uint32(types.StringID), Explicit: true}},
 		{"http://scalar.com/helloworld/", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
+			Explicit:  true,
 		}},
 		{"age", &protos.SchemaUpdate{
 			ValueType: uint32(types.IntID),
+			Explicit:  true,
 		}},
 	})
 
@@ -179,26 +182,31 @@ func TestSchemaIndexCustom(t *testing.T) {
 			Tokenizer: []string{"exact"},
 			Directive: protos.SchemaUpdate_INDEX,
 			Count:     true,
+			Explicit:  true,
 		}},
 		{"address", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"term"},
 			Directive: protos.SchemaUpdate_INDEX,
+			Explicit:  true,
 		}},
 		{"age", &protos.SchemaUpdate{
 			ValueType: uint32(types.IntID),
 			Tokenizer: []string{"int"},
 			Directive: protos.SchemaUpdate_INDEX,
+			Explicit:  true,
 		}},
 		{"id", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact", "term"},
 			Directive: protos.SchemaUpdate_INDEX,
+			Explicit:  true,
 		}},
 		{"friend", &protos.SchemaUpdate{
 			ValueType: uint32(types.UidID),
 			Directive: protos.SchemaUpdate_REVERSE,
 			Count:     true,
+			Explicit:  true,
 		}},
 	})
 	require.True(t, State().IsIndexed("name"))
@@ -285,18 +293,21 @@ func TestParseScalarList(t *testing.T) {
 		Directive: protos.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"},
 		List:      true,
+		Explicit:  true,
 	}, schemas[0])
 
 	require.EqualValues(t, &protos.SchemaUpdate{
 		Predicate: "occupations",
 		ValueType: 9,
 		List:      true,
+		Explicit:  true,
 	}, schemas[1])
 
 	require.EqualValues(t, &protos.SchemaUpdate{
 		Predicate: "graduation",
 		ValueType: 5,
 		List:      true,
+		Explicit:  true,
 	}, schemas[2])
 }
 
