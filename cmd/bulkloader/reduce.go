@@ -49,7 +49,7 @@ func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 }
 
 func shufflePostings(batchCh chan<- shuffleOutput,
-	mapEntryChs []chan *protos.MapEntry, kv *badger.KV, prog *progress) {
+	mapEntryChs []chan *protos.MapEntry, kv *badger.KV, ci *countIndexer, prog *progress) {
 
 	var ph postingHeap
 	for _, ch := range mapEntryChs {
@@ -60,6 +60,7 @@ func shufflePostings(batchCh chan<- shuffleOutput,
 	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*protos.MapEntry, 0, batchAlloc)
 	var prevKey []byte
+	var plistLen int
 	for len(ph.nodes) > 0 {
 		me := ph.nodes[0].mapEntry
 		var ok bool
@@ -70,6 +71,12 @@ func shufflePostings(batchCh chan<- shuffleOutput,
 			heap.Pop(&ph)
 		}
 
+		keyChanged := bytes.Compare(prevKey, me.Key) != 0
+		if keyChanged && plistLen > 0 {
+			ci.addUid(prevKey, plistLen)
+			plistLen = 0
+		}
+
 		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
 			batchCh <- shuffleOutput{entries: batch, kv: kv}
 			NumQueuedReduceJobs.Add(1)
@@ -77,10 +84,14 @@ func shufflePostings(batchCh chan<- shuffleOutput,
 		}
 		prevKey = me.Key
 		batch = append(batch, me)
+		plistLen++
 	}
 	if len(batch) > 0 {
 		batchCh <- shuffleOutput{entries: batch, kv: kv}
 		NumQueuedReduceJobs.Add(1)
+	}
+	if plistLen > 0 {
+		ci.addUid(prevKey, plistLen)
 	}
 }
 

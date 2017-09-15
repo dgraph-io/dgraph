@@ -237,8 +237,11 @@ func (ld *loader) reduceStage() {
 				shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
 				go readMapOutput(mappedFile, shuffleInputChs[i])
 			}
+
+			ci := &countIndexer{state: ld.state, kv: kv}
 			go func() {
-				shufflePostings(shuffleOutputCh, shuffleInputChs, kv, ld.prog)
+				shufflePostings(shuffleOutputCh, shuffleInputChs, kv, ci, ld.prog)
+				ci.wait()
 				<-pendingShufflers
 				shuffleWg.Done()
 			}()
