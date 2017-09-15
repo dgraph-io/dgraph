@@ -206,8 +206,8 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	idx, restart, err := n.InitFromWal(wal)
-	x.Check(err)
 	n.Applied.SetDoneUntil(idx)
+	x.Check(err)
 
 	if restart {
 		x.Println("Restarting node for dgraphzero")
@@ -244,41 +244,31 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	}
 
 	go n.Run()
-	go n.snapshotPeriodically()
 	go n.BatchAndSendMessages()
 	return err
 }
 
-func (n *node) snapshotPeriodically() {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			existing, err := n.Store.Snapshot()
-			x.Checkf(err, "Unable to get existing snapshot")
-			si := existing.Metadata.Index
-
-			n.server.Lock()
-			idx := n.Applied.DoneUntil()
-			if idx <= si {
-				n.server.Unlock()
-				return
-			}
-			data, err := n.server.state.Marshal()
-			x.Check(err)
-			n.server.Unlock()
-
-			if tr, ok := trace.FromContext(n.ctx); ok {
-				tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
-			}
-			s, err := n.Store.CreateSnapshot(idx, n.ConfState(), data)
-			x.Checkf(err, "While creating snapshot")
-			x.Checkf(n.Store.Compact(idx), "While compacting snapshot")
-			x.Check(n.Wal.StoreSnapshot(0, s))
-		}
+func (n *node) snapshot() {
+	existing, err := n.Store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
+	si := existing.Metadata.Index
+	idx := n.Applied.DoneUntil()
+	if idx <= si+1000 {
+		return
 	}
+
+	n.server.Lock()
+	data, err := n.server.state.Marshal()
+	x.Check(err)
+	n.server.Unlock()
+
+	if tr, ok := trace.FromContext(n.ctx); ok {
+		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
+	}
+	s, err := n.Store.CreateSnapshot(idx, n.ConfState(), data)
+	x.Checkf(err, "While creating snapshot")
+	x.Checkf(n.Store.Compact(idx), "While compacting snapshot")
+	x.Check(n.Wal.StoreSnapshot(0, s))
 }
 
 func (n *node) Run() {
@@ -344,6 +334,7 @@ func (n *node) Run() {
 				msg.Context = rcBytes
 				n.Send(msg)
 			}
+			n.snapshot()
 			n.Raft().Advance()
 		}
 	}
