@@ -34,7 +34,7 @@ function run_test {
 	echo "$schema" > $tmp/sch.schema
 
 	# Run bulk loader.
-	$GOPATH/bin/bulkloader -shards=2 -mapoutput_mb=10 -tmp "$tmp/tmp" -p "$tmp/p" -l "$tmp/LEASE" -s "$tmp/sch.schema" -r "$rdfs"
+	$GOPATH/bin/bulkloader -shards=4 -shufflers=2 -mapoutput_mb=10 -tmp "$tmp/tmp" -p "$tmp/p" -l "$tmp/LEASE" -s "$tmp/sch.schema" -r "$rdfs"
 }
 
 echo "========================="

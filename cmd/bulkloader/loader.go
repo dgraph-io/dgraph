@@ -35,6 +35,7 @@ type options struct {
 	SkipMapPhase           bool
 	CleanupTmp             bool
 	MaxPendingBadgerWrites int
+	NumShufflers           int
 }
 
 type state struct {
@@ -212,20 +213,23 @@ func (ld *loader) reduceStage() {
 		close(shuffleOutputCh)
 	}()
 
-	// Start shufflers.
-	mapOutputShards := ld.findMapOutputFiles()
-	for _, mapOutput := range mapOutputShards {
-		shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutput))
-		for i, mappedFile := range mapOutput {
-			fmt.Println(mappedFile)
-			shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
-			go readMapOutput(mappedFile, shuffleInputChs[i])
+	// Run shufflers
+	pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
+	go func() {
+		pendingShufflers <- struct{}{}
+		for _, mapOutput := range ld.findMapOutputFiles() {
+			shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutput))
+			for i, mappedFile := range mapOutput {
+				shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
+				go readMapOutput(mappedFile, shuffleInputChs[i])
+			}
+			go func() {
+				shufflePostings(shuffleOutputCh, shuffleInputChs, ld.prog)
+				shuffleWg.Done()
+				<-pendingShufflers
+			}()
 		}
-		go func() {
-			shufflePostings(shuffleOutputCh, shuffleInputChs, ld.prog)
-			shuffleWg.Done()
-		}()
-	}
+	}()
 
 	// Run reducers.
 	var badgerWg sync.WaitGroup
