@@ -27,11 +27,13 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 )
 
 type proposalCtx struct {
@@ -73,10 +75,46 @@ func (p *proposals) Done(pid uint32, err error) {
 
 type node struct {
 	*conn.Node
-	server *Server
-	ctx    context.Context
-	props  proposals
-	leader uint32
+	server      *Server
+	ctx         context.Context
+	props       proposals
+	leader      uint32
+	subscribers map[uint32]chan struct{}
+}
+
+func (n *node) RegisterForUpdates(ch chan struct{}) uint32 {
+	n.Lock()
+	defer n.Unlock()
+	if n.subscribers == nil {
+		n.subscribers = make(map[uint32]chan struct{})
+	}
+	for {
+		id := rand.Uint32()
+		if _, has := n.subscribers[id]; has {
+			continue
+		}
+		n.subscribers[id] = ch
+		return id
+	}
+}
+
+func (n *node) Deregister(id uint32) {
+	n.Lock()
+	defer n.Unlock()
+	delete(n.subscribers, id)
+}
+
+func (n *node) triggerUpdates() {
+	n.Lock()
+	defer n.Unlock()
+	for _, ch := range n.subscribers {
+		select {
+		case ch <- struct{}{}:
+		// We can ignore it and don't send a notification, because they are going to
+		// read a state version after now since ch is already full.
+		default:
+		}
+	}
 }
 
 func (n *node) AmLeader() bool {
@@ -204,11 +242,18 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {
-	_, restart, err := n.InitFromWal(wal)
+	idx, restart, err := n.InitFromWal(wal)
+	n.Applied.SetDoneUntil(idx)
 	x.Check(err)
 
 	if restart {
 		x.Println("Restarting node for dgraphzero")
+		sp, err := n.Store.Snapshot()
+		var state protos.MembershipState
+		x.Check(state.Unmarshal(sp.Data))
+		n.server.SetMembershipState(&state)
+
+		x.Checkf(err, "Unable to get existing snapshot")
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	} else if len(*peer) > 0 {
@@ -234,9 +279,29 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	}
 
 	go n.Run()
-	// go n.snapshotPeriodically()
 	go n.BatchAndSendMessages()
 	return err
+}
+
+func (n *node) trySnapshot() {
+	existing, err := n.Store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
+	si := existing.Metadata.Index
+	idx := n.Applied.DoneUntil()
+	if idx <= si+1000 {
+		return
+	}
+
+	data, err := n.server.MarshalMembershipState()
+	x.Check(err)
+
+	if tr, ok := trace.FromContext(n.ctx); ok {
+		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
+	}
+	s, err := n.Store.CreateSnapshot(idx, n.ConfState(), data)
+	x.Checkf(err, "While creating snapshot")
+	x.Checkf(n.Store.Compact(idx), "While compacting snapshot")
+	x.Check(n.Wal.StoreSnapshot(0, s))
 }
 
 func (n *node) Run() {
@@ -246,12 +311,25 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
+	// This chan could have capacity zero, because runReadIndexLoop never blocks without selecting
+	// on readStateCh.  It's 2 so that sending rarely blocks (so the Go runtime doesn't have to
+	// switch threads as much.)
+	readStateCh := make(chan raft.ReadState, 2)
+	closer := y.NewCloser(1)
+	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
+	// That way we know sending to readStateCh will not deadlock.
+	defer closer.SignalAndWait()
+	go n.RunReadIndexLoop(closer, readStateCh)
+
 	for {
 		select {
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			for _, rs := range rd.ReadStates {
+				readStateCh <- rs
+			}
 			// First store the entries, then the hardstate and snapshot.
 			x.Check(n.Wal.Store(0, rd.HardState, rd.Entries))
 			x.Check(n.Wal.StoreSnapshot(0, rd.Snapshot))
@@ -262,12 +340,11 @@ func (n *node) Run() {
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state protos.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
-				n.server.Lock()
-				n.server.state = &state
-				n.server.Unlock()
+				n.server.SetMembershipState(&state)
 			}
 
 			for _, entry := range rd.CommittedEntries {
+				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
 
@@ -281,6 +358,7 @@ func (n *node) Run() {
 				} else {
 					x.Printf("Unhandled entry: %+v\n", entry)
 				}
+				n.Applied.Done(entry.Index)
 			}
 
 			// TODO: Should we move this to the top?
@@ -300,6 +378,10 @@ func (n *node) Run() {
 				msg.Context = rcBytes
 				n.Send(msg)
 			}
+			if len(rd.CommittedEntries) > 0 {
+				n.triggerUpdates()
+			}
+			n.trySnapshot()
 			n.Raft().Advance()
 		}
 	}

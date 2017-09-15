@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -67,6 +68,24 @@ func (s *Server) Init() {
 	}
 	s.nextLeaseId = 1
 	s.nextGroup = 1
+}
+
+func (s *Server) SetMembershipState(state *protos.MembershipState) {
+	s.Lock()
+	defer s.Unlock()
+	s.state = state
+	if state.Zeros == nil {
+		state.Zeros = make(map[uint64]*protos.Member)
+	}
+	if state.Groups == nil {
+		state.Groups = make(map[uint32]*protos.Group)
+	}
+}
+
+func (s *Server) MarshalMembershipState() ([]byte, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.state.Marshal()
 }
 
 // Do not modify the membership state out of this.
@@ -224,6 +243,7 @@ func (s *Server) Connect(ctx context.Context,
 			return &emptyMembershipState, err
 		}
 	}
+	// TODO: Shouldn't we copy before.
 	return s.membershipState(), nil
 }
 
@@ -253,34 +273,95 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
-func (s *Server) Update(
-	ctx context.Context, group *protos.Group) (state *protos.MembershipState, err error) {
-	if ctx.Err() != nil {
-		return &emptyMembershipState, ctx.Err()
-	}
+func (s *Server) receiveUpdates(stream protos.Zero_UpdateServer) error {
+	for {
+		group, err := stream.Recv()
+		// Due to closeSend on client Side
+		if group == nil {
+			return nil
+		}
+		// Could be EOF also, but we don't care about error type.
+		if err != nil {
+			return err
+		}
+		proposals, err := s.createProposals(group)
+		if err != nil {
+			return err
+		}
 
-	proposals, err := s.createProposals(group)
+		errCh := make(chan error)
+		for _, pr := range proposals {
+			go func(pr *protos.ZeroProposal) {
+				x.Printf("Proposing: %+v\n", pr)
+				errCh <- s.Node.proposeAndWait(context.Background(), pr)
+			}(pr)
+		}
+
+		for range proposals {
+			// We Don't care about these errors
+			// Ideally shouldn't error out.
+			if err := <-errCh; err != nil {
+				x.Printf("Error while applying proposal in update stream %v\n", err)
+			}
+		}
+	}
+}
+
+func (s *Server) Update(stream protos.Zero_UpdateServer) error {
+	che := make(chan error, 1)
+	// Server side cancellation can only be done by existing the handler
+	// since Recv is blocking we need to run it in a goroutine.
+	go func() {
+		che <- s.receiveUpdates(stream)
+	}()
+
+	// Check every minute that whether we caught upto read index or not.
+	ticker := time.NewTicker(time.Minute)
+	ctx := stream.Context()
+	// node sends struct{} on this channel whenever membership state is updated
+	changeCh := make(chan struct{}, 1)
+
+	id := s.Node.RegisterForUpdates(changeCh)
+	defer s.Node.Deregister(id)
+	// Send MembershipState immediately after registering. (Or there could be race
+	// condition between registering and change in membership state).
+	ms, err := s.latestMembershipState(ctx)
 	if err != nil {
-		return &emptyMembershipState, err
+		return err
+	}
+	if err := stream.Send(ms); err != nil {
+		return err
 	}
 
-	errCh := make(chan error)
-	for _, pr := range proposals {
-		go func(pr *protos.ZeroProposal) {
-			x.Printf("Proposing: %+v\n", pr)
-			errCh <- s.Node.proposeAndWait(ctx, pr)
-		}(pr)
-	}
-
-	for range proposals {
+	for {
 		select {
-		case err := <-errCh:
+		case <-changeCh:
+			ms, err := s.latestMembershipState(ctx)
 			if err != nil {
-				return &emptyMembershipState, err
+				return err
+			}
+			if err := stream.Send(ms); err != nil {
+				return err
+			}
+		case err := <-che:
+			// Error while receiving updates.
+			return err
+		case <-ticker.C:
+			// Check Whether we caught upto read index or not.
+			if _, err := s.latestMembershipState(ctx); err != nil {
+				return err
 			}
 		case <-ctx.Done():
-			return &emptyMembershipState, ctx.Err()
+			return ctx.Err()
 		}
+	}
+}
+
+func (s *Server) latestMembershipState(ctx context.Context) (*protos.MembershipState, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
+		return nil, err
 	}
 	return s.membershipState(), nil
 }
