@@ -360,6 +360,8 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 
 // TODO: This could be better done via a uni-directional or bi-directional stream, so it's
 // instantenous.
+// If node is the leader, every sync involves calculating tablet sizes and sending them to
+// dgraphzero.
 func (g *groupi) syncMembershipState() {
 	// TODO: Instead of getting an address first, then finding a connection to that address,
 	// we should pick up a healthy connection from any server in the provided group.
@@ -395,7 +397,7 @@ func (g *groupi) syncMembershipState() {
 }
 
 func (g *groupi) periodicSyncMemberships() {
-	t := time.NewTicker(10 * time.Second)
+	t := time.NewTicker(time.Minute)
 	// TODO: We don't need to send membership information every 10 seconds, if we get a stream of
 	// MembershipState from dgraphzero. That way, we'll have the latest state update.
 	for {
