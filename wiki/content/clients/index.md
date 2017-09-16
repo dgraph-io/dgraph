@@ -161,6 +161,14 @@ INFO: [ManagedChannelImpl@5d3411d] Created with target localhost:9080
 {"_root_":[{"_uid_":"0x8c84811dffd0a905","_xid_":"alice","name":"Alice","follows":[{"_uid_":"0xdd77c65008e3c71","_xid_":"bob","name":"Bob"},{"_uid_":"0x5991e7d8205041b3","_xid_":"greg","name":"Greg"}]}],"server_latency":{"pb":"11.487µs","parsing":"85.504µs","processing":"270.597µs"}}
 ```
 
+### Scala
+
+https://github.com/PhilAndrew/DGraph4S
+
+{{% notice "incomplete" %}}The Scala API is developed by the community and is not officially supported.{{% /notice %}}
+
+This uses GRPC to communicate with the database over a Netty Channel supporting Scala Futures which allows for asynchronous calls.
+
 ### Shell
 
 This client requires commands which are often already installed on a Dgraph server or a client machine.
