@@ -91,13 +91,32 @@ func NewNode(rc *protos.RaftContext) *Node {
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
 		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
-		RequestCh:   make(chan linReadReq),
+		RequestCh:   make(chan linReadReq, 100),
 	}
 	n.Applied.Init()
 	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.
 	// This can happen once we get rid of groups.
 	n_ = n
 	return n
+}
+
+func (n *Node) WaitLinearizableRead(ctx context.Context) error {
+	replyCh, err := n.ReadIndex(ctx)
+	if err != nil {
+		return err
+	}
+	select {
+	case index := <-replyCh:
+		if index == raft.None {
+			return x.Errorf("cannot get linearized read (time expired or no configured leader)")
+		}
+		if err := n.Applied.WaitForMark(ctx, index); err != nil {
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // SetRaft would set the provided raft.Node to this node.
@@ -371,32 +390,33 @@ func (n *Node) RunReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
 				}
 			}
 			activeRctx := counter.Generate()
-			// We ignore the err - it would be n.ctx cancellation (which we must ignore because
-			// it's our duty to continue until `stop` is triggered) or raft.ErrStopped (which we
-			// must ignore for the same reason).
-			_ = n.Raft().ReadIndex(context.Background(), activeRctx[:])
 			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
 			// successful response.  If we don't see one, the raft leader wasn't configured, or the
 			// raft leader didn't respond.
 
 			// This is supposed to use context.Background().  We don't want to cancel the timer
 			// externally.  We want equivalent functionality to time.NewTimer.
-			timer, cancelTimer := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			// TODO: Second is high, if a node gets partitioned we would have to throw error sooner.
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			// We ignore the err - it would be n.ctx cancellation (which we must ignore because
+			// it's our duty to continue until `stop` is triggered) or raft.ErrStopped (which we
+			// must ignore for the same reason).
+			_ = n.Raft().ReadIndex(ctx, activeRctx[:])
 		again:
 			select {
 			case <-stop:
-				cancelTimer()
+				cancel()
 				return
 			case rs := <-readStateCh:
 				if 0 != bytes.Compare(activeRctx[:], rs.RequestCtx) {
 					goto again
 				}
-				cancelTimer()
+				cancel()
 				index := rs.Index
 				for _, req := range requests {
 					req.indexCh <- index
 				}
-			case <-timer.Done():
+			case <-ctx.Done():
 				for _, req := range requests {
 					req.indexCh <- raft.None
 				}

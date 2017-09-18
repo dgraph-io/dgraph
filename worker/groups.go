@@ -252,7 +252,6 @@ func (g *groupi) ServesTablet(key string) bool {
 	zc := protos.NewZeroClient(pl.Get())
 
 	tablet := &protos.Tablet{GroupId: g.groupId(), Predicate: key}
-	// TODO: RETRY
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		x.Printf("Error while ShouldServe grpc call %v", err)
@@ -362,17 +361,17 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	return
 }
 
-func (g *groupi) TriggerMembershipSync() {
+func (g *groupi) triggerMembershipSync() {
 	// It's ok if we miss the trigger, periodic membership sync runs every minute.
 	select {
 	case g.triggerCh <- struct{}{}:
+	// It's ok to ignore it, since we would be sending update of a later state
 	default:
 	}
 }
 
 func (g *groupi) periodicMembershipUpdate() {
-	ticker := time.NewTicker(time.Minute)
-	lastUpdate := time.Now()
+	ticker := time.NewTicker(time.Minute * 10)
 	tablets := g.calculateTabletSizes()
 
 START:
@@ -408,28 +407,26 @@ START:
 		}
 	}()
 
-	g.TriggerMembershipSync() // Ticker doesn't start immediately
+	g.triggerMembershipSync() // Ticker doesn't start immediately
+OUTER:
 	for {
-		// Ensures we don't calculateTabletSizes more than once in 10mins
-		if time.Since(lastUpdate) >= time.Minute*10 {
-			// dgraphzero just adds to the map so we needn't worry about race condition
-			// where a newly added tablet is not sent.
-			tablets = g.calculateTabletSizes()
-		}
 		select {
 		case <-g.triggerCh:
 			if err := g.sendMembership(tablets, stream); err != nil {
-				break
+				stream.CloseSend()
+				break OUTER
 			}
-			lastUpdate = time.Now()
 		case <-ticker.C:
+			// dgraphzero just adds to the map so we needn't worry about race condition
+			// where a newly added tablet is not sent.
+			tablets = g.calculateTabletSizes()
 			if err := g.sendMembership(tablets, stream); err != nil {
-				break
+				stream.CloseSend()
+				break OUTER
 			}
-			lastUpdate = time.Now()
 		case <-ctx.Done():
 			stream.CloseSend()
-			break
+			break OUTER
 		}
 	}
 	goto START
@@ -449,11 +446,7 @@ func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 	group.Members[member.Id] = member
 	group.Tablets = tablets
 
-	if err := stream.Send(group); err != nil {
-		stream.CloseSend()
-		return err
-	}
-	return nil
+	return stream.Send(group)
 }
 
 // SyncAllMarks syncs marks of all nodes of the worker group.

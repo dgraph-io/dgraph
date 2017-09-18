@@ -70,6 +70,18 @@ func (s *Server) Init() {
 	s.nextGroup = 1
 }
 
+func (s *Server) SetMembershipState(state *protos.MembershipState) {
+	s.Lock()
+	defer s.Unlock()
+	s.state = state
+}
+
+func (s *Server) MarshalMembershipState() ([]byte, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.state.Marshal()
+}
+
 // Do not modify the membership state out of this.
 func (s *Server) membershipState() *protos.MembershipState {
 	s.RLock()
@@ -225,6 +237,7 @@ func (s *Server) Connect(ctx context.Context,
 			return &emptyMembershipState, err
 		}
 	}
+	// TODO: Shouldn't we copy before.
 	return s.membershipState(), nil
 }
 
@@ -254,87 +267,95 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
+func (s *Server) receiveUpdates(stream protos.Zero_UpdateServer) error {
+	for {
+		group, err := stream.Recv()
+		// Due to closeSend on client Side
+		if group == nil {
+			return nil
+		}
+		// Could be EOF also, but we don't care about error type.
+		if err != nil {
+			return err
+		}
+		proposals, err := s.createProposals(group)
+		if err != nil {
+			return err
+		}
+
+		errCh := make(chan error)
+		for _, pr := range proposals {
+			go func(pr *protos.ZeroProposal) {
+				x.Printf("Proposing: %+v\n", pr)
+				errCh <- s.Node.proposeAndWait(context.Background(), pr)
+			}(pr)
+		}
+
+		for range proposals {
+			// We Don't care about these errors
+			// Ideally shouldn't error out.
+			if err := <-errCh; err != nil {
+				x.Printf("Error while applying proposal in update stream %v\n", err)
+			}
+		}
+	}
+}
+
 func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 	che := make(chan error, 1)
 	// Server side cancellation can only be done by existing the handler
 	// since Recv is blocking we need to run it in a goroutine.
-	go func(che chan error) {
-		for {
-			group, err := stream.Recv()
-			// Due to closeSend on client Side
-			if group == nil {
-				che <- nil
-			}
-			// Could be EOF also, but we don't care about error type.
-			if err != nil {
-				che <- err
-			}
-			proposals, err := s.createProposals(group)
-			if err != nil {
-				che <- err
-			}
+	go func() {
+		che <- s.receiveUpdates(stream)
+	}()
 
-			errCh := make(chan error)
-			for _, pr := range proposals {
-				go func(pr *protos.ZeroProposal) {
-					x.Printf("Proposing: %+v\n", pr)
-					errCh <- s.Node.proposeAndWait(context.Background(), pr)
-				}(pr)
-			}
-
-			for range proposals {
-				// We Don't care about these errors
-				// Ideally shouldn't error out.
-				if err := <-errCh; err != nil {
-					x.Printf("Error while applying proposal in update stream %v\n", err)
-				}
-			}
-		}
-	}(che)
-
-	ticker := time.NewTicker(time.Second * 5)
+	// Check every minute that whether we caught upto read index or not.
+	ticker := time.NewTicker(time.Minute)
 	ctx := stream.Context()
-	count := 0
+	// node sends struct{} on this channel whenever memebrship state is updated
 	changeCh := make(chan struct{}, 1)
-	lastUpdate := time.Now()
+
 	id := s.Node.RegisterForUpdates(changeCh)
-	defer s.Node.DeRegister(id)
-	if err := stream.Send(s.membershipState()); err != nil {
+	defer s.Node.Deregister(id)
+	// Send MembershipState immediately after registering. (Or there could be race
+	// condition between registering and change in membership state).
+	ms, err := s.latestMembershipState(ctx)
+	if err != nil {
 		return err
 	}
+	if err := stream.Send(ms); err != nil {
+		return err
+	}
+
 	for {
 		select {
 		case <-changeCh:
-			if err := stream.Send(s.membershipState()); err != nil {
-				return err
-			}
-			lastUpdate = time.Now()
-		case err := <-che:
-			return err
-		case <-ticker.C:
-			// Error would be thrown only when context is done.
-			replyCh, err := s.Node.ReadIndex(ctx)
+			ms, err := s.latestMembershipState(ctx)
 			if err != nil {
 				return err
 			}
-			// times out in 10ms
-			readIdx := <-replyCh
-			count++
-			if readIdx <= s.Node.Applied.DoneUntil() {
-				count = 0
-			} else if count >= 2 {
-				return x.Errorf("Reader index hasn't catched up for 10 seconds")
-			}
-
-			if time.Since(lastUpdate) < time.Minute {
-				continue
-			}
-			if err := stream.Send(s.membershipState()); err != nil {
+			if err := stream.Send(ms); err != nil {
 				return err
 			}
-			lastUpdate = time.Now()
+		case err := <-che:
+			// Error while receiving updates.
+			return err
+		case <-ticker.C:
+			// Check Whether we caught upto read index or not.
+			if _, err := s.latestMembershipState(ctx); err != nil {
+				return err
+			}
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
+}
+
+func (s *Server) latestMembershipState(ctx context.Context) (*protos.MembershipState, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
+		return nil, err
+	}
+	return s.membershipState(), nil
 }

@@ -344,7 +344,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	n.SetConfState(cs)
 	n.Applied.Done(e.Index)
 	posting.SyncMarks().Done(e.Index)
-	groups().TriggerMembershipSync()
+	groups().triggerMembershipSync()
 }
 
 func (n *node) processApplyCh() {
@@ -685,22 +685,7 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
-func waitLinearizableRead(ctx context.Context, gid uint32) error {
+func waitLinearizableRead(ctx context.Context) error {
 	n := groups().Node
-	replyCh, err := n.ReadIndex(ctx)
-	if err != nil {
-		return err
-	}
-	select {
-	case index := <-replyCh:
-		if index == raft.None {
-			return x.Errorf("cannot get linearized read (time expired or no configured leader)")
-		}
-		if err := n.Applied.WaitForMark(ctx, index); err != nil {
-			return err
-		}
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return n.WaitLinearizableRead(ctx)
 }

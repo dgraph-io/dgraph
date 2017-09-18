@@ -97,7 +97,7 @@ func (n *node) RegisterForUpdates(ch chan struct{}) uint32 {
 	}
 }
 
-func (n *node) DeRegister(id uint32) {
+func (n *node) Deregister(id uint32) {
 	n.Lock()
 	defer n.Unlock()
 	delete(n.subscribers, id)
@@ -109,6 +109,8 @@ func (n *node) triggerUpdates() {
 	for _, ch := range n.subscribers {
 		select {
 		case ch <- struct{}{}:
+		// We can ignore it and don't send a notification, because they are going to
+		// read a state version after now since ch is already full.
 		default:
 		}
 	}
@@ -248,9 +250,7 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		sp, err := n.Store.Snapshot()
 		var state protos.MembershipState
 		x.Check(state.Unmarshal(sp.Data))
-		n.server.Lock()
-		n.server.state = &state
-		n.server.Unlock()
+		n.server.SetMembershipState(&state)
 
 		x.Checkf(err, "Unable to get existing snapshot")
 		n.SetRaft(raft.RestartNode(n.Cfg))
@@ -282,7 +282,7 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	return err
 }
 
-func (n *node) snapshot() {
+func (n *node) trySnapshot() {
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 	si := existing.Metadata.Index
@@ -291,10 +291,8 @@ func (n *node) snapshot() {
 		return
 	}
 
-	n.server.Lock()
-	data, err := n.server.state.Marshal()
+	data, err := n.server.MarshalMembershipState()
 	x.Check(err)
-	n.server.Unlock()
 
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
@@ -346,9 +344,7 @@ func (n *node) Run() {
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state protos.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
-				n.server.Lock()
-				n.server.state = &state
-				n.server.Unlock()
+				n.server.SetMembershipState(&state)
 			}
 
 			for _, entry := range rd.CommittedEntries {
@@ -387,9 +383,9 @@ func (n *node) Run() {
 				n.Send(msg)
 			}
 			if len(rd.CommittedEntries) > 0 {
-				go n.triggerUpdates()
+				n.triggerUpdates()
 			}
-			n.snapshot()
+			n.trySnapshot()
 			n.Raft().Advance()
 		}
 	}

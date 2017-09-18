@@ -565,7 +565,7 @@ func processUpsertTask(ctx context.Context, q *protos.Query, gid uint32) (*proto
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
-	if err := waitLinearizableRead(ctx, gid); err != nil {
+	if err := waitLinearizableRead(ctx); err != nil {
 		return &emptyResult, err
 	}
 	return helpProcessTask(ctx, q, gid)
