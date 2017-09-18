@@ -252,8 +252,10 @@ func (g *groupi) ServesTablet(key string) bool {
 	zc := protos.NewZeroClient(pl.Get())
 
 	tablet := &protos.Tablet{GroupId: g.groupId(), Predicate: key}
+	// TODO: RETRY
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
+		x.Printf("Error while ShouldServe grpc call %v", err)
 		return false
 	}
 	g.Lock()
@@ -392,7 +394,7 @@ START:
 
 	go func() {
 		for {
-			// Blocking
+			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
 			if err != nil || state == nil {
 				x.Printf("Unable to sync memberships. Error: %v", err)
@@ -408,35 +410,50 @@ START:
 
 	g.TriggerMembershipSync() // Ticker doesn't start immediately
 	for {
+		// Ensures we don't calculateTabletSizes more than once in 10mins
+		if time.Since(lastUpdate) >= time.Minute*10 {
+			// dgraphzero just adds to the map so we needn't worry about race condition
+			// where a newly added tablet is not sent.
+			tablets = g.calculateTabletSizes()
+		}
 		select {
 		case <-g.triggerCh:
+			if err := g.sendMembership(tablets, stream); err != nil {
+				break
+			}
+			lastUpdate = time.Now()
 		case <-ticker.C:
-			member := &protos.Member{
-				Id:      Config.RaftId,
-				GroupId: g.groupId(),
-				Addr:    Config.MyAddr,
-				Leader:  g.Node.AmLeader(),
-			}
-			group := &protos.Group{
-				Members: make(map[uint64]*protos.Member),
-			}
-			group.Members[member.Id] = member
-			// Ensures we don't calculateTabletSizes more than once in 10mins
-			if time.Since(lastUpdate) >= time.Minute*10 {
-				tablets = g.calculateTabletSizes()
-			}
-			group.Tablets = tablets
-
-			if err := stream.Send(group); err != nil {
-				stream.CloseSend()
+			if err := g.sendMembership(tablets, stream); err != nil {
 				break
 			}
 			lastUpdate = time.Now()
 		case <-ctx.Done():
 			stream.CloseSend()
+			break
 		}
 	}
 	goto START
+}
+
+func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
+	stream protos.Zero_UpdateClient) error {
+	member := &protos.Member{
+		Id:      Config.RaftId,
+		GroupId: g.groupId(),
+		Addr:    Config.MyAddr,
+		Leader:  g.Node.AmLeader(),
+	}
+	group := &protos.Group{
+		Members: make(map[uint64]*protos.Member),
+	}
+	group.Members[member.Id] = member
+	group.Tablets = tablets
+
+	if err := stream.Send(group); err != nil {
+		stream.CloseSend()
+		return err
+	}
+	return nil
 }
 
 // SyncAllMarks syncs marks of all nodes of the worker group.

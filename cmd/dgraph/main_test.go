@@ -119,7 +119,7 @@ func (z *zeroServer) Update(stream protos.Zero_UpdateServer) error {
 		}
 		m := &protos.MembershipState{}
 		m.Zeros = make(map[uint64]*protos.Member)
-		m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
+		m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12341"}
 		m.Groups = make(map[uint32]*protos.Group)
 		g := &protos.Group{}
 		g.Members = make(map[uint64]*protos.Member)
