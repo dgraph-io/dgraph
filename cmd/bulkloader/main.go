@@ -51,12 +51,22 @@ func main() {
 	flag.Parse()
 	if len(flag.Args()) != 0 {
 		flag.Usage()
-		fmt.Println("No free args allowed, but got:", flag.Args())
+		fmt.Fprintf(os.Stderr, "No free args allowed, but got: %v\n", flag.Args())
 		os.Exit(1)
 	}
 	if opt.RDFDir == "" || opt.SchemaFile == "" {
 		flag.Usage()
-		fmt.Println("RDF and schema file(s) must be specified.")
+		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
+		os.Exit(1)
+	}
+	if opt.ReduceShards > opt.MapShards {
+		fmt.Fprintf(os.Stderr, "Invalid flags: reduce_shards(%d) should be <= map_shards(%d)\n",
+			opt.ReduceShards, opt.MapShards)
+		os.Exit(1)
+	}
+	if opt.NumShufflers > opt.ReduceShards {
+		fmt.Fprintf(os.Stderr, "Invalid flags: shufflers(%d) should be <= reduce_shards(%d)\n",
+			opt.NumShufflers, opt.ReduceShards)
 		os.Exit(1)
 	}
 
