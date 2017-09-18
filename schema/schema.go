@@ -111,23 +111,19 @@ func (s *stateGroup) update(se SyncEntry) {
 
 // Delete updates the schema in memory and sends an entry to syncCh so that it can be
 // committed later
-func (s *state) Delete(pred string) {
-	s.get(group.BelongsTo(pred)).delete(pred)
+func (s *state) Delete(se SyncEntry) {
+	s.get(group.BelongsTo(se.Attr)).delete(se)
 }
 
-func (s *stateGroup) delete(pred string) {
+func (s *stateGroup) delete(se SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
-	delete(s.predicate, pred)
-	syncCh <- SyncEntry{
-		Attr: pred,
-		Schema: protos.SchemaUpdate{
-			Directive: protos.SchemaUpdate_DELETE,
-		},
-	}
-	s.elog.Printf("Deleting schema for attr: %s", pred)
-	x.Printf("Deleting schema for attr: %s", pred)
+	delete(s.predicate, se.Attr)
+	se.Water.Begin(se.Index)
+	syncCh <- se
+	s.elog.Printf("Deleting schema for attr: %s", se.Attr)
+	x.Printf("Deleting schema for attr: %s", se.Attr)
 }
 
 // Set sets the schema for given predicate in memory
