@@ -317,3 +317,19 @@ func TestLangTag(t *testing.T) {
 	require.Equal(t, 1, len(r2.Root))
 	require.Equal(t, "Алиса", r2.Root[0].Name)
 }
+
+func TestEmptyString(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+	alice, err := dgraphClient.NodeBlank("")
+	require.NoError(t, err)
+	e := alice.Edge("name")
+	require.NoError(t, e.SetValueString(""))
+	require.NoError(t, req.Set(e))
+	_, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+}
