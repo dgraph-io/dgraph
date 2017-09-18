@@ -218,12 +218,12 @@ func (ld *loader) reduceStage() {
 
 	// Run shufflers
 	var badgers []*badger.KV
-	pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
 	go func() {
 		mapOutputs := findMapOutputFiles(ld.opt.TmpDir)
 		x.AssertTrue(len(mapOutputs) == ld.opt.NumShards)
 		x.AssertTrue(len(ld.opt.shardOutputDirs) == ld.opt.NumShards)
 
+		pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
 		for i := 0; i < ld.opt.NumShards; i++ {
 			pendingShufflers <- struct{}{}
 
