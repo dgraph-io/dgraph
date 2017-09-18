@@ -65,4 +65,5 @@ service Worker {
 	rpc Schema (SchemaRequest)                  returns (SchemaResult) {}
 
 	rpc Export (ExportPayload)                    returns (ExportPayload) {}
+	rpc ReadPredicate (Payload) returns (stream KV) {}
 }

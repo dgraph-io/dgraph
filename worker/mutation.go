@@ -337,6 +337,25 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 	return c.AssignUids(ctx, num)
 }
 
+// size of kvs won't be too big, we would take care before proposing.
+func processKeyValues(ctx context.Context, kvs *protos.KeyValues) error {
+	x.Printf("Writing %d keys\n", len(kvs.Kv))
+	wb := make([]*badger.Entry, 0, 1000)
+	// Badger does batching internally so no need to batch it.
+	for _, kv := range kvs.Kv {
+		wb = badger.EntriesSet(wb, kv.Key, kv.Val)
+	}
+	if err := pstore.BatchSet(wb); err != nil {
+		return err
+	}
+	for _, wbe := range wb {
+		if err := wbe.Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
 // the leader of the group gid for proposing.
 func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che chan error) {
