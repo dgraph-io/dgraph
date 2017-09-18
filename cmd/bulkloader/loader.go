@@ -13,10 +13,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/badger"
-	bo "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -51,12 +49,12 @@ type state struct {
 	sm         *shardMap
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
+	kvs        []*badger.KV
 }
 
 type loader struct {
 	*state
 	mappers []*mapper
-	kvs     []*badger.KV
 }
 
 func newLoader(opt options) *loader {
@@ -206,51 +204,11 @@ type shuffleOutput struct {
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	// Orchestrate finalisation of shufflers.
-	var shuffleWg sync.WaitGroup
-	shuffleWg.Add(ld.opt.ReduceShards)
+	// Run shufflers. Shuffle output channel is closed when the last shuffle completes.
 	shuffleOutputCh := make(chan shuffleOutput, 1000)
 	go func() {
-		shuffleWg.Wait()
-		close(shuffleOutputCh)
-	}()
-
-	// Run shufflers
-	go func() {
-		ld.mergeMapShardsIntoReduceShards()
-		shardDirs := ld.shardDirs()
-		x.AssertTrue(len(shardDirs) == ld.opt.ReduceShards)
-		x.AssertTrue(len(ld.opt.shardOutputDirs) == ld.opt.ReduceShards)
-
-		pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
-		for i := 0; i < ld.opt.ReduceShards; i++ {
-			pendingShufflers <- struct{}{} // Blocks to prevent too many concurrent shufflers.
-
-			opt := badger.DefaultOptions
-			opt.Dir = ld.opt.shardOutputDirs[i]
-			opt.ValueDir = opt.Dir
-			opt.ValueGCRunInterval = time.Hour * 100
-			opt.SyncWrites = false
-			opt.TableLoadingMode = bo.MemoryMap
-			kv, err := badger.NewKV(&opt)
-			x.Check(err)
-			ld.kvs = append(ld.kvs, kv)
-
-			mapFiles := filenamesInTree(shardDirs[i])
-			shuffleInputChs := make([]chan *protos.MapEntry, len(mapFiles))
-			for i, mapFile := range mapFiles {
-				shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
-				go readMapOutput(mapFile, shuffleInputChs[i])
-			}
-
-			go func() {
-				ci := &countIndexer{state: ld.state, kv: kv}
-				shufflePostings(shuffleOutputCh, shuffleInputChs, kv, ci, ld.prog)
-				ci.wait()
-				<-pendingShufflers
-				shuffleWg.Done()
-			}()
-		}
+		sh := shuffler{state: ld.state, output: shuffleOutputCh}
+		sh.run()
 	}()
 
 	// Run reducers.
@@ -268,53 +226,6 @@ func (ld *loader) reduceStage() {
 		}(reduceJob)
 	}
 	badgerWg.Wait()
-}
-
-func (ld *loader) shardDirs() []string {
-	dir, err := os.Open(ld.opt.TmpDir)
-	x.Check(err)
-	shards, err := dir.Readdirnames(0)
-	x.Check(err)
-	dir.Close()
-	for i, shard := range shards {
-		shards[i] = filepath.Join(ld.opt.TmpDir, shard)
-	}
-
-	// Allow largest shards to be shuffled first.
-	sortBySize(shards, false)
-	return shards
-}
-
-func filenamesInTree(dir string) []string {
-	var fnames []string
-	x.Check(filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !fi.IsDir() {
-			fnames = append(fnames, path)
-		}
-		return nil
-	}))
-	return fnames
-}
-
-func (ld *loader) mergeMapShardsIntoReduceShards() {
-	mapShards := ld.shardDirs()
-
-	var reduceShards []string
-	for i := 0; i < ld.opt.ReduceShards; i++ {
-		shardDir := filepath.Join(ld.opt.TmpDir, fmt.Sprintf("shard_%d", i))
-		x.Check(os.MkdirAll(shardDir, 0755))
-		reduceShards = append(reduceShards, shardDir)
-	}
-
-	// Heuristic: put the largest map shard into the smallest reduce shard
-	// until there are no more map shards left. Should be a good approximation.
-	for _, shard := range mapShards {
-		sortBySize(reduceShards, true)
-		x.Check(os.Rename(shard, filepath.Join(reduceShards[0], filepath.Base(shard))))
-	}
 }
 
 type sizedDir struct {

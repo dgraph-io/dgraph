@@ -1,126 +1,14 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
-	"container/heap"
-	"encoding/binary"
-	"io"
-	"log"
-	"os"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/proto"
 )
-
-func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
-	fd, err := os.Open(filename)
-	x.Check(err)
-	defer fd.Close()
-	r := bufio.NewReaderSize(fd, 16<<10)
-
-	unmarshalBuf := make([]byte, 1<<10)
-	for {
-		buf, err := r.Peek(binary.MaxVarintLen64)
-		if err == io.EOF {
-			break
-		}
-		x.Check(err)
-		sz, n := binary.Uvarint(buf)
-		if n <= 0 {
-			log.Fatal("Could not read uvarint: %d", n)
-		}
-		x.Check2(r.Discard(n))
-
-		for cap(unmarshalBuf) < int(sz) {
-			unmarshalBuf = make([]byte, sz)
-		}
-		x.Check2(io.ReadFull(r, unmarshalBuf[:sz]))
-
-		me := new(protos.MapEntry)
-		x.Check(proto.Unmarshal(unmarshalBuf[:sz], me))
-		mapEntryCh <- me
-	}
-	close(mapEntryCh)
-}
-
-func shufflePostings(batchCh chan<- shuffleOutput,
-	mapEntryChs []chan *protos.MapEntry, kv *badger.KV, ci *countIndexer, prog *progress) {
-
-	var ph postingHeap
-	for _, ch := range mapEntryChs {
-		heap.Push(&ph, heapNode{mapEntry: <-ch, ch: ch})
-	}
-
-	const batchSize = 1e4
-	const batchAlloc = batchSize * 11 / 10
-	batch := make([]*protos.MapEntry, 0, batchAlloc)
-	var prevKey []byte
-	var plistLen int
-	for len(ph.nodes) > 0 {
-		me := ph.nodes[0].mapEntry
-		var ok bool
-		ph.nodes[0].mapEntry, ok = <-ph.nodes[0].ch
-		if ok {
-			heap.Fix(&ph, 0)
-		} else {
-			heap.Pop(&ph)
-		}
-
-		keyChanged := bytes.Compare(prevKey, me.Key) != 0
-		if keyChanged && plistLen > 0 {
-			ci.addUid(prevKey, plistLen)
-			plistLen = 0
-		}
-
-		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
-			batchCh <- shuffleOutput{entries: batch, kv: kv}
-			NumQueuedReduceJobs.Add(1)
-			batch = make([]*protos.MapEntry, 0, batchAlloc)
-		}
-		prevKey = me.Key
-		batch = append(batch, me)
-		plistLen++
-	}
-	if len(batch) > 0 {
-		batchCh <- shuffleOutput{entries: batch, kv: kv}
-		NumQueuedReduceJobs.Add(1)
-	}
-	if plistLen > 0 {
-		ci.addUid(prevKey, plistLen)
-	}
-}
-
-type heapNode struct {
-	mapEntry *protos.MapEntry
-	ch       <-chan *protos.MapEntry
-}
-
-type postingHeap struct {
-	nodes []heapNode
-}
-
-func (h *postingHeap) Len() int {
-	return len(h.nodes)
-}
-func (h *postingHeap) Less(i, j int) bool {
-	return bytes.Compare(h.nodes[i].mapEntry.Key, h.nodes[j].mapEntry.Key) < 0
-}
-func (h *postingHeap) Swap(i, j int) {
-	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
-}
-func (h *postingHeap) Push(x interface{}) {
-	h.nodes = append(h.nodes, x.(heapNode))
-}
-func (h *postingHeap) Pop() interface{} {
-	elem := h.nodes[len(h.nodes)-1]
-	h.nodes = h.nodes[:len(h.nodes)-1]
-	return elem
-}
 
 func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()) {
 
