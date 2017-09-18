@@ -26,7 +26,7 @@ me(_xid_: m.06pj8) {
 INFO[0554] Query Latencies                               json=35.434904ms package=server parsing=93.385µs process=24.785928ms total=60.314523ms
 
 The first time this query runs, it's a bit slower, taking around 250ms in processing, mostly because we have to load
-the posting lists from rocksdb, and use disk seeks. But, on consecutive runs, when the PLs are already in memory,
+the posting lists from our key value store, and use disk seeks. But, on consecutive runs, when the PLs are already in memory,
 this takes under 25ms for processing. IT actually takes more time to convert the results to JSON!
 
 My reactions are mixed. I'm happy, but unsatisfied.

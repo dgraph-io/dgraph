@@ -122,16 +122,16 @@ There is typically more than one Posting in a PostingList.
 The RDF Label is stored as `label` in each posting.
 {{% notice "warning" %}}We don't currently retrieve label via query -- but would use it in the future.{{% /notice %}}
 
-### RocksDB
-PostingLists are served via [RocksDB](http://rocksdb.org), given the latter provides enough
+###  Badger
+PostingLists are served via [Badger](https://github.com/dgraph-io/badger), given the latter provides enough
 knobs to decide how much data should be served out of memory, SSD or disk.
 Also, it supports bloom filters on keys, which makes random lookups efficient.
 
-To allow RocksDB full access to memory to optimize for caches, we'll have
-one RocksDB instance per machine. Each instance would contain all the
+To allow Badger full access to memory to optimize for caches, we'll have
+one Badger instance per machine. Each instance would contain all the
 posting lists served by the machine.
 
-Posting Lists get stored in RocksDB, in a key-value format, like so:
+Posting Lists get stored in Badger, in a key-value format, like so:
 ```
 (Predicate, Subject) --> PostingList
 ```

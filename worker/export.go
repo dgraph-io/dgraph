@@ -266,7 +266,7 @@ func export(bdir string) error {
 		wg.Done()
 	}()
 
-	// Iterate over rocksdb.
+	// Iterate over key-value store
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	prefix := new(bytes.Buffer)
