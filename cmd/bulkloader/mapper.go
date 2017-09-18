@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -36,12 +37,12 @@ type mapper struct {
 func newMapper(st *state) *mapper {
 	return &mapper{
 		state:           st,
-		shardMapEntries: make([][]*protos.MapEntry, st.opt.NumShards),
-		shardSize:       make([]int64, st.opt.NumShards),
+		shardMapEntries: make([][]*protos.MapEntry, st.opt.numSubshards),
+		shardSize:       make([]int64, st.opt.numSubshards),
 	}
 }
 
-func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, shard int) {
+func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, subshard int) {
 	sort.Slice(mapEntries, func(i, j int) bool {
 		return bytes.Compare(mapEntries[i].Key, mapEntries[j].Key) < 0
 	})
@@ -58,8 +59,10 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, shard int)
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
 		m.opt.TmpDir,
-		fmt.Sprintf("%d_%06d.map", shard, fileNum),
+		fmt.Sprintf("%03d", subshard),
+		fmt.Sprintf("%06d.map", fileNum),
 	)
+	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
 	x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
 	m.buf.Reset()
 	m.mu.Unlock() // Locked by caller.

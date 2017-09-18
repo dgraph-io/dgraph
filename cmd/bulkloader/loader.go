@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -31,12 +32,14 @@ type options struct {
 	MapBufSize             int64
 	SkipExpandEdges        bool
 	NumShards              int
+	SubshardMultiplier     int
 	BlockRate              int
 	SkipMapPhase           bool
 	CleanupTmp             bool
 	MaxPendingBadgerWrites int
 	NumShufflers           int
 
+	numSubshards    int
 	shardOutputDirs []string
 }
 
@@ -66,7 +69,7 @@ func newLoader(opt options) *loader {
 		prog: newProgress(),
 		um:   newUIDMap(),
 		ss:   newSchemaStore(initialSchema),
-		sm:   newShardMap(opt.NumShards),
+		sm:   newShardMap(opt.numSubshards),
 
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
@@ -211,12 +214,14 @@ func (ld *loader) reduceStage() {
 		close(shuffleOutputCh)
 	}()
 
+	mergeSubshards(ld.opt.TmpDir, ld.opt.NumShards)
+
 	// Run shufflers
 	var badgers []*badger.KV
 	pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
 	go func() {
-		mapOutputs := ld.findMapOutputFiles()
-		x.AssertTrue(len(mapOutputs) == ld.opt.NumShards)
+		mapOutputs := findMapOutputFiles(ld.opt.TmpDir)
+		x.AssertTruef(len(mapOutputs) == ld.opt.NumShards, "%v %v", len(mapOutputs), ld.opt.NumShards)
 		x.AssertTrue(len(ld.opt.shardOutputDirs) == ld.opt.NumShards)
 
 		for i := 0; i < ld.opt.NumShards; i++ {
@@ -269,20 +274,84 @@ func (ld *loader) reduceStage() {
 	}
 }
 
-func (ld *loader) findMapOutputFiles() [][]string {
-	shards := make([][]string, ld.opt.NumShards)
-	x.Checkf(filepath.Walk(ld.opt.TmpDir, func(path string, _ os.FileInfo, err error) error {
-		if !strings.HasSuffix(path, ".map") {
-			return nil
+func findMapOutputFiles(tmpDir string) [][]string {
+	dir, err := os.Open(tmpDir)
+	x.Check(err)
+	shards, err := dir.Readdirnames(0)
+	x.Check(err)
+	dir.Close()
+
+	var byShard [][]string
+	for _, shard := range shards {
+		shard = filepath.Join(tmpDir, shard)
+		byShard = append(byShard, filenamesInDir(shard))
+	}
+	return byShard
+}
+
+func filenamesInDir(dir string) []string {
+	var fnames []string
+	x.Check(filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
-		var shard, fileNum int
-		base := filepath.Base(path)
-		x.Check2(fmt.Sscanf(base, "%d_%d.map", &shard, &fileNum))
-		x.AssertTruef(shard < len(shards), "map filename doesn't match number of shards: %q", base)
-		shards[shard] = append(shards[shard], path)
+		if !fi.IsDir() {
+			fnames = append(fnames, path)
+		}
 		return nil
-	}), "while looking for map output files")
-	return shards
+	}))
+	return fnames
+}
+
+func mergeSubshards(tmpDir string, numShards int) {
+	dir, err := os.Open(tmpDir)
+	x.Check(err)
+	subshards, err := dir.Readdirnames(0)
+	x.Check(err)
+	dir.Close()
+	for i := range subshards {
+		subshards[i] = filepath.Join(tmpDir, subshards[i])
+	}
+
+	// Order subshards from largest to smallest.
+	sortByContentSize(subshards, false)
+
+	// Create new shards.
+	var shards []string
+	for i := 0; i < numShards; i++ {
+		shardDir := filepath.Join(tmpDir, fmt.Sprintf("shard_%d", i))
+		x.Check(os.MkdirAll(shardDir, 0755))
+		shards = append(shards, shardDir)
+	}
+
+	// Heuristic: put the largest subshard into the smallest new shard until
+	// there are no more subshards left. Should be a good approximation.
+	for _, subshard := range subshards {
+		sortByContentSize(shards, true)
+		x.Check(os.Rename(subshard, filepath.Join(shards[0], filepath.Base(subshard))))
+	}
+}
+
+func sortByContentSize(dirs []string, ascending bool) {
+	sort.SliceStable(dirs, func(i, j int) bool {
+		if ascending {
+			return contentSize(dirs[i]) < contentSize(dirs[j])
+		} else {
+			return contentSize(dirs[i]) > contentSize(dirs[j])
+		}
+	})
+}
+
+func contentSize(dir string) int64 {
+	var sum int64
+	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		sum += info.Size()
+		return nil
+	}))
+	return sum
 }
 
 func (ld *loader) writeSchema() {

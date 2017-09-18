@@ -19,11 +19,10 @@ func newShardMap(numShards int) *shardMap {
 func (m *shardMap) shardFor(pred string) int {
 	m.RLock()
 	shard, ok := m.predToShard[pred]
+	m.RUnlock()
 	if ok {
-		m.RUnlock()
 		return shard
 	}
-	m.RUnlock()
 
 	m.Lock()
 	defer m.Unlock()

@@ -26,7 +26,8 @@ func main() {
 	flag.IntVar(&opt.BlockRate, "block", 0, "Block profiling rate")
 	flag.StringVar(&opt.RDFDir, "r", "", "Directory containing *.rdf or *.rdf.gz files to load")
 	flag.StringVar(&opt.SchemaFile, "s", "", "Location of schema file to load")
-	flag.StringVar(&opt.DgraphsDir, "out", "out", "Location to write the final dgraph data directories.")
+	flag.StringVar(&opt.DgraphsDir, "out", "out",
+		"Location to write the final dgraph data directories.")
 	flag.StringVar(&opt.LeaseFile, "l", "LEASE", "Location to write the lease file")
 	flag.StringVar(&opt.TmpDir, "tmp", "tmp", "Temp directory used to use for on-disk "+
 		"scratch space. Requires free space proportional to the size of the RDF file.")
@@ -42,6 +43,9 @@ func main() {
 	flag.BoolVar(&opt.SkipExpandEdges, "skip_expand_edges", false,
 		"Don't generate edges that allow nodes to be expanded using _predicate_ or expand(...).")
 	flag.IntVar(&opt.NumShards, "shards", 1, "Number map phase output shards.")
+	flag.IntVar(&opt.SubshardMultiplier, "pre-shard-multiplier", 4,
+		"Number of subshards to create per shard. Increases memory usage during the map phase, "+
+			"but can help to create more equally sized shards (which speeds up the reduce phase).")
 	flag.IntVar(&opt.MaxPendingBadgerWrites, "max_pending_badger_writes", 1000,
 		"Maximum number of pending badger writes allowed at any time.")
 	flag.IntVar(&opt.NumShufflers, "shufflers", 1, "Number of shufflers to run concurrently.")
@@ -59,6 +63,8 @@ func main() {
 	}
 
 	opt.MapBufSize = opt.MapBufSize << 20 // Convert from MB to B.
+	opt.numSubshards = opt.SubshardMultiplier * opt.NumShards
+	fmt.Println(opt.numSubshards)
 
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")
 	x.Check(err)
