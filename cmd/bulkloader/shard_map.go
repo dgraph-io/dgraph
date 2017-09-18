@@ -32,7 +32,7 @@ func (m *shardMap) shardFor(pred string) int {
 	}
 
 	shard = m.nextShard
-	m.nextShard = (m.nextShard + 1) % m.numShards
 	m.predToShard[pred] = shard
+	m.nextShard = (m.nextShard + 1) % m.numShards
 	return shard
 }
