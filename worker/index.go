@@ -84,10 +84,11 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 }
 
 func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) error {
-	if err := n.Applied.WaitForMark(ctx, lastIndex); err != nil {
+	if err := n.applied.WaitForMark(ctx, lastIndex); err != nil {
 		return err
 	}
-	return waitForSyncMark(ctx, n.gid, lastIndex)
+	waitForSyncMark(ctx, n.gid, lastIndex)
+	return nil
 }
 
 func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) error {
