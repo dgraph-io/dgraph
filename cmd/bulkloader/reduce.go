@@ -13,8 +13,8 @@ import (
 
 type reducer struct {
 	*state
-	input <-chan shuffleOutput
-	wg    sync.WaitGroup
+	input    <-chan shuffleOutput
+	writesWg sync.WaitGroup
 }
 
 func (r *reducer) run() {
@@ -23,18 +23,18 @@ func (r *reducer) run() {
 		thr.Start()
 		NumReducers.Add(1)
 		NumQueuedReduceJobs.Add(-1)
-		r.wg.Add(1)
+		r.writesWg.Add(1)
 		go func(job shuffleOutput) {
 			r.reduce(job)
 			thr.Done()
 			NumReducers.Add(-1)
 		}(reduceJob)
 	}
-	r.wg.Wait()
+	thr.Wait()
+	r.writesWg.Wait()
 }
 
 func (r *reducer) reduce(job shuffleOutput) {
-
 	var currentKey []byte
 	var uids []uint64
 	pl := new(protos.PostingList)
@@ -88,6 +88,6 @@ func (r *reducer) reduce(job shuffleOutput) {
 			x.Check(e.Error)
 		}
 		NumBadgerWrites.Add(-1)
-		r.wg.Done()
+		r.writesWg.Done()
 	})
 }

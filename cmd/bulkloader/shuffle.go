@@ -35,33 +35,35 @@ func (s *shuffler) run() {
 	thr := x.NewThrottle(s.opt.NumShufflers)
 	for i := 0; i < s.opt.ReduceShards; i++ {
 		thr.Start()
+		go func(i int, kv *badger.KV) {
+			mapFiles := filenamesInTree(shardDirs[i])
+			shuffleInputChs := make([]chan *protos.MapEntry, len(mapFiles))
+			for i, mapFile := range mapFiles {
+				shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
+				go readMapOutput(mapFile, shuffleInputChs[i])
+			}
 
-		opt := badger.DefaultOptions
-		opt.Dir = s.opt.shardOutputDirs[i]
-		opt.ValueDir = opt.Dir
-		opt.ValueGCRunInterval = time.Hour * 100
-		opt.SyncWrites = false
-		opt.TableLoadingMode = bo.MemoryMap
-		kv, err := badger.NewKV(&opt)
-		x.Check(err)
-		s.kvs = append(s.kvs, kv)
-
-		mapFiles := filenamesInTree(shardDirs[i])
-		shuffleInputChs := make([]chan *protos.MapEntry, len(mapFiles))
-		for i, mapFile := range mapFiles {
-			shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
-			go readMapOutput(mapFile, shuffleInputChs[i])
-		}
-
-		go func() {
 			ci := &countIndexer{state: s.state, kv: kv}
 			s.shufflePostings(shuffleInputChs, ci)
 			ci.wait()
 			thr.Done()
-		}()
+		}(i, s.createBadger(i))
 	}
 	thr.Wait()
 	close(s.output)
+}
+
+func (s *shuffler) createBadger(i int) *badger.KV {
+	opt := badger.DefaultOptions
+	opt.ValueGCRunInterval = time.Hour * 100
+	opt.SyncWrites = false
+	opt.TableLoadingMode = bo.MemoryMap
+	opt.Dir = s.opt.shardOutputDirs[i]
+	opt.ValueDir = opt.Dir
+	kv, err := badger.NewKV(&opt)
+	x.Check(err)
+	s.kvs = append(s.kvs, kv)
+	return kv
 }
 
 func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
@@ -109,7 +111,8 @@ func (s *shuffler) mergeMapShardsIntoReduceShards() {
 	// until there are no more map shards left. Should be a good approximation.
 	for _, shard := range mapShards {
 		sortBySize(reduceShards)
-		x.Check(os.Rename(shard, filepath.Join(reduceShards[len(reduceShards)-1], filepath.Base(shard))))
+		x.Check(os.Rename(shard, filepath.Join(
+			reduceShards[len(reduceShards)-1], filepath.Base(shard))))
 	}
 }
 

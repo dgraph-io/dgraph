@@ -159,6 +159,7 @@ func (ld *loader) mapStage() {
 	for _, r := range readers {
 		thr.Start()
 		go func(r *bufio.Reader) {
+			defer thr.Done()
 			for {
 				chunkBuf, err := readChunk(r)
 				if err == io.EOF {
@@ -170,7 +171,6 @@ func (ld *loader) mapStage() {
 				x.Check(err)
 				ld.rdfChunkCh <- chunkBuf
 			}
-			thr.Done()
 		}(r)
 	}
 	thr.Wait()
