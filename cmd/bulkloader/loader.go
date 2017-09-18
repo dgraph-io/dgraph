@@ -221,7 +221,7 @@ func (ld *loader) reduceStage() {
 	pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
 	go func() {
 		mapOutputs := findMapOutputFiles(ld.opt.TmpDir)
-		x.AssertTruef(len(mapOutputs) == ld.opt.NumShards, "%v %v", len(mapOutputs), ld.opt.NumShards)
+		x.AssertTrue(len(mapOutputs) == ld.opt.NumShards)
 		x.AssertTrue(len(ld.opt.shardOutputDirs) == ld.opt.NumShards)
 
 		for i := 0; i < ld.opt.NumShards; i++ {
@@ -238,7 +238,7 @@ func (ld *loader) reduceStage() {
 			badgers = append(badgers, kv)
 
 			shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutputs[i]))
-			for i, mappedFile := range mapOutputs[i] {
+			for i, mappedFile := range filenamesInDir(mapOutputs[i]) {
 				shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
 				go readMapOutput(mappedFile, shuffleInputChs[i])
 			}
@@ -274,19 +274,19 @@ func (ld *loader) reduceStage() {
 	}
 }
 
-func findMapOutputFiles(tmpDir string) [][]string {
+func findMapOutputFiles(tmpDir string) []string {
 	dir, err := os.Open(tmpDir)
 	x.Check(err)
 	shards, err := dir.Readdirnames(0)
 	x.Check(err)
 	dir.Close()
-
-	var byShard [][]string
-	for _, shard := range shards {
-		shard = filepath.Join(tmpDir, shard)
-		byShard = append(byShard, filenamesInDir(shard))
+	for i, shard := range shards {
+		shards[i] = filepath.Join(tmpDir, shard)
 	}
-	return byShard
+
+	// Allow largest shards to be shuffled first.
+	sortByContentSize(shards, false)
+	return shards
 }
 
 func filenamesInDir(dir string) []string {
