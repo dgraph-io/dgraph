@@ -9375,3 +9375,22 @@ func TestMathAlias(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"count(friend)":5,"score":6.000000,"name":"Michonne"}]}}`, js)
 }
+
+func TestUidVariable(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		var(func:allofterms(name, "Michonne")) {
+			friend {
+				f as _uid_
+			}
+		}
+
+		me(func: uid(f)) {
+			name
+		}
+	}`
+
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+}

@@ -140,7 +140,8 @@ func (req *Req) AddSchema(s protos.SchemaUpdate) error {
 	return nil
 }
 
-func (req *Req) size() int {
+// Size returns the total number of Set, Delete and Schema mutations that are part of the request.
+func (req *Req) Size() int {
 	if req.gr.Mutation == nil {
 		return 0
 	}
