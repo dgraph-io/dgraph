@@ -214,13 +214,12 @@ func (ld *loader) reduceStage() {
 		close(shuffleOutputCh)
 	}()
 
-	mergeSubshards(ld.opt.TmpDir, ld.opt.ReduceShards)
-
 	// Run shufflers
 	var badgers []*badger.KV
 	go func() {
-		mapOutputs := findMapOutputFiles(ld.opt.TmpDir)
-		x.AssertTrue(len(mapOutputs) == ld.opt.ReduceShards)
+		ld.mergeMapShardsIntoReduceShards()
+		shardDirs := ld.shardDirs()
+		x.AssertTrue(len(shardDirs) == ld.opt.ReduceShards)
 		x.AssertTrue(len(ld.opt.shardOutputDirs) == ld.opt.ReduceShards)
 
 		pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
@@ -237,11 +236,11 @@ func (ld *loader) reduceStage() {
 			x.Check(err)
 			badgers = append(badgers, kv)
 
-			mapFiles := filenamesInDir(mapOutputs[i])
+			mapFiles := filenamesInTree(shardDirs[i])
 			shuffleInputChs := make([]chan *protos.MapEntry, len(mapFiles))
-			for i, mappedFile := range mapFiles {
+			for i, mapFile := range mapFiles {
 				shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
-				go readMapOutput(mappedFile, shuffleInputChs[i])
+				go readMapOutput(mapFile, shuffleInputChs[i])
 			}
 
 			ci := &countIndexer{state: ld.state, kv: kv}
@@ -275,22 +274,22 @@ func (ld *loader) reduceStage() {
 	}
 }
 
-func findMapOutputFiles(tmpDir string) []string {
-	dir, err := os.Open(tmpDir)
+func (ld *loader) shardDirs() []string {
+	dir, err := os.Open(ld.opt.TmpDir)
 	x.Check(err)
 	shards, err := dir.Readdirnames(0)
 	x.Check(err)
 	dir.Close()
 	for i, shard := range shards {
-		shards[i] = filepath.Join(tmpDir, shard)
+		shards[i] = filepath.Join(ld.opt.TmpDir, shard)
 	}
 
 	// Allow largest shards to be shuffled first.
-	sortByContentSize(shards, false)
+	sortBySize(shards, false)
 	return shards
 }
 
-func filenamesInDir(dir string) []string {
+func filenamesInTree(dir string) []string {
 	var fnames []string
 	x.Check(filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
@@ -304,46 +303,56 @@ func filenamesInDir(dir string) []string {
 	return fnames
 }
 
-func mergeSubshards(tmpDir string, numShards int) {
-	dir, err := os.Open(tmpDir)
+func (ld *loader) mergeMapShardsIntoReduceShards() {
+	dir, err := os.Open(ld.opt.TmpDir)
 	x.Check(err)
-	subshards, err := dir.Readdirnames(0)
+	mapShards, err := dir.Readdirnames(0)
 	x.Check(err)
 	dir.Close()
-	for i := range subshards {
-		subshards[i] = filepath.Join(tmpDir, subshards[i])
+	for i := range mapShards {
+		mapShards[i] = filepath.Join(ld.opt.TmpDir, mapShards[i])
 	}
 
-	// Order subshards from largest to smallest.
-	sortByContentSize(subshards, false)
-
-	// Create new shards.
-	var shards []string
-	for i := 0; i < numShards; i++ {
-		shardDir := filepath.Join(tmpDir, fmt.Sprintf("shard_%d", i))
+	// Create reduce shards.
+	var reduceShards []string
+	for i := 0; i < ld.opt.ReduceShards; i++ {
+		shardDir := filepath.Join(ld.opt.TmpDir, fmt.Sprintf("shard_%d", i))
 		x.Check(os.MkdirAll(shardDir, 0755))
-		shards = append(shards, shardDir)
+		reduceShards = append(reduceShards, shardDir)
 	}
 
-	// Heuristic: put the largest subshard into the smallest new shard until
-	// there are no more subshards left. Should be a good approximation.
-	for _, subshard := range subshards {
-		sortByContentSize(shards, true)
-		x.Check(os.Rename(subshard, filepath.Join(shards[0], filepath.Base(subshard))))
+	// Heuristic: put the largest map shard into the smallest reduce shard
+	// until there are no more map shards left. Should be a good approximation.
+	sortBySize(mapShards, false)
+	for _, shard := range mapShards {
+		sortBySize(reduceShards, true)
+		x.Check(os.Rename(shard, filepath.Join(reduceShards[0], filepath.Base(shard))))
 	}
 }
 
-func sortByContentSize(dirs []string, ascending bool) {
-	sort.SliceStable(dirs, func(i, j int) bool {
+type sizedDir struct {
+	dir string
+	sz  int64
+}
+
+func sortBySize(dirs []string, ascending bool) {
+	sizedDirs := make([]sizedDir, len(dirs))
+	for i, dir := range dirs {
+		sizedDirs[i] = sizedDir{dir: dir, sz: treeSize(dir)}
+	}
+	sort.SliceStable(sizedDirs, func(i, j int) bool {
 		if ascending {
-			return contentSize(dirs[i]) < contentSize(dirs[j])
+			return sizedDirs[i].sz < sizedDirs[j].sz
 		} else {
-			return contentSize(dirs[i]) > contentSize(dirs[j])
+			return sizedDirs[i].sz > sizedDirs[j].sz
 		}
 	})
+	for i := range sizedDirs {
+		dirs[i] = sizedDirs[i].dir
+	}
 }
 
-func contentSize(dir string) int64 {
+func treeSize(dir string) int64 {
 	var sum int64
 	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -367,5 +376,4 @@ func (ld *loader) writeSchema() {
 
 func (ld *loader) cleanup() {
 	ld.prog.endSummary()
-	//x.Check(ld.kv.Close())
 }
