@@ -27,21 +27,25 @@ import (
 
 type mapper struct {
 	*state
-	shardMapEntries [][]*protos.MapEntry
-	shardSize       []int64
+	shards []shardState // shard is based on predicate
+}
 
-	mu sync.Mutex
+type shardState struct {
+	// Buffer up map entries until we have a sufficient amount, then sort and
+	// write them to file.
+	mapEntries []*protos.MapEntry
+	size       int64
+	mu         sync.Mutex // Allow only 1 write per shard at a time.
 }
 
 func newMapper(st *state) *mapper {
 	return &mapper{
-		state:           st,
-		shardMapEntries: make([][]*protos.MapEntry, st.opt.MapShards),
-		shardSize:       make([]int64, st.opt.MapShards),
+		state:  st,
+		shards: make([]shardState, st.opt.MapShards),
 	}
 }
 
-func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, size int64, subshard int) {
+func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, size int64, shardIdx int) {
 	sort.Slice(mapEntries, func(i, j int) bool {
 		return bytes.Compare(mapEntries[i].Key, mapEntries[j].Key) < 0
 	})
@@ -60,12 +64,12 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, size int64
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
 		m.opt.TmpDir,
-		fmt.Sprintf("%03d", subshard),
+		fmt.Sprintf("%03d", shardIdx),
 		fmt.Sprintf("%06d.map", fileNum),
 	)
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
 	x.Check(x.WriteFileSync(filename, buf, 0644))
-	m.mu.Unlock() // Locked by caller.
+	m.shards[shardIdx].mu.Unlock() // Locked by caller.
 }
 
 func (m *mapper) run() {
@@ -83,23 +87,25 @@ func (m *mapper) run() {
 
 			x.Check(m.parseRDF(rdf))
 			atomic.AddInt64(&m.prog.rdfCount, 1)
-			for i := range m.shardSize {
-				if m.shardSize[i] >= m.opt.MapBufSize {
-					m.mu.Lock() // One write at a time.
-					go m.writeMapEntriesToFile(m.shardMapEntries[i], m.shardSize[i], i)
-					m.shardMapEntries[i] = nil
-					m.shardSize[i] = 0
+			for i := range m.shards {
+				sh := &m.shards[i]
+				if sh.size >= m.opt.MapBufSize {
+					sh.mu.Lock() // One write at a time.
+					go m.writeMapEntriesToFile(sh.mapEntries, sh.size, i)
+					sh.mapEntries = nil
+					sh.size = 0
 				}
 			}
 		}
 	}
-	for i, mapEntries := range m.shardMapEntries {
-		if len(mapEntries) > 0 {
-			m.mu.Lock() // One write at a time.
-			m.writeMapEntriesToFile(mapEntries, m.shardSize[i], i)
+	for i := range m.shards {
+		sh := &m.shards[i]
+		if len(sh.mapEntries) > 0 {
+			sh.mu.Lock() // One write at a time.
+			m.writeMapEntriesToFile(sh.mapEntries, sh.size, i)
 		}
+		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
-	m.mu.Lock() // Ensure that the last file write finishes.
 }
 
 func (m *mapper) addMapEntry(key []byte, posting *protos.Posting, shard int) {
@@ -114,8 +120,9 @@ func (m *mapper) addMapEntry(key []byte, posting *protos.Posting, shard int) {
 		me.Posting = posting
 	}
 	meSize := int64(me.Size())
-	m.shardSize[shard] += int64(meSize + varintSize(meSize))
-	m.shardMapEntries[shard] = append(m.shardMapEntries[shard], me)
+	sh := &m.shards[shard]
+	sh.size += int64(meSize + varintSize(meSize))
+	sh.mapEntries = append(sh.mapEntries, me)
 }
 
 func (m *mapper) parseRDF(rdfLine string) error {
