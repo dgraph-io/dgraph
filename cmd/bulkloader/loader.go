@@ -224,14 +224,14 @@ func (ld *loader) reduceStage() {
 
 		pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
 		for i := 0; i < ld.opt.ReduceShards; i++ {
-			pendingShufflers <- struct{}{}
+			pendingShufflers <- struct{}{} // Blocks to prevent too many concurrent shufflers.
 
 			opt := badger.DefaultOptions
 			opt.Dir = ld.opt.shardOutputDirs[i]
 			opt.ValueDir = opt.Dir
 			opt.ValueGCRunInterval = time.Hour * 100
 			opt.SyncWrites = false
-			opt.TableLoadingMode = bo.LoadToRAM
+			opt.TableLoadingMode = bo.MemoryMap
 			kv, err := badger.NewKV(&opt)
 			x.Check(err)
 			ld.kvs = append(ld.kvs, kv)
@@ -328,7 +328,7 @@ func sortBySize(dirs []string, ascending bool) {
 		sizedDirs[i] = sizedDir{dir: dir, sz: treeSize(dir)}
 	}
 	sort.SliceStable(sizedDirs, func(i, j int) bool {
-		return ascending == sizedDirs[i].sz < sizedDirs[j].sz
+		return ascending == (sizedDirs[i].sz < sizedDirs[j].sz)
 	})
 	for i := range sizedDirs {
 		dirs[i] = sizedDirs[i].dir
