@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -33,12 +32,9 @@ func (s *shuffler) run() {
 	x.AssertTrue(len(shardDirs) == s.opt.ReduceShards)
 	x.AssertTrue(len(s.opt.shardOutputDirs) == s.opt.ReduceShards)
 
-	var wg sync.WaitGroup
-	wg.Add(s.opt.ReduceShards)
-
-	pending := make(chan struct{}, s.opt.NumShufflers)
+	thr := x.NewThrottle(s.opt.NumShufflers)
 	for i := 0; i < s.opt.ReduceShards; i++ {
-		pending <- struct{}{} // Blocks to prevent too many concurrent shufflers.
+		thr.Start()
 
 		opt := badger.DefaultOptions
 		opt.Dir = s.opt.shardOutputDirs[i]
@@ -61,12 +57,10 @@ func (s *shuffler) run() {
 			ci := &countIndexer{state: s.state, kv: kv}
 			s.shufflePostings(shuffleInputChs, ci)
 			ci.wait()
-			<-pending
-			wg.Done()
+			thr.Done()
 		}()
 	}
-
-	wg.Wait()
+	thr.Wait()
 	close(s.output)
 }
 

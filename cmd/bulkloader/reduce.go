@@ -18,15 +18,15 @@ type reducer struct {
 }
 
 func (r *reducer) run() {
-	pending := make(chan struct{}, r.opt.NumGoroutines)
+	thr := x.NewThrottle(r.opt.NumGoroutines)
 	for reduceJob := range r.input {
-		pending <- struct{}{}
+		thr.Start()
 		NumReducers.Add(1)
 		NumQueuedReduceJobs.Add(-1)
 		r.wg.Add(1)
 		go func(job shuffleOutput) {
 			r.reduce(job)
-			<-pending
+			thr.Done()
 			NumReducers.Add(-1)
 		}(reduceJob)
 	}

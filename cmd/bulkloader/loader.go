@@ -155,9 +155,9 @@ func (ld *loader) mapStage() {
 		}
 	}
 
-	pending := make(chan struct{}, ld.opt.NumGoroutines)
+	thr := x.NewThrottle(ld.opt.NumGoroutines)
 	for _, r := range readers {
-		pending <- struct{}{}
+		thr.Start()
 		go func(r *bufio.Reader) {
 			for {
 				chunkBuf, err := readChunk(r)
@@ -170,12 +170,10 @@ func (ld *loader) mapStage() {
 				x.Check(err)
 				ld.rdfChunkCh <- chunkBuf
 			}
-			<-pending
+			thr.Done()
 		}(r)
 	}
-	for i := 0; i < ld.opt.NumGoroutines; i++ {
-		pending <- struct{}{}
-	}
+	thr.Wait()
 
 	close(ld.rdfChunkCh)
 	mapperWg.Wait()
