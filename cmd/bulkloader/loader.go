@@ -243,8 +243,8 @@ func (ld *loader) reduceStage() {
 				go readMapOutput(mapFile, shuffleInputChs[i])
 			}
 
-			ci := &countIndexer{state: ld.state, kv: kv}
 			go func() {
+				ci := &countIndexer{state: ld.state, kv: kv}
 				shufflePostings(shuffleOutputCh, shuffleInputChs, kv, ci, ld.prog)
 				ci.wait()
 				<-pendingShufflers
@@ -267,7 +267,6 @@ func (ld *loader) reduceStage() {
 			NumReducers.Add(-1)
 		}(reduceJob)
 	}
-
 	badgerWg.Wait()
 }
 
@@ -301,16 +300,8 @@ func filenamesInTree(dir string) []string {
 }
 
 func (ld *loader) mergeMapShardsIntoReduceShards() {
-	dir, err := os.Open(ld.opt.TmpDir)
-	x.Check(err)
-	mapShards, err := dir.Readdirnames(0)
-	x.Check(err)
-	dir.Close()
-	for i := range mapShards {
-		mapShards[i] = filepath.Join(ld.opt.TmpDir, mapShards[i])
-	}
+	mapShards := ld.shardDirs()
 
-	// Create reduce shards.
 	var reduceShards []string
 	for i := 0; i < ld.opt.ReduceShards; i++ {
 		shardDir := filepath.Join(ld.opt.TmpDir, fmt.Sprintf("shard_%d", i))
@@ -320,7 +311,6 @@ func (ld *loader) mergeMapShardsIntoReduceShards() {
 
 	// Heuristic: put the largest map shard into the smallest reduce shard
 	// until there are no more map shards left. Should be a good approximation.
-	sortBySize(mapShards, false)
 	for _, shard := range mapShards {
 		sortBySize(reduceShards, true)
 		x.Check(os.Rename(shard, filepath.Join(reduceShards[0], filepath.Base(shard))))
