@@ -328,11 +328,7 @@ func sortBySize(dirs []string, ascending bool) {
 		sizedDirs[i] = sizedDir{dir: dir, sz: treeSize(dir)}
 	}
 	sort.SliceStable(sizedDirs, func(i, j int) bool {
-		if ascending {
-			return sizedDirs[i].sz < sizedDirs[j].sz
-		} else {
-			return sizedDirs[i].sz > sizedDirs[j].sz
-		}
+		return ascending == sizedDirs[i].sz < sizedDirs[j].sz
 	})
 	for i := range sizedDirs {
 		dirs[i] = sizedDirs[i].dir
