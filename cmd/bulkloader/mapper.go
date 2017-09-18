@@ -30,8 +30,7 @@ type mapper struct {
 	shardMapEntries [][]*protos.MapEntry
 	shardSize       []int64
 
-	mu  sync.Mutex
-	buf bytes.Buffer
+	mu sync.Mutex
 }
 
 func newMapper(st *state) *mapper {
@@ -42,19 +41,21 @@ func newMapper(st *state) *mapper {
 	}
 }
 
-func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, subshard int) {
+func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, size int64, subshard int) {
 	sort.Slice(mapEntries, func(i, j int) bool {
 		return bytes.Compare(mapEntries[i].Key, mapEntries[j].Key) < 0
 	})
 
-	var varintBuf [binary.MaxVarintLen64]byte
+	var n int
+	buf := make([]byte, size)
 	for _, me := range mapEntries {
-		n := binary.PutUvarint(varintBuf[:], uint64(me.Size()))
-		m.buf.Write(varintBuf[:n])
-		postBuf, err := me.Marshal()
+		m := binary.PutUvarint(buf[n:], uint64(me.Size()))
+		n += m
+		m, err := me.MarshalTo(buf[n:])
 		x.Check(err)
-		m.buf.Write(postBuf)
+		n += m
 	}
+	x.AssertTrue(n == len(buf))
 
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
@@ -63,8 +64,7 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, subshard i
 		fmt.Sprintf("%06d.map", fileNum),
 	)
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
-	x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
-	m.buf.Reset()
+	x.Check(x.WriteFileSync(filename, buf, 0644))
 	m.mu.Unlock() // Locked by caller.
 }
 
@@ -86,7 +86,7 @@ func (m *mapper) run() {
 			for i := range m.shardSize {
 				if m.shardSize[i] >= m.opt.MapBufSize {
 					m.mu.Lock() // One write at a time.
-					go m.writeMapEntriesToFile(m.shardMapEntries[i], i)
+					go m.writeMapEntriesToFile(m.shardMapEntries[i], m.shardSize[i], i)
 					m.shardMapEntries[i] = nil
 					m.shardSize[i] = 0
 				}
@@ -96,7 +96,7 @@ func (m *mapper) run() {
 	for i, mapEntries := range m.shardMapEntries {
 		if len(mapEntries) > 0 {
 			m.mu.Lock() // One write at a time.
-			m.writeMapEntriesToFile(mapEntries, i)
+			m.writeMapEntriesToFile(mapEntries, m.shardSize[i], i)
 		}
 	}
 	m.mu.Lock() // Ensure that the last file write finishes.
@@ -113,7 +113,8 @@ func (m *mapper) addMapEntry(key []byte, posting *protos.Posting, shard int) {
 	} else {
 		me.Posting = posting
 	}
-	m.shardSize[shard] += int64(me.Size())
+	meSize := int64(me.Size())
+	m.shardSize[shard] += int64(meSize + varintSize(meSize))
 	m.shardMapEntries[shard] = append(m.shardMapEntries[shard], me)
 }
 
@@ -249,4 +250,13 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 			)
 		}
 	}
+}
+
+func varintSize(x int64) int64 {
+	i := int64(1)
+	for x >= 0x80 {
+		x >>= 7
+		i++
+	}
+	return i
 }
