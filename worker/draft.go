@@ -277,7 +277,7 @@ func (n *node) handleUpsert(task *task) (bool, error) {
 		return true, nil
 	}
 
-	res, err := processUpsertTask(n.ctx, task.upsert, groups().BelongsTo(attr))
+	res, err := n.processUpsertTask(n.ctx, task, groups().BelongsTo(attr))
 	if err != nil {
 		return false, err
 	}

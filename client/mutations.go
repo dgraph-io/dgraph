@@ -382,7 +382,7 @@ RETRY:
 		req.mark.Done(req.line)
 		req.markWg.Done()
 	}
-	atomic.AddUint64(&d.rdfs, uint64(req.size()))
+	atomic.AddUint64(&d.rdfs, uint64(req.Size()))
 	return nil
 }
 
@@ -420,7 +420,7 @@ LOOP:
 				return
 			}
 			start := time.Now()
-			if req.size() > 0 {
+			if req.Size() > 0 {
 				d.request(req)
 				req = new(Req)
 			}
@@ -431,7 +431,7 @@ LOOP:
 		}
 	}
 
-	if req.size() > 0 {
+	if req.Size() > 0 {
 		d.request(req)
 	}
 	d.che <- nil
@@ -451,13 +451,13 @@ func (d *Dgraph) batchNquads() {
 		} else if n.op == DEL {
 			req.Delete(n.e)
 		}
-		if req.size() == d.opts.Size {
+		if req.Size() == d.opts.Size {
 			d.reqs <- req
 			req = new(Req)
 		}
 	}
 
-	if req.size() > 0 {
+	if req.Size() > 0 {
 		d.reqs <- req
 	}
 	close(d.reqs)

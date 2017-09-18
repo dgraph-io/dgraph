@@ -1449,6 +1449,15 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			path: sgPath,
 		}
 	} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
+		if sg.Attr == "_uid_" {
+			// Its still an entity variable if its _uid_.
+			doneVars[sg.Params.Var] = varValue{
+				Uids: sg.SrcUIDs,
+				path: sgPath,
+			}
+			return nil
+		}
+
 		// This implies it is a value variable.
 		// NOTE: Value variables cannot be defined and used in the same query block. so
 		// checking len(sgPath) is okay.
