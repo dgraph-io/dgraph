@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,32 +27,49 @@ import (
 
 type mapper struct {
 	*state
-	mapEntries []*protos.MapEntry
-	sz         int64
-
-	mu  sync.Mutex
-	buf bytes.Buffer
+	shards []shardState // shard is based on predicate
 }
 
-func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
+type shardState struct {
+	// Buffer up map entries until we have a sufficient amount, then sort and
+	// write them to file.
+	mapEntries []*protos.MapEntry
+	size       int64
+	mu         sync.Mutex // Allow only 1 write per shard at a time.
+}
+
+func newMapper(st *state) *mapper {
+	return &mapper{
+		state:  st,
+		shards: make([]shardState, st.opt.MapShards),
+	}
+}
+
+func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, size int64, shardIdx int) {
 	sort.Slice(mapEntries, func(i, j int) bool {
 		return bytes.Compare(mapEntries[i].Key, mapEntries[j].Key) < 0
 	})
 
-	var varintBuf [binary.MaxVarintLen64]byte
+	var n int
+	buf := make([]byte, size)
 	for _, me := range mapEntries {
-		n := binary.PutUvarint(varintBuf[:], uint64(me.Size()))
-		m.buf.Write(varintBuf[:n])
-		postBuf, err := me.Marshal()
+		m := binary.PutUvarint(buf[n:], uint64(me.Size()))
+		n += m
+		m, err := me.MarshalTo(buf[n:])
 		x.Check(err)
-		m.buf.Write(postBuf)
+		n += m
 	}
+	x.AssertTrue(n == len(buf))
 
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
-	filename := filepath.Join(m.opt.tmpDir, fmt.Sprintf("%06d.map", fileNum))
-	x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
-	m.buf.Reset()
-	m.mu.Unlock() // Locked by caller.
+	filename := filepath.Join(
+		m.opt.TmpDir,
+		fmt.Sprintf("%03d", shardIdx),
+		fmt.Sprintf("%06d.map", fileNum),
+	)
+	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
+	x.Check(x.WriteFileSync(filename, buf, 0644))
+	m.shards[shardIdx].mu.Unlock() // Locked by caller.
 }
 
 func (m *mapper) run() {
@@ -69,22 +87,28 @@ func (m *mapper) run() {
 
 			x.Check(m.parseRDF(rdf))
 			atomic.AddInt64(&m.prog.rdfCount, 1)
-			if m.sz >= m.opt.mapBufSize {
-				m.mu.Lock() // One write at a time.
-				go m.writeMapEntriesToFile(m.mapEntries)
-				m.mapEntries = nil
-				m.sz = 0
+			for i := range m.shards {
+				sh := &m.shards[i]
+				if sh.size >= m.opt.MapBufSize {
+					sh.mu.Lock() // One write at a time.
+					go m.writeMapEntriesToFile(sh.mapEntries, sh.size, i)
+					sh.mapEntries = nil
+					sh.size = 0
+				}
 			}
 		}
 	}
-	if len(m.mapEntries) > 0 {
-		m.mu.Lock() // One write at a time.
-		m.writeMapEntriesToFile(m.mapEntries)
+	for i := range m.shards {
+		sh := &m.shards[i]
+		if len(sh.mapEntries) > 0 {
+			sh.mu.Lock() // One write at a time.
+			m.writeMapEntriesToFile(sh.mapEntries, sh.size, i)
+		}
+		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
-	m.mu.Lock() // Ensure that the last file write finishes.
 }
 
-func (m *mapper) addMapEntry(key []byte, posting *protos.Posting) {
+func (m *mapper) addMapEntry(key []byte, posting *protos.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
 	me := &protos.MapEntry{
@@ -95,8 +119,10 @@ func (m *mapper) addMapEntry(key []byte, posting *protos.Posting) {
 	} else {
 		me.Posting = posting
 	}
-	m.sz += int64(me.Size())
-	m.mapEntries = append(m.mapEntries, me)
+	meSize := int64(me.Size())
+	sh := &m.shards[shard]
+	sh.size += int64(meSize + varintSize(meSize))
+	sh.mapEntries = append(sh.mapEntries, me)
 }
 
 func (m *mapper) parseRDF(rdfLine string) error {
@@ -120,18 +146,19 @@ func (m *mapper) parseRDF(rdfLine string) error {
 	}
 
 	fwd, rev := m.createPostings(nq, de)
-	key := x.DataKey(nq.GetPredicate(), sid)
-	m.addMapEntry(key, fwd)
+	shard := m.state.sm.shardFor(nq.Predicate)
+	key := x.DataKey(nq.Predicate, sid)
+	m.addMapEntry(key, fwd, shard)
 
 	if rev != nil {
-		key = x.ReverseKey(nq.GetPredicate(), oid)
-		m.addMapEntry(key, rev)
+		key = x.ReverseKey(nq.Predicate, oid)
+		m.addMapEntry(key, rev, shard)
 	}
 
-	if !m.opt.skipExpandEdges {
+	if !m.opt.SkipExpandEdges {
 		key = x.DataKey("_predicate_", sid)
-		pp := m.createPredicatePosting(nq.GetPredicate())
-		m.addMapEntry(key, pp)
+		pp := m.createPredicatePosting(nq.Predicate)
+		m.addMapEntry(key, pp, shard)
 	}
 
 	m.addIndexMapEntries(nq, de)
@@ -226,7 +253,17 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 					Uid:         de.GetEntity(),
 					PostingType: protos.Posting_REF,
 				},
+				m.state.sm.shardFor(nq.Predicate),
 			)
 		}
 	}
+}
+
+func varintSize(x int64) int64 {
+	i := int64(1)
+	for x >= 0x80 {
+		x >>= 7
+		i++
+	}
+	return i
 }

@@ -1,19 +1,18 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/x"
-)
-
-var (
-	blockRate = flag.Int("block", 0, "Block profiling rate")
 )
 
 func main() {
@@ -24,60 +23,85 @@ func main() {
 	runtime.GOMAXPROCS(128)
 
 	var opt options
-	flag.StringVar(&opt.rdfDir, "r", "", "Directory containing *.rdf or *.rdf.gz files to load")
-	flag.StringVar(&opt.schemaFile, "s", "", "Location of schema file to load")
-	flag.StringVar(&opt.badgerDir, "p", "p", "Location of the final Dgraph directory")
-	flag.StringVar(&opt.leaseFile, "l", "LEASE", "Location to write the lease file")
-	flag.StringVar(&opt.tmpDir, "tmp", "tmp", "Temp directory used to use for on-disk "+
+	flag.IntVar(&opt.BlockRate, "block", 0, "Block profiling rate")
+	flag.StringVar(&opt.RDFDir, "r", "", "Directory containing *.rdf or *.rdf.gz files to load")
+	flag.StringVar(&opt.SchemaFile, "s", "", "Location of schema file to load")
+	flag.StringVar(&opt.DgraphsDir, "out", "out",
+		"Location to write the final dgraph data directories.")
+	flag.StringVar(&opt.LeaseFile, "l", "LEASE", "Location to write the lease file")
+	flag.StringVar(&opt.TmpDir, "tmp", "tmp", "Temp directory used to use for on-disk "+
 		"scratch space. Requires free space proportional to the size of the RDF file.")
-	flag.IntVar(&opt.numGoroutines, "j", runtime.NumCPU(),
+	flag.IntVar(&opt.NumGoroutines, "j", runtime.NumCPU(),
 		"Number of worker threads to use (defaults to one less than logical CPUs)")
-	flag.Int64Var(&opt.mapBufSize, "mapoutput_mb", 128,
+	flag.Int64Var(&opt.MapBufSize, "mapoutput_mb", 128,
 		"The estimated size of each map file output. This directly affects the memory usage.")
 	httpAddr := flag.String("http", "localhost:8080", "Address to serve http (pprof)")
-	skipMapPhase := flag.Bool("skip_map_phase", false,
+	flag.BoolVar(&opt.SkipMapPhase, "skip_map_phase", false,
 		"Skip the map phase (assumes that map output files already exist)")
-	cleanUpTmp := flag.Bool("cleanup_tmp", true,
+	flag.BoolVar(&opt.CleanupTmp, "cleanup_tmp", true,
 		"Clean up the tmp directory after the loader finishes")
-	flag.BoolVar(&opt.skipExpandEdges, "skip_expand_edges", false,
+	flag.BoolVar(&opt.SkipExpandEdges, "skip_expand_edges", false,
 		"Don't generate edges that allow nodes to be expanded using _predicate_ or expand(...).")
+	flag.IntVar(&opt.MaxPendingBadgerWrites, "max_pending_badger_writes", 1000,
+		"Maximum number of pending badger writes allowed at any time.")
+	flag.IntVar(&opt.NumShufflers, "shufflers", 1, "Number of shufflers to run concurrently.")
+	flag.IntVar(&opt.MapShards, "map_shards", 1, "Number of map output shards.")
+	flag.IntVar(&opt.ReduceShards, "reduce_shards", 1, "Number of shuffle output shards.")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {
 		flag.Usage()
-		fmt.Println("No free args allowed, but got:", flag.Args())
+		fmt.Fprintf(os.Stderr, "No free args allowed, but got: %v\n", flag.Args())
 		os.Exit(1)
 	}
-	if opt.rdfDir == "" || opt.schemaFile == "" {
+	if opt.RDFDir == "" || opt.SchemaFile == "" {
 		flag.Usage()
-		fmt.Println("RDF and schema file(s) must be specified.")
+		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
+		os.Exit(1)
+	}
+	if opt.ReduceShards > opt.MapShards {
+		fmt.Fprintf(os.Stderr, "Invalid flags: reduce_shards(%d) should be <= map_shards(%d)\n",
+			opt.ReduceShards, opt.MapShards)
+		os.Exit(1)
+	}
+	if opt.NumShufflers > opt.ReduceShards {
+		fmt.Fprintf(os.Stderr, "Invalid flags: shufflers(%d) should be <= reduce_shards(%d)\n",
+			opt.NumShufflers, opt.ReduceShards)
 		os.Exit(1)
 	}
 
-	opt.mapBufSize = opt.mapBufSize << 20 // Convert from MB to B.
+	opt.MapBufSize = opt.MapBufSize << 20 // Convert from MB to B.
+
+	optBuf, err := json.MarshalIndent(&opt, "", "\t")
+	x.Check(err)
+	fmt.Println(string(optBuf))
 
 	go func() {
 		log.Fatal(http.ListenAndServe(*httpAddr, nil))
 	}()
-	if *blockRate > 0 {
-		runtime.SetBlockProfileRate(*blockRate)
+	if opt.BlockRate > 0 {
+		runtime.SetBlockProfileRate(opt.BlockRate)
 	}
 
-	// Ensure the badger output dir is empty.
-	x.Check(os.RemoveAll(opt.badgerDir))
-	x.Check(os.MkdirAll(opt.badgerDir, 0700))
+	// Delete and recreate the output dirs to ensure they are empty.
+	x.Check(os.RemoveAll(opt.DgraphsDir))
+	for i := 0; i < opt.ReduceShards; i++ {
+		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i))
+		x.Check(os.MkdirAll(dir, 0700))
+		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
+	}
 
 	// Create a directory just for bulk loader's usage.
-	if !*skipMapPhase {
-		x.Check(os.RemoveAll(opt.tmpDir))
-		x.Check(os.MkdirAll(opt.tmpDir, 0700))
+	if !opt.SkipMapPhase {
+		x.Check(os.RemoveAll(opt.TmpDir))
+		x.Check(os.MkdirAll(opt.TmpDir, 0700))
 	}
-	if *cleanUpTmp {
-		defer os.RemoveAll(opt.tmpDir)
+	if opt.CleanupTmp {
+		defer os.RemoveAll(opt.TmpDir)
 	}
 
 	loader := newLoader(opt)
-	if !*skipMapPhase {
+	if !opt.SkipMapPhase {
 		loader.mapStage()
 	}
 	loader.reduceStage()

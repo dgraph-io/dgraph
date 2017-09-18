@@ -1,13 +1,7 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
-	"container/heap"
-	"encoding/binary"
-	"io"
-	"log"
-	"os"
 	"sync"
 	"sync/atomic"
 
@@ -15,128 +9,39 @@ import (
 	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/proto"
 )
 
-var mePool = sync.Pool{
-	New: func() interface{} {
-		return new(protos.MapEntry)
-	},
+type reducer struct {
+	*state
+	input    <-chan shuffleOutput
+	writesWg sync.WaitGroup
 }
 
-func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
-	fd, err := os.Open(filename)
-	x.Check(err)
-	defer fd.Close()
-	r := bufio.NewReaderSize(fd, 1<<20)
-
-	unmarshalBuf := make([]byte, 1<<10)
-	for {
-		buf, err := r.Peek(binary.MaxVarintLen64)
-		if err == io.EOF {
-			break
-		}
-		x.Check(err)
-		sz, n := binary.Uvarint(buf)
-		if n <= 0 {
-			log.Fatal("Could not read uvarint: %d", n)
-		}
-		x.Check2(r.Discard(n))
-
-		for cap(unmarshalBuf) < int(sz) {
-			unmarshalBuf = make([]byte, sz)
-		}
-		x.Check2(io.ReadFull(r, unmarshalBuf[:sz]))
-
-		mapEntry := mePool.Get().(*protos.MapEntry)
-		x.Check(proto.Unmarshal(unmarshalBuf[:sz], mapEntry))
-		mapEntryCh <- mapEntry
+func (r *reducer) run() {
+	thr := x.NewThrottle(r.opt.NumGoroutines)
+	for reduceJob := range r.input {
+		thr.Start()
+		NumReducers.Add(1)
+		NumQueuedReduceJobs.Add(-1)
+		r.writesWg.Add(1)
+		go func(job shuffleOutput) {
+			r.reduce(job)
+			thr.Done()
+			NumReducers.Add(-1)
+		}(reduceJob)
 	}
-	close(mapEntryCh)
+	thr.Wait()
+	r.writesWg.Wait()
 }
 
-func shufflePostings(batchCh chan<- []*protos.MapEntry,
-	mapEntryChs []chan *protos.MapEntry, prog *progress, ci *countIndexer) {
-
-	var ph postingHeap
-	for _, ch := range mapEntryChs {
-		heap.Push(&ph, heapNode{mapEntry: <-ch, ch: ch})
-	}
-
-	const batchSize = 1e5
-	const batchAlloc = batchSize * 11 / 10
-	batch := make([]*protos.MapEntry, 0, batchAlloc)
-	var prevKey []byte
-	var plistLen int
-	for len(ph.nodes) > 0 {
-		me := ph.nodes[0].mapEntry
-		var ok bool
-		ph.nodes[0].mapEntry, ok = <-ph.nodes[0].ch
-		if ok {
-			heap.Fix(&ph, 0)
-		} else {
-			heap.Pop(&ph)
-		}
-
-		keyChanged := bytes.Compare(prevKey, me.Key) != 0
-		if keyChanged && plistLen > 0 {
-			ci.addUid(prevKey, plistLen)
-			plistLen = 0
-		}
-
-		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
-			batchCh <- batch
-			batch = make([]*protos.MapEntry, 0, batchAlloc)
-		}
-		prevKey = me.Key
-
-		batch = append(batch, me)
-		plistLen++
-	}
-	if len(batch) > 0 {
-		batchCh <- batch
-	}
-	if plistLen > 0 {
-		ci.addUid(prevKey, plistLen)
-	}
-	close(batchCh)
-}
-
-type heapNode struct {
-	mapEntry *protos.MapEntry
-	ch       <-chan *protos.MapEntry
-}
-
-type postingHeap struct {
-	nodes []heapNode
-}
-
-func (h *postingHeap) Len() int {
-	return len(h.nodes)
-}
-func (h *postingHeap) Less(i, j int) bool {
-	return bytes.Compare(h.nodes[i].mapEntry.Key, h.nodes[j].mapEntry.Key) < 0
-}
-func (h *postingHeap) Swap(i, j int) {
-	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
-}
-func (h *postingHeap) Push(x interface{}) {
-	h.nodes = append(h.nodes, x.(heapNode))
-}
-func (h *postingHeap) Pop() interface{} {
-	elem := h.nodes[len(h.nodes)-1]
-	h.nodes = h.nodes[:len(h.nodes)-1]
-	return elem
-}
-
-func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress) {
+func (r *reducer) reduce(job shuffleOutput) {
 	var currentKey []byte
 	var uids []uint64
 	pl := new(protos.PostingList)
 	var entries []*badger.Entry
 
 	outputPostingList := func() {
-		atomic.AddInt64(&prog.reduceKeyCount, 1)
+		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
 
 		// For a UID-only posting list, the badger value is a delta packed UID
 		// list. The UserMeta indicates to treat the value as a delta packed
@@ -148,8 +53,8 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress) {
 			e.Value = bp128.DeltaPack(uids)
 			e.UserMeta = 0x01
 		} else {
-			var err error
 			pl.Uids = bp128.DeltaPack(uids)
+			var err error
 			e.Value, err = pl.Marshal()
 			x.Check(err)
 		}
@@ -159,8 +64,8 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress) {
 		pl.Reset()
 	}
 
-	for _, mapEntry := range batch {
-		atomic.AddInt64(&prog.reduceEdgeCount, 1)
+	for _, mapEntry := range job.mapEntries {
+		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 
 		if bytes.Compare(mapEntry.Key, currentKey) != 0 && currentKey != nil {
 			outputPostingList()
@@ -176,14 +81,13 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress) {
 	}
 	outputPostingList()
 
-	err := kv.BatchSet(entries)
-	x.Check(err)
-	for _, e := range entries {
-		x.Check(e.Error)
-	}
-	// Reuse map entries.
-	for _, me := range batch {
-		me.Reset()
-		mePool.Put(me)
-	}
+	NumBadgerWrites.Add(1)
+	job.kv.BatchSetAsync(entries, func(err error) {
+		x.Check(err)
+		for _, e := range entries {
+			x.Check(e.Error)
+		}
+		NumBadgerWrites.Add(-1)
+		r.writesWg.Done()
+	})
 }

@@ -17,6 +17,7 @@ type current struct {
 
 type countIndexer struct {
 	*state
+	kv     *badger.KV
 	cur    current
 	counts map[int][]uint64
 	wg     sync.WaitGroup
