@@ -49,32 +49,22 @@ class FrameItem extends React.Component {
   };
 
   getAndExecuteSharedQuery = shareId => {
-    return getSharedQuery(shareId)
-      .then(query => {
-        if (!query) {
-          this.setState({
-            errorMessage: `No query found for the shareId: ${shareId}`,
-            executed: true
-          });
-        } else {
-          this.executeFrameQuery(query);
-          const { frame, updateFrame } = this.props;
-          updateFrame({
-            query: query,
-            id: frame.id,
-            // Lets update share back to empty, because we now have the query.
-            share: ""
-          })();
-        }
-      })
-      .catch(error => {
-        Raven.captureException(error);
-        this.setState({
-          executed: true,
-          data: error,
-          errorMessage: error.message
-        });
+    let query = getSharedQuery(shareId);
+    if (!query) {
+      this.setState({
+        errorMessage: `No query found for the shareId: ${shareId}`,
+        executed: true
       });
+    } else {
+      this.executeFrameQuery(query);
+      const { frame, updateFrame } = this.props;
+      updateFrame({
+        query: query,
+        id: frame.id,
+        // Lets update share back to empty, because we now have the query.
+        share: ""
+      })();
+    }
   };
 
   executeOnJsonClick = () => {
@@ -144,6 +134,13 @@ class FrameItem extends React.Component {
           };
 
           this.setState({ response, executed: true });
+          let hasMutation = query.indexOf("mutation") > -1;
+          if (hasMutation) {
+            // This would mean that its not run again when user clicks on JSON tab.
+            // TODO - Ideally, we want to remove the mutation and run the query again.
+            // Maybe parse the query and remove the mutation block.
+            this.setState({ response, data: res });
+          }
         } else {
           this.setState({
             successMessage: "Your query did not return any results",

@@ -2,12 +2,7 @@ import React, { Component } from "react";
 import { connect } from "react-redux";
 import _ from "lodash";
 
-import {
-  timeout,
-  checkStatus,
-  sortStrings,
-  getEndpointBaseURL
-} from "../lib/helpers";
+import { checkStatus, sortStrings, getEndpointBaseURL } from "../lib/helpers";
 import "../assets/css/Editor.css";
 
 require("codemirror/addon/hint/show-hint.css");
@@ -54,22 +49,19 @@ class Editor extends Component {
     require("codemirror-graphql/mode");
 
     let keywords = [];
-    timeout(
-      1000,
-      fetch(getEndpointBaseURL() + "/ui/keywords", {
-        method: "GET",
-        mode: "cors"
+    fetch(getEndpointBaseURL() + "/ui/keywords", {
+      method: "GET",
+      mode: "cors"
+    })
+      .then(checkStatus)
+      .then(response => response.json())
+      .then(function(result) {
+        keywords = keywords.concat(
+          result.keywords.map(kw => {
+            return kw.name;
+          })
+        );
       })
-        .then(checkStatus)
-        .then(response => response.json())
-        .then(function(result) {
-          keywords = keywords.concat(
-            result.keywords.map(kw => {
-              return kw.name;
-            })
-          );
-        })
-    )
       .catch(function(error) {
         console.log(error.stack);
         console.warn(
@@ -87,26 +79,23 @@ class Editor extends Component {
         }
       });
 
-    timeout(
-      1000,
-      fetch(getEndpointBaseURL() + "/query", {
-        method: "POST",
-        mode: "cors",
-        body: "schema {}"
+    fetch(getEndpointBaseURL() + "/query", {
+      method: "POST",
+      mode: "cors",
+      body: "schema {}"
+    })
+      .then(checkStatus)
+      .then(response => response.json())
+      .then(function(result) {
+        var data = result.data;
+        if (data.schema && !_.isEmpty(data.schema)) {
+          keywords = keywords.concat(
+            data.schema.map(kw => {
+              return kw.predicate;
+            })
+          );
+        }
       })
-        .then(checkStatus)
-        .then(response => response.json())
-        .then(function(result) {
-          var data = result.data;
-          if (data.schema && !_.isEmpty(data.schema)) {
-            keywords = keywords.concat(
-              data.schema.map(kw => {
-                return kw.predicate;
-              })
-            );
-          }
-        })
-    )
       .catch(function(error) {
         console.log(error.stack);
         console.warn("In catch: Error while trying to fetch schema", error);
@@ -151,10 +140,12 @@ class Editor extends Component {
     this.editor.setCursor(this.editor.lineCount(), 0);
 
     CodeMirror.registerHelper("hint", "fromList", function(cm, options) {
-      var cur = cm.getCursor(), token = cm.getTokenAt(cur);
+      var cur = cm.getCursor(),
+        token = cm.getTokenAt(cur);
 
       var to = CodeMirror.Pos(cur.line, token.end);
-      let from = "", term = "";
+      let from = "",
+        term = "";
       if (token.string) {
         term = token.string;
         from = CodeMirror.Pos(cur.line, token.start);
