@@ -765,10 +765,34 @@ func DeletePredicate(ctx context.Context, attr string) error {
 		}
 	}
 
-	if ok := schema.State().HasCount(attr); ok {
+	hasCountIndex := schema.State().HasCount(attr)
+	if hasCountIndex {
 		if err := DeleteCountIndex(ctx, attr); err != nil {
 			return err
 		}
+	}
+
+	s, ok := schema.State().Get(attr)
+	if !ok {
+		return fmt.Errorf("Expected type to exist for pred: %s while deleting it.", attr)
+	}
+
+	var index uint64
+	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+		index = rv.Index
+	}
+	if !s.Explicit {
+		// Delete predicate from schema.
+		se := schema.SyncEntry{
+			Attr:  attr,
+			Index: index,
+			Water: SyncMarks(),
+			Schema: protos.SchemaUpdate{
+				Predicate: attr,
+				Directive: protos.SchemaUpdate_DELETE,
+			},
+		}
+		schema.State().Delete(se)
 	}
 	return nil
 }

@@ -77,10 +77,21 @@ class FrameItem extends React.Component {
       });
   };
 
+  executeOnJsonClick = () => {
+    const { frame } = this.props;
+    const { query } = frame;
+
+    executeQuery(query, false).then(res => {
+      this.setState({
+        data: res
+      });
+    });
+  };
+
   executeFrameQuery = query => {
     const { frame: { meta }, onUpdateConnectedState } = this.props;
 
-    executeQuery(query)
+    executeQuery(query, true)
       .then(res => {
         onUpdateConnectedState(true);
 
@@ -132,7 +143,7 @@ class FrameItem extends React.Component {
             data: res
           };
 
-          this.setState({ response, executed: true, data: res });
+          this.setState({ response, executed: true });
         } else {
           this.setState({
             successMessage: "Your query did not return any results",
@@ -183,7 +194,14 @@ class FrameItem extends React.Component {
     if (!executed) {
       content = <FrameLoading />;
     } else if (response) {
-      content = <FrameSession frame={frame} response={response} data={data} />;
+      content = (
+        <FrameSession
+          frame={frame}
+          response={response}
+          data={data}
+          onJsonClick={this.executeOnJsonClick}
+        />
+      );
     } else if (successMessage) {
       content = (
         <FrameSuccess

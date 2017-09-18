@@ -56,18 +56,27 @@ func TestSchema(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaVal), 1))
 	checkSchema(t, State().predicate, []nameType{
 		{"name", &protos.SchemaUpdate{
+			Predicate: "name",
 			ValueType: uint32(types.StringID),
+			Explicit:  true,
 		}},
 		{"_predicate_", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			List:      true,
 		}},
-		{"address", &protos.SchemaUpdate{ValueType: uint32(types.StringID)}},
-		{"http://scalar.com/helloworld/", &protos.SchemaUpdate{
+		{"address", &protos.SchemaUpdate{
+			Predicate: "address",
 			ValueType: uint32(types.StringID),
+			Explicit:  true}},
+		{"http://scalar.com/helloworld/", &protos.SchemaUpdate{
+			Predicate: "http://scalar.com/helloworld/",
+			ValueType: uint32(types.StringID),
+			Explicit:  true,
 		}},
 		{"age", &protos.SchemaUpdate{
+			Predicate: "age",
 			ValueType: uint32(types.IntID),
+			Explicit:  true,
 		}},
 	})
 
@@ -174,30 +183,40 @@ func TestSchemaIndexCustom(t *testing.T) {
 			List:      true,
 		}},
 		{"name", &protos.SchemaUpdate{
+			Predicate: "name",
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact"},
 			Directive: protos.SchemaUpdate_INDEX,
 			Count:     true,
+			Explicit:  true,
 		}},
 		{"address", &protos.SchemaUpdate{
+			Predicate: "address",
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"term"},
 			Directive: protos.SchemaUpdate_INDEX,
+			Explicit:  true,
 		}},
 		{"age", &protos.SchemaUpdate{
+			Predicate: "age",
 			ValueType: uint32(types.IntID),
 			Tokenizer: []string{"int"},
 			Directive: protos.SchemaUpdate_INDEX,
+			Explicit:  true,
 		}},
 		{"id", &protos.SchemaUpdate{
+			Predicate: "id",
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact", "term"},
 			Directive: protos.SchemaUpdate_INDEX,
+			Explicit:  true,
 		}},
 		{"friend", &protos.SchemaUpdate{
 			ValueType: uint32(types.UidID),
+			Predicate: "friend",
 			Directive: protos.SchemaUpdate_REVERSE,
 			Count:     true,
+			Explicit:  true,
 		}},
 	})
 	require.True(t, State().IsIndexed("name"))
@@ -284,18 +303,21 @@ func TestParseScalarList(t *testing.T) {
 		Directive: protos.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"},
 		List:      true,
+		Explicit:  true,
 	}, schemas[0])
 
 	require.EqualValues(t, &protos.SchemaUpdate{
 		Predicate: "occupations",
 		ValueType: 9,
 		List:      true,
+		Explicit:  true,
 	}, schemas[1])
 
 	require.EqualValues(t, &protos.SchemaUpdate{
 		Predicate: "graduation",
 		ValueType: 5,
 		List:      true,
+		Explicit:  true,
 	}, schemas[2])
 }
 

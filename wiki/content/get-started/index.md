@@ -63,11 +63,11 @@ docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgrap
 #### Map to custom port
 ```sh
 mkdir -p ~/dgraph
-# Mapping port 8080 from within the container to 18080 of the instance, likewise with the gRPC port 9090.
-docker run -it -p 18080:8080 -p 19090:9090 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048
+# Mapping port 8080 from within the container to 18080 of the instance, likewise with the gRPC port 9080.
+docker run -it -p 18080:8080 -p 19090:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048
 ```
 
-{{% notice "note" %}}The dgraph server listens on ports 8080 and 9090 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
+{{% notice "note" %}}The dgraph server listens on ports 8080 and 9080 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
 
 {{% notice "note" %}}If you are using docker on non-linux distribution, please use docker data volumes.{{% /notice %}}
 ### On Non Linux Distributions.
@@ -80,7 +80,7 @@ docker create -v /dgraph --name datacontainer dgraph/dgraph`
 
 Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
-docker run -it -p 18080:8080 -p 19090:9090 --volumes-from datacontainer --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048 --p /dgraph/p --w /dgraph/w
+docker run -it -p 18080:8080 -p 19090:9080 --volumes-from datacontainer --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048 --p /dgraph/p --w /dgraph/w
 ```
 
 ## Step 3: Run Queries

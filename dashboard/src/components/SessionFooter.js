@@ -25,17 +25,12 @@ const SessionFooter = ({
       <SessionFooterResult
         currentTab={currentTab}
         response={response}
-        data={data}
         graphRenderTime={graphRenderTime}
         treeRenderTime={treeRenderTime}
       />
     );
   }
 
-  return (
-    <div className="footer">
-      {child}
-    </div>
-  );
+  return <div className="footer">{child}</div>;
 };
 export default SessionFooter;

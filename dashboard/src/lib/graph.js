@@ -7,15 +7,6 @@ import _ from "lodash";
 import uuid from "uuid";
 import randomColor from "randomcolor";
 
-function hasChildren(node: Object): boolean {
-  for (var prop in node) {
-    if (Array.isArray(node[prop])) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function extractFacets(val, edgeAttributes, properties) {
   // lets handle @facets between uids here.
   for (let pred in val) {
@@ -52,7 +43,8 @@ function findAndMerge(nodes, n) {
     return;
   }
 
-  let node = nodes[idx], props = JSON.parse(node.title);
+  let node = nodes[idx],
+    props = JSON.parse(node.title);
   _.merge(props, properties);
   node.title = JSON.stringify(props);
   // For shortest path, this would overwrite the color and this is fine
@@ -87,7 +79,8 @@ function aggregationPrefix(properties) {
 }
 
 export function shortenName(label) {
-  let words = label.split(" "), firstWord = words[0];
+  let words = label.split(" "),
+    firstWord = words[0];
   if (firstWord.length > 20) {
     label = [firstWord.substr(0, 9), firstWord.substr(9, 7) + "..."].join(
       "-\n"
@@ -345,8 +338,6 @@ export function processGraph(
         pred: "empty"
       }
     },
-    someNodeHasChildren: boolean = false,
-    ignoredChildren: Array<ResponseNode> = [],
     // We store the indexes corresponding to what we show at first render here.
     // That we can only do one traversal.
     nodesIndex,
@@ -381,9 +372,6 @@ export function processGraph(
       return;
     }
 
-    someNodeHasChildren = false;
-    ignoredChildren = [];
-
     if (k === "extensions" || k === "uids") {
       continue;
     }
@@ -392,7 +380,6 @@ export function processGraph(
     // are considered as children because it is an array of values.
     let block = response[k];
 
-    isSchema = k === "schema";
     for (let i = 0; i < block.length; i++) {
       let rn: ResponseNode = {
         node: block[i],
@@ -402,23 +389,7 @@ export function processGraph(
         }
       };
 
-      if (isSchema || hasChildren(block[i])) {
-        someNodeHasChildren = true;
-        nodesQueue.push(rn);
-      } else {
-        ignoredChildren.push(rn);
-      }
-    }
-
-    // If no root node has children , then we add all root level nodes to the view.
-    // Or if the count of children at root which don't have children is > than those
-    // which have children we show them.
-    if (!someNodeHasChildren || ignoredChildren.length > nodesQueue.length) {
-      // Push one by one else we get Maximum call stack size exceeded error.
-      // https://stackoverflow.com/questions/22123769/rangeerror-maximum-call-stack-size-exceeded-why
-      for (var i = 0; i < ignoredChildren.length; i++) {
-        nodesQueue.push(ignoredChildren[i]);
-      }
+      nodesQueue.push(rn);
     }
   }
 
@@ -450,9 +421,9 @@ export function processGraph(
     }
 
     let properties: MapOfStrings = {
-      attrs: {},
-      facets: {}
-    },
+        attrs: {},
+        facets: {}
+      },
       id: string,
       edgeAttributes = {
         facets: {}
@@ -487,7 +458,8 @@ export function processGraph(
         typeof val[0] === "object"
       ) {
         // These are child nodes, lets add them to the queue.
-        let arr = val, xposition = 1;
+        let arr = val,
+          xposition = 1;
         for (let j = 0; j < arr.length; j++) {
           // X position makes sure that nodes are rendered in the order they are received
           // in the response.
@@ -573,7 +545,8 @@ export function processGraph(
         continue;
       }
 
-      let oldEdge = edges[edgeIdx], edgeTitle = JSON.parse(oldEdge.title);
+      let oldEdge = edges[edgeIdx],
+        edgeTitle = JSON.parse(oldEdge.title);
       // This is helpful in case of shortest path results so that we can get
       // the edge weights.
       _.merge(edgeAttributes, edgeTitle);

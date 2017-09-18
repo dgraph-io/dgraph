@@ -92,6 +92,11 @@ class FrameSession extends React.Component {
     this.setState({
       currentTab: tabName
     });
+
+    const { onJsonClick, data } = this.props;
+    if (tabName === "code" && data == null) {
+      onJsonClick();
+    }
   };
 
   getGraphRenderTime = () => {
@@ -192,47 +197,47 @@ class FrameSession extends React.Component {
           </div>
 
           <div className="main">
-            {currentTab === "graph"
-              ? <SessionGraphTab
-                  response={response}
-                  onBeforeGraphRender={this.handleBeforeGraphRender}
-                  onGraphRendered={this.handleGraphRendered}
-                  onNodeSelected={this.handleNodeSelected}
-                  onNodeHovered={this.handleNodeHovered}
-                  nodesDataset={this.nodes}
-                  edgesDataset={this.edges}
-                />
-              : null}
+            {currentTab === "graph" ? (
+              <SessionGraphTab
+                response={response}
+                onBeforeGraphRender={this.handleBeforeGraphRender}
+                onGraphRendered={this.handleGraphRendered}
+                onNodeSelected={this.handleNodeSelected}
+                onNodeHovered={this.handleNodeHovered}
+                nodesDataset={this.nodes}
+                edgesDataset={this.edges}
+              />
+            ) : null}
 
-            {currentTab === "tree"
-              ? <SessionTreeTab
-                  response={response}
-                  onBeforeTreeRender={this.handleBeforeTreeRender}
-                  onTreeRendered={this.handleTreeRendered}
-                  onNodeSelected={this.handleNodeSelected}
-                  onNodeHovered={this.handleNodeHovered}
-                  selectedNode={selectedNode}
-                  nodesDataset={this.nodes}
-                  edgesDataset={this.edges}
-                />
-              : null}
+            {currentTab === "tree" ? (
+              <SessionTreeTab
+                response={response}
+                onBeforeTreeRender={this.handleBeforeTreeRender}
+                onTreeRendered={this.handleTreeRendered}
+                onNodeSelected={this.handleNodeSelected}
+                onNodeHovered={this.handleNodeHovered}
+                selectedNode={selectedNode}
+                nodesDataset={this.nodes}
+                edgesDataset={this.edges}
+              />
+            ) : null}
 
-            {currentTab === "code"
-              ? <FrameCodeTab query={frame.query} response={data} />
-              : null}
+            {currentTab === "code" ? (
+              <FrameCodeTab query={frame.query} response={data} />
+            ) : null}
 
-            {currentTab === "graph" || currentTab === "tree"
-              ? <EntitySelector
-                  response={response}
-                  onInitNodeTypeConfig={this.handleInitNodeTypeConfig}
-                  labelRegexStr={frame.meta.regexStr}
-                  onUpdateLabelRegex={this.handleUpdateLabelRegex}
-                  onUpdateLabels={this.handleUpdateLabels}
-                />
-              : null}
+            {currentTab === "graph" || currentTab === "tree" ? (
+              <EntitySelector
+                response={response}
+                onInitNodeTypeConfig={this.handleInitNodeTypeConfig}
+                labelRegexStr={frame.meta.regexStr}
+                onUpdateLabelRegex={this.handleUpdateLabelRegex}
+                onUpdateLabels={this.handleUpdateLabels}
+              />
+            ) : null}
 
             <SessionFooter
-              data={data}
+              data={response.data}
               response={response}
               currentTab={currentTab}
               selectedNode={selectedNode}

@@ -104,7 +104,7 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 		return err
 	}
 	old, ok := schema.State().Get(update.Predicate)
-	current := schema.From(update)
+	current := *update
 	updateSchema(update.Predicate, current, rv.Index, rv.Group)
 
 	// Once we remove index or reverse edges from schema, even though the values

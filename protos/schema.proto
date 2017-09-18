@@ -47,11 +47,13 @@ message SchemaUpdate {
 	   NONE = 0;
 	   INDEX = 1;
 	   REVERSE = 2;
-  }
+	   DELETE = 3;
+	}
 	Directive directive = 3;
 	repeated string tokenizer = 4;
 	bool count = 5;
 	bool list = 6;
+	bool explicit = 7; // whether schema was set by the user.
 }
 
 

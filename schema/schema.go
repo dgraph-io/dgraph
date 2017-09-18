@@ -78,6 +78,19 @@ func (s *stateGroup) Update(se SyncEntry) {
 	x.Printf(logUpdate(se.Schema, se.Attr))
 }
 
+// Delete updates the schema in memory and sends an entry to syncCh so that it can be
+// committed later
+func (s *stateGroup) Delete(se SyncEntry) {
+	s.Lock()
+	defer s.Unlock()
+
+	delete(s.predicate, se.Attr)
+	se.Water.Begin(se.Index)
+	syncCh <- se
+	s.elog.Printf("Deleting schema for attr: %s", se.Attr)
+	x.Printf("Deleting schema for attr: %s", se.Attr)
+}
+
 func logUpdate(schema protos.SchemaUpdate, pred string) string {
 	typ := types.TypeID(schema.ValueType).Name()
 	if schema.List {
@@ -293,6 +306,10 @@ func batchSync() {
 		loop++
 		State().elog.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
 		for _, e := range entries {
+			if e.Schema.Directive == protos.SchemaUpdate_DELETE {
+				wb = badger.EntriesDelete(wb, x.SchemaKey(e.Attr))
+				continue
+			}
 			val, err := e.Schema.Marshal()
 			x.Checkf(err, "Error while marshalling schema description")
 			wb = badger.EntriesSet(wb, x.SchemaKey(e.Attr), val)
