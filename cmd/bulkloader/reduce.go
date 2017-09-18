@@ -72,17 +72,16 @@ func (r *reducer) reduce(job shuffleOutput) {
 		}
 		currentKey = mapEntry.Key
 
-		if mapEntry.Posting == nil {
-			uid := mapEntry.Uid
-			if len(uids) == 0 || uid != uids[len(uids)-1] { // De-duplicate
-				uids = append(uids, uid)
-			}
-		} else {
-			uid := mapEntry.Posting.Uid
-			if len(uids) == 0 || uid != uids[len(uids)-1] { // De-duplicate
-				uids = append(uids, uid)
-				pl.Postings = append(pl.Postings, mapEntry.Posting)
-			}
+		uid := mapEntry.Uid
+		if mapEntry.Posting != nil {
+			uid = mapEntry.Posting.Uid
+		}
+		if len(uids) > 0 && uids[len(uids)-1] == uid {
+			continue
+		}
+		uids = append(uids, uid)
+		if mapEntry.Posting != nil {
+			pl.Postings = append(pl.Postings, mapEntry.Posting)
 		}
 	}
 	outputPostingList()
