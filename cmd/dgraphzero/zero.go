@@ -261,6 +261,10 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 	go func(che chan error) {
 		for {
 			group, err := stream.Recv()
+			// Due to closeSend on client Side
+			if group == nil {
+				che <- nil
+			}
 			// Could be EOF also, but we don't care about error type.
 			if err != nil {
 				che <- err
