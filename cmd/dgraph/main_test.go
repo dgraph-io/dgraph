@@ -167,6 +167,7 @@ func TestDeletePredicate(t *testing.T) {
 		delete {
 			* <friend> * .
 			* <name> * .
+			* <salary> * .
 		}
 	}
 	`
@@ -180,6 +181,7 @@ func TestDeletePredicate(t *testing.T) {
 			<0x2> <name> "Alice1" .
 			<0x3> <name> "Alice2" .
 			<0x3> <age> "13" .
+			<0x11> <salary> "100000" . # should be deleted from schema after we delete the predicate
 		}
 	}
 	`
@@ -279,6 +281,10 @@ func TestDeletePredicate(t *testing.T) {
 	err = runMutation(m2)
 	require.NoError(t, err)
 
+	output, err = runQuery(`schema{}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"age","type":"default"},{"predicate":"friend","type":"uid","reverse":true},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]}]}}`, output)
+
 	output, err = runQuery(q1)
 	require.JSONEq(t, `{"data": {}}`, output)
 
@@ -322,9 +328,38 @@ func TestSchemaMutation(t *testing.T) {
 	schema.ParseBytes([]byte(""), 1)
 	expected := map[string]*protos.SchemaUpdate{
 		"name": {
+			Predicate: "name",
 			Tokenizer: []string{"term", "exact"},
 			ValueType: uint32(types.StringID),
-			Directive: protos.SchemaUpdate_INDEX},
+			Directive: protos.SchemaUpdate_INDEX,
+			Explicit:  true},
+	}
+
+	err := runMutation(m)
+	require.NoError(t, err)
+	for k, v := range expected {
+		s, ok := schema.State().Get(k)
+		require.True(t, ok)
+		require.Equal(t, *v, s)
+	}
+}
+
+func TestSchemaMutation1(t *testing.T) {
+	var m = `
+	mutation {
+		set {
+			<0x1234> <pred1> "12345"^^<xs:string> .
+			<0x1234> <pred2> "12345" .
+		}
+	}
+
+` // reset schema
+	schema.ParseBytes([]byte(""), 1)
+	expected := map[string]*protos.SchemaUpdate{
+		"pred1": {
+			ValueType: uint32(types.StringID)},
+		"pred2": {
+			ValueType: uint32(types.DefaultID)},
 	}
 
 	err := runMutation(m)

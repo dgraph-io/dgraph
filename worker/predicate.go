@@ -318,6 +318,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 				}
 			}
 		}
+		// TODO - Verify that schema key is deleted from follower after leader deletes it.
 
 		// We just need to stream this kv. So, we can directly use the key
 		// and val without any copying.

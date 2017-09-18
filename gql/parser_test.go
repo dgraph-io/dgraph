@@ -4291,3 +4291,29 @@ func TestUpsertQueryError2(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Upsert query can only have one argument.")
 }
+
+func TestEqArgWithDollar(t *testing.T) {
+	// This is a fix for #1444.
+	query := `
+	{
+		ab(func: eq(name@en, "$pringfield (or, How)")) {
+			uid
+		}
+	}
+	`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, gql.Query[0].Func.Args[0].Value, `$pringfield (or, How)`)
+}
+
+func TestLangWithDash(t *testing.T) {
+	query := `{
+		q(func: uid(1)) {
+			text@en-us
+		}
+	}`
+
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, []string{"en-us"}, gql.Query[0].Children[0].Langs)
+}

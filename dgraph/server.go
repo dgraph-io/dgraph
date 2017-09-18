@@ -182,6 +182,10 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		GqlQuery: &res,
 	}
 	if req.Mutation != nil && len(req.Mutation.Schema) > 0 {
+		// Every update that comes from the client is explicit.
+		for _, s := range req.Mutation.Schema {
+			s.Explicit = true
+		}
 		queryRequest.SchemaUpdate = req.Mutation.Schema
 	}
 

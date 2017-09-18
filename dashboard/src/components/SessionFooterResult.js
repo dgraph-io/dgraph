@@ -7,8 +7,7 @@ const SessionFooterResult = ({
   graphRenderTime,
   treeRenderTime,
   currentTab,
-  response,
-  data
+  response
 }) => {
   let currentAction;
   if (currentTab === "graph" || currentTab === "tree") {
@@ -32,26 +31,27 @@ const SessionFooterResult = ({
       </div>
       <div className="col-12 col-sm-4">
         <div className="latency stats">
-          {data.extensions && data.extensions.server_latency
-            ? <div className="stat">
-                Server latency:{" "}
-                <span className="value">
-                  {data.extensions.server_latency.total}
-                </span>
-              </div>
-            : null}
-          {graphRenderTime && currentTab === "graph"
-            ? <div className="stat">
-                Rendering latency:{" "}
-                <span className="value">{humanizeTime(graphRenderTime)}</span>
-              </div>
-            : null}
-          {treeRenderTime && currentTab === "tree"
-            ? <div className="stat">
-                Rendering latency:{" "}
-                <span className="value">{humanizeTime(treeRenderTime)}</span>
-              </div>
-            : null}
+          {response.data.extensions &&
+          response.data.extensions.server_latency ? (
+            <div className="stat">
+              Server latency:{" "}
+              <span className="value">
+                {response.data.extensions.server_latency.total}
+              </span>
+            </div>
+          ) : null}
+          {graphRenderTime && currentTab === "graph" ? (
+            <div className="stat">
+              Rendering latency:{" "}
+              <span className="value">{humanizeTime(graphRenderTime)}</span>
+            </div>
+          ) : null}
+          {treeRenderTime && currentTab === "tree" ? (
+            <div className="stat">
+              Rendering latency:{" "}
+              <span className="value">{humanizeTime(treeRenderTime)}</span>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
