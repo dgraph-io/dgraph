@@ -31,15 +31,15 @@ type options struct {
 	NumGoroutines          int
 	MapBufSize             int64
 	SkipExpandEdges        bool
-	NumShards              int
-	SubshardMultiplier     int
 	BlockRate              int
 	SkipMapPhase           bool
 	CleanupTmp             bool
 	MaxPendingBadgerWrites int
 	NumShufflers           int
 
-	numSubshards    int
+	MapShards    int
+	ReduceShards int
+
 	shardOutputDirs []string
 }
 
@@ -69,7 +69,7 @@ func newLoader(opt options) *loader {
 		prog: newProgress(),
 		um:   newUIDMap(),
 		ss:   newSchemaStore(initialSchema),
-		sm:   newShardMap(opt.numSubshards),
+		sm:   newShardMap(opt.MapShards),
 
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
@@ -207,24 +207,24 @@ func (ld *loader) reduceStage() {
 
 	// Orchestrate finalisation of shufflers.
 	var shuffleWg sync.WaitGroup
-	shuffleWg.Add(ld.opt.NumShards)
+	shuffleWg.Add(ld.opt.ReduceShards)
 	shuffleOutputCh := make(chan shuffleOutput, 1000)
 	go func() {
 		shuffleWg.Wait()
 		close(shuffleOutputCh)
 	}()
 
-	mergeSubshards(ld.opt.TmpDir, ld.opt.NumShards)
+	mergeSubshards(ld.opt.TmpDir, ld.opt.ReduceShards)
 
 	// Run shufflers
 	var badgers []*badger.KV
 	go func() {
 		mapOutputs := findMapOutputFiles(ld.opt.TmpDir)
-		x.AssertTrue(len(mapOutputs) == ld.opt.NumShards)
-		x.AssertTrue(len(ld.opt.shardOutputDirs) == ld.opt.NumShards)
+		x.AssertTrue(len(mapOutputs) == ld.opt.ReduceShards)
+		x.AssertTrue(len(ld.opt.shardOutputDirs) == ld.opt.ReduceShards)
 
 		pendingShufflers := make(chan struct{}, ld.opt.NumShufflers)
-		for i := 0; i < ld.opt.NumShards; i++ {
+		for i := 0; i < ld.opt.ReduceShards; i++ {
 			pendingShufflers <- struct{}{}
 
 			opt := badger.DefaultOptions
@@ -237,8 +237,9 @@ func (ld *loader) reduceStage() {
 			x.Check(err)
 			badgers = append(badgers, kv)
 
-			shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutputs[i]))
-			for i, mappedFile := range filenamesInDir(mapOutputs[i]) {
+			mapFiles := filenamesInDir(mapOutputs[i])
+			shuffleInputChs := make([]chan *protos.MapEntry, len(mapFiles))
+			for i, mappedFile := range mapFiles {
 				shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
 				go readMapOutput(mappedFile, shuffleInputChs[i])
 			}

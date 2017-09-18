@@ -42,13 +42,11 @@ func main() {
 		"Clean up the tmp directory after the loader finishes")
 	flag.BoolVar(&opt.SkipExpandEdges, "skip_expand_edges", false,
 		"Don't generate edges that allow nodes to be expanded using _predicate_ or expand(...).")
-	flag.IntVar(&opt.NumShards, "shards", 1, "Number map phase output shards.")
-	flag.IntVar(&opt.SubshardMultiplier, "pre-shard-multiplier", 4,
-		"Number of subshards to create per shard. Increases memory usage during the map phase, "+
-			"but can help to create more equally sized shards (which speeds up the reduce phase).")
 	flag.IntVar(&opt.MaxPendingBadgerWrites, "max_pending_badger_writes", 1000,
 		"Maximum number of pending badger writes allowed at any time.")
 	flag.IntVar(&opt.NumShufflers, "shufflers", 1, "Number of shufflers to run concurrently.")
+	flag.IntVar(&opt.MapShards, "map_shards", 1, "Number of map output shards.")
+	flag.IntVar(&opt.ReduceShards, "reduce_shards", 1, "Number of shuffle output shards.")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {
@@ -63,8 +61,6 @@ func main() {
 	}
 
 	opt.MapBufSize = opt.MapBufSize << 20 // Convert from MB to B.
-	opt.numSubshards = opt.SubshardMultiplier * opt.NumShards
-	fmt.Println(opt.numSubshards)
 
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")
 	x.Check(err)
@@ -79,7 +75,7 @@ func main() {
 
 	// Delete and recreate the output dirs to ensure they are empty.
 	x.Check(os.RemoveAll(opt.DgraphsDir))
-	for i := 0; i < opt.NumShards; i++ {
+	for i := 0; i < opt.ReduceShards; i++ {
 		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i))
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)

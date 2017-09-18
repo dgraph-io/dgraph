@@ -37,8 +37,8 @@ type mapper struct {
 func newMapper(st *state) *mapper {
 	return &mapper{
 		state:           st,
-		shardMapEntries: make([][]*protos.MapEntry, st.opt.numSubshards),
-		shardSize:       make([]int64, st.opt.numSubshards),
+		shardMapEntries: make([][]*protos.MapEntry, st.opt.MapShards),
+		shardSize:       make([]int64, st.opt.MapShards),
 	}
 }
 
