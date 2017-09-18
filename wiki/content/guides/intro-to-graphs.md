@@ -46,7 +46,7 @@ name "Millhouse".
 Now let's do this in Dgraph! If you haven't followed the getting started
 guide, do so now: [Get Started]({{< relref "get-started/index.md" >}})
 
-Note that you must be using version 0.7.4 or later for the examples
+Note that you must be using version 0.8.1 or later for the examples
 in this guide to work.
 
 Once you have Dgraph setup and running, navigate to http://localhost:8080/
@@ -68,7 +68,7 @@ mutation {
   }
 
   schema {
-   name: string @index .
+   name: string @index(term) .
   }
 }
 ```
@@ -118,7 +118,7 @@ query you give.  Let's have a look at an example:
 
 ```
 {
-  cats(func:anyofterms(name@en, "Millhouse")) {
+  cats(func:anyofterms(name, "Millhouse")) {
     name
     age
     color
@@ -158,7 +158,7 @@ Now to pull in the relation between the human and the cat:
 
 ```
 {
-  human(func:allofterms(name@en, "Kaley")) {
+  human(func:allofterms(name, "Kaley")) {
     name
     age
     favourite_food
