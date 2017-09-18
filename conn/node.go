@@ -27,6 +27,7 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -366,25 +367,25 @@ func (n *Node) ReadIndex(ctx context.Context) (chan uint64, error) {
 	}
 }
 
-func (n *Node) RunReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
-	requestCh <-chan linReadReq, readStateCh <-chan raft.ReadState) {
-	defer close(finished)
+func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
+	closer.AddRunning(1)
+	defer closer.Done()
 	counter := x.NewNonceCounter()
 	requests := []linReadReq{}
 	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
 	// requestCh.
 	for {
 		select {
-		case <-stop:
+		case <-closer.HasBeenClosed():
 			return
 		case <-readStateCh:
 			// Do nothing, discard ReadState info we don't have an activeRctx for
-		case req := <-requestCh:
+		case req := <-n.RequestCh:
 		slurpLoop:
 			for {
 				requests = append(requests, req)
 				select {
-				case req = <-requestCh:
+				case req = <-n.RequestCh:
 				default:
 					break slurpLoop
 				}
@@ -404,7 +405,7 @@ func (n *Node) RunReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
 			_ = n.Raft().ReadIndex(ctx, activeRctx[:])
 		again:
 			select {
-			case <-stop:
+			case <-closer.HasBeenClosed():
 				cancel()
 				return
 			case rs := <-readStateCh:

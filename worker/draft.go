@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -430,15 +431,13 @@ func (n *node) Run() {
 	// on readStateCh.  It's 2 so that sending rarely blocks (so the Go runtime doesn't have to
 	// switch threads as much.)
 	readStateCh := make(chan raft.ReadState, 2)
+	closer := y.NewCloser(0)
 
 	{
 		// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 		// That way we know sending to readStateCh will not deadlock.
-		finished := make(chan struct{})
-		stop := make(chan struct{})
-		defer func() { <-finished }()
-		defer close(stop)
-		go n.RunReadIndexLoop(stop, finished, n.RequestCh, readStateCh)
+		defer closer.SignalAndWait()
+		go n.RunReadIndexLoop(closer, readStateCh)
 	}
 
 	for {
