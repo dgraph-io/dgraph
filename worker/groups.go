@@ -51,13 +51,14 @@ type servers struct {
 type groupi struct {
 	x.SafeMutex
 	// TODO: Is this context being used?
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wal     *raftwal.Wal
-	state   *protos.MembershipState
-	Node    *node
-	gid     uint32
-	tablets map[string]uint32
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wal       *raftwal.Wal
+	state     *protos.MembershipState
+	Node      *node
+	gid       uint32
+	tablets   map[string]uint32
+	triggerCh chan struct{} // Used to trigger membership sync
 }
 
 var gr *groupi
@@ -124,6 +125,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	}
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
+	gr.triggerCh = make(chan struct{}, 1)
 	gid := gr.groupId()
 	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
 	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
@@ -131,7 +133,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 
 	x.UpdateHealthStatus(true)
 	if !Config.InMemoryComm {
-		go gr.periodicSyncMemberships() // Now set it to be run periodically.
+		go gr.periodicMembershipUpdate() // Now set it to be run periodically.
 	}
 }
 
@@ -252,6 +254,7 @@ func (g *groupi) ServesTablet(key string) bool {
 	tablet := &protos.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
+		x.Printf("Error while ShouldServe grpc call %v", err)
 		return false
 	}
 	g.Lock()
@@ -358,21 +361,80 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	return
 }
 
-// TODO: This could be better done via a uni-directional or bi-directional stream, so it's
-// instantenous.
-// If node is the leader, every sync involves calculating tablet sizes and sending them to
-// dgraphzero.
-func (g *groupi) syncMembershipState() {
-	// TODO: Instead of getting an address first, then finding a connection to that address,
-	// we should pick up a healthy connection from any server in the provided group.
-	// This way, if a server goes down, AnyServer can avoid giving a connection to that server.
+func (g *groupi) triggerMembershipSync() {
+	// It's ok if we miss the trigger, periodic membership sync runs every minute.
+	select {
+	case g.triggerCh <- struct{}{}:
+	// It's ok to ignore it, since we would be sending update of a later state
+	default:
+	}
+}
+
+func (g *groupi) periodicMembershipUpdate() {
+	ticker := time.NewTicker(time.Minute * 10)
+	tablets := g.calculateTabletSizes()
+
+START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		x.Printf("WARNING: We don't have address of any dgraphzero server.")
-		return
+		time.Sleep(time.Minute)
+		goto START
 	}
 
+	c := protos.NewZeroClient(pl.Get())
+	ctx, cancel := context.WithCancel(context.Background())
+	stream, err := c.Update(ctx)
+	if err != nil {
+		x.Printf("Error while calling update %v\n", err)
+		time.Sleep(time.Minute)
+		goto START
+	}
+
+	go func() {
+		for {
+			// Blocking, should return if sending on stream fails(Need to verify).
+			state, err := stream.Recv()
+			if err != nil || state == nil {
+				x.Printf("Unable to sync memberships. Error: %v", err)
+				// If zero server is lagging behind leader.
+				if ctx.Err() == nil {
+					cancel()
+				}
+				return
+			}
+			g.applyState(state)
+		}
+	}()
+
+	g.triggerMembershipSync() // Ticker doesn't start immediately
+OUTER:
+	for {
+		select {
+		case <-g.triggerCh:
+			if err := g.sendMembership(tablets, stream); err != nil {
+				stream.CloseSend()
+				break OUTER
+			}
+		case <-ticker.C:
+			// dgraphzero just adds to the map so we needn't worry about race condition
+			// where a newly added tablet is not sent.
+			tablets = g.calculateTabletSizes()
+			if err := g.sendMembership(tablets, stream); err != nil {
+				stream.CloseSend()
+				break OUTER
+			}
+		case <-ctx.Done():
+			stream.CloseSend()
+			break OUTER
+		}
+	}
+	goto START
+}
+
+func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
+	stream protos.Zero_UpdateClient) error {
 	member := &protos.Member{
 		Id:      Config.RaftId,
 		GroupId: g.groupId(),
@@ -383,31 +445,9 @@ func (g *groupi) syncMembershipState() {
 		Members: make(map[uint64]*protos.Member),
 	}
 	group.Members[member.Id] = member
-	group.Tablets = g.calculateTabletSizes()
+	group.Tablets = tablets
 
-	c := protos.NewZeroClient(pl.Get())
-	state, err := c.Update(context.Background(), group)
-
-	if err != nil || state == nil {
-		x.Printf("Unable to sync memberships. Error: %v", err)
-		return
-	}
-	// fmt.Printf("Got a updated state: %v\n", state)
-	g.applyState(state)
-}
-
-func (g *groupi) periodicSyncMemberships() {
-	t := time.NewTicker(time.Minute)
-	// TODO: We don't need to send membership information every 10 seconds, if we get a stream of
-	// MembershipState from dgraphzero. That way, we'll have the latest state update.
-	for {
-		select {
-		case <-t.C:
-			g.syncMembershipState()
-		case <-g.ctx.Done():
-			return
-		}
-	}
+	return stream.Send(group)
 }
 
 // SyncAllMarks syncs marks of all nodes of the worker group.

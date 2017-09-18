@@ -376,8 +376,8 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
 func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
-	gid := groups().BelongsTo(ts.Order[0].Attr)
-	if err := waitLinearizableRead(ctx, gid); err != nil {
+	n := groups().Node
+	if err := n.WaitLinearizableRead(ctx); err != nil {
 		return &emptySortResult, err
 	}
 
