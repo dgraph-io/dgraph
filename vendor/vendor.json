@@ -211,6 +211,12 @@
 			"revisionTime": "2015-09-09T17:09:13Z"
 		},
 		{
+			"checksumSHA1": "aZgc99rAVaEA9gYf6D4n1iF8oHs=",
+			"path": "github.com/gogo/protobuf/jsonpb",
+			"revision": "e57a569e1882958f6b188cb42231d6db87701f2a",
+			"revisionTime": "2016-07-19T14:39:48Z"
+		},
+		{
 			"checksumSHA1": "HIXTnq2r3h/9X1lc7Td4AopDmZs=",
 			"path": "github.com/gogo/protobuf/proto",
 			"revision": "e57a569e1882958f6b188cb42231d6db87701f2a",
