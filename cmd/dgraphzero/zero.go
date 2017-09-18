@@ -20,7 +20,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"sync"
 	"time"
@@ -262,9 +261,7 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 	go func(che chan error) {
 		for {
 			group, err := stream.Recv()
-			if err == io.EOF {
-				che <- nil
-			}
+			// Could be EOF also, but we don't care about error type.
 			if err != nil {
 				che <- err
 			}
@@ -294,9 +291,8 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 	ticker := time.NewTicker(time.Second * 5)
 	ctx := stream.Context()
 	count := 0
-	// High buffer size just to be safe, selects below don't block for long
-	// We will receive something on this channel atmax once every heartbeat(20ms).
-	changeCh := make(chan struct{}, 10)
+	changeCh := make(chan struct{}, 1)
+	lastUpdate := time.Now()
 	id := s.Node.RegisterForUpdates(changeCh)
 	defer s.Node.DeRegister(id)
 	if err := stream.Send(s.membershipState()); err != nil {
@@ -308,6 +304,7 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 			if err := stream.Send(s.membershipState()); err != nil {
 				return err
 			}
+			lastUpdate = time.Now()
 		case err := <-che:
 			return err
 		case <-ticker.C:
@@ -318,11 +315,20 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 			}
 			// times out in 10ms
 			readIdx := <-replyCh
+			count++
 			if readIdx <= s.Node.Applied.DoneUntil() {
 				count = 0
 			} else if count >= 2 {
 				return x.Errorf("Reader index hasn't catched up for 10 seconds")
 			}
+
+			if time.Since(lastUpdate) < time.Minute {
+				continue
+			}
+			if err := stream.Send(s.membershipState()); err != nil {
+				return err
+			}
+			lastUpdate = time.Now()
 		case <-ctx.Done():
 			return ctx.Err()
 		}

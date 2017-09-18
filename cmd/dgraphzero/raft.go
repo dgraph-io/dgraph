@@ -107,7 +107,10 @@ func (n *node) triggerUpdates() {
 	n.Lock()
 	defer n.Unlock()
 	for _, ch := range n.subscribers {
-		ch <- struct{}{}
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -384,7 +387,7 @@ func (n *node) Run() {
 				n.Send(msg)
 			}
 			if len(rd.CommittedEntries) > 0 {
-				n.triggerUpdates()
+				go n.triggerUpdates()
 			}
 			n.snapshot()
 			n.Raft().Advance()

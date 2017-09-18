@@ -344,6 +344,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	n.SetConfState(cs)
 	n.Applied.Done(e.Index)
 	posting.SyncMarks().Done(e.Index)
+	groups().TriggerMembershipSync()
 }
 
 func (n *node) processApplyCh() {

@@ -51,13 +51,14 @@ type servers struct {
 type groupi struct {
 	x.SafeMutex
 	// TODO: Is this context being used?
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wal     *raftwal.Wal
-	state   *protos.MembershipState
-	Node    *node
-	gid     uint32
-	tablets map[string]uint32
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wal       *raftwal.Wal
+	state     *protos.MembershipState
+	Node      *node
+	gid       uint32
+	tablets   map[string]uint32
+	triggerCh chan struct{} // Used to trigger membership sync
 }
 
 var gr *groupi
@@ -124,6 +125,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	}
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
+	gr.triggerCh = make(chan struct{}, 1)
 	gid := gr.groupId()
 	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
 	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
@@ -358,48 +360,19 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	return
 }
 
-func (g *groupi) streamUpdates(stream protos.Zero_UpdateClient, ctx context.Context,
-	cancel context.CancelFunc) {
-	ticker := time.NewTicker(time.Minute)
-	amLeader := g.Node.AmLeader()
-	lastUpdate := time.Now()
-	for {
-		select {
-		case <-ticker.C:
-			// TODO: Tirgger immediately on leadger change.
-			// Have a change for leader change.
-			// Wait till either leader change happens or it's 10 minutes since lastupdate
-			if amLeader == g.Node.AmLeader() && time.Since(lastUpdate) < time.Minute*10 {
-				break
-			}
-			member := &protos.Member{
-				Id:      Config.RaftId,
-				GroupId: g.groupId(),
-				Addr:    Config.MyAddr,
-				Leader:  g.Node.AmLeader(),
-			}
-			group := &protos.Group{
-				Members: make(map[uint64]*protos.Member),
-			}
-			group.Members[member.Id] = member
-			group.Tablets = g.calculateTabletSizes()
-
-			lastUpdate = time.Now()
-			amLeader = g.Node.AmLeader()
-			if err := stream.Send(group); err != nil {
-				// Stream.Recv is blocking so need to cancel the context.
-				stream.CloseSend()
-				cancel()
-				return
-			}
-		case <-ctx.Done():
-			stream.CloseSend()
-			return
-		}
+func (g *groupi) TriggerMembershipSync() {
+	// It's ok if we miss the trigger, periodic membership sync runs every minute.
+	select {
+	case g.triggerCh <- struct{}{}:
+	default:
 	}
 }
 
 func (g *groupi) periodicMembershipUpdate() {
+	ticker := time.NewTicker(time.Minute)
+	lastUpdate := time.Now()
+	tablets := g.calculateTabletSizes()
+
 START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
@@ -416,20 +389,54 @@ START:
 		x.Printf("Error while calling update %v\n", err)
 		goto START
 	}
-	go g.streamUpdates(stream, ctx, cancel)
 
-	for {
-		state, err := stream.Recv()
-		if err != nil || state == nil {
-			x.Printf("Unable to sync memberships. Error: %v", err)
-			// Context could have been closed when we fail to send over the stream
-			if ctx.Err() == nil {
-				cancel()
+	go func() {
+		for {
+			// Blocking
+			state, err := stream.Recv()
+			if err != nil || state == nil {
+				x.Printf("Unable to sync memberships. Error: %v", err)
+				// If zero server is lagging behind leader.
+				if ctx.Err() == nil {
+					cancel()
+				}
+				return
 			}
-			goto START
+			g.applyState(state)
 		}
-		g.applyState(state)
+	}()
+
+	g.TriggerMembershipSync() // Ticker doesn't start immediately
+	for {
+		select {
+		case <-g.triggerCh:
+		case <-ticker.C:
+			member := &protos.Member{
+				Id:      Config.RaftId,
+				GroupId: g.groupId(),
+				Addr:    Config.MyAddr,
+				Leader:  g.Node.AmLeader(),
+			}
+			group := &protos.Group{
+				Members: make(map[uint64]*protos.Member),
+			}
+			group.Members[member.Id] = member
+			// Ensures we don't calculateTabletSizes more than once in 10mins
+			if time.Since(lastUpdate) >= time.Minute*10 {
+				tablets = g.calculateTabletSizes()
+			}
+			group.Tablets = tablets
+
+			if err := stream.Send(group); err != nil {
+				stream.CloseSend()
+				break
+			}
+			lastUpdate = time.Now()
+		case <-ctx.Done():
+			stream.CloseSend()
+		}
 	}
+	goto START
 }
 
 // SyncAllMarks syncs marks of all nodes of the worker group.
