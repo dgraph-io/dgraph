@@ -9432,3 +9432,18 @@ func TestFilterRoot(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {}}`, js)
 }
+
+func TestMathAlias(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		me(func:allofterms(name, "Michonne")) {
+			p as count(friend)
+			score: math(p + 1)
+			name
+		}
+	}`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"count(friend)":5,"score":6.000000,"name":"Michonne"}]}}`, js)
+}

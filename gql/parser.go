@@ -2468,7 +2468,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					MathExp:    mathTree,
 					IsInternal: true,
 				}
-				varName = ""
+				// TODO - See that if we can instead initialize this at the top.
+				varName, alias = "", ""
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue

@@ -294,6 +294,9 @@ func (e *Edge) setValueString(val string) error {
 		return err
 	}
 
+	if len(val) == 0 {
+		val = "_nil_"
+	}
 	v, err := types.ObjectValue(types.StringID, val)
 	if err != nil {
 		return err
