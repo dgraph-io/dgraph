@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -22,9 +21,6 @@ type progress struct {
 	mapEdgeCount    int64
 	reduceEdgeCount int64
 	reduceKeyCount  int64
-
-	debugMu sync.Mutex
-	debug   func() string
 
 	start       time.Time
 	startReduce time.Time
@@ -63,12 +59,6 @@ func (p *progress) report() {
 
 func (p *progress) reportOnce() {
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
-	var debug string
-	p.debugMu.Lock()
-	if p.debug != nil {
-		debug = " " + p.debug()
-	}
-	p.debugMu.Unlock()
 	switch phase(atomic.LoadInt32((*int32)(&p.phase))) {
 	case nothing:
 	case mapPhase:
@@ -80,7 +70,6 @@ func (p *progress) reportOnce() {
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
 			niceFloat(float64(mapEdgeCount)),
 			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),
-			debug,
 		)
 	case reducePhase:
 		now := time.Now()
@@ -103,7 +92,6 @@ func (p *progress) reportOnce() {
 			niceFloat(float64(reduceEdgeCount)/elapsed.Seconds()),
 			niceFloat(float64(reduceKeyCount)),
 			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
-			debug,
 		)
 	default:
 		x.AssertTruef(false, "invalid phase")
