@@ -545,7 +545,7 @@ func processUpsertTask(ctx context.Context, q *protos.Query, gid uint32) (*proto
 	// This code is copied from waitLinearizableRead only difference being that we wait till
 	// index-1.
 	n := groups().Node
-	replyCh, err := n.readIndex(ctx)
+	replyCh, err := n.ReadIndex(ctx)
 	if err != nil {
 		return nil, err
 	}

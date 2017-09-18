@@ -41,6 +41,9 @@ type sendmsg struct {
 type Node struct {
 	x.SafeMutex
 
+	// Changed after init but not protected by SafeMutex
+	RequestCh chan linReadReq
+
 	// SafeMutex is for fields which can be changed after init.
 	_confState *raftpb.ConfState
 	_raft      raft.Node
@@ -88,6 +91,7 @@ func NewNode(rc *protos.RaftContext) *Node {
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
 		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		RequestCh:   make(chan linReadReq),
 	}
 	n.Applied.Init()
 	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.
@@ -326,6 +330,80 @@ func (n *Node) Connect(pid uint64, addr string) {
 	}
 	Get().Connect(addr)
 	n.peers[pid] = addr
+}
+
+type linReadReq struct {
+	// A one-shot chan which we send a raft index upon
+	indexCh chan<- uint64
+}
+
+func (n *Node) ReadIndex(ctx context.Context) (chan uint64, error) {
+	ch := make(chan uint64, 1)
+	select {
+	case n.RequestCh <- linReadReq{ch}:
+		return ch, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (n *Node) RunReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
+	requestCh <-chan linReadReq, readStateCh <-chan raft.ReadState) {
+	defer close(finished)
+	counter := x.NewNonceCounter()
+	requests := []linReadReq{}
+	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
+	// requestCh.
+	for {
+		select {
+		case <-stop:
+			return
+		case <-readStateCh:
+			// Do nothing, discard ReadState info we don't have an activeRctx for
+		case req := <-requestCh:
+		slurpLoop:
+			for {
+				requests = append(requests, req)
+				select {
+				case req = <-requestCh:
+				default:
+					break slurpLoop
+				}
+			}
+			activeRctx := counter.Generate()
+			// We ignore the err - it would be n.ctx cancellation (which we must ignore because
+			// it's our duty to continue until `stop` is triggered) or raft.ErrStopped (which we
+			// must ignore for the same reason).
+			_ = n.Raft().ReadIndex(context.Background(), activeRctx[:])
+			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
+			// successful response.  If we don't see one, the raft leader wasn't configured, or the
+			// raft leader didn't respond.
+
+			// This is supposed to use context.Background().  We don't want to cancel the timer
+			// externally.  We want equivalent functionality to time.NewTimer.
+			timer, cancelTimer := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		again:
+			select {
+			case <-stop:
+				cancelTimer()
+				return
+			case rs := <-readStateCh:
+				if 0 != bytes.Compare(activeRctx[:], rs.RequestCtx) {
+					goto again
+				}
+				cancelTimer()
+				index := rs.Index
+				for _, req := range requests {
+					req.indexCh <- index
+				}
+			case <-timer.Done():
+				for _, req := range requests {
+					req.indexCh <- raft.None
+				}
+			}
+			requests = requests[:0]
+		}
+	}
 }
 
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {

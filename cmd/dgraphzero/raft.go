@@ -74,10 +74,41 @@ func (p *proposals) Done(pid uint32, err error) {
 
 type node struct {
 	*conn.Node
-	server *Server
-	ctx    context.Context
-	props  proposals
-	leader uint32
+	server      *Server
+	ctx         context.Context
+	props       proposals
+	leader      uint32
+	subscribers map[uint32]chan struct{}
+}
+
+func (n *node) RegisterForUpdates(ch chan struct{}) uint32 {
+	n.Lock()
+	defer n.Unlock()
+	if n.subscribers == nil {
+		n.subscribers = make(map[uint32]chan struct{})
+	}
+	for {
+		id := rand.Uint32()
+		if _, has := n.subscribers[id]; has {
+			continue
+		}
+		n.subscribers[id] = ch
+		return id
+	}
+}
+
+func (n *node) DeRegister(id uint32) {
+	n.Lock()
+	defer n.Unlock()
+	delete(n.subscribers, id)
+}
+
+func (n *node) triggerUpdates() {
+	n.Lock()
+	defer n.Unlock()
+	for _, ch := range n.subscribers {
+		ch <- struct{}{}
+	}
 }
 
 func (n *node) AmLeader() bool {
@@ -278,12 +309,30 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
+	// This chan could have capacity zero, because runReadIndexLoop never blocks without selecting
+	// on readStateCh.  It's 2 so that sending rarely blocks (so the Go runtime doesn't have to
+	// switch threads as much.)
+	readStateCh := make(chan raft.ReadState, 2)
+
+	{
+		// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
+		// That way we know sending to readStateCh will not deadlock.
+		finished := make(chan struct{})
+		stop := make(chan struct{})
+		defer func() { <-finished }()
+		defer close(stop)
+		go n.RunReadIndexLoop(stop, finished, n.RequestCh, readStateCh)
+	}
+
 	for {
 		select {
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			for _, rs := range rd.ReadStates {
+				readStateCh <- rs
+			}
 			// First store the entries, then the hardstate and snapshot.
 			x.Check(n.Wal.Store(0, rd.HardState, rd.Entries))
 			x.Check(n.Wal.StoreSnapshot(0, rd.Snapshot))
@@ -333,6 +382,9 @@ func (n *node) Run() {
 			for _, msg := range rd.Messages {
 				msg.Context = rcBytes
 				n.Send(msg)
+			}
+			if len(rd.CommittedEntries) > 0 {
+				n.triggerUpdates()
 			}
 			n.snapshot()
 			n.Raft().Advance()

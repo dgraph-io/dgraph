@@ -367,6 +367,7 @@ func (g *groupi) streamUpdates(stream protos.Zero_UpdateClient, ctx context.Cont
 		select {
 		case <-ticker.C:
 			// TODO: Tirgger immediately on leadger change.
+			// Have a change for leader change.
 			// Wait till either leader change happens or it's 10 minutes since lastupdate
 			if amLeader == g.Node.AmLeader() && time.Since(lastUpdate) < time.Minute*10 {
 				break
@@ -419,7 +420,6 @@ START:
 
 	for {
 		state, err := stream.Recv()
-		// TODO: May be we don't need to shift to other group zero server on all errors.
 		if err != nil || state == nil {
 			x.Printf("Unable to sync memberships. Error: %v", err)
 			// Context could have been closed when we fail to send over the stream

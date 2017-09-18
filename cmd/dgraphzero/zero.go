@@ -257,7 +257,6 @@ func (s *Server) ShouldServe(
 
 func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 	che := make(chan error, 1)
-	var m sync.Mutex
 	// Server side cancellation can only be done by existing the handler
 	// since Recv is blocking we need to run it in a goroutine.
 	go func(che chan error) {
@@ -283,33 +282,49 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 			}
 
 			for range proposals {
-				// Store no-nil error
-				if e := <-errCh; e != nil {
-					err = e
+				// We Don't care about these errors
+				// Ideally shouldn't error out.
+				if err := <-errCh; err != nil {
+					x.Printf("Error while applying proposal in update stream %v\n", err)
 				}
 			}
-			if err != nil {
-				che <- err
-			}
-			m.Lock()
-			if err := stream.Send(s.membershipState()); err != nil {
-				m.Unlock()
-				che <- err
-			}
-			m.Unlock()
 		}
 	}(che)
 
-	ticker := time.NewTicker(time.Minute)
-	// TODO: Trigger on applyproposal
+	ticker := time.NewTicker(time.Second * 5)
+	ctx := stream.Context()
+	count := 0
+	// High buffer size just to be safe, selects below don't block for long
+	// We will receive something on this channel atmax once every heartbeat(20ms).
+	changeCh := make(chan struct{}, 10)
+	id := s.Node.RegisterForUpdates(changeCh)
+	defer s.Node.DeRegister(id)
+	if err := stream.Send(s.membershipState()); err != nil {
+		return err
+	}
 	for {
 		select {
+		case <-changeCh:
+			if err := stream.Send(s.membershipState()); err != nil {
+				return err
+			}
 		case err := <-che:
 			return err
 		case <-ticker.C:
-			// Check if lagging, if yes then return
-		case <-stream.Context().Done():
-			return stream.Context().Err()
+			// Error would be thrown only when context is done.
+			replyCh, err := s.Node.ReadIndex(ctx)
+			if err != nil {
+				return err
+			}
+			// times out in 10ms
+			readIdx := <-replyCh
+			if readIdx <= s.Node.Applied.DoneUntil() {
+				count = 0
+			} else if count >= 2 {
+				return x.Errorf("Reader index hasn't catched up for 10 seconds")
+			}
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 }
