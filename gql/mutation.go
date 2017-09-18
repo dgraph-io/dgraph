@@ -163,6 +163,9 @@ func typeValFrom(val *protos.Value) types.Val {
 	case *protos.Value_IntVal:
 		return types.Val{types.IntID, val.GetIntVal()}
 	case *protos.Value_StrVal:
+		if val.GetStrVal() == "" {
+			return types.Val{types.StringID, "_nil_"}
+		}
 		return types.Val{types.StringID, val.GetStrVal()}
 	case *protos.Value_BoolVal:
 		return types.Val{types.BoolID, val.GetBoolVal()}
@@ -175,8 +178,12 @@ func typeValFrom(val *protos.Value) types.Val {
 	case *protos.Value_PasswordVal:
 		return types.Val{types.PasswordID, val.GetPasswordVal()}
 	case *protos.Value_DefaultVal:
+		if val.GetDefaultVal() == "" {
+			return types.Val{types.DefaultID, "_nil_"}
+		}
 		return types.Val{types.DefaultID, val.GetDefaultVal()}
 	}
+
 	return types.Val{types.StringID, ""}
 }
 

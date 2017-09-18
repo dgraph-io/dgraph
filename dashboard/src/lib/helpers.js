@@ -12,15 +12,6 @@ export function checkStatus(response) {
   }
 }
 
-export function timeout(ms, promise) {
-  return new Promise(function(resolve, reject) {
-    setTimeout(function() {
-      reject(new Error("timeout"));
-    }, ms);
-    promise.then(resolve, reject);
-  });
-}
-
 // outgoingEdges gets edges coming out from the node with the given nodeId in
 // given set of edges
 export function outgoingEdges(nodeId, edgeSet) {
@@ -221,21 +212,18 @@ export function executeQuery(query, debug) {
  *
  */
 export const getSharedQuery = shareId => {
-  return timeout(
-    6000,
-    fetch(getEndpoint("query"), {
-      method: "POST",
-      mode: "cors",
-      headers: {
-        Accept: "application/json"
-      },
-      body: `{
+  fetch(getEndpoint("query"), {
+    method: "POST",
+    mode: "cors",
+    headers: {
+      Accept: "application/json"
+    },
+    body: `{
           query(func: uid(${shareId})) {
               _share_
           }
       }`
-    })
-  )
+  })
     .then(checkStatus)
     .then(response => response.json())
     .then(function(result) {
