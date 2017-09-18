@@ -3,7 +3,7 @@ package main
 import "expvar"
 
 var (
-	NumBadgerWrites     = expvar.NewInt("bulkloader_pending_badger_writes")
-	NumReducers         = expvar.NewInt("bulkloader_reducers")
-	NumQueuedReduceJobs = expvar.NewInt("bulkloader_queued_reduce_jobs")
+	NumBadgerWrites     = expvar.NewInt("bulkloader_badger_writes_pending")
+	NumReducers         = expvar.NewInt("bulkloader_num_reducers_total")
+	NumQueuedReduceJobs = expvar.NewInt("bulkloader_reduce_queue_size")
 )
