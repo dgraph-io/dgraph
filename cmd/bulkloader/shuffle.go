@@ -10,6 +10,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -112,8 +114,8 @@ func (s *shuffler) mergeMapShardsIntoReduceShards() {
 	// Heuristic: put the largest map shard into the smallest reduce shard
 	// until there are no more map shards left. Should be a good approximation.
 	for _, shard := range mapShards {
-		sortBySize(reduceShards, true)
-		x.Check(os.Rename(shard, filepath.Join(reduceShards[0], filepath.Base(shard))))
+		sortBySize(reduceShards)
+		x.Check(os.Rename(shard, filepath.Join(reduceShards[len(reduceShards)-1], filepath.Base(shard))))
 	}
 }
 
@@ -128,7 +130,7 @@ func (s *shuffler) shardDirs() []string {
 	}
 
 	// Allow largest shards to be shuffled first.
-	sortBySize(shards, false)
+	sortBySize(shards)
 	return shards
 }
 
@@ -138,12 +140,43 @@ func filenamesInTree(dir string) []string {
 		if err != nil {
 			return err
 		}
-		if !fi.IsDir() {
+		if strings.HasSuffix(path, ".map") {
 			fnames = append(fnames, path)
 		}
 		return nil
 	}))
 	return fnames
+}
+
+type sizedDir struct {
+	dir string
+	sz  int64
+}
+
+// sortBySize sorts the input directories by size of their content (biggest to smallest).
+func sortBySize(dirs []string) {
+	sizedDirs := make([]sizedDir, len(dirs))
+	for i, dir := range dirs {
+		sizedDirs[i] = sizedDir{dir: dir, sz: treeSize(dir)}
+	}
+	sort.SliceStable(sizedDirs, func(i, j int) bool {
+		return sizedDirs[i].sz > sizedDirs[j].sz
+	})
+	for i := range sizedDirs {
+		dirs[i] = sizedDirs[i].dir
+	}
+}
+
+func treeSize(dir string) int64 {
+	var sum int64
+	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		sum += info.Size()
+		return nil
+	}))
+	return sum
 }
 
 func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *countIndexer) {

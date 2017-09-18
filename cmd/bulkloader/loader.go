@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 
@@ -212,36 +211,6 @@ func (ld *loader) reduceStage() {
 
 	redu := reducer{state: ld.state, input: shuffleOutputCh}
 	redu.run()
-}
-
-type sizedDir struct {
-	dir string
-	sz  int64
-}
-
-func sortBySize(dirs []string, ascending bool) {
-	sizedDirs := make([]sizedDir, len(dirs))
-	for i, dir := range dirs {
-		sizedDirs[i] = sizedDir{dir: dir, sz: treeSize(dir)}
-	}
-	sort.SliceStable(sizedDirs, func(i, j int) bool {
-		return ascending == (sizedDirs[i].sz < sizedDirs[j].sz)
-	})
-	for i := range sizedDirs {
-		dirs[i] = sizedDirs[i].dir
-	}
-}
-
-func treeSize(dir string) int64 {
-	var sum int64
-	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		sum += info.Size()
-		return nil
-	}))
-	return sum
 }
 
 func (ld *loader) writeSchema() {
