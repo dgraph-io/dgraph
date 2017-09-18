@@ -175,7 +175,7 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *coun
 		}
 
 		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
-			s.output <- shuffleOutput{entries: batch, kv: ci.kv}
+			s.output <- shuffleOutput{mapEntries: batch, kv: ci.kv}
 			NumQueuedReduceJobs.Add(1)
 			batch = make([]*protos.MapEntry, 0, batchAlloc)
 		}
@@ -184,7 +184,7 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *coun
 		plistLen++
 	}
 	if len(batch) > 0 {
-		s.output <- shuffleOutput{entries: batch, kv: ci.kv}
+		s.output <- shuffleOutput{mapEntries: batch, kv: ci.kv}
 		NumQueuedReduceJobs.Add(1)
 	}
 	if plistLen > 0 {

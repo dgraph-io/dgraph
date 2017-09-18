@@ -197,35 +197,21 @@ func (ld *loader) writeLease() {
 }
 
 type shuffleOutput struct {
-	kv      *badger.KV
-	entries []*protos.MapEntry
+	kv         *badger.KV
+	mapEntries []*protos.MapEntry
 }
 
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	// Run shufflers. Shuffle output channel is closed when the last shuffle completes.
 	shuffleOutputCh := make(chan shuffleOutput, 1000)
 	go func() {
-		sh := shuffler{state: ld.state, output: shuffleOutputCh}
-		sh.run()
+		shuf := shuffler{state: ld.state, output: shuffleOutputCh}
+		shuf.run()
 	}()
 
-	// Run reducers.
-	var badgerWg sync.WaitGroup
-	pendingReducers := make(chan struct{}, ld.opt.NumGoroutines)
-	for reduceJob := range shuffleOutputCh {
-		pendingReducers <- struct{}{}
-		NumReducers.Add(1)
-		NumQueuedReduceJobs.Add(-1)
-		badgerWg.Add(1)
-		go func(job shuffleOutput) {
-			reduce(job.entries, job.kv, ld.prog, badgerWg.Done)
-			<-pendingReducers
-			NumReducers.Add(-1)
-		}(reduceJob)
-	}
-	badgerWg.Wait()
+	redu := reducer{state: ld.state, input: shuffleOutputCh}
+	redu.run()
 }
 
 type sizedDir struct {

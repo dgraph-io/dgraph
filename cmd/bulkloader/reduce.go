@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
@@ -10,7 +11,29 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()) {
+type reducer struct {
+	*state
+	input <-chan shuffleOutput
+	wg    sync.WaitGroup
+}
+
+func (r *reducer) run() {
+	pending := make(chan struct{}, r.opt.NumGoroutines)
+	for reduceJob := range r.input {
+		pending <- struct{}{}
+		NumReducers.Add(1)
+		NumQueuedReduceJobs.Add(-1)
+		r.wg.Add(1)
+		go func(job shuffleOutput) {
+			r.reduce(job)
+			<-pending
+			NumReducers.Add(-1)
+		}(reduceJob)
+	}
+	r.wg.Wait()
+}
+
+func (r *reducer) reduce(job shuffleOutput) {
 
 	var currentKey []byte
 	var uids []uint64
@@ -18,7 +41,7 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()
 	var entries []*badger.Entry
 
 	outputPostingList := func() {
-		atomic.AddInt64(&prog.reduceKeyCount, 1)
+		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
 
 		// For a UID-only posting list, the badger value is a delta packed UID
 		// list. The UserMeta indicates to treat the value as a delta packed
@@ -41,8 +64,8 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()
 		pl.Reset()
 	}
 
-	for _, mapEntry := range batch {
-		atomic.AddInt64(&prog.reduceEdgeCount, 1)
+	for _, mapEntry := range job.mapEntries {
+		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 
 		if bytes.Compare(mapEntry.Key, currentKey) != 0 && currentKey != nil {
 			outputPostingList()
@@ -59,12 +82,12 @@ func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress, done func()
 	outputPostingList()
 
 	NumBadgerWrites.Add(1)
-	kv.BatchSetAsync(entries, func(err error) {
+	job.kv.BatchSetAsync(entries, func(err error) {
 		x.Check(err)
 		for _, e := range entries {
 			x.Check(e.Error)
 		}
 		NumBadgerWrites.Add(-1)
-		done()
+		r.wg.Done()
 	})
 }
