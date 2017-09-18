@@ -64,7 +64,7 @@ func (p *progress) reportOnce() {
 	case mapPhase:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
-		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec%s\n",
+		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
 			fixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
@@ -85,7 +85,7 @@ func (p *progress) reportOnce() {
 			pct = fmt.Sprintf("[%.2f%%] ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
 		}
 		fmt.Printf("REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
-			"plist_count:%s plist_speed:%s/sec%s\n",
+			"plist_count:%s plist_speed:%s/sec\n",
 			fixedDuration(now.Sub(p.start)),
 			pct,
 			niceFloat(float64(reduceEdgeCount)),

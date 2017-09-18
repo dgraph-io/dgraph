@@ -56,6 +56,7 @@ type state struct {
 type loader struct {
 	*state
 	mappers []*mapper
+	kvs     []*badger.KV
 }
 
 func newLoader(opt options) *loader {
@@ -215,7 +216,6 @@ func (ld *loader) reduceStage() {
 	}()
 
 	// Run shufflers
-	var badgers []*badger.KV
 	go func() {
 		ld.mergeMapShardsIntoReduceShards()
 		shardDirs := ld.shardDirs()
@@ -234,7 +234,7 @@ func (ld *loader) reduceStage() {
 			opt.TableLoadingMode = bo.LoadToRAM
 			kv, err := badger.NewKV(&opt)
 			x.Check(err)
-			badgers = append(badgers, kv)
+			ld.kvs = append(ld.kvs, kv)
 
 			mapFiles := filenamesInTree(shardDirs[i])
 			shuffleInputChs := make([]chan *protos.MapEntry, len(mapFiles))
@@ -269,9 +269,6 @@ func (ld *loader) reduceStage() {
 	}
 
 	badgerWg.Wait()
-	for _, kv := range badgers {
-		x.Check(kv.Close())
-	}
 }
 
 func (ld *loader) shardDirs() []string {
@@ -365,15 +362,14 @@ func treeSize(dir string) int64 {
 }
 
 func (ld *loader) writeSchema() {
-	// TODO: Schema should be written to KVs. Does a copy go to each KV? Or
-	// only on a per schema basis?
-
-	// TODO: It occurs to me that the predicate -> shard mapping might better
-	// belong in the schema store, since we already look up by schema there.
-
-	//ld.ss.write(ld.kv)
+	for _, kv := range ld.kvs {
+		ld.ss.write(kv)
+	}
 }
 
 func (ld *loader) cleanup() {
+	for _, kv := range ld.kvs {
+		x.Check(kv.Close())
+	}
 	ld.prog.endSummary()
 }
