@@ -19,23 +19,22 @@ while [[ $# -gt 1 ]]; do
 	shift
 done
 
-tmp=${tmp:-/tmp}
+tmp=${tmp:-tmp}
 
-go install github.com/dgraph-io/dgraph/cmd/bulkloader
+go install -race github.com/dgraph-io/dgraph/cmd/bulkloader
 
 function run_test {
 	[[ $# == 2 ]] || { echo "bad args"; exit 1; }
 	schema=$1
 	rdfs=$2
 
-	tmpDir=$(mktemp -p $tmp -d --suffix="_bulk_loader_speed_test")
-	echo "$schema" > $tmpDir/sch.schema
+	rm -rf $tmp
+	mkdir $tmp
+
+	echo "$schema" > $tmp/sch.schema
 
 	# Run bulk loader.
-	$GOPATH/bin/bulkloader -tmp "$tmpDir/tmp" -p "$tmpDir/p" -l "$tmpDir/LEASE" -s "$tmpDir/sch.schema" -r "$rdfs"
-
-	# Cleanup
-	rm -rf $tmpDir
+	$GOPATH/bin/bulkloader -map_shards=5 -reduce_shards=2 -shufflers=2 -mapoutput_mb=15 -tmp "$tmp/tmp" -out "$tmp/out" -l "$tmp/LEASE" -s "$tmp/sch.schema" -r "$rdfs"
 }
 
 echo "========================="
