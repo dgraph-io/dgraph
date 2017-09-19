@@ -1,0 +1,29 @@
+_:alice <friend> _:bob   .
+_:alice <friend> _:carol .
+_:alice <friend> <dave>  .
+
+_:bob   <friend> _:carol .
+
+_:carol <friend> _:bob   .
+_:carol <friend> <dave>  .
+
+_:erin  <friend> _:bob   .
+_:erin  <friend> _:carol .
+
+_:frank <friend> _:carol .
+_:frank <friend> <dave>  .
+_:frank <friend> _:erin  .
+
+_:grace <friend> _:alice .
+_:grace <friend> _:bob   .
+_:grace <friend> _:carol .
+_:grace <friend> <dave>  .
+_:grace <friend> _:erin  .
+_:grace <friend> _:frank .
+
+_:alice <name> "Alice" .
+_:bob   <name> "Bob" .
+_:carol <name> "Carol" .
+_:erin  <name> "Erin" .
+_:frank <name> "Frank" .
+_:grace <name> "Grace" .

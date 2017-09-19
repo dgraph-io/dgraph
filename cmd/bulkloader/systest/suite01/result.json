@@ -1,0 +1,10 @@
+{
+	"data": {
+		"all": [
+			{ "name": "Peter" }
+		],
+		"any": [
+			{ "name": "Peter" }
+		]
+	}
+}
