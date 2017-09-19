@@ -2504,6 +2504,12 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 					ferr = fmt.Errorf("Expected a uid to be assigned while doing upsert.")
 					continue
 				}
+
+				// Someone else might have assigned and created the uid, so we don't want to return
+				// this uid in allocatedUids.
+				if uid != sg.DestUIDs.Uids[0] {
+					continue
+				}
 				if allocatedUids == nil {
 					allocatedUids = make(map[string]uint64)
 				}
