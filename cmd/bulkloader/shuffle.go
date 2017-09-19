@@ -151,7 +151,7 @@ func (h *postingHeap) Len() int {
 	return len(h.nodes)
 }
 func (h *postingHeap) Less(i, j int) bool {
-	return bytes.Compare(h.nodes[i].mapEntry.Key, h.nodes[j].mapEntry.Key) < 0
+	return less(h.nodes[i].mapEntry, h.nodes[j].mapEntry)
 }
 func (h *postingHeap) Swap(i, j int) {
 	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]

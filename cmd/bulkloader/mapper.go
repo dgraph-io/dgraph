@@ -45,9 +45,24 @@ func newMapper(st *state) *mapper {
 	}
 }
 
+func less(lhs, rhs *protos.MapEntry) bool {
+	if keyCmp := bytes.Compare(lhs.Key, rhs.Key); keyCmp != 0 {
+		return keyCmp < 0
+	}
+	lhsUID := lhs.Uid
+	rhsUID := rhs.Uid
+	if lhs.Posting != nil {
+		lhsUID = lhs.Posting.Uid
+	}
+	if rhs.Posting != nil {
+		rhsUID = rhs.Posting.Uid
+	}
+	return lhsUID < rhsUID
+}
+
 func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, size int64, shardIdx int) {
 	sort.Slice(mapEntries, func(i, j int) bool {
-		return bytes.Compare(mapEntries[i].Key, mapEntries[j].Key) < 0
+		return less(mapEntries[i], mapEntries[j])
 	})
 
 	var n int
