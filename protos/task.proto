@@ -170,6 +170,7 @@ message Proposal {
 message KV {
 	bytes key = 1;
 	bytes val = 2;
+	bytes meta = 3;
 }
 
 message KC {

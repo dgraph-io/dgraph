@@ -398,7 +398,7 @@ func (n *node) processKeyValues(index uint64, pid uint32, kvs *protos.KeyValues)
 	// We need to update index in props map
 	n.props.IncRef(pid, index, 1)
 	ctx, _ := n.props.Ctx(pid)
-	err := processKeyValues(ctx, kvs)
+	err := populateKeyValues(ctx, kvs)
 	n.props.Done(pid, err)
 	return nil
 }

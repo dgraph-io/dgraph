@@ -1,0 +1,172 @@
+/*
+ * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package worker
+
+import (
+	"io"
+
+	"golang.org/x/net/context"
+
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/x"
+)
+
+var (
+	errEmptyPredicate = x.Errorf("Predicate not specified")
+)
+
+// size of kvs won't be too big, we would take care before proposing.
+func populateKeyValues(ctx context.Context, kvs *protos.KeyValues) error {
+	x.Printf("Writing %d keys\n", len(kvs.Kv))
+	wb := make([]*badger.Entry, 0, 1000)
+	// Badger does batching internally so no need to batch it.
+	for _, kv := range kvs.Kv {
+		wb = badger.EntriesSet(wb, kv.Key, kv.Val)
+	}
+	if err := pstore.BatchSet(wb); err != nil {
+		return err
+	}
+	for _, wbe := range wb {
+		if err := wbe.Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *grpcWorker) ReadPredicate(in *protos.Payload,
+	stream protos.Worker_ReadPredicateServer) error {
+	predicate := string(in.Data)
+	if len(predicate) == 0 {
+		return errEmptyPredicate
+	}
+	if !groups().ServesTablet(predicate) {
+		return errUnservedTablet
+	}
+
+	// TODO: Send metadata
+	sendItem := func(stream protos.Worker_ReadPredicateServer, item *badger.KVItem) error {
+		kv := &protos.KV{}
+		key := item.Key()
+		kv.Key = make([]byte, len(key))
+		copy(kv.Key, key)
+
+		err := item.Value(func(val []byte) error {
+			kv.Val = make([]byte, len(val))
+			copy(kv.Val, val)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		return stream.Send(kv)
+	}
+
+	// sends all data except schema, schema key has different prefix
+	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+	prefix := x.PredicatePrefix(predicate)
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		item := it.Item()
+		if err := sendItem(stream, item); err != nil {
+			return err
+		}
+	}
+
+	// send schema
+	var item badger.KVItem
+	if err := pstore.Get(x.SchemaKey(predicate), &item); err != nil {
+		return err
+	}
+	return sendItem(stream, &item)
+}
+
+func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
+	n := groups().Node
+	keyValues := &protos.KeyValues{}
+	proposal := &protos.Proposal{KeyValues: keyValues}
+	size := 0
+
+	for kv := range kvs {
+		if size >= 512<<20 { // 512 MB
+			if err := n.ProposeAndWait(ctx, proposal); err != nil {
+				return err
+			}
+			proposal.KeyValues.Kv = proposal.KeyValues.Kv[:0]
+			size = 0
+			continue
+		}
+
+		keyValues.Kv = append(keyValues.Kv, kv)
+		size = size + len(kv.Key) + len(kv.Val)
+	}
+	return nil
+}
+
+// Returns count which can be used to verify whether we have moved all keys
+// for a predicate or not.
+func readPredicate(ctx context.Context, predicate string) (int, error) {
+	gid := groups().BelongsTo(predicate)
+	if gid == 0 {
+		return 0, errUnservedTablet
+	}
+
+	pl := groups().Leader(gid)
+	if pl == nil {
+		return 0, x.Errorf("Unable to find a connection for groupd: %d\n", gid)
+	}
+
+	c := protos.NewWorkerClient(pl.Get())
+	in := &protos.Payload{Data: []byte(predicate)}
+	stream, err := c.ReadPredicate(ctx, in)
+	if err != nil {
+		return 0, err
+	}
+
+	// Values can be pretty big so having less buffer is safer.
+	kvs := make(chan *protos.KV, 10)
+	che := make(chan error, 1)
+	// We can use count to check the number of posting lists returned in tests.
+	count := 0
+
+	go func() {
+		// Takes care of throttling and batching.
+		che <- batchAndProposeKeyValues(ctx, kvs)
+	}()
+	for {
+		kv, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return count, err
+		}
+		count++
+
+		select {
+		case kvs <- kv:
+		case <-ctx.Done():
+			return count, ctx.Err()
+		case err := <-che:
+			return count, err
+		}
+	}
+
+	return count, nil
+}
