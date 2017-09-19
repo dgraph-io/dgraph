@@ -1,0 +1,58 @@
+{
+	alice_friend_count(func: eq(name, "Alice")) {
+		count(friend),
+	},
+	bob_friend_count(func: eq(name, "Bob")) {
+		count(friend),
+	},
+	carol_friend_count(func: eq(name, "Carol")) {
+		count(friend),
+	},
+	erin_friend_count(func: eq(name, "Erin")) {
+		count(friend),
+	},
+	frank_friend_count(func: eq(name, "Frank")) {
+		count(friend),
+	},
+	grace_friend_count(func: eq(name, "Grace")) {
+		count(friend),
+	},
+
+	has_1_friend(func: has(friend)) @filter(eq(count(friend), 1)) {
+		name
+	},
+	has_2_friends(func: has(friend)) @filter(eq(count(friend), 2)) {
+		name
+	},
+	has_3_friends(func: has(friend)) @filter(eq(count(friend), 3)) {
+		name
+	},
+	has_4_friends(func: has(friend)) @filter(eq(count(friend), 4)) {
+		name
+	},
+	has_5_friends(func: has(friend)) @filter(eq(count(friend), 5)) {
+		name
+	},
+	has_6_friends(func: has(friend)) @filter(eq(count(friend), 6)) {
+		name
+	},
+
+	has_1_rev_friend(func: has(friend)) @filter(eq(count(~friend), 1)) {
+		name
+	},
+	has_2_rev_friends(func: has(friend)) @filter(eq(count(~friend), 2)) {
+		name
+	},
+	has_3_rev_friends(func: has(friend)) @filter(eq(count(~friend), 3)) {
+		name
+	},
+	has_4_rev_friends(func: has(friend)) @filter(eq(count(~friend), 4)) {
+		name
+	},
+	has_5_rev_friends(func: has(friend)) @filter(eq(count(~friend), 5)) {
+		name
+	},
+	has_6_rev_friends(func: has(friend)) @filter(eq(count(~friend), 6)) {
+		name
+	},
+}
