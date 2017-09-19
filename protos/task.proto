@@ -164,14 +164,13 @@ message Proposal {
 	uint32 id = 1;
 	Mutations mutations = 2;
 	Member membership = 3;
-	KeyValues keyValues = 4;
-	bool refreshMembership = 5;
+	repeated KV kv = 4;
 }
 
 message KV {
 	bytes key = 1;
 	bytes val = 2;
-	bytes meta = 3;
+	bytes userMeta = 3;
 }
 
 message KC {

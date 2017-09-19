@@ -49,7 +49,7 @@ func writeBatch(ctx context.Context, pstore *badger.KV, kv chan *protos.KV, che 
 			entry := &badger.Entry{
 				Key:      i.Key,
 				Value:    i.Val,
-				UserMeta: i.Meta[0],
+				UserMeta: i.UserMeta[0],
 			}
 			wb = append(wb, entry)
 		}
@@ -314,9 +314,9 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		// We just need to stream this kv. So, we can directly use the key
 		// and val without any copying.
 		kv := &protos.KV{
-			Key:  k,
-			Val:  v,
-			Meta: []byte{iterItem.UserMeta()},
+			Key:      k,
+			Val:      v,
+			UserMeta: []byte{iterItem.UserMeta()},
 		}
 
 		count++

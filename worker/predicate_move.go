@@ -35,15 +35,15 @@ var (
 )
 
 // size of kvs won't be too big, we would take care before proposing.
-func populateKeyValues(ctx context.Context, kvs *protos.KeyValues) error {
-	x.Printf("Writing %d keys\n", len(kvs.Kv))
+func populateKeyValues(ctx context.Context, kvs []*protos.KV) error {
+	x.Printf("Writing %d keys\n", len(kvs))
 	wb := make([]*badger.Entry, 0, 1000)
 	// Badger does batching internally so no need to batch it.
-	for _, kv := range kvs.Kv {
+	for _, kv := range kvs {
 		entry := &badger.Entry{
 			Key:      kv.Key,
 			Value:    kv.Val,
-			UserMeta: kv.Meta[0],
+			UserMeta: kv.UserMeta[0],
 		}
 		wb = append(wb, entry)
 	}
@@ -85,7 +85,7 @@ func movePredicate(ctx context.Context, predicate string, gid uint32) error {
 		key := item.Key()
 		kv.Key = make([]byte, len(key))
 		copy(kv.Key, key)
-		kv.Meta = []byte{item.UserMeta()}
+		kv.UserMeta = []byte{item.UserMeta()}
 
 		err := item.Value(func(val []byte) error {
 			kv.Val = make([]byte, len(val))
@@ -136,21 +136,20 @@ func movePredicate(ctx context.Context, predicate string, gid uint32) error {
 
 func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 	n := groups().Node
-	keyValues := &protos.KeyValues{}
-	proposal := &protos.Proposal{KeyValues: keyValues}
+	proposal := &protos.Proposal{}
 	size := 0
 
 	for kv := range kvs {
-		if size >= 512<<20 { // 512 MB
+		if size >= 32<<20 { // 32 MB
 			if err := n.ProposeAndWait(ctx, proposal); err != nil {
 				return err
 			}
-			proposal.KeyValues.Kv = proposal.KeyValues.Kv[:0]
+			proposal.Kv = proposal.Kv[:0]
 			size = 0
 			continue
 		}
 
-		keyValues.Kv = append(keyValues.Kv, kv)
+		proposal.Kv = append(proposal.Kv, kv)
 		size = size + len(kv.Key) + len(kv.Val)
 	}
 	return nil

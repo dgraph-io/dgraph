@@ -19,23 +19,26 @@ package main
 
 /*
 Steps to move predicate p from g1 to g2.
-1. Update group zero config to block mutations on predicate p.
+Design change:
+• If you’re not the leader, don’t talk to zero.
+• Let the leader send you updates via proposals.
 
-2. Propose RefreshMembership on g1 so all nodes refresh their config from group zero.
-Useful if some nodes get paritioned away from group zero.
-All the nodes would get update from group zero and they can start rejecting mutations, in
-case they don't get update from group zero the mutation would reach g1 and it would reject it.
+Move:
+• Dgraph zero would decide that G1 should not serve P, G2 should serve it.
+• Zero would propose that G1 is read-only for predicate P. This would propagate to the cluster.
 
-3. Initiate transfer from g1 to g2.
-4. In case of error, unblock mutations, propose refreshmembership on g1.
-5. Else, update config that predicate p would be served by g2.
-Depending on whether the nodes get the new configuration from group zero, requests might come to
-g1 or g2. Writes would be rejected, reads can be done from any group and they should give same results.
+• Zero would tell G1 to move P to G2 (Endpoint: Zero → G1)
 
-6. Propose refreshmembership on g1, then g1 would know that it doesn't serve that predicate anymore.
-The above is necessary to block reads on g1 followers which are paritioned away from group zero,
-now due to linearizability they would get refreshmembership and would throw error if they would crash
-if they can't reach group zero, or else refresh and reject the read request.
+This would trigger G1 to get latest state. Wait for it.
+• G1 would propose this state to it’s followers.
+• G1 after proposing would do a call to G2, and start streaming.
+• Before G2 starts accepting, it should delete any current keys for P.
+• It should tell Zero whether it succeeded or failed. (Endpoint: G1 → Zero)
 
-7. Unblock mutations on predicate p.
+• Zero would then propose that G2 is serving P (or G1 is, if fail above) P would RW.
+• G1 gets this, G2 gets this.
+• Both propagate this to their followers.
+
+Cleanup:
+• The iterator for tablet update can do the cleanup, if it’s not serving the predicate.
 */

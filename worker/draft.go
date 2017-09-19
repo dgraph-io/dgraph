@@ -249,7 +249,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Waiting for the proposal: membership update.")
 		}
-	} else if proposal.KeyValues != nil {
+	} else if len(proposal.Kv) > 0 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Waiting for the proposal: key-values.")
 		}
@@ -386,15 +386,15 @@ func (n *node) processApplyCh() {
 			n.sch.schedule(proposal, e.Index)
 		} else if proposal.Membership != nil {
 			x.Fatalf("Dgraph does not handle membership proposals anymore.")
-		} else if proposal.KeyValues != nil {
-			go n.processKeyValues(e.Index, proposal.Id, proposal.KeyValues)
+		} else if len(proposal.Kv) > 0 {
+			go n.processKeyValues(e.Index, proposal.Id, proposal.Kv)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
 	}
 }
 
-func (n *node) processKeyValues(index uint64, pid uint32, kvs *protos.KeyValues) error {
+func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
 	// We need to update index in props map
 	n.props.IncRef(pid, index, 1)
 	ctx, _ := n.props.Ctx(pid)
