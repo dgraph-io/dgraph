@@ -1341,7 +1341,7 @@ func TestGroupByMulti(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"@groupby":[{"count":1,"friend":"0x18","name":"Andrea"},{"count":1,"friend":"0x1","name":"Rick Grimes"}]}]}]}}`,
+		`{"data": {"me":[{"friend":[{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}]}]}}`,
 		js)
 }
 

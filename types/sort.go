@@ -111,7 +111,7 @@ func Less(a, b Val) (bool, error) {
 	}
 	typ := a.Tid
 	switch typ {
-	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+	case DateTimeID, UidID, IntID, FloatID, StringID, DefaultID:
 		// Don't do anything, we can sort values of this type.
 	default:
 		return false, x.Errorf("Compare not supported for type: %v", a.Tid)
