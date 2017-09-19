@@ -1,5 +1,0 @@
-{
-	q(func: allofterms(name, "Peter")) {
-		name
-	}
-}

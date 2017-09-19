@@ -1,5 +1,0 @@
-{
-	q(func: anyofterms(name, "Peter")) {
-		name
-	}
-}

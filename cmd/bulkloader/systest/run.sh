@@ -37,17 +37,14 @@ for suite in $script_dir/suite*; do
 	sleep 5
 
 	popd >/dev/null # out of tmp
-	for test_case in $suite/test*; do
-		echo Running test case: $(basename $test_case)
-		result=$(curl --silent localhost:8080/query -XPOST -d @$test_case/query.json)
-		if ! $(jq --argfile a <(echo $result) --argfile b $test_case/result.json -n 'def post_recurse(f): def r: (f | select(. != null) | r), .; r; def post_recurse: post_recurse(.[]?); ($a | (post_recurse | arrays) |= sort) as $a | ($b | (post_recurse | arrays) |= sort) as $b | $a == $b')
-		then
-			echo "Actual result doesn't match expected result:"
-			echo "Actual: $result"
-			echo "Expected: $(cat $test_case/result.json)"
-			fail=true
-		fi
-	done
+	result=$(curl --silent localhost:8080/query -XPOST -d @$suite/query.json)
+	if ! $(jq --argfile a <(echo $result) --argfile b $suite/result.json -n 'def post_recurse(f): def r: (f | select(. != null) | r), .; r; def post_recurse: post_recurse(.[]?); ($a | (post_recurse | arrays) |= sort) as $a | ($b | (post_recurse | arrays) |= sort) as $b | $a == $b')
+	then
+		echo "Actual result doesn't match expected result:"
+		echo "Actual: $result"
+		echo "Expected: $(cat $suite/result.json)"
+		fail=true
+	fi
 
 	kill $dgPid
 	kill $dgzPid
