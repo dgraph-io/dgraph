@@ -191,6 +191,7 @@ func (w *grpcWorker) MovePredicate(stream protos.Worker_MovePredicateServer) err
 			return err
 		}
 	}
-
-	return nil
+	close(kvs)
+	err := <-che
+	return err
 }

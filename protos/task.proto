@@ -165,6 +165,7 @@ message Proposal {
 	Mutations mutations = 2;
 	Member membership = 3;
 	KeyValues keyValues = 4;
+	bool refreshMembership = 5;
 }
 
 message KV {
