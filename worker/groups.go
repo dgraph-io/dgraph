@@ -57,7 +57,7 @@ type groupi struct {
 	state     *protos.MembershipState
 	Node      *node
 	gid       uint32
-	tablets   map[string]uint32
+	tablets   map[string]*protos.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 }
 
@@ -187,7 +187,7 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 	defer g.Unlock()
 
 	g.state = state
-	g.tablets = make(map[string]uint32)
+	g.tablets = make(map[string]*protos.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if Config.RaftId == member.Id {
@@ -198,7 +198,7 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 			}
 		}
 		for _, tablet := range group.Tablets {
-			g.tablets[tablet.Predicate] = tablet.GroupId
+			g.tablets[tablet.Predicate] = tablet
 		}
 	}
 	for _, member := range g.state.Zeros {
@@ -216,19 +216,21 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 
 func (g *groupi) BelongsTo(key string) uint32 {
 	g.RLock()
-	gid := g.tablets[key]
+	tablet, ok := g.tablets[key]
 	g.RUnlock()
 
-	if gid > 0 {
-		return gid
+	if ok {
+		return tablet.GroupId
 	}
 	if g.ServesTablet(key) {
 		return g.groupId()
 	}
 	g.RLock()
-	gid = g.tablets[key]
-	g.RUnlock()
-	return gid
+	defer g.RUnlock()
+	if tablet, ok := g.tablets[key]; ok {
+		return tablet.GroupId
+	}
+	return 0
 }
 
 func (g *groupi) ServesTablet(key string) bool {
@@ -236,10 +238,10 @@ func (g *groupi) ServesTablet(key string) bool {
 		return true
 	}
 	g.RLock()
-	gid := g.tablets[key]
+	tablet, ok := g.tablets[key]
 	g.RUnlock()
-	if gid > 0 {
-		return gid == g.groupId()
+	if ok {
+		return tablet.GroupId == g.groupId()
 	}
 
 	fmt.Printf("Asking if I serve tablet: %v\n", key)
@@ -251,14 +253,14 @@ func (g *groupi) ServesTablet(key string) bool {
 	}
 	zc := protos.NewZeroClient(pl.Get())
 
-	tablet := &protos.Tablet{GroupId: g.groupId(), Predicate: key}
+	tablet = &protos.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		x.Printf("Error while ShouldServe grpc call %v", err)
 		return false
 	}
 	g.Lock()
-	g.tablets[key] = out.GroupId
+	g.tablets[key] = out
 	g.Unlock()
 	return out.GroupId == g.groupId()
 }

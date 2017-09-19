@@ -35,9 +35,12 @@ This would trigger G1 to get latest state. Wait for it.
 • Before G2 starts accepting, it should delete any current keys for P.
 • It should tell Zero whether it succeeded or failed. (Endpoint: G1 → Zero)
 
-• Zero would then propose that G2 is serving P (or G1 is, if fail above) P would RW.
+• Zero would then propose that G2 is serving P (or G1 is, if fail above) P would R.
 • G1 gets this, G2 gets this.
 • Both propagate this to their followers.
+
+Ask G1 whether it got and proposed latest state, if yes convert P to RW in G2.
+This would avoid the issue if there in delay in apply of membership state.
 
 Cleanup:
 • The iterator for tablet update can do the cleanup, if it’s not serving the predicate.
