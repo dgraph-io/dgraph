@@ -40,11 +40,9 @@ for suite in $script_dir/suite*; do
 	result=$(curl --silent localhost:8080/query -XPOST -d @$suite/query.json)
 	if ! $(jq --argfile a <(echo $result) --argfile b $suite/result.json -n 'def post_recurse(f): def r: (f | select(. != null) | r), .; r; def post_recurse: post_recurse(.[]?); ($a | (post_recurse | arrays) |= sort) as $a | ($b | (post_recurse | arrays) |= sort) as $b | $a == $b')
 	then
-		niceGot=$(echo $result | jq '.')
-		niceWant=$(cat $suite/result.json | jq '.')
 		echo "Actual result doesn't match expected result:"
-		echo "Actual: $niceGot"
-		echo "Expected: $niceWant"
+		echo "Actual: $result"
+		echo "Expected: $(cat $suite/result.json)"
 		fail=true
 	fi
 
