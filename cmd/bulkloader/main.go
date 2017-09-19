@@ -101,6 +101,7 @@ func main() {
 	loader := newLoader(opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()
+		mergeMapShardsIntoReduceShards(opt)
 	}
 	loader.reduceStage()
 	loader.writeSchema()

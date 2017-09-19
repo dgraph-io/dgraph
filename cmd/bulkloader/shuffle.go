@@ -5,13 +5,9 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"log"
 	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -27,8 +23,7 @@ type shuffler struct {
 }
 
 func (s *shuffler) run() {
-	s.mergeMapShardsIntoReduceShards()
-	shardDirs := s.shardDirs()
+	shardDirs := shardDirs(s.opt.TmpDir)
 	x.AssertTrue(len(shardDirs) == s.opt.ReduceShards)
 	x.AssertTrue(len(s.opt.shardOutputDirs) == s.opt.ReduceShards)
 
@@ -95,85 +90,6 @@ func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 		mapEntryCh <- me
 	}
 	close(mapEntryCh)
-}
-
-func (s *shuffler) mergeMapShardsIntoReduceShards() {
-	mapShards := s.shardDirs()
-
-	var reduceShards []string
-	for i := 0; i < s.opt.ReduceShards; i++ {
-		shardDir := filepath.Join(s.opt.TmpDir, fmt.Sprintf("shard_%d", i))
-		x.Check(os.MkdirAll(shardDir, 0755))
-		reduceShards = append(reduceShards, shardDir)
-	}
-
-	// Heuristic: put the largest map shard into the smallest reduce shard
-	// until there are no more map shards left. Should be a good approximation.
-	for _, shard := range mapShards {
-		sortBySize(reduceShards)
-		x.Check(os.Rename(shard, filepath.Join(
-			reduceShards[len(reduceShards)-1], filepath.Base(shard))))
-	}
-}
-
-func (s *shuffler) shardDirs() []string {
-	dir, err := os.Open(s.opt.TmpDir)
-	x.Check(err)
-	shards, err := dir.Readdirnames(0)
-	x.Check(err)
-	dir.Close()
-	for i, shard := range shards {
-		shards[i] = filepath.Join(s.opt.TmpDir, shard)
-	}
-
-	// Allow largest shards to be shuffled first.
-	sortBySize(shards)
-	return shards
-}
-
-func filenamesInTree(dir string) []string {
-	var fnames []string
-	x.Check(filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if strings.HasSuffix(path, ".map") {
-			fnames = append(fnames, path)
-		}
-		return nil
-	}))
-	return fnames
-}
-
-type sizedDir struct {
-	dir string
-	sz  int64
-}
-
-// sortBySize sorts the input directories by size of their content (biggest to smallest).
-func sortBySize(dirs []string) {
-	sizedDirs := make([]sizedDir, len(dirs))
-	for i, dir := range dirs {
-		sizedDirs[i] = sizedDir{dir: dir, sz: treeSize(dir)}
-	}
-	sort.SliceStable(sizedDirs, func(i, j int) bool {
-		return sizedDirs[i].sz > sizedDirs[j].sz
-	})
-	for i := range sizedDirs {
-		dirs[i] = sizedDirs[i].dir
-	}
-}
-
-func treeSize(dir string) int64 {
-	var sum int64
-	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		sum += info.Size()
-		return nil
-	}))
-	return sum
 }
 
 func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *countIndexer) {
