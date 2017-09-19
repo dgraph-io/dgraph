@@ -179,8 +179,7 @@ func (n *Node) Send(m raftpb.Message) {
 	case n.messages <- sendmsg{to: m.To, data: data}:
 		// pass
 	default:
-		// TODO: It's bad to fail like this.
-		x.Fatalf("Unable to push messages to channel in send")
+		// ignore
 	}
 }
 
