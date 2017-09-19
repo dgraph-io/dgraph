@@ -553,6 +553,13 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	if err := n.WaitLinearizableRead(ctx); err != nil {
 		return &emptyResult, err
 	}
+	// If a group stops serving tablet and it gets partitioned away from group zero, then it
+	// wouldn't know that this group is no longer serving this predicate.
+	// There's no issue if a we are serving a particular tablet and we get paritioned away from
+	// group zero as long as it's not removed.
+	if !groups().ServesTablet(q.Attr) {
+		return &emptyResult, errUnservedTablet
+	}
 	return helpProcessTask(ctx, q, gid)
 }
 

@@ -156,15 +156,21 @@ message Mutations {
 	Query upsert = 4;
 }
 
+message KeyValues {
+  repeated KV kv = 1;
+}
+
 message Proposal {
 	uint32 id = 1;
 	Mutations mutations = 2;
 	Member membership = 3;
+	repeated KV kv = 4;
 }
 
 message KV {
 	bytes key = 1;
 	bytes val = 2;
+	bytes userMeta = 3;
 }
 
 message KC {

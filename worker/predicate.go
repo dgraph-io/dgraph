@@ -46,7 +46,12 @@ func writeBatch(ctx context.Context, pstore *badger.KV, kv chan *protos.KV, che 
 		if len(i.Val) == 0 {
 			wb = badger.EntriesDelete(wb, i.Key)
 		} else {
-			wb = badger.EntriesSet(wb, i.Key, i.Val)
+			entry := &badger.Entry{
+				Key:      i.Key,
+				Value:    i.Val,
+				UserMeta: i.UserMeta[0],
+			}
+			wb = append(wb, entry)
 		}
 		batchSize += len(i.Key) + len(i.Val)
 		// We write in batches of size 32MB.
@@ -309,8 +314,9 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		// We just need to stream this kv. So, we can directly use the key
 		// and val without any copying.
 		kv := &protos.KV{
-			Key: k,
-			Val: v,
+			Key:      k,
+			Val:      v,
+			UserMeta: []byte{iterItem.UserMeta()},
 		}
 
 		count++
