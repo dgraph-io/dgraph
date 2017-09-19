@@ -18,7 +18,9 @@
 package worker
 
 import (
+	"fmt"
 	"io"
+	"strconv"
 
 	"golang.org/x/net/context"
 
@@ -29,6 +31,7 @@ import (
 
 var (
 	errEmptyPredicate = x.Errorf("Predicate not specified")
+	errNotLeader      = x.Errorf("Server is not leader of this group")
 )
 
 // size of kvs won't be too big, we would take care before proposing.
@@ -37,7 +40,12 @@ func populateKeyValues(ctx context.Context, kvs *protos.KeyValues) error {
 	wb := make([]*badger.Entry, 0, 1000)
 	// Badger does batching internally so no need to batch it.
 	for _, kv := range kvs.Kv {
-		wb = badger.EntriesSet(wb, kv.Key, kv.Val)
+		entry := &badger.Entry{
+			Key:      kv.Key,
+			Value:    kv.Val,
+			UserMeta: kv.Meta[0],
+		}
+		wb = append(wb, entry)
 	}
 	if err := pstore.BatchSet(wb); err != nil {
 		return err
@@ -50,22 +58,34 @@ func populateKeyValues(ctx context.Context, kvs *protos.KeyValues) error {
 	return nil
 }
 
-func (w *grpcWorker) ReadPredicate(in *protos.Payload,
-	stream protos.Worker_ReadPredicateServer) error {
-	predicate := string(in.Data)
+func movePredicate(ctx context.Context, predicate string, gid uint32) error {
 	if len(predicate) == 0 {
 		return errEmptyPredicate
 	}
 	if !groups().ServesTablet(predicate) {
 		return errUnservedTablet
 	}
+	if groups().Node.AmLeader() {
+		return errNotLeader
+	}
 
-	// TODO: Send metadata
-	sendItem := func(stream protos.Worker_ReadPredicateServer, item *badger.KVItem) error {
+	pl := groups().Leader(gid)
+	if pl == nil {
+		return x.Errorf("Unable to find a connection for groupd: %d\n", gid)
+	}
+	c := protos.NewWorkerClient(pl.Get())
+	stream, err := c.MovePredicate(ctx)
+	if err != nil {
+		return err
+	}
+
+	count := 0
+	sendItem := func(stream protos.Worker_MovePredicateClient, item *badger.KVItem) error {
 		kv := &protos.KV{}
 		key := item.Key()
 		kv.Key = make([]byte, len(key))
 		copy(kv.Key, key)
+		kv.Meta = []byte{item.UserMeta()}
 
 		err := item.Value(func(val []byte) error {
 			kv.Val = make([]byte, len(val))
@@ -84,6 +104,7 @@ func (w *grpcWorker) ReadPredicate(in *protos.Payload,
 	prefix := x.PredicatePrefix(predicate)
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		item := it.Item()
+		count++
 		if err := sendItem(stream, item); err != nil {
 			return err
 		}
@@ -94,7 +115,23 @@ func (w *grpcWorker) ReadPredicate(in *protos.Payload,
 	if err := pstore.Get(x.SchemaKey(predicate), &item); err != nil {
 		return err
 	}
-	return sendItem(stream, &item)
+	if err := sendItem(stream, &item); err != nil {
+		return err
+	}
+	count++
+
+	payload, err := stream.CloseAndRecv()
+	if err != nil {
+		return err
+	}
+	recvCount, err := strconv.Atoi(string(payload.Data))
+	if err != nil {
+		return err
+	}
+	if recvCount != count {
+		return x.Errorf("Sent count %d doesn't match with received %d", count, recvCount)
+	}
+	return nil
 }
 
 func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
@@ -121,29 +158,14 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 
 // Returns count which can be used to verify whether we have moved all keys
 // for a predicate or not.
-func readPredicate(ctx context.Context, predicate string) (int, error) {
-	gid := groups().BelongsTo(predicate)
-	if gid == 0 {
-		return 0, errUnservedTablet
-	}
-
-	pl := groups().Leader(gid)
-	if pl == nil {
-		return 0, x.Errorf("Unable to find a connection for groupd: %d\n", gid)
-	}
-
-	c := protos.NewWorkerClient(pl.Get())
-	in := &protos.Payload{Data: []byte(predicate)}
-	stream, err := c.ReadPredicate(ctx, in)
-	if err != nil {
-		return 0, err
-	}
-
+func (w *grpcWorker) MovePredicate(stream protos.Worker_MovePredicateServer) error {
 	// Values can be pretty big so having less buffer is safer.
 	kvs := make(chan *protos.KV, 10)
 	che := make(chan error, 1)
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
+	ctx := stream.Context()
+	payload := &protos.Payload{}
 
 	go func() {
 		// Takes care of throttling and batching.
@@ -152,21 +174,23 @@ func readPredicate(ctx context.Context, predicate string) (int, error) {
 	for {
 		kv, err := stream.Recv()
 		if err == io.EOF {
+			payload.Data = []byte(fmt.Sprintf("%d", count))
+			stream.SendAndClose(payload)
 			break
 		}
 		if err != nil {
-			return count, err
+			return err
 		}
 		count++
 
 		select {
 		case kvs <- kv:
 		case <-ctx.Done():
-			return count, ctx.Err()
+			return ctx.Err()
 		case err := <-che:
-			return count, err
+			return err
 		}
 	}
 
-	return count, nil
+	return nil
 }
