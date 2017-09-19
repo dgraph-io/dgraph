@@ -1,29 +1,29 @@
-<alice> <friend> <bob>   .
-<alice> <friend> <carol> .
-<alice> <friend> <dave>  .
+_:alice <friend> _:bob   .
+_:alice <friend> _:carol .
+_:alice <friend> <dave>  .
 
-<bob>   <friend> <carol> .
+_:bob   <friend> _:carol .
 
-<carol> <friend> <bob>   .
-<carol> <friend> <dave>  .
+_:carol <friend> _:bob   .
+_:carol <friend> <dave>  .
 
-<erin>  <friend> <bob>   .
-<erin>  <friend> <carol> .
+_:erin  <friend> _:bob   .
+_:erin  <friend> _:carol .
 
-<frank> <friend> <carol> .
-<frank> <friend> <dave>  .
-<frank> <friend> <erin>  .
+_:frank <friend> _:carol .
+_:frank <friend> <dave>  .
+_:frank <friend> _:erin  .
 
-<grace> <friend> <alice> .
-<grace> <friend> <bob>   .
-<grace> <friend> <carol> .
-<grace> <friend> <dave>  .
-<grace> <friend> <erin>  .
-<grace> <friend> <frank> .
+_:grace <friend> _:alice .
+_:grace <friend> _:bob   .
+_:grace <friend> _:carol .
+_:grace <friend> <dave>  .
+_:grace <friend> _:erin  .
+_:grace <friend> _:frank .
 
-<alice> <name> "Alice" .
-<bob>   <name> "Bob" .
-<carol> <name> "Carol" .
-<erin>  <name> "Erin" .
-<frank> <name> "Frank" .
-<grace> <name> "Grace" .
+_:alice <name> "Alice" .
+_:bob   <name> "Bob" .
+_:carol <name> "Carol" .
+_:erin  <name> "Erin" .
+_:frank <name> "Frank" .
+_:grace <name> "Grace" .
