@@ -1,7 +1,7 @@
 {
 	"data": {
 		"alice_friend_count": [
-			{ "count(friend)": 3 }
+			{ "count(friend)": 2 }
 		],
 		"bob_friend_count": [
 			{ "count(friend)": 1 }
