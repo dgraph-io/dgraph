@@ -1,0 +1,29 @@
+<alice> <friend> <bob>   .
+<alice> <friend> <carol> .
+<alice> <friend> <dave>  .
+
+<bob>   <friend> <carol> .
+
+<carol> <friend> <bob>   .
+<carol> <friend> <dave>  .
+
+<erin>  <friend> <bob>   .
+<erin>  <friend> <carol> .
+
+<frank> <friend> <carol> .
+<frank> <friend> <dave>  .
+<frank> <friend> <erin>  .
+
+<grace> <friend> <alice> .
+<grace> <friend> <bob>   .
+<grace> <friend> <carol> .
+<grace> <friend> <dave>  .
+<grace> <friend> <erin>  .
+<grace> <friend> <frank> .
+
+<alice> <name> "Alice" .
+<bob>   <name> "Bob" .
+<carol> <name> "Carol" .
+<erin>  <name> "Erin" .
+<frank> <name> "Frank" .
+<grace> <name> "Grace" .
