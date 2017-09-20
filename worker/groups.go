@@ -96,7 +96,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	if Config.InMemoryComm {
 		gr.state = &protos.MembershipState{}
 		atomic.StoreUint32(&gr.gid, 1)
-
+		inMemoryTablet = &protos.Tablet{GroupId: gr.groupId()}
 	} else {
 		x.AssertTruef(len(Config.PeerAddr) > 0, "Providing dgraphzero address is mandatory.")
 		x.AssertTruef(Config.PeerAddr != Config.MyAddr,
@@ -185,8 +185,7 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
-	// Skip if we get older update, counter rolls back to zero on integer overflow.
-	if g.state != nil && g.state.Counter >= state.Counter && state.Counter != 0 {
+	if g.state != nil && g.state.Counter >= state.Counter {
 		return
 	}
 
@@ -218,35 +217,47 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 	return g.gid == gid
 }
 
-func (g *groupi) BelongsTo(key string) (uint32, bool) {
+func (g *groupi) BelongsTo(key string) uint32 {
 	if Config.InMemoryComm {
-		return g.groupId(), true
+		return g.groupId()
 	}
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
 
 	if ok {
-		return tablet.GroupId, !tablet.ReadOnly
+		return tablet.GroupId
 	}
 	g.ServesTablet(key)
 	g.RLock()
 	defer g.RUnlock()
 	if tablet, ok := g.tablets[key]; ok {
-		return tablet.GroupId, !tablet.ReadOnly
+		return tablet.GroupId
 	}
-	return 0, false
+	return 0
 }
 
+var inMemoryTablet *protos.Tablet
+
 func (g *groupi) ServesTablet(key string) bool {
-	if Config.InMemoryComm {
+	tablet := g.tablet(key)
+	if tablet != nil && tablet.GroupId == groups().groupId() {
 		return true
+	}
+	return false
+}
+
+// Do not modify the returned tablet
+func (g *groupi) tablet(key string) *protos.Tablet {
+	// TODO: Remove all this later, create a membership state and apply it
+	if Config.InMemoryComm {
+		return inMemoryTablet
 	}
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
 	if ok {
-		return tablet.GroupId == g.groupId()
+		return tablet
 	}
 
 	fmt.Printf("Asking if I serve tablet: %v\n", key)
@@ -254,7 +265,7 @@ func (g *groupi) ServesTablet(key string) bool {
 	// Check with dgraphzero if we can serve it.
 	pl := g.AnyServer(0)
 	if pl == nil {
-		return false
+		return nil
 	}
 	zc := protos.NewZeroClient(pl.Get())
 
@@ -262,12 +273,12 @@ func (g *groupi) ServesTablet(key string) bool {
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		x.Printf("Error while ShouldServe grpc call %v", err)
-		return false
+		return nil
 	}
 	g.Lock()
 	g.tablets[key] = out
 	g.Unlock()
-	return out.GroupId == g.groupId()
+	return out
 }
 
 func (g *groupi) HasMeInState() bool {

@@ -135,7 +135,7 @@ func processWithBackupRequest(
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	attr := q.Attr
-	gid, _ := groups().BelongsTo(attr)
+	gid := groups().BelongsTo(attr)
 	if gid == 0 {
 		return &protos.Result{}, errUnservedTablet
 	}
@@ -1133,7 +1133,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 		return &emptyResult, ctx.Err()
 	}
 
-	gid, _ := groups().BelongsTo(q.Attr)
+	gid := groups().BelongsTo(q.Attr)
 	var numUids int
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)

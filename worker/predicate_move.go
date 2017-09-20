@@ -198,8 +198,9 @@ func (w *grpcWorker) ReceivePredicate(stream protos.Worker_ReceivePredicateServe
 func (w *grpcWorker) MovePredicate(ctx context.Context,
 	in *protos.MovePredicatePayload) (*protos.Payload, error) {
 	if groups().gid != in.SourceGroupId {
-		return &emptyPayload, x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
-			in.SourceGroupId, groups().gid)
+		return &emptyPayload,
+			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
+				in.SourceGroupId, groups().gid)
 	}
 	if len(in.Predicate) == 0 {
 		return &emptyPayload, errEmptyPredicate

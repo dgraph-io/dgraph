@@ -377,10 +377,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 // taking into account the op(operation) and the attribute.
 func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutations) error {
 	for _, edge := range m.Edges {
-		gid, canWrite := groups().BelongsTo(edge.Attr)
-		if !canWrite {
-			return errPredicateMoving
-		}
+		gid := groups().BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
 		if mu == nil {
 			mu = &protos.Mutations{GroupId: gid}
@@ -389,10 +386,7 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		mu.Edges = append(mu.Edges, edge)
 	}
 	for _, schema := range m.Schema {
-		gid, canWrite := groups().BelongsTo(schema.Predicate)
-		if !canWrite {
-			return errPredicateMoving
-		}
+		gid := groups().BelongsTo(schema.Predicate)
 		mu := mutationMap[gid]
 		if mu == nil {
 			mu = &protos.Mutations{GroupId: gid}
@@ -402,10 +396,7 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 	}
 
 	if m.Upsert != nil {
-		gid, canWrite := groups().BelongsTo(m.Upsert.Attr)
-		if !canWrite {
-			return errPredicateMoving
-		}
+		gid := groups().BelongsTo(m.Upsert.Attr)
 		mu := mutationMap[gid]
 		// There should also be a corresponding mutation for this attribute when doing upsert.
 		x.AssertTrue(mu != nil)

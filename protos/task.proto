@@ -128,8 +128,8 @@ message Tablet {
   uint32 group_id  = 1; // Served by which group.
   string predicate = 2;
 	bool no_update   = 3; // Used to avoid race condition in shouldServe endpoint.
-  int64 size       = 6;
-  bool read_only   = 7;  // Used to block mutations on this predicate.
+  bool read_only   = 4;  // Used to block mutations on this predicate.
+  int64 size       = 7;
 }
 
 message DirectedEdge {

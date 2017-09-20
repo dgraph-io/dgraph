@@ -191,7 +191,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	defer n.server.Unlock()
 
 	state := n.server.state
-	state.Counter++
+	state.Counter = e.Index
 	if p.Member != nil {
 		if p.Member.GroupId == 0 {
 			return 0, errInvalidProposal
@@ -219,7 +219,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		_, has := group.Tablets[p.Tablet.Predicate]
 		if has && p.Tablet.NoUpdate {
-			// ShouldServeTablet was called at same time by different groups
+			return 0, errInvalidProposal
 		} else {
 			group.Tablets[p.Tablet.Predicate] = p.Tablet
 		}

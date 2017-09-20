@@ -209,7 +209,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
-			if _, canWrite := groups().BelongsTo(edge.Attr); !canWrite {
+			if tablet := groups().tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
 			}
 			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
@@ -219,7 +219,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 			}
 		}
 		for _, schema := range proposal.Mutations.Schema {
-			if _, canWrite := groups().BelongsTo(schema.Predicate); !canWrite {
+			if tablet := groups().tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
 			}
 			if err := checkSchema(schema); err != nil {
@@ -260,20 +260,14 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Waiting for the proposal: mutations.")
 		}
-	} else if proposal.Membership != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal: membership update.")
-		}
 	} else if len(proposal.Kv) > 0 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Waiting for the proposal: key-values.")
 		}
-	} else if proposal.State != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal: MembershipState.")
-		}
 	} else {
-		log.Fatalf("Unknown proposal")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal: %v.", proposal)
+		}
 	}
 
 	err = <-che
@@ -296,7 +290,7 @@ func (n *node) handleUpsert(task *task) (bool, error) {
 		return true, nil
 	}
 
-	gid, _ := groups().BelongsTo(attr)
+	gid := groups().BelongsTo(attr)
 	res, err := n.processUpsertTask(n.ctx, task, gid)
 	if err != nil {
 		return false, err

@@ -80,14 +80,16 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 	if group == nil {
 		return nil
 	}
+	var healthyPool *conn.Pool
 	for _, m := range group.Members {
-		if m.Leader {
-			if pl, err := conn.Get().Get(m.Addr); err == nil {
+		if pl, err := conn.Get().Get(m.Addr); err == nil {
+			healthyPool = pl
+			if m.Leader {
 				return pl
 			}
 		}
 	}
-	return nil
+	return healthyPool
 }
 
 func (s *Server) SetMembershipState(state *protos.MembershipState) {
