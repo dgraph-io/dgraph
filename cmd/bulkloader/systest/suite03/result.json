@@ -2,7 +2,17 @@
 	"data": {
 		"cooks": [
 			{ "name": "Gordon Ramsay" },
-			{ "name": ["Walter White", "Heisenberg"] }
+			{ "name": ["Heisenberg", "Walter White"] }
+		],
+		"occupation_count": [
+			{
+				"name": "Gordon Ramsay",
+				"count(occupation)": 2
+			},
+			{
+				"name": ["Walter White", "Heisenberg"],
+				"count(occupation)": 2
+			}
 		]
 	}
 }

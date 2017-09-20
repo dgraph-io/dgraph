@@ -2,4 +2,8 @@
 	cooks(func: anyofterms(occupation, "Cook")) {
 		name
 	}
+	occupation_count(func: has(occupation)) {
+		name,
+		count(occupation)
+	}
 }
