@@ -236,7 +236,13 @@ Output
 
 ## (Optional) Step 4: Load a bigger dataset
 
-Step 3 showed how to add data with a small mutation.  Bigger datasets can be loaded with dgraphloader.
+Step 3 showed how to add data with a small mutation.  Bigger datasets can be loaded with
+
+* dgraphloader if you already have some data or
+* using the [bulkloader]({{< ref "deploy/index.md#bulkloader" >}}) which is significantly faster than
+  dgraphloader but can only be used for initial seeding of data into Dgraph.
+
+We will use `dgraphloader` below.
 
 ### Download dataset
 Download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Put it directory`~/dgraph`, creating the directory if necessary using `mkdir ~/dgraph`.
