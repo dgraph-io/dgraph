@@ -205,16 +205,18 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	m.ss.validateType(de, nq.ObjectValue == nil)
 
 	p := posting.NewPosting(de)
+	sch := m.ss.getSchema(nq.GetPredicate())
 	if nq.GetObjectValue() != nil {
-		if lang := de.GetLang(); lang == "" {
-			p.Uid = math.MaxUint64
-		} else {
+		if lang := de.GetLang(); len(lang) > 0 {
 			p.Uid = farm.Fingerprint64([]byte(lang))
+		} else if sch.List {
+			p.Uid = farm.Fingerprint64(de.Value)
+		} else {
+			p.Uid = math.MaxUint64
 		}
 	}
 
 	// Early exit for no reverse edge.
-	sch := m.ss.getSchema(nq.GetPredicate())
 	if sch.GetDirective() != protos.SchemaUpdate_REVERSE {
 		return p, nil
 	}
