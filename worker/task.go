@@ -860,29 +860,44 @@ func filterGeoFunction(arg funcArgs) {
 func filterStringFunction(arg funcArgs) {
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
-	var values []types.Val
+	var values [][]types.Val
 	filteredUids := make([]uint64, 0, len(uids.Uids))
 	lang := langForFunc(arg.q.Langs)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
 		pl := posting.Get(key)
 
+		var vals []types.Val
 		var val types.Val
 		var err error
 		if lang == "" {
-			val, err = pl.Value()
+			if schema.State().IsList(attr) {
+				vals, err = pl.AllValues()
+			} else {
+				val, err = pl.Value()
+				vals = append(vals, val)
+			}
 		} else {
 			val, err = pl.ValueForTag(lang)
+			vals = append(vals, val)
 		}
 		if err != nil {
 			continue
 		}
-		// convert data from binary to appropriate format
-		strVal, err := types.Convert(val, types.StringID)
-		if err == nil {
-			values = append(values, strVal)
+
+		var strVals []types.Val
+		for _, v := range vals {
+			// convert data from binary to appropriate format
+			strVal, err := types.Convert(v, types.StringID)
+			if err != nil {
+				continue
+			}
+			strVals = append(strVals, strVal)
 		}
-		filteredUids = append(filteredUids, uid)
+		if len(strVals) > 0 {
+			values = append(values, strVals)
+			filteredUids = append(filteredUids, uid)
+		}
 	}
 
 	filtered := &protos.List{Uids: filteredUids}

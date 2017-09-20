@@ -405,6 +405,7 @@ Syntax Examples:
 
 * `eq(predicate, value)`
 * `eq(val(varName), value)`
+* `eq(predicate, val(varName))`
 * `eq(count(predicate), value)`
 * `eq(predicate, [val1, val2, ..., valN])`
 
@@ -460,6 +461,7 @@ Syntax Examples: for inequality `IE`
 
 * `IE(predicate, value)`
 * `IE(val(varName), value)`
+* `IE(predicate, val(varName))`
 * `IE(count(predicate), value)`
 
 With `IE` replaced by
@@ -528,6 +530,26 @@ Query Example: A movie in each genre that has over 30000 movies.  Because there 
   }
 }
 {{< /runnable >}}
+
+Query Example: Directors called Steven and their movies which have `initial_release_date` greater
+than that of the movie Minority Report.
+
+{{< runnable >}}
+{
+  var(func: eq(name@en,"Minority Report")) {
+    d as initial_release_date
+  }
+
+  me(func: eq(name@en, "Steven Spielberg")) {
+    name@en
+    director.film @filter(ge(initial_release_date, val(d))) {
+      initial_release_date
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
 
 ### uid
 
@@ -689,7 +711,7 @@ mutation {
 }
 ```
 
-Here is how you would associate a `Polygon` with a node.
+Here is how you would associate a `Polygon` with a node. Adding a `MultiPolygon` is also similar.
 
 ```
 mutation {
@@ -1047,6 +1069,7 @@ Syntax Examples:
 * `q(func: ..., orderdesc: val(varName))`
 * `predicate (orderdesc: predicate) { ... }`
 * `predicate @filter(...) (orderasc: N) { ... }`
+* `q(func: ..., orderasc: predicate1, orderdesc: predicate2)`
 
 Sortable Types: `int`, `float`, `String`, `dateTime`, `id`, `default`
 
@@ -1092,7 +1115,20 @@ Query Example: All genres sorted alphabetically and the five movies in each genr
 }
 {{< /runnable >}}
 
+Sorting can also be performed by multiple predicates as shown below. If the values are equal for the
+first predicate, then they are sorted by the second predicate and so on.
 
+Query Example: Find all nodes which have type Person, sort them by their first_name and among those
+that have the same first_name sort them by last_name in descending order.
+
+```
+{
+  me(func: eq(type, "Person", orderasc: first_name, orderdesc: last_name)) {
+    first_name
+    last_name
+  }
+}
+```
 
 ## Multiple Query Blocks
 
@@ -1748,6 +1784,36 @@ Query Example: Predicates saved to a variable and queried with `expand()`.
 
 `_predicate_` returns string valued predicates as a name without language tag.  If the predicate has no string without a language tag, `expand()` won't expand it (see [language preference]({{< relref "#language-support" >}})).  For example, above `name` generally doesn't have strings without tags in the dataset, so `name@.` is required.
 
+## Upsert
+
+Syntax Example: `me(func: eq(predicate, "value")) @upsert`
+
+With the `@upsert` directive, nodes can be upserted i.e. they would be created if they don't already
+exist. This is useful when you want to search for nodes using a predicate value and create a new one if
+one doesn't already exist.
+
+Query Example: Search for a node with name `Steven Spielberg` and create it if one doesn't exist
+already.
+
+```
+{
+  a as var(func: eq(name@en, "Steven Spielberg")) @upsert
+}
+
+mutation {
+  set {
+    uid(a) <age> "70" .
+  }
+}
+```
+
+The above query would check if a node with a name `Steven Spielberg` exists. If it does then it
+would return the `uid` of the node which can be used later. If it doesn't exist then it will create
+a new node and do a mutation for the `name` and then return the `uid`. You can also assign the
+returned uid in a variable and use it later for doing other mutations.
+
+{{% notice "note" %}} You need to have the appropriate index for using the [eq]({{<ref "#inequality">}}) function. {{% /notice %}}
+
 ## Cascade Directive
 
 With the `@cascade` directive, nodes that don't have all predicates specified in the query are removed. This can be useful in cases where some filter was applied or if nodes might not have all listed predicates.
@@ -2060,6 +2126,9 @@ For predicates with the `@count` Dgraph indexes the number of edges out of each 
 
 Schema mutations add or modify schema.
 
+Multiple scalar values can also be added for a `S P` by specifying the schema to be of
+list type. Occupations in the example below can store a list of strings for each `S P`.
+
 An index is specified with `@index`, with arguments to specify the tokenizer. When specifying an
 index for a predicate it is mandatory to specify the type of the index. For example:
 
@@ -2071,6 +2140,7 @@ mutation {
     friend: uid @count .
     dob: dateTime .
     location: geo @index(geo) .
+    occupations: [string] @index(term) .
   }
 }
 ```
@@ -2082,6 +2152,29 @@ If data is already stored before the mutation, existing values are not checked t
 If data exists and new indices are specified in a schema mutation, any index not in the updated list is dropped and a new index is created for every new tokenizer specified.
 
 Reverse edges are also computed if specified by a schema mutation.
+
+### List Type
+
+Predicate with scalar types can also store a list of values if specified in the schema. The scalar
+type needs to be enclosed within `[]` to indicate that its a list type. These lists are like an
+unordered set.
+
+```
+mutation {
+  schema {
+    occupations: [string] .
+    score: [int] .
+  }
+}
+```
+
+* A set operation adds to the list of values. The order of the stored values is non-deterministic.
+* A delete operation deletes the value from the list.
+* Querying for these predicates would return the list in an array.
+* Indexes can be applied on predicates which have a list type and you can use [Functions]({{<ref
+  "#functions">}}) on them.
+* Sorting is not allowed using these predicates.
+
 
 ### Reverse Edges
 

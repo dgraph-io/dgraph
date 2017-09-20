@@ -44,13 +44,14 @@ Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
 
 After installing Go, run
 ```
-# This should install the following binaries in your $GOPATH/bin: dgraph and dgraphloader.
+# This should install the following binaries in your $GOPATH/bin: dgraph, dgraphloader, and bulkloader.
 go get -u github.com/dgraph-io/dgraph/...
 ```
 
-The binaries are located in `cmd/dgraph` and `cmd/dgraphloader`. If you get errors related to `grpc` while building
-them, your `go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it causes issues while using
-the Go client). Update your `go-grpc` by running.
+The binaries are located in `cmd/dgraph`, `cmd/dgraphloader`, and
+`cmd/bulkloader`. If you get errors related to `grpc` while building them, your
+`go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it
+causes issues while using the Go client). Update your `go-grpc` by running.
 ```
 go get -u google.golang.org/grpc
 ```
@@ -351,15 +352,23 @@ p w ip worker groups.conf groups heathy-peer
 --->
 
 ## Bulk Data Loading
+
+There are two different tools that can be used for bulk data loading:
+
+- `dgraphloader`
+- `bulkloader`
+
+{{% notice "note" %}} both tools only accepts gzipped, RDF NQuad/Triple data.
+Data in other formats must be converted [to
+this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
+
+### `dgraphloader`
+
 The `dgraphloader` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph. It's not the only way to run mutations.  Mutations could also be run from the command line, e.g. with `curl`, from the UI, by sending to `/query` or by a program using a [Dgraph client]({{< relref "clients/index.md" >}}).
 
 `dgraphloader` correctly handles splitting blank nodes across multiple batches and creating `xid` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
 
 `dgraphloader` checkpoints the loaded rdfs in the c directory by default. On restart it would automatically resume from the last checkpoint. If you want to load the whole data again, you need to delete the checkpoint directory.
-
-{{% notice "note" %}} `dgraphloader` only accepts gzipped, RDF NQuad/Triple data. Data in other formats must be converted [to this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
-
-
 
 ```
 $ dgraphloader --help # To see the available flags.
@@ -372,6 +381,23 @@ $ dgraphloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph
 
 # For example to load goldendata with the corresponding schema and convert URI to xid.
 $ dgraphloader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema -x
+```
+
+### `bulkloader`
+
+`bulkloader` serves a similar purpose to `dgraphloader`, but can only be used
+while dgraph is offline for the initial population. It cannot run on an
+existing dgraph instance.
+
+`bulkloader` is *considerably faster* than `dgraphloader`, and is the recommended
+way to perform the initial import of large datasets into dgraph.
+
+```
+$ bulkloader --help # To see the available flags
+
+# Read RDFs and schema from file, and create the data directory for a new
+# dgraph instance:
+$ bulkloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file>
 ```
 
 ## Export
