@@ -41,9 +41,10 @@ const (
 )
 
 var (
-	errUnservedTablet = x.Errorf("Tablet isn't being served by this instance.")
-	allocator         x.EmbeddedUidAllocator
-	emptyAssignedIds  = &protos.AssignedIds{}
+	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
+	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
+	allocator          x.EmbeddedUidAllocator
+	emptyAssignedIds   = &protos.AssignedIds{}
 )
 
 // runMutation goes through all the edges and applies them. It returns the
@@ -374,7 +375,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutations) {
+func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutations) error {
 	for _, edge := range m.Edges {
 		gid := groups().BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
@@ -401,13 +402,16 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		x.AssertTrue(mu != nil)
 		mu.Upsert = m.Upsert
 	}
+	return nil
 }
 
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	mutationMap := make(map[uint32]*protos.Mutations)
-	addToMutationMap(mutationMap, m)
+	if err := addToMutationMap(mutationMap, m); err != nil {
+		return err
+	}
 
 	errorCh := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {

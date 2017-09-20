@@ -99,9 +99,18 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	// ensures that index is not mark completed until all tasks
 	// are submitted to scheduler
 	total := len(proposal.Mutations.Edges)
-	s.n.props.IncRef(proposal.Id, index, 1+total)
-	x.ActiveMutations.Add(int64(total))
 	for _, supdate := range proposal.Mutations.Schema {
+		// This is neceassry to ensure that there is no race between when we start reading
+		// from badger and new mutation getting commited via raft and getting applied.
+		// Before Moving the predicate we would flush all and wait for watermark to catch up
+		// but there might be some proposals which got proposed but not comitted yet.
+		// It's ok to reject the proposal here and same would happen on all nodes because we
+		// would have proposed membershipstate, and all nodes would have the proposed state
+		// or some state after that before reaching here.
+		if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
+			s.n.props.Done(proposal.Id, errPredicateMoving)
+			return errPredicateMoving
+		}
 		if err := s.n.processSchemaMutations(proposal.Id, index, supdate); err != nil {
 			s.n.props.Done(proposal.Id, err)
 			return err
@@ -122,11 +131,24 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	// stores a map of predicate and type of first mutation for each predicate
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
+		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
+			s.n.props.Done(proposal.Id, errPredicateMoving)
+			return errPredicateMoving
+		}
 		if _, ok := schemaMap[edge.Attr]; !ok {
 			schemaMap[edge.Attr] = posting.TypeID(edge)
 		}
 	}
+	if proposal.Mutations.Upsert != nil {
+		attr := proposal.Mutations.Upsert.Attr
+		if tablet := groups().Tablet(attr); tablet != nil && tablet.ReadOnly {
+			s.n.props.Done(proposal.Id, errPredicateMoving)
+			return errPredicateMoving
+		}
+	}
 
+	s.n.props.IncRef(proposal.Id, total)
+	x.ActiveMutations.Add(int64(total))
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
 			// Schema doesn't exist

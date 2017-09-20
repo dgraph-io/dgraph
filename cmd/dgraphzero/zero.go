@@ -70,6 +70,28 @@ func (s *Server) Init() {
 	s.nextGroup = 1
 }
 
+func (s *Server) Leader(gid uint32) *conn.Pool {
+	s.RLock()
+	defer s.RUnlock()
+	if s.state == nil {
+		return nil
+	}
+	group := s.state.Groups[gid]
+	if group == nil {
+		return nil
+	}
+	var healthyPool *conn.Pool
+	for _, m := range group.Members {
+		if pl, err := conn.Get().Get(m.Addr); err == nil {
+			healthyPool = pl
+			if m.Leader {
+				return pl
+			}
+		}
+	}
+	return healthyPool
+}
+
 func (s *Server) SetMembershipState(state *protos.MembershipState) {
 	s.Lock()
 	defer s.Unlock()
@@ -265,9 +287,11 @@ func (s *Server) ShouldServe(
 
 	// Set the tablet to be served by this server's group.
 	var proposal protos.ZeroProposal
+	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
+	tablet.NoUpdate = true
 	proposal.Tablet = tablet
-	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
-		return nil, err
+	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
+		return tablet, err
 	}
 	tab = s.servingTablet(tablet.Predicate)
 	return tab, nil
@@ -340,6 +364,7 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 			if err != nil {
 				return err
 			}
+			// TODO: Don't send if only lease has changed.
 			if err := stream.Send(ms); err != nil {
 				return err
 			}

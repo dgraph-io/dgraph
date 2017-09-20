@@ -57,7 +57,7 @@ type groupi struct {
 	state     *protos.MembershipState
 	Node      *node
 	gid       uint32
-	tablets   map[string]uint32
+	tablets   map[string]*protos.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 }
 
@@ -96,7 +96,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	if Config.InMemoryComm {
 		gr.state = &protos.MembershipState{}
 		atomic.StoreUint32(&gr.gid, 1)
-
+		inMemoryTablet = &protos.Tablet{GroupId: gr.groupId()}
 	} else {
 		x.AssertTruef(len(Config.PeerAddr) > 0, "Providing dgraphzero address is mandatory.")
 		x.AssertTruef(Config.PeerAddr != Config.MyAddr,
@@ -185,9 +185,12 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
+	if g.state != nil && g.state.Counter >= state.Counter {
+		return
+	}
 
 	g.state = state
-	g.tablets = make(map[string]uint32)
+	g.tablets = make(map[string]*protos.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if Config.RaftId == member.Id {
@@ -198,7 +201,7 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 			}
 		}
 		for _, tablet := range group.Tablets {
-			g.tablets[tablet.Predicate] = tablet.GroupId
+			g.tablets[tablet.Predicate] = tablet
 		}
 	}
 	for _, member := range g.state.Zeros {
@@ -215,31 +218,44 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 }
 
 func (g *groupi) BelongsTo(key string) uint32 {
-	g.RLock()
-	gid := g.tablets[key]
-	g.RUnlock()
-
-	if gid > 0 {
-		return gid
-	}
-	if g.ServesTablet(key) {
+	if Config.InMemoryComm {
 		return g.groupId()
 	}
 	g.RLock()
-	gid = g.tablets[key]
+	tablet, ok := g.tablets[key]
 	g.RUnlock()
-	return gid
+
+	if ok {
+		return tablet.GroupId
+	}
+	tablet = g.Tablet(key)
+	if tablet != nil {
+		return tablet.GroupId
+	}
+	return 0
 }
 
+var inMemoryTablet *protos.Tablet
+
 func (g *groupi) ServesTablet(key string) bool {
-	if Config.InMemoryComm {
+	tablet := g.Tablet(key)
+	if tablet != nil && tablet.GroupId == groups().groupId() {
 		return true
 	}
+	return false
+}
+
+// Do not modify the returned Tablet
+func (g *groupi) Tablet(key string) *protos.Tablet {
+	// TODO: Remove all this later, create a membership state and apply it
+	if Config.InMemoryComm {
+		return inMemoryTablet
+	}
 	g.RLock()
-	gid := g.tablets[key]
+	tablet, ok := g.tablets[key]
 	g.RUnlock()
-	if gid > 0 {
-		return gid == g.groupId()
+	if ok {
+		return tablet
 	}
 
 	fmt.Printf("Asking if I serve tablet: %v\n", key)
@@ -247,20 +263,20 @@ func (g *groupi) ServesTablet(key string) bool {
 	// Check with dgraphzero if we can serve it.
 	pl := g.AnyServer(0)
 	if pl == nil {
-		return false
+		return nil
 	}
 	zc := protos.NewZeroClient(pl.Get())
 
-	tablet := &protos.Tablet{GroupId: g.groupId(), Predicate: key}
+	tablet = &protos.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		x.Printf("Error while ShouldServe grpc call %v", err)
-		return false
+		return nil
 	}
 	g.Lock()
-	g.tablets[key] = out.GroupId
+	g.tablets[key] = out
 	g.Unlock()
-	return out.GroupId == g.groupId()
+	return out
 }
 
 func (g *groupi) HasMeInState() bool {
@@ -393,6 +409,7 @@ START:
 	}
 
 	go func() {
+		n := g.Node
 		for {
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
@@ -404,7 +421,10 @@ START:
 				}
 				return
 			}
-			g.applyState(state)
+			if n.AmLeader() {
+				proposal := &protos.Proposal{State: state}
+				go n.ProposeAndWait(context.Background(), proposal)
+			}
 		}
 	}()
 
@@ -421,6 +441,9 @@ OUTER:
 			// dgraphzero just adds to the map so we needn't worry about race condition
 			// where a newly added tablet is not sent.
 			tablets = g.calculateTabletSizes()
+			if tablets == nil {
+				continue // I am not leader so no need to send.
+			}
 			if err := g.sendMembership(tablets, stream); err != nil {
 				stream.CloseSend()
 				break OUTER

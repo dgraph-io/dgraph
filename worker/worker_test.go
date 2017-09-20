@@ -620,10 +620,10 @@ func TestMain(m *testing.M) {
 	posting.Config.CommitFraction = 0.10
 	gr = new(groupi)
 	gr.gid = 1
-	gr.tablets = make(map[string]uint32)
-	gr.tablets["name"] = 1
-	gr.tablets["age"] = 1
-	gr.tablets["friend"] = 1
-	gr.tablets[""] = 1
+	gr.tablets = make(map[string]*protos.Tablet)
+	gr.tablets["name"] = &protos.Tablet{GroupId: 1}
+	gr.tablets["age"] = &protos.Tablet{GroupId: 1}
+	gr.tablets["friend"] = &protos.Tablet{GroupId: 1}
+	gr.tablets[""] = &protos.Tablet{GroupId: 1}
 	os.Exit(m.Run())
 }
