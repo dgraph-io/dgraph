@@ -24,8 +24,7 @@ function readCookie(name) {
   var ca = document.cookie.split(";");
   for (var i = 0; i < ca.length; i++) {
     var c = ca[i];
-    while (c.charAt(0) == " ")
-      c = c.substring(1, c.length);
+    while (c.charAt(0) == " ") c = c.substring(1, c.length);
     if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
   }
   return null;
@@ -52,9 +51,9 @@ function eraseCookie(name) {
   // @params runnableEl {HTMLElement|JQueryElement} - HTML Element for runnable
   function setupRunnableClipboard(runnableEl) {
     // Set up clipboard
-    var codeClipEl = $(runnableEl).find('.code-btn[data-action="copy-code"]')[
-      0
-    ];
+    var codeClipEl = $(runnableEl).find(
+      '.code-btn[data-action="copy-code"]'
+    )[0];
     var codeClip = new Clipboard(codeClipEl, {
       text: function(trigger) {
         var $runnable = $(trigger).closest(".runnable");
@@ -68,10 +67,14 @@ function eraseCookie(name) {
 
     codeClip.on("success", function(e) {
       e.clearSelection();
-      $(e.trigger).text("Copied").addClass("copied");
+      $(e.trigger)
+        .text("Copied")
+        .addClass("copied");
 
       window.setTimeout(function() {
-        $(e.trigger).text("Copy").removeClass("copied");
+        $(e.trigger)
+          .text("Copy")
+          .removeClass("copied");
       }, 2000);
     });
 
@@ -99,10 +102,14 @@ function eraseCookie(name) {
 
     outputClip.on("success", function(e) {
       e.clearSelection();
-      $(e.trigger).text("Copied").addClass("copied");
+      $(e.trigger)
+        .text("Copied")
+        .addClass("copied");
 
       window.setTimeout(function() {
-        $(e.trigger).text("Copy").removeClass("copied");
+        $(e.trigger)
+          .text("Copy")
+          .removeClass("copied");
       }, 2000);
     });
 
@@ -295,12 +302,16 @@ function eraseCookie(name) {
 
     // there can be at most two instances of a same runnable because users can
     // launch a runnable as a modal. they share the same checksum
-    var checksum = $(this).closest(".runnable").data("checksum");
+    var checksum = $(this)
+      .closest(".runnable")
+      .data("checksum");
     var $currentRunnable = $(this).closest(".runnable");
     var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
     var codeEl = $runnables.find(".output");
     var isModal = $currentRunnable.parents("#runnable-modal").length > 0;
-    var query = $(this).closest(".runnable").attr("data-current");
+    var query = $(this)
+      .closest(".runnable")
+      .attr("data-current");
 
     $runnables.find(".output-container").removeClass("empty error");
     codeEl.text("Waiting for the server response...");
@@ -317,8 +328,8 @@ function eraseCookie(name) {
       .done(function(res) {
         var now = new Date().getTime();
         var networkLatency = now - startTime;
-        var serverLatencyInfo = res.data && res.data.server_latency;
-        res.data && delete res.data.server_latency;
+        var serverLatencyInfo = res.extensions && res.extensions.server_latency;
+        delete res.extensions;
 
         // In some cases, the server does not return latency information
         // TODO: Remove special handling from next version as Dgraph would
@@ -388,7 +399,9 @@ function eraseCookie(name) {
   $(document).on("click", '.runnable [data-action="save"]', function(e) {
     e.preventDefault();
 
-    var checksum = $(this).closest(".runnable").data("checksum");
+    var checksum = $(this)
+      .closest(".runnable")
+      .data("checksum");
     var $currentRunnable = $(this).closest(".runnable");
     var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
     var newQuery =
@@ -404,7 +417,10 @@ function eraseCookie(name) {
     // a modal, value will be lose as HTML is copied
     // TODO: implement JS object for runnable instead of storing these states
     // in DOM. Is there a good way to do so without framework?
-    $runnables.find(".query-content-editable").val(newQuery).text(newQuery);
+    $runnables
+      .find(".query-content-editable")
+      .val(newQuery)
+      .text(newQuery);
 
     var dest = readCookie("lang");
     navToRunnableTab($currentRunnable, dest);
@@ -461,8 +477,12 @@ function eraseCookie(name) {
 
   // Runnable modal event hooks
   $("#runnable-modal").on("hidden.bs.modal", function(e) {
-    $(this).find(".server-latency-tooltip-trigger").tooltip("dispose");
-    $(this).find(".modal-body").html("");
+    $(this)
+      .find(".server-latency-tooltip-trigger")
+      .tooltip("dispose");
+    $(this)
+      .find(".modal-body")
+      .html("");
   });
 
   $("#runnable-modal").on("shown.bs.modal", function() {
