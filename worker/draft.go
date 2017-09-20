@@ -488,6 +488,7 @@ func (n *node) Run() {
 			}
 
 			if rd.SoftState != nil {
+				groups().triggerMembershipSync()
 				leader = rd.RaftState == raft.StateLeader
 			}
 			if leader {

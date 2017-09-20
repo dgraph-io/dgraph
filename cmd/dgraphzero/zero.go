@@ -291,7 +291,7 @@ func (s *Server) ShouldServe(
 	tablet.NoUpdate = true
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
-		return nil, err
+		return tablet, err
 	}
 	tab = s.servingTablet(tablet.Predicate)
 	return tab, nil
@@ -364,6 +364,7 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 			if err != nil {
 				return err
 			}
+			// TODO: Don't send if only lease has changed.
 			if err := stream.Send(ms); err != nil {
 				return err
 			}

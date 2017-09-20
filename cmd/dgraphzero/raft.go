@@ -178,10 +178,10 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	var p protos.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
 	if len(e.Data) == 0 {
-		return 0, nil
+		return p.Id, nil
 	}
 	if err := p.Unmarshal(e.Data); err != nil {
-		return 0, err
+		return p.Id, err
 	}
 	if p.Id == 0 {
 		return 0, errInvalidProposal
@@ -195,7 +195,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	state.Counter = e.Index
 	if p.Member != nil {
 		if p.Member.GroupId == 0 {
-			return 0, errInvalidProposal
+			return p.Id, errInvalidProposal
 		}
 		group := state.Groups[p.Member.GroupId]
 		if group == nil {
@@ -205,13 +205,13 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		_, has := group.Members[p.Member.Id]
 		if !has && len(group.Members) >= n.server.NumReplicas {
 			// We shouldn't allow more members than the number of replicas.
-			return 0, errInvalidProposal
+			return p.Id, errInvalidProposal
 		}
 		group.Members[p.Member.Id] = p.Member
 	}
 	if p.Tablet != nil {
 		if p.Tablet.GroupId == 0 {
-			return 0, errInvalidProposal
+			return p.Id, errInvalidProposal
 		}
 		group := state.Groups[p.Tablet.GroupId]
 		if group == nil {
@@ -220,7 +220,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		_, has := group.Tablets[p.Tablet.Predicate]
 		if has && p.Tablet.NoUpdate {
-			return 0, errTabletAlreadyServed
+			return p.Id, errTabletAlreadyServed
 		} else {
 			group.Tablets[p.Tablet.Predicate] = p.Tablet
 		}

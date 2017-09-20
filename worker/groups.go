@@ -228,10 +228,8 @@ func (g *groupi) BelongsTo(key string) uint32 {
 	if ok {
 		return tablet.GroupId
 	}
-	g.ServesTablet(key)
-	g.RLock()
-	defer g.RUnlock()
-	if tablet, ok := g.tablets[key]; ok {
+	tablet = g.Tablet(key)
+	if tablet != nil {
 		return tablet.GroupId
 	}
 	return 0
