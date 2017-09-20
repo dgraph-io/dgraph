@@ -4317,3 +4317,49 @@ func TestLangWithDash(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"en-us"}, gql.Query[0].Children[0].Langs)
 }
+
+func TestOrderByVarAndPred(t *testing.T) {
+	query := `{
+		q(func: uid(1), orderasc: name, orderdesc: val(n)) {
+		}
+
+		var(func: uid(0x0a)) {
+			friends {
+				n AS name
+			}
+		}
+
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple sorting only allowed by predicates.")
+
+	query = `{
+		q(func: uid(1)) {
+		}
+
+		var(func: uid(0x0a)) {
+			friends (orderasc: name, orderdesc: val(n)) {
+				n AS name
+			}
+		}
+
+	}`
+	_, err = Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple sorting only allowed by predicates.")
+
+	query = `{
+		q(func: uid(1)) {
+		}
+
+		var(func: uid(0x0a)) {
+			friends (orderasc: name, orderdesc: genre) {
+				name
+			}
+		}
+
+	}`
+	_, err = Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}

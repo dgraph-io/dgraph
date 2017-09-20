@@ -456,6 +456,8 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		if len(t.Lang) > 0 {
 			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
 		} else if schema.State().IsList(t.Attr) {
+			// TODO - When values are deleted for list type, then we should only delete the uid from
+			// index if no other values produces that index token.
 			// Value for list type.
 			t.ValueId = farm.Fingerprint64(t.Value)
 		} else {

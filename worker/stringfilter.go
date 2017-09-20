@@ -38,15 +38,18 @@ type stringFilter struct {
 	eqVals    []types.Val
 }
 
-func matchStrings(uids *protos.List, values []types.Val, filter stringFilter) *protos.List {
+func matchStrings(uids *protos.List, values [][]types.Val, filter stringFilter) *protos.List {
 	rv := &protos.List{}
 	for i := 0; i < len(values); i++ {
-		if len(values[i].Value.(string)) == 0 {
-			continue
-		}
+		for j := 0; j < len(values[i]); j++ {
+			if len(values[i][j].Value.(string)) == 0 {
+				continue
+			}
 
-		if filter.match(values[i], filter) {
-			rv.Uids = append(rv.Uids, uids.Uids[i])
+			if filter.match(values[i][j], filter) {
+				rv.Uids = append(rv.Uids, uids.Uids[i])
+				break
+			}
 		}
 	}
 
