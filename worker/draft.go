@@ -414,6 +414,8 @@ func (n *node) processApplyCh() {
 		} else if len(proposal.Kv) > 0 {
 			go n.processKeyValues(e.Index, proposal.Id, proposal.Kv)
 		} else if proposal.State != nil {
+			// This state needn't be snapshotted in this group, on restart we would fetch
+			// a state which is latest or equal to this.
 			groups().applyState(proposal.State)
 			// When proposal is done it emits done watermarks.
 			n.props.Done(proposal.Id, nil)

@@ -185,8 +185,8 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
-	// Skip if we get older update
-	if g.state != nil && g.state.Counter >= state.Counter {
+	// Skip if we get older update, counter rolls back to zero on integer overflow.
+	if g.state != nil && g.state.Counter >= state.Counter && state.Counter != 0 {
 		return
 	}
 

@@ -191,6 +191,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	defer n.server.Unlock()
 
 	state := n.server.state
+	state.Counter++
 	if p.Member != nil {
 		if p.Member.GroupId == 0 {
 			return 0, errInvalidProposal
@@ -216,7 +217,12 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			group = newGroup()
 			state.Groups[p.Tablet.GroupId] = group
 		}
-		group.Tablets[p.Tablet.Predicate] = p.Tablet
+		_, has := group.Tablets[p.Tablet.Predicate]
+		if has && p.Tablet.NoUpdate {
+			// ShouldServeTablet was called at same time by different groups
+		} else {
+			group.Tablets[p.Tablet.Predicate] = p.Tablet
+		}
 	}
 	if p.MaxLeaseId > 0 {
 		state.MaxLeaseId = p.MaxLeaseId

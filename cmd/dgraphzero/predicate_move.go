@@ -17,6 +17,12 @@
 
 package main
 
+import (
+	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/x"
+	"golang.org/x/net/context"
+)
+
 /*
 Steps to move predicate p from g1 to g2.
 Design change:
@@ -35,15 +41,84 @@ This would trigger G1 to get latest state. Wait for it.
 • Before G2 starts accepting, it should delete any current keys for P.
 • It should tell Zero whether it succeeded or failed. (Endpoint: G1 → Zero)
 
-• Zero would then propose that G2 is serving P (or G1 is, if fail above) P would R.
+• Zero would then propose that G2 is serving P (or G1 is, if fail above) P would RW.
 • G1 gets this, G2 gets this.
 • Both propagate this to their followers.
 
 Cleanup:
+// Could cause race conditons when predicate is being moved. Ensure only either deletePredicate
+// is running or predicate streaming.
+// But if we are sending from g1 to g2, stream breaks in between then cleanup guy would end up cleaning
+// the predicate(Would create tombstones). Group zero would anyhow retry moving later.
+// TODO: Decide whether it's better if group zero does the cleanup.
 • The iterator for tablet update can do the cleanup, if it’s not serving the predicate.
 */
 
 // TODO: Handle failure scenarios, probably cleanup
-func (s *Server) movePredicate(predicate string, srcGroup uint32, dstGroup uint32) error {
+// Zero can crash after proposing G1 is read only.
+// Ensure that we don't end up moving same predicate from g1 to g2 and then g2 to g1.
+func (s *Server) movePredicate(ctx context.Context, predicate string, srcGroup uint32,
+	dstGroup uint32) error {
+	// TODO: Trigger recovery in case of exceptions or panics also
+	if err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup); err != nil {
+		stab := s.servingTablet(predicate)
+		x.AssertTrue(stab != nil)
+		p := &protos.ZeroProposal{}
+		p.Tablet = &protos.Tablet{
+			GroupId:   srcGroup,
+			Predicate: predicate,
+			Size_:     stab.Size_,
+		}
+		// TODO: Retry ???
+		s.Node.proposeAndWait(context.Background(), p)
+	}
+	return nil
+}
+
+func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcGroup uint32,
+	dstGroup uint32) error {
+	n := s.Node
+	stab := s.servingTablet(predicate)
+	x.AssertTrue(stab != nil)
+	// Propose that predicate in read only
+	p := &protos.ZeroProposal{}
+	p.Tablet = &protos.Tablet{
+		GroupId:   srcGroup,
+		Predicate: predicate,
+		Size_:     stab.Size_,
+		ReadOnly:  true,
+	}
+	if err := n.proposeAndWait(ctx, p); err != nil {
+		return err
+	}
+
+	pl := s.Leader(srcGroup)
+	if pl == nil {
+		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
+	}
+
+	c := protos.NewWorkerClient(pl.Get())
+	in := &protos.MovePredicatePayload{
+		Predicate:     predicate,
+		State:         s.membershipState(),
+		SourceGroupId: srcGroup,
+		DestGroupId:   dstGroup,
+	}
+	if _, err := c.MovePredicate(ctx, in); err != nil {
+		return err
+	}
+
+	// Propose that predicate is served by dstGroup in RW.
+	p.Tablet = &protos.Tablet{
+		GroupId:   dstGroup,
+		Predicate: predicate,
+		Size_:     stab.Size_,
+	}
+	if err := n.proposeAndWait(ctx, p); err != nil {
+		return err
+	}
+	// TODO: Probably make it R in dstGroup and send state to srcGroup and only after
+	// it proposes make it RW in dstGroup. That way we won't have stale reads from srcGroup
+	// for sure.
 	return nil
 }
