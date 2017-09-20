@@ -1,0 +1,5 @@
+{
+	cooks(func: anyofterms(occupation, "Cook")) {
+		name
+	}
+}

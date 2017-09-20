@@ -1,0 +1,2 @@
+name: [string] @index(term) .
+occupation: [string] @index(term) .

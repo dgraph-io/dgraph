@@ -28,13 +28,13 @@ for suite in $script_dir/suite*; do
 	$GOPATH/bin/dgraphzero -id 1 >/dev/null 2>&1 &
 	dgzPid=$!
 	popd >/dev/null
-	sleep 5
+	sleep 2
 
 	pushd dg >/dev/null
 	$GOPATH/bin/dgraph -peer localhost:8888 -memory_mb=1024 >/dev/null 2>&1 &
 	dgPid=$!
 	popd >/dev/null
-	sleep 5
+	sleep 2
 
 	popd >/dev/null # out of tmp
 	result=$(curl --silent localhost:8080/query -XPOST -d @$suite/query.json)
