@@ -61,6 +61,7 @@ var (
 	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
 	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
 	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
+	version          = flag.Bool("version", false, "Prints the version of Dgraphloader")
 )
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -251,7 +252,9 @@ func fileList(files string) []string {
 
 func main() {
 	flag.Parse()
-	x.Init()
+	if *version {
+		x.PrintVersionOnly()
+	}
 	runtime.SetBlockProfileRate(*blockRate)
 
 	interruptChan := make(chan os.Signal)

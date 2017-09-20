@@ -45,12 +45,16 @@ func main() {
 	flag.IntVar(&opt.NumShufflers, "shufflers", 1, "Number of shufflers to run concurrently.")
 	flag.IntVar(&opt.MapShards, "map_shards", 1, "Number of map output shards.")
 	flag.IntVar(&opt.ReduceShards, "reduce_shards", 1, "Number of shuffle output shards.")
+	flag.BoolVar(&opt.Version, "version", false, "Prints the version of bulkloader.")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {
 		flag.Usage()
 		fmt.Fprintf(os.Stderr, "No free args allowed, but got: %v\n", flag.Args())
 		os.Exit(1)
+	}
+	if opt.Version {
+		x.PrintVersionOnly()
 	}
 	if opt.RDFDir == "" || opt.SchemaFile == "" {
 		flag.Usage()

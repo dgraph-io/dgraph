@@ -168,7 +168,9 @@ func setupConfigOpts() {
 	}
 	// Lets check version flag before we SetConfiguration because we validate AllottedMemory in
 	// SetConfiguration.
-	x.PrintVersionOnly()
+	if x.Config.Version {
+		x.PrintVersionOnly()
+	}
 
 	dgraph.SetConfiguration(config)
 }
