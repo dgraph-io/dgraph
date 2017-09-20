@@ -47,7 +47,7 @@ type sortresult struct {
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
-	gid := groups().BelongsTo(q.Order[0].Attr)
+	gid, _ := groups().BelongsTo(q.Order[0].Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Order[0].Attr, gid)
 	}
@@ -75,7 +75,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *protos.SortMessage) (*protos.S
 		return &emptySortResult, ctx.Err()
 	}
 
-	gid := groups().BelongsTo(s.Order[0].Attr)
+	gid, _ := groups().BelongsTo(s.Order[0].Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sorting: Attribute: %q groupId: %v Sort", s.Order[0].Attr, gid)
 	}

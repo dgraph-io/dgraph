@@ -31,6 +31,8 @@ Move:
 
 This would trigger G1 to get latest state. Wait for it.
 • G1 would propose this state to it’s followers.
+// flush and wait for syncmark
+// We need to be sure that no new updates came after we starting reading from badger.
 • G1 after proposing would do a call to G2, and start streaming.
 • Before G2 starts accepting, it should delete any current keys for P.
 • It should tell Zero whether it succeeded or failed. (Endpoint: G1 → Zero)

@@ -113,7 +113,8 @@ func TestAddToMutationArray(t *testing.T) {
 	})
 	m := &protos.Mutations{Edges: edges, Schema: schema}
 
-	addToMutationMap(mutationsMap, m)
+	err = addToMutationMap(mutationsMap, m)
+	require.NoError(t, err)
 	mu := mutationsMap[1]
 	require.NotNil(t, mu)
 	require.NotNil(t, mu.Edges)

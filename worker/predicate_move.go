@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -138,6 +139,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 	n := groups().Node
 	proposal := &protos.Proposal{}
 	size := 0
+	firstKV := true
 
 	for kv := range kvs {
 		if size >= 32<<20 { // 32 MB
@@ -149,6 +151,13 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 			continue
 		}
 
+		if firstKV {
+			firstKV = false
+			pk := x.Parse(kv.Key)
+			if err := posting.DeletePredicate(ctx, pk.Attr); err != nil {
+				return err
+			}
+		}
 		proposal.Kv = append(proposal.Kv, kv)
 		size = size + len(kv.Key) + len(kv.Val)
 	}

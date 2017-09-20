@@ -103,7 +103,7 @@ func populateSchema(attr string, fields []string) *protos.SchemaNode {
 // empty then it adds all known groups
 func addToSchemaMap(schemaMap map[uint32]*protos.SchemaRequest, schema *protos.SchemaRequest) {
 	for _, attr := range schema.Predicates {
-		gid := groups().BelongsTo(attr)
+		gid, _ := groups().BelongsTo(attr)
 		s := schemaMap[gid]
 		if s == nil {
 			s = &protos.SchemaRequest{GroupId: gid}

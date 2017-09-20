@@ -69,13 +69,22 @@ func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
 	return true
 }
 
-func (p *proposals) IncRef(pid uint32, index uint64, count int) {
+func (p *proposals) SetIndex(pid uint32, index uint64) {
+	p.Lock()
+	defer p.Unlock()
+	pd, has := p.ids[pid]
+	x.AssertTrue(has)
+	pd.index = index
+	pd.cnt = 1
+	return
+}
+
+func (p *proposals) IncRef(pid uint32, count int) {
 	p.Lock()
 	defer p.Unlock()
 	pd, has := p.ids[pid]
 	x.AssertTrue(has)
 	pd.cnt += count
-	pd.index = index
 	return
 }
 
@@ -200,6 +209,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
+			if _, canWrite := groups().BelongsTo(edge.Attr); !canWrite {
+				return errPredicateMoving
+			}
 			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
 				continue
 			} else if err := ValidateAndConvert(edge, typ); err != nil {
@@ -207,6 +219,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 			}
 		}
 		for _, schema := range proposal.Mutations.Schema {
+			if _, canWrite := groups().BelongsTo(schema.Predicate); !canWrite {
+				return errPredicateMoving
+			}
 			if err := checkSchema(schema); err != nil {
 				return err
 			}
@@ -253,6 +268,10 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Waiting for the proposal: key-values.")
 		}
+	} else if proposal.State != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal: MembershipState.")
+		}
 	} else {
 		log.Fatalf("Unknown proposal")
 	}
@@ -277,7 +296,8 @@ func (n *node) handleUpsert(task *task) (bool, error) {
 		return true, nil
 	}
 
-	res, err := n.processUpsertTask(n.ctx, task, groups().BelongsTo(attr))
+	gid, _ := groups().BelongsTo(attr)
+	res, err := n.processUpsertTask(n.ctx, task, gid)
 	if err != nil {
 		return false, err
 	}
@@ -347,6 +367,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+	// Not present in proposal map
 	n.Applied.Done(e.Index)
 	posting.SyncMarks().Done(e.Index)
 	groups().triggerMembershipSync()
@@ -355,6 +376,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 func (n *node) processApplyCh() {
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
+			// This is not in the proposal map
 			n.Applied.Done(e.Index)
 			posting.SyncMarks().Done(e.Index)
 			continue
@@ -376,11 +398,14 @@ func (n *node) processApplyCh() {
 		// becomes zero.
 		if !n.props.Has(proposal.Id) {
 			pctx := &proposalCtx{
-				ch:  make(chan error, 1),
-				ctx: n.ctx,
-				n:   n,
+				ch:    make(chan error, 1),
+				ctx:   n.ctx,
+				n:     n,
+				index: e.Index,
 			}
 			n.props.Store(proposal.Id, pctx)
+		} else {
+			n.props.SetIndex(proposal.Id, e.Index)
 		}
 		if proposal.Mutations != nil {
 			n.sch.schedule(proposal, e.Index)
@@ -388,6 +413,10 @@ func (n *node) processApplyCh() {
 			x.Fatalf("Dgraph does not handle membership proposals anymore.")
 		} else if len(proposal.Kv) > 0 {
 			go n.processKeyValues(e.Index, proposal.Id, proposal.Kv)
+		} else if proposal.State != nil {
+			groups().applyState(proposal.State)
+			// When proposal is done it emits done watermarks.
+			n.props.Done(proposal.Id, nil)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
@@ -395,8 +424,6 @@ func (n *node) processApplyCh() {
 }
 
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
-	// We need to update index in props map
-	n.props.IncRef(pid, index, 1)
 	ctx, _ := n.props.Ctx(pid)
 	err := populateKeyValues(ctx, kvs)
 	n.props.Done(pid, err)
@@ -431,6 +458,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
+	groups().triggerMembershipSync()
 }
 
 func (n *node) Run() {

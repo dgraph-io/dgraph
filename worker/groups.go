@@ -185,6 +185,10 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
+	// Skip if we get older update
+	if g.state != nil && g.state.Counter >= state.Counter {
+		return
+	}
 
 	g.state = state
 	g.tablets = make(map[string]*protos.Tablet)
@@ -214,23 +218,24 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 	return g.gid == gid
 }
 
-func (g *groupi) BelongsTo(key string) uint32 {
+func (g *groupi) BelongsTo(key string) (uint32, bool) {
+	if Config.InMemoryComm {
+		return g.groupId(), true
+	}
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
 
 	if ok {
-		return tablet.GroupId
+		return tablet.GroupId, !tablet.ReadOnly
 	}
-	if g.ServesTablet(key) {
-		return g.groupId()
-	}
+	g.ServesTablet(key)
 	g.RLock()
 	defer g.RUnlock()
 	if tablet, ok := g.tablets[key]; ok {
-		return tablet.GroupId
+		return tablet.GroupId, !tablet.ReadOnly
 	}
-	return 0
+	return 0, false
 }
 
 func (g *groupi) ServesTablet(key string) bool {
@@ -395,6 +400,7 @@ START:
 	}
 
 	go func() {
+		n := g.Node
 		for {
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
@@ -406,7 +412,10 @@ START:
 				}
 				return
 			}
-			g.applyState(state)
+			if n.AmLeader() {
+				proposal := &protos.Proposal{State: state}
+				go n.ProposeAndWait(context.Background(), proposal)
+			}
 		}
 	}()
 
@@ -423,6 +432,9 @@ OUTER:
 			// dgraphzero just adds to the map so we needn't worry about race condition
 			// where a newly added tablet is not sent.
 			tablets = g.calculateTabletSizes()
+			if tablets == nil {
+				continue // I am not leader so no need to send.
+			}
 			if err := g.sendMembership(tablets, stream); err != nil {
 				stream.CloseSend()
 				break OUTER
