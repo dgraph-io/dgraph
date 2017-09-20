@@ -3,13 +3,13 @@
 		name
 	}
 	occupation_count(func: has(occupation)) {
-		name,
+		name
 		count(occupation)
 	}
 	eggplant(func: anyofterms(name, "eggplant")) {
 		name
 	}
-	alex(func: anyofterms(name, "Alex"@.)) {
+	alex(func: anyofterms(name@., "Alex")) {
 		name
 	}
 }
