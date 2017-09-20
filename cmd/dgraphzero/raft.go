@@ -163,7 +163,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal
 }
 
 var (
-	errInvalidProposal = errors.New("Invalid group proposal")
+	errInvalidProposal     = errors.New("Invalid group proposal")
+	errTabletAlreadyServed = errors.New("Tablet is already being served")
 )
 
 func newGroup() *protos.Group {
@@ -219,7 +220,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		_, has := group.Tablets[p.Tablet.Predicate]
 		if has && p.Tablet.NoUpdate {
-			return 0, errInvalidProposal
+			return 0, errTabletAlreadyServed
 		} else {
 			group.Tablets[p.Tablet.Predicate] = p.Tablet
 		}

@@ -240,15 +240,15 @@ func (g *groupi) BelongsTo(key string) uint32 {
 var inMemoryTablet *protos.Tablet
 
 func (g *groupi) ServesTablet(key string) bool {
-	tablet := g.tablet(key)
+	tablet := g.Tablet(key)
 	if tablet != nil && tablet.GroupId == groups().groupId() {
 		return true
 	}
 	return false
 }
 
-// Do not modify the returned tablet
-func (g *groupi) tablet(key string) *protos.Tablet {
+// Do not modify the returned Tablet
+func (g *groupi) Tablet(key string) *protos.Tablet {
 	// TODO: Remove all this later, create a membership state and apply it
 	if Config.InMemoryComm {
 		return inMemoryTablet

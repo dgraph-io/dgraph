@@ -209,7 +209,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
-			if tablet := groups().tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
+			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
 			}
 			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
@@ -219,7 +219,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 			}
 		}
 		for _, schema := range proposal.Mutations.Schema {
-			if tablet := groups().tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
+			if tablet := groups().Tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
 			}
 			if err := checkSchema(schema); err != nil {
@@ -396,6 +396,7 @@ func (n *node) processApplyCh() {
 				ctx:   n.ctx,
 				n:     n,
 				index: e.Index,
+				cnt:   1,
 			}
 			n.props.Store(proposal.Id, pctx)
 		} else {
