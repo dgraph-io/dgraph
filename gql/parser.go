@@ -1150,6 +1150,7 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 // parseArguments parses the arguments part of the GraphQL query root.
 func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr error) {
 	expectArg := true
+	orderCount := 0
 	for it.Next() {
 		var p pair
 		// Get key.
@@ -1159,6 +1160,9 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 				return result, x.Errorf("Expecting a comma. But got: %v", item.Val)
 			}
 			p.Key = collectName(it, item.Val)
+			if isSortkey(p.Key) {
+				orderCount++
+			}
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if expectArg {
@@ -1196,6 +1200,9 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			gq.NeedsVar[len(gq.NeedsVar)-1].Typ = VALUE_VAR
 			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			result = append(result, p)
+			if isSortkey(p.Key) && orderCount > 1 {
+				return result, x.Errorf("Multiple sorting only allowed by predicates. Got: %+v", p.Val)
+			}
 			continue
 		}
 
@@ -2269,9 +2276,14 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			// TODO - Allow only order by one of variable/predicate for now.
 			if val == "" {
+				// Right now we only allow one sort by a variable and it has to be at the first
+				// position.
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
+				if len(gq.Order) > 0 && isSortkey(key) {
+					return nil, x.Errorf("Multiple sorting only allowed by predicates. Got: %+v", val)
+				}
 			}
-			if key == "orderasc" || key == "orderdesc" {
+			if isSortkey(key) {
 				if order[val] {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
@@ -2288,6 +2300,10 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 
 	return gq, nil
+}
+
+func isSortkey(k string) bool {
+	return k == "orderasc" || k == "orderdesc"
 }
 
 type Count int

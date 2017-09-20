@@ -1542,7 +1542,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 	m := `
 	mutation {
 		schema {
-			occupations: [string] .
+			occupations: [string] @index(term) .
 		}
 	}`
 
@@ -1567,6 +1567,26 @@ func TestListTypeSchemaChange(t *testing.T) {
 			}
 		}`
 	res, err := runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
+
+	q = `{
+			me(func: anyofterms(occupations, "Engineer")) {
+				occupations
+			}
+	}`
+
+	res, err = runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
+
+	q = `{
+			me(func: allofterms(occupations, "Software Engineer")) {
+				occupations
+			}
+	}`
+
+	res, err = runQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 
