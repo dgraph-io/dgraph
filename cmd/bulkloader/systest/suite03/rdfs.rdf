@@ -6,3 +6,8 @@ _:ww <name> "Walter White" .
 _:ww <name> "Heisenberg" .
 _:ww <occupation> "Cook" .
 _:ww <occupation> "Teacher" .
+
+_:ep <name> "eggplant" .
+_:ep <name> "aubergine" .
+_:ep <name> "aubergine"@fr .
+_:ep <name> "brinjal"@af .

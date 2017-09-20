@@ -6,4 +6,7 @@
 		name,
 		count(occupation)
 	}
+	eggplant(func: anyofterms(name, "eggplant")) {
+		name
+	}
 }

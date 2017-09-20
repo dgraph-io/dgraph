@@ -13,6 +13,16 @@
 				"name": ["Walter White", "Heisenberg"],
 				"count(occupation)": 2
 			}
+		],
+		"eggplant": [
+			{
+				"name": [
+					"eggplant",
+					"aubergine",
+					"aubergine",
+					"brinjal"
+				]
+			}
 		]
 	}
 }
