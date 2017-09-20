@@ -55,12 +55,12 @@ Cleanup:
 */
 
 // TODO: Handle failure scenarios, probably cleanup
-// Zero can crash after proposing G1 is read only.
+// Zero can crash after proposing G1 is read only. Need to run recovery on restart.
 // Ensure that we don't end up moving same predicate from g1 to g2 and then g2 to g1.
 func (s *Server) movePredicate(ctx context.Context, predicate string, srcGroup uint32,
 	dstGroup uint32) error {
-	// TODO: Trigger recovery in case of exceptions or panics also
-	if err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup); err != nil {
+	var err error
+	defer func() {
 		stab := s.servingTablet(predicate)
 		x.AssertTrue(stab != nil)
 		p := &protos.ZeroProposal{}
@@ -69,10 +69,13 @@ func (s *Server) movePredicate(ctx context.Context, predicate string, srcGroup u
 			Predicate: predicate,
 			Size_:     stab.Size_,
 		}
-		// TODO: Retry ???
+		// TODO: Retry, shouldn't error our ideally
 		s.Node.proposeAndWait(context.Background(), p)
-	}
-	return nil
+	}()
+	// TODO: Set timeout based on size of predicate and ensures timeout is honoured all the way
+	// across the stack.
+	err = s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup)
+	return err
 }
 
 func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcGroup uint32,
