@@ -32,6 +32,7 @@ type options struct {
 	SkipMapPhase    bool
 	CleanupTmp      bool
 	NumShufflers    int
+	Version         bool
 
 	MapShards    int
 	ReduceShards int

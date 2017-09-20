@@ -25,4 +25,9 @@ cd $dgraph_cmd/dgraphloader && \
    go build -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
 
+echo "bulkloader"
+cd $dgraph_cmd/bulkloader && \
+   go build -ldflags \
+   "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
+
 
