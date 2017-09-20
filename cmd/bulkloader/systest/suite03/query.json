@@ -9,4 +9,7 @@
 	eggplant(func: anyofterms(name, "eggplant")) {
 		name
 	}
+	alex(func: anyofterms(name, "Alex"@.)) {
+		name
+	}
 }

@@ -11,3 +11,5 @@ _:ep <name> "eggplant" .
 _:ep <name> "aubergine" .
 _:ep <name> "aubergine"@fr .
 _:ep <name> "brinjal"@af .
+
+_:alex <name> "Alex"@en .
