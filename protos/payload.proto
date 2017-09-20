@@ -26,6 +26,13 @@ message Payload {
 	bytes Data = 1;
 }
 
+message MovePredicatePayload {
+ string predicate = 1;
+ uint32 source_group_id = 2;
+ uint32 dest_group_id = 3;
+ MembershipState state = 4;
+}
+
 // BackupPayload is used both as a request and a response.
 // When used in request, groups represents the list of groups that need to be backed up.
 // When used in response, groups represent the list of groups that were backed up.
@@ -65,5 +72,6 @@ service Worker {
 	rpc Schema (SchemaRequest)                  returns (SchemaResult) {}
 
 	rpc Export (ExportPayload)                    returns (ExportPayload) {}
-	rpc MovePredicate (stream KV) returns (Payload) {}
+	rpc ReceivePredicate(stream KV) returns (Payload) {}
+	rpc MovePredicate(MovePredicatePayload) returns (Payload) {}
 }

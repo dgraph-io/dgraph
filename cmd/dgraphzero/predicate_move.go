@@ -31,8 +31,6 @@ Move:
 
 This would trigger G1 to get latest state. Wait for it.
 • G1 would propose this state to it’s followers.
-// flush and wait for syncmark
-// We need to be sure that no new updates came after we starting reading from badger.
 • G1 after proposing would do a call to G2, and start streaming.
 • Before G2 starts accepting, it should delete any current keys for P.
 • It should tell Zero whether it succeeded or failed. (Endpoint: G1 → Zero)
@@ -41,9 +39,11 @@ This would trigger G1 to get latest state. Wait for it.
 • G1 gets this, G2 gets this.
 • Both propagate this to their followers.
 
-Ask G1 whether it got and proposed latest state, if yes convert P to RW in G2.
-This would avoid the issue if there in delay in apply of membership state.
-
 Cleanup:
 • The iterator for tablet update can do the cleanup, if it’s not serving the predicate.
 */
+
+// TODO: Handle failure scenarios, probably cleanup
+func (s *Server) movePredicate(predicate string, srcGroup uint32, dstGroup uint32) error {
+	return nil
+}

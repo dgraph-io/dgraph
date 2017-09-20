@@ -33,6 +33,7 @@ import (
 var (
 	errEmptyPredicate = x.Errorf("Predicate not specified")
 	errNotLeader      = x.Errorf("Server is not leader of this group")
+	emptyPayload      = protos.Payload{}
 )
 
 // size of kvs won't be too big, we would take care before proposing.
@@ -59,29 +60,19 @@ func populateKeyValues(ctx context.Context, kvs []*protos.KV) error {
 	return nil
 }
 
-func movePredicate(ctx context.Context, predicate string, gid uint32) error {
-	if len(predicate) == 0 {
-		return errEmptyPredicate
-	}
-	if !groups().ServesTablet(predicate) {
-		return errUnservedTablet
-	}
-	if groups().Node.AmLeader() {
-		return errNotLeader
-	}
-
+func movePredicateHelper(ctx context.Context, predicate string, gid uint32) error {
 	pl := groups().Leader(gid)
 	if pl == nil {
 		return x.Errorf("Unable to find a connection for groupd: %d\n", gid)
 	}
 	c := protos.NewWorkerClient(pl.Get())
-	stream, err := c.MovePredicate(ctx)
+	stream, err := c.ReceivePredicate(ctx)
 	if err != nil {
 		return err
 	}
 
 	count := 0
-	sendItem := func(stream protos.Worker_MovePredicateClient, item *badger.KVItem) error {
+	sendItem := func(stream protos.Worker_ReceivePredicateClient, item *badger.KVItem) error {
 		kv := &protos.KV{}
 		key := item.Key()
 		kv.Key = make([]byte, len(key))
@@ -166,7 +157,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 
 // Returns count which can be used to verify whether we have moved all keys
 // for a predicate or not.
-func (w *grpcWorker) MovePredicate(stream protos.Worker_MovePredicateServer) error {
+func (w *grpcWorker) ReceivePredicate(stream protos.Worker_ReceivePredicateServer) error {
 	// Values can be pretty big so having less buffer is safer.
 	kvs := make(chan *protos.KV, 10)
 	che := make(chan error, 1)
@@ -202,4 +193,34 @@ func (w *grpcWorker) MovePredicate(stream protos.Worker_MovePredicateServer) err
 	close(kvs)
 	err := <-che
 	return err
+}
+
+func (w *grpcWorker) MovePredicate(ctx context.Context,
+	in *protos.MovePredicatePayload) (*protos.Payload, error) {
+	if groups().gid != in.SourceGroupId {
+		return &emptyPayload, x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
+			in.SourceGroupId, groups().gid)
+	}
+	if len(in.Predicate) == 0 {
+		return &emptyPayload, errEmptyPredicate
+	}
+	if !groups().ServesTablet(in.Predicate) {
+		return &emptyPayload, errUnservedTablet
+	}
+	n := groups().Node
+	if n.AmLeader() {
+		return &emptyPayload, errNotLeader
+	}
+
+	// Ensures that all future mtuations beyond this point are rejected
+	if err := n.ProposeAndWait(ctx, &protos.Proposal{State: in.State}); err != nil {
+		return &emptyPayload, err
+	}
+	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
+	if err := syncAllMarks(ctx); err != nil {
+		return &emptyPayload, err
+	}
+
+	err := movePredicateHelper(ctx, in.Predicate, in.DestGroupId)
+	return &emptyPayload, err
 }
