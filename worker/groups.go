@@ -387,7 +387,7 @@ func (g *groupi) triggerMembershipSync() {
 }
 
 func (g *groupi) periodicMembershipUpdate() {
-	ticker := time.NewTicker(time.Minute * 10)
+	ticker := time.NewTicker(time.Minute * 2)
 	tablets := g.calculateTabletSizes()
 
 START:
@@ -445,6 +445,7 @@ OUTER:
 				continue // I am not leader so no need to send.
 			}
 			if err := g.sendMembership(tablets, stream); err != nil {
+				x.Printf("Error while updating tablets size %v\n", err)
 				stream.CloseSend()
 				break OUTER
 			}

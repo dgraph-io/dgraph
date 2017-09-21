@@ -111,6 +111,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		return err
 	}
 	count++
+	x.Printf("Sent %d number of keys for predicate %v\n", count, predicate)
 
 	payload, err := stream.CloseAndRecv()
 	if err != nil {
@@ -152,6 +153,10 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 		proposal.Kv = append(proposal.Kv, kv)
 		size = size + len(kv.Key) + len(kv.Val)
 	}
+	// Propose remaining keys.
+	if err := n.ProposeAndWait(ctx, proposal); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -178,6 +183,7 @@ func (w *grpcWorker) ReceivePredicate(stream protos.Worker_ReceivePredicateServe
 			break
 		}
 		if err != nil {
+			x.Printf("received %d number of keys, err %v\n", count, err)
 			return err
 		}
 		count++
@@ -185,13 +191,18 @@ func (w *grpcWorker) ReceivePredicate(stream protos.Worker_ReceivePredicateServe
 		select {
 		case kvs <- kv:
 		case <-ctx.Done():
+			close(kvs)
+			<-che
+			x.Printf("received %d number of keys, context deadline\n", count)
 			return ctx.Err()
 		case err := <-che:
+			x.Printf("received %d number of keys, error %v\n", count, err)
 			return err
 		}
 	}
 	close(kvs)
 	err := <-che
+	x.Printf("received %d number of keys, error %v\n", count, err)
 	return err
 }
 
@@ -209,7 +220,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errUnservedTablet
 	}
 	n := groups().Node
-	if n.AmLeader() {
+	if !n.AmLeader() {
 		return &emptyPayload, errNotLeader
 	}
 

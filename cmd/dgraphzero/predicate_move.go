@@ -18,6 +18,7 @@
 package main
 
 import (
+	"sort"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -47,28 +48,88 @@ This would trigger G1 to get latest state. Wait for it.
 • G1 gets this, G2 gets this.
 • Both propagate this to their followers.
 
-Cleanup:
-// Could cause race conditons when predicate is being moved. Ensure only either deletePredicate
-// is running or predicate streaming.
-// But if we are sending from g1 to g2, stream breaks in between then cleanup guy would end up
-// cleaning the predicate(Would create tombstones). Group zero would anyhow retry moving later.
-// TODO: Decide whether it's better if group zero does the cleanup.
-• The iterator for tablet update can do the cleanup, if it’s not serving the predicate.
 */
 
 // TODO: Handle failure scenarios, probably cleanup
-// Zero can crash after proposing G1 is read only. Need to run recovery on restart.
-// Ensure that we don't end up moving same predicate from g1 to g2 and then g2 to g1.
+// 1. Zero can crash after proposing G1 is read only. Need to run recovery on restart.
+// 2. Cleanup
+// 3. Verify timeout when destiantion node is slow.
+// 4. Leader change in group zero, new leader needs to check whether some move was in process.
+// 5. Crashed once during testing, don't know why :(
+func (s *Server) rebalanceTablets() {
+	ticker := time.NewTicker(time.Minute)
+	for {
+		<-ticker.C
+		s.RLock()
+		if s.state == nil {
+			s.RUnlock()
+			return
+		}
+		numGroups := len(s.state.Groups)
+		if !s.Node.AmLeader() || numGroups <= 1 {
+			continue
+		}
+
+		// Sort all groups by their sizes.
+		type kv struct {
+			gid  uint32
+			size int64
+		}
+		var ss []kv
+		for k, v := range s.state.Groups {
+			ss = append(ss, kv{k, v.Size_})
+		}
+		s.RUnlock()
+		sort.Slice(ss, func(i, j int) bool {
+			return ss[i].size < ss[j].size
+		})
+
+		// TODO: Start moving more at a time, for now we will move 1.
+		srcGroup := ss[numGroups-1].gid
+		dstGroup := ss[0].gid
+		size_diff := ss[numGroups-1].size - ss[0].size
+		x.Printf("\n\nGroups sorted by size: %+v, size_diff %v\n\n", ss, size_diff)
+		// TODO: Don't move a node unless you receive atleast one update regarding tablet size.
+		if size_diff < 50<<20 || ss[0].size == 0 { // Change limit later
+			continue
+		}
+
+		// Try to find a predicate which we can move.
+		predicate := ""
+		size := int64(0)
+		s.RLock()
+		group := s.state.Groups[srcGroup]
+		for _, tab := range group.Tablets {
+			// Finds a tablet as big a possible such that on moving it dstGroup's size is
+			// less than or equal to srcGroup.
+			// TODO: Probably don't drop below the mean of all groups.
+			if tab.Size_ <= size_diff/2 && tab.Size_ > size {
+				predicate = tab.Predicate
+				size = tab.Size_
+			}
+		}
+		s.RUnlock()
+		if len(predicate) == 0 {
+			continue
+		}
+		x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
+		if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
+			x.Printf("Error while trying to move predicate %v from %d to %d: %v\n",
+				predicate, srcGroup, dstGroup, err)
+		}
+	}
+}
+
 func (s *Server) movePredicate(predicate string, srcGroup uint32,
-	dstGroup uint32) (bool, error) {
+	dstGroup uint32) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*20)
 	defer cancel()
 	err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup)
 	if err == nil {
-		return true, nil
+		return nil
 	}
 
-	stab := s.servingTablet(predicate)
+	stab := s.ServingTablet(predicate)
 	x.AssertTrue(stab != nil)
 	p := &protos.ZeroProposal{}
 	p.Tablet = &protos.Tablet{
@@ -79,13 +140,13 @@ func (s *Server) movePredicate(predicate string, srcGroup uint32,
 	if err := s.Node.proposeAndWait(context.Background(), p); err != nil {
 		x.Printf("Error while reverting group %d to RW", srcGroup)
 	}
-	return false, err
+	return err
 }
 
 func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcGroup uint32,
 	dstGroup uint32) error {
 	n := s.Node
-	stab := s.servingTablet(predicate)
+	stab := s.ServingTablet(predicate)
 	x.AssertTrue(stab != nil)
 	// Propose that predicate in read only
 	p := &protos.ZeroProposal{}
@@ -119,6 +180,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		GroupId:   dstGroup,
 		Predicate: predicate,
 		Size_:     stab.Size_,
+		PrevGroup: srcGroup,
 	}
 	if err := n.proposeAndWait(ctx, p); err != nil {
 		return err

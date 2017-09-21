@@ -19,7 +19,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -142,7 +141,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal
 			break
 		}
 	}
-	fmt.Printf(" ===> Proposal: %+v\n", proposal)
 	data, err := proposal.Marshal()
 	if err != nil {
 		return err
@@ -186,7 +184,6 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	if p.Id == 0 {
 		return 0, errInvalidProposal
 	}
-	x.Printf("Applying proposal: %+v\n", p)
 
 	n.server.Lock()
 	defer n.server.Unlock()
@@ -218,15 +215,24 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			group = newGroup()
 			state.Groups[p.Tablet.GroupId] = group
 		}
-		_, has := group.Tablets[p.Tablet.Predicate]
-		if has && p.Tablet.NoUpdate {
-			return p.Id, errTabletAlreadyServed
-		} else {
-			group.Tablets[p.Tablet.Predicate] = p.Tablet
+
+		if p.Tablet.PrevGroup != 0 {
+			group := state.Groups[p.Tablet.PrevGroup]
+			delete(group.Tablets, p.Tablet.Predicate)
+			group.Size_ -= p.Tablet.Size_
+		} else if tablet := n.server.servingTablet(p.Tablet.Predicate); tablet != nil {
+			if tablet.GroupId != p.Tablet.GroupId {
+				return p.Id, errTabletAlreadyServed
+			}
+			group.Size_ -= tablet.Size_
 		}
+		group.Tablets[p.Tablet.Predicate] = p.Tablet
+		group.Size_ += p.Tablet.Size_
 	}
 	if p.MaxLeaseId > 0 {
 		state.MaxLeaseId = p.MaxLeaseId
+	} else {
+		x.Printf("Applied proposal: %+v\n", p)
 	}
 	return p.Id, nil
 }
