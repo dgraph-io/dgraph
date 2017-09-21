@@ -1444,9 +1444,20 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 	} else if len(sg.DestUIDs.Uids) != 0 {
 		// This implies it is a entity variable.
-		doneVars[sg.Params.Var] = varValue{
-			Uids: sg.DestUIDs,
-			path: sgPath,
+		if v, ok := doneVars[sg.Params.Var]; ok {
+			uids := v.Uids
+			lists := make([]*protos.List, 0, 2)
+			lists = append(lists, uids, sg.DestUIDs)
+			mergedList := algo.MergeSorted(lists)
+			doneVars[sg.Params.Var] = varValue{
+				Uids: mergedList,
+				path: sgPath,
+			}
+		} else {
+			doneVars[sg.Params.Var] = varValue{
+				Uids: sg.DestUIDs,
+				path: sgPath,
+			}
 		}
 	} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
 		if sg.Attr == "_uid_" {
@@ -1473,6 +1484,11 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			doneVars[sg.Params.Var].Vals[uid] = val
 		}
 	} else {
+		// If the variable already existed and now we see it again without any DestUIDs or
+		// ValueMatrix then lets just return.
+		if _, ok := doneVars[sg.Params.Var]; ok {
+			return nil
+		}
 		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = varValue{
 			path: sgPath,
@@ -1481,6 +1497,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 	}
 	return nil
 }
+
 func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
 		sgPath = append(sgPath, sg)
