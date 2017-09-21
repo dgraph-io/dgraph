@@ -192,7 +192,6 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 		srcTablet, has := group.Tablets[key]
 		if !has {
 			// Tablet moved to new group
-			// TODO: We can return error and trigger cleanup.
 			continue
 		}
 
@@ -280,7 +279,6 @@ func (s *Server) Connect(ctx context.Context,
 			return &emptyMembershipState, err
 		}
 	}
-	// TODO: Shouldn't we copy before.
 	return s.membershipState(), nil
 }
 

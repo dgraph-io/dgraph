@@ -52,10 +52,9 @@ This would trigger G1 to get latest state. Wait for it.
 
 // TODO: Handle failure scenarios, probably cleanup
 // 1. Zero can crash after proposing G1 is read only. Need to run recovery on restart.
-// 2. Cleanup
-// 3. Verify timeout when destiantion node is slow.
-// 4. Leader change in group zero, new leader needs to check whether some move was in process.
-// 5. Crashed once during testing, don't know why :(
+// 2. Leader change in group zero, new leader needs to check whether some move was in process.
+// 3. Cleanup
+// 4. Verify timeout when destiantion node is slow.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(time.Minute)
 	for {
@@ -102,7 +101,6 @@ func (s *Server) rebalanceTablets() {
 		for _, tab := range group.Tablets {
 			// Finds a tablet as big a possible such that on moving it dstGroup's size is
 			// less than or equal to srcGroup.
-			// TODO: Probably don't drop below the mean of all groups.
 			if tab.Size_ <= size_diff/2 && tab.Size_ > size {
 				predicate = tab.Predicate
 				size = tab.Size_
