@@ -9490,3 +9490,22 @@ func TestUidVariable(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
+
+func TestMultipleValueVarError(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		var(func:ge(graduation, "1930")) {
+			o as graduation
+		}
+
+		me(func: uid(o)) {
+			graduation
+		}
+	}`
+
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Value variables not supported for predicate with list type.")
+}

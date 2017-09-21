@@ -1423,6 +1423,8 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		return nil
 	}
 
+	var v varValue
+	var ok bool
 	if sg.Attr == "_predicate_" {
 		// This is a predicates list.
 		doneVars[sg.Params.Var] = varValue{
@@ -1444,21 +1446,22 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 	} else if len(sg.DestUIDs.Uids) != 0 {
 		// This implies it is a entity variable.
-		if v, ok := doneVars[sg.Params.Var]; ok {
-			uids := v.Uids
-			lists := make([]*protos.List, 0, 2)
-			lists = append(lists, uids, sg.DestUIDs)
-			mergedList := algo.MergeSorted(lists)
-			doneVars[sg.Params.Var] = varValue{
-				Uids: mergedList,
-				path: sgPath,
-			}
-		} else {
+		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
 				Uids: sg.DestUIDs,
 				path: sgPath,
 			}
+			return nil
 		}
+		// For a recurse query this can happen. We don't allow using the same variable more than
+		// once otherwise.
+		uids := v.Uids
+		lists := make([]*protos.List, 0, 2)
+		lists = append(lists, uids, sg.DestUIDs)
+		v.Uids = algo.MergeSorted(lists)
+		doneVars[sg.Params.Var] = v
+
+		// This implies it is a value variable.
 	} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
 		if sg.Attr == "_uid_" {
 			// Its still an entity variable if its _uid_.
@@ -1469,14 +1472,15 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			return nil
 		}
 
-		// This implies it is a value variable.
-		// NOTE: Value variables cannot be defined and used in the same query block. so
-		// checking len(sgPath) is okay.
 		doneVars[sg.Params.Var] = varValue{
 			Vals: make(map[uint64]types.Val),
 			path: sgPath,
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
+			if len(sg.valueMatrix[idx].Values) > 1 {
+				return x.Errorf("Value variables not supported for predicate with list type.")
+			}
+
 			val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0], sg.Attr)
 			if err != nil {
 				continue
