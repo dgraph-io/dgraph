@@ -1472,6 +1472,10 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			return nil
 		}
 
+		if _, ok := doneVars[sg.Params.Var]; ok {
+			return nil
+		}
+
 		doneVars[sg.Params.Var] = varValue{
 			Vals: make(map[uint64]types.Val),
 			path: sgPath,

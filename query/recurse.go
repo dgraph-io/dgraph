@@ -143,7 +143,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 				temp := new(SubGraph)
 				temp.copyFiltersRecurse(child)
 				temp.SrcUIDs = sg.DestUIDs
-				temp.Params.Var = sg.Params.Var
+				temp.Params.Var = child.Params.Var
 				sg.Children = append(sg.Children, temp)
 				out = append(out, temp)
 			}

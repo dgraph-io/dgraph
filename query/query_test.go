@@ -1843,6 +1843,30 @@ func TestRecurseVariable(t *testing.T) {
 	require.Equal(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
 
+func TestRecurseVariable2(t *testing.T) {
+	populateGraph(t)
+
+	query := `
+			{
+
+				recurse(func: uid(0x1)) {
+					f2 as friend
+					f as follow
+				}
+
+				me(func: uid(f)) {
+					name
+				}
+
+				me2(func: uid(f2)) {
+					name
+				}
+			}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+}
+
 func TestShortestPath_ExpandError(t *testing.T) {
 	populateGraph(t)
 	query := `
