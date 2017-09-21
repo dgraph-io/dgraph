@@ -79,6 +79,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			go ProcessGraph(ctx, sg, dummy, rrch)
 		}
 
+		var recurseErr error
 		for range exec {
 			select {
 			case err = <-rrch:
@@ -86,15 +87,22 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 					if tr, ok := trace.FromContext(ctx); ok {
 						tr.LazyPrintf("Error while processing child task: %+v", err)
 					}
-					// TODO - Wait for all to complete before returning.
-					return err
+					if recurseErr == nil {
+						recurseErr = err
+					}
 				}
 			case <-ctx.Done():
 				if tr, ok := trace.FromContext(ctx); ok {
 					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 				}
-				return ctx.Err()
+				if recurseErr == nil {
+					recurseErr = ctx.Err()
+				}
 			}
+		}
+
+		if recurseErr != nil {
+			return recurseErr
 		}
 
 		for _, sg := range exec {
