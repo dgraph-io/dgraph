@@ -1825,6 +1825,48 @@ func TestRecurseQueryLimitDepth2(t *testing.T) {
 		`{"data": {"recurse":[{"_uid_":"0x1","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"name":"Michonne"}]}}`, js)
 }
 
+func TestRecurseVariable(t *testing.T) {
+	populateGraph(t)
+	query := `
+			{
+				recurse(func: uid(0x01)) {
+					a as friend
+				}
+
+				me(func: uid(a)) {
+					name
+				}
+			}
+		`
+
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+}
+
+func TestRecurseVariable2(t *testing.T) {
+	populateGraph(t)
+
+	query := `
+			{
+
+				recurse(func: uid(0x1)) {
+					f2 as friend
+					f as follow
+				}
+
+				me(func: uid(f)) {
+					name
+				}
+
+				me2(func: uid(f2)) {
+					name
+				}
+			}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+}
+
 func TestShortestPath_ExpandError(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -9471,4 +9513,23 @@ func TestUidVariable(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+}
+
+func TestMultipleValueVarError(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		var(func:ge(graduation, "1930")) {
+			o as graduation
+		}
+
+		me(func: uid(o)) {
+			graduation
+		}
+	}`
+
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Value variables not supported for predicate with list type.")
 }
