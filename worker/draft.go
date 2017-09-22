@@ -423,15 +423,18 @@ func (n *node) processApplyCh() {
 				n.props.Done(proposal.Id, nil)
 				continue
 			}
-			go n.deletePredicate(proposal.Id, proposal.CleanPredicate)
+			go n.deletePredicate(e.Index, proposal.Id, proposal.CleanPredicate)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
 	}
 }
 
-func (n *node) deletePredicate(pid uint32, predicate string) {
-	err := posting.DeletePredicate(n.ctx, predicate)
+func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
+	ctx, _ := n.props.Ctx(pid)
+	rv := x.RaftValue{Group: n.gid, Index: index}
+	ctx = context.WithValue(n.ctx, "raft", rv)
+	err := posting.DeletePredicate(ctx, predicate)
 	n.props.Done(pid, err)
 }
 
