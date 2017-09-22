@@ -153,11 +153,12 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 				Attr:      pk.Attr,
 				ValueType: uint32(types.StringID),
 				Value:     []byte(x.Star),
+				Op:        protos.DirectedEdge_DEL,
 			}
 			p.Mutations.Edges = append(p.Mutations.Edges, edge)
 			err := groups().Node.ProposeAndWait(ctx, p)
 			if err != nil {
-				x.Printf("Error while cleaning predicate %v\n", pk.Attr)
+				x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 			}
 		}
 		proposal.Kv = append(proposal.Kv, kv)
