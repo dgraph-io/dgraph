@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -299,35 +300,51 @@ func nquadsFromJson(b []byte) ([]*protos.NQuad, error) {
 	}
 	fmt.Println("ms", ms)
 
-	var hasUid bool
+	var uid string
 	// Check field in map.
 	if uidVal, ok := ms["_uid_"]; ok {
 		// Should be convertible to uint64. Maybe we also want to allow string later.
-		if uid, ok := uidVal.(uint64); ok && uid != 0 {
-			hasUid = true
+		if id, ok := uidVal.(uint64); ok && id != 0 {
+			// TODO - Check if uint64 needs to be converted to string.
+			uid = uidVal
 		}
 	}
 
+	// TODO - Handle facets
+	var nquads []*protos.NQuad
 	for k, v := range ms {
 		if k == "_uid_" {
 			continue
 		}
 
-		fmt.Println("k", k, "v", v)
+		nq := protos.NQuad{
+			Subject:   uid,
+			Predicate: k,
+		}
 		switch t := v.(type) {
 		default:
 			fmt.Printf("unexpected type %T\n", t) // %T prints whatever type t has
+		case string:
+			nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v}}
+			nq.ObjectType = types.StringID
+			nquads = append(nquads, &nq)
+		case float64:
+			nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v}}
+			nq.ObjectType = types.FloatID
+			nquads = append(nquads, &nq)
+			// TODO - Handle language.
 		case bool:
-			fmt.Printf("boolean %t\n", t) // t has type bool
-		case int:
-			fmt.Printf("integer %d\n", t) // t has type int
-		case *bool:
-			fmt.Printf("pointer to boolean %t\n", *t) // t has type *bool
-		case *int:
-			fmt.Printf("pointer to integer %d\n", *t) // t has type *int
+			nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v}}
+			nq.ObjectType = types.BoolID
+			nquads = append(nquads, &nq)
+		case map[string]interface{}:
+			fmt.Println("k", k, "v", v)
+		case []interface{}:
+			fmt.Println("list k", k, "v", v)
 		}
 	}
-	fmt.Println("hasUid", hasUid)
+
+	fmt.Printf("Nquads: %+v\n", nquads)
 	return nil, nil
 }
 
