@@ -163,10 +163,21 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 
 		tablet, has := tablets[pk.Attr]
 		if !has {
-			if !g.ServesTablet(pk.Attr) {
-				// TODO: Propose state whenver you are receiving predicate and do
+			tablet = g.Tablet(pk.Attr)
+			if tablet == nil || tablet.GroupId != g.groupId() {
+				// Someone else is serving this. tablet could be nil if request
+				// to group zero fails, so delete only if we are sure.
 				// cleanup via proposals, that way you can skip cleanup if a
 				// predicate is being moved.
+				if tablet != nil {
+					go func(predicate string) {
+						p := &protos.Proposal{CleanPredicate: predicate}
+						err := g.Node.ProposeAndWait(g.ctx, p)
+						if err != nil {
+							x.Printf("Error while cleaning predicate %v\n", predicate)
+						}
+					}(pk.Attr)
+				}
 				itr.Seek(pk.SkipPredicate())
 				continue
 			}

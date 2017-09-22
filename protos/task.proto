@@ -166,6 +166,7 @@ message Proposal {
 	Member membership = 3;
 	repeated KV kv = 4;
 	MembershipState state = 5;
+	string clean_predicate = 6; // Delete the predicate which was moved to other group.
 }
 
 message KV {

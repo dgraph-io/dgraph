@@ -25,8 +25,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -146,8 +146,18 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 		if firstKV {
 			firstKV = false
 			pk := x.Parse(kv.Key)
-			if err := posting.DeletePredicate(ctx, pk.Attr); err != nil {
-				return err
+			// Delete on all nodes.
+			p := &protos.Proposal{}
+			p.Mutations = &protos.Mutations{}
+			edge := &protos.DirectedEdge{
+				Attr:      pk.Attr,
+				ValueType: uint32(types.StringID),
+				Value:     []byte(x.Star),
+			}
+			p.Mutations.Edges = append(p.Mutations.Edges, edge)
+			err := groups().Node.ProposeAndWait(ctx, p)
+			if err != nil {
+				x.Printf("Error while cleaning predicate %v\n", pk.Attr)
 			}
 		}
 		proposal.Kv = append(proposal.Kv, kv)
@@ -171,6 +181,9 @@ func (w *grpcWorker) ReceivePredicate(stream protos.Worker_ReceivePredicateServe
 	ctx := stream.Context()
 	payload := &protos.Payload{}
 
+	// TODO: Get state and propose before moving, would be used to avoid race condition in cleanup.
+	// Cleaning might be going on background, so propoaly wait for appliedwatermark.
+	groups().Node.WaitLinearizableRead(ctx)
 	go func() {
 		// Takes care of throttling and batching.
 		che <- batchAndProposeKeyValues(ctx, kvs)

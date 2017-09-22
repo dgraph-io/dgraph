@@ -414,10 +414,23 @@ func (n *node) processApplyCh() {
 			groups().applyState(proposal.State)
 			// When proposal is done it emits done watermarks.
 			n.props.Done(proposal.Id, nil)
+		} else if len(proposal.CleanPredicate) > 0 {
+			// If this predicate is being moved, can be false positive when tablet is being moved
+			// to some other group, but it's ok and background cleaning job would try to delete again.
+			if tablet := groups().Tablet(proposal.CleanPredicate); tablet != nil && tablet.ReadOnly {
+				n.props.Done(proposal.Id, nil)
+				continue
+			}
+			go n.deletePredicate(proposal.Id, proposal.CleanPredicate)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
 	}
+}
+
+func (n *node) deletePredicate(pid uint32, predicate string) {
+	err := posting.DeletePredicate(n.ctx, predicate)
+	n.props.Done(pid, err)
 }
 
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {

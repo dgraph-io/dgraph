@@ -50,7 +50,9 @@ This would trigger G1 to get latest state. Wait for it.
 
 */
 
-// TODO: Have a flag to disable rebalancing.
+// TODO: Have a flag to disable rebalancing. (Useful on production when users don't want
+// rebalancing to happen during critical time.
+//       Have a event log for everything.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(time.Minute)
 	var cancel context.CancelFunc
