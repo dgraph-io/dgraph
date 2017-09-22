@@ -57,16 +57,11 @@ type loader struct {
 }
 
 func newLoader(opt options) *loader {
-	schemaBuf, err := ioutil.ReadFile(opt.SchemaFile)
-	x.Checkf(err, "Could not load schema.")
-	initialSchema, err := schema.Parse(string(schemaBuf))
-	x.Checkf(err, "Could not parse schema.")
-
 	st := &state{
 		opt:  opt,
 		prog: newProgress(),
 		um:   newUIDMap(),
-		ss:   newSchemaStore(initialSchema),
+		ss:   newSchemaStore(readSchema(opt.SchemaFile)),
 		sm:   newShardMap(opt.MapShards),
 
 		// Lots of gz readers, so not much channel buffer needed.
@@ -81,6 +76,24 @@ func newLoader(opt options) *loader {
 	}
 	go ld.prog.report()
 	return ld
+}
+
+func readSchema(filename string) []*protos.SchemaUpdate {
+	f, err := os.Open(filename)
+	x.Check(err)
+	defer f.Close()
+	var r io.Reader = f
+	if filepath.Ext(filename) == ".gz" {
+		r, err = gzip.NewReader(f)
+		x.Check(err)
+	}
+
+	buf, err := ioutil.ReadAll(r)
+	x.Check(err)
+
+	initialSchema, err := schema.Parse(string(buf))
+	x.Check(err)
+	return initialSchema
 }
 
 func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
