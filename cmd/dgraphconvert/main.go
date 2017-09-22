@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -68,7 +69,22 @@ func writeToFile(fpath string, ch chan []byte) error {
 
 func convertGeoFile(input string, output string) error {
 	fmt.Printf("\nProcessing %s\n\n", input)
-	b, err := ioutil.ReadFile(input)
+	f, err := os.Open(input)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var gz io.Reader
+	gz = f
+	if filepath.Ext(input) == ".gz" {
+		gz, err = gzip.NewReader(f)
+		if err != nil {
+			return err
+		}
+	}
+
+	b, err := ioutil.ReadAll(gz)
 	if err != nil {
 		return err
 	}
