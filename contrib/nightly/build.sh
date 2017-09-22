@@ -259,6 +259,6 @@ fi
 
 # Lets rename the binaries before they are uploaded to S3.
 mv $TRAVIS_BUILD_DIR/cmd/dgraph/dgraph $TRAVIS_BUILD_DIR/cmd/dgraph/dgraph-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
-mv $TRAVIS_BUILD_DIR/cmd/dgraphloader/dgraphloader $TRAVIS_BUILD_DIR/cmd/dgraphloader/dgraphloader-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
+mv $TRAVIS_BUILD_DIR/cmd/dgraph-live-loader/dgraph-live-loader $TRAVIS_BUILD_DIR/cmd/dgraph-live-loader/dgraph-live-loader-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
 
 popd > /dev/null

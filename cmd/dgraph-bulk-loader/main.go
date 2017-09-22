@@ -45,7 +45,7 @@ func main() {
 	flag.IntVar(&opt.NumShufflers, "shufflers", 1, "Number of shufflers to run concurrently.")
 	flag.IntVar(&opt.MapShards, "map_shards", 1, "Number of map output shards.")
 	flag.IntVar(&opt.ReduceShards, "reduce_shards", 1, "Number of shuffle output shards.")
-	flag.BoolVar(&opt.Version, "version", false, "Prints the version of bulkloader.")
+	flag.BoolVar(&opt.Version, "version", false, "Prints the version of dgraph-bulk-loader.")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {

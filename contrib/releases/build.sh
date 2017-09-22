@@ -50,12 +50,12 @@ echo "dgraph"
 cd $dgraph_cmd/dgraph && \
    go build -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
-echo "dgraphloader"
-cd $dgraph_cmd/dgraphloader && \
+echo "dgraph-live-loader"
+cd $dgraph_cmd/dgraph-live-loader && \
    go build -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
-echo "bulkloader"
-cd $dgraph_cmd/bulkloader && \
+echo "dgraph-bulk-loader"
+cd $dgraph_cmd/dgraph-bulk-loader && \
    go build -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
 
@@ -64,9 +64,9 @@ echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 cd $tmp_dir;
 mkdir dgraph && pushd &> /dev/null dgraph;
 # Stripping the binaries.
-strip $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphloader/dgraphloader \
-$dgraph_cmd/bulkloader/bulkloader;
-cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphloader/dgraphloader $dgraph_cmd/bulkloader/bulkloader .;
+strip $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraph-live-loader/dgraph-live-loader \
+$dgraph_cmd/dgraph-bulk-loader/dgraph-bulk-loader;
+cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraph-live-loader/dgraph-live-loader $dgraph_cmd/dgraph-bulk-loader/dgraph-bulk-loader .;
 
 echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
 
@@ -80,10 +80,10 @@ fi
 
 checksum=$($digest_cmd dgraph | awk '{print $1}')
 echo "$checksum /usr/local/bin/dgraph" >> $checksum_file
-checksum=$($digest_cmd dgraphloader | awk '{print $1}')
-echo "$checksum /usr/local/bin/dgraphloader" >> $checksum_file
-checksum=$($digest_cmd bulkloader | awk '{print $1}')
-echo "$checksum /usr/local/bin/bulkloader" >> $checksum_file
+checksum=$($digest_cmd dgraph-live-loader | awk '{print $1}')
+echo "$checksum /usr/local/bin/dgraph-live-loader" >> $checksum_file
+checksum=$($digest_cmd dgraph-bulk-loader | awk '{print $1}')
+echo "$checksum /usr/local/bin/dgraph-bulk-loader" >> $checksum_file
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
 tar_file=dgraph-"$platform"-amd64-$release_version

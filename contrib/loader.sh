@@ -56,12 +56,12 @@ curl -X POST  -d 'mutation {
   }
 }' "http://localhost:8080/query"
 
-echo -e "\nBuilding and running dgraphloader."
-pushd cmd/dgraphloader &> /dev/null
+echo -e "\nBuilding and running dgraph-live-loader."
+pushd cmd/dgraph-live-loader &> /dev/null
 # Delete client directory to clear checkpoints.
 rm -rf c
 go build .
-./dgraphloader -r $benchmark/goldendata.rdf.gz -x true -d "localhost:8080,localhost:8082"
+./dgraph-live-loader -r $benchmark/goldendata.rdf.gz -x true -d "localhost:8080,localhost:8082"
 popd &> /dev/null
 
 
@@ -94,7 +94,7 @@ rm -rf export/*
 curl http://localhost:8080/admin/export
 echo -e "\nExport done."
 
-# This is count of RDF's in goldendata.rdf.gz + xids because we ran dgraphloader with -xid flag.
+# This is count of RDF's in goldendata.rdf.gz + xids because we ran dgraph-live-loader with -xid flag.
 dataCount="1475250"
 # Concat exported files to get total count.
 cat $(ls -t export/dgraph-1-* | head -1) $(ls -t export/dgraph-2-* | head -1) > export/dgraph-export.rdf.gz

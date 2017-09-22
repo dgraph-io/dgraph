@@ -9,7 +9,7 @@ title = "Performance"
 ### Dgraphloader
 [Dgraphloader]({{< relref "deploy/index.md#bulk-data-loading" >}}) can be used to load the RDF data into Dgraph. As a reference point, it took on an average '''5 minutes to load 22M RDFs''' (from [benchmarks repository](https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz)) on an i7-6820HQ quad core Thinkpad T460 laptop with 16 GB RAM and SSD storage. The total output including the RAFT logs was 1.4 GB. Loading the same data on a ec2 [m4.large](https://aws.amazon.com/ec2/instance-types) machine took around 18 minutes.
 
-![Dgraph loader performance on an i7 quad core Thinkpad](dgraphloader.gif)
+![Dgraph loader performance on an i7 quad core Thinkpad](dgraph-live-loader.gif)
 
 ### Queries
 

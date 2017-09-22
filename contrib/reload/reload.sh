@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script runs as a cron job. It builds dgraph, dgraphloader and loads up the
+# This script runs as a cron job. It builds dgraph, dgraph-live-loader and loads up the
 # 21million.rdf.gz dataset when invoked. It would be used to display proper responses
 # for docs on master branch.
 
@@ -64,10 +64,10 @@ pushd $dgraphRepo > /dev/null
 updateBranch
 popd > /dev/null
 
-echo "$(date) Building dgraph and dgraphloader"
+echo "$(date) Building dgraph and dgraph-live-loader"
 cd $dgraphRepo/cmd/dgraph && go build .
-cd $dgraphRepo/cmd/dgraphloader && go build .
-echo -e "$(date)$GREEN dgraph and dgraphloader built successfully. $RESET"
+cd $dgraphRepo/cmd/dgraph-live-loader && go build .
+echo -e "$(date)$GREEN dgraph and dgraph-live-loader built successfully. $RESET"
 
 latestCommit=$(git rev-parse --short HEAD)
 unixTs=$(date +%s)
@@ -77,7 +77,7 @@ mkdir -p ~/dgraph/$dgraphDir && cd ~/dgraph/$dgraphDir
 $dgraphRepo/cmd/dgraph/dgraph --port 8082 --workerport 12346 > dgraph.log 2>&1 &
 sleep 15
 echo -e "$(date) Started Dgraph on port 8082. Now loading the dataset."
-$dgraphRepo/cmd/dgraphloader/dgraphloader --d 127.0.0.1:8082 --s $schemaPath \
+$dgraphRepo/cmd/dgraph-live-loader/dgraph-live-loader --d 127.0.0.1:8082 --s $schemaPath \
 	--r $dataPath
 echo -e "$(date)$GREEN Data loaded successfully. $RESET"
 
