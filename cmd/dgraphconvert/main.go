@@ -88,6 +88,7 @@ func convertGeoFile(input string, output string) error {
 	}
 
 	count := 0
+	rdfCount := 0
 	for _, f := range fc1.Features {
 		b, err := json.Marshal(f.Geometry)
 		if err != nil {
@@ -100,20 +101,21 @@ func convertGeoFile(input string, output string) error {
 		chb <- []byte(rdf)
 
 		for k, _ := range f.Properties {
-			// Maybe support other types later.
+			// TODO - Support other types later.
 			if str, err := f.PropertyString(k); err == nil {
+				rdfCount++
 				rdf = fmt.Sprintf("%s <%s> \"%s\" .\n", bn, k, str)
 				chb <- []byte(rdf)
 			}
 		}
 		count++
+		rdfCount++
 		if count%1000 == 0 {
 			fmt.Printf("%d features converted\r", count)
 		}
 	}
 	close(chb)
-	fmt.Printf("%d features converted", count)
-
+	fmt.Printf("%d features converted. %s rdf's generated\n", count, rdfCount)
 	return <-che
 }
 
