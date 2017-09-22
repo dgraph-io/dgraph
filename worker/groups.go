@@ -144,11 +144,6 @@ func (g *groupi) groupId() uint32 {
 }
 
 func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
-	// Only calculate these, if I'm the leader.
-	if !g.Node.AmLeader() {
-		return nil
-	}
-
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchValues = false
 	itr := pstore.NewIterator(opt)
@@ -169,13 +164,16 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 		tablet, has := tablets[pk.Attr]
 		if !has {
 			if !g.ServesTablet(pk.Attr) {
+				// TODO: Propose state whenver you are receiving predicate and do
+				// cleanup via proposals, that way you can skip cleanup if a
+				// predicate is being moved.
 				itr.Seek(pk.SkipPredicate())
 				continue
 			}
 			tablet = &protos.Tablet{GroupId: gid, Predicate: pk.Attr}
 			tablets[pk.Attr] = tablet
 		}
-		tablet.Size_ += item.EstimatedSize()
+		tablet.Space += item.EstimatedSize()
 		itr.Next()
 	}
 	return tablets
@@ -388,6 +386,8 @@ func (g *groupi) triggerMembershipSync() {
 
 func (g *groupi) periodicMembershipUpdate() {
 	ticker := time.NewTicker(time.Minute * 2)
+	// Node might not be the leader when we are calculating size.
+	// We need to send immediately on start so no leader check inside calculatesize.
 	tablets := g.calculateTabletSizes()
 
 START:
@@ -433,6 +433,7 @@ OUTER:
 	for {
 		select {
 		case <-g.triggerCh:
+			// On start of node if it becomes a leader, we would send tablets size for sure.
 			if err := g.sendMembership(tablets, stream); err != nil {
 				stream.CloseSend()
 				break OUTER
@@ -440,10 +441,11 @@ OUTER:
 		case <-ticker.C:
 			// dgraphzero just adds to the map so we needn't worry about race condition
 			// where a newly added tablet is not sent.
-			tablets = g.calculateTabletSizes()
-			if tablets == nil {
-				continue // I am not leader so no need to send.
+			if g.Node.AmLeader() {
+				tablets = g.calculateTabletSizes()
 			}
+			// Let's send update even if not leader, zero will know that this node is still
+			// active.
 			if err := g.sendMembership(tablets, stream); err != nil {
 				x.Printf("Error while updating tablets size %v\n", err)
 				stream.CloseSend()
@@ -459,17 +461,21 @@ OUTER:
 
 func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 	stream protos.Zero_UpdateClient) error {
+	leader := g.Node.AmLeader()
 	member := &protos.Member{
-		Id:      Config.RaftId,
-		GroupId: g.groupId(),
-		Addr:    Config.MyAddr,
-		Leader:  g.Node.AmLeader(),
+		Id:         Config.RaftId,
+		GroupId:    g.groupId(),
+		Addr:       Config.MyAddr,
+		Leader:     leader,
+		LastUpdate: uint64(time.Now().Nanosecond()),
 	}
 	group := &protos.Group{
 		Members: make(map[uint64]*protos.Member),
 	}
 	group.Members[member.Id] = member
-	group.Tablets = tablets
+	if leader {
+		group.Tablets = tablets
+	}
 
 	return stream.Send(group)
 }

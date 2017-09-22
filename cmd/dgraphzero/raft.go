@@ -216,18 +216,22 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			state.Groups[p.Tablet.GroupId] = group
 		}
 
-		if p.Tablet.PrevGroup != 0 {
-			group := state.Groups[p.Tablet.PrevGroup]
-			delete(group.Tablets, p.Tablet.Predicate)
-			group.Size_ -= p.Tablet.Size_
-		} else if tablet := n.server.servingTablet(p.Tablet.Predicate); tablet != nil {
-			if tablet.GroupId != p.Tablet.GroupId {
-				return p.Id, errTabletAlreadyServed
+		if tablet := n.server.servingTablet(p.Tablet.Predicate); tablet != nil {
+			if p.Tablet.Force {
+				group := state.Groups[tablet.GroupId]
+				delete(group.Tablets, p.Tablet.Predicate)
+				group.Space -= p.Tablet.Space
+			} else {
+				if tablet.GroupId != p.Tablet.GroupId {
+					return p.Id, errTabletAlreadyServed
+				}
+				// This update can come from tablet size.
+				group.Space -= tablet.Space
+				p.Tablet.ReadOnly = tablet.ReadOnly
 			}
-			group.Size_ -= tablet.Size_
 		}
 		group.Tablets[p.Tablet.Predicate] = p.Tablet
-		group.Size_ += p.Tablet.Size_
+		group.Space += p.Tablet.Space
 	}
 	if p.MaxLeaseId > 0 {
 		state.MaxLeaseId = p.MaxLeaseId
@@ -252,6 +256,11 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+	select {
+	case n.server.leaderChangeCh <- struct{}{}:
+	default:
+		// Ok to ingore
+	}
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {

@@ -56,7 +56,8 @@ type Server struct {
 	leaseLock   sync.Mutex // protects nextLeaseId and lease proposals.
 
 	// groupMap    map[uint32]*Group
-	nextGroup uint32
+	nextGroup      uint32
+	leaderChangeCh chan struct{}
 }
 
 func (s *Server) Init() {
@@ -69,6 +70,7 @@ func (s *Server) Init() {
 	}
 	s.nextLeaseId = 1
 	s.nextGroup = 1
+	s.leaderChangeCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
 }
 
@@ -94,6 +96,23 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 	return healthyPool
 }
 
+func (s *Server) hasLeader(gid uint32) bool {
+	s.AssertRLock()
+	if s.state == nil {
+		return false
+	}
+	group := s.state.Groups[gid]
+	if group == nil {
+		return false
+	}
+	for _, m := range group.Members {
+		if m.Leader {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) SetMembershipState(state *protos.MembershipState) {
 	s.Lock()
 	defer s.Unlock()
@@ -104,6 +123,7 @@ func (s *Server) SetMembershipState(state *protos.MembershipState) {
 	if state.Groups == nil {
 		state.Groups = make(map[uint32]*protos.Group)
 	}
+	s.nextGroup = uint32(len(state.Groups) + 1)
 }
 
 func (s *Server) MarshalMembershipState() ([]byte, error) {
@@ -195,8 +215,8 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 			continue
 		}
 
-		s := float64(srcTablet.Size_)
-		d := float64(dstTablet.Size_)
+		s := float64(srcTablet.Space)
+		d := float64(dstTablet.Space)
 		if (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
 			proposal := &protos.ZeroProposal{
 				Tablet: dstTablet,

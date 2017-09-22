@@ -105,7 +105,7 @@ message Member {
 message Group {
   map<uint64, Member> members = 1; // Raft ID is the key.
   map<string, Tablet> tablets = 2; // Predicate + others are key.
-	int64 size = 7; // Used to trace size of group
+	int64 space                 = 7; // Used to trace size of group
 }
 
 message ZeroProposal {
@@ -126,11 +126,11 @@ message MembershipState {
 }
 
 message Tablet {
-  uint32 group_id   = 1; // Served by which group.
-  string predicate  = 2;
-	uint32 prev_group = 3; // Used while moving predicate.
-  bool read_only    = 4;  // Used to block mutations on this predicate.
-  int64 size        = 7;
+  uint32 group_id  = 1; // Served by which group.
+  string predicate = 2;
+	bool force       = 3; // Used while moving predicate.
+  bool read_only   = 4;  // Used to block mutations on this predicate.
+  int64 space      = 7;
 }
 
 message DirectedEdge {
