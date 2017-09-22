@@ -17,6 +17,7 @@
 package dgraph
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -135,7 +136,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 
 	resp = new(protos.Response)
 	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
-		len(req.Mutation.GetSchema()) == 0
+		len(req.Mutation.GetSchema()) == 0 && len(req.MutationSet) == 0 && len(req.MutationDel) == 0
 	if len(req.Query) == 0 && emptyMutation && req.Schema == nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Empty query and mutation.")
@@ -151,6 +152,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
 	}
+
 	res, err := ParseQueryAndMutation(ctx, gql.Request{
 		Str:       req.Query,
 		Mutation:  req.Mutation,
@@ -158,6 +160,10 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		Http:      false,
 	})
 	if err != nil {
+		return resp, err
+	}
+
+	if err := parseMutationObject(&res, req); err != nil {
 		return resp, err
 	}
 
@@ -284,4 +290,55 @@ func ParseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 		}
 	}
 	return res, nil
+}
+
+func nquadsFromJson(b []byte) ([]*protos.NQuad, error) {
+	ms := make(map[string]interface{})
+	if err := json.Unmarshal(b, &ms); err != nil {
+		return nil, err
+	}
+	fmt.Println("ms", ms)
+
+	var hasUid bool
+	// Check field in map.
+	if uidVal, ok := ms["_uid_"]; ok {
+		// Should be convertible to uint64. Maybe we also want to allow string later.
+		if uid, ok := uidVal.(uint64); ok && uid != 0 {
+			hasUid = true
+		}
+	}
+
+	for k, v := range ms {
+		if k == "_uid_" {
+			continue
+		}
+
+		fmt.Println("k", k, "v", v)
+		switch t := v.(type) {
+		default:
+			fmt.Printf("unexpected type %T\n", t) // %T prints whatever type t has
+		case bool:
+			fmt.Printf("boolean %t\n", t) // t has type bool
+		case int:
+			fmt.Printf("integer %d\n", t) // t has type int
+		case *bool:
+			fmt.Printf("pointer to boolean %t\n", *t) // t has type *bool
+		case *int:
+			fmt.Printf("pointer to integer %d\n", *t) // t has type *int
+		}
+	}
+	fmt.Println("hasUid", hasUid)
+	return nil, nil
+}
+
+func parseMutationObject(res *gql.Result, q *protos.Request) error {
+	if len(q.MutationSet) == 0 && len(q.MutationDel) == 0 {
+		return nil
+	}
+
+	_, err := nquadsFromJson(q.MutationSet)
+	if err != nil {
+		return err
+	}
+	return nil
 }

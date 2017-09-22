@@ -57,6 +57,7 @@
 		Tablet
 		DirectedEdge
 		Mutations
+		KeyValues
 		Proposal
 		KV
 		KC

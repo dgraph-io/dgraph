@@ -19,6 +19,7 @@ package client
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -104,6 +105,15 @@ func (req *Req) addMutation(e Edge, op opType) {
 	} else if op == DEL {
 		req.gr.Mutation.Del = append(req.gr.Mutation.Del, &e.nq)
 	}
+}
+
+func (req *Req) SetObject(v interface{}) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	req.gr.MutationSet = b
+	return nil
 }
 
 // Set adds edge e to the set mutation of request req, thus scheduling the edge to be added to the

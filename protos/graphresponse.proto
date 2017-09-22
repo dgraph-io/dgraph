@@ -76,6 +76,8 @@ message Request {
     Mutation mutation = 2;
     SchemaRequest schema = 3;
     map<string, string> vars = 4; // Support for GraphQL like variables.
+    bytes mutation_set = 5;
+    bytes mutation_del = 6;
 }
 
 message Latency {
