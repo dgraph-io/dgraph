@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/crc64"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -22,7 +24,8 @@ func TestHelloWorld(t *testing.T) {
 	s := setup(t, `
 		name: string @index(term) .
 	`, `
-		_:peter <name> "Peter" .
+		_:pj <name> "Peter Jackson" .
+		_:pp <name> "Peter Pan" .
 	`)
 	defer s.cleanup()
 	t.Run("test case 1", s.strtest(`
@@ -35,7 +38,8 @@ func TestHelloWorld(t *testing.T) {
 	{
 		"data": {
 			"q": [
-				{ "name": "Peter" }
+				{ "name": "Peter Pan" },
+				{ "name": "Peter Jackson" }
 			]
 		}
 	}
@@ -153,6 +157,8 @@ func (s *suite) strtest(query, wantResult string) func(*testing.T) {
 			t.Fatal("Could not convert want result to JSON:", err)
 		}
 
+		// TODO: Actually need to compare using map[string]interface{}, since
+		// map iteration order could cause different textual representations.
 		if gotCanon != wantCanon {
 			t.Errorf("Want result and got result different:\nWant:\n%v\nGot:\n%v", wantCanon, gotCanon)
 		}
@@ -205,4 +211,38 @@ func canonicalJSON(in []byte) (string, error) {
 		return "", err
 	}
 	return string(out), nil
+}
+
+func sortJSON(i interface{}) uint64 {
+	switch i := i.(type) {
+	case map[string]interface{}:
+		return sortJSONMap(i)
+	case []interface{}:
+		return sortJSONArray(i)
+	default:
+		// TODO: Just take a hash
+	}
+}
+
+func sortJSONMap(m map[string]interface{}) uint64 {
+	h := crc64.New(crc64.ISO)
+	for _, k := range sortedKeys(m) {
+		h.Write([]byte(k))
+		v := m[k]
+		if slc, ok := v.(type); ok {
+			// TODO: Sort the slice
+		}
+	}
+}
+
+func sortJSONArray(a []interface{}) uint64 {
+}
+
+func sortedKeys(m map[string]interface{}) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return ks
 }
