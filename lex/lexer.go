@@ -145,7 +145,7 @@ func (l *Lexer) Run(f StateFn) *Lexer {
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 	l.items = append(l.items, Item{
 		Typ: ItemError,
-		Val: fmt.Sprintf(format, args...),
+		Val: fmt.Sprintf("while lexing %v: "+format, append([]interface{}{l.Input}, args...)...),
 	})
 	return nil
 }
