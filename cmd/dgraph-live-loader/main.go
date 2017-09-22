@@ -1,8 +1,20 @@
-// This script is used to load data into Dgraph from an RDF file by performing
-// mutations using the HTTP interface.
-//
-// You can run the script like
-// go build . && ./dgraphloader -r path-to-gzipped-rdf.gz -s path-to-gzipped-schema-rdf.gz
+/*
+ * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package main
 
 import (
@@ -39,17 +51,15 @@ import (
 )
 
 var (
-	files        = flag.String("r", "", "Location of rdf files to load")
-	schemaFile   = flag.String("s", "", "Location of schema file")
-	dgraph       = flag.String("d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	concurrent   = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
-	numRdf       = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
-	storeXid     = flag.Bool("x", false, "Store xids by adding corresponding xid edges")
-	mode         = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
-	clientDir    = flag.String("cd", "c", "Directory to store xid to uid mapping")
-	blockRate    = flag.Int("block", 0, "Block profiling rate")
-	geoFiles     = flag.String("geo", "", "Location of geo files to load")
-	geoPredicate = flag.String("geopred", "loc", "The name of the predicate used to store coordinates.")
+	files      = flag.String("r", "", "Location of rdf files to load")
+	schemaFile = flag.String("s", "", "Location of schema file")
+	dgraph     = flag.String("d", "127.0.0.1:9080", "Dgraph gRPC server address")
+	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
+	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
+	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding xid edges")
+	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
+	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
+	blockRate  = flag.Int("block", 0, "Block profiling rate")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
 	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip certificate validation (insecure)")
@@ -327,8 +337,7 @@ func main() {
 	}
 
 	filesList := fileList(*files)
-	geoFilesList := fileList(*geoFiles)
-	totalFiles := len(filesList) + len(geoFilesList)
+	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		os.Exit(0)
 	}
@@ -341,12 +350,7 @@ func main() {
 			errCh <- processFile(ctx, file, dgraphClient)
 		}(file)
 	}
-	for _, file := range geoFilesList {
-		file = strings.Trim(file, " \t")
-		go func(file string) {
-			errCh <- processGeoFile(ctx, file, dgraphClient)
-		}(file)
-	}
+
 	interrupted := false
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {

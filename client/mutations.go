@@ -490,7 +490,7 @@ L:
 
 // BatchSetWithMark takes a Req which has a batch of edges. It accepts a file to which the edges
 // belong and also the line number of the last line that the batch contains. This is used by the
-// dgraphloader to do checkpointing so that in case the loader crashes, we can skip the lines
+// dgraph-live-loader to do checkpointing so that in case the loader crashes, we can skip the lines
 // which the server has already processed. Most users would only need BatchSet which does the
 // batching automatically.
 func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
@@ -688,7 +688,7 @@ func (d *Dgraph) Counter() Counter {
 	}
 }
 
-// CheckVersion checks if the version of dgraph and dgraphloader are the same.  If either the
+// CheckVersion checks if the version of dgraph and dgraph-live-loader are the same.  If either the
 // versions don't match or the version information could not be obtained an error message is
 // printed.
 func (d *Dgraph) CheckVersion(ctx context.Context) {

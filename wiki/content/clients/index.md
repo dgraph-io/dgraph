@@ -32,7 +32,7 @@ The client [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client) has spe
 
 Larger examples can be found [here](https://github.com/dgraph-io/dgraph/tree/master/wiki/resources/examples/goclient).  And [this](https://open.dgraph.io/post/client0.8.0) blog post explores the examples further.
 
-The app [dgraphloader](https://github.com/dgraph-io/dgraph/tree/master/cmd/dgraphloader) uses the client interface to batch concurrent mutations.
+The app [dgraph-live-loader](https://github.com/dgraph-io/dgraph/tree/master/cmd/dgraph-live-loader) uses the client interface to batch concurrent mutations.
 
 {{% notice "note" %}}As with mutations through a mutation block, [schema type]({{< relref "query-language/index.md#schema" >}}) needs to be set for the edges, or schema is derived based on first mutation received by the server. {{% /notice %}}
 

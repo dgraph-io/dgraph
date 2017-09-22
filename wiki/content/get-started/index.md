@@ -238,11 +238,11 @@ Output
 
 Step 3 showed how to add data with a small mutation.  Bigger datasets can be loaded with
 
-* dgraphloader if you already have some data or
-* using the [bulkloader]({{< ref "deploy/index.md#bulkloader" >}}) which is significantly faster than
-  dgraphloader but can only be used for initial seeding of data into Dgraph.
+* dgraph-live-loader if you already have some data or
+* using the [dgraph-bulk-loader]({{< ref "deploy/index.md#dgraph-bulk-loader" >}}) which is significantly faster than
+  dgraph-live-loader but can only be used for initial seeding of data into Dgraph.
 
-We will use `dgraphloader` below.
+We will use `dgraph-live-loader` below.
 
 ### Download dataset
 Download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Put it directory`~/dgraph`, creating the directory if necessary using `mkdir ~/dgraph`.
@@ -267,13 +267,13 @@ mutation {
 '| python -m json.tool | less
 ```
 
-### Load data with dgraphloader
+### Load data with dgraph-live-loader
 
 Load the downloaded dataset by running the following in a terminal.
 
 ```sh
 cd ~/dgraph # The directory where you downloaded the rdf.gz file.
-dgraphloader -r goldendata.rdf.gz
+dgraph-live-loader -r goldendata.rdf.gz
 ```
 
 ### Load data with Docker
@@ -281,7 +281,7 @@ dgraphloader -r goldendata.rdf.gz
 If Dgraph was started in Docker, then load the dataset with the following.
 
 ```sh
-docker exec -it dgraph dgraphloader -r goldendata.rdf.gz
+docker exec -it dgraph dgraph-live-loader -r goldendata.rdf.gz
 ```
 
 ### Result
@@ -391,7 +391,7 @@ wget "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?
 wget "https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz?raw=true" -O sf.tourism.gz -q
 ```
 
-Then, using the same process as [schema updating]({{< relref "#update-schema" >}}) and [data loading]({{< relref "#load-data-with-dgraphloader" >}}) (or [with Docker]({{< relref "#load-data-with-docker" >}})) from Step 4 above, mutate the schema and load the data files.  The required schema is as follows.
+Then, using the same process as [schema updating]({{< relref "#update-schema" >}}) and [data loading]({{< relref "#load-data-with-dgraph-live-loader" >}}) (or [with Docker]({{< relref "#load-data-with-docker" >}})) from Step 4 above, mutate the schema and load the data files.  The required schema is as follows.
 
 ```
 mutation {
