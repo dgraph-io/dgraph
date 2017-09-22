@@ -283,7 +283,7 @@ func (l *Lexer) LexQuotedString() error {
 		if r == '\\' {
 			r := l.Next()
 			if !l.IsEscChar(r) {
-				return x.Errorf("Not a valid escape char: %v", r)
+				return x.Errorf("Not a valid escape char: '%c'", r)
 			}
 			continue // eat the next char
 		}
