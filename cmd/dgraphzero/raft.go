@@ -205,6 +205,10 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			return p.Id, errInvalidProposal
 		}
 		group.Members[p.Member.Id] = p.Member
+		// On replay of logs on restart we need to set nextGroup.
+		if n.server.nextGroup <= p.Member.GroupId {
+			n.server.nextGroup = p.Member.GroupId + 1
+		}
 	}
 	if p.Tablet != nil {
 		if p.Tablet.GroupId == 0 {
@@ -216,22 +220,22 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			state.Groups[p.Tablet.GroupId] = group
 		}
 
+		// There's a edge case that we're handling.
+		// Two servers ask to serve the same tablet, then we need to ensure that
+		// only the first one succeeds.
 		if tablet := n.server.servingTablet(p.Tablet.Predicate); tablet != nil {
 			if p.Tablet.Force {
 				group := state.Groups[tablet.GroupId]
 				delete(group.Tablets, p.Tablet.Predicate)
-				group.Space -= p.Tablet.Space
 			} else {
 				if tablet.GroupId != p.Tablet.GroupId {
 					return p.Id, errTabletAlreadyServed
 				}
 				// This update can come from tablet size.
-				group.Space -= tablet.Space
 				p.Tablet.ReadOnly = tablet.ReadOnly
 			}
 		}
 		group.Tablets[p.Tablet.Predicate] = p.Tablet
-		group.Space += p.Tablet.Space
 	}
 	if p.MaxLeaseId > 0 {
 		state.MaxLeaseId = p.MaxLeaseId

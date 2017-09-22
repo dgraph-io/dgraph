@@ -50,11 +50,9 @@ This would trigger G1 to get latest state. Wait for it.
 
 */
 
-// TODO: Have a flag to disable rebalancing. (Useful on production when users don't want
-// rebalancing to happen during critical time.
-//       Have a event log for everything.
+//  TODO: Have a event log for everything.
 func (s *Server) rebalanceTablets() {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute * 8)
 	var cancel context.CancelFunc
 	for {
 		select {
@@ -63,6 +61,7 @@ func (s *Server) rebalanceTablets() {
 			if !s.Node.AmLeader() {
 				if cancel != nil {
 					cancel()
+					cancel = nil
 				}
 				break
 			}
@@ -77,14 +76,14 @@ func (s *Server) rebalanceTablets() {
 			// of any error unless a node crashes or is shutdown.
 			s.runRecovery()
 		case <-ticker.C:
-			predicate, srcGroup, dstGroup := s.choosePredicate()
+			predicate, srcGroup, dstGroup := s.chooseTablet()
 			if len(predicate) == 0 {
 				break
 			}
 			x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
 			var ctx context.Context
 			ctx, cancel = context.WithTimeout(context.Background(), time.Minute*20)
-			if err := s.movePredicate(ctx, predicate, srcGroup, dstGroup); err != nil {
+			if err := s.moveTablet(ctx, predicate, srcGroup, dstGroup); err != nil {
 				x.Printf("Error while trying to move predicate %v from %d to %d: %v\n",
 					predicate, srcGroup, dstGroup, err)
 			}
@@ -131,7 +130,7 @@ func (s *Server) runRecovery() {
 	}
 }
 
-func (s *Server) choosePredicate() (predicate string, srcGroup uint32, dstGroup uint32) {
+func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uint32) {
 	s.RLock()
 	defer s.RUnlock()
 	if s.state == nil {
@@ -149,44 +148,57 @@ func (s *Server) choosePredicate() (predicate string, srcGroup uint32, dstGroup 
 	}
 	var groups []kv
 	for k, v := range s.state.Groups {
-		groups = append(groups, kv{k, v.Space})
+		space := int64(0)
+		for _, tab := range v.Tablets {
+			space += tab.Space
+		}
+		groups = append(groups, kv{k, space})
 	}
 	sort.Slice(groups, func(i, j int) bool {
 		return groups[i].size < groups[j].size
 	})
 
-	srcGroup = groups[numGroups-1].gid
-	dstGroup = groups[0].gid
-	size_diff := groups[numGroups-1].size - groups[0].size
-	x.Printf("\n\nGroups sorted by size: %+v, size_diff %v\n\n", groups, size_diff)
-	// Don't move a node unless you receive atleast one update regarding tablet size.
-	// Tablet size would have come up with leader update.
-	if !s.hasLeader(dstGroup) {
-		return
-	}
-	if size_diff < 50<<20 { // Change limit later
-		return
-	}
+	x.Printf("\n\nGroups sorted by size: %+v\n\n", groups)
+	for lastGroup := numGroups - 1; lastGroup > 0; lastGroup-- {
+		srcGroup = groups[lastGroup].gid
+		dstGroup = groups[0].gid
+		size_diff := groups[lastGroup].size - groups[0].size
+		x.Printf("size_diff %v\n", size_diff)
+		// Don't move a node unless you receive atleast one update regarding tablet size.
+		// Tablet size would have come up with leader update.
+		if !s.hasLeader(dstGroup) {
+			return
+		}
+		if float64(size_diff) < 0.1*float64(groups[0].size) { // Change limit later
+			return
+		}
 
-	// Try to find a predicate which we can move.
-	size := int64(0)
-	group := s.state.Groups[srcGroup]
-	for _, tab := range group.Tablets {
-		// Finds a tablet as big a possible such that on moving it dstGroup's size is
-		// less than or equal to srcGroup.
-		if tab.Space <= size_diff/2 && tab.Space > size {
-			predicate = tab.Predicate
-			size = tab.Space
+		// Try to find a predicate which we can move.
+		size := int64(0)
+		group := s.state.Groups[srcGroup]
+		for _, tab := range group.Tablets {
+			// Finds a tablet as big a possible such that on moving it dstGroup's size is
+			// less than or equal to srcGroup.
+			if tab.Space <= size_diff/2 && tab.Space > size {
+				predicate = tab.Predicate
+				size = tab.Space
+			}
+		}
+		if len(predicate) > 0 {
+			return
 		}
 	}
 	return
 }
 
-func (s *Server) movePredicate(ctx context.Context, predicate string, srcGroup uint32,
+func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint32,
 	dstGroup uint32) error {
 	err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup)
 	if err == nil {
 		return nil
+	}
+	if !s.Node.AmLeader() {
+		s.runRecovery()
 	}
 
 	stab := s.ServingTablet(predicate)

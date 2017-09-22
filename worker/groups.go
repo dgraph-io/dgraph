@@ -134,6 +134,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	x.UpdateHealthStatus(true)
 	if !Config.InMemoryComm {
 		go gr.periodicMembershipUpdate() // Now set it to be run periodically.
+		go gr.cleanupTablets()
 	}
 }
 
@@ -163,21 +164,7 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 
 		tablet, has := tablets[pk.Attr]
 		if !has {
-			tablet = g.Tablet(pk.Attr)
-			if tablet == nil || tablet.GroupId != g.groupId() {
-				// Someone else is serving this. tablet could be nil if request
-				// to group zero fails, so delete only if we are sure.
-				// cleanup via proposals, that way you can skip cleanup if a
-				// predicate is being moved.
-				if tablet != nil {
-					go func(predicate string) {
-						p := &protos.Proposal{CleanPredicate: predicate}
-						err := g.Node.ProposeAndWait(g.ctx, p)
-						if err != nil {
-							x.Printf("Error while cleaning predicate %v\n", predicate)
-						}
-					}(pk.Attr)
-				}
+			if !g.ServesTablet(pk.Attr) {
 				itr.Seek(pk.SkipPredicate())
 				continue
 			}
@@ -396,7 +383,7 @@ func (g *groupi) triggerMembershipSync() {
 }
 
 func (g *groupi) periodicMembershipUpdate() {
-	ticker := time.NewTicker(time.Minute * 2)
+	ticker := time.NewTicker(time.Minute * 5)
 	// Node might not be the leader when we are calculating size.
 	// We need to send immediately on start so no leader check inside calculatesize.
 	tablets := g.calculateTabletSizes()
@@ -468,6 +455,36 @@ OUTER:
 		}
 	}
 	goto START
+}
+
+func (g *groupi) cleanupTablets() {
+	ticker := time.NewTimer(time.Minute * 10)
+	select {
+	case <-ticker.C:
+		func() {
+			opt := badger.DefaultIteratorOptions
+			opt.PrefetchValues = false
+			itr := pstore.NewIterator(opt)
+			defer itr.Close()
+
+			for itr.Rewind(); itr.Valid(); {
+				item := itr.Item()
+
+				pk := x.Parse(item.Key())
+
+				// Delete one at time
+				if tablet := g.Tablet(pk.Attr); tablet != nil && !tablet.ReadOnly {
+					// TODO: Keep on checking readonly flag every 100 values and return.
+					return
+				}
+				if pk.IsSchema() {
+					itr.Seek(pk.SkipSchema())
+					continue
+				}
+				itr.Seek(pk.SkipPredicate())
+			}
+		}()
+	}
 }
 
 func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,

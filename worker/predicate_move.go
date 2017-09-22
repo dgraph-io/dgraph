@@ -26,7 +26,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -147,15 +146,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 			firstKV = false
 			pk := x.Parse(kv.Key)
 			// Delete on all nodes.
-			p := &protos.Proposal{}
-			p.Mutations = &protos.Mutations{}
-			edge := &protos.DirectedEdge{
-				Attr:      pk.Attr,
-				ValueType: uint32(types.StringID),
-				Value:     []byte(x.Star),
-				Op:        protos.DirectedEdge_DEL,
-			}
-			p.Mutations.Edges = append(p.Mutations.Edges, edge)
+			p := &protos.Proposal{CleanPredicate: pk.Attr}
 			err := groups().Node.ProposeAndWait(ctx, p)
 			if err != nil {
 				x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
@@ -182,8 +173,6 @@ func (w *grpcWorker) ReceivePredicate(stream protos.Worker_ReceivePredicateServe
 	ctx := stream.Context()
 	payload := &protos.Payload{}
 
-	// TODO: Get state and propose before moving, would be used to avoid race condition in cleanup.
-	// Cleaning might be going on background, so propoaly wait for appliedwatermark.
 	groups().Node.WaitLinearizableRead(ctx)
 	go func() {
 		// Takes care of throttling and batching.

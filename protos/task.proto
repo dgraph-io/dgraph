@@ -105,7 +105,6 @@ message Member {
 message Group {
   map<uint64, Member> members = 1; // Raft ID is the key.
   map<string, Tablet> tablets = 2; // Predicate + others are key.
-	int64 space                 = 7; // Used to trace size of group
 }
 
 message ZeroProposal {
