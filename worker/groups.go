@@ -26,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -59,6 +60,7 @@ type groupi struct {
 	gid       uint32
 	tablets   map[string]*protos.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
+	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
 }
 
 var gr *groupi
@@ -126,6 +128,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
 	gr.triggerCh = make(chan struct{}, 1)
+	gr.delPred = make(chan struct{}, 1)
 	gid := gr.groupId()
 	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
 	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
@@ -393,7 +396,7 @@ START:
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		x.Printf("WARNING: We don't have address of any dgraphzero server.")
-		time.Sleep(time.Minute)
+		time.Sleep(time.Second)
 		goto START
 	}
 
@@ -402,7 +405,7 @@ START:
 	stream, err := c.Update(ctx)
 	if err != nil {
 		x.Printf("Error while calling update %v\n", err)
-		time.Sleep(time.Minute)
+		time.Sleep(time.Second)
 		goto START
 	}
 
@@ -457,6 +460,31 @@ OUTER:
 	goto START
 }
 
+func (g *groupi) waitForBackgroundDeletion() {
+	// Waits for background cleanup if any to finish.
+	// No new cleanup on any predicate would start until we finish moving
+	// the predicate because read only flag would be set by now. We start deletion
+	// only when no predicate is being moved.
+	g.delPred <- struct{}{}
+	<-g.delPred
+}
+
+func (g *groupi) hasReadOnlyTablets() bool {
+	g.RLock()
+	defer g.RUnlock()
+	if g.state == nil {
+		return false
+	}
+	for _, group := range g.state.Groups {
+		for _, tab := range group.Tablets {
+			if tab.ReadOnly {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (g *groupi) cleanupTablets() {
 	ticker := time.NewTimer(time.Minute * 10)
 	select {
@@ -472,9 +500,19 @@ func (g *groupi) cleanupTablets() {
 
 				pk := x.Parse(item.Key())
 
-				// Delete one at time
-				if tablet := g.Tablet(pk.Attr); tablet != nil && !tablet.ReadOnly {
-					// TODO: Keep on checking readonly flag every 100 values and return.
+				// Delete at most one predicate at a time.
+				// Tablet is not being served by me and is not read only.
+				// Don't use servesTablet function because it can return false even if
+				// request made to group zero fails. We might end up deleting a predicate
+				// on failure of network request even though no one else is serving this
+				// tablet.
+				if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
+					if g.hasReadOnlyTablets() {
+						return
+					}
+					g.delPred <- struct{}{}
+					posting.DeletePredicate(context.Background(), pk.Attr)
+					<-g.delPred
 					return
 				}
 				if pk.IsSchema() {

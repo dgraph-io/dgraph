@@ -199,6 +199,7 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 	}
 	if !s.Node.AmLeader() {
 		s.runRecovery()
+		return err
 	}
 
 	stab := s.ServingTablet(predicate)

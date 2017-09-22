@@ -37,6 +37,10 @@ var (
 
 // size of kvs won't be too big, we would take care before proposing.
 func populateKeyValues(ctx context.Context, kvs []*protos.KV) error {
+	// No new deletion/background cleanup would start after we start streaming tablet,
+	// so all the proposals for a particular tablet would atmost wait for deletion of
+	// single tablet.
+	groups().waitForBackgroundDeletion()
 	x.Printf("Writing %d keys\n", len(kvs))
 	wb := make([]*badger.Entry, 0, 1000)
 	// Badger does batching internally so no need to batch it.
@@ -173,7 +177,6 @@ func (w *grpcWorker) ReceivePredicate(stream protos.Worker_ReceivePredicateServe
 	ctx := stream.Context()
 	payload := &protos.Payload{}
 
-	groups().Node.WaitLinearizableRead(ctx)
 	go func() {
 		// Takes care of throttling and batching.
 		che <- batchAndProposeKeyValues(ctx, kvs)
