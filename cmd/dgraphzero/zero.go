@@ -218,6 +218,7 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 		s := float64(srcTablet.Space)
 		d := float64(dstTablet.Space)
 		if (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
+			dstTablet.Force = false
 			proposal := &protos.ZeroProposal{
 				Tablet: dstTablet,
 			}
@@ -321,6 +322,7 @@ func (s *Server) ShouldServe(
 	// Set the tablet to be served by this server's group.
 	var proposal protos.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
+	tablet.Force = false
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
 		return tablet, err

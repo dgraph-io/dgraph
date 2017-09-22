@@ -60,8 +60,10 @@ func (s *Server) rebalanceTablets() {
 		select {
 		case <-s.leaderChangeCh:
 			// Cancel predicate moves when you step down as leader.
-			if !s.Node.AmLeader() && cancel != nil {
-				cancel()
+			if !s.Node.AmLeader() {
+				if cancel != nil {
+					cancel()
+				}
 				break
 			}
 
