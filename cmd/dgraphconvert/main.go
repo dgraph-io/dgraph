@@ -115,7 +115,7 @@ func convertGeoFile(input string, output string) error {
 		}
 	}
 	close(chb)
-	fmt.Printf("%d features converted. %s rdf's generated\n", count, rdfCount)
+	fmt.Printf("%d features converted. %d rdf's generated\n", count, rdfCount)
 	return <-che
 }
 
