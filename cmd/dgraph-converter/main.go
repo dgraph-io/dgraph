@@ -34,6 +34,7 @@ import (
 )
 
 var (
+	// TODO - Take a directory here and convert all the files in the directory.
 	geoFile    = flag.String("geo", "", "Location of geo file to convert")
 	outputFile = flag.String("out", "output.rdf.gz", "Location of output rdf.gz file")
 	geoPred    = flag.String("geopred", "loc", "Predicate to use to store geometries")
@@ -47,7 +48,7 @@ func writeToFile(fpath string, ch chan []byte) error {
 
 	defer f.Close()
 	x.Check(err)
-	w := bufio.NewWriterSize(f, 1000000)
+	w := bufio.NewWriterSize(f, 1e6)
 	gw, err := gzip.NewWriterLevel(w, gzip.BestCompression)
 	if err != nil {
 		return err
@@ -84,6 +85,7 @@ func convertGeoFile(input string, output string) error {
 		}
 	}
 
+	// TODO - This might not be a good idea for large files. Use json.Decode to read features.
 	b, err := ioutil.ReadAll(gz)
 	if err != nil {
 		return err
@@ -97,15 +99,15 @@ func convertGeoFile(input string, output string) error {
 		che <- writeToFile(output, chb)
 	}()
 
-	fc1 := geojson.NewFeatureCollection()
-	err = json.Unmarshal(b, fc1)
+	fc := geojson.NewFeatureCollection()
+	err = json.Unmarshal(b, fc)
 	if err != nil {
 		return err
 	}
 
 	count := 0
 	rdfCount := 0
-	for _, f := range fc1.Features {
+	for _, f := range fc.Features {
 		b, err := json.Marshal(f.Geometry)
 		if err != nil {
 			return err
@@ -137,7 +139,9 @@ func convertGeoFile(input string, output string) error {
 
 func main() {
 	flag.Parse()
-	if len(*geoFile) > 0 {
-		x.Check(convertGeoFile(*geoFile, *outputFile))
+	if len(*geoFile) == 0 {
+		fmt.Printf("The file to be loaded must be specified using the --geo flag.\n")
+		os.Exit(1)
 	}
+	x.Check(convertGeoFile(*geoFile, *outputFile))
 }
