@@ -774,7 +774,7 @@ func DeletePredicate(ctx context.Context, attr string) error {
 
 	s, ok := schema.State().Get(attr)
 	if !ok {
-		return fmt.Errorf("Expected type to exist for pred: %s while deleting it.", attr)
+		return nil
 	}
 
 	var index uint64

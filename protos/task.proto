@@ -127,9 +127,9 @@ message MembershipState {
 message Tablet {
   uint32 group_id  = 1; // Served by which group.
   string predicate = 2;
-	bool no_update   = 3; // Used to avoid race condition in shouldServe endpoint.
+	bool force       = 3; // Used while moving predicate.
   bool read_only   = 4;  // Used to block mutations on this predicate.
-  int64 size       = 7;
+  int64 space      = 7;
 }
 
 message DirectedEdge {
@@ -165,6 +165,7 @@ message Proposal {
 	Member membership = 3;
 	repeated KV kv = 4;
 	MembershipState state = 5;
+	string clean_predicate = 6; // Delete the predicate which was moved to other group.
 }
 
 message KV {
