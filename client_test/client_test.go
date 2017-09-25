@@ -333,3 +333,88 @@ func TestEmptyString(t *testing.T) {
 	_, err = dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
 }
+
+func TestSetObject(t *testing.T) {
+	type School struct {
+		Name string `json:",omitempty"`
+	}
+
+	type Person struct {
+		Uid     string   `json:"_uid_,omitempty",dgraph:"_uid_"`
+		Name    string   `json:"name,omitempty",dgraph:"name"`
+		Age     int      `json:"age,omitempty",dgraph:"age"`
+		Married bool     `json:"married,omitempty",dgraph:"married"`
+		Friends []Person `json:"friend,omitempty",dgraph:"friend"`
+		School  *School  `json:"school,omitempty",dgraph:"school"`
+	}
+
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	p := Person{
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Friends: []Person{{
+			Uid:  "1000",
+			Name: "Bob",
+			Age:  24,
+		}},
+		School: &School{
+			Name: "Crown Public School",
+		},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	fmt.Println("resp", resp)
+
+	puid := resp.AssignedUids["blank-0"]
+	q := fmt.Sprintf(`{
+		me(func: uid(%d)) {
+			name
+			age
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+			school {
+				Name
+			}
+		}
+	}`, puid)
+
+	req = client.Req{}
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	type Root struct {
+		Me Person `dgraph:"me"`
+	}
+
+	var r Root
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+
+	p2 := r.Me
+	require.Equal(t, p.Name, p2.Name)
+	require.Equal(t, p.Age, p2.Age)
+	require.Equal(t, p.Married, p2.Married)
+	require.Equal(t, p.School.Name, p2.School.Name)
+	require.Equal(t, len(p.Friends), len(p2.Friends))
+	require.Equal(t, p.Friends[0].Name, p2.Friends[0].Name)
+}

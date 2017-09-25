@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
@@ -293,27 +294,30 @@ func ParseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 	return res, nil
 }
 
-func nquadsFromJson(b []byte) ([]*protos.NQuad, error) {
-	ms := make(map[string]interface{})
-	if err := json.Unmarshal(b, &ms); err != nil {
-		return nil, err
-	}
-	fmt.Println("ms", ms)
-
+func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, error) {
 	var uid string
 	// Check field in map.
-	if uidVal, ok := ms["_uid_"]; ok {
+	if uidVal, ok := m["_uid_"]; ok {
 		// Should be convertible to uint64. Maybe we also want to allow string later.
-		if id, ok := uidVal.(uint64); ok && id != 0 {
-			// TODO - Check if uint64 needs to be converted to string.
-			uid = uidVal
+		if id, ok := uidVal.(string); ok && id != "" {
+			if _, err := strconv.ParseUint(id, 10, 64); err == nil {
+				uid = id
+			}
 		}
+	}
+
+	if len(uid) == 0 {
+		uid = fmt.Sprintf("_:blank-%d", *idx)
+		*idx++
 	}
 
 	// TODO - Handle facets
 	var nquads []*protos.NQuad
-	for k, v := range ms {
-		if k == "_uid_" {
+	for k, v := range m {
+		// We have already extracted the uid above so we skip that edge.
+		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
+		// option.
+		if k == "_uid_" || v == nil {
 			continue
 		}
 
@@ -325,27 +329,64 @@ func nquadsFromJson(b []byte) ([]*protos.NQuad, error) {
 		default:
 			fmt.Printf("unexpected type %T\n", t) // %T prints whatever type t has
 		case string:
-			nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v}}
-			nq.ObjectType = types.StringID
+			nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}
+			nq.ObjectType = int32(types.StringID)
 			nquads = append(nquads, &nq)
 		case float64:
-			nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v}}
-			nq.ObjectType = types.FloatID
+			nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v.(float64)}}
+			nq.ObjectType = int32(types.FloatID)
 			nquads = append(nquads, &nq)
 			// TODO - Handle language.
 		case bool:
-			nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v}}
-			nq.ObjectType = types.BoolID
+			nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v.(bool)}}
+			nq.ObjectType = int32(types.BoolID)
 			nquads = append(nquads, &nq)
 		case map[string]interface{}:
-			fmt.Println("k", k, "v", v)
+			// TODO - Handle Geo
+			mnquads, oid, err := mapToNquads(v.(map[string]interface{}), idx)
+			if err != nil {
+				return nil, uid, err
+			}
+
+			// Add the connecting edge beteween the entities.
+			nq.ObjectId = oid
+			nquads = append(nquads, &nq)
+			// Add the nquads that we got for the connecting entity.
+			nquads = append(nquads, mnquads...)
 		case []interface{}:
-			fmt.Println("list k", k, "v", v)
+			for _, item := range v.([]interface{}) {
+				nq := protos.NQuad{
+					Subject:   uid,
+					Predicate: k,
+				}
+
+				if mp, ok := item.(map[string]interface{}); ok {
+					mnquads, oid, err := mapToNquads(mp, idx)
+					if err != nil {
+						return nil, uid, err
+					}
+					nq.ObjectId = oid
+					nquads = append(nquads, &nq)
+					// Add the nquads that we got for the connecting entity.
+					nquads = append(nquads, mnquads...)
+				}
+				// TODO - Throw error if not ok?
+			}
 		}
 	}
 
-	fmt.Printf("Nquads: %+v\n", nquads)
-	return nil, nil
+	return nquads, uid, nil
+}
+
+func nquadsFromJson(b []byte) ([]*protos.NQuad, error) {
+	ms := make(map[string]interface{})
+	if err := json.Unmarshal(b, &ms); err != nil {
+		return nil, err
+	}
+
+	var idx int
+	nquads, _, err := mapToNquads(ms, &idx)
+	return nquads, err
 }
 
 func parseMutationObject(res *gql.Result, q *protos.Request) error {
@@ -353,9 +394,28 @@ func parseMutationObject(res *gql.Result, q *protos.Request) error {
 		return nil
 	}
 
-	_, err := nquadsFromJson(q.MutationSet)
-	if err != nil {
-		return err
+	var nquads []*protos.NQuad
+	var err error
+	if len(q.MutationSet) > 0 {
+		nquads, err = nquadsFromJson(q.MutationSet)
+		if err != nil {
+			return err
+		}
 	}
+
+	if res.Mutation == nil {
+		res.Mutation = &gql.Mutation{}
+	}
+	res.Mutation.Set = append(res.Mutation.Set, nquads...)
+
+	nquads = nquads[:0]
+	if len(q.MutationDel) > 0 {
+		nquads, err = nquadsFromJson(q.MutationDel)
+		if err != nil {
+			return err
+		}
+	}
+	res.Mutation.Del = append(res.Mutation.Del, nquads...)
+
 	return nil
 }
