@@ -30,7 +30,7 @@ func TestHelloWorld(t *testing.T) {
 		_:pp <name> "Peter Pan" .
 	`)
 	defer s.cleanup()
-	t.Run("test case 1", s.strtest(`
+	t.Run("Pan and Jackson", s.strtest(`
 	{
 		q(func: anyofterms(name, "Peter")) {
 			name
@@ -41,6 +41,36 @@ func TestHelloWorld(t *testing.T) {
 		"data": {
 			"q": [
 				{ "name": "Peter Pan" },
+				{ "name": "Peter Jackson" }
+			]
+		}
+	}
+	`))
+	t.Run("Pan only", s.strtest(`
+	{
+		q(func: anyofterms(name, "Pan")) {
+			name
+		}
+	}
+	`, `
+	{
+		"data": {
+			"q": [
+				{ "name": "Peter Pan" }
+			]
+		}
+	}
+	`))
+	t.Run("Jackson only", s.strtest(`
+	{
+		q(func: anyofterms(name, "Jackson")) {
+			name
+		}
+	}
+	`, `
+	{
+		"data": {
+			"q": [
 				{ "name": "Peter Jackson" }
 			]
 		}
