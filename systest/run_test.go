@@ -47,6 +47,10 @@ func TestHelloWorld(t *testing.T) {
 	`))
 }
 
+func init() {
+	// TODO: Install the binaries.
+}
+
 type suite struct {
 	t       *testing.T
 	rootDir string
@@ -54,6 +58,7 @@ type suite struct {
 
 	bulkLoaderQueryPort string
 	liveLoaderQueryPort string
+	liveLoaderGRPCPort  string
 }
 
 func setup(t *testing.T, schema string, rdfs string) *suite {
@@ -100,27 +105,36 @@ func setup(t *testing.T, schema string, rdfs string) *suite {
 		filepath.Join(bulkloaderDG, "p"),
 	))
 
-	s.bulkLoaderQueryPort = s.startDgraph(bulkloaderDG, bulkloaderDGZ)
+	s.bulkLoaderQueryPort, _ = s.startDgraph(bulkloaderDG, bulkloaderDGZ)
+
+	s.liveLoaderQueryPort, s.liveLoaderGRPCPort = s.startDgraph(dgraphloaderDG, dgraphloaderDGZ)
+
+	liveCmd := buildCmd("dgraphloader", "-r", rdfFile, "-s", schemaFile, "-d", ":"+s.liveLoaderGRPCPort)
+	liveCmd.Dir = dgraphloaderDir
+	if err := liveCmd.Run(); err != nil {
+		t.Fatalf("Live Loader didn't run: %v\nOutput:\n%s", err, liveCmd.Out.String())
+	}
 
 	return s
 }
 
-func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) string {
+func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) (queryPort string, grpcPort string) {
 	port := freePort()
 	zeroCmd := buildCmd("dgraphzero", "-id", "1", "-port", port)
 	zeroCmd.Dir = dgraphZeroDir
 	s.checkFatal(zeroCmd.Start())
 	s.kill = append(s.kill, zeroCmd.Cmd)
 
-	time.Sleep(time.Second * 1) // Wait for dgraphzero to start listening.
-	fmt.Println(zeroCmd.Out.String())
+	// Wait for dgraphzero to start listening.
+	time.Sleep(time.Second * 1)
 
-	queryPort := freePort()
+	queryPort = freePort()
+	grpcPort = freePort()
 	dgraphCmd := buildCmd("dgraph",
 		"-memory_mb=1024",
 		"-peer", ":"+port,
 		"-port", queryPort,
-		"-grpc_port", freePort(),
+		"-grpc_port", grpcPort,
 		"-workerport", freePort(),
 	)
 	dgraphCmd.Dir = dgraphDir
@@ -128,11 +142,12 @@ func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) string {
 	s.kill = append(s.kill, dgraphCmd.Cmd)
 
 	// Wait for dgraph to start accepting requests. TODO: Could do this
-	// programmatically by hitting the query port.
+	// programmatically by hitting the query port. This would be quicker than
+	// just waiting 4 seconds (which seems to be the smallest amount of time to
+	// reliably wait).
 	time.Sleep(time.Second * 4)
-	fmt.Println(dgraphCmd.Out.String())
 
-	return queryPort
+	return queryPort, grpcPort
 }
 
 func (s *suite) cleanup() {
@@ -146,23 +161,24 @@ func (s *suite) cleanup() {
 
 func (s *suite) strtest(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
-		resp, err := http.Post("http://127.0.0.1:"+s.bulkLoaderQueryPort+"/query",
-			"", bytes.NewBufferString(query))
-		if err != nil {
-			t.Fatal("Could not post:", err)
-		}
-		s.checkFatal(err)
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Fatal("Bad response:", resp.Status)
-		}
+		for _, qPort := range []string{s.bulkLoaderQueryPort, s.liveLoaderQueryPort} {
+			resp, err := http.Post("http://127.0.0.1:"+qPort+"/query",
+				"", bytes.NewBufferString(query))
+			if err != nil {
+				t.Fatal("Could not post:", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatal("Bad response:", resp.Status)
+			}
 
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatal("Could not read response:", err)
-		}
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal("Could not read response:", err)
+			}
 
-		compareJSON(t, wantResult, string(body))
+			compareJSON(t, wantResult, string(body))
+		}
 	}
 }
 
