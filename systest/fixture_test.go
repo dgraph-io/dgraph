@@ -48,17 +48,19 @@ func newSuite(t *testing.T, schema, rdfs string) *suite {
 	s.checkFatal(os.MkdirAll(rootDir, 0755))
 	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
 	s.checkFatal(ioutil.WriteFile(rdfFile, []byte(rdfs), 0644))
-	s.setup(schema, rdfFile)
+	schemaFile := filepath.Join(rootDir, "schema.txt")
+	s.checkFatal(ioutil.WriteFile(schemaFile, []byte(schema), 0644))
+	s.setup(schemaFile, rdfFile)
 	return s
 }
 
-func newSuiteFromRDFFile(t *testing.T, schema, rdfFile string) *suite {
+func newSuiteFromFile(t *testing.T, schemaFile, rdfFile string) *suite {
 	s := &suite{t: t}
-	s.setup(schema, rdfFile)
+	s.setup(schemaFile, rdfFile)
 	return s
 }
 
-func (s *suite) setup(schema, rdfFile string) {
+func (s *suite) setup(schemaFile, rdfFile string) {
 	var (
 		bulkloaderDir   = filepath.Join(rootDir, "bl_dir")
 		bulkloaderDGZ   = filepath.Join(rootDir, "bl_dgz")
@@ -76,11 +78,6 @@ func (s *suite) setup(schema, rdfFile string) {
 		makeDirEmpty(dgraphloaderDGZ),
 		makeDirEmpty(dgraphloaderDG),
 		makeDirEmpty(dataDir),
-	)
-
-	schemaFile := filepath.Join(dataDir, "schema.txt")
-	s.checkFatal(
-		ioutil.WriteFile(schemaFile, []byte(schema), 0644),
 	)
 
 	blHTTPPort := freePort()

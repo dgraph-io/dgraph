@@ -1,9 +1,9 @@
 package main
 
-import "testing"
-
-func TestGoldenData(t *testing.T) {
-}
+import (
+	"os"
+	"testing"
+)
 
 func TestHelloWorld(t *testing.T) {
 	s := newSuite(t, `
@@ -192,4 +192,27 @@ func TestCountIndex(t *testing.T) {
 		]
 	}}
 	`))
+}
+
+func TestGoldenData(t *testing.T) {
+	s := newSuiteFromFile(t,
+		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/benchmarks/data/goldendata.schema"),
+		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz"),
+	)
+	defer s.cleanup()
+
+	//t.Run("basic", s.singleQuery(`
+	//me(func:eq(xid,"m.07mv_h")) {
+	//director.film {
+	//directed_by {
+	//director.film {
+	//_uid_
+	//name@en
+	//}
+	//}
+	//}
+	//}
+	//`, `
+	//"me": []
+	//`))
 }
