@@ -19,7 +19,6 @@ package gql
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -314,7 +313,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, e
 	case x.ValuePlain, x.ValueMulti:
 		edge, err = nq.CreateValueEdge(sUid)
 	default:
-		return &emptyEdge, errors.New("unknow value type")
+		return &emptyEdge, x.Errorf("unknown value type for nquad: %+v", nq)
 	}
 	if err != nil {
 		return nil, err
@@ -372,7 +371,7 @@ func (nq *NQuad) ExpandVariables(newToUid map[string]uint64, subjectUids []uint6
 			edges = append(edges, edge)
 		}
 	default:
-		return edges, fmt.Errorf("unknown value type: %s", nq.String())
+		return edges, x.Errorf("unknown value type for nquad: %+v", nq)
 	}
 	return edges, nil
 

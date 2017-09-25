@@ -66,19 +66,27 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			// S * * case
 			if mu.Attr == x.Star {
 				// Fetch all the predicates and replace them
-				preds, err := getNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
+				valMatrix, err := getNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
 				if err != nil {
 					return err
 				}
+
+				// _predicate_ is of list type. So we will get all the predicates in the first list
+				// of the value matrix.
 				val := mu.GetValue()
+				if len(valMatrix) != 1 {
+					return x.Errorf("Expected only one list in value matrix while deleting: %v",
+						mu.GetEntity())
+				}
+				preds := valMatrix[0].Values
 				for _, pred := range preds {
-					if bytes.Equal(pred.Values[0].Val, x.Nilbyte) {
+					if bytes.Equal(pred.Val, x.Nilbyte) {
 						continue
 					}
 					edge := &protos.DirectedEdge{
 						Op:     protos.DirectedEdge_DEL,
 						Entity: mu.GetEntity(),
-						Attr:   string(pred.Values[0].Val),
+						Attr:   string(pred.Val),
 						Value:  val,
 					}
 					newEdges = append(newEdges, edge)

@@ -240,6 +240,15 @@ func checkSchema(s *protos.SchemaUpdate) error {
 	if len(s.Predicate) == 0 {
 		return x.Errorf("No predicate specified in schema mutation")
 	}
+
+	if s.Directive == protos.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
+		return x.Errorf("Tokenizer must be specified while indexing a predicate: %+v", s)
+	}
+
+	if len(s.Tokenizer) > 0 && s.Directive != protos.SchemaUpdate_INDEX {
+		return x.Errorf("Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
+	}
+
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == protos.SchemaUpdate_INDEX {
 		// index on uid type
