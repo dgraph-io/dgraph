@@ -289,6 +289,12 @@
 			"revisionTime": "2016-04-24T11:30:07Z"
 		},
 		{
+			"checksumSHA1": "i5DYjDaR52hXzynKeIW6RZY/4yI=",
+			"path": "github.com/paulmach/go.geojson",
+			"revision": "40612a87147b9cf5cd0e397ced54d89e623647ff",
+			"revisionTime": "2017-03-27T17:05:36Z"
+		},
+		{
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
 			"path": "github.com/pkg/errors",
 			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",
