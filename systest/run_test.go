@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/crc64"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -48,7 +49,13 @@ func TestHelloWorld(t *testing.T) {
 }
 
 func init() {
-	// TODO: Install the binaries.
+	for _, name := range []string{"dgraphloader", "bulkloader", "dgraph", "dgraphzero"} {
+		cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/cmd/"+name)
+		cmd.Env = os.Environ()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
+		}
+	}
 }
 
 type suite struct {
