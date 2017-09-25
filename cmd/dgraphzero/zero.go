@@ -86,6 +86,8 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 	}
 	var healthyPool *conn.Pool
 	for _, m := range group.Members {
+		// TODO: Remove this and handle connections properly later.
+		conn.Get().Connect(m.Addr)
 		if pl, err := conn.Get().Get(m.Addr); err == nil {
 			healthyPool = pl
 			if m.Leader {
