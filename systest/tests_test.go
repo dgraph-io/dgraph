@@ -11,53 +11,35 @@ func TestHelloWorld(t *testing.T) {
 	`)
 	defer s.cleanup()
 
-	t.Run("Pan and Jackson", s.strtest(`
-	{
+	t.Run("Pan and Jackson", s.singleQuery(`
 		q(func: anyofterms(name, "Peter")) {
 			name
 		}
-	}
 	`, `
-	{
-		"data": {
-			"q": [
-				{ "name": "Peter Pan" },
-				{ "name": "Peter Jackson" }
-			]
-		}
-	}
+		"q": [
+			{ "name": "Peter Pan" },
+			{ "name": "Peter Jackson" }
+		]
 	`))
 
-	t.Run("Pan only", s.strtest(`
-	{
+	t.Run("Pan only", s.singleQuery(`
 		q(func: anyofterms(name, "Pan")) {
 			name
 		}
-	}
 	`, `
-	{
-		"data": {
-			"q": [
-				{ "name": "Peter Pan" }
-			]
-		}
-	}
+		"q": [
+			{ "name": "Peter Pan" }
+		]
 	`))
 
-	t.Run("Jackson only", s.strtest(`
-	{
+	t.Run("Jackson only", s.singleQuery(`
 		q(func: anyofterms(name, "Jackson")) {
 			name
 		}
-	}
 	`, `
-	{
-		"data": {
-			"q": [
-				{ "name": "Peter Jackson" }
-			]
-		}
-	}
+		"q": [
+			{ "name": "Peter Jackson" }
+		]
 	`))
 }
 
@@ -97,7 +79,7 @@ func TestCountIndex(t *testing.T) {
 		_:grace <name> "Grace" .
 	`)
 
-	t.Run("All queries", s.strtest(`
+	t.Run("All queries", s.multiQuery(`
 	{
 		alice_friend_count(func: eq(name, "Alice")) {
 			count(friend),

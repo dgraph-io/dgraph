@@ -140,7 +140,14 @@ func (s *suite) cleanup() {
 	_ = os.RemoveAll(s.rootDir)
 }
 
-func (s *suite) strtest(query, wantResult string) func(*testing.T) {
+func (s *suite) singleQuery(query, wantResult string) func(*testing.T) {
+	return s.multiQuery(
+		fmt.Sprintf(`{ %s }`, query),
+		fmt.Sprintf(`{ "data" : { %s } }`, wantResult),
+	)
+}
+
+func (s *suite) multiQuery(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
 		for _, qPort := range []string{s.bulkLoaderQueryPort, s.liveLoaderQueryPort} {
 			resp, err := http.Post("http://127.0.0.1:"+qPort+"/query",
