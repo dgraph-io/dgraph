@@ -112,7 +112,12 @@ func setup(t *testing.T, schema string, rdfs string) *suite {
 	// problems once we are running two sets of dgraphs.
 
 	s.blDGHTTPPort = freePort()
-	blDGCmd := buildCmd("dgraph", "-memory_mb=1024", "-peer", ":"+blDGZPort, "-port", s.blDGHTTPPort)
+	blDGCmd := buildCmd("dgraph",
+		"-memory_mb=1024",
+		"-peer", ":"+blDGZPort,
+		"-port", s.blDGHTTPPort, "-grpc_port",
+		freePort(), "-workerport", freePort(),
+	)
 	blDGCmd.Dir = bulkloaderDG
 	s.checkFatal(blDGCmd.Start())
 	s.kill = append(s.kill, blDGCmd.Cmd)
@@ -203,9 +208,6 @@ func compareJSON(t *testing.T, want, got string) {
 	sortJSON(wantMap)
 	sortJSON(gotMap)
 
-	fmt.Println(wantMap)
-	fmt.Println(gotMap)
-
 	if !reflect.DeepEqual(wantMap, gotMap) {
 		wantBuf, err := json.MarshalIndent(wantMap, "", "  ")
 		if err != nil {
@@ -223,7 +225,6 @@ func compareJSON(t *testing.T, want, got string) {
 // sortJSON looks for any arrays in the unmarshalled JSON and sorts them in an
 // arbitrary but deterministic order based on their content.
 func sortJSON(i interface{}) uint64 {
-	fmt.Println("sortJSON:", i)
 	if i == nil {
 		return 0
 	}
@@ -260,7 +261,6 @@ func sortJSONArray(a []interface{}) uint64 {
 	for i, elem := range a {
 		elements[i] = arrayElement{elem, sortJSON(elem)}
 		h ^= elements[i].sortBy
-		fmt.Println(elements[i].sortBy)
 	}
 	sort.Slice(elements, func(i, j int) bool {
 		return elements[i].sortBy < elements[j].sortBy
