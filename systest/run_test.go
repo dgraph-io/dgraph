@@ -108,7 +108,8 @@ func setup(t *testing.T, schema string, rdfs string) *suite {
 	time.Sleep(time.Second * 1) // Wait for dgraphzero to start listening.
 	fmt.Println(blDGZCmd.Out.String())
 
-	// TODO: GRPC and Worker ports should be randomized.
+	// TODO: GRPC and Worker ports should be randomized. Otherwise we will have
+	// problems once we are running two sets of dgraphs.
 
 	s.blDGHTTPPort = freePort()
 	blDGCmd := buildCmd("dgraph", "-memory_mb=1024", "-peer", ":"+blDGZPort, "-port", s.blDGHTTPPort)
@@ -124,11 +125,11 @@ func setup(t *testing.T, schema string, rdfs string) *suite {
 
 func (s *suite) cleanup() {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
-	// called when we detect an error (don't want to mask the original problem)
+	// called when we detect an error (don't want to mask the original problem).
 	for _, k := range s.kill {
-		k.Process.Kill()
+		_ = k.Process.Kill()
 	}
-	os.RemoveAll(s.rootDir) // Ignore error.
+	_ = os.RemoveAll(s.rootDir)
 }
 
 func (s *suite) strtest(query, wantResult string) func(*testing.T) {
