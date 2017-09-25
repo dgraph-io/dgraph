@@ -32,46 +32,54 @@ func init() {
 	}
 }
 
+var rootDir = filepath.Join(os.TempDir(), "dgraph_systest")
+
 type suite struct {
-	t       *testing.T
-	rootDir string
-	kill    []*exec.Cmd
+	t    *testing.T
+	kill []*exec.Cmd
 
 	bulkLoaderQueryPort string
 	liveLoaderQueryPort string
 	liveLoaderGRPCPort  string
 }
 
-func setup(t *testing.T, schema string, rdfs string) *suite {
-	s := &suite{
-		t:       t,
-		rootDir: filepath.Join(os.TempDir(), "dgraph_systest"),
-	}
+func newSuite(t *testing.T, schema, rdfs string) *suite {
+	s := &suite{t: t}
+	s.checkFatal(os.MkdirAll(rootDir, 0755))
+	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
+	s.checkFatal(ioutil.WriteFile(rdfFile, []byte(rdfs), 0644))
+	s.setup(schema, rdfFile)
+	return s
+}
+
+func newSuiteFromRDFFile(t *testing.T, schema, rdfFile string) *suite {
+	s := &suite{t: t}
+	s.setup(schema, rdfFile)
+	return s
+}
+
+func (s *suite) setup(schema, rdfFile string) {
 	var (
-		bulkloaderDir   = filepath.Join(s.rootDir, "bl_dir")
-		bulkloaderDGZ   = filepath.Join(s.rootDir, "bl_dgz")
-		bulkloaderDG    = filepath.Join(s.rootDir, "bl_dg")
-		dgraphloaderDir = filepath.Join(s.rootDir, "dg_dir")
-		dgraphloaderDGZ = filepath.Join(s.rootDir, "dg_dgz")
-		dgraphloaderDG  = filepath.Join(s.rootDir, "dg_dg")
-		dataDir         = filepath.Join(s.rootDir, "data")
+		bulkloaderDir   = filepath.Join(rootDir, "bl_dir")
+		bulkloaderDGZ   = filepath.Join(rootDir, "bl_dgz")
+		bulkloaderDG    = filepath.Join(rootDir, "bl_dg")
+		dgraphloaderDir = filepath.Join(rootDir, "dg_dir")
+		dgraphloaderDGZ = filepath.Join(rootDir, "dg_dgz")
+		dgraphloaderDG  = filepath.Join(rootDir, "dg_dg")
+		dataDir         = filepath.Join(rootDir, "data")
 	)
 	s.checkFatal(
-		os.RemoveAll(s.rootDir),
-		os.MkdirAll(s.rootDir, 0755),
-		os.MkdirAll(bulkloaderDir, 0755),
-		os.MkdirAll(bulkloaderDGZ, 0755),
-		os.MkdirAll(bulkloaderDG, 0755),
-		os.MkdirAll(dgraphloaderDir, 0755),
-		os.MkdirAll(dgraphloaderDGZ, 0755),
-		os.MkdirAll(dgraphloaderDG, 0755),
-		os.MkdirAll(dataDir, 0755),
+		makeDirEmpty(bulkloaderDir),
+		makeDirEmpty(bulkloaderDGZ),
+		makeDirEmpty(bulkloaderDG),
+		makeDirEmpty(dgraphloaderDir),
+		makeDirEmpty(dgraphloaderDGZ),
+		makeDirEmpty(dgraphloaderDG),
+		makeDirEmpty(dataDir),
 	)
 
-	rdfFile := filepath.Join(dataDir, "rdfs.rdf")
 	schemaFile := filepath.Join(dataDir, "schema.txt")
 	s.checkFatal(
-		ioutil.WriteFile(rdfFile, []byte(rdfs), 0644),
 		ioutil.WriteFile(schemaFile, []byte(schema), 0644),
 	)
 
@@ -79,7 +87,8 @@ func setup(t *testing.T, schema string, rdfs string) *suite {
 	blCmd := buildCmd("bulkloader", "-r", rdfFile, "-s", schemaFile, "-http", ":"+blHTTPPort)
 	blCmd.Dir = bulkloaderDir
 	if err := blCmd.Run(); err != nil {
-		t.Fatalf("Bulkloader didn't run: %v\nOutput:\n%s", err, blCmd.Out.String())
+		s.cleanup()
+		s.t.Fatalf("Bulkloader didn't run: %v\nOutput:\n%s", err, blCmd.Out.String())
 	}
 	s.checkFatal(os.Rename(
 		filepath.Join(bulkloaderDir, "out", "0"),
@@ -93,10 +102,16 @@ func setup(t *testing.T, schema string, rdfs string) *suite {
 	liveCmd := buildCmd("dgraphloader", "-r", rdfFile, "-s", schemaFile, "-d", ":"+s.liveLoaderGRPCPort)
 	liveCmd.Dir = dgraphloaderDir
 	if err := liveCmd.Run(); err != nil {
-		t.Fatalf("Live Loader didn't run: %v\nOutput:\n%s", err, liveCmd.Out.String())
+		s.cleanup()
+		s.t.Fatalf("Live Loader didn't run: %v\nOutput:\n%s", err, liveCmd.Out.String())
 	}
+}
 
-	return s
+func makeDirEmpty(dir string) error {
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	return os.MkdirAll(dir, 0755)
 }
 
 func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) (queryPort string, grpcPort string) {
@@ -137,7 +152,7 @@ func (s *suite) cleanup() {
 	for _, k := range s.kill {
 		_ = k.Process.Kill()
 	}
-	_ = os.RemoveAll(s.rootDir)
+	_ = os.RemoveAll(rootDir)
 }
 
 func (s *suite) singleQuery(query, wantResult string) func(*testing.T) {

@@ -2,8 +2,11 @@ package main
 
 import "testing"
 
+func TestGoldenData(t *testing.T) {
+}
+
 func TestHelloWorld(t *testing.T) {
-	s := setup(t, `
+	s := newSuite(t, `
 		name: string @index(term) .
 	`, `
 		_:pj <name> "Peter Jackson" .
@@ -44,7 +47,7 @@ func TestHelloWorld(t *testing.T) {
 }
 
 func TestCountIndex(t *testing.T) {
-	s := setup(t, `
+	s := newSuite(t, `
 		name: string @index(exact) .
 		friend: uid @count @reverse .
 	`, `
