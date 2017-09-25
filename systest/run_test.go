@@ -52,7 +52,8 @@ type suite struct {
 	rootDir string
 	kill    []*exec.Cmd
 
-	blDGHTTPPort string
+	bulkLoaderQueryPort string
+	liveLoaderQueryPort string
 }
 
 func setup(t *testing.T, schema string, rdfs string) *suite {
@@ -99,33 +100,39 @@ func setup(t *testing.T, schema string, rdfs string) *suite {
 		filepath.Join(bulkloaderDG, "p"),
 	))
 
-	blDGZPort := freePort()
-	blDGZCmd := buildCmd("dgraphzero", "-id", "1", "-port", blDGZPort)
-	blDGZCmd.Dir = bulkloaderDGZ
-	s.checkFatal(blDGZCmd.Start())
-	s.kill = append(s.kill, blDGZCmd.Cmd)
-
-	time.Sleep(time.Second * 1) // Wait for dgraphzero to start listening.
-	fmt.Println(blDGZCmd.Out.String())
-
-	// TODO: GRPC and Worker ports should be randomized. Otherwise we will have
-	// problems once we are running two sets of dgraphs.
-
-	s.blDGHTTPPort = freePort()
-	blDGCmd := buildCmd("dgraph",
-		"-memory_mb=1024",
-		"-peer", ":"+blDGZPort,
-		"-port", s.blDGHTTPPort, "-grpc_port",
-		freePort(), "-workerport", freePort(),
-	)
-	blDGCmd.Dir = bulkloaderDG
-	s.checkFatal(blDGCmd.Start())
-	s.kill = append(s.kill, blDGCmd.Cmd)
-
-	time.Sleep(time.Second * 4) // Wait for dgraph to start accepting requests. TODO: Could do this programmatically by hitting the query port.
-	fmt.Println(blDGCmd.Out.String())
+	s.bulkLoaderQueryPort = s.startDgraph(bulkloaderDG, bulkloaderDGZ)
 
 	return s
+}
+
+func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) string {
+	port := freePort()
+	zeroCmd := buildCmd("dgraphzero", "-id", "1", "-port", port)
+	zeroCmd.Dir = dgraphZeroDir
+	s.checkFatal(zeroCmd.Start())
+	s.kill = append(s.kill, zeroCmd.Cmd)
+
+	time.Sleep(time.Second * 1) // Wait for dgraphzero to start listening.
+	fmt.Println(zeroCmd.Out.String())
+
+	queryPort := freePort()
+	dgraphCmd := buildCmd("dgraph",
+		"-memory_mb=1024",
+		"-peer", ":"+port,
+		"-port", queryPort,
+		"-grpc_port", freePort(),
+		"-workerport", freePort(),
+	)
+	dgraphCmd.Dir = dgraphDir
+	s.checkFatal(dgraphCmd.Start())
+	s.kill = append(s.kill, dgraphCmd.Cmd)
+
+	// Wait for dgraph to start accepting requests. TODO: Could do this
+	// programmatically by hitting the query port.
+	time.Sleep(time.Second * 4)
+	fmt.Println(dgraphCmd.Out.String())
+
+	return queryPort
 }
 
 func (s *suite) cleanup() {
@@ -139,7 +146,8 @@ func (s *suite) cleanup() {
 
 func (s *suite) strtest(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
-		resp, err := http.Post("http://127.0.0.1:"+s.blDGHTTPPort+"/query", "", bytes.NewBufferString(query))
+		resp, err := http.Post("http://127.0.0.1:"+s.bulkLoaderQueryPort+"/query",
+			"", bytes.NewBufferString(query))
 		if err != nil {
 			t.Fatal("Could not post:", err)
 		}
