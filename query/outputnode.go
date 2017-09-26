@@ -690,6 +690,13 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	}
 
 	lenList := len(sg.uidMatrix[0].Uids)
+
+	if lenList == 0 {
+		// So that we return an empty key for the block.
+		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
+		return nil
+	}
+
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
