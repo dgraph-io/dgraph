@@ -69,6 +69,8 @@ message Mutation {
     repeated NQuad set = 1;
     repeated NQuad del = 2;
     repeated SchemaUpdate schema = 3;
+    bytes set_json = 4;
+    bytes delete_json = 5;
 }
 
 message Request {
@@ -76,8 +78,6 @@ message Request {
     Mutation mutation = 2;
     SchemaRequest schema = 3;
     map<string, string> vars = 4; // Support for GraphQL like variables.
-    bytes mutation_set = 5;
-    bytes mutation_del = 6;
 }
 
 message Latency {
