@@ -23,7 +23,7 @@ import (
 )
 
 func init() {
-	if !testing.Short() {
+	if testing.Short() {
 		return
 	}
 	for _, name := range []string{
