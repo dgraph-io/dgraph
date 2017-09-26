@@ -36,6 +36,8 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
 type ServerState struct {
@@ -331,6 +333,21 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 			if len(predWithLang) == 2 {
 				nq.Predicate = predWithLang[0]
 				nq.Lang = predWithLang[1]
+			}
+
+			var g geom.T
+			err := geojson.Unmarshal([]byte(v.(string)), &g)
+			// We try to parse the value as a GeoJSON. If we can't, then we store as a string.
+			if err == nil {
+				geo, err := types.ObjectValue(types.GeoID, g)
+				if err != nil {
+					return nil, uid, x.Errorf("Couldn't convert value: %s to geo type", v.(string))
+				}
+
+				nq.ObjectValue = geo
+				nq.ObjectType = int32(types.GeoID)
+				nquads = append(nquads, &nq)
+				continue
 			}
 
 			nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}

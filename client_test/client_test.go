@@ -340,12 +340,13 @@ func TestSetObject(t *testing.T) {
 	}
 
 	type Person struct {
-		Uid     uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
-		Name    string   `json:"name,omitempty" dgraph:"name"`
-		Age     int      `json:"age,omitempty" dgraph:"age"`
-		Married bool     `json:"married,omitempty" dgraph:"married"`
-		Friends []Person `json:"friend,omitempty" dgraph:"friend"`
-		School  *School  `json:"school,omitempty" dgraph:"school"`
+		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
+		Name     string   `json:"name,omitempty" dgraph:"name"`
+		Age      int      `json:"age,omitempty" dgraph:"age"`
+		Married  bool     `json:"married,omitempty" dgraph:"married"`
+		Friends  []Person `json:"friend,omitempty" dgraph:"friend"`
+		Location string   `json:"loc,omitempty" dgraph:"loc"`
+		School   *School  `json:"school,omitempty" dgraph:"school"`
 	}
 
 	dirs, options := prepare()
@@ -355,10 +356,12 @@ func TestSetObject(t *testing.T) {
 	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
+	loc := `{"type":"Point","coordinates":[1.1,2]}`
 	p := Person{
-		Name:    "Alice",
-		Age:     26,
-		Married: true,
+		Name:     "Alice",
+		Age:      26,
+		Married:  true,
+		Location: loc,
 		Friends: []Person{{
 			Uid:  1000,
 			Name: "Bob",
@@ -388,6 +391,7 @@ func TestSetObject(t *testing.T) {
 		me(func: uid(%d)) {
 			name
 			age
+			loc
 			married
 			friend {
 				_uid_
@@ -413,6 +417,7 @@ func TestSetObject(t *testing.T) {
 	require.NoError(t, client.Unmarshal(resp.N, &r))
 
 	p2 := r.Me
+	require.Equal(t, p.Location, p2.Location)
 	require.Equal(t, p.Name, p2.Name)
 	require.Equal(t, p.Age, p2.Age)
 	require.Equal(t, p.Married, p2.Married)

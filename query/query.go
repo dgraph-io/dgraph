@@ -558,6 +558,7 @@ func convertWithBestEffort(tv *protos.TaskValue, attr string) (types.Val, error)
 	if bytes.Equal(tv.Val, nil) {
 		return v, ErrEmptyVal
 	}
+
 	// creates appropriate type from binary format
 	sv, err := types.Convert(v, v.Tid)
 	x.Checkf(err, "Error while interpreting appropriate type from binary")

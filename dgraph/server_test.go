@@ -9,6 +9,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
 func makeNquad(sub, pred string, val *protos.Value, t types.TypeID) *protos.NQuad {
@@ -38,19 +39,20 @@ type Person struct {
 	Age     int        `json:"age,omitempty"`
 	Married bool       `json:"married,omitempty"`
 	Now     *time.Time `json:"now,omitempty"`
-	Address geom.T     `json:"address,omitempty"`
+	Address string     `json:"address,omitempty"` // geo value
 	Friends []Person   `json:"friend,omitempty"`
 	School  *School    `json:"school,omitempty"`
 }
 
 func TestNquadsFromJson1(t *testing.T) {
 	tn := time.Now()
+	geoVal := `{"Type":"Point", "Coordinates":[1.1,2.0]}`
 	p := Person{
 		Name:    "Alice",
 		Age:     26,
 		Married: true,
 		Now:     &tn,
-		Address: geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518}),
+		Address: geoVal,
 	}
 
 	b, err := json.Marshal(p)
@@ -73,7 +75,13 @@ func TestNquadsFromJson1(t *testing.T) {
 	oval = &protos.Value{&protos.Value_StrVal{tn.Format(time.RFC3339Nano)}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "now", oval, types.StringID))
 
-	// TODO - Handle Geo
+	var g geom.T
+	err = geojson.Unmarshal([]byte(geoVal), &g)
+	require.NoError(t, err)
+	geo, err := types.ObjectValue(types.GeoID, g)
+	require.NoError(t, err)
+
+	require.Contains(t, nq, makeNquad("_:blank-0", "address", geo, types.GeoID))
 }
 
 func TestNquadsFromJson2(t *testing.T) {

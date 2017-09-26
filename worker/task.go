@@ -363,6 +363,9 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		var vl protos.ValueList
 		for _, val := range vals {
 			newValue, err = convertToType(val, srcFn.atype)
+			if err != nil {
+				return err
+			}
 
 			// This means we fetched the value directly instead of fetching index key and intersecting.
 			// Lets compare the value and add filter the uid.

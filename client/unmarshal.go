@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
 func unmarshalToStruct(f reflect.StructField, n *protos.Node, val reflect.Value) error {
@@ -113,7 +115,25 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 	}
 	switch field.Type.Kind() {
 	case reflect.String:
-		f.SetString(value.GetStrVal())
+		switch value.Val.(type) {
+		case *protos.Value_GeoVal:
+			v := value.GetGeoVal()
+			if len(v) == 0 {
+				return nil
+			}
+
+			g, err := wkb.Unmarshal(v)
+			if err != nil {
+				return nil
+			}
+			b, err := geojson.Marshal(g)
+			if err != nil {
+				return nil
+			}
+			f.SetString(string(b))
+		default:
+			f.SetString(value.GetStrVal())
+		}
 	case reflect.Int64, reflect.Int:
 		f.SetInt(value.GetIntVal())
 	case reflect.Float64:
