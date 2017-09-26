@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -326,6 +327,12 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 		default:
 			return nil, uid, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 		case string:
+			predWithLang := strings.SplitN(k, "@", 2)
+			if len(predWithLang) == 2 {
+				nq.Predicate = predWithLang[0]
+				nq.Lang = predWithLang[1]
+			}
+
 			nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}
 			nq.ObjectType = int32(types.StringID)
 			nquads = append(nquads, &nq)
@@ -333,7 +340,6 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 			nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v.(float64)}}
 			nq.ObjectType = int32(types.FloatID)
 			nquads = append(nquads, &nq)
-			// TODO - Handle language.
 		case bool:
 			nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v.(bool)}}
 			nq.ObjectType = int32(types.BoolID)

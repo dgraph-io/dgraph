@@ -336,7 +336,7 @@ func TestEmptyString(t *testing.T) {
 
 func TestSetObject(t *testing.T) {
 	type School struct {
-		Name string `json:",omitempty"`
+		Name string `json:"name@en,omitempty" dgraph:"name@en"`
 	}
 
 	type Person struct {
@@ -395,7 +395,7 @@ func TestSetObject(t *testing.T) {
 				age
 			}
 			school {
-				Name
+				name@en
 			}
 		}
 	}`, puid)
