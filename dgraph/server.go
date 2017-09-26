@@ -140,7 +140,8 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 
 	resp = new(protos.Response)
 	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
-		len(req.Mutation.GetSchema()) == 0 && len(req.MutationSet) == 0 && len(req.MutationDel) == 0
+		len(req.Mutation.GetSchema()) == 0 && len(req.Mutation.GetSetJson()) == 0 &&
+		len(req.Mutation.GetDeleteJson()) == 0
 	if len(req.Query) == 0 && emptyMutation && req.Schema == nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Empty query and mutation.")
@@ -296,7 +297,7 @@ func ParseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 	return res, nil
 }
 
-func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, error) {
+func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, string, error) {
 	var uid string
 	// Check field in map.
 	if uidVal, ok := m["_uid_"]; ok {
@@ -307,6 +308,10 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 	}
 
 	if len(uid) == 0 {
+		// Delete operations must have a uid.
+		if op == delete {
+			return nil, uid, x.Errorf("_uid_ must be present and be non-zero. Got: %+v", m)
+		}
 		uid = fmt.Sprintf("_:blank-%d", *idx)
 		*idx++
 	}
@@ -317,7 +322,7 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 		// We have already extracted the uid above so we skip that edge.
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
-		if k == "_uid_" || v == nil {
+		if k == "_uid_" {
 			continue
 		}
 
@@ -325,6 +330,15 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 			Subject:   uid,
 			Predicate: k,
 		}
+
+		if v == nil {
+			if op == delete {
+				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				nquads = append(nquads, &nq)
+			}
+			continue
+		}
+
 		switch v.(type) {
 		default:
 			return nil, uid, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
@@ -363,7 +377,7 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 			nquads = append(nquads, &nq)
 		case map[string]interface{}:
 			// TODO - Handle Geo
-			mnquads, oid, err := mapToNquads(v.(map[string]interface{}), idx)
+			mnquads, oid, err := mapToNquads(v.(map[string]interface{}), idx, op)
 			if err != nil {
 				return nil, uid, err
 			}
@@ -381,7 +395,7 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 				}
 
 				if mp, ok := item.(map[string]interface{}); ok {
-					mnquads, oid, err := mapToNquads(mp, idx)
+					mnquads, oid, err := mapToNquads(mp, idx, op)
 					if err != nil {
 						return nil, uid, err
 					}
@@ -397,26 +411,31 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 	return nquads, uid, nil
 }
 
-func nquadsFromJson(b []byte) ([]*protos.NQuad, error) {
+const (
+	set = iota
+	delete
+)
+
+func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 	ms := make(map[string]interface{})
 	if err := json.Unmarshal(b, &ms); err != nil {
 		return nil, err
 	}
 
 	var idx int
-	nquads, _, err := mapToNquads(ms, &idx)
+	nquads, _, err := mapToNquads(ms, &idx, op)
 	return nquads, err
 }
 
 func parseMutationObject(res *gql.Result, q *protos.Request) error {
-	if len(q.MutationSet) == 0 && len(q.MutationDel) == 0 {
+	if q.Mutation == nil || (len(q.Mutation.SetJson) == 0 && len(q.Mutation.DeleteJson) == 0) {
 		return nil
 	}
 
 	var nquads []*protos.NQuad
 	var err error
-	if len(q.MutationSet) > 0 {
-		nquads, err = nquadsFromJson(q.MutationSet)
+	if len(q.Mutation.SetJson) > 0 {
+		nquads, err = nquadsFromJson(q.Mutation.SetJson, set)
 		if err != nil {
 			return err
 		}
@@ -428,8 +447,8 @@ func parseMutationObject(res *gql.Result, q *protos.Request) error {
 	res.Mutation.Set = append(res.Mutation.Set, nquads...)
 
 	nquads = nquads[:0]
-	if len(q.MutationDel) > 0 {
-		nquads, err = nquadsFromJson(q.MutationDel)
+	if len(q.Mutation.DeleteJson) > 0 {
+		nquads, err = nquadsFromJson(q.Mutation.DeleteJson, delete)
 		if err != nil {
 			return err
 		}

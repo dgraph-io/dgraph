@@ -37,7 +37,7 @@ type Person struct {
 	Uid     uint64     `json:"_uid_,omitempty"`
 	Name    string     `json:"name,omitempty"`
 	Age     int        `json:"age,omitempty"`
-	Married bool       `json:"married,omitempty"`
+	Married *bool      `json:"married,omitempty"`
 	Now     *time.Time `json:"now,omitempty"`
 	Address string     `json:"address,omitempty"` // geo value
 	Friends []Person   `json:"friend,omitempty"`
@@ -47,10 +47,11 @@ type Person struct {
 func TestNquadsFromJson1(t *testing.T) {
 	tn := time.Now()
 	geoVal := `{"Type":"Point", "Coordinates":[1.1,2.0]}`
+	m := true
 	p := Person{
 		Name:    "Alice",
 		Age:     26,
-		Married: true,
+		Married: &m,
 		Now:     &tn,
 		Address: geoVal,
 	}
@@ -58,7 +59,7 @@ func TestNquadsFromJson1(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	nq, err := nquadsFromJson(b)
+	nq, err := nquadsFromJson(b, set)
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
@@ -85,10 +86,13 @@ func TestNquadsFromJson1(t *testing.T) {
 }
 
 func TestNquadsFromJson2(t *testing.T) {
+	m := false
+
 	p := Person{
 		Name: "Alice",
 		Friends: []Person{{
-			Name: "Charlie",
+			Name:    "Charlie",
+			Married: &m,
 		}, {
 			Uid:  1000,
 			Name: "Bob",
@@ -98,15 +102,18 @@ func TestNquadsFromJson2(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	nq, err := nquadsFromJson(b)
+	nq, err := nquadsFromJson(b, set)
 	require.NoError(t, err)
 
-	require.Equal(t, 5, len(nq))
+	require.Equal(t, 6, len(nq))
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "_:blank-1"))
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "1000"))
 
 	oval := &protos.Value{&protos.Value_StrVal{"Charlie"}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "name", oval, types.StringID))
+
+	oval = &protos.Value{&protos.Value_BoolVal{false}}
+	require.Contains(t, nq, makeNquad("_:blank-1", "married", oval, types.BoolID))
 
 	oval = &protos.Value{&protos.Value_StrVal{"Bob"}}
 	require.Contains(t, nq, makeNquad("1000", "name", oval, types.StringID))
@@ -123,7 +130,7 @@ func TestNquadsFromJson3(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	nq, err := nquadsFromJson(b)
+	nq, err := nquadsFromJson(b, set)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(nq))
@@ -131,4 +138,20 @@ func TestNquadsFromJson3(t *testing.T) {
 
 	oval := &protos.Value{&protos.Value_StrVal{"Wellington Public School"}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval, types.StringID))
+}
+
+func TestNquadsFromJsonError(t *testing.T) {
+	p := Person{
+		Name: "Alice",
+		School: &School{
+			Name: "Wellington Public School",
+		},
+	}
+
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	_, err = nquadsFromJson(b, delete)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "_uid_ must be present and be non-zero.")
 }

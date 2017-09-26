@@ -112,7 +112,7 @@ func (req *Req) SetObject(v interface{}) error {
 	if err != nil {
 		return err
 	}
-	req.gr.MutationSet = b
+	req.gr.Mutation.SetJson = b
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (req *Req) DelObject(v interface{}) error {
 	if err != nil {
 		return err
 	}
-	req.gr.MutationDel = b
+	req.gr.Mutation.DeleteJson = b
 	return nil
 }
 
