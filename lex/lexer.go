@@ -145,7 +145,7 @@ func (l *Lexer) Run(f StateFn) *Lexer {
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 	l.items = append(l.items, Item{
 		Typ: ItemError,
-		Val: fmt.Sprintf(format, args...),
+		Val: fmt.Sprintf("while lexing %v: "+format, append([]interface{}{l.Input}, args...)...),
 	})
 	return nil
 }
@@ -283,7 +283,7 @@ func (l *Lexer) LexQuotedString() error {
 		if r == '\\' {
 			r := l.Next()
 			if !l.IsEscChar(r) {
-				return x.Errorf("Not a valid escape char: %v", r)
+				return x.Errorf("Not a valid escape char: '%c'", r)
 			}
 			continue // eat the next char
 		}

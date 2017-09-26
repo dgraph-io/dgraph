@@ -58,7 +58,7 @@ output to a file.  For example:
 
 This crawler outputs gzipped rdf.  The output file can be loaded into a Dgraph instance with
 
-dgraphloader --s <schemafile> --r crawl.rdf.gz
+dgraph-live-loader --s <schemafile> --r crawl.rdf.gz
 
 The schema could be the same as 21million (https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema),
 or

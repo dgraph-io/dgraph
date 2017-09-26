@@ -21,7 +21,7 @@ done
 
 tmp=${tmp:-tmp}
 
-go install -race github.com/dgraph-io/dgraph/cmd/bulkloader
+go install -race github.com/dgraph-io/dgraph/cmd/dgraph-bulk-loader
 
 function run_test {
 	[[ $# == 2 ]] || { echo "bad args"; exit 1; }
@@ -34,7 +34,7 @@ function run_test {
 	echo "$schema" > $tmp/sch.schema
 
 	# Run bulk loader.
-	$GOPATH/bin/bulkloader -map_shards=5 -reduce_shards=2 -shufflers=2 -mapoutput_mb=15 -tmp "$tmp/tmp" -out "$tmp/out" -l "$tmp/LEASE" -s "$tmp/sch.schema" -r "$rdfs"
+	$GOPATH/bin/dgraph-bulk-loader -map_shards=5 -reduce_shards=2 -shufflers=2 -mapoutput_mb=15 -tmp "$tmp/tmp" -out "$tmp/out" -l "$tmp/LEASE" -s "$tmp/sch.schema" -r "$rdfs"
 }
 
 echo "========================="

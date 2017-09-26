@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script is used to compile dgraph and dgraphloader with build flags.
+# This script is used to compile dgraph and dgraph-live-loader with build flags.
 # The build flags are useful in finding information about the binary.
 
 release_version="$(git describe --abbrev=0)-dev";
@@ -20,13 +20,13 @@ cd $dgraph_cmd/dgraph && \
    go build -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" ;
 
-echo "dgraphloader"
-cd $dgraph_cmd/dgraphloader && \
+echo "dgraph-live-loader"
+cd $dgraph_cmd/dgraph-live-loader && \
    go build -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
 
-echo "bulkloader"
-cd $dgraph_cmd/bulkloader && \
+echo "dgraph-bulk-loader"
+cd $dgraph_cmd/dgraph-bulk-loader && \
    go build -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
 

@@ -188,7 +188,7 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 		return sfn
 	}
 
-	return l.Errorf("Invalid character %v found for UID node itemType: %v", r,
+	return l.Errorf("Invalid character '%c' found for UID node itemType: %v", r,
 		styp)
 }
 
@@ -198,14 +198,14 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
 	r := l.Next()
 	if r != colon {
-		return l.Errorf("Invalid character after _. Expected :, found %v", r)
+		return l.Errorf("Invalid character after _. Expected :, found '%c'", r)
 	}
 	r = l.Next()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
 	}
 	if !(isPNCharsU(r) || (r >= '0' && r <= '9')) {
-		return l.Errorf("Invalid character in %v after _: , Got %v", styp, r)
+		return l.Errorf("Invalid character in %v after _: , Got '%c'", styp, r)
 	}
 	lastAccRune, validRune := l.AcceptRun(func(r rune) bool {
 		return r == dot || isPNChar(r)
@@ -224,7 +224,7 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 		return sfn
 	}
 
-	return l.Errorf("Invalid character %v found for itemType: %v", r, styp)
+	return l.Errorf("Invalid character '%c' found for itemType: %v", r, styp)
 }
 
 func lexSubject(l *lex.Lexer) lex.StateFn {
@@ -248,7 +248,7 @@ func lexPredicate(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	// The predicate can only be an IRI according to the spec.
 	if r != lsThan {
-		return l.Errorf("Invalid character in lexPredicate: %v", r)
+		return l.Errorf("Invalid character in lexPredicate: '%c'", r)
 	}
 
 	l.Depth++
@@ -264,7 +264,7 @@ func lexLanguage(l *lex.Lexer) lex.StateFn {
 	l.Ignore()
 	r = l.Next()
 	if !isLangTagPrefix(r) {
-		return l.Errorf("Invalid language tag prefix: %v", r)
+		return l.Errorf("Invalid language tag prefix: '%c'", r)
 	}
 
 	lastRune, validRune := l.AcceptRun(isLangTag)
@@ -286,11 +286,11 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 			if l.IsEscChar(r) || lex.HasUChars(r, l) {
 				continue // This would skip over the escaped rune.
 			}
-			return l.Errorf("Invalid escape character : %v in literal", r)
+			return l.Errorf("Invalid escape character : '%c' in literal", r)
 		}
 
 		if r == 0x5c || r == 0xa || r == 0xd { // 0x22 ('"') is endLiteral
-			return l.Errorf("Invalid character %v in literal.", r)
+			return l.Errorf("Invalid character '%c' in literal.", r)
 		}
 
 		if r == lex.EOF || isEndLiteral(r) {
@@ -355,7 +355,7 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 		return lexLiteral(l)
 	}
 
-	return l.Errorf("Invalid char: %v at lexObject", r)
+	return l.Errorf("Invalid char: '%c' at lexObject", r)
 }
 
 func lexLabel(l *lex.Lexer) lex.StateFn {
@@ -370,7 +370,7 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 		l.Depth++
 		return lexBlankNode(l, itemLabel, lexText)
 	}
-	return l.Errorf("Invalid char: %v at lexLabel", r)
+	return l.Errorf("Invalid char: '%c' at lexLabel", r)
 }
 
 // lexFacets parses key-value pairs of Facets. sample is :
@@ -379,7 +379,7 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 func lexFacets(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	if r != leftRound {
-		return l.Errorf("Expected '(' but found %v at Facet.", r)
+		return l.Errorf("Expected '(' but found '%c' at Facet.", r)
 	}
 	l.Emit(itemLeftRound)
 
@@ -437,14 +437,14 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 
 	for _, c := range "uid" {
 		if r = l.Next(); r != c {
-			return l.Errorf("Unexpected char %c when parsing var keyword", r)
+			return l.Errorf("Unexpected char '%c' when parsing var keyword", r)
 		}
 	}
 	l.Emit(itemVarKeyword)
 	l.IgnoreRun(isSpace)
 
 	if r = l.Next(); r != '(' {
-		return l.Errorf("Expected '(' after var keyword, found: %c", r)
+		return l.Errorf("Expected '(' after var keyword, found: '%c'", r)
 	}
 	l.Emit(itemLeftRound)
 
@@ -468,7 +468,7 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 	l.IgnoreRun(isSpace)
 
 	if r = l.Next(); r != ')' {
-		return l.Errorf("Expected ')' while reading var, found: %c", r)
+		return l.Errorf("Expected ')' while reading var, found: '%c'", r)
 	}
 	l.Emit(itemRightRound)
 	l.Depth++

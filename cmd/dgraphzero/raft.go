@@ -19,7 +19,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -142,7 +141,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal
 			break
 		}
 	}
-	fmt.Printf(" ===> Proposal: %+v\n", proposal)
 	data, err := proposal.Marshal()
 	if err != nil {
 		return err
@@ -186,7 +184,6 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	if p.Id == 0 {
 		return 0, errInvalidProposal
 	}
-	x.Printf("Applying proposal: %+v\n", p)
 
 	n.server.Lock()
 	defer n.server.Unlock()
@@ -208,6 +205,10 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			return p.Id, errInvalidProposal
 		}
 		group.Members[p.Member.Id] = p.Member
+		// On replay of logs on restart we need to set nextGroup.
+		if n.server.nextGroup <= p.Member.GroupId {
+			n.server.nextGroup = p.Member.GroupId + 1
+		}
 	}
 	if p.Tablet != nil {
 		if p.Tablet.GroupId == 0 {
@@ -218,15 +219,28 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			group = newGroup()
 			state.Groups[p.Tablet.GroupId] = group
 		}
-		_, has := group.Tablets[p.Tablet.Predicate]
-		if has && p.Tablet.NoUpdate {
-			return p.Id, errTabletAlreadyServed
-		} else {
-			group.Tablets[p.Tablet.Predicate] = p.Tablet
+
+		// There's a edge case that we're handling.
+		// Two servers ask to serve the same tablet, then we need to ensure that
+		// only the first one succeeds.
+		if tablet := n.server.servingTablet(p.Tablet.Predicate); tablet != nil {
+			if p.Tablet.Force {
+				group := state.Groups[tablet.GroupId]
+				delete(group.Tablets, p.Tablet.Predicate)
+			} else {
+				if tablet.GroupId != p.Tablet.GroupId {
+					return p.Id, errTabletAlreadyServed
+				}
+				// This update can come from tablet size.
+				p.Tablet.ReadOnly = tablet.ReadOnly
+			}
 		}
+		group.Tablets[p.Tablet.Predicate] = p.Tablet
 	}
 	if p.MaxLeaseId > 0 {
 		state.MaxLeaseId = p.MaxLeaseId
+	} else {
+		x.Printf("Applied proposal: %+v\n", p)
 	}
 	return p.Id, nil
 }
@@ -246,6 +260,11 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+	select {
+	case n.server.leaderChangeCh <- struct{}{}:
+	default:
+		// Ok to ingore
+	}
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {

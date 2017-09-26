@@ -146,7 +146,7 @@ func main() {
 	// https://github.com/dgraph-io/benchmarks/blob/master/movielens/movielens.schema
 	// using draphloader (--s option with no data file), or by running a mutation
 	// mutation { schema { <content of schema file> } }
-	// dgraphloader function processSchemaFile() also shows an example of how to load
+	// dgraph-live-loader function processSchemaFile() also shows an example of how to load
 	// a schema file using the client.
 
 	gf, err := os.Open(*genre)

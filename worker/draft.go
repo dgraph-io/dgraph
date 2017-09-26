@@ -414,10 +414,20 @@ func (n *node) processApplyCh() {
 			groups().applyState(proposal.State)
 			// When proposal is done it emits done watermarks.
 			n.props.Done(proposal.Id, nil)
+		} else if len(proposal.CleanPredicate) > 0 {
+			go n.deletePredicate(e.Index, proposal.Id, proposal.CleanPredicate)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
 	}
+}
+
+func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
+	ctx, _ := n.props.Ctx(pid)
+	rv := x.RaftValue{Group: n.gid, Index: index}
+	ctx = context.WithValue(n.ctx, "raft", rv)
+	err := posting.DeletePredicate(ctx, predicate)
+	n.props.Done(pid, err)
 }
 
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {

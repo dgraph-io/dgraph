@@ -244,7 +244,7 @@ func SchemaPrefix() []byte {
 // PredicatePrefix returns the prefix for all keys belonging
 // to this predicate except schema key.
 func PredicatePrefix(predicate string) []byte {
-	buf := make([]byte, 2+len(predicate))
+	buf := make([]byte, 1+2+len(predicate))
 	buf[0] = defaultPrefix
 	k := writeAttr(buf[1:], predicate)
 	AssertTrue(len(k) == 0)

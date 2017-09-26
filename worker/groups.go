@@ -26,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -59,6 +60,7 @@ type groupi struct {
 	gid       uint32
 	tablets   map[string]*protos.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
+	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
 }
 
 var gr *groupi
@@ -126,6 +128,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
 	gr.triggerCh = make(chan struct{}, 1)
+	gr.delPred = make(chan struct{}, 1)
 	gid := gr.groupId()
 	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
 	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
@@ -134,6 +137,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	x.UpdateHealthStatus(true)
 	if !Config.InMemoryComm {
 		go gr.periodicMembershipUpdate() // Now set it to be run periodically.
+		go gr.cleanupTablets()
 	}
 }
 
@@ -144,11 +148,6 @@ func (g *groupi) groupId() uint32 {
 }
 
 func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
-	// Only calculate these, if I'm the leader.
-	if !g.Node.AmLeader() {
-		return nil
-	}
-
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchValues = false
 	itr := pstore.NewIterator(opt)
@@ -175,7 +174,7 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 			tablet = &protos.Tablet{GroupId: gid, Predicate: pk.Attr}
 			tablets[pk.Attr] = tablet
 		}
-		tablet.Size_ += item.EstimatedSize()
+		tablet.Space += item.EstimatedSize()
 		itr.Next()
 	}
 	return tablets
@@ -387,7 +386,9 @@ func (g *groupi) triggerMembershipSync() {
 }
 
 func (g *groupi) periodicMembershipUpdate() {
-	ticker := time.NewTicker(time.Minute * 10)
+	ticker := time.NewTicker(time.Minute * 5)
+	// Node might not be the leader when we are calculating size.
+	// We need to send immediately on start so no leader check inside calculatesize.
 	tablets := g.calculateTabletSizes()
 
 START:
@@ -395,7 +396,7 @@ START:
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		x.Printf("WARNING: We don't have address of any dgraphzero server.")
-		time.Sleep(time.Minute)
+		time.Sleep(time.Second)
 		goto START
 	}
 
@@ -404,7 +405,7 @@ START:
 	stream, err := c.Update(ctx)
 	if err != nil {
 		x.Printf("Error while calling update %v\n", err)
-		time.Sleep(time.Minute)
+		time.Sleep(time.Second)
 		goto START
 	}
 
@@ -433,6 +434,7 @@ OUTER:
 	for {
 		select {
 		case <-g.triggerCh:
+			// On start of node if it becomes a leader, we would send tablets size for sure.
 			if err := g.sendMembership(tablets, stream); err != nil {
 				stream.CloseSend()
 				break OUTER
@@ -440,11 +442,13 @@ OUTER:
 		case <-ticker.C:
 			// dgraphzero just adds to the map so we needn't worry about race condition
 			// where a newly added tablet is not sent.
-			tablets = g.calculateTabletSizes()
-			if tablets == nil {
-				continue // I am not leader so no need to send.
+			if g.Node.AmLeader() {
+				tablets = g.calculateTabletSizes()
 			}
+			// Let's send update even if not leader, zero will know that this node is still
+			// active.
 			if err := g.sendMembership(tablets, stream); err != nil {
+				x.Printf("Error while updating tablets size %v\n", err)
 				stream.CloseSend()
 				break OUTER
 			}
@@ -456,19 +460,88 @@ OUTER:
 	goto START
 }
 
+func (g *groupi) waitForBackgroundDeletion() {
+	// Waits for background cleanup if any to finish.
+	// No new cleanup on any predicate would start until we finish moving
+	// the predicate because read only flag would be set by now. We start deletion
+	// only when no predicate is being moved.
+	g.delPred <- struct{}{}
+	<-g.delPred
+}
+
+func (g *groupi) hasReadOnlyTablets() bool {
+	g.RLock()
+	defer g.RUnlock()
+	if g.state == nil {
+		return false
+	}
+	for _, group := range g.state.Groups {
+		for _, tab := range group.Tablets {
+			if tab.ReadOnly {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (g *groupi) cleanupTablets() {
+	ticker := time.NewTimer(time.Minute * 10)
+	select {
+	case <-ticker.C:
+		func() {
+			opt := badger.DefaultIteratorOptions
+			opt.PrefetchValues = false
+			itr := pstore.NewIterator(opt)
+			defer itr.Close()
+
+			for itr.Rewind(); itr.Valid(); {
+				item := itr.Item()
+
+				pk := x.Parse(item.Key())
+
+				// Delete at most one predicate at a time.
+				// Tablet is not being served by me and is not read only.
+				// Don't use servesTablet function because it can return false even if
+				// request made to group zero fails. We might end up deleting a predicate
+				// on failure of network request even though no one else is serving this
+				// tablet.
+				if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
+					if g.hasReadOnlyTablets() {
+						return
+					}
+					g.delPred <- struct{}{}
+					posting.DeletePredicate(context.Background(), pk.Attr)
+					<-g.delPred
+					return
+				}
+				if pk.IsSchema() {
+					itr.Seek(pk.SkipSchema())
+					continue
+				}
+				itr.Seek(pk.SkipPredicate())
+			}
+		}()
+	}
+}
+
 func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 	stream protos.Zero_UpdateClient) error {
+	leader := g.Node.AmLeader()
 	member := &protos.Member{
-		Id:      Config.RaftId,
-		GroupId: g.groupId(),
-		Addr:    Config.MyAddr,
-		Leader:  g.Node.AmLeader(),
+		Id:         Config.RaftId,
+		GroupId:    g.groupId(),
+		Addr:       Config.MyAddr,
+		Leader:     leader,
+		LastUpdate: uint64(time.Now().Nanosecond()),
 	}
 	group := &protos.Group{
 		Members: make(map[uint64]*protos.Member),
 	}
 	group.Members[member.Id] = member
-	group.Tablets = tablets
+	if leader {
+		group.Tablets = tablets
+	}
 
 	return stream.Send(group)
 }

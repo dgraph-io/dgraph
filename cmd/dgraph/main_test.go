@@ -1713,6 +1713,59 @@ func TestUpsert2(t *testing.T) {
 		res)
 }
 
+func TestDeleteAllSP2(t *testing.T) {
+	var m = `
+	mutation {
+	  set {
+	    _:day1 <nodeType> "TRACKED_DAY" .
+	    _:day1 <name> "July 3 2017" .
+	    _:day1 <date> "2017-07-03T03:49:03+00:00" .
+	    _:day1 <weight> "262.3" .
+	    _:day1 <weightUnit> "pound" .
+	    _:day1 <lifeLoad> "5" .
+	    _:day1 <stressLevel> "3" .
+	    _:day1 <plan> "modest day" .
+	    _:day1 <postMortem> "win!" .
+	  }
+	}
+	`
+	output, err := runQuery(m)
+	require.NoError(t, err)
+	out := make(map[string]interface{})
+	require.NoError(t, json.Unmarshal([]byte(output), &out))
+	uid := out["data"].(map[string]interface{})["uids"].(map[string]interface{})["day1"].(string)
+
+	q := fmt.Sprintf(`
+	{
+	  all_tracked_days(func: uid(%s)) {
+		_predicate_
+		name
+	    date
+	    weight
+	    lifeLoad
+	    stressLevel
+	  }
+	}`, uid)
+
+	output, err = runQuery(q)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {"all_tracked_days":[{"_predicate_":["name","date","weightUnit","postMortem","lifeLoad","weight","stressLevel","nodeType","plan"],"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
+
+	m = fmt.Sprintf(`
+		mutation {
+			delete {
+				<%s> * * .
+			}
+		}`, uid)
+
+	output, err = runQuery(m)
+	require.NoError(t, err)
+
+	output, err = runQuery(q)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {}}`, output)
+}
+
 func TestMain(m *testing.M) {
 	dc := dgraph.DefaultConfig
 	dc.AllottedMemory = 2048.0
@@ -1720,6 +1773,7 @@ func TestMain(m *testing.M) {
 	x.Init()
 
 	dir1, dir2, _ := prepare()
+	time.Sleep(10 * time.Millisecond)
 
 	// Parse GQL into internal query representation.
 	r := m.Run()

@@ -40,12 +40,12 @@ func main() {
 		"Skip the map phase (assumes that map output files already exist)")
 	flag.BoolVar(&opt.CleanupTmp, "cleanup_tmp", true,
 		"Clean up the tmp directory after the loader finishes")
-	flag.BoolVar(&opt.SkipExpandEdges, "skip_expand_edges", false,
-		"Don't generate edges that allow nodes to be expanded using _predicate_ or expand(...).")
+	flag.BoolVar(&opt.ExpandEdges, "expand_edges", true, "Generate edges that allow nodes to"+
+		" be expanded using _predicate_ or expand(...). Disable to increase loading speed.")
 	flag.IntVar(&opt.NumShufflers, "shufflers", 1, "Number of shufflers to run concurrently.")
 	flag.IntVar(&opt.MapShards, "map_shards", 1, "Number of map output shards.")
 	flag.IntVar(&opt.ReduceShards, "reduce_shards", 1, "Number of shuffle output shards.")
-	flag.BoolVar(&opt.Version, "version", false, "Prints the version of bulkloader.")
+	flag.BoolVar(&opt.Version, "version", false, "Prints the version of dgraph-bulk-loader.")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {

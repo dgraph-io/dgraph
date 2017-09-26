@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/proto"
 )
 
 var (
@@ -55,7 +56,8 @@ type Server struct {
 	leaseLock   sync.Mutex // protects nextLeaseId and lease proposals.
 
 	// groupMap    map[uint32]*Group
-	nextGroup uint32
+	nextGroup      uint32
+	leaderChangeCh chan struct{}
 }
 
 func (s *Server) Init() {
@@ -68,6 +70,8 @@ func (s *Server) Init() {
 	}
 	s.nextLeaseId = 1
 	s.nextGroup = 1
+	s.leaderChangeCh = make(chan struct{}, 1)
+	go s.rebalanceTablets()
 }
 
 func (s *Server) Leader(gid uint32) *conn.Pool {
@@ -82,6 +86,8 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 	}
 	var healthyPool *conn.Pool
 	for _, m := range group.Members {
+		// TODO: Remove this and handle connections properly later.
+		conn.Get().Connect(m.Addr)
 		if pl, err := conn.Get().Get(m.Addr); err == nil {
 			healthyPool = pl
 			if m.Leader {
@@ -90,6 +96,23 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 		}
 	}
 	return healthyPool
+}
+
+func (s *Server) hasLeader(gid uint32) bool {
+	s.AssertRLock()
+	if s.state == nil {
+		return false
+	}
+	group := s.state.Groups[gid]
+	if group == nil {
+		return false
+	}
+	for _, m := range group.Members {
+		if m.Leader {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) SetMembershipState(state *protos.MembershipState) {
@@ -102,6 +125,7 @@ func (s *Server) SetMembershipState(state *protos.MembershipState) {
 	if state.Groups == nil {
 		state.Groups = make(map[uint32]*protos.Group)
 	}
+	s.nextGroup = uint32(len(state.Groups) + 1)
 }
 
 func (s *Server) MarshalMembershipState() ([]byte, error) {
@@ -110,11 +134,10 @@ func (s *Server) MarshalMembershipState() ([]byte, error) {
 	return s.state.Marshal()
 }
 
-// Do not modify the membership state out of this.
 func (s *Server) membershipState() *protos.MembershipState {
 	s.RLock()
 	defer s.RUnlock()
-	return s.state
+	return proto.Clone(s.state).(*protos.MembershipState)
 }
 
 func (s *Server) storeZero(m *protos.Member) {
@@ -124,9 +147,22 @@ func (s *Server) storeZero(m *protos.Member) {
 	s.state.Zeros[m.Id] = m
 }
 
-func (s *Server) servingTablet(dst string) *protos.Tablet {
+func (s *Server) ServingTablet(dst string) *protos.Tablet {
 	s.RLock()
 	defer s.RUnlock()
+
+	for _, group := range s.state.Groups {
+		for key, tab := range group.Tablets {
+			if key == dst {
+				return tab
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Server) servingTablet(dst string) *protos.Tablet {
+	s.AssertRLock()
 
 	for _, group := range s.state.Groups {
 		for key, tab := range group.Tablets {
@@ -177,12 +213,14 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 		}
 		srcTablet, has := group.Tablets[key]
 		if !has {
-			return res, errUnknownMember
+			// Tablet moved to new group
+			continue
 		}
 
-		s := float64(srcTablet.Size())
-		d := float64(dstTablet.Size())
+		s := float64(srcTablet.Space)
+		d := float64(dstTablet.Space)
 		if (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
+			dstTablet.Force = false
 			proposal := &protos.ZeroProposal{
 				Tablet: dstTablet,
 			}
@@ -260,12 +298,10 @@ func (s *Server) Connect(ctx context.Context,
 
 	proposal := createProposal()
 	if proposal != nil {
-		x.Printf("Proposing: %+v\n", proposal)
 		if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
 			return &emptyMembershipState, err
 		}
 	}
-	// TODO: Shouldn't we copy before.
 	return s.membershipState(), nil
 }
 
@@ -277,7 +313,7 @@ func (s *Server) ShouldServe(
 	}
 
 	// Check who is serving this tablet.
-	tab := s.servingTablet(tablet.Predicate)
+	tab := s.ServingTablet(tablet.Predicate)
 	if tab != nil {
 		// Someone is serving this tablet. Could be the caller as well.
 		// The caller should compare the returned group against the group it holds to check who's
@@ -288,12 +324,12 @@ func (s *Server) ShouldServe(
 	// Set the tablet to be served by this server's group.
 	var proposal protos.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
-	tablet.NoUpdate = true
+	tablet.Force = false
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
 		return tablet, err
 	}
-	tab = s.servingTablet(tablet.Predicate)
+	tab = s.ServingTablet(tablet.Predicate)
 	return tab, nil
 }
 
@@ -310,13 +346,13 @@ func (s *Server) receiveUpdates(stream protos.Zero_UpdateServer) error {
 		}
 		proposals, err := s.createProposals(group)
 		if err != nil {
+			x.Printf("Error while creating proposals in stream %v\n", err)
 			return err
 		}
 
 		errCh := make(chan error)
 		for _, pr := range proposals {
 			go func(pr *protos.ZeroProposal) {
-				x.Printf("Proposing: %+v\n", pr)
 				errCh <- s.Node.proposeAndWait(context.Background(), pr)
 			}(pr)
 		}
@@ -353,8 +389,11 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 	if err != nil {
 		return err
 	}
-	if err := stream.Send(ms); err != nil {
-		return err
+	if ms != nil {
+		// grpc will error out during marshalling if we send nil.
+		if err := stream.Send(ms); err != nil {
+			return err
+		}
 	}
 
 	for {

@@ -204,7 +204,7 @@ func export(bdir string) error {
 	gid := groups().groupId()
 	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
-	fspath := path.Join(bdir, fmt.Sprintf("dgraph-schema-%d-%s.rdf.gz", gid,
+	fspath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.schema.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
 	x.Printf("Exporting to: %v, schema at %v\n", fpath, fspath)
 	chb := make(chan []byte, 1000)

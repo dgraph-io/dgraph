@@ -74,4 +74,4 @@ serialized SubGraph objects.
 Just two things to note before running `run.sh`:
 
 1. Run it in this directory so that it generates the files here.
-1. Remember to specify `DATADIR`. This is the location of your posting list data after running `dgraphloader`.
+1. Remember to specify `DATADIR`. This is the location of your posting list data after running `dgraph-live-loader`.

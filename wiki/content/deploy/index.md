@@ -44,12 +44,12 @@ Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
 
 After installing Go, run
 ```
-# This should install the following binaries in your $GOPATH/bin: dgraph, dgraphloader, and bulkloader.
+# This should install the following binaries in your $GOPATH/bin: dgraph, dgraph-live-loader, and dgraph-bulk-loader.
 go get -u github.com/dgraph-io/dgraph/...
 ```
 
-The binaries are located in `cmd/dgraph`, `cmd/dgraphloader`, and
-`cmd/bulkloader`. If you get errors related to `grpc` while building them, your
+The binaries are located in `cmd/dgraph`, `cmd/dgraph-live-loader`, and
+`cmd/dgraph-bulk-loader`. If you get errors related to `grpc` while building them, your
 `go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it
 causes issues while using the Go client). Update your `go-grpc` by running.
 ```
@@ -209,7 +209,7 @@ cd ~/dgraph
 dgraph
 ```
 
-Or by specifying `p` and `w` directories, ports, etc.  If `dgraphloader` is used, it must connect on the port exposing Dgraph services, as must the go client.  
+Or by specifying `p` and `w` directories, ports, etc.  If `dgraph-live-loader` is used, it must connect on the port exposing Dgraph services, as must the go client.  
 
 ### Multiple instances
 
@@ -355,49 +355,49 @@ p w ip worker groups.conf groups heathy-peer
 
 There are two different tools that can be used for bulk data loading:
 
-- `dgraphloader`
-- `bulkloader`
+- `dgraph-live-loader`
+- `dgraph-bulk-loader`
 
 {{% notice "note" %}} both tools only accepts gzipped, RDF NQuad/Triple data.
 Data in other formats must be converted [to
 this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
 
-### `dgraphloader`
+### `dgraph-live-loader`
 
-The `dgraphloader` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph. It's not the only way to run mutations.  Mutations could also be run from the command line, e.g. with `curl`, from the UI, by sending to `/query` or by a program using a [Dgraph client]({{< relref "clients/index.md" >}}).
+The `dgraph-live-loader` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph. It's not the only way to run mutations.  Mutations could also be run from the command line, e.g. with `curl`, from the UI, by sending to `/query` or by a program using a [Dgraph client]({{< relref "clients/index.md" >}}).
 
-`dgraphloader` correctly handles splitting blank nodes across multiple batches and creating `xid` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
+`dgraph-live-loader` correctly handles splitting blank nodes across multiple batches and creating `xid` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
 
-`dgraphloader` checkpoints the loaded rdfs in the c directory by default. On restart it would automatically resume from the last checkpoint. If you want to load the whole data again, you need to delete the checkpoint directory.
+`dgraph-live-loader` checkpoints the loaded rdfs in the c directory by default. On restart it would automatically resume from the last checkpoint. If you want to load the whole data again, you need to delete the checkpoint directory.
 
 ```
-$ dgraphloader --help # To see the available flags.
+$ dgraph-live-loader --help # To see the available flags.
 
 # Read RDFs from the passed file, and send them to Dgraph on localhost:9080.
-$ dgraphloader -r <path-to-rdf-gzipped-file>
+$ dgraph-live-loader -r <path-to-rdf-gzipped-file>
 
 # Read RDFs and a schema file and send do Dgraph running at given address
-$ dgraphloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
+$ dgraph-live-loader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
 
 # For example to load goldendata with the corresponding schema and convert URI to xid.
-$ dgraphloader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema -x
+$ dgraph-live-loader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema -x
 ```
 
-### `bulkloader`
+### `dgraph-bulk-loader`
 
-`bulkloader` serves a similar purpose to `dgraphloader`, but can only be used
+`dgraph-bulk-loader` serves a similar purpose to `dgraph-live-loader`, but can only be used
 while dgraph is offline for the initial population. It cannot run on an
 existing dgraph instance.
 
-`bulkloader` is *considerably faster* than `dgraphloader`, and is the recommended
+`dgraph-bulk-loader` is *considerably faster* than `dgraph-live-loader`, and is the recommended
 way to perform the initial import of large datasets into dgraph.
 
 ```
-$ bulkloader --help # To see the available flags
+$ dgraph-bulk-loader --help # To see the available flags
 
 # Read RDFs and schema from file, and create the data directory for a new
 # dgraph instance:
-$ bulkloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file>
+$ dgraph-bulk-loader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file>
 ```
 
 ## Export
@@ -438,7 +438,7 @@ To drop all data and start from a clean database:
 
 ## Upgrade Dgraph
 
-<!--{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraphloader using the `-s` flag while reloading your data.{{% /notice %}}-->
+<!--{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraph-live-loader using the `-s` flag while reloading your data.{{% /notice %}}-->
 {{% notice "note" %}}If you are upgrading from v0.7 please check whether you have the export api or get the latest binary for version v0.7.7 and use the export api. {{% /notice %}}
 
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.

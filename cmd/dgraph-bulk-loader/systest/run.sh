@@ -5,7 +5,7 @@ set -euo pipefail
 script_dir=$(dirname $(readlink -f "$0"))
 
 echo "Installing binaries..."
-go install github.com/dgraph-io/dgraph/cmd/bulkloader
+go install github.com/dgraph-io/dgraph/cmd/dgraph-bulk-loader
 go install github.com/dgraph-io/dgraph/cmd/dgraph
 go install github.com/dgraph-io/dgraph/cmd/dgraphzero
 echo "Done."
@@ -19,7 +19,7 @@ for suite in $script_dir/suite*; do
 	pushd tmp >/dev/null
 	mkdir dg
 	pushd dg >/dev/null
-	$GOPATH/bin/bulkloader -r $suite/rdfs.rdf -s $suite/schema.txt >/dev/null 2>&1
+	$GOPATH/bin/dgraph-bulk-loader -r $suite/rdfs.rdf -s $suite/schema.txt >/dev/null 2>&1
 	mv out/0 p
 	popd >/dev/null
 
