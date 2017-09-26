@@ -310,7 +310,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 	if len(uid) == 0 {
 		// Delete operations must have a uid.
 		if op == delete {
-			return nil, uid, x.Errorf("_uid_ must be present and be non-zero. Got: %+v", m)
+			return nil, uid, x.Errorf("_uid_ must be present and non-zero. Got: %+v", m)
 		}
 		uid = fmt.Sprintf("_:blank-%d", *idx)
 		*idx++
@@ -349,6 +349,13 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 				nq.Lang = predWithLang[1]
 			}
 
+			// Default value is considered as S P * deletion.
+			if v == "" && op == delete {
+				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				nquads = append(nquads, &nq)
+				continue
+			}
+
 			var g geom.T
 			err := geojson.Unmarshal([]byte(v.(string)), &g)
 			// We try to parse the value as a GeoJSON. If we can't, then we store as a string.
@@ -368,15 +375,26 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 			nq.ObjectType = int32(types.StringID)
 			nquads = append(nquads, &nq)
 		case float64:
+			if v == 0 && op == delete {
+				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				nquads = append(nquads, &nq)
+				continue
+			}
+
 			nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v.(float64)}}
 			nq.ObjectType = int32(types.FloatID)
 			nquads = append(nquads, &nq)
 		case bool:
+			if v == false && op == delete {
+				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				nquads = append(nquads, &nq)
+				continue
+			}
+
 			nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v.(bool)}}
 			nq.ObjectType = int32(types.BoolID)
 			nquads = append(nquads, &nq)
 		case map[string]interface{}:
-			// TODO - Handle Geo
 			mnquads, oid, err := mapToNquads(v.(map[string]interface{}), idx, op)
 			if err != nil {
 				return nil, uid, err

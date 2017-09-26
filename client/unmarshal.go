@@ -277,6 +277,9 @@ func resetStruct(t reflect.Type, v reflect.Value) {
 		case reflect.Struct:
 			resetStruct(ft.Type, f)
 		case reflect.Ptr:
+			if ft.Type.Elem().Kind() != reflect.Struct {
+				continue
+			}
 			fv := reflect.New(ft.Type.Elem())
 			resetStruct(ft.Type.Elem(), fv.Elem())
 			f.Set(fv)

@@ -153,5 +153,5 @@ func TestNquadsFromJsonError(t *testing.T) {
 
 	_, err = nquadsFromJson(b, delete)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "_uid_ must be present and be non-zero.")
+	require.Contains(t, err.Error(), "_uid_ must be present and non-zero.")
 }

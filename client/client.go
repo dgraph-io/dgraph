@@ -112,7 +112,22 @@ func (req *Req) SetObject(v interface{}) error {
 	if err != nil {
 		return err
 	}
+	if req.gr.Mutation == nil {
+		req.gr.Mutation = new(protos.Mutation)
+	}
 	req.gr.Mutation.SetJson = b
+	return nil
+}
+
+func (req *Req) DeleteObject(v interface{}) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	if req.gr.Mutation == nil {
+		req.gr.Mutation = new(protos.Mutation)
+	}
+	req.gr.Mutation.DeleteJson = b
 	return nil
 }
 
@@ -126,16 +141,6 @@ func (req *Req) Set(e Edge) error {
 		return err
 	}
 	req.addMutation(e, SET)
-	return nil
-}
-
-// TODO - Add Go docs and test
-func (req *Req) DelObject(v interface{}) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	req.gr.Mutation.DeleteJson = b
 	return nil
 }
 
