@@ -44,6 +44,9 @@ type suite struct {
 }
 
 func newSuite(t *testing.T, schema, rdfs string) *suite {
+	if testing.Short() {
+		t.Skip("Skipping system test with long runtime.")
+	}
 	s := &suite{t: t}
 	s.checkFatal(os.MkdirAll(rootDir, 0755))
 	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
@@ -55,6 +58,9 @@ func newSuite(t *testing.T, schema, rdfs string) *suite {
 }
 
 func newSuiteFromFile(t *testing.T, schemaFile, rdfFile string) *suite {
+	if testing.Short() {
+		t.Skip("Skipping system test with long runtime.")
+	}
 	s := &suite{t: t}
 	s.setup(schemaFile, rdfFile)
 	return s
@@ -81,7 +87,8 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	)
 
 	blHTTPPort := freePort()
-	blCmd := buildCmd("bulkloader", "-r", rdfFile, "-s", schemaFile, "-http", ":"+blHTTPPort)
+	blCmd := buildCmd("bulkloader", "-r", rdfFile,
+		"-s", schemaFile, "-http", ":"+blHTTPPort, "-j=1")
 	blCmd.Dir = bulkloaderDir
 	if err := blCmd.Run(); err != nil {
 		s.cleanup()

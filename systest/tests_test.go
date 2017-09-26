@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TODO: This test was used just to make sure some really basic examples work.
+// It can be deleted once the remainder of the tests have been setup.
 func TestHelloWorld(t *testing.T) {
 	s := newSuite(t, `
 		name: string @index(term) .
@@ -222,5 +224,11 @@ func TestGoldenData(t *testing.T) {
 		] } ]
 	`))
 
-	// TODO: Add the test cases from contrib/goldendata-queries.sh
+	// TODO: Add the test cases from contrib/goldendata-queries.sh The tests
+	// there use grep to find the number of leaf nodes in the queries, so the
+	// queries will have to be modified.
+
+	// TODO: Add tests similar to those in
+	// https://docs.dgraph.io/query-language/. These test most of the main
+	// functionality of dgraph.
 }
