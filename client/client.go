@@ -129,6 +129,16 @@ func (req *Req) Set(e Edge) error {
 	return nil
 }
 
+// TODO - Add Go docs and test
+func (req *Req) DelObject(v interface{}) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	req.gr.MutationDel = b
+	return nil
+}
+
 // Delete adds edge e to the delete mutation of request req, thus scheduling the edge to be removed
 // from the graph when the request is run. The edge must have a valid target (a Node or value),
 // otherwise an error is returned.  The edge need not represent
