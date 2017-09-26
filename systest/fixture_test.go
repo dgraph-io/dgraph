@@ -56,7 +56,7 @@ func newSuite(t *testing.T, schema, rdfs string) *suite {
 		t.Skip("Skipping system test with long runtime.")
 	}
 	s := &suite{t: t}
-	s.checkFatal(os.MkdirAll(rootDir, 0755))
+	s.checkFatal(makeDirEmpty(rootDir))
 	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
 	s.checkFatal(ioutil.WriteFile(rdfFile, []byte(rdfs), 0644))
 	schemaFile := filepath.Join(rootDir, "schema.txt")
@@ -206,6 +206,8 @@ func (s *suite) checkFatal(errs ...error) {
 }
 
 func freePort() string {
+	// Linux reuses ports in FIFO order. So a port that we listen on and then
+	// release will be free for a long time.
 	for {
 		p := 20000 + rand.Intn(40000)
 		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", p))
