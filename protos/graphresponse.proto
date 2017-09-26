@@ -76,6 +76,7 @@ message Request {
     Mutation mutation = 2;
     SchemaRequest schema = 3;
     map<string, string> vars = 4; // Support for GraphQL like variables.
+    bool DropAll = 5;
 }
 
 message Latency {
