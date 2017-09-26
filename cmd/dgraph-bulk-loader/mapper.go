@@ -170,7 +170,7 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		m.addMapEntry(key, rev, shard)
 	}
 
-	if !m.opt.SkipExpandEdges {
+	if m.opt.ExpandEdges {
 		key = x.DataKey("_predicate_", sid)
 		pp := m.createPredicatePosting(nq.Predicate)
 		m.addMapEntry(key, pp, shard)

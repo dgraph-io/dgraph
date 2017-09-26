@@ -20,19 +20,19 @@ import (
 )
 
 type options struct {
-	RDFDir          string
-	SchemaFile      string
-	DgraphsDir      string
-	LeaseFile       string
-	TmpDir          string
-	NumGoroutines   int
-	MapBufSize      int64
-	SkipExpandEdges bool
-	BlockRate       int
-	SkipMapPhase    bool
-	CleanupTmp      bool
-	NumShufflers    int
-	Version         bool
+	RDFDir        string
+	SchemaFile    string
+	DgraphsDir    string
+	LeaseFile     string
+	TmpDir        string
+	NumGoroutines int
+	MapBufSize    int64
+	ExpandEdges   bool
+	BlockRate     int
+	SkipMapPhase  bool
+	CleanupTmp    bool
+	NumShufflers  int
+	Version       bool
 
 	MapShards    int
 	ReduceShards int
