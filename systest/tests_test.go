@@ -201,18 +201,26 @@ func TestGoldenData(t *testing.T) {
 	)
 	defer s.cleanup()
 
-	//t.Run("basic", s.singleQuery(`
-	//me(func:eq(xid,"m.07mv_h")) {
-	//director.film {
-	//directed_by {
-	//director.film {
-	//_uid_
-	//name@en
-	//}
-	//}
-	//}
-	//}
-	//`, `
-	//"me": []
-	//`))
+	t.Run("basic", s.singleQuery(`
+		pj_films(func:allofterms(name@en,"Peter Jackson")) {
+			director.film (orderasc: name@en, first: 10) {
+				name@en
+			}
+		}
+	`, `
+		"pj_films": [ { "director.film": [
+			{ "name@en": "Bad Taste" },
+			{ "name@en": "Heavenly Creatures" },
+			{ "name@en": "Forgotten Silver" },
+			{ "name@en": "Dead Alive" },
+			{ "name@en": "The Adventures of Tintin: Prisoners of the Sun" },
+			{ "name@en": "Crossing the Line" },
+			{ "name@en": "Meet the Feebles" },
+			{ "name@en": "King Kong" },
+			{ "name@en": "The Frighteners" },
+			{ "name@en": "Gollum's Acceptance Speech" }
+		] } ]
+	`))
+
+	// TODO: Add the test cases from contrib/goldendata-queries.sh
 }
