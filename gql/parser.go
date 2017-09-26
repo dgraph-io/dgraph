@@ -566,6 +566,7 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 		res.Mutation.Set = append(res.Mutation.Set, r.Mutation.Set...)
 		res.Mutation.Del = append(res.Mutation.Del, r.Mutation.Del...)
+		res.Mutation.DropAll = r.Mutation.DropAll
 	}
 
 	if res.Mutation != nil {

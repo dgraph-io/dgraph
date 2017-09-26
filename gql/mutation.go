@@ -32,9 +32,10 @@ var (
 
 // Mutation stores the strings corresponding to set and delete operations.
 type Mutation struct {
-	Set    []*protos.NQuad
-	Del    []*protos.NQuad
-	Schema string
+	Set     []*protos.NQuad
+	Del     []*protos.NQuad
+	DropAll bool
+	Schema  string
 }
 
 func (m Mutation) HasVariables() bool {
@@ -54,7 +55,7 @@ func (m Mutation) HasVariables() bool {
 // HasOps returns true iff the mutation has at least one non-empty
 // part.
 func (m Mutation) HasOps() bool {
-	return len(m.Set) > 0 || len(m.Del) > 0 || len(m.Schema) > 0
+	return len(m.Set) > 0 || len(m.Del) > 0 || len(m.Schema) > 0 || m.DropAll
 }
 
 // NeededVars retrieves NQuads and variable names of NQuads that refer a variable.
