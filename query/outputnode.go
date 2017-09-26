@@ -677,10 +677,13 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	}
 
 	if sg.uidMatrix == nil {
+		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
 		return nil
 	}
 
+	hasChild := false
 	if sg.Params.uidCount != "" {
+		hasChild = true
 		n.addCountAtRoot(sg)
 	}
 
@@ -690,12 +693,6 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	}
 
 	lenList := len(sg.uidMatrix[0].Uids)
-	if lenList == 0 {
-		// So that we return an empty key for the block if the root didn't have any uids.
-		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
-		return nil
-	}
-
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
@@ -715,6 +712,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 			continue
 		}
 
+		hasChild = true
 		if !sg.Params.Normalize {
 			n.AddListChild(sg.Params.Alias, n1)
 			continue
@@ -730,7 +728,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		}
 	}
 
-	if len(n.attrs) == 0 {
+	if !hasChild {
 		// So that we return an empty key if the root didn't have any children.
 		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
 	}

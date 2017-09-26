@@ -1352,14 +1352,12 @@ func TestMultiEmptyBlocks(t *testing.T) {
 			you(func: uid(0x01)) {
 			}
 
-			me(func: uid( 0x02)) {
+			me(func: uid(0x02)) {
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"you": [], "me": []}}`, js)
 }
 
 func TestUseVarsMultiCascade1(t *testing.T) {
@@ -1840,7 +1838,7 @@ func TestRecurseVariable(t *testing.T) {
 		`
 
 	js := processToFastJSON(t, query)
-	require.Equal(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+	require.Equal(t, `{"data": {"recurse":[],"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
 
 func TestRecurseVariable2(t *testing.T) {
@@ -1864,7 +1862,7 @@ func TestRecurseVariable2(t *testing.T) {
 			}
 	`
 	js := processToFastJSON(t, query)
-	require.Equal(t, `{"data": {"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+	require.Equal(t, `{"data": {"recurse":[],"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
@@ -3636,8 +3634,7 @@ func TestFilterRegex13(t *testing.T) {
 
 	// no results are returned, becaues case insensive mode is turned off before 'ISSION'
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`, js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 // invalid regexp modifier
@@ -6417,9 +6414,7 @@ func TestLangSingleFallback(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangMany1(t *testing.T) {
@@ -6477,9 +6472,7 @@ func TestLangManyFallback(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangNoFallbackNoDefault(t *testing.T) {
@@ -6492,9 +6485,7 @@ func TestLangNoFallbackNoDefault(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangSingleNoFallbackNoDefault(t *testing.T) {
@@ -6507,9 +6498,7 @@ func TestLangSingleNoFallbackNoDefault(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
@@ -6522,9 +6511,7 @@ func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangOnlyForcedFallbackNoDefault(t *testing.T) {
@@ -9144,7 +9131,7 @@ func TestAppendDummyValuesPanic(t *testing.T) {
 		}
 	}`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {}}`, js)
+	require.JSONEq(t, `{"data": {"n": []}}`, js)
 }
 
 func TestMultipleValueFilter(t *testing.T) {
