@@ -57,9 +57,9 @@ service Raft {
 }
 
 service Zero {
-  rpc Connect (Member) returns (MembershipState) {}
+	rpc Connect (Member) returns (MembershipState) {}
 	rpc Update (stream Group)  returns (stream MembershipState) {}
-  rpc ShouldServe (Tablet) returns (Tablet) {}
+	rpc ShouldServe (Tablet) returns (Tablet) {}
 	rpc AssignUids (Num)                 returns (AssignedIds) {}
 }
 
