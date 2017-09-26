@@ -92,12 +92,12 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		makeDirEmpty(liveDG),
 	)
 
-	bulkCmd := buildCmd("dgraph-bulk-loader", "-r", rdfFile,
+	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-bulk-loader"), "-r", rdfFile,
 		"-s", schemaFile, "-http", ":"+freePort(), "-j=1")
 	bulkCmd.Dir = bulkDir
-	if err := bulkCmd.Run(); err != nil {
+	if out, err := bulkCmd.CombinedOutput(); err != nil {
 		s.cleanup()
-		s.t.Fatalf("Bulkloader didn't run: %v\nOutput:\n%s", err, bulkCmd.Out.String())
+		s.t.Fatalf("Bulkloader didn't run: %v\nOutput:\n%s", err, string(out))
 	}
 	s.checkFatal(os.Rename(
 		filepath.Join(bulkDir, "out", "0"),
@@ -108,12 +108,12 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 
 	s.liveQueryPort, s.liveGRPCPort = s.startDgraph(liveDG, liveDGZ)
 
-	liveCmd := buildCmd("dgraph-live-loader", "-r", rdfFile,
+	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-live-loader"), "-r", rdfFile,
 		"-s", schemaFile, "-d", ":"+s.liveGRPCPort)
 	liveCmd.Dir = liveDir
-	if err := liveCmd.Run(); err != nil {
+	if out, err := liveCmd.CombinedOutput(); err != nil {
 		s.cleanup()
-		s.t.Fatalf("Live Loader didn't run: %v\nOutput:\n%s", err, liveCmd.Out.String())
+		s.t.Fatalf("Live Loader didn't run: %v\nOutput:\n%s", err, string(out))
 	}
 }
 
@@ -126,17 +126,17 @@ func makeDirEmpty(dir string) error {
 
 func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) (queryPort string, grpcPort string) {
 	port := freePort()
-	zeroCmd := buildCmd("dgraphzero", "-id", "1", "-port", port)
+	zeroCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"), "-id", "1", "-port", port)
 	zeroCmd.Dir = dgraphZeroDir
 	s.checkFatal(zeroCmd.Start())
-	s.kill = append(s.kill, zeroCmd.Cmd)
+	s.kill = append(s.kill, zeroCmd)
 
 	// Wait for dgraphzero to start listening.
 	time.Sleep(time.Second * 1)
 
 	queryPort = freePort()
 	grpcPort = freePort()
-	dgraphCmd := buildCmd("dgraph",
+	dgraphCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"-memory_mb=1024",
 		"-peer", ":"+port,
 		"-port", queryPort,
@@ -145,7 +145,7 @@ func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) (queryPort string, 
 	)
 	dgraphCmd.Dir = dgraphDir
 	s.checkFatal(dgraphCmd.Start())
-	s.kill = append(s.kill, dgraphCmd.Cmd)
+	s.kill = append(s.kill, dgraphCmd)
 
 	// Wait for dgraph to start accepting requests. TODO: Could do this
 	// programmatically by hitting the query port. This would be quicker than
@@ -203,20 +203,6 @@ func (s *suite) checkFatal(errs ...error) {
 			s.t.Fatalf("%+v", err)
 		}
 	}
-}
-
-type Cmd struct {
-	*exec.Cmd
-	Out *bytes.Buffer
-}
-
-func buildCmd(prog string, args ...string) Cmd {
-	bin := filepath.Join(os.ExpandEnv("$GOPATH"), "bin", prog)
-	cmd := exec.Command(bin, args...)
-	out := new(bytes.Buffer)
-	cmd.Stdout = out
-	cmd.Stderr = out
-	return Cmd{Cmd: cmd, Out: out}
 }
 
 func freePort() string {
