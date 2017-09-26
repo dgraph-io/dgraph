@@ -32,10 +32,12 @@ func unmarshalToStruct(f reflect.StructField, n *protos.Node, val reflect.Value)
 		// it can unmarshal node and its properties.
 		typ = typ.Elem()
 	}
+
 	rcv, err := unmarshal(n, typ)
 	if err != nil {
 		return err
 	}
+
 	fieldVal := val.FieldByName(f.Name)
 	if !fieldVal.CanSet() {
 		return fmt.Errorf("Cant set field: %+v", f.Name)

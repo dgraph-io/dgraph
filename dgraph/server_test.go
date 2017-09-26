@@ -33,7 +33,7 @@ type School struct {
 }
 
 type Person struct {
-	Uid     string     `json:"_uid_,omitempty"`
+	Uid     uint64     `json:"_uid_,omitempty"`
 	Name    string     `json:"name,omitempty"`
 	Age     int        `json:"age,omitempty"`
 	Married bool       `json:"married,omitempty"`
@@ -82,7 +82,7 @@ func TestNquadsFromJson2(t *testing.T) {
 		Friends: []Person{{
 			Name: "Charlie",
 		}, {
-			Uid:  "1000",
+			Uid:  1000,
 			Name: "Bob",
 		}},
 	}

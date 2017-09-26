@@ -340,12 +340,12 @@ func TestSetObject(t *testing.T) {
 	}
 
 	type Person struct {
-		Uid     string   `json:"_uid_,omitempty",dgraph:"_uid_"`
-		Name    string   `json:"name,omitempty",dgraph:"name"`
-		Age     int      `json:"age,omitempty",dgraph:"age"`
-		Married bool     `json:"married,omitempty",dgraph:"married"`
-		Friends []Person `json:"friend,omitempty",dgraph:"friend"`
-		School  *School  `json:"school,omitempty",dgraph:"school"`
+		Uid     uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
+		Name    string   `json:"name,omitempty" dgraph:"name"`
+		Age     int      `json:"age,omitempty" dgraph:"age"`
+		Married bool     `json:"married,omitempty" dgraph:"married"`
+		Friends []Person `json:"friend,omitempty" dgraph:"friend"`
+		School  *School  `json:"school,omitempty" dgraph:"school"`
 	}
 
 	dirs, options := prepare()
@@ -360,9 +360,12 @@ func TestSetObject(t *testing.T) {
 		Age:     26,
 		Married: true,
 		Friends: []Person{{
-			Uid:  "1000",
+			Uid:  1000,
 			Name: "Bob",
 			Age:  24,
+		}, {
+			Name: "Charlie",
+			Age:  29,
 		}},
 		School: &School{
 			Name: "Crown Public School",
@@ -379,7 +382,6 @@ func TestSetObject(t *testing.T) {
 
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
-	fmt.Println("resp", resp)
 
 	puid := resp.AssignedUids["blank-0"]
 	q := fmt.Sprintf(`{
@@ -416,5 +418,7 @@ func TestSetObject(t *testing.T) {
 	require.Equal(t, p.Married, p2.Married)
 	require.Equal(t, p.School.Name, p2.School.Name)
 	require.Equal(t, len(p.Friends), len(p2.Friends))
-	require.Equal(t, p.Friends[0].Name, p2.Friends[0].Name)
+	require.NotNil(t, p2.Friends[0].Name)
+	require.NotNil(t, p2.Friends[1].Name)
+	require.NotNil(t, p2.Friends[1].Age)
 }

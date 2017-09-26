@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
@@ -299,10 +298,8 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 	// Check field in map.
 	if uidVal, ok := m["_uid_"]; ok {
 		// Should be convertible to uint64. Maybe we also want to allow string later.
-		if id, ok := uidVal.(string); ok && id != "" {
-			if _, err := strconv.ParseUint(id, 10, 64); err == nil {
-				uid = id
-			}
+		if id, ok := uidVal.(float64); ok && uint64(id) != 0 {
+			uid = fmt.Sprintf("%d", uint64(id))
 		}
 	}
 
@@ -325,9 +322,9 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 			Subject:   uid,
 			Predicate: k,
 		}
-		switch t := v.(type) {
+		switch v.(type) {
 		default:
-			fmt.Printf("unexpected type %T\n", t) // %T prints whatever type t has
+			return nil, uid, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 		case string:
 			nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}
 			nq.ObjectType = int32(types.StringID)
@@ -370,7 +367,6 @@ func mapToNquads(m map[string]interface{}, idx *int) ([]*protos.NQuad, string, e
 					// Add the nquads that we got for the connecting entity.
 					nquads = append(nquads, mnquads...)
 				}
-				// TODO - Throw error if not ok?
 			}
 		}
 	}
