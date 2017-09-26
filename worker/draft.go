@@ -792,7 +792,7 @@ func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
 
 			// This is supposed to use context.Background().  We don't want to cancel the timer
 			// externally.  We want equivalent functionality to time.NewTimer.
-			timer, cancelTimer := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			timer, cancelTimer := context.WithTimeout(context.Background(), time.Second)
 		again:
 			select {
 			case <-stop:
