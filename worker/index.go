@@ -33,8 +33,9 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool)
 	// Raft index starts from 1
 	n.syncAllMarks(ctx, rv.Index-1)
 
-	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Predicate %s index mismatch, rebuild %v",
-		attr, rebuild)
+	if schema.State().IsIndexed(attr) != rebuild {
+		return x.Errorf("Predicate %s index mismatch, rebuild %v", attr, rebuild)
+	}
 	// Remove index edges
 	// For delete we since mutations would have been applied, we needn't
 	// wait for synced watermarks if we delete through mutations, but
@@ -56,7 +57,9 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	// Raft index starts from 1
 	n.syncAllMarks(ctx, rv.Index-1)
 
-	x.AssertTruef(schema.State().IsReversed(attr) == rebuild, "Predicate %s reverse mismatch", attr)
+	if schema.State().IsReversed(attr) != rebuild {
+		return x.Errorf("Predicate %s reverse mismatch, rebuild %v", attr, rebuild)
+	}
 	posting.DeleteReverseEdges(ctx, attr)
 	if rebuild {
 		// Remove reverse edges

@@ -147,7 +147,7 @@ func TestCheckSchema(t *testing.T) {
 	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID), Directive: protos.SchemaUpdate_REVERSE}
 	require.Error(t, checkSchema(s1))
 
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Directive: protos.SchemaUpdate_INDEX}
+	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
 	require.NoError(t, checkSchema(s1))
 
 	s1 = &protos.SchemaUpdate{Predicate: "friend", ValueType: uint32(types.UidID), Directive: protos.SchemaUpdate_REVERSE}

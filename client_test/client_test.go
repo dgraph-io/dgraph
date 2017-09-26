@@ -27,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/dgraph"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
@@ -316,6 +317,35 @@ func TestLangTag(t *testing.T) {
 	err = client.Unmarshal(resp.N, &r2)
 	require.Equal(t, 1, len(r2.Root))
 	require.Equal(t, "Алиса", r2.Root[0].Name)
+}
+
+func TestSchemaError(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+
+	req := client.Req{}
+	err := req.AddSchema(protos.SchemaUpdate{
+		Predicate: "dummy",
+		Tokenizer: []string{"term"},
+	})
+	require.NoError(t, err)
+	_, err = dgraphClient.Run(context.Background(), &req)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
+
+	req = client.Req{}
+	err = req.AddSchema(protos.SchemaUpdate{
+		Predicate: "dummy",
+		Directive: protos.SchemaUpdate_INDEX,
+	})
+	require.NoError(t, err)
+	_, err = dgraphClient.Run(context.Background(), &req)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Tokenizer must be specified while indexing a predicate")
+
 }
 
 func TestEmptyString(t *testing.T) {
