@@ -23,7 +23,15 @@ import (
 )
 
 func init() {
-	for _, name := range []string{"dgraphloader", "bulkloader", "dgraph", "dgraphzero"} {
+	if !testing.Short() {
+		return
+	}
+	for _, name := range []string{
+		"dgraph-bulk-loader",
+		"dgraph-live-loader",
+		"dgraph",
+		"dgraphzero",
+	} {
 		cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/cmd/"+name)
 		cmd.Env = os.Environ()
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -38,9 +46,9 @@ type suite struct {
 	t    *testing.T
 	kill []*exec.Cmd
 
-	bulkLoaderQueryPort string
-	liveLoaderQueryPort string
-	liveLoaderGRPCPort  string
+	bulkQueryPort string
+	liveQueryPort string
+	liveGRPCPort  string
 }
 
 func newSuite(t *testing.T, schema, rdfs string) *suite {
@@ -68,43 +76,41 @@ func newSuiteFromFile(t *testing.T, schemaFile, rdfFile string) *suite {
 
 func (s *suite) setup(schemaFile, rdfFile string) {
 	var (
-		bulkloaderDir   = filepath.Join(rootDir, "bl_dir")
-		bulkloaderDGZ   = filepath.Join(rootDir, "bl_dgz")
-		bulkloaderDG    = filepath.Join(rootDir, "bl_dg")
-		dgraphloaderDir = filepath.Join(rootDir, "dg_dir")
-		dgraphloaderDGZ = filepath.Join(rootDir, "dg_dgz")
-		dgraphloaderDG  = filepath.Join(rootDir, "dg_dg")
-		dataDir         = filepath.Join(rootDir, "data")
+		bulkDir = filepath.Join(rootDir, "bulk_dir")
+		bulkDGZ = filepath.Join(rootDir, "bulk_dgz")
+		bulkDG  = filepath.Join(rootDir, "bulk_dg")
+		liveDir = filepath.Join(rootDir, "live_dir")
+		liveDGZ = filepath.Join(rootDir, "live_dgz")
+		liveDG  = filepath.Join(rootDir, "live_dg")
 	)
 	s.checkFatal(
-		makeDirEmpty(bulkloaderDir),
-		makeDirEmpty(bulkloaderDGZ),
-		makeDirEmpty(bulkloaderDG),
-		makeDirEmpty(dgraphloaderDir),
-		makeDirEmpty(dgraphloaderDGZ),
-		makeDirEmpty(dgraphloaderDG),
-		makeDirEmpty(dataDir),
+		makeDirEmpty(bulkDir),
+		makeDirEmpty(bulkDGZ),
+		makeDirEmpty(bulkDG),
+		makeDirEmpty(liveDir),
+		makeDirEmpty(liveDGZ),
+		makeDirEmpty(liveDG),
 	)
 
-	blHTTPPort := freePort()
-	blCmd := buildCmd("bulkloader", "-r", rdfFile,
-		"-s", schemaFile, "-http", ":"+blHTTPPort, "-j=1")
-	blCmd.Dir = bulkloaderDir
-	if err := blCmd.Run(); err != nil {
+	bulkCmd := buildCmd("dgraph-bulk-loader", "-r", rdfFile,
+		"-s", schemaFile, "-http", ":"+freePort(), "-j=1")
+	bulkCmd.Dir = bulkDir
+	if err := bulkCmd.Run(); err != nil {
 		s.cleanup()
-		s.t.Fatalf("Bulkloader didn't run: %v\nOutput:\n%s", err, blCmd.Out.String())
+		s.t.Fatalf("Bulkloader didn't run: %v\nOutput:\n%s", err, bulkCmd.Out.String())
 	}
 	s.checkFatal(os.Rename(
-		filepath.Join(bulkloaderDir, "out", "0"),
-		filepath.Join(bulkloaderDG, "p"),
+		filepath.Join(bulkDir, "out", "0"),
+		filepath.Join(bulkDG, "p"),
 	))
 
-	s.bulkLoaderQueryPort, _ = s.startDgraph(bulkloaderDG, bulkloaderDGZ)
+	s.bulkQueryPort, _ = s.startDgraph(bulkDG, bulkDGZ)
 
-	s.liveLoaderQueryPort, s.liveLoaderGRPCPort = s.startDgraph(dgraphloaderDG, dgraphloaderDGZ)
+	s.liveQueryPort, s.liveGRPCPort = s.startDgraph(liveDG, liveDGZ)
 
-	liveCmd := buildCmd("dgraphloader", "-r", rdfFile, "-s", schemaFile, "-d", ":"+s.liveLoaderGRPCPort)
-	liveCmd.Dir = dgraphloaderDir
+	liveCmd := buildCmd("dgraph-live-loader", "-r", rdfFile,
+		"-s", schemaFile, "-d", ":"+s.liveGRPCPort)
+	liveCmd.Dir = liveDir
 	if err := liveCmd.Run(); err != nil {
 		s.cleanup()
 		s.t.Fatalf("Live Loader didn't run: %v\nOutput:\n%s", err, liveCmd.Out.String())
@@ -168,7 +174,7 @@ func (s *suite) singleQuery(query, wantResult string) func(*testing.T) {
 
 func (s *suite) multiQuery(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
-		for _, qPort := range []string{s.bulkLoaderQueryPort, s.liveLoaderQueryPort} {
+		for _, qPort := range []string{s.bulkQueryPort, s.liveQueryPort} {
 			resp, err := http.Post("http://127.0.0.1:"+qPort+"/query",
 				"", bytes.NewBufferString(query))
 			if err != nil {
