@@ -736,6 +736,13 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	return nil
 }
 
+func DeleteAll() error {
+	if err := lcache.clear(func(_ []byte) bool { return true }); err != nil {
+		return err
+	}
+	return deleteEntries(nil)
+}
+
 func DeletePredicate(ctx context.Context, attr string) error {
 	err := lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
