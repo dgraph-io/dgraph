@@ -510,6 +510,20 @@ func ExampleDgraph_NodeUidVar() {
 	x.Check(err)
 }
 
+func ExampleDgraph_DropAll() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Checkf(err, "While creating temp dir")
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	x.Checkf(dgraphClient.DropAll(), "While dropping all")
+	x.Checkf(dgraphClient.Close(), "While closing client")
+}
+
 func ExampleEdge_SetValueBytes() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")

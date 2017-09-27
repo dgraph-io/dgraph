@@ -545,6 +545,21 @@ L:
 	return nil
 }
 
+// DropAll deletes all edges and schema from Dgraph.
+func (d *Dgraph) DropAll() error {
+	req := &Req{
+		gr: protos.Request{
+			Mutation: &protos.Mutation{DropAll: true},
+		},
+	}
+	select {
+	case d.reqs <- req:
+		return nil
+	case <-d.opts.Ctx.Done():
+		return d.opts.Ctx.Err()
+	}
+}
+
 // AddSchema adds the given schema mutation to the batch of schema mutations.  If the schema
 // mutation applies an index to a UID edge, or if it adds reverse to a scalar edge, then the
 // mutation is not added to the batch and an error is returned. Once added, the client will
