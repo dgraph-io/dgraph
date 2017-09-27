@@ -175,6 +175,8 @@ func TestCountIndex(t *testing.T) {
 			{ "name": "Alice" },
 			{ "name": "Frank" }
 		],
+		"has_4_friends": [],
+		"has_5_friends": [],
 		"has_6_friends": [
 			{ "name": "Grace" }
 		],
@@ -186,12 +188,15 @@ func TestCountIndex(t *testing.T) {
 		"has_2_rev_friends": [
 			{ "name": "Erin" }
 		],
+		"has_3_rev_friends": [
+		],
 		"has_4_rev_friends": [
 			{ "name": "Bob" }
 		],
 		"has_5_rev_friends": [
 			{ "name": "Carol" }
-		]
+		],
+		"has_6_rev_friends": []
 	}}
 	`))
 }
