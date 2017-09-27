@@ -2700,6 +2700,13 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		}
 	}
 
+	if qr.GqlQuery.Mutation.DropAll {
+		m := protos.Mutations{DropAll: true}
+		if err := ApplyMutations(ctx, &m); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
+		}
+	}
+
 	if qr.GqlQuery.Schema != nil {
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, qr.GqlQuery.Schema); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
