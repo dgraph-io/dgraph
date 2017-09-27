@@ -1715,13 +1715,14 @@ func uniquePreds(vl []*protos.ValueList) map[string]struct{} {
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
-func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
+func ProcessGraph(ctx context.Context, sg, parent *SubGraph, res chan response) {
+	r := response{sg: sg}
 	if sg.Attr == "_uid_" {
 		// We dont need to call ProcessGraph for _uid_, as we already have uids
 		// populated from parent and there is nothing to process but uidMatrix
 		// and values need to have the right sizes so that preTraverse works.
 		sg.appendDummyValues()
-		rch <- nil
+		res <- r
 		return
 	}
 	var err error
@@ -1746,11 +1747,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
 			if err := sg.fillVars(sg.Params.ParentVars); err != nil {
-				rch <- err
+				r.err = err
+				res <- r
 				return
 			}
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
-			rch <- nil
+			res <- r
 			return
 		}
 
@@ -1767,7 +1769,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// This is a ineq function which uses a value variable.
 			err = sg.ApplyIneqFunc()
 			if parent != nil {
-				rch <- err
+				r.err = err
+				res <- r
 				return
 			}
 		} else {
@@ -1776,7 +1779,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				if tr, ok := trace.FromContext(ctx); ok {
 					tr.LazyPrintf("Error while processing task: %+v", err)
 				}
-				rch <- err
+				r.err = err
+				res <- r
 				return
 			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
@@ -1784,7 +1788,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				if tr, ok := trace.FromContext(ctx); ok {
 					tr.LazyPrintf("Error while processing task: %+v", err)
 				}
-				rch <- err
+				r.err = err
+				res <- r
 				return
 			}
 
@@ -1799,7 +1804,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					if tr, ok := trace.FromContext(ctx); ok {
 						tr.LazyPrintf("Zero uids. Only count requested")
 					}
-					rch <- nil
+					res <- r
 					return
 				}
 				sg.counts = make([]uint32, len(sg.uidMatrix))
@@ -1831,14 +1836,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			out = append(out, child)
 		}
 		sg.Children = out // Remove any expand nodes we might have added.
-		rch <- nil
+		res <- r
 		return
 	}
 
 	// Run filters if any.
 	if len(sg.Filters) > 0 {
 		// Run all filters in parallel.
-		filterChan := make(chan error, len(sg.Filters))
+		filterChan := make(chan response, len(sg.Filters))
 		for _, filter := range sg.Filters {
 			isUidFuncWithoutVar := filter.SrcFunc != nil && filter.SrcFunc.Name == "uid" &&
 				len(filter.Params.NeedsVar) == 0
@@ -1846,7 +1851,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// list. Lets just update DestUIDs.
 			if isUidFuncWithoutVar {
 				filter.DestUIDs = filter.SrcUIDs
-				filterChan <- nil
+				filterChan <- response{sg: filter}
 				continue
 			}
 
@@ -1858,10 +1863,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		var filterErr error
 		for range sg.Filters {
-			if err = <-filterChan; err != nil {
+			if fr := <-filterChan; fr.err != nil {
 				// Store error in a variable and wait for all filters to run
 				// before returning. Else tracing causes crashes.
-				filterErr = err
+				filterErr = fr.err
 				if tr, ok := trace.FromContext(ctx); ok {
 					tr.LazyPrintf("Error while processing filter task: %+v", err)
 				}
@@ -1869,7 +1874,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		if filterErr != nil {
-			rch <- filterErr
+			r.err = filterErr
+			res <- r
 			return
 		}
 
@@ -1900,7 +1906,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
-			rch <- err
+			r.err = err
+			res <- r
 			return
 		}
 	} else {
@@ -1908,7 +1915,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if !sg.Params.DoCount {
 			// We need to sort first before pagination.
 			if err = sg.applyOrderAndPagination(ctx); err != nil {
-				rch <- err
+				r.err = err
+				res <- r
 				return
 			}
 		}
@@ -1917,7 +1925,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// We store any variable defined by this node in the map and pass it on
 	// to the children which might depend on it.
 	if err = sg.assignVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
-		rch <- err
+		r.err = err
+		res <- r
 		return
 	}
 
@@ -1936,7 +1945,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// without forming the intersection.
 			sg.counts[i] = uint32(len(ul.Uids))
 		}
-		rch <- nil
+		res <- r
 		return
 	}
 
@@ -1945,7 +1954,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		child := sg.Children[i]
 
 		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
-			rch <- x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
+			r.err = x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
+			res <- r
 			return
 		}
 
@@ -1955,7 +1965,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		if !worker.Config.ExpandEdge {
-			rch <- x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
+			r.err = x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
+			res <- r
 			return
 		}
 
@@ -1964,7 +1975,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// have the list populated.
 			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
 			if err != nil {
-				rch <- err
+				r.err = err
+				res <- r
 				return
 			}
 		}
@@ -1978,7 +1990,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			temp.Attr = k
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
-					rch <- x.Errorf("Repeated subgraph while using expand()")
+					r.err = x.Errorf("Repeated subgraph while using expand()")
+					res <- r
 					return
 				}
 			}
@@ -2001,7 +2014,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	childChan := make(chan error, len(sg.Children))
+	childChan := make(chan response, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.Params.ParentVars = make(map[string]varValue)
@@ -2023,14 +2036,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if child.IsInternal() {
 			continue
 		}
-		if err = <-childChan; err != nil {
-			childErr = err
+		if cr := <-childChan; cr.err != nil {
+			childErr = cr.err
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while processing child task: %+v", err)
 			}
 		}
 	}
-	rch <- childErr
+	r.err = childErr
+	res <- r
 }
 
 // applyWindow applies windowing to sg.sorted.
@@ -2379,9 +2393,10 @@ func (sg *SubGraph) upsert(ctx context.Context) (uint64, error) {
 	}
 
 	// TODO - Optionally ApplyMutations could return the uid and thne we can avoid this call.
-	che := make(chan error, 1)
-	ProcessGraph(ctx, sg, nil, che)
-	return res.StartId, <-che
+	chr := make(chan response, 1)
+	ProcessGraph(ctx, sg, nil, chr)
+	r := <-chr
+	return res.StartId, r.err
 }
 
 // QueryRequest wraps the state that is used when executing query.
@@ -2395,6 +2410,11 @@ type QueryRequest struct {
 
 	vars         map[string]varValue
 	SchemaUpdate []*protos.SchemaUpdate
+}
+
+type response struct {
+	sg  *SubGraph // To know which subgraph a response belongs to.
+	err error
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2458,7 +2478,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 
 	var shortestSg []*SubGraph
 	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
-		errChan := make(chan error, len(req.Subgraphs))
+		res := make(chan response, len(req.Subgraphs))
 		var idxList []int
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
 		// to be executed.
@@ -2476,12 +2496,14 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 			if err != nil {
 				return nil, err
 			}
+
+			r := response{sg: sg}
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
 			// Doesn't need to be executed as it just does aggregation and math functions.
 			if sg.Params.IsEmpty {
-				errChan <- nil
+				res <- r
 				continue
 			}
 
@@ -2489,14 +2511,16 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 				// We allow only one shortest path block per query.
 				go func() {
 					shortestSg, err = ShortestPath(ctx, sg)
-					errChan <- err
+					r.err = err
+					res <- r
 				}()
 			} else if sg.Params.Alias == "recurse" {
 				go func() {
-					errChan <- Recurse(ctx, sg)
+					r.err = Recurse(ctx, sg)
+					res <- r
 				}()
 			} else {
-				go ProcessGraph(ctx, sg, nil, errChan)
+				go ProcessGraph(ctx, sg, nil, res)
 			}
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Graph processed")
@@ -2504,18 +2528,19 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 		}
 
 		var ferr error
+		var r response
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
-			if err = <-errChan; err != nil {
-				ferr = err
+			if r = <-res; r.err != nil {
+				ferr = r.err
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while processing Query: %+v", err)
+					tr.LazyPrintf("Error while processing Query: %+v", r.err)
 				}
 				continue
 			}
 			// We didn't get back any uids. So we would have to assign the uid and perform the
 			// mutation (i.e. the upsert operation).
-			sg := req.Subgraphs[i]
+			sg := r.sg
 			if sg.Params.upsert && (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) {
 				if len(sg.Filters) > 0 {
 					ferr = fmt.Errorf("Upsert query cannot have filters.")
