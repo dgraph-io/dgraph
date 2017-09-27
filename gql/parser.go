@@ -1035,6 +1035,8 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 					return x.Errorf("Multiple 'schema' blocks not allowed.")
 				}
 				mu.Schema = item.Val
+			} else if op == "dropall" {
+				mu.DropAll = true
 			} else {
 				return x.Errorf("Invalid mutation operation.")
 			}
