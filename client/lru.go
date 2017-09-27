@@ -17,7 +17,10 @@ limitations under the License.
 // Package lru implements an LRU cache.
 package client
 
-import "container/list"
+import (
+	"container/list"
+	"sync"
+)
 
 // cache is an LRU cache. It is not safe for concurrent access.
 type cache struct {
@@ -32,6 +35,7 @@ type cache struct {
 type entry struct {
 	key   string
 	value uint64
+	sync.WaitGroup
 }
 
 // New creates a new Cache.

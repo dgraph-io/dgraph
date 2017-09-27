@@ -313,8 +313,7 @@ func (d *Dgraph) batchSync() {
 		loop++
 
 		for _, e := range entries {
-			// Atmost 10 bytes are needed for uvarint encoding
-			buf := make([]byte, 10)
+			buf := make([]byte, binary.MaxVarintLen64)
 			n := binary.PutUvarint(buf[:], e.value)
 			wb = badger.EntriesSet(wb, []byte(e.key), buf[:n])
 		}
