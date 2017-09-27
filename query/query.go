@@ -146,7 +146,7 @@ type params struct {
 	ExploreDepth   uint64
 	isInternal     bool   // Determines if processTask has to be called or not.
 	ignoreResult   bool   // Node results are ignored.
-	Expand         string // Var to use for expand.
+	Expand         string // Value is either _all_/variable-name or empty.
 	isGroupBy      bool
 	groupbyAttrs   []gql.AttrLang
 	uidCount       string
@@ -299,6 +299,9 @@ func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
 				return true
 			}
 		}
+		return false
+	}
+	if sg.Params.Expand != ssg.Params.Expand {
 		return false
 	}
 	return true
@@ -1960,23 +1963,25 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		var preds []*protos.ValueList
 		if child.Params.Expand == "_all_" {
 			// Get the predicate list for expansion. Otherwise we already
 			// have the list populated.
-			preds, err = getNodePredicates(ctx, sg.DestUIDs)
+			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
 			if err != nil {
 				rch <- err
 				return
 			}
 		}
 
-		up := uniquePreds(preds)
+		up := uniquePreds(child.ExpandPreds)
+		fmt.Println("up", up)
 		for k, _ := range up {
 			temp := new(SubGraph)
 			*temp = *child
 			temp.Params.isInternal = false
-			temp.Params.Expand = ""
+			// This is an expanded child and was not given explicitly by the user.
+			// We can ignore password fetching error for this node.
+			temp.Params.Expand = "_expanded_"
 			temp.Attr = k
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
@@ -2026,11 +2031,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			continue
 		}
 		if err = <-childChan; err != nil {
+			// If this was an expanded node, then we can ignore password fetching error.
+			if err == worker.ErrPasswordFetch && child.Params.Expand == "_expanded_" {
+				continue
+			}
 			childErr = err
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while processing child task: %+v", err)
 			}
 		}
+		fmt.Println("attr", child.Attr, "err", err, "expand", child.Params.Expand)
 	}
 	rch <- childErr
 }

@@ -2870,14 +2870,44 @@ func TestQueryPassword(t *testing.T) {
 	require.NotNil(t, err)
 }
 
-func TestPasswordExpandAll(t *testing.T) {
+func TestPasswordExpandAll1(t *testing.T) {
 	populateGraph(t)
 	addPassword(t, 1, "password", "123456")
-	// Password is not fetchable
+	// We ignore password in expand(_all_)
 	query := `
     {
         me(func: uid(0x01)) {
 			expand(_all_)
+		}
+    }
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"alive":true,"loc":{"type":"Point","coordinates":[1.1,2]},"sword_present":"true","gender":"female","power":13.250000,"graduation":"1932-01-01T00:00:00Z","_xid_":"mich","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","noindex_name":"Michonne's name not indexed","name":"Michonne","age":38,"full_name":"Michonne's large name for hashing","bin_data":"YmluLWRhdGE=","survival_rate":98.990000,"address":"31, 32 street, Jupiter"}]}}`, js)
+}
+
+func TestPasswordExpandAll2(t *testing.T) {
+	populateGraph(t)
+	addPassword(t, 1, "password", "123456")
+	query := `
+    {
+        me(func: uid(0x01)) {
+			expand(_all_)
+			checkpwd(password, "12345")
+		}
+    }
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"sword_present":"true","bin_data":"YmluLWRhdGE=","power":13.250000,"_xid_":"mich","name":"Michonne","age":38,"dob_day":"1910-01-01T00:00:00Z","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","gender":"female","noindex_name":"Michonne's name not indexed","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"graduation":"1932-01-01T00:00:00Z","full_name":"Michonne's large name for hashing","alive":true,"password":[{"checkpwd":false}]}]}}`, js)
+}
+
+func TestPasswordExpandError(t *testing.T) {
+	populateGraph(t)
+	addPassword(t, 1, "password", "123456")
+	query := `
+    {
+        me(func: uid(0x01)) {
+			expand(_all_)
+			password
 		}
     }
 	`
@@ -9550,5 +9580,5 @@ func TestExpandVal(t *testing.T) {
 	}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
+	require.JSONEq(t, `{"data": {"me":[{"survival_rate":98.990000,"address":"31, 32 street, Jupiter","bin_data":"YmluLWRhdGE=","power":13.250000,"gender":"female","_xid_":"mich","alive":true,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","graduation":"1932-01-01T00:00:00Z","age":38,"noindex_name":"Michonne's name not indexed","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","sword_present":"true","dob":"1910-01-01T00:00:00Z"}]}}`, js)
 }

@@ -48,9 +48,10 @@ import (
 )
 
 var (
-	emptyUIDList   protos.List
-	emptyResult    protos.Result
-	emptyValueList = protos.ValueList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
+	emptyUIDList     protos.List
+	emptyResult      protos.Result
+	emptyValueList   = protos.ValueList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
+	ErrPasswordFetch = fmt.Errorf("Attribute of type password cannot be fetched.")
 )
 
 func invokeNetworkRequest(
@@ -346,7 +347,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			var val types.Val
 			val, err = pl.ValueFor(q.Langs)
 			if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-				return x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+				fmt.Println("here", q.Attr)
+				return ErrPasswordFetch
 			}
 			vals = append(vals, val)
 		}
