@@ -363,3 +363,380 @@ func TestEmptyString(t *testing.T) {
 	_, err = dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
 }
+
+func TestSetObject(t *testing.T) {
+	type School struct {
+		Name string `json:"name@en,omitempty" dgraph:"name@en"`
+	}
+
+	type Person struct {
+		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
+		Name     string   `json:"name,omitempty" dgraph:"name"`
+		Age      int      `json:"age,omitempty" dgraph:"age"`
+		Married  bool     `json:"married,omitempty" dgraph:"married"`
+		Friends  []Person `json:"friend,omitempty" dgraph:"friend"`
+		Location string   `json:"loc,omitempty" dgraph:"loc"`
+		School   *School  `json:"school,omitempty" dgraph:"school"`
+	}
+
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	loc := `{"type":"Point","coordinates":[1.1,2]}`
+	p := Person{
+		Name:     "Alice",
+		Age:      26,
+		Married:  true,
+		Location: loc,
+		Friends: []Person{{
+			Uid:  1000,
+			Name: "Bob",
+			Age:  24,
+		}, {
+			Name: "Charlie",
+			Age:  29,
+		}},
+		School: &School{
+			Name: "Crown Public School",
+		},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	puid := resp.AssignedUids["blank-0"]
+	q := fmt.Sprintf(`{
+		me(func: uid(%d)) {
+			name
+			age
+			loc
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+			school {
+				name@en
+			}
+		}
+	}`, puid)
+
+	req = client.Req{}
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	type Root struct {
+		Me Person `dgraph:"me"`
+	}
+
+	var r Root
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+
+	p2 := r.Me
+	require.Equal(t, p.Location, p2.Location)
+	require.Equal(t, p.Name, p2.Name)
+	require.Equal(t, p.Age, p2.Age)
+	require.Equal(t, p.Married, p2.Married)
+	require.Equal(t, p.School.Name, p2.School.Name)
+	require.Equal(t, len(p.Friends), len(p2.Friends))
+	require.NotNil(t, p2.Friends[0].Name)
+	require.NotNil(t, p2.Friends[1].Name)
+	require.NotNil(t, p2.Friends[1].Age)
+}
+
+func TestSetObject2(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	type School struct {
+		Uid  uint64
+		Name string `json:"@,omitempty" dgraph:"name@en"`
+	}
+
+	type Person struct {
+		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
+		Name     string   `json:"name,omitempty" dgraph:"name"`
+		Age      int      `json:"age,omitempty" dgraph:"age"`
+		Married  bool     `json:"married,omitempty" dgraph:"married"`
+		Friends  []Person `json:"friend,omitempty" dgraph:"friend"`
+		Location string   `json:"loc,omitempty" dgraph:"loc"`
+		School   *School  `json:"school,omitempty" dgraph:"school"`
+	}
+
+	loc := `{"type":"Point","coordinates":[1.1,2]}`
+	p := Person{
+		Name:     "Alice",
+		Age:      26,
+		Married:  true,
+		Location: loc,
+		Friends: []Person{{
+			Uid:  1000,
+			Name: "Bob",
+			Age:  24,
+		}, {
+			Uid:  1001,
+			Name: "Charlie",
+			Age:  29,
+		}},
+		School: &School{
+			Uid:  1002,
+			Name: "Crown Public School",
+		},
+	}
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+	_, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+}
+
+func TestDeleteObject1(t *testing.T) {
+	// In this test we check S P O deletion.
+	type School struct {
+		Uid  uint64 `json:"_uid_"`
+		Name string `json:"name@en,omitempty" dgraph:"name@en"`
+	}
+
+	type Person struct {
+		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
+		Name     string   `json:"name,omitempty" dgraph:"name"`
+		Age      int      `json:"age,omitempty" dgraph:"age"`
+		Married  bool     `json:"married,omitempty" dgraph:"married"`
+		Friends  []Person `json:"friend,omitempty" dgraph:"friend"`
+		Location string   `json:"loc,omitempty" dgraph:"loc"`
+		School   *School  `json:"school,omitempty" dgraph:"school"`
+	}
+
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	loc := `{"type":"Point","coordinates":[1.1,2]}`
+	p := Person{
+		Uid:      1000,
+		Name:     "Alice",
+		Age:      26,
+		Married:  true,
+		Location: loc,
+		Friends: []Person{{
+			Uid:  1001,
+			Name: "Bob",
+			Age:  24,
+		}, {
+			Uid:  1002,
+			Name: "Charlie",
+			Age:  29,
+		}},
+		School: &School{
+			Uid:  1003,
+			Name: "Crown Public School",
+		},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+
+	q := fmt.Sprintf(`{
+		me(func: uid(1000)) {
+			name
+			age
+			loc
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+			school {
+				_uid_
+				name@en
+			}
+		}
+
+		me2(func: uid(1001)) {
+			name
+			age
+		}
+
+		me3(func: uid(1003)) {
+			name@en
+		}
+
+		me4(func: uid(1002)) {
+			name
+			age
+		}
+	}`)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	req = client.Req{}
+	// Delete Charlie from friends so that he is not deleted.
+	p.Friends = p.Friends[:1]
+	err = req.DeleteObject(&p)
+	require.NoError(t, err)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	type Root struct {
+		Me Person `dgraph:"me"`
+	}
+
+	var r Root
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+	require.Equal(t, 1, len(r.Me.Friends))
+
+	for i := 1; i < len(resp.N)-1; i++ {
+		n := resp.N[i]
+		require.Equal(t, 0, len(n.Children))
+		require.Equal(t, 0, len(n.Properties))
+	}
+
+	require.Equal(t, 2, len(resp.N[3].Children[0].Properties))
+}
+
+func TestDeleteObject2(t *testing.T) {
+	// In this test we check S P * deletion.
+	type School struct {
+		Uid  uint64 `json:"_uid_"`
+		Name string `json:"name@en,omitempty" dgraph:"name@en"`
+	}
+
+	type Person struct {
+		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
+		Name     *string  `json:"name" dgraph:"name"`
+		Age      int      `json:"age,omitempty" dgraph:"age"`
+		Married  bool     `json:"married,omitempty" dgraph:"married"`
+		Friends  []Person `json:"friend" dgraph:"friend"`
+		Location string   `json:"loc,omitempty" dgraph:"loc"`
+		School   *School  `json:"school" dgraph:"school"`
+	}
+
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	loc := `{"type":"Point","coordinates":[1.1,2]}`
+	alice, bob, charlie := "Alice", "Bob", "Charlie"
+	p := Person{
+		Uid:      1000,
+		Name:     &alice,
+		Age:      26,
+		Married:  true,
+		Location: loc,
+		Friends: []Person{{
+			Uid:  1001,
+			Name: &bob,
+			Age:  24,
+		}, {
+			Uid:  1002,
+			Name: &charlie,
+			Age:  29,
+		}},
+		School: &School{
+			Uid:  1003,
+			Name: "Crown Public School",
+		},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+
+	q := fmt.Sprintf(`{
+		me(func: uid(1000)) {
+			name
+			age
+			loc
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+			school {
+				_uid_
+				name@en
+			}
+		}
+
+		me2(func: uid(1001)) {
+			name
+			age
+		}
+
+		me3(func: uid(1003)) {
+			name@en
+		}
+	}`)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	n := ""
+	// Now persons name, friends and school should be deleted but not location.
+	p2 := Person{
+		Uid:     1000,
+		Name:    &n,
+		Friends: nil,
+		School:  nil,
+	}
+
+	req = client.Req{}
+	err = req.DeleteObject(&p2)
+	require.NoError(t, err)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	type Root struct {
+		Me Person `dgraph:"me"`
+	}
+
+	var r Root
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+
+	p3 := r.Me
+	require.Equal(t, p.Location, p3.Location)
+	require.Nil(t, p3.Name)
+	require.Equal(t, p3.Age, p.Age)
+	require.Equal(t, p3.Married, p.Married)
+	require.Nil(t, p3.School)
+	require.Equal(t, 0, len(p3.Friends))
+}

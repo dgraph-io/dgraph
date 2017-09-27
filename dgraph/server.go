@@ -17,9 +17,11 @@
 package dgraph
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -30,9 +32,12 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
+	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
 type ServerState struct {
@@ -135,7 +140,8 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 
 	resp = new(protos.Response)
 	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
-		len(req.Mutation.GetSchema()) == 0
+		len(req.Mutation.GetSchema()) == 0 && len(req.Mutation.GetSetJson()) == 0 &&
+		len(req.Mutation.GetDeleteJson()) == 0
 	if len(req.Query) == 0 && emptyMutation && req.Schema == nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Empty query and mutation.")
@@ -151,6 +157,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
 	}
+
 	res, err := ParseQueryAndMutation(ctx, gql.Request{
 		Str:       req.Query,
 		Mutation:  req.Mutation,
@@ -158,6 +165,10 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		Http:      false,
 	})
 	if err != nil {
+		return resp, err
+	}
+
+	if err := parseMutationObject(&res, req); err != nil {
 		return resp, err
 	}
 
@@ -284,4 +295,186 @@ func ParseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 		}
 	}
 	return res, nil
+}
+
+func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, string, error) {
+	var uid string
+	// Check field in map.
+	if uidVal, ok := m["_uid_"]; ok {
+		// Should be convertible to uint64. Maybe we also want to allow string later.
+		if id, ok := uidVal.(float64); ok && uint64(id) != 0 {
+			uid = fmt.Sprintf("%d", uint64(id))
+		}
+	}
+
+	if len(uid) == 0 {
+		// Delete operations must have a uid.
+		if op == delete {
+			return nil, uid, x.Errorf("_uid_ must be present and non-zero. Got: %+v", m)
+		}
+		uid = fmt.Sprintf("_:blank-%d", *idx)
+		*idx++
+	}
+
+	// TODO - Handle facets
+	var nquads []*protos.NQuad
+	for k, v := range m {
+		// We have already extracted the uid above so we skip that edge.
+		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
+		// option.
+		if k == "_uid_" {
+			continue
+		}
+
+		nq := protos.NQuad{
+			Subject:   uid,
+			Predicate: k,
+		}
+
+		if v == nil {
+			if op == delete {
+				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				nquads = append(nquads, &nq)
+			}
+			continue
+		}
+
+		switch v.(type) {
+		default:
+			return nil, uid, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
+		case string:
+			predWithLang := strings.SplitN(k, "@", 2)
+			if len(predWithLang) == 2 && predWithLang[0] != "" {
+				nq.Predicate = predWithLang[0]
+				nq.Lang = predWithLang[1]
+			}
+
+			// Default value is considered as S P * deletion.
+			if v == "" && op == delete {
+				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				nquads = append(nquads, &nq)
+				continue
+			}
+
+			var g geom.T
+			err := geojson.Unmarshal([]byte(v.(string)), &g)
+			// We try to parse the value as a GeoJSON. If we can't, then we store as a string.
+			if err == nil {
+				geo, err := types.ObjectValue(types.GeoID, g)
+				if err != nil {
+					return nil, uid, x.Errorf("Couldn't convert value: %s to geo type", v.(string))
+				}
+
+				nq.ObjectValue = geo
+				nq.ObjectType = int32(types.GeoID)
+				nquads = append(nquads, &nq)
+				continue
+			}
+
+			nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}
+			nq.ObjectType = int32(types.StringID)
+			nquads = append(nquads, &nq)
+		case float64:
+			if v == 0 && op == delete {
+				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				nquads = append(nquads, &nq)
+				continue
+			}
+
+			nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v.(float64)}}
+			nq.ObjectType = int32(types.FloatID)
+			nquads = append(nquads, &nq)
+		case bool:
+			if v == false && op == delete {
+				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				nquads = append(nquads, &nq)
+				continue
+			}
+
+			nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v.(bool)}}
+			nq.ObjectType = int32(types.BoolID)
+			nquads = append(nquads, &nq)
+		case map[string]interface{}:
+			mnquads, oid, err := mapToNquads(v.(map[string]interface{}), idx, op)
+			if err != nil {
+				return nil, uid, err
+			}
+
+			// Add the connecting edge beteween the entities.
+			nq.ObjectId = oid
+			nquads = append(nquads, &nq)
+			// Add the nquads that we got for the connecting entity.
+			nquads = append(nquads, mnquads...)
+		case []interface{}:
+			for _, item := range v.([]interface{}) {
+				nq := protos.NQuad{
+					Subject:   uid,
+					Predicate: k,
+				}
+
+				if mp, ok := item.(map[string]interface{}); ok {
+					mnquads, oid, err := mapToNquads(mp, idx, op)
+					if err != nil {
+						return nil, uid, err
+					}
+					nq.ObjectId = oid
+					nquads = append(nquads, &nq)
+					// Add the nquads that we got for the connecting entity.
+					nquads = append(nquads, mnquads...)
+				} else {
+					return nquads, uid,
+						x.Errorf("Only slice of structs supported. Got incorrect type for: %s", k)
+				}
+			}
+		}
+	}
+
+	return nquads, uid, nil
+}
+
+const (
+	set = iota
+	delete
+)
+
+func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
+	ms := make(map[string]interface{})
+	if err := json.Unmarshal(b, &ms); err != nil {
+		return nil, err
+	}
+
+	var idx int
+	nquads, _, err := mapToNquads(ms, &idx, op)
+	return nquads, err
+}
+
+func parseMutationObject(res *gql.Result, q *protos.Request) error {
+	if q.Mutation == nil || (len(q.Mutation.SetJson) == 0 && len(q.Mutation.DeleteJson) == 0) {
+		return nil
+	}
+
+	var nquads []*protos.NQuad
+	var err error
+	if len(q.Mutation.SetJson) > 0 {
+		nquads, err = nquadsFromJson(q.Mutation.SetJson, set)
+		if err != nil {
+			return err
+		}
+	}
+
+	if res.Mutation == nil {
+		res.Mutation = &gql.Mutation{}
+	}
+	res.Mutation.Set = append(res.Mutation.Set, nquads...)
+
+	nquads = nquads[:0]
+	if len(q.Mutation.DeleteJson) > 0 {
+		nquads, err = nquadsFromJson(q.Mutation.DeleteJson, delete)
+		if err != nil {
+			return err
+		}
+	}
+	res.Mutation.Del = append(res.Mutation.Del, nquads...)
+
+	return nil
 }

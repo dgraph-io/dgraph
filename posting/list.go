@@ -465,7 +465,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		}
 	}
 	if t.ValueId == 0 {
-		err := x.Errorf("ValueId cannot be zero")
+		err := x.Errorf("ValueId cannot be zero for edge: %+v", t)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}

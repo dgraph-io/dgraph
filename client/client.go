@@ -19,6 +19,7 @@ package client
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -104,6 +105,36 @@ func (req *Req) addMutation(e Edge, op opType) {
 	} else if op == DEL {
 		req.gr.Mutation.Del = append(req.gr.Mutation.Del, &e.nq)
 	}
+}
+
+// SetObject allows creating a new nested object (struct). If the object has _uid_
+// key then it is updated, else it a new node is created with the given properties and edges.
+// If the object can't be marshalled using Json.Marshal then an error is returned.
+func (req *Req) SetObject(v interface{}) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	if req.gr.Mutation == nil {
+		req.gr.Mutation = new(protos.Mutation)
+	}
+	req.gr.Mutation.SetJson = b
+	return nil
+}
+
+// DeleteObject allows deleting a nested object (struct). The object must have _uid_
+// after it is json marshalled else an error is returned.
+// If the object can't be marshalled using Json.Marshal then also an error is returned.
+func (req *Req) DeleteObject(v interface{}) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	if req.gr.Mutation == nil {
+		req.gr.Mutation = new(protos.Mutation)
+	}
+	req.gr.Mutation.DeleteJson = b
+	return nil
 }
 
 // Set adds edge e to the set mutation of request req, thus scheduling the edge to be added to the
