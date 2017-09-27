@@ -1117,7 +1117,7 @@ func TestQueryVarValOrderDescMissing(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {}}`, js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestGroupByRootProto(t *testing.T) {
@@ -1352,14 +1352,12 @@ func TestMultiEmptyBlocks(t *testing.T) {
 			you(func: uid(0x01)) {
 			}
 
-			me(func: uid( 0x02)) {
+			me(func: uid(0x02)) {
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"you": [], "me": []}}`, js)
 }
 
 func TestUseVarsMultiCascade1(t *testing.T) {
@@ -1748,7 +1746,7 @@ func TestNestedFuncRoot3(t *testing.T) {
 		}
   `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {}}`, js)
+	require.JSONEq(t, `{"data": { "me": []}}`, js)
 }
 
 func TestNestedFuncRoot4(t *testing.T) {
@@ -1840,7 +1838,7 @@ func TestRecurseVariable(t *testing.T) {
 		`
 
 	js := processToFastJSON(t, query)
-	require.Equal(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+	require.Equal(t, `{"data": {"recurse":[],"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
 
 func TestRecurseVariable2(t *testing.T) {
@@ -1864,7 +1862,7 @@ func TestRecurseVariable2(t *testing.T) {
 			}
 	`
 	js := processToFastJSON(t, query)
-	require.Equal(t, `{"data": {"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+	require.Equal(t, `{"data": {"recurse":[],"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
@@ -1902,9 +1900,7 @@ func TestShortestPath_NoPath(t *testing.T) {
 			}
 		}`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestKShortestPath_NoPath(t *testing.T) {
@@ -1922,9 +1918,7 @@ func TestKShortestPath_NoPath(t *testing.T) {
 			}
 		}`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestKShortestPathWeighted(t *testing.T) {
@@ -2173,9 +2167,7 @@ func TestShortestPath_filter2(t *testing.T) {
 			}
 		}`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": { "me": []}}`, js)
 }
 
 func TestUseVarsFilterMultiId(t *testing.T) {
@@ -3642,8 +3634,7 @@ func TestFilterRegex13(t *testing.T) {
 
 	// no results are returned, becaues case insensive mode is turned off before 'ISSION'
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`, js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 // invalid regexp modifier
@@ -6423,9 +6414,7 @@ func TestLangSingleFallback(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangMany1(t *testing.T) {
@@ -6483,9 +6472,7 @@ func TestLangManyFallback(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangNoFallbackNoDefault(t *testing.T) {
@@ -6498,9 +6485,7 @@ func TestLangNoFallbackNoDefault(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangSingleNoFallbackNoDefault(t *testing.T) {
@@ -6513,9 +6498,7 @@ func TestLangSingleNoFallbackNoDefault(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
@@ -6528,9 +6511,7 @@ func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangOnlyForcedFallbackNoDefault(t *testing.T) {
@@ -6606,9 +6587,7 @@ func TestLangFilterMismatch1(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangFilterMismatch2(t *testing.T) {
@@ -6621,9 +6600,7 @@ func TestLangFilterMismatch2(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangFilterMismatch3(t *testing.T) {
@@ -6636,9 +6613,7 @@ func TestLangFilterMismatch3(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangFilterMismatch5(t *testing.T) {
@@ -6666,9 +6641,7 @@ func TestLangFilterMismatch6(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangLossyIndex1(t *testing.T) {
@@ -6714,9 +6687,7 @@ func TestLangLossyIndex3(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestLangLossyIndex4(t *testing.T) {
@@ -6757,9 +6728,7 @@ func TestLangBug1295(t *testing.T) {
 				json, err := processToFastJsonReq(t, query)
 				require.NoError(t, err)
 				if l == "" {
-					require.JSONEq(t,
-						`{"data": {}}`,
-						json)
+					require.JSONEq(t, `{"data": {"q": []}}`, json)
 				} else {
 					require.JSONEq(t,
 						`{"data": {"q":[{"royal_title@en":"Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith"}]}}`,
@@ -9127,7 +9096,7 @@ func TestMathCeil1(t *testing.T) {
 	}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {}}`, js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestMathCeil2(t *testing.T) {
@@ -9162,7 +9131,7 @@ func TestAppendDummyValuesPanic(t *testing.T) {
 		}
 	}`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {}}`, js)
+	require.JSONEq(t, `{"data": {"n": []}}`, js)
 }
 
 func TestMultipleValueFilter(t *testing.T) {
@@ -9464,7 +9433,7 @@ func TestFilterRootOverride(t *testing.T) {
 	}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {}}`, js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestFilterRoot(t *testing.T) {
@@ -9478,7 +9447,7 @@ func TestFilterRoot(t *testing.T) {
 	}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {}}`, js)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestMathAlias(t *testing.T) {
@@ -9532,4 +9501,21 @@ func TestMultipleValueVarError(t *testing.T) {
 	_, err := processToFastJsonReqCtx(t, query, ctx)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Value variables not supported for predicate with list type.")
+}
+
+func TestReturnEmptyBlock(t *testing.T) {
+	populateGraph(t)
+	query := `{
+		me(func:allofterms(name, "Michonne")) @filter(eq(name, "Rick Grimes")) {
+		}
+
+		me2(func: eq(name, "XYZ"))
+
+		me3(func: eq(name, "Michonne")) {
+			name
+		}
+	}`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[],"me2":[],"me3":[{"name":"Michonne"}]}}`, js)
 }

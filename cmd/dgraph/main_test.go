@@ -375,11 +375,11 @@ func TestDeletePredicate(t *testing.T) {
 	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"age","type":"default"},{"predicate":"friend","type":"uid","reverse":true},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]}]}}`, output)
 
 	output, err = runQuery(q1)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q5)
 	require.NoError(t, err)
@@ -812,11 +812,11 @@ func TestDeleteAll(t *testing.T) {
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 }
 
 func TestDeleteAllSP(t *testing.T) {
@@ -928,15 +928,15 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`,
+	require.JSONEq(t, `{"data": {"user": []}}`,
 		output)
 }
 
@@ -986,7 +986,7 @@ func TestSchemaValidationError(t *testing.T) {
 	_, err := gql.Parse(gql.Request{Str: m5, Http: true})
 	require.Error(t, err)
 	output := processToFastJSON(strings.Replace(q5, "<id>", "0x8", -1))
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 }
 
 var m6 = `
@@ -1737,7 +1737,7 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	q := fmt.Sprintf(`
 	{
-	  all_tracked_days(func: uid(%s)) {
+	  me(func: uid(%s)) {
 		_predicate_
 		name
 	    date
@@ -1749,7 +1749,7 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err = runQuery(q)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"all_tracked_days":[{"_predicate_":["name","date","weightUnit","postMortem","lifeLoad","weight","stressLevel","nodeType","plan"],"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
+	require.Equal(t, `{"data": {"me":[{"_predicate_":["name","date","weightUnit","postMortem","lifeLoad","weight","stressLevel","nodeType","plan"],"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
 
 	m = fmt.Sprintf(`
 		mutation {
@@ -1763,7 +1763,7 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err = runQuery(q)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {}}`, output)
+	require.Equal(t, `{"data": {"me":[]}}`, output)
 }
 
 func TestMain(m *testing.M) {
