@@ -2870,6 +2870,21 @@ func TestQueryPassword(t *testing.T) {
 	require.NotNil(t, err)
 }
 
+func TestPasswordExpandAll(t *testing.T) {
+	populateGraph(t)
+	addPassword(t, 1, "password", "123456")
+	// Password is not fetchable
+	query := `
+    {
+        me(func: uid(0x01)) {
+			expand(_all_)
+		}
+    }
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
+}
+
 func TestCheckPassword(t *testing.T) {
 	populateGraph(t)
 	addPassword(t, 1, "password", "123456")
@@ -6992,6 +7007,7 @@ func TestMain(m *testing.M) {
 	worker.Config.PeerAddr = "localhost:12340"
 	worker.Config.RaftId = 1
 	worker.Config.MyAddr = "localhost:12345"
+	worker.Config.ExpandEdge = true
 	schema.Init(ps)
 	posting.Init(ps)
 	worker.Init(ps)
@@ -9518,4 +9534,21 @@ func TestReturnEmptyBlock(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[],"me2":[],"me3":[{"name":"Michonne"}]}}`, js)
+}
+
+func TestExpandVal(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		var(func: uid(1)) {
+			pred as _predicate_
+		}
+
+		me(func: uid(1)) {
+			expand(val(pred))
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
 }

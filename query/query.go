@@ -1960,17 +1960,18 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
+		var preds []*protos.ValueList
 		if child.Params.Expand == "_all_" {
 			// Get the predicate list for expansion. Otherwise we already
 			// have the list populated.
-			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
+			preds, err = getNodePredicates(ctx, sg.DestUIDs)
 			if err != nil {
 				rch <- err
 				return
 			}
 		}
 
-		up := uniquePreds(child.ExpandPreds)
+		up := uniquePreds(preds)
 		for k, _ := range up {
 			temp := new(SubGraph)
 			*temp = *child

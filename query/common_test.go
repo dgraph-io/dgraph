@@ -71,6 +71,7 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 	l := posting.Get(x.DataKey(attr, src))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
+
 }
 
 func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {
@@ -93,9 +94,21 @@ func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {
 	return fs, nil
 }
 
+func addPredicateEdge(t *testing.T, attr string, src uint64) {
+	if worker.Config.ExpandEdge {
+		edge := &protos.DirectedEdge{
+			Value: []byte(attr),
+			Attr:  "_predicate_",
+			Op:    protos.DirectedEdge_SET,
+		}
+		addEdge(t, "_predicate_", src, edge)
+	}
+}
+
 func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string, facetKVs map[string]string) {
 	addEdgeToLangValue(t, attr, src, value, "", facetKVs)
+	addPredicateEdge(t, attr, src)
 }
 
 func addEdgeToLangValue(t *testing.T, attr string, src uint64,
@@ -112,6 +125,7 @@ func addEdgeToLangValue(t *testing.T, attr string, src uint64,
 		Facets: fs,
 	}
 	addEdge(t, attr, src, edge)
+	addPredicateEdge(t, attr, src)
 }
 
 func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
@@ -128,6 +142,7 @@ func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 		Facets:    fs,
 	}
 	addEdge(t, attr, src, edge)
+	addPredicateEdge(t, attr, src)
 }
 
 func addEdgeToUID(t *testing.T, attr string, src uint64,
@@ -146,6 +161,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 		Facets:    fs,
 	}
 	addEdge(t, attr, src, edge)
+	addPredicateEdge(t, attr, src)
 }
 
 func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
