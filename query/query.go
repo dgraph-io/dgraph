@@ -2700,7 +2700,7 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		}
 	}
 
-	if qr.GqlQuery.Mutation.DropAll {
+	if qr.GqlQuery.Mutation != nil && qr.GqlQuery.Mutation.DropAll {
 		m := protos.Mutations{DropAll: true}
 		if err := ApplyMutations(ctx, &m); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
