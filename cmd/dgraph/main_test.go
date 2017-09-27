@@ -1683,7 +1683,7 @@ func TestUpsert2(t *testing.T) {
 
 	res, err := runQuery(query)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"uids":{"b":"0x271a","a":"0x2719"}}}`, res)
+	require.JSONEq(t, `{"data": {"uids":{"a":"0x271a","b":"0x2719"}}}`, res)
 
 	m := make(map[string]interface{})
 	require.NoError(t, json.Unmarshal([]byte(res), &m))
@@ -1764,6 +1764,64 @@ func TestDeleteAllSP2(t *testing.T) {
 	output, err = runQuery(q)
 	require.NoError(t, err)
 	require.Equal(t, `{"data": {}}`, output)
+}
+
+func TestUpsertRace(t *testing.T) {
+	s := `
+	mutation {
+		schema {
+			xid: string @index(exact) .
+		}
+	}
+	`
+	_, err := runQuery(s)
+	require.NoError(t, err)
+
+	q := `
+{
+  email as var(func: eq(xid, "<2519643.1075860072192.JavaMail.evans@thyme>")) @upsert
+  human as var(func: eq(xid, "mark.taylor@enron.com")) @upsert
+  human_to_0 as var(func: eq(xid, "leonardo.pacheco@enron.com")) @upsert
+  human_cc_0 as var(func: eq(xid, "jay.hawthorn@enron.com")) @upsert
+  human_cc_1 as var(func: eq(xid, "cynthia.harkness@enron.com")) @upsert
+  human_cc_2 as var(func: eq(xid, "jean.mrha@enron.com")) @upsert
+  human_cc_3 as var(func: eq(xid, "david.forster@enron.com")) @upsert
+  human_cc_4 as var(func: eq(xid, "julie.ferrara@enron.com")) @upsert
+  human_cc_5 as var(func: eq(xid, "kal.shah@enron.com")) @upsert
+  human_bcc_0 as var(func: eq(xid, "jay.hawthorn@enron.com")) @upsert
+  human_bcc_1 as var(func: eq(xid, "cynthia.harkness@enron.com")) @upsert
+  human_bcc_2 as var(func: eq(xid, "jean.mrha@enron.com")) @upsert
+  human_bcc_3 as var(func: eq(xid, "david.forster@enron.com")) @upsert
+  human_bcc_4 as var(func: eq(xid, "julie.ferrara@enron.com")) @upsert
+  human_bcc_5 as var(func: eq(xid, "kal.shah@enron.com")) @upsert
+}
+mutation {
+  set {
+   uid(email) <xid> "<2519643.1075860072192.JavaMail.evans@thyme>" .
+   uid(email) <filename> "data/maildir/taylor-m/sent/1018." .
+   uid(email) <date> "2000-05-01 01:31:00 -0700 PDT" .
+   uid(human) <sent> uid(email) .
+   uid(email) <from> "mark.taylor@enron.com" .
+   uid(email) <subject> "Re: Bandwidth Launch on EOL Website Ticker Text" .
+
+   uid(human_to_0) <xid> "leonardo.pacheco@enron.com" .
+   uid(human_cc_0) <xid> "jay.hawthorn@enron.com" .
+   uid(human_cc_1) <xid> "cynthia.harkness@enron.com" .
+   uid(human_cc_2) <xid> "jean.mrha@enron.com" .
+   uid(human_cc_3) <xid> "david.forster@enron.com" .
+   uid(human_cc_4) <xid> "julie.ferrara@enron.com" .
+   uid(human_cc_5) <xid> "kal.shah@enron.com" .
+   uid(human_bcc_0) <xid> "jay.hawthorn@enron.com" .
+   uid(human_bcc_1) <xid> "cynthia.harkness@enron.com" .
+   uid(human_bcc_2) <xid> "jean.mrha@enron.com" .
+   uid(human_bcc_3) <xid> "david.forster@enron.com" .
+   uid(human_bcc_4) <xid> "julie.ferrara@enron.com" .
+   uid(human_bcc_5) <xid> "kal.shah@enron.com" .
+  }
+}
+	`
+	_, err = runQuery(q)
+	require.NoError(t, err)
 }
 
 func TestMain(m *testing.M) {

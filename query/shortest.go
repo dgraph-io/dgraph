@@ -136,7 +136,6 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 	var numEdges uint64
 	var exec []*SubGraph
-	var err error
 	in := []uint64{start.Params.From}
 	start.SrcUIDs = &protos.List{in}
 	start.uidMatrix = []*protos.List{{in}}
@@ -152,19 +151,19 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		if !isNext {
 			return
 		}
-		rrch := make(chan error, len(exec))
+		rrch := make(chan response, len(exec))
 		for _, sg := range exec {
 			go ProcessGraph(ctx, sg, dummy, rrch)
 		}
 
 		for range exec {
 			select {
-			case err = <-rrch:
-				if err != nil {
+			case r := <-rrch:
+				if r.err != nil {
 					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf("Error while processing child task: %+v", err)
+						tr.LazyPrintf("Error while processing child task: %+v", r.err)
 					}
-					rch <- err
+					rch <- r.err
 					return
 				}
 			case <-ctx.Done():

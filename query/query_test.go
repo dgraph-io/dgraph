@@ -3143,10 +3143,10 @@ func TestProcessGraph(t *testing.T) {
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
+	resp := make(chan response)
+	go ProcessGraph(ctx, sg, nil, resp)
+	r := <-resp
+	require.NoError(t, r.err)
 
 	require.EqualValues(t, childAttrs(sg), []string{"friend", "name", "gender", "alive"})
 	require.EqualValues(t, childAttrs(sg.Children[0]), []string{"name"})
@@ -3410,11 +3410,10 @@ func TestFilterRegexError(t *testing.T) {
 	ctx := context.Background()
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.Error(t, err)
+	resp := make(chan response)
+	go ProcessGraph(ctx, sg, nil, resp)
+	r := <-resp
+	require.Error(t, r.err)
 }
 
 func TestFilterRegex1(t *testing.T) {
@@ -4089,10 +4088,10 @@ func TestToFastJSONOrderNameError(t *testing.T) {
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.Error(t, err)
+	resp := make(chan response)
+	go ProcessGraph(ctx, sg, nil, resp)
+	r := <-resp
+	require.Error(t, r.err)
 }
 
 func TestToFastJSONFilterleOrder(t *testing.T) {
@@ -5687,10 +5686,10 @@ func TestNearGeneratorError(t *testing.T) {
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.Error(t, err)
+	resp := make(chan response)
+	go ProcessGraph(ctx, sg, nil, resp)
+	r := <-resp
+	require.Error(t, r.err)
 }
 
 func TestNearGeneratorErrorMissDist(t *testing.T) {
@@ -5709,10 +5708,10 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.Error(t, err)
+	resp := make(chan response)
+	go ProcessGraph(ctx, sg, nil, resp)
+	r := <-resp
+	require.Error(t, r.err)
 }
 
 func TestWithinGeneratorError(t *testing.T) {
@@ -5731,10 +5730,10 @@ func TestWithinGeneratorError(t *testing.T) {
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.Error(t, err)
+	resp := make(chan response)
+	go ProcessGraph(ctx, sg, nil, resp)
+	r := <-resp
+	require.Error(t, r.err)
 }
 
 func TestWithinGenerator(t *testing.T) {
@@ -5788,10 +5787,10 @@ func TestIntersectsGeneratorError(t *testing.T) {
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.Error(t, err)
+	resp := make(chan response)
+	go ProcessGraph(ctx, sg, nil, resp)
+	r := <-resp
+	require.Error(t, r.err)
 }
 
 func TestIntersectsGenerator(t *testing.T) {

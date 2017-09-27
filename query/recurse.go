@@ -33,9 +33,8 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 	reachMap := make(map[string]struct{})
 	var numEdges int
 	var exec []*SubGraph
-	var err error
 
-	rrch := make(chan error, len(exec))
+	rrch := make(chan response, len(exec))
 	startChildren := make([]*SubGraph, len(start.Children))
 	copy(startChildren, start.Children)
 	start.Children = []*SubGraph{}
@@ -43,12 +42,12 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 	// Process the root first.
 	go ProcessGraph(ctx, start, nil, rrch)
 	select {
-	case err = <-rrch:
-		if err != nil {
+	case r := <-rrch:
+		if r.err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while processing child task: %+v", err)
+				tr.LazyPrintf("Error while processing child task: %+v", r.err)
 			}
-			return err
+			return r.err
 		}
 	case <-ctx.Done():
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -74,7 +73,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		}
 		depth++
 
-		rrch := make(chan error, len(exec))
+		rrch := make(chan response, len(exec))
 		for _, sg := range exec {
 			go ProcessGraph(ctx, sg, dummy, rrch)
 		}
@@ -82,13 +81,13 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		var recurseErr error
 		for range exec {
 			select {
-			case err = <-rrch:
-				if err != nil {
+			case r := <-rrch:
+				if r.err != nil {
 					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf("Error while processing child task: %+v", err)
+						tr.LazyPrintf("Error while processing child task: %+v", r.err)
 					}
 					if recurseErr == nil {
-						recurseErr = err
+						recurseErr = r.err
 					}
 				}
 			case <-ctx.Done():
