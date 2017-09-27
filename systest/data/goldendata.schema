@@ -1,0 +1,2 @@
+name: string @index(term) .
+initial_release_date: datetime @index(year) .

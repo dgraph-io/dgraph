@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
 func unmarshalToStruct(f reflect.StructField, n *protos.Node, val reflect.Value) error {
@@ -32,10 +34,12 @@ func unmarshalToStruct(f reflect.StructField, n *protos.Node, val reflect.Value)
 		// it can unmarshal node and its properties.
 		typ = typ.Elem()
 	}
+
 	rcv, err := unmarshal(n, typ)
 	if err != nil {
 		return err
 	}
+
 	fieldVal := val.FieldByName(f.Name)
 	if !fieldVal.CanSet() {
 		return fmt.Errorf("Cant set field: %+v", f.Name)
@@ -111,7 +115,25 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 	}
 	switch field.Type.Kind() {
 	case reflect.String:
-		f.SetString(value.GetStrVal())
+		switch value.Val.(type) {
+		case *protos.Value_GeoVal:
+			v := value.GetGeoVal()
+			if len(v) == 0 {
+				return nil
+			}
+
+			g, err := wkb.Unmarshal(v)
+			if err != nil {
+				return nil
+			}
+			b, err := geojson.Marshal(g)
+			if err != nil {
+				return nil
+			}
+			f.SetString(string(b))
+		default:
+			f.SetString(value.GetStrVal())
+		}
 	case reflect.Int64, reflect.Int:
 		f.SetInt(value.GetIntVal())
 	case reflect.Float64:
@@ -255,6 +277,9 @@ func resetStruct(t reflect.Type, v reflect.Value) {
 		case reflect.Struct:
 			resetStruct(ft.Type, f)
 		case reflect.Ptr:
+			if ft.Type.Elem().Kind() != reflect.Struct {
+				continue
+			}
 			fv := reflect.New(ft.Type.Elem())
 			resetStruct(ft.Type.Elem(), fv.Elem())
 			f.Set(fv)

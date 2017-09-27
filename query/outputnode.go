@@ -677,10 +677,13 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	}
 
 	if sg.uidMatrix == nil {
+		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
 		return nil
 	}
 
+	hasChild := false
 	if sg.Params.uidCount != "" {
+		hasChild = true
 		n.addCountAtRoot(sg)
 	}
 
@@ -709,6 +712,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 			continue
 		}
 
+		hasChild = true
 		if !sg.Params.Normalize {
 			n.AddListChild(sg.Params.Alias, n1)
 			continue
@@ -722,6 +726,11 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		for _, c := range normalized {
 			n.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
 		}
+	}
+
+	if !hasChild {
+		// So that we return an empty key if the root didn't have any children.
+		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
 	}
 	return nil
 }

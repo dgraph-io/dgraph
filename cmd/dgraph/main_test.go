@@ -375,11 +375,11 @@ func TestDeletePredicate(t *testing.T) {
 	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"age","type":"default"},{"predicate":"friend","type":"uid","reverse":true},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]}]}}`, output)
 
 	output, err = runQuery(q1)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q5)
 	require.NoError(t, err)
@@ -812,11 +812,11 @@ func TestDeleteAll(t *testing.T) {
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 }
 
 func TestDeleteAllSP(t *testing.T) {
@@ -928,15 +928,15 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {}}`,
+	require.JSONEq(t, `{"data": {"user": []}}`,
 		output)
 }
 
@@ -986,7 +986,7 @@ func TestSchemaValidationError(t *testing.T) {
 	_, err := gql.Parse(gql.Request{Str: m5, Http: true})
 	require.Error(t, err)
 	output := processToFastJSON(strings.Replace(q5, "<id>", "0x8", -1))
-	require.JSONEq(t, `{"data": {}}`, output)
+	require.JSONEq(t, `{"data": {"user": []}}`, output)
 }
 
 var m6 = `
@@ -1737,7 +1737,7 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	q := fmt.Sprintf(`
 	{
-	  all_tracked_days(func: uid(%s)) {
+	  me(func: uid(%s)) {
 		_predicate_
 		name
 	    date
@@ -1749,7 +1749,7 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err = runQuery(q)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"all_tracked_days":[{"_predicate_":["name","date","weightUnit","postMortem","lifeLoad","weight","stressLevel","nodeType","plan"],"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
+	require.Equal(t, `{"data": {"me":[{"_predicate_":["name","date","weightUnit","postMortem","lifeLoad","weight","stressLevel","nodeType","plan"],"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
 
 	m = fmt.Sprintf(`
 		mutation {
@@ -1763,7 +1763,64 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err = runQuery(q)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {}}`, output)
+	require.Equal(t, `{"data": {"me":[]}}`, output)
+}
+
+func TestUpsertRace(t *testing.T) {
+	s := `
+	mutation {
+		schema {
+			xid: string @index(exact) .
+		}
+	}
+	`
+	_, err := runQuery(s)
+	require.NoError(t, err)
+
+	q := `
+{
+  email as var(func: eq(xid, "<2519643.1075860072192.JavaMail.evans@thyme>")) @upsert
+  human as var(func: eq(xid, "mark.taylor@enron.com")) @upsert
+  human_to_0 as var(func: eq(xid, "leonardo.pacheco@enron.com")) @upsert
+  human_cc_0 as var(func: eq(xid, "jay.hawthorn@enron.com")) @upsert
+  human_cc_1 as var(func: eq(xid, "cynthia.harkness@enron.com")) @upsert
+  human_cc_2 as var(func: eq(xid, "jean.mrha@enron.com")) @upsert
+  human_cc_3 as var(func: eq(xid, "david.forster@enron.com")) @upsert
+  human_cc_4 as var(func: eq(xid, "julie.ferrara@enron.com")) @upsert
+  human_cc_5 as var(func: eq(xid, "kal.shah@enron.com")) @upsert
+  human_bcc_0 as var(func: eq(xid, "jay.hawthorn@enron.com")) @upsert
+  human_bcc_1 as var(func: eq(xid, "cynthia.harkness@enron.com")) @upsert
+  human_bcc_2 as var(func: eq(xid, "jean.mrha@enron.com")) @upsert
+  human_bcc_3 as var(func: eq(xid, "david.forster@enron.com")) @upsert
+  human_bcc_4 as var(func: eq(xid, "julie.ferrara@enron.com")) @upsert
+  human_bcc_5 as var(func: eq(xid, "kal.shah@enron.com")) @upsert
+}
+mutation {
+  set {
+   uid(email) <xid> "<2519643.1075860072192.JavaMail.evans@thyme>" .
+   uid(email) <filename> "data/maildir/taylor-m/sent/1018." .
+   uid(email) <date> "2000-05-01 01:31:00 -0700 PDT" .
+   uid(human) <sent> uid(email) .
+   uid(email) <from> "mark.taylor@enron.com" .
+   uid(email) <subject> "Re: Bandwidth Launch on EOL Website Ticker Text" .
+   uid(human_to_0) <xid> "leonardo.pacheco@enron.com" .
+   uid(human_cc_0) <xid> "jay.hawthorn@enron.com" .
+   uid(human_cc_1) <xid> "cynthia.harkness@enron.com" .
+   uid(human_cc_2) <xid> "jean.mrha@enron.com" .
+   uid(human_cc_3) <xid> "david.forster@enron.com" .
+   uid(human_cc_4) <xid> "julie.ferrara@enron.com" .
+   uid(human_cc_5) <xid> "kal.shah@enron.com" .
+   uid(human_bcc_0) <xid> "jay.hawthorn@enron.com" .
+   uid(human_bcc_1) <xid> "cynthia.harkness@enron.com" .
+   uid(human_bcc_2) <xid> "jean.mrha@enron.com" .
+   uid(human_bcc_3) <xid> "david.forster@enron.com" .
+   uid(human_bcc_4) <xid> "julie.ferrara@enron.com" .
+   uid(human_bcc_5) <xid> "kal.shah@enron.com" .
+  }
+}
+	`
+	_, err = runQuery(q)
+	require.NoError(t, err)
 }
 
 func TestDropAll(t *testing.T) {
@@ -1819,7 +1876,7 @@ func TestDropAll(t *testing.T) {
 	}`
 	output, err = runQuery(q5)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {}}`, output)
+	require.Equal(t, `{"data": {"q":[]}}`, output)
 }
 
 func TestMain(m *testing.M) {

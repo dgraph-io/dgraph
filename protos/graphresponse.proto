@@ -69,7 +69,9 @@ message Mutation {
     repeated NQuad set = 1;
     repeated NQuad del = 2;
     repeated SchemaUpdate schema = 3;
-    bool DropAll = 4;
+    bytes set_json = 4;
+    bytes delete_json = 5;
+    bool DropAll = 6;
 }
 
 message Request {

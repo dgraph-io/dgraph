@@ -558,6 +558,7 @@ func convertWithBestEffort(tv *protos.TaskValue, attr string) (types.Val, error)
 	if bytes.Equal(tv.Val, nil) {
 		return v, ErrEmptyVal
 	}
+
 	// creates appropriate type from binary format
 	sv, err := types.Convert(v, v.Tid)
 	x.Checkf(err, "Error while interpreting appropriate type from binary")
@@ -2513,9 +2514,16 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 				}
 				continue
 			}
+		}
+		if ferr != nil {
+			return nil, ferr
+		}
+
+		// If the executed subgraph had some variable defined in it, Populate it in the map.
+		for _, idx := range idxList {
+			sg := req.Subgraphs[idx]
 			// We didn't get back any uids. So we would have to assign the uid and perform the
 			// mutation (i.e. the upsert operation).
-			sg := req.Subgraphs[i]
 			if sg.Params.upsert && (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) {
 				if len(sg.Filters) > 0 {
 					ferr = fmt.Errorf("Upsert query cannot have filters.")
@@ -2548,14 +2556,6 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 					allocatedUids[sg.Params.Alias] = uid
 				}
 			}
-		}
-		if ferr != nil {
-			return nil, ferr
-		}
-
-		// If the executed subgraph had some variable defined in it, Populate it in the map.
-		for _, idx := range idxList {
-			sg := req.Subgraphs[idx]
 			var sgPath []*SubGraph
 			err = sg.populateVarMap(req.vars, sgPath)
 			if err != nil {
