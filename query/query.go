@@ -2675,10 +2675,6 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		}
 	}
 
-	if len(qr.GqlQuery.Query) == 0 && qr.GqlQuery.Schema == nil {
-		return er, nil
-	}
-
 	uids, err := qr.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
