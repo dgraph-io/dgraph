@@ -344,7 +344,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 			return nil, uid, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 		case string:
 			predWithLang := strings.SplitN(k, "@", 2)
-			if len(predWithLang) == 2 {
+			if len(predWithLang) == 2 && predWithLang[0] != "" {
 				nq.Predicate = predWithLang[0]
 				nq.Lang = predWithLang[1]
 			}
@@ -421,6 +421,9 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 					nquads = append(nquads, &nq)
 					// Add the nquads that we got for the connecting entity.
 					nquads = append(nquads, mnquads...)
+				} else {
+					return nquads, uid,
+						x.Errorf("Only slice of structs supported. Got incorrect type for: %s", k)
 				}
 			}
 		}

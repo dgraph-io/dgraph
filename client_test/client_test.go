@@ -428,6 +428,56 @@ func TestSetObject(t *testing.T) {
 	require.NotNil(t, p2.Friends[1].Age)
 }
 
+func TestSetObject2(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	type School struct {
+		Uid  uint64
+		Name string `json:"@,omitempty" dgraph:"name@en"`
+	}
+
+	type Person struct {
+		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
+		Name     string   `json:"name,omitempty" dgraph:"name"`
+		Age      int      `json:"age,omitempty" dgraph:"age"`
+		Married  bool     `json:"married,omitempty" dgraph:"married"`
+		Friends  []Person `json:"friend,omitempty" dgraph:"friend"`
+		Location string   `json:"loc,omitempty" dgraph:"loc"`
+		School   *School  `json:"school,omitempty" dgraph:"school"`
+	}
+
+	loc := `{"type":"Point","coordinates":[1.1,2]}`
+	p := Person{
+		Name:     "Alice",
+		Age:      26,
+		Married:  true,
+		Location: loc,
+		Friends: []Person{{
+			Uid:  1000,
+			Name: "Bob",
+			Age:  24,
+		}, {
+			Uid:  1001,
+			Name: "Charlie",
+			Age:  29,
+		}},
+		School: &School{
+			Uid:  1002,
+			Name: "Crown Public School",
+		},
+	}
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+	_, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+}
+
 func TestDeleteObject1(t *testing.T) {
 	// In this test we check S P O deletion.
 	type School struct {
@@ -507,11 +557,18 @@ func TestDeleteObject1(t *testing.T) {
 		me3(func: uid(1003)) {
 			name@en
 		}
+
+		me4(func: uid(1002)) {
+			name
+			age
+		}
 	}`)
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
 
 	req = client.Req{}
+	// Delete Charlie from friends so that he is not deleted.
+	p.Friends = p.Friends[:1]
 	err = req.DeleteObject(&p)
 	require.NoError(t, err)
 
@@ -519,10 +576,21 @@ func TestDeleteObject1(t *testing.T) {
 	resp, err = dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
 
-	for _, n := range resp.N {
+	type Root struct {
+		Me Person `dgraph:"me"`
+	}
+
+	var r Root
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+	require.Equal(t, 1, len(r.Me.Friends))
+
+	for i := 1; i < len(resp.N)-1; i++ {
+		n := resp.N[i]
 		require.Equal(t, 0, len(n.Children))
 		require.Equal(t, 0, len(n.Properties))
 	}
+
+	require.Equal(t, 2, len(resp.N[3].Children[0].Properties))
 }
 
 func TestDeleteObject2(t *testing.T) {
@@ -641,5 +709,4 @@ func TestDeleteObject2(t *testing.T) {
 	require.Equal(t, p3.Married, p.Married)
 	require.Nil(t, p3.School)
 	require.Equal(t, 0, len(p3.Friends))
-
 }

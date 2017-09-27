@@ -140,7 +140,7 @@ func TestNquadsFromJson3(t *testing.T) {
 	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval, types.StringID))
 }
 
-func TestNquadsFromJsonError(t *testing.T) {
+func TestNquadsFromJsonError1(t *testing.T) {
 	p := Person{
 		Name: "Alice",
 		School: &School{
@@ -154,4 +154,20 @@ func TestNquadsFromJsonError(t *testing.T) {
 	_, err = nquadsFromJson(b, delete)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "_uid_ must be present and non-zero.")
+}
+
+func TestNquadsFromJsonError2(t *testing.T) {
+	type Root struct {
+		Name []string
+	}
+
+	p := Root{
+		Name: []string{"a", "b"},
+	}
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+
+	_, err = nquadsFromJson(b, set)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only slice of structs supported. Got incorrect type for: Name")
 }
