@@ -737,7 +737,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeleteAll() error {
-	if err := lcache.clear(func(_ []byte) bool { return true }); err != nil {
+	if err := lcache.clear(func([]byte) bool { return true }); err != nil {
 		return err
 	}
 	return deleteEntries(nil)
