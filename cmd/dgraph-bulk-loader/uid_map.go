@@ -61,8 +61,6 @@ func (m *uidMap) assignUID(str string) uint64 {
 
 	uid, ok := sh.cache.lookup(str)
 	if ok {
-		// In a normal LRU cache, this would reset the position of the element.
-		// We can't easily do that with a circular buffer though.
 		return uid
 	}
 
@@ -145,6 +143,10 @@ func (c *lruCache) lookup(k string) (v uint64, ok bool) {
 }
 
 func (c *lruCache) add(k string, v uint64) *lruCacheEntry {
+
+	_, ok := c.m[k]
+	x.AssertTrue(!ok)
+
 	if c.ll.Len()+1 > lruSize {
 		// LRU is full, so evict oldest element. Make sure the evict lock can
 		// be held before the eviction. Being able to hold the lock proves that
