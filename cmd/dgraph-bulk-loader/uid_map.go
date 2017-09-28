@@ -146,6 +146,9 @@ func (c *lruCache) add(k string, v uint64) *lruCacheEntry {
 
 	_, ok := c.m[k]
 	x.AssertTrue(!ok)
+	for e := c.ll.Front(); e.Next() != nil; e = e.Next() {
+		x.AssertTrue(e.Value.(*lruCacheEntry).key != k)
+	}
 
 	if c.ll.Len()+1 > lruSize {
 		// LRU is full, so evict oldest element. Make sure the evict lock can
