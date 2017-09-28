@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
@@ -13,8 +12,8 @@ import (
 
 type reducer struct {
 	*state
-	input    <-chan shuffleOutput
-	writesWg sync.WaitGroup
+	input     <-chan shuffleOutput
+	writesThr *x.Throttle
 }
 
 func (r *reducer) run() {
@@ -23,7 +22,7 @@ func (r *reducer) run() {
 		thr.Start()
 		NumReducers.Add(1)
 		NumQueuedReduceJobs.Add(-1)
-		r.writesWg.Add(1)
+		r.writesThr.Start()
 		go func(job shuffleOutput) {
 			r.reduce(job)
 			thr.Done()
@@ -31,7 +30,7 @@ func (r *reducer) run() {
 		}(reduceJob)
 	}
 	thr.Wait()
-	r.writesWg.Wait()
+	r.writesThr.Wait()
 }
 
 func (r *reducer) reduce(job shuffleOutput) {
@@ -93,6 +92,6 @@ func (r *reducer) reduce(job shuffleOutput) {
 			x.Check(e.Error)
 		}
 		NumBadgerWrites.Add(-1)
-		r.writesWg.Done()
+		r.writesThr.Done()
 	})
 }

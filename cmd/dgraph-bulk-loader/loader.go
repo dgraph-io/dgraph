@@ -228,13 +228,17 @@ type shuffleOutput struct {
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	shuffleOutputCh := make(chan shuffleOutput, 1000)
+	shuffleOutputCh := make(chan shuffleOutput, 100)
 	go func() {
 		shuf := shuffler{state: ld.state, output: shuffleOutputCh}
 		shuf.run()
 	}()
 
-	redu := reducer{state: ld.state, input: shuffleOutputCh}
+	redu := reducer{
+		state:     ld.state,
+		input:     shuffleOutputCh,
+		writesThr: x.NewThrottle(100),
+	}
 	redu.run()
 }
 
