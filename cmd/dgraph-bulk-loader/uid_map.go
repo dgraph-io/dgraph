@@ -91,6 +91,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 
 	sh.lastUsed++
 	lck := &sh.cache.add(str, sh.lastUsed).evictLock
+	x.AssertTrue(lck != nil)
 	fmt.Printf("L %p\n", lck)
 	lck.Lock() // Stop from being evicted until unlocked.
 
@@ -112,6 +113,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 			}
 			for _, mu := range batchMu {
 				// Allow entries to be evicted from LRU cache.
+				x.AssertTrue(mu != nil)
 				mu.Unlock()
 				fmt.Printf("U %p\n", mu)
 			}
