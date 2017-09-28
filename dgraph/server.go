@@ -158,7 +158,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
 	}
 
-	res, err = gql.Parse(gql.Request{
+	res, err := gql.Parse(gql.Request{
 		Str:       req.Query,
 		Mutation:  req.Mutation,
 		Variables: req.Vars,
