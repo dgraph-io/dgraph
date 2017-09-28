@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/list"
 	"encoding/binary"
 	"sync"
 	"sync/atomic"
@@ -11,7 +12,8 @@ import (
 )
 
 const (
-	// Memory used is about numShards * avgKeySize * lruSize
+	// Memory used is in the order of numShards * (avgKeySize + constant
+	// overhead per key) * lruSize.
 	numShards = 1 << 12
 	lruSize   = 1 << 9
 )
@@ -37,7 +39,10 @@ func newUIDMap() *uidMap {
 		lease: 1,
 	}
 	for i := range um.shards {
-		um.shards[i].cache = lruCache{m: make(map[string]uint64)}
+		um.shards[i].cache = lruCache{
+			m:  make(map[string]*list.Element),
+			ll: list.New(),
+		}
 	}
 	return um
 }
@@ -52,7 +57,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid, ok := sh.cache.m[str]
+	uid, ok := sh.cache.lookup(str)
 	if ok {
 		// In a normal LRU cache, this would reset the position of the element.
 		// We can't easily do that with a circular buffer though.
@@ -83,7 +88,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 	}
 
 	sh.lastUsed++
-	lck := sh.cache.add(str, sh.lastUsed)
+	lck := &sh.cache.add(str, sh.lastUsed).evictLock
 	lck.Lock() // Stop from being evicted until unlocked.
 
 	var valBuf [binary.MaxVarintLen64]byte
@@ -92,7 +97,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 		Value: valBuf[:binary.PutUvarint(valBuf[:], uid)],
 	})
 	m.batchMu = append(m.batchMu, lck)
-	if len(m.batch) > 1e3 {
+	if len(m.batch) > 1000 {
 		batch := m.batch
 		m.batch = nil
 		batchMu := m.batchMu
@@ -113,31 +118,44 @@ func (m *uidMap) assignUID(str string) uint64 {
 }
 
 type lruCache struct {
-	// Circular buffer. LRU data is held in keys. EvictLocks control when
-	// eviction can occur - eviction must not take place until the keys have
-	// been persisted to badger.
-	keys       [lruSize]string
-	evictLocks [lruSize]sync.Mutex
-	head, tail int // Put at head, get at tail.
-
-	m map[string]uint64
+	m  map[string]*list.Element
+	ll *list.List
 }
 
-func (c *lruCache) add(k string, v uint64) *sync.Mutex {
-	const n = lruSize
-	if (c.head-c.tail+n)%n == n-1 {
-		// LRU is full, so evict oldest element. Make sure the element lock can
+type lruCacheEntry struct {
+	key       string
+	val       uint64
+	evictLock sync.Mutex
+}
+
+func (c *lruCache) lookup(k string) (v uint64, ok bool) {
+	var elem *list.Element
+	elem, ok = c.m[k]
+	if !ok {
+		return 0, false
+	}
+	c.ll.MoveToBack(elem)
+	return elem.Value.(lruCacheEntry).val, true
+}
+
+func (c *lruCache) add(k string, v uint64) *lruCacheEntry {
+	if c.ll.Len()+1 > lruSize {
+		// LRU is full, so evict oldest element. Make sure the evict lock can
 		// be held before the eviction. Being able to hold the lock proves that
 		// the element has been accepted by badger.
-		c.evictLocks[c.tail].Lock()
-		c.evictLocks[c.tail].Unlock()
-		delete(c.m, c.keys[c.tail])
-		c.tail = (c.tail + 1) % n
+		elem := c.ll.Front()
+		entry := elem.Value.(*lruCacheEntry)
+		entry.evictLock.Lock()
+		entry.evictLock.Unlock()
+		c.ll.Remove(elem)
+		delete(c.m, entry.key)
 	}
 
-	c.keys[c.head] = k
-	lck := &c.evictLocks[c.head]
-	c.head = (c.head + 1) % n
-	c.m[k] = v
-	return lck
+	entry := &lruCacheEntry{
+		key: k,
+		val: v,
+	}
+	elem := c.ll.PushBack(entry)
+	c.m[k] = elem
+	return entry
 }
