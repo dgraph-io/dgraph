@@ -60,7 +60,7 @@ func newLoader(opt options) *loader {
 	st := &state{
 		opt:  opt,
 		prog: newProgress(),
-		um:   newUIDMap(),
+		um:   newUIDMap(xidKV),
 		ss:   newSchemaStore(readSchema(opt.SchemaFile)),
 		sm:   newShardMap(opt.MapShards),
 

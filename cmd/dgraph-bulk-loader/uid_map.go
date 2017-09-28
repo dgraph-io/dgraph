@@ -34,7 +34,7 @@ type shard struct {
 	lease    uint64
 }
 
-func newUIDMap() *uidMap {
+func newUIDMap(kv *badger.KV) *uidMap {
 	um := &uidMap{
 		lease: 1,
 	}
