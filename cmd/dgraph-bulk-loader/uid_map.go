@@ -37,6 +37,7 @@ type shard struct {
 func newUIDMap(kv *badger.KV) *uidMap {
 	um := &uidMap{
 		lease: 1,
+		kv:    kv,
 	}
 	for i := range um.shards {
 		um.shards[i].cache = lruCache{
@@ -135,7 +136,7 @@ func (c *lruCache) lookup(k string) (v uint64, ok bool) {
 		return 0, false
 	}
 	c.ll.MoveToBack(elem)
-	return elem.Value.(lruCacheEntry).val, true
+	return elem.Value.(*lruCacheEntry).val, true
 }
 
 func (c *lruCache) add(k string, v uint64) *lruCacheEntry {

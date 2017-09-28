@@ -209,6 +209,7 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	ld.writeLease()
+	x.Check(ld.um.kv.Close())
 	ld.um = nil
 	runtime.GC()
 }
@@ -247,6 +248,5 @@ func (ld *loader) cleanup() {
 	for _, kv := range ld.kvs {
 		x.Check(kv.Close())
 	}
-	x.Check(ld.um.kv.Close())
 	ld.prog.endSummary()
 }
