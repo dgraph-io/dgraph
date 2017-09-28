@@ -48,10 +48,9 @@ import (
 )
 
 var (
-	emptyUIDList     protos.List
-	emptyResult      protos.Result
-	emptyValueList   = protos.ValueList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
-	ErrPasswordFetch = fmt.Errorf("Attribute of type password cannot be fetched.")
+	emptyUIDList   protos.List
+	emptyResult    protos.Result
+	emptyValueList = protos.ValueList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
 )
 
 func invokeNetworkRequest(
@@ -346,9 +345,12 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		} else {
 			var val types.Val
 			val, err = pl.ValueFor(q.Langs)
+			// If this was an expanded node, then we can ignore password fetching error.
 			if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-				fmt.Println("here", q.Attr)
-				return ErrPasswordFetch
+				if args.q.Expanded {
+					return nil
+				}
+				return x.Errorf("Attribute: [%s] of type password cannot be fetched.", attr)
 			}
 			vals = append(vals, val)
 		}
