@@ -12,8 +12,10 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger"
+	bo "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -57,6 +59,17 @@ type loader struct {
 }
 
 func newLoader(opt options) *loader {
+	xidDir := filepath.Join(opt.TmpDir, "xids")
+	x.Check(os.Mkdir(xidDir, 0755))
+	xidKVOpt := badger.DefaultOptions
+	xidKVOpt.ValueGCRunInterval = time.Hour * 100
+	xidKVOpt.SyncWrites = false
+	xidKVOpt.TableLoadingMode = bo.MemoryMap
+	xidKVOpt.Dir = xidDir
+	xidKVOpt.ValueDir = xidDir
+	xidKV, err := badger.NewKV(&xidKVOpt)
+	x.Check(err)
+
 	st := &state{
 		opt:  opt,
 		prog: newProgress(),
@@ -234,5 +247,6 @@ func (ld *loader) cleanup() {
 	for _, kv := range ld.kvs {
 		x.Check(kv.Close())
 	}
+	x.Check(ld.um.kv.Close())
 	ld.prog.endSummary()
 }
