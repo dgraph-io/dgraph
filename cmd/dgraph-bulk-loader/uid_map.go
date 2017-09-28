@@ -103,7 +103,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 		m.batch = nil
 		batchMu := m.batchMu
 		m.batchMu = nil
-		m.kv.BatchSetAsync(m.batch, func(err error) {
+		m.kv.BatchSetAsync(batch, func(err error) {
 			x.Check(err)
 			for _, e := range batch {
 				x.Check(e.Error)
