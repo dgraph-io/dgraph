@@ -27,9 +27,18 @@ type uidMap struct {
 
 type shard struct {
 	sync.Mutex
-	cache    lruCache
+
 	lastUsed uint64
 	lease    uint64
+
+	elems   map[string]*list.Element
+	queue   *list.List
+	evicted map[string]uint64 // Evicted but not yet persisted.
+}
+
+type keyval struct {
+	key string
+	val uint64
 }
 
 func newUIDMap(kv *badger.KV) *uidMap {
@@ -38,11 +47,8 @@ func newUIDMap(kv *badger.KV) *uidMap {
 		kv:    kv,
 	}
 	for i := range um.shards {
-		um.shards[i].cache = lruCache{
-			elems: make(map[string]*list.Element),
-			queue: list.New(),
-			sh:    &um.shards[i], // TODO: hack
-		}
+		um.shards[i].elems = make(map[string]*list.Element)
+		um.shards[i].queue = list.New()
 	}
 	return um
 }
@@ -57,7 +63,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid, ok := sh.cache.lookup(str)
+	uid, ok := sh.lookup(str)
 	if ok {
 		return uid
 	}
@@ -75,7 +81,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 		return nil
 	}))
 	if ok {
-		sh.cache.add(str, uid, m.kv)
+		sh.add(str, uid, m.kv)
 		return uid
 	}
 
@@ -85,47 +91,34 @@ func (m *uidMap) assignUID(str string) uint64 {
 		sh.lastUsed = sh.lease - leaseChunk
 	}
 	sh.lastUsed++
-	sh.cache.add(str, sh.lastUsed, m.kv)
+	sh.add(str, sh.lastUsed, m.kv)
 	return sh.lastUsed
 }
 
-type lruCache struct {
-	elems   map[string]*list.Element
-	queue   *list.List
-	evicted map[string]uint64 // Evicted but not yet persisted.
-
-	sh *shard // TODO: Hack - should really just be one struct
-}
-
-type lruCacheEntry struct {
-	key string
-	val uint64
-}
-
-func (c *lruCache) lookup(k string) (v uint64, ok bool) {
+func (s *shard) lookup(k string) (v uint64, ok bool) {
 	var elem *list.Element
-	elem, ok = c.elems[k]
+	elem, ok = s.elems[k]
 	if ok {
-		c.queue.MoveToBack(elem)
-		return elem.Value.(*lruCacheEntry).val, true
+		s.queue.MoveToBack(elem)
+		return elem.Value.(*keyval).val, true
 	}
-	if v, ok := c.evicted[k]; ok {
+	if v, ok := s.evicted[k]; ok {
 		// TODO: Possible to move from evicted back to main part of cache?
 		return v, true
 	}
 	return 0, false
 }
 
-func (c *lruCache) add(k string, v uint64, kv *badger.KV) {
-	if c.queue.Len()+1 > lruSize && len(c.evicted) == 0 {
-		c.evicted = make(map[string]uint64, lruEvict)
+func (s *shard) add(k string, v uint64, kv *badger.KV) {
+	if s.queue.Len()+1 > lruSize && len(s.evicted) == 0 {
+		s.evicted = make(map[string]uint64, lruEvict)
 		batch := make([]*badger.Entry, 0, lruEvict)
-		for c.queue.Len()+1 > lruSize {
-			elem := c.queue.Front()
-			entry := elem.Value.(*lruCacheEntry)
-			c.queue.Remove(elem)
-			delete(c.elems, entry.key)
-			c.evicted[entry.key] = entry.val
+		for s.queue.Len()+1 > lruSize {
+			elem := s.queue.Front()
+			entry := elem.Value.(*keyval)
+			s.queue.Remove(elem)
+			delete(s.elems, entry.key)
+			s.evicted[entry.key] = entry.val
 
 			var valBuf [binary.MaxVarintLen64]byte
 			batch = append(batch, &badger.Entry{
@@ -139,16 +132,16 @@ func (c *lruCache) add(k string, v uint64, kv *badger.KV) {
 				x.Check(e.Error)
 			}
 
-			c.sh.Lock()
-			c.evicted = nil
-			c.sh.Unlock()
+			s.Lock()
+			s.evicted = nil
+			s.Unlock()
 		})
 	}
 
-	entry := &lruCacheEntry{
+	entry := &keyval{
 		key: k,
 		val: v,
 	}
-	elem := c.queue.PushBack(entry)
-	c.elems[k] = elem
+	elem := s.queue.PushBack(entry)
+	s.elems[k] = elem
 }
