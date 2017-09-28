@@ -36,9 +36,9 @@ type shard struct {
 	evicted map[string]uint64 // Evicted but not yet persisted.
 }
 
-type keyval struct {
-	key string
-	val uint64
+type mapping struct {
+	xid string
+	uid uint64
 }
 
 func newUIDMap(kv *badger.KV) *uidMap {
@@ -53,35 +53,35 @@ func newUIDMap(kv *badger.KV) *uidMap {
 	return um
 }
 
-// assignUID would assume that str is an external ID, and would assign a new
+// assignUID would assume that xid is an external ID, and would assign a new
 // internal Dgraph ID for this.
-func (m *uidMap) assignUID(str string) uint64 {
-	fp := farm.Fingerprint64([]byte(str))
+func (m *uidMap) assignUID(xid string) uint64 {
+	fp := farm.Fingerprint64([]byte(xid))
 	idx := fp % numShards
 	sh := &m.shards[idx]
 
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid, ok := sh.lookup(str)
+	uid, ok := sh.lookup(xid)
 	if ok {
 		return uid
 	}
 
 	var item badger.KVItem
-	x.Check(m.kv.Get([]byte(str), &item))
-	x.Check(item.Value(func(v []byte) error {
-		if v == nil {
+	x.Check(m.kv.Get([]byte(xid), &item))
+	x.Check(item.Value(func(uidBuf []byte) error {
+		if uidBuf == nil {
 			return nil
 		}
 		var n int
-		uid, n = binary.Uvarint(v)
-		x.AssertTrue(n == len(v))
+		uid, n = binary.Uvarint(uidBuf)
+		x.AssertTrue(n == len(uidBuf))
 		ok = true
 		return nil
 	}))
 	if ok {
-		sh.add(str, uid, m.kv)
+		sh.add(xid, uid, m.kv)
 		return uid
 	}
 
@@ -91,39 +91,38 @@ func (m *uidMap) assignUID(str string) uint64 {
 		sh.lastUsed = sh.lease - leaseChunk
 	}
 	sh.lastUsed++
-	sh.add(str, sh.lastUsed, m.kv)
+	sh.add(xid, sh.lastUsed, m.kv)
 	return sh.lastUsed
 }
 
-func (s *shard) lookup(k string) (v uint64, ok bool) {
-	var elem *list.Element
-	elem, ok = s.elems[k]
+func (s *shard) lookup(xid string) (uint64, bool) {
+	elem, ok := s.elems[xid]
 	if ok {
 		s.queue.MoveToBack(elem)
-		return elem.Value.(*keyval).val, true
+		return elem.Value.(*mapping).uid, true
 	}
-	if v, ok := s.evicted[k]; ok {
+	if uid, ok := s.evicted[xid]; ok {
 		// TODO: Possible to move from evicted back to main part of cache?
-		return v, true
+		return uid, true
 	}
 	return 0, false
 }
 
-func (s *shard) add(k string, v uint64, kv *badger.KV) {
+func (s *shard) add(xid string, uid uint64, kv *badger.KV) {
 	if s.queue.Len()+1 > lruSize && len(s.evicted) == 0 {
 		s.evicted = make(map[string]uint64, lruEvict)
 		batch := make([]*badger.Entry, 0, lruEvict)
 		for s.queue.Len()+1 > lruSize {
 			elem := s.queue.Front()
-			entry := elem.Value.(*keyval)
+			m := elem.Value.(*mapping)
 			s.queue.Remove(elem)
-			delete(s.elems, entry.key)
-			s.evicted[entry.key] = entry.val
+			delete(s.elems, m.xid)
+			s.evicted[m.xid] = m.uid
 
 			var valBuf [binary.MaxVarintLen64]byte
 			batch = append(batch, &badger.Entry{
-				Key:   []byte(entry.key),
-				Value: valBuf[:binary.PutUvarint(valBuf[:], entry.val)],
+				Key:   []byte(m.xid),
+				Value: valBuf[:binary.PutUvarint(valBuf[:], m.uid)],
 			})
 		}
 		kv.BatchSetAsync(batch, func(err error) {
@@ -138,10 +137,10 @@ func (s *shard) add(k string, v uint64, kv *badger.KV) {
 		})
 	}
 
-	entry := &keyval{
-		key: k,
-		val: v,
+	m := &mapping{
+		xid: xid,
+		uid: uid,
 	}
-	elem := s.queue.PushBack(entry)
-	s.elems[k] = elem
+	elem := s.queue.PushBack(m)
+	s.elems[xid] = elem
 }
