@@ -113,40 +113,41 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 }
 
 func (s *shard) add(xid string, uid uint64, persisted bool) {
-	if s.queue.Len()+1 > lruSize && len(s.evicted) == 0 {
-		s.evicted = make(map[string]uint64, lruEvict)
-		batch := make([]*badger.Entry, 0, lruEvict)
-		for s.queue.Len()+1 > lruSize {
-			elem := s.queue.Front()
-			m := elem.Value.(*mapping)
-			s.queue.Remove(elem)
-			delete(s.elems, m.xid)
-			s.evicted[m.xid] = m.uid
-			if !m.persisted {
-				var valBuf [binary.MaxVarintLen64]byte
-				batch = append(batch, &badger.Entry{
-					Key:   []byte(m.xid),
-					Value: valBuf[:binary.PutUvarint(valBuf[:], m.uid)],
-				})
-			}
+	if s.queue.Len() < lruSize || len(s.evicted) > 0 {
+		m := &mapping{
+			xid:       xid,
+			uid:       uid,
+			persisted: persisted,
 		}
-		s.kv.BatchSetAsync(batch, func(err error) {
-			x.Check(err)
-			for _, e := range batch {
-				x.Check(e.Error)
-			}
-
-			s.Lock()
-			s.evicted = nil
-			s.Unlock()
-		})
+		elem := s.queue.PushBack(m)
+		s.elems[xid] = elem
+		return
 	}
 
-	m := &mapping{
-		xid:       xid,
-		uid:       uid,
-		persisted: persisted,
+	s.evicted = make(map[string]uint64, lruEvict)
+	batch := make([]*badger.Entry, 0, lruEvict)
+	for s.queue.Len()+1 > lruSize {
+		elem := s.queue.Front()
+		m := elem.Value.(*mapping)
+		s.queue.Remove(elem)
+		delete(s.elems, m.xid)
+		s.evicted[m.xid] = m.uid
+		if !m.persisted {
+			var valBuf [binary.MaxVarintLen64]byte
+			batch = append(batch, &badger.Entry{
+				Key:   []byte(m.xid),
+				Value: valBuf[:binary.PutUvarint(valBuf[:], m.uid)],
+			})
+		}
 	}
-	elem := s.queue.PushBack(m)
-	s.elems[xid] = elem
+	s.kv.BatchSetAsync(batch, func(err error) {
+		x.Check(err)
+		for _, e := range batch {
+			x.Check(e.Error)
+		}
+
+		s.Lock()
+		s.evicted = nil
+		s.Unlock()
+	})
 }
