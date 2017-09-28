@@ -59,21 +59,9 @@ type loader struct {
 }
 
 func newLoader(opt options) *loader {
-	xidDir := filepath.Join(opt.TmpDir, "xids")
-	x.Check(os.Mkdir(xidDir, 0755))
-	xidKVOpt := badger.DefaultOptions
-	xidKVOpt.ValueGCRunInterval = time.Hour * 100
-	xidKVOpt.SyncWrites = false
-	xidKVOpt.TableLoadingMode = bo.MemoryMap
-	xidKVOpt.Dir = xidDir
-	xidKVOpt.ValueDir = xidDir
-	xidKV, err := badger.NewKV(&xidKVOpt)
-	x.Check(err)
-
 	st := &state{
 		opt:  opt,
 		prog: newProgress(),
-		um:   newUIDMap(xidKV),
 		ss:   newSchemaStore(readSchema(opt.SchemaFile)),
 		sm:   newShardMap(opt.MapShards),
 
@@ -157,6 +145,18 @@ func findRDFFiles(dir string) []string {
 
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
+
+	xidDir := filepath.Join(ld.opt.TmpDir, "xids")
+	x.Check(os.Mkdir(xidDir, 0755))
+	opt := badger.DefaultOptions
+	opt.ValueGCRunInterval = time.Hour * 100
+	opt.SyncWrites = false
+	opt.TableLoadingMode = bo.MemoryMap
+	opt.Dir = xidDir
+	opt.ValueDir = xidDir
+	xidKV, err := badger.NewKV(&opt)
+	x.Check(err)
+	ld.um = newUIDMap(xidKV)
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
