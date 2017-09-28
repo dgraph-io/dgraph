@@ -345,8 +345,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		} else {
 			var val types.Val
 			val, err = pl.ValueFor(q.Langs)
-			// If this was an expanded node, then we can ignore password fetching error.
 			if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
+				// If this was an expanded node, then we can ignore password fetching error.
 				if args.q.Expanded {
 					return nil
 				}

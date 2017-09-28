@@ -71,7 +71,6 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 	l := posting.Get(x.DataKey(attr, src))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
-
 }
 
 func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {

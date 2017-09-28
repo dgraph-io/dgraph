@@ -53,7 +53,7 @@ message Query {
 
 	Param facet_param = 8; // which facets to fetch
 	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
-  bool Expanded = 10; // If node was expanded by us, we can ignore password fetching errors.
+	bool Expanded = 10; // If node was expanded by us, we can ignore password fetching errors.
 }
 
 message ValueList {
