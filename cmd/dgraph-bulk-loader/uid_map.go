@@ -16,15 +16,13 @@ const (
 	// overhead per key) * lruSize.
 	numShards = 1 << 12
 	lruSize   = 1 << 9
+	lruEvict  = lruSize / 4
 )
 
 type uidMap struct {
 	lease  uint64
 	shards [numShards]shard
-
-	kv      *badger.KV
-	batch   []*badger.Entry
-	batchMu []*sync.Mutex
+	kv     *badger.KV
 }
 
 type shard struct {
@@ -41,8 +39,9 @@ func newUIDMap(kv *badger.KV) *uidMap {
 	}
 	for i := range um.shards {
 		um.shards[i].cache = lruCache{
-			m:  make(map[string]*list.Element),
-			ll: list.New(),
+			elems: make(map[string]*list.Element),
+			queue: list.New(),
+			sh:    &um.shards[i], // TODO: hack
 		}
 	}
 	return um
@@ -76,7 +75,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 		return nil
 	}))
 	if ok {
-		sh.cache.add(str, uid)
+		sh.cache.add(str, uid, m.kv)
 		return uid
 	}
 
@@ -85,76 +84,71 @@ func (m *uidMap) assignUID(str string) uint64 {
 		sh.lease = atomic.AddUint64(&m.lease, leaseChunk)
 		sh.lastUsed = sh.lease - leaseChunk
 	}
-
 	sh.lastUsed++
-	lck := &sh.cache.add(str, sh.lastUsed).evictLock
-	lck.Lock() // Stop from being evicted until unlocked.
-
-	var valBuf [binary.MaxVarintLen64]byte
-	m.batch = append(m.batch, &badger.Entry{
-		Key:   []byte(str),
-		Value: valBuf[:binary.PutUvarint(valBuf[:], uid)],
-	})
-	m.batchMu = append(m.batchMu, lck)
-	if len(m.batch) > 1000 {
-		batch := m.batch
-		m.batch = nil
-		batchMu := m.batchMu
-		m.batchMu = nil
-		m.kv.BatchSetAsync(batch, func(err error) {
-			x.Check(err)
-			for _, e := range batch {
-				x.Check(e.Error)
-			}
-			for _, mu := range batchMu {
-				// Allow entries to be evicted from LRU cache.
-				mu.Unlock()
-			}
-		})
-	}
-
+	sh.cache.add(str, sh.lastUsed, m.kv)
 	return sh.lastUsed
 }
 
 type lruCache struct {
-	m  map[string]*list.Element
-	ll *list.List
+	elems   map[string]*list.Element
+	queue   *list.List
+	evicted map[string]uint64 // Evicted but not yet persisted.
+
+	sh *shard // TODO: Hack - should really just be one struct
 }
 
 type lruCacheEntry struct {
-	key       string
-	val       uint64
-	evictLock sync.Mutex
+	key string
+	val uint64
 }
 
 func (c *lruCache) lookup(k string) (v uint64, ok bool) {
 	var elem *list.Element
-	elem, ok = c.m[k]
-	if !ok {
-		return 0, false
+	elem, ok = c.elems[k]
+	if ok {
+		c.queue.MoveToBack(elem)
+		return elem.Value.(*lruCacheEntry).val, true
 	}
-	c.ll.MoveToBack(elem)
-	return elem.Value.(*lruCacheEntry).val, true
+	if v, ok := c.evicted[k]; ok {
+		// TODO: Possible to move from evicted back to main part of cache?
+		return v, true
+	}
+	return 0, false
 }
 
-func (c *lruCache) add(k string, v uint64) *lruCacheEntry {
-	if c.ll.Len()+1 > lruSize {
-		// LRU is full, so evict oldest element. Make sure the evict lock can
-		// be held before the eviction. Being able to hold the lock proves that
-		// the element has been accepted by badger.
-		elem := c.ll.Front()
-		entry := elem.Value.(*lruCacheEntry)
-		entry.evictLock.Lock()
-		entry.evictLock.Unlock()
-		c.ll.Remove(elem)
-		delete(c.m, entry.key)
+func (c *lruCache) add(k string, v uint64, kv *badger.KV) {
+	if c.queue.Len()+1 > lruSize && len(c.evicted) == 0 {
+		c.evicted = make(map[string]uint64, lruEvict)
+		batch := make([]*badger.Entry, 0, lruEvict)
+		for c.queue.Len()+1 > lruSize {
+			elem := c.queue.Front()
+			entry := elem.Value.(*lruCacheEntry)
+			c.queue.Remove(elem)
+			delete(c.elems, entry.key)
+			c.evicted[entry.key] = entry.val
+
+			var valBuf [binary.MaxVarintLen64]byte
+			batch = append(batch, &badger.Entry{
+				Key:   []byte(entry.key),
+				Value: valBuf[:binary.PutUvarint(valBuf[:], entry.val)],
+			})
+		}
+		kv.BatchSetAsync(batch, func(err error) {
+			x.Check(err)
+			for _, e := range batch {
+				x.Check(e.Error)
+			}
+
+			c.sh.Lock()
+			c.evicted = nil
+			c.sh.Unlock()
+		})
 	}
 
 	entry := &lruCacheEntry{
 		key: k,
 		val: v,
 	}
-	elem := c.ll.PushBack(entry)
-	c.m[k] = elem
-	return entry
+	elem := c.queue.PushBack(entry)
+	c.elems[k] = elem
 }
