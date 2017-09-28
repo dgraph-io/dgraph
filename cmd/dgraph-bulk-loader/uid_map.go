@@ -100,11 +100,13 @@ func (m *uidMap) assignUID(str string) uint64 {
 	})
 	m.batchMu = append(m.batchMu, lck)
 	if len(m.batch) > 1000 {
+
 		batch := m.batch
 		m.batch = nil
 		batchMu := m.batchMu
 		m.batchMu = nil
-		m.kv.BatchSetAsync(batch, func(err error) {
+
+		handler := func(err error) {
 			x.Check(err)
 			for _, e := range batch {
 				x.Check(e.Error)
@@ -115,7 +117,8 @@ func (m *uidMap) assignUID(str string) uint64 {
 				fmt.Printf("U %p\n", mu)
 				mu.Unlock()
 			}
-		})
+		}
+		m.kv.BatchSetAsync(batch, handler)
 	}
 
 	return sh.lastUsed
