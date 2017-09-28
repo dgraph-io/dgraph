@@ -34,6 +34,8 @@ type shard struct {
 	elems   map[string]*list.Element
 	queue   *list.List
 	evicted map[string]uint64 // Evicted but not yet persisted.
+
+	kv *badger.KV
 }
 
 type mapping struct {
@@ -50,6 +52,7 @@ func newUIDMap(kv *badger.KV) *uidMap {
 	for i := range um.shards {
 		um.shards[i].elems = make(map[string]*list.Element)
 		um.shards[i].queue = list.New()
+		um.shards[i].kv = kv
 	}
 	return um
 }
@@ -82,7 +85,7 @@ func (m *uidMap) assignUID(xid string) uint64 {
 		return nil
 	}))
 	if ok {
-		sh.add(xid, uid, true, m.kv)
+		sh.add(xid, uid, true)
 		return uid
 	}
 
@@ -92,7 +95,7 @@ func (m *uidMap) assignUID(xid string) uint64 {
 		sh.lastUsed = sh.lease - leaseChunk
 	}
 	sh.lastUsed++
-	sh.add(xid, sh.lastUsed, false, m.kv)
+	sh.add(xid, sh.lastUsed, false)
 	return sh.lastUsed
 }
 
@@ -103,13 +106,13 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 		return elem.Value.(*mapping).uid, true
 	}
 	if uid, ok := s.evicted[xid]; ok {
-		// TODO: Possible to move from evicted back to main part of cache?
+		s.add(xid, uid, true)
 		return uid, true
 	}
 	return 0, false
 }
 
-func (s *shard) add(xid string, uid uint64, persisted bool, kv *badger.KV) {
+func (s *shard) add(xid string, uid uint64, persisted bool) {
 	if s.queue.Len()+1 > lruSize && len(s.evicted) == 0 {
 		s.evicted = make(map[string]uint64, lruEvict)
 		batch := make([]*badger.Entry, 0, lruEvict)
@@ -127,7 +130,7 @@ func (s *shard) add(xid string, uid uint64, persisted bool, kv *badger.KV) {
 				})
 			}
 		}
-		kv.BatchSetAsync(batch, func(err error) {
+		s.kv.BatchSetAsync(batch, func(err error) {
 			x.Check(err)
 			for _, e := range batch {
 				x.Check(e.Error)
