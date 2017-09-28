@@ -751,41 +751,154 @@ func TestSetObjectWithFacets(t *testing.T) {
 	req := client.Req{}
 
 	type friendFacet struct {
-		Since  time.Time `dgraph:"since"`
-		Family bool      `dgraph:"family"`
-		Tag    string    `dgraph:"tag"`
-		Age    int       `dgraph:"age"`
-		Close  bool      `dgraph:"close"`
+		Since  time.Time `dgraph:"since" json:"since"`
+		Family string    `dgraph:"family" json:"family"`
+		Age    float64   `dgraph:"age" json:"age"`
+		Close  bool      `dgraph:"close" json:"close"`
 	}
 
 	type nameFacets struct {
-		Origin string `dgraph:"origin"`
+		Origin string `dgraph:"origin" json:"origin"`
+	}
+
+	type schoolFacet struct {
+		Since time.Time `dgraph:"since" json:"since"`
+	}
+
+	type School struct {
+		Name   string      `dgraph:"name" json:"name"`
+		Facets schoolFacet `dgraph:"@facets" json:"@facets"`
 	}
 
 	type Person struct {
-		Name       string      `dgraph:"name"`
-		NameFacets nameFacets  `dgraph:"name@facets"`
-		Facets     friendFacet `dgraph:"@facets"`
-		Friends    []Person    `dgraph:"friend"`
+		Name       string      `dgraph:"name" json:"name"`
+		NameFacets nameFacets  `dgraph:"name@facets" json:"name@facets"`
+		Facets     friendFacet `dgraph:"@facets" json:"@facets"`
+		Friends    []Person    `dgraph:"friend" json:"friend"`
+		School     School      `dgraph:"school" json:"school"`
 	}
 
+	ti := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 	p := Person{
-		Name:     "Alice",
-		Age:      26,
-		Married:  true,
-		Location: loc,
-		Friends: []Person{{
-			Uid:  1000,
-			Name: "Bob",
-			Age:  24,
-		}, {
-			Uid:  1001,
-			Name: "Charlie",
-			Age:  29,
-		}},
-		School: &School{
-			Uid:  1002,
-			Name: "Crown Public School",
+		Name: "Alice",
+		NameFacets: nameFacets{
+			Origin: "Indonesia",
+		},
+		Friends: []Person{
+			Person{
+				Name: "Bob",
+				Facets: friendFacet{
+					Since:  ti,
+					Family: "yes",
+					Age:    13,
+					Close:  true,
+				},
+			},
+			Person{
+				Name: "Charlie",
+				Facets: friendFacet{
+					Family: "maybe",
+					Age:    16,
+				},
+			},
+		},
+		School: School{
+			Name: "Wellington School",
+			Facets: schoolFacet{
+				Since: ti,
+			},
+		},
+	}
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	auid := resp.AssignedUids["blank-0"]
+
+	q := fmt.Sprintf(`
+	{
+
+		me(func: uid(%v)) {
+			name @facets
+			friend @facets {
+				name
+			}
+			school @facets {
+				name
+			}
+
+		}
+	}`, auid)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	type Root struct {
+		Me Person `dgraph:"me"`
+	}
+
+	var r Root
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+	// Compare the objects.
+	require.EqualValues(t, p, r.Me)
+}
+
+func TestSetObjectUpdateFacets(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	type friendFacet struct {
+		// All facets should be marshalled to a string. Server interprets the type from the value.
+		Since  time.Time `dgraph:"since" json:"since, omitempty"`
+		Family string    `dgraph:"family" json:"family"`
+		Age    float64   `dgraph:"age" json:"age"`
+		Close  bool      `dgraph:"close" json:"close"`
+	}
+
+	type nameFacets struct {
+		Origin string `dgraph:"origin" json:"origin"`
+	}
+
+	type Person struct {
+		Uid        uint64      `dgraph:"_uid_" json:"_uid_"`
+		Name       string      `dgraph:"name" json:"name"`
+		NameFacets nameFacets  `dgraph:"name@facets" json:"name@facets"`
+		Facets     friendFacet `dgraph:"@facets" json:"@facets"`
+		Friends    []Person    `dgraph:"friend" json:"friend"`
+	}
+
+	ti := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
+	p := Person{
+		Uid:  1001,
+		Name: "Alice",
+		NameFacets: nameFacets{
+			Origin: "Indonesia",
+		},
+		Friends: []Person{
+			Person{
+				Uid:  1002,
+				Name: "Bob",
+				Facets: friendFacet{
+					Since:  ti,
+					Family: "yes",
+					Age:    13,
+					Close:  true,
+				},
+			},
+			Person{
+				Uid:  1003,
+				Name: "Charlie",
+				Facets: friendFacet{
+					Family: "maybe",
+					Age:    16,
+				},
+			},
 		},
 	}
 
@@ -794,4 +907,40 @@ func TestSetObjectWithFacets(t *testing.T) {
 	_, err = dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
 
+	// Now update some facets and do a set again.
+	p.NameFacets.Origin = "Jakarta"
+	p.Friends[0].Facets.Family = "No"
+	p.Friends[0].Facets.Age = 14
+	p.Friends[1].Facets = friendFacet{}
+
+	err = req.SetObject(&p)
+	require.NoError(t, err)
+	_, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	q := `
+	{
+
+		me(func: uid(1001)) {
+			_uid_
+			name @facets
+			friend @facets {
+				_uid_
+				name
+			}
+
+		}
+	}`
+
+	req.SetQuery(q)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	type Root struct {
+		Me Person `dgraph:"me"`
+	}
+
+	var r Root
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+	// Compare the objects.
+	require.EqualValues(t, p, r.Me)
 }

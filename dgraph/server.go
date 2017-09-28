@@ -309,15 +309,45 @@ func parseFacets(val interface{}) ([]*protos.Facet, error) {
 	}
 
 	facetsForPred := make([]*protos.Facet, 0, len(facetObj))
-	var fv string
+	var fv interface{}
 	for facetKey, facetVal := range facetObj {
-		if fv, ok = facetVal.(string); !ok {
-			return nil, x.Errorf("Facet value for key: %s should be a string", facetKey)
+		if facetVal == nil {
+			continue
 		}
-		f, err := facets.FacetFor(facetKey, fv)
-		if err != nil {
+		f := &protos.Facet{Key: facetKey}
+		switch v := facetVal.(type) {
+		case string:
+			if t, err := types.ParseTime(v); err == nil {
+				f.ValType = protos.Facet_DATETIME
+				fv = t
+			} else {
+				f.ValType = protos.Facet_STRING
+				fv = v
+			}
+		case float64:
+			// Could be int too, but we just store it as float.
+			fv = v
+			f.ValType = protos.Facet_FLOAT
+		case bool:
+			fv = v
+			f.ValType = protos.Facet_BOOL
+		default:
+			return nil, x.Errorf("Facet value for key: %s can only be string/float64/bool.",
+				facetKey)
+		}
+
+		// convert facet val interface{} to binary
+		tid := facets.TypeIDFor(&protos.Facet{ValType: f.ValType})
+		fVal := &types.Val{Tid: types.BinaryID}
+		if err := types.Marshal(types.Val{Tid: tid, Value: fv}, fVal); err != nil {
 			return nil, err
 		}
+
+		fval, ok := fVal.Value.([]byte)
+		if !ok {
+			return nil, x.Errorf("Error while marshalling types.Val into binary.")
+		}
+		f.Value = fval
 		facetsForPred = append(facetsForPred, f)
 	}
 

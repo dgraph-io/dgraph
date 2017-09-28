@@ -676,7 +676,11 @@ func (d *Dgraph) BatchFlush() error {
 // It's often easier to unpack directly into a struct with Unmarshal, than to
 // step through the response.
 func (d *Dgraph) Run(ctx context.Context, req *Req) (*protos.Response, error) {
-	return d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr)
+	res, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr)
+	if err == nil {
+		req = &Req{}
+	}
+	return res, err
 }
 
 // Counter returns the current state of the BatchMutation.
