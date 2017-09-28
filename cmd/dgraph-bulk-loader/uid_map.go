@@ -14,9 +14,9 @@ import (
 const (
 	// Memory used is in the order of numShards * (avgKeySize + constant
 	// overhead per key) * lruSize.
-	numShards = 1 << 10
-	lruSize   = 1 << 9
-	lruEvict  = lruSize / 4
+	numShards  = 1 << 10
+	lruSize    = 1 << 9
+	evictRatio = 0.25
 )
 
 type uidMap struct {
@@ -124,9 +124,10 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 		return
 	}
 
-	s.evicted = make(map[string]uint64, lruEvict)
-	batch := make([]*badger.Entry, 0, lruEvict)
-	for s.queue.Len()+1 > lruSize {
+	s.evicted = make(map[string]uint64)
+	evict := int(float64(s.queue.Len()) * evictRatio)
+	batch := make([]*badger.Entry, 0, evict)
+	for i := 0; i < evict; i++ {
 		elem := s.queue.Front()
 		m := elem.Value.(*mapping)
 		s.queue.Remove(elem)
@@ -139,6 +140,7 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 				Value: valBuf[:binary.PutUvarint(valBuf[:], m.uid)],
 			})
 		}
+
 	}
 	s.kv.BatchSetAsync(batch, func(err error) {
 		x.Check(err)
