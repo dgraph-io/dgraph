@@ -14,9 +14,8 @@ import (
 const (
 	// Memory used is in the order of numShards * (avgKeySize + constant
 	// overhead per key) * lruSize.
-	numShards  = 1 << 10
-	lruSize    = 1 << 9
-	evictRatio = 0.25
+	numShards = 1 << 10
+	lruSize   = 1 << 9
 )
 
 type uidMap struct {
@@ -112,19 +111,23 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 }
 
 func (s *shard) add(xid string, uid uint64, persisted bool) {
-	if s.queue.Len() < lruSize || len(s.beingEvicted) > 0 {
-		m := &mapping{
-			xid:       xid,
-			uid:       uid,
-			persisted: persisted,
-		}
-		elem := s.queue.PushBack(m)
-		s.elems[xid] = elem
-		return
+	if s.queue.Len() >= lruSize && len(s.beingEvicted) == 0 {
+		s.evict()
 	}
 
-	s.beingEvicted = make(map[string]uint64)
+	m := &mapping{
+		xid:       xid,
+		uid:       uid,
+		persisted: persisted,
+	}
+	elem := s.queue.PushBack(m)
+	s.elems[xid] = elem
+}
+
+func (s *shard) evict() {
+	const evictRatio = 0.5
 	evict := int(float64(s.queue.Len()) * evictRatio)
+	s.beingEvicted = make(map[string]uint64)
 	batch := make([]*badger.Entry, 0, evict)
 	for i := 0; i < evict; i++ {
 		elem := s.queue.Front()
