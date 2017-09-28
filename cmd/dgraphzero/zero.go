@@ -42,6 +42,7 @@ var (
 	errJoinCluster       = errors.New("Unable to join cluster")
 	errUnknownMember     = errors.New("Unknown cluster member")
 	errUpdatedMember     = errors.New("Cluster member has updated credentials.")
+	errServerShutDown    = errors.New("Server is being shut down.")
 )
 
 type Server struct {
@@ -58,6 +59,7 @@ type Server struct {
 	// groupMap    map[uint32]*Group
 	nextGroup      uint32
 	leaderChangeCh chan struct{}
+	shutDownCh     chan struct{} // Used to tell stream to close.
 }
 
 func (s *Server) Init() {
@@ -71,6 +73,7 @@ func (s *Server) Init() {
 	s.nextLeaseId = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
+	s.shutDownCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
 }
 
@@ -417,6 +420,8 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 			}
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-s.shutDownCh:
+			return errServerShutDown
 		}
 	}
 }
