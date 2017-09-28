@@ -57,8 +57,7 @@ func newUIDMap(kv *badger.KV) *uidMap {
 	return um
 }
 
-// assignUID would assume that xid is an external ID, and would assign a new
-// internal Dgraph ID for this.
+// assignUID creates new or looks up existing XID to UID mappings.
 func (m *uidMap) assignUID(xid string) uint64 {
 	fp := farm.Fingerprint64([]byte(xid))
 	idx := fp % numShards
