@@ -24,6 +24,7 @@ import (
 	"log"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/dgraph"
@@ -739,4 +740,58 @@ func TestDeleteObject2(t *testing.T) {
 	require.Equal(t, p3.Married, p.Married)
 	require.Nil(t, p3.School)
 	require.Equal(t, 0, len(p3.Friends))
+}
+
+func TestSetObjectWithFacets(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	type friendFacet struct {
+		Since  time.Time `dgraph:"since"`
+		Family bool      `dgraph:"family"`
+		Tag    string    `dgraph:"tag"`
+		Age    int       `dgraph:"age"`
+		Close  bool      `dgraph:"close"`
+	}
+
+	type nameFacets struct {
+		Origin string `dgraph:"origin"`
+	}
+
+	type Person struct {
+		Name       string      `dgraph:"name"`
+		NameFacets nameFacets  `dgraph:"name@facets"`
+		Facets     friendFacet `dgraph:"@facets"`
+		Friends    []Person    `dgraph:"friend"`
+	}
+
+	p := Person{
+		Name:     "Alice",
+		Age:      26,
+		Married:  true,
+		Location: loc,
+		Friends: []Person{{
+			Uid:  1000,
+			Name: "Bob",
+			Age:  24,
+		}, {
+			Uid:  1001,
+			Name: "Charlie",
+			Age:  29,
+		}},
+		School: &School{
+			Uid:  1002,
+			Name: "Crown Public School",
+		},
+	}
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+	_, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
 }

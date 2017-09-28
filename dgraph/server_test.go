@@ -140,6 +140,39 @@ func TestNquadsFromJson3(t *testing.T) {
 	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval, types.StringID))
 }
 
+func TestNquadsFromJson4(t *testing.T) {
+	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123"}]`
+
+	nq, err := nquadsFromJson([]byte(json), set)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+	oval := &protos.Value{&protos.Value_StrVal{"Alice"}}
+	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval, types.StringID))
+}
+
+func TestNquadsFromJsonFacets1(t *testing.T) {
+	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123","mobile@facets":{"since":"2006-01-02T15:04:05Z"},"car@facets":{"first":"true","since":"2006-02-02T13:01:09Z"}}]`
+
+	nq, err := nquadsFromJson([]byte(json), set)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+	require.Equal(t, "mobile", nq[1].Predicate)
+	require.Equal(t, 1, len(nq[1].Facets))
+	require.Equal(t, "car", nq[2].Predicate)
+	require.Equal(t, 2, len(nq[2].Facets))
+}
+
+func TestNquadsFromJsonFacets2(t *testing.T) {
+	// Dave has uid facets which should go on the edge between Alice and Dave
+	json := `[{"name":"Alice","friend":[{"name":"Dave","@facets":{"close":"true"}}]}]`
+
+	nq, err := nquadsFromJson([]byte(json), set)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+	require.Equal(t, "friend", nq[1].Predicate)
+	require.Equal(t, 1, len(nq[1].Facets))
+}
+
 func TestNquadsFromJsonError1(t *testing.T) {
 	p := Person{
 		Name: "Alice",

@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -297,7 +298,34 @@ func ParseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 	return res, nil
 }
 
-func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, string, error) {
+func parseFacets(val interface{}) ([]*protos.Facet, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	facetObj, ok := val.(map[string]interface{})
+	if !ok {
+		return nil, x.Errorf("Facets : %v should always be a map", val)
+	}
+
+	facetsForPred := make([]*protos.Facet, 0, len(facetObj))
+	var fv string
+	for facetKey, facetVal := range facetObj {
+		if fv, ok = facetVal.(string); !ok {
+			return nil, x.Errorf("Facet value for key: %s should be a string", facetKey)
+		}
+		f, err := facets.FacetFor(facetKey, fv)
+		if err != nil {
+			return nil, err
+		}
+		facetsForPred = append(facetsForPred, f)
+	}
+
+	return facetsForPred, nil
+}
+
+func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, string, []*protos.Facet,
+	error) {
 	var uid string
 	// Check field in map.
 	if uidVal, ok := m["_uid_"]; ok {
@@ -310,7 +338,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 	if len(uid) == 0 {
 		// Delete operations must have a uid.
 		if op == delete {
-			return nil, uid, x.Errorf("_uid_ must be present and non-zero. Got: %+v", m)
+			return nil, uid, nil, x.Errorf("_uid_ must be present and non-zero. Got: %+v", m)
 		}
 		uid = fmt.Sprintf("_:blank-%d", *idx)
 		*idx++
@@ -322,13 +350,20 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 		// We have already extracted the uid above so we skip that edge.
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
-		if k == "_uid_" {
+		if k == "_uid_" || strings.HasSuffix(k, "@facets") {
 			continue
+		}
+
+		fkey := fmt.Sprintf("%s@facets", k)
+		fts, err := parseFacets(m[fkey])
+		if err != nil {
+			return nil, uid, nil, err
 		}
 
 		nq := protos.NQuad{
 			Subject:   uid,
 			Predicate: k,
+			Facets:    fts,
 		}
 
 		if v == nil {
@@ -341,7 +376,8 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 
 		switch v.(type) {
 		default:
-			return nil, uid, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
+			return nil, uid, nil,
+				x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 		case string:
 			predWithLang := strings.SplitN(k, "@", 2)
 			if len(predWithLang) == 2 && predWithLang[0] != "" {
@@ -362,7 +398,8 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 			if err == nil {
 				geo, err := types.ObjectValue(types.GeoID, g)
 				if err != nil {
-					return nil, uid, x.Errorf("Couldn't convert value: %s to geo type", v.(string))
+					return nil, uid, nil,
+						x.Errorf("Couldn't convert value: %s to geo type", v.(string))
 				}
 
 				nq.ObjectValue = geo
@@ -395,13 +432,14 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 			nq.ObjectType = int32(types.BoolID)
 			nquads = append(nquads, &nq)
 		case map[string]interface{}:
-			mnquads, oid, err := mapToNquads(v.(map[string]interface{}), idx, op)
+			mnquads, oid, uf, err := mapToNquads(v.(map[string]interface{}), idx, op)
 			if err != nil {
-				return nil, uid, err
+				return nil, uid, nil, err
 			}
 
 			// Add the connecting edge beteween the entities.
 			nq.ObjectId = oid
+			nq.Facets = uf
 			nquads = append(nquads, &nq)
 			// Add the nquads that we got for the connecting entity.
 			nquads = append(nquads, mnquads...)
@@ -413,23 +451,25 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 				}
 
 				if mp, ok := item.(map[string]interface{}); ok {
-					mnquads, oid, err := mapToNquads(mp, idx, op)
+					mnquads, oid, uf, err := mapToNquads(mp, idx, op)
 					if err != nil {
-						return nil, uid, err
+						return nil, uid, nil, err
 					}
 					nq.ObjectId = oid
+					nq.Facets = uf
 					nquads = append(nquads, &nq)
 					// Add the nquads that we got for the connecting entity.
 					nquads = append(nquads, mnquads...)
 				} else {
-					return nquads, uid,
+					return nquads, uid, nil,
 						x.Errorf("Only slice of structs supported. Got incorrect type for: %s", k)
 				}
 			}
 		}
 	}
 
-	return nquads, uid, nil
+	fts, err := parseFacets(m["@facets"])
+	return nquads, uid, fts, err
 }
 
 const (
@@ -439,12 +479,36 @@ const (
 
 func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 	ms := make(map[string]interface{})
+	var list []interface{}
 	if err := json.Unmarshal(b, &ms); err != nil {
-		return nil, err
+		// Couldn't parse as map, lets try to parse it as a list.
+		if err = json.Unmarshal(b, &list); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(list) == 0 && len(ms) == 0 {
+		return nil, fmt.Errorf("Couldn't parse json as a map or an array.")
 	}
 
 	var idx int
-	nquads, _, err := mapToNquads(ms, &idx, op)
+	var nquads []*protos.NQuad
+	if len(list) > 0 {
+		for _, obj := range list {
+			if _, ok := obj.(map[string]interface{}); !ok {
+				return nil, x.Errorf("Only array of map allowed at root.")
+			}
+			n, _, _, err := mapToNquads(obj.(map[string]interface{}), &idx, op)
+			if err != nil {
+				return nquads, err
+			}
+
+			nquads = append(nquads, n...)
+		}
+		return nquads, nil
+	}
+
+	nquads, _, _, err := mapToNquads(ms, &idx, op)
 	return nquads, err
 }
 
