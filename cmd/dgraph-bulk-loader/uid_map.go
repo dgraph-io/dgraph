@@ -91,7 +91,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 
 	sh.lastUsed++
 	lck := &sh.cache.add(str, sh.lastUsed).evictLock
-	fmt.Println("L %p\n", lck)
+	fmt.Printf("L %p\n", lck)
 	lck.Lock() // Stop from being evicted until unlocked.
 
 	var valBuf [binary.MaxVarintLen64]byte
@@ -113,7 +113,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 			for _, mu := range batchMu {
 				// Allow entries to be evicted from LRU cache.
 				mu.Unlock()
-				fmt.Println("U %p\n", mu)
+				fmt.Printf("U %p\n", mu)
 			}
 		})
 	}
