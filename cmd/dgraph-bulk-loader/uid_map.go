@@ -31,9 +31,9 @@ type shard struct {
 	lastUsed uint64
 	lease    uint64
 
-	elems   map[string]*list.Element
-	queue   *list.List
-	evicted map[string]uint64 // Evicted but not yet persisted.
+	elems        map[string]*list.Element
+	queue        *list.List
+	beingEvicted map[string]uint64
 
 	kv *badger.KV
 }
@@ -104,7 +104,7 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 		s.queue.MoveToBack(elem)
 		return elem.Value.(*mapping).uid, true
 	}
-	if uid, ok := s.evicted[xid]; ok {
+	if uid, ok := s.beingEvicted[xid]; ok {
 		s.add(xid, uid, true)
 		return uid, true
 	}
@@ -112,7 +112,7 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 }
 
 func (s *shard) add(xid string, uid uint64, persisted bool) {
-	if s.queue.Len() < lruSize || len(s.evicted) > 0 {
+	if s.queue.Len() < lruSize || len(s.beingEvicted) > 0 {
 		m := &mapping{
 			xid:       xid,
 			uid:       uid,
@@ -123,7 +123,7 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 		return
 	}
 
-	s.evicted = make(map[string]uint64)
+	s.beingEvicted = make(map[string]uint64)
 	evict := int(float64(s.queue.Len()) * evictRatio)
 	batch := make([]*badger.Entry, 0, evict)
 	for i := 0; i < evict; i++ {
@@ -131,7 +131,7 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 		m := elem.Value.(*mapping)
 		s.queue.Remove(elem)
 		delete(s.elems, m.xid)
-		s.evicted[m.xid] = m.uid
+		s.beingEvicted[m.xid] = m.uid
 		if !m.persisted {
 			var valBuf [binary.MaxVarintLen64]byte
 			batch = append(batch, &badger.Entry{
@@ -148,7 +148,7 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 		}
 
 		s.Lock()
-		s.evicted = nil
+		s.beingEvicted = nil
 		s.Unlock()
 	})
 }
