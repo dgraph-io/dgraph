@@ -12,12 +12,11 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
-func makeNquad(sub, pred string, val *protos.Value, t types.TypeID) *protos.NQuad {
+func makeNquad(sub, pred string, val *protos.Value) *protos.NQuad {
 	return &protos.NQuad{
 		Subject:     sub,
 		Predicate:   pred,
 		ObjectValue: val,
-		ObjectType:  int32(t),
 	}
 }
 
@@ -65,16 +64,16 @@ func TestNquadsFromJson1(t *testing.T) {
 	require.Equal(t, 5, len(nq))
 
 	oval := &protos.Value{&protos.Value_StrVal{"Alice"}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval, types.StringID))
+	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 
 	oval = &protos.Value{&protos.Value_DoubleVal{26}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "age", oval, types.FloatID))
+	require.Contains(t, nq, makeNquad("_:blank-0", "age", oval))
 
 	oval = &protos.Value{&protos.Value_BoolVal{true}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "married", oval, types.BoolID))
+	require.Contains(t, nq, makeNquad("_:blank-0", "married", oval))
 
 	oval = &protos.Value{&protos.Value_StrVal{tn.Format(time.RFC3339Nano)}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "now", oval, types.StringID))
+	require.Contains(t, nq, makeNquad("_:blank-0", "now", oval))
 
 	var g geom.T
 	err = geojson.Unmarshal([]byte(geoVal), &g)
@@ -82,7 +81,7 @@ func TestNquadsFromJson1(t *testing.T) {
 	geo, err := types.ObjectValue(types.GeoID, g)
 	require.NoError(t, err)
 
-	require.Contains(t, nq, makeNquad("_:blank-0", "address", geo, types.GeoID))
+	require.Contains(t, nq, makeNquad("_:blank-0", "address", geo))
 }
 
 func TestNquadsFromJson2(t *testing.T) {
@@ -110,13 +109,13 @@ func TestNquadsFromJson2(t *testing.T) {
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "1000"))
 
 	oval := &protos.Value{&protos.Value_StrVal{"Charlie"}}
-	require.Contains(t, nq, makeNquad("_:blank-1", "name", oval, types.StringID))
+	require.Contains(t, nq, makeNquad("_:blank-1", "name", oval))
 
 	oval = &protos.Value{&protos.Value_BoolVal{false}}
-	require.Contains(t, nq, makeNquad("_:blank-1", "married", oval, types.BoolID))
+	require.Contains(t, nq, makeNquad("_:blank-1", "married", oval))
 
 	oval = &protos.Value{&protos.Value_StrVal{"Bob"}}
-	require.Contains(t, nq, makeNquad("1000", "name", oval, types.StringID))
+	require.Contains(t, nq, makeNquad("1000", "name", oval))
 }
 
 func TestNquadsFromJson3(t *testing.T) {
@@ -137,7 +136,7 @@ func TestNquadsFromJson3(t *testing.T) {
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "school", "_:blank-1"))
 
 	oval := &protos.Value{&protos.Value_StrVal{"Wellington Public School"}}
-	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval, types.StringID))
+	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval))
 }
 
 func TestNquadsFromJsonError1(t *testing.T) {

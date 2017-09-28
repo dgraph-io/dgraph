@@ -158,7 +158,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
 	}
 
-	res, err := ParseQueryAndMutation(ctx, gql.Request{
+	res, err = gql.Parse(gql.Request{
 		Str:       req.Query,
 		Mutation:  req.Mutation,
 		Variables: req.Vars,
@@ -263,40 +263,6 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-// parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
-// We allow 1 second for parsing the query; and then give up.
-func ParseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, err error) {
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Query received: %v", r.Str)
-	}
-	errc := make(chan error, 1)
-
-	go func() {
-		var err error
-		res, err = gql.Parse(r)
-		errc <- err
-	}()
-
-	child, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-
-	select {
-	case <-child.Done():
-		return res, child.Err()
-	case err := <-errc:
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while parsing query: %+v", err)
-			}
-			return res, err
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Query parsed")
-		}
-	}
-	return res, nil
-}
-
 func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, string, error) {
 	var uid string
 	// Check field in map.
@@ -366,13 +332,11 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 				}
 
 				nq.ObjectValue = geo
-				nq.ObjectType = int32(types.GeoID)
 				nquads = append(nquads, &nq)
 				continue
 			}
 
 			nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}
-			nq.ObjectType = int32(types.StringID)
 			nquads = append(nquads, &nq)
 		case float64:
 			if v == 0 && op == delete {
@@ -382,7 +346,6 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 			}
 
 			nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v.(float64)}}
-			nq.ObjectType = int32(types.FloatID)
 			nquads = append(nquads, &nq)
 		case bool:
 			if v == false && op == delete {
@@ -392,7 +355,6 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) ([]*protos.NQuad, s
 			}
 
 			nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v.(bool)}}
-			nq.ObjectType = int32(types.BoolID)
 			nquads = append(nquads, &nq)
 		case map[string]interface{}:
 			mnquads, oid, err := mapToNquads(v.(map[string]interface{}), idx, op)
