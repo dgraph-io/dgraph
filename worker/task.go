@@ -346,7 +346,11 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			var val types.Val
 			val, err = pl.ValueFor(q.Langs)
 			if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-				return x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+				// If this was an expanded node, then we can ignore password fetching error.
+				if args.q.Expanded {
+					return nil
+				}
+				return x.Errorf("Attribute: [%s] of type password cannot be fetched.", attr)
 			}
 			vals = append(vals, val)
 		}
