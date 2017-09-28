@@ -37,8 +37,9 @@ type shard struct {
 }
 
 type mapping struct {
-	xid string
-	uid uint64
+	xid       string
+	uid       uint64
+	persisted bool
 }
 
 func newUIDMap(kv *badger.KV) *uidMap {
@@ -81,7 +82,7 @@ func (m *uidMap) assignUID(xid string) uint64 {
 		return nil
 	}))
 	if ok {
-		sh.add(xid, uid, m.kv)
+		sh.add(xid, uid, true, m.kv)
 		return uid
 	}
 
@@ -91,7 +92,7 @@ func (m *uidMap) assignUID(xid string) uint64 {
 		sh.lastUsed = sh.lease - leaseChunk
 	}
 	sh.lastUsed++
-	sh.add(xid, sh.lastUsed, m.kv)
+	sh.add(xid, sh.lastUsed, false, m.kv)
 	return sh.lastUsed
 }
 
@@ -108,7 +109,7 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 	return 0, false
 }
 
-func (s *shard) add(xid string, uid uint64, kv *badger.KV) {
+func (s *shard) add(xid string, uid uint64, persisted bool, kv *badger.KV) {
 	if s.queue.Len()+1 > lruSize && len(s.evicted) == 0 {
 		s.evicted = make(map[string]uint64, lruEvict)
 		batch := make([]*badger.Entry, 0, lruEvict)
@@ -118,12 +119,13 @@ func (s *shard) add(xid string, uid uint64, kv *badger.KV) {
 			s.queue.Remove(elem)
 			delete(s.elems, m.xid)
 			s.evicted[m.xid] = m.uid
-
-			var valBuf [binary.MaxVarintLen64]byte
-			batch = append(batch, &badger.Entry{
-				Key:   []byte(m.xid),
-				Value: valBuf[:binary.PutUvarint(valBuf[:], m.uid)],
-			})
+			if !m.persisted {
+				var valBuf [binary.MaxVarintLen64]byte
+				batch = append(batch, &badger.Entry{
+					Key:   []byte(m.xid),
+					Value: valBuf[:binary.PutUvarint(valBuf[:], m.uid)],
+				})
+			}
 		}
 		kv.BatchSetAsync(batch, func(err error) {
 			x.Check(err)
@@ -138,8 +140,9 @@ func (s *shard) add(xid string, uid uint64, kv *badger.KV) {
 	}
 
 	m := &mapping{
-		xid: xid,
-		uid: uid,
+		xid:       xid,
+		uid:       uid,
+		persisted: persisted,
 	}
 	elem := s.queue.PushBack(m)
 	s.elems[xid] = elem
