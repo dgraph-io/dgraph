@@ -10,6 +10,21 @@ import (
 	farm "github.com/dgryski/go-farm"
 )
 
+const (
+	// Memory used is about numShards * avgKeySize * lruSize
+	numShards = 1 << 12
+	lruSize   = 1 << 9
+)
+
+type uidMap struct {
+	lease  uint64
+	shards [numShards]shard
+
+	kv      *badger.KV
+	batch   []*badger.Entry
+	batchMu []*sync.Mutex
+}
+
 type shard struct {
 	sync.Mutex
 	cache    lruCache
@@ -17,22 +32,12 @@ type shard struct {
 	lease    uint64
 }
 
-const numShards = 1 << 16
-
-type uidMap struct {
-	lease  uint64
-	shards [numShards]shard
-
-	kv    *badger.KV
-	batch []*badger.Entry
-}
-
 func newUIDMap() *uidMap {
 	um := &uidMap{
 		lease: 1,
 	}
 	for i := range um.shards {
-		um.shards[i].xidToUid = make(map[string]uint64)
+		um.shards[i].cache = lruCache{m: make(map[string]uint64)}
 	}
 	return um
 }
@@ -49,6 +54,8 @@ func (m *uidMap) assignUID(str string) uint64 {
 
 	uid, ok := sh.cache.m[str]
 	if ok {
+		// In a normal LRU cache, this would reset the position of the element.
+		// We can't easily do that with a circular buffer though.
 		return uid
 	}
 
@@ -56,12 +63,12 @@ func (m *uidMap) assignUID(str string) uint64 {
 	x.Check(m.kv.Get([]byte(str), &item))
 	x.Check(item.Value(func(v []byte) error {
 		if v == nil {
-			ok = true
 			return nil
 		}
 		var n int
 		uid, n = binary.Uvarint(v)
 		x.AssertTrue(n == len(v))
+		ok = true
 		return nil
 	}))
 	if ok {
@@ -76,34 +83,61 @@ func (m *uidMap) assignUID(str string) uint64 {
 	}
 
 	sh.lastUsed++
-	sh.cache.add(str, sh.lastUsed)
+	lck := sh.cache.add(str, sh.lastUsed)
+	lck.Lock() // Stop from being evicted until unlocked.
 
-	// TODO: put into badger
 	var valBuf [binary.MaxVarintLen64]byte
 	m.batch = append(m.batch, &badger.Entry{
 		Key:   []byte(str),
-		Value: valBuf[:binary.PutUvarint(valBuf, uid)],
+		Value: valBuf[:binary.PutUvarint(valBuf[:], uid)],
 	})
+	m.batchMu = append(m.batchMu, lck)
+	if len(m.batch) > 1e3 {
+		batch := m.batch
+		m.batch = nil
+		batchMu := m.batchMu
+		m.batchMu = nil
+		m.kv.BatchSetAsync(m.batch, func(err error) {
+			x.Check(err)
+			for _, e := range batch {
+				x.Check(e.Error)
+			}
+			for _, mu := range batchMu {
+				// Allow entries to be evicted from LRU cache.
+				mu.Unlock()
+			}
+		})
+	}
 
 	return sh.lastUsed
 }
 
 type lruCache struct {
-	circKeys   []string
-	circWgs    []sync.WaitGroup // wait for badger write
-	head, tail int              // put at head, get at tail
-	m          map[string]uint64
+	// Circular buffer. LRU data is held in keys. EvictLocks control when
+	// eviction can occur - eviction must not take place until the keys have
+	// been persisted to badger.
+	keys       [lruSize]string
+	evictLocks [lruSize]sync.Mutex
+	head, tail int // Put at head, get at tail.
+
+	m map[string]uint64
 }
 
-func (c *lruCache) add(k string, v uint64) {
-	n := len(c.circWgs)
+func (c *lruCache) add(k string, v uint64) *sync.Mutex {
+	const n = lruSize
 	if (c.head-c.tail+n)%n == n-1 {
-		c.circWgs[c.tail].Wait()
-		delete(c.m, c.circKeys[c.tail])
+		// LRU is full, so evict oldest element. Make sure the element lock can
+		// be held before the eviction. Being able to hold the lock proves that
+		// the element has been accepted by badger.
+		c.evictLocks[c.tail].Lock()
+		c.evictLocks[c.tail].Unlock()
+		delete(c.m, c.keys[c.tail])
 		c.tail = (c.tail + 1) % n
 	}
-	c.circWgs[c.head].Add(1)
-	c.circKeys[c.head] = k
+
+	c.keys[c.head] = k
+	lck := &c.evictLocks[c.head]
 	c.head = (c.head + 1) % n
 	c.m[k] = v
+	return lck
 }
