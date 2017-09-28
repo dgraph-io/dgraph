@@ -79,6 +79,7 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, size int64
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
 		m.opt.TmpDir,
+		"shards",
 		fmt.Sprintf("%03d", shardIdx),
 		fmt.Sprintf("%06d.map", fileNum),
 	)
