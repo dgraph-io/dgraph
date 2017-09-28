@@ -3,7 +3,6 @@ package main
 import (
 	"container/list"
 	"encoding/binary"
-	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -89,9 +88,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 
 	sh.lastUsed++
 	lck := &sh.cache.add(str, sh.lastUsed).evictLock
-	x.AssertTrue(lck != nil)
 	lck.Lock() // Stop from being evicted until unlocked.
-	fmt.Printf("L %p\n", lck)
 
 	var valBuf [binary.MaxVarintLen64]byte
 	m.batch = append(m.batch, &badger.Entry{
@@ -100,25 +97,20 @@ func (m *uidMap) assignUID(str string) uint64 {
 	})
 	m.batchMu = append(m.batchMu, lck)
 	if len(m.batch) > 1000 {
-
 		batch := m.batch
 		m.batch = nil
 		batchMu := m.batchMu
 		m.batchMu = nil
-
-		handler := func(err error) {
+		m.kv.BatchSetAsync(batch, func(err error) {
 			x.Check(err)
 			for _, e := range batch {
 				x.Check(e.Error)
 			}
 			for _, mu := range batchMu {
 				// Allow entries to be evicted from LRU cache.
-				x.AssertTrue(mu != nil)
-				fmt.Printf("U %p\n", mu)
 				mu.Unlock()
 			}
-		}
-		m.kv.BatchSetAsync(batch, handler)
+		})
 	}
 
 	return sh.lastUsed
@@ -146,13 +138,6 @@ func (c *lruCache) lookup(k string) (v uint64, ok bool) {
 }
 
 func (c *lruCache) add(k string, v uint64) *lruCacheEntry {
-
-	_, ok := c.m[k]
-	x.AssertTrue(!ok)
-	for e := c.ll.Front(); e != nil; e = e.Next() {
-		x.AssertTrue(e.Value.(*lruCacheEntry).key != k)
-	}
-
 	if c.ll.Len()+1 > lruSize {
 		// LRU is full, so evict oldest element. Make sure the evict lock can
 		// be held before the eviction. Being able to hold the lock proves that
