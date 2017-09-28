@@ -14,7 +14,7 @@ import (
 const (
 	// Memory used is in the order of numShards * (avgKeySize + constant
 	// overhead per key) * lruSize.
-	numShards = 1 << 12
+	numShards = 1 << 10
 	lruSize   = 1 << 9
 	lruEvict  = lruSize / 4
 )
