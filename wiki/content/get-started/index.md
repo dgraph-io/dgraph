@@ -43,11 +43,20 @@ docker pull dgraph/dgraph
 {{% notice "note" %}}You need to set the estimated memory dgraph can take through memory_mb flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
 
 ### From Installed Binary
+Run `dgraphzero` binary which controls the Dgraph cluster. It moves data between different
+dgraph instances based on the size of the data served by each instance.
+
+```sh
+dgraphzero --id 1 -w zw
+```
+
 If Dgraph was installed with the install script, run Dgraph with:
 
 ```sh
-dgraph --memory_mb 2048
+dgraph --memory_mb 2048 --peer 127.0.0.1:8888
 ```
+
+`-peer` flag contains the address of a `dgraphzero` node which by default starts on port `8888`.
 
 ### Using Docker
 
@@ -55,16 +64,23 @@ The `-v` flag lets Docker mount a directory so that dgraph can persist data to d
 
 #### Map to default ports (8080 and 9080)
 
+Run `dgraphzero`
 ```sh
 mkdir -p ~/dgraph
-docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048
+docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -id 1 -w zw
+```
+
+Run `dgraph`
+```sh
+docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
 ```
 
 #### Map to custom port
 ```sh
 mkdir -p ~/dgraph
 # Mapping port 8080 from within the container to 18080 of the instance, likewise with the gRPC port 9080.
-docker run -it -p 18080:8080 -p 19090:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048
+docker run -it -p 18080:8080 -p 19090:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -id 1 -w zw
+docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
 ```
 
 {{% notice "note" %}}The dgraph server listens on ports 8080 and 9080 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
@@ -75,12 +91,13 @@ File access in mounted filesystems is slower when using docker. Try running the 
 
 Create a docker data container named datacontainer with dgraph/dgraph image.
 ```sh
-docker create -v /dgraph --name datacontainer dgraph/dgraph`
+docker create -v /dgraph --name datacontainer dgraph/dgraph
 ```
 
 Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
-docker run -it -p 18080:8080 -p 19090:9080 --volumes-from datacontainer --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048 --p /dgraph/p --w /dgraph/w
+docker run -it -p 18080:8080 -p 19090:9080 --volumes-from datacontainer --name dgraph dgraph/dgraph dgraphzero -id 1 -w zw
+docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 --p /dgraph/p --w /dgraph/w -peer 127.0.0.1:8888
 ```
 
 ## Step 3: Run Queries
@@ -429,3 +446,10 @@ dgraph --memory_mb 2048
 ```
 
 If Dgraph runs for you that indicates there could be something wrong with mounting volumes.
+
+### 2. Docker: Error response from daemon; Conflict. Container name already exists.
+
+Remove the dgraph container and try the docker run command again.
+```
+docker rm dgraph
+```
