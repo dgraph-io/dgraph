@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -33,8 +34,7 @@ type mapper struct {
 type shardState struct {
 	// Buffer up map entries until we have a sufficient amount, then sort and
 	// write them to file.
-	mapEntries []*protos.MapEntry
-	size       int64
+	entriesBuf []byte
 	mu         sync.Mutex // Allow only 1 write per shard at a time.
 }
 
@@ -60,21 +60,31 @@ func less(lhs, rhs *protos.MapEntry) bool {
 	return lhsUID < rhsUID
 }
 
-func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, size int64, shardIdx int) {
-	sort.Slice(mapEntries, func(i, j int) bool {
-		return less(mapEntries[i], mapEntries[j])
+func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
+	var buf []byte = entriesBuf
+	var entries []*protos.MapEntry
+	for len(buf) > 0 {
+		sz, n := binary.Uvarint(buf)
+		x.AssertTrue(n > 0)
+		buf = buf[n:]
+		me := new(protos.MapEntry)
+		x.Check(proto.Unmarshal(buf[:sz], me))
+		entries = append(entries, me)
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return less(entries[i], entries[j])
 	})
 
-	var n int
-	buf := make([]byte, size)
-	for _, me := range mapEntries {
-		m := binary.PutUvarint(buf[n:], uint64(me.Size()))
-		n += m
-		m, err := me.MarshalTo(buf[n:])
+	buf = entriesBuf
+	for _, me := range entries {
+		n := binary.PutUvarint(buf, uint64(me.Size()))
+		buf = buf[n:]
+		n, err := me.MarshalTo(buf)
 		x.Check(err)
-		n += m
+		buf = buf[n:]
 	}
-	x.AssertTrue(n == len(buf))
+	x.AssertTrue(len(buf) == 0)
 
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
@@ -84,7 +94,7 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry, size int64
 		fmt.Sprintf("%06d.map", fileNum),
 	)
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
-	x.Check(x.WriteFileSync(filename, buf, 0644))
+	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 	m.shards[shardIdx].mu.Unlock() // Locked by caller.
 }
 
@@ -105,20 +115,19 @@ func (m *mapper) run() {
 			atomic.AddInt64(&m.prog.rdfCount, 1)
 			for i := range m.shards {
 				sh := &m.shards[i]
-				if sh.size >= m.opt.MapBufSize {
+				if len(sh.entriesBuf) >= int(m.opt.MapBufSize) {
 					sh.mu.Lock() // One write at a time.
-					go m.writeMapEntriesToFile(sh.mapEntries, sh.size, i)
-					sh.mapEntries = nil
-					sh.size = 0
+					go m.writeMapEntriesToFile(sh.entriesBuf, i)
+					sh.entriesBuf = make([]byte, 0, m.opt.MapBufSize*11/10)
 				}
 			}
 		}
 	}
 	for i := range m.shards {
 		sh := &m.shards[i]
-		if len(sh.mapEntries) > 0 {
+		if len(sh.entriesBuf) > 0 {
 			sh.mu.Lock() // One write at a time.
-			m.writeMapEntriesToFile(sh.mapEntries, sh.size, i)
+			m.writeMapEntriesToFile(sh.entriesBuf, i)
 		}
 		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
@@ -135,10 +144,14 @@ func (m *mapper) addMapEntry(key []byte, posting *protos.Posting, shard int) {
 	} else {
 		me.Posting = posting
 	}
-	meSize := int64(me.Size())
 	sh := &m.shards[shard]
-	sh.size += int64(meSize + varintSize(meSize))
-	sh.mapEntries = append(sh.mapEntries, me)
+
+	data, err := me.Marshal()
+	x.Check(err)
+	var szBuf [binary.MaxVarintLen64]byte
+	sz := szBuf[:binary.PutUvarint(szBuf[:], uint64(len(data)))]
+	sh.entriesBuf = append(sh.entriesBuf, data...)
+	sh.entriesBuf = append(sh.entriesBuf, sz...)
 }
 
 func (m *mapper) parseRDF(rdfLine string) error {
@@ -275,13 +288,4 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 			)
 		}
 	}
-}
-
-func varintSize(x int64) int64 {
-	i := int64(1)
-	for x >= 0x80 {
-		x >>= 7
-		i++
-	}
-	return i
 }
