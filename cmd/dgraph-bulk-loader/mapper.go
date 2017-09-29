@@ -151,8 +151,8 @@ func (m *mapper) addMapEntry(key []byte, posting *protos.Posting, shard int) {
 	x.Check(err)
 	var szBuf [binary.MaxVarintLen64]byte
 	sz := szBuf[:binary.PutUvarint(szBuf[:], uint64(len(data)))]
-	sh.entriesBuf = append(sh.entriesBuf, data...)
 	sh.entriesBuf = append(sh.entriesBuf, sz...)
+	sh.entriesBuf = append(sh.entriesBuf, data...)
 }
 
 func (m *mapper) parseRDF(rdfLine string) error {
