@@ -69,6 +69,7 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 		buf = buf[n:]
 		me := new(protos.MapEntry)
 		x.Check(proto.Unmarshal(buf[:sz], me))
+		buf = buf[sz:]
 		entries = append(entries, me)
 	}
 
