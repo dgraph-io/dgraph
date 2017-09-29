@@ -130,16 +130,14 @@ func (s *shard) evict() {
 	s.beingEvicted = make(map[string]uint64)
 	batch := make([]*badger.Entry, 0, evict)
 	for i := 0; i < evict; i++ {
-		elem := s.queue.Front()
-		m := elem.Value.(*mapping)
-		s.queue.Remove(elem)
+		m := s.queue.Remove(s.queue.Front()).(*mapping)
 		delete(s.elems, m.xid)
 		s.beingEvicted[m.xid] = m.uid
 		if !m.persisted {
-			var valBuf [binary.MaxVarintLen64]byte
+			var uidBuf [binary.MaxVarintLen64]byte
 			batch = append(batch, &badger.Entry{
 				Key:   []byte(m.xid),
-				Value: valBuf[:binary.PutUvarint(valBuf[:], m.uid)],
+				Value: uidBuf[:binary.PutUvarint(uidBuf[:], m.uid)],
 			})
 		}
 
