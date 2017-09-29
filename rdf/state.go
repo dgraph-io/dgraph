@@ -297,11 +297,8 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 			break
 		}
 	}
-	l.Backup()
 
 	l.Emit(itemLiteral)
-	l.Next()   // Move to end literal.
-	l.Ignore() // Ignore end literal.
 	l.Depth++
 
 	r := l.Peek()
@@ -351,7 +348,6 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 	}
 
 	if r == quote {
-		l.Ignore()
 		return lexLiteral(l)
 	}
 

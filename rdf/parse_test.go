@@ -21,9 +21,9 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 
-	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -381,7 +381,7 @@ var testNQuads = []struct {
 		nq: protos.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "likes",
-			ObjectValue: &protos.Value{&protos.Value_DefaultVal{`mov\"enpick`}},
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{`mov"enpick`}},
 			ObjectType:  0,
 		},
 	},
@@ -483,7 +483,7 @@ var testNQuads = []struct {
 			Subject:     "alice",
 			Predicate:   "lives",
 			ObjectId:    "",
-			ObjectValue: &protos.Value{&protos.Value_DefaultVal{`\u0045 wonderland`}},
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{`E wonderland`}},
 			ObjectType:  0,
 		},
 		expectedErr: false,
@@ -497,14 +497,18 @@ var testNQuads = []struct {
 		expectedErr: true, // object langtag can not end with -
 	},
 	{
-		input: `<alice> <lives> "\t\b\n\r\f\"\'\\"@a-b .`,
+		input: `<alice> <lives> "\t\b\n\r\f\"\\"@a-b .`,
 		nq: protos.NQuad{
 			Subject:     "alice",
 			Predicate:   "lives",
 			Lang:        "a-b",
-			ObjectValue: &protos.Value{&protos.Value_DefaultVal{`\t\b\n\r\f\"\'\\`}},
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"\t\b\n\r\f\"\\"}},
 			ObjectType:  9,
 		},
+	},
+	{
+		input:       `<alice> <lives> "\'" .`,
+		expectedErr: true, // \' isn't a valid escape sequence
 	},
 	{
 		input:       `<alice> <lives> "\a" .`,
@@ -843,6 +847,15 @@ var testNQuads = []struct {
 	{
 		input:       `_:company <name> "TurfBytes" . _:company <owner> _:owner . _:owner <name> "Jason" .  `,
 		expectedErr: true,
+	},
+	{
+		input: `<alice> <lives> "A\tB" .`,
+		nq: protos.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives",
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"A\tB"}},
+			ObjectType:  0,
+		},
 	},
 }
 
