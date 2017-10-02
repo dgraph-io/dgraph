@@ -2642,6 +2642,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				count = seenWithPred
 			}
 		case itemLeftCurl:
+			if curp == nil {
+				return x.Errorf("Query syntax invalid.")
+			}
 			if len(curp.Langs) > 0 {
 				return x.Errorf("Cannot have children for attr: %s with lang tags: %v", curp.Attr,
 					curp.Langs)
