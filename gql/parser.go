@@ -1935,7 +1935,9 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	// For other applications, typically after all items are
 	// consumed, we will run a loop like "while opStack is nonempty, evalStack".
 	// This is not needed here.
-	x.AssertTruef(opStack.empty(), "Op stack should be empty when we exit")
+	if !opStack.empty() {
+		return nil, x.Errorf("Unbalanced parentheses in @filter statement")
+	}
 
 	if valueStack.empty() {
 		// This happens when we have @filter(). We can either return an error or
