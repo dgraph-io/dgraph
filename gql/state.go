@@ -390,7 +390,7 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	}
 	l.Ignore()
 	l.Emit(lex.ItemEOF)
-	return nil // Stop the run loop.
+	return l.Mode
 }
 
 // lexNameMutation lexes the itemMutationOp, which could be set or delete.
