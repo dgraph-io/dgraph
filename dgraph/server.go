@@ -68,9 +68,7 @@ func (s *ServerState) runVlogGC(store *badger.KV) {
 	// TODO - Make this smarter later. Maybe get size of directories from badger and only run GC
 	// if size increases by more than 1GB.
 	for range s.vlogTicker.C {
-		if err := store.RunValueLogGC(0.5); err != nil {
-			x.Printf("Got error while running value log GC: %+v", err)
-		}
+		store.RunValueLogGC(0.5)
 	}
 }
 
