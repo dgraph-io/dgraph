@@ -66,13 +66,13 @@ func removeDirs(dirs []string) {
 }
 
 type Person struct {
-	Name    string   `dgraph:"name"`
-	FallsIn string   `dgraph:"falls.in"`
-	Friends []Person `dgraph:"friend"`
+	Name    string   `json:"name"`
+	FallsIn string   `json:"falls.in"`
+	Friends []Person `json:"friend"`
 }
 
 type Res struct {
-	Root []Person `dgraph:"me"`
+	Root []Person `json:"me"`
 }
 
 func TestClientDelete(t *testing.T) {
@@ -292,13 +292,13 @@ func TestLangTag(t *testing.T) {
 	require.Equal(t, "Alice", r.Root[0].Name)
 
 	type Person struct {
-		Name    string   `dgraph:"name@ru"`
-		FallsIn string   `dgraph:"falls.in"`
-		Friends []Person `dgraph:"friend"`
+		Name    string   `json:"name@ru"`
+		FallsIn string   `json:"falls.in"`
+		Friends []Person `json:"friend"`
 	}
 
 	type Res struct {
-		Root []Person `dgraph:"me"`
+		Root []Person `json:"me"`
 	}
 
 	var r2 Res
@@ -367,17 +367,17 @@ func TestEmptyString(t *testing.T) {
 
 func TestSetObject(t *testing.T) {
 	type School struct {
-		Name string `json:"name@en,omitempty" dgraph:"name@en"`
+		Name string `json:"name@en,omitempty"`
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
-		Name     string   `json:"name,omitempty" dgraph:"name"`
-		Age      int      `json:"age,omitempty" dgraph:"age"`
-		Married  bool     `json:"married,omitempty" dgraph:"married"`
-		Friends  []Person `json:"friend,omitempty" dgraph:"friend"`
-		Location string   `json:"loc,omitempty" dgraph:"loc"`
-		School   *School  `json:"school,omitempty" dgraph:"school"`
+		Uid      uint64   `json:"_uid_,omitempty"`
+		Name     string   `json:"name,omitempty"`
+		Age      int      `json:"age,omitempty"`
+		Married  bool     `json:"married,omitempty"`
+		Friends  []Person `json:"friend,omitempty"`
+		Location string   `json:"loc,omitempty"`
+		School   *School  `json:"school,omitempty"`
 	}
 
 	dirs, options := prepare()
@@ -441,7 +441,7 @@ func TestSetObject(t *testing.T) {
 	require.NoError(t, err)
 
 	type Root struct {
-		Me Person `dgraph:"me"`
+		Me Person `json:"me"`
 	}
 
 	var r Root
@@ -469,17 +469,17 @@ func TestSetObject2(t *testing.T) {
 
 	type School struct {
 		Uid  uint64
-		Name string `json:"@,omitempty" dgraph:"name@en"`
+		Name string `json:"@,omitempty"`
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
-		Name     string   `json:"name,omitempty" dgraph:"name"`
-		Age      int      `json:"age,omitempty" dgraph:"age"`
-		Married  bool     `json:"married,omitempty" dgraph:"married"`
-		Friends  []Person `json:"friend,omitempty" dgraph:"friend"`
-		Location string   `json:"loc,omitempty" dgraph:"loc"`
-		School   *School  `json:"school,omitempty" dgraph:"school"`
+		Uid      uint64   `json:"_uid_,omitempty"`
+		Name     string   `json:"name,omitempty"`
+		Age      int      `json:"age,omitempty"`
+		Married  bool     `json:"married,omitempty"`
+		Friends  []Person `json:"friend,omitempty"`
+		Location string   `json:"loc,omitempty"`
+		School   *School  `json:"school,omitempty"`
 	}
 
 	loc := `{"type":"Point","coordinates":[1.1,2]}`
@@ -513,17 +513,17 @@ func TestDeleteObject1(t *testing.T) {
 	// In this test we check S P O deletion.
 	type School struct {
 		Uid  uint64 `json:"_uid_"`
-		Name string `json:"name@en,omitempty" dgraph:"name@en"`
+		Name string `json:"name@en,omitempty"`
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
-		Name     string   `json:"name,omitempty" dgraph:"name"`
-		Age      int      `json:"age,omitempty" dgraph:"age"`
-		Married  bool     `json:"married,omitempty" dgraph:"married"`
-		Friends  []Person `json:"friend,omitempty" dgraph:"friend"`
-		Location string   `json:"loc,omitempty" dgraph:"loc"`
-		School   *School  `json:"school,omitempty" dgraph:"school"`
+		Uid      uint64   `json:"_uid_,omitempty"`
+		Name     string   `json:"name,omitempty"`
+		Age      int      `json:"age,omitempty"`
+		Married  bool     `json:"married,omitempty"`
+		Friends  []Person `json:"friend,omitempty"`
+		Location string   `json:"loc,omitempty"`
+		School   *School  `json:"school,omitempty"`
 	}
 
 	dirs, options := prepare()
@@ -608,7 +608,7 @@ func TestDeleteObject1(t *testing.T) {
 	require.NoError(t, err)
 
 	type Root struct {
-		Me Person `dgraph:"me"`
+		Me Person `json:"me"`
 	}
 
 	var r Root
@@ -628,17 +628,17 @@ func TestDeleteObject2(t *testing.T) {
 	// In this test we check S P * deletion.
 	type School struct {
 		Uid  uint64 `json:"_uid_"`
-		Name string `json:"name@en,omitempty" dgraph:"name@en"`
+		Name string `json:"name@en,omitempty"`
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty" dgraph:"_uid_"`
-		Name     *string  `json:"name" dgraph:"name"`
-		Age      int      `json:"age,omitempty" dgraph:"age"`
-		Married  bool     `json:"married,omitempty" dgraph:"married"`
-		Friends  []Person `json:"friend" dgraph:"friend"`
-		Location string   `json:"loc,omitempty" dgraph:"loc"`
-		School   *School  `json:"school" dgraph:"school"`
+		Uid      uint64   `json:"_uid_,omitempty"`
+		Name     *string  `json:"name"`
+		Age      int      `json:"age,omitempty"`
+		Married  bool     `json:"married,omitempty"`
+		Friends  []Person `json:"friend"`
+		Location string   `json:"loc,omitempty"`
+		School   *School  `json:"school"`
 	}
 
 	dirs, options := prepare()
@@ -727,7 +727,7 @@ func TestDeleteObject2(t *testing.T) {
 	require.NoError(t, err)
 
 	type Root struct {
-		Me Person `dgraph:"me"`
+		Me Person `json:"me"`
 	}
 
 	var r Root
@@ -751,31 +751,31 @@ func TestSetObjectWithFacets(t *testing.T) {
 	req := client.Req{}
 
 	type friendFacet struct {
-		Since  time.Time `dgraph:"since" json:"since"`
-		Family string    `dgraph:"family" json:"family"`
-		Age    float64   `dgraph:"age" json:"age"`
-		Close  bool      `dgraph:"close" json:"close"`
+		Since  time.Time `json:"since"`
+		Family string    `json:"family"`
+		Age    float64   `json:"age"`
+		Close  bool      `json:"close"`
 	}
 
 	type nameFacets struct {
-		Origin string `dgraph:"origin" json:"origin"`
+		Origin string `json:"origin"`
 	}
 
 	type schoolFacet struct {
-		Since time.Time `dgraph:"since" json:"since"`
+		Since time.Time `json:"since"`
 	}
 
 	type School struct {
-		Name   string      `dgraph:"name" json:"name"`
-		Facets schoolFacet `dgraph:"@facets" json:"@facets"`
+		Name   string      `json:"name"`
+		Facets schoolFacet `json:"@facets"`
 	}
 
 	type Person struct {
-		Name       string      `dgraph:"name" json:"name"`
-		NameFacets nameFacets  `dgraph:"name@facets" json:"name@facets"`
-		Facets     friendFacet `dgraph:"@facets" json:"@facets"`
-		Friends    []Person    `dgraph:"friend" json:"friend"`
-		School     School      `dgraph:"school" json:"school"`
+		Name       string      `json:"name"`
+		NameFacets nameFacets  `json:"name@facets"`
+		Facets     friendFacet `json:"@facets"`
+		Friends    []Person    `json:"friend"`
+		School     School      `json:"school"`
 	}
 
 	ti := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
@@ -836,7 +836,7 @@ func TestSetObjectWithFacets(t *testing.T) {
 	resp, err = dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
 	type Root struct {
-		Me Person `dgraph:"me"`
+		Me Person `json:"me"`
 	}
 
 	var r Root
@@ -855,22 +855,22 @@ func TestSetObjectUpdateFacets(t *testing.T) {
 
 	type friendFacet struct {
 		// All facets should be marshalled to a string. Server interprets the type from the value.
-		Since  time.Time `dgraph:"since" json:"since, omitempty"`
-		Family string    `dgraph:"family" json:"family"`
-		Age    float64   `dgraph:"age" json:"age"`
-		Close  bool      `dgraph:"close" json:"close"`
+		Since  time.Time `json:"since, omitempty"`
+		Family string    `json:"family"`
+		Age    float64   `json:"age"`
+		Close  bool      `json:"close"`
 	}
 
 	type nameFacets struct {
-		Origin string `dgraph:"origin" json:"origin"`
+		Origin string `json:"origin"`
 	}
 
 	type Person struct {
-		Uid        uint64      `dgraph:"_uid_" json:"_uid_"`
-		Name       string      `dgraph:"name" json:"name"`
-		NameFacets nameFacets  `dgraph:"name@facets" json:"name@facets"`
-		Facets     friendFacet `dgraph:"@facets" json:"@facets"`
-		Friends    []Person    `dgraph:"friend" json:"friend"`
+		Uid        uint64      `json:"_uid_"`
+		Name       string      `json:"name"`
+		NameFacets nameFacets  `json:"name@facets"`
+		Facets     friendFacet `json:"@facets"`
+		Friends    []Person    `json:"friend"`
 	}
 
 	ti := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
@@ -936,7 +936,7 @@ func TestSetObjectUpdateFacets(t *testing.T) {
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
 	type Root struct {
-		Me Person `dgraph:"me"`
+		Me Person `json:"me"`
 	}
 
 	var r Root

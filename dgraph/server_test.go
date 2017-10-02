@@ -150,16 +150,23 @@ func TestNquadsFromJson4(t *testing.T) {
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval, types.StringID))
 }
 
+func checkCount(t *testing.T, nq []*protos.NQuad, pred string, count int) {
+	for _, n := range nq {
+		if n.Predicate == pred {
+			require.Equal(t, count, len(n.Facets))
+			break
+		}
+	}
+}
+
 func TestNquadsFromJsonFacets1(t *testing.T) {
-	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123","mobile@facets":{"since":"2006-01-02T15:04:05Z"},"car@facets":{"first":"true","since":"2006-02-02T13:01:09Z"}}]`
+	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123","mobile@facets":{"since":"2006-01-02T15:04:05Z"},"car@facets":{"first":"true"}}]`
 
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
-	require.Equal(t, "mobile", nq[1].Predicate)
 	require.Equal(t, 1, len(nq[1].Facets))
-	require.Equal(t, "car", nq[2].Predicate)
-	require.Equal(t, 2, len(nq[2].Facets))
+	require.Equal(t, 1, len(nq[2].Facets))
 }
 
 func TestNquadsFromJsonFacets2(t *testing.T) {
@@ -169,8 +176,7 @@ func TestNquadsFromJsonFacets2(t *testing.T) {
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
-	require.Equal(t, "friend", nq[1].Predicate)
-	require.Equal(t, 1, len(nq[1].Facets))
+	checkCount(t, nq, "friend", 1)
 }
 
 func TestNquadsFromJsonError1(t *testing.T) {

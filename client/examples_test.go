@@ -272,24 +272,24 @@ func ExampleEdge_AddFacet() {
 
 	// Types representing information in the graph.
 	type nameFacets struct {
-		Since time.Time `dgraph:"since"`
-		Alias string    `dgraph:"alias"`
+		Since time.Time `json:"since"`
+		Alias string    `json:"alias"`
 	}
 
 	type friendFacets struct {
-		Close bool `dgraph:"close"`
+		Close bool `json:"close"`
 	}
 
 	type Person struct {
-		Name         string       `dgraph:"name"`
-		NameFacets   nameFacets   `dgraph:"name@facets"`
-		Friends      []Person     `dgraph:"friend"`
-		FriendFacets friendFacets `dgraph:"@facets"`
+		Name         string       `json:"name"`
+		NameFacets   nameFacets   `json:"name@facets"`
+		Friends      []Person     `json:"friend"`
+		FriendFacets friendFacets `json:"@facets"`
 	}
 
 	// Helper type to unmarshal query
 	type Res struct {
-		Root Person `dgraph:"query"`
+		Root Person `json:"query"`
 	}
 
 	var pq Res
@@ -359,12 +359,12 @@ func ExampleReq_SetQuery() {
 	}
 
 	type Alice struct {
-		Name         string `dgraph:"name"`
-		WhatHappened string `dgraph:"falls.in"`
+		Name         string `json:"name"`
+		WhatHappened string `json:"falls.in"`
 	}
 
 	type Res struct {
-		Root Alice `dgraph:"me"`
+		Root Alice `json:"me"`
 	}
 
 	var r Res
@@ -424,12 +424,12 @@ func ExampleReq_SetQueryWithVariables() {
 	}
 
 	type Alice struct {
-		Name         string `dgraph:"name"`
-		WhatHappened string `dgraph:"falls.in"`
+		Name         string `json:"name"`
+		WhatHappened string `json:"falls.in"`
 	}
 
 	type Res struct {
-		Root Alice `dgraph:"me"`
+		Root Alice `json:"me"`
 	}
 
 	var r Res
@@ -556,12 +556,12 @@ func ExampleEdge_SetValueBytes() {
 	}
 
 	type Alice struct {
-		Name      string `dgraph:"name"`
-		ByteValue []byte `dgraph:"somestoredbytes"`
+		Name      string `json:"name"`
+		ByteValue []byte `json:"somestoredbytes"`
 	}
 
 	type Res struct {
-		Root Alice `dgraph:"q"`
+		Root Alice `json:"q"`
 	}
 
 	var r Res
@@ -621,13 +621,13 @@ mutation {
 
 	// A type representing information in the graph.
 	type person struct {
-		Name    string   `dgraph:"name"`
-		Friends []person `dgraph:"friend"`
+		Name    string   `json:"name"`
+		Friends []person `json:"friend"`
 	}
 
 	// A helper type matching the query root.
 	type friends struct {
-		Root person `dgraph:"friends"`
+		Root person `json:"friends"`
 	}
 
 	var f friends
@@ -697,20 +697,20 @@ mutation {
 	// Unmarshal the response into a custom struct
 
 	type friendFacets struct {
-		Close bool `dgraph:"close"`
+		Close bool `json:"close"`
 	}
 
 	// A type representing information in the graph.
 	type person struct {
-		ID           uint64        `dgraph:"_uid_"` // record the UID for our update
-		Name         string        `dgraph:"name"`
-		Friends      []*person     `dgraph:"friend"` // Unmarshal with pointers to structs
-		FriendFacets *friendFacets `dgraph:"@facets"`
+		ID           uint64        `json:"_uid_"` // record the UID for our update
+		Name         string        `json:"name"`
+		Friends      []*person     `json:"friend"` // Unmarshal with pointers to structs
+		FriendFacets *friendFacets `json:"@facets"`
 	}
 
 	// A helper type matching the query root.
 	type friends struct {
-		Root person `dgraph:"friends"`
+		Root person `json:"friends"`
 	}
 
 	var f friends
@@ -794,13 +794,13 @@ func ExampleEdge_SetValueGeoJson() {
 	}
 
 	type Alice struct {
-		Name string `dgraph:"name"`
-		Loc  []byte `dgraph:"loc"`
-		City []byte `dgraph:"city"`
+		Name string `json:"name"`
+		Loc  []byte `json:"loc"`
+		City []byte `json:"city"`
 	}
 
 	type Res struct {
-		Root Alice `dgraph:"q"`
+		Root Alice `json:"q"`
 	}
 
 	var r Res

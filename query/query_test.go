@@ -8352,15 +8352,15 @@ func TestMultipleEqInt(t *testing.T) {
 
 func TestPBUnmarshalToStruct1(t *testing.T) {
 	type Person struct {
-		Name       string `dgraph:"name"`
-		Age        int    `dgraph:"age"`
+		Name       string `json:"name"`
+		Age        int    `json:"age"`
 		Birth      string
-		BinaryData []byte   `dgraph:"bin_data"`
-		Friends    []Person `dgraph:"friend"`
+		BinaryData []byte   `json:"bin_data"`
+		Friends    []Person `json:"friend"`
 	}
 
 	type res struct {
-		Root Person `dgraph:"me"`
+		Root Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8395,18 +8395,18 @@ func TestPBUnmarshalToStruct1(t *testing.T) {
 
 func TestPBUnmarshalToStruct2(t *testing.T) {
 	type Person struct {
-		Id       uint64    `dgraph:"_uid_"`
-		Name     string    `dgraph:"name"`
-		Age      int       `dgraph:"age"`
-		Birth    time.Time `dgraph:"dob"`
-		Alive    bool      `dgraph:"alive"`
-		Survival float64   `dgraph:"survival_rate"`
-		Location geom.T    `dgraph:"location"`
-		Friends  []Person  `dgraph:"friend"`
+		Id       uint64    `json:"_uid_"`
+		Name     string    `json:"name"`
+		Age      int       `json:"age"`
+		Birth    time.Time `json:"dob"`
+		Alive    bool      `json:"alive"`
+		Survival float64   `json:"survival_rate"`
+		Location geom.T    `json:"location"`
+		Friends  []Person  `json:"friend"`
 	}
 
 	type res struct {
-		Root []Person `dgraph:"me"`
+		Root []Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8436,23 +8436,23 @@ func TestPBUnmarshalToStruct2(t *testing.T) {
 	require.Equal(t, 4, len(r.Root))
 	js, err := json.Marshal(r.Root[0])
 	require.NoError(t, err)
-	require.Equal(t, `{"Id":1,"Name":"Michonne","Age":38,"Birth":"1910-01-01T00:00:00Z","Alive":true,"Survival":98.99,"Location":null,"Friends":[{"Id":23,"Name":"Rick Grimes","Age":15,"Birth":"1910-01-02T00:00:00Z","Alive":false,"Survival":0,"Location":null,"Friends":null}]}`, string(js))
+	require.JSONEq(t, `{"_uid_":1,"name":"Michonne","age":38,"dob":"1910-01-01T00:00:00Z","alive":true,"survival_rate":98.99,"location":null,"friend":[{"_uid_":23,"name":"Rick Grimes","age":15,"dob":"1910-01-02T00:00:00Z","alive":false,"survival_rate":0,"location":null,"friend":null}]}`, string(js))
 }
 
 func TestPBUnmarshalToStruct3(t *testing.T) {
 	type Person struct {
-		Id       uint64    `dgraph:"_uid_"`
-		Name     string    `dgraph:"name"`
-		Age      int       `dgraph:"age"`
-		Birth    time.Time `dgraph:"dob"`
-		Alive    bool      `dgraph:"alive"`
-		Survival float64   `dgraph:"survival_rate"`
-		Location []byte    `dgraph:"loc"`
-		Friends  []*Person `dgraph:"friend"`
+		Id       uint64    `json:"_uid_"`
+		Name     string    `json:"name"`
+		Age      int       `json:"age"`
+		Birth    time.Time `json:"dob"`
+		Alive    bool      `json:"alive"`
+		Survival float64   `json:"survival_rate"`
+		Location []byte    `json:"loc"`
+		Friends  []*Person `json:"friend"`
 	}
 
 	type res struct {
-		Root []*Person `dgraph:"me"`
+		Root []*Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8485,19 +8485,19 @@ func TestPBUnmarshalToStruct3(t *testing.T) {
 	require.Equal(t, 4, len(r.Root))
 	js, err := json.Marshal(r.Root[0])
 	require.NoError(t, err)
-	require.Equal(t, `{"Id":1,"Name":"Michonne","Age":38,"Birth":"1910-01-01T00:00:00Z","Alive":true,"Survival":98.99,"Location":"AQEAAACamZmZmZnxPwAAAAAAAABA","Friends":[{"Id":23,"Name":"Rick Grimes","Age":15,"Birth":"1910-01-02T00:00:00Z","Alive":false,"Survival":0,"Location":null,"Friends":null}]}`, string(js))
+	require.JSONEq(t, `{"_uid_":1,"name":"Michonne","age":38,"dob":"1910-01-01T00:00:00Z","alive":true,"survival_rate":98.99,"loc":"AQEAAACamZmZmZnxPwAAAAAAAABA","friend":[{"_uid_":23,"name":"Rick Grimes","age":15,"dob":"1910-01-02T00:00:00Z","alive":false,"survival_rate":0,"loc":null,"friend":null}]}`, string(js))
 }
 
 func TestPBUnmarshalToStruct4(t *testing.T) {
 	type Person struct {
-		Name    string `dgraph:"name"`
-		Age     int    `dgraph:"age"`
+		Name    string `json:"name"`
+		Age     int    `json:"age"`
 		Birth   string
-		Friends []Person `dgraph:"friend"`
+		Friends []Person `json:"friend"`
 	}
 
 	type res struct {
-		Root *Person `dgraph:"me"`
+		Root *Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8530,11 +8530,11 @@ func TestPBUnmarshalToStruct4(t *testing.T) {
 
 func TestPBUnmarshalToStruct5(t *testing.T) {
 	type Person struct {
-		Name string `dgraph:"name@hi:ru"`
+		Name string `json:"name@hi:ru"`
 	}
 
 	type res struct {
-		Root Person `dgraph:"me"`
+		Root Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8625,13 +8625,13 @@ func TestPBUnmarshalToStruct7(t *testing.T) {
 
 func TestPBUnmarshalToStruct8(t *testing.T) {
 	type Person struct {
-		Name  string `dgraph:"name"`
-		Age   int    `dgraph:"age"`
+		Name  string `json:"name"`
+		Age   int    `json:"age"`
 		Birth string
 	}
 
 	type res struct {
-		Root [2]Person `dgraph:"me"`
+		Root [2]Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -9238,12 +9238,12 @@ func TestMultipleValueProto(t *testing.T) {
 	}
 	`
 	type Person struct {
-		Name       string      `dgraph:"name"`
-		Graduation []time.Time `dgraph:"graduation"`
+		Name       string      `json:"name"`
+		Graduation []time.Time `json:"graduation"`
 	}
 
 	type res struct {
-		Root []Person `dgraph:"me"`
+		Root []Person `json:"me"`
 	}
 
 	pb := processToPB(t, query, map[string]string{}, false)

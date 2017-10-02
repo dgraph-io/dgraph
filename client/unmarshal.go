@@ -252,9 +252,15 @@ func fieldMap(typ reflect.Type) map[string]reflect.StructField {
 	fmap := make(map[string]reflect.StructField)
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
-		// If dgraph tag for a field exists we store that.
-		if tag, ok := field.Tag.Lookup("dgraph"); ok {
+		// If json tag for a field exists we store that.
+		if tag, ok := field.Tag.Lookup("json"); ok {
 			// Store in lower case to do a case-insensitive match.
+			tags := strings.Split(tag, ",")
+			// User could give other things after the actual name e.g. json:"friend,omitempty"
+			// We only store the first part in this case.
+			if len(tags) > 1 {
+				tag = tags[0]
+			}
 			fmap[strings.ToLower(tag)] = field
 		} else {
 			// Else we store the field Name.
