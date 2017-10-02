@@ -2652,6 +2652,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return err
 			}
 		case itemLeftRound:
+			if curp == nil {
+				return x.Errorf("Query syntax invalid.")
+			}
 			if curp.Attr == "" {
 				return x.Errorf("Predicate name cannot be empty.")
 			}
