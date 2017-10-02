@@ -17,8 +17,6 @@
 package badger
 
 import (
-	"time"
-
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/badger/y"
 )
@@ -45,11 +43,6 @@ type Options struct {
 	// How should LSM tree be accessed.
 	TableLoadingMode options.FileLoadingMode
 
-	// How often to run value log garbage collector. Every time it runs,
-	// there'd be a spike in LSM tree activity. But, running it frequently
-	// allows reclaiming disk space from an ever-growing value log.
-	ValueGCRunInterval time.Duration
-
 	// 3. Flags that user might want to review
 	// ----------------------------------------
 	// The following affect all levels of LSM tree.
@@ -71,10 +64,6 @@ type Options struct {
 	// Maximum total size for L1.
 	LevelOneSize int64
 
-	// Run value log garbage collection if we can reclaim at least this
-	// much space. This is a ratio.
-	ValueGCThreshold float64
-
 	// Size of single value log file.
 	ValueLogFileSize int64
 
@@ -85,7 +74,8 @@ type Options struct {
 	// ------------------------------
 	DoNotCompact bool // Stops LSM tree from compactions.
 
-	maxBatchSize int64 // max batch size in bytes
+	maxBatchCount int64 // max entries in batch
+	maxBatchSize  int64 // max batch size in bytes
 }
 
 // DefaultOptions sets a list of recommended options for good performance.
@@ -106,10 +96,8 @@ var DefaultOptions = Options{
 	SyncWrites:              false,
 	// Nothing to read/write value log using standard File I/O
 	// MemoryMap to mmap() the value log files
-	ValueGCRunInterval: 10 * time.Minute,
-	ValueGCThreshold:   0.5, // Set to zero to not run GC.
-	ValueLogFileSize:   1 << 30,
-	ValueThreshold:     20,
+	ValueLogFileSize: 1 << 30,
+	ValueThreshold:   20,
 }
 
 func (opt *Options) estimateSize(entry *Entry) int {

@@ -36,7 +36,6 @@ import (
 	"bytes"
 	"math"
 	"math/rand"
-	"sync"
 	"sync/atomic"
 	"unsafe"
 
@@ -48,22 +47,31 @@ const (
 	heightIncrease = math.MaxUint32 / 3
 )
 
-type node struct {
-	// ONLY guards valueOffset, valueSize. To do without lock, we need to encode
-	// valueSize in arena. Consider this next time.
-	// RWMutex takes 24 bytes whereas Mutex takes 8 bytes.
-	sync.Mutex
+// MaxNodeSize is the memory footprint of a node of maximum height.
+const MaxNodeSize = int(unsafe.Sizeof(node{}))
 
+type node struct {
 	// A byte slice is 24 bytes. We are trying to save space here.
 	keyOffset uint32 // Immutable. No need to lock to access key.
 	keySize   uint16 // Immutable. No need to lock to access key.
 
-	valueOffset uint32
-	valueSize   uint16 // Assume values not too big. There's value threshold.
+	// Height of the tower.
+	height uint16
 
-	// []*node. Size is <=kMaxNumLevels. Usually a very small array. CAS.
-	// No need to lock.
-	next []unsafe.Pointer
+	// Multiple parts of the value are encoded as a single uint64 so that it
+	// can be atomically loaded and stored:
+	//   value offset: uint32 (bits 0-31)
+	//   value size  : uint16 (bits 32-47)
+	value uint64
+
+	// Most nodes do not need to use the full height of the tower, since the
+	// probability of each successive level decreases exponentially. Because
+	// these elements are never accessed, they do not need to be allocated.
+	// Therefore, when a node is allocated in the arena, its memory footprint
+	// is deliberately truncated to not include unneeded tower elements.
+	//
+	// All accesses to elements should use CAS operations, with no need to lock.
+	tower [maxHeight]uint32
 }
 
 // Skiplist maps keys to values (in memory)
@@ -72,23 +80,6 @@ type Skiplist struct {
 	head   *node
 	ref    int32
 	arena  *Arena
-}
-
-var (
-	nodePools []sync.Pool
-)
-
-func init() {
-	nodePools = make([]sync.Pool, maxHeight+1)
-	for i := 1; i <= maxHeight; i++ {
-		func(i int) { // Need a function here in order to capture variable i.
-			nodePools[i].New = func() interface{} {
-				return &node{
-					next: make([]unsafe.Pointer, i),
-				}
-			}
-		}(i)
-	}
 }
 
 // IncrRef increases the refcount
@@ -102,13 +93,7 @@ func (s *Skiplist) DecrRef() {
 	if newRef > 0 {
 		return
 	}
-	// Deallocate all nodes.
-	x := s.head
-	for x != nil {
-		next := x.getNext(0)
-		nodePools[len(x.next)].Put(x)
-		x = next
-	}
+
 	s.arena.reset()
 	// Indicate we are closed. Good for testing.  Also, lets GC reclaim memory. Race condition
 	// here would suggest we are accessing skiplist when we are supposed to have no reference!
@@ -118,15 +103,24 @@ func (s *Skiplist) DecrRef() {
 func (s *Skiplist) valid() bool { return s.arena != nil }
 
 func newNode(arena *Arena, key []byte, v y.ValueStruct, height int) *node {
-	keyOffset := arena.putKey(key)
-	valOffset := arena.putVal(v)
-	return &node{
-		keyOffset:   keyOffset,
-		keySize:     uint16(len(key)),
-		valueOffset: valOffset,
-		valueSize:   uint16(len(v.Value)),
-		next:        make([]unsafe.Pointer, height),
-	}
+	// The base level is already allocated in the node struct.
+	offset := arena.putNode(height)
+	node := arena.getNode(offset)
+	node.keyOffset = arena.putKey(key)
+	node.keySize = uint16(len(key))
+	node.height = uint16(height)
+	node.value = encodeValue(arena.putVal(v), uint16(len(v.Value)))
+	return node
+}
+
+func encodeValue(valOffset uint32, valSize uint16) uint64 {
+	return uint64(valSize)<<32 | uint64(valOffset)
+}
+
+func decodeValue(value uint64) (valOffset uint32, valSize uint16) {
+	valOffset = uint32(value)
+	valSize = uint16(value >> 32)
+	return
 }
 
 // NewSkiplist makes a new empty skiplist, with a given arena size
@@ -142,9 +136,8 @@ func NewSkiplist(arenaSize int64) *Skiplist {
 }
 
 func (s *node) getValueOffset() (uint32, uint16) {
-	s.Lock()
-	defer s.Unlock()
-	return s.valueOffset, s.valueSize
+	value := atomic.LoadUint64(&s.value)
+	return decodeValue(value)
 }
 
 func (s *node) key(arena *Arena) []byte {
@@ -153,18 +146,16 @@ func (s *node) key(arena *Arena) []byte {
 
 func (s *node) setValue(arena *Arena, v y.ValueStruct) {
 	valOffset := arena.putVal(v)
-	s.Lock()
-	defer s.Unlock()
-	s.valueOffset = valOffset
-	s.valueSize = uint16(len(v.Value))
+	value := encodeValue(valOffset, uint16(len(v.Value)))
+	atomic.StoreUint64(&s.value, value)
 }
 
-func (s *node) getNext(h int) *node {
-	return (*node)(atomic.LoadPointer(&s.next[h]))
+func (s *node) getNextOffset(h int) uint32 {
+	return atomic.LoadUint32(&s.tower[h])
 }
 
-func (s *node) casNext(h int, old, val *node) bool {
-	return atomic.CompareAndSwapPointer(&s.next[h], unsafe.Pointer(old), unsafe.Pointer(val))
+func (s *node) casNextOffset(h int, old, val uint32) bool {
+	return atomic.CompareAndSwapUint32(&s.tower[h], old, val)
 }
 
 // Returns true if key is strictly > n.key.
@@ -182,6 +173,10 @@ func randomHeight() int {
 	return h
 }
 
+func (s *Skiplist) getNext(nd *node, height int) *node {
+	return s.arena.getNode(nd.getNextOffset(height))
+}
+
 // findNear finds the node near to key.
 // If less=true, it finds rightmost node such that node.key < key (if allowEqual=false) or
 // node.key <= key (if allowEqual=true).
@@ -193,7 +188,7 @@ func (s *Skiplist) findNear(key []byte, less bool, allowEqual bool) (*node, bool
 	level := int(s.getHeight() - 1)
 	for {
 		// Assume x.key < key.
-		next := x.getNext(level)
+		next := s.getNext(x, level)
 		if next == nil {
 			// x.key < key < END OF LIST
 			if level > 0 {
@@ -226,7 +221,7 @@ func (s *Skiplist) findNear(key []byte, less bool, allowEqual bool) (*node, bool
 			}
 			if !less {
 				// We want >, so go to base level to grab the next bigger note.
-				return next.getNext(0), false
+				return s.getNext(next, 0), false
 			}
 			// We want <. If not base level, we should go closer in the next level.
 			if level > 0 {
@@ -263,7 +258,7 @@ func (s *Skiplist) findNear(key []byte, less bool, allowEqual bool) (*node, bool
 func (s *Skiplist) findSpliceForLevel(key []byte, before *node, level int) (*node, *node) {
 	for {
 		// Assume before.key < key.
-		next := before.getNext(level)
+		next := s.getNext(before, level)
 		if next == nil {
 			return before, next
 		}
@@ -331,8 +326,9 @@ func (s *Skiplist) Put(key []byte, v y.ValueStruct) {
 				// the base level. But we know we are not on the base level.
 				y.AssertTrue(prev[i] != next[i])
 			}
-			x.next[i] = unsafe.Pointer(next[i])
-			if prev[i].casNext(i, next[i], x) {
+			nextOffset := s.arena.getNodeOffset(next[i])
+			x.tower[i] = nextOffset
+			if prev[i].casNextOffset(i, nextOffset, s.arena.getNodeOffset(x)) {
 				// Managed to insert x between prev[i] and next[i]. Go to the next level.
 				break
 			}
@@ -360,7 +356,7 @@ func (s *Skiplist) findLast() *node {
 	n := s.head
 	level := int(s.getHeight()) - 1
 	for {
-		next := n.getNext(level)
+		next := s.getNext(n, level)
 		if next != nil {
 			n = next
 			continue
@@ -425,7 +421,7 @@ func (s *Iterator) Value() y.ValueStruct {
 // Next advances to the next position.
 func (s *Iterator) Next() {
 	y.AssertTrue(s.Valid())
-	s.n = s.n.getNext(0)
+	s.n = s.list.getNext(s.n, 0)
 }
 
 // Prev advances to the previous position.
@@ -447,7 +443,7 @@ func (s *Iterator) SeekForPrev(target []byte) {
 // SeekToFirst seeks position at the first entry in list.
 // Final state of iterator is Valid() iff list is not empty.
 func (s *Iterator) SeekToFirst() {
-	s.n = s.list.head.getNext(0)
+	s.n = s.list.getNext(s.list.head, 0)
 }
 
 // SeekToLast seeks position at the last entry in list.
