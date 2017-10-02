@@ -192,8 +192,6 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *protos.List, groupVal [
 }
 
 func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGraph) error {
-	mp := make(map[string]groupResult)
-	_ = mp
 	var dedupMap dedup
 	var pathNode *SubGraph
 	for _, child := range sg.Children {
@@ -293,28 +291,37 @@ func groupLess(a, b *groupResult) bool {
 
 	for i := range a.keys {
 		l, err := types.Less(a.keys[i].key, b.keys[i].key)
-		if err == nil {
-			if l {
-				return l
-			}
-			l, _ = types.Less(b.keys[i].key, a.keys[i].key)
-			if l {
-				return !l
-			}
+		if err != nil {
+			return false
+		}
+		if l {
+			return l
+		}
+		l, err = types.Less(b.keys[i].key, a.keys[i].key)
+		if err != nil {
+			return false
+		}
+		if l {
+			return !l
 		}
 	}
 
 	for i := range a.aggregates {
 		if l, err := types.Less(a.aggregates[i].key, b.aggregates[i].key); err == nil {
+			if err != nil {
+				return false
+			}
 			if l {
 				return l
 			}
-			l, _ = types.Less(b.aggregates[i].key, a.aggregates[i].key)
+			l, err = types.Less(b.aggregates[i].key, a.aggregates[i].key)
+			if err != nil {
+				return false
+			}
 			if l {
 				return !l
 			}
 		}
 	}
-	x.Fatalf("wrong groups")
 	return false
 }
