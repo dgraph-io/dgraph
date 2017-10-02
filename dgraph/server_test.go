@@ -165,8 +165,8 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
-	require.Equal(t, 1, len(nq[1].Facets))
-	require.Equal(t, 1, len(nq[2].Facets))
+	checkCount(t, nq, "mobile", 1)
+	checkCount(t, nq, "car", 1)
 }
 
 func TestNquadsFromJsonFacets2(t *testing.T) {
