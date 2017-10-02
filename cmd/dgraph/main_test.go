@@ -1147,7 +1147,7 @@ func TestExpandPredError(t *testing.T) {
 	var q1 = `
 	{
 		me(func:anyofterms(name, "Alice")) {
-  		expand(_all_)
+  			expand(_all_)
 			name
 			friend
 		}
@@ -1183,6 +1183,7 @@ func TestExpandPredError(t *testing.T) {
 
 	_, err = runQuery(q1)
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Repeated subgraph")
 }
 
 func TestExpandPred(t *testing.T) {
@@ -1861,7 +1862,7 @@ func TestRecurseExpandAll(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"recurse":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
+	require.JSONEq(t, `{"data": {"recurse":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
 }
 
 func TestMain(m *testing.M) {
