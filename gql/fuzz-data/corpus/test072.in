@@ -1,0 +1,12 @@
+
+		schema {
+			pred
+			type
+		}
+		query {
+			me(func: uid( tomhanks)) {
+				name
+				hometown
+			}
+		}
+	

@@ -1,0 +1,9 @@
+
+	query {
+		me(func: uid(0x1)) {
+			friends @facets() {
+			}
+			hometown
+			age
+		}
+	}

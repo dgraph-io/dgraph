@@ -1,0 +1,6 @@
+
+	query {
+		user(func: uid(0x1, 0x34)) {
+			type.object.name
+		}
+	}

@@ -1,0 +1,16 @@
+
+{
+      me(func: uid(aliceInWonderland)) {
+        type
+        writtenIn
+        name
+        character {
+                name
+        }
+        author {
+                name
+                born
+                died
+        }
+      }
+    }

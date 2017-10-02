@@ -1,0 +1,11 @@
+
+	# Something
+	{
+		me(func:allofterms(name, "barack")) {
+			friends {
+				name
+			} # Something
+			gender,age
+			hometown
+		}
+	}

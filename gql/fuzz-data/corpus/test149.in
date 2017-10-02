@@ -1,0 +1,10 @@
+
+	query {
+		me(func: uid(0x1)) {
+			friends @groupby(name@en) {
+				count(_uid_)
+			}
+			hometown
+			age
+		}
+	}

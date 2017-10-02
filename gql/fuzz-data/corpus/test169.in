@@ -1,0 +1,9 @@
+
+	{
+		me(func: uid(0x1)) {
+			name
+			friend(first:5, orderasc: name@en:fr) {
+				name@en
+			}
+		}
+	}

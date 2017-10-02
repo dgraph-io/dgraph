@@ -1,0 +1,11 @@
+{
+		me(func: uid( 0x1)) {
+			<http://verygood.com/what/about/you>
+			friends @filter(allofterms(<http://verygood.com/what/about/you>,
+				"good better bad")){
+				name
+			}
+			gender,age
+			hometown
+		}
+	}

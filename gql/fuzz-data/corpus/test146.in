@@ -1,0 +1,11 @@
+
+	query {
+		me(func: uid( 1, 2, 3)) @groupby(friends) {
+				a as count(_uid_)
+		}
+
+		groups(func: uid(a)) {
+			_uid_
+			val(a)
+		}
+	}

@@ -1,0 +1,13 @@
+
+	{
+		var(func: uid(0x0a)) {
+			friends {
+				a as count(age)
+			}
+			s as sum(val(a))
+		}
+
+		sumage(func: uid( 0x0a)) {
+			val(s)
+		}
+	}

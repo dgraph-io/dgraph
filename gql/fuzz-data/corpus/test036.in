@@ -1,0 +1,6 @@
+
+	{
+		me(func: uid(1)) @filter(anyofterms(name"alice")) {
+		 name
+		}
+	}

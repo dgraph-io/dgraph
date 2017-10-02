@@ -1,0 +1,16 @@
+
+	{
+		var(func: uid(0x0a)) {
+			L AS friends {
+				B AS relatives
+			}
+		}
+
+		me(func: uid(L)) {
+		 name
+		}
+
+		relatives(func: uid(B)) {
+			name
+		}
+	}

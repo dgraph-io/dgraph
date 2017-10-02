@@ -1,0 +1,10 @@
+
+	{
+		var(func: uid(0x0a)) {
+			a as friends
+		}
+
+		me(func: uid(a)) {
+			uid(a)
+		}
+	}

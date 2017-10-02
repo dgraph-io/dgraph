@@ -1,0 +1,7 @@
+
+	{
+  		me(func: anyoftext(Text, "science")) {
+			Text(first: 1, first: 4)
+  		}
+	}
+	

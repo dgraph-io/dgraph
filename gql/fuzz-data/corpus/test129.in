@@ -1,0 +1,10 @@
+{
+		me(allofterms(name, "barack")) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+			count(friends)
+		}
+	}
