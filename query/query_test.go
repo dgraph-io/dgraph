@@ -260,7 +260,7 @@ func populateGraph(t *testing.T) {
 	addGeoData(t, ps, 5105, poly, "Mountain View")
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122.25, 37.49}, {-122.28, 37.49}, {-122.27, 37.51}, {-122.25, 37.52},
-			{-122.24, 37.51}},
+			{-122.25, 37.49}},
 	})
 	addGeoData(t, ps, 5106, poly, "San Carlos")
 

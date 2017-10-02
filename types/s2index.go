@@ -134,6 +134,9 @@ func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 	if n < 4 {
 		return nil, x.Errorf("Can't convert ring with less than 4 pts")
 	}
+	if !r.Coord(0).Equal(geom.XY, r.Coord(n-1)) {
+		return nil, x.Errorf("Last coordinate not same as first for polygon: %+v\n", p)
+	}
 	// S2 specifies that the orientation of the polygons should be CCW. However there is no
 	// restriction on the orientation in WKB (or geojson). To get the correct orientation we assume
 	// that the polygons are always less than one hemisphere. If they are bigger, we flip the

@@ -2529,6 +2529,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 			sg := req.Subgraphs[idx]
 			// We didn't get back any uids. So we would have to assign the uid and perform the
 			// mutation (i.e. the upsert operation).
+			// TODO - We can do upserts in parallel.
 			if sg.Params.upsert && (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) {
 				if len(sg.Filters) > 0 {
 					ferr = fmt.Errorf("Upsert query cannot have filters.")
