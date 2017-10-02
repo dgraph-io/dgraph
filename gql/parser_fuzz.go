@@ -6,7 +6,7 @@ package gql
 //
 // Build: go-fuzz-build github.com/dgraph-io/dgraph/gql
 //
-// Run: go-fuzz -bin=./gql-fuzz.zip -workdir fuzz-data/corpus
+// Run: go-fuzz -bin=./gql-fuzz.zip -workdir fuzz-data
 
 const (
 	fuzzInteresting = 1
