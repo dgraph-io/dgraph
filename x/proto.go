@@ -26,7 +26,7 @@ func AppendUvarint(p []byte, x uint64) []byte {
 }
 
 func ReserveCap(p []byte, atLeast int) []byte {
-	if atLeast >= cap(p) {
+	if cap(p) >= atLeast {
 		return p
 	}
 	newCap := cap(p) * 2
