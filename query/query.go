@@ -673,9 +673,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	attrsSeen := make(map[string]struct{})
 
 	for _, gchild := range gq.Children {
-		if (sg.Params.Alias == "shortest" || sg.Params.Alias == "recurse") &&
-			gchild.Expand != "" {
-			return x.Errorf("expand() not allowed inside shortest/recurse")
+		if sg.Params.Alias == "shortest" && gchild.Expand != "" {
+			return x.Errorf("expand() not allowed inside shortest")
 		}
 
 		key := ""
@@ -1714,6 +1713,54 @@ func uniquePreds(vl []*protos.ValueList) map[string]struct{} {
 	return preds
 }
 
+func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
+	out := make([]*SubGraph, 0, len(sg.Children))
+	var err error
+	for i := 0; i < len(sg.Children); i++ {
+		child := sg.Children[i]
+
+		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
+			return out,
+				x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
+		}
+
+		if child.Params.Expand == "" {
+			out = append(out, child)
+			continue
+		}
+
+		if !worker.Config.ExpandEdge {
+			return out,
+				x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
+		}
+
+		if child.Params.Expand == "_all_" {
+			// Get the predicate list for expansion. Otherwise we already
+			// have the list populated.
+			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
+			if err != nil {
+				return out, err
+			}
+		}
+
+		up := uniquePreds(child.ExpandPreds)
+		for k, _ := range up {
+			temp := new(SubGraph)
+			*temp = *child
+			temp.Params.isInternal = false
+			temp.Params.Expand = ""
+			temp.Attr = k
+			for _, ch := range sg.Children {
+				if ch.isSimilar(temp) {
+					return out, x.Errorf("Repeated subgraph while using expand()")
+				}
+			}
+			out = append(out, temp)
+		}
+	}
+	return out, nil
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
@@ -1941,52 +1988,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 
-	var out []*SubGraph
-	for i := 0; i < len(sg.Children); i++ {
-		child := sg.Children[i]
-
-		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
-			rch <- x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
-			return
-		}
-
-		if child.Params.Expand == "" {
-			out = append(out, child)
-			continue
-		}
-
-		if !worker.Config.ExpandEdge {
-			rch <- x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
-			return
-		}
-
-		if child.Params.Expand == "_all_" {
-			// Get the predicate list for expansion. Otherwise we already
-			// have the list populated.
-			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
-			if err != nil {
-				rch <- err
-				return
-			}
-		}
-
-		up := uniquePreds(child.ExpandPreds)
-		for k, _ := range up {
-			temp := new(SubGraph)
-			*temp = *child
-			temp.Params.isInternal = false
-			temp.Params.Expand = ""
-			temp.Attr = k
-			for _, ch := range sg.Children {
-				if ch.isSimilar(temp) {
-					rch <- x.Errorf("Repeated subgraph while using expand()")
-					return
-				}
-			}
-			out = append(out, temp)
-		}
+	if sg.Children, err = expandSubgraph(ctx, sg); err != nil {
+		rch <- err
+		return
 	}
-	sg.Children = out
 
 	if sg.IsGroupBy() {
 		// Add the attrs required by groupby nodes

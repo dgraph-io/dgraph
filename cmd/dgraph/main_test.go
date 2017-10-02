@@ -1823,6 +1823,47 @@ mutation {
 	require.NoError(t, err)
 }
 
+func TestRecurseExpandAll(t *testing.T) {
+	var q1 = `
+	{
+		recurse(func:anyofterms(name, "Alica")) {
+  			expand(_all_)
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+			<0x1> <name> "Alica" .
+			<0x1> <age> "13" .
+			<0x1> <friend> <0x4> .
+			<0x4> <name> "bob" .
+			<0x4> <age> "12" .
+		}
+	}
+	`
+
+	var s = `
+	mutation {
+		schema {
+			name:string @index(term) .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {"recurse":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
+}
+
 func TestMain(m *testing.M) {
 	dc := dgraph.DefaultConfig
 	dc.AllottedMemory = 2048.0
