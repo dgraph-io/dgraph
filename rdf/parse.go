@@ -117,8 +117,6 @@ L:
 			// grammar allows either ^^ iriref or lang tag
 			if len(oval) > 0 {
 				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{oval}}
-				// If no type is specified, we default to string.
-				rnq.ObjectType = int32(types.StringID)
 				oval = ""
 			}
 		case itemObjectType:
@@ -144,7 +142,6 @@ L:
 			if oval == "_nil_" && t != types.StringID {
 				return rnq, x.Errorf("Invalid ObjectValue")
 			}
-			rnq.ObjectType = int32(t)
 			src := types.ValueForType(types.StringID)
 			src.Value = []byte(oval)
 			p, err := types.Convert(src, t)
@@ -197,8 +194,6 @@ L:
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{oval}}
-		// If no type is specified, we default to string.
-		rnq.ObjectType = int32(types.DefaultID)
 	}
 	if (len(rnq.Subject) == 0 && len(rnq.SubjectVar) == 0) || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
