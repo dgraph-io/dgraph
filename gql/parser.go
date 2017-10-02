@@ -1475,7 +1475,9 @@ L:
 					} else {
 						// TODO: Refactor later, this is hacky way,Function name would be set as arg
 						// because of the way parser works
-						g.Args = g.Args[:len(g.Args)-1]
+						if len(g.Args) > 0 {
+							g.Args = g.Args[:len(g.Args)-1]
+						}
 					}
 					g.Args = append(g.Args, Arg{Value: f.NeedsVar[0].Name, IsValueVar: true})
 					g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
