@@ -150,9 +150,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			// if argument starts with '/' it's a regex, otherwise it's a division
 			if empty {
 				empty = false
-				lexRegex(l)
-				l.Emit(itemRegex)
-				continue
+				return lexRegex(l)
 			}
 			fallthrough
 		case isMathOp(r):
@@ -449,13 +447,13 @@ LOOP:
 	return lexTextMutation
 }
 
-func lexRegex(l *lex.Lexer) {
+func lexRegex(l *lex.Lexer) lex.StateFn {
 LOOP:
 	for {
 		r := l.Next()
 		switch r {
 		case lex.EOF:
-			return
+			return l.Errorf("Unclosed regexp")
 		case '\\':
 			l.Next()
 		case '/':
@@ -463,6 +461,8 @@ LOOP:
 		}
 	}
 	l.AcceptRun(isRegexFlag)
+	l.Emit(itemRegex)
+	return l.Mode
 }
 
 // lexOperationType lexes a query or mutation or schema operation type.

@@ -3799,7 +3799,7 @@ func TestParseRegexp6(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Expected arg after func [regexp]")
-	require.Contains(t, err.Error(), "Unclosed Brackets")
+	require.Contains(t, err.Error(), "Unclosed regexp")
 }
 
 func TestParseGraphQLVarId(t *testing.T) {
