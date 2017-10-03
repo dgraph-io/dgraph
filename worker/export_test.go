@@ -53,6 +53,7 @@ func populateGraphExport(t *testing.T) {
 		`<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,age=33,game="football") .`,
 		`<1> <name> "pho\ton" <author0> .`,
 		`<2> <name> "pho\ton"@en <author0> .`,
+		`<3> <name> "First Line\nSecondLine" .`,
 	}
 	idMap := map[string]uint64{
 		"1": 1,
@@ -151,12 +152,23 @@ func TestExport(t *testing.T) {
 	for scanner.Scan() {
 		nq, err := rdf.Parse(scanner.Text())
 		require.NoError(t, err)
-		// Subject should have uid 1/2/3/4.
 		require.Contains(t, []string{"_:uid1", "_:uid2", "_:uid3", "_:uid4"}, nq.Subject)
-		// The only value we set was "photon".
 		if nq.ObjectValue != nil {
-			require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\ton"}},
-				nq.ObjectValue)
+			switch nq.Subject {
+			case "_:uid1", "_:uid2":
+				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\ton"}},
+					nq.ObjectValue)
+			case "_:uid3":
+				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"First Line\nSecondLine"}},
+					nq.ObjectValue)
+			case "_:uid4":
+			default:
+				t.Errorf("Unexpected subject: %v", nq.Subject)
+			}
+			if nq.Subject == "_:uid1" || nq.Subject == "_:uid2" {
+				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\ton"}},
+					nq.ObjectValue)
+			}
 		}
 
 		// The only objectId we set was uid 5.
@@ -195,7 +207,7 @@ func TestExport(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 	// This order will be presereved due to file naming.
-	require.Equal(t, 6, count)
+	require.Equal(t, 7, count)
 
 	require.Equal(t, 1, len(schemaFileList))
 	file = schemaFileList[0]
