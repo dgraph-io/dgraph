@@ -1147,7 +1147,7 @@ func TestExpandPredError(t *testing.T) {
 	var q1 = `
 	{
 		me(func:anyofterms(name, "Alice")) {
-  		expand(_all_)
+  			expand(_all_)
 			name
 			friend
 		}
@@ -1183,6 +1183,7 @@ func TestExpandPredError(t *testing.T) {
 
 	_, err = runQuery(q1)
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Repeated subgraph")
 }
 
 func TestExpandPred(t *testing.T) {
@@ -1821,6 +1822,103 @@ mutation {
 	`
 	_, err = runQuery(q)
 	require.NoError(t, err)
+}
+
+func TestDropAll(t *testing.T) {
+	var q1 = `
+	mutation{
+		schema{
+			name: string @index(term) .
+		}
+		set{
+			_:foo <name> "Foo" .
+		}
+	}
+	{
+		q(func: allofterms(name, "Foo")) {
+			_uid_
+			name
+		}
+	}`
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	q1Result := map[string]interface{}{}
+	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
+	queryResults := q1Result["data"].(map[string]interface{})["q"].([]interface{})
+	name := queryResults[0].(map[string]interface{})["name"].(string)
+	require.Equal(t, "Foo", name)
+
+	q2 := "mutation{ dropall {} }"
+	_, err = runQuery(q2)
+	require.NoError(t, err)
+
+	q3 := "schema{}"
+	output, err = runQuery(q3)
+	require.NoError(t, err)
+	require.Equal(t,
+		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true}]}}`, output)
+
+	// Reinstate schema so that we can re-run the original query.
+	q4 := `
+	mutation {
+		schema{
+			name: string @index(term) .
+		}
+	}`
+	_, err = runQuery(q4)
+	require.NoError(t, err)
+
+	q5 := `
+	{
+		q(func: allofterms(name, "Foo")) {
+			_uid_
+			name
+		}
+	}`
+	output, err = runQuery(q5)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {"q":[]}}`, output)
+}
+
+func TestRecurseExpandAll(t *testing.T) {
+	var q1 = `
+	{
+		recurse(func:anyofterms(name, "Alica")) {
+  			expand(_all_)
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+			<0x1> <name> "Alica" .
+			<0x1> <age> "13" .
+			<0x1> <friend> <0x4> .
+			<0x4> <name> "bob" .
+			<0x4> <age> "12" .
+		}
+	}
+	`
+
+	var s = `
+	mutation {
+		schema {
+			name:string @index(term) .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"recurse":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
 }
 
 func TestMain(m *testing.M) {

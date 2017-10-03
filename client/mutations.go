@@ -544,6 +544,21 @@ L:
 	return nil
 }
 
+// DropAll deletes all edges and schema from Dgraph.
+func (d *Dgraph) DropAll() error {
+	req := &Req{
+		gr: protos.Request{
+			Mutation: &protos.Mutation{DropAll: true},
+		},
+	}
+	select {
+	case d.reqs <- req:
+		return nil
+	case <-d.opts.Ctx.Done():
+		return d.opts.Ctx.Err()
+	}
+}
+
 // AddSchema adds the given schema mutation to the batch of schema mutations.  If the schema
 // mutation applies an index to a UID edge, or if it adds reverse to a scalar edge, then the
 // mutation is not added to the batch and an error is returned. Once added, the client will
@@ -675,7 +690,11 @@ func (d *Dgraph) BatchFlush() error {
 // It's often easier to unpack directly into a struct with Unmarshal, than to
 // step through the response.
 func (d *Dgraph) Run(ctx context.Context, req *Req) (*protos.Response, error) {
-	return d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr)
+	res, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr)
+	if err == nil {
+		req = &Req{}
+	}
+	return res, err
 }
 
 // Counter returns the current state of the BatchMutation.

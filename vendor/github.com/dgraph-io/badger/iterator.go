@@ -208,6 +208,8 @@ func (it *Iterator) ValidForPrefix(prefix []byte) bool {
 // Close would close the iterator. It is important to call this when you're done with iteration.
 func (it *Iterator) Close() {
 	it.iitr.Close()
+	// TODO: We could handle this error.
+	_ = it.kv.vlog.decrIteratorCount()
 }
 
 // Next would advance the iterator by one. Always check it.Valid() after a Next()
@@ -343,6 +345,7 @@ func (it *Iterator) Rewind() {
 func (s *KV) NewIterator(opt IteratorOptions) *Iterator {
 	tables, decr := s.getMemTables()
 	defer decr()
+	s.vlog.incrIteratorCount()
 	var iters []y.Iterator
 	for i := 0; i < len(tables); i++ {
 		iters = append(iters, tables[i].NewUniIterator(opt.Reverse))

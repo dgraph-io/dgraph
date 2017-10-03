@@ -1,0 +1,15 @@
+
+	query {
+		me(func: uid(0x1)) {
+			friends @groupby(friends) {
+				a as max(first-name@en:ta)
+			}
+			hometown
+			age
+		}
+
+		groups(func: uid(a)) {
+			_uid_
+			val(a)
+		}
+	}

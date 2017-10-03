@@ -1,0 +1,4 @@
+{
+		"query": "query testQuery($a: bool , $b: float! = 3){root(func: uid( 0x0a) {name(first: $b)){english}}}",
+		"variables": {"$a": "5" }
+	}

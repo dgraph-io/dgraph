@@ -274,6 +274,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 
 		// Extract tokens.
 		toks, err := toker.Tokens(schemaVal)
+		x.Check(err)
 
 		// Store index posting.
 		for _, t := range toks {

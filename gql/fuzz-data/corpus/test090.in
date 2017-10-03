@@ -1,0 +1,12 @@
+
+		query versions($version: string = "v0.7.3/beta")
+		{
+			versions(func:eq(type, "version"))
+			{
+				versions @filter(eq(version_number, $version))
+				{
+					version_number
+				}
+			}
+		}
+	

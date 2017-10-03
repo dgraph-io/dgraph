@@ -3,3 +3,8 @@
 /installs
 /coverage.out
 dgraph-bulk-loader
+
+# fuzzing output
+gql/gql-fuzz.zip
+gql/fuzz-data/crashers
+gql/fuzz-data/suppressions

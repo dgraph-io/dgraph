@@ -1,0 +1,8 @@
+
+	{
+	  me(func:regexp(name, /^[a-zA-z]*[^Kk ]?[Nn]ight/), orderasc: name@en, first:5) {
+		name@en
+		name@de
+		name@it
+	  }
+	}

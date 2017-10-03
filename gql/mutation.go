@@ -32,9 +32,10 @@ var (
 
 // Mutation stores the strings corresponding to set and delete operations.
 type Mutation struct {
-	Set    []*protos.NQuad
-	Del    []*protos.NQuad
-	Schema string
+	Set     []*protos.NQuad
+	Del     []*protos.NQuad
+	DropAll bool
+	Schema  string
 }
 
 func (m Mutation) HasVariables() bool {
@@ -54,7 +55,7 @@ func (m Mutation) HasVariables() bool {
 // HasOps returns true iff the mutation has at least one non-empty
 // part.
 func (m Mutation) HasOps() bool {
-	return len(m.Set) > 0 || len(m.Del) > 0 || len(m.Schema) > 0
+	return len(m.Set) > 0 || len(m.Del) > 0 || len(m.Schema) > 0 || m.DropAll
 }
 
 // NeededVars retrieves NQuads and variable names of NQuads that refer a variable.
@@ -186,21 +187,21 @@ func typeValFrom(val *protos.Value) types.Val {
 	return types.Val{types.StringID, ""}
 }
 
-func byteVal(nq NQuad) ([]byte, error) {
+func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
 	p := typeValFrom(nq.ObjectValue)
 	// These three would have already been marshalled to bytes by the client or
 	// in parse function.
 	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {
-		return p.Value.([]byte), nil
+		return p.Value.([]byte), p.Tid, nil
 	}
 
 	p1 := types.ValueForType(types.BinaryID)
 	if err := types.Marshal(p, &p1); err != nil {
-		return []byte{}, err
+		return []byte{}, p.Tid, err
 	}
-	return []byte(p1.Value.([]byte)), nil
+	return []byte(p1.Value.([]byte)), p.Tid, nil
 }
 
 func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
@@ -379,10 +380,11 @@ func (nq *NQuad) ExpandVariables(newToUid map[string]uint64, subjectUids []uint6
 
 func copyValue(out *protos.DirectedEdge, nq NQuad) error {
 	var err error
-	if out.Value, err = byteVal(nq); err != nil {
+	var t types.TypeID
+	if out.Value, t, err = byteVal(nq); err != nil {
 		return err
 	}
-	out.ValueType = uint32(nq.ObjectType)
+	out.ValueType = uint32(t)
 	return nil
 }
 

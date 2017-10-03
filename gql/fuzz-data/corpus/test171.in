@@ -1,0 +1,9 @@
+
+	{
+	  me(func: uid(0x1)) {
+	    name
+		friend @filter(regexp(name@en, /case INSENSITIVE regexp with \/ escaped value/i)) {
+	      name@en
+	    }
+	  }
+    }

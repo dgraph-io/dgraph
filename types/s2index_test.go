@@ -114,6 +114,14 @@ func TestIndexCellsPolygon(t *testing.T) {
 	require.True(t, len(parents) > len(cover))
 }
 
+func TestIndexCellsPolygonError(t *testing.T) {
+	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 38}}})
+	_, _, err := indexCells(poly)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Last coordinate not same as first")
+}
+
 func TestKeyGeneratorPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)

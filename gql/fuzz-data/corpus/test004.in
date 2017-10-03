@@ -1,0 +1,6 @@
+
+	{
+		me(func: uid(0x0a)) {
+			pred: _predicate_
+		}
+	}

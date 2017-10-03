@@ -1,0 +1,12 @@
+
+	{
+		me(func: uid(), orderasc: val(n)) {
+			name
+		}
+
+		var(func: uid(0x0a)) {
+			friends {
+				n AS name
+			}
+		}
+	}

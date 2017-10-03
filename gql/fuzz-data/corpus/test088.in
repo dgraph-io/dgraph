@@ -1,0 +1,13 @@
+
+	query {
+		user(func: uid(0x0a)) {
+			...fragmenta
+		}
+	}
+	fragment fragmentb {
+		...fragmentc
+	}
+	fragment fragmentc {
+		id
+		...fragmenta
+	}

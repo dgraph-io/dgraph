@@ -1,0 +1,7 @@
+
+	{
+		me(func: uid( L, J, K)) {name}
+		var(func: uid(0x0a)) {L AS friends}
+		var(func: uid(0x0a)) {J AS friends}
+		var(func: uid(0x0a)) {K AS friends}
+	}

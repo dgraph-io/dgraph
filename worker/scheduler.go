@@ -96,6 +96,20 @@ func (s *scheduler) register(t *task) bool {
 }
 
 func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
+	if proposal.Mutations.DropAll {
+		if err := s.n.waitForSyncMark(s.n.ctx, index-1); err != nil {
+			s.n.props.Done(proposal.Id, err)
+			return err
+		}
+		schema.State().DeleteAll()
+		if err := posting.DeleteAll(); err != nil {
+			s.n.props.Done(proposal.Id, err)
+			return err
+		}
+		s.n.props.Done(proposal.Id, nil)
+		return nil
+	}
+
 	// ensures that index is not mark completed until all tasks
 	// are submitted to scheduler
 	total := len(proposal.Mutations.Edges)

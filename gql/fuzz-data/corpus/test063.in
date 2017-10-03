@@ -1,0 +1,15 @@
+
+		{
+			me(func: uid(0x0a)) {
+				name,
+				f as bestFriend: friends(first: 10) {
+					c as count(friend)
+				}
+			}
+
+			friend(func: uid(f)) {
+				name
+				fcount: val(c)
+			}
+		}
+	

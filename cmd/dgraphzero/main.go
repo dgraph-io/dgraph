@@ -182,8 +182,10 @@ func main() {
 		defer wg.Done()
 		<-sdCh
 		fmt.Println("Shutting down...")
-		go httpListener.Close()
-		go grpcListener.Close()
+		// Close doesn't close already opened connections.
+		httpListener.Close()
+		grpcListener.Close()
+		st.zero.shutDownCh <- struct{}{}
 	}()
 
 	fmt.Println("Running Dgraph zero...")

@@ -17,6 +17,7 @@
 package badger
 
 import (
+	"encoding/hex"
 	"expvar"
 	"log"
 	"os"
@@ -78,11 +79,17 @@ var ErrInvalidDir = errors.New("Invalid Dir, directory does not exist")
 
 // ErrValueLogSize is returned when opt.ValueLogFileSize option is not within the valid
 // range.
-var ErrValueLogSize = errors.New("Invalid ValueLogFileSize, must be between 1MB and 1GB")
+var ErrValueLogSize = errors.New("Invalid ValueLogFileSize, must be between 1MB and 2GB")
 
-// ErrExceedsMaxKeyValueSize is returned as part of Entry when the size of the key or value
-// exceeds the specified limits.
-var ErrExceedsMaxKeyValueSize = errors.New("Key (value) size exceeded 1MB (1GB) limit")
+func exceedsMaxKeySizeError(key []byte) error {
+	return errors.Errorf("Key with size %d exceeded %dMB limit. Key:\n%s",
+		len(key), maxKeySize<<20, hex.Dump(key[:1<<10]))
+}
+
+func exceedsMaxValueSizeError(value []byte, maxValueSize int64) error {
+	return errors.Errorf("Value with size %d exceeded ValueLogFileSize (%dMB). Key:\n%s",
+		len(value), maxValueSize<<20, hex.Dump(value[:1<<10]))
+}
 
 const (
 	kvWriteChCapacity = 1000
@@ -93,6 +100,7 @@ func NewKV(optParam *Options) (out *KV, err error) {
 	// Make a copy early and fill in maxBatchSize
 	opt := *optParam
 	opt.maxBatchSize = (15 * opt.MaxTableSize) / 100
+	opt.maxBatchCount = opt.maxBatchSize / int64(skl.MaxNodeSize)
 
 	for _, path := range []string{opt.Dir, opt.ValueDir} {
 		dirExists, err := exists(path)
@@ -253,14 +261,21 @@ func NewKV(optParam *Options) (out *KV, err error) {
 	if err = out.vlog.Replay(vptr, fn); err != nil {
 		return out, err
 	}
+
 	replayCloser.SignalAndWait() // Wait for replay to be applied first.
+
+	// Mmap writable log
+	lf := out.vlog.filesMap[out.vlog.maxFid]
+	if err = lf.mmap(2 * out.vlog.opt.ValueLogFileSize); err != nil {
+		return out, errors.Wrapf(err, "Unable to mmap RDWR log file")
+	}
 
 	out.writeCh = make(chan *request, kvWriteChCapacity)
 	out.closers.writes = y.NewCloser(1)
 	go out.doWrites(out.closers.writes)
 
 	out.closers.valueGC = y.NewCloser(1)
-	go out.vlog.runGCInLoop(out.closers.valueGC)
+	go out.vlog.waitOnGC(out.closers.valueGC)
 
 	valueDirLockGuard = nil
 	dirLockGuard = nil
@@ -697,12 +712,17 @@ func (s *KV) doWrites(lc *y.Closer) {
 
 func (s *KV) sendToWriteCh(entries []*Entry) []*request {
 	var reqs []*request
-	var size int64
+	var count, size int64
 	var b *request
 	var bad []*Entry
 	for _, entry := range entries {
-		if len(entry.Key) > maxKeySize || len(entry.Value) > maxValueSize {
-			entry.Error = ErrExceedsMaxKeyValueSize
+		if len(entry.Key) > maxKeySize {
+			entry.Error = exceedsMaxKeySizeError(entry.Key)
+			bad = append(bad, entry)
+			continue
+		}
+		if len(entry.Value) > int(s.opt.ValueLogFileSize) {
+			entry.Error = exceedsMaxValueSizeError(entry.Value, s.opt.ValueLogFileSize)
 			bad = append(bad, entry)
 			continue
 		}
@@ -712,12 +732,14 @@ func (s *KV) sendToWriteCh(entries []*Entry) []*request {
 			b.Wg = sync.WaitGroup{}
 			b.Wg.Add(1)
 		}
+		count++
 		size += int64(s.opt.estimateSize(entry))
 		b.Entries = append(b.Entries, entry)
-		if size >= s.opt.maxBatchSize {
+		if count >= s.opt.maxBatchCount || size >= s.opt.maxBatchSize {
 			s.writeCh <- b
 			y.NumPuts.Add(int64(len(b.Entries)))
 			reqs = append(reqs, b)
+			count = 0
 			size = 0
 			b = nil
 		}
@@ -1029,7 +1051,7 @@ func (s *KV) ensureRoomForWrite() error {
 }
 
 func arenaSize(opt *Options) int64 {
-	return opt.MaxTableSize + opt.maxBatchSize
+	return opt.MaxTableSize + opt.maxBatchSize + opt.maxBatchCount*int64(skl.MaxNodeSize)
 }
 
 // WriteLevel0Table flushes memtable. It drops deleteValues.
@@ -1175,4 +1197,31 @@ func (s *KV) updateSize(lc *y.Closer) {
 			return
 		}
 	}
+}
+
+// RunValueLogGC would trigger a value log garbage collection with no guarantees that a call would
+// result in a space reclaim. Every run would in the best case rewrite only one log file. So,
+// repeated calls may be necessary.
+//
+// The way it currently works is that it would randomly pick up a value log file, and sample it. If
+// the sample shows that we can discard at least discardRatio space of that file, it would be
+// rewritten. Else, an ErrNoRewrite error would be returned indicating that the GC didn't result in
+// any file rewrite.
+//
+// We recommend setting discardRatio to 0.5, thus indicating that a file be rewritten if half the
+// space can be discarded.  This results in a lifetime value log write amplification of 2 (1 from
+// original write + 0.5 rewrite + 0.25 + 0.125 + ... = 2). Setting it to higher value would result
+// in fewer space reclaims, while setting it to a lower value would result in more space reclaims at
+// the cost of increased activity on the LSM tree. discardRatio must be in the range (0.0, 1.0),
+// both endpoints excluded, otherwise an ErrInvalidRequest is returned.
+//
+// Only one GC is allowed at a time. If another value log GC is running, or KV has been closed, this
+// would return an ErrRejected.
+//
+// Note: Every time GC is run, it would produce a spike of activity on the LSM tree.
+func (s *KV) RunValueLogGC(discardRatio float64) error {
+	if discardRatio >= 1.0 || discardRatio <= 0.0 {
+		return ErrInvalidRequest
+	}
+	return s.vlog.runGC(discardRatio)
 }

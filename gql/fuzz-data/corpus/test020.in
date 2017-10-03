@@ -1,0 +1,18 @@
+
+	{
+		me(func: uid(L), orderasc: val(d) ) {
+			name
+			val(f)
+		}
+
+		var(func: uid(0x0a)) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as math(cond(a <= 10, exp(a + b + 1), ln(c)) + 10*a)
+				e as math(cond(a!=10, exp(a + b + 1), ln(d)))
+				f as math(cond(a==10, exp(a + b + 1), ln(e)))
+			}
+		}
+	}

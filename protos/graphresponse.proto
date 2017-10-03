@@ -42,11 +42,10 @@ message NQuad {
     string object_id = 3;
     Value object_value = 4;
     string label = 5;
-    string lang = 7;
-    sint32 objectType = 6;
-    repeated Facet facets = 8;
-    string subject_var = 9;
-    string object_var = 10;
+    string lang = 6;
+    repeated Facet facets = 7;
+    string subject_var = 8;
+    string object_var = 9;
 }
 
 message Value {
@@ -71,6 +70,7 @@ message Mutation {
     repeated SchemaUpdate schema = 3;
     bytes set_json = 4;
     bytes delete_json = 5;
+    bool DropAll = 6;
 }
 
 message Request {

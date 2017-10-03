@@ -1,0 +1,13 @@
+
+	{
+		me(func: val(L), orderasc: val(n)) {
+			name
+		}
+
+		var(func: uid(0x0a)) {
+			L AS friends {
+				na as name
+			}
+			n as min(val(na))
+		}
+	}

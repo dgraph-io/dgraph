@@ -65,6 +65,18 @@ func State() *stateGroup {
 	return pstate
 }
 
+func (s *stateGroup) DeleteAll() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.predicate = map[string]*protos.SchemaUpdate{
+		"_predicate_": &protos.SchemaUpdate{
+			ValueType: uint32(types.StringID),
+			List:      true,
+		},
+	}
+}
+
 // Update updates the schema in memory and sends an entry to syncCh so that it can be
 // committed later
 func (s *stateGroup) Update(se SyncEntry) {

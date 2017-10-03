@@ -60,7 +60,8 @@ func ExampleReq_Set() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	// Create new request
 	req := client.Req{}
@@ -110,7 +111,8 @@ func ExampleReq_Delete() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	// Create new request
 	req := client.Req{}
@@ -213,7 +215,8 @@ func ExampleEdge_AddFacet() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -272,24 +275,24 @@ func ExampleEdge_AddFacet() {
 
 	// Types representing information in the graph.
 	type nameFacets struct {
-		Since time.Time `dgraph:"since"`
-		Alias string    `dgraph:"alias"`
+		Since time.Time `json:"since"`
+		Alias string    `json:"alias"`
 	}
 
 	type friendFacets struct {
-		Close bool `dgraph:"close"`
+		Close bool `json:"close"`
 	}
 
 	type Person struct {
-		Name         string       `dgraph:"name"`
-		NameFacets   nameFacets   `dgraph:"name@facets"`
-		Friends      []Person     `dgraph:"friend"`
-		FriendFacets friendFacets `dgraph:"@facets"`
+		Name         string       `json:"name"`
+		NameFacets   nameFacets   `json:"name@facets"`
+		Friends      []Person     `json:"friend"`
+		FriendFacets friendFacets `json:"@facets"`
 	}
 
 	// Helper type to unmarshal query
 	type Res struct {
-		Root Person `dgraph:"query"`
+		Root Person `json:"query"`
 	}
 
 	var pq Res
@@ -299,7 +302,8 @@ func ExampleEdge_AddFacet() {
 	}
 
 	fmt.Println("Found : ", pq.Root.Name)
-	fmt.Println("Who likes to be called : ", pq.Root.NameFacets.Alias, " since ", pq.Root.NameFacets.Since)
+	fmt.Println("Who likes to be called : ", pq.Root.NameFacets.Alias,
+		" since ", pq.Root.NameFacets.Since)
 	fmt.Println("Friends : ")
 	for i := range pq.Root.Friends {
 		fmt.Print("\t", pq.Root.Friends[i].Name)
@@ -322,7 +326,8 @@ func ExampleReq_SetQuery() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 	alice, err := dgraphClient.NodeXid("alice", false)
@@ -359,12 +364,12 @@ func ExampleReq_SetQuery() {
 	}
 
 	type Alice struct {
-		Name         string `dgraph:"name"`
-		WhatHappened string `dgraph:"falls.in"`
+		Name         string `json:"name"`
+		WhatHappened string `json:"falls.in"`
 	}
 
 	type Res struct {
-		Root Alice `dgraph:"me"`
+		Root Alice `json:"me"`
 	}
 
 	var r Res
@@ -384,7 +389,8 @@ func ExampleReq_SetQueryWithVariables() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -424,12 +430,12 @@ func ExampleReq_SetQueryWithVariables() {
 	}
 
 	type Alice struct {
-		Name         string `dgraph:"name"`
-		WhatHappened string `dgraph:"falls.in"`
+		Name         string `json:"name"`
+		WhatHappened string `json:"falls.in"`
 	}
 
 	type Res struct {
-		Root Alice `dgraph:"me"`
+		Root Alice `json:"me"`
 	}
 
 	var r Res
@@ -449,7 +455,8 @@ func ExampleDgraph_NodeUidVar() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -510,6 +517,21 @@ func ExampleDgraph_NodeUidVar() {
 	x.Check(err)
 }
 
+func ExampleDgraph_DropAll() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Checkf(err, "While creating temp dir")
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	x.Checkf(dgraphClient.DropAll(), "While dropping all")
+	x.Checkf(dgraphClient.Close(), "While closing client")
+}
+
 func ExampleEdge_SetValueBytes() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
@@ -519,7 +541,8 @@ func ExampleEdge_SetValueBytes() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -556,12 +579,12 @@ func ExampleEdge_SetValueBytes() {
 	}
 
 	type Alice struct {
-		Name      string `dgraph:"name"`
-		ByteValue []byte `dgraph:"somestoredbytes"`
+		Name      string `json:"name"`
+		ByteValue []byte `json:"somestoredbytes"`
 	}
 
 	type Res struct {
-		Root Alice `dgraph:"q"`
+		Root Alice `json:"q"`
 	}
 
 	var r Res
@@ -581,7 +604,8 @@ func ExampleUnmarshal() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -621,13 +645,13 @@ mutation {
 
 	// A type representing information in the graph.
 	type person struct {
-		Name    string   `dgraph:"name"`
-		Friends []person `dgraph:"friend"`
+		Name    string   `json:"name"`
+		Friends []person `json:"friend"`
 	}
 
 	// A helper type matching the query root.
 	type friends struct {
-		Root person `dgraph:"friends"`
+		Root person `json:"friends"`
 	}
 
 	var f friends
@@ -656,7 +680,8 @@ func ExampleUnmarshal_facetsUpdate() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -697,20 +722,20 @@ mutation {
 	// Unmarshal the response into a custom struct
 
 	type friendFacets struct {
-		Close bool `dgraph:"close"`
+		Close bool `json:"close"`
 	}
 
 	// A type representing information in the graph.
 	type person struct {
-		ID           uint64        `dgraph:"_uid_"` // record the UID for our update
-		Name         string        `dgraph:"name"`
-		Friends      []*person     `dgraph:"friend"` // Unmarshal with pointers to structs
-		FriendFacets *friendFacets `dgraph:"@facets"`
+		ID           uint64        `json:"_uid_"` // record the UID for our update
+		Name         string        `json:"name"`
+		Friends      []*person     `json:"friend"` // Unmarshal with pointers to structs
+		FriendFacets *friendFacets `json:"@facets"`
 	}
 
 	// A helper type matching the query root.
 	type friends struct {
-		Root person `dgraph:"friends"`
+		Root person `json:"friends"`
 	}
 
 	var f friends
@@ -750,7 +775,8 @@ func ExampleEdge_SetValueGeoJson() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -770,7 +796,10 @@ func ExampleEdge_SetValueGeoJson() {
 	x.Check(err)
 
 	e = alice.Edge("city")
-	err = e.SetValueGeoJson(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
+	err = e.SetValueGeoJson(`{
+		"Type":"Polygon",
+		"Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]
+	}`)
 	x.Check(err)
 	err = req.Set(e)
 	x.Check(err)
@@ -794,13 +823,13 @@ func ExampleEdge_SetValueGeoJson() {
 	}
 
 	type Alice struct {
-		Name string `dgraph:"name"`
-		Loc  []byte `dgraph:"loc"`
-		City []byte `dgraph:"city"`
+		Name string `json:"name"`
+		Loc  []byte `json:"loc"`
+		City []byte `json:"city"`
 	}
 
 	type Res struct {
-		Root Alice `dgraph:"q"`
+		Root Alice `json:"q"`
 	}
 
 	var r Res

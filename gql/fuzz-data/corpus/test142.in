@@ -1,0 +1,9 @@
+{
+		me(func:anyofterms(<http://helloworld.com/how/are/you>, "good better bad")) {
+			<http://verygood.com/what/about/you>
+			friends @filter(allofterms(<http://verygood.com/what/about/you>,
+				"good better bad")){
+				name
+			}
+		}
+	}

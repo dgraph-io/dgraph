@@ -1,0 +1,1 @@
+{e(func:uid(L),orderasc:val(d)){e	val(q)}r(func:uid()){L as s{a as e	b as count(s)c as count(s)d as math((a+b+1)-ln(c))q as math(c*-1+-b+(-b*c))}}}

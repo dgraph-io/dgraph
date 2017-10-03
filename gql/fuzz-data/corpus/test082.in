@@ -1,0 +1,17 @@
+
+		mutation {
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san/francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+		query {
+			me(func: uid( 0x5)) {
+				name
+				hometown
+			}
+		}
+	

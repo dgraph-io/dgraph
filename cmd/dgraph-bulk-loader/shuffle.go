@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
@@ -50,7 +49,6 @@ func (s *shuffler) run() {
 
 func (s *shuffler) createBadger(i int) *badger.KV {
 	opt := badger.DefaultOptions
-	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = s.opt.shardOutputDirs[i]
