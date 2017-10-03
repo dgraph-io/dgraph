@@ -711,16 +711,26 @@ var testNQuads = []struct {
 	},
 	{
 		// Quotes inside facet string values.
-		input: `_:alice <knows> "stuff" (key1="\"hello world\"") .`,
+		input: `_:alice <knows> "stuff" (key1="\"hello world\"",key2="LineA\nLineB") .`,
 		nq: protos.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"stuff"}},
 			Facets: []*protos.Facet{
-				{"key1", []byte(`\"hello world\"`),
-					facets.ValTypeForTypeID(facets.StringID),
-					[]string{"\001hello", "\001world"}, "",
+				{
+					Key:     "key1",
+					Value:   []byte(`"hello world"`),
+					ValType: facets.ValTypeForTypeID(facets.StringID),
+					Tokens:  []string{"\001hello", "\001world"},
+					Val:     "",
+				},
+				{
+					Key:     "key2",
+					Value:   []byte("LineA\nLineB"),
+					ValType: facets.ValTypeForTypeID(facets.StringID),
+					Tokens:  []string{"\001linea", "\001lineb"},
+					Val:     "",
 				},
 			},
 		},

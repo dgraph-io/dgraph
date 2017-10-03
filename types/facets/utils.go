@@ -79,7 +79,8 @@ func valAndValType(val string) (interface{}, protos.Facet_ValType, error) {
 	}
 	// strings should be in quotes.
 	if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
-		return val[1 : len(val)-1], protos.Facet_STRING, nil
+		uq, err := strconv.Unquote(val)
+		return uq, protos.Facet_STRING, x.Wrapf(err, "could not unquote %q:", val)
 	}
 	if intVal, err := strconv.ParseInt(val, 0, 64); err == nil {
 		return int64(intVal), protos.Facet_INT, nil
@@ -132,7 +133,7 @@ func FacetFor(key, val string) (*protos.Facet, error) {
 	res := &protos.Facet{Key: key, Value: fval, ValType: vt}
 	if vt == protos.Facet_STRING {
 		// tokenize val.
-		res.Tokens, err = tok.GetTokens([]string{val})
+		res.Tokens, err = tok.GetTokens([]string{v.(string)})
 		if err == nil {
 			sort.Strings(res.Tokens)
 		}
