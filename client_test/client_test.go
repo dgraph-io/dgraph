@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -842,6 +843,9 @@ func TestSetObjectWithFacets(t *testing.T) {
 	var r Root
 	require.NoError(t, client.Unmarshal(resp.N, &r))
 	// Compare the objects.
+	sort.Slice(r.Me.Friends, func(i, j int) bool {
+		return r.Me.Friends[i].Name < r.Me.Friends[j].Name
+	})
 	require.EqualValues(t, p, r.Me)
 }
 
