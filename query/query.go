@@ -146,7 +146,7 @@ type params struct {
 	ExploreDepth   uint64
 	isInternal     bool   // Determines if processTask has to be called or not.
 	ignoreResult   bool   // Node results are ignored.
-	Expand         string // Var to use for expand.
+	Expand         string // Value is either _all_/variable-name or empty.
 	isGroupBy      bool
 	groupbyAttrs   []gql.AttrLang
 	uidCount       string
@@ -154,6 +154,8 @@ type params struct {
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	upsert         bool
+	// This is a child which the user didn't supply explicitly and we got it using expand(_all_)
+	expanded bool
 }
 
 // Function holds the information about gql functions.
@@ -673,9 +675,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	attrsSeen := make(map[string]struct{})
 
 	for _, gchild := range gq.Children {
-		if (sg.Params.Alias == "shortest" || sg.Params.Alias == "recurse") &&
-			gchild.Expand != "" {
-			return x.Errorf("expand() not allowed inside shortest/recurse")
+		if sg.Params.Alias == "shortest" && gchild.Expand != "" {
+			return x.Errorf("expand() not allowed inside shortest")
 		}
 
 		key := ""
@@ -1011,6 +1012,7 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
+		Expanded:     sg.Params.expanded,
 	}
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
@@ -1714,6 +1716,55 @@ func uniquePreds(vl []*protos.ValueList) map[string]struct{} {
 	return preds
 }
 
+func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
+	out := make([]*SubGraph, 0, len(sg.Children))
+	var err error
+	for i := 0; i < len(sg.Children); i++ {
+		child := sg.Children[i]
+
+		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
+			return out,
+				x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
+		}
+
+		if child.Params.Expand == "" {
+			out = append(out, child)
+			continue
+		}
+
+		if !worker.Config.ExpandEdge {
+			return out,
+				x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
+		}
+
+		if child.Params.Expand == "_all_" {
+			// Get the predicate list for expansion. Otherwise we already
+			// have the list populated.
+			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
+			if err != nil {
+				return out, err
+			}
+		}
+
+		up := uniquePreds(child.ExpandPreds)
+		for k, _ := range up {
+			temp := new(SubGraph)
+			*temp = *child
+			temp.Params.isInternal = false
+			temp.Params.Expand = ""
+			temp.Params.expanded = true
+			temp.Attr = k
+			for _, ch := range sg.Children {
+				if ch.isSimilar(temp) {
+					return out, x.Errorf("Repeated subgraph: [%s] while using expand()", ch.Attr)
+				}
+			}
+			out = append(out, temp)
+		}
+	}
+	return out, nil
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
@@ -1941,52 +1992,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 
-	var out []*SubGraph
-	for i := 0; i < len(sg.Children); i++ {
-		child := sg.Children[i]
-
-		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
-			rch <- x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
-			return
-		}
-
-		if child.Params.Expand == "" {
-			out = append(out, child)
-			continue
-		}
-
-		if !worker.Config.ExpandEdge {
-			rch <- x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
-			return
-		}
-
-		if child.Params.Expand == "_all_" {
-			// Get the predicate list for expansion. Otherwise we already
-			// have the list populated.
-			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
-			if err != nil {
-				rch <- err
-				return
-			}
-		}
-
-		up := uniquePreds(child.ExpandPreds)
-		for k, _ := range up {
-			temp := new(SubGraph)
-			*temp = *child
-			temp.Params.isInternal = false
-			temp.Params.Expand = ""
-			temp.Attr = k
-			for _, ch := range sg.Children {
-				if ch.isSimilar(temp) {
-					rch <- x.Errorf("Repeated subgraph while using expand()")
-					return
-				}
-			}
-			out = append(out, temp)
-		}
+	if sg.Children, err = expandSubgraph(ctx, sg); err != nil {
+		rch <- err
+		return
 	}
-	sg.Children = out
 
 	if sg.IsGroupBy() {
 		// Add the attrs required by groupby nodes
@@ -2524,6 +2533,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 			sg := req.Subgraphs[idx]
 			// We didn't get back any uids. So we would have to assign the uid and perform the
 			// mutation (i.e. the upsert operation).
+			// TODO - We can do upserts in parallel.
 			if sg.Params.upsert && (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) {
 				if len(sg.Filters) > 0 {
 					ferr = fmt.Errorf("Upsert query cannot have filters.")

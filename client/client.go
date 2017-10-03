@@ -261,7 +261,7 @@ func NewEdge(nq protos.NQuad) Edge {
 // ConnectTo adds Node n as the target of the edge.  If the edge already has a known scalar type,
 // for example if Edge.SetValue...() had been called on the edge, then an error is returned.
 func (e *Edge) ConnectTo(n Node) error {
-	if e.nq.ObjectType > 0 {
+	if e.nq.ObjectValue != nil {
 		return ErrValue
 	}
 	if len(n.varName) != 0 {
@@ -334,7 +334,6 @@ func (e *Edge) setValueString(val string) error {
 		return err
 	}
 	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.StringID)
 	return nil
 }
 
@@ -370,7 +369,6 @@ func (e *Edge) SetValueInt(val int64) error {
 		return err
 	}
 	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.IntID)
 	return nil
 }
 
@@ -387,7 +385,6 @@ func (e *Edge) SetValueFloat(val float64) error {
 		return err
 	}
 	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.FloatID)
 	return nil
 }
 
@@ -404,7 +401,6 @@ func (e *Edge) SetValueBool(val bool) error {
 		return err
 	}
 	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.BoolID)
 	return nil
 }
 
@@ -421,7 +417,6 @@ func (e *Edge) SetValuePassword(val string) error {
 		return err
 	}
 	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.PasswordID)
 	return nil
 }
 
@@ -438,7 +433,6 @@ func (e *Edge) SetValueDatetime(dateTime time.Time) error {
 		return err
 	}
 	e.nq.ObjectValue = d
-	e.nq.ObjectType = int32(types.DateTimeID)
 	return nil
 }
 
@@ -464,8 +458,6 @@ func (e *Edge) SetValueGeoJson(json string) error {
 	}
 
 	e.nq.ObjectValue = geo
-	e.nq.ObjectType = int32(types.GeoID)
-
 	return nil
 }
 
@@ -485,7 +477,6 @@ func (e *Edge) SetValueGeoGeometry(g geom.T) error {
 	}
 	geo := &protos.Value{&protos.Value_GeoVal{b}}
 	e.nq.ObjectValue = geo
-	e.nq.ObjectType = int32(types.GeoID)
 	return nil
 }
 
@@ -507,7 +498,6 @@ func (e *Edge) SetValueDefault(val string) error {
 		return err
 	}
 	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.StringID)
 	return nil
 }
 
@@ -526,7 +516,6 @@ func (e *Edge) SetValueBytes(val []byte) error {
 		return err
 	}
 	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.BinaryID)
 	return nil
 }
 

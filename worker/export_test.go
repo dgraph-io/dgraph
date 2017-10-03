@@ -157,13 +157,6 @@ func TestExport(t *testing.T) {
 		if nq.ObjectValue != nil {
 			require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\\ton"}},
 				nq.ObjectValue)
-			// Test objecttype
-			if nq.Subject == "_:uid1" {
-				require.Equal(t, int32(0), nq.ObjectType)
-			} else if nq.Subject == "_:uid2" {
-				// string type because of lang @en
-				require.Equal(t, int32(9), nq.ObjectType)
-			}
 		}
 
 		// The only objectId we set was uid 5.

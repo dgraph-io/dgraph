@@ -260,7 +260,7 @@ func populateGraph(t *testing.T) {
 	addGeoData(t, ps, 5105, poly, "Mountain View")
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122.25, 37.49}, {-122.28, 37.49}, {-122.27, 37.51}, {-122.25, 37.52},
-			{-122.24, 37.51}},
+			{-122.25, 37.49}},
 	})
 	addGeoData(t, ps, 5106, poly, "San Carlos")
 
@@ -2863,11 +2863,57 @@ func TestQueryPassword(t *testing.T) {
 	`
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
-
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
 	_, err = queryRequest.ProcessQuery(defaultContext())
-
 	require.NotNil(t, err)
+}
+func TestPasswordExpandAll1(t *testing.T) {
+	populateGraph(t)
+	addPassword(t, 1, "password", "123456")
+	// We ignore password in expand(_all_)
+	query := `
+    {
+        me(func: uid(0x01)) {
+			expand(_all_)
+		}
+    }
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"alive":true,"loc":{"type":"Point","coordinates":[1.1,2]},"sword_present":"true","gender":"female","power":13.250000,"graduation":"1932-01-01T00:00:00Z","_xid_":"mich","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","noindex_name":"Michonne's name not indexed","name":"Michonne","age":38,"full_name":"Michonne's large name for hashing","bin_data":"YmluLWRhdGE=","survival_rate":98.990000,"address":"31, 32 street, Jupiter"}]}}`, js)
+}
+
+func TestPasswordExpandAll2(t *testing.T) {
+	populateGraph(t)
+	addPassword(t, 1, "password", "123456")
+	query := `
+    {
+        me(func: uid(0x01)) {
+			expand(_all_)
+			checkpwd(password, "12345")
+		}
+    }
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"sword_present":"true","bin_data":"YmluLWRhdGE=","power":13.250000,"_xid_":"mich","name":"Michonne","age":38,"dob_day":"1910-01-01T00:00:00Z","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","gender":"female","noindex_name":"Michonne's name not indexed","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"graduation":"1932-01-01T00:00:00Z","full_name":"Michonne's large name for hashing","alive":true,"password":[{"checkpwd":false}]}]}}`, js)
+}
+
+func TestPasswordExpandError(t *testing.T) {
+	populateGraph(t)
+	addPassword(t, 1, "password", "123456")
+	query := `
+    {
+        me(func: uid(0x01)) {
+			expand(_all_)
+			password
+		}
+    }
+	`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	_, err = queryRequest.ProcessQuery(defaultContext())
+	require.NotNil(t, err)
+	require.Contains(t, err.Error(), "Repeated subgraph: [password]")
 }
 
 func TestCheckPassword(t *testing.T) {
@@ -2986,7 +3032,7 @@ func TestCheckPasswordQuery1(t *testing.T) {
 	`
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
-	require.EqualValues(t, "Attribute `password` of type password cannot be fetched", err.Error())
+	require.EqualValues(t, "Attribute: [password] of type password cannot be fetched.", err.Error())
 }
 
 // test for improved version of checkpwd with custom attribute name
@@ -3004,7 +3050,7 @@ func TestCheckPasswordQuery2(t *testing.T) {
 	`
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
-	require.EqualValues(t, "Attribute `pass` of type password cannot be fetched", err.Error())
+	require.EqualValues(t, "Attribute: [pass] of type password cannot be fetched.", err.Error())
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {
@@ -6992,6 +7038,7 @@ func TestMain(m *testing.M) {
 	worker.Config.PeerAddr = "localhost:12340"
 	worker.Config.RaftId = 1
 	worker.Config.MyAddr = "localhost:12345"
+	worker.Config.ExpandEdge = true
 	schema.Init(ps)
 	posting.Init(ps)
 	worker.Init(ps)
@@ -8352,15 +8399,15 @@ func TestMultipleEqInt(t *testing.T) {
 
 func TestPBUnmarshalToStruct1(t *testing.T) {
 	type Person struct {
-		Name       string `dgraph:"name"`
-		Age        int    `dgraph:"age"`
+		Name       string `json:"name"`
+		Age        int    `json:"age"`
 		Birth      string
-		BinaryData []byte   `dgraph:"bin_data"`
-		Friends    []Person `dgraph:"friend"`
+		BinaryData []byte   `json:"bin_data"`
+		Friends    []Person `json:"friend"`
 	}
 
 	type res struct {
-		Root Person `dgraph:"me"`
+		Root Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8395,18 +8442,18 @@ func TestPBUnmarshalToStruct1(t *testing.T) {
 
 func TestPBUnmarshalToStruct2(t *testing.T) {
 	type Person struct {
-		Id       uint64    `dgraph:"_uid_"`
-		Name     string    `dgraph:"name"`
-		Age      int       `dgraph:"age"`
-		Birth    time.Time `dgraph:"dob"`
-		Alive    bool      `dgraph:"alive"`
-		Survival float64   `dgraph:"survival_rate"`
-		Location geom.T    `dgraph:"location"`
-		Friends  []Person  `dgraph:"friend"`
+		Id       uint64    `json:"_uid_"`
+		Name     string    `json:"name"`
+		Age      int       `json:"age"`
+		Birth    time.Time `json:"dob"`
+		Alive    bool      `json:"alive"`
+		Survival float64   `json:"survival_rate"`
+		Location geom.T    `json:"location"`
+		Friends  []Person  `json:"friend"`
 	}
 
 	type res struct {
-		Root []Person `dgraph:"me"`
+		Root []Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8436,23 +8483,23 @@ func TestPBUnmarshalToStruct2(t *testing.T) {
 	require.Equal(t, 4, len(r.Root))
 	js, err := json.Marshal(r.Root[0])
 	require.NoError(t, err)
-	require.Equal(t, `{"Id":1,"Name":"Michonne","Age":38,"Birth":"1910-01-01T00:00:00Z","Alive":true,"Survival":98.99,"Location":null,"Friends":[{"Id":23,"Name":"Rick Grimes","Age":15,"Birth":"1910-01-02T00:00:00Z","Alive":false,"Survival":0,"Location":null,"Friends":null}]}`, string(js))
+	require.JSONEq(t, `{"_uid_":1,"name":"Michonne","age":38,"dob":"1910-01-01T00:00:00Z","alive":true,"survival_rate":98.99,"location":null,"friend":[{"_uid_":23,"name":"Rick Grimes","age":15,"dob":"1910-01-02T00:00:00Z","alive":false,"survival_rate":0,"location":null,"friend":null}]}`, string(js))
 }
 
 func TestPBUnmarshalToStruct3(t *testing.T) {
 	type Person struct {
-		Id       uint64    `dgraph:"_uid_"`
-		Name     string    `dgraph:"name"`
-		Age      int       `dgraph:"age"`
-		Birth    time.Time `dgraph:"dob"`
-		Alive    bool      `dgraph:"alive"`
-		Survival float64   `dgraph:"survival_rate"`
-		Location []byte    `dgraph:"loc"`
-		Friends  []*Person `dgraph:"friend"`
+		Id       uint64    `json:"_uid_"`
+		Name     string    `json:"name"`
+		Age      int       `json:"age"`
+		Birth    time.Time `json:"dob"`
+		Alive    bool      `json:"alive"`
+		Survival float64   `json:"survival_rate"`
+		Location []byte    `json:"loc"`
+		Friends  []*Person `json:"friend"`
 	}
 
 	type res struct {
-		Root []*Person `dgraph:"me"`
+		Root []*Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8485,19 +8532,19 @@ func TestPBUnmarshalToStruct3(t *testing.T) {
 	require.Equal(t, 4, len(r.Root))
 	js, err := json.Marshal(r.Root[0])
 	require.NoError(t, err)
-	require.Equal(t, `{"Id":1,"Name":"Michonne","Age":38,"Birth":"1910-01-01T00:00:00Z","Alive":true,"Survival":98.99,"Location":"AQEAAACamZmZmZnxPwAAAAAAAABA","Friends":[{"Id":23,"Name":"Rick Grimes","Age":15,"Birth":"1910-01-02T00:00:00Z","Alive":false,"Survival":0,"Location":null,"Friends":null}]}`, string(js))
+	require.JSONEq(t, `{"_uid_":1,"name":"Michonne","age":38,"dob":"1910-01-01T00:00:00Z","alive":true,"survival_rate":98.99,"loc":"AQEAAACamZmZmZnxPwAAAAAAAABA","friend":[{"_uid_":23,"name":"Rick Grimes","age":15,"dob":"1910-01-02T00:00:00Z","alive":false,"survival_rate":0,"loc":null,"friend":null}]}`, string(js))
 }
 
 func TestPBUnmarshalToStruct4(t *testing.T) {
 	type Person struct {
-		Name    string `dgraph:"name"`
-		Age     int    `dgraph:"age"`
+		Name    string `json:"name"`
+		Age     int    `json:"age"`
 		Birth   string
-		Friends []Person `dgraph:"friend"`
+		Friends []Person `json:"friend"`
 	}
 
 	type res struct {
-		Root *Person `dgraph:"me"`
+		Root *Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8530,11 +8577,11 @@ func TestPBUnmarshalToStruct4(t *testing.T) {
 
 func TestPBUnmarshalToStruct5(t *testing.T) {
 	type Person struct {
-		Name string `dgraph:"name@hi:ru"`
+		Name string `json:"name@hi:ru"`
 	}
 
 	type res struct {
-		Root Person `dgraph:"me"`
+		Root Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -8625,13 +8672,13 @@ func TestPBUnmarshalToStruct7(t *testing.T) {
 
 func TestPBUnmarshalToStruct8(t *testing.T) {
 	type Person struct {
-		Name  string `dgraph:"name"`
-		Age   int    `dgraph:"age"`
+		Name  string `json:"name"`
+		Age   int    `json:"age"`
 		Birth string
 	}
 
 	type res struct {
-		Root [2]Person `dgraph:"me"`
+		Root [2]Person `json:"me"`
 	}
 
 	populateGraph(t)
@@ -9238,12 +9285,12 @@ func TestMultipleValueProto(t *testing.T) {
 	}
 	`
 	type Person struct {
-		Name       string      `dgraph:"name"`
-		Graduation []time.Time `dgraph:"graduation"`
+		Name       string      `json:"name"`
+		Graduation []time.Time `json:"graduation"`
 	}
 
 	type res struct {
-		Root []Person `dgraph:"me"`
+		Root []Person `json:"me"`
 	}
 
 	pb := processToPB(t, query, map[string]string{}, false)
@@ -9518,4 +9565,21 @@ func TestReturnEmptyBlock(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[],"me2":[],"me3":[{"name":"Michonne"}]}}`, js)
+}
+
+func TestExpandVal(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		var(func: uid(1)) {
+			pred as _predicate_
+		}
+
+		me(func: uid(1)) {
+			expand(val(pred))
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"survival_rate":98.990000,"address":"31, 32 street, Jupiter","bin_data":"YmluLWRhdGE=","power":13.250000,"gender":"female","_xid_":"mich","alive":true,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","graduation":"1932-01-01T00:00:00Z","age":38,"noindex_name":"Michonne's name not indexed","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","sword_present":"true","dob":"1910-01-01T00:00:00Z"}]}}`, js)
 }

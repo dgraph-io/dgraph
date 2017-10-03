@@ -1147,7 +1147,7 @@ func TestExpandPredError(t *testing.T) {
 	var q1 = `
 	{
 		me(func:anyofterms(name, "Alice")) {
-  		expand(_all_)
+  			expand(_all_)
 			name
 			friend
 		}
@@ -1183,6 +1183,7 @@ func TestExpandPredError(t *testing.T) {
 
 	_, err = runQuery(q1)
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Repeated subgraph")
 }
 
 func TestExpandPred(t *testing.T) {
@@ -1821,6 +1822,47 @@ mutation {
 	`
 	_, err = runQuery(q)
 	require.NoError(t, err)
+}
+
+func TestRecurseExpandAll(t *testing.T) {
+	var q1 = `
+	{
+		recurse(func:anyofterms(name, "Alica")) {
+  			expand(_all_)
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+			<0x1> <name> "Alica" .
+			<0x1> <age> "13" .
+			<0x1> <friend> <0x4> .
+			<0x4> <name> "bob" .
+			<0x4> <age> "12" .
+		}
+	}
+	`
+
+	var s = `
+	mutation {
+		schema {
+			name:string @index(term) .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"recurse":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
 }
 
 func TestMain(m *testing.M) {

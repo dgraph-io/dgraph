@@ -38,7 +38,8 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 	rrch := make(chan error, len(exec))
 	startChildren := make([]*SubGraph, len(start.Children))
 	copy(startChildren, start.Children)
-	start.Children = []*SubGraph{}
+	// Empty children before giving to ProcessGraph as we are only concerned with DestUids.
+	start.Children = start.Children[:0]
 
 	// Process the root first.
 	go ProcessGraph(ctx, start, nil, rrch)
@@ -57,6 +58,13 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		return ctx.Err()
 	}
 
+	// Add children back so that expandSubgraph can expand them if needed.
+	start.Children = append(start.Children, startChildren...)
+	if startChildren, err = expandSubgraph(ctx, start); err != nil {
+		return err
+	}
+
+	start.Children = start.Children[:0]
 	for _, child := range startChildren {
 		temp := new(SubGraph)
 		temp.copyFiltersRecurse(child)

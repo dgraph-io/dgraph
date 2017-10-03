@@ -4363,3 +4363,18 @@ func TestOrderByVarAndPred(t *testing.T) {
 	_, err = Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 }
+
+func TestInvalidValUsage(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) {
+				val(_uid_) {
+					nope
+				}
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Query syntax invalid.")
+}
