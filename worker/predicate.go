@@ -108,7 +108,11 @@ func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataCl
 			// Do not go next.
 			continue
 		}
-		// TODO: Stream only certain tablets, not all of them.
+
+		if !groups().ServesTablet(pk.Attr) {
+			it.Seek(pk.SkipPredicate())
+			continue
+		}
 
 		kdup := make([]byte, len(k))
 		copy(kdup, k)
