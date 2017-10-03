@@ -622,8 +622,11 @@ func TestMain(m *testing.M) {
 	gr.gid = 1
 	gr.tablets = make(map[string]*protos.Tablet)
 	gr.tablets["name"] = &protos.Tablet{GroupId: 1}
+	gr.tablets["name2"] = &protos.Tablet{GroupId: 1}
 	gr.tablets["age"] = &protos.Tablet{GroupId: 1}
 	gr.tablets["friend"] = &protos.Tablet{GroupId: 1}
+	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &protos.Tablet{GroupId: 1}
+	gr.tablets["friend_not_served"] = &protos.Tablet{GroupId: 2}
 	gr.tablets[""] = &protos.Tablet{GroupId: 1}
 	os.Exit(m.Run())
 }

@@ -269,7 +269,7 @@ func TestPopulateShard(t *testing.T) {
 		return nil
 	}))
 
-	// We have delete and added new pl's
+	// We have deleted and added new pl's
 	// Nothing is present for group2
 	count, err = populateShard(context.Background(), psFollower, pool, 2)
 	if err != nil {
