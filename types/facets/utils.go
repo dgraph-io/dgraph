@@ -132,7 +132,7 @@ func FacetFor(key, val string) (*protos.Facet, error) {
 	res := &protos.Facet{Key: key, Value: fval, ValType: vt}
 	if vt == protos.Facet_STRING {
 		// tokenize val.
-		res.Tokens, err = tok.GetTokens([]string{val})
+		res.Tokens, err = tok.GetTokens([]string{val}, false)
 		if err == nil {
 			sort.Strings(res.Tokens)
 		}

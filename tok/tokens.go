@@ -26,23 +26,23 @@ import (
 var termTokenizer TermTokenizer
 var fullTextTokenizer FullTextTokenizer
 
-func GetTokens(funcArgs []string) ([]string, error) {
-	return tokenize(funcArgs, termTokenizer)
+func GetTokens(funcArgs []string, indexing bool) ([]string, error) {
+	return tokenize(funcArgs, termTokenizer, indexing)
 }
 
-func GetTextTokens(funcArgs []string, lang string) ([]string, error) {
+func GetTextTokens(funcArgs []string, lang string, indexing bool) ([]string, error) {
 	t, found := GetTokenizer("fulltext" + lang)
 	if found {
-		return tokenize(funcArgs, t)
+		return tokenize(funcArgs, t, indexing)
 	}
 	return nil, x.Errorf("Tokenizer not found for %s", "fulltext"+lang)
 }
 
-func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {
+func tokenize(funcArgs []string, tokenizer Tokenizer, indexing bool) ([]string, error) {
 	if len(funcArgs) != 1 {
 		return nil, x.Errorf("Function requires 1 arguments, but got %d",
 			len(funcArgs))
 	}
 	sv := types.Val{types.StringID, funcArgs[0]}
-	return tokenizer.Tokens(sv)
+	return tokenizer.Tokens(sv, indexing)
 }

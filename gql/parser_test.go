@@ -3689,6 +3689,24 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 	require.Equal(t, "name@en:fr", res.Query[0].Children[1].Order[0].Attr)
 }
 
+func TestParseQueryWithAttrLang1(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x1)) {
+			name
+			friend(first:5, orderasc: name@en:zh_hans) {
+				name@en
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, "name@en:zh-hans", res.Query[0].Children[1].Args["orderasc"])
+}
+
 func TestParseQueryWithAttrLang2(t *testing.T) {
 	query := `
 	{
@@ -3704,6 +3722,23 @@ func TestParseQueryWithAttrLang2(t *testing.T) {
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
 	require.Equal(t, "name@en", res.Query[0].Order[0].Attr)
+}
+
+func TestParseQueryWithAttrLang3(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name, /^[a-zA-z]*[^Kk ]?[Nn]ight/), orderasc: name@zh_hans, first:5) {
+		name@en
+		name@de
+		name@it
+	  }
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, "name@zh-hans", res.Query[0].Args["orderasc"])
 }
 
 func TestParseRegexp1(t *testing.T) {

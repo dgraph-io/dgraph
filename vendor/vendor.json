@@ -397,6 +397,13 @@
 			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
+			"checksumSHA1": "TgznJBwcKZdxC6qyhIlZvzVoefo=",
+			"path": "github.com/yanyiwu/gojieba",
+			"revision": "78c7e2ab4e2aaf35fcb394d26e5bca4805fc057d",
+			"revisionTime": "2017-07-15T13:47:19Z",
+			"tree": true
+		},
+		{
 			"checksumSHA1": "vE43s37+4CJ2CDU6TlOUOYE0K9c=",
 			"path": "golang.org/x/crypto/bcrypt",
 			"revision": "22ddb68eccda408bbf17759ac18d3120ce0d4f3f",

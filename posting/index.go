@@ -66,7 +66,7 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 				return nil, x.Errorf("Tokenizer not available for language: %s", lang)
 			}
 		}
-		toks, err := it.Tokens(sv)
+		toks, err := it.Tokens(sv, true)
 		if err != nil {
 			return tokens, err
 		}

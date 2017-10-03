@@ -26,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/yanyiwu/gojieba"
 )
 
 // Tokenizer defines what a tokenizer must provide.
@@ -38,7 +39,7 @@ type Tokenizer interface {
 	Type() types.TypeID
 
 	// Tokens return tokens for a given value.
-	Tokens(sv types.Val) ([]string, error)
+	Tokens(sv types.Val, indexing bool) ([]string, error)
 
 	// Identifier returns the prefix byte for this token type.
 	Identifier() byte
@@ -55,6 +56,7 @@ type Tokenizer interface {
 var (
 	tokenizers map[string]Tokenizer
 	defaults   map[types.TypeID]Tokenizer
+	jiebaSearch *gojieba.Jieba
 )
 
 func init() {
@@ -105,7 +107,7 @@ type GeoTokenizer struct{}
 
 func (t GeoTokenizer) Name() string       { return "geo" }
 func (t GeoTokenizer) Type() types.TypeID { return types.GeoID }
-func (t GeoTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t GeoTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	tokens, err := types.IndexGeoTokens(sv.Value.(geom.T))
 	EncodeGeoTokens(tokens)
 	return tokens, err
@@ -118,7 +120,7 @@ type IntTokenizer struct{}
 
 func (t IntTokenizer) Name() string       { return "int" }
 func (t IntTokenizer) Type() types.TypeID { return types.IntID }
-func (t IntTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t IntTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	return []string{encodeToken(encodeInt(sv.Value.(int64)), t.Identifier())}, nil
 }
 func (t IntTokenizer) Identifier() byte { return 0x6 }
@@ -129,7 +131,7 @@ type FloatTokenizer struct{}
 
 func (t FloatTokenizer) Name() string       { return "float" }
 func (t FloatTokenizer) Type() types.TypeID { return types.FloatID }
-func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t FloatTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	return []string{encodeToken(encodeInt(int64(sv.Value.(float64))), t.Identifier())}, nil
 }
 func (t FloatTokenizer) Identifier() byte { return 0x7 }
@@ -140,7 +142,7 @@ type YearTokenizer struct{}
 
 func (t YearTokenizer) Name() string       { return "year" }
 func (t YearTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t YearTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t YearTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	tval := sv.Value.(time.Time)
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
@@ -154,7 +156,7 @@ type MonthTokenizer struct{}
 
 func (t MonthTokenizer) Name() string       { return "month" }
 func (t MonthTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t MonthTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t MonthTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	tval := sv.Value.(time.Time)
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
@@ -169,7 +171,7 @@ type DayTokenizer struct{}
 
 func (t DayTokenizer) Name() string       { return "day" }
 func (t DayTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t DayTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t DayTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	tval := sv.Value.(time.Time)
 	buf := make([]byte, 6)
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
@@ -185,7 +187,7 @@ type HourTokenizer struct{}
 
 func (t HourTokenizer) Name() string       { return "hour" }
 func (t HourTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t HourTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t HourTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	tval := sv.Value.(time.Time)
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
@@ -202,8 +204,8 @@ type TermTokenizer struct{}
 
 func (t TermTokenizer) Name() string       { return "term" }
 func (t TermTokenizer) Type() types.TypeID { return types.StringID }
-func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return getBleveTokens(t.Name(), t.Identifier(), sv)
+func (t TermTokenizer) Tokens(sv types.Val, indexing bool) ([]string, error) {
+	return getBleveTokens(t.Name(), t.Identifier(), sv, indexing)
 }
 func (t TermTokenizer) Identifier() byte { return 0x1 }
 func (t TermTokenizer) IsSortable() bool { return false }
@@ -213,7 +215,7 @@ type ExactTokenizer struct{}
 
 func (t ExactTokenizer) Name() string       { return "exact" }
 func (t ExactTokenizer) Type() types.TypeID { return types.StringID }
-func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t ExactTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	term, ok := sv.Value.(string)
 	if !ok {
 		return nil, x.Errorf("Exact indices only supported for string types")
@@ -234,14 +236,25 @@ type FullTextTokenizer struct {
 
 func (t FullTextTokenizer) Name() string       { return FtsTokenizerName(t.Lang) }
 func (t FullTextTokenizer) Type() types.TypeID { return types.StringID }
-func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return getBleveTokens(t.Name(), t.Identifier(), sv)
+func (t FullTextTokenizer) Tokens(sv types.Val, indexing bool) ([]string, error) {
+	return getBleveTokens(t.Name(), t.Identifier(), sv, indexing)
 }
 func (t FullTextTokenizer) Identifier() byte { return 0x8 }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
 
-func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error) {
+func getBleveTokens(name string, identifier byte, sv types.Val, indexing bool) ([]string, error) {
+	if name==FtsTokenizerName("zh-hans") && !indexing {
+		// Seems Gojieba/bleve doesn't have an exact mode, use Gojieba directly
+		// ....
+		words := jiebaSearch.Cut(sv.Value.(string), true)
+		terms := make([]string, len(words))
+		for i, token := range words {
+			terms[i] = encodeToken(token, identifier)
+		}
+		terms = x.RemoveDuplicates(terms)
+		return terms, nil
+	}
 	analyzer, err := bleveCache.AnalyzerNamed(name)
 	if err != nil {
 		return nil, err
@@ -287,7 +300,7 @@ type BoolTokenizer struct{}
 
 func (t BoolTokenizer) Name() string       { return "bool" }
 func (t BoolTokenizer) Type() types.TypeID { return types.BoolID }
-func (t BoolTokenizer) Tokens(v types.Val) ([]string, error) {
+func (t BoolTokenizer) Tokens(v types.Val, _ bool) ([]string, error) {
 	var b int64
 	if v.Value.(bool) {
 		b = 1
@@ -302,7 +315,7 @@ type TrigramTokenizer struct{}
 
 func (t TrigramTokenizer) Name() string       { return "trigram" }
 func (t TrigramTokenizer) Type() types.TypeID { return types.StringID }
-func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t TrigramTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	value, ok := sv.Value.(string)
 	if !ok {
 		return nil, x.Errorf("Trigram indices only supported for string types")
@@ -327,7 +340,7 @@ type HashTokenizer struct{}
 
 func (t HashTokenizer) Name() string       { return "hash" }
 func (t HashTokenizer) Type() types.TypeID { return types.StringID }
-func (t HashTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t HashTokenizer) Tokens(sv types.Val, _ bool) ([]string, error) {
 	term, ok := sv.Value.(string)
 	if !ok {
 		return nil, x.Errorf("Hash tokenizer only supported for string types")
@@ -339,3 +352,13 @@ func (t HashTokenizer) Tokens(sv types.Val) ([]string, error) {
 func (t HashTokenizer) Identifier() byte { return 0xB }
 func (t HashTokenizer) IsSortable() bool { return false }
 func (t HashTokenizer) IsLossy() bool    { return true }
+
+func init() {
+	jiebaSearch = gojieba.NewJieba(
+		gojieba.DICT_PATH,
+		gojieba.HMM_PATH,
+		gojieba.USER_DICT_PATH,
+		gojieba.IDF_PATH,
+		gojieba.STOP_WORDS_PATH,
+	)
+}

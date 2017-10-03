@@ -1595,7 +1595,7 @@ L:
 				}
 				g.Attr = val
 			} else if expectLang {
-				g.Lang = val
+				g.Lang = strings.Replace(val, "_", "-", -1)
 				expectLang = false
 			} else if g.Name != uid {
 				// For UID function. we set g.UID
@@ -2115,6 +2115,10 @@ func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 	}
 	it.Prev()
 
+	// HACK: Query doesn't allow identifiers with '-', use '_' instead
+	for i, lang := range langs {
+		langs[i]=strings.Replace(lang, "_", "-", -1)
+	}
 	return langs, nil
 }
 

@@ -60,9 +60,9 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	}
 	switch funcType {
 	case FullTextSearchFn:
-		return tok.GetTextTokens(funcArgs, lang)
+		return tok.GetTextTokens(funcArgs, lang, false)
 	default:
-		return tok.GetTokens(funcArgs)
+		return tok.GetTokens(funcArgs, false)
 	}
 }
 
@@ -114,7 +114,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	}
 
 	// Get the token for the value passed in function.
-	ineqTokens, err := tokenizer.Tokens(ineqValue)
+	ineqTokens, err := tokenizer.Tokens(ineqValue, false)
 	if err != nil {
 		return nil, "", err
 	}
