@@ -135,6 +135,7 @@ func populateGraph(t *testing.T) {
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 1, types.GeoID, gData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "loc", 25, types.GeoID, gData.Value.([]byte), nil)
 
 	// IntID
 	data := types.ValueForType(types.BinaryID)
@@ -5685,7 +5686,7 @@ func TestNearGenerator(t *testing.T) {
 	populateGraph(t)
 	time.Sleep(10 * time.Millisecond)
 	query := `{
-		me(func:near(loc, [1.1,2.0], 5.001)) {
+		me(func:near(loc, [1.1,2.0], 5.001)) @filter(not uid(25)) {
 			name
 			gender
 		}
@@ -5777,7 +5778,7 @@ func TestWithinGeneratorError(t *testing.T) {
 func TestWithinGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:within(loc,  [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) {
+		me(func:within(loc,  [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) @filter(not uid(25)) {
 			name
 		}
 	}`
@@ -5834,7 +5835,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 func TestIntersectsGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:intersects(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) {
+		me(func:intersects(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) @filter(not uid(25)) {
 			name
 		}
 	}`
@@ -9582,4 +9583,17 @@ func TestExpandVal(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"survival_rate":98.990000,"address":"31, 32 street, Jupiter","bin_data":"YmluLWRhdGE=","power":13.250000,"gender":"female","_xid_":"mich","alive":true,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","graduation":"1932-01-01T00:00:00Z","age":38,"noindex_name":"Michonne's name not indexed","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","sword_present":"true","dob":"1910-01-01T00:00:00Z"}]}}`, js)
+}
+
+func TestGroupByGeoCrash(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+	  q(func: uid(1, 23, 24, 25, 31)) @groupby(loc) {
+	    count(_uid_)
+	  }
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.Contains(t, js, `{"loc":{"type":"Point","coordinates":[1.1,2]},"count":2}`)
 }

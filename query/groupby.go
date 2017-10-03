@@ -192,8 +192,6 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *protos.List, groupVal [
 }
 
 func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGraph) error {
-	mp := make(map[string]groupResult)
-	_ = mp
 	var dedupMap dedup
 	var pathNode *SubGraph
 	for _, child := range sg.Children {
@@ -315,6 +313,5 @@ func groupLess(a, b *groupResult) bool {
 			}
 		}
 	}
-	x.Fatalf("wrong groups")
 	return false
 }
