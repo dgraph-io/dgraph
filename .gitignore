@@ -2,6 +2,7 @@
 /build
 /installs
 /coverage.out
+dgraph-bulk-loader
 
 # fuzzing output
 gql/gql-fuzz.zip
