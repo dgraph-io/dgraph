@@ -2862,12 +2862,10 @@ func TestQueryPassword(t *testing.T) {
                         }
                 }
 	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = queryRequest.ProcessQuery(defaultContext())
-	require.NotNil(t, err)
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"}]}}`, js)
 }
+
 func TestPasswordExpandAll1(t *testing.T) {
 	err := schema.ParseBytes([]byte(schemaStr), 1)
 	x.Check(err)
@@ -3034,8 +3032,7 @@ func TestCheckPasswordQuery1(t *testing.T) {
                 }
 	`
 	_, err := processToFastJsonReq(t, query)
-	require.Error(t, err)
-	require.EqualValues(t, "Attribute: [password] of type password cannot be fetched.", err.Error())
+	require.NoError(t, err)
 }
 
 // test for improved version of checkpwd with custom attribute name
@@ -3052,8 +3049,7 @@ func TestCheckPasswordQuery2(t *testing.T) {
                 }
 	`
 	_, err := processToFastJsonReq(t, query)
-	require.Error(t, err)
-	require.EqualValues(t, "Attribute: [pass] of type password cannot be fetched.", err.Error())
+	require.NoError(t, err)
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {

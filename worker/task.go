@@ -312,29 +312,6 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	return true, nil
 }
 
-var (
-	ErrSkipPassword = errors.New("Skipping check for password for expanded edge.")
-)
-
-func validatePassword(args funcArgs) error {
-	srcFn := args.srcFn
-	attr := args.q.Attr
-	if srcFn.fnType == PasswordFn && srcFn.atype != types.PasswordID {
-		return x.Errorf("checkpwd fn can only be used on attr: [%s] with schema type password."+
-			" Got type: %s", attr, types.TypeID(srcFn.atype).Name())
-	}
-
-	if srcFn.atype == types.PasswordID && srcFn.fnType != PasswordFn {
-		// If this was an expanded node, then we can ignore password fetching error.
-		if args.q.Expanded {
-			return ErrSkipPassword
-		}
-		return x.Errorf("Attribute: [%s] of type password cannot be fetched.", attr)
-	}
-
-	return nil
-}
-
 // Handles fetching of value posting lists and filtering of uids based on that.
 func handleValuePostings(ctx context.Context, args funcArgs) error {
 	srcFn := args.srcFn
@@ -348,11 +325,17 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		return x.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
 	}
 
-	if err := validatePassword(args); err != nil {
-		if err == ErrSkipPassword {
+	{
+		if srcFn.atype == types.PasswordID && srcFn.fnType != PasswordFn {
+			// Silently skip if the user is trying to fetch an attribute of type password.
 			return nil
 		}
-		return err
+
+		if srcFn.fnType == PasswordFn && srcFn.atype != types.PasswordID {
+			return x.Errorf("checkpwd fn can only be used on attr: [%s] with schema type password."+
+				" Got type: %s", attr, types.TypeID(srcFn.atype).Name())
+		}
+
 	}
 
 	var key []byte
