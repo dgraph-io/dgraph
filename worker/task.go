@@ -312,6 +312,10 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	return true, nil
 }
 
+var (
+	ErrSkipPassword = errors.New("Skipping check for password for expanded edge.")
+)
+
 func validatePassword(args funcArgs) error {
 	srcFn := args.srcFn
 	attr := args.q.Attr
@@ -323,7 +327,7 @@ func validatePassword(args funcArgs) error {
 	if srcFn.atype == types.PasswordID && srcFn.fnType != PasswordFn {
 		// If this was an expanded node, then we can ignore password fetching error.
 		if args.q.Expanded {
-			return nil
+			return ErrSkipPassword
 		}
 		return x.Errorf("Attribute: [%s] of type password cannot be fetched.", attr)
 	}
@@ -345,6 +349,9 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 	}
 
 	if err := validatePassword(args); err != nil {
+		if err == ErrSkipPassword {
+			return nil
+		}
 		return err
 	}
 

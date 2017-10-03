@@ -9573,6 +9573,10 @@ func TestReturnEmptyBlock(t *testing.T) {
 }
 
 func TestExpandVal(t *testing.T) {
+	err := schema.ParseBytes([]byte(schemaStr), 1)
+	x.Check(err)
+	addPassword(t, 1, "password", "123456")
+	// We ignore password in expand(_all_)
 	populateGraph(t)
 	query := `
 	{
