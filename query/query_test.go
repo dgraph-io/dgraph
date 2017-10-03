@@ -27,6 +27,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -183,7 +184,7 @@ func populateGraph(t *testing.T) {
 
 	addEdgeToValue(t, "address", 23, "21, mark street, Mars", nil)
 	addEdgeToValue(t, "name", 24, "Glenn Rhee", nil)
-	addEdgeToValue(t, "_xid_", 24, `g\"lenn`, nil)
+	addEdgeToValue(t, "_xid_", 24, `g"lenn`, nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[1.10001,2.000001]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
@@ -339,7 +340,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "son", 1, 2300, nil)
 	addEdgeToUID(t, "son", 1, 2333, nil)
 
-	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
+	addEdgeToValue(t, "name", 2301, `Alice"`, nil)
 
 	// Add some base64 encoded data
 	addEdgeToTypedValue(t, "bin_data", 0x1, types.BinaryID, []byte("YmluLWRhdGE="), nil)
@@ -7225,7 +7226,7 @@ children: <
     properties: <
       prop: "_xid_"
       value: <
-        default_val: "g\\\"lenn"
+        default_val: "g\"lenn"
       >
     >
     properties: <
@@ -9310,7 +9311,7 @@ func TestMultiPolygonIntersects(t *testing.T) {
 	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
 	query := `{
-		me(func: intersects(geometry, "` + string(usc) + `" )) {
+		me(func: intersects(geometry, "` + strings.TrimSpace(string(usc)) + `" )) {
 			name
 		}
 	}
@@ -9326,7 +9327,7 @@ func TestMultiPolygonWithin(t *testing.T) {
 	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
 	query := `{
-		me(func: within(geometry, "` + string(usc) + `" )) {
+		me(func: within(geometry, "` + strings.TrimSpace(string(usc)) + `" )) {
 			name
 		}
 	}
