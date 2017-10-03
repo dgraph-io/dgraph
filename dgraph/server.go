@@ -142,7 +142,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	resp = new(protos.Response)
 	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
 		len(req.Mutation.GetSchema()) == 0 && len(req.Mutation.GetSetJson()) == 0 &&
-		len(req.Mutation.GetDeleteJson()) == 0
+		len(req.Mutation.GetDeleteJson()) == 0 && !req.Mutation.GetDropAll()
 	if len(req.Query) == 0 && emptyMutation && req.Schema == nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Empty query and mutation.")

@@ -411,6 +411,18 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		x.AssertTrue(mu != nil)
 		mu.Upsert = m.Upsert
 	}
+
+	if m.DropAll {
+		for _, gid := range groups().KnownGroups() {
+			mu := mutationMap[gid]
+			if mu == nil {
+				mu = &protos.Mutations{GroupId: gid}
+				mutationMap[gid] = mu
+			}
+			mu.DropAll = true
+		}
+	}
+
 	return nil
 }
 

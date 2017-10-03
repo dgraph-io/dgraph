@@ -154,6 +154,7 @@ message Mutations {
 	repeated DirectedEdge edges = 2;
 	repeated SchemaUpdate schema = 3;
 	Query upsert = 4;
+	bool DropAll = 5;
 }
 
 message KeyValues {

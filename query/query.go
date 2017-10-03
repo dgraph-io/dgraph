@@ -2685,10 +2685,6 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		}
 	}
 
-	if len(qr.GqlQuery.Query) == 0 && qr.GqlQuery.Schema == nil {
-		return er, nil
-	}
-
 	uids, err := qr.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
@@ -2707,6 +2703,13 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 	if !nquads.IsEmpty() {
 		if err = qr.processNquads(ctx, nquads, newUids); err != nil {
 			return er, err
+		}
+	}
+
+	if qr.GqlQuery.Mutation != nil && qr.GqlQuery.Mutation.DropAll {
+		m := protos.Mutations{DropAll: true}
+		if err := ApplyMutations(ctx, &m); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
 		}
 	}
 
