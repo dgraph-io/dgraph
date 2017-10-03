@@ -135,9 +135,10 @@ func (s *shard) evict() {
 		s.beingEvicted[m.xid] = m.uid
 		if !m.persisted {
 			var uidBuf [binary.MaxVarintLen64]byte
+			n := binary.PutUvarint(uidBuf[:], m.uid)
 			batch = append(batch, &badger.Entry{
 				Key:   []byte(m.xid),
-				Value: uidBuf[:binary.PutUvarint(uidBuf[:], m.uid)],
+				Value: uidBuf[:n],
 			})
 		}
 

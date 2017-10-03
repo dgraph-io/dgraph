@@ -61,7 +61,7 @@ func less(lhs, rhs *protos.MapEntry) bool {
 }
 
 func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
-	var buf []byte = entriesBuf
+	buf := entriesBuf
 	var entries []*protos.MapEntry
 	for len(buf) > 0 {
 		sz, n := binary.Uvarint(buf)
