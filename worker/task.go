@@ -312,6 +312,25 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	return true, nil
 }
 
+func validatePassword(args funcArgs) error {
+	srcFn := args.srcFn
+	attr := args.q.Attr
+	if srcFn.fnType == PasswordFn && srcFn.atype != types.PasswordID {
+		return x.Errorf("checkpwd fn can only be used on attr: [%s] with schema type password."+
+			" Got type: %s", attr, types.TypeID(srcFn.atype).Name())
+	}
+
+	if srcFn.atype == types.PasswordID && srcFn.fnType != PasswordFn {
+		// If this was an expanded node, then we can ignore password fetching error.
+		if args.q.Expanded {
+			return nil
+		}
+		return x.Errorf("Attribute: [%s] of type password cannot be fetched.", attr)
+	}
+
+	return nil
+}
+
 // Handles fetching of value posting lists and filtering of uids based on that.
 func handleValuePostings(ctx context.Context, args funcArgs) error {
 	srcFn := args.srcFn
@@ -323,6 +342,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 	case NotAFunction, AggregatorFn, PasswordFn, CompareAttrFn:
 	default:
 		return x.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+	}
+
+	if err := validatePassword(args); err != nil {
+		return err
 	}
 
 	var key []byte
@@ -345,13 +368,6 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		} else {
 			var val types.Val
 			val, err = pl.ValueFor(q.Langs)
-			if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-				// If this was an expanded node, then we can ignore password fetching error.
-				if args.q.Expanded {
-					return nil
-				}
-				return x.Errorf("Attribute: [%s] of type password cannot be fetched.", attr)
-			}
 			vals = append(vals, val)
 		}
 

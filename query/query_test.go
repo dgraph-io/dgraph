@@ -2869,6 +2869,8 @@ func TestQueryPassword(t *testing.T) {
 	require.NotNil(t, err)
 }
 func TestPasswordExpandAll1(t *testing.T) {
+	err := schema.ParseBytes([]byte(schemaStr), 1)
+	x.Check(err)
 	populateGraph(t)
 	addPassword(t, 1, "password", "123456")
 	// We ignore password in expand(_all_)
@@ -6842,6 +6844,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "occupations", Type: "string"},
 		{Predicate: "_predicate_", Type: "string"},
 		{Predicate: "salary", Type: "float"},
+		{Predicate: "password", Type: "password"},
 	}
 	checkSchemaNodes(t, expected, actual)
 }
@@ -6943,6 +6946,7 @@ lossy                          : string @index(term) .
 occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
+password                       : password .
 `
 
 // Duplicate implemention as in cmd/dgraph/main_test.go
@@ -9596,4 +9600,20 @@ func TestGroupByGeoCrash(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.Contains(t, js, `{"loc":{"type":"Point","coordinates":[1.1,2]},"count":2}`)
+}
+
+func TestPasswordError(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1)) {
+			checkpwd(name, "Michonne")
+		}
+	}
+	`
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t,
+		err.Error(), "checkpwd fn can only be used on attr: [name] with schema type password. Got type: string")
 }
