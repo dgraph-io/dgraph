@@ -200,26 +200,26 @@ func TestRetrieveFacetsProtoUnmarshal(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 
 	type friendFacet struct {
-		Since  time.Time `dgraph:"since"`
-		Family bool      `dgraph:"family"`
-		Tag    string    `dgraph:"tag"`
-		Age    int       `dgraph:"age"`
-		Close  bool      `dgraph:"close"`
+		Since  time.Time `json:"since"`
+		Family bool      `json:"family"`
+		Tag    string    `json:"tag"`
+		Age    int       `json:"age"`
+		Close  bool      `json:"close"`
 	}
 
 	type nameFacets struct {
-		Origin string `dgraph:"origin"`
+		Origin string `json:"origin"`
 	}
 
 	type Person struct {
-		Name       string      `dgraph:"name"`
-		NameFacets nameFacets  `dgraph:"name@facets"`
-		Facets     friendFacet `dgraph:"@facets"`
-		Friends    []Person    `dgraph:"friend"`
+		Name       string      `json:"name"`
+		NameFacets nameFacets  `json:"name@facets"`
+		Facets     friendFacet `json:"@facets"`
+		Friends    []Person    `json:"friend"`
 	}
 
 	type res struct {
-		Root Person `dgraph:"me"`
+		Root Person `json:"me"`
 	}
 
 	// to see how friend @facets are positioned in output.
@@ -252,26 +252,26 @@ func TestRetrieveFacetsProtoUnmarshalPointer(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 
 	type friendFacets struct {
-		Since  time.Time `dgraph:"since"`
-		Family bool      `dgraph:"family"`
-		Tag    string    `dgraph:"tag"`
-		Age    int       `dgraph:"age"`
-		Close  bool      `dgraph:"close"`
+		Since  time.Time `json:"since"`
+		Family bool      `json:"family"`
+		Tag    string    `json:"tag"`
+		Age    int       `json:"age"`
+		Close  bool      `json:"close"`
 	}
 
 	type nameFacets struct {
-		Origin string `dgraph:"origin"`
+		Origin string `json:"origin"`
 	}
 
 	type Person struct {
-		Name       string        `dgraph:"name"`
-		NameFacets *nameFacets   `dgraph:"name@facets"`
-		Facets     *friendFacets `dgraph:"@facets"`
-		Friends    []Person      `dgraph:"friend"`
+		Name       string        `json:"name"`
+		NameFacets *nameFacets   `json:"name@facets"`
+		Facets     *friendFacets `json:"@facets"`
+		Friends    []Person      `json:"friend"`
 	}
 
 	type res struct {
-		Root Person `dgraph:"me"`
+		Root Person `json:"me"`
 	}
 
 	// to see how friend @facets are positioned in output.
