@@ -281,12 +281,22 @@ func export(bdir string) error {
 			continue
 		}
 
-		if !groups().ServesTablet(pk.Attr) ||
-			pk.Attr == "_uid_" || pk.Attr == "_predicate_" || pk.Attr == "_lease_" {
+		// Skip if we don't serve the tablet.
+		if !groups().ServesTablet(pk.Attr) {
+			if pk.IsData() {
+				it.Seek(pk.SkipPredicate())
+			} else if pk.IsSchema() {
+				it.Seek(pk.SkipSchema())
+			}
+			continue
+		}
+
+		if pk.Attr == "_predicate_" {
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())
 			continue
 		}
+
 		if pk.IsSchema() {
 			s := &protos.SchemaUpdate{}
 			err := item.Value(func(val []byte) error {
