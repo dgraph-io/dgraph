@@ -47,12 +47,12 @@ import (
 
 func populateGraphExport(t *testing.T) {
 	rdfEdges := []string{
-		"<1> <friend> <5> <author0> .",
-		"<2> <friend> <5> <author0> .",
-		"<3> <friend> <5> .",
-		"<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,age=33,game=\"football\") .",
-		"<1> <name> \"pho\\ton\" <author0> .",
-		"<2> <name> \"pho\\ton\"@en <author0> .",
+		`<1> <friend> <5> <author0> .`,
+		`<2> <friend> <5> <author0> .`,
+		`<3> <friend> <5> .`,
+		`<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,age=33,game="football") .`,
+		`<1> <name> "pho\ton" <author0> .`,
+		`<2> <name> "pho\ton"@en <author0> .`,
 	}
 	idMap := map[string]uint64{
 		"1": 1,
@@ -155,7 +155,7 @@ func TestExport(t *testing.T) {
 		require.Contains(t, []string{"_:uid1", "_:uid2", "_:uid3", "_:uid4"}, nq.Subject)
 		// The only value we set was "photon".
 		if nq.ObjectValue != nil {
-			require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\\ton"}},
+			require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\ton"}},
 				nq.ObjectValue)
 		}
 

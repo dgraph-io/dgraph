@@ -831,7 +831,6 @@ var testNQuads = []struct {
 			Subject:     "alice",
 			Predicate:   "lives",
 			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"A\tB"}},
-			ObjectType:  0,
 		},
 	},
 }
