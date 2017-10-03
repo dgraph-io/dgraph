@@ -1,0 +1,10 @@
+
+		{
+			me(func: uid(0x0a)) {
+				name: type.object.name.en
+				bestFriend: friends(first: 10) {
+					name: type.object.name.hi
+				}
+			}
+		}
+	

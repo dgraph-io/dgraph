@@ -1,0 +1,10 @@
+{
+		me(func: allofterms(name, "barack")) {
+			friends(all: 5) {
+				name
+			}
+			gender,age
+			hometown
+			count(friends)
+		}
+	}

@@ -1,0 +1,12 @@
+
+	query {
+		var(func:uid(1)) {
+			a as name
+		}
+		me(func: eq(name, val(a))) {
+			friends @filter() {
+				name
+			}
+			hometown
+		}
+	}

@@ -1,0 +1,10 @@
+
+	query {
+		me(func: uid(0x0a)) {
+			friends @filter(near(loc, [[1 , 2 ], [[3, 4] , [5, 6]] )) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}

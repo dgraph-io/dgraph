@@ -1,0 +1,7 @@
+
+	{
+		shortest(from:0x0a, to:0x0b, numpaths: 3) {
+			friends
+			name
+		}
+	}

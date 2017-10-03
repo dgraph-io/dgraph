@@ -1,0 +1,9 @@
+
+	query {
+		me(func: gt(count(friend), 10)) {
+			friends @filter() {
+				name
+			}
+			hometown
+		}
+	}

@@ -19,6 +19,7 @@ package gql
 
 import (
 	"os"
+	"runtime/debug"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -3798,7 +3799,7 @@ func TestParseRegexp6(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Expected arg after func [regexp]")
-	require.Contains(t, err.Error(), "Unclosed Brackets")
+	require.Contains(t, err.Error(), "Unclosed regexp")
 }
 
 func TestParseGraphQLVarId(t *testing.T) {
@@ -3988,6 +3989,86 @@ func TestParseEqArg(t *testing.T) {
 	gql, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
+}
+
+// TestParserFuzz replays inputs that were identified by go-fuzz to cause crash
+// in the past. Used for regression testing.
+// We don't care here about return value, only about correct handling of
+// incorrect input.
+func TestParserFuzz(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+	}{
+		{"test001", "{e(){@filter(q(/"},
+		{"test002", "{e(){@filter(p(%"},
+		{"test003", "{e(){@filter(0(/\\0"},
+		{"test004", "query #"},
+		{"test005", "{e(){{@filter(q(/"},
+		{"test006", "{e(func:0(0(0,/"},
+		{"test007", "{e(func:uid()){@filter(0(/\\"},
+		{"test008", "{e(){@filter(0(/\\0/"},
+		{"test009", "{e(){@filter(p(/\\"},
+		{"test010", "{m(func:0(0(0(0,/"},
+		{"test011", "{e(){@filter(0(%0"},
+		{"test012", "{e(func:uid()){@filter(p(%"},
+		{"test013", "{e(orderasc:val(0)){{min(val(0)0("},
+		{"test014", "query{e(func:uid(val(0)"},
+		{"test015", "{e(){@filter(0(%000"},
+		{"test016", "{e(){@filter(0(%"},
+		{"test017", "{e(){{@filter(0(/"},
+		{"test018", "{e(func:uid(0))@filter(p(/\\"},
+		{"test019", "{e(func:uid()){@filter(p(/\\"},
+		{"test020", "{e(){@filter(p(/\\00"},
+		{"test021", "{e(func:uid(0)){@filter(0(%"},
+		{"test022", "{e(){@filter(0(/"},
+		{"test023", "{e(func:uid()){@filter(p(/"},
+		{"test024", "{s(func:uid(val(0)"},
+		{"test025", "{e()@filter(0(%"},
+		{"test026", "{e(func:uid(0)){@filter(0(/\\"},
+		{"test027", "{e(){@filter(0(%"},
+		{"test028", "{e(){@filter(0(%00"},
+		{"test029", "{e(func:uid(0)){@filter(p(/\\e/i)){e}}}"},
+		{"test030", "{e(func:uid(0)){@filter(p(%//i))00"},
+		{"test031", "{e()@filter(p(/�Is))}"},
+		{"test032", "{e(){@filter(0(0,/"},
+		{"test033", "{e(func:uid()){@filter(0(/"},
+		{"test034", "{e()@filter(0(/"},
+		{"test035", "{e(func:uid(0)){@filter(p(/\\"},
+		{"test036", "{e(func:uid())@filter(0(%"},
+		{"test037", "{e(func:uid(0)){@filter(0(%"},
+		{"test038", "{e(func:uid(0))@filter(p(/\\0/"},
+		{"test039", "{e(func:uid(0)){@filter(p(/\\e/i)){e}00"},
+		{"test040", "{e(){@filter(0(-"},
+		{"test041", "{e(func:uid(0)){@filter(0(%0"},
+		{"test042", "{e()@filter(q(/"},
+		{"test043", "{e(func:uid(0)){@filter(p(%"},
+		{"test044", "{e()@filter(p(/"},
+		{"test045", "{e(func:uid())@filter(0(/"},
+		{"test046", "{e(func:uid(0)){@filter(p(/\\e/"},
+		{"test047", "{e(func:uid()){@filter(0(%"},
+		{"test048", "{e()@filter(0(0,/"},
+		{"test049", "{e(){{@filter(0(0,/"},
+		{"test050", "{e(func:uid(0)){@filter(p(/"},
+		{"test051", "{e()@filter(0(-"},
+		{"test052", "{e(func:uid(0)){@filter(0(/"},
+		{"test053", "{e(func:uid())@filter(p(%"},
+		{"test054", "{e(orderasc:val(0)){min(val(0)0("},
+		{"test055", "{e(){@filter(p(/"},
+		{"test056", "{e(func:uid())@filter(p(/"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("parser panic caused by test: '%s', input: '%s': %v\n%s", test.name, test.in, r, debug.Stack())
+				}
+			}()
+
+			Parse(Request{Str: test.in, Http: true})
+		})
+	}
 }
 
 func TestParseEqArg2(t *testing.T) {

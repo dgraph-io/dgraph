@@ -2,3 +2,8 @@
 /build
 /installs
 /coverage.out
+
+# fuzzing output
+gql/gql-fuzz.zip
+gql/fuzz-data/crashers
+gql/fuzz-data/suppressions

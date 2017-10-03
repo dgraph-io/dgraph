@@ -1,0 +1,10 @@
+
+{
+  me(func: uid(1)) {
+    Upvote {
+       u as Author
+    }
+    count(val(u))
+  }
+}
+	

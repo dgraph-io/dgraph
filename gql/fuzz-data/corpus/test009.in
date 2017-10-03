@@ -1,0 +1,8 @@
+
+	{
+		var(func: uid(0x0a)) {
+			min(friends) {
+				name
+			}
+		}
+	}

@@ -1,0 +1,7 @@
+
+	query testQuery($a: string, $b: int!){
+			root(func: uid( 0x0a)) {
+				type.object.name.es-419
+			}
+		}
+	

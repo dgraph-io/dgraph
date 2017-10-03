@@ -1,0 +1,12 @@
+
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(gt(val(a, b), 10)) {
+		 name
+		}
+	}

@@ -1,0 +1,33 @@
+
+	{
+		user(func: uid(0x0a)) {
+			...fragmenta,...fragmentb
+			friends {
+				name
+			}
+			...fragmentc
+			hobbies
+			...fragmentd
+		}
+
+		me(func: uid(0x01)) {
+			...fragmenta
+			...fragmentb
+		}
+	}
+
+	fragment fragmenta {
+		name
+	}
+
+	fragment fragmentb {
+		id
+	}
+
+	fragment fragmentc {
+		name
+	}
+
+	fragment fragmentd {
+		id
+	}

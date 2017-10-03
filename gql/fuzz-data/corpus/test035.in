@@ -1,0 +1,6 @@
+
+	{
+		me(func: uid(1) @filter(anyof(name, "alice"))) {
+		 name
+		}
+	}

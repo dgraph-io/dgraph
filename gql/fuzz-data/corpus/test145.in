@@ -1,0 +1,10 @@
+
+	query {
+		me(func: uid( 0x3)) @normalize {
+			friends {
+				name
+			}
+			gender
+			hometown
+		}
+}

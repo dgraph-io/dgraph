@@ -1,0 +1,7 @@
+
+	{
+  		me(func: anyoftext(Text, "biology"), func: anyoftext(Text, "science")) {
+			Text
+  		}
+	}
+	

@@ -1,0 +1,1 @@
+{"query":"query y($a:float,$b:bool){t()}","variables":{"$b":"f","$a":"3.33"}}

@@ -1478,7 +1478,9 @@ L:
 					} else {
 						// TODO: Refactor later, this is hacky way,Function name would be set as arg
 						// because of the way parser works
-						g.Args = g.Args[:len(g.Args)-1]
+						if len(g.Args) > 0 {
+							g.Args = g.Args[:len(g.Args)-1]
+						}
 					}
 					g.Args = append(g.Args, Arg{Value: f.NeedsVar[0].Name, IsValueVar: true})
 					g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
@@ -1938,7 +1940,9 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	// For other applications, typically after all items are
 	// consumed, we will run a loop like "while opStack is nonempty, evalStack".
 	// This is not needed here.
-	x.AssertTruef(opStack.empty(), "Op stack should be empty when we exit")
+	if !opStack.empty() {
+		return nil, x.Errorf("Unbalanced parentheses in @filter statement")
+	}
 
 	if valueStack.empty() {
 		// This happens when we have @filter(). We can either return an error or
@@ -2653,6 +2657,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return err
 			}
 		case itemLeftRound:
+			if curp == nil {
+				return x.Errorf("Query syntax invalid.")
+			}
 			if curp.Attr == "" {
 				return x.Errorf("Predicate name cannot be empty.")
 			}

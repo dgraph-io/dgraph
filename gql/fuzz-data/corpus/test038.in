@@ -1,0 +1,9 @@
+
+	{
+		K as var(func: uid(0x0a)) {
+			L AS friends
+		}
+		me(func: uid(K)) @filter(uid(L)) {
+		 name
+		}
+	}
