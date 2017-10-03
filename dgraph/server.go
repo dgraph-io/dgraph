@@ -47,6 +47,8 @@ type ServerState struct {
 
 	Pstore   *badger.KV
 	WALstore *badger.KV
+
+	vlogTicker *time.Ticker
 }
 
 // TODO(tzdybal) - remove global
@@ -61,6 +63,14 @@ func NewServerState() (state ServerState) {
 	state.initStorage()
 
 	return state
+}
+
+func (s *ServerState) runVlogGC(store *badger.KV) {
+	// TODO - Make this smarter later. Maybe get size of directories from badger and only run GC
+	// if size increases by more than 1GB.
+	for range s.vlogTicker.C {
+		store.RunValueLogGC(0.5)
+	}
 }
 
 func (s *ServerState) initStorage() {
@@ -96,6 +106,9 @@ func (s *ServerState) initStorage() {
 	}
 	s.Pstore, err = badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
+	s.vlogTicker = time.NewTicker(10 * time.Minute)
+	go s.runVlogGC(s.Pstore)
+	go s.runVlogGC(s.WALstore)
 }
 
 func (s *ServerState) Dispose() error {
@@ -105,6 +118,7 @@ func (s *ServerState) Dispose() error {
 	if err := s.WALstore.Close(); err != nil {
 		return errors.Wrapf(err, "While closing WAL store")
 	}
+	s.vlogTicker.Stop()
 	return nil
 }
 
