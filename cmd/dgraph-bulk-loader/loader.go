@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
@@ -149,7 +148,6 @@ func (ld *loader) mapStage() {
 	xidDir := filepath.Join(ld.opt.TmpDir, "xids")
 	x.Check(os.Mkdir(xidDir, 0755))
 	opt := badger.DefaultOptions
-	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = xidDir
