@@ -64,8 +64,8 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.FloatID:    "xs:float",
 	types.BoolID:     "xs:boolean",
 	types.GeoID:      "geo:geojson",
-	types.PasswordID: "pwd:password",
 	types.BinaryID:   "xs:base64Binary",
+	types.PasswordID: "xs:string",
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {

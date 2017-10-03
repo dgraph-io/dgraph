@@ -768,8 +768,8 @@ var testNQuads = []struct {
 	},
 	// Facet tests end
 	{
-		input:       `<alice> <password> "guess"^^<pwd:password> .`,
-		expectedErr: true, // len(password) should >= 6
+		input:       `<alice> <password> "guess123"^^<pwd:password> .`,
+		expectedErr: true,
 	},
 	// Test variable in subject
 	{

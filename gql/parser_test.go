@@ -2818,18 +2818,6 @@ func TestMutationDoubleQuote(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestMutationPassword(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			<alice> <password> "PenAndPencil"^^<pwd:password> .
-		}
-	}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-}
-
 func TestMutationSchema(t *testing.T) {
 	query := `
 	mutation {
