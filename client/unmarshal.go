@@ -17,6 +17,7 @@
 package client
 
 import (
+	"encoding/base64"
 	"fmt"
 	"reflect"
 	"strings"
@@ -170,6 +171,18 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 			case *protos.Value_BytesVal:
 				v := value.GetBytesVal()
 				f.Set(reflect.ValueOf(v))
+			case *protos.Value_StrVal:
+				// []byte arrays are marshalled into string by JSON.Marshal which is called by
+				// SetObject. So if the user wants to unmarshal them back into []byte, we do that
+				// here.
+				str := value.GetStrVal()
+				data, err := base64.StdEncoding.DecodeString(str)
+				if err == nil {
+					f.Set(reflect.ValueOf(data))
+					return nil
+				}
+				// User could be trying to unmarshal a string to []byte.
+				f.Set(reflect.ValueOf([]byte(str)))
 			}
 		default:
 			// We would be here when an attr has multiple values.

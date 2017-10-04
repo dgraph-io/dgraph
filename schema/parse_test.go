@@ -351,6 +351,15 @@ func TestParseScalarListError3(t *testing.T) {
 	require.Nil(t, schemas)
 }
 
+func TestParseScalarListError4(t *testing.T) {
+	reset()
+	_, err := Parse(`
+		friend: [bool] .
+	`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unsupported type for list: [bool]")
+}
+
 var ps *badger.KV
 
 func TestMain(m *testing.M) {
