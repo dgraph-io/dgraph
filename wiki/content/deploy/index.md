@@ -370,7 +370,7 @@ The `dgraph-live-loader` binary is a small helper program which reads RDF NQuads
 
 `dgraph-live-loader` checkpoints the loaded rdfs in the c directory by default. On restart it would automatically resume from the last checkpoint. If you want to load the whole data again, you need to delete the checkpoint directory.
 
-```
+```sh
 $ dgraph-live-loader --help # To see the available flags.
 
 # Read RDFs from the passed file, and send them to Dgraph on localhost:9080.
@@ -398,7 +398,7 @@ Flags can be used to control the behaviour and performance characteristics of
 the bulk loader. The following are from the output of `dgraph-bulk-loader
 --help`:
 
-```
+```sh
 Usage of dgraph-bulk-loader:
   -block int
         Block profiling rate.
@@ -440,7 +440,7 @@ finish, using the *golden data* set from dgraph's
 
 Start with a fresh directory, then obtain the RDFs and schema.
 
-```
+```sh
 $ wget https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true -O goldendata.rdf.gz
 $ wget https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/goldendata.schema
 ```
@@ -461,7 +461,7 @@ There are many different options,
 look at the `--help` flag for details. For this tutorial, we only care about a
 few options.
 
-```
+```sh
 $ dgraph-bulk-loader -r=goldendata.rdf.gz -s=goldendata.schema -map_shards=4 -reduce_shards=2
 {
         "RDFDir": "goldendata.rdf.gz",
@@ -502,7 +502,7 @@ dgraph cluster. The `p` directories are the posting list directories the
 dgraph instances in the cluster will use. They contain all of the edges
 required to run the dgraph cluster.
 
-```
+```sh
 $ ls -l
 total 11960
 -rw-r--r-- 1 petsta petsta 12222898 Oct  4 16:41 goldendata.rdf.gz
@@ -528,7 +528,7 @@ out
 
 Now it's time to bring up `dgraphzero`. We need to give it an `id` and the
 UID lease as given by the bulk loader.
-```
+```sh
 $ mkdir zero
 $ cd zero
 $ dgraphzero -id 1 -lease $(cat ../LEASE)
@@ -541,13 +541,13 @@ directory from the bulk loader. We need to specify several things. First, they
 need to know how to communicate with another peer. We can just use dgraphzero,
 which listens on `localhost:8888`. We also need to specify how much memory each
 dgraph instance should use (this flag is required).
-```
+```sh
 $ cd out/0
 $ dgraph -peer=localhost:8888 -memory_mb=1024
 ```
 For the second dgraph instance, the `-port_offset` flag prevents port conflicts
 (since the default ports are used here).
-```
+```sh
 $ cd out/1
 $ dgraph -peer=localhost:8888 -memory_mb=1024 -port_offset=2000
 ```
