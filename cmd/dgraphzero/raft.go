@@ -239,7 +239,9 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	}
 	if p.MaxLeaseId > state.MaxLeaseId {
 		state.MaxLeaseId = p.MaxLeaseId
-	} else {
+	}
+	if p.MaxLeaseId == 0 {
+		// Don't show lease proposals - they occur too frequently to be useful.
 		x.Printf("Applied proposal: %+v\n", p)
 	}
 	return p.Id, nil
