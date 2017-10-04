@@ -447,7 +447,7 @@ $ wget https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/golden
 {{% notice "note" %}}
 For bigger datasets and machines with many cores, gzip
 decoding can be a bottleneck. Performance improvements can be obtained by
-splitting first the RDFs up into many `.rdf.gz` files (e.g. 256MB each).
+first splitting the RDFs up into many `.rdf.gz` files (e.g. 256MB each).
 {{% /notice %}}
 
 The next step is to run the bulk loader. First, you need to determine the
@@ -539,8 +539,10 @@ terminals for the next steps.
 Now to start the dgraph instances. We'll start two, one for each output
 directory from the bulk loader. We need to specify several things. First, they
 need to know how to communicate with another peer. We can just use dgraphzero,
-which listens on `localhost:8888`. We also need to specify how much memory each
-dgraph instance should use (this flag is required).
+which listens on `localhost:8888`. Each dgraph instance also need to be assigned a
+unique index. We also need to specify how much memory each dgraph instance
+should use (this flag is required - but for a small data set such as *golden
+data* we don't really care, so just use the minimum value of 1024 MB).
 ```sh
 $ cd out/0
 $ dgraph -peer=localhost:8888 -memory_mb=1024 -idx=10
