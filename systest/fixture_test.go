@@ -100,7 +100,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		s.t.Fatalf("Bulkloader didn't run: %v\nOutput:\n%s", err, string(out))
 	}
 	s.checkFatal(os.Rename(
-		filepath.Join(bulkDir, "out", "0"),
+		filepath.Join(bulkDir, "out", "0", "p"),
 		filepath.Join(bulkDG, "p"),
 	))
 
