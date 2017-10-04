@@ -525,16 +525,21 @@ out
 4 directories, 7 files
 ```
 
-Now it's time to bring up `dgraphzero`. TODO: need to supply LEASE.
+Now it's time to bring up `dgraphzero`. We need to give it an `id` and the
+UID lease as given by the bulk loader.
 ```
 $ mkdir zero
 $ cd zero
-$ dgraphzero -id 1
+$ dgraphzero -id 1 -lease $(cat ../LEASE)
 ```
-`dgraphzero` will stay in the foreground, so you'll need to open a new
-terminal for the next steps.
+`dgraphzero` will stay in the foreground, so you'll need to open new
+terminals for the next steps.
 
-Now it's time to start 
+Now to start the dgraph instances. We'll start two, one for each output
+directory from the bulk loader.
+```
+$ cd out/0
+```
 
 
 
