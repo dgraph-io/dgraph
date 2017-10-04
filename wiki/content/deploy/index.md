@@ -551,10 +551,20 @@ For the second dgraph instance, the `-port_offset` flag prevents port conflicts
 $ cd out/1
 $ dgraph -peer=localhost:8888 -memory_mb=1024 -idx=11 -port_offset=2000
 ```
-
 Dgraphzero and the two dgraph instances should all now be running in the
 foreground in separate terminals. Now you can connect to dgraph as normal and
-do all of your usual queries and mutations.
+do all of your usual queries and mutations. With multiple dgraph instances,
+queries can be sent to any instance.
+```sh
+$ curl localhost:8080/query -XPOST -d '{
+    pj_films(func:allofterms(name@en,"Peter Jackson")) {                                                                                  
+        director.film (orderasc: name@en, first: 10) {
+            name@en       
+        }
+    }
+}'
+TODO: Show output
+```
 
 ## Export
 
