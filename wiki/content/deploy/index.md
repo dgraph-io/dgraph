@@ -385,7 +385,9 @@ $ dgraph-live-loader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -
 
 ### `dgraph-bulk-loader`
 
+{{% notice "note" %}}
 This tool will become available in v0.8.3.
+{{% /notice %}}
 
 `dgraph-bulk-loader` serves a similar purpose to `dgraph-live-loader`, but can only be used
 while dgraph is offline for the initial population. It cannot run on an
@@ -393,6 +395,9 @@ existing dgraph instance.
 
 `dgraph-bulk-loader` is *considerably faster* than `dgraph-live-loader`, and is the recommended
 way to perform the initial import of large datasets into dgraph.
+
+You can [read some technical details](https://blog.dgraph.io/post/bulkloader/)
+about the bulkloader on the blog.
 
 Flags can be used to control the behaviour and performance characteristics of
 the bulk loader. The following are from the output of `dgraph-bulk-loader
