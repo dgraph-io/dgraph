@@ -21,7 +21,6 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -77,7 +76,6 @@ type node struct {
 	server      *Server
 	ctx         context.Context
 	props       proposals
-	leader      uint32
 	subscribers map[uint32]chan struct{}
 }
 
@@ -117,7 +115,11 @@ func (n *node) triggerUpdates() {
 }
 
 func (n *node) AmLeader() bool {
-	return atomic.LoadUint32(&n.leader) == 1
+	if n.Raft() == nil {
+		return false
+	}
+	r := n.Raft()
+	return r.Status().Lead == r.Status().ID
 }
 
 func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal) error {
@@ -192,7 +194,8 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	state.Counter = e.Index
 	if p.Member != nil {
 		if p.Member.GroupId == 0 {
-			return p.Id, errInvalidProposal
+			state.Zeros[p.Member.Id] = p.Member
+			return p.Id, nil
 		}
 		group := state.Groups[p.Member.GroupId]
 		if group == nil {
@@ -260,11 +263,17 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+	n.triggerLeaderChange()
+}
+
+func (n *node) triggerLeaderChange() {
 	select {
 	case n.server.leaderChangeCh <- struct{}{}:
 	default:
 		// Ok to ingore
 	}
+	m := &protos.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
+	go n.proposeAndWait(context.Background(), &protos.ZeroProposal{Member: m})
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {
@@ -393,11 +402,7 @@ func (n *node) Run() {
 					n.server.updateNextLeaseId()
 					leader = true
 				}
-				if leader {
-					atomic.StoreUint32(&n.leader, 1)
-				} else {
-					atomic.StoreUint32(&n.leader, 0)
-				}
+				n.triggerLeaderChange()
 			}
 
 			for _, msg := range rd.Messages {
