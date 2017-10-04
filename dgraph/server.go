@@ -351,21 +351,43 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 		}
 	}
 
-	if len(mr.uid) == 0 {
-		// Delete operations must have a uid.
-		if op == delete {
-			return mr, x.Errorf("_uid_ must be present and non-zero. Got: %+v", m)
-		}
+	if len(mr.uid) == 0 && op != delete {
 		mr.uid = fmt.Sprintf("_:blank-%d", *idx)
 		*idx++
+	}
+
+	// Since _uid_ is the only key, this must be S * * deletion.
+	if op == delete && len(mr.uid) > 0 && len(m) == 1 {
+		mr.nquads = append(mr.nquads, &protos.NQuad{
+			Subject:     mr.uid,
+			Predicate:   x.Star,
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
+		})
+		return mr, nil
 	}
 
 	for k, v := range m {
 		// We have already extracted the uid above so we skip that edge.
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
+		// We also skip facets here because we parse them with the corresponding predicate.
 		if k == "_uid_" || strings.HasSuffix(k, "@facets") {
 			continue
+		}
+
+		if op == delete {
+			// This corresponds to predicate deletion.
+			if v == nil {
+				mr.nquads = append(mr.nquads, &protos.NQuad{
+					Subject:     x.Star,
+					Predicate:   k,
+					ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
+				})
+				continue
+			} else if len(mr.uid) == 0 {
+				// Delete operations with a non-nil value must have a uid specified.
+				return mr, x.Errorf("_uid_ must be present and non-zero. Got: %+v", m)
+			}
 		}
 
 		fkey := fmt.Sprintf("%s@facets", k)

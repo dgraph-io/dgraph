@@ -955,3 +955,192 @@ func TestSetObjectUpdateFacets(t *testing.T) {
 	// Compare the objects.
 	require.EqualValues(t, p, r.Me)
 }
+
+func TestDeleteObjectNode(t *testing.T) {
+	// In this test we check S * * deletion.
+	type Person struct {
+		Uid     uint64    `json:"_uid_,omitempty"`
+		Name    string    `json:"name,omitempty"`
+		Age     int       `json:"age,omitempty"`
+		Married bool      `json:"married,omitempty"`
+		Friends []*Person `json:"friend,omitempty"`
+	}
+
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	p := Person{
+		Uid:     1000,
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Friends: []*Person{&Person{
+			Uid:  1001,
+			Name: "Bob",
+			Age:  24,
+		}, &Person{
+			Uid:  1002,
+			Name: "Charlie",
+			Age:  29,
+		}},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+
+	q := fmt.Sprintf(`{
+		me(func: uid(1000)) {
+			name
+			age
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+		}
+
+		me2(func: uid(1001)) {
+			name
+			age
+		}
+
+		me3(func: uid(1002)) {
+			name
+			age
+		}
+	}`)
+	req.SetQuery(q)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	first := resp.N[0].Children[0]
+	require.Equal(t, 2, len(first.Children))
+	require.Equal(t, 3, len(first.Properties))
+
+	// Now lets try to delete Alice. This won't delete Bob and Charlie but just remove the
+	// connection between Alice and them.
+	p2 := Person{
+		Uid: 1000,
+	}
+
+	req = client.Req{}
+	err = req.DeleteObject(&p2)
+	require.NoError(t, err)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(resp.N[0].Children))
+	second := resp.N[1].Children[0]
+	require.Equal(t, 2, len(second.Properties))
+	third := resp.N[2].Children[0]
+	require.Equal(t, 2, len(third.Properties))
+}
+
+func TestDeleteObjectPredicate(t *testing.T) {
+	// In this test we check * P * deletion.
+	type Person struct {
+		Uid     uint64    `json:"_uid_,omitempty"`
+		Name    string    `json:"name,omitempty"`
+		Age     int       `json:"age,omitempty"`
+		Married bool      `json:"married,omitempty"`
+		Friends []*Person `json:"friend,omitempty"`
+	}
+
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	p := Person{
+		Uid:     1000,
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Friends: []*Person{&Person{
+			Uid:  1001,
+			Name: "Bob",
+			Age:  24,
+		}, &Person{
+			Uid:  1002,
+			Name: "Charlie",
+			Age:  29,
+		}},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+
+	q := fmt.Sprintf(`{
+		me(func: uid(1000)) {
+			name
+			age
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+		}
+
+		me2(func: uid(1001)) {
+			name
+			age
+		}
+
+		me3(func: uid(1002)) {
+			name
+			age
+		}
+	}`)
+	req.SetQuery(q)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	first := resp.N[0].Children[0]
+	require.Equal(t, 2, len(first.Children))
+	require.Equal(t, 3, len(first.Properties))
+
+	// Now lets try to delete friend and married predicate.
+	type DeletePred struct {
+		Friend  interface{} `json:"friend"`
+		Married interface{} `json:"married"`
+	}
+	dp := DeletePred{}
+	// Basically we want predicate as JSON keys with value null.
+	// After marshalling this would become { "friend" : null, "married": null }
+
+	req = client.Req{}
+	err = req.DeleteObject(&dp)
+	require.NoError(t, err)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	first = resp.N[0].Children[0]
+	// Alice should have no friends and only two attributes now.
+	require.Equal(t, 0, len(first.Children))
+	require.Equal(t, 2, len(first.Properties))
+	second := resp.N[1].Children[0]
+	require.Equal(t, 2, len(second.Properties))
+	third := resp.N[2].Children[0]
+	require.Equal(t, 2, len(third.Properties))
+}
