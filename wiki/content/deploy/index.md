@@ -553,8 +553,8 @@ $ dgraph -peer=localhost:8888 -memory_mb=1024 -port_offset=2000
 ```
 
 Dgraphzero and the two dgraph instances should all now be running in the
-foreground in separate terminals. Now you can connect to the web UI via
-`localhost:8080` and do all of your usual queries and mutations.
+foreground in separate terminals. Now you can connect to dgraph as normal and
+do all of your usual queries and mutations.
 
 ## Export
 
