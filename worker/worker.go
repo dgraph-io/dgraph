@@ -39,6 +39,7 @@ import (
 var (
 	pstore           *badger.KV
 	workerServer     *grpc.Server
+	raftServer       conn.RaftServer
 	pendingProposals chan struct{}
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
@@ -104,7 +105,7 @@ func RunServer(bindall bool) {
 	x.Printf("Worker listening at address: %v", ln.Addr())
 
 	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
-	protos.RegisterRaftServer(workerServer, &conn.RaftServer{})
+	protos.RegisterRaftServer(workerServer, &raftServer)
 	workerServer.Serve(ln)
 }
 
