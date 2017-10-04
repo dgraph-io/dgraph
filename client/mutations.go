@@ -92,6 +92,7 @@ func (a *allocator) fetchOne() (uint64, error) {
 		for {
 			assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
 			if err != nil {
+				x.Printf("Error while getting lease %v\n", err)
 				time.Sleep(factor)
 				if factor < 256*time.Second {
 					factor = factor * 2
