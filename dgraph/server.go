@@ -486,7 +486,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 				}
 
 				switch iv := item.(type) {
-				case string, float64, bool:
+				case string, float64:
 					if err := handleBasicType(k, iv, op, &nq); err != nil {
 						return mr, err
 					}
