@@ -543,13 +543,13 @@ which listens on `localhost:8888`. We also need to specify how much memory each
 dgraph instance should use (this flag is required).
 ```sh
 $ cd out/0
-$ dgraph -peer=localhost:8888 -memory_mb=1024
+$ dgraph -peer=localhost:8888 -memory_mb=1024 -idx=10
 ```
 For the second dgraph instance, the `-port_offset` flag prevents port conflicts
 (since the default ports are used here).
 ```sh
 $ cd out/1
-$ dgraph -peer=localhost:8888 -memory_mb=1024 -port_offset=2000
+$ dgraph -peer=localhost:8888 -memory_mb=1024 -idx=11 -port_offset=2000
 ```
 
 Dgraphzero and the two dgraph instances should all now be running in the
