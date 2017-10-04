@@ -41,14 +41,6 @@ type server struct {
 	PoolOrNil *conn.Pool // An owned reference to the server's Pool entry (nil if Addr is our own).
 }
 
-type servers struct {
-	// A map of indices into list, allowing for random access by their NodeId field.
-	byNodeID map[uint64]int
-	// Servers for the group, as determined by Raft group zero.
-	// list[0] is the (last-known) leader of that group.
-	list []server
-}
-
 type groupi struct {
 	x.SafeMutex
 	// TODO: Is this context being used?

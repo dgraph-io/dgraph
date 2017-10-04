@@ -68,7 +68,7 @@ func (e *EmbeddedUidAllocator) AssignUids(ctx context.Context,
 	}
 
 	e.Lock()
-	e.Unlock()
+	defer e.Unlock()
 
 	howMany := leaseBandwidth
 	if num.Val > leaseBandwidth {
