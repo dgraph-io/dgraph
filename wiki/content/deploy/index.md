@@ -536,12 +536,24 @@ $ dgraphzero -id 1 -lease $(cat ../LEASE)
 terminals for the next steps.
 
 Now to start the dgraph instances. We'll start two, one for each output
-directory from the bulk loader.
+directory from the bulk loader. We need to specify several things. First, they
+need to know how to communicate with another peer. We can just use dgraphzero,
+which listens on `localhost:8888`. We also need to specify how much memory each
+dgraph instance should use (this flag is required).
 ```
 $ cd out/0
+$ dgraph -peer=localhost:8888 -memory_mb=1024
+```
+For the second dgraph instance, the `-port_offset` flag prevents port conflicts
+(since the default ports are used here).
+```
+$ cd out/1
+$ dgraph -peer=localhost:8888 -memory_mb=1024 -port_offset=2000
 ```
 
-
+Dgraphzero and the two dgraph instances should all now be running in the
+foreground in separate terminals. Now you can connect to the web UI via
+`localhost:8080` and do all of your usual queries and mutations.
 
 ## Export
 
