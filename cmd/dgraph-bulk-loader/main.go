@@ -104,7 +104,7 @@ func main() {
 	// Delete and recreate the output dirs to ensure they are empty.
 	x.Check(os.RemoveAll(opt.DgraphsDir))
 	for i := 0; i < opt.ReduceShards; i++ {
-		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i))
+		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i), "p")
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
 	}
