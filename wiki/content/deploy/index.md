@@ -392,28 +392,151 @@ existing dgraph instance.
 `dgraph-bulk-loader` is *considerably faster* than `dgraph-live-loader`, and is the recommended
 way to perform the initial import of large datasets into dgraph.
 
-```
-$ dgraph-bulk-loader --help # To see the available flags
+Flags can be used to control the behaviour and performance characteristics of
+the bulk loader. The following are from the output of `dgraph-bulk-loader
+--help`:
 
-# Read RDFs and schema from file, and create the data directory for a new
-# dgraph instance:
-$ dgraph-bulk-loader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file>
-
-# Move the bulk loader output directory into the p folder of the new dgraph
-# instance. Then start up dgraph. If the --reduce_shards=n flag is set, there
-# will be multiple output directories, labeled 0 through to n-1, one for each
-# new dgraph instance.
-$ tree
-out/
-└── 0
-    ├── 000000.vlog
-    ├── 000001.sst
-    ├── 000002.sst
-    └── MANIFEST
-$ mv out/0 dgraph_instance/p
-$ cd dgraph_instance
-$ dgraph
 ```
+Usage of dgraph-bulk-loader:
+  -block int
+        Block profiling rate.
+  -cleanup_tmp
+        Clean up the tmp directory after the loader finishes. Setting this to false allows the bulk loader can be re-run while skipping the map phase. (default true)
+  -expand_edges
+        Generate edges that allow nodes to be expanded using _predicate_ or expand(...). Disable to increase loading speed. (default true)
+  -http string
+        Address to serve http (pprof). (default "localhost:8080")
+  -j int
+        Number of worker threads to use (defaults to the number of logical CPUs) (default 4)
+  -l string
+        Location to write the lease file. (default "LEASE")
+  -map_shards int
+        Number of map output shards. Must be greater than or equal to the number of reduce shards. Increasing allows more evenly sized reduce shards, at the expense of increased memory usage. (default 1)
+  -mapoutput_mb int
+        The estimated size of each map file output. Increasing this increases memory usage. (default 64)
+  -out string
+        Location to write the final dgraph data directories. (default "out")
+  -r string
+        Directory containing *.rdf or *.rdf.gz files to load.
+  -reduce_shards int
+        Number of reduce shards. This determines the number of dgraph instances in the final cluster. Increasing this potentially decreases the reduce stage runtime by using more parallelism, but increases memory usage. (default 1)
+  -s string
+        Location of schema file to load.
+  -shufflers int
+        Number of shufflers to run concurrently. Increasing this can improve performance, and must be less than or equal to the number of reduce shards. (default 1)
+  -skip_map_phase
+        Skip the map phase (assumes that map output files already exist).
+  -tmp string
+        Temp directory used to use for on-disk scratch space. Requires free space proportional to the size of the RDF file and the amount of indexing used. (default "tmp")
+  -version
+        Prints the version of dgraph-bulk-loader.
+```
+
+We'll run through a complete example of loading a data set from start to
+finish, using the *golden data* set from dgraph's
+[benchmarks](https://github.com/dgraph-io/benchmarks).
+
+Start with a fresh directory, then obtain the RDFs and schema.
+
+```
+$ wget https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true
+-O goldendata.rdf.gz
+$ wget https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/goldendata.schema
+```
+{{% notice "note" %}}
+For bigger datasets and machines with many cores, gzip
+decoding can be a bottleneck. Performance improvements can be obtained by
+splitting first the RDFs up into many `.rdf.gz` files (e.g. 256MB each).
+{{% /notice %}}
+
+The next step is to run the bulk loader. First, you need to determine the
+number of dgraph instances you want in your cluster. You should set the number
+of reduce shards to this number. You will also need to set the number of map
+shards to at least this number (a higher number helps the bulk loader evenly
+distribute predicates between the reduce shards). For this example, we'll use
+2 reduce shards and 4 map shards.
+
+There are many different options,
+look at the `--help` flag for details. For this tutorial, we only care about a
+few options.
+
+```
+$ dgraph-bulk-loader -r=goldendata.rdf.gz -s=goldendata.schema -map_shards=4 -reduce_shards=2
+{
+        "RDFDir": "goldendata.rdf.gz",
+        "SchemaFile": "goldendata.schema",
+        "DgraphsDir": "out",
+        "LeaseFile": "LEASE",
+        "TmpDir": "tmp",
+        "NumGoroutines": 4,
+        "MapBufSize": 67108864,
+        "ExpandEdges": true,
+        "BlockRate": 0,
+        "SkipMapPhase": false,
+        "CleanupTmp": true,
+        "NumShufflers": 1,
+        "Version": false,
+        "MapShards": 4,
+        "ReduceShards": 2
+}
+MAP 01s rdf_count:219.0k rdf_speed:218.7k/sec edge_count:693.4k edge_speed:692.7k/sec
+MAP 02s rdf_count:494.2k rdf_speed:247.0k/sec edge_count:1.596M edge_speed:797.7k/sec
+MAP 03s rdf_count:749.4k rdf_speed:249.4k/sec edge_count:2.459M edge_speed:818.3k/sec
+MAP 04s rdf_count:1.005M rdf_speed:250.8k/sec edge_count:3.308M edge_speed:826.1k/sec
+MAP 05s rdf_count:1.121M rdf_speed:223.9k/sec edge_count:3.695M edge_speed:738.3k/sec
+MAP 06s rdf_count:1.121M rdf_speed:186.6k/sec edge_count:3.695M edge_speed:615.3k/sec
+MAP 07s rdf_count:1.121M rdf_speed:160.0k/sec edge_count:3.695M edge_speed:527.5k/sec
+REDUCE 08s [22.68%] edge_count:837.9k edge_speed:837.9k/sec plist_count:450.2k plist_speed:450.2k/sec
+REDUCE 09s [40.79%] edge_count:1.507M edge_speed:1.507M/sec plist_count:905.8k plist_speed:905.7k/sec
+REDUCE 10s [79.91%] edge_count:2.953M edge_speed:1.476M/sec plist_count:1.395M plist_speed:697.3k/sec
+REDUCE 11s [100.00%] edge_count:3.695M edge_speed:1.231M/sec plist_count:1.778M plist_speed:592.5k/sec
+REDUCE 11s [100.00%] edge_count:3.695M edge_speed:1.182M/sec plist_count:1.778M plist_speed:568.8k/sec
+Total: 11s
+```
+
+You will now have some additional data in your directory.
+
+The `LEASE` file indicates the UID lease that should be given to the new
+dgraph cluster. The `p` directories are the posting list directories the
+dgraph instances in the cluster will use. They contain all of the edges
+required to run the dgraph cluster.
+
+```
+$ ls -l
+total 11960
+-rw-r--r-- 1 petsta petsta 12222898 Oct  4 16:41 goldendata.rdf.gz
+-rw-r--r-- 1 petsta petsta       74 Oct  4 16:36 goldendata.schema
+-rw-r--r-- 1 petsta petsta       10 Oct  4 16:42 LEASE
+drwx------ 4 petsta petsta     4096 Oct  4 16:42 out
+$ tree out
+out
+├── 0
+│   └── p
+│       ├── 000000.vlog
+│       ├── 000001.sst
+│       ├── 000002.sst
+│       └── MANIFEST
+└── 1
+    └── p
+        ├── 000000.vlog
+        ├── 000001.sst
+        └── MANIFEST
+
+4 directories, 7 files
+```
+
+Now it's time to bring up `dgraphzero`. TODO: need to supply LEASE.
+```
+$ mkdir zero
+$ cd zero
+$ dgraphzero -id 1
+```
+`dgraphzero` will stay in the foreground, so you'll need to open a new
+terminal for the next steps.
+
+Now it's time to start 
+
+
 
 ## Export
 
