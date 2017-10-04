@@ -2090,7 +2090,6 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	sort := &protos.SortMessage{
 		Order:     sg.Params.Order,
-		Langs:     sg.Params.Langs,
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
