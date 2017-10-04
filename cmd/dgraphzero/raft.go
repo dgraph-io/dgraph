@@ -237,7 +237,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		group.Tablets[p.Tablet.Predicate] = p.Tablet
 	}
-	if p.MaxLeaseId > 0 {
+	if p.MaxLeaseId > state.MaxLeaseId {
 		state.MaxLeaseId = p.MaxLeaseId
 	} else {
 		x.Printf("Applied proposal: %+v\n", p)
