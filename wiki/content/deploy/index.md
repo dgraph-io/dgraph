@@ -398,6 +398,21 @@ $ dgraph-bulk-loader --help # To see the available flags
 # Read RDFs and schema from file, and create the data directory for a new
 # dgraph instance:
 $ dgraph-bulk-loader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file>
+
+# Move the bulk loader output directory into the p folder of the new dgraph
+# instance. Then start up dgraph. If the --reduce_shards=n flag is set, there
+# will be multiple output directories, labeled 0 through to n-1, one for each
+# new dgraph instance.
+$ tree
+out/
+└── 0
+    ├── 000000.vlog
+    ├── 000001.sst
+    ├── 000002.sst
+    └── MANIFEST
+$ mv out/0 dgraph_instance/p
+$ cd dgraph_instance
+$ dgraph
 ```
 
 ## Export
