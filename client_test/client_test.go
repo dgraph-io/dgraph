@@ -383,6 +383,7 @@ func TestSetObject(t *testing.T) {
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
+		Raw      []byte   `json:"raw_bytes",omitempty`
 		Friends  []Person `json:"friend,omitempty"`
 		Location string   `json:"loc,omitempty"`
 		School   *School  `json:"school,omitempty"`
@@ -401,6 +402,7 @@ func TestSetObject(t *testing.T) {
 		Age:      26,
 		Married:  true,
 		Location: loc,
+		Raw:      []byte("raw_bytes"),
 		Friends: []Person{{
 			Uid:  1000,
 			Name: "Bob",
@@ -431,6 +433,7 @@ func TestSetObject(t *testing.T) {
 			name
 			age
 			loc
+			raw_bytes
 			married
 			friend {
 				_uid_
@@ -460,6 +463,7 @@ func TestSetObject(t *testing.T) {
 	require.Equal(t, p.Name, p2.Name)
 	require.Equal(t, p.Age, p2.Age)
 	require.Equal(t, p.Married, p2.Married)
+	require.Equal(t, p.Raw, p2.Raw)
 	require.Equal(t, p.School.Name, p2.School.Name)
 	require.Equal(t, len(p.Friends), len(p2.Friends))
 	require.NotNil(t, p2.Friends[0].Name)
