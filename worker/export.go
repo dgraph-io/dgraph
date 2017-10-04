@@ -118,9 +118,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				fVal := &types.Val{Tid: types.StringID}
 				x.Check(types.Marshal(facets.ValFor(f), fVal))
 				if facets.TypeIDFor(f) == types.StringID {
-					buf.WriteByte('"')
-					buf.WriteString(fVal.Value.(string))
-					buf.WriteByte('"')
+					buf.WriteString(strconv.Quote(fVal.Value.(string)))
 				} else {
 					buf.WriteString(fVal.Value.(string))
 				}
