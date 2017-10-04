@@ -209,3 +209,11 @@ func TestNquadsFromJsonError2(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only slice of structs supported. Got incorrect type for: Name")
 }
+
+func TestNquadsFromJsonList(t *testing.T) {
+	json := `{"address":["Riley Street","Redfern"],"phone_number":[123,9876]}`
+
+	nq, err := nquadsFromJson([]byte(json), set)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(nq))
+}

@@ -1144,3 +1144,95 @@ func TestDeleteObjectPredicate(t *testing.T) {
 	third := resp.N[2].Children[0]
 	require.Equal(t, 2, len(third.Properties))
 }
+
+func TestObjectList(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	type Person struct {
+		Uid         uint64   `json:"_uid_"`
+		Address     []string `json:"address"`
+		PhoneNumber []int64  `json:"phone_number"`
+	}
+
+	p := Person{
+		Address:     []string{"Redfern", "Riley Street"},
+		PhoneNumber: []int64{9876, 123},
+	}
+
+	req.SetSchema(`
+		address: [string] .
+		phone_number: [int] .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	uid := resp.AssignedUids["blank-0"]
+	fmt.Println("uid", uid)
+
+	q := fmt.Sprintf(`
+	{
+		me(func: uid(%d)) {
+			_uid_
+			address
+			phone_number
+		}
+	}
+	`, uid)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	type Root struct {
+		Me Person `json:"me"`
+	}
+
+	var r Root
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+
+	require.Equal(t, 2, len(r.Me.Address))
+	require.Equal(t, 2, len(r.Me.PhoneNumber))
+	sort.Strings(r.Me.Address)
+	require.Equal(t, p.Address, r.Me.Address)
+	require.Equal(t, p.PhoneNumber, r.Me.PhoneNumber)
+
+	// Now add some more values and do the query again.
+	p2 := Person{
+		Uid:         uid,
+		Address:     []string{"Surry Hills"},
+		PhoneNumber: []int64{1234},
+	}
+	err = req.SetObject(&p2)
+	require.NoError(t, err)
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+	require.Equal(t, 3, len(r.Me.Address))
+	require.Equal(t, 3, len(r.Me.PhoneNumber))
+
+	// Now lets delete 2 values.
+	p3 := Person{
+		Uid:         uid,
+		Address:     p.Address,
+		PhoneNumber: p.PhoneNumber,
+	}
+
+	err = req.DeleteObject(&p3)
+	require.NoError(t, err)
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+	require.Equal(t, p2, r.Me)
+}

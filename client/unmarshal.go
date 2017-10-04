@@ -134,7 +134,7 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 		default:
 			f.SetString(value.GetStrVal())
 		}
-	case reflect.Int64, reflect.Int:
+	case reflect.Int64:
 		f.SetInt(value.GetIntVal())
 	case reflect.Float64:
 		f.SetFloat(value.GetDoubleVal())
@@ -178,7 +178,7 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 			switch elemType.Kind() {
 			case reflect.String:
 				f.Set(reflect.Append(f, reflect.ValueOf(value.GetStrVal())))
-			case reflect.Int64, reflect.Int:
+			case reflect.Int64:
 				f.Set(reflect.Append(f, reflect.ValueOf(value.GetIntVal())))
 			case reflect.Float64:
 				f.Set(reflect.Append(f, reflect.ValueOf(value.GetDoubleVal())))

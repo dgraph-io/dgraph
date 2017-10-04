@@ -341,6 +341,56 @@ type mapResponse struct {
 	fcts   []*protos.Facet // facets on the edge connecting this node to the source if any.
 }
 
+func handleBasicType(k string, v interface{}, op int, nq *protos.NQuad) error {
+	switch v.(type) {
+	case string:
+		predWithLang := strings.SplitN(k, "@", 2)
+		if len(predWithLang) == 2 && predWithLang[0] != "" {
+			nq.Predicate = predWithLang[0]
+			nq.Lang = predWithLang[1]
+		}
+
+		// Default value is considered as S P * deletion.
+		if v == "" && op == delete {
+			nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+			return nil
+		}
+
+		var g geom.T
+		err := geojson.Unmarshal([]byte(v.(string)), &g)
+		// We try to parse the value as a GeoJSON. If we can't, then we store as a string.
+		if err == nil {
+			geo, err := types.ObjectValue(types.GeoID, g)
+			if err != nil {
+				return x.Errorf("Couldn't convert value: %s to geo type", v.(string))
+			}
+
+			nq.ObjectValue = geo
+			return nil
+		}
+
+		nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}
+	case float64:
+		if v == 0 && op == delete {
+			nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+			return nil
+		}
+
+		nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v.(float64)}}
+	case bool:
+		if v == false && op == delete {
+			nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+			return nil
+		}
+
+		nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v.(bool)}}
+	default:
+		return x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
+	}
+	return nil
+
+}
+
 func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
@@ -411,55 +461,10 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 		}
 
 		switch v.(type) {
-		default:
-			return mr, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
-		case string:
-			predWithLang := strings.SplitN(k, "@", 2)
-			if len(predWithLang) == 2 && predWithLang[0] != "" {
-				nq.Predicate = predWithLang[0]
-				nq.Lang = predWithLang[1]
+		case string, float64, bool:
+			if err := handleBasicType(k, v, op, &nq); err != nil {
+				return mr, err
 			}
-
-			// Default value is considered as S P * deletion.
-			if v == "" && op == delete {
-				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
-				mr.nquads = append(mr.nquads, &nq)
-				continue
-			}
-
-			var g geom.T
-			err := geojson.Unmarshal([]byte(v.(string)), &g)
-			// We try to parse the value as a GeoJSON. If we can't, then we store as a string.
-			if err == nil {
-				geo, err := types.ObjectValue(types.GeoID, g)
-				if err != nil {
-					return mr, x.Errorf("Couldn't convert value: %s to geo type", v.(string))
-				}
-
-				nq.ObjectValue = geo
-				mr.nquads = append(mr.nquads, &nq)
-				continue
-			}
-
-			nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}
-			mr.nquads = append(mr.nquads, &nq)
-		case float64:
-			if v == 0 && op == delete {
-				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
-				mr.nquads = append(mr.nquads, &nq)
-				continue
-			}
-
-			nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v.(float64)}}
-			mr.nquads = append(mr.nquads, &nq)
-		case bool:
-			if v == false && op == delete {
-				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
-				mr.nquads = append(mr.nquads, &nq)
-				continue
-			}
-
-			nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v.(bool)}}
 			mr.nquads = append(mr.nquads, &nq)
 		case map[string]interface{}:
 			cr, err := mapToNquads(v.(map[string]interface{}), idx, op)
@@ -480,8 +485,14 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 					Predicate: k,
 				}
 
-				if mp, ok := item.(map[string]interface{}); ok {
-					cr, err := mapToNquads(mp, idx, op)
+				switch iv := item.(type) {
+				case string, float64, bool:
+					if err := handleBasicType(k, iv, op, &nq); err != nil {
+						return mr, err
+					}
+					mr.nquads = append(mr.nquads, &nq)
+				case map[string]interface{}:
+					cr, err := mapToNquads(iv, idx, op)
 					if err != nil {
 						return mr, err
 					}
@@ -490,11 +501,13 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 					mr.nquads = append(mr.nquads, &nq)
 					// Add the nquads that we got for the connecting entity.
 					mr.nquads = append(mr.nquads, cr.nquads...)
-				} else {
+				default:
 					return mr,
-						x.Errorf("Only slice of structs supported. Got incorrect type for: %s", k)
+						x.Errorf("Got unsupported type for list: %s", k)
 				}
 			}
+		default:
+			return mr, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 		}
 	}
 
