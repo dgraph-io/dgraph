@@ -1179,7 +1179,6 @@ func TestObjectList(t *testing.T) {
 	require.NoError(t, err)
 
 	uid := resp.AssignedUids["blank-0"]
-	fmt.Println("uid", uid)
 
 	q := fmt.Sprintf(`
 	{
