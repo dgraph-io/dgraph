@@ -242,7 +242,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	}
 	if p.MaxLeaseId > state.MaxLeaseId {
 		state.MaxLeaseId = p.MaxLeaseId
-	} else {
+	} else if p.MaxLeaseId != 0 {
 		x.Printf("Could not apply lease, ignoring: proposedLease=%d existingLease=%d",
 			p.MaxLeaseId, state.MaxLeaseId)
 	}
