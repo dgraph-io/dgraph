@@ -34,17 +34,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	set            = "set"
-	del            = "delete"
-	leaseBandwidth = uint64(10000)
-)
-
 var (
 	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
 	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
 	allocator          x.EmbeddedUidAllocator
-	emptyAssignedIds   = &protos.AssignedIds{}
 )
 
 // runMutation goes through all the edges and applies them. It returns the

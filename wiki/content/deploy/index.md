@@ -356,7 +356,7 @@ p w ip worker groups.conf groups heathy-peer
 There are two different tools that can be used for bulk data loading:
 
 - `dgraph-live-loader`
-- `dgraph-bulk-loader`
+- `dgraph-bulk-loader` (will be available in v0.8.3)
 
 {{% notice "note" %}} both tools only accepts gzipped, RDF NQuad/Triple data.
 Data in other formats must be converted [to
@@ -384,6 +384,8 @@ $ dgraph-live-loader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -
 ```
 
 ### `dgraph-bulk-loader`
+
+This tool will become available in v0.8.3.
 
 `dgraph-bulk-loader` serves a similar purpose to `dgraph-live-loader`, but can only be used
 while dgraph is offline for the initial population. It cannot run on an
