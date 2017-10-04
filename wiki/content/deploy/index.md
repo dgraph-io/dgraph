@@ -439,8 +439,7 @@ finish, using the *golden data* set from dgraph's
 Start with a fresh directory, then obtain the RDFs and schema.
 
 ```
-$ wget https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true
--O goldendata.rdf.gz
+$ wget https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true -O goldendata.rdf.gz
 $ wget https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/goldendata.schema
 ```
 {{% notice "note" %}}
