@@ -121,6 +121,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	gid := gr.groupId()
 	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
 	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
+	raftServer.Node = gr.Node.Node
 	gr.Node.InitAndStartNode(gr.wal)
 
 	x.UpdateHealthStatus(true)
@@ -522,7 +523,7 @@ func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 		GroupId:    g.groupId(),
 		Addr:       Config.MyAddr,
 		Leader:     leader,
-		LastUpdate: uint64(time.Now().Nanosecond()),
+		LastUpdate: uint64(time.Now().Unix()),
 	}
 	group := &protos.Group{
 		Members: make(map[uint64]*protos.Member),
