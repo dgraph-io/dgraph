@@ -2384,7 +2384,7 @@ func (sg *SubGraph) upsert(ctx context.Context) (uint64, error) {
 		return 0, x.Wrapf(err, "While running upsert mutation.")
 	}
 
-	// TODO - Optionally ApplyMutations could return the uid and thne we can avoid this call.
+	// TODO - Optionally ApplyMutations could return the uid and then we can avoid this call.
 	che := make(chan error, 1)
 	ProcessGraph(ctx, sg, nil, che)
 	return res.StartId, <-che
@@ -2531,37 +2531,35 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 			// mutation (i.e. the upsert operation).
 			// TODO - We can do upserts in parallel.
 			if sg.Params.upsert && (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) {
+				// Safe to return in case of errors here as all query blocks have been executed.
 				if len(sg.Filters) > 0 {
-					ferr = fmt.Errorf("Upsert query cannot have filters.")
-					continue
+					return nil, fmt.Errorf("Upsert query cannot have filters.")
 				}
 				uid, err := sg.upsert(ctx)
 				if err != nil {
-					ferr = err
-					continue
+					return nil, err
 				}
 
 				if len(sg.DestUIDs.Uids) == 0 {
-					ferr = fmt.Errorf("Expected a uid to be assigned while doing upsert.")
-					continue
+					return nil, fmt.Errorf("Expected a uid to be assigned while doing upsert.")
 				}
 
-				// Someone else might have assigned and created the uid, so we don't want to return
-				// this uid in allocatedUids.
-				if uid != sg.DestUIDs.Uids[0] {
-					continue
-				}
-				if allocatedUids == nil {
-					allocatedUids = make(map[string]uint64)
-				}
-				if sg.Params.Var != "" {
-					allocatedUids[sg.Params.Var] = uid
-				} else {
-					// There can only be one upsert per query block, so the key can be
-					// the Alias for the block.
-					allocatedUids[sg.Params.Alias] = uid
+				// This means that the uid that we allocated was same as the result from query.
+				// This means we allocated it. Hence, we should return it as part of allocated uids.
+				if uid == sg.DestUIDs.Uids[0] {
+					if allocatedUids == nil {
+						allocatedUids = make(map[string]uint64)
+					}
+					if sg.Params.Var != "" {
+						allocatedUids[sg.Params.Var] = uid
+					} else {
+						// There can only be one upsert per query block, so the key can be
+						// the Alias for the block.
+						allocatedUids[sg.Params.Alias] = uid
+					}
 				}
 			}
+
 			var sgPath []*SubGraph
 			err = sg.populateVarMap(req.vars, sgPath)
 			if err != nil {
