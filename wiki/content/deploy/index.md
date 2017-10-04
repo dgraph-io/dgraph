@@ -554,7 +554,8 @@ $ dgraph -peer=localhost:8888 -memory_mb=1024 -idx=11 -port_offset=2000
 Dgraphzero and the two dgraph instances should all now be running in the
 foreground in separate terminals. Now you can connect to dgraph as normal and
 do all of your usual queries and mutations. With multiple dgraph instances,
-queries can be sent to any instance.
+queries can be sent to any instance (in this case to either `localhost:8080` or
+`localhost:10080`).
 ```sh
 $ curl localhost:8080/query -XPOST -d '{
     pj_films(func:allofterms(name@en,"Peter Jackson")) {                                                                                  
@@ -562,8 +563,28 @@ $ curl localhost:8080/query -XPOST -d '{
             name@en       
         }
     }
-}'
-TODO: Show output
+}' | jq
+```
+```sh
+{
+  "data": {
+    "pj_films": [
+      {
+        "director.film": [
+          {
+            "name@en": "The Lord of the Rings: The Return of the King"
+          },
+          {
+            "name@en": "The Lovely Bones"
+          },
+          {
+            "name@en": "Meet the Feebles"
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
 ## Export
