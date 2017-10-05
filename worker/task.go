@@ -1393,17 +1393,19 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	var illegal bool
 	switch cp.fn {
 	case "eq":
-		illegal = count == 0
+		illegal = count <= 0
 	case "lt":
-		illegal = count == 0 || count == 1
+		illegal = count <= 1
 	case "le":
-		illegal = count == 0
+		illegal = count <= 0
+	case "gt":
+		illegal = count < 0
 	case "ge":
-		illegal = count == 0
+		illegal = count <= 0
 	}
 	if illegal {
-		return x.Errorf("count(predicate) can only be used " +
-			"to search for nodes with non-zero counts.")
+		return x.Errorf("count(predicate) cannot be used to search for " +
+			"negative counts (nonsensical) or zero counts (not tracked).")
 	}
 
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
@@ -1419,13 +1421,7 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 		count += 1
 	}
 
-	if count < 0 && (cp.fn == "lt" || cp.fn == "le") {
-		return nil
-	}
-
-	if count < 0 {
-		count = 0
-	}
+	x.AssertTrue(count >= 1)
 	countKey = x.CountKey(cp.attr, uint32(count), cp.reverse)
 
 	itOpt := badger.DefaultIteratorOptions
