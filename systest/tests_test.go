@@ -51,7 +51,7 @@ func TestHelloWorld(t *testing.T) {
 func TestFacets(t *testing.T) {
 	s := newSuite(t, `
 		name: string @index(exact) .
-		boss: uid @count @reverse .
+		boss: uid @reverse .
 	`, `
 		_:alice <name> "Alice" (middle_initial="J") .
 		_:bob   <name> "Bob"   (middle_initial="M") .
