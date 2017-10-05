@@ -2474,6 +2474,30 @@ func TestCountError3(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestCountDoNotTrackZeroCount(t *testing.T) {
+	populateGraph(t)
+	query := `
+	mutation{
+		schema{
+			aoeu: uid @count .
+		}
+		set{
+			_:a <aoeu> _:b .
+		}
+		delete{
+			* <aoeu> * .
+		}
+	}
+	{
+		q(func: lt(count(aoeu), 5)) {
+			count
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"q":[]}}`, js)
+}
+
 func TestMultiCountSort(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.

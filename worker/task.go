@@ -1392,8 +1392,8 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	count := cp.count
 	if count == 0 {
 		switch cp.fn {
-		case "eq", "ge", "lt", "le": // gt and ne 0 are allowed
-			return x.Errorf("count() can't evaluate to zero count nodes")
+		case "eq", "ge", "lt", "le": // gt and ne 0 are allowed, since they exclude the zero count.
+			return x.Errorf("count() cannot evaluate to zero count nodes")
 		}
 	}
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)

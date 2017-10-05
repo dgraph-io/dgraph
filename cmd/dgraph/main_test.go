@@ -1921,6 +1921,24 @@ func TestRecurseExpandAll(t *testing.T) {
 	require.JSONEq(t, `{"data": {"recurse":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
 }
 
+func TestIllegalCountInQueryFn(t *testing.T) {
+	q := `
+	mutation{
+		schema{
+			friend: uid @count .
+		}
+	}
+	{
+		q(func: eq(count(friend), 0)) {
+			count
+		}
+	}`
+	_, err := runQuery(q)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "count")
+	require.Contains(t, err.Error(), "zero")
+}
+
 func TestMain(m *testing.M) {
 	dc := dgraph.DefaultConfig
 	dc.AllottedMemory = 2048.0
