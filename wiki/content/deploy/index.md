@@ -72,7 +72,7 @@ After installing Go, run
 go get -u github.com/dgraph-io/dgraph/...
 ```
 
-The binaries are located in `cmd/dgraph`, `cmd/dgraph-live-loader`, and
+The binaries are located in `cmd/dgraph`, `cmd/dgraphzero`, `cmd/dgraph-live-loader`, and
 `cmd/dgraph-bulk-loader`. If you get errors related to `grpc` while building them, your
 `go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it
 causes issues while using the Go client). Update your `go-grpc` by running.
@@ -104,6 +104,20 @@ value for port flag(`8888`), then it would have a HTTP server running on `8889`.
   size of predicates and groups they belong to.
 
 
+## Dgraphzero
+
+Dgraphzero is a binary which controls the Dgraph cluster. It automatically moves data between
+different dgraph instances based on the size of the data served by each instance.
+
+It is mandatory to run atleast one `dgraphzero` node before running any whether `dgraph`.
+Options present for `dgraphzero` can be seen by running `dgraphzero --help`.
+
+* dgraphzero stores information about the cluster.
+* `--replicas` is the option that controls the replication factor. (i.e. number of replicas per data shard, including the original shard)
+* Whenever a new machine is brought up it is assigned a group based on replication factor. If replication factor is 1 then each node will serve different group. If replication factor is 2 and you launch 4 machines then first two machines would server group 1 and next two machines would server group 2.
+* dgraphzero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
+
+
 ## Running Dgraph
 
 {{% notice "tip" %}}  All Dgraph tools have `--help`.  To view all the flags, run `dgraph --help`, it's a great way to familiarize yourself with the tools.{{% /notice %}}
@@ -118,6 +132,7 @@ Whether running standalone or in a cluster, each Dgraph instance relies on the f
 * A port on which to run a worker node, used for Dgraph's communication between nodes. (option `--workerport`, default: `12345`)
 * An address and port at which the node advertises its worker.  (option `--my`, default: `localhost:workerport`)
 * Estimated memory dgraph can take. (option `--memory_mb, mandatory to specify, recommended value half of RAM size`)
+* Peer address of a **dgraphzero** node (option `--peer`, mandatory, default: `127.0.0.1:8888`)
 * If you are running multiple dgraph instances on same machine for testing, you can use port offset to let dgraph use `default port + offset` instead of specifying all the ports. (option `--port_offset`)
 
 {{% notice "note" %}}By default the server listens on `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
@@ -235,19 +250,13 @@ tls.max_version string
 tls.min_version string
 ```
 
-Dgraphzero can be configured with following options
-
-```
-# Replication factor (Number of replicas per data shard, count includes the original shard)
-replicas
-```
 
 ### Single Instance
 A single instance can be run with default options, as in:
 
 ```sh
 mkdir ~/dgraph # The folder where dgraph binary will create the directories it requires.
-cd ~/dgraph 
+cd ~/dgraph
 dgraphzero -w wz
 dgraph --memory_mb 2048 --peer "localhost:8888"
 ```
@@ -256,22 +265,18 @@ Or by specifying `p` and `w` directories, ports, etc.  If `dgraph-live-loader` i
 
 ### Multiple instances
 
-Dgraph is a truly distributed graph database - not a master-slave replication of one datastore.  Dgraph shards by predicate, not by node.  Running in a cluster shards and replicates predicates across the cluster, queries can be run on any node and joins are handled over the distributed data.
+Dgraph is a truly distributed graph database - not a master-slave replication of one datastore. Dgraph shards by predicate, not by node.  Running in a cluster shards and replicates predicates across the cluster, queries can be run on any node and joins are handled over the distributed data.
 
 As well as the requirements for [each instance]({{< relref "#running-dgraph">}}), to run Dgraph effectively in a cluster, it's important to understand how sharding and replication work.
 
 * Dgraph stores data per predicate (not per node), thus the unit of sharding and replication is predicates.
-* To shard the graph, predicates are assigned to groups and each node in the cluster serves a singe group.
+* To shard the graph, predicates are assigned to groups and each node in the cluster serves a single group.
 * Each node in a cluster stores only the predicates for the groups it is assigned to.
 * If multiple cluster nodes server the same group, the data for that group is replicated
 
+Replication can be tuned via the `replicas` flag in [dgraphzero](#dgraphzero-1).
+
 A query is resolved locally for predicates the node stores and via distributed joins for predicates stored on other nodes.
-
-Note also:
-
-* dgraphzero stores information about the cluster.
-* Whenver a new machine is brought up it is assigned a group based on replication factor. If replication factor is 1 then each node will serve different group. If replciation factor is 2 and you launch 4 machines then first two machines would server group 1 and next two machines would server group 2.
-* dgraphzero monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
 
 #### Data sharding
 
@@ -285,33 +290,36 @@ Note also:
 Each machine in the cluster must be started with a unique ID (option `--idx`) and address of dgraphzero server. Each machine must also satisfy the data directory and port requirements for a [single instance]({{< relref "#running-dgraph">}}).
 
 
-To run a cluster, begin by bringing up dgraphzero.
+To run a cluster, begin by bringing up [dgraphzero](#dgraphzero-1) nodes.
 
+**We recommend running three instances of dgraphzero for high availability.**
+
+```sh
+
+# dgraphzero instance 1 using the default 8888 for grpc and 8889 for http.
+$ dgraphzero -w wz --bindall=true --my "ip-address-others-should-access-me-at"
+
+# dgraphzero instance 2 using the default 8890 for grpc and 8891 for http.
+$ dgraphzero -w wz1 --peer "ip-address:8888" --port 8890 --bindall=true -idx 2
+
+# dgraphzero instance 3
+$ dgraphzero -w wz1 --peer "ip-address:8888" --port 8892 --bindall=true -idx 3
 ```
-$ dgraphzero -w wz  --bindall=true
 
-# This will bring up dgraphzero using the default 8888 for grpc and 8889 for http.
+Now bring up `dgraph` nodes and supply `peer` as the address of any `dgraphzero` node.
+
+```sh
+# specify dgraphzero's grpc port's address as peer address.
+$ dgraph --idx 1 --peer "ip-address:8888" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
+$ dgraph --idx 2 --peer "ip-address:8888" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
+$ dgraph --idx 3 --peer "ip-address:8888" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
 ```
 
-We recommend running three instances of dgraphzero for high availability.
-```
-$ dgraphzero -w wz1 --peer "localhost:8888" --port 8890 --bindall=true -idx 2
-
-# This will bring up dgraphzero using the default 8890 for grpc and 8891 for http.
-```
-
+**The new servers will automatically detect each other by communicating with dgraphzero and establish connections to each other**.
 
 {{% notice "note" %}} The `--bindall=true` option is required when running on multiple machines, otherwise the node's port and workerport will be bound to localhost and not be accessible over a network. {{% /notice %}}
 
 Bring up dgraph nodes.
-
-```
-# specify dgraphzero's grpc port's address as peer address.
-$ dgraph --idx 3 --peer "<ip address>:<workerport>" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
-```
-
-The new servers will automatically detect each other by communicating with dgraphzero and establish connections to each other if replication is greater than 1. Dgraphzero would assign groups to the new nodes.
-
 {{% notice "note" %}}To have RAFT consensus work correctly, each group must be served by an odd number of Dgraph instances.{{% /notice %}}
 
 You could start loading all the data into one of the dgraph nodes and dgraphzero would automatically rebalance the data for you.
@@ -320,12 +328,11 @@ You could start loading all the data into one of the dgraph nodes and dgraphzero
 
 In setting up a cluster be sure the check the following.
 
+* Is atleast one dgraphzero node running?
 * Is each dgraph instance in the cluster [set up correctly]({{< relref "#running-dgraph">}})?
 * Will each instance be accessible to all peers on `workerport`?
 * Does each node have a unique ID on startup?
 * Has `--bindall=true` been set for networked communication?
-* Is dgraphzero brought up first?
-
 
 <!---
 ### In EC2
