@@ -3675,7 +3675,8 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, "name@en:fr", res.Query[0].Children[1].Order[0].Attr)
+	require.Equal(t, "name", res.Query[0].Children[1].Order[0].Attr)
+	require.Equal(t, []string{"en", "fr"}, res.Query[0].Children[1].Order[0].Langs)
 }
 
 func TestParseQueryWithAttrLang2(t *testing.T) {
@@ -3692,7 +3693,8 @@ func TestParseQueryWithAttrLang2(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, "name@en", res.Query[0].Order[0].Attr)
+	require.Equal(t, "name", res.Query[0].Order[0].Attr)
+	require.Equal(t, []string{"en"}, res.Query[0].Order[0].Langs)
 }
 
 func TestParseRegexp1(t *testing.T) {
