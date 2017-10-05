@@ -64,8 +64,8 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.FloatID:    "xs:float",
 	types.BoolID:     "xs:boolean",
 	types.GeoID:      "geo:geojson",
-	types.PasswordID: "pwd:password",
 	types.BinaryID:   "xs:base64Binary",
+	types.PasswordID: "xs:string",
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
@@ -189,8 +189,6 @@ func writeToFile(fpath string, ch chan []byte) error {
 }
 
 // Export creates a export of data by exporting it as an RDF gzip.
-// TODO: Make it so that export checks if the tablet is served by us,
-// before exporting it.
 func export(bdir string) error {
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)
@@ -278,12 +276,23 @@ func export(bdir string) error {
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
-		if pk.Attr == "_uid_" || pk.Attr == "_predicate_" ||
-			pk.Attr == "_lease_" {
+
+		// Skip if we don't serve the tablet.
+		if !groups().ServesTablet(pk.Attr) {
+			if pk.IsData() {
+				it.Seek(pk.SkipPredicate())
+			} else if pk.IsSchema() {
+				it.Seek(pk.SkipSchema())
+			}
+			continue
+		}
+
+		if pk.Attr == "_predicate_" {
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())
 			continue
 		}
+
 		if pk.IsSchema() {
 			s := &protos.SchemaUpdate{}
 			err := item.Value(func(val []byte) error {

@@ -1824,6 +1824,62 @@ mutation {
 	require.NoError(t, err)
 }
 
+func TestDropAll(t *testing.T) {
+	var q1 = `
+	mutation{
+		schema{
+			name: string @index(term) .
+		}
+		set{
+			_:foo <name> "Foo" .
+		}
+	}
+	{
+		q(func: allofterms(name, "Foo")) {
+			_uid_
+			name
+		}
+	}`
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	q1Result := map[string]interface{}{}
+	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
+	queryResults := q1Result["data"].(map[string]interface{})["q"].([]interface{})
+	name := queryResults[0].(map[string]interface{})["name"].(string)
+	require.Equal(t, "Foo", name)
+
+	q2 := "mutation{ dropall {} }"
+	_, err = runQuery(q2)
+	require.NoError(t, err)
+
+	q3 := "schema{}"
+	output, err = runQuery(q3)
+	require.NoError(t, err)
+	require.Equal(t,
+		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true}]}}`, output)
+
+	// Reinstate schema so that we can re-run the original query.
+	q4 := `
+	mutation {
+		schema{
+			name: string @index(term) .
+		}
+	}`
+	_, err = runQuery(q4)
+	require.NoError(t, err)
+
+	q5 := `
+	{
+		q(func: allofterms(name, "Foo")) {
+			_uid_
+			name
+		}
+	}`
+	output, err = runQuery(q5)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {"q":[]}}`, output)
+}
+
 func TestRecurseExpandAll(t *testing.T) {
 	var q1 = `
 	{

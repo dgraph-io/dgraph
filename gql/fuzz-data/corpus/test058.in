@@ -1,0 +1,8 @@
+
+	query {
+		user(func: uid( 0x1)) {
+			type.object.name
+			friends (first: 10, offset: 3) {
+			}
+		}
+	}

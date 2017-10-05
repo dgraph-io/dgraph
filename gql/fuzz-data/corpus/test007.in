@@ -1,0 +1,19 @@
+
+	{
+		var(func: uid(0x0a)) {
+			f as friends
+		}
+
+		var(func: uid(f)) {
+			l as _predicate_
+			friend {
+				g as _predicate_
+			}
+		}
+
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(val(l, g))
+			}
+		}
+	}

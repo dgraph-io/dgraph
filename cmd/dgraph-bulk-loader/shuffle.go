@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
@@ -50,7 +49,6 @@ func (s *shuffler) run() {
 
 func (s *shuffler) createBadger(i int) *badger.KV {
 	opt := badger.DefaultOptions
-	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = s.opt.shardOutputDirs[i]
@@ -99,7 +97,7 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *coun
 		heap.Push(&ph, heapNode{mapEntry: <-ch, ch: ch})
 	}
 
-	const batchSize = 1e4
+	const batchSize = 1000
 	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*protos.MapEntry, 0, batchAlloc)
 	var prevKey []byte

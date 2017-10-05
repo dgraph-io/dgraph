@@ -1,0 +1,6 @@
+
+	{
+	  me(func:regexp(name@en, /pattern\/)) {
+	    name
+	  }
+    }

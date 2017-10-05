@@ -383,6 +383,7 @@ func TestSetObject(t *testing.T) {
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
+		Raw      []byte   `json:"raw_bytes",omitempty`
 		Friends  []Person `json:"friend,omitempty"`
 		Location string   `json:"loc,omitempty"`
 		School   *School  `json:"school,omitempty"`
@@ -401,6 +402,7 @@ func TestSetObject(t *testing.T) {
 		Age:      26,
 		Married:  true,
 		Location: loc,
+		Raw:      []byte("raw_bytes"),
 		Friends: []Person{{
 			Uid:  1000,
 			Name: "Bob",
@@ -431,6 +433,7 @@ func TestSetObject(t *testing.T) {
 			name
 			age
 			loc
+			raw_bytes
 			married
 			friend {
 				_uid_
@@ -460,6 +463,7 @@ func TestSetObject(t *testing.T) {
 	require.Equal(t, p.Name, p2.Name)
 	require.Equal(t, p.Age, p2.Age)
 	require.Equal(t, p.Married, p2.Married)
+	require.Equal(t, p.Raw, p2.Raw)
 	require.Equal(t, p.School.Name, p2.School.Name)
 	require.Equal(t, len(p.Friends), len(p2.Friends))
 	require.NotNil(t, p2.Friends[0].Name)
@@ -954,4 +958,284 @@ func TestSetObjectUpdateFacets(t *testing.T) {
 	require.NoError(t, client.Unmarshal(resp.N, &r))
 	// Compare the objects.
 	require.EqualValues(t, p, r.Me)
+}
+
+func TestDeleteObjectNode(t *testing.T) {
+	// In this test we check S * * deletion.
+	type Person struct {
+		Uid     uint64    `json:"_uid_,omitempty"`
+		Name    string    `json:"name,omitempty"`
+		Age     int       `json:"age,omitempty"`
+		Married bool      `json:"married,omitempty"`
+		Friends []*Person `json:"friend,omitempty"`
+	}
+
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	p := Person{
+		Uid:     1000,
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Friends: []*Person{&Person{
+			Uid:  1001,
+			Name: "Bob",
+			Age:  24,
+		}, &Person{
+			Uid:  1002,
+			Name: "Charlie",
+			Age:  29,
+		}},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+
+	q := fmt.Sprintf(`{
+		me(func: uid(1000)) {
+			name
+			age
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+		}
+
+		me2(func: uid(1001)) {
+			name
+			age
+		}
+
+		me3(func: uid(1002)) {
+			name
+			age
+		}
+	}`)
+	req.SetQuery(q)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	first := resp.N[0].Children[0]
+	require.Equal(t, 2, len(first.Children))
+	require.Equal(t, 3, len(first.Properties))
+
+	// Now lets try to delete Alice. This won't delete Bob and Charlie but just remove the
+	// connection between Alice and them.
+	p2 := Person{
+		Uid: 1000,
+	}
+
+	req = client.Req{}
+	err = req.DeleteObject(&p2)
+	require.NoError(t, err)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(resp.N[0].Children))
+	second := resp.N[1].Children[0]
+	require.Equal(t, 2, len(second.Properties))
+	third := resp.N[2].Children[0]
+	require.Equal(t, 2, len(third.Properties))
+}
+
+func TestDeleteObjectPredicate(t *testing.T) {
+	// In this test we check * P * deletion.
+	type Person struct {
+		Uid     uint64    `json:"_uid_,omitempty"`
+		Name    string    `json:"name,omitempty"`
+		Age     int       `json:"age,omitempty"`
+		Married bool      `json:"married,omitempty"`
+		Friends []*Person `json:"friend,omitempty"`
+	}
+
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	p := Person{
+		Uid:     1000,
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Friends: []*Person{&Person{
+			Uid:  1001,
+			Name: "Bob",
+			Age:  24,
+		}, &Person{
+			Uid:  1002,
+			Name: "Charlie",
+			Age:  29,
+		}},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+
+	q := fmt.Sprintf(`{
+		me(func: uid(1000)) {
+			name
+			age
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+		}
+
+		me2(func: uid(1001)) {
+			name
+			age
+		}
+
+		me3(func: uid(1002)) {
+			name
+			age
+		}
+	}`)
+	req.SetQuery(q)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	first := resp.N[0].Children[0]
+	require.Equal(t, 2, len(first.Children))
+	require.Equal(t, 3, len(first.Properties))
+
+	// Now lets try to delete friend and married predicate.
+	type DeletePred struct {
+		Friend  interface{} `json:"friend"`
+		Married interface{} `json:"married"`
+	}
+	dp := DeletePred{}
+	// Basically we want predicate as JSON keys with value null.
+	// After marshalling this would become { "friend" : null, "married": null }
+
+	req = client.Req{}
+	err = req.DeleteObject(&dp)
+	require.NoError(t, err)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	first = resp.N[0].Children[0]
+	// Alice should have no friends and only two attributes now.
+	require.Equal(t, 0, len(first.Children))
+	require.Equal(t, 2, len(first.Properties))
+	second := resp.N[1].Children[0]
+	require.Equal(t, 2, len(second.Properties))
+	third := resp.N[2].Children[0]
+	require.Equal(t, 2, len(third.Properties))
+}
+
+func TestObjectList(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+
+	type Person struct {
+		Uid         uint64   `json:"_uid_"`
+		Address     []string `json:"address"`
+		PhoneNumber []int64  `json:"phone_number"`
+	}
+
+	p := Person{
+		Address:     []string{"Redfern", "Riley Street"},
+		PhoneNumber: []int64{9876, 123},
+	}
+
+	req.SetSchema(`
+		address: [string] .
+		phone_number: [int] .
+	`)
+
+	err := req.SetObject(&p)
+	require.NoError(t, err)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	uid := resp.AssignedUids["blank-0"]
+
+	q := fmt.Sprintf(`
+	{
+		me(func: uid(%d)) {
+			_uid_
+			address
+			phone_number
+		}
+	}
+	`, uid)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	type Root struct {
+		Me Person `json:"me"`
+	}
+
+	var r Root
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+
+	require.Equal(t, 2, len(r.Me.Address))
+	require.Equal(t, 2, len(r.Me.PhoneNumber))
+	sort.Strings(r.Me.Address)
+	require.Equal(t, p.Address, r.Me.Address)
+	require.Equal(t, p.PhoneNumber, r.Me.PhoneNumber)
+
+	// Now add some more values and do the query again.
+	p2 := Person{
+		Uid:         uid,
+		Address:     []string{"Surry Hills"},
+		PhoneNumber: []int64{1234},
+	}
+	err = req.SetObject(&p2)
+	require.NoError(t, err)
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+	require.Equal(t, 3, len(r.Me.Address))
+	require.Equal(t, 3, len(r.Me.PhoneNumber))
+
+	// Now lets delete 2 values.
+	p3 := Person{
+		Uid:         uid,
+		Address:     p.Address,
+		PhoneNumber: p.PhoneNumber,
+	}
+
+	err = req.DeleteObject(&p3)
+	require.NoError(t, err)
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	require.NoError(t, client.Unmarshal(resp.N, &r))
+	require.Equal(t, p2, r.Me)
 }

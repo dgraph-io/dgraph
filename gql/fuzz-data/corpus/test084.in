@@ -1,0 +1,28 @@
+
+	query {
+		user(func: uid(0x0a)) {
+			...fragmenta,...fragmentb
+			friends {
+				name
+			}
+			...fragmentc
+			hobbies
+			...fragmentd
+		}
+	}
+
+	fragment fragmenta {
+		name
+	}
+
+	fragment fragmentb {
+		id
+	}
+
+	fragment fragmentc {
+		name
+	}
+
+	fragment fragmentd {
+		id
+	}

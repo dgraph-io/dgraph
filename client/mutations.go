@@ -92,6 +92,7 @@ func (a *allocator) fetchOne() (uint64, error) {
 		for {
 			assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
 			if err != nil {
+				x.Printf("Error while getting lease %v\n", err)
 				time.Sleep(factor)
 				if factor < 256*time.Second {
 					factor = factor * 2
@@ -313,8 +314,7 @@ func (d *Dgraph) batchSync() {
 		loop++
 
 		for _, e := range entries {
-			// Atmost 10 bytes are needed for uvarint encoding
-			buf := make([]byte, 10)
+			buf := make([]byte, binary.MaxVarintLen64)
 			n := binary.PutUvarint(buf[:], e.value)
 			wb = badger.EntriesSet(wb, []byte(e.key), buf[:n])
 		}
@@ -543,6 +543,21 @@ L:
 	}
 	atomic.AddUint64(&d.rdfs, 1)
 	return nil
+}
+
+// DropAll deletes all edges and schema from Dgraph.
+func (d *Dgraph) DropAll() error {
+	req := &Req{
+		gr: protos.Request{
+			Mutation: &protos.Mutation{DropAll: true},
+		},
+	}
+	select {
+	case d.reqs <- req:
+		return nil
+	case <-d.opts.Ctx.Done():
+		return d.opts.Ctx.Err()
+	}
 }
 
 // AddSchema adds the given schema mutation to the batch of schema mutations.  If the schema

@@ -1,0 +1,10 @@
+
+	query {
+		me(func: uid(0x0a)) {
+			friends @filter() {
+				name @filter(namefilter(name, "a"))
+			}
+			gender @filter(eq(g, "a")),age @filter(neq(a, "b"))
+			hometown
+		}
+	}

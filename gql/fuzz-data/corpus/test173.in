@@ -1,0 +1,6 @@
+
+	{
+	  me(func:allofterms(name, "barack")) @filter(regexp(secret, /whitehouse[0-9]{1,4}/fLaGs)) {
+	    name
+	  }
+    }

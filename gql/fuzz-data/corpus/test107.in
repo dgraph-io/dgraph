@@ -1,0 +1,10 @@
+
+	query {
+		me(func:anyofterms(abc, "Abc")) @filter(allofterms(name, "alice")) {
+			friends @filter() {
+				name @filter(namefilter(name, "a"))
+			}
+			gender @filter(eq(g, "a")),age @filter(neq(a, "b"))
+			hometown
+		}
+	}

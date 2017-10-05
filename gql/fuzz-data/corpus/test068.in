@@ -1,0 +1,6 @@
+
+		schema (pred : name) {
+			pred
+			type
+		}
+	

@@ -23,28 +23,44 @@ func main() {
 	runtime.GOMAXPROCS(128)
 
 	var opt options
-	flag.IntVar(&opt.BlockRate, "block", 0, "Block profiling rate")
-	flag.StringVar(&opt.RDFDir, "r", "", "Directory containing *.rdf or *.rdf.gz files to load")
-	flag.StringVar(&opt.SchemaFile, "s", "", "Location of schema file to load")
+	flag.IntVar(&opt.BlockRate, "block", 0,
+		"Block profiling rate.")
+	flag.StringVar(&opt.RDFDir, "r", "",
+		"Directory containing *.rdf or *.rdf.gz files to load.")
+	flag.StringVar(&opt.SchemaFile, "s", "",
+		"Location of schema file to load.")
 	flag.StringVar(&opt.DgraphsDir, "out", "out",
 		"Location to write the final dgraph data directories.")
-	flag.StringVar(&opt.LeaseFile, "l", "LEASE", "Location to write the lease file")
-	flag.StringVar(&opt.TmpDir, "tmp", "tmp", "Temp directory used to use for on-disk "+
-		"scratch space. Requires free space proportional to the size of the RDF file.")
+	flag.StringVar(&opt.LeaseFile, "l", "LEASE",
+		"Location to write the lease file.")
+	flag.StringVar(&opt.TmpDir, "tmp", "tmp",
+		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
+			" to the size of the RDF file and the amount of indexing used.")
 	flag.IntVar(&opt.NumGoroutines, "j", runtime.NumCPU(),
-		"Number of worker threads to use (defaults to one less than logical CPUs)")
-	flag.Int64Var(&opt.MapBufSize, "mapoutput_mb", 128,
-		"The estimated size of each map file output. This directly affects the memory usage.")
-	httpAddr := flag.String("http", "localhost:8080", "Address to serve http (pprof)")
+		"Number of worker threads to use (defaults to the number of logical CPUs)")
+	flag.Int64Var(&opt.MapBufSize, "mapoutput_mb", 64,
+		"The estimated size of each map file output. Increasing this increases memory usage.")
+	httpAddr := flag.String("http", "localhost:8080",
+		"Address to serve http (pprof).")
 	flag.BoolVar(&opt.SkipMapPhase, "skip_map_phase", false,
-		"Skip the map phase (assumes that map output files already exist)")
+		"Skip the map phase (assumes that map output files already exist).")
 	flag.BoolVar(&opt.CleanupTmp, "cleanup_tmp", true,
-		"Clean up the tmp directory after the loader finishes")
-	flag.BoolVar(&opt.ExpandEdges, "expand_edges", true, "Generate edges that allow nodes to"+
-		" be expanded using _predicate_ or expand(...). Disable to increase loading speed.")
-	flag.IntVar(&opt.NumShufflers, "shufflers", 1, "Number of shufflers to run concurrently.")
-	flag.IntVar(&opt.MapShards, "map_shards", 1, "Number of map output shards.")
-	flag.IntVar(&opt.ReduceShards, "reduce_shards", 1, "Number of shuffle output shards.")
+		"Clean up the tmp directory after the loader finishes. Setting this to false allows the"+
+			" bulk loader can be re-run while skipping the map phase.")
+	flag.BoolVar(&opt.ExpandEdges, "expand_edges", true,
+		"Generate edges that allow nodes to be expanded using _predicate_ or expand(...). "+
+			"Disable to increase loading speed.")
+	flag.IntVar(&opt.NumShufflers, "shufflers", 1,
+		"Number of shufflers to run concurrently. Increasing this can improve performance, and "+
+			"must be less than or equal to the number of reduce shards.")
+	flag.IntVar(&opt.MapShards, "map_shards", 1,
+		"Number of map output shards. Must be greater than or equal to the number of reduce "+
+			"shards. Increasing allows more evenly sized reduce shards, at the expense of "+
+			"increased memory usage.")
+	flag.IntVar(&opt.ReduceShards, "reduce_shards", 1,
+		"Number of reduce shards. This determines the number of dgraph instances in the final "+
+			"cluster. Increasing this potentially decreases the reduce stage runtime by using "+
+			"more parallelism, but increases memory usage.")
 	flag.BoolVar(&opt.Version, "version", false, "Prints the version of dgraph-bulk-loader.")
 
 	flag.Parse()
@@ -88,7 +104,7 @@ func main() {
 	// Delete and recreate the output dirs to ensure they are empty.
 	x.Check(os.RemoveAll(opt.DgraphsDir))
 	for i := 0; i < opt.ReduceShards; i++ {
-		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i))
+		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i), "p")
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
 	}

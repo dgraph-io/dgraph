@@ -70,6 +70,7 @@ message Mutation {
     repeated SchemaUpdate schema = 3;
     bytes set_json = 4;
     bytes delete_json = 5;
+    bool DropAll = 6;
 }
 
 message Request {

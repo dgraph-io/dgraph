@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
+	bo "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -60,7 +61,6 @@ func newLoader(opt options) *loader {
 	st := &state{
 		opt:  opt,
 		prog: newProgress(),
-		um:   newUIDMap(),
 		ss:   newSchemaStore(readSchema(opt.SchemaFile)),
 		sm:   newShardMap(opt.MapShards),
 
@@ -145,6 +145,17 @@ func findRDFFiles(dir string) []string {
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
 
+	xidDir := filepath.Join(ld.opt.TmpDir, "xids")
+	x.Check(os.Mkdir(xidDir, 0755))
+	opt := badger.DefaultOptions
+	opt.SyncWrites = false
+	opt.TableLoadingMode = bo.MemoryMap
+	opt.Dir = xidDir
+	opt.ValueDir = xidDir
+	xidKV, err := badger.NewKV(&opt)
+	x.Check(err)
+	ld.um = newUIDMap(xidKV)
+
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
@@ -196,6 +207,7 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	ld.writeLease()
+	x.Check(ld.um.kv.Close())
 	ld.um = nil
 	runtime.GC()
 }
@@ -214,13 +226,17 @@ type shuffleOutput struct {
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	shuffleOutputCh := make(chan shuffleOutput, 1000)
+	shuffleOutputCh := make(chan shuffleOutput, 100)
 	go func() {
 		shuf := shuffler{state: ld.state, output: shuffleOutputCh}
 		shuf.run()
 	}()
 
-	redu := reducer{state: ld.state, input: shuffleOutputCh}
+	redu := reducer{
+		state:     ld.state,
+		input:     shuffleOutputCh,
+		writesThr: x.NewThrottle(100),
+	}
 	redu.run()
 }
 

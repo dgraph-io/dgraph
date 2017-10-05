@@ -347,8 +347,6 @@ func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.Schema
 	return nil
 }
 
-const numPendingMutations = 10000
-
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)

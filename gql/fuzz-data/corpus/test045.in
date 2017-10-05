@@ -1,0 +1,10 @@
+
+	{
+		you(func: uid(0x0a)) {
+			name
+		}
+
+		me(func: uid(0x0b)) {
+		 friends
+		}
+	}

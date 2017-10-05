@@ -34,17 +34,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	set            = "set"
-	del            = "delete"
-	leaseBandwidth = uint64(10000)
-)
-
 var (
 	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
 	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
 	allocator          x.EmbeddedUidAllocator
-	emptyAssignedIds   = &protos.AssignedIds{}
 )
 
 // runMutation goes through all the edges and applies them. It returns the
@@ -411,6 +404,18 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		x.AssertTrue(mu != nil)
 		mu.Upsert = m.Upsert
 	}
+
+	if m.DropAll {
+		for _, gid := range groups().KnownGroups() {
+			mu := mutationMap[gid]
+			if mu == nil {
+				mu = &protos.Mutations{GroupId: gid}
+				mutationMap[gid] = mu
+			}
+			mu.DropAll = true
+		}
+	}
+
 	return nil
 }
 

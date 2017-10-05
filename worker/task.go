@@ -325,6 +325,19 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		return x.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
 	}
 
+	{
+		if srcFn.atype == types.PasswordID && srcFn.fnType != PasswordFn {
+			// Silently skip if the user is trying to fetch an attribute of type password.
+			return nil
+		}
+
+		if srcFn.fnType == PasswordFn && srcFn.atype != types.PasswordID {
+			return x.Errorf("checkpwd fn can only be used on attr: [%s] with schema type password."+
+				" Got type: %s", attr, types.TypeID(srcFn.atype).Name())
+		}
+
+	}
+
 	var key []byte
 	var err error
 	listType := schema.State().IsList(attr)
@@ -345,13 +358,6 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		} else {
 			var val types.Val
 			val, err = pl.ValueFor(q.Langs)
-			if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-				// If this was an expanded node, then we can ignore password fetching error.
-				if args.q.Expanded {
-					return nil
-				}
-				return x.Errorf("Attribute: [%s] of type password cannot be fetched.", attr)
-			}
 			vals = append(vals, val)
 		}
 

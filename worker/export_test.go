@@ -55,6 +55,7 @@ func populateGraphExport(t *testing.T) {
 		`<1> <name> "pho\ton" <author0> .`,
 		`<2> <name> "pho\ton"@en <author0> .`,
 		`<3> <name> "First Line\nSecondLine" .`,
+		"<1> <friend_not_served> <5> <author0> .",
 	}
 	idMap := map[string]uint64{
 		"1": 1,
@@ -96,6 +97,7 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.KV) {
 	val, err = (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
 	ps.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val, 0x00)
+	ps.Set(x.SchemaKey("friend_not_served"), val, 0x00)
 	populateGraphExport(t)
 
 	return dir, ps

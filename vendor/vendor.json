@@ -169,40 +169,40 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "hV9h5r1lWJ3QWgys5Y7CxDwj8/8=",
+			"checksumSHA1": "UEpH8OEeMQV+vj5yjEV8Gcz7fgU=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "64df7f57d9ee20d7b28de4a3eea90bf8d7310a77",
-			"revisionTime": "2017-09-12T05:49:28Z"
+			"revision": "7f945c8fffd35e73f278fc3f0bce9961398dc1e1",
+			"revisionTime": "2017-09-28T02:11:23Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "64df7f57d9ee20d7b28de4a3eea90bf8d7310a77",
-			"revisionTime": "2017-09-12T05:49:28Z"
+			"revision": "7f945c8fffd35e73f278fc3f0bce9961398dc1e1",
+			"revisionTime": "2017-09-28T02:11:23Z"
 		},
 		{
 			"checksumSHA1": "FB7rDZgiLfpIGi9RqWbgxjZ0Vjg=",
 			"path": "github.com/dgraph-io/badger/protos",
-			"revision": "64df7f57d9ee20d7b28de4a3eea90bf8d7310a77",
-			"revisionTime": "2017-09-12T05:49:28Z"
+			"revision": "7f945c8fffd35e73f278fc3f0bce9961398dc1e1",
+			"revisionTime": "2017-09-28T02:11:23Z"
 		},
 		{
-			"checksumSHA1": "JPMRtJrMwbjSPHA6VsuUyJJM7xE=",
+			"checksumSHA1": "+WRzlEkaNDITqaYzuG1z3NwxDZo=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "64df7f57d9ee20d7b28de4a3eea90bf8d7310a77",
-			"revisionTime": "2017-09-12T05:49:28Z"
+			"revision": "7f945c8fffd35e73f278fc3f0bce9961398dc1e1",
+			"revisionTime": "2017-09-28T02:11:23Z"
 		},
 		{
 			"checksumSHA1": "p03nWiAKduR/uci7cdpIba0lA1E=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "64df7f57d9ee20d7b28de4a3eea90bf8d7310a77",
-			"revisionTime": "2017-09-12T05:49:28Z"
+			"revision": "7f945c8fffd35e73f278fc3f0bce9961398dc1e1",
+			"revisionTime": "2017-09-28T02:11:23Z"
 		},
 		{
-			"checksumSHA1": "uqMEk55tUra75Gf2adOS21dWTSU=",
+			"checksumSHA1": "yi7zCzAJ9WzSo3/IVcMn3ALfEx0=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "64df7f57d9ee20d7b28de4a3eea90bf8d7310a77",
-			"revisionTime": "2017-09-12T05:49:28Z"
+			"revision": "7f945c8fffd35e73f278fc3f0bce9961398dc1e1",
+			"revisionTime": "2017-09-28T02:11:23Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",

@@ -1968,6 +1968,7 @@ For all triples with a predicate of scalar types the object is a literal.
 |  `id`       | string  |
 |  `dateTime` | time.Time (RFC3339 format [Optional timezone] eg: 2006-01-02T15:04:05.999999999+10:00 or 2006-01-02T15:04:05.999999999)    |
 |  `geo`      | [go-geom](https://github.com/twpayne/go-geom)    |
+|  `password` | string (encrypted) |
 
 #### UID Type
 
@@ -2011,14 +2012,17 @@ The following types are also accepted.
 
 #### Password type
 
-A password for an entity is set with `^^<pwd:password>`.  Passwords cannot be queried directly, only checked for a match using the `checkpwd` function.
+A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkpwd` function.
 
 For example: to set a password:
 ```
 mutation {
+  schema {
+    pass: password .
+  }
   set {
     <0x123> <name> "Password Example"
-    <0x123> <password> "ThePassword"^^<pwd:password>     .
+    <0x123> <pass> "ThePassword" .
   }
 }
 ```
@@ -2028,7 +2032,7 @@ to check a password:
 {
   check(func: uid(0x123)) {
     name
-    checkpwd(password, "ThePassword")
+    checkpwd(pass, "ThePassword")
   }
 }
 ```
@@ -2039,7 +2043,7 @@ output:
   "check": [
     {
       "name": "Password Example",
-      "password": [
+      "pass": [
         {
           "checkpwd": true
         }

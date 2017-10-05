@@ -15,7 +15,7 @@ func mergeMapShardsIntoReduceShards(opt options) {
 
 	var reduceShards []string
 	for i := 0; i < opt.ReduceShards; i++ {
-		shardDir := filepath.Join(opt.TmpDir, fmt.Sprintf("shard_%d", i))
+		shardDir := filepath.Join(opt.TmpDir, "shards", fmt.Sprintf("shard_%d", i))
 		x.Check(os.MkdirAll(shardDir, 0755))
 		reduceShards = append(reduceShards, shardDir)
 	}
@@ -30,13 +30,13 @@ func mergeMapShardsIntoReduceShards(opt options) {
 }
 
 func shardDirs(tmpDir string) []string {
-	dir, err := os.Open(tmpDir)
+	dir, err := os.Open(filepath.Join(tmpDir, "shards"))
 	x.Check(err)
 	shards, err := dir.Readdirnames(0)
 	x.Check(err)
 	dir.Close()
 	for i, shard := range shards {
-		shards[i] = filepath.Join(tmpDir, shard)
+		shards[i] = filepath.Join(tmpDir, "shards", shard)
 	}
 
 	// Allow largest shards to be shuffled first.

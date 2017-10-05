@@ -60,7 +60,8 @@ func ExampleReq_Set() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	// Create new request
 	req := client.Req{}
@@ -110,7 +111,8 @@ func ExampleReq_Delete() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	// Create new request
 	req := client.Req{}
@@ -213,7 +215,8 @@ func ExampleEdge_AddFacet() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -299,7 +302,8 @@ func ExampleEdge_AddFacet() {
 	}
 
 	fmt.Println("Found : ", pq.Root.Name)
-	fmt.Println("Who likes to be called : ", pq.Root.NameFacets.Alias, " since ", pq.Root.NameFacets.Since)
+	fmt.Println("Who likes to be called : ", pq.Root.NameFacets.Alias,
+		" since ", pq.Root.NameFacets.Since)
 	fmt.Println("Friends : ")
 	for i := range pq.Root.Friends {
 		fmt.Print("\t", pq.Root.Friends[i].Name)
@@ -322,7 +326,8 @@ func ExampleReq_SetQuery() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 	alice, err := dgraphClient.NodeXid("alice", false)
@@ -384,7 +389,8 @@ func ExampleReq_SetQueryWithVariables() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -449,7 +455,8 @@ func ExampleDgraph_NodeUidVar() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -510,6 +517,21 @@ func ExampleDgraph_NodeUidVar() {
 	x.Check(err)
 }
 
+func ExampleDgraph_DropAll() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Checkf(err, "While creating temp dir")
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	x.Checkf(dgraphClient.DropAll(), "While dropping all")
+	x.Checkf(dgraphClient.Close(), "While closing client")
+}
+
 func ExampleEdge_SetValueBytes() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
@@ -519,7 +541,8 @@ func ExampleEdge_SetValueBytes() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -581,7 +604,8 @@ func ExampleUnmarshal() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -656,7 +680,8 @@ func ExampleUnmarshal_facetsUpdate() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -750,7 +775,8 @@ func ExampleEdge_SetValueGeoJson() {
 	x.Check(err)
 	defer os.RemoveAll(clientDir)
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -770,7 +796,10 @@ func ExampleEdge_SetValueGeoJson() {
 	x.Check(err)
 
 	e = alice.Edge("city")
-	err = e.SetValueGeoJson(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
+	err = e.SetValueGeoJson(`{
+		"Type":"Polygon",
+		"Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]
+	}`)
 	x.Check(err)
 	err = req.Set(e)
 	x.Check(err)

@@ -1,0 +1,1 @@
+{e(func:anyofterms(c,"c"))@filter(allofterms(e,"e")){friends@filter(){name@filter(namefilter(e,"a"))}gender@filter(eq(g,"a"))age@filter(neq(a,"b"))hometown}}

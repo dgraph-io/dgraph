@@ -136,6 +136,7 @@ func populateGraph(t *testing.T) {
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 1, types.GeoID, gData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "loc", 25, types.GeoID, gData.Value.([]byte), nil)
 
 	// IntID
 	data := types.ValueForType(types.BinaryID)
@@ -2862,13 +2863,13 @@ func TestQueryPassword(t *testing.T) {
                         }
                 }
 	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = queryRequest.ProcessQuery(defaultContext())
-	require.NotNil(t, err)
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"}]}}`, js)
 }
+
 func TestPasswordExpandAll1(t *testing.T) {
+	err := schema.ParseBytes([]byte(schemaStr), 1)
+	x.Check(err)
 	populateGraph(t)
 	addPassword(t, 1, "password", "123456")
 	// We ignore password in expand(_all_)
@@ -3032,8 +3033,7 @@ func TestCheckPasswordQuery1(t *testing.T) {
                 }
 	`
 	_, err := processToFastJsonReq(t, query)
-	require.Error(t, err)
-	require.EqualValues(t, "Attribute: [password] of type password cannot be fetched.", err.Error())
+	require.NoError(t, err)
 }
 
 // test for improved version of checkpwd with custom attribute name
@@ -3050,8 +3050,7 @@ func TestCheckPasswordQuery2(t *testing.T) {
                 }
 	`
 	_, err := processToFastJsonReq(t, query)
-	require.Error(t, err)
-	require.EqualValues(t, "Attribute: [pass] of type password cannot be fetched.", err.Error())
+	require.NoError(t, err)
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {
@@ -5686,7 +5685,7 @@ func TestNearGenerator(t *testing.T) {
 	populateGraph(t)
 	time.Sleep(10 * time.Millisecond)
 	query := `{
-		me(func:near(loc, [1.1,2.0], 5.001)) {
+		me(func:near(loc, [1.1,2.0], 5.001)) @filter(not uid(25)) {
 			name
 			gender
 		}
@@ -5778,7 +5777,7 @@ func TestWithinGeneratorError(t *testing.T) {
 func TestWithinGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:within(loc,  [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) {
+		me(func:within(loc,  [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) @filter(not uid(25)) {
 			name
 		}
 	}`
@@ -5835,7 +5834,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 func TestIntersectsGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:intersects(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) {
+		me(func:intersects(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) @filter(not uid(25)) {
 			name
 		}
 	}`
@@ -6842,6 +6841,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "occupations", Type: "string"},
 		{Predicate: "_predicate_", Type: "string"},
 		{Predicate: "salary", Type: "float"},
+		{Predicate: "password", Type: "password"},
 	}
 	checkSchemaNodes(t, expected, actual)
 }
@@ -6943,6 +6943,7 @@ lossy                          : string @index(term) .
 occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
+password                       : password .
 `
 
 // Duplicate implemention as in cmd/dgraph/main_test.go
@@ -9569,6 +9570,10 @@ func TestReturnEmptyBlock(t *testing.T) {
 }
 
 func TestExpandVal(t *testing.T) {
+	err := schema.ParseBytes([]byte(schemaStr), 1)
+	x.Check(err)
+	addPassword(t, 1, "password", "123456")
+	// We ignore password in expand(_all_)
 	populateGraph(t)
 	query := `
 	{
@@ -9583,4 +9588,33 @@ func TestExpandVal(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"survival_rate":98.990000,"address":"31, 32 street, Jupiter","bin_data":"YmluLWRhdGE=","power":13.250000,"gender":"female","_xid_":"mich","alive":true,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","graduation":"1932-01-01T00:00:00Z","age":38,"noindex_name":"Michonne's name not indexed","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","sword_present":"true","dob":"1910-01-01T00:00:00Z"}]}}`, js)
+}
+
+func TestGroupByGeoCrash(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+	  q(func: uid(1, 23, 24, 25, 31)) @groupby(loc) {
+	    count(_uid_)
+	  }
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.Contains(t, js, `{"loc":{"type":"Point","coordinates":[1.1,2]},"count":2}`)
+}
+
+func TestPasswordError(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1)) {
+			checkpwd(name, "Michonne")
+		}
+	}
+	`
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t,
+		err.Error(), "checkpwd fn can only be used on attr: [name] with schema type password. Got type: string")
 }

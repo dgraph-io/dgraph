@@ -1,0 +1,4 @@
+{
+		"query" : "query versions($a: string, $b: string, $c: string){versions(func: uid($a,$b,$c)){versions{ version_number}}}",
+		"variables" : {"$a": "3", "$b": "3", "$c": "3"}
+	}

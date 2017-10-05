@@ -19,6 +19,8 @@
 package y
 
 import (
+	"fmt"
+	"math"
 	"os"
 	"syscall"
 	"unsafe"
@@ -32,19 +34,40 @@ func Mmap(fd *os.File, write bool, size int64) ([]byte, error) {
 		protect = syscall.PAGE_READWRITE
 		access = syscall.FILE_MAP_WRITE
 	}
+	fi, err := fd.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	// Truncate the database to the size of the mmap.
+	if fi.Size() < size {
+		if err := fd.Truncate(size); err != nil {
+			return nil, fmt.Errorf("truncate: %s", err)
+		}
+	}
+
+	// Open a file mapping handle.
+	sizelo := uint32(size >> 32)
+	sizehi := uint32(size) & 0xffffffff
+
 	handler, err := syscall.CreateFileMapping(syscall.Handle(fd.Fd()), nil,
-		uint32(protect), uint32(size>>32), uint32(size), nil)
+		uint32(protect), sizelo, sizehi, nil)
 	if err != nil {
-		return nil, err
-	}
-	defer syscall.CloseHandle(handler)
-
-	mapData, err := syscall.MapViewOfFile(handler, uint32(access), 0, 0, 0)
-	if err != nil {
-		return nil, err
+		return nil, os.NewSyscallError("CreateFileMapping", err)
 	}
 
-	data := (*[1 << 30]byte)(unsafe.Pointer(mapData))[:size]
+	// Create the memory map.
+	addr, err := syscall.MapViewOfFile(handler, uint32(access), 0, 0, uintptr(size))
+	if addr == 0 {
+		return nil, os.NewSyscallError("MapViewOfFile", err)
+	}
+
+	// Close mapping handle.
+	if err := syscall.CloseHandle(syscall.Handle(handler)); err != nil {
+		return nil, os.NewSyscallError("CloseHandle", err)
+	}
+
+	data := (*[math.MaxUint32]byte)(unsafe.Pointer(addr))[:size]
 	return data, nil
 }
 

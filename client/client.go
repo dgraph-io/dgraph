@@ -162,6 +162,13 @@ func (req *Req) Delete(e Edge) error {
 	return nil
 }
 
+func (req *Req) DeleteAll() {
+	if req.gr.Mutation == nil {
+		req.gr.Mutation = new(protos.Mutation)
+	}
+	req.gr.Mutation.DropAll = true
+}
+
 // AddSchema adds the single schema mutation s to the request.
 func (req *Req) AddSchema(s protos.SchemaUpdate) error {
 	if req.gr.Mutation == nil {

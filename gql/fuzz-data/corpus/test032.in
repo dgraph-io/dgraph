@@ -1,0 +1,9 @@
+
+	{
+		me(func: uid(L)) {name}
+		him(func: uid(J)) {name}
+		you(func: uid(K)) {name}
+		var(func: uid(0x0a)) {L AS friends}
+		var(func: uid(0x0a)) {J AS friends}
+		var(func: uid(0x0a)) {K AS friends}
+	}

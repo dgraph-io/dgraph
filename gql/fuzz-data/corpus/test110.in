@@ -1,0 +1,9 @@
+
+	query {
+		me(func:anyofterms(abc, "Abc")) @filter(gt(count(friends), 10)) {
+			friends @filter() {
+				name
+			}
+			hometown
+		}
+	}

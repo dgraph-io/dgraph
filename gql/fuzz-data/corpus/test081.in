@@ -1,0 +1,21 @@
+
+	# Mutation
+		mutation {
+			# Set block
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san/francisco> .
+			}
+			# Delete block
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+		# Query starts here.
+		query {
+			me(func: uid( 0x5)) { # now mention children
+				name		# Name
+				hometown # hometown of the person
+			}
+		}
+	

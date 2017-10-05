@@ -154,8 +154,6 @@ type params struct {
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	upsert         bool
-	// This is a child which the user didn't supply explicitly and we got it using expand(_all_)
-	expanded bool
 }
 
 // Function holds the information about gql functions.
@@ -1012,7 +1010,6 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
-		Expanded:     sg.Params.expanded,
 	}
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
@@ -1752,7 +1749,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			*temp = *child
 			temp.Params.isInternal = false
 			temp.Params.Expand = ""
-			temp.Params.expanded = true
 			temp.Attr = k
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
@@ -2388,7 +2384,7 @@ func (sg *SubGraph) upsert(ctx context.Context) (uint64, error) {
 		return 0, x.Wrapf(err, "While running upsert mutation.")
 	}
 
-	// TODO - Optionally ApplyMutations could return the uid and thne we can avoid this call.
+	// TODO - Optionally ApplyMutations could return the uid and then we can avoid this call.
 	che := make(chan error, 1)
 	ProcessGraph(ctx, sg, nil, che)
 	return res.StartId, <-che
@@ -2535,37 +2531,35 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (map[string]uint64, e
 			// mutation (i.e. the upsert operation).
 			// TODO - We can do upserts in parallel.
 			if sg.Params.upsert && (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) {
+				// Safe to return in case of errors here as all query blocks have been executed.
 				if len(sg.Filters) > 0 {
-					ferr = fmt.Errorf("Upsert query cannot have filters.")
-					continue
+					return nil, fmt.Errorf("Upsert query cannot have filters.")
 				}
 				uid, err := sg.upsert(ctx)
 				if err != nil {
-					ferr = err
-					continue
+					return nil, err
 				}
 
 				if len(sg.DestUIDs.Uids) == 0 {
-					ferr = fmt.Errorf("Expected a uid to be assigned while doing upsert.")
-					continue
+					return nil, fmt.Errorf("Expected a uid to be assigned while doing upsert.")
 				}
 
-				// Someone else might have assigned and created the uid, so we don't want to return
-				// this uid in allocatedUids.
-				if uid != sg.DestUIDs.Uids[0] {
-					continue
-				}
-				if allocatedUids == nil {
-					allocatedUids = make(map[string]uint64)
-				}
-				if sg.Params.Var != "" {
-					allocatedUids[sg.Params.Var] = uid
-				} else {
-					// There can only be one upsert per query block, so the key can be
-					// the Alias for the block.
-					allocatedUids[sg.Params.Alias] = uid
+				// This means that the uid that we allocated was same as the result from query.
+				// This means we allocated it. Hence, we should return it as part of allocated uids.
+				if uid == sg.DestUIDs.Uids[0] {
+					if allocatedUids == nil {
+						allocatedUids = make(map[string]uint64)
+					}
+					if sg.Params.Var != "" {
+						allocatedUids[sg.Params.Var] = uid
+					} else {
+						// There can only be one upsert per query block, so the key can be
+						// the Alias for the block.
+						allocatedUids[sg.Params.Alias] = uid
+					}
 				}
 			}
+
 			var sgPath []*SubGraph
 			err = sg.populateVarMap(req.vars, sgPath)
 			if err != nil {
@@ -2685,10 +2679,6 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		}
 	}
 
-	if len(qr.GqlQuery.Query) == 0 && qr.GqlQuery.Schema == nil {
-		return er, nil
-	}
-
 	uids, err := qr.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
@@ -2707,6 +2697,13 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 	if !nquads.IsEmpty() {
 		if err = qr.processNquads(ctx, nquads, newUids); err != nil {
 			return er, err
+		}
+	}
+
+	if qr.GqlQuery.Mutation != nil && qr.GqlQuery.Mutation.DropAll {
+		m := protos.Mutations{DropAll: true}
+		if err := ApplyMutations(ctx, &m); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
 		}
 	}
 
