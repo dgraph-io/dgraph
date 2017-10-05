@@ -1402,6 +1402,8 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 		illegal = count < 0
 	case "ge":
 		illegal = count <= 0
+	default:
+		x.AssertTruef(false, "unhandled count comparison fn: %v", cp.fn)
 	}
 	if illegal {
 		return x.Errorf("count(predicate) cannot be used to search for " +
