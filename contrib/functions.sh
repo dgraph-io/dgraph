@@ -26,7 +26,7 @@ function start {
 
 function startZero {
 	echo -e "Staring dgraph zero.\n"
-  ./dgraphzero -w $BUILD/wz -port 12340 -id 3 &
+  ./dgraphzero -w $BUILD/wz -port 12340 -idx 3 &
   # To ensure dgraph doesn't start before dgraphzero.
 	sleep 30
 }

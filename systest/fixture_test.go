@@ -126,7 +126,7 @@ func makeDirEmpty(dir string) error {
 
 func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) (queryPort string, grpcPort string) {
 	port := freePort()
-	zeroCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"), "-id", "1", "-port", port)
+	zeroCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"), "-idx", "1", "-port", port)
 	zeroCmd.Dir = dgraphZeroDir
 	s.checkFatal(zeroCmd.Start())
 	s.kill = append(s.kill, zeroCmd)

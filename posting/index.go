@@ -788,6 +788,10 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		index = rv.Index
 	}
+	if index == 0 {
+		// This function is called by cleaning thread(after predicate move)
+		return schema.State().Remove(attr)
+	}
 	if !s.Explicit {
 		// Delete predicate from schema.
 		se := schema.SyncEntry{
