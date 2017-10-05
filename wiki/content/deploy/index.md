@@ -32,8 +32,32 @@ The Docker version is available as _master_.  Pull and run with:
 
 ```sh
 docker pull dgraph/dgraph:master
+```
+
+#### Run using installed binary
+
+Run dgraphzero
+```sh
+dgraphzero -w zw
+```
+
+Run dgraph
+```sh
+dgraph --memory_mb 2048 --peer 127.0.0.1:8888
+```
+
+#### Run using Docker
+
+
+Run dgraphzero
+```sh
 mkdir -p ~/dgraph
-docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph:master dgraph --bindall=true --memory_mb 2048
+docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph:master dgraphzero -w zw
+```
+
+Run dgraph
+```
+docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
 ```
 
 {{% notice "note" %}}All the usual cautions about nightly builds apply: the feature set is not stable and may change (even daily) and the nightly build may contain bugs. {{% /notice %}}
@@ -59,6 +83,8 @@ go get -u google.golang.org/grpc
 
 ## Endpoints
 
+### Dgraph
+
 On its http port, a running Dgraph instance exposes a number of service endpoints.
 
 * `/` Browser UI and query visualization.
@@ -68,6 +94,14 @@ On its http port, a running Dgraph instance exposes a number of service endpoint
 <!-- * `/debug/store` backend storage stats.-->
 * `/admin/shutdown` [shutdown]({{< relref "#shutdown">}}) a node.
 * `/admin/export` take a running [export]({{< relref "#export">}}).
+
+### Dgraphzero
+
+Dgraphzero also exposes a http on (`--port` + 1). So if you ran `dgraphzero` using the default
+value for port flag(`8888`), then it would have a HTTP server running on `8889`.
+
+* `/state` Information about the nodes that are part of the cluster. Also contains information about
+  size of predicates and groups they belong to.
 
 
 ## Running Dgraph
@@ -209,7 +243,7 @@ cd ~/dgraph
 dgraph
 ```
 
-Or by specifying `p` and `w` directories, ports, etc.  If `dgraph-live-loader` is used, it must connect on the port exposing Dgraph services, as must the go client.  
+Or by specifying `p` and `w` directories, ports, etc.  If `dgraph-live-loader` is used, it must connect on the port exposing Dgraph services, as must the go client.
 
 ### Multiple instances
 
@@ -292,7 +326,7 @@ For this groups.conf:
 Each machine in the cluster must be started with a unique ID (option `--idx`) and a comma-separated list of group IDs (option `--groups`).  Each machine must also satisfy the data directory and port requirements for a [single instance]({{< relref "#running-dgraph">}}).
 
 
-To run a cluster, begin by bringing up a single server that serves at least group 0.  
+To run a cluster, begin by bringing up a single server that serves at least group 0.
 
 ```
 $ dgraph --group_conf groups.conf --groups "0,1" --idx 1 --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb 2048
@@ -339,7 +373,7 @@ In setting up a cluster be sure the check the following.
 
 To make provisioning an EC2 Dgraph cluster quick, the following script installs and starts a Dgraph node, opens ports on the host machine and enters Dgraph into systemd so that the node will restart if the machine is rebooted.
 
-We recommend an Ubuntu 16.04 AMI on a machine with at least 16GB of memory.  
+We recommend an Ubuntu 16.04 AMI on a machine with at least 16GB of memory.
 
 The i3 instances with SSD drives have the right hardware set up to run Dgraph (and its underlying key value store Badger) for performance environments.
 
@@ -565,9 +599,9 @@ queries can be sent to any instance (in this case to either `localhost:8080` or
 `localhost:10080`).
 ```sh
 $ curl localhost:8080/query -XPOST -d '{
-    pj_films(func:allofterms(name@en,"Peter Jackson")) {                                                                                  
+    pj_films(func:allofterms(name@en,"Peter Jackson")) {
         director.film (orderasc: name@en, first: 10) {
-            name@en       
+            name@en
         }
     }
 }' | jq
@@ -622,7 +656,7 @@ This stops the server on which the command is executed and not the entire cluste
 
 ## Delete database
 
-Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).  
+Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).
 
 To drop all data and start from a clean database:
 
@@ -667,7 +701,7 @@ scrape_configs:
       - 172.31.8.118:8080
 ```
 
-Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**. 
+Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**.
 
 ## Troubleshooting
 Here are some problems that you may encounter and some solutions to try.
