@@ -205,6 +205,10 @@ func (s *suite) checkFatal(errs ...error) {
 	}
 }
 
+func init() {
+	rand.Seed(int64(time.Now().Nanosecond()))
+}
+
 func freePort() string {
 	// Linux reuses ports in FIFO order. So a port that we listen on and then
 	// release will be free for a long time.
