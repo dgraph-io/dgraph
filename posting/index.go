@@ -789,7 +789,7 @@ func DeletePredicate(ctx context.Context, attr string) error {
 		index = rv.Index
 	}
 	if index == 0 {
-		// This functionw as called by cleaning thread(after predicate move)
+		// This function is called by cleaning thread(after predicate move)
 		schema.State().Remove(attr)
 	}
 	if !s.Explicit {
