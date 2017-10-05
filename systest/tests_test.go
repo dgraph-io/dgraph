@@ -48,6 +48,65 @@ func TestHelloWorld(t *testing.T) {
 	`))
 }
 
+func TestFacets(t *testing.T) {
+	s := newSuite(t, `
+		name: string @index(exact) .
+		boss: uid @count @reverse .
+	`, `
+		_:alice <name> "Alice" (middle_initial="J") .
+		_:bob   <name> "Bob"   (middle_initial="M") .
+		_:bob   <boss> _:alice (since=2017-04-26)   .
+	`)
+	defer s.cleanup()
+
+	t.Run("facet on terminal edge", s.singleQuery(`
+		q(func: eq(name, "Alice")) {
+			name @facets(middle_initial)
+		}
+	`, `
+		"q": [ {
+			"@facets": {
+				"name": {
+					"middle_initial": "J"
+				}
+			},
+			"name": "Alice"
+		} ]
+	`))
+
+	t.Run("facets on fwd uid edge", s.singleQuery(`
+		q(func: eq(name, "Bob")) {
+			boss @facets(since)
+		}
+	`, `
+		"q": [ {
+			"boss": [ {
+				"@facets": {
+					"_": {
+						"since": "2017-04-26T00:00:00Z"
+					}
+				}
+			} ]
+		} ]
+	`))
+
+	t.Run("facets on rev uid edge", s.singleQuery(`
+		q(func: eq(name, "Alice")) {
+			~boss @facets(since)
+		}
+	`, `
+		"q": [ {
+			"~boss": [ {
+				"@facets": {
+					"_": {
+						"since": "2017-04-26T00:00:00Z"
+					}
+				}
+			} ]
+		} ]
+	`))
+}
+
 func TestCountIndex(t *testing.T) {
 	s := newSuite(t, `
 		name: string @index(exact) .
@@ -83,6 +142,7 @@ func TestCountIndex(t *testing.T) {
 		_:frank <name> "Frank" .
 		_:grace <name> "Grace" .
 	`)
+	defer s.cleanup()
 
 	t.Run("All queries", s.multiQuery(`
 	{
