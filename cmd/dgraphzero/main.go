@@ -48,7 +48,7 @@ var (
 	myAddr = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	port        = flag.Int("port", 8888, "Port to run Dgraph zero on.")
-	nodeId      = flag.Uint64("id", 0, "Unique node index for this server.")
+	nodeId      = flag.Uint64("idx", 0, "Unique node index for this server.")
 	numReplicas = flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
 	peer  = flag.String("peer", "", "Address of another dgraphzero server.")

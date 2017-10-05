@@ -35,7 +35,8 @@ import (
 )
 
 var (
-	errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
+	errReadIndex       = x.Errorf("cannot get linerized read (time expired or no configured leader)")
+	ErrDuplicateRaftId = x.Errorf("Node is already part of group")
 )
 
 type sendmsg struct {
@@ -478,11 +479,15 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	}
 	// Also check that the new node is not me.
 	if rc.Id == node.RaftContext.Id {
-		return nil, x.Errorf("Same Raft ID")
+		return nil, ErrDuplicateRaftId
 	}
 	// Check that the new node is not already part of the group.
-	if _, ok := node.peers[rc.Id]; ok {
-		return &protos.Payload{}, x.Errorf("Node id already part of group.")
+	if addr, ok := node.peers[rc.Id]; ok {
+		Get().Connect(addr)
+		// There exists a healthy connection to server with same id.
+		if _, err := Get().Get(addr); err == nil {
+			return &protos.Payload{}, ErrDuplicateRaftId
+		}
 	}
 	node.Connect(rc.Id, rc.Addr)
 

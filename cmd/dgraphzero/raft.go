@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
+
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger/y"
@@ -308,6 +310,10 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		for err != nil {
 			time.Sleep(time.Millisecond)
 			_, err = c.JoinCluster(n.ctx, n.RaftContext)
+			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
+				x.Fatalf("Error while joining cluster %v", err)
+			}
+			x.Printf("Error while joining cluster %v\n", err)
 		}
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
