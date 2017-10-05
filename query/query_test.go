@@ -1737,19 +1737,6 @@ func TestNestedFuncRoot2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Andrea"}]}}`, js)
 }
 
-func TestNestedFuncRoot3(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: le(count(friend), -1)) {
-				name
-			}
-		}
-  `
-	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": { "me": []}}`, js)
-}
-
 func TestNestedFuncRoot4(t *testing.T) {
 	populateGraph(t)
 	query := `
