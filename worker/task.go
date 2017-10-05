@@ -568,7 +568,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it
 	// wouldn't know that this group is no longer serving this predicate.
-	// There's no issue if a we are serving a particular tablet and we get paritioned away from
+	// There's no issue if a we are serving a particular tablet and we get partitioned away from
 	// group zero as long as it's not removed.
 	if !groups().ServesTablet(q.Attr) {
 		return &emptyResult, errUnservedTablet
@@ -711,8 +711,7 @@ func handleCompareScalarFunction(arg funcArgs) error {
 		gid:     arg.gid,
 		reverse: arg.q.Reverse,
 	}
-	cp.evaluate(arg.out)
-	return nil
+	return cp.evaluate(arg.out)
 }
 
 func handleRegexFunction(ctx context.Context, arg funcArgs) error {
@@ -1389,13 +1388,19 @@ type countParams struct {
 	fn      string // function name
 }
 
-func (cp *countParams) evaluate(out *protos.Result) {
+func (cp *countParams) evaluate(out *protos.Result) error {
 	count := cp.count
+	if count == 0 {
+		switch cp.fn {
+		case "eq", "ge", "lt", "le": // gt and ne 0 are allowed
+			return x.Errorf("count() can't evaluate to zero count nodes")
+		}
+	}
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
 		pl := posting.Get(countKey)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
-		return
+		return nil
 	}
 
 	if cp.fn == "lt" {
@@ -1405,7 +1410,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	}
 
 	if count < 0 && (cp.fn == "lt" || cp.fn == "le") {
-		return
+		return nil
 	}
 
 	if count < 0 {
@@ -1428,4 +1433,5 @@ func (cp *countParams) evaluate(out *protos.Result) {
 		pl := posting.Get(key)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 	}
+	return nil
 }

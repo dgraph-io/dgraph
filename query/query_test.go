@@ -7795,7 +7795,7 @@ func TestCountAtRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
         {
-        	me(func: ge(count(friend), 0)) {
+            me(func: gt(count(friend), 0)) {
 				count()
 			}
         }
