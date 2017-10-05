@@ -1390,18 +1390,18 @@ type countParams struct {
 
 func (cp *countParams) evaluate(out *protos.Result) error {
 	count := cp.count
-	var zeroCheck bool
+	var illegal bool
 	switch cp.fn {
 	case "eq":
-		zeroCheck = count == 0
+		illegal = count == 0
 	case "lt":
-		zeroCheck = count == 0 || count == 1
+		illegal = count == 0 || count == 1
 	case "le":
-		zeroCheck = count == 0
+		illegal = count == 0
 	case "ge":
-		zeroCheck = count == 0
+		illegal = count == 0
 	}
-	if zeroCheck {
+	if illegal {
 		return x.Errorf("count(predicate) can only be used " +
 			"to search for nodes with non-zero counts.")
 	}
