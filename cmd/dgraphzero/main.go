@@ -48,11 +48,12 @@ var (
 	myAddr = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	port        = flag.Int("port", 8888, "Port to run Dgraph zero on.")
-	nodeId      = flag.Uint64("id", 1, "Unique node index for this server.")
+	nodeId      = flag.Uint64("idx", 1, "Unique node index for this server.")
 	numReplicas = flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
-	peer = flag.String("peer", "", "Address of another dgraphzero server.")
-	w    = flag.String("w", "w", "Directory storing WAL.")
+	peer  = flag.String("peer", "", "Address of another dgraphzero server.")
+	w     = flag.String("w", "w", "Directory storing WAL.")
+	lease = flag.Int64("lease", 0, "Sets a new lease. Ignored if less than the existing lease.")
 )
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
@@ -177,6 +178,12 @@ func main() {
 
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	if *lease != 0 {
+		x.Check(st.node.proposeAndWait(context.Background(), &protos.ZeroProposal{
+			MaxLeaseId: uint64(*lease),
+		}))
+	}
 
 	go func() {
 		defer wg.Done()

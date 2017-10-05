@@ -21,8 +21,9 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
@@ -77,7 +78,6 @@ type node struct {
 	server      *Server
 	ctx         context.Context
 	props       proposals
-	leader      uint32
 	subscribers map[uint32]chan struct{}
 }
 
@@ -117,7 +117,11 @@ func (n *node) triggerUpdates() {
 }
 
 func (n *node) AmLeader() bool {
-	return atomic.LoadUint32(&n.leader) == 1
+	if n.Raft() == nil {
+		return false
+	}
+	r := n.Raft()
+	return r.Status().Lead == r.Status().ID
 }
 
 func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal) error {
@@ -192,7 +196,8 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	state.Counter = e.Index
 	if p.Member != nil {
 		if p.Member.GroupId == 0 {
-			return p.Id, errInvalidProposal
+			state.Zeros[p.Member.Id] = p.Member
+			return p.Id, nil
 		}
 		group := state.Groups[p.Member.GroupId]
 		if group == nil {
@@ -237,9 +242,14 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		group.Tablets[p.Tablet.Predicate] = p.Tablet
 	}
-	if p.MaxLeaseId > 0 {
+	if p.MaxLeaseId > state.MaxLeaseId {
 		state.MaxLeaseId = p.MaxLeaseId
-	} else {
+	} else if p.MaxLeaseId != 0 {
+		x.Printf("Could not apply lease, ignoring: proposedLease=%d existingLease=%d",
+			p.MaxLeaseId, state.MaxLeaseId)
+	}
+	if p.MaxLeaseId == 0 {
+		// Don't show lease proposals - they occur too frequently to be useful.
 		x.Printf("Applied proposal: %+v\n", p)
 	}
 	return p.Id, nil
@@ -260,11 +270,17 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+	n.triggerLeaderChange()
+}
+
+func (n *node) triggerLeaderChange() {
 	select {
 	case n.server.leaderChangeCh <- struct{}{}:
 	default:
 		// Ok to ingore
 	}
+	m := &protos.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
+	go n.proposeAndWait(context.Background(), &protos.ZeroProposal{Member: m})
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {
@@ -294,6 +310,10 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		for err != nil {
 			time.Sleep(time.Millisecond)
 			_, err = c.JoinCluster(n.ctx, n.RaftContext)
+			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
+				x.Fatalf("Error while joining cluster %v", err)
+			}
+			x.Printf("Error while joining cluster %v\n", err)
 		}
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
@@ -393,11 +413,7 @@ func (n *node) Run() {
 					n.server.updateNextLeaseId()
 					leader = true
 				}
-				if leader {
-					atomic.StoreUint32(&n.leader, 1)
-				} else {
-					atomic.StoreUint32(&n.leader, 0)
-				}
+				n.triggerLeaderChange()
 			}
 
 			for _, msg := range rd.Messages {

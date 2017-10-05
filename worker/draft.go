@@ -39,10 +39,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	errorNodeIDExists = "Error Node ID already exists in the cluster"
-)
-
 type proposalCtx struct {
 	ch  chan error
 	ctx context.Context
