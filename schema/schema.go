@@ -103,6 +103,16 @@ func (s *stateGroup) Delete(se SyncEntry) {
 	x.Printf("Deleting schema for attr: %s", se.Attr)
 }
 
+// Remove deletes the schema from memory and disk. Used after predicate move to do
+// cleanup
+func (s *stateGroup) Remove(predicate string) error {
+	s.Lock()
+	defer s.Unlock()
+
+	delete(s.predicate, predicate)
+	return pstore.Delete(x.SchemaKey(predicate))
+}
+
 func logUpdate(schema protos.SchemaUpdate, pred string) string {
 	typ := types.TypeID(schema.ValueType).Name()
 	if schema.List {
