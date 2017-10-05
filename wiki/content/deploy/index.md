@@ -339,7 +339,6 @@ The i3 instances with SSD drives have the right hardware set up to run Dgraph (a
 After provisioning an Ubuntu machine the following scripts installs and brings up Dgraph.
 
 
-p w ip worker groups.conf groups heathy-peer
 
 ## Docker
 --->
@@ -633,7 +632,6 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 - Start an [export]({{< relref "#export">}})
 - Ensure it's successful
 - Bring down the cluster
-- Upgrade Dgraph binary / specify a new groups.conf
 - Run Dgraph using new data directories.
 - Reload the data via [bulk data loading]({{< relref "#bulk-data-loading" >}}).
 - If all looks good, you can delete the old directories (export serves as an insurance)
