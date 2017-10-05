@@ -112,7 +112,7 @@ L:
 			if err != nil {
 				return rnq, x.Wrapf(err, "while unquoting")
 			}
-			if oval == "" { // TODO: Look into what this is for. It's setting off my spidey sense.
+			if oval == "" {
 				oval = "_nil_"
 			}
 
