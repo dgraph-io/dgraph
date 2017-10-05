@@ -1390,12 +1390,22 @@ type countParams struct {
 
 func (cp *countParams) evaluate(out *protos.Result) error {
 	count := cp.count
-	if count == 0 {
-		switch cp.fn {
-		case "eq", "ge", "lt", "le": // gt and ne 0 are allowed, since they exclude the zero count.
-			return x.Errorf("count() cannot evaluate to zero count nodes")
-		}
+	var zeroCheck bool
+	switch cp.fn {
+	case "eq":
+		zeroCheck = count == 0
+	case "lt":
+		zeroCheck = count == 0 || count == 1
+	case "le":
+		zeroCheck = count == 0
+	case "ge":
+		zeroCheck = count == 0
 	}
+	if zeroCheck {
+		return x.Errorf("count(predicate) can only be used " +
+			"to search for nodes with non-zero counts.")
+	}
+
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
 		pl := posting.Get(countKey)
