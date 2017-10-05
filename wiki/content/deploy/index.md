@@ -536,7 +536,7 @@ UID lease as given by the bulk loader.
 ```sh
 $ mkdir zero
 $ cd zero
-$ dgraphzero -id 1 -lease $(cat ../LEASE)
+$ dgraphzero -idx 1 -lease $(cat ../LEASE)
 ```
 `dgraphzero` will stay in the foreground, so you'll need to open new
 terminals for the next steps.

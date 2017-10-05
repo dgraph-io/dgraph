@@ -47,7 +47,7 @@ Run `dgraphzero` binary which controls the Dgraph cluster. It moves data between
 dgraph instances based on the size of the data served by each instance.
 
 ```sh
-dgraphzero --id 1 -w zw
+dgraphzero --idx 1 -w zw
 ```
 
 If Dgraph was installed with the install script, run Dgraph with:
@@ -67,7 +67,7 @@ The `-v` flag lets Docker mount a directory so that dgraph can persist data to d
 Run `dgraphzero`
 ```sh
 mkdir -p ~/dgraph
-docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -id 1 -w zw
+docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -idx 1 -w zw
 ```
 
 Run `dgraph`
@@ -79,7 +79,7 @@ docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:88
 ```sh
 mkdir -p ~/dgraph
 # Mapping port 8080 from within the container to 18080 of the instance, likewise with the gRPC port 9080.
-docker run -it -p 18080:8080 -p 19090:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -id 1 -w zw
+docker run -it -p 18080:8080 -p 19090:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -idx 1 -w zw
 docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
 ```
 
@@ -96,7 +96,7 @@ docker create -v /dgraph --name datacontainer dgraph/dgraph
 
 Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
-docker run -it -p 18080:8080 -p 19090:9080 --volumes-from datacontainer --name dgraph dgraph/dgraph dgraphzero -id 1 -w zw
+docker run -it -p 18080:8080 -p 19090:9080 --volumes-from datacontainer --name dgraph dgraph/dgraph dgraphzero -idx 1 -w zw
 docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 --p /dgraph/p --w /dgraph/w -peer 127.0.0.1:8888
 ```
 
