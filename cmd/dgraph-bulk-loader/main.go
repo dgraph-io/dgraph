@@ -149,7 +149,7 @@ func maxOpenFilesWarning() {
 		return
 	}
 	colour := green
-	if maxOpenFiles <= 1e5 {
+	if maxOpenFiles < 1e5 {
 		colour = yellow
 	}
 	fmt.Printf(colour+"Current max open files limit: %d\n"+reset, maxOpenFiles)
