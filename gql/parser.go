@@ -1084,7 +1084,7 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
-			return x.Errorf("Expecting a collon. Got: %v", item)
+			return x.Errorf("Expecting a colon. Got: %v", item)
 		}
 
 		// Get variable type.
@@ -1134,8 +1134,12 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 			// If value is empty replace, otherwise ignore the default value
 			// as the intialised value will override the default value.
 			if vmap[varName].Value == "" {
+				uq, err := unquoteIfQuoted(it.Val)
+				if err != nil {
+					return err
+				}
 				vmap[varName] = varInfo{
-					Value: strings.Trim(it.Val, "\""),
+					Value: uq,
 					Type:  varType,
 				}
 			}
@@ -1148,6 +1152,17 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 		expectArg = false
 	}
 	return nil
+}
+
+// unquoteIfQuoted checks if str is quoted (starts and ends with quotes). If
+// so, it tries to unquote str possibly returning an error. Otherwise, the
+// original value is returned.
+func unquoteIfQuoted(str string) (string, error) {
+	if len(str) < 2 || str[0] != quote || str[len(str)-1] != quote {
+		return str, nil
+	}
+	uq, err := strconv.Unquote(str)
+	return uq, x.Wrapf(err, "could not unquote %q:", str)
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
@@ -1566,9 +1581,12 @@ L:
 
 			// TODO - Move this to a function.
 			v := strings.Trim(itemInFunc.Val, " \t")
-			// Trim just one leading and trailing "
-			v = strings.TrimPrefix(v, "\"")
-			val += strings.TrimSuffix(v, "\"")
+			var err error
+			v, err = unquoteIfQuoted(v)
+			if err != nil {
+				return nil, err
+			}
+			val += v
 			if val == "" {
 				return nil, x.Errorf("Empty argument received")
 			}

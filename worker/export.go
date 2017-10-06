@@ -83,9 +83,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			src.Value = p.Value
 			str, err := types.Convert(src, types.StringID)
 			x.Check(err)
-			buf.WriteByte('"')
-			buf.WriteString(str.Value.(string))
-			buf.WriteByte('"')
+			buf.WriteString(strconv.Quote(str.Value.(string)))
 			if p.PostingType == protos.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.Metadata))
@@ -120,9 +118,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				fVal := &types.Val{Tid: types.StringID}
 				x.Check(types.Marshal(facets.ValFor(f), fVal))
 				if facets.TypeIDFor(f) == types.StringID {
-					buf.WriteByte('"')
-					buf.WriteString(fVal.Value.(string))
-					buf.WriteByte('"')
+					buf.WriteString(strconv.Quote(fVal.Value.(string)))
 				} else {
 					buf.WriteString(fVal.Value.(string))
 				}

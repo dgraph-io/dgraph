@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -422,7 +423,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 		}
 		return []byte("false"), nil
 	case types.StringID, types.DefaultID:
-		return []byte(fmt.Sprintf(`"%s"`, v.Value.(string))), nil
+		return []byte(strconv.Quote(v.Value.(string))), nil
 	case types.DateTimeID:
 		return v.Value.(time.Time).MarshalJSON()
 	case types.GeoID:

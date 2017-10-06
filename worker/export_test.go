@@ -47,12 +47,14 @@ import (
 
 func populateGraphExport(t *testing.T) {
 	rdfEdges := []string{
-		"<1> <friend> <5> <author0> .",
-		"<2> <friend> <5> <author0> .",
-		"<3> <friend> <5> .",
-		"<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,age=33,game=\"football\") .",
-		"<1> <name> \"pho\\ton\" <author0> .",
-		"<2> <name> \"pho\\ton\"@en <author0> .",
+		`<1> <friend> <5> <author0> .`,
+		`<2> <friend> <5> <author0> .`,
+		`<3> <friend> <5> .`,
+		`<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,` +
+			`age=33,game="football",poem="roses are red\nviolets are blue") .`,
+		`<1> <name> "pho\ton" <author0> .`,
+		`<2> <name> "pho\ton"@en <author0> .`,
+		`<3> <name> "First Line\nSecondLine" .`,
 		"<1> <friend_not_served> <5> <author0> .",
 	}
 	idMap := map[string]uint64{
@@ -153,12 +155,23 @@ func TestExport(t *testing.T) {
 	for scanner.Scan() {
 		nq, err := rdf.Parse(scanner.Text())
 		require.NoError(t, err)
-		// Subject should have uid 1/2/3/4.
 		require.Contains(t, []string{"_:uid1", "_:uid2", "_:uid3", "_:uid4"}, nq.Subject)
-		// The only value we set was "photon".
 		if nq.ObjectValue != nil {
-			require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\\ton"}},
-				nq.ObjectValue)
+			switch nq.Subject {
+			case "_:uid1", "_:uid2":
+				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\ton"}},
+					nq.ObjectValue)
+			case "_:uid3":
+				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"First Line\nSecondLine"}},
+					nq.ObjectValue)
+			case "_:uid4":
+			default:
+				t.Errorf("Unexpected subject: %v", nq.Subject)
+			}
+			if nq.Subject == "_:uid1" || nq.Subject == "_:uid2" {
+				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\ton"}},
+					nq.ObjectValue)
+			}
 		}
 
 		// The only objectId we set was uid 5.
@@ -174,18 +187,20 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "age", nq.Facets[0].Key)
 			require.Equal(t, "close", nq.Facets[1].Key)
 			require.Equal(t, "game", nq.Facets[2].Key)
-			require.Equal(t, "since", nq.Facets[3].Key)
+			require.Equal(t, "poem", nq.Facets[3].Key)
+			require.Equal(t, "since", nq.Facets[4].Key)
 			// byte representation for facets.
 			require.Equal(t, []byte{0x21, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, nq.Facets[0].Value)
 			require.Equal(t, []byte{0x1}, nq.Facets[1].Value)
 			require.Equal(t, []byte("football"), nq.Facets[2].Value)
+			require.Equal(t, []byte("roses are red\nviolets are blue"), nq.Facets[3].Value)
 			require.Equal(t, "\x01\x00\x00\x00\x0e\xba\b8e\x00\x00\x00\x00\xff\xff",
-				string(nq.Facets[3].Value))
+				string(nq.Facets[4].Value))
 			// valtype for facets.
 			require.Equal(t, 1, int(nq.Facets[0].ValType))
 			require.Equal(t, 3, int(nq.Facets[1].ValType))
 			require.Equal(t, 0, int(nq.Facets[2].ValType))
-			require.Equal(t, 4, int(nq.Facets[3].ValType))
+			require.Equal(t, 4, int(nq.Facets[4].ValType))
 		}
 		// Test label
 		if nq.Subject != "_:uid3" {
@@ -197,7 +212,7 @@ func TestExport(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 	// This order will be presereved due to file naming.
-	require.Equal(t, 6, count)
+	require.Equal(t, 7, count)
 
 	require.Equal(t, 1, len(schemaFileList))
 	file = schemaFileList[0]

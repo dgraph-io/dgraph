@@ -1966,6 +1966,25 @@ func TestParseVariablesFragments(t *testing.T) {
 	require.Equal(t, "5", res.Query[0].Children[0].Args["first"])
 }
 
+func TestParseVariablesNewLineInDefault(t *testing.T) {
+	query := `{
+		"query": "query test($a: string = \"Line1\\nLine2\") { q(func: eq(name, $a)) { name } }"
+	}`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, "Line1\nLine2", res.Query[0].Func.Args[0].Value)
+}
+
+func TestParseVariablesNewLineInVarBlock(t *testing.T) {
+	query := `{
+		"query": "query test($a: string) { q(func: eq(name, $a)) { name } }",
+		"variables": {"$a": "Line1\nLine2" }
+	}`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, "Line1\nLine2", res.Query[0].Func.Args[0].Value)
+}
+
 func TestParseVariablesError1(t *testing.T) {
 	query := `
 	query testQuery($a: string, $b: int!){

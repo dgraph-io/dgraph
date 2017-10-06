@@ -23,6 +23,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -56,7 +57,8 @@ func sane(s string) bool {
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
-func Parse(line string) (rnq protos.NQuad, rerr error) {
+func Parse(line string) (protos.NQuad, error) {
+	var rnq protos.NQuad
 	l := lex.Lexer{
 		Input: line,
 	}
@@ -105,7 +107,11 @@ L:
 				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
 			}
 		case itemLiteral:
-			oval = item.Val
+			var err error
+			oval, err = strconv.Unquote(item.Val)
+			if err != nil {
+				return rnq, x.Wrapf(err, "while unquoting")
+			}
 			if oval == "" {
 				oval = "_nil_"
 			}
