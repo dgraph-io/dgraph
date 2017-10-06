@@ -391,6 +391,17 @@ func handleBasicType(k string, v interface{}, op int, nq *protos.NQuad) error {
 
 }
 
+func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
+	// Since _uid_ is the only key, this must be S * * deletion.
+	if op == delete && len(mr.uid) > 0 && len(m) == 1 {
+		mr.nquads = append(mr.nquads, &protos.NQuad{
+			Subject:     mr.uid,
+			Predicate:   x.Star,
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
+		})
+	}
+}
+
 func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
@@ -404,16 +415,6 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 	if len(mr.uid) == 0 && op != delete {
 		mr.uid = fmt.Sprintf("_:blank-%d", *idx)
 		*idx++
-	}
-
-	// Since _uid_ is the only key, this must be S * * deletion.
-	if op == delete && len(mr.uid) > 0 && len(m) == 1 {
-		mr.nquads = append(mr.nquads, &protos.NQuad{
-			Subject:     mr.uid,
-			Predicate:   x.Star,
-			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
-		})
-		return mr, nil
 	}
 
 	for k, v := range m {
@@ -492,6 +493,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 					}
 					mr.nquads = append(mr.nquads, &nq)
 				case map[string]interface{}:
+
 					cr, err := mapToNquads(iv, idx, op)
 					if err != nil {
 						return mr, err
@@ -546,13 +548,14 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 			if err != nil {
 				return mr.nquads, err
 			}
-
+			checkForDeletion(&mr, obj.(map[string]interface{}), op)
 			nquads = append(nquads, mr.nquads...)
 		}
 		return nquads, nil
 	}
 
 	mr, err := mapToNquads(ms, &idx, op)
+	checkForDeletion(&mr, ms, op)
 	return mr.nquads, err
 }
 
