@@ -141,13 +141,14 @@ type Arg struct {
 
 // Function holds the information about gql functions.
 type Function struct {
-	Attr     string
-	Lang     string // language of the attribute value
-	Name     string // Specifies the name of the function.
-	Args     []Arg  // Contains the arguments of the function.
-	UID      []uint64
-	NeedsVar []VarContext // If the function requires some variable
-	IsCount  bool         // gt(count(friends),0)
+	Attr       string
+	Lang       string // language of the attribute value
+	Name       string // Specifies the name of the function.
+	Args       []Arg  // Contains the arguments of the function.
+	UID        []uint64
+	NeedsVar   []VarContext // If the function requires some variable
+	IsCount    bool         // gt(count(friends),0)
+	IsValueVar bool         // eq(val(s), 5)
 }
 
 // Facet holds the information about gql Facets (edge key-value pairs).
@@ -1492,16 +1493,17 @@ L:
 						return nil, x.Errorf("Multiple variables not allowed in a function")
 					}
 					// Function name would be set as attribute because of way parser is written
-					if g.Attr == "val" {
-						g.Attr = value
+					if g.Attr == value {
+						g.Attr = f.NeedsVar[0].Name
+						g.IsValueVar = true
 					} else {
 						// TODO: Refactor later, this is hacky way,Function name would be set as arg
 						// because of the way parser works
 						if len(g.Args) > 0 {
 							g.Args = g.Args[:len(g.Args)-1]
 						}
+						g.Args = append(g.Args, Arg{Value: f.NeedsVar[0].Name, IsValueVar: true})
 					}
-					g.Args = append(g.Args, Arg{Value: f.NeedsVar[0].Name, IsValueVar: true})
 					g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
 					g.NeedsVar[0].Typ = VALUE_VAR
 				} else {
