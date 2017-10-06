@@ -1501,7 +1501,8 @@ L:
 				continue
 			} else if itemInFunc.Typ == itemAt {
 				if attrItemsAgo != 1 {
-					return nil, x.Errorf("Invalid usage of '@' in function argument, must only appear immediately after attr.")
+					return nil, x.Errorf("Invalid usage of '@' in function " +
+						"argument, must only appear immediately after attr.")
 				}
 				expectLang = true
 				continue
