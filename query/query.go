@@ -158,9 +158,10 @@ type params struct {
 
 // Function holds the information about gql functions.
 type Function struct {
-	Name    string    // Specifies the name of the function.
-	Args    []gql.Arg // Contains the arguments of the function.
-	IsCount bool      // gt(count(friends),0)
+	Name       string    // Specifies the name of the function.
+	Args       []gql.Arg // Contains the arguments of the function.
+	IsCount    bool      // gt(count(friends),0)
+	IsValueVar bool      // eq(val(s), 10)
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -207,6 +208,7 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 	sg.SrcFunc.Name = gf.Name
 	sg.SrcFunc.Args = append(sg.SrcFunc.Args, gf.Args...)
 	sg.SrcFunc.IsCount = gf.IsCount
+	sg.SrcFunc.IsValueVar = gf.IsValueVar
 	if gf.Lang != "" {
 		sg.Params.Langs = append(sg.Params.Langs, gf.Lang)
 	}
@@ -1620,8 +1622,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 // eq(score,val(myscore)), we disallow vars in facets filter so we don't need to worry about
 // that as of now.
 func (sg *SubGraph) replaceVarInFunc() error {
-	// Attr would be set to val if the query is of type eq(val(myscore), 35)
-	if sg.SrcFunc == nil || sg.Attr == "val" {
+	if sg.SrcFunc == nil {
 		return nil
 	}
 	var args []gql.Arg
@@ -1661,7 +1662,7 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 		typ = v.Tid
 		break
 	}
-	val := sg.SrcFunc.Args[1].Value
+	val := sg.SrcFunc.Args[0].Value
 	src := types.Val{types.StringID, []byte(val)}
 	dst, err := types.Convert(src, typ)
 	if err != nil {
@@ -1811,7 +1812,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
 	} else {
 
-		if sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && sg.Attr == "val" {
+		if sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && sg.SrcFunc.IsValueVar {
 			// This is a ineq function which uses a value variable.
 			err = sg.ApplyIneqFunc()
 			if parent != nil {
