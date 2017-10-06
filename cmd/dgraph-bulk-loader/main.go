@@ -94,6 +94,8 @@ func main() {
 	x.Check(err)
 	fmt.Println(string(optBuf))
 
+	maxOpenFilesWarning()
+
 	go func() {
 		log.Fatal(http.ListenAndServe(*httpAddr, nil))
 	}()
@@ -126,4 +128,29 @@ func main() {
 	loader.reduceStage()
 	loader.writeSchema()
 	loader.cleanup()
+}
+
+func maxOpenFilesWarning() {
+	maxOpenFiles, err := queryMaxOpenFiles()
+	const (
+		red    = "\x1b[31m"
+		green  = "\x1b[32m"
+		yellow = "\x1b[33m"
+		reset  = "\x1b[0m"
+	)
+	if err != nil {
+		fmt.Printf(red+"Nonfatal error: max open file limit could not be detected: %v\n"+reset, err)
+	}
+	fmt.Println("The bulk loader needs to open many files at once. This number depends" +
+		" on the size of the data set loaded, the map file output size, and the level " +
+		"of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for" +
+		" details of how to change the limit.")
+	if err != nil {
+		return
+	}
+	colour := green
+	if maxOpenFiles < 1e5 {
+		colour = yellow
+	}
+	fmt.Printf(colour+"Current max open files limit: %d\n"+reset, maxOpenFiles)
 }
