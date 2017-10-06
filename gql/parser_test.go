@@ -4447,3 +4447,17 @@ func TestInvalidValUsage(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Query syntax invalid.")
 }
+
+func TestParseLangTagAfterStringInFunction(t *testing.T) {
+	// This is a fix for #1499.
+	query := `
+		{
+			q(func: anyofterms(name, "Hello"@en)) {
+				_uid_
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid usage of '@' in function argument")
+}

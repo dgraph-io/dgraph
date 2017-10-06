@@ -1441,9 +1441,13 @@ L:
 			return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
 		}
 
+		attrItemsAgo := -1
 		expectArg = true
 		for it.Next() {
 			itemInFunc := it.Item()
+			if attrItemsAgo >= 0 {
+				attrItemsAgo++
+			}
 			var val string
 			if itemInFunc.Typ == itemRightRound {
 				break L
@@ -1496,16 +1500,11 @@ L:
 				expectArg = false
 				continue
 			} else if itemInFunc.Typ == itemAt {
-				if len(g.Attr) > 0 && len(g.Lang) == 0 {
-					itNext, err := it.Peek(1)
-					if err == nil && itNext[0].Val == "filter" {
-						return nil, x.Errorf("Filter cannot be used inside a function.")
-					}
-					expectLang = true
-					continue
-				} else {
-					return nil, x.Errorf("Invalid usage of '@' in function argument")
+				if attrItemsAgo != 1 {
+					return nil, x.Errorf("Invalid usage of '@' in function argument, must only appear immediately after attr.")
 				}
+				expectLang = true
+				continue
 			} else if itemInFunc.Typ == itemMathOp {
 				val = itemInFunc.Val
 				it.Next()
@@ -1596,6 +1595,7 @@ L:
 						itemInFunc.Val)
 				}
 				g.Attr = val
+				attrItemsAgo = 0
 			} else if expectLang {
 				g.Lang = val
 				expectLang = false
