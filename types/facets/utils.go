@@ -99,9 +99,10 @@ func valAndValType(val string) (interface{}, protos.Facet_ValType, error) {
 		}
 	}
 	if floatVal, err := strconv.ParseFloat(val, 64); err == nil {
-		// We can't store NaN as it is because it serializes into invalid JSON.
+		// We can't store NaN as it is because it serializes into invalid JSON. Storing a zero value
+		// should be safe.
 		if math.IsNaN(floatVal) {
-			return "null", protos.Facet_STRING, nil
+			return 0.0, protos.Facet_FLOAT, nil
 		}
 
 		return floatVal, protos.Facet_FLOAT, nil
