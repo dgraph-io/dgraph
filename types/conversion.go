@@ -109,7 +109,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				if math.IsNaN(val) {
-					return to, fmt.Errorf("Got NaN as value.")
+					return to, fmt.Errorf("Got invalid value: NaN.")
 				}
 				*res = float64(val)
 			case StringID, DefaultID:
