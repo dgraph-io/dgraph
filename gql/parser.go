@@ -1492,16 +1492,12 @@ L:
 					if len(f.NeedsVar) > 1 {
 						return nil, x.Errorf("Multiple variables not allowed in a function")
 					}
-					// Function name would be set as attribute because of way parser is written
-					if g.Attr == value {
+					// Variable is used in place of attribute, eq(val(a), 5)
+					if len(g.Attr) == 0 {
 						g.Attr = f.NeedsVar[0].Name
 						g.IsValueVar = true
 					} else {
-						// TODO: Refactor later, this is hacky way,Function name would be set as arg
-						// because of the way parser works
-						if len(g.Args) > 0 {
-							g.Args = g.Args[:len(g.Args)-1]
-						}
+						// eq(name, val(a))
 						g.Args = append(g.Args, Arg{Value: f.NeedsVar[0].Name, IsValueVar: true})
 					}
 					g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
@@ -1575,6 +1571,12 @@ L:
 			} else if itemInFunc.Typ != itemName {
 				return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 					g.Name, itemInFunc)
+			}
+
+			item, ok := it.PeekOne()
+			// Part of function continue
+			if ok && item.Typ == itemLeftRound {
+				continue
 			}
 
 			if !expectArg && !expectLang {
