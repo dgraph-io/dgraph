@@ -914,10 +914,11 @@ func TestParseQueryWithVarInIneq(t *testing.T) {
 	require.Equal(t, "fr", res.Query[1].NeedsVar[0].Name)
 	require.Equal(t, UID_VAR, res.Query[1].NeedsVar[0].Typ)
 	require.Equal(t, VALUE_VAR, res.Query[1].Filter.Func.NeedsVar[0].Typ)
-	require.Equal(t, 2, len(res.Query[1].Filter.Func.Args))
-	require.Equal(t, "val", res.Query[1].Filter.Func.Attr)
-	require.Equal(t, "a", res.Query[1].Filter.Func.Args[0].Value)
-	require.Equal(t, true, res.Query[1].Filter.Func.Args[0].IsValueVar)
+	require.Equal(t, 1, len(res.Query[1].Filter.Func.Args))
+	require.Equal(t, "a", res.Query[1].Filter.Func.Attr)
+	require.Equal(t, true, res.Query[1].Filter.Func.IsValueVar)
+	require.Equal(t, "10", res.Query[1].Filter.Func.Args[0].Value)
+	require.Equal(t, false, res.Query[1].Filter.Func.Args[0].IsValueVar)
 	require.Equal(t, "gt", res.Query[1].Filter.Func.Name)
 }
 

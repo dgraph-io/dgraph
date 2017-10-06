@@ -141,13 +141,14 @@ type Arg struct {
 
 // Function holds the information about gql functions.
 type Function struct {
-	Attr     string
-	Lang     string // language of the attribute value
-	Name     string // Specifies the name of the function.
-	Args     []Arg  // Contains the arguments of the function.
-	UID      []uint64
-	NeedsVar []VarContext // If the function requires some variable
-	IsCount  bool         // gt(count(friends),0)
+	Attr       string
+	Lang       string // language of the attribute value
+	Name       string // Specifies the name of the function.
+	Args       []Arg  // Contains the arguments of the function.
+	UID        []uint64
+	NeedsVar   []VarContext // If the function requires some variable
+	IsCount    bool         // gt(count(friends),0)
+	IsValueVar bool         // eq(val(s), 5)
 }
 
 // Facet holds the information about gql Facets (edge key-value pairs).
@@ -1438,7 +1439,7 @@ func validFuncName(name string) bool {
 }
 
 func parseFunction(it *lex.ItemIterator, gq *GraphQuery) (*Function, error) {
-	var g *Function
+	var function *Function
 	var expectArg, seenFuncArg, expectLang, isDollar bool
 L:
 	for it.Next() {
@@ -1449,11 +1450,11 @@ L:
 		}
 
 		val := collectName(it, item.Val)
-		g = &Function{
+		function = &Function{
 			Name: strings.ToLower(val),
 		}
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
-			return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
+			return nil, x.Errorf("Expected ( after func name [%s]", function.Name)
 		}
 
 		attrItemsAgo := -1
@@ -1482,35 +1483,32 @@ L:
 				}
 				it.Prev()
 				it.Prev()
-				f, err := parseFunction(it, gq)
+				nestedFunc, err := parseFunction(it, gq)
 				if err != nil {
 					return nil, err
 				}
 				seenFuncArg = true
-				if f.Name == value {
-					if len(f.NeedsVar) > 1 {
+				if nestedFunc.Name == value {
+					if len(nestedFunc.NeedsVar) > 1 {
 						return nil, x.Errorf("Multiple variables not allowed in a function")
 					}
-					// Function name would be set as attribute because of way parser is written
-					if g.Attr == "val" {
-						g.Attr = value
+					// Variable is used in place of attribute, eq(val(a), 5)
+					if len(function.Attr) == 0 {
+						function.Attr = nestedFunc.NeedsVar[0].Name
+						function.IsValueVar = true
 					} else {
-						// TODO: Refactor later, this is hacky way,Function name would be set as arg
-						// because of the way parser works
-						if len(g.Args) > 0 {
-							g.Args = g.Args[:len(g.Args)-1]
-						}
+						// eq(name, val(a))
+						function.Args = append(function.Args, Arg{Value: nestedFunc.NeedsVar[0].Name, IsValueVar: true})
 					}
-					g.Args = append(g.Args, Arg{Value: f.NeedsVar[0].Name, IsValueVar: true})
-					g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
-					g.NeedsVar[0].Typ = VALUE_VAR
+					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
+					function.NeedsVar[0].Typ = VALUE_VAR
 				} else {
-					if f.Name != "count" {
+					if nestedFunc.Name != "count" {
 						return nil,
-							x.Errorf("Only val/count allowed as function within another. Got: %s", f.Name)
+							x.Errorf("Only val/count allowed as function within another. Got: %s", nestedFunc.Name)
 					}
-					g.Attr = f.Attr
-					g.IsCount = true
+					function.Attr = nestedFunc.Attr
+					function.IsCount = true
 				}
 				expectArg = false
 				continue
@@ -1540,18 +1538,18 @@ L:
 					flags = itemInFunc.Val[end+1:]
 				}
 
-				g.Args = append(g.Args, Arg{Value: expr}, Arg{Value: flags})
+				function.Args = append(function.Args, Arg{Value: expr}, Arg{Value: flags})
 				expectArg = false
 				continue
 				// Lets reassemble the geo tokens.
 			} else if itemInFunc.Typ == itemLeftSquare {
-				isGeo := isGeoFunc(g.Name)
-				if !isGeo && !isInequalityFn(g.Name) {
+				isGeo := isGeoFunc(function.Name)
+				if !isGeo && !isInequalityFn(function.Name) {
 					return nil, x.Errorf("Unexpected character [ while parsing request.")
 				}
 
 				if isGeo {
-					if err := parseGeoArgs(it, g); err != nil {
+					if err := parseGeoArgs(it, function); err != nil {
 						return nil, err
 					}
 					expectArg = false
@@ -1572,7 +1570,13 @@ L:
 				continue
 			} else if itemInFunc.Typ != itemName {
 				return nil, x.Errorf("Expected arg after func [%s], but got item %v",
-					g.Name, itemInFunc)
+					function.Name, itemInFunc)
+			}
+
+			item, ok := it.PeekOne()
+			// Part of function continue
+			if ok && item.Typ == itemLeftRound {
+				continue
 			}
 
 			if !expectArg && !expectLang {
@@ -1594,47 +1598,47 @@ L:
 			if isDollar {
 				val = "$" + val
 				isDollar = false
-				if g.Name == uid && gq != nil {
+				if function.Name == uid && gq != nil {
 					if len(gq.Args["id"]) > 0 {
 						return nil,
 							x.Errorf("Only one GraphQL variable allowed inside uid function.")
 					}
 					gq.Args["id"] = val
 				} else {
-					g.Args = append(g.Args, Arg{Value: val, IsGraphQLVar: true})
+					function.Args = append(function.Args, Arg{Value: val, IsGraphQLVar: true})
 				}
 				expectArg = false
 				continue
 			}
 
 			// Unlike other functions, uid function has no attribute, everything is args.
-			if len(g.Attr) == 0 && g.Name != "uid" {
+			if len(function.Attr) == 0 && function.Name != "uid" {
 				if strings.ContainsRune(itemInFunc.Val, '"') {
 					return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
 						itemInFunc.Val)
 				}
-				g.Attr = val
+				function.Attr = val
 				attrItemsAgo = 0
 			} else if expectLang {
-				g.Lang = val
+				function.Lang = val
 				expectLang = false
-			} else if g.Name != uid {
+			} else if function.Name != uid {
 				// For UID function. we set g.UID
-				g.Args = append(g.Args, Arg{Value: val})
+				function.Args = append(function.Args, Arg{Value: val})
 			}
 
-			if g.Name == "var" {
+			if function.Name == "var" {
 				return nil, x.Errorf("Unexpected var(). Maybe you want to try using uid()")
 			}
 
 			expectArg = false
-			if g.Name == value {
+			if function.Name == value {
 				// E.g. @filter(gt(val(a), 10))
-				g.NeedsVar = append(g.NeedsVar, VarContext{
+				function.NeedsVar = append(function.NeedsVar, VarContext{
 					Name: val,
 					Typ:  VALUE_VAR,
 				})
-			} else if g.Name == uid {
+			} else if function.Name == uid {
 				// uid function could take variables as well as actual uids.
 				// If we can parse the value that means its an uid otherwise a variable.
 				uid, err := strconv.ParseUint(val, 0, 64)
@@ -1644,12 +1648,12 @@ L:
 						gq.UID = append(gq.UID, uid)
 						// Or uid function in filter.
 					} else {
-						g.UID = append(g.UID, uid)
+						function.UID = append(function.UID, uid)
 					}
 					continue
 				}
 				// E.g. @filter(uid(a, b, c))
-				g.NeedsVar = append(g.NeedsVar, VarContext{
+				function.NeedsVar = append(function.NeedsVar, VarContext{
 					Name: val,
 					Typ:  UID_VAR,
 				})
@@ -1657,11 +1661,11 @@ L:
 		}
 	}
 
-	if g.Name != uid && len(g.Attr) == 0 {
-		return nil, x.Errorf("Got empty attr for function: [%s]", g.Name)
+	if function.Name != uid && len(function.Attr) == 0 {
+		return nil, x.Errorf("Got empty attr for function: [%s]", function.Name)
 	}
 
-	return g, nil
+	return function, nil
 }
 
 type facetRes struct {
