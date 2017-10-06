@@ -1202,7 +1202,7 @@ func TestFacetWithLang(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"@facets":{"name@en":{"type":"Test facet with lang", "nankey": 0.0}},"name@en":"Test facet"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"@facets":{"name@en":{"type":"Test facet with lang", "nankey": "null"}},"name@en":"Test facet"}]}}`, js)
 }
 
 func TestFilterUidFacetMismatch(t *testing.T) {
