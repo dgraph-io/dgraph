@@ -56,7 +56,7 @@ docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgrap
 ```
 
 Run dgraph
-```
+```sh
 docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
 ```
 
@@ -67,7 +67,7 @@ docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:88
 Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
 
 After installing Go, run
-```
+```sh
 # This should install the following binaries in your $GOPATH/bin: dgraph, dgraph-live-loader, and dgraph-bulk-loader.
 go get -u github.com/dgraph-io/dgraph/...
 ```
@@ -76,7 +76,7 @@ The binaries are located in `cmd/dgraph`, `cmd/dgraphzero`, `cmd/dgraph-live-loa
 `cmd/dgraph-bulk-loader`. If you get errors related to `grpc` while building them, your
 `go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it
 causes issues while using the Go client). Update your `go-grpc` by running.
-```
+```sh
 go get -u google.golang.org/grpc
 ```
 

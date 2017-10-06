@@ -73,7 +73,8 @@ func populateGraphWithFacets(t *testing.T) {
 	addEdgeToValue(t, "name", 33, "Michale", nil)
 	// missing name for 101 -- no name edge and no facets.
 
-	addEdgeToLangValue(t, "name", 320, "Test facet", "en", map[string]string{"type": `"Test facet with lang"`})
+	addEdgeToLangValue(t, "name", 320, "Test facet", "en",
+		map[string]string{"type": `"Test facet with lang"`, "nankey": "NaN"})
 
 	time.Sleep(5 * time.Millisecond)
 }
@@ -1201,7 +1202,7 @@ func TestFacetWithLang(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"@facets":{"name@en":{"type":"Test facet with lang"}},"name@en":"Test facet"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"@facets":{"name@en":{"type":"Test facet with lang", "nankey": 0.0}},"name@en":"Test facet"}]}}`, js)
 }
 
 func TestFilterUidFacetMismatch(t *testing.T) {
