@@ -36,7 +36,7 @@ go build mlbatch.go
 
 - start a dgraph instance, e.g for default options
 
-dgraph 
+dgraph
 
 - run in a directory with the movielens data unpacked
 
@@ -60,15 +60,15 @@ and run queries like
 {
   q(func: eq(name, "Toy Story (1995)")) {
     name
-    genre { 
-      name 
+    genre {
+      name
     }
-    count(~rated) 
+    count(~rated)
   }
 }
 
 or see the queries at
-https://open.dgraph.io/post/recommendation/   and 
+https://open.dgraph.io/post/recommendation/   and
 https://open.dgraph.io/post/recommendation2/
 (though your UIDs will be different)
 
@@ -103,8 +103,8 @@ var (
 	numRdf     = flag.Int("m", 100, "Number of RDF N-Quads to send as part of a mutation.")
 
 	genre = flag.String("genre", "ml-100k/u.genre", "")
-	data = flag.String("rating", "ml-100k/u.data", "")
-	users  = flag.String("user", "ml-100k/u.user", "")
+	data  = flag.String("rating", "ml-100k/u.data", "")
+	users = flag.String("user", "ml-100k/u.user", "")
 	movie = flag.String("movie", "ml-100k/u.item", "")
 )
 
@@ -168,7 +168,7 @@ func main() {
 	// The blank node names are used accross 4 go routines.  It doesn't mater which go routine
 	// uses the node name first - a "user<userID>" node may be first used in the go routine reading
 	// users, or the one setting ratings - the Dgraph client ensures that all the routines are
-	// talking about the same nodes. So no matter what the creation order, or the order the client 
+	// talking about the same nodes. So no matter what the creation order, or the order the client
 	// submits the batches in the background, the graph is connected properly.
 
 	go func() {

@@ -201,3 +201,11 @@ func TestNquadsFromJsonList(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 4, len(nq))
 }
+
+func TestNquadsFromJsonDelete(t *testing.T) {
+	json := `{"_uid_":1000,"friend":[{"_uid_":1001}]}`
+
+	nq, err := nquadsFromJson([]byte(json), delete)
+	require.NoError(t, err)
+	require.Equal(t, nq[0], makeNquadEdge("1000", "friend", "1001"))
+}

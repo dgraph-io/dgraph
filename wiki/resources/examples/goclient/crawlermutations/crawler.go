@@ -104,24 +104,24 @@ var (
 //
 // See also our crawlerRDF example for more description about Unmarshal and structs.
 type namedNode struct {
-	ID   uint64 `dgraph:"_uid_"`
-	Name string `dgraph:"name@en"`
+	ID   uint64 `json:"_uid_"`
+	Name string `json:"name@en"`
 }
 
 type movie struct {
-	ReleaseDate time.Time      `dgraph:"initial_release_date"`
-	ID          uint64         `dgraph:"_uid_"`
-	Name        string         `dgraph:"EnglishName"`
-	NameDE      string         `dgraph:"GermanName"`
-	NameIT      string         `dgraph:"ItalianName"`
-	Genres      []*namedNode   `dgraph:"genre"`
-	Starring    []*performance `dgraph:"starring"`
-	Directors   []*namedNode   `dgraph:"~director.film"`
+	ReleaseDate time.Time      `json:"initial_release_date"`
+	ID          uint64         `json:"_uid_"`
+	Name        string         `json:"EnglishName"`
+	NameDE      string         `json:"GermanName"`
+	NameIT      string         `json:"ItalianName"`
+	Genres      []*namedNode   `json:"genre"`
+	Starring    []*performance `json:"starring"`
+	Directors   []*namedNode   `json:"~director.film"`
 }
 
 type performance struct {
-	Actor     *namedNode `dgraph:"performance.actor"`
-	Character *namedNode `dgraph:"performance.character"`
+	Actor     *namedNode `json:"performance.actor"`
+	Character *namedNode `json:"performance.character"`
 }
 
 // A helper struct for Unmarshal in readMovies() and visitMovie().  In visitMovie we unpack the
@@ -129,7 +129,7 @@ type performance struct {
 // struct.  The query in readMovies() only fills the ID.  Another option in readMovies() would
 // be reading into a namedNode or just grabbing the UID like in visitActor().
 type movieQuery struct {
-	Root *movie `dgraph:"movie"`
+	Root *movie `json:"movie"`
 }
 
 // Tick off the things we have seen in our crawl so far, so we only create each movie, director,
@@ -187,7 +187,7 @@ var (
 	movieByIDTemplate = `{
 	movie(func: uid($a)) {
 		_uid_
-		EnglishName: name@en 
+		EnglishName: name@en
 		GermanName: name@de
 		ItalianName: name@it
       	starring {
@@ -208,7 +208,7 @@ var (
 			_uid_
 			name@en
 		}
-		initial_release_date 
+		initial_release_date
 	}
 }`
 	movieByIDMap = make(map[string]string)
@@ -418,7 +418,7 @@ func visitMovie(movieID uint64, source *client.Dgraph, target *client.Dgraph) {
 
 			dnode, _ := getFromSavedNode(&people, d.ID)
 			e = dnode.ConnectTo("director.film", mnode)
-			req.Set(e) 
+			req.Set(e)
 		}
 
 		// A movie can have a number of genres.  We'll add an edge for each one, but,
@@ -457,7 +457,7 @@ func visitMovie(movieID uint64, source *client.Dgraph, target *client.Dgraph) {
 					return
 				}
 				e = mnode.ConnectTo("starring", pnode)
-				req.Set(e)  
+				req.Set(e)
 
 				edgesToAdd++ // for p --- performance.character ---> p.character
 				err = ensureNamedNode(p.Character, &characters, target)

@@ -65,7 +65,7 @@ mkdir dgraph && pushd &> /dev/null dgraph;
 # Stripping the binaries.
 for d in $dgraph_cmd/*; do
   n=$(basename "${d}")
-  strip $d/$n
+  strip $d/$n || true
   cp $d/$n .
 done
 

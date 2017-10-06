@@ -24,6 +24,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
@@ -845,4 +846,658 @@ func ExampleEdge_SetValueGeoJson() {
 	fmt.Printf("City: %+v\n\n", city)
 	err = dgraphClient.Close()
 	x.Check(err)
+}
+
+func ExampleReq_SetObject() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	type School struct {
+		Name string `json:"name@en,omitempty"`
+	}
+
+	// If omitempty is not set, then edges with empty values (0 for int/float, "" for string, false
+	// for bool) would be created for values not specified explicitly.
+
+	type Person struct {
+		Uid      uint64   `json:"_uid_,omitempty"`
+		Name     string   `json:"name,omitempty"`
+		Age      int      `json:"age,omitempty"`
+		Married  bool     `json:"married,omitempty"`
+		Raw      []byte   `json:"raw_bytes",omitempty`
+		Friends  []Person `json:"friend,omitempty"`
+		Location string   `json:"loc,omitempty"`
+		School   *School  `json:"school,omitempty"`
+	}
+
+	// While setting an object if a struct has a Uid then its properties in the graph are updated
+	// else a new node is created.
+	// In the example below new nodes for Alice and Charlie and school are created (since they dont
+	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
+	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
+
+	loc := `{"type":"Point","coordinates":[1.1,2]}`
+	p := Person{
+		Name:     "Alice",
+		Age:      26,
+		Married:  true,
+		Location: loc,
+		Raw:      []byte("raw_bytes"),
+		Friends: []Person{{
+			Uid:  1000,
+			Name: "Bob",
+			Age:  24,
+		}, {
+			Name: "Charlie",
+			Age:  29,
+		}},
+		School: &School{
+			Name: "Crown Public School",
+		},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err = req.SetObject(&p)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
+	puid := resp.AssignedUids["blank-0"]
+	q := fmt.Sprintf(`{
+		me(func: uid(%d)) {
+			_uid_
+			name
+			age
+			loc
+			raw_bytes
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+			school {
+				name@en
+			}
+		}
+	}`, puid)
+
+	req = client.Req{}
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	type Root struct {
+		Me Person `json:"me"`
+	}
+
+	var r Root
+	err = client.Unmarshal(resp.N, &r)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Me: %+v\n", r.Me)
+	// R.Me would be same as the person that we set above.
+}
+
+func ExampleReq_SetObject_facets(t *testing.T) {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	// This example shows example for SetObject using facets.
+
+	type friendFacet struct {
+		Since  time.Time `json:"since"`
+		Family string    `json:"family"`
+		Age    float64   `json:"age"`
+		Close  bool      `json:"close"`
+	}
+
+	type nameFacets struct {
+		Origin string `json:"origin"`
+	}
+
+	type schoolFacet struct {
+		Since time.Time `json:"since"`
+	}
+
+	type School struct {
+		Name   string      `json:"name"`
+		Facets schoolFacet `json:"@facets"`
+	}
+
+	type Person struct {
+		Name       string      `json:"name"`
+		NameFacets nameFacets  `json:"name@facets"`
+		Facets     friendFacet `json:"@facets"`
+		Friends    []Person    `json:"friend"`
+		School     School      `json:"school"`
+	}
+
+	ti := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
+	p := Person{
+		Name: "Alice",
+		NameFacets: nameFacets{
+			Origin: "Indonesia",
+		},
+		Friends: []Person{
+			Person{
+				Name: "Bob",
+				Facets: friendFacet{
+					Since:  ti,
+					Family: "yes",
+					Age:    13,
+					Close:  true,
+				},
+			},
+			Person{
+				Name: "Charlie",
+				Facets: friendFacet{
+					Family: "maybe",
+					Age:    16,
+				},
+			},
+		},
+		School: School{
+			Name: "Wellington School",
+			Facets: schoolFacet{
+				Since: ti,
+			},
+		},
+	}
+
+	err = req.SetObject(&p)
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	auid := resp.AssignedUids["blank-0"]
+
+	q := fmt.Sprintf(`
+    {
+
+        me(func: uid(%v)) {
+            name @facets
+            friend @facets {
+                name
+            }
+            school @facets {
+                name
+            }
+
+        }
+    }`, auid)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	type Root struct {
+		Me Person `json:"me"`
+	}
+
+	var r Root
+	err = client.Unmarshal(resp.N, &r)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Me: %+v\n", r.Me)
+}
+
+func ExampleReq_SetObject_list(t *testing.T) {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	// This example shows example for SetObject for predicates with list type.
+	type Person struct {
+		Uid         uint64   `json:"_uid_"`
+		Address     []string `json:"address"`
+		PhoneNumber []int64  `json:"phone_number"`
+	}
+
+	p := Person{
+		Address:     []string{"Redfern", "Riley Street"},
+		PhoneNumber: []int64{9876, 123},
+	}
+
+	req.SetSchema(`
+		address: [string] .
+		phone_number: [int] .
+	`)
+
+	err = req.SetObject(&p)
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	uid := resp.AssignedUids["blank-0"]
+
+	q := fmt.Sprintf(`
+	{
+		me(func: uid(%d)) {
+			_uid_
+			address
+			phone_number
+		}
+	}
+	`, uid)
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	type Root struct {
+		Me Person `json:"me"`
+	}
+
+	var r Root
+	err = client.Unmarshal(resp.N, &r)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Me: %+v\n", r.Me)
+}
+
+func ExampleReq_DeleteObject_edges() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	type School struct {
+		Uid  uint64 `json:"_uid_"`
+		Name string `json:"name@en,omitempty"`
+	}
+
+	type Person struct {
+		Uid      uint64   `json:"_uid_,omitempty"`
+		Name     string   `json:"name,omitempty"`
+		Age      int      `json:"age,omitempty"`
+		Married  bool     `json:"married,omitempty"`
+		Friends  []Person `json:"friend,omitempty"`
+		Location string   `json:"loc,omitempty"`
+		School   *School  `json:"school,omitempty"`
+	}
+
+	// Lets add some data first.
+	loc := `{"type":"Point","coordinates":[1.1,2]}`
+	p := Person{
+		Uid:      1000,
+		Name:     "Alice",
+		Age:      26,
+		Married:  true,
+		Location: loc,
+		Friends: []Person{{
+			Uid:  1001,
+			Name: "Bob",
+			Age:  24,
+		}, {
+			Uid:  1002,
+			Name: "Charlie",
+			Age:  29,
+		}},
+		School: &School{
+			Uid:  1003,
+			Name: "Crown Public School",
+		},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err = req.SetObject(&p)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	q := fmt.Sprintf(`{
+		me(func: uid(1000)) {
+			_uid_
+			name
+			age
+			loc
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+			school {
+				_uid_
+				name@en
+			}
+		}
+
+		me2(func: uid(1001)) {
+			_uid_
+			name
+			age
+		}
+
+		me3(func: uid(1003)) {
+			_uid_
+			name@en
+		}
+
+		me4(func: uid(1002)) {
+			_uid_
+			name
+			age
+		}
+	}`)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Now lets delete the edge between Alice and Bob.
+	// Also lets delete the location for Alice.
+	req = client.Req{}
+	p2 := Person{
+		Uid:      1000,
+		Location: "",
+		Friends:  []Person{Person{Uid: 1001}},
+	}
+	err = req.DeleteObject(&p2)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	type Root struct {
+		Me  Person `json:"me"`
+		Me2 Person `json:"me2"`
+		Me3 School `json:"me3"`
+		Me4 Person `json:"me4"`
+	}
+
+	var r Root
+	err = client.Unmarshal(resp.N, &r)
+	fmt.Printf("Resp: %+v\n", r)
+}
+
+func ExampleReq_DeleteObject_node() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	// In this test we check S * * deletion.
+	type Person struct {
+		Uid     uint64    `json:"_uid_,omitempty"`
+		Name    string    `json:"name,omitempty"`
+		Age     int       `json:"age,omitempty"`
+		Married bool      `json:"married,omitempty"`
+		Friends []*Person `json:"friend,omitempty"`
+	}
+
+	req = client.Req{}
+
+	p := Person{
+		Uid:     1000,
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Friends: []*Person{&Person{
+			Uid:  1001,
+			Name: "Bob",
+			Age:  24,
+		}, &Person{
+			Uid:  1002,
+			Name: "Charlie",
+			Age:  29,
+		}},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err = req.SetObject(&p)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	q := fmt.Sprintf(`{
+		me(func: uid(1000)) {
+			_uid_
+			name
+			age
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+		}
+
+		me2(func: uid(1001)) {
+			_uid_
+			name
+			age
+		}
+
+		me3(func: uid(1002)) {
+			_uid_
+			name
+			age
+		}
+	}`)
+	req.SetQuery(q)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	type Root struct {
+		Me  Person `json:"me"`
+		Me2 Person `json:"me2"`
+		Me3 Person `json:"me3"`
+	}
+
+	var r Root
+	err = client.Unmarshal(resp.N, &r)
+	fmt.Printf("Resp after SetObject: %+v\n", r)
+
+	// Now lets try to delete Alice. This won't delete Bob and Charlie but just remove the
+	// connection between Alice and them.
+	p2 := Person{
+		Uid: 1000,
+	}
+
+	req = client.Req{}
+	err = req.DeleteObject(&p2)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	err = client.Unmarshal(resp.N, &r)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Resp after deleting node: %+v\n", r)
+}
+
+func ExampleReq_DeleteObject_predicate() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient(
+		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	type Person struct {
+		Uid     uint64   `json:"_uid_,omitempty"`
+		Name    string   `json:"name,omitempty"`
+		Age     int      `json:"age,omitempty"`
+		Married bool     `json:"married,omitempty"`
+		Friends []Person `json:"friend,omitempty"`
+	}
+
+	p := Person{
+		Uid:     1000,
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Friends: []Person{Person{
+			Uid:  1001,
+			Name: "Bob",
+			Age:  24,
+		}, Person{
+			Uid:  1002,
+			Name: "Charlie",
+			Age:  29,
+		}},
+	}
+
+	req.SetSchema(`
+		age: int .
+		married: bool .
+	`)
+
+	err = req.SetObject(&p)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	q := fmt.Sprintf(`{
+		me(func: uid(1000)) {
+			_uid_
+			name
+			age
+			married
+			friend {
+				_uid_
+				name
+				age
+			}
+		}
+	}`)
+	req.SetQuery(q)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	type Root struct {
+		Me Person `json:"me"`
+	}
+	var r Root
+	err = client.Unmarshal(resp.N, &r)
+	fmt.Printf("Response after SetObject: %+v\n\n", r)
+
+	// Now lets try to delete friend and married predicate.
+	type DeletePred struct {
+		Friend  interface{} `json:"friend"`
+		Married interface{} `json:"married"`
+	}
+	dp := DeletePred{}
+	// Basically we want predicate as JSON keys with value null.
+	// After marshalling this would become { "friend" : null, "married": null }
+
+	req = client.Req{}
+	err = req.DeleteObject(&dp)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Also lets run the query again to verify that predicate data was deleted.
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = client.Unmarshal(resp.N, &r)
+	// Alice should have no friends and only two attributes now.
+	fmt.Printf("Response after deletion: %+v\n", r)
 }

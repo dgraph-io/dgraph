@@ -107,9 +107,9 @@ func (req *Req) addMutation(e Edge, op opType) {
 	}
 }
 
-// SetObject allows creating a new nested object (struct). If the object has _uid_
-// key then it is updated, else it a new node is created with the given properties and edges.
-// If the object can't be marshalled using Json.Marshal then an error is returned.
+// SetObject allows creating a new nested object (struct). If the struct has a _uid_
+// field then it is updated, else a new node is created with the given properties and edges.
+// If the object can't be marshalled using json.Marshal then an error is returned.
 func (req *Req) SetObject(v interface{}) error {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -122,9 +122,17 @@ func (req *Req) SetObject(v interface{}) error {
 	return nil
 }
 
-// DeleteObject allows deleting a nested object (struct). The object must have _uid_
-// after it is json marshalled else an error is returned.
-// If the object can't be marshalled using Json.Marshal then also an error is returned.
+// DeleteObject allows deleting a nested object (struct).
+//
+// 1. If properties other than the _uid_ are specified, then only those are set for deletion.
+//
+// 2. If no properties are specified and only the _uid_ is specified then that corresponds to a
+// S * * deletion and all properties of the node are set for deletion.
+//
+// 3. If only predicates are specified with null value, then it is considered a * P * deletion and
+// all data for the predicate is set for deletion.
+//
+// If the object can't be marshalled using json.Marshal then also an error is returned.
 func (req *Req) DeleteObject(v interface{}) error {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -142,6 +150,8 @@ func (req *Req) DeleteObject(v interface{}) error {
 // an error is returned.  The edge is not checked agaist the schema until the request is
 // run --- so setting a UID edge to a value, for example, doesn't result in an error until
 // the request is run.
+//
+// Deprecated; use req.SetObject method instead.
 func (req *Req) Set(e Edge) error {
 	if err := e.validate(); err != nil {
 		return err
@@ -154,6 +164,8 @@ func (req *Req) Set(e Edge) error {
 // from the graph when the request is run. The edge must have a valid target (a Node or value),
 // otherwise an error is returned.  The edge need not represent
 // an edge in the graph --- applying such a mutation simply has no effect.
+//
+// Deprecated; use req.DeleteObject method instead.
 func (req *Req) Delete(e Edge) error {
 	if err := e.validate(); err != nil {
 		return err
@@ -162,6 +174,7 @@ func (req *Req) Delete(e Edge) error {
 	return nil
 }
 
+// DeleteAll is used to drop all the data in the database.
 func (req *Req) DeleteAll() {
 	if req.gr.Mutation == nil {
 		req.gr.Mutation = new(protos.Mutation)
@@ -222,6 +235,8 @@ func (e *Edge) setSubject(n *Node) {
 }
 
 // ConnectTo creates an edge labelled pred from Node n to Node n1
+//
+// Deprecated; use req.SetObject method instead.
 func (n *Node) ConnectTo(pred string, n1 Node) Edge {
 	e := Edge{}
 	(&e).setSubject(n)
@@ -235,6 +250,8 @@ func (n *Node) ConnectTo(pred string, n1 Node) Edge {
 // UID edge, or one of the Edge.SetValue...() functions if the edge is of a scalar type.
 // The edge can't be committed to the store --- calling Req.Set() to add the edge to
 // a request will result in an error --- until it is completed.
+//
+// Deprecated; use req.SetObject method instead.
 func (n *Node) Edge(pred string) Edge {
 	e := Edge{}
 	(&e).setSubject(n)
@@ -244,6 +261,8 @@ func (n *Node) Edge(pred string) Edge {
 
 // Delete is used to delete all outgoing edges for a node. It is equivalent to performing a S * *
 // deletion.
+//
+// Deprecated; use req.DeleteObject method instead.
 func (n *Node) Delete() Edge {
 	e := Edge{}
 	(&e).setSubject(n)
@@ -261,6 +280,8 @@ type Edge struct {
 }
 
 // NewEdge creates an Edge from an NQuad.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func NewEdge(nq protos.NQuad) Edge {
 	return Edge{nq}
 }
@@ -349,12 +370,16 @@ func (e *Edge) setValueString(val string) error {
 // the value and type are overwritten.  If the edge has previously been connected to a node, the
 // edge and type are left unchanged and ErrConnected is returned.  The string must
 // escape " with \, otherwise the edge and type are left unchanged and an error returned.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValueString(val string) error {
 	return e.setValueString(val)
 }
 
 // SetValueStringWithLang has same behavior as SetValueString along with the ability to set the
 // language tag as lang.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValueStringWithLang(val string, lang string) error {
 	if err := e.setValueString(val); err != nil {
 		return err
@@ -367,6 +392,8 @@ func (e *Edge) SetValueStringWithLang(val string, lang string) error {
 // If the edge had previous been assigned another value (even of another type), the value and type
 // are overwritten.  If the edge has previously been connected to a node, the edge and type are
 // left unchanged and ErrConnected is returned.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValueInt(val int64) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -383,6 +410,8 @@ func (e *Edge) SetValueInt(val int64) error {
 // types.FloatID.  If the edge had previous been assigned another value (even of another type),
 // the value and type are overwritten.  If the edge has previously been connected to a node, the
 // edge and type are left unchanged and ErrConnected is returned.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValueFloat(val float64) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -399,6 +428,8 @@ func (e *Edge) SetValueFloat(val float64) error {
 // If the edge had previous been assigned another value (even of another type), the value and type
 // are overwritten.  If the edge has previously been connected to a node, the edge and type are
 // left unchanged and ErrConnected is returned.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValueBool(val bool) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -415,6 +446,8 @@ func (e *Edge) SetValueBool(val bool) error {
 // to types.PasswordID.  If the edge had previous been assigned another value (even of another
 // type), the value and type are overwritten.  If the edge has previously been connected to a
 // node, the edge and type are left unchanged and ErrConnected is returned.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValuePassword(val string) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -431,6 +464,8 @@ func (e *Edge) SetValuePassword(val string) error {
 // to types.DateTimeID.  If the edge had previous been assigned another value (even of another
 // type), the value and type are overwritten.  If the edge has previously been connected to a node,
 // the edge and type are left unchanged and ErrConnected is returned.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValueDatetime(dateTime time.Time) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -448,6 +483,8 @@ func (e *Edge) SetValueDatetime(dateTime time.Time) error {
 // of another type), the value and type are overwritten.  If the edge has previously been connected
 // to a node, the edge and type are left unchanged and ErrConnected is returned. If the string
 // fails to parse with geojson.Unmarshal() the edge is left unchanged and an error returned.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValueGeoJson(json string) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -492,6 +529,8 @@ func (e *Edge) SetValueGeoGeometry(g geom.T) error {
 // type), the value and type are overwritten.  If the edge has previously been connected to
 // a node, the edge and type are left unchanged and ErrConnected is returned.
 // The string must escape " with \, otherwise the edge and type are left unchanged and an error returned.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValueDefault(val string) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -512,6 +551,8 @@ func (e *Edge) SetValueDefault(val string) error {
 // to types.BinaryID.  If the edge had previous been assigned another value (even of another type),
 // the value and type are overwritten.  If the edge has previously been connected to a node, the
 // edge and type are left unchanged and ErrConnected is returned. the bytes are encoded as base64.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) SetValueBytes(val []byte) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -527,6 +568,8 @@ func (e *Edge) SetValueBytes(val []byte) error {
 }
 
 // AddFacet adds the key, value pair as facets on Edge e.  No checking is done.
+//
+// Deprecated; use req.SetObject/DeleteObject method instead.
 func (e *Edge) AddFacet(key, val string) {
 	e.nq.Facets = append(e.nq.Facets, &protos.Facet{
 		Key: key,
