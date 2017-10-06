@@ -2144,6 +2144,16 @@ func validKey(k string) bool {
 	return false
 }
 
+func attrAndLang(attrData string) (attr string, langs []string) {
+	idx := strings.Index(attrData, "@")
+	if idx < 0 {
+		return attrData, langs
+	}
+	attr = attrData[:idx]
+	langs = strings.Split(attrData[idx+1:], ":")
+	return
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -2294,7 +2304,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if order[val] {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
-				gq.Order = append(gq.Order, &protos.Order{val, key == "orderdesc"})
+				attr, langs := attrAndLang(val)
+				gq.Order = append(gq.Order, &protos.Order{attr, key == "orderdesc", langs})
 				order[val] = true
 				continue
 			}
@@ -2683,7 +2694,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					if order[p.Val] {
 						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
 					}
-					curp.Order = append(curp.Order, &protos.Order{p.Val, p.Key == "orderdesc"})
+					attr, langs := attrAndLang(p.Val)
+					curp.Order = append(curp.Order, &protos.Order{attr, p.Key == "orderdesc", langs})
 					order[p.Val] = true
 					continue
 				}
