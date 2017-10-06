@@ -821,6 +821,10 @@ var testNQuads = []struct {
 		input:       `_:company <name> "TurfBytes" . _:company <owner> _:owner . _:owner <name> "Jason" .  `,
 		expectedErr: true,
 	},
+	{
+		input:       `<alice> <age> "NaN"^^<xs:double> .`,
+		expectedErr: true,
+	},
 }
 
 func TestLex(t *testing.T) {
