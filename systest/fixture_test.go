@@ -93,7 +93,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	)
 
 	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-bulk-loader"), "-r", rdfFile,
-		"-s", schemaFile, "-http", ":"+freePort(), "-j=1")
+		"-s", schemaFile, "-http", ":"+freePort(), "-j=1", "-x=true")
 	bulkCmd.Dir = bulkDir
 	if out, err := bulkCmd.CombinedOutput(); err != nil {
 		s.cleanup()
@@ -109,7 +109,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	s.liveQueryPort, s.liveGRPCPort = s.startDgraph(liveDG, liveDGZ)
 
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-live-loader"), "-r", rdfFile,
-		"-s", schemaFile, "-d", ":"+s.liveGRPCPort)
+		"-s", schemaFile, "-d", ":"+s.liveGRPCPort, "-x=true")
 	liveCmd.Dir = liveDir
 	if out, err := liveCmd.CombinedOutput(); err != nil {
 		s.cleanup()

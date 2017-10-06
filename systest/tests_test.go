@@ -11,8 +11,8 @@ func TestHelloWorld(t *testing.T) {
 	s := newSuite(t, `
 		name: string @index(term) .
 	`, `
-		_:pj <name> "Peter Jackson" .
-		_:pp <name> "Peter Pan" .
+		<pj> <name> "Peter Jackson" .
+		<pp> <name> "Peter Pan" .
 	`)
 	defer s.cleanup()
 
@@ -104,6 +104,40 @@ func TestFacets(t *testing.T) {
 				}
 			} ]
 		} ]
+	`))
+}
+
+func TestXids(t *testing.T) {
+	s := newSuite(t, `
+		name: string @index(exact) .
+	`, `
+		<abc> <name> "ABC" .
+		_:def <name> "DEF" .
+	`)
+	defer s.cleanup()
+
+	t.Run("xid", s.singleQuery(`
+		q(func: eq(name, "ABC")) {
+			xid
+		}
+	`, `
+		"q": [ { "xid": "abc" } ]
+	`))
+
+	t.Run("blank node", s.singleQuery(`
+		q(func: eq(name, "DEF")) {
+			xid
+		}
+	`, `
+		"q": []
+	`))
+
+	t.Run("index", s.singleQuery(`
+		q(func: eq(xid, "abc")) {
+			name
+		}
+	`, `
+		"q": [ { "name" : "ABC" } ]
 	`))
 }
 

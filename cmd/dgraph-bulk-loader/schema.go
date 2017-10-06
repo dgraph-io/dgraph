@@ -37,8 +37,11 @@ func newSchemaStore(initial []*protos.SchemaUpdate, opt options) *schemaStore {
 	}
 	if opt.StoreXids {
 		s.m["xid"] = schemaState{
-			strict:       true,
-			SchemaUpdate: &protos.SchemaUpdate{ValueType: uint32(protos.Posting_STRING)},
+			strict: true,
+			SchemaUpdate: &protos.SchemaUpdate{
+				ValueType: uint32(protos.Posting_STRING),
+				Tokenizer: []string{"exact"},
+			},
 		}
 	}
 	for _, sch := range initial {

@@ -161,10 +161,14 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		}
 		return errors.Wrapf(err, "while parsing line %q", rdfLine)
 	}
+	m.processNQuad(nq)
+	return nil
+}
 
+func (m *mapper) processNQuad(nq gql.NQuad) {
 	sid, sidIsNew := m.um.assignUID(nq.GetSubject())
 	if m.opt.StoreXids && sidIsNew {
-		m.addXidEntry(sid, nq.GetSubject())
+		m.addXidEdge(nq.GetSubject())
 	}
 	var oid uint64
 	var de *protos.DirectedEdge
@@ -172,10 +176,11 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		var oidIsNew bool
 		oid, oidIsNew = m.um.assignUID(nq.GetObjectId())
 		if m.opt.StoreXids && oidIsNew {
-			m.addXidEntry(oid, nq.GetObjectId())
+			m.addXidEdge(nq.GetObjectId())
 		}
 		de = nq.CreateUidEdge(sid, oid)
 	} else {
+		var err error
 		de, err = nq.CreateValueEdge(sid)
 		x.Check(err)
 	}
@@ -197,8 +202,6 @@ func (m *mapper) parseRDF(rdfLine string) error {
 	}
 
 	m.addIndexMapEntries(nq, de)
-
-	return nil
 }
 
 func parseNQuad(line string) (gql.NQuad, error) {
@@ -298,15 +301,16 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 	}
 }
 
-func (m *mapper) addXidEntry(uid uint64, xid string) {
-	m.addMapEntry(
-		x.DataKey("xid", uid),
-		&protos.Posting{
-			Uid:         math.MaxUint64,
-			Value:       []byte(xid),
-			ValType:     protos.Posting_STRING,
-			PostingType: protos.Posting_VALUE,
+func (m *mapper) addXidEdge(xid string) {
+	if strings.HasPrefix(xid, "_:") {
+		return
+	}
+	nq := gql.NQuad{&protos.NQuad{
+		Subject:   xid,
+		Predicate: "xid",
+		ObjectValue: &protos.Value{
+			Val: &protos.Value_StrVal{StrVal: xid},
 		},
-		m.state.sm.shardFor("xid"),
-	)
+	}}
+	m.processNQuad(nq)
 }
