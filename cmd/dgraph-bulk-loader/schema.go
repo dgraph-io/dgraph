@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
@@ -21,7 +22,7 @@ type schemaStore struct {
 	m map[string]schemaState
 }
 
-func newSchemaStore(initial []*protos.SchemaUpdate) *schemaStore {
+func newSchemaStore(initial []*protos.SchemaUpdate, opt options) *schemaStore {
 	s := &schemaStore{
 		m: map[string]schemaState{
 			"_predicate_": {
@@ -34,9 +35,18 @@ func newSchemaStore(initial []*protos.SchemaUpdate) *schemaStore {
 			},
 		},
 	}
+	if opt.StoreXids {
+		s.m["xid"] = schemaState{
+			strict:       true,
+			SchemaUpdate: &protos.SchemaUpdate{ValueType: uint32(protos.Posting_STRING)},
+		}
+	}
 	for _, sch := range initial {
 		p := sch.Predicate
 		sch.Predicate = ""
+		if _, ok := s.m[p]; ok {
+			x.Check(fmt.Errorf("predicate %q already exists in schema", p))
+		}
 		s.m[p] = schemaState{true, sch}
 	}
 	return s
