@@ -94,6 +94,8 @@ func main() {
 	x.Check(err)
 	fmt.Println(string(optBuf))
 
+	maxOpenFilesWarning()
+
 	go func() {
 		log.Fatal(http.ListenAndServe(*httpAddr, nil))
 	}()
@@ -126,4 +128,24 @@ func main() {
 	loader.reduceStage()
 	loader.writeSchema()
 	loader.cleanup()
+}
+
+func maxOpenFilesWarning() {
+	maxOpenFiles, err := queryMaxOpenFiles()
+	const (
+		red    = "\x1b[33m"
+		yellow = "\x1b[30m"
+		reset  = "\x1b[0m"
+	)
+	if err != nil {
+		fmt.Println(yellow+"Max open file limit could not be detected (error: %s). The bulk "+
+			"loader needs to open many files at once. Please ensure that "+
+			"the max open file limit is adequate before continuing.\n"+reset, err)
+	} else if maxOpenFiles <= 1024 {
+		fmt.Printf(red+"Max open file limit is %d. The bulk loader needs to open many"+
+			" files at once. You may wish to increase your max open file limit "+
+			"otherwise the bulk loader may abort part way through.\n"+reset, maxOpenFiles)
+	} else {
+		fmt.Printf("Max open file limit is %d\n", maxOpenFiles)
+	}
 }
