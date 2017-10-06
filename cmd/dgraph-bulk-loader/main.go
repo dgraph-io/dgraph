@@ -133,19 +133,24 @@ func main() {
 func maxOpenFilesWarning() {
 	maxOpenFiles, err := queryMaxOpenFiles()
 	const (
-		red    = "\x1b[33m"
-		yellow = "\x1b[30m"
+		red    = "\x1b[31m"
+		green  = "\x1b[32m"
+		yellow = "\x1b[33m"
 		reset  = "\x1b[0m"
 	)
 	if err != nil {
-		fmt.Println(yellow+"Max open file limit could not be detected (error: %s). The bulk "+
-			"loader needs to open many files at once. Please ensure that "+
-			"the max open file limit is adequate before continuing.\n"+reset, err)
-	} else if maxOpenFiles <= 1024 {
-		fmt.Printf(red+"Max open file limit is %d. The bulk loader needs to open many"+
-			" files at once. You may wish to increase your max open file limit "+
-			"otherwise the bulk loader may abort part way through.\n"+reset, maxOpenFiles)
-	} else {
-		fmt.Printf("Max open file limit is %d\n", maxOpenFiles)
+		fmt.Printf(red+"Nonfatal error: max open file limit could not be detected: %v\n"+reset, err)
 	}
+	fmt.Println("The bulk loader needs to open many files at once. This number depends" +
+		" on the size of the data set loaded, the map file output size, and the level " +
+		"of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for" +
+		" details of how to change the limit.")
+	if err != nil {
+		return
+	}
+	colour := green
+	if maxOpenFiles <= 1e5 {
+		colour = yellow
+	}
+	fmt.Printf(colour+"Current max open files limit: %d\n"+reset, maxOpenFiles)
 }
