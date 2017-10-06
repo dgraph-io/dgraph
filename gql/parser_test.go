@@ -4470,3 +4470,31 @@ func TestOrderWithLang(t *testing.T) {
 	require.Equal(t, "salary", orders[2].Attr)
 	require.Equal(t, 0, len(orders[2].Langs))
 }
+
+func TestParseLangTagAfterStringInRoot(t *testing.T) {
+	// This is a fix for #1499.
+	query := `
+		{
+			q(func: anyofterms(name, "Hello"@en)) {
+				_uid_
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid usage of '@' in function argument")
+}
+
+func TestParseLangTagAfterStringInFilter(t *testing.T) {
+	// This is a fix for #1499.
+	query := `
+		{
+			q(func: uid(0x01)) @filter(eq(name, "Hello"@en)) {
+				_uid_
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid usage of '@' in function argument")
+}
