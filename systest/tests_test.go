@@ -11,8 +11,8 @@ func TestHelloWorld(t *testing.T) {
 	s := newSuite(t, `
 		name: string @index(term) .
 	`, `
-		<pj> <name> "Peter Jackson" .
-		<pp> <name> "Peter Pan" .
+		_:pj <name> "Peter Jackson" .
+		_:pp <name> "Peter Pan" .
 	`)
 	defer s.cleanup()
 
