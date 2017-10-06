@@ -3675,7 +3675,8 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, "name@en:fr", res.Query[0].Children[1].Order[0].Attr)
+	require.Equal(t, "name", res.Query[0].Children[1].Order[0].Attr)
+	require.Equal(t, []string{"en", "fr"}, res.Query[0].Children[1].Order[0].Langs)
 }
 
 func TestParseQueryWithAttrLang2(t *testing.T) {
@@ -3692,7 +3693,8 @@ func TestParseQueryWithAttrLang2(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, "name@en", res.Query[0].Order[0].Attr)
+	require.Equal(t, "name", res.Query[0].Order[0].Attr)
+	require.Equal(t, []string{"en"}, res.Query[0].Order[0].Langs)
 }
 
 func TestParseRegexp1(t *testing.T) {
@@ -4446,4 +4448,25 @@ func TestInvalidValUsage(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Query syntax invalid.")
+}
+
+func TestOrderWithLang(t *testing.T) {
+	query := `
+	{
+		me(func: uid(0x1), orderasc: name@en:fr:., orderdesc: lastname@ci, orderasc: salary) {
+			name
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	orders := res.Query[0].Order
+	require.Equal(t, "name", orders[0].Attr)
+	require.Equal(t, []string{"en", "fr", "."}, orders[0].Langs)
+	require.Equal(t, "lastname", orders[1].Attr)
+	require.Equal(t, []string{"ci"}, orders[1].Langs)
+	require.Equal(t, "salary", orders[2].Attr)
+	require.Equal(t, 0, len(orders[2].Langs))
 }

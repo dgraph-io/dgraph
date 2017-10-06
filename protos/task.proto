@@ -70,11 +70,11 @@ message Result {
 message Order {
 	string attr = 1;
 	bool desc = 2;
+	repeated string langs = 3;
 }
 
 message SortMessage {
 	repeated Order order = 1;
-	repeated string langs = 2;
 	repeated List uid_matrix = 3;
 	int32 count = 4;   // Return this many elements.
 	int32 offset = 5;  // Skip this many elements.

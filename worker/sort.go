@@ -296,11 +296,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 		in := &protos.Query{
 			Attr:    ts.Order[i].Attr,
 			UidList: destUids,
-		}
-		attrData := strings.Split(in.Attr, "@")
-		in.Attr = attrData[0]
-		if len(attrData) == 2 {
-			in.Langs = strings.Split(attrData[1], ":")
+			Langs:   ts.Order[i].Langs,
 		}
 		go fetchValues(ctx, in, i, och)
 	}
@@ -386,11 +382,6 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 			"Try flipping order and return first few elements instead.", ts.Order[0].Attr, ts.Count)
 	}
 
-	attrData := strings.Split(ts.Order[0].Attr, "@")
-	ts.Order[0].Attr = attrData[0]
-	if len(attrData) == 2 {
-		ts.Langs = strings.Split(attrData[1], ":")
-	}
 	if schema.State().IsList(ts.Order[0].Attr) {
 		return nil, x.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Order[0].Attr)
 	}
@@ -591,13 +582,14 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 	uids := make([]uint64, 0, lenList)
 	values := make([][]types.Val, 0, lenList)
 	multiSortVals := make([]types.Val, 0, lenList)
+	order := ts.Order[0]
 	for i := 0; i < lenList; i++ {
 		select {
 		case <-ctx.Done():
 			return multiSortVals, ctx.Err()
 		default:
 			uid := ul.Uids[i]
-			val, err := fetchValue(uid, ts.Order[0].Attr, ts.Langs, typ)
+			val, err := fetchValue(uid, order.Attr, order.Langs, typ)
 			if err != nil {
 				// If a value is missing, skip that UID in the result.
 				continue
@@ -606,7 +598,7 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 			values = append(values, []types.Val{val})
 		}
 	}
-	err := types.Sort(values, &protos.List{uids}, []bool{ts.Order[0].Desc})
+	err := types.Sort(values, &protos.List{uids}, []bool{order.Desc})
 	ul.Uids = uids
 	if len(ts.Order) > 1 {
 		for _, v := range values {
