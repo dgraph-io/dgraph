@@ -32,8 +32,32 @@ The Docker version is available as _master_.  Pull and run with:
 
 ```sh
 docker pull dgraph/dgraph:master
+```
+
+#### Run using installed binary
+
+Run dgraphzero
+```sh
+dgraphzero -w zw
+```
+
+Run dgraph
+```sh
+dgraph --memory_mb 2048 --peer 127.0.0.1:8888
+```
+
+#### Run using Docker
+
+
+Run dgraphzero
+```sh
 mkdir -p ~/dgraph
-docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph:master dgraph --bindall=true --memory_mb 2048
+docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph:master dgraphzero -w zw
+```
+
+Run dgraph
+```sh
+docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
 ```
 
 {{% notice "note" %}}All the usual cautions about nightly builds apply: the feature set is not stable and may change (even daily) and the nightly build may contain bugs. {{% /notice %}}
@@ -43,21 +67,23 @@ docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph
 Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
 
 After installing Go, run
-```
+```sh
 # This should install the following binaries in your $GOPATH/bin: dgraph, dgraph-live-loader, and dgraph-bulk-loader.
 go get -u github.com/dgraph-io/dgraph/...
 ```
 
-The binaries are located in `cmd/dgraph`, `cmd/dgraph-live-loader`, and
+The binaries are located in `cmd/dgraph`, `cmd/dgraphzero`, `cmd/dgraph-live-loader`, and
 `cmd/dgraph-bulk-loader`. If you get errors related to `grpc` while building them, your
 `go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it
 causes issues while using the Go client). Update your `go-grpc` by running.
-```
+```sh
 go get -u google.golang.org/grpc
 ```
 
 
 ## Endpoints
+
+### Dgraph
 
 On its http port, a running Dgraph instance exposes a number of service endpoints.
 
@@ -68,6 +94,28 @@ On its http port, a running Dgraph instance exposes a number of service endpoint
 <!-- * `/debug/store` backend storage stats.-->
 * `/admin/shutdown` [shutdown]({{< relref "#shutdown">}}) a node.
 * `/admin/export` take a running [export]({{< relref "#export">}}).
+
+### Dgraphzero
+
+Dgraphzero also exposes a http on (`--port` + 1). So if you ran `dgraphzero` using the default
+value for port flag(`8888`), then it would have a HTTP server running on `8889`.
+
+* `/state` Information about the nodes that are part of the cluster. Also contains information about
+  size of predicates and groups they belong to.
+
+
+## Dgraphzero
+
+Dgraphzero is a binary which controls the Dgraph cluster. It automatically moves data between
+different dgraph instances based on the size of the data served by each instance.
+
+It is mandatory to run atleast one `dgraphzero` node before running any whether `dgraph`.
+Options present for `dgraphzero` can be seen by running `dgraphzero --help`.
+
+* dgraphzero stores information about the cluster.
+* `--replicas` is the option that controls the replication factor. (i.e. number of replicas per data shard, including the original shard)
+* Whenever a new machine is brought up it is assigned a group based on replication factor. If replication factor is 1 then each node will serve different group. If replication factor is 2 and you launch 4 machines then first two machines would server group 1 and next two machines would server group 2.
+* dgraphzero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
 
 
 ## Running Dgraph
@@ -84,6 +132,8 @@ Whether running standalone or in a cluster, each Dgraph instance relies on the f
 * A port on which to run a worker node, used for Dgraph's communication between nodes. (option `--workerport`, default: `12345`)
 * An address and port at which the node advertises its worker.  (option `--my`, default: `localhost:workerport`)
 * Estimated memory dgraph can take. (option `--memory_mb, mandatory to specify, recommended value half of RAM size`)
+* Peer address of a **dgraphzero** node (option `--peer`, mandatory, default: `127.0.0.1:8888`)
+* If you are running multiple dgraph instances on same machine for testing, you can use port offset to let dgraph use `default port + offset` instead of specifying all the ports. (option `--port_offset`)
 
 {{% notice "note" %}}By default the server listens on `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
 
@@ -100,9 +150,6 @@ gentlecommit: 0.33
 
 # RAFT ID that this server will use to join RAFT groups.
 idx: 1
-
-# Groups to be served by this instance (comma separated list, ranges are supported).
-groups: "0,1-5"
 
 # Port to run server on. (default 8080)
 port: 8080
@@ -127,6 +174,9 @@ w: w
 
 # Debug mode for testing.
 debugmode: false
+
+# Address of dgraphzero
+peer: localhost:8888
 ```
 
 ### TLS configuration
@@ -200,153 +250,102 @@ tls.max_version string
 tls.min_version string
 ```
 
+
 ### Single Instance
 A single instance can be run with default options, as in:
 
 ```sh
 mkdir ~/dgraph # The folder where dgraph binary will create the directories it requires.
 cd ~/dgraph
-dgraph
+dgraphzero -w wz
+dgraph --memory_mb 2048 --peer "localhost:8888"
 ```
 
-Or by specifying `p` and `w` directories, ports, etc.  If `dgraph-live-loader` is used, it must connect on the port exposing Dgraph services, as must the go client.  
+Or by specifying `p` and `w` directories, ports, etc.  If `dgraph-live-loader` is used, it must connect on the port exposing Dgraph services, as must the go client.
 
 ### Multiple instances
 
-Dgraph is a truly distributed graph database - not a master-slave replication of one datastore.  Dgraph shards by predicate, not by node.  Running in a cluster shards and replicates predicates across the cluster, queries can be run on any node and joins are handled over the distributed data.
+Dgraph is a truly distributed graph database - not a master-slave replication of one datastore. Dgraph shards by predicate, not by node.  Running in a cluster shards and replicates predicates across the cluster, queries can be run on any node and joins are handled over the distributed data.
 
 As well as the requirements for [each instance]({{< relref "#running-dgraph">}}), to run Dgraph effectively in a cluster, it's important to understand how sharding and replication work.
 
 * Dgraph stores data per predicate (not per node), thus the unit of sharding and replication is predicates.
-* To shard the graph, predicates are assigned to groups and each node in the cluster serves a number of groups.
+* To shard the graph, predicates are assigned to groups and each node in the cluster serves a single group.
 * Each node in a cluster stores only the predicates for the groups it is assigned to.
 * If multiple cluster nodes server the same group, the data for that group is replicated
 
-For example, if predicates `P1`, `P2` and `P3` are assigned to group 1, predicates `P4` and `P5` to group 2, and predicates `P6`, `P7` and `P8` to group 3.  If cluster node `N1` serves group 1, it stores data for only predicates `P1`, `P2` and `P3`.  While if node `N2` serves groups 1 and 3, it stores data for predicates `P1-P3` and `P6-P8`, replicating the `P1-P3` data.  A node `N3` could then, for example, serve groups 2 and 3.  A query is resolved locally for predicates the node stores and via distributed joins for predicates stored on other nodes.
+Replication can be tuned via the `replicas` flag in [dgraphzero](#dgraphzero-1).
 
-Note also:
-
-* Group 0 stores information about the cluster.
-* If sharding results in `N` groups, then for every group `0,...,N` there must be at least one node serving the group.  If there are no nodes serving a particular group, then the cluster won't know where to store the data for predicates in that group.
-* A Dgraph cluster can detect new machines allocated to the cluster, establish connections, and transfer a subset of existing predicates to the new node based on the groups served by the new machine.
-* Similarly, machines can be taken down and then brought back up to serve different groups and Dgraph will reorganize for the new structure.
-
-
-{{% notice "warning" %}}Group id 0 is used to store membership information for the entire cluster. Dgraph doesn't take snapshots of this group.  It is an error to assign a predicate to group 0. {{% /notice %}}
-
+A query is resolved locally for predicates the node stores and via distributed joins for predicates stored on other nodes.
 
 #### Data sharding
 
-Sharding is specified by supplying the `--group_conf` flag.
-
-The groups config syntax is as follows:
-
-```
-<groupID>: comma separated list of predicate names or prefixes
-
-# Last entry should be:
-default: fp % N + k, where N = number of shards you want, and k = starting shard id.
-```
-
-The default groups config used by Dgraph, when nothing is provided is:
-
-```
-$ cat cmd/dgraph/groups.conf
-// Default formula for getting group where fp is the fingerprint of a predicate.
-default: fp % 1 + 1
-
-# fp % 1 is always zero. Thus, all data is located on group id 1.
-```
-
-{{% notice "note" %}} Assignment of predicates to groups is done in order of group ID.  If a predicate matches multiple groups, the lowest matching group is picked.{{% /notice %}}
-
-
-A valid groups.conf is:
-
-```
-// Matching is by prefix when * is used, and by equality otherwise
-
-1: type.object.name
-2: type.object.name*, film.performance.*
-
-// Default formula for getting group where fp is the fingerprint of a predicate.
-default: fp % 10 + 2
-```
-
-For this groups.conf:
-
-* Predicate `type.object.name` is assigned to group 1.
-* Any predicate with prefix `type.object.name` and `film.performance.` will be assigned to group 2.
-* `type.object.name` belongs to group 1 and not 2 despite matching both, because 1 is lower than 2.
-* The remaining predicates are assigned by the formula: `fingerprint(predicate) % 10 + 2`, and thus occupy groups `[2, 3, 4, 5, 6, 7, 8, 9, 10, 11]`.
-* Group 2 will serve predicates matching the specified prefixes and those set by the default rule.
-
-{{% notice "note" %}} Data for reverse edges are always stored with the corresponding forward edge.  It's an error to use a reverse edge in groups.conf. {{% /notice %}}
-
-{{% notice "warning" %}}Once sharding spec is set, it **must not be changed** without bringing the cluster down. The same spec must be passed to all the nodes in the cluster.{{% /notice %}}
-
+* dgraphzero assigns predicates to group. At this point dgraphzero doesn't know what might be the growth rate of the data so the predicate is assigned to the group which asks first.
+* Data for reverse edges and index are always stored along with the predicate.
+* dgraphzero tries to rebalance the cluster based on the disk usage in each group. If dgraphzero detects an imbalance then dgraphzero would try to move a predicate along with index and reverse edges to a node which has less disk usage.
 
 
 #### Running the Cluster
 
-Each machine in the cluster must be started with a unique ID (option `--idx`) and a comma-separated list of group IDs (option `--groups`).  Each machine must also satisfy the data directory and port requirements for a [single instance]({{< relref "#running-dgraph">}}).
+Each machine in the cluster must be started with a unique ID (option `--idx`) and address of dgraphzero server. Each machine must also satisfy the data directory and port requirements for a [single instance]({{< relref "#running-dgraph">}}).
 
 
-To run a cluster, begin by bringing up a single server that serves at least group 0.  
+To run a cluster, begin by bringing up [dgraphzero](#dgraphzero-1) nodes.
 
+**We recommend running three instances of dgraphzero for high availability.**
+
+```sh
+
+# dgraphzero instance 1 using the default 8888 for grpc and 8889 for http.
+$ dgraphzero -w wz --bindall=true --my "ip-address-others-should-access-me-at"
+
+# dgraphzero instance 2 using the default 8890 for grpc and 8891 for http.
+$ dgraphzero -w wz1 --peer "ip-address:8888" --port 8890 --bindall=true -idx 2
+
+# dgraphzero instance 3
+$ dgraphzero -w wz1 --peer "ip-address:8888" --port 8892 --bindall=true -idx 3
 ```
-$ dgraph --group_conf groups.conf --groups "0,1" --idx 1 --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb 2048
 
-# This instance with ID 1 will serve groups 0 and 1, using the default 8080/9080 ports for clients and 12345 for peers.
+Now bring up `dgraph` nodes and supply `peer` as the address of any `dgraphzero` node.
+
+```sh
+# specify dgraphzero's grpc port's address as peer address.
+$ dgraph --idx 1 --peer "ip-address:8888" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
+$ dgraph --idx 2 --peer "ip-address:8888" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
+$ dgraph --idx 3 --peer "ip-address:8888" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
 ```
+
+**The new servers will automatically detect each other by communicating with dgraphzero and establish connections to each other**.
 
 {{% notice "note" %}} The `--bindall=true` option is required when running on multiple machines, otherwise the node's port and workerport will be bound to localhost and not be accessible over a network. {{% /notice %}}
 
-New nodes are added to a cluster by specifying any known healthy node on startup (option `--peer`).  The address given at `--peer` must be the `workerport`.
-
-
-```
-# Server handling only group 2.
-$ dgraph --group_conf groups.conf --groups "2" --idx 3 --peer "<ip address>:<workerport>" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
-
-# Server handling groups 0, 1 and 2.
-$ dgraph --group_conf groups.conf --groups "0,1,2" --idx 4 --peer "<ip address>:<workerport>" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
-```
-
-The new servers will automatically detect each other by communicating with the provided peer and establish connections to each other.
-
+Bring up dgraph nodes.
 {{% notice "note" %}}To have RAFT consensus work correctly, each group must be served by an odd number of Dgraph instances.{{% /notice %}}
 
-It can be worth building redundancy and extensibility into a cluster configuration so that a cluster can be extended online without needing to be restarted.  For example, by anticipating potential future shards and specifying a groups.conf file with more groups than initially needed - the first few instances might then serve many groups but it's easy to add more nodes as need arrises and even restart the initial nodes serving fewer groups once the cluster has enough redundancy.  If not enough groups are specified at the start, reconfiguration of the groups must be done offline.
-
-Query patterns might also influence sharding.  There is no value in co-locating predicates that are never used in joins while distributing predicates that are often used together in joins.  Network communication is slower than memory, so considering common query patterns can lead to fewer distributed joins and fast query times.
+You could start loading all the data into one of the dgraph nodes and dgraphzero would automatically rebalance the data for you.
 
 #### Cluster Checklist
 
 In setting up a cluster be sure the check the following.
 
+* Is atleast one dgraphzero node running?
 * Is each dgraph instance in the cluster [set up correctly]({{< relref "#running-dgraph">}})?
 * Will each instance be accessible to all peers on `workerport`?
-* Is `groups.conf` configured to shard the predicates to groups correctly?
 * Does each node have a unique ID on startup?
 * Has `--bindall=true` been set for networked communication?
-* Is a node serving group 0 being brought up first?
-* Is every group going to be served by at least one node?
-
 
 <!---
 ### In EC2
 
 To make provisioning an EC2 Dgraph cluster quick, the following script installs and starts a Dgraph node, opens ports on the host machine and enters Dgraph into systemd so that the node will restart if the machine is rebooted.
 
-We recommend an Ubuntu 16.04 AMI on a machine with at least 16GB of memory.  
+We recommend an Ubuntu 16.04 AMI on a machine with at least 16GB of memory.
 
 The i3 instances with SSD drives have the right hardware set up to run Dgraph (and its underlying key value store Badger) for performance environments.
 
 After provisioning an Ubuntu machine the following scripts installs and brings up Dgraph.
 
 
-p w ip worker groups.conf groups heathy-peer
 
 ## Docker
 --->
@@ -536,7 +535,7 @@ UID lease as given by the bulk loader.
 ```sh
 $ mkdir zero
 $ cd zero
-$ dgraphzero -id 1 -lease $(cat ../LEASE)
+$ dgraphzero -idx 1 -lease $(cat ../LEASE)
 ```
 `dgraphzero` will stay in the foreground, so you'll need to open new
 terminals for the next steps.
@@ -565,9 +564,9 @@ queries can be sent to any instance (in this case to either `localhost:8080` or
 `localhost:10080`).
 ```sh
 $ curl localhost:8080/query -XPOST -d '{
-    pj_films(func:allofterms(name@en,"Peter Jackson")) {                                                                                  
+    pj_films(func:allofterms(name@en,"Peter Jackson")) {
         director.film (orderasc: name@en, first: 10) {
-            name@en       
+            name@en
         }
     }
 }' | jq
@@ -622,7 +621,7 @@ This stops the server on which the command is executed and not the entire cluste
 
 ## Delete database
 
-Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).  
+Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).
 
 To drop all data and start from a clean database:
 
@@ -640,7 +639,6 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 - Start an [export]({{< relref "#export">}})
 - Ensure it's successful
 - Bring down the cluster
-- Upgrade Dgraph binary / specify a new groups.conf
 - Run Dgraph using new data directories.
 - Reload the data via [bulk data loading]({{< relref "#bulk-data-loading" >}}).
 - If all looks good, you can delete the old directories (export serves as an insurance)
@@ -667,7 +665,7 @@ scrape_configs:
       - 172.31.8.118:8080
 ```
 
-Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**. 
+Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**.
 
 ## Troubleshooting
 Here are some problems that you may encounter and some solutions to try.

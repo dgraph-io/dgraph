@@ -73,7 +73,8 @@ func populateGraphWithFacets(t *testing.T) {
 	addEdgeToValue(t, "name", 33, "Michale", nil)
 	// missing name for 101 -- no name edge and no facets.
 
-	addEdgeToLangValue(t, "name", 320, "Test facet", "en", map[string]string{"type": `"Test facet with lang"`})
+	addEdgeToLangValue(t, "name", 320, "Test facet", "en",
+		map[string]string{"type": `"Test facet with lang"`})
 
 	time.Sleep(5 * time.Millisecond)
 }

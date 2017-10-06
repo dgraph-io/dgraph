@@ -240,8 +240,7 @@ func ConvertToNQuads(mutation string) ([]*protos.NQuad, error) {
 		if err == ErrEmpty { // special case: comment/empty line
 			continue
 		} else if err != nil {
-			// x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
-			return nquads, err
+			return nquads, x.Wrapf(err, "While parsing RDF: %s", strBuf.String())
 		}
 		nquads = append(nquads, &nq)
 	}

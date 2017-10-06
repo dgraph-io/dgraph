@@ -275,10 +275,12 @@ func updateCount(ctx context.Context, params countParams) error {
 		return err
 	}
 
-	edge.Op = protos.DirectedEdge_SET
-	if err := addCountMutation(ctx, &edge, uint32(params.countAfter),
-		params.reverse); err != nil {
-		return err
+	if params.countAfter > 0 {
+		edge.Op = protos.DirectedEdge_SET
+		if err := addCountMutation(ctx, &edge, uint32(params.countAfter),
+			params.reverse); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -787,6 +789,10 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	var index uint64
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		index = rv.Index
+	}
+	if index == 0 {
+		// This function is called by cleaning thread(after predicate move)
+		return schema.State().Remove(attr)
 	}
 	if !s.Explicit {
 		// Delete predicate from schema.

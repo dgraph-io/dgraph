@@ -247,6 +247,17 @@ func (s *Server) Connect(ctx context.Context,
 		fmt.Println("No address provided.")
 		return &emptyMembershipState, errInvalidAddress
 	}
+	for _, group := range s.state.Groups {
+		member, has := group.Members[m.Id]
+		if !has {
+			break
+		}
+		conn.Get().Connect(member.Addr)
+		// Healthy connection exists to a machine with same id
+		if _, err := conn.Get().Get(member.Addr); err == nil {
+			return &emptyMembershipState, conn.ErrDuplicateRaftId
+		}
+	}
 	// Create a connection and check validity of the address by doing an Echo.
 	conn.Get().Connect(m.Addr)
 

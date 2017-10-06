@@ -2090,7 +2090,6 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	sort := &protos.SortMessage{
 		Order:     sg.Params.Order,
-		Langs:     sg.Params.Langs,
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
@@ -2232,15 +2231,7 @@ func isValidFuncName(f string) bool {
 		"has", "uid", "uid_in":
 		return true
 	}
-	return isCompareFn(f) || types.IsGeoFunc(f)
-}
-
-func isCompareFn(f string) bool {
-	switch f {
-	case "le", "ge", "lt", "gt", "eq":
-		return true
-	}
-	return false
+	return isInequalityFn(f) || types.IsGeoFunc(f)
 }
 
 func isInequalityFn(f string) bool {

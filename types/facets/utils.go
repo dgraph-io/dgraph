@@ -18,6 +18,8 @@ package facets
 
 import (
 	"bytes"
+	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"unicode"
@@ -99,6 +101,11 @@ func valAndValType(val string) (interface{}, protos.Facet_ValType, error) {
 		}
 	}
 	if floatVal, err := strconv.ParseFloat(val, 64); err == nil {
+		// We can't store NaN as it is because it serializes into invalid JSON.
+		if math.IsNaN(floatVal) {
+			return nil, protos.Facet_FLOAT, fmt.Errorf("Got invalid value: NaN.")
+		}
+
 		return floatVal, protos.Facet_FLOAT, nil
 	} else if numErr := err.(*strconv.NumError); numErr.Err == strconv.ErrRange {
 		return nil, protos.Facet_FLOAT, err

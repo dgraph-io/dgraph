@@ -1456,9 +1456,13 @@ L:
 			return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
 		}
 
+		attrItemsAgo := -1
 		expectArg = true
 		for it.Next() {
 			itemInFunc := it.Item()
+			if attrItemsAgo >= 0 {
+				attrItemsAgo++
+			}
 			var val string
 			if itemInFunc.Typ == itemRightRound {
 				break L
@@ -1511,16 +1515,12 @@ L:
 				expectArg = false
 				continue
 			} else if itemInFunc.Typ == itemAt {
-				if len(g.Attr) > 0 && len(g.Lang) == 0 {
-					itNext, err := it.Peek(1)
-					if err == nil && itNext[0].Val == "filter" {
-						return nil, x.Errorf("Filter cannot be used inside a function.")
-					}
-					expectLang = true
-					continue
-				} else {
-					return nil, x.Errorf("Invalid usage of '@' in function argument")
+				if attrItemsAgo != 1 {
+					return nil, x.Errorf("Invalid usage of '@' in function " +
+						"argument, must only appear immediately after attr.")
 				}
+				expectLang = true
+				continue
 			} else if itemInFunc.Typ == itemMathOp {
 				val = itemInFunc.Val
 				it.Next()
@@ -1614,6 +1614,7 @@ L:
 						itemInFunc.Val)
 				}
 				g.Attr = val
+				attrItemsAgo = 0
 			} else if expectLang {
 				g.Lang = val
 				expectLang = false
@@ -2162,6 +2163,16 @@ func validKey(k string) bool {
 	return false
 }
 
+func attrAndLang(attrData string) (attr string, langs []string) {
+	idx := strings.Index(attrData, "@")
+	if idx < 0 {
+		return attrData, langs
+	}
+	attr = attrData[:idx]
+	langs = strings.Split(attrData[idx+1:], ":")
+	return
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -2312,7 +2323,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if order[val] {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
-				gq.Order = append(gq.Order, &protos.Order{val, key == "orderdesc"})
+				attr, langs := attrAndLang(val)
+				gq.Order = append(gq.Order, &protos.Order{attr, key == "orderdesc", langs})
 				order[val] = true
 				continue
 			}
@@ -2701,7 +2713,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					if order[p.Val] {
 						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
 					}
-					curp.Order = append(curp.Order, &protos.Order{p.Val, p.Key == "orderdesc"})
+					attr, langs := attrAndLang(p.Val)
+					curp.Order = append(curp.Order, &protos.Order{attr, p.Key == "orderdesc", langs})
 					order[p.Val] = true
 					continue
 				}

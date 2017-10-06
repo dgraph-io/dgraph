@@ -134,16 +134,16 @@ func (m *mapper) run() {
 	}
 }
 
-func (m *mapper) addMapEntry(key []byte, posting *protos.Posting, shard int) {
+func (m *mapper) addMapEntry(key []byte, p *protos.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
 	me := &protos.MapEntry{
 		Key: key,
 	}
-	if posting.PostingType == protos.Posting_REF {
-		me.Uid = posting.Uid
+	if p.PostingType != protos.Posting_REF || len(p.Facets) > 0 {
+		me.Posting = p
 	} else {
-		me.Posting = posting
+		me.Uid = p.Uid
 	}
 	sh := &m.shards[shard]
 
@@ -228,6 +228,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 			p.Uid = math.MaxUint64
 		}
 	}
+	p.Facets = nq.Facets
 
 	// Early exit for no reverse edge.
 	if sch.GetDirective() != protos.SchemaUpdate_REVERSE {
