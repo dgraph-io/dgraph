@@ -1737,19 +1737,6 @@ func TestNestedFuncRoot2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Andrea"}]}}`, js)
 }
 
-func TestNestedFuncRoot3(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: le(count(friend), -1)) {
-				name
-			}
-		}
-  `
-	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": { "me": []}}`, js)
-}
-
 func TestNestedFuncRoot4(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -2472,6 +2459,30 @@ func TestCountError3(t *testing.T) {
 	`
 	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
+}
+
+func TestCountDoNotTrackZeroCount(t *testing.T) {
+	populateGraph(t)
+	query := `
+	mutation{
+		schema{
+			aoeu: uid @count .
+		}
+		set{
+			_:a <aoeu> _:b .
+		}
+		delete{
+			* <aoeu> * .
+		}
+	}
+	{
+		q(func: lt(count(aoeu), 5)) {
+			count
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"q":[]}}`, js)
 }
 
 func TestMultiCountSort(t *testing.T) {
@@ -7795,7 +7806,7 @@ func TestCountAtRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
         {
-        	me(func: ge(count(friend), 0)) {
+            me(func: gt(count(friend), 0)) {
 				count()
 			}
         }

@@ -568,7 +568,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it
 	// wouldn't know that this group is no longer serving this predicate.
-	// There's no issue if a we are serving a particular tablet and we get paritioned away from
+	// There's no issue if a we are serving a particular tablet and we get partitioned away from
 	// group zero as long as it's not removed.
 	if !groups().ServesTablet(q.Attr) {
 		return &emptyResult, errUnservedTablet
@@ -711,8 +711,7 @@ func handleCompareScalarFunction(arg funcArgs) error {
 		gid:     arg.gid,
 		reverse: arg.q.Reverse,
 	}
-	cp.evaluate(arg.out)
-	return nil
+	return cp.evaluate(arg.out)
 }
 
 func handleRegexFunction(ctx context.Context, arg funcArgs) error {
@@ -1389,13 +1388,33 @@ type countParams struct {
 	fn      string // function name
 }
 
-func (cp *countParams) evaluate(out *protos.Result) {
+func (cp *countParams) evaluate(out *protos.Result) error {
 	count := cp.count
+	var illegal bool
+	switch cp.fn {
+	case "eq":
+		illegal = count <= 0
+	case "lt":
+		illegal = count <= 1
+	case "le":
+		illegal = count <= 0
+	case "gt":
+		illegal = count < 0
+	case "ge":
+		illegal = count <= 0
+	default:
+		x.AssertTruef(false, "unhandled count comparison fn: %v", cp.fn)
+	}
+	if illegal {
+		return x.Errorf("count(predicate) cannot be used to search for " +
+			"negative counts (nonsensical) or zero counts (not tracked).")
+	}
+
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
 		pl := posting.Get(countKey)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
-		return
+		return nil
 	}
 
 	if cp.fn == "lt" {
@@ -1404,13 +1423,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 		count += 1
 	}
 
-	if count < 0 && (cp.fn == "lt" || cp.fn == "le") {
-		return
-	}
-
-	if count < 0 {
-		count = 0
-	}
+	x.AssertTrue(count >= 1)
 	countKey = x.CountKey(cp.attr, uint32(count), cp.reverse)
 
 	itOpt := badger.DefaultIteratorOptions
@@ -1428,4 +1441,5 @@ func (cp *countParams) evaluate(out *protos.Result) {
 		pl := posting.Get(key)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 	}
+	return nil
 }

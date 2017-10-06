@@ -2231,15 +2231,7 @@ func isValidFuncName(f string) bool {
 		"has", "uid", "uid_in":
 		return true
 	}
-	return isCompareFn(f) || types.IsGeoFunc(f)
-}
-
-func isCompareFn(f string) bool {
-	switch f {
-	case "le", "ge", "lt", "gt", "eq":
-		return true
-	}
-	return false
+	return isInequalityFn(f) || types.IsGeoFunc(f)
 }
 
 func isInequalityFn(f string) bool {

@@ -275,10 +275,12 @@ func updateCount(ctx context.Context, params countParams) error {
 		return err
 	}
 
-	edge.Op = protos.DirectedEdge_SET
-	if err := addCountMutation(ctx, &edge, uint32(params.countAfter),
-		params.reverse); err != nil {
-		return err
+	if params.countAfter > 0 {
+		edge.Op = protos.DirectedEdge_SET
+		if err := addCountMutation(ctx, &edge, uint32(params.countAfter),
+			params.reverse); err != nil {
+			return err
+		}
 	}
 	return nil
 }
