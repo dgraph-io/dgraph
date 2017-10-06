@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-
-/* 
+/*
 Package client is used to interact with a Dgraph server.  Queries and
 mutations can be run from the client.  There are essentially two modes
 of client interaction:
 
-- Request based interaction mode where the user program builds requests 
+- Request based interaction mode where the user program builds requests
 and receives responses immediately after running, and
 
 - Batch mode where clients submit many requests and let the client package
@@ -28,12 +27,12 @@ batch those requests to the server.
 
 Request Mode: User programs create a NewDgraphClient, create a request
 with req := client.Req{} and then add edges, deletion, schema and
-queries to the request with Set, Delete, AddSchema/AddSchemaFromString and
+queries to the request with SetObject, DeleteObject, AddSchema/AddSchemaFromString and
 SetQuery/SetQueryWithVariables.  Once the request is built, it is run with
-Run.  
+Run.
 
 Batch Mode:  On creating a new client with NewDgraphClient users submit
-BatchMutationOptions specifying the size of batches and number of concurrent 
+BatchMutationOptions specifying the size of batches and number of concurrent
 batches.  Edges are added to the batch with BatchSet; deletions are added
 with BatchDelete; and schema mutations with AddSchema.
 
