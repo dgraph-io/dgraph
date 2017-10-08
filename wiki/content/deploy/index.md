@@ -380,7 +380,7 @@ $ dgraphloader -r <path-to-rdf-gzipped-file>
 $ dgraphloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
 
 # For example to load goldendata with the corresponding schema and convert URI to xid.
-$ dgraphloader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema -x
+$ dgraphloader -r https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true -s https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/goldendata.schema -x
 ```
 
 ### `bulkloader`
