@@ -81,6 +81,8 @@ var (
 	tlsSystemCACerts bool
 	tlsMinVersion    string
 	tlsMaxVersion    string
+
+	customTokenizers string
 )
 
 func setupConfigOpts() {
@@ -154,6 +156,8 @@ func setupConfigOpts() {
 	flag.BoolVar(&tlsSystemCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
 	flag.StringVar(&tlsMinVersion, "tls.min_version", "TLS11", "TLS min version.")
 	flag.StringVar(&tlsMaxVersion, "tls.max_version", "TLS12", "TLS max version.")
+	//Custom plugins.
+	flag.StringVar(&customTokenizers, "custom_tokenizers", "", "Comma separated list of tokenizer plugins")
 
 	flag.Parse()
 	if !flag.Parsed() {
@@ -172,6 +176,29 @@ func setupConfigOpts() {
 	}
 
 	dgraph.SetConfiguration(config)
+	setupCustomTokenizers()
+}
+
+func setupCustomTokenizers() {
+	if customTokenizers == "" {
+		return
+	}
+	for _, soFile := range strings.Split(customTokenizers, ",") {
+		pl, err := plugin.Open(soFile)
+		x.Checkf(err, "could not open custom tokenizer plugin file")
+		mustLookup := func(symName string) plugin.Symbol {
+			symbol, err := pl.Lookup(symName)
+			x.Check(err)
+			return symbol
+		}
+		tok.RegisterTokenizer(tok.CustomTokenizer{
+			NameStr:   *mustLookup(pl, "Name").(*string),
+			TokensFn:  mustLookup(pl, "Tokens").(func(string) ([]string, error)),
+			IdByte:    *mustLookup(pl, "Identifier").(*byte),
+			SortBool:  *mustLookup(pl, "Sortable").(*bool),
+			LossyBool: *mustLookup(pl, "IsLossy").(*bool),
+		})
+	}
 }
 
 func httpPort() int {
@@ -733,23 +760,7 @@ func setupServer(che chan error) {
 	che <- err                // final close for main.
 }
 
-func MustLookup(pl *plugin.Plugin, symName string) plugin.Symbol {
-	symbol, err := pl.Lookup(symName)
-	x.Check(err)
-	return symbol
-}
-
 func main() {
-	pl, err := plugin.Open("/home/petsta/go/src/github.com/dgraph-io/dgraph/customcidr/main.so")
-	x.Check(err)
-	tok.RegisterTokenizer(tok.CustomTokenizer{
-		NameStr:   *MustLookup(pl, "Name").(*string),
-		TokensFn:  MustLookup(pl, "Tokens").(func(string) ([]string, error)),
-		IdByte:    *MustLookup(pl, "Identifier").(*byte),
-		SortBool:  *MustLookup(pl, "Sortable").(*bool),
-		LossyBool: *MustLookup(pl, "IsLossy").(*bool),
-	})
-
 	rand.Seed(time.Now().UnixNano())
 
 	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
