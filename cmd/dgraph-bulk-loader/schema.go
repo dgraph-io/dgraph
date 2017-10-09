@@ -26,12 +26,11 @@ func newSchemaStore(initial []*protos.SchemaUpdate, opt options) *schemaStore {
 	s := &schemaStore{
 		m: map[string]schemaState{
 			"_predicate_": {
-				strict:       true,
-				SchemaUpdate: nil,
-			},
-			"_lease_": {
-				strict:       true,
-				SchemaUpdate: &protos.SchemaUpdate{ValueType: uint32(protos.Posting_INT)},
+				strict: true,
+				SchemaUpdate: &protos.SchemaUpdate{
+					ValueType: uint32(types.StringID),
+					List:      true,
+				},
 			},
 		},
 	}
@@ -40,7 +39,7 @@ func newSchemaStore(initial []*protos.SchemaUpdate, opt options) *schemaStore {
 			strict: true,
 			SchemaUpdate: &protos.SchemaUpdate{
 				ValueType: uint32(protos.Posting_STRING),
-				Tokenizer: []string{"exact"},
+				Tokenizer: []string{"hash"},
 			},
 		}
 	}
