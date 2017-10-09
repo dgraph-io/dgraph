@@ -1115,21 +1115,22 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case CustomIndexFn:
-		// srcfunc 0th val is func name, and --
-		fmt.Printf("CUSTOM_INDEX_FN: %+v\n", q.SrcFunc)
-
-		// First arg: index type. Second arg: string to index.
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
-		// TODO: Verify correct index is available on the predicate.
-		tokenizer, ok := tok.GetTokenizer(q.SrcFunc.Args[0])
+		tokenizerName := q.SrcFunc.Args[0]
+		strToTokenize := q.SrcFunc.Args[1]
+		if !verifyCustomIndex(q.Attr, tokenizerName) {
+			return nil, x.Errorf("Attribute %s is not indexed with custom tokenizer %s",
+				q.Attr, tokenizerName)
+		}
+		tokenizer, ok := tok.GetTokenizer(tokenizerName)
 		if !ok {
-			return nil, x.Errorf("Could not find tokenizer with name %q", q.SrcFunc.Args[0])
+			return nil, x.Errorf("Could not find tokenizer with name %q", tokenizerName)
 		}
 		fc.tokens, err = tokenizer.Tokens(types.Val{
 			Tid:   types.StringID,
-			Value: q.SrcFunc.Args[1],
+			Value: strToTokenize,
 		})
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		fc.intersectDest = strings.HasSuffix(fnName, "allof")
