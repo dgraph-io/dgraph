@@ -220,7 +220,9 @@ func NewKV(optParam *Options) (out *KV, err error) {
 			if err != nil {
 				return err
 			}
-			if oldValue.CASCounter != e.CASCounterCheck {
+			// Oldvalue might have been deleted after value log gc
+			// Do cas check only if found(Badger can get killed before memtable flush)
+			if oldValue.CASCounter > 0 && oldValue.CASCounter != e.CASCounterCheck {
 				return nil
 			}
 		}
