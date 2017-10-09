@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 Dgraph Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package client_test
 
 import (
@@ -12,7 +28,25 @@ import (
 	"google.golang.org/grpc"
 )
 
-func Example() {
+type School struct {
+	Name string `json:"name,omitempty"`
+}
+
+// If omitempty is not set, then edges with empty values (0 for int/float, "" for string, false
+// for bool) would be created for values not specified explicitly.
+
+type Person struct {
+	Uid      uint64   `json:"_uid_,omitempty"`
+	Name     string   `json:"name,omitempty"`
+	Age      int      `json:"age,omitempty"`
+	Married  bool     `json:"married,omitempty"`
+	Raw      []byte   `json:"raw_bytes",omitempty`
+	Friends  []Person `json:"friend,omitempty"`
+	Location string   `json:"loc,omitempty"`
+	School   School   `json:"school,omitempty"`
+}
+
+func Example_setObject() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
@@ -25,24 +59,6 @@ func Example() {
 		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
-
-	type School struct {
-		Name string `json:"name@en,omitempty"`
-	}
-
-	// If omitempty is not set, then edges with empty values (0 for int/float, "" for string, false
-	// for bool) would be created for values not specified explicitly.
-
-	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
-		Name     string   `json:"name,omitempty"`
-		Age      int      `json:"age,omitempty"`
-		Married  bool     `json:"married,omitempty"`
-		Raw      []byte   `json:"raw_bytes",omitempty`
-		Friends  []Person `json:"friend,omitempty"`
-		Location string   `json:"loc,omitempty"`
-		School   *School  `json:"school,omitempty"`
-	}
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
 	// else a new node is created.
@@ -65,7 +81,7 @@ func Example() {
 			Name: "Charlie",
 			Age:  29,
 		}},
-		School: &School{
+		School: School{
 			Name: "Crown Public School",
 		},
 	}
@@ -101,7 +117,7 @@ func Example() {
 				age
 			}
 			school {
-				name@en
+				name
 			}
 		}
 	}`, puid)
