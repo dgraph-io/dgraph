@@ -19,6 +19,8 @@ syntax = "proto3";
 
 package protos;
 
+option java_package = "io.dgraph.proto";
+
 message SchemaRequest {
 	uint32 group_id = 1;
 	repeated string predicates = 2;

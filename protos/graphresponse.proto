@@ -21,6 +21,8 @@ import "schema.proto";
 
 package protos;
 
+option java_package = "io.dgraph.proto";
+
 service Dgraph {
     rpc Run (Request) returns (Response) {};
     rpc CheckVersion(Check) returns (Version) {};
