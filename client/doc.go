@@ -26,10 +26,10 @@ and receives responses immediately after running, and
 batch those requests to the server.
 
 Request Mode: User programs create a NewDgraphClient, create a request
-with req := client.Req{} and then add edges, deletion, schema and
-queries to the request with SetObject, DeleteObject, AddSchema/AddSchemaFromString and
-SetQuery/SetQueryWithVariables.  Once the request is built, it is run with
-Run.
+with req := client.Req{} and then add edges, deletion, schema and queries
+to the request with SetObject/DeleteObject, AddSchema/SetSchema and SetQuery/SetQueryWithVariables.
+Once the request is built, it is run with Run. This is the mode that would be suitable for most
+real-time applications. Below is an example on how to use SetObject to add some data to Dgraph.
 
 Batch Mode:  On creating a new client with NewDgraphClient users submit
 BatchMutationOptions specifying the size of batches and number of concurrent
