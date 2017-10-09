@@ -19,6 +19,7 @@ package tok
 
 import (
 	"encoding/binary"
+	"plugin"
 	"time"
 
 	farm "github.com/dgryski/go-farm"
@@ -72,7 +73,11 @@ func init() {
 	RegisterTokenizer(HashTokenizer{})
 
 	// Check for duplicate prefix bytes.
-	usedIds := make(map[byte]struct{})
+	usedIds := map[byte]struct{}{
+		// All custom tokenizers share the same identifier, but we still don't
+		// want clashes with other tokenizers.
+		CustomTokenizer{}.Identifier(): struct{}{},
+	}
 	for _, tok := range tokenizers {
 		tokID := tok.Identifier()
 		_, ok := usedIds[tokID]
@@ -341,19 +346,12 @@ func (t HashTokenizer) IsSortable() bool { return false }
 func (t HashTokenizer) IsLossy() bool    { return true }
 
 type CustomTokenizer struct {
-	NameStr   string
-	TokensFn  func(string) ([]string, error)
-	IdByte    byte
-	SortBool  bool
-	LossyBool bool
+	NameStr  string
+	TokensFn func(string) ([]string, error)
 }
 
 func (t CustomTokenizer) Name() string {
 	return t.NameStr
-}
-
-func (t CustomTokenizer) Type() types.TypeID {
-	return types.StringID
 }
 
 func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
@@ -361,17 +359,30 @@ func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("CustomTokenizer only supported for string types")
 	}
-	return t.TokensFn(str)
+	toks, err := t.TokensFn(str)
+	if err != nil {
+		return nil, x.Errorf("could not tokenize %q", str)
+	}
+	for i := range toks {
+		toks[i] = encodeToken(t.NameStr+toks[i], t.Identifier())
+	}
+	return toks, nil
 }
+func (t CustomTokenizer) Type() types.TypeID { return types.StringID }
+func (t CustomTokenizer) Identifier() byte   { return 0xC }
+func (CustomTokenizer) IsSortable() bool     { return false }
+func (CustomTokenizer) IsLossy() bool        { return true }
 
-func (t CustomTokenizer) Identifier() byte {
-	return t.IdByte
-}
-
-func (t CustomTokenizer) IsSortable() bool {
-	return t.SortBool
-}
-
-func (t CustomTokenizer) IsLossy() bool {
-	return t.LossyBool
+func LoadCustomTokenizer(soFile string) {
+	pl, err := plugin.Open(soFile)
+	x.Checkf(err, "could not open custom tokenizer plugin file")
+	mustLookup := func(symName string) plugin.Symbol {
+		symbol, err := pl.Lookup(symName)
+		x.Check(err)
+		return symbol
+	}
+	RegisterTokenizer(CustomTokenizer{
+		NameStr:  *mustLookup("Name").(*string),
+		TokensFn: mustLookup("Tokens").(func(string) ([]string, error)),
+	})
 }

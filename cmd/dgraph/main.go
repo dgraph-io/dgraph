@@ -33,7 +33,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"plugin"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -184,20 +183,7 @@ func setupCustomTokenizers() {
 		return
 	}
 	for _, soFile := range strings.Split(customTokenizers, ",") {
-		pl, err := plugin.Open(soFile)
-		x.Checkf(err, "could not open custom tokenizer plugin file")
-		mustLookup := func(symName string) plugin.Symbol {
-			symbol, err := pl.Lookup(symName)
-			x.Check(err)
-			return symbol
-		}
-		tok.RegisterTokenizer(tok.CustomTokenizer{
-			NameStr:   *mustLookup(pl, "Name").(*string),
-			TokensFn:  mustLookup(pl, "Tokens").(func(string) ([]string, error)),
-			IdByte:    *mustLookup(pl, "Identifier").(*byte),
-			SortBool:  *mustLookup(pl, "Sortable").(*bool),
-			LossyBool: *mustLookup(pl, "IsLossy").(*bool),
-		})
+		tok.LoadCustomTokenizer(soFile)
 	}
 }
 
