@@ -57,7 +57,7 @@ func newUIDMap(kv *badger.KV) *uidMap {
 }
 
 // assignUID creates new or looks up existing XID to UID mappings.
-func (m *uidMap) assignUID(xid string) uint64 {
+func (m *uidMap) assignUID(xid string) (uid uint64, isNew bool) {
 	fp := farm.Fingerprint64([]byte(xid))
 	idx := fp % numShards
 	sh := &m.shards[idx]
@@ -65,9 +65,10 @@ func (m *uidMap) assignUID(xid string) uint64 {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid, ok := sh.lookup(xid)
+	var ok bool
+	uid, ok = sh.lookup(xid)
 	if ok {
-		return uid
+		return uid, false
 	}
 
 	var item badger.KVItem
@@ -84,7 +85,7 @@ func (m *uidMap) assignUID(xid string) uint64 {
 	}))
 	if ok {
 		sh.add(xid, uid, true)
-		return uid
+		return uid, false
 	}
 
 	const leaseChunk = 1e5
@@ -94,7 +95,7 @@ func (m *uidMap) assignUID(xid string) uint64 {
 	}
 	sh.lastUsed++
 	sh.add(xid, sh.lastUsed, false)
-	return sh.lastUsed
+	return sh.lastUsed, true
 }
 
 func (s *shard) lookup(xid string) (uint64, bool) {

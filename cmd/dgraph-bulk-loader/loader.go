@@ -34,6 +34,7 @@ type options struct {
 	CleanupTmp    bool
 	NumShufflers  int
 	Version       bool
+	StoreXids     bool
 
 	MapShards    int
 	ReduceShards int
@@ -61,7 +62,7 @@ func newLoader(opt options) *loader {
 	st := &state{
 		opt:  opt,
 		prog: newProgress(),
-		ss:   newSchemaStore(readSchema(opt.SchemaFile)),
+		ss:   newSchemaStore(readSchema(opt.SchemaFile), opt),
 		sm:   newShardMap(opt.MapShards),
 
 		// Lots of gz readers, so not much channel buffer needed.

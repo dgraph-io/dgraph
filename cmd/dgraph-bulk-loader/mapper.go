@@ -161,14 +161,19 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		}
 		return errors.Wrapf(err, "while parsing line %q", rdfLine)
 	}
+	m.processNQuad(nq)
+	return nil
+}
 
-	sid := m.um.assignUID(nq.GetSubject())
+func (m *mapper) processNQuad(nq gql.NQuad) {
+	sid := m.lookupUid(nq.GetSubject())
 	var oid uint64
 	var de *protos.DirectedEdge
 	if nq.GetObjectValue() == nil {
-		oid = m.um.assignUID(nq.GetObjectId())
+		oid = m.lookupUid(nq.GetObjectId())
 		de = nq.CreateUidEdge(sid, oid)
 	} else {
+		var err error
 		de, err = nq.CreateValueEdge(sid)
 		x.Check(err)
 	}
@@ -190,8 +195,26 @@ func (m *mapper) parseRDF(rdfLine string) error {
 	}
 
 	m.addIndexMapEntries(nq, de)
+}
 
-	return nil
+func (m *mapper) lookupUid(xid string) uint64 {
+	uid, isNew := m.um.assignUID(xid)
+	if !isNew || !m.opt.StoreXids {
+		return uid
+	}
+	if strings.HasPrefix(xid, "_:") {
+		// Don't store xids for blank nodes.
+		return uid
+	}
+	nq := gql.NQuad{&protos.NQuad{
+		Subject:   xid,
+		Predicate: "xid",
+		ObjectValue: &protos.Value{
+			Val: &protos.Value_StrVal{StrVal: xid},
+		},
+	}}
+	m.processNQuad(nq)
+	return uid
 }
 
 func parseNQuad(line string) (gql.NQuad, error) {
