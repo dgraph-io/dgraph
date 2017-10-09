@@ -221,6 +221,7 @@ const (
 	FullTextSearchFn
 	HasFn
 	UidInFn
+	CustomIndexFn
 	StandardFn = 100
 )
 
@@ -259,6 +260,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return HasFn, f
 	case "uid_in":
 		return UidInFn, f
+	case "customanyof", "customallof":
+		return CustomIndexFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -298,7 +301,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 			return false, nil
 		}
 		return true, nil
-	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn:
+	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn, CustomIndexFn:
 		// All of these require index, hence would require fetching uid postings.
 		return false, nil
 	case UidInFn, CompareScalarFn:
@@ -467,7 +470,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			} else {
 				key = x.DataKey(attr, q.UidList.Uids[i])
 			}
-		case GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+		case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn:
 			key = x.IndexKey(attr, srcFn.tokens[i])
 		case CompareAttrFn:
 			key = x.IndexKey(attr, srcFn.tokens[i])
@@ -1110,6 +1113,26 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
+		fc.n = len(fc.tokens)
+	case CustomIndexFn:
+		// srcfunc 0th val is func name, and --
+		fmt.Printf("CUSTOM_INDEX_FN: %+v\n", q.SrcFunc)
+
+		// First arg: index type. Second arg: string to index.
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
+			return nil, err
+		}
+		// TODO: Verify correct index is available on the predicate.
+		tokenizer, ok := tok.GetTokenizer(q.SrcFunc.Args[0])
+		if !ok {
+			return nil, x.Errorf("Could not find tokenizer with name %q", q.SrcFunc.Args[0])
+		}
+		fc.tokens, err = tokenizer.Tokens(types.Val{
+			Tid:   types.StringID,
+			Value: q.SrcFunc.Args[1],
+		})
+		fnName := strings.ToLower(q.SrcFunc.Name)
+		fc.intersectDest = strings.HasSuffix(fnName, "allof")
 		fc.n = len(fc.tokens)
 	case RegexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {

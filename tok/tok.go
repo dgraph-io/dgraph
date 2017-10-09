@@ -339,3 +339,39 @@ func (t HashTokenizer) Tokens(sv types.Val) ([]string, error) {
 func (t HashTokenizer) Identifier() byte { return 0xB }
 func (t HashTokenizer) IsSortable() bool { return false }
 func (t HashTokenizer) IsLossy() bool    { return true }
+
+type CustomTokenizer struct {
+	NameStr   string
+	TokensFn  func(string) ([]string, error)
+	IdByte    byte
+	SortBool  bool
+	LossyBool bool
+}
+
+func (t CustomTokenizer) Name() string {
+	return t.NameStr
+}
+
+func (t CustomTokenizer) Type() types.TypeID {
+	return types.StringID
+}
+
+func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
+	str, ok := sv.Value.(string)
+	if !ok {
+		return nil, x.Errorf("CustomTokenizer only supported for string types")
+	}
+	return t.TokensFn(str)
+}
+
+func (t CustomTokenizer) Identifier() byte {
+	return t.IdByte
+}
+
+func (t CustomTokenizer) IsSortable() bool {
+	return t.SortBool
+}
+
+func (t CustomTokenizer) IsLossy() bool {
+	return t.LossyBool
+}

@@ -33,6 +33,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"plugin"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -53,6 +54,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -731,7 +733,23 @@ func setupServer(che chan error) {
 	che <- err                // final close for main.
 }
 
+func MustLookup(pl *plugin.Plugin, symName string) plugin.Symbol {
+	symbol, err := pl.Lookup(symName)
+	x.Check(err)
+	return symbol
+}
+
 func main() {
+	pl, err := plugin.Open("/home/petsta/go/src/github.com/dgraph-io/dgraph/customcidr/main.so")
+	x.Check(err)
+	tok.RegisterTokenizer(tok.CustomTokenizer{
+		NameStr:   *MustLookup(pl, "Name").(*string),
+		TokensFn:  MustLookup(pl, "Tokens").(func(string) ([]string, error)),
+		IdByte:    *MustLookup(pl, "Identifier").(*byte),
+		SortBool:  *MustLookup(pl, "Sortable").(*bool),
+		LossyBool: *MustLookup(pl, "IsLossy").(*bool),
+	})
+
 	rand.Seed(time.Now().UnixNano())
 
 	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
