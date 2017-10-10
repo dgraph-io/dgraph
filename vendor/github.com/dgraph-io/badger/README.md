@@ -28,6 +28,11 @@ If you want to run tests, also get testing dependencies by passing in `-t` flag.
 
 From here, follow [docs](https://godoc.org/github.com/dgraph-io/badger) for usage.
 
+### Note
+Badger is undergoing a major API change by introducing transactions. To use the
+existing version of the APIs, please use [tag v0.8](/tree/v0.8). Tag can be
+specified via the Go dependency tool you're using.
+
 ## Documentation
 
 Badger documentation is located at [godoc.org](https://godoc.org/github.com/dgraph-io/badger).
@@ -38,12 +43,8 @@ Badger has these design goals in mind:
 
 - Write it purely in Go.
 - Use latest research to build the fastest KV store for data sets spanning terabytes.
-- Keep it simple, stupid. No support for transactions, versioning or snapshots -- anything that can be done outside of the store should be done outside.
+- ~~Keep it simple, stupid. No support for transactions, versioning or snapshots -- anything that can be done outside of the store should be done outside.~~ By user demand and realizing their utility, we're introducing multi-version concurrency control, snapshots and transactions to Badger.
 - Optimize for SSDs (more below).
-
-### Non-Goals
-
-- Try to be a database.
 
 ## Users
 
