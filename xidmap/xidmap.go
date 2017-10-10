@@ -65,7 +65,7 @@ func New(kv *badger.KV, up UidProvider) *XidMap {
 // AssignUid creates new or looks up existing XID to UID mappings.
 func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	fp := farm.Fingerprint64([]byte(xid))
-	idx := int(fp) % numShards
+	idx := fp % numShards
 	sh := &m.shards[idx]
 
 	sh.Lock()
