@@ -40,6 +40,7 @@ func addDeltaAt(key []byte, p []*protos.Posting, startTs uint64) error {
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
+	// TODO: Use pl in lru to detect conflict.
 	item, err := txn.Get(key)
 	if err != nil && err != badger.ErrKeyNotFound {
 		return err
@@ -90,6 +91,7 @@ func checkCommitStatus(item *badger.Item) (uint64, bool, error) {
 }
 
 // Probably this might not be needed, we can write delta when evicting from LRU.
+// TODO: Do in batch for whole transaction.
 func commitMutation(key []byte, startTs uint64, commitTs uint64) error {
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()

@@ -512,9 +512,6 @@ func (l *List) commitMutation(ctx context.Context, commitTs uint64) error {
 			l.water.Begin(rv.Index)
 			l.pending = append(l.pending, rv.Index)
 		}
-		if dirtyChan != nil {
-			dirtyChan <- l.key
-		}
 	}
 	l.uncommitted = l.uncommitted[:0]
 	return nil
@@ -529,10 +526,6 @@ func (l *List) deleteHelper(ctx context.Context) error {
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		l.water.Begin(rv.Index)
 		l.pending = append(l.pending, rv.Index)
-	}
-	// if mutation doesn't come via raft
-	if dirtyChan != nil {
-		dirtyChan <- l.key
 	}
 	return nil
 }

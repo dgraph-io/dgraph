@@ -118,11 +118,10 @@ func (c *listCache) removeOldest() {
 		c.curSize -= e.size
 
 		e.pl.SetForDeletion()
-		// If length of mutation layer is zero, then we won't call pstore.SetAsync and the
-		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
-		if committed, _ := e.pl.SyncIfDirty(true); !committed {
-			delete(c.cache, e.key)
-		}
+		// TODO: Deltas should be written first before applying to memory.
+		// Writing deltas at the end would be easy.
+		// Don't evict or abort and evict if pl has uncomitted data.
+		delete(c.cache, e.key)
 	}
 }
 
@@ -185,9 +184,7 @@ func (c *listCache) clear(remove func(key []byte) bool) error {
 
 		c.ll.Remove(e)
 		kv.pl.SetForDeletion()
-		if committed, _ := kv.pl.SyncIfDirty(true); !committed {
-			delete(c.cache, k)
-		}
+		delete(c.cache, k)
 	}
 	return nil
 }

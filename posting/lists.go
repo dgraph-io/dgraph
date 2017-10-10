@@ -27,7 +27,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -70,60 +69,6 @@ func init() {
 		x.Check(err)
 	})
 	elog = trace.NewEventLog("Memory", "")
-}
-
-func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
-	commitFraction float64) {
-	select {
-	case pending <- struct{}{}:
-	default:
-		elog.Printf("Skipping gentleCommit")
-		return
-	}
-
-	// NOTE: No need to acquire read lock for stopTheWorld. This portion is being run
-	// serially alongside aggressive commit.
-	n := int(float64(len(dirtyMap)) * commitFraction)
-	if n < 1000 {
-		// Have a min value of n, so we can merge small number of dirty PLs fast.
-		n = 1000
-	}
-	keysBuffer := make([]string, 0, n)
-
-	// Convert map to list.
-	var loops int
-	for key, ts := range dirtyMap {
-		loops++
-		if loops > 3*n {
-			break
-		}
-		if time.Since(ts) < 5*time.Second {
-			continue
-		}
-
-		delete(dirtyMap, key)
-		keysBuffer = append(keysBuffer, key)
-		if len(keysBuffer) >= n {
-			// We don't want to process the entire dirtyMap in one go.
-			break
-		}
-	}
-
-	go func(keys []string) {
-		defer func() { <-pending }()
-		if len(keys) == 0 {
-			return
-		}
-		for _, key := range keys {
-			l := lcache.Get(key)
-			if l == nil {
-				continue
-			}
-			// Not removing the postings list from the map, to avoid a race condition,
-			// where another caller re-creates the posting list before a commit happens.
-			commitOne(l)
-		}
-	}(keysBuffer)
 }
 
 func getMemUsage() int {
@@ -172,43 +117,23 @@ func getMemUsage() int {
 	return rss * os.Getpagesize()
 }
 
-// periodicMerging periodically merges the dirty posting lists. It also checks our memory
-// usage. If it exceeds a certain threshold, it would stop the world, and aggressively
-// merge and evict all posting lists from memory.
-func periodicCommit() {
+func periodicUpdateStats() {
 	ticker := time.NewTicker(time.Second)
-	dirtyMap := make(map[string]time.Time, 1000)
-	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
-	pending := make(chan struct{}, 15)
-	dsize := 0 // needed for better reporting.
 	setLruMemory := true
 	for {
 		select {
-		case key := <-dirtyChan:
-			dirtyMap[string(key)] = time.Now()
 
 		case <-ticker.C:
-			if len(dirtyMap) != dsize {
-				dsize = len(dirtyMap)
-				x.DirtyMapSize.Set(int64(dsize))
-			}
 
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
 			megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
 			inUse := float64(megs)
 
-			fraction := math.Min(1.0, Config.CommitFraction*math.Exp(float64(dsize)/1000000.0))
-			gentleCommit(dirtyMap, pending, fraction)
-
 			stats := lcache.Stats()
 			x.EvictedPls.Set(int64(stats.NumEvicts))
 			x.LcacheSize.Set(int64(stats.Size))
 			x.LcacheLen.Set(int64(stats.Length))
-
-			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
-			// are currently being processed to not get stuck on dirtyChan, which won't be
-			// processed until aggressive evict finishes.
 
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
@@ -241,10 +166,9 @@ func updateMemoryMetrics() {
 }
 
 var (
-	pstore    *badger.DB
-	dirtyChan chan []byte // All dirty posting list keys are pushed here.
-	marks     *x.WaterMark
-	lcache    *listCache
+	pstore *badger.DB
+	marks  *x.WaterMark
+	lcache *listCache
 )
 
 func SyncMarks() *x.WaterMark {
@@ -259,9 +183,8 @@ func Init(ps *badger.DB) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
 	x.LcacheCapacity.Set(math.MaxInt64)
-	dirtyChan = make(chan []byte, 10000)
 
-	go periodicCommit()
+	go periodicUpdateStats()
 	go updateMemoryMetrics()
 }
 
@@ -339,45 +262,6 @@ func GetNoStore(key []byte) (rlist *List) {
 	}
 	lp, _ = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	return lp
-}
-
-func commitOne(l *List) {
-	if l == nil {
-		return
-	}
-	if _, err := l.SyncIfDirty(false); err != nil {
-		x.Printf("Error while committing dirty list: %v\n", err)
-	}
-}
-
-func CommitLists(numRoutines int, gid uint32) {
-	if gid == 0 {
-		return
-	}
-
-	// We iterate over lhmap, deleting keys and pushing values (List) into this
-	// channel. Then goroutines right below will commit these lists to data store.
-	workChan := make(chan *List, 10000)
-
-	var wg sync.WaitGroup
-	for i := 0; i < numRoutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for l := range workChan {
-				commitOne(l)
-			}
-		}()
-	}
-
-	lcache.Each(func(k []byte, l *List) {
-		if l == nil { // To be safe. Check might be unnecessary.
-			return
-		}
-		workChan <- l
-	})
-	close(workChan)
-	wg.Wait()
 }
 
 // This doesn't sync, so call this only when you don't care about dirty posting lists in
