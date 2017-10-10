@@ -12,12 +12,14 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/xidmap"
 )
 
 type options struct {
@@ -45,7 +47,7 @@ type options struct {
 type state struct {
 	opt        options
 	prog       *progress
-	um         *uidMap
+	um         *xidmap.XidMap
 	ss         *schemaStore
 	sm         *shardMap
 	rdfChunkCh chan *bytes.Buffer
@@ -56,6 +58,7 @@ type state struct {
 type loader struct {
 	*state
 	mappers []*mapper
+	xidKV   *badger.KV
 }
 
 func newLoader(opt options) *loader {
@@ -143,6 +146,13 @@ func findRDFFiles(dir string) []string {
 	return files
 }
 
+type uidProvider uint64
+
+func (p *uidProvider) AssignUidRange(size uint64) (start, end uint64, err error) {
+	newLease := atomic.AddUint64((*uint64)(p), size)
+	return newLease - size, newLease, nil
+}
+
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
 
@@ -153,9 +163,10 @@ func (ld *loader) mapStage() {
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = xidDir
 	opt.ValueDir = xidDir
-	xidKV, err := badger.NewKV(&opt)
+	var err error
+	ld.xidKV, err = badger.NewKV(&opt)
 	x.Check(err)
-	ld.um = newUIDMap(xidKV)
+	ld.um = xidmap.New(ld.xidKV, new(uidProvider))
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
@@ -208,14 +219,15 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	ld.writeLease()
-	x.Check(ld.um.kv.Close())
+	x.Check(ld.xidKV.Close())
 	ld.um = nil
 	runtime.GC()
 }
 
 func (ld *loader) writeLease() {
+	lease, _ := ld.um.One()
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "%d\n", ld.um.lease)
+	fmt.Fprintf(&buf, "%d\n", lease)
 	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))
 }
 

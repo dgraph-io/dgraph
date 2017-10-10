@@ -69,7 +69,23 @@ func (d *Dgraph) NewSyncMarks(files []string) error {
 
 // Get checkpoint for file from Badger.
 func (d *Dgraph) Checkpoint(file string) (uint64, error) {
-	return d.alloc.getFromKV(fmt.Sprintf("checkpoint-%s", file))
+	k := fmt.Sprintf("checkpoint-%s", file)
+	var item badger.KVItem
+	err := d.kv.Get([]byte(k), &item)
+	if err != nil {
+		return 0, err
+	}
+	var uidBuf [binary.MaxVarintLen64]byte
+	var uid uint64
+	err = item.Value(func(p []byte) error {
+		var n int
+		uid, n = binary.Uvarint(uidBuf[:])
+		if n <= 0 {
+			return x.Errorf("could not decode checkpoint")
+		}
+		return nil
+	})
+	return uid, err
 }
 
 // Used to write checkpoints to Badger.
@@ -82,12 +98,12 @@ func (d *Dgraph) writeCheckpoint() {
 		}
 		wm.last = doneUntil
 		d.marks[file] = wm
-		var buf [10]byte
+		var buf [binary.MaxVarintLen64]byte
 		n := binary.PutUvarint(buf[:], doneUntil)
 		wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
 	}
 
-	if err := d.alloc.kv.BatchSet(wb); err != nil {
+	if err := d.kv.BatchSet(wb); err != nil {
 		fmt.Printf("Error while writing to disk %v\n", err)
 	}
 	for _, wbe := range wb {

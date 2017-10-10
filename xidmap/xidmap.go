@@ -1,10 +1,9 @@
-package main
+package xidmap
 
 import (
 	"container/list"
 	"encoding/binary"
 	"sync"
-	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/x"
@@ -18,10 +17,13 @@ const (
 	lruSize   = 1 << 9
 )
 
-type uidMap struct {
-	lease  uint64
+type XidMap struct {
 	shards [numShards]shard
 	kv     *badger.KV
+	up     UidProvider
+
+	// For one-off uid requests.
+	lastUsed, lease uint64
 }
 
 type shard struct {
@@ -43,10 +45,14 @@ type mapping struct {
 	persisted bool
 }
 
-func newUIDMap(kv *badger.KV) *uidMap {
-	um := &uidMap{
-		lease: 1,
-		kv:    kv,
+type UidProvider interface {
+	AssignUidRange(size uint64) (start, end uint64, err error)
+}
+
+func New(kv *badger.KV, up UidProvider) *XidMap {
+	um := &XidMap{
+		kv: kv,
+		up: up,
 	}
 	for i := range um.shards {
 		um.shards[i].elems = make(map[string]*list.Element)
@@ -56,10 +62,10 @@ func newUIDMap(kv *badger.KV) *uidMap {
 	return um
 }
 
-// assignUID creates new or looks up existing XID to UID mappings.
-func (m *uidMap) assignUID(xid string) (uid uint64, isNew bool) {
+// AssignUid creates new or looks up existing XID to UID mappings.
+func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	fp := farm.Fingerprint64([]byte(xid))
-	idx := fp % numShards
+	idx := int(fp) % numShards
 	sh := &m.shards[idx]
 
 	sh.Lock()
@@ -68,7 +74,7 @@ func (m *uidMap) assignUID(xid string) (uid uint64, isNew bool) {
 	var ok bool
 	uid, ok = sh.lookup(xid)
 	if ok {
-		return uid, false
+		return uid, false, nil
 	}
 
 	var item badger.KVItem
@@ -85,17 +91,31 @@ func (m *uidMap) assignUID(xid string) (uid uint64, isNew bool) {
 	}))
 	if ok {
 		sh.add(xid, uid, true)
-		return uid, false
+		return uid, false, nil
 	}
 
-	const leaseChunk = 1e5
 	if sh.lastUsed == sh.lease {
-		sh.lease = atomic.AddUint64(&m.lease, leaseChunk)
-		sh.lastUsed = sh.lease - leaseChunk
+		start, end, err := m.up.AssignUidRange(1e5)
+		if err != nil {
+			return 0, false, err
+		}
+		sh.lastUsed, sh.lease = start, end
 	}
 	sh.lastUsed++
 	sh.add(xid, sh.lastUsed, false)
-	return sh.lastUsed, true
+	return sh.lastUsed, true, nil
+}
+
+func (m *XidMap) One() (uint64, error) {
+	if m.lastUsed == m.lease {
+		start, end, err := m.up.AssignUidRange(1e5)
+		if err != nil {
+			return 0, err
+		}
+		m.lastUsed, m.lease = start, end
+	}
+	m.lastUsed++
+	return m.lastUsed, nil
 }
 
 func (s *shard) lookup(xid string) (uint64, bool) {
