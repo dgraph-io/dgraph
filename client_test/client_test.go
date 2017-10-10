@@ -34,12 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	x.Init()
-	x.Logger = log.New(ioutil.Discard, "", 0)
-	os.Exit(m.Run())
-}
-
 func prepare() (res []string, options dgraph.Options) {
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
@@ -66,6 +60,19 @@ func removeDirs(dirs []string) {
 	}
 }
 
+var dgraphClient *client.Dgraph
+
+func TestMain(m *testing.M) {
+	x.Init()
+	x.Logger = log.New(ioutil.Discard, "", 0)
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+	dgraphClient = dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	r := m.Run()
+	dgraph.DisposeEmbeddedDgraph()
+	os.Exit(r)
+}
+
 type Person struct {
 	Name    string   `json:"name"`
 	Loc     string   `json:"loc"`
@@ -78,11 +85,6 @@ type Res struct {
 }
 
 func TestClientDelete(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 	alice, err := dgraphClient.NodeBlank("")
 	require.NoError(t, err)
@@ -161,11 +163,6 @@ func TestClientDelete(t *testing.T) {
 }
 
 func TestClientAddFacets(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 	alice, err := dgraphClient.NodeBlank("")
 	require.NoError(t, err)
@@ -189,11 +186,6 @@ func TestClientAddFacets(t *testing.T) {
 }
 
 func TestClientAddFacetsError(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 	alice, err := dgraphClient.NodeBlank("")
 	require.NoError(t, err)
@@ -214,11 +206,6 @@ func TestClientAddFacetsError(t *testing.T) {
 }
 
 func TestClientDeletePredicate(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 	alice, err := dgraphClient.NodeBlank("")
 	require.NoError(t, err)
@@ -273,11 +260,6 @@ func TestClientDeletePredicate(t *testing.T) {
 }
 
 func TestLangTag(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 	alice, err := dgraphClient.NodeBlank("")
 	require.NoError(t, err)
@@ -329,12 +311,6 @@ func TestLangTag(t *testing.T) {
 }
 
 func TestSchemaError(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
-
 	req := client.Req{}
 	err := req.AddSchema(protos.SchemaUpdate{
 		Predicate: "dummy",
@@ -358,11 +334,6 @@ func TestSchemaError(t *testing.T) {
 }
 
 func TestEmptyString(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 	alice, err := dgraphClient.NodeBlank("")
 	require.NoError(t, err)
@@ -389,11 +360,6 @@ func TestSetObject(t *testing.T) {
 		School   *School  `json:"school,omitempty"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	loc := `{"type":"Point","coordinates":[1.1,2]}`
@@ -472,11 +438,6 @@ func TestSetObject(t *testing.T) {
 }
 
 func TestSetObject2(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	type School struct {
@@ -538,11 +499,6 @@ func TestDeleteObject1(t *testing.T) {
 		School   *School  `json:"school,omitempty"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	loc := `{"type":"Point","coordinates":[1.1,2]}`
@@ -653,11 +609,6 @@ func TestDeleteObject2(t *testing.T) {
 		School   *School  `json:"school"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	loc := `{"type":"Point","coordinates":[1.1,2]}`
@@ -755,11 +706,6 @@ func TestDeleteObject2(t *testing.T) {
 }
 
 func TestSetObjectWithFacets(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	type friendFacet struct {
@@ -861,11 +807,6 @@ func TestSetObjectWithFacets(t *testing.T) {
 }
 
 func TestSetObjectUpdateFacets(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	type friendFacet struct {
@@ -970,11 +911,6 @@ func TestDeleteObjectNode(t *testing.T) {
 		Friends []*Person `json:"friend,omitempty"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	p := Person{
@@ -1061,11 +997,6 @@ func TestDeleteObjectPredicate(t *testing.T) {
 		Friends []*Person `json:"friend,omitempty"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	p := Person{
@@ -1150,11 +1081,6 @@ func TestDeleteObjectPredicate(t *testing.T) {
 }
 
 func TestObjectList(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	type Person struct {
