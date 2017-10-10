@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -41,7 +42,7 @@ func (l *List) PostingList() *protos.PostingList {
 
 func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {
 	out := make([]uint64, 0, 10)
-	l.Iterate(afterUid, func(p *protos.Posting) bool {
+	l.Iterate(3, afterUid, func(p *protos.Posting) bool {
 		out = append(out, p.Uid)
 		return true
 	})
@@ -65,7 +66,9 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32) {
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	_, err := l.AddMutation(context.Background(), edge)
+	_, err := l.AddMutation(context.Background(), 1, edge)
+	require.NoError(t, err)
+	err = l.CommitMutation(context.Background(), 2)
 	require.NoError(t, err)
 }
 
@@ -124,11 +127,13 @@ func TestAddMutation(t *testing.T) {
 	dl := Get(key)
 	checkUids(t, dl, uids)
 	deletePl(t)
-	ps.Delete(dl.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(dl.key)
+	})
 }
 
 func getFirst(l *List) (res protos.Posting) {
-	l.Iterate(0, func(p *protos.Posting) bool {
+	l.Iterate(3, 0, func(p *protos.Posting) bool {
 		res = *p
 		return false
 	})
@@ -143,7 +148,8 @@ func checkValue(t *testing.T, ol *List, val string) {
 
 func TestAddMutation_Value(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 	edge := &protos.DirectedEdge{
 		Value: []byte("oh hey there"),
 		Label: "new-testing",
@@ -152,7 +158,7 @@ func TestAddMutation_Value(t *testing.T) {
 	checkValue(t, ol, "oh hey there")
 
 	// Run the same check after committing.
-	_, err := ol.SyncIfDirty(false)
+	_, err = ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	checkValue(t, ol, "oh hey there")
 
@@ -162,7 +168,9 @@ func TestAddMutation_Value(t *testing.T) {
 	checkValue(t, ol, "119")
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
@@ -210,7 +218,9 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	checkValue(t, ol, "cars")
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
@@ -296,7 +306,9 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	require.Equal(t, 0, ol.Length(0))
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
@@ -356,12 +368,15 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	require.Equal(t, 0, ol.Length(0))
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_gru(t *testing.T) {
 	key := x.DataKey("question.tag", 0x01)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	{
 		// Set two tag ids and merge.
@@ -397,12 +412,15 @@ func TestAddMutation_gru(t *testing.T) {
 	}
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_gru2(t *testing.T) {
 	key := x.DataKey("question.tag", 0x100)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	{
 		// Set two tag ids and merge.
@@ -449,12 +467,15 @@ func TestAddMutation_gru2(t *testing.T) {
 	uids := []uint64{0x04}
 	require.Equal(t, uids, listToArray(t, 0, ol))
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAfterUIDCount(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
 		Label: "jchiu",
@@ -523,12 +544,15 @@ func TestAfterUIDCount(t *testing.T) {
 	require.EqualValues(t, 50, ol.Length(199))
 	require.EqualValues(t, 0, ol.Length(300))
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAfterUIDCount2(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
@@ -553,12 +577,15 @@ func TestAfterUIDCount2(t *testing.T) {
 	require.EqualValues(t, 100, ol.Length(199))
 	require.EqualValues(t, 0, ol.Length(300))
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestDelete(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
@@ -570,9 +597,8 @@ func TestDelete(t *testing.T) {
 		addMutation(t, ol, edge, Set)
 	}
 	require.EqualValues(t, 30, ol.Length(0))
-	ol.Lock()
-	ol.delete(context.Background(), "value")
-	ol.Unlock()
+	edge.Value = []byte(x.Star)
+	addMutation(t, ol, edge, Del)
 	require.EqualValues(t, 0, ol.Length(0))
 	commited, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
@@ -583,7 +609,8 @@ func TestDelete(t *testing.T) {
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
@@ -659,10 +686,12 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 50, ol.Length(199))
 	require.EqualValues(t, 0, ol.Length(300))
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
-var ps *badger.KV
+var ps *badger.DB
 
 func TestMain(m *testing.M) {
 	x.Init()
@@ -675,9 +704,10 @@ func TestMain(m *testing.M) {
 	opt := badger.DefaultOptions
 	opt.Dir = dir
 	opt.ValueDir = dir
-	ps, err = badger.NewKV(&opt)
+	ps, err = badger.Open(&opt)
 	x.Check(err)
 	Init(ps)
+	schema.Init(ps)
 
 	r := m.Run()
 
@@ -687,11 +717,13 @@ func TestMain(m *testing.M) {
 
 func BenchmarkAddMutations(b *testing.B) {
 	key := x.DataKey("name", 1)
-	l := getNew(key, ps)
+	l, err := getNew(key, ps)
+	if err != nil {
+		b.Error(err)
+	}
 	b.ResetTimer()
 
 	ctx := context.Background()
-	var err error
 	for i := 0; i < b.N; i++ {
 		if err != nil {
 			b.Error(err)
@@ -702,7 +734,7 @@ func BenchmarkAddMutations(b *testing.B) {
 			Label:   "testing",
 			Op:      protos.DirectedEdge_SET,
 		}
-		if _, err = l.AddMutation(ctx, edge); err != nil {
+		if _, err = l.AddMutation(ctx, uint64(i), edge); err != nil {
 			b.Error(err)
 		}
 	}

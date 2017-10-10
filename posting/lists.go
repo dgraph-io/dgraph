@@ -241,7 +241,7 @@ func updateMemoryMetrics() {
 }
 
 var (
-	pstore    *badger.KV
+	pstore    *badger.DB
 	dirtyChan chan []byte // All dirty posting list keys are pushed here.
 	marks     *x.WaterMark
 	lcache    *listCache
@@ -252,7 +252,7 @@ func SyncMarks() *x.WaterMark {
 }
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.KV) {
+func Init(ps *badger.DB) {
 	marks = &x.WaterMark{Name: "Synced watermark"}
 	marks.Init()
 
@@ -285,7 +285,7 @@ func Get(key []byte) (rlist *List) {
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
-	l := getNew(key, pstore)
+	l, _ := getNew(key, pstore)
 	l.water = marks
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
@@ -307,7 +307,7 @@ func getOrMutate(key []byte) (rlist *List) {
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
-	l := getNew(key, pstore)
+	l, _ := getNew(key, pstore)
 	l.water = marks
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
@@ -318,10 +318,14 @@ func getOrMutate(key []byte) (rlist *List) {
 		pk := x.Parse(key)
 		x.AssertTrue(pk.IsIndex() || pk.IsCount())
 		// This is a best effort set, hence we don't check error from callback.
-		if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil &&
-			err != badger.ErrKeyExists {
-			x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
+		txn := pstore.NewTransaction(true)
+		defer txn.Discard()
+		_, err := txn.Get(key)
+		if err == badger.ErrKeyNotFound {
+			txn.Set(key, nil, 0x00)
 		}
+		txn.Commit(func(err error) {
+		})
 	}
 	return lp
 }
@@ -333,7 +337,7 @@ func GetNoStore(key []byte) (rlist *List) {
 	if lp != nil {
 		return lp
 	}
-	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+	lp, _ = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	return lp
 }
 

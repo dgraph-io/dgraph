@@ -132,8 +132,11 @@ func TestTokensTable(t *testing.T) {
 	require.NoError(t, err)
 
 	key := x.DataKey("name", 1)
-	l := getNew(key, ps)
-	defer ps.Delete(key)
+	l, err := getNew(key, ps)
+	require.NoError(t, err)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(key)
+	})
 
 	edge := &protos.DirectedEdge{
 		Value:  []byte("david"),
@@ -145,28 +148,34 @@ func TestTokensTable(t *testing.T) {
 	_, err = l.SyncIfDirty(false)
 	x.Check(err)
 
-	key = x.IndexKey("name", "david")
-	var item badger.KVItem
+	key = x.IndexKey("name", "\x01david")
 	time.Sleep(10 * time.Millisecond)
-	err = ps.Get(key, &item)
-	require.NoError(t, err)
 
 	var pl protos.PostingList
-	require.NoError(t, item.Value(func(val []byte) error {
+	txn := ps.NewTransaction(false)
+	_, err = txn.Get(key)
+	require.NoError(t, err)
+	ps.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		require.NoError(t, err)
+		val, err := item.Value()
+		require.NoError(t, err)
 		UnmarshalOrCopy(val, item.UserMeta(), &pl)
 		return nil
-	}))
+	})
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
 	CommitLists(10, 1)
 
-	err = ps.Get(key, &item)
-	require.NoError(t, err)
-	require.NoError(t, item.Value(func(val []byte) error {
+	ps.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		require.NoError(t, err)
+		val, err := item.Value()
+		require.NoError(t, err)
 		UnmarshalOrCopy(val, item.UserMeta(), &pl)
 		return nil
-	}))
+	})
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 	deletePl(t)
@@ -176,7 +185,9 @@ func TestTokensTable(t *testing.T) {
 func tokensForTest(attr string) []string {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	txn := pstore.NewTransaction(false)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	var out []string
@@ -204,7 +215,7 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 	}
 	l := Get(x.DataKey(attr, src))
 	// No index entries added here as we do not call AddMutationWithIndex.
-	ok, err := l.AddMutation(context.Background(), edge)
+	ok, err := l.AddMutation(context.Background(), 1, edge)
 	require.NoError(t, err)
 	require.True(t, ok)
 }
@@ -221,7 +232,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 	}
 	l := Get(x.DataKey(attr, src))
 	// No index entries added here as we do not call AddMutationWithIndex.
-	ok, err := l.AddMutation(context.Background(), edge)
+	ok, err := l.AddMutation(context.Background(), 1, edge)
 	require.NoError(t, err)
 	require.True(t, ok)
 }
@@ -249,8 +260,11 @@ func TestRebuildIndex(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Create some fake wrong entries for data store.
-	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"), 0x00)
-	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"), 0x00)
+	ps.Update(func(txn *badger.Txn) error {
+		txn.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"), 0x00)
+		txn.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"), 0x00)
+		return nil
+	})
 
 	require.NoError(t, DeleteIndex(context.Background(), "name"))
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
@@ -260,7 +274,9 @@ func TestRebuildIndex(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Check index entries in data store.
-	it := ps.NewIterator(badger.DefaultIteratorOptions)
+	txn := ps.NewTransaction(false)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
@@ -274,10 +290,9 @@ func TestRebuildIndex(t *testing.T) {
 		}
 		idxKeys = append(idxKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, item.Value(func(val []byte) error {
-			UnmarshalOrCopy(val, item.UserMeta(), pl)
-			return nil
-		}))
+		val, err := item.Value()
+		require.NoError(t, err)
+		UnmarshalOrCopy(val, item.UserMeta(), pl)
 		idxVals = append(idxVals, pl)
 	}
 	require.Len(t, idxKeys, 2)
@@ -294,10 +309,14 @@ func TestRebuildIndex(t *testing.T) {
 
 	l1 := Get(x.DataKey("name", 1))
 	deletePl(t)
-	ps.Delete(l1.key)
+	ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(l1.key)
+	})
 	l2 := Get(x.DataKey("name", 20))
 	deletePl(t)
-	ps.Delete(l2.key)
+	ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(l2.key)
+	})
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
@@ -316,7 +335,9 @@ func TestRebuildReverseEdges(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Check index entries in data store.
-	it := ps.NewIterator(badger.DefaultIteratorOptions)
+	txn := ps.NewTransaction(false)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	pk := x.ParsedKey{Attr: "friend"}
 	prefix := pk.ReversePrefix()
@@ -330,10 +351,9 @@ func TestRebuildReverseEdges(t *testing.T) {
 		}
 		revKeys = append(revKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, item.Value(func(val []byte) error {
-			UnmarshalOrCopy(val, item.UserMeta(), pl)
-			return nil
-		}))
+		val, err := item.Value()
+		require.NoError(t, err)
+		UnmarshalOrCopy(val, item.UserMeta(), pl)
 		revVals = append(revVals, pl)
 	}
 	require.Len(t, revKeys, 2)
