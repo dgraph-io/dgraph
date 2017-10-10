@@ -3,11 +3,8 @@
 set -e
 
 if [[ $TRAVIS_OS_NAME == "osx" ]]; then
-  wget https://github.com/stedolan/jq/releases/download/jq-1.5/jq-osx-amd64
-  mv jq-osx-amd64 jq
-  chmod +x jq
-  export PATH=$PATH:$PWD
-  jq --version
+  brew update
+  brew install jq
 fi
 
 # Lets install the dependencies that are not vendored in anymore.
