@@ -5,8 +5,6 @@ import (
 	"strconv"
 )
 
-var Name string = "intfactor"
-
 func Tokens(s string) ([]string, error) {
 	x, err := strconv.Atoi(s)
 	if err != nil {

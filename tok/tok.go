@@ -19,7 +19,9 @@ package tok
 
 import (
 	"encoding/binary"
+	"path/filepath"
 	"plugin"
+	"strings"
 	"time"
 
 	farm "github.com/dgryski/go-farm"
@@ -346,12 +348,8 @@ func (t HashTokenizer) IsSortable() bool { return false }
 func (t HashTokenizer) IsLossy() bool    { return true }
 
 type CustomTokenizer struct {
-	NameStr  string
-	TokensFn func(string) ([]string, error)
-}
-
-func (t CustomTokenizer) Name() string {
-	return t.NameStr
+	name   string
+	tokens func(string) ([]string, error)
 }
 
 func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
@@ -359,15 +357,16 @@ func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("CustomTokenizer only supported for string types")
 	}
-	toks, err := t.TokensFn(str)
+	toks, err := t.tokens(str)
 	if err != nil {
 		return nil, x.Errorf("could not tokenize %q", str)
 	}
 	for i := range toks {
-		toks[i] = encodeToken(t.NameStr+toks[i], t.Identifier())
+		toks[i] = encodeToken(t.name+toks[i], t.Identifier())
 	}
 	return toks, nil
 }
+func (t CustomTokenizer) Name() string       { return t.name }
 func (t CustomTokenizer) Type() types.TypeID { return types.StringID }
 func (t CustomTokenizer) Identifier() byte   { return 0xC }
 func (CustomTokenizer) IsSortable() bool     { return false }
@@ -376,13 +375,12 @@ func (CustomTokenizer) IsLossy() bool        { return true }
 func LoadCustomTokenizer(soFile string) {
 	pl, err := plugin.Open(soFile)
 	x.Checkf(err, "could not open custom tokenizer plugin file")
-	mustLookup := func(symName string) plugin.Symbol {
-		symbol, err := pl.Lookup(symName)
-		x.Check(err)
-		return symbol
-	}
+	symb, err := pl.Lookup("Tokens")
+	x.Checkf(err, "could not find symbol \"Tokens\" while loading custom tokenizer: %v", err)
+	tokName := filepath.Base(strings.TrimSuffix(soFile, filepath.Ext(soFile)))
+	x.Printf("Loading custom tokenizer %q", tokName)
 	RegisterTokenizer(CustomTokenizer{
-		NameStr:  *mustLookup("Name").(*string),
-		TokensFn: mustLookup("Tokens").(func(string) ([]string, error)),
+		tokens: symb.(func(string) ([]string, error)),
+		name:   tokName,
 	})
 }
