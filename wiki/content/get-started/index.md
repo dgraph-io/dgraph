@@ -47,6 +47,9 @@ If you wish to install the binaries on Windows, you can get them from the [Githu
 all the binaries.
 
 If you wish to run the UI for Dgraph you should also download the `assets.tar.gz` and extract them into a folder called assets.
+```sh
+mkdir assets && tar -xzvf assets.tar.gz -C assets
+```
 
 
 ## Step 2: Run Dgraph

@@ -97,7 +97,7 @@ func (s *scheduler) register(t *task) bool {
 
 func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	if proposal.Mutations.DropAll {
-		if err := s.n.waitForSyncMark(s.n.ctx, index-1); err != nil {
+		if err := s.n.syncAllMarks(s.n.ctx, index-1); err != nil {
 			s.n.props.Done(proposal.Id, err)
 			return err
 		}
