@@ -33,22 +33,12 @@ fi
 
 mkdir $tmp_dir;
 
-lastCommitSHA1=$(git rev-parse --short HEAD);
-gitBranch=$(git rev-parse --abbrev-ref HEAD)
-lastCommitTime=$(git log -1 --format=%ci)
-dgraph_cmd=$GOPATH/src/github.com/dgraph-io/dgraph/cmd;
-ui="/usr/local/share/dgraph/assets"
+source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/releases/constants.sh
 
-release="github.com/dgraph-io/dgraph/x.dgraphVersion"
-branch="github.com/dgraph-io/dgraph/x.gitBranch"
-commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
-commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
-uiDir="main.uiDir"
-
-echo -e "\033[1;33mBuilding binaries\033[0m"
+echo -e "\033[1;33mBuilding binaries for $platform\033[0m"
 for d in $dgraph_cmd/*; do
   n=$(basename "${d}")
-  echo $n
+  echo -e "\033[1;34m$n\033[0m"
   cd $d
   if [ "$n" = "dgraph" ];then
     go build -ldflags \
