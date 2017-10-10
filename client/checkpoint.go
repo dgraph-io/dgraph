@@ -67,11 +67,15 @@ func (d *Dgraph) NewSyncMarks(files []string) error {
 	return nil
 }
 
+func checkpointKey(file string) []byte {
+	// Prefix to avoid key clashes with other data stored in badger.
+	return []byte("\x02" + file)
+}
+
 // Get checkpoint for file from Badger.
 func (d *Dgraph) Checkpoint(file string) (uint64, error) {
-	k := fmt.Sprintf("checkpoint-%s", file)
 	var item badger.KVItem
-	err := d.kv.Get([]byte(k), &item)
+	err := d.kv.Get(checkpointKey(file), &item)
 	if err != nil {
 		return 0, err
 	}
@@ -100,7 +104,7 @@ func (d *Dgraph) writeCheckpoint() {
 		d.marks[file] = wm
 		var buf [binary.MaxVarintLen64]byte
 		n := binary.PutUvarint(buf[:], doneUntil)
-		wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
+		wb = badger.EntriesSet(wb, checkpointKey(file), buf[:n])
 	}
 
 	if err := d.kv.BatchSet(wb); err != nil {

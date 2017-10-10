@@ -612,6 +612,11 @@ func (d *Dgraph) NodeUid(uid uint64) Node {
 	return Node{uid: uid}
 }
 
+func xidKey(xid string) string {
+	// Prefix to avoid key clashes with other data stored in badger.
+	return "\x01" + xid
+}
+
 // NodeBlank creates or returns a Node given a string name for the blank node. Blank nodes do not
 // exist as labelled nodes in Dgraph. Blank nodes are used as labels client side for loading and
 // linking nodes correctly.  If the label is new in this session a new UID is allocated and
@@ -626,7 +631,7 @@ func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 		}
 		return Node{uid: uid}, nil
 	}
-	uid, _, err := d.alloc.AssignUid("_:" + varname)
+	uid, _, err := d.alloc.AssignUid(xidKey("_:" + varname))
 	if err != nil {
 		return Node{}, err
 	}
@@ -643,7 +648,7 @@ func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
 	if len(xid) == 0 {
 		return Node{}, ErrEmptyXid
 	}
-	uid, isNew, err := d.alloc.AssignUid(xid)
+	uid, isNew, err := d.alloc.AssignUid(xidKey(xid))
 	if err != nil {
 		return Node{}, err
 	}
