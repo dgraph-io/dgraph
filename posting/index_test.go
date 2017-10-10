@@ -118,7 +118,7 @@ func addMutationWithIndex(t *testing.T, l *List, edge *protos.DirectedEdge, op u
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge))
+	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, uint64(1)))
 }
 
 const schemaVal = `
@@ -165,8 +165,6 @@ func TestTokensTable(t *testing.T) {
 	})
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
-
-	CommitLists(10, 1)
 
 	ps.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
@@ -247,17 +245,13 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      protos.DirectedEdge_SET,
 	}
-	addReverseMutation(context.Background(), edge)
+	addReverseMutation(context.Background(), edge, 1)
 }
 
 func TestRebuildIndex(t *testing.T) {
 	schema.ParseBytes([]byte(schemaVal), 1)
 	addEdgeToValue(t, "name", 1, "Michonne")
 	addEdgeToValue(t, "name", 20, "David")
-
-	// RebuildIndex requires the data to be committed to data store.
-	CommitLists(10, 1)
-	time.Sleep(10 * time.Millisecond)
 
 	// Create some fake wrong entries for data store.
 	ps.Update(func(txn *badger.Txn) error {
@@ -267,11 +261,7 @@ func TestRebuildIndex(t *testing.T) {
 	})
 
 	require.NoError(t, DeleteIndex(context.Background(), "name"))
-	require.NoError(t, RebuildIndex(context.Background(), "name"))
-
-	// Let's force a commit.
-	CommitLists(10, 1)
-	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, RebuildIndex(context.Background(), "name", uint64(2)))
 
 	// Check index entries in data store.
 	txn := ps.NewTransaction(false)
@@ -324,15 +314,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 1, 24)
 	addEdgeToUID(t, "friend", 2, 23)
 
-	// RebuildIndex requires the data to be committed to data store.
-	CommitLists(10, 1)
-	time.Sleep(10 * time.Millisecond)
-
-	require.NoError(t, RebuildReverseEdges(context.Background(), "friend"))
-
-	// Let's force a commit.
-	CommitLists(10, 1)
-	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, RebuildReverseEdges(context.Background(), "friend", 2))
 
 	// Check index entries in data store.
 	txn := ps.NewTransaction(false)
