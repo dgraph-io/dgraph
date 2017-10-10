@@ -8,7 +8,7 @@
 # Exit script in case an error is encountered.
 set -e
 
-docker pull karalabe/xgo-latest
+echo -e "\n\n Downloading xgo"
 go get github.com/karalabe/xgo
 
 asset_suffix=$1

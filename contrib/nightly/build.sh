@@ -186,7 +186,7 @@ upload_assets() {
 	if [[ $TRAVIS_OS_NAME == "linux" ]]; then
 		# As asset would be the same on both platforms, we only upload it from linux.
 		update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
-		upload_or_create_asset $release_id $WINDOWS_TAR_NAME ${NIGHTLY_WINDOWS_FILE}
+		update_or_create_asset $release_id $WINDOWS_TAR_NAME ${NIGHTLY_WINDOWS_FILE}
 
 		# We dont want to update description programatically for version releases and commit apart from
 		# nightly.
