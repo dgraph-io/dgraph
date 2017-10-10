@@ -13,7 +13,7 @@ Dgraph can be installed from the install scripts, or deployed in Docker.
 
 {{% notice "note" %}}These instructions will install the latest release version.  To instead install our nightly build see [these instructions]({{< relref "deploy/index.md#nightly" >}}).{{% /notice %}}
 
-### From Install Scripts
+### From Install Scripts (Linux/Mac)
 
 Install the binaries with
 
@@ -39,6 +39,16 @@ Pull the Dgraph Docker images [from here](https://hub.docker.com/r/dgraph/dgraph
 docker pull dgraph/dgraph
 ```
 
+### Installing on Windows
+
+{{% notice "note" %}}Binaries for Windows are available from `v0.8.3`.{{% /notice %}}
+
+If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v0.x.y.tar.gz` contains
+all the binaries.
+
+If you wish to run the UI for Dgraph you should also download the `assets.tar.gz` and extract them into a folder called assets.
+
+
 ## Step 2: Run Dgraph
 {{% notice "note" %}}You need to set the estimated memory dgraph can take through memory_mb flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
 
@@ -57,6 +67,13 @@ dgraph --memory_mb 2048 --peer 127.0.0.1:8888
 ```
 
 `-peer` flag contains the address of a `dgraphzero` node which by default starts on port `8888`.
+
+
+#### Windows
+To run dgraph with the UI on Windows, you also have to supply the path to the assets using the (`--ui` option).
+```sh
+./dgraph.exe --memory_mb 2048 --peer 127.0.0.1:8888 -ui path-to-assets-folder
+```
 
 ### Using Docker
 

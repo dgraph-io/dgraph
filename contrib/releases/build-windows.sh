@@ -8,6 +8,9 @@
 # Exit script in case an error is encountered.
 set -e
 
+docker pull karalabe/xgo-latest
+go get github.com/karalabe/xgo
+
 asset_suffix=$1
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
@@ -15,36 +18,31 @@ release_version=$(git describe --abbrev=0);
 if [[ -n $asset_suffix ]]; then
   release_version="$release_version${asset_suffix}"
 fi
-platform="$(uname | tr '[:upper:]' '[:lower:]')"
-checksum_file=$cur_dir/"dgraph-checksum-$platform-amd64-$release_version".sha256
-if [ -f "$checksum_file" ]; then
-	rm $checksum_file
-fi
+platform="windows"
+
+# TODO - Add checksum file later when we support get.dgraph.io for Windows.
 
 # If temporary directory already exists delete it.
 if [ -d "$tmp_dir" ]; then
   rm -rf $tmp_dir
 fi
 
-if ! type strip > /dev/null; then
-  echo -e "\033[0;31mYou don't have strip command line tool available. Install it and try again.\033[0m"
-  exit 1
-fi
-
 mkdir $tmp_dir;
 
 source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/releases/constants.sh
 
-echo -e "\033[1;33mBuilding binaries for $platform\033[0m"
+xgo_target="windows/amd64"
+
+echo -e "\n\n\033[1;33mBuilding binaries for $platform\033[0m"
 for d in $dgraph_cmd/*; do
   n=$(basename "${d}")
   echo -e "\033[1;34m$n\033[0m"
   cd $d
   if [ "$n" = "dgraph" ];then
-    go build -ldflags \
+    xgo --go 1.8.3 --targets $xgo_target -ldflags \
       "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
   else
-    go build -ldflags \
+    xgo --go 1.8.3 --targets $xgo_target -ldflags \
     "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
   fi
 done
@@ -55,25 +53,10 @@ mkdir dgraph && pushd &> /dev/null dgraph;
 # Stripping the binaries.
 for d in $dgraph_cmd/*; do
   n=$(basename "${d}")
-  strip -x $d/$n || true
-  cp $d/$n .
+  cp $d/"$n-windows-4.0-amd64".exe "$n".exe
 done
 
-echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
-
-digest_cmd=""
-if hash shasum 2>/dev/null; then
-  digest_cmd="shasum -a 256"
-else
-  echo -e "\033[0;31mYou don't have shasum command line tool available. Install it and try again.\033[0m"
-  exit 1
-fi
-
-for d in $dgraph_cmd/*; do
-  n=$(basename "${d}")
-  checksum=$($digest_cmd $n | awk '{print $1}')
-  echo "$checksum /usr/local/bin/$n" >> $checksum_file
-done
+echo -e "\n\033[1;34mSize of files: $(du -sh)\033[0m"
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
 tar_file=dgraph-"$platform"-amd64-$release_version
@@ -85,9 +68,3 @@ echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file.tar.gz)\033[0m"
 echo -e "\n\033[1;33mMoving tarfile to original directory\033[0m"
 mv $tar_file.tar.gz $cur_dir
 rm -rf $tmp_dir
-
-echo -e "Calculating and storing checksum for tar gzipped assets."
-cd $cur_dir
-GZIP=-n tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
-checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
-echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
