@@ -46,7 +46,7 @@ type mapping struct {
 }
 
 type UidProvider interface {
-	AssignUidRange(size uint64) (start, end uint64, err error)
+	ReserveUidRange(size uint64) (start, end uint64, err error)
 }
 
 func New(kv *badger.KV, up UidProvider) *XidMap {
@@ -95,7 +95,7 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	}
 
 	if sh.lastUsed == sh.lease {
-		start, end, err := m.up.AssignUidRange(1e5)
+		start, end, err := m.up.ReserveUidRange(1e5)
 		if err != nil {
 			return 0, false, err
 		}
@@ -106,9 +106,9 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	return sh.lastUsed, true, nil
 }
 
-func (m *XidMap) One() (uint64, error) {
+func (m *XidMap) ReserveUid() (uint64, error) {
 	if m.lastUsed == m.lease {
-		start, end, err := m.up.AssignUidRange(1e5)
+		start, end, err := m.up.ReserveUidRange(1e5)
 		if err != nil {
 			return 0, err
 		}

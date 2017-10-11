@@ -74,7 +74,7 @@ type uidProvider struct {
 	ctx context.Context
 }
 
-func (p *uidProvider) AssignUidRange(size uint64) (start, end uint64, err error) {
+func (p *uidProvider) ReserveUidRange(size uint64) (start, end uint64, err error) {
 	factor := time.Second
 	for {
 		assignedIds, err := p.dc.AssignUids(context.Background(), &protos.Num{Val: 100})
@@ -625,7 +625,7 @@ func xidKey(xid string) string {
 // but no map is stored, so every call to NodeBlank("") returns a new node.
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 	if len(varname) == 0 {
-		uid, err := d.alloc.One()
+		uid, err := d.alloc.ReserveUid()
 		if err != nil {
 			return Node{}, err
 		}
