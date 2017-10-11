@@ -78,18 +78,17 @@ func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 	factor := time.Second
 	for {
 		assignedIds, err := p.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
-		if err != nil {
-			x.Printf("Error while getting lease %v\n", err)
-			select {
-			case <-time.After(factor):
-			case <-p.ctx.Done():
-				return 0, 0, p.ctx.Err()
-			}
-			if factor < 256*time.Second {
-				factor = factor * 2
-			}
-		} else {
+		if err == nil {
 			return assignedIds.StartId, assignedIds.EndId, nil
+		}
+		x.Printf("Error while getting lease %v\n", err)
+		select {
+		case <-time.After(factor):
+		case <-p.ctx.Done():
+			return 0, 0, p.ctx.Err()
+		}
+		if factor < 256*time.Second {
+			factor = factor * 2
 		}
 	}
 }
@@ -630,7 +629,7 @@ func xidKey(xid string) string {
 // but no map is stored, so every call to NodeBlank("") returns a new node.
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 	if len(varname) == 0 {
-		uid, err := d.alloc.ReserveUid()
+		uid, err := d.alloc.AllocateUid()
 		if err != nil {
 			return Node{}, err
 		}

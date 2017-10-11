@@ -29,7 +29,9 @@ type XidMap struct {
 	kv     *badger.KV
 	up     UidProvider
 	opt    Options
-	noMap  block
+
+	noMapMu sync.Mutex
+	noMap   block // block for allocating uids without an xid to uid mapping
 }
 
 type shard struct {
@@ -131,8 +133,10 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	return uid, true, err
 }
 
-// ReserveUid gives a single uid without creating an xid to uid mapping.
-func (m *XidMap) ReserveUid() (uint64, error) {
+// AllocateUid gives a single uid without creating an xid to uid mapping.
+func (m *XidMap) AllocateUid() (uint64, error) {
+	m.noMapMu.Lock()
+	defer m.noMapMu.Unlock()
 	return m.noMap.assign(m.up)
 }
 

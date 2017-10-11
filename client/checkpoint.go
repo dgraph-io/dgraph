@@ -79,20 +79,20 @@ func (d *Dgraph) Checkpoint(file string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	var uid uint64
+	var lineNum uint64
 	err = item.Value(func(p []byte) error {
 		if len(p) == 0 {
-			// no existing checkpoint, leave uid as 0
+			// no existing checkpoint, so read from line 0
 			return nil
 		}
 		var n int
-		uid, n = binary.Uvarint(p)
+		lineNum, n = binary.Uvarint(p)
 		if n <= 0 {
 			return x.Errorf("could not decode checkpoint (uvarint, n=%d)", n)
 		}
 		return nil
 	})
-	return uid, err
+	return lineNum, err
 }
 
 // Used to write checkpoints to Badger.
