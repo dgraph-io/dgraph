@@ -29,16 +29,12 @@ type XidMap struct {
 	kv     *badger.KV
 	up     UidProvider
 	opt    Options
-
-	// For one-off uid requests.
-	lastUsed, lease uint64
+	noMap  block
 }
 
 type shard struct {
 	sync.Mutex
-
-	lastUsed uint64
-	lease    uint64
+	block
 
 	elems        map[string]*list.Element
 	queue        *list.List
@@ -53,9 +49,29 @@ type mapping struct {
 	persisted bool
 }
 
+type block struct {
+	start, end uint64
+}
+
+func (b *block) assign(up UidProvider) (uint64, error) {
+	if b.end == 0 || b.start > b.end {
+		start, end, err := up.ReserveUidRange()
+		if err != nil {
+			return 0, err
+		}
+		b.start, b.end = start, end
+	}
+	x.AssertTrue(b.start <= b.end)
+	uid := b.start
+	b.start++
+	return uid, nil
+}
+
 // UidProvider allows the XidMap to obtain ranges of uids that it can then
 // allocate freely. Implementations should expect to be called concurrently.
 type UidProvider interface {
+	// ReserveUidRange should give a range of new uids from start to end
+	// (start and end are both inclusive).
 	ReserveUidRange() (start, end uint64, err error)
 }
 
@@ -110,29 +126,14 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 		return uid, false, nil
 	}
 
-	if sh.lastUsed == sh.lease {
-		start, end, err := m.up.ReserveUidRange()
-		if err != nil {
-			return 0, false, err
-		}
-		sh.lastUsed, sh.lease = start, end
-	}
-	sh.lastUsed++
-	sh.add(xid, sh.lastUsed, false)
-	return sh.lastUsed, true, nil
+	uid, err = sh.assign(sh.xm.up)
+	sh.add(xid, uid, false)
+	return uid, true, err
 }
 
 // ReserveUid gives a single uid without creating an xid to uid mapping.
 func (m *XidMap) ReserveUid() (uint64, error) {
-	if m.lastUsed == m.lease {
-		start, end, err := m.up.ReserveUidRange()
-		if err != nil {
-			return 0, err
-		}
-		m.lastUsed, m.lease = start, end
-	}
-	m.lastUsed++
-	return m.lastUsed, nil
+	return m.noMap.assign(m.up)
 }
 
 func (s *shard) lookup(xid string) (uint64, bool) {

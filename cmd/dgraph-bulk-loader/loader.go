@@ -151,8 +151,9 @@ type uidProvider uint64
 
 func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 	const uidChunk = 1e5
-	newLease := atomic.AddUint64((*uint64)(p), uidChunk)
-	return newLease - uidChunk, newLease, nil
+	end = atomic.AddUint64((*uint64)(p), uidChunk)
+	start = end - uidChunk + 1
+	return
 }
 
 func (ld *loader) mapStage() {
