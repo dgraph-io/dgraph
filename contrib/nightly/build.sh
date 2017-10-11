@@ -217,10 +217,10 @@ build_docker_image() {
 	cp ${ASSETS_FILE} .
 	echo -e "Building the docker image with tag: $DOCKER_TAG."
 	docker build -t dgraph/dgraph:$DOCKER_TAG .
-	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
-		echo "Tagging docker image with latest tag"
-		docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest
-	fi
+#	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
+#		echo "Tagging docker image with latest tag"
+#		docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest
+#	fi
 	# Lets remove the dgraph folder now.
 	rm -rf dgraph
 	rm assets.tar.gz
@@ -236,10 +236,10 @@ upload_docker_image() {
 	echo "Pushing the image"
 	echo -e "Pushing image with tag $DOCKER_TAG"
 	docker push dgraph/dgraph:$DOCKER_TAG
-	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
-		echo -e "Pushing latest image"
-		docker push dgraph/dgraph:latest
-	fi
+#	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
+#		echo -e "Pushing latest image"
+#		docker push dgraph/dgraph:latest
+#	fi
 	popd > /dev/null
 }
 
