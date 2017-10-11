@@ -80,17 +80,16 @@ func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 		assignedIds, err := p.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
 		if err != nil {
 			x.Printf("Error while getting lease %v\n", err)
-			time.Sleep(factor)
+			select {
+			case <-time.After(factor):
+			case <-p.ctx.Done():
+				return 0, 0, p.ctx.Err()
+			}
 			if factor < 256*time.Second {
 				factor = factor * 2
 			}
 		} else {
 			return assignedIds.StartId, assignedIds.EndId, nil
-		}
-		select {
-		case <-p.ctx.Done():
-			return 0, 0, p.ctx.Err()
-		default:
 		}
 	}
 }
