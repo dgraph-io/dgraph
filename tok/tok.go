@@ -361,7 +361,7 @@ func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
 	}
 	toks, err := t.tokens(str)
 	if err != nil {
-		return nil, x.Errorf("could not tokenize %q", str)
+		return nil, x.Wrapf(err, "could not tokenize %q", str)
 	}
 	for i := range toks {
 		buf := make([]byte, 4+len(toks[i]))
