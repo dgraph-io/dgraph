@@ -234,7 +234,9 @@ func (ld *loader) mapStage() {
 func (ld *loader) writeLease() {
 	// Obtain a fresh uid range - since uids are allocated in increasing order,
 	// the start of the new range can be used as the lease.
-	lease, _, _ := ld.up.ReserveUidRange()
+	lease, _, err := ld.up.ReserveUidRange()
+	// Cannot give an error because uid ranges are produced by incrementing an integer.
+	x.AssertTrue(err == nil)
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%d\n", lease)
 	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))

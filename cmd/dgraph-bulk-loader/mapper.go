@@ -198,7 +198,9 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid, isNew, _ := m.um.AssignUid(xid)
+	uid, isNew, err := m.um.AssignUid(xid)
+	// Cannot give an error because uid ranges are produced by incrementing an integer.
+	x.AssertTrue(err == nil)
 	if !isNew || !m.opt.StoreXids {
 		return uid
 	}
