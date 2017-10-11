@@ -79,11 +79,10 @@ func (d *Dgraph) Checkpoint(file string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	var uidBuf [binary.MaxVarintLen64]byte
 	var uid uint64
 	err = item.Value(func(p []byte) error {
 		var n int
-		uid, n = binary.Uvarint(uidBuf[:])
+		uid, n = binary.Uvarint(p)
 		if n <= 0 {
 			return x.Errorf("could not decode checkpoint")
 		}

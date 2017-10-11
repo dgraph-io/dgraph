@@ -232,6 +232,8 @@ func (ld *loader) mapStage() {
 }
 
 func (ld *loader) writeLease() {
+	// Obtain a fresh uid range - since uids are allocated in increasing order,
+	// the start of the new range can be used as the lease.
 	lease, _, _ := ld.up.ReserveUidRange()
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%d\n", lease)
