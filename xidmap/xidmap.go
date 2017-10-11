@@ -10,11 +10,20 @@ import (
 	farm "github.com/dgryski/go-farm"
 )
 
+// Options controls the performance characteristics of the XidMap.
 type Options struct {
+	// NumShards controls the number of shards the XidMap is broken into. More
+	// shards reduces lock contention.
 	NumShards int
-	LRUSize   int
+	// LRUSize controls the total size of the LRU cache. The LRU is split
+	// between all shards, so with 4 shards and an LRUSize of 100, each shard
+	// receives 25 LRU slots.
+	LRUSize int
 }
 
+// XidMap allocates and tracks mappings between Xids and Uids in a threadsafe
+// manner. It's memory friendly because the mapping is stored on disk, but fast
+// because it uses an LRU cache.
 type XidMap struct {
 	shards []shard
 	kv     *badger.KV
@@ -44,10 +53,13 @@ type mapping struct {
 	persisted bool
 }
 
+// UidProvider allows the XidMap to obtain ranges of uids that it can then
+// allocate freely. Implementations should expect to be called concurrently.
 type UidProvider interface {
 	ReserveUidRange(size uint64) (start, end uint64, err error)
 }
 
+// New creates an XidMap with given badger and uid provider.
 func New(kv *badger.KV, up UidProvider, opt Options) *XidMap {
 	x.AssertTrue(opt.LRUSize != 0)
 	x.AssertTrue(opt.NumShards != 0)
@@ -65,7 +77,8 @@ func New(kv *badger.KV, up UidProvider, opt Options) *XidMap {
 	return xm
 }
 
-// AssignUid creates new or looks up existing XID to UID mappings.
+// AssignUid creates new or looks up existing XID to UID mappings. Any errors
+// returned originate from the UidProvider.
 func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	fp := farm.Fingerprint64([]byte(xid))
 	idx := fp % uint64(m.opt.NumShards)
@@ -109,6 +122,7 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	return sh.lastUsed, true, nil
 }
 
+// ReserveUid gives a single uid without creating an xid to uid mapping.
 func (m *XidMap) ReserveUid() (uint64, error) {
 	if m.lastUsed == m.lease {
 		start, end, err := m.up.ReserveUidRange(1e5)
