@@ -71,7 +71,7 @@ func (s *stateGroup) DeleteAll() {
 
 	for pred := range s.predicate {
 		// We set schema for _predicate_, hence it shouldn't be deleted.
-		if pred != "_predicate_" {
+		if pred != x.PredicateListAttr {
 			delete(s.predicate, pred)
 		}
 	}

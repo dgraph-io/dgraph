@@ -1167,12 +1167,29 @@ func TestObjectList(t *testing.T) {
 }
 
 func TestInitialSchema(t *testing.T) {
+	req := client.Req{}
+	req.DeleteAll()
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	req = client.Req{}
+
+	req.SetQuery(`schema{}`)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(resp.Schema))
+	s := resp.Schema[0]
+	if s.Predicate == x.PredicateListAttr {
+		require.Equal(t, &protos.SchemaNode{
+			Predicate: x.PredicateListAttr,
+			List:      true,
+			Type:      "string",
+		}, s)
+	}
+
 	type Person struct {
 		Name string `json:"name,omitempty"`
 		Age  int    `json:"age,omitempty"`
 	}
-
-	req := client.Req{}
 
 	p := Person{
 		Name: "Alice",
@@ -1183,10 +1200,10 @@ func TestInitialSchema(t *testing.T) {
 		age: int .
 	`)
 
-	err := req.SetObject(&p)
+	err = req.SetObject(&p)
 	require.NoError(t, err)
 
-	resp, err := dgraphClient.Run(context.Background(), &req)
+	resp, err = dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
 
 	puid := resp.AssignedUids["blank-0"]
@@ -1196,6 +1213,7 @@ func TestInitialSchema(t *testing.T) {
 		}
 	}`, puid)
 
+	req = client.Req{}
 	req.SetQuery(q)
 	resp, err = dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
@@ -1203,17 +1221,4 @@ func TestInitialSchema(t *testing.T) {
 	r := resp.N[0].Children[0]
 	require.Equal(t, 2, len(r.Properties))
 
-	req.SetQuery(`schema{}`)
-	resp, err = dgraphClient.Run(context.Background(), &req)
-	require.NoError(t, err)
-	require.Equal(t, 3, len(resp.Schema))
-	for _, s := range resp.Schema {
-		if s.Predicate == x.PredicateListAttr {
-			require.Equal(t, &protos.SchemaNode{
-				Predicate: x.PredicateListAttr,
-				List:      true,
-				Type:      "string",
-			}, s)
-		}
-	}
 }
