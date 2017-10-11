@@ -361,8 +361,12 @@ func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
 	if err != nil {
 		return nil, x.Errorf("could not tokenize %q", str)
 	}
+	hash := farm.Fingerprint32([]byte(t.name))
 	for i := range toks {
-		toks[i] = encodeToken(t.name+toks[i], t.Identifier())
+		buf := make([]byte, 4+len(toks[i]))
+		binary.BigEndian.PutUint32(buf[:4], hash)
+		copy(buf[4:], toks[i])
+		toks[i] = encodeToken(string(buf), t.Identifier())
 	}
 	return toks, nil
 }
