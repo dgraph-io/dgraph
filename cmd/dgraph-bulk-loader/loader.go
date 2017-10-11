@@ -149,9 +149,10 @@ func findRDFFiles(dir string) []string {
 
 type uidProvider uint64
 
-func (p *uidProvider) ReserveUidRange(size uint64) (start, end uint64, err error) {
-	newLease := atomic.AddUint64((*uint64)(p), size)
-	return newLease - size, newLease, nil
+func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
+	const uidChunk = 1e5
+	newLease := atomic.AddUint64((*uint64)(p), uidChunk)
+	return newLease - uidChunk, newLease, nil
 }
 
 func (ld *loader) mapStage() {
@@ -230,7 +231,7 @@ func (ld *loader) mapStage() {
 }
 
 func (ld *loader) writeLease() {
-	lease, _, _ := ld.up.ReserveUidRange(1)
+	lease, _, _ := ld.up.ReserveUidRange()
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%d\n", lease)
 	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))

@@ -56,7 +56,7 @@ type mapping struct {
 // UidProvider allows the XidMap to obtain ranges of uids that it can then
 // allocate freely. Implementations should expect to be called concurrently.
 type UidProvider interface {
-	ReserveUidRange(size uint64) (start, end uint64, err error)
+	ReserveUidRange() (start, end uint64, err error)
 }
 
 // New creates an XidMap with given badger and uid provider.
@@ -111,7 +111,7 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	}
 
 	if sh.lastUsed == sh.lease {
-		start, end, err := m.up.ReserveUidRange(1e5)
+		start, end, err := m.up.ReserveUidRange()
 		if err != nil {
 			return 0, false, err
 		}
@@ -125,7 +125,7 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 // ReserveUid gives a single uid without creating an xid to uid mapping.
 func (m *XidMap) ReserveUid() (uint64, error) {
 	if m.lastUsed == m.lease {
-		start, end, err := m.up.ReserveUidRange(1e5)
+		start, end, err := m.up.ReserveUidRange()
 		if err != nil {
 			return 0, err
 		}

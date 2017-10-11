@@ -74,10 +74,10 @@ type uidProvider struct {
 	ctx context.Context
 }
 
-func (p *uidProvider) ReserveUidRange(size uint64) (start, end uint64, err error) {
+func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 	factor := time.Second
 	for {
-		assignedIds, err := p.dc.AssignUids(context.Background(), &protos.Num{Val: 100})
+		assignedIds, err := p.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
 		if err != nil {
 			x.Printf("Error while getting lease %v\n", err)
 			time.Sleep(factor)
