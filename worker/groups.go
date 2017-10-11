@@ -88,8 +88,10 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	}
 
 	if Config.InMemoryComm {
-		gr.state = &protos.MembershipState{}
 		atomic.StoreUint32(&gr.gid, 1)
+		gr.state = &protos.MembershipState{}
+		gr.state.Groups = make(map[uint32]*protos.Group)
+		gr.state.Groups[gr.groupId()] = &protos.Group{}
 		inMemoryTablet = &protos.Tablet{GroupId: gr.groupId()}
 	} else {
 		x.AssertTruefNoTrace(len(Config.PeerAddr) > 0, "Providing dgraphzero address is mandatory.")
@@ -279,7 +281,7 @@ func (g *groupi) Tablet(key string) *protos.Tablet {
 		return tablet
 	}
 
-	fmt.Printf("Asking if I serve tablet: %v\n", key)
+	fmt.Printf("Asking if I can serve tablet for: %v\n", key)
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
 	pl := g.AnyServer(0)

@@ -1203,9 +1203,17 @@ func TestInitialSchema(t *testing.T) {
 	r := resp.N[0].Children[0]
 	require.Equal(t, 2, len(r.Properties))
 
-	fmt.Println("here")
 	req.SetQuery(`schema{}`)
 	resp, err = dgraphClient.Run(context.Background(), &req)
 	require.NoError(t, err)
-	fmt.Println(resp.N)
+	require.Equal(t, 3, len(resp.Schema))
+	for _, s := range resp.Schema {
+		if s.Predicate == x.PredicateListAttr {
+			require.Equal(t, &protos.SchemaNode{
+				Predicate: x.PredicateListAttr,
+				List:      true,
+				Type:      "string",
+			}, s)
+		}
+	}
 }

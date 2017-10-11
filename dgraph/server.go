@@ -216,7 +216,6 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	}
 
 	var er query.ExecuteResult
-	fmt.Printf("req: %+v\n", queryRequest.GqlQuery)
 	if er, err = queryRequest.ProcessWithMutation(ctx); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while processing query: %+v", err)
