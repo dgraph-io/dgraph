@@ -19,6 +19,7 @@ package tok
 
 import (
 	"encoding/binary"
+	"fmt"
 	"path/filepath"
 	"plugin"
 	"strings"
@@ -348,8 +349,9 @@ func (t HashTokenizer) IsSortable() bool { return false }
 func (t HashTokenizer) IsLossy() bool    { return true }
 
 type CustomTokenizer struct {
-	name   string
-	tokens func(string) ([]string, error)
+	name     string
+	nameHash uint32
+	tokens   func(string) ([]string, error)
 }
 
 func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
@@ -361,10 +363,9 @@ func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
 	if err != nil {
 		return nil, x.Errorf("could not tokenize %q", str)
 	}
-	hash := farm.Fingerprint32([]byte(t.name))
 	for i := range toks {
 		buf := make([]byte, 4+len(toks[i]))
-		binary.BigEndian.PutUint32(buf[:4], hash)
+		binary.BigEndian.PutUint32(buf[:4], t.nameHash)
 		copy(buf[4:], toks[i])
 		toks[i] = encodeToken(string(buf), t.Identifier())
 	}
@@ -383,8 +384,18 @@ func LoadCustomTokenizer(soFile string) {
 	x.Checkf(err, "could not find symbol \"Tokens\" while loading custom tokenizer: %v", err)
 	tokName := filepath.Base(strings.TrimSuffix(soFile, filepath.Ext(soFile)))
 	x.Printf("Loading custom tokenizer %q", tokName)
-	RegisterTokenizer(CustomTokenizer{
-		tokens: symb.(func(string) ([]string, error)),
-		name:   tokName,
-	})
+	tokenizer := CustomTokenizer{
+		tokens:   symb.(func(string) ([]string, error)),
+		name:     tokName,
+		nameHash: farm.Hash32([]byte(tokName)),
+	}
+
+	// Ensure we don't get two custom tokenizers with the same hash.
+	for _, t := range tokenizers {
+		if t, ok := t.(CustomTokenizer); ok && t.nameHash == tokenizer.nameHash {
+			x.Check(fmt.Errorf("tokenizer with same name hash already loaded: %s(%x)",
+				t.name, t.nameHash))
+		}
+	}
+	RegisterTokenizer(tokenizer)
 }
