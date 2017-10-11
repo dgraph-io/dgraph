@@ -48,6 +48,7 @@ type state struct {
 	opt        options
 	prog       *progress
 	um         *xidmap.XidMap
+	up         *uidProvider
 	ss         *schemaStore
 	sm         *shardMap
 	rdfChunkCh chan *bytes.Buffer
@@ -166,7 +167,8 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidKV, err = badger.NewKV(&opt)
 	x.Check(err)
-	ld.um = xidmap.New(ld.xidKV, new(uidProvider))
+	ld.up = new(uidProvider)
+	ld.um = xidmap.New(ld.xidKV, ld.up)
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
@@ -225,7 +227,7 @@ func (ld *loader) mapStage() {
 }
 
 func (ld *loader) writeLease() {
-	lease, _ := ld.um.ReserveUid() // TODO: This is incorrect. It might not be the largest UID.
+	lease, _, _ := ld.up.ReserveUidRange(1)
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%d\n", lease)
 	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))
