@@ -275,7 +275,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		Variables: map[string]string{},
 		Http:      true,
 	})
-	fmt.Printf("q: %s, Parsed: %+v\n", q, parsed)
 	l.Parsing += time.Since(parseStart)
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
