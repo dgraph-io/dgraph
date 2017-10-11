@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -49,11 +50,14 @@ const (
 	ValidHostnameRegex      = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 	Star                    = "_STAR_ALL"
 	GrpcMaxSize             = 256 << 20
+	// The attr used to store list of predicates for a node.
+	PredicateListAttr = "_predicate_"
 )
 
 var (
 	// Useful for running multiple servers on the same machine.
-	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
+	regExpHostName         = regexp.MustCompile(ValidHostnameRegex)
+	ErrTabletAlreadyServed = errors.New("Tablet is already being served")
 )
 
 // WhiteSpace Replacer removes spaces and tabs from a string.

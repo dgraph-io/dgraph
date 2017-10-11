@@ -340,7 +340,7 @@ func (s *Server) ShouldServe(
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
 	tablet.Force = false
 	proposal.Tablet = tablet
-	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
+	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != x.ErrTabletAlreadyServed {
 		return tablet, err
 	}
 	tab = s.ServingTablet(tablet.Predicate)
