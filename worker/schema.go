@@ -161,6 +161,8 @@ func GetSchemaOverNetwork(ctx context.Context, schema *protos.SchemaRequest) ([]
 		}
 		return nil, err
 	}
+
+	// Map of groupd id => Predicates for that group.
 	schemaMap := make(map[uint32]*protos.SchemaRequest)
 	addToSchemaMap(schemaMap, schema)
 

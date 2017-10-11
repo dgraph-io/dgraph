@@ -247,7 +247,7 @@ func (g *groupi) Tablet(key string) *protos.Tablet {
 		return tablet
 	}
 
-	fmt.Printf("Asking if I serve tablet: %v\n", key)
+	fmt.Printf("Asking if I can serve tablet for: %v\n", key)
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
 	pl := g.AnyServer(0)
