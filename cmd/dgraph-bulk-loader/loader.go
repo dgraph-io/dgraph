@@ -168,7 +168,10 @@ func (ld *loader) mapStage() {
 	ld.xidKV, err = badger.NewKV(&opt)
 	x.Check(err)
 	ld.up = new(uidProvider)
-	ld.um = xidmap.New(ld.xidKV, ld.up)
+	ld.um = xidmap.New(ld.xidKV, ld.up, xidmap.Options{
+		NumShards: 1 << 10,
+		LRUSize:   1 << 19,
+	})
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))

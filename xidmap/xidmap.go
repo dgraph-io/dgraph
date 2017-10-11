@@ -10,17 +10,16 @@ import (
 	farm "github.com/dgryski/go-farm"
 )
 
-const (
-	// Memory used is in the order of numShards * (avgKeySize + constant
-	// overhead per key) * lruSize.
-	numShards = 1 << 10
-	lruSize   = 1 << 9
-)
+type Options struct {
+	NumShards int
+	LRUSize   int
+}
 
 type XidMap struct {
-	shards [numShards]shard
+	shards []shard
 	kv     *badger.KV
 	up     UidProvider
+	opt    Options
 
 	// For one-off uid requests.
 	lastUsed, lease uint64
@@ -36,7 +35,7 @@ type shard struct {
 	queue        *list.List
 	beingEvicted map[string]uint64
 
-	kv *badger.KV
+	xm *XidMap
 }
 
 type mapping struct {
@@ -49,23 +48,27 @@ type UidProvider interface {
 	ReserveUidRange(size uint64) (start, end uint64, err error)
 }
 
-func New(kv *badger.KV, up UidProvider) *XidMap {
-	um := &XidMap{
-		kv: kv,
-		up: up,
+func New(kv *badger.KV, up UidProvider, opt Options) *XidMap {
+	x.AssertTrue(opt.LRUSize != 0)
+	x.AssertTrue(opt.NumShards != 0)
+	xm := &XidMap{
+		shards: make([]shard, opt.NumShards),
+		kv:     kv,
+		up:     up,
+		opt:    opt,
 	}
-	for i := range um.shards {
-		um.shards[i].elems = make(map[string]*list.Element)
-		um.shards[i].queue = list.New()
-		um.shards[i].kv = kv
+	for i := range xm.shards {
+		xm.shards[i].elems = make(map[string]*list.Element)
+		xm.shards[i].queue = list.New()
+		xm.shards[i].xm = xm
 	}
-	return um
+	return xm
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings.
 func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	fp := farm.Fingerprint64([]byte(xid))
-	idx := fp % numShards
+	idx := fp % uint64(m.opt.NumShards)
 	sh := &m.shards[idx]
 
 	sh.Lock()
@@ -132,7 +135,8 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 }
 
 func (s *shard) add(xid string, uid uint64, persisted bool) {
-	if s.queue.Len() >= lruSize && len(s.beingEvicted) == 0 {
+	lruSizePerShard := s.xm.opt.LRUSize / s.xm.opt.NumShards
+	if s.queue.Len() >= lruSizePerShard && len(s.beingEvicted) == 0 {
 		s.evict()
 	}
 
@@ -164,7 +168,7 @@ func (s *shard) evict() {
 		}
 
 	}
-	s.kv.BatchSetAsync(batch, func(err error) {
+	s.xm.kv.BatchSetAsync(batch, func(err error) {
 		x.Check(err)
 		for _, e := range batch {
 			x.Check(e.Error)

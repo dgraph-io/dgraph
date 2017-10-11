@@ -168,10 +168,16 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		// If the user doesn't give a context we supply one because we check ctx.Done().
 		opts.Ctx = context.TODO()
 	}
-	alloc := xidmap.New(kv, &uidProvider{
-		dc:  clients[0],
-		ctx: opts.Ctx,
-	})
+	alloc := xidmap.New(kv,
+		&uidProvider{
+			dc:  clients[0],
+			ctx: opts.Ctx,
+		},
+		xidmap.Options{
+			NumShards: 100,
+			LRUSize:   1e5,
+		},
+	)
 
 	d := &Dgraph{
 		opts:   opts,
