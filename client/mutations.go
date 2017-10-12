@@ -18,7 +18,6 @@ package client
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -35,6 +34,7 @@ import (
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/xidmap"
 )
 
 var (
@@ -69,106 +69,28 @@ var DefaultOptions = BatchMutationOptions{
 	MaxRetries:    math.MaxUint32,
 }
 
-type allocator struct {
-	x.SafeMutex
-
-	dc protos.DgraphClient
-
-	kv  *badger.KV
-	ids *cache
-
-	syncCh chan entry
-
-	startId uint64
-	endId   uint64
-	ctx     context.Context // passed from dgraphClient.
+type uidProvider struct {
+	dc  protos.DgraphClient
+	ctx context.Context
 }
 
-// TODO: Add for n later
-func (a *allocator) fetchOne() (uint64, error) {
-	a.AssertLock()
-	if a.startId == 0 || a.endId < a.startId {
-		factor := time.Second
-		for {
-			assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
-			if err != nil {
-				x.Printf("Error while getting lease %v\n", err)
-				time.Sleep(factor)
-				if factor < 256*time.Second {
-					factor = factor * 2
-				}
-			} else {
-				a.startId = assignedIds.StartId
-				a.endId = assignedIds.EndId
-				break
-			}
-			select {
-			case <-a.ctx.Done():
-				return 0, a.ctx.Err()
-			default:
-			}
+func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
+	factor := time.Second
+	for {
+		assignedIds, err := p.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
+		if err == nil {
+			return assignedIds.StartId, assignedIds.EndId, nil
+		}
+		x.Printf("Error while getting lease %v\n", err)
+		select {
+		case <-time.After(factor):
+		case <-p.ctx.Done():
+			return 0, 0, p.ctx.Err()
+		}
+		if factor < 256*time.Second {
+			factor = factor * 2
 		}
 	}
-
-	uid := a.startId
-	a.startId++
-	return uid, nil
-}
-
-func (a *allocator) getFromKV(id string) (uint64, error) {
-	var item badger.KVItem
-	var err error
-	if err = a.kv.Get([]byte(id), &item); err != nil {
-		return 0, err
-	}
-
-	var uid uint64
-	err = item.Value(func(val []byte) error {
-		if len(val) > 0 {
-			var n int
-			uid, n = binary.Uvarint(val)
-			if n <= 0 {
-				return fmt.Errorf("Unable to parse val %q to uint64 for %q", val, id)
-			}
-		}
-		return nil
-
-	})
-
-	return uid, err
-}
-
-func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool, err error) {
-	a.Lock()
-	defer a.Unlock()
-	uid, _ = a.ids.Get(id)
-	if uid > 0 {
-		return
-	}
-
-	// check in kv
-	// get in outside lock and do put if missing ???
-	uid, err = a.getFromKV(id)
-	if err != nil {
-		return
-	}
-	// if not found in kv
-	if uid == 0 {
-		// assign one
-		uid, err = a.fetchOne()
-		if err != nil {
-			return
-		}
-		// Entry would be comitted to disc by the time it's evicted
-		// TODO: Better to delete after it's persisted, can cause race
-		// may be persist it during eviction and delete after it's synced
-		// to disk
-		a.syncCh <- entry{key: id, value: uid}
-	}
-	a.ids.Add(id, uid)
-	isNew = true
-	err = nil
-	return
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -190,8 +112,9 @@ type Dgraph struct {
 	schema chan protos.SchemaUpdate
 	nquads chan nquadOp
 	dc     []protos.DgraphClient
-	alloc  *allocator
+	alloc  *xidmap.XidMap
 	ticker *time.Ticker
+	kv     *badger.KV
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -243,13 +166,16 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		// If the user doesn't give a context we supply one because we check ctx.Done().
 		opts.Ctx = context.TODO()
 	}
-	alloc := &allocator{
-		dc:     clients[0],
-		ids:    newCache(100000),
-		kv:     kv,
-		syncCh: make(chan entry, 10000),
-		ctx:    opts.Ctx,
-	}
+	alloc := xidmap.New(kv,
+		&uidProvider{
+			dc:  clients[0],
+			ctx: opts.Ctx,
+		},
+		xidmap.Options{
+			NumShards: 100,
+			LRUSize:   1e5,
+		},
+	)
 
 	d := &Dgraph{
 		opts:   opts,
@@ -258,6 +184,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		nquads: make(chan nquadOp, opts.Pending*opts.Size),
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
+		kv:     kv,
 		marks:  make(map[string]waterMark),
 		reqs:   make(chan *Req, opts.Pending*2),
 
@@ -281,54 +208,13 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 	if opts.PrintCounters {
 		go d.printCounters()
 	}
-	go d.batchSync()
 	return d
 }
 
 // Close makes sure that the kv-store is closed properly. This should be called after using the
 // Dgraph client.
 func (d *Dgraph) Close() error {
-	return d.alloc.kv.Close()
-}
-
-func (d *Dgraph) batchSync() {
-	var entries []entry
-	var loop uint64
-	wb := make([]*badger.Entry, 0, 1000)
-
-	for {
-		ent := <-d.alloc.syncCh
-	slurpLoop:
-		for {
-			entries = append(entries, ent)
-			if len(entries) == 1000 {
-				// Avoid making infinite batch, push back against syncCh.
-				break
-			}
-			select {
-			case ent = <-d.alloc.syncCh:
-			default:
-				break slurpLoop
-			}
-		}
-		loop++
-
-		for _, e := range entries {
-			buf := make([]byte, binary.MaxVarintLen64)
-			n := binary.PutUvarint(buf[:], e.value)
-			wb = badger.EntriesSet(wb, []byte(e.key), buf[:n])
-		}
-		if err := d.alloc.kv.BatchSet(wb); err != nil {
-			fmt.Printf("Error while writing to disc %v\n", err)
-		}
-		for _, wbe := range wb {
-			if err := wbe.Error; err != nil {
-				fmt.Printf("Error while writing to disc %v\n", err)
-			}
-		}
-		wb = wb[:0]
-		entries = entries[:0]
-	}
+	return d.kv.Close()
 }
 
 func (d *Dgraph) printCounters() {
@@ -730,6 +616,11 @@ func (d *Dgraph) NodeUid(uid uint64) Node {
 	return Node{uid: uid}
 }
 
+func xidKey(xid string) string {
+	// Prefix to avoid key clashes with other data stored in badger.
+	return "\x01" + xid
+}
+
 // NodeBlank creates or returns a Node given a string name for the blank node. Blank nodes do not
 // exist as labelled nodes in Dgraph. Blank nodes are used as labels client side for loading and
 // linking nodes correctly.  If the label is new in this session a new UID is allocated and
@@ -738,15 +629,13 @@ func (d *Dgraph) NodeUid(uid uint64) Node {
 // but no map is stored, so every call to NodeBlank("") returns a new node.
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 	if len(varname) == 0 {
-		d.alloc.Lock()
-		defer d.alloc.Unlock()
-		uid, err := d.alloc.fetchOne()
+		uid, err := d.alloc.AllocateUid()
 		if err != nil {
 			return Node{}, err
 		}
 		return Node{uid: uid}, nil
 	}
-	uid, _, err := d.alloc.assignOrGet("_:" + varname)
+	uid, _, err := d.alloc.AssignUid(xidKey("_:" + varname))
 	if err != nil {
 		return Node{}, err
 	}
@@ -763,7 +652,7 @@ func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
 	if len(xid) == 0 {
 		return Node{}, ErrEmptyXid
 	}
-	uid, isNew, err := d.alloc.assignOrGet(xid)
+	uid, isNew, err := d.alloc.AssignUid(xidKey(xid))
 	if err != nil {
 		return Node{}, err
 	}
