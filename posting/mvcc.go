@@ -18,8 +18,8 @@
 package posting
 
 import (
-	"math"
 	"sort"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
@@ -41,10 +41,24 @@ func commitTimestamp(startTs uint64) (commitTs uint64, aborted bool, err error) 
 
 type Txn struct {
 	StartTs uint64
-	m       map[string][]*protos.Posting
+	// Fields which can changed after init
+	sync.Mutex
+	m map[string][]*protos.Posting
+	// atomic
+	aborted uint32
+}
+
+func (t *Txn) Abort() {
+	atomic.StoreUint32(&t.aborted, 1)
+}
+
+func (t *Txn) Aborted() uint32 {
+	return atomic.LoadUint32(&t.aborted)
 }
 
 func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
+	t.Lock()
+	defer t.Unlock()
 	if t.m == nil {
 		t.m = make(map[string][]*protos.Posting)
 	}
@@ -54,6 +68,11 @@ func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 // Write All deltas per transaction at once.
 // Called after all mutations are applied in memory and checked for locks/conflicts.
 func (t *Txn) CommitDeltas() error {
+	t.Lock()
+	defer t.Unlock()
+	if t.Aborted() != 0 {
+		return errConflict
+	}
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
@@ -97,7 +116,7 @@ func checkCommitStatus(key []byte, vs uint64) (uint64, bool, error) {
 		return 0, true, nil
 	}
 	if commitTs > 0 {
-		err := commitMutations([][]byte{key}, vs, commitTs)
+		err := commitMutations([][]byte{key}, commitTs)
 		if err == nil {
 			clean(key, vs)
 		}
@@ -108,7 +127,7 @@ func checkCommitStatus(key []byte, vs uint64) (uint64, bool, error) {
 
 // Writes all commit keys of the transaction.
 // Called after all mutations are committed in memory.
-func commitMutations(keys [][]byte, startTs uint64, commitTs uint64) error {
+func commitMutations(keys [][]byte, commitTs uint64) error {
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
@@ -143,6 +162,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 	var commitTs uint64
 	for it.ValidForPrefix(l.key) {
+		// TODO: Break when key changes.
 		item := it.Item()
 		if item.UserMeta()&bitCommitMarker != 0 {
 			// CommitMarkers and Deltas are always interleaved.
@@ -188,7 +208,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			if commitTs > 0 {
 				mpost.Commit = commitTs
 			} else {
-				mpost.Commit = math.MaxUint64 // Uncomitted entries would be at front.
+				mpost.Commit = item.Version()
 			}
 		}
 		l.mlayer = append(l.mlayer, pl.Postings...)

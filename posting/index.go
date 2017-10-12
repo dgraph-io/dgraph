@@ -159,11 +159,11 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge, txn *Txn) e
 	hasCountIndex := schema.State().HasCount(t.Attr)
 	plist.Lock()
 	if hasCountIndex {
-		countBefore = plist.length(0)
+		countBefore = plist.length(txn.StartTs, 0)
 	}
 	_, err := plist.addMutation(ctx, txn, edge)
 	if hasCountIndex {
-		countAfter = plist.length(0)
+		countAfter = plist.length(txn.StartTs, 0)
 	}
 	plist.Unlock()
 	if err != nil {
@@ -326,11 +326,11 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 		countBefore, countAfter := 0, 0
 		hasCountIndex := schema.State().HasCount(t.Attr)
 		if hasCountIndex {
-			countBefore = l.length(0)
+			countBefore = l.length(txn.StartTs, 0)
 		}
 		_, err := l.addMutation(ctx, txn, t)
 		if hasCountIndex {
-			countAfter = l.length(0)
+			countAfter = l.length(txn.StartTs, 0)
 		}
 		l.Unlock()
 
@@ -630,8 +630,6 @@ func RebuildReverseEdges(ctx context.Context, attr string, txn *Txn) error {
 	return nil
 }
 
-// TODO(txn): Fix this we need to delete
-// It would explode the write set.
 func DeleteIndex(ctx context.Context, attr string) error {
 	err := lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteIndex)
@@ -649,6 +647,7 @@ func DeleteIndex(ctx context.Context, attr string) error {
 }
 
 // RebuildIndex rebuilds index for a given attribute.
+// Ignore for now
 func RebuildIndex(ctx context.Context, attr string, txn *Txn) error {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 	// Add index entries to data store.
