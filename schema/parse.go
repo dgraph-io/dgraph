@@ -209,7 +209,7 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 			return tokenizers, x.Errorf("Invalid tokenizer %s", next.Val)
 		}
 		tokenizerType, ok := types.TypeForName(tokenizer.Type())
-		x.AssertTrue(ok) // Type is either valid (built in) or validated upon loading (custom).
+		x.AssertTrue(ok) // Type is validated during tokenizer loading.
 		if tokenizerType != typ {
 			return tokenizers,
 				x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
@@ -263,7 +263,7 @@ func resolveTokenizers(updates []*protos.SchemaUpdate) error {
 				return x.Errorf("Invalid tokenizer %s", t)
 			}
 			tokenizerType, ok := types.TypeForName(tokenizer.Type())
-			x.AssertTrue(ok) // Type is either valid (built in) or validated upon loading (custom).
+			x.AssertTrue(ok) // Type is validated during tokenizer loading.
 			if tokenizerType != typ {
 				return x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
 					tokenizer.Name(), schema.Predicate, typ.Name())

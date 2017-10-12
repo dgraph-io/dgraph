@@ -29,7 +29,7 @@ func (t CIDRTokenizer) Tokens(value interface{}) ([]string, error) {
 			IP:   ipnet.IP.Mask(m),
 			Mask: m,
 		}
-		toks = append(toks, string(t.Identifier())+tok.String())
+		toks = append(toks, tok.String())
 	}
 	return toks, nil
 }
