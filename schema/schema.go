@@ -259,7 +259,11 @@ func LoadFromDb() error {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		attr := x.Parse(key).Attr
+		pk := x.Parse(key)
+		if pk == nil {
+			continue
+		}
+		attr := pk.Attr
 		var s protos.SchemaUpdate
 		err := item.Value(func(val []byte) error {
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")

@@ -63,7 +63,7 @@ func removeDirs(dirs []string) {
 var dgraphClient *client.Dgraph
 
 func TestMain(m *testing.M) {
-	x.Init()
+	x.Init(true)
 	x.Logger = log.New(ioutil.Discard, "", 0)
 	dirs, options := prepare()
 	defer removeDirs(dirs)
