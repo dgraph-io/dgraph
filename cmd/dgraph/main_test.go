@@ -134,6 +134,10 @@ func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*proto
 	return in, nil
 }
 
+func (z *zeroServer) Timestamps(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
+	return &protos.AssignedIds{}, nil
+}
+
 func StartDummyZero() *grpc.Server {
 	ln, err := net.Listen("tcp", "localhost:12341")
 	x.Check(err)
