@@ -24,6 +24,7 @@ The go client communicates with the server on the grpc port (set with option `--
 Go get the client:
 ```
 go get -u -v github.com/dgraph-io/dgraph/client
+cd $GOPATH/src/github.com/dgraph-io/dgraph && git checkout release/v0.8.3
 ```
 
 #### Examples

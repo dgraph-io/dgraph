@@ -1943,7 +1943,7 @@ func TestMain(m *testing.M) {
 	dc := dgraph.DefaultConfig
 	dc.AllottedMemory = 2048.0
 	dgraph.SetConfiguration(dc)
-	x.Init()
+	x.Init(true)
 
 	dir1, dir2, _ := prepare()
 	time.Sleep(10 * time.Millisecond)

@@ -35,7 +35,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	x.Init()
+	x.Init(true)
 	x.Logger = log.New(ioutil.Discard, "", 0)
 	os.Exit(m.Run())
 }

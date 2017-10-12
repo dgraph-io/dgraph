@@ -150,6 +150,10 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 		item := itr.Item()
 
 		pk := x.Parse(item.Key())
+		if pk == nil {
+			itr.Next()
+			continue
+		}
 		if pk.IsSchema() {
 			itr.Seek(pk.SkipSchema())
 			continue
@@ -489,6 +493,10 @@ func (g *groupi) cleanupTablets() {
 				item := itr.Item()
 
 				pk := x.Parse(item.Key())
+				if pk == nil {
+					itr.Next()
+					continue
+				}
 
 				// Delete at most one predicate at a time.
 				// Tablet is not being served by me and is not read only.
