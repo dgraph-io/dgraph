@@ -415,6 +415,9 @@ func deleteEntries(prefix []byte) error {
 
 func compareAttrAndType(key []byte, attr string, typ byte) bool {
 	pk := x.Parse(key)
+	if pk == nil {
+		return true
+	}
 	if pk.Attr == attr && pk.IsType(typ) {
 		return true
 	}
@@ -502,6 +505,9 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		iterItem := it.Item()
 		key := iterItem.Key()
 		pki := x.Parse(key)
+		if pki == nil {
+			continue
+		}
 		var pl protos.PostingList
 		err := iterItem.Value(func(val []byte) error {
 			UnmarshalOrCopy(val, iterItem.UserMeta(), &pl)
@@ -610,6 +616,9 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 			break
 		}
 		pki := x.Parse(key)
+		if pki == nil {
+			continue
+		}
 		var pl protos.PostingList
 		err := iterItem.Value(func(val []byte) error {
 			UnmarshalOrCopy(val, iterItem.UserMeta(), &pl)
@@ -712,6 +721,9 @@ func RebuildIndex(ctx context.Context, attr string) error {
 			break
 		}
 		pki := x.Parse(key)
+		if pki == nil {
+			continue
+		}
 		var pl protos.PostingList
 		err := iterItem.Value(func(val []byte) error {
 			UnmarshalOrCopy(val, iterItem.UserMeta(), &pl)

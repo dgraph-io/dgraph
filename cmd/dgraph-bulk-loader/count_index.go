@@ -28,7 +28,7 @@ type countIndexer struct {
 // sorted order.
 func (c *countIndexer) addUid(rawKey []byte, count int) {
 	key := x.Parse(rawKey)
-	if !key.IsData() && !key.IsReverse() {
+	if key == nil || (!key.IsData() && !key.IsReverse()) {
 		return
 	}
 	sameIndexKey := key.Attr == c.cur.pred && key.IsReverse() == c.cur.rev

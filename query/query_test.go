@@ -9629,3 +9629,18 @@ func TestPasswordError(t *testing.T) {
 	require.Contains(t,
 		err.Error(), "checkpwd fn can only be used on attr: [name] with schema type password. Got type: string")
 }
+
+func TestCountPanic(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1, 300)) {
+			_uid_
+			name
+			count(name)
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"q":[{"_uid_":"0x1","name":"Michonne","count(name)":1},{"_uid_":"0x12c","count(name)":0}]}}`, js)
+}
