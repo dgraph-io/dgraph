@@ -209,6 +209,43 @@ func (l *loader) Counter() Counter {
 	}
 }
 
+func (d *Dgraph) stopTickers() {
+	if d.ticker != nil {
+		d.ticker.Stop()
+	}
+	if d.checkpointTicker != nil {
+		d.checkpointTicker.Stop()
+	}
+}
+
+// BatchFlush waits for all pending requests to complete. It should always be called after all
+// BatchSet and BatchDeletes have been called.  Calling BatchFlush ends the client session and
+// will cause a panic if further AddSchema, BatchSet or BatchDelete functions are called.
+func (d *Dgraph) BatchFlush() error {
+	close(d.nquads)
+	close(d.schema)
+	for i := 0; i < d.opts.Pending+2; i++ {
+		select {
+		case err := <-d.che:
+			if err != nil {
+				// To signal other go-routines to stop.
+				d.stopTickers()
+				return err
+			}
+		}
+	}
+
+	// After we have received response from server and sent the marks for completion,
+	// we need to wait for all of them to be processed.
+	for _, wm := range d.marks {
+		wm.wg.Wait()
+	}
+	// Write final checkpoint before stopping.
+	d.writeCheckpoint()
+	d.stopTickers()
+	return nil
+}
+
 // TODO - Temporarily break checkpointing.
 // BatchSetWithMark takes a Req which has a batch of edges. It accepts a file to which the edges
 // belong and also the line number of the last line that the batch contains. This is used by the

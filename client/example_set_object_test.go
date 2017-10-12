@@ -3,9 +3,7 @@ package client_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,12 +33,7 @@ func Example_setObject() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Check(err)
-	defer os.RemoveAll(clientDir)
-
-	dgraphClient := client.NewDgraphClient(
-		[]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn})
 
 	req := client.Req{}
 
