@@ -100,12 +100,12 @@ func LoadCustomTokenizer(soFile string) {
 	// Let any type assertion panics occur, since they will contain a message
 	// telling the user what went wrong. Otherwise it's hard to capture this
 	// information to pass on to the user.
-	tokenizer := symb.(func() interface{})().(Tokenizer)
+	tokenizer := symb.(func() interface{})().(PluginTokenizer)
 
 	id := tokenizer.Identifier()
 	x.AssertTruef(id >= 0x80,
 		"custom tokenizer identifier byte must be >= 0x80, but was %#x", id)
-	registerTokenizer(tokenizer)
+	registerTokenizer(CustomTokenizer{PluginTokenizer: tokenizer})
 }
 
 // GetTokenizer returns tokenizer given unique name.
@@ -367,3 +367,21 @@ func (t HashTokenizer) Tokens(v interface{}) ([]string, error) {
 func (t HashTokenizer) Identifier() byte { return 0xB }
 func (t HashTokenizer) IsSortable() bool { return false }
 func (t HashTokenizer) IsLossy() bool    { return true }
+
+// PluginTokenizer is implemented by external plugins loaded dynamically via
+// *.so files. It follows the implementation semantics of the Tokenizer
+// interface.
+type PluginTokenizer interface {
+	Name() string
+	Type() string
+	Tokens(value interface{}) ([]string, error)
+	Identifier() byte
+}
+
+type CustomTokenizer struct {
+	PluginTokenizer
+}
+
+// It doesn't make sense for plugins to implement the following methods, so they're hardcoded.
+func (CustomTokenizer) IsSortable() bool { return false }
+func (CustomTokenizer) IsLossy() bool    { return true }

@@ -12,8 +12,7 @@ type FactorTokenizer struct{}
 func (FactorTokenizer) Name() string     { return "factor" }
 func (FactorTokenizer) Type() string     { return "int" }
 func (FactorTokenizer) Identifier() byte { return 0xfe }
-func (FactorTokenizer) IsSortable() bool { return false }
-func (FactorTokenizer) IsLossy() bool    { return true }
+
 func (FactorTokenizer) Tokens(value interface{}) ([]string, error) {
 	x := value.(int64)
 	if x <= 1 {

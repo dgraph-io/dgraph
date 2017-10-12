@@ -14,8 +14,7 @@ type CIDRTokenizer struct {
 func (CIDRTokenizer) Name() string     { return "cidr" }
 func (CIDRTokenizer) Type() string     { return "string" }
 func (CIDRTokenizer) Identifier() byte { return 0xff }
-func (CIDRTokenizer) IsSortable() bool { return false }
-func (CIDRTokenizer) IsLossy() bool    { return true }
+
 func (t CIDRTokenizer) Tokens(value interface{}) ([]string, error) {
 	_, ipnet, err := net.ParseCIDR(value.(string))
 	if err != nil {
