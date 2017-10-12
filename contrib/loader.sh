@@ -58,6 +58,7 @@ curl -X POST  -d 'mutation {
 
 res=$(curl -X POST  -d 'schema {}' "http://localhost:8080/query")
 expected='{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"initial_release_date","type":"datetime","index":true,"tokenizer":["year"]},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]},{"predicate":"xid","type":"string","index":true,"tokenizer":["exact"]}]}}'
+echo -e "Response $res"
 if [[ "$res" != "$expected" ]]; then
   echo "Schema comparison failed."
   quit 1
