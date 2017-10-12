@@ -1442,7 +1442,8 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 
 	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
 		key := it.Item().Key()
-		pl := posting.Get(key)
+		nk := make([]byte, len(key))
+		pl := posting.Get(nk)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 	}
 	return nil
