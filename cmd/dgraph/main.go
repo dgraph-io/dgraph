@@ -740,7 +740,7 @@ func main() {
 	runtime.GOMAXPROCS(128)
 
 	setupConfigOpts() // flag.Parse is called here.
-	x.Init()
+	x.Init(dgraph.Config.DebugMode)
 
 	setupProfiling()
 

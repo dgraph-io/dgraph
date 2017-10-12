@@ -268,7 +268,9 @@ func Parse(key []byte) *ParsedKey {
 	switch p.byteType {
 	case ByteData, ByteReverse:
 		if len(k) < 8 {
-			fmt.Printf("Error: Uid length < 8 for key: %q, parsed key: %+v\n", key, p)
+			if Config.DebugMode {
+				fmt.Printf("Error: Uid length < 8 for key: %q, parsed key: %+v\n", key, p)
+			}
 			return nil
 		}
 		p.Uid = binary.BigEndian.Uint64(k)
@@ -276,7 +278,9 @@ func Parse(key []byte) *ParsedKey {
 		p.Term = string(k)
 	case ByteCount, ByteCountRev:
 		if len(k) < 4 {
-			fmt.Printf("Error: Count length < 4 for key: %q, parsed key: %+v\n", key, p)
+			if Config.DebugMode {
+				fmt.Printf("Error: Count length < 4 for key: %q, parsed key: %+v\n", key, p)
+			}
 			return nil
 		}
 		p.Count = binary.BigEndian.Uint32(k)
