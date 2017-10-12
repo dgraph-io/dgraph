@@ -27,6 +27,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -41,11 +42,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/xidmap"
 
 	"github.com/pkg/profile"
 )
@@ -260,6 +264,63 @@ func fileList(files string) []string {
 	return strings.Split(files, ",")
 }
 
+func setup() *loader {
+	x.Check(os.MkdirAll(clientDir, 0700))
+	opt := badger.DefaultOptions
+	opt.SyncWrites = true // So that checkpoints are persisted immediately.
+	opt.TableLoadingMode = options.MemoryMap
+	opt.Dir = clientDir
+	opt.ValueDir = clientDir
+
+	kv, err := badger.NewKV(&opt)
+	x.Checkf(err, "Error while creating badger KV posting store")
+	if opts.Ctx == nil {
+		// If the user doesn't give a context we supply one because we check ctx.Done().
+		opts.Ctx = context.TODO()
+	}
+	alloc := xidmap.New(kv,
+		&uidProvider{
+			dc:  clients[0],
+			ctx: opts.Ctx,
+		},
+		xidmap.Options{
+			NumShards: 100,
+			LRUSize:   1e5,
+		},
+	)
+
+	l := &loader{
+		opts:   opts,
+		dc:     clients,
+		start:  time.Now(),
+		nquads: make(chan nquadOp, opts.Pending*opts.Size),
+		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
+		alloc:  alloc,
+		kv:     kv,
+		marks:  make(map[string]waterMark),
+		reqs:   make(chan *Req, opts.Pending*2),
+
+		// length includes opts.Pending for makeRequests, another two for makeSchemaRequests and
+		// 	batchNquads.
+		che: make(chan error, opts.Pending+2),
+	}
+	if opts.MaxRetries == 0 {
+		l.opts.MaxRetries = DefaultOptions.MaxRetries
+	}
+
+	go l.batchNquads()
+
+	for i := 0; i < opts.Pending; i++ {
+		go l.makeRequests()
+	}
+	go l.makeSchemaRequests()
+
+	rand.Seed(time.Now().Unix())
+	if opts.PrintCounters {
+		go l.printCounters()
+	}
+}
+
 func main() {
 	flag.Parse()
 	if *version {
@@ -314,6 +375,9 @@ func main() {
 		dgraphClient.CheckVersion(ctxTimeout)
 		cancelTimeout()
 	}
+
+	l := setup()
+	defer l.kv.Close()
 
 	if *storeXid {
 		if err := dgraphClient.AddSchema(protos.SchemaUpdate{

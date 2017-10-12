@@ -20,117 +20,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/rand"
-	"os"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/xidmap"
 )
 
 var (
-	ErrConnected      = errors.New("Edge already connected to another node.")
-	ErrValue          = errors.New("Edge already has a value.")
-	ErrEmptyXid       = errors.New("Empty XID node.")
-	ErrInvalidType    = errors.New("Invalid value type")
-	ErrEmptyVar       = errors.New("Empty variable name.")
-	ErrNotConnected   = errors.New("Edge needs to be connected to another node or a value.")
-	ErrInvalidSubject = errors.New("Edge should have one of Subject/SubjectVar set.")
-	ErrEmptyPredicate = errors.New("Edge should have a predicate set.")
-	ErrMaxTries       = errors.New("Max retries exceeded for request while doing batch mutations.")
-	emptyEdge         Edge
+	ErrMaxTries = errors.New("Max retries exceeded for request while doing batch mutations.")
+	emptyEdge   Edge
 )
 
-// BatchMutationOptions sets the clients batch mode to Pending number of buffers each of Size.
-// Running counters of number of rdfs processed, total time and mutations per second are printed
-// if PrintCounters is set true.  See Counter.
-type BatchMutationOptions struct {
-	Size          int
-	Pending       int
-	PrintCounters bool
-	MaxRetries    uint32
-	// User could pass a context so that we can stop retrying requests once context is done
-	Ctx context.Context
-}
-
-var DefaultOptions = BatchMutationOptions{
-	Size:          100,
-	Pending:       100,
-	PrintCounters: false,
-	MaxRetries:    math.MaxUint32,
-}
-
-type uidProvider struct {
-	dc  protos.DgraphClient
-	ctx context.Context
-}
-
-func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
-	factor := time.Second
-	for {
-		assignedIds, err := p.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
-		if err == nil {
-			return assignedIds.StartId, assignedIds.EndId, nil
-		}
-		x.Printf("Error while getting lease %v\n", err)
-		select {
-		case <-time.After(factor):
-		case <-p.ctx.Done():
-			return 0, 0, p.ctx.Err()
-		}
-		if factor < 256*time.Second {
-			factor = factor * 2
-		}
-	}
-}
-
-// Counter keeps a track of various parameters about a batch mutation. Running totals are printed
-// if BatchMutationOptions PrintCounters is set to true.
-type Counter struct {
-	// Number of RDF's processed by server.
-	Rdfs uint64
-	// Number of mutations processed by the server.
-	Mutations uint64
-	// Time elapsed sinze the batch started.
-	Elapsed time.Duration
-}
-
-// A Dgraph is the data structure held by the user program for all interactions with the Dgraph
-// server.  After making grpc connection a new Dgraph is created by function NewDgraphClient.
 type Dgraph struct {
 	opts BatchMutationOptions
 
 	schema chan protos.SchemaUpdate
-	nquads chan nquadOp
 	dc     []protos.DgraphClient
-	alloc  *xidmap.XidMap
-	ticker *time.Ticker
-	kv     *badger.KV
-
-	// Miscellaneous information to print counters.
-	// Num of RDF's sent
-	rdfs uint64
-	// Num of mutations sent
-	mutations uint64
-	// To get time elapsed.
-	start time.Time
-
-	// Map of filename to x.Watermark. Used for checkpointing.
-	marks            syncMarks
-	reqs             chan *Req
-	checkpointTicker *time.Ticker // Used to write checkpoints periodically.
-	che              chan error
-	// In case of max retries exceeded, we set this to 1.
-	retriesExceeded int32
 }
 
 // NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
@@ -142,79 +51,22 @@ type Dgraph struct {
 //
 // A single client is thread safe for sharing with multiple go routines (though a single Req
 // should not be shared unless the go routines negotiate exclusive assess to the Req functions).
-func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
+func NewDgraphClient(conns []*grpc.ClientConn) *Dgraph {
 	var clients []protos.DgraphClient
 	for _, conn := range conns {
 		client := protos.NewDgraphClient(conn)
 		clients = append(clients, client)
 	}
-	return NewClient(clients, opts, clientDir)
+	return NewClient(clients)
 }
 
 // TODO(tzdybal) - hide this function from users
-func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientDir string) *Dgraph {
-	x.Check(os.MkdirAll(clientDir, 0700))
-	opt := badger.DefaultOptions
-	opt.SyncWrites = true // So that checkpoints are persisted immediately.
-	opt.TableLoadingMode = options.MemoryMap
-	opt.Dir = clientDir
-	opt.ValueDir = clientDir
-
-	kv, err := badger.NewKV(&opt)
-	x.Checkf(err, "Error while creating badger KV posting store")
-	if opts.Ctx == nil {
-		// If the user doesn't give a context we supply one because we check ctx.Done().
-		opts.Ctx = context.TODO()
-	}
-	alloc := xidmap.New(kv,
-		&uidProvider{
-			dc:  clients[0],
-			ctx: opts.Ctx,
-		},
-		xidmap.Options{
-			NumShards: 100,
-			LRUSize:   1e5,
-		},
-	)
-
+func NewClient(clients []protos.DgraphClient) *Dgraph {
 	d := &Dgraph{
-		opts:   opts,
-		dc:     clients,
-		start:  time.Now(),
-		nquads: make(chan nquadOp, opts.Pending*opts.Size),
-		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
-		alloc:  alloc,
-		kv:     kv,
-		marks:  make(map[string]waterMark),
-		reqs:   make(chan *Req, opts.Pending*2),
-
-		// length includes opts.Pending for makeRequests, another two for makeSchemaRequests and
-		// 	batchNquads.
-		che: make(chan error, opts.Pending+2),
+		dc: clients,
 	}
 
-	if opts.MaxRetries == 0 {
-		d.opts.MaxRetries = DefaultOptions.MaxRetries
-	}
-
-	go d.batchNquads()
-
-	for i := 0; i < opts.Pending; i++ {
-		go d.makeRequests()
-	}
-	go d.makeSchemaRequests()
-
-	rand.Seed(time.Now().Unix())
-	if opts.PrintCounters {
-		go d.printCounters()
-	}
 	return d
-}
-
-// Close makes sure that the kv-store is closed properly. This should be called after using the
-// Dgraph client.
-func (d *Dgraph) Close() error {
-	return d.kv.Close()
 }
 
 func (d *Dgraph) printCounters() {
@@ -229,65 +81,6 @@ func (d *Dgraph) printCounters() {
 			counter.Mutations, counter.Rdfs, rate, elapsed)
 
 	}
-}
-
-func (d *Dgraph) request(req *Req) error {
-	counter := atomic.AddUint64(&d.mutations, 1)
-	factor := time.Second
-	var retries uint32
-RETRY:
-	select {
-	case <-d.opts.Ctx.Done():
-		return d.opts.Ctx.Err()
-	default:
-	}
-	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
-	if err != nil {
-		errString := err.Error()
-		// Irrecoverable
-		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
-			return err
-		}
-		if !strings.Contains(errString, "Temporary Error") {
-			fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
-		}
-		time.Sleep(factor)
-		if factor < 256*time.Second {
-			factor = factor * 2
-		}
-		if retries >= d.opts.MaxRetries {
-			atomic.CompareAndSwapInt32(&d.retriesExceeded, 0, 1)
-			return ErrMaxTries
-		}
-		retries++
-		goto RETRY
-	}
-
-	// Mark watermarks as done.
-	if req.line != 0 && req.mark != nil {
-		req.mark.Done(req.line)
-		req.markWg.Done()
-	}
-	atomic.AddUint64(&d.rdfs, uint64(req.Size()))
-	return nil
-}
-
-// makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
-// It doesn't need to batch the requests anymore. Batching is already done for it by the
-// caller functions.
-func (d *Dgraph) makeRequests() {
-	for req := range d.reqs {
-		if atomic.LoadInt32(&d.retriesExceeded) == 1 {
-			d.che <- ErrMaxTries
-			return
-		}
-
-		if err := d.request(req); err != nil {
-			d.che <- err
-			return
-		}
-	}
-	d.che <- nil
 }
 
 func (d *Dgraph) makeSchemaRequests() {
@@ -321,114 +114,6 @@ LOOP:
 		d.request(req)
 	}
 	d.che <- nil
-}
-
-// Used to batch the nquads into Req of size given by user and send to d.reqs channel.
-func (d *Dgraph) batchNquads() {
-	req := new(Req)
-	for n := range d.nquads {
-		if atomic.LoadInt32(&d.retriesExceeded) == 1 {
-			d.che <- ErrMaxTries
-			return
-		}
-
-		if n.op == SET {
-			req.Set(n.e)
-		} else if n.op == DEL {
-			req.Delete(n.e)
-		}
-		if req.Size() == d.opts.Size {
-			d.reqs <- req
-			req = new(Req)
-		}
-	}
-
-	if req.Size() > 0 {
-		d.reqs <- req
-	}
-	close(d.reqs)
-	d.che <- nil
-}
-
-// BatchSet adds Edge e as a set to the current batch mutation.  Once added, the client will apply
-// the mutation to the Dgraph server when it is ready to flush its buffers.  The edge will be added
-// to one of the batches as specified in d's BatchMutationOptions.  If that batch fills, it
-// eventually flushes.  But there is no guarantee of delivery before BatchFlush() is called.
-func (d *Dgraph) BatchSet(e Edge) error {
-	nq := nquadOp{
-		e:  e,
-		op: SET,
-	}
-L:
-	for {
-		select {
-		case d.nquads <- nq:
-			break L
-		default:
-			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
-				return ErrMaxTries
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-	}
-	return nil
-}
-
-// BatchSetWithMark takes a Req which has a batch of edges. It accepts a file to which the edges
-// belong and also the line number of the last line that the batch contains. This is used by the
-// dgraph-live-loader to do checkpointing so that in case the loader crashes, we can skip the lines
-// which the server has already processed. Most users would only need BatchSet which does the
-// batching automatically.
-func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
-	sm := d.marks[file]
-	if sm.mark != nil && line != 0 {
-		r.mark = sm.mark
-		r.line = line
-		r.markWg = sm.wg
-		sm.mark.Begin(line)
-		sm.wg.Add(1)
-	}
-
-L:
-	for {
-		select {
-		case <-d.opts.Ctx.Done():
-			return d.opts.Ctx.Err()
-		case d.reqs <- r:
-			break L
-		default:
-			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
-				return ErrMaxTries
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-	}
-	return nil
-}
-
-// BatchDelete adds Edge e as a delete to the current batch mutation.  Once added, the client will
-// apply the mutation to the Dgraph server when it is ready to flush its buffers.  The edge will
-// be added to one of the batches as specified in d's BatchMutationOptions.  If that batch fills,
-// it eventually flushes.  But there is no guarantee of delivery before BatchFlush() is called.
-func (d *Dgraph) BatchDelete(e Edge) error {
-	nq := nquadOp{
-		e:  e,
-		op: DEL,
-	}
-L:
-	for {
-		select {
-		case d.nquads <- nq:
-			break L
-		default:
-			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
-				return ErrMaxTries
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-	}
-	atomic.AddUint64(&d.rdfs, 1)
-	return nil
 }
 
 // DropAll deletes all edges and schema from Dgraph.
