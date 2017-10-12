@@ -7030,7 +7030,7 @@ func StartDummyZero() *grpc.Server {
 }
 
 func TestMain(m *testing.M) {
-	x.Init()
+	x.Init(true)
 
 	StartDummyZero()
 
