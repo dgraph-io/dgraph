@@ -60,12 +60,12 @@ func initFullTextTokenizers() {
 		defineStemmer(lang)
 		defineStopWordsList(lang)
 		defineAnalyzer(lang)
-		RegisterTokenizer(&FullTextTokenizer{Lang: countryCode(lang)})
+		registerTokenizer(&FullTextTokenizer{Lang: countryCode(lang)})
 	}
 
 	// Default full text tokenizer, with Porter stemmer (it works with English only).
 	defineDefaultFullTextAnalyzer()
-	RegisterTokenizer(FullTextTokenizer{})
+	registerTokenizer(FullTextTokenizer{})
 }
 
 // Create normalizer using Normalization Form KC (NFKC) - Compatibility Decomposition, followed

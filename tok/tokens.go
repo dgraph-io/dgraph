@@ -18,7 +18,6 @@
 package tok
 
 import (
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -43,6 +42,5 @@ func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {
 		return nil, x.Errorf("Function requires 1 arguments, but got %d",
 			len(funcArgs))
 	}
-	sv := types.Val{types.StringID, funcArgs[0]}
-	return tokenizer.Tokens(sv)
+	return tokenizer.Tokens(funcArgs[0])
 }

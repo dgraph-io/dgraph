@@ -4,8 +4,20 @@ import (
 	"net"
 )
 
-func Tokens(s string) ([]string, error) {
-	_, ipnet, err := net.ParseCIDR(s)
+func Tokenizer() interface{} {
+	return CIDRTokenizer{}
+}
+
+type CIDRTokenizer struct {
+}
+
+func (CIDRTokenizer) Name() string     { return "cidr" }
+func (CIDRTokenizer) Type() string     { return "string" }
+func (CIDRTokenizer) Identifier() byte { return 0xff }
+func (CIDRTokenizer) IsSortable() bool { return false }
+func (CIDRTokenizer) IsLossy() bool    { return true }
+func (t CIDRTokenizer) Tokens(value interface{}) ([]string, error) {
+	_, ipnet, err := net.ParseCIDR(value.(string))
 	if err != nil {
 		return nil, err
 	}
@@ -17,7 +29,7 @@ func Tokens(s string) ([]string, error) {
 			IP:   ipnet.IP.Mask(m),
 			Mask: m,
 		}
-		toks = append(toks, tok.String())
+		toks = append(toks, string(t.Identifier())+tok.String())
 	}
 	return toks, nil
 }

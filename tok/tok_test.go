@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -67,10 +66,8 @@ func TestFullTextTokenizer(t *testing.T) {
 	tokenizer, has := GetTokenizer("fulltext")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
-	val := types.ValueForType(types.StringID)
-	val.Value = "Stemming works!"
 
-	tokens, err := tokenizer.Tokens(val)
+	tokens, err := tokenizer.Tokens("Stemming works!")
 	require.Nil(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -82,11 +79,10 @@ func TestHourTokenizer(t *testing.T) {
 	tokenizer, has := GetTokenizer("hour")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
-	val := types.ValueForType(types.DateTimeID)
-	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	dt, err := time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
 	require.NoError(t, err)
 
-	tokens, err := tokenizer.Tokens(val)
+	tokens, err := tokenizer.Tokens(dt)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
 	require.Equal(t, 1+2*4, len(tokens[0]))
@@ -97,11 +93,10 @@ func TestDayTokenizer(t *testing.T) {
 	tokenizer, has := GetTokenizer("day")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
-	val := types.ValueForType(types.DateTimeID)
-	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	dt, err := time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
 	require.NoError(t, err)
 
-	tokens, err := tokenizer.Tokens(val)
+	tokens, err := tokenizer.Tokens(dt)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
 	require.Equal(t, 1+2*3, len(tokens[0]))
@@ -112,11 +107,10 @@ func TestMonthTokenizer(t *testing.T) {
 	tokenizer, has := GetTokenizer("month")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
-	val := types.ValueForType(types.DateTimeID)
-	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	dt, err := time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
 	require.NoError(t, err)
 
-	tokens, err := tokenizer.Tokens(val)
+	tokens, err := tokenizer.Tokens(dt)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
 	require.Equal(t, 1+2*2, len(tokens[0]))
@@ -127,11 +121,10 @@ func TestDateTimeTokenizer(t *testing.T) {
 	tokenizer, has := GetTokenizer("year")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
-	val := types.ValueForType(types.DateTimeID)
-	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	dt, err := time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
 	require.NoError(t, err)
 
-	tokens, err := tokenizer.Tokens(val)
+	tokens, err := tokenizer.Tokens(dt)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
 	require.Equal(t, 1+2, len(tokens[0]))
@@ -141,10 +134,8 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	tokenizer, has := GetTokenizer(FtsTokenizerName("de"))
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
-	val := types.ValueForType(types.StringID)
-	val.Value = "Katzen und Auffassung"
 
-	tokens, err := tokenizer.Tokens(val)
+	tokens, err := tokenizer.Tokens("Katzen und Auffassung")
 	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -156,10 +147,8 @@ func TestTermTokenizer(t *testing.T) {
 	tokenizer, has := GetTokenizer("term")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
-	val := types.ValueForType(types.StringID)
-	val.Value = "Tokenizer works!"
 
-	tokens, err := tokenizer.Tokens(val)
+	tokens, err := tokenizer.Tokens("Tokenizer works!")
 	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -170,9 +159,7 @@ func TestTrigramTokenizer(t *testing.T) {
 	tokenizer, has := GetTokenizer("trigram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
-	val := types.ValueForType(types.StringID)
-	val.Value = "Dgraph rocks!"
-	tokens, err := tokenizer.Tokens(val)
+	tokens, err := tokenizer.Tokens("Dgraph rocks!")
 	require.NoError(t, err)
 	require.Equal(t, 11, len(tokens))
 	id := tokenizer.Identifier()
@@ -194,8 +181,7 @@ func TestTrigramTokenizer(t *testing.T) {
 }
 
 func TestGetBleveTokens(t *testing.T) {
-	val := types.ValueForType(types.StringID)
-	val.Value = "Our chief weapon is surprise...surprise and fear...fear and surprise...." +
+	val := "Our chief weapon is surprise...surprise and fear...fear and surprise...." +
 		"Our two weapons are fear and surprise...and ruthless efficiency.... " +
 		"Our three weapons are fear, surprise, and ruthless efficiency..."
 	tokens, err := getBleveTokens(FTSTokenizerName, 0x20, val) // use space as identifier

@@ -126,7 +126,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	}
 
 	// Get the token for the value passed in function.
-	ineqTokens, err := tokenizer.Tokens(ineqValue)
+	ineqTokens, err := tokenizer.Tokens(ineqValue.Value)
 	if err != nil {
 		return nil, "", err
 	}

@@ -19,8 +19,6 @@ package tok
 
 import (
 	"encoding/binary"
-	"fmt"
-	"path/filepath"
 	"plugin"
 	"strings"
 	"time"
@@ -38,13 +36,15 @@ type Tokenizer interface {
 	// Name is name of tokenizer. This should be unique.
 	Name() string
 
-	// Type returns typeID that we care about.
-	Type() types.TypeID
+	// Type returns the string representation of the typeID that we care about.
+	Type() string
 
 	// Tokens return tokens for a given value.
-	Tokens(sv types.Val) ([]string, error)
+	Tokens(value interface{}) ([]string, error)
 
-	// Identifier returns the prefix byte for this token type.
+	// Identifier returns the prefix byte for this token type. This should be
+	// unique. The range 0x80 to 0xff (inclusive) is reserved for user-provided
+	// custom tokenizers.
 	Identifier() byte
 
 	// IsSortable returns true if the tokenizer can be used for sorting/ordering.
@@ -56,40 +56,41 @@ type Tokenizer interface {
 	IsLossy() bool
 }
 
-var (
-	tokenizers map[string]Tokenizer
-	defaults   map[types.TypeID]Tokenizer
-)
+var tokenizers map[string]Tokenizer
 
 func init() {
-	RegisterTokenizer(GeoTokenizer{})
-	RegisterTokenizer(IntTokenizer{})
-	RegisterTokenizer(FloatTokenizer{})
-	RegisterTokenizer(YearTokenizer{})
-	RegisterTokenizer(HourTokenizer{})
-	RegisterTokenizer(MonthTokenizer{})
-	RegisterTokenizer(DayTokenizer{})
-	RegisterTokenizer(TermTokenizer{})
-	RegisterTokenizer(ExactTokenizer{})
-	RegisterTokenizer(BoolTokenizer{})
-	RegisterTokenizer(TrigramTokenizer{})
-	RegisterTokenizer(HashTokenizer{})
-
-	// Check for duplicate prefix bytes.
-	usedIds := map[byte]struct{}{
-		// All custom tokenizers share the same identifier, but we still don't
-		// want clashes with other tokenizers.
-		CustomTokenizer{}.Identifier(): struct{}{},
-	}
-	for _, tok := range tokenizers {
-		tokID := tok.Identifier()
-		_, ok := usedIds[tokID]
-		x.AssertTruef(!ok, "Same ID used by multiple tokenizers: %#x", tokID)
-		usedIds[tokID] = struct{}{}
-	}
-
-	// all full-text tokenizers share the same Identifier, so we skip the test
+	registerTokenizer(GeoTokenizer{})
+	registerTokenizer(IntTokenizer{})
+	registerTokenizer(FloatTokenizer{})
+	registerTokenizer(YearTokenizer{})
+	registerTokenizer(HourTokenizer{})
+	registerTokenizer(MonthTokenizer{})
+	registerTokenizer(DayTokenizer{})
+	registerTokenizer(TermTokenizer{})
+	registerTokenizer(ExactTokenizer{})
+	registerTokenizer(BoolTokenizer{})
+	registerTokenizer(TrigramTokenizer{})
+	registerTokenizer(HashTokenizer{})
 	initFullTextTokenizers()
+}
+
+func LoadCustomTokenizer(soFile string) {
+	x.Printf("Loading custom tokenizer from %q", soFile)
+	pl, err := plugin.Open(soFile)
+	x.Checkf(err, "could not open custom tokenizer plugin file")
+	symb, err := pl.Lookup("Tokenizer")
+	x.Checkf(err, "could not find symbol \"Tokenizer\" "+
+		"while loading custom tokenizer: %v", err)
+
+	// Let any type assertion panics occur, since they will contain a message
+	// telling the user what went wrong. Otherwise it's hard to capture this
+	// information to pass on to the user.
+	tokenizer := symb.(func() interface{})().(Tokenizer)
+
+	id := tokenizer.Identifier()
+	x.AssertTruef(id >= 0x80,
+		"custom tokenizer identifier byte must be >= 0x80, but was %#x", id)
+	registerTokenizer(tokenizer)
 }
 
 // GetTokenizer returns tokenizer given unique name.
@@ -98,23 +99,28 @@ func GetTokenizer(name string) (Tokenizer, bool) {
 	return t, found
 }
 
-// RegisterTokenizer adds your tokenizer to our list.
-func RegisterTokenizer(t Tokenizer) {
+func registerTokenizer(t Tokenizer) {
 	if tokenizers == nil {
 		tokenizers = make(map[string]Tokenizer)
 	}
 	name := t.Name()
 	_, found := tokenizers[name]
 	x.AssertTruef(!found, "Duplicate tokenizer name %s", name)
+	for _, tok := range tokenizers {
+		// all full-text tokenizers share the same Identifier, so they skip the test
+		isFTS := strings.HasPrefix(tok.Name(), FTSTokenizerName)
+		x.AssertTruef(isFTS || tok.Identifier() != t.Identifier(),
+			"Duplicate tokenizer id byte %#x, %s and %s", tok.Identifier(), tok.Name(), t.Name())
+	}
 	tokenizers[name] = t
 }
 
 type GeoTokenizer struct{}
 
-func (t GeoTokenizer) Name() string       { return "geo" }
-func (t GeoTokenizer) Type() types.TypeID { return types.GeoID }
-func (t GeoTokenizer) Tokens(sv types.Val) ([]string, error) {
-	tokens, err := types.IndexGeoTokens(sv.Value.(geom.T))
+func (t GeoTokenizer) Name() string { return "geo" }
+func (t GeoTokenizer) Type() string { return "geo" }
+func (t GeoTokenizer) Tokens(v interface{}) ([]string, error) {
+	tokens, err := types.IndexGeoTokens(v.(geom.T))
 	EncodeGeoTokens(tokens)
 	return tokens, err
 }
@@ -124,10 +130,10 @@ func (t GeoTokenizer) IsLossy() bool    { return true }
 
 type IntTokenizer struct{}
 
-func (t IntTokenizer) Name() string       { return "int" }
-func (t IntTokenizer) Type() types.TypeID { return types.IntID }
-func (t IntTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(sv.Value.(int64)), t.Identifier())}, nil
+func (t IntTokenizer) Name() string { return "int" }
+func (t IntTokenizer) Type() string { return "int" }
+func (t IntTokenizer) Tokens(v interface{}) ([]string, error) {
+	return []string{encodeToken(encodeInt(v.(int64)), t.Identifier())}, nil
 }
 func (t IntTokenizer) Identifier() byte { return 0x6 }
 func (t IntTokenizer) IsSortable() bool { return true }
@@ -135,10 +141,10 @@ func (t IntTokenizer) IsLossy() bool    { return false }
 
 type FloatTokenizer struct{}
 
-func (t FloatTokenizer) Name() string       { return "float" }
-func (t FloatTokenizer) Type() types.TypeID { return types.FloatID }
-func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int64(sv.Value.(float64))), t.Identifier())}, nil
+func (t FloatTokenizer) Name() string { return "float" }
+func (t FloatTokenizer) Type() string { return "float" }
+func (t FloatTokenizer) Tokens(v interface{}) ([]string, error) {
+	return []string{encodeToken(encodeInt(int64(v.(float64))), t.Identifier())}, nil
 }
 func (t FloatTokenizer) Identifier() byte { return 0x7 }
 func (t FloatTokenizer) IsSortable() bool { return true }
@@ -146,10 +152,10 @@ func (t FloatTokenizer) IsLossy() bool    { return true }
 
 type YearTokenizer struct{}
 
-func (t YearTokenizer) Name() string       { return "year" }
-func (t YearTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t YearTokenizer) Tokens(sv types.Val) ([]string, error) {
-	tval := sv.Value.(time.Time)
+func (t YearTokenizer) Name() string { return "year" }
+func (t YearTokenizer) Type() string { return "datetime" }
+func (t YearTokenizer) Tokens(v interface{}) ([]string, error) {
+	tval := v.(time.Time)
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
 	return []string{encodeToken(string(buf), t.Identifier())}, nil
@@ -160,10 +166,10 @@ func (t YearTokenizer) IsLossy() bool    { return true }
 
 type MonthTokenizer struct{}
 
-func (t MonthTokenizer) Name() string       { return "month" }
-func (t MonthTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t MonthTokenizer) Tokens(sv types.Val) ([]string, error) {
-	tval := sv.Value.(time.Time)
+func (t MonthTokenizer) Name() string { return "month" }
+func (t MonthTokenizer) Type() string { return "datetime" }
+func (t MonthTokenizer) Tokens(v interface{}) ([]string, error) {
+	tval := v.(time.Time)
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
 	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
@@ -175,10 +181,10 @@ func (t MonthTokenizer) IsLossy() bool    { return true }
 
 type DayTokenizer struct{}
 
-func (t DayTokenizer) Name() string       { return "day" }
-func (t DayTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t DayTokenizer) Tokens(sv types.Val) ([]string, error) {
-	tval := sv.Value.(time.Time)
+func (t DayTokenizer) Name() string { return "day" }
+func (t DayTokenizer) Type() string { return "datetime" }
+func (t DayTokenizer) Tokens(v interface{}) ([]string, error) {
+	tval := v.(time.Time)
 	buf := make([]byte, 6)
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
 	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
@@ -191,10 +197,10 @@ func (t DayTokenizer) IsLossy() bool    { return true }
 
 type HourTokenizer struct{}
 
-func (t HourTokenizer) Name() string       { return "hour" }
-func (t HourTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t HourTokenizer) Tokens(sv types.Val) ([]string, error) {
-	tval := sv.Value.(time.Time)
+func (t HourTokenizer) Name() string { return "hour" }
+func (t HourTokenizer) Type() string { return "datetime" }
+func (t HourTokenizer) Tokens(v interface{}) ([]string, error) {
+	tval := v.(time.Time)
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
 	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
@@ -208,10 +214,10 @@ func (t HourTokenizer) IsLossy() bool    { return true }
 
 type TermTokenizer struct{}
 
-func (t TermTokenizer) Name() string       { return "term" }
-func (t TermTokenizer) Type() types.TypeID { return types.StringID }
-func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return getBleveTokens(t.Name(), t.Identifier(), sv)
+func (t TermTokenizer) Name() string { return "term" }
+func (t TermTokenizer) Type() string { return "string" }
+func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
+	return getBleveTokens(t.Name(), t.Identifier(), v.(string))
 }
 func (t TermTokenizer) Identifier() byte { return 0x1 }
 func (t TermTokenizer) IsSortable() bool { return false }
@@ -219,10 +225,10 @@ func (t TermTokenizer) IsLossy() bool    { return true }
 
 type ExactTokenizer struct{}
 
-func (t ExactTokenizer) Name() string       { return "exact" }
-func (t ExactTokenizer) Type() types.TypeID { return types.StringID }
-func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
-	term, ok := sv.Value.(string)
+func (t ExactTokenizer) Name() string { return "exact" }
+func (t ExactTokenizer) Type() string { return "string" }
+func (t ExactTokenizer) Tokens(v interface{}) ([]string, error) {
+	term, ok := v.(string)
 	if !ok {
 		return nil, x.Errorf("Exact indices only supported for string types")
 	}
@@ -240,21 +246,21 @@ type FullTextTokenizer struct {
 	Lang string
 }
 
-func (t FullTextTokenizer) Name() string       { return FtsTokenizerName(t.Lang) }
-func (t FullTextTokenizer) Type() types.TypeID { return types.StringID }
-func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return getBleveTokens(t.Name(), t.Identifier(), sv)
+func (t FullTextTokenizer) Name() string { return FtsTokenizerName(t.Lang) }
+func (t FullTextTokenizer) Type() string { return "string" }
+func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
+	return getBleveTokens(t.Name(), t.Identifier(), v.(string))
 }
 func (t FullTextTokenizer) Identifier() byte { return 0x8 }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
 
-func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error) {
+func getBleveTokens(name string, identifier byte, str string) ([]string, error) {
 	analyzer, err := bleveCache.AnalyzerNamed(name)
 	if err != nil {
 		return nil, err
 	}
-	tokenStream := analyzer.Analyze([]byte(sv.Value.(string)))
+	tokenStream := analyzer.Analyze([]byte(str))
 
 	terms := make([]string, len(tokenStream))
 	for i, token := range tokenStream {
@@ -293,11 +299,11 @@ func EncodeRegexTokens(tokens []string) {
 
 type BoolTokenizer struct{}
 
-func (t BoolTokenizer) Name() string       { return "bool" }
-func (t BoolTokenizer) Type() types.TypeID { return types.BoolID }
-func (t BoolTokenizer) Tokens(v types.Val) ([]string, error) {
+func (t BoolTokenizer) Name() string { return "bool" }
+func (t BoolTokenizer) Type() string { return "bool" }
+func (t BoolTokenizer) Tokens(v interface{}) ([]string, error) {
 	var b int64
-	if v.Value.(bool) {
+	if v.(bool) {
 		b = 1
 	}
 	return []string{encodeToken(encodeInt(b), t.Identifier())}, nil
@@ -308,10 +314,10 @@ func (t BoolTokenizer) IsLossy() bool    { return false }
 
 type TrigramTokenizer struct{}
 
-func (t TrigramTokenizer) Name() string       { return "trigram" }
-func (t TrigramTokenizer) Type() types.TypeID { return types.StringID }
-func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
-	value, ok := sv.Value.(string)
+func (t TrigramTokenizer) Name() string { return "trigram" }
+func (t TrigramTokenizer) Type() string { return "string" }
+func (t TrigramTokenizer) Tokens(v interface{}) ([]string, error) {
+	value, ok := v.(string)
 	if !ok {
 		return nil, x.Errorf("Trigram indices only supported for string types")
 	}
@@ -333,10 +339,10 @@ func (t TrigramTokenizer) IsLossy() bool    { return true }
 
 type HashTokenizer struct{}
 
-func (t HashTokenizer) Name() string       { return "hash" }
-func (t HashTokenizer) Type() types.TypeID { return types.StringID }
-func (t HashTokenizer) Tokens(sv types.Val) ([]string, error) {
-	term, ok := sv.Value.(string)
+func (t HashTokenizer) Name() string { return "hash" }
+func (t HashTokenizer) Type() string { return "string" }
+func (t HashTokenizer) Tokens(v interface{}) ([]string, error) {
+	term, ok := v.(string)
 	if !ok {
 		return nil, x.Errorf("Hash tokenizer only supported for string types")
 	}
@@ -347,55 +353,3 @@ func (t HashTokenizer) Tokens(sv types.Val) ([]string, error) {
 func (t HashTokenizer) Identifier() byte { return 0xB }
 func (t HashTokenizer) IsSortable() bool { return false }
 func (t HashTokenizer) IsLossy() bool    { return true }
-
-type CustomTokenizer struct {
-	name     string
-	nameHash uint32
-	tokens   func(string) ([]string, error)
-}
-
-func (t CustomTokenizer) Tokens(sv types.Val) ([]string, error) {
-	str, ok := sv.Value.(string)
-	if !ok {
-		return nil, x.Errorf("CustomTokenizer only supported for string types")
-	}
-	toks, err := t.tokens(str)
-	if err != nil {
-		return nil, x.Wrapf(err, "could not tokenize %q", str)
-	}
-	for i := range toks {
-		buf := make([]byte, 4+len(toks[i]))
-		binary.BigEndian.PutUint32(buf[:4], t.nameHash)
-		copy(buf[4:], toks[i])
-		toks[i] = encodeToken(string(buf), t.Identifier())
-	}
-	return toks, nil
-}
-func (t CustomTokenizer) Name() string       { return t.name }
-func (t CustomTokenizer) Type() types.TypeID { return types.StringID }
-func (t CustomTokenizer) Identifier() byte   { return 0xC }
-func (CustomTokenizer) IsSortable() bool     { return false }
-func (CustomTokenizer) IsLossy() bool        { return true }
-
-func LoadCustomTokenizer(soFile string) {
-	pl, err := plugin.Open(soFile)
-	x.Checkf(err, "could not open custom tokenizer plugin file")
-	symb, err := pl.Lookup("Tokens")
-	x.Checkf(err, "could not find symbol \"Tokens\" while loading custom tokenizer: %v", err)
-	tokName := filepath.Base(strings.TrimSuffix(soFile, filepath.Ext(soFile)))
-	x.Printf("Loading custom tokenizer %q", tokName)
-	tokenizer := CustomTokenizer{
-		tokens:   symb.(func(string) ([]string, error)),
-		name:     tokName,
-		nameHash: farm.Hash32([]byte(tokName)),
-	}
-
-	// Ensure we don't get two custom tokenizers with the same hash.
-	for _, t := range tokenizers {
-		if t, ok := t.(CustomTokenizer); ok && t.nameHash == tokenizer.nameHash {
-			x.Check(fmt.Errorf("tokenizer with same name hash already loaded: %s(%x)",
-				t.name, t.nameHash))
-		}
-	}
-	RegisterTokenizer(tokenizer)
-}

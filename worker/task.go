@@ -1128,10 +1128,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if !ok {
 			return nil, x.Errorf("Could not find tokenizer with name %q", tokenizerName)
 		}
-		fc.tokens, err = tokenizer.Tokens(types.Val{
-			Tid:   types.StringID,
-			Value: strToTokenize,
-		})
+		fc.tokens, err = tokenizer.Tokens(strToTokenize)
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		fc.intersectDest = strings.HasSuffix(fnName, "allof")
 		fc.n = len(fc.tokens)

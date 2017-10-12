@@ -109,7 +109,7 @@ func tokenizeValue(value types.Val, filter stringFilter) []string {
 
 	// tokenizer was used in previous stages of query proccessing, it has to be available
 	x.AssertTrue(found)
-	tokens, err := tokenizer.Tokens(value)
+	tokens, err := tokenizer.Tokens(value.Value)
 	if err == nil {
 		return tokens
 	}
