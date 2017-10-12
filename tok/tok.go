@@ -128,7 +128,7 @@ func registerTokenizer(t Tokenizer) {
 			"Duplicate tokenizer id byte %#x, %s and %s", tok.Identifier(), tok.Name(), t.Name())
 	}
 	_, validType := types.TypeForName(t.Type())
-	x.AssertTruef(validType, "t.Type() returned %q which isn't a valid type name")
+	x.AssertTruef(validType, "t.Type() returned %q which isn't a valid type name", t.Type())
 	tokenizers[name] = t
 }
 
