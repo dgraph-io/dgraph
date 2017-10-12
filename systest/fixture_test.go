@@ -128,6 +128,8 @@ func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) (queryPort string, 
 	port := freePort()
 	zeroCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"), "-idx", "1", "-port", port)
 	zeroCmd.Dir = dgraphZeroDir
+	zeroCmd.Stdout = os.Stdout
+	zeroCmd.Stderr = os.Stderr
 	s.checkFatal(zeroCmd.Start())
 	s.kill = append(s.kill, zeroCmd)
 
@@ -144,6 +146,8 @@ func (s *suite) startDgraph(dgraphDir, dgraphZeroDir string) (queryPort string, 
 		"-workerport", freePort(),
 	)
 	dgraphCmd.Dir = dgraphDir
+	dgraphCmd.Stdout = os.Stdout
+	dgraphCmd.Stderr = os.Stderr
 	s.checkFatal(dgraphCmd.Start())
 	s.kill = append(s.kill, dgraphCmd)
 
