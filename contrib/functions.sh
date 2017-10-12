@@ -20,7 +20,7 @@ function start {
   ./dgraph -p $BUILD/p2 -w $BUILD/w2 -memory_mb 2048 --idx 2 --my "127.0.0.1:12346" --peer "127.0.0.1:12340" --port 8082 --grpc_port 9082 --workerport 12346 > $BUILD/server2.log &
   # Wait for membership sync to happen.
 	# TODO: Change this to wait for health check.
-  sleep 30
+  sleep 45
   return 0
 }
 
