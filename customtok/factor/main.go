@@ -27,7 +27,6 @@ func (FactorTokenizer) Tokens(value interface{}) ([]string, error) {
 			}
 		}
 	}
-	fmt.Println(value, toks)
 	return toks, nil
 
 }
