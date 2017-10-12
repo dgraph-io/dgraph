@@ -3637,3 +3637,125 @@ overridden (In the example, `$a` will have value 5 and `$b` will be 3).
 * The variable types that are supported as of now are: `int`, `float`, `bool`, `string` and `uid`.
 
 {{% notice "note" %}}In GraphiQL interface, the query and the variables have to be separately entered in their respective boxes.{{% /notice %}}
+
+## Indexing with Custom Tokenizers
+
+Dgraph comes with a large toolkit of builtin indexes, but sometimes for niche
+use cases they're not always enough.
+
+Dgraph allows you to implement custom tokenizers via a plugin system in order
+to fill the gaps.
+
+### Caveats
+
+The plugin system uses Go's [`pkg/plugin`](https://golang.org/pkg/plugin/).
+This brings some restrictions to how plugins can be used.
+
+- Plugins must be written in Go.
+
+- As of Go 1.9, `pkg/plugin` only works on Linux. Therefore, plugins will only
+  work on dgraph instances deployed in a Linux environment.
+
+- The version of Go used to compile the plugin should be the same as the version
+  of Go used to compile Dgraph itself. Dgraph always uses the latest version of
+Go (and so should you!).
+
+### Implementing a plugin
+
+{{% notice "note" %}}
+You should consider Go's [plugin](https://golang.org/pkg/plugin/) documentation
+to be supplementary to the documentation provided here.
+{{% /notice %}}
+
+Plugins are implemented as their own main package. They must export a
+particular symbol that allows Dgraph to hook into the custom logic the plugin
+provides.
+
+The plugin must export a symbol named `Tokenizer`. The type of the symbol must
+be `func() interface{}`. When the function is called the result returned should
+be a value that implements the following interface:
+
+```
+type PluginTokenizer interface {
+    // Name is the name of the tokenizer. It should be unique among all
+    // builtin tokenizers and other custom tokenizers. It identifies the
+    // tokenizer when an index is set in the schema and when search/filter
+    // is used in queries.
+    Name() string
+
+    // Identifier is a byte that uniquely identifiers the tokenizer.
+    // Bytes in the range 0x80 to 0xff (inclusive) are reserved for
+    // custom tokenizers.
+    Identifier() byte
+
+    // Type is a string representing the type of data that is to be
+    // tokenized. This must match the schema type of the predicate
+    // being indexde. Allowable values are shown in the table below.
+    Type() string
+
+    // Tokens should implement the tokenization logic. The input is
+    // the value to be tokenized, and will always have a concrete type
+    // corresponding to Type(). The return value should be a list of
+    // the tokens generated.
+    Tokens(interface{}) ([]string, error)
+}
+```
+
+The return value of `Type()` corresponds to the concrete input type of
+`Tokens(interface{})` in the following way:
+
+ `Type()` return value | `Tokens(interface{})` input type
+-----------------------|----------------------------------
+ `"int"`               | `int64`
+ `"float"`             | `float64`
+ `"string"`            | `string`
+ `"bool"`              | `bool`
+ `"datetime"`          | `time.Time`
+
+### Building the plugin
+
+The plugin has to be built using the `plugin` build mode so that an `.so` file
+is produced instead of a regular executable. For example:
+
+```sh
+go build -buildmode=plugin -o myplugin.so ~/go/src/myplugin/main.go
+```
+
+### Running Dgraph with plugins
+
+When starting Dgraph, use the `--custom_tokenizers` flag to tell dgraph which
+tokenizers to load. It accepts a comma separated list of plugins. E.g.
+
+```sh
+dgraph ...other-args... --custom_tokenizers=plugin1.so,plugin2.so
+```
+
+### Adding the index to the schema
+
+To use a tokenization plugin, an index has to be created in the schema.
+
+The syntax is the same as adding any built-in index. To add an custom index
+using a tokenizer plugin named `foo` to a `string` predicate named
+`my_predicate`, use the following in the schema:
+
+```sh
+my_predicate: string @index(foo) .
+```
+
+### Using the index in queries
+
+There are two functions that can use custom indexes:
+
+ Mode | Behaviour
+--------|-------
+ `anyof` | Returns nodes that match on *any* of the tokens generated
+ `allof` | Returns nodes that match on *all* of the tokens generated
+
+The functions can be used either at the query root or in filters.
+
+There behaviour here an analogous to `anyofterms`/`allofterms` and
+`anyoftext`/`alloftext`.
+
+### Examples
+
+TODO
