@@ -406,7 +406,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	x.Check(dgraphClient.NewSyncMarks(filesList))
+	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
@@ -427,7 +427,7 @@ func main() {
 	}
 
 	{
-		if err := dgraphClient.BatchFlush(); err != nil {
+		if err := l.BatchFlush(); err != nil {
 			if err == context.Canceled {
 				interrupted = true
 			} else {

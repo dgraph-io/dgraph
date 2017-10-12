@@ -200,6 +200,15 @@ func (l *loader) printCounters() {
 	}
 }
 
+// Counter returns the current state of the BatchMutation.
+func (l *loader) Counter() Counter {
+	return Counter{
+		Rdfs:      atomic.LoadUint64(&d.rdfs),
+		Mutations: atomic.LoadUint64(&d.mutations),
+		Elapsed:   time.Since(d.start),
+	}
+}
+
 // TODO - Temporarily break checkpointing.
 // BatchSetWithMark takes a Req which has a batch of edges. It accepts a file to which the edges
 // belong and also the line number of the last line that the batch contains. This is used by the
