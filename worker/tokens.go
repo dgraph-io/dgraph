@@ -140,7 +140,6 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 		key := it.Item().Key()
 		k := x.Parse(key)
 		if k == nil {
-			it.Next()
 			continue
 		}
 		out = append(out, k.Term)
