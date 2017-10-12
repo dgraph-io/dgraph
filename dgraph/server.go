@@ -173,7 +173,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
 	}
 
-	res, err := gql.Parse(gql.Request{
+	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
 		Mutation:  req.Mutation,
 		Variables: req.Vars,
@@ -183,29 +183,29 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		return resp, err
 	}
 
-	if err := parseMutationObject(&res, req); err != nil {
+	if err := parseMutationObject(&parsedReq, req); err != nil {
 		return resp, err
 	}
 
 	var cancel context.CancelFunc
 	// set timeout if schema mutation not present
-	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
+	if parsedReq.Mutation == nil || len(parsedReq.Mutation.Schema) == 0 {
 		// If schema mutation is not present
 		ctx, cancel = context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 	}
 
-	if req.Schema != nil && res.Schema != nil {
+	if req.Schema != nil && parsedReq.Schema != nil {
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
 	// Schema Block and Mutation can be part of query string or request
-	if res.Schema == nil {
-		res.Schema = req.Schema
+	if parsedReq.Schema == nil {
+		parsedReq.Schema = req.Schema
 	}
 
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
-		GqlQuery: &res,
+		GqlQuery: &parsedReq,
 	}
 	if req.Mutation != nil && len(req.Mutation.Schema) > 0 {
 		// Every update that comes from the client is explicit.

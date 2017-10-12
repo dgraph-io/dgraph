@@ -7056,6 +7056,7 @@ func TestMain(m *testing.M) {
 	worker.Config.RaftId = 1
 	worker.Config.MyAddr = "localhost:12345"
 	worker.Config.ExpandEdge = true
+	worker.Config.NumPendingProposals = 100 // So that mutations can run.
 	schema.Init(ps)
 	posting.Init(ps)
 	worker.Init(ps)

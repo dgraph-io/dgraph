@@ -56,6 +56,16 @@ curl -X POST  -d 'mutation {
   }
 }' "http://localhost:8080/query"
 
+res=$(curl -X POST  -d 'schema {}' "http://localhost:8080/query")
+expected='{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"initial_release_date","type":"datetime","index":true,"tokenizer":["year"]},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]},{"predicate":"xid","type":"string","index":true,"tokenizer":["exact"]}]}}'
+echo -e "Response $res"
+if [[ $TRAVIS_OS_NAME ==  "linux" ]] && [[ "$res" != "$expected" ]]; then
+  echo "Schema comparison failed."
+  quit 1
+else
+  echo "Schema comparison successful."
+fi
+
 echo -e "\nBuilding and running dgraph-live-loader."
 pushd cmd/dgraph-live-loader &> /dev/null
 # Delete client directory to clear checkpoints.

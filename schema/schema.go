@@ -62,11 +62,11 @@ func (s *state) DeleteAll() {
 	s.Lock()
 	defer s.Unlock()
 
-	s.predicate = map[string]*protos.SchemaUpdate{
-		"_predicate_": &protos.SchemaUpdate{
-			ValueType: uint32(types.StringID),
-			List:      true,
-		},
+	for pred := range s.predicate {
+		// We set schema for _predicate_, hence it shouldn't be deleted.
+		if pred != x.PredicateListAttr {
+			delete(s.predicate, pred)
+		}
 	}
 }
 
@@ -274,10 +274,6 @@ func LoadFromDb() error {
 		}
 		State().Set(attr, s)
 	}
-	State().Set("_predicate_", protos.SchemaUpdate{
-		ValueType: uint32(types.StringID),
-		List:      true,
-	})
 	return nil
 }
 
