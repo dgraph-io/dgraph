@@ -39,20 +39,21 @@ message SrcFunction {
 
 message Query {
 	string attr = 1;
-	repeated string langs = 2; // language list for attribute
-	fixed64 after_uid = 3;  // Only return UIDs greater than this.
-	bool do_count = 4;      // Are we just getting lengths?
+	uint64 readTs = 2;
+	repeated string langs = 3; // language list for attribute
+	fixed64 after_uid = 4;  // Only return UIDs greater than this.
+	bool do_count = 5;      // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
-	List uid_list = 5;
+	List uid_list = 6;
 
 	// Function to generate or filter UIDs.
-	SrcFunction src_func = 6;
+	SrcFunction src_func = 7;
 
-	bool reverse = 7;  // Whether this is a reverse edge.
+	bool reverse = 8;  // Whether this is a reverse edge.
 
-	Param facet_param = 8; // which facets to fetch
-	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
+	Param facet_param = 9; // which facets to fetch
+	FilterTree facets_filter = 10; // filtering on facets : has Op (and/or/not) tree
 }
 
 message ValueList {
