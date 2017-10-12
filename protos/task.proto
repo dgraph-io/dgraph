@@ -22,6 +22,8 @@ import "graphresponse.proto";
 
 package protos;
 
+option java_package = "io.dgraph.proto";
+
 message List {
 	repeated fixed64 uids = 1;
 }

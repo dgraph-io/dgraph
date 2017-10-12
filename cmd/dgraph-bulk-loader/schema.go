@@ -12,44 +12,35 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type schemaState struct {
-	strict bool
-	*protos.SchemaUpdate
-}
-
 type schemaStore struct {
 	sync.RWMutex
-	m map[string]schemaState
+	m map[string]*protos.SchemaUpdate
 }
 
 func newSchemaStore(initial []*protos.SchemaUpdate, opt options) *schemaStore {
 	s := &schemaStore{
-		m: map[string]schemaState{
-			"_predicate_": {
-				strict: true,
-				SchemaUpdate: &protos.SchemaUpdate{
-					ValueType: uint32(types.StringID),
-					List:      true,
-				},
+		m: map[string]*protos.SchemaUpdate{
+			"_predicate_": &protos.SchemaUpdate{
+				ValueType: uint32(types.StringID),
+				List:      true,
+				Explicit:  true,
 			},
 		},
 	}
 	if opt.StoreXids {
-		s.m["xid"] = schemaState{
-			strict: true,
-			SchemaUpdate: &protos.SchemaUpdate{
-				ValueType: uint32(protos.Posting_STRING),
-				Tokenizer: []string{"hash"},
-			},
+		s.m["xid"] = &protos.SchemaUpdate{
+			ValueType: uint32(protos.Posting_STRING),
+			Tokenizer: []string{"hash"},
+			Explicit:  true,
 		}
 	}
 	for _, sch := range initial {
 		p := sch.Predicate
-		sch.Predicate = ""
+		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
 		if _, ok := s.m[p]; ok {
 			x.Check(fmt.Errorf("predicate %q already exists in schema", p))
 		}
-		s.m[p] = schemaState{true, sch}
+		s.m[p] = sch
 	}
 	return s
 }
@@ -57,7 +48,7 @@ func newSchemaStore(initial []*protos.SchemaUpdate, opt options) *schemaStore {
 func (s *schemaStore) getSchema(pred string) *protos.SchemaUpdate {
 	s.RLock()
 	defer s.RUnlock()
-	return s.m[pred].SchemaUpdate
+	return s.m[pred]
 }
 
 func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
@@ -72,7 +63,7 @@ func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 		s.Lock()
 		sch, ok = s.m[de.Attr]
 		if !ok {
-			sch = schemaState{false, &protos.SchemaUpdate{ValueType: de.ValueType}}
+			sch = &protos.SchemaUpdate{ValueType: de.ValueType}
 			s.m[de.Attr] = sch
 		}
 		s.Unlock()
@@ -80,10 +71,7 @@ func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 
 	schTyp := types.TypeID(sch.ValueType)
 	err := wk.ValidateAndConvert(de, schTyp)
-	if sch.strict && err != nil {
-		// TODO: It's unclear to me as to why it's only an error to have a bad
-		// conversion if the schema was established explicitly rather than
-		// automatically.
+	if sch.GetExplicit() && err != nil {
 		log.Fatalf("RDF doesn't match schema: %v", err)
 	}
 }
@@ -91,12 +79,8 @@ func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 func (s *schemaStore) write(kv *badger.KV) {
 	for pred, sch := range s.m {
 		k := x.SchemaKey(pred)
-		var v []byte
-		var err error
-		if sch.SchemaUpdate != nil {
-			v, err = sch.SchemaUpdate.Marshal()
-			x.Check(err)
-		}
+		v, err := sch.Marshal()
+		x.Check(err)
 		x.Check(kv.Set(k, v, 0x00))
 	}
 }

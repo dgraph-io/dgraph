@@ -18,6 +18,8 @@
 package worker
 
 import (
+	"fmt"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -56,8 +58,10 @@ func getSchema(ctx context.Context, s *protos.SchemaRequest) (*protos.SchemaResu
 	}
 
 	for _, attr := range predicates {
+		// This can happen after a predicate is moved. We don't delete predicate from schema state
+		// immediately. So lets ignore this predicate.
 		if !groups().ServesTablet(attr) {
-			return &emptySchemaResult, errUnservedTablet
+			continue
 		}
 		if schemaNode := populateSchema(attr, fields); schemaNode != nil {
 			result.Schema = append(result.Schema, schemaNode)
@@ -169,6 +173,7 @@ func GetSchemaOverNetwork(ctx context.Context, schema *protos.SchemaRequest) ([]
 
 	for gid, s := range schemaMap {
 		if gid == 0 {
+			fmt.Printf("Schemamap: %+v\n", schemaMap)
 			return schemaNodes, errUnservedTablet
 		}
 		go getSchemaOverNetwork(ctx, gid, s, results)

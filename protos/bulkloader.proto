@@ -4,6 +4,8 @@ import "types.proto";
 
 package protos;
 
+option java_package = "io.dgraph.proto";
+
 message MapEntry {
 	bytes key = 1;
 
