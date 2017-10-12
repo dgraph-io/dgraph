@@ -18,6 +18,7 @@ package x
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 )
 
@@ -265,9 +266,11 @@ func Parse(key []byte) *ParsedKey {
 	k = k[1:]
 
 	switch p.byteType {
-	case ByteData:
-		fallthrough
-	case ByteReverse:
+	case ByteData, ByteReverse:
+		if len(k) < 8 {
+			fmt.Printf("Error: Uid length < 8 for key: %q, parsed key: %+v\n", key, p)
+			return nil
+		}
 		p.Uid = binary.BigEndian.Uint64(k)
 	case ByteIndex:
 		p.Term = string(k)

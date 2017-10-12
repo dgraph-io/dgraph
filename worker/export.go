@@ -270,6 +270,10 @@ func export(bdir string) error {
 		item := it.Item()
 		key := item.Key()
 		pk := x.Parse(key)
+		if pk == nil {
+			it.Next()
+			continue
+		}
 
 		if pk.IsIndex() || pk.IsReverse() || pk.IsCount() {
 			// Seek to the end of index, reverse and count keys.
