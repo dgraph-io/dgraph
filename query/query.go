@@ -2495,7 +2495,7 @@ type ExecuteResult struct {
 	SchemaNode []*protos.SchemaNode
 }
 
-func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResult, err error) {
+func (qr *QueryRequest) Process(ctx context.Context) (er ExecuteResult, err error) {
 	err = qr.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
