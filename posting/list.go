@@ -524,6 +524,7 @@ func (l *List) commitMutation(ctx context.Context, commitTs uint64) error {
 		}
 		mpost.Commit = commitTs
 	}
+	l.startTs = 0
 	return nil
 }
 
