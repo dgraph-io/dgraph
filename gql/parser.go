@@ -27,7 +27,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -302,7 +301,6 @@ func convertToVarMap(variables map[string]string) (vm varMap) {
 
 type Request struct {
 	Str       string
-	Mutation  *protos.Mutation
 	Variables map[string]string
 	// We need this so that we don't try to do JSON.Unmarshal for request coming
 	// from Go client, as we directly get the variables in a map.
@@ -486,11 +484,9 @@ type Vars struct {
 // Result struct contains the Query list, its corresponding variable use list
 // and the mutation block.
 type Result struct {
-	Query        []*GraphQuery
-	QueryVars    []*Vars
-	Mutation     *Mutation
-	MutationVars []string
-	Schema       *protos.SchemaRequest
+	Query     []*GraphQuery
+	QueryVars []*Vars
+	Schema    *protos.SchemaRequest
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -512,15 +508,12 @@ func Parse(r Request) (res Result, rerr error) {
 		switch item.Typ {
 		case lex.ItemError:
 			return res, x.Errorf(item.Val)
+
 		case itemOpType:
 			if item.Val == "mutation" {
-				if res.Mutation != nil {
-					return res, x.Errorf("Only one mutation block allowed.")
-				}
-				if res.Mutation, rerr = getMutation(it); rerr != nil {
-					return res, rerr
-				}
-			} else if item.Val == "schema" {
+				return res, x.Errorf("Mutation block no longer allowed.")
+			}
+			if item.Val == "schema" {
 				if res.Schema != nil {
 					return res, x.Errorf("Only one schema block allowed ")
 				}
@@ -560,23 +553,6 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 	}
 
-	// Clients can pass mutations separately apart from passing it as part of request.
-	if r.Mutation != nil {
-		if res.Mutation == nil {
-			res.Mutation = &Mutation{}
-		}
-		res.Mutation.Set = append(res.Mutation.Set, r.Mutation.Set...)
-		res.Mutation.Del = append(res.Mutation.Del, r.Mutation.Del...)
-		res.Mutation.DropAll = r.Mutation.DropAll
-	}
-
-	if res.Mutation != nil {
-		res.MutationVars = res.Mutation.NeededVars()
-		if len(res.MutationVars) > 0 && len(res.Query) == 0 {
-			return res, x.Errorf("mutation uses undefined vars: %v", res.MutationVars)
-		}
-	}
-
 	if len(res.Query) != 0 {
 		res.QueryVars = make([]*Vars, 0, len(res.Query))
 		for i := 0; i < len(res.Query); i++ {
@@ -597,12 +573,6 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 
 		allVars := res.QueryVars
-		if len(res.MutationVars) > 0 {
-			varNames := x.RemoveDuplicates(res.MutationVars)
-
-			allVars = append(allVars, &Vars{Needs: varNames})
-		}
-
 		if err := checkDependency(allVars); err != nil {
 			return res, err
 		}
@@ -857,30 +827,6 @@ func getFragment(it *lex.ItemIterator) (*fragmentNode, error) {
 	return fn, nil
 }
 
-// getMutation function parses and stores the set and delete
-// operation in Mutation.
-func getMutation(it *lex.ItemIterator) (*Mutation, error) {
-	var mu *Mutation
-	for it.Next() {
-		item := it.Item()
-		if item.Typ == itemText {
-			continue
-		}
-		if item.Typ == itemLeftCurl {
-			mu = new(Mutation)
-		}
-		if item.Typ == itemRightCurl {
-			return mu, nil
-		}
-		if item.Typ == itemMutationOp {
-			if err := parseMutationOp(it, item.Val, mu); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return nil, x.Errorf("Invalid mutation.")
-}
-
 // parses till rightSquare is found (parses [a, b]) excluding leftSquare
 // This function can be reused for query later
 func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
@@ -984,69 +930,6 @@ func getSchema(it *lex.ItemIterator) (*protos.SchemaRequest, error) {
 		}
 	}
 	return nil, x.Errorf("Invalid schema block.")
-}
-
-// parseMutationOp parses and stores set or delete operation string in Mutation.
-///  TODO: move to rdf
-func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
-	var err error
-	if mu == nil {
-		return x.Errorf("Mutation is nil.")
-	}
-	var nquads []*protos.NQuad
-
-	parse := false
-	for it.Next() {
-		item := it.Item()
-		if item.Typ == itemText {
-			continue
-		}
-		if item.Typ == itemLeftCurl {
-			if parse {
-				return x.Errorf("Too many left curls in set mutation.")
-			}
-			parse = true
-		}
-		if item.Typ == itemMutationContent {
-			if !parse {
-				return x.Errorf("Mutation syntax invalid.")
-			}
-			if op == "set" {
-				if len(item.Val) > 0 {
-					if nquads, err = rdf.ConvertToNQuads(item.Val); err != nil {
-						return x.Wrap(err)
-					}
-				}
-				if mu.Set != nil {
-					return x.Errorf("Multiple 'set' blocks not allowed.")
-				}
-				mu.Set = nquads
-			} else if op == "delete" {
-				if len(item.Val) > 0 {
-					if nquads, err = rdf.ConvertToNQuads(item.Val); err != nil {
-						return x.Wrap(err)
-					}
-				}
-				if mu.Del != nil {
-					return x.Errorf("Multiple 'delete' blocks not allowed.")
-				}
-				mu.Del = nquads
-			} else if op == "schema" {
-				if mu.Schema != "" {
-					return x.Errorf("Multiple 'schema' blocks not allowed.")
-				}
-				mu.Schema = item.Val
-			} else if op == "dropall" {
-				mu.DropAll = true
-			} else {
-				return x.Errorf("Invalid mutation operation.")
-			}
-		}
-		if item.Typ == itemRightCurl {
-			return nil
-		}
-	}
-	return x.Errorf("Invalid mutation formatting.")
 }
 
 // parseGqlVariables parses the the graphQL variable declaration.

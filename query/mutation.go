@@ -14,15 +14,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type InternalMutation struct {
-	Edges []*protos.DirectedEdge
-}
-
-func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.DirectedEdge_Op) {
-	edge.Op = op
-	mr.Edges = append(mr.Edges, edge)
-}
-
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 	if worker.Config.ExpandEdge {
 		err := handleInternalEdge(ctx, m)
@@ -126,11 +117,11 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 	return nil
 }
 
-func AssignUids(ctx context.Context, nquads gql.NQuads) (map[string]uint64, error) {
+func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
 	num := &protos.Num{}
 	var err error
-	for _, nq := range nquads.NQuads {
+	for _, nq := range nquads {
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 			continue
@@ -174,78 +165,55 @@ func AssignUids(ctx context.Context, nquads gql.NQuads) (map[string]uint64, erro
 	return newUids, nil
 }
 
-func expandVariables(nq *gql.NQuad,
-	newUids map[string]uint64,
-	vars map[string]varValue) ([]*protos.DirectedEdge, error) {
-	var subjectUids, objectUids []uint64
-	if len(nq.SubjectVar) > 0 {
-		if vars[nq.SubjectVar].Uids != nil {
-			subjectUids = vars[nq.SubjectVar].Uids.Uids
-		}
-	}
-	if len(nq.ObjectVar) > 0 {
-		if vars[nq.ObjectVar].Uids != nil {
-			objectUids = vars[nq.ObjectVar].Uids.Uids
-		}
-	}
-	return nq.ExpandVariables(newUids, subjectUids, objectUids)
-}
-
-func ToInternal(ctx context.Context,
-	nquads gql.NQuads,
-	vars map[string]varValue, newUids map[string]uint64) (InternalMutation, error) {
-	var mr InternalMutation
-	var err error
-
-	if newUids == nil {
-		newUids = make(map[string]uint64)
-	}
+func ToInternal(gmu *gql.Mutation,
+	newUids map[string]uint64) (edges []*protos.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
 	var wnq *gql.NQuad
 	var delPred []*protos.NQuad
-	for i, nq := range nquads.NQuads {
-		if err := facets.SortAndValidate(nq.Facets); err != nil {
-			return mr, err
+
+	parse := func(nq *protos.NQuad, op protos.DirectedEdge_Op) error {
+		wnq = &gql.NQuad{nq}
+		if len(nq.Subject) == 0 {
+			return nil
 		}
+		// Get edge from nquad using newUids.
+		var edge *protos.DirectedEdge
+		edge, err = wnq.ToEdgeUsing(newUids)
+		if err != nil {
+			return x.Wrap(err)
+		}
+		edge.Op = op
+		edges = append(edges, edge)
+		return nil
+	}
+
+	for _, nq := range gmu.Set {
+		if err := facets.SortAndValidate(nq.Facets); err != nil {
+			return edges, err
+		}
+		if err := parse(nq, protos.DirectedEdge_SET); err != nil {
+			return edges, err
+		}
+	}
+	for _, nq := range gmu.Del {
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 			delPred = append(delPred, nq)
 			continue
 		}
-
-		wnq = &gql.NQuad{nq}
-		usesVariable := len(nq.SubjectVar) > 0 || len(nq.ObjectVar) > 0
-
-		if !usesVariable {
-			if len(nq.Subject) > 0 {
-				// Get edge from nquad using newUids.
-				var edge *protos.DirectedEdge
-				edge, err = wnq.ToEdgeUsing(newUids)
-				if err != nil {
-					return mr, x.Wrap(err)
-				}
-				mr.AddEdge(edge, nquads.Types[i])
-			}
-		} else {
-			var expanded []*protos.DirectedEdge
-			expanded, err = expandVariables(wnq, newUids, vars)
-			if err != nil {
-				return mr, x.Wrap(err)
-			}
-			for _, edge := range expanded {
-				mr.AddEdge(edge, nquads.Types[i])
-			}
+		if err := parse(nq, protos.DirectedEdge_DEL); err != nil {
+			return edges, err
 		}
 	}
 
-	for i, nq := range delPred {
+	for _, nq := range delPred {
 		wnq = &gql.NQuad{nq}
 		edge, err := wnq.ToDeletePredEdge()
 		if err != nil {
-			return mr, err
+			return edges, err
 		}
-		mr.AddEdge(edge, nquads.Types[i])
+		edges = append(edges, edge)
 	}
 
-	return mr, nil
+	return edges, nil
 }

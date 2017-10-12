@@ -35,6 +35,11 @@ func (i *inmemoryClient) Run(ctx context.Context, in *protos.Request,
 	return i.srv.Run(ctx, in)
 }
 
+func (i *inmemoryClient) Mutate(ctx context.Context, in *protos.Mutation,
+	_ ...grpc.CallOption) (*protos.Assigned, error) {
+	return i.srv.Mutate(ctx, in)
+}
+
 func (i *inmemoryClient) CheckVersion(ctx context.Context, in *protos.Check,
 	_ ...grpc.CallOption) (*protos.Version, error) {
 	return i.srv.CheckVersion(ctx, in)
