@@ -209,6 +209,10 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			// We shouldn't allow more members than the number of replicas.
 			return p.Id, errInvalidProposal
 		}
+
+		// Create a connection to this server.
+		go conn.Get().Connect(p.Member.Addr)
+
 		group.Members[p.Member.Id] = p.Member
 		// On replay of logs on restart we need to set nextGroup.
 		if n.server.nextGroup <= p.Member.GroupId {

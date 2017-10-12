@@ -252,10 +252,12 @@ func (s *Server) Connect(ctx context.Context,
 		if !has {
 			break
 		}
-		conn.Get().Connect(member.Addr)
-		// Healthy connection exists to a machine with same id
-		if _, err := conn.Get().Get(member.Addr); err == nil {
-			return &emptyMembershipState, conn.ErrDuplicateRaftId
+		if member.Addr != m.Addr {
+			// Different address, then check if the last one is healthy or not.
+			if _, err := conn.Get().Get(member.Addr); err == nil {
+				// Healthy conn to the existing member with the same id.
+				return &emptyMembershipState, conn.ErrDuplicateRaftId
+			}
 		}
 	}
 	// Create a connection and check validity of the address by doing an Echo.
