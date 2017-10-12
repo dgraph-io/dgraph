@@ -354,10 +354,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		var vals []types.Val
 		// Even if its a list type and value is asked in a language we return that.
 		if listType && len(q.Langs) == 0 {
-			vals, err = pl.AllValues()
+			vals, err = pl.AllValues(0)
 		} else {
 			var val types.Val
-			val, err = pl.ValueFor(q.Langs)
+			val, err = pl.ValueFor(0, q.Langs)
 			vals = append(vals, val)
 		}
 
@@ -401,7 +401,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 		// add facets to result.
 		if q.FacetParam != nil {
-			fs, err := pl.Facets(q.FacetParam, q.Langs)
+			fs, err := pl.Facets(0, q.FacetParam, q.Langs)
 			if err != nil {
 				fs = []*protos.Facet{}
 			}
@@ -753,9 +753,9 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 
 			var val types.Val
 			if lang != "" {
-				val, err = pl.ValueForTag(lang)
+				val, err = pl.ValueForTag(0, lang)
 			} else {
-				val, err = pl.Value()
+				val, err = pl.Value(0)
 			}
 
 			if err != nil {
@@ -814,7 +814,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 				switch lang {
 				case "":
 					pl := posting.GetNoStore(x.DataKey(attr, uid))
-					sv, err := pl.Value()
+					sv, err := pl.Value(0)
 					if err == nil {
 						dst, err := types.Convert(sv, typ)
 						return err == nil &&
@@ -823,7 +823,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					return false
 				case ".":
 					pl := posting.GetNoStore(x.DataKey(attr, uid))
-					values, _ := pl.AllValues()
+					values, _ := pl.AllValues(0)
 					for _, sv := range values {
 						dst, err := types.Convert(sv, typ)
 						if err == nil &&
@@ -853,7 +853,7 @@ func filterGeoFunction(arg funcArgs) {
 		key := x.DataKey(attr, uid)
 		pl := posting.Get(key)
 
-		val, err := pl.Value()
+		val, err := pl.Value(0)
 		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
@@ -884,13 +884,13 @@ func filterStringFunction(arg funcArgs) {
 		var err error
 		if lang == "" {
 			if schema.State().IsList(attr) {
-				vals, err = pl.AllValues()
+				vals, err = pl.AllValues(0)
 			} else {
-				val, err = pl.Value()
+				val, err = pl.Value(0)
 				vals = append(vals, val)
 			}
 		} else {
-			val, err = pl.ValueForTag(lang)
+			val, err = pl.ValueForTag(0, lang)
 			vals = append(vals, val)
 		}
 		if err != nil {
@@ -1429,7 +1429,8 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = cp.fn == "le" || cp.fn == "lt"
-	it := pstore.NewIterator(itOpt)
+	txn := pstore.NewTransaction(false)
+	it := txn.NewIterator(itOpt)
 	defer it.Close()
 	pk := x.ParsedKey{
 		Attr: cp.attr,

@@ -162,11 +162,12 @@ message KeyValues {
 
 message Proposal {
 	uint32 id = 1;
-	Mutations mutations = 2;
-	Member membership = 3;
-	repeated KV kv = 4;
-	MembershipState state = 5;
-	string clean_predicate = 6; // Delete the predicate which was moved to other group.
+	uint64 start_ts = 2;
+	Mutations mutations = 3;
+	Member membership = 4;
+	repeated KV kv = 5;
+	MembershipState state = 6;
+	string clean_predicate = 7; // Delete the predicate which was moved to other group.
 }
 
 message KV {

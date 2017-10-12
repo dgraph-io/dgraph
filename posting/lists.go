@@ -209,7 +209,6 @@ func Get(key []byte) (rlist *List) {
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l, _ := getNew(key, pstore)
-	l.water = marks
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
@@ -231,7 +230,6 @@ func getOrMutate(key []byte) (rlist *List) {
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l, _ := getNew(key, pstore)
-	l.water = marks
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 

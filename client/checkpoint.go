@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -74,7 +73,7 @@ func (d *Dgraph) Checkpoint(file string) (uint64, error) {
 
 // Used to write checkpoints to Badger.
 func (d *Dgraph) writeCheckpoint() {
-	wb := make([]*badger.Entry, 0, len(d.marks))
+	txn := d.alloc.kv.NewTransaction(true)
 	for file, wm := range d.marks {
 		doneUntil := wm.mark.DoneUntil()
 		if doneUntil == 0 || doneUntil == wm.last {
@@ -84,16 +83,12 @@ func (d *Dgraph) writeCheckpoint() {
 		d.marks[file] = wm
 		var buf [10]byte
 		n := binary.PutUvarint(buf[:], doneUntil)
-		wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
+		err := txn.Set([]byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n], 0)
+		x.Check(err)
 	}
 
-	if err := d.alloc.kv.BatchSet(wb); err != nil {
+	if err := txn.Commit(nil); err != nil {
 		fmt.Printf("Error while writing to disk %v\n", err)
-	}
-	for _, wbe := range wb {
-		if err := wbe.Error; err != nil {
-			fmt.Printf("Error while writing to disk %v\n", err)
-		}
 	}
 }
 

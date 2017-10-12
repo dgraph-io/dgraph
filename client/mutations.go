@@ -116,9 +116,12 @@ func (a *allocator) fetchOne() (uint64, error) {
 }
 
 func (a *allocator) getFromKV(id string) (uint64, error) {
-	var item badger.KVItem
-	var err error
-	if err = a.kv.Get([]byte(id), &item); err != nil {
+	txn := a.kv.NewTransaction(false)
+	item, err := txn.Get([]byte(id))
+	if err == badger.ErrKeyNotFound {
+		return 0, nil
+	}
+	if err != nil {
 		return 0, err
 	}
 
@@ -294,7 +297,6 @@ func (d *Dgraph) Close() error {
 func (d *Dgraph) batchSync() {
 	var entries []entry
 	var loop uint64
-	wb := make([]*badger.Entry, 0, 1000)
 
 	for {
 		ent := <-d.alloc.syncCh
@@ -313,20 +315,16 @@ func (d *Dgraph) batchSync() {
 		}
 		loop++
 
+		txn := d.alloc.kv.NewTransaction(true)
 		for _, e := range entries {
 			buf := make([]byte, binary.MaxVarintLen64)
 			n := binary.PutUvarint(buf[:], e.value)
-			wb = badger.EntriesSet(wb, []byte(e.key), buf[:n])
+			err := txn.Set([]byte(e.key), buf[:n], 0)
+			x.Check(err)
 		}
-		if err := d.alloc.kv.BatchSet(wb); err != nil {
+		if err := txn.Commit(nil); err != nil {
 			fmt.Printf("Error while writing to disc %v\n", err)
 		}
-		for _, wbe := range wb {
-			if err := wbe.Error; err != nil {
-				fmt.Printf("Error while writing to disc %v\n", err)
-			}
-		}
-		wb = wb[:0]
 		entries = entries[:0]
 	}
 }

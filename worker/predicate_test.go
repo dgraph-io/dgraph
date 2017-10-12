@@ -36,7 +36,8 @@ import (
 )
 
 func checkShard(ps *badger.KV) (int, []byte) {
-	it := ps.NewIterator(badger.DefaultIteratorOptions)
+	txn := ps.NewTransaction(false)
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	count := 0
@@ -74,13 +75,16 @@ func writePLs(t *testing.T, pred string, startIdx int, count int, vid uint64) {
 }
 
 func deletePLs(t *testing.T, pred string, startIdx int, count int, ps *badger.KV) {
+	txn := ps.NewTransaction(true)
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i+startIdx))
-		ps.Delete(k)
+		txn.Delete(k)
 	}
+	txn.Commit(nil)
 }
 
 func writeToBadger(t *testing.T, pred string, startIdx int, count int, ps *badger.KV) {
+	txn := ps.NewTransaction(true)
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i+startIdx))
 		pl := new(protos.PostingList)
@@ -88,11 +92,12 @@ func writeToBadger(t *testing.T, pred string, startIdx int, count int, ps *badge
 		if err != nil {
 			t.Errorf("Error while marshing pl")
 		}
-		err = ps.Set(k, data, 0x00)
+		err = txn.Set(k, data, 0x00)
 		if err != nil {
 			t.Errorf("Error while writing to badger")
 		}
 	}
+	txn.Commit(nil)
 }
 
 // We define this function so that we have access to the server which we can
@@ -217,8 +222,8 @@ func TestPopulateShard(t *testing.T) {
 		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 40, count)
 	}
 
-	var item badger.KVItem
-	err = psFollower.Get(x.DataKey("name", 1), &item)
+	txn := psFollower.NewTransaction(false)
+	item, err := txn.Get(x.DataKey("name", 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +253,8 @@ func TestPopulateShard(t *testing.T) {
 	if count != 45 {
 		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 45, count)
 	}
-	err = psFollower.Get(x.DataKey("name", 1), &item)
+	txn = psFollower.NewTransaction(false)
+	item, err = txn.Get(x.DataKey("name", 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +264,8 @@ func TestPopulateShard(t *testing.T) {
 		}
 		return nil
 	}))
-	err = psFollower.Get(x.DataKey("name", 110), &item)
+	txn = psFollower.NewTransaction(false)
+	item, err = txn.Get(x.DataKey("name", 1))
 	if err != nil {
 		t.Fatal(err)
 	}

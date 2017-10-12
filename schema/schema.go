@@ -37,7 +37,7 @@ const (
 
 var (
 	pstate *stateGroup
-	pstore *badger.KV
+	pstore *badger.DB
 	syncCh chan SyncEntry
 )
 
@@ -110,7 +110,9 @@ func (s *stateGroup) Remove(predicate string) error {
 	defer s.Unlock()
 
 	delete(s.predicate, predicate)
-	return pstore.Delete(x.SchemaKey(predicate))
+	txn := pstore.NewTransaction(true)
+	txn.Delete(x.SchemaKey(predicate))
+	return txn.Commit(nil)
 }
 
 func logUpdate(schema protos.SchemaUpdate, pred string) string {
@@ -247,7 +249,7 @@ func (s *stateGroup) IsList(pred string) bool {
 	return false
 }
 
-func Init(ps *badger.KV) {
+func Init(ps *badger.DB) {
 	pstore = ps
 	syncCh = make(chan SyncEntry, syncChCapacity)
 	reset()
@@ -257,7 +259,8 @@ func Init(ps *badger.KV) {
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
 	prefix := x.SchemaPrefix()
-	itr := pstore.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
+	txn := pstore.NewTransaction(false)
+	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
 	defer itr.Close()
 
 	for itr.Seek(prefix); itr.Valid(); itr.Next() {
@@ -268,12 +271,13 @@ func LoadFromDb() error {
 		}
 		attr := x.Parse(key).Attr
 		var s protos.SchemaUpdate
-		err := item.Value(func(val []byte) error {
+		val, err := item.Value()
+		if err != badger.ErrKeyNotFound {
+			return err
+		}
+		if len(val) > 0 {
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
 			return nil
-		})
-		if err != nil {
-			return err
 		}
 		State().Set(attr, s)
 	}
@@ -308,7 +312,6 @@ func addToEntriesMap(entriesMap map[*x.WaterMark][]uint64, entries []SyncEntry) 
 func batchSync() {
 	var entries []SyncEntry
 	var loop uint64
-	wb := make([]*badger.Entry, 0, 100)
 	for {
 		ent := <-syncCh
 	slurpLoop:
@@ -327,17 +330,21 @@ func batchSync() {
 
 		loop++
 		State().elog.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
+		txn := pstore.NewTransaction(true)
 		for _, e := range entries {
 			if e.Schema.Directive == protos.SchemaUpdate_DELETE {
-				wb = badger.EntriesDelete(wb, x.SchemaKey(e.Attr))
+				err := txn.Delete(x.SchemaKey(e.Attr))
+				// TODO: Handle errors here.
+				x.Check(err)
 				continue
 			}
 			val, err := e.Schema.Marshal()
 			x.Checkf(err, "Error while marshalling schema description")
-			wb = badger.EntriesSet(wb, x.SchemaKey(e.Attr), val)
+			err = txn.Set(x.SchemaKey(e.Attr), val, 0)
+			x.Check(err)
 		}
-		pstore.BatchSet(wb)
-		wb = wb[:0]
+		err := txn.Commit(nil)
+		x.Check(err)
 
 		entriesMap := make(map[*x.WaterMark][]uint64)
 		addToEntriesMap(entriesMap, entries)

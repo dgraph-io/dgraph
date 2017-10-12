@@ -65,7 +65,7 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walStore *badger.KV, bindall bool) {
+func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -140,7 +140,8 @@ func (g *groupi) groupId() uint32 {
 func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchValues = false
-	itr := pstore.NewIterator(opt)
+	txn := pstore.NewTransaction(false)
+	itr := txn.NewIterator(opt)
 	defer itr.Close()
 
 	gid := g.groupId()
@@ -482,7 +483,8 @@ func (g *groupi) cleanupTablets() {
 		func() {
 			opt := badger.DefaultIteratorOptions
 			opt.PrefetchValues = false
-			itr := pstore.NewIterator(opt)
+			txn := pstore.NewTransaction(false)
+			itr := txn.NewIterator(opt)
 			defer itr.Close()
 
 			for itr.Rewind(); itr.Valid(); {

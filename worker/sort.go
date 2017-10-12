@@ -158,7 +158,8 @@ func sortWithIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
 	iterOpt.Reverse = order.Desc
-	it := pstore.NewIterator(iterOpt)
+	txn := pstore.NewTransaction(false)
+	it := txn.NewIterator(iterOpt)
 	defer it.Close()
 
 	typ, err := schema.State().TypeOf(order.Attr)
@@ -613,7 +614,7 @@ func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID) (t
 	// Don't put the values in memory
 	pl := posting.GetNoStore(x.DataKey(attr, uid))
 
-	src, err := pl.ValueFor(langs)
+	src, err := pl.ValueFor(0, langs)
 
 	if err != nil {
 		return types.Val{}, err

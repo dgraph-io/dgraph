@@ -131,7 +131,8 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = !isgeOrGt
-	it := pstore.NewIterator(itOpt)
+	txn := pstore.NewTransaction(false)
+	it := txn.NewIterator(itOpt)
 	defer it.Close()
 
 	var out []string

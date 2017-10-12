@@ -28,7 +28,6 @@ import (
 func getPosting() *List {
 	l := &List{
 		plist: &protos.PostingList{},
-		water: marks,
 	}
 	return l
 }

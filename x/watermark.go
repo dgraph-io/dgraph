@@ -44,6 +44,7 @@ func (u *uint64Heap) Pop() interface{} {
 type RaftValue struct {
 	Group uint32
 	Index uint64
+	Ts    uint64
 }
 
 // mark contains raft proposal id and a done boolean. It is used to

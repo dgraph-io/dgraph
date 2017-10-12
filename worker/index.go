@@ -25,7 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool) error {
+func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool, txn *posting.Txn) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 
@@ -42,14 +42,14 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool)
 	// it would use by lhmap
 	posting.DeleteIndex(ctx, attr)
 	if rebuild {
-		if err := posting.RebuildIndex(ctx, attr); err != nil {
+		if err := posting.RebuildIndex(ctx, attr, txn); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild bool) error {
+func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild bool, txn *posting.Txn) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 
@@ -63,14 +63,14 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	posting.DeleteReverseEdges(ctx, attr)
 	if rebuild {
 		// Remove reverse edges
-		if err := posting.RebuildReverseEdges(ctx, attr); err != nil {
+		if err := posting.RebuildReverseEdges(ctx, attr, txn); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild bool) error {
+func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild bool, txn *posting.Txn) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 
@@ -79,7 +79,7 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 	n.syncAllMarks(ctx, rv.Index-1)
 	posting.DeleteCountIndex(ctx, attr)
 	if rebuild {
-		if err := posting.RebuildCountIndex(ctx, attr); err != nil {
+		if err := posting.RebuildCountIndex(ctx, attr, txn); err != nil {
 			return err
 		}
 	}
@@ -103,9 +103,6 @@ func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) error {
 	if w.DoneUntil() >= lastIndex {
 		return nil
 	}
-
-	// Force an aggressive evict.
-	posting.CommitLists(10, gid)
 
 	return w.WaitForMark(ctx, lastIndex)
 }

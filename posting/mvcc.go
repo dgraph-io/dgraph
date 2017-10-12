@@ -18,136 +18,152 @@
 package posting
 
 import (
+	"math"
+	"sort"
+	"sync/atomic"
+
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
-	"sort"
-	"sync/atomic"
 )
 
 var (
 	errConflict = x.Errorf("Transaction aborted due to conflict")
+	errTsTooOld = x.Errorf("Transaction is too old")
 )
 
-func commitTimestamp(startTs uint64) (commitTs uint64, aborted bool) {
+// Dummy function for now
+func commitTimestamp(startTs uint64) (commitTs uint64, aborted bool, err error) {
 	// TODO: wait and ask group zero about the status
-	return 0, false
+	// Do some batching/caching using group zero stream.
+	return 0, false, nil
 }
 
-// Apply all mutations in memory and then write the delta to disk.
-// TODO: Write delta per transaction at once, change it to map[string][]*posting
-func addDeltaAt(key []byte, p []*protos.Posting, startTs uint64) error {
+type Txn struct {
+	StartTs uint64
+	m       map[string][]*protos.Posting
+}
+
+func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
+	if t.m == nil {
+		t.m = make(map[string][]*protos.Posting)
+	}
+	t.m[string(key)] = append(t.m[string(key)], p)
+}
+
+// Write All deltas per transaction at once.
+// Called after all mutations are applied in memory and checked for locks/conflicts.
+func (t *Txn) CommitDeltas() error {
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
-	// TODO: Use pl in lru to detect conflict.
-	item, err := txn.Get(key)
-	if err != nil && err != badger.ErrKeyNotFound {
-		return err
-	} else if err == nil && item.UserMeta()&bitUncommitedPosting != 0 {
-		// If latest version is uncommited value.
-		// acts like a lock
-		if commitTs, aborted, err := checkCommitStatus(item); err != nil {
+	for k, v := range t.m {
+		var pl protos.PostingList
+		item, err := txn.Get([]byte(k))
+		if err == nil {
+			val, err := item.Value()
+			if err != nil {
+				return err
+			}
+			pl.Unmarshal(val)
+		}
+
+		pl.Postings = append(pl.Postings, v...)
+		val, err := pl.Marshal()
+		x.Check(err)
+		err = txn.Set([]byte(k), val, bitDeltaPosting)
+		if err != nil {
 			return err
-		} else if commitTs > startTs || (commitTs == 0 && !aborted) {
-			return errConflict
 		}
 	}
-
-	var pl protos.PostingList
-	pl.Postings = p
-	val, err := pl.Marshal()
-	x.Check(err)
-	err = txn.Set(key, val, bitDeltaPosting&bitUncommitedPosting)
-	if err != nil {
-		return err
-	}
-	return txn.CommitAt(startTs, nil)
+	return txn.CommitAt(t.StartTs, nil)
 }
 
-// TODO: Can be done in background.
+// clean deletes the key with startTs after txn is aborted.
 func clean(key []byte, startTs uint64) {
 	txn := pstore.NewTransactionAt(startTs, true)
 	txn.Delete(key)
-	txn.CommitAt(startTs, nil)
+	// We don't care about the error
+	txn.CommitAt(startTs, func(err error) {})
 }
 
-func checkCommitStatus(item *badger.Item) (uint64, bool, error) {
-	//  Found some uncomitted data
-	vs := item.Version()
-	// Can happen when client crashes after transaction is comitted but before the
-	// commit keys are written on nodes.
-	commitTs, aborted := commitTimestamp(vs)
+func checkCommitStatus(key []byte, vs uint64) (uint64, bool, error) {
+	commitTs, aborted, err := commitTimestamp(vs)
+	if err != nil {
+		return 0, false, err
+	}
 	if aborted {
-		clean(item.Key(), vs)
+		clean(key, vs)
 		return 0, true, nil
 	}
 	if commitTs > 0 {
-		err := commitMutation(item.Key(), vs, commitTs)
-		clean(item.Key(), vs)
+		err := commitMutations([][]byte{key}, vs, commitTs)
+		if err == nil {
+			clean(key, vs)
+		}
 		return commitTs, false, err
 	}
 	return 0, false, nil
 }
 
-// Probably this might not be needed, we can write delta when evicting from LRU.
-// TODO: Do in batch for whole transaction.
-func commitMutation(key []byte, startTs uint64, commitTs uint64) error {
+// Writes all commit keys of the transaction.
+// Called after all mutations are committed in memory.
+func commitMutations(keys [][]byte, startTs uint64, commitTs uint64) error {
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
-	item, err := txn.Get(key)
-	if err != nil {
-		return err
-	}
-
-	x.AssertTrue(item.Version() == startTs)
-	val, err := item.Value()
-	newVal := make([]byte, len(val))
-	copy(newVal, val)
-
-	// Writes the value with commitTimestamp
-	err = txn.Set(key, val, bitDeltaPosting)
-	if err != nil {
-		return nil
+	for _, k := range keys {
+		err := txn.Set(k, nil, bitCommitMarker)
+		if err != nil {
+			return nil
+		}
 	}
 	return txn.CommitAt(commitTs, nil)
 }
 
-// reads the latest posting list from disk.(When not found in lru)
-func getNew(key []byte, pstore *badger.DB) (*List, error) {
-	txn := pstore.NewTransaction(false)
+func abortMutations(keys [][]byte, startTs uint64) error {
+	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	it := txn.NewIterator(iterOpts)
-	defer it.Close()
+	for _, k := range keys {
+		err := txn.Delete(k)
+		if err != nil {
+			return nil
+		}
+	}
+	return txn.CommitAt(startTs, nil)
+}
+
+// constructs the posting list from the disk using the passed iterator.
+// Use forward iterator with allversions enabled in iter options.
+func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.plist = new(protos.PostingList)
-	l.water = SyncMarks()
 
-	for it.Seek(key); it.ValidForPrefix(key); it.Next() {
+	var commitTs uint64
+	for it.ValidForPrefix(l.key) {
 		item := it.Item()
-		// There would be at most one uncommitted entry.
-		if item.UserMeta()&bitUncommitedPosting != 0 {
-			commitTs, aborted, err := checkCommitStatus(item)
+		if item.UserMeta()&bitCommitMarker != 0 {
+			// CommitMarkers and Deltas are always interleaved.
+			commitTs = item.Version()
+			it.Next()
+			continue
+		}
+
+		// Found some uncommitted entry
+		if commitTs == 0 {
+			var aborted bool
+			var err error
+			// There would be at most one uncommitted entry.
+			commitTs, aborted, err = checkCommitStatus(item.Key(), item.Version())
 			if err != nil {
 				return nil, err
 			} else if aborted {
 				continue
+			} else if commitTs == 0 {
+				l.startTs = item.Version()
 			}
-			val, err := item.Value()
-			if err != nil {
-				return nil, err
-			}
-			var pl protos.PostingList
-			x.Check(pl.Unmarshal(val))
-			if commitTs == 0 {
-				l.uncommitted = pl.Postings
-			}
-			continue
 		}
 
 		val, err := item.Value()
@@ -166,9 +182,16 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 			break
 		}
 		// It's delta
-		var p protos.Posting
-		x.Check(p.Unmarshal(val))
-		l.mlayer = append(l.mlayer, &p)
+		var pl protos.PostingList
+		x.Check(pl.Unmarshal(val))
+		for _, mpost := range pl.Postings {
+			if commitTs > 0 {
+				mpost.Commit = commitTs
+			} else {
+				mpost.Commit = math.MaxUint64 // Uncomitted entries would be at front.
+			}
+		}
+		l.mlayer = append(l.mlayer, pl.Postings...)
 	}
 	// Sort by Uid, Ts
 	sort.Slice(l.mlayer, func(i, j int) bool {
@@ -177,8 +200,22 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		}
 		return l.mlayer[i].Commit > l.mlayer[j].Commit
 	})
+	l.Lock()
 	size := l.calculateSize()
+	l.Unlock()
 	x.BytesRead.Add(int64(size))
 	atomic.StoreUint32(&l.estimatedSize, size)
 	return l, nil
+}
+
+func getNew(key []byte, pstore *badger.DB) (*List, error) {
+	txn := pstore.NewTransaction(false)
+	defer txn.Discard()
+
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	it := txn.NewIterator(iterOpts)
+	defer it.Close()
+	it.Seek(key)
+	return readPostingList(key, it)
 }

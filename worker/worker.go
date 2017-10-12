@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	pstore           *badger.KV
+	pstore           *badger.DB
 	workerServer     *grpc.Server
 	raftServer       conn.RaftServer
 	pendingProposals chan struct{}
@@ -51,7 +51,7 @@ func workerPort() int {
 	return x.Config.PortOffset + Config.BaseWorkerPort
 }
 
-func Init(ps *badger.KV) {
+func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
 	pendingProposals = make(chan struct{}, Config.NumPendingProposals)

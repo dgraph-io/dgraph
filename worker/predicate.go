@@ -38,20 +38,15 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func writeBatch(ctx context.Context, pstore *badger.KV, kv chan *protos.KV, che chan error) {
-	wb := make([]*badger.Entry, 0, 100)
+func writeBatch(ctx context.Context, pstore *badger.DB, kv chan *protos.KV, che chan error) {
+	txn := pstore.NewTransaction(true)
 	batchSize := 0
 	batchWriteNum := 1
 	for i := range kv {
 		if len(i.Val) == 0 {
-			wb = badger.EntriesDelete(wb, i.Key)
+			txn.Delete(i.Key)
 		} else {
-			entry := &badger.Entry{
-				Key:      i.Key,
-				Value:    i.Val,
-				UserMeta: i.UserMeta[0],
-			}
-			wb = append(wb, entry)
+			txn.Set(i.Key, i.Val, i.UserMeta[0])
 		}
 		batchSize += len(i.Key) + len(i.Val)
 		// We write in batches of size 32MB.
@@ -59,7 +54,7 @@ func writeBatch(ctx context.Context, pstore *badger.KV, kv chan *protos.KV, che 
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("SNAPSHOT: Doing batch write num: %d", batchWriteNum)
 			}
-			if err := pstore.BatchSet(wb); err != nil {
+			if err := txn.Commit(nil); err != nil {
 				che <- err
 				return
 			}
@@ -69,14 +64,14 @@ func writeBatch(ctx context.Context, pstore *badger.KV, kv chan *protos.KV, che 
 			batchSize = 0
 			// Since we are writing data in batches, we need to clear up items enqueued
 			// for batch write after every successful write.
-			wb = wb[:0]
+			txn = pstore.NewTransaction(true)
 		}
 	}
 	if batchSize > 0 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Doing batch write %d.", batchWriteNum)
 		}
-		if err := pstore.BatchSet(wb); err != nil {
+		if err := txn.Commit(nil); err != nil {
 			che <- err
 			return
 		}
@@ -84,8 +79,9 @@ func writeBatch(ctx context.Context, pstore *badger.KV, kv chan *protos.KV, che 
 	che <- nil
 }
 
-func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataClient) error {
-	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+func streamKeys(pstore *badger.DB, stream protos.Worker_PredicateAndSchemaDataClient) error {
+	txn := pstore.NewTransaction(false)
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	g := &protos.GroupKeys{
@@ -119,14 +115,12 @@ func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataCl
 		key := &protos.KC{
 			Key: kdup,
 		}
-		err := iterItem.Value(func(val []byte) error {
-			checksum := md5.Sum(val)
-			key.Checksum = checksum[:]
-			return nil
-		})
+		val, err := iterItem.Value()
 		if err != nil {
 			return err
 		}
+		checksum := md5.Sum(val)
+		key.Checksum = checksum[:]
 		g.Keys = append(g.Keys, key)
 		if len(g.Keys) >= 1000 {
 			if err := stream.Send(g); err != nil {
@@ -144,7 +138,7 @@ func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataCl
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func populateShard(ctx context.Context, ps *badger.KV, pl *conn.Pool, group uint32) (int, error) {
+func populateShard(ctx context.Context, ps *badger.DB, pl *conn.Pool, group uint32) (int, error) {
 	conn := pl.Get()
 	c := protos.NewWorkerClient(conn)
 
@@ -257,7 +251,8 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		}
 	}
 
-	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	txn := pstore.NewTransaction(false)
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	var count int
@@ -275,15 +270,13 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 
 		// No checksum check for schema keys
 		var v []byte
-		err := iterItem.Value(func(val []byte) error {
-			v = make([]byte, len(val))
-			// Copy it as we have to access it outside.
-			copy(v, val)
-			return nil
-		})
+		val, err := iterItem.Value()
 		if err != nil {
 			return err
 		}
+		v = make([]byte, len(val))
+		// Copy it as we have to access it outside.
+		copy(v, val)
 
 		if !pk.IsSchema() {
 			var pl protos.PostingList
