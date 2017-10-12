@@ -22,8 +22,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -155,14 +153,7 @@ func (g *groupi) proposeInitialSchema() {
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.
-
-	// Could get an error if some other node asked first and got to serve it.
-	if err := MutateOverNetwork(gr.ctx, &m); err != nil {
-		if errStr := grpc.ErrorDesc(err); len(errStr) > 0 &&
-			errStr != x.ErrTabletAlreadyServed.Error() {
-			x.Checkf(err, "Got error while proposing initial schema")
-		}
-	}
+	MutateOverNetwork(gr.ctx, &m)
 }
 
 // No locks are acquired while accessing this function.

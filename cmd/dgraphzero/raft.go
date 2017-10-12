@@ -165,7 +165,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal
 }
 
 var (
-	errInvalidProposal = errors.New("Invalid group proposal")
+	errInvalidProposal     = errors.New("Invalid group proposal")
+	errTabletAlreadyServed = errors.New("Tablet is already being served")
 )
 
 func newGroup() *protos.Group {
@@ -233,7 +234,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 				delete(group.Tablets, p.Tablet.Predicate)
 			} else {
 				if tablet.GroupId != p.Tablet.GroupId {
-					return p.Id, x.ErrTabletAlreadyServed
+					return p.Id, errTabletAlreadyServed
 				}
 				// This update can come from tablet size.
 				p.Tablet.ReadOnly = tablet.ReadOnly

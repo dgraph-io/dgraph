@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -56,8 +55,7 @@ const (
 
 var (
 	// Useful for running multiple servers on the same machine.
-	regExpHostName         = regexp.MustCompile(ValidHostnameRegex)
-	ErrTabletAlreadyServed = errors.New("Tablet is already being served")
+	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 )
 
 // WhiteSpace Replacer removes spaces and tabs from a string.
