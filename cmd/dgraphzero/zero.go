@@ -54,7 +54,8 @@ type Server struct {
 	state       *protos.MembershipState
 
 	nextLeaseId uint64
-	leaseLock   sync.Mutex // protects nextLeaseId and lease proposals.
+	nextTxnTs   uint64
+	leaseLock   sync.Mutex // protects nextLeaseId, nextTxnTs and corresponding proposals.
 
 	// groupMap    map[uint32]*Group
 	nextGroup      uint32
@@ -71,6 +72,7 @@ func (s *Server) Init() {
 		Zeros:  make(map[uint64]*protos.Member),
 	}
 	s.nextLeaseId = 1
+	s.nextTxnTs = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.shutDownCh = make(chan struct{}, 1)
