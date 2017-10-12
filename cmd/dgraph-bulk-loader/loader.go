@@ -12,12 +12,14 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/xidmap"
 )
 
 type options struct {
@@ -45,7 +47,8 @@ type options struct {
 type state struct {
 	opt        options
 	prog       *progress
-	um         *uidMap
+	um         *xidmap.XidMap
+	up         *uidProvider
 	ss         *schemaStore
 	sm         *shardMap
 	rdfChunkCh chan *bytes.Buffer
@@ -56,6 +59,7 @@ type state struct {
 type loader struct {
 	*state
 	mappers []*mapper
+	xidKV   *badger.KV
 }
 
 func newLoader(opt options) *loader {
@@ -143,6 +147,15 @@ func findRDFFiles(dir string) []string {
 	return files
 }
 
+type uidProvider uint64
+
+func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
+	const uidChunk = 1e5
+	end = atomic.AddUint64((*uint64)(p), uidChunk)
+	start = end - uidChunk + 1
+	return
+}
+
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
 
@@ -153,9 +166,14 @@ func (ld *loader) mapStage() {
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = xidDir
 	opt.ValueDir = xidDir
-	xidKV, err := badger.NewKV(&opt)
+	var err error
+	ld.xidKV, err = badger.NewKV(&opt)
 	x.Check(err)
-	ld.um = newUIDMap(xidKV)
+	ld.up = new(uidProvider)
+	ld.um = xidmap.New(ld.xidKV, ld.up, xidmap.Options{
+		NumShards: 1 << 10,
+		LRUSize:   1 << 19,
+	})
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
@@ -208,14 +226,19 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	ld.writeLease()
-	x.Check(ld.um.kv.Close())
+	x.Check(ld.xidKV.Close())
 	ld.um = nil
 	runtime.GC()
 }
 
 func (ld *loader) writeLease() {
+	// Obtain a fresh uid range - since uids are allocated in increasing order,
+	// the start of the new range can be used as the lease.
+	lease, _, err := ld.up.ReserveUidRange()
+	// Cannot give an error because uid ranges are produced by incrementing an integer.
+	x.AssertTrue(err == nil)
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "%d\n", ld.um.lease)
+	fmt.Fprintf(&buf, "%d\n", lease)
 	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))
 }
 
