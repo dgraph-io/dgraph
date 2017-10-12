@@ -275,6 +275,10 @@ func Parse(key []byte) *ParsedKey {
 	case ByteIndex:
 		p.Term = string(k)
 	case ByteCount, ByteCountRev:
+		if len(k) < 4 {
+			fmt.Printf("Error: Count length < 4 for key: %q, parsed key: %+v\n", key, p)
+			return nil
+		}
 		p.Count = binary.BigEndian.Uint32(k)
 	case byteSchema:
 		break
