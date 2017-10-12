@@ -22,12 +22,13 @@ func (FactorTokenizer) Tokens(value interface{}) ([]string, error) {
 	var toks []string
 	for p := int64(2); x > 1; p++ {
 		if x%p == 0 {
-			toks = append(toks, encodeInt(x))
+			toks = append(toks, encodeInt(p))
 			for x%p == 0 {
 				x /= p
 			}
 		}
 	}
+	fmt.Println(value, toks)
 	return toks, nil
 
 }

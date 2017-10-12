@@ -1118,17 +1118,20 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
-		tokenizerName := q.SrcFunc.Args[0]
-		strToTokenize := q.SrcFunc.Args[1]
-		if !verifyCustomIndex(q.Attr, tokenizerName) {
+		tokerName := q.SrcFunc.Args[0]
+		if !verifyCustomIndex(q.Attr, tokerName) {
 			return nil, x.Errorf("Attribute %s is not indexed with custom tokenizer %s",
-				q.Attr, tokenizerName)
+				q.Attr, tokerName)
 		}
-		tokenizer, ok := tok.GetTokenizer(tokenizerName)
+		valToTok, err := convertValue(q.Attr, q.SrcFunc.Args[1])
+		if err != nil {
+			return nil, err
+		}
+		tokenizer, ok := tok.GetTokenizer(tokerName)
 		if !ok {
-			return nil, x.Errorf("Could not find tokenizer with name %q", tokenizerName)
+			return nil, x.Errorf("Could not find tokenizer with name %q", tokerName)
 		}
-		fc.tokens, err = tok.BuildTokens(strToTokenize, tokenizer)
+		fc.tokens, err = tok.BuildTokens(valToTok.Value, tokenizer)
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		fc.intersectDest = strings.HasSuffix(fnName, "allof")
 		fc.n = len(fc.tokens)
