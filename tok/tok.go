@@ -371,6 +371,8 @@ func (t HashTokenizer) IsLossy() bool    { return true }
 // PluginTokenizer is implemented by external plugins loaded dynamically via
 // *.so files. It follows the implementation semantics of the Tokenizer
 // interface.
+//
+// Think carefully before modifying this interface, as it would break users' plugins.
 type PluginTokenizer interface {
 	Name() string
 	Type() string
