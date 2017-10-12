@@ -67,7 +67,7 @@ func TestFullTextTokenizer(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	tokens, err := tokenizer.Tokens("Stemming works!")
+	tokens, err := BuildTokens("Stemming works!", tokenizer)
 	require.Nil(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -82,7 +82,7 @@ func TestHourTokenizer(t *testing.T) {
 	dt, err := time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
 	require.NoError(t, err)
 
-	tokens, err := tokenizer.Tokens(dt)
+	tokens, err := BuildTokens(dt, tokenizer)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
 	require.Equal(t, 1+2*4, len(tokens[0]))
@@ -96,7 +96,7 @@ func TestDayTokenizer(t *testing.T) {
 	dt, err := time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
 	require.NoError(t, err)
 
-	tokens, err := tokenizer.Tokens(dt)
+	tokens, err := BuildTokens(dt, tokenizer)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
 	require.Equal(t, 1+2*3, len(tokens[0]))
@@ -110,7 +110,7 @@ func TestMonthTokenizer(t *testing.T) {
 	dt, err := time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
 	require.NoError(t, err)
 
-	tokens, err := tokenizer.Tokens(dt)
+	tokens, err := BuildTokens(dt, tokenizer)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
 	require.Equal(t, 1+2*2, len(tokens[0]))
@@ -124,7 +124,7 @@ func TestDateTimeTokenizer(t *testing.T) {
 	dt, err := time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
 	require.NoError(t, err)
 
-	tokens, err := tokenizer.Tokens(dt)
+	tokens, err := BuildTokens(dt, tokenizer)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
 	require.Equal(t, 1+2, len(tokens[0]))
@@ -135,7 +135,7 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	tokens, err := tokenizer.Tokens("Katzen und Auffassung")
+	tokens, err := BuildTokens("Katzen und Auffassung", tokenizer)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -148,7 +148,7 @@ func TestTermTokenizer(t *testing.T) {
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
-	tokens, err := tokenizer.Tokens("Tokenizer works!")
+	tokens, err := BuildTokens("Tokenizer works!", tokenizer)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
@@ -159,7 +159,7 @@ func TestTrigramTokenizer(t *testing.T) {
 	tokenizer, has := GetTokenizer("trigram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
-	tokens, err := tokenizer.Tokens("Dgraph rocks!")
+	tokens, err := BuildTokens("Dgraph rocks!", tokenizer)
 	require.NoError(t, err)
 	require.Equal(t, 11, len(tokens))
 	id := tokenizer.Identifier()
@@ -184,10 +184,10 @@ func TestGetBleveTokens(t *testing.T) {
 	val := "Our chief weapon is surprise...surprise and fear...fear and surprise...." +
 		"Our two weapons are fear and surprise...and ruthless efficiency.... " +
 		"Our three weapons are fear, surprise, and ruthless efficiency..."
-	tokens, err := getBleveTokens(FTSTokenizerName, 0x20, val) // use space as identifier
+	tokens, err := getBleveTokens(FTSTokenizerName, val)
 	require.NoError(t, err)
 
-	expected := []string{" chief", " weapon", " surpris", " fear", " ruthless", " effici"}
+	expected := []string{"chief", "weapon", "surpris", "fear", "ruthless", "effici"}
 	sort.Strings(expected)
 
 	// ensure that tokens are sorted and unique

@@ -42,5 +42,5 @@ func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {
 		return nil, x.Errorf("Function requires 1 arguments, but got %d",
 			len(funcArgs))
 	}
-	return tokenizer.Tokens(funcArgs[0])
+	return BuildTokens(funcArgs[0], tokenizer)
 }
