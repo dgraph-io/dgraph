@@ -18,7 +18,6 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 
@@ -28,18 +27,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	ErrMaxTries = errors.New("Max retries exceeded for request while doing batch mutations.")
-)
-
 type Dgraph struct {
 	dc []protos.DgraphClient
 }
 
 // NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
-// conns.  The Dgraph client stores blanknode to uid, and XIDnode to uid mappings on disk
-// in clientDir.
-//
+// conns.
 // The client can be backed by multiple connections (to the same server, or multiple servers in a
 // cluster).
 //
@@ -180,4 +173,8 @@ You can get the latest version from https://docs.dgraph.io
 `, v.Tag, version)
 		}
 	}
+}
+
+func (d *Dgraph) AnyClient() protos.DgraphClient {
+	return d.dc[rand.Intn(len(d.dc))]
 }

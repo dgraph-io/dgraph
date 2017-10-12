@@ -156,41 +156,10 @@ type NQuad struct {
 	*protos.NQuad
 }
 
-func typeValFrom(val *protos.Value) types.Val {
-	switch val.Val.(type) {
-	case *protos.Value_BytesVal:
-		return types.Val{types.BinaryID, val.GetBytesVal()}
-	case *protos.Value_IntVal:
-		return types.Val{types.IntID, val.GetIntVal()}
-	case *protos.Value_StrVal:
-		if val.GetStrVal() == "" {
-			return types.Val{types.StringID, "_nil_"}
-		}
-		return types.Val{types.StringID, val.GetStrVal()}
-	case *protos.Value_BoolVal:
-		return types.Val{types.BoolID, val.GetBoolVal()}
-	case *protos.Value_DoubleVal:
-		return types.Val{types.FloatID, val.GetDoubleVal()}
-	case *protos.Value_GeoVal:
-		return types.Val{types.GeoID, val.GetGeoVal()}
-	case *protos.Value_DatetimeVal:
-		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
-	case *protos.Value_PasswordVal:
-		return types.Val{types.PasswordID, val.GetPasswordVal()}
-	case *protos.Value_DefaultVal:
-		if val.GetDefaultVal() == "" {
-			return types.Val{types.DefaultID, "_nil_"}
-		}
-		return types.Val{types.DefaultID, val.GetDefaultVal()}
-	}
-
-	return types.Val{types.StringID, ""}
-}
-
 func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
-	p := typeValFrom(nq.ObjectValue)
+	p := types.ValFromObjectVal(nq.ObjectValue)
 	// These three would have already been marshalled to bytes by the client or
 	// in parse function.
 	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {

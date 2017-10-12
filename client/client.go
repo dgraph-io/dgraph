@@ -19,7 +19,6 @@ package client
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
@@ -39,10 +38,10 @@ const (
 // multiple set, delete and schema mutations, and a single GraphQL+- query.  If the query contains
 // GraphQL variables, then it must be set with SetQueryWithVariables rather than SetQuery.
 type Req struct {
-	gr     protos.Request
-	mark   *x.WaterMark
-	line   uint64
-	markWg *sync.WaitGroup // non-nil only if mark is non-nil
+	gr protos.Request
+	//	mark   *x.WaterMark
+	//	line   uint64
+	//	markWg *sync.WaitGroup // non-nil only if mark is non-nil
 }
 
 // Request returns the protos.Request backing the Req.
@@ -50,7 +49,7 @@ func (req *Req) Request() *protos.Request {
 	return &req.gr
 }
 
-func checkSchema(schema protos.SchemaUpdate) error {
+func (d *Dgraph) CheckSchema(schema protos.SchemaUpdate) error {
 	if len(schema.Predicate) == 0 {
 		return x.Errorf("No predicate specified for schemaUpdate")
 	}
