@@ -247,19 +247,22 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	// err = query.ToJson(&l, res.Subgraphs, w,
 	// query.ConvertUidsToHex(res.Allocations), addLatency)
 
-	nodes, err := query.ToProtocolBuf(&l, er.Subgraphs)
+	json, err := query.ToJson(&l, er.Subgraphs)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while converting to protocol buffer: %+v", err)
 		}
 		return resp, err
 	}
-	resp.N = nodes
+	resp.Json = json
 
-	gl := new(protos.Latency)
-	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),
-		l.ProtocolBuffer.String()
-	resp.L = gl
+	gl := &protos.Latency{
+		Parsing:    l.Parsing.String(),
+		Processing: l.Processing.String(),
+		Encoding:   l.Json.String(),
+	}
+
+	resp.Latency = gl
 	return resp, err
 }
 
