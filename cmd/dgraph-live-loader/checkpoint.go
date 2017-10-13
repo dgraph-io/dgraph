@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package client
+package main
 
 import (
 	"encoding/binary"
@@ -37,11 +37,11 @@ type waterMark struct {
 type syncMarks map[string]waterMark
 
 // Create syncmarks for files and store them in dgraphClient.
-func (d *Dgraph) NewSyncMarks(files []string) error {
+func (l *loader) newSyncMarks(files []string) error {
 	if len(files) == 0 {
 		return nil
 	}
-	if len(d.marks) > 0 {
+	if len(l.marks) > 0 {
 		return fmt.Errorf("NewSyncMarks should only be called once.")
 	}
 
@@ -51,17 +51,17 @@ func (d *Dgraph) NewSyncMarks(files []string) error {
 			return err
 		}
 
-		if _, ok := d.marks[ap]; ok {
+		if _, ok := l.marks[ap]; ok {
 			return fmt.Errorf("Found duplicate file: %+v\n", ap)
 		}
-		d.marks.create(ap)
+		l.marks.create(ap)
 	}
 
 	t := time.NewTicker(10 * time.Second)
-	d.checkpointTicker = t
+	l.checkpointTicker = t
 	go func(t *time.Ticker) {
 		for range t.C {
-			d.writeCheckpoint()
+			l.writeCheckpoint()
 		}
 	}(t)
 	return nil
@@ -73,9 +73,9 @@ func checkpointKey(file string) []byte {
 }
 
 // Get checkpoint for file from Badger.
-func (d *Dgraph) Checkpoint(file string) (uint64, error) {
+func (l *loader) checkpoint(file string) (uint64, error) {
 	var item badger.KVItem
-	err := d.kv.Get(checkpointKey(file), &item)
+	err := l.kv.Get(checkpointKey(file), &item)
 	if err != nil {
 		return 0, err
 	}
@@ -96,21 +96,21 @@ func (d *Dgraph) Checkpoint(file string) (uint64, error) {
 }
 
 // Used to write checkpoints to Badger.
-func (d *Dgraph) writeCheckpoint() {
-	wb := make([]*badger.Entry, 0, len(d.marks))
-	for file, wm := range d.marks {
+func (l *loader) writeCheckpoint() {
+	wb := make([]*badger.Entry, 0, len(l.marks))
+	for file, wm := range l.marks {
 		doneUntil := wm.mark.DoneUntil()
 		if doneUntil == 0 || doneUntil == wm.last {
 			continue
 		}
 		wm.last = doneUntil
-		d.marks[file] = wm
+		l.marks[file] = wm
 		var buf [binary.MaxVarintLen64]byte
 		n := binary.PutUvarint(buf[:], doneUntil)
 		wb = badger.EntriesSet(wb, checkpointKey(file), buf[:n])
 	}
 
-	if err := d.kv.BatchSet(wb); err != nil {
+	if err := l.kv.BatchSet(wb); err != nil {
 		fmt.Printf("Error while writing to disk %v\n", err)
 	}
 	for _, wbe := range wb {

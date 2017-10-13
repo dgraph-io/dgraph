@@ -27,6 +27,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -35,17 +36,22 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/xidmap"
 
 	"github.com/pkg/profile"
 )
@@ -113,25 +119,32 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	if err != nil {
 		x.Checkf(err, "Error while reading file")
 	}
-	return dgraphClient.SetSchemaBlocking(ctx, string(b))
+
+	su, err := schema.Parse(string(b))
+	if err != nil {
+		return err
+	}
+	return dgraphClient.SetSchemaBlocking(ctx, su)
 }
 
-func Node(val string, c *client.Dgraph) (string, error) {
+func hex(uid uint64) string {
+	return fmt.Sprintf("%#x", uint64(uid))
+}
+
+func (l *loader) uid(val string) (string, error) {
 	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
-		return c.NodeUid(uid).String(), nil
+		return hex(uid), nil
 	}
+
 	if strings.HasPrefix(val, "_:") {
-		n, err := c.NodeBlank(val[2:])
+		uid, err := l.NodeBlank(val[2:])
 		if err != nil {
 			return "", err
 		}
-		return n.String(), nil
+		return hex(uid), nil
 	}
-	n, err := c.NodeXid(val, *storeXid)
-	if err != nil {
-		return "", err
-	}
-	return n.String(), nil
+	uid, err := l.NodeXid(val, *storeXid)
+	return hex(uid), err
 }
 
 func fileReader(file string) (io.Reader, *os.File) {
@@ -149,23 +162,23 @@ func fileReader(file string) (io.Reader, *os.File) {
 }
 
 // processFile sends mutations for a given gz file.
-func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
+func (l *loader) processFile(ctx context.Context, file string) error {
 	fmt.Printf("\nProcessing %s\n", file)
 	gr, f := fileReader(file)
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
 	defer f.Close()
 
-	absPath, err := filepath.Abs(file)
-	x.Check(err)
-	checkpoint, err := dgraphClient.Checkpoint(absPath)
-	x.Check(err)
-	if checkpoint != 0 {
-		fmt.Printf("\nFound checkpoint for: %s. Skipping: %v lines.\n", file, checkpoint)
-	}
+	//	absPath, err := filepath.Abs(file)
+	//	x.Check(err)
+	//	checkpoint, err := dgraphClient.Checkpoint(absPath)
+	//	x.Check(err)
+	//	if checkpoint != 0 {
+	//		fmt.Printf("\nFound checkpoint for: %s. Skipping: %v lines.\n", file, checkpoint)
+	//	}
 
 	var line uint64
-	r := new(client.Req)
+	r := client.Req{}
 	var batchSize int
 	for {
 		select {
@@ -173,7 +186,7 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 			return ctx.Err()
 		default:
 		}
-		err = readLine(bufReader, &buf)
+		err := readLine(bufReader, &buf)
 		if err != nil {
 			if err != io.EOF {
 				return err
@@ -181,11 +194,11 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 			break
 		}
 		line++
-		if line <= checkpoint {
-			buf.Reset()
-			// No need to parse. We have already sent it to server.
-			continue
-		}
+		//		if line <= checkpoint {
+		//			buf.Reset()
+		//			// No need to parse. We have already sent it to server.
+		//			continue
+		//		}
 		nq, err := rdf.Parse(buf.String())
 		if err == rdf.ErrEmpty { // special case: comment/empty line
 			buf.Reset()
@@ -196,27 +209,27 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 		batchSize++
 		buf.Reset()
 
-		if nq.Subject, err = Node(nq.Subject, dgraphClient); err != nil {
+		if nq.Subject, err = l.uid(nq.Subject); err != nil {
 			return err
 		}
 		if len(nq.ObjectId) > 0 {
-			if nq.ObjectId, err = Node(nq.ObjectId, dgraphClient); err != nil {
+			if nq.ObjectId, err = l.uid(nq.ObjectId); err != nil {
 				return err
 			}
 		}
-		r.Set(client.NewEdge(nq))
+		r.Set(&nq)
+
 		if batchSize >= *numRdf {
-			if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
-				return err
-			}
+			l.reqs <- r
+			atomic.AddUint64(&l.rdfs, uint64(batchSize))
 			batchSize = 0
-			r = new(client.Req)
+			r = client.Req{}
 		}
 	}
 	if batchSize > 0 {
-		if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
-			return err
-		}
+		l.reqs <- r
+		atomic.AddUint64(&l.rdfs, uint64(batchSize))
+		r = client.Req{}
 	}
 	return nil
 }
@@ -260,6 +273,53 @@ func fileList(files string) []string {
 	return strings.Split(files, ",")
 }
 
+func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
+	x.Check(os.MkdirAll(*clientDir, 0700))
+	opt := badger.DefaultOptions
+	opt.SyncWrites = true // So that checkpoints are persisted immediately.
+	opt.TableLoadingMode = options.MemoryMap
+	opt.Dir = *clientDir
+	opt.ValueDir = *clientDir
+
+	kv, err := badger.NewKV(&opt)
+	x.Checkf(err, "Error while creating badger KV posting store")
+
+	alloc := xidmap.New(kv,
+		&uidProvider{
+			dc:  dc.AnyClient(),
+			ctx: opts.Ctx,
+		},
+		xidmap.Options{
+			NumShards: 100,
+			LRUSize:   1e5,
+		},
+	)
+
+	l := &loader{
+		opts:  opts,
+		dc:    dc,
+		start: time.Now(),
+		//	schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
+		alloc: alloc,
+		kv:    kv,
+		//		marks:  make(map[string]waterMark),
+		reqs: make(chan client.Req, opts.Pending*2),
+
+		// length includes opts.Pending for makeRequests, another one for makeSchemaRequests.
+		che: make(chan error, opts.Pending),
+	}
+
+	for i := 0; i < opts.Pending; i++ {
+		go l.makeRequests()
+	}
+
+	rand.Seed(time.Now().Unix())
+	if opts.PrintCounters {
+		go l.printCounters()
+	}
+	return l
+}
+
 func main() {
 	flag.Parse()
 	if *version {
@@ -300,14 +360,13 @@ func main() {
 		defer conn.Close()
 	}
 
-	bmOpts := client.BatchMutationOptions{
+	bmOpts := batchMutationOptions{
 		Size:          *numRdf,
 		Pending:       *concurrent,
 		PrintCounters: true,
 		Ctx:           ctx,
 	}
-	dgraphClient := client.NewDgraphClient(conns, bmOpts, *clientDir)
-	defer dgraphClient.Close()
+	dgraphClient := client.NewDgraphClient(conns)
 
 	{
 		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)
@@ -315,13 +374,16 @@ func main() {
 		cancelTimeout()
 	}
 
+	l := setup(bmOpts, dgraphClient)
+	defer l.kv.Close()
+
 	if *storeXid {
-		if err := dgraphClient.AddSchema(protos.SchemaUpdate{
+		if err := dgraphClient.SetSchemaBlocking(ctx, []*protos.SchemaUpdate{&protos.SchemaUpdate{
 			Predicate: "xid",
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"hash"},
 			Directive: protos.SchemaUpdate_INDEX,
-		}); err != nil {
+		}}); err != nil {
 			log.Fatal("While adding schema to batch ", err)
 		}
 	}
@@ -342,12 +404,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	x.Check(dgraphClient.NewSyncMarks(filesList))
+	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- processFile(ctx, file, dgraphClient)
+			errCh <- l.processFile(ctx, file)
 		}(file)
 	}
 
@@ -363,7 +425,7 @@ func main() {
 	}
 
 	{
-		if err := dgraphClient.BatchFlush(); err != nil {
+		if err := l.BatchFlush(); err != nil {
 			if err == context.Canceled {
 				interrupted = true
 			} else {
@@ -372,7 +434,7 @@ func main() {
 		}
 	}
 
-	c := dgraphClient.Counter()
+	c := l.Counter()
 	var rate uint64
 	if c.Elapsed.Seconds() < 1 {
 		rate = c.Rdfs
