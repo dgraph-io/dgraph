@@ -41,8 +41,8 @@ func (r keyRange) String() string {
 }
 
 func (r keyRange) equals(dst keyRange) bool {
-	return bytes.Compare(r.left, dst.left) == 0 &&
-		bytes.Compare(r.right, dst.right) == 0 &&
+	return bytes.Equal(r.left, dst.left) &&
+		bytes.Equal(r.right, dst.right) &&
 		r.inf == dst.inf
 }
 
@@ -52,11 +52,11 @@ func (r keyRange) overlapsWith(dst keyRange) bool {
 	}
 
 	// If my left is greater than dst right, we have no overlap.
-	if bytes.Compare(r.left, dst.right) > 0 {
+	if y.CompareKeys(r.left, dst.right) > 0 {
 		return false
 	}
 	// If my right is less than dst left, we have no overlap.
-	if bytes.Compare(r.right, dst.left) < 0 {
+	if y.CompareKeys(r.right, dst.left) < 0 {
 		return false
 	}
 	// We have overlap.
@@ -68,10 +68,10 @@ func getKeyRange(tables []*table.Table) keyRange {
 	smallest := tables[0].Smallest()
 	biggest := tables[0].Biggest()
 	for i := 1; i < len(tables); i++ {
-		if bytes.Compare(tables[i].Smallest(), smallest) < 0 {
+		if y.CompareKeys(tables[i].Smallest(), smallest) < 0 {
 			smallest = tables[i].Smallest()
 		}
-		if bytes.Compare(tables[i].Biggest(), biggest) > 0 {
+		if y.CompareKeys(tables[i].Biggest(), biggest) > 0 {
 			biggest = tables[i].Biggest()
 		}
 	}

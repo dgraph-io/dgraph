@@ -17,7 +17,6 @@
 package table
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -107,7 +106,7 @@ type byKey []keyOffset
 
 func (b byKey) Len() int               { return len(b) }
 func (b byKey) Swap(i int, j int)      { b[i], b[j] = b[j], b[i] }
-func (b byKey) Less(i int, j int) bool { return bytes.Compare(b[i].key, b[j].key) < 0 }
+func (b byKey) Less(i int, j int) bool { return y.CompareKeys(b[i].key, b[j].key) < 0 }
 
 // OpenTable assumes file has only one table and opens it.  Takes ownership of fd upon function
 // entry.  Returns a table with one reference count on it (decrementing which may delete the file!
@@ -241,10 +240,6 @@ func (t *Table) readIndex() error {
 			len:    offsets[i] - o,
 		}
 		t.blockIndex = append(t.blockIndex, ko)
-	}
-
-	if len(t.blockIndex) == 1 {
-		return nil
 	}
 
 	che := make(chan error, len(t.blockIndex))

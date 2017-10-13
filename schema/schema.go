@@ -37,7 +37,7 @@ const (
 
 var (
 	pstate *state
-	pstore *badger.KV
+	pstore *badger.DB
 	syncCh chan SyncEntry
 )
 
@@ -98,12 +98,15 @@ func (s *state) Delete(se SyncEntry) {
 
 // Remove deletes the schema from memory and disk. Used after predicate move to do
 // cleanup
+// TODO(Txn): Take timestamps
 func (s *state) Remove(predicate string) error {
 	s.Lock()
 	defer s.Unlock()
 
 	delete(s.predicate, predicate)
-	return pstore.Delete(x.SchemaKey(predicate))
+	return pstore.Update(func(txn *badger.Txn) error {
+		return txn.Delete(x.SchemaKey(predicate))
+	})
 }
 
 func logUpdate(schema protos.SchemaUpdate, pred string) string {
@@ -240,17 +243,18 @@ func (s *state) IsList(pred string) bool {
 	return false
 }
 
-func Init(ps *badger.KV) {
+func Init(ps *badger.DB) {
 	pstore = ps
 	syncCh = make(chan SyncEntry, syncChCapacity)
 	reset()
-	go batchSync()
 }
 
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
 	prefix := x.SchemaPrefix()
-	itr := pstore.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
+	txn := pstore.NewTransaction(false)
+	defer txn.Discard()
+	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
 	defer itr.Close()
 
 	for itr.Seek(prefix); itr.Valid(); itr.Next() {
@@ -265,13 +269,11 @@ func LoadFromDb() error {
 		}
 		attr := pk.Attr
 		var s protos.SchemaUpdate
-		err := item.Value(func(val []byte) error {
-			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
-			return nil
-		})
+		val, err := item.Value()
 		if err != nil {
 			return err
 		}
+		x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
 		State().Set(attr, s)
 	}
 	return nil
@@ -295,48 +297,5 @@ func addToEntriesMap(entriesMap map[*x.WaterMark][]uint64, entries []SyncEntry) 
 		if entry.Water != nil {
 			entriesMap[entry.Water] = append(entriesMap[entry.Water], entry.Index)
 		}
-	}
-}
-
-func batchSync() {
-	var entries []SyncEntry
-	var loop uint64
-	wb := make([]*badger.Entry, 0, 100)
-	for {
-		ent := <-syncCh
-	slurpLoop:
-		for {
-			entries = append(entries, ent)
-			if len(entries) == syncChCapacity {
-				// Avoid making infinite batch, push back against syncCh.
-				break
-			}
-			select {
-			case ent = <-syncCh:
-			default:
-				break slurpLoop
-			}
-		}
-
-		loop++
-		State().elog.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
-		for _, e := range entries {
-			if e.Schema.Directive == protos.SchemaUpdate_DELETE {
-				wb = badger.EntriesDelete(wb, x.SchemaKey(e.Attr))
-				continue
-			}
-			val, err := e.Schema.Marshal()
-			x.Checkf(err, "Error while marshalling schema description")
-			wb = badger.EntriesSet(wb, x.SchemaKey(e.Attr), val)
-		}
-		pstore.BatchSet(wb)
-		wb = wb[:0]
-
-		entriesMap := make(map[*x.WaterMark][]uint64)
-		addToEntriesMap(entriesMap, entries)
-		for wm, indices := range entriesMap {
-			wm.DoneMany(indices)
-		}
-		entries = entries[:0]
 	}
 }

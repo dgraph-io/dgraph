@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -39,25 +40,29 @@ func (l *List) PostingList() *protos.PostingList {
 	return l.plist
 }
 
-func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {
+func listToArray(t *testing.T, afterUid uint64, l *List, readTs uint64) []uint64 {
 	out := make([]uint64, 0, 10)
-	l.Iterate(afterUid, func(p *protos.Posting) bool {
+	l.Iterate(readTs, afterUid, func(p *protos.Posting) bool {
 		out = append(out, p.Uid)
 		return true
 	})
 	return out
 }
 
-func checkUids(t *testing.T, l *List, uids []uint64) {
-	require.Equal(t, uids, listToArray(t, 0, l))
+func checkUids(t *testing.T, l *List, uids []uint64, readTs uint64) {
+	require.Equal(t, uids, listToArray(t, 0, l, readTs))
 	if len(uids) >= 3 {
-		require.Equal(t, uids[1:], listToArray(t, 10, l), uids[1:])
-		require.Equal(t, []uint64{81}, listToArray(t, 80, l))
-		require.Empty(t, listToArray(t, 82, l))
+		require.Equal(t, uids[1:], listToArray(t, 10, l, readTs), uids[1:])
+		require.Equal(t, []uint64{81}, listToArray(t, 80, l, readTs))
+		require.Empty(t, listToArray(t, 82, l, readTs))
 	}
 }
 
-func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32) {
+func deletePl(t *testing.T) {
+	lcache.Reset()
+}
+
+func addMutationHelper(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32, txn *Txn) {
 	if op == Del {
 		edge.Op = protos.DirectedEdge_DEL
 	} else if op == Set {
@@ -65,108 +70,115 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32) {
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	_, err := l.AddMutation(context.Background(), edge)
+	_, err := l.AddMutation(context.Background(), txn, edge)
 	require.NoError(t, err)
 }
 
-func deletePl(t *testing.T) {
-	lcache.Reset()
-}
-
 func TestAddMutation(t *testing.T) {
-	key := x.DataKey("name", 1)
+	key := x.DataKey("name", 2)
 
 	l := Get(key)
 
+	txn := &Txn{StartTs: uint64(1)}
 	edge := &protos.DirectedEdge{
 		ValueId: 9,
 		Label:   "testing",
 	}
-	addMutation(t, l, edge, Set)
+	addMutationHelper(t, l, edge, Set, txn)
 
-	require.Equal(t, listToArray(t, 0, l), []uint64{9})
+	require.Equal(t, listToArray(t, 0, l, 1), []uint64{9})
 
-	p := getFirst(l)
+	p := getFirst(l, 1)
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, p.Label, "testing")
 
 	// Add another edge now.
 	edge.ValueId = 81
-	addMutation(t, l, edge, Set)
-	require.Equal(t, listToArray(t, 0, l), []uint64{9, 81})
+	addMutationHelper(t, l, edge, Set, txn)
+	require.Equal(t, listToArray(t, 0, l, 1), []uint64{9, 81})
 
 	// Add another edge, in between the two above.
 	edge.ValueId = 49
-	addMutation(t, l, edge, Set)
-	require.Equal(t, listToArray(t, 0, l), []uint64{9, 49, 81})
+	addMutationHelper(t, l, edge, Set, txn)
+	require.Equal(t, listToArray(t, 0, l, 1), []uint64{9, 49, 81})
 
-	checkUids(t, l, []uint64{9, 49, 81})
+	checkUids(t, l, []uint64{9, 49, 81}, 1)
 
 	// Delete an edge, add an edge, replace an edge
 	edge.ValueId = 49
-	addMutation(t, l, edge, Del)
+	addMutationHelper(t, l, edge, Del, txn)
 
 	edge.ValueId = 69
-	addMutation(t, l, edge, Set)
+	addMutationHelper(t, l, edge, Set, txn)
 
 	edge.ValueId = 9
 	edge.Label = "anti-testing"
-	addMutation(t, l, edge, Set)
+	addMutationHelper(t, l, edge, Set, txn)
+	l.CommitMutation(context.Background(), 1, 2)
 
 	uids := []uint64{9, 69, 81}
-	checkUids(t, l, uids)
+	checkUids(t, l, uids, 3)
 
-	p = getFirst(l)
+	p = getFirst(l, 3)
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, "anti-testing", p.Label)
 
 	// Try reading the same data in another PostingList.
 	dl := Get(key)
-	checkUids(t, dl, uids)
+	checkUids(t, dl, uids, 3)
 	deletePl(t)
-	ps.Delete(dl.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(dl.key)
+	})
 }
 
-func getFirst(l *List) (res protos.Posting) {
-	l.Iterate(0, func(p *protos.Posting) bool {
+func getFirst(l *List, readTs uint64) (res protos.Posting) {
+	l.Iterate(readTs, 0, func(p *protos.Posting) bool {
 		res = *p
 		return false
 	})
 	return res
 }
 
-func checkValue(t *testing.T, ol *List, val string) {
-	p := getFirst(ol)
+func checkValue(t *testing.T, ol *List, val string, readTs uint64) {
+	p := getFirst(ol, readTs)
 	require.Equal(t, uint64(math.MaxUint64), p.Uid) // Cast to prevent overflow.
 	require.EqualValues(t, val, p.Value)
 }
 
+// TODO(txn): Add tests after lru eviction
 func TestAddMutation_Value(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 	edge := &protos.DirectedEdge{
 		Value: []byte("oh hey there"),
 		Label: "new-testing",
 	}
-	addMutation(t, ol, edge, Set)
-	checkValue(t, ol, "oh hey there")
+	txn := &Txn{StartTs: 1}
+	addMutationHelper(t, ol, edge, Set, txn)
+	checkValue(t, ol, "oh hey there", txn.StartTs)
 
 	// Run the same check after committing.
-	_, err := ol.SyncIfDirty(false)
+	ol.CommitMutation(context.Background(), txn.StartTs, txn.StartTs+1)
+	_, err = ol.SyncIfDirty(false)
 	require.NoError(t, err)
-	checkValue(t, ol, "oh hey there")
+	checkValue(t, ol, "oh hey there", uint64(3))
 
 	// The value made it to the posting list. Changing it now.
 	edge.Value = []byte(strconv.Itoa(119))
-	addMutation(t, ol, edge, Set)
-	checkValue(t, ol, "119")
+	txn = &Txn{StartTs: 3}
+	addMutationHelper(t, ol, edge, Set, txn)
+	checkValue(t, ol, "119", txn.StartTs)
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := x.DataKey("value", 12)
 	ol := Get(key)
 
 	// Set value to cars and merge to RocksDB.
@@ -174,47 +186,53 @@ func TestAddMutation_jchiu1(t *testing.T) {
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Set)
+	txn := &Txn{StartTs: 1}
+	addMutationHelper(t, ol, edge, Set, txn)
+	ol.CommitMutation(context.Background(), 1, uint64(2))
 	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
 
-	require.EqualValues(t, 1, ol.Length(0))
-	checkValue(t, ol, "cars")
+	// TODO: Read at commitTimestamp with all committed
+	require.EqualValues(t, 1, ol.Length(uint64(3), 0))
+	checkValue(t, ol, "cars", uint64(3))
 
+	txn = &Txn{StartTs: 3}
 	// Set value to newcars, but don't merge yet.
 	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Set)
-	require.EqualValues(t, 1, ol.Length(0))
-	checkValue(t, ol, "newcars")
+	addMutationHelper(t, ol, edge, Set, txn)
+	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
+	checkValue(t, ol, "newcars", txn.StartTs)
 
 	// Set value to someothercars, but don't merge yet.
 	edge = &protos.DirectedEdge{
 		Value: []byte("someothercars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Set)
-	require.EqualValues(t, 1, ol.Length(0))
-	checkValue(t, ol, "someothercars")
+	addMutationHelper(t, ol, edge, Set, txn)
+	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
+	checkValue(t, ol, "someothercars", txn.StartTs)
 
 	// Set value back to the committed value cars, but don't merge yet.
 	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Set)
-	require.EqualValues(t, 1, ol.Length(0))
-	checkValue(t, ol, "cars")
+	addMutationHelper(t, ol, edge, Set, txn)
+	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
+	checkValue(t, ol, "cars", txn.StartTs)
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := x.DataKey("value", 15)
 	ol := Get(key)
 
 	// Del a value cars and but don't merge.
@@ -222,30 +240,68 @@ func TestAddMutation_jchiu2(t *testing.T) {
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Del)
-	require.EqualValues(t, 0, ol.Length(0))
+	txn := &Txn{StartTs: 1}
+	addMutationHelper(t, ol, edge, Del, txn)
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 0))
 
 	// Set value to newcars, but don't merge yet.
 	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Set)
-	require.EqualValues(t, 1, ol.Length(0))
-	checkValue(t, ol, "newcars")
+	addMutationHelper(t, ol, edge, Set, txn)
+	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
+	checkValue(t, ol, "newcars", txn.StartTs)
 
 	// Del a value cars. This operation should be ignored.
 	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Del)
-	require.EqualValues(t, 1, ol.Length(0))
-	checkValue(t, ol, "newcars")
+	addMutationHelper(t, ol, edge, Del, txn)
+	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
+	checkValue(t, ol, "newcars", txn.StartTs)
+}
+
+func TestAddMutation_jchiu2_Commit(t *testing.T) {
+	key := x.DataKey("value", 16)
+	ol := Get(key)
+
+	// Del a value cars and but don't merge.
+	edge := &protos.DirectedEdge{
+		Value: []byte("cars"),
+		Label: "jchiu",
+	}
+	txn := &Txn{StartTs: 1}
+	addMutationHelper(t, ol, edge, Del, txn)
+	ol.CommitMutation(context.Background(), 1, uint64(2))
+	require.EqualValues(t, 0, ol.Length(uint64(3), 0))
+
+	// Set value to newcars, but don't merge yet.
+	edge = &protos.DirectedEdge{
+		Value: []byte("newcars"),
+		Label: "jchiu",
+	}
+	txn = &Txn{StartTs: 3}
+	addMutationHelper(t, ol, edge, Set, txn)
+	ol.CommitMutation(context.Background(), 3, uint64(4))
+	require.EqualValues(t, 1, ol.Length(5, 0))
+	checkValue(t, ol, "newcars", 5)
+
+	// Del a value cars. This operation should be ignored.
+	edge = &protos.DirectedEdge{
+		Value: []byte("cars"),
+		Label: "jchiu",
+	}
+	txn = &Txn{StartTs: 5}
+	addMutationHelper(t, ol, edge, Del, txn)
+	ol.CommitMutation(context.Background(), 5, uint64(6))
+	require.EqualValues(t, 1, ol.Length(txn.StartTs+1, 0))
+	checkValue(t, ol, "newcars", txn.StartTs+1)
 }
 
 func TestAddMutation_jchiu3(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := x.DataKey("value", 29)
 	ol := Get(key)
 
 	// Set value to cars and merge to RocksDB.
@@ -253,54 +309,59 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Set)
-	require.Equal(t, 1, ol.Length(0))
+	txn := &Txn{StartTs: 1}
+	addMutationHelper(t, ol, edge, Set, txn)
+	ol.CommitMutation(context.Background(), 1, uint64(2))
+	require.Equal(t, 1, ol.Length(uint64(3), 0))
 	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
-	require.EqualValues(t, 1, ol.Length(0))
-	checkValue(t, ol, "cars")
+	require.EqualValues(t, 1, ol.Length(uint64(3), 0))
+	checkValue(t, ol, "cars", uint64(3))
 
 	// Del a value cars and but don't merge.
 	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, ol.Length(0))
+	txn = &Txn{StartTs: 3}
+	addMutationHelper(t, ol, edge, Del, txn)
+	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 
 	// Set value to newcars, but don't merge yet.
 	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Set)
-	require.EqualValues(t, 1, ol.Length(0))
-	checkValue(t, ol, "newcars")
+	addMutationHelper(t, ol, edge, Set, txn)
+	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
+	checkValue(t, ol, "newcars", txn.StartTs)
 
 	// Del a value othercars and but don't merge.
 	edge = &protos.DirectedEdge{
 		Value: []byte("othercars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Del)
-	require.NotEqual(t, 0, ol.Length(0))
-	checkValue(t, ol, "newcars")
+	addMutationHelper(t, ol, edge, Del, txn)
+	require.NotEqual(t, 0, ol.Length(txn.StartTs, 0))
+	checkValue(t, ol, "newcars", txn.StartTs)
 
 	// Del a value newcars and but don't merge.
 	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, ol.Length(0))
+	addMutationHelper(t, ol, edge, Del, txn)
+	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := x.DataKey("value", 21)
 	ol := Get(key)
 
 	// Set a value cars and merge.
@@ -308,7 +369,9 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Set)
+	txn := &Txn{StartTs: 1}
+	addMutationHelper(t, ol, edge, Set, txn)
+	ol.CommitMutation(context.Background(), 1, uint64(2))
 	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
@@ -318,16 +381,17 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Del)
-	checkValue(t, ol, "cars")
+	txn = &Txn{StartTs: 3}
+	addMutationHelper(t, ol, edge, Del, txn)
+	checkValue(t, ol, "cars", txn.StartTs)
 
 	// Delete the previously committed value cars. But don't merge.
 	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, ol.Length(0))
+	addMutationHelper(t, ol, edge, Del, txn)
+	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 
 	// Do this again to cover Del, muid == curUid, inPlist test case.
 	// Delete the previously committed value cars. But don't merge.
@@ -335,8 +399,8 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, ol.Length(0))
+	addMutationHelper(t, ol, edge, Del, txn)
+	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 
 	// Set the value again to cover Set, muid == curUid, inPlist test case.
 	// Set the previously committed value cars. But don't merge.
@@ -344,24 +408,27 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Set)
-	checkValue(t, ol, "cars")
+	addMutationHelper(t, ol, edge, Set, txn)
+	checkValue(t, ol, "cars", txn.StartTs)
 
 	// Delete it again, just for fun.
 	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
-	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, ol.Length(0))
+	addMutationHelper(t, ol, edge, Del, txn)
+	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_gru(t *testing.T) {
 	key := x.DataKey("question.tag", 0x01)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	{
 		// Set two tag ids and merge.
@@ -369,12 +436,14 @@ func TestAddMutation_gru(t *testing.T) {
 			ValueId: 0x2b693088816b04b7,
 			Label:   "gru",
 		}
-		addMutation(t, ol, edge, Set)
+		txn := &Txn{StartTs: 1}
+		addMutationHelper(t, ol, edge, Set, txn)
 		edge = &protos.DirectedEdge{
 			ValueId: 0x29bf442b48a772e0,
 			Label:   "gru",
 		}
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
+		ol.CommitMutation(context.Background(), 1, uint64(2))
 		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
@@ -385,24 +454,29 @@ func TestAddMutation_gru(t *testing.T) {
 			ValueId: 0x38dec821d2ac3a79,
 			Label:   "gru",
 		}
-		addMutation(t, ol, edge, Set)
+		txn := &Txn{StartTs: 3}
+		addMutationHelper(t, ol, edge, Set, txn)
 		edge = &protos.DirectedEdge{
 			ValueId: 0x2b693088816b04b7,
 			Label:   "gru",
 		}
-		addMutation(t, ol, edge, Del)
+		addMutationHelper(t, ol, edge, Del, txn)
+		ol.CommitMutation(context.Background(), 1, uint64(4))
 		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
 	}
 
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAddMutation_gru2(t *testing.T) {
 	key := x.DataKey("question.tag", 0x100)
-	ol := getNew(key, ps)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	{
 		// Set two tag ids and merge.
@@ -410,12 +484,15 @@ func TestAddMutation_gru2(t *testing.T) {
 			ValueId: 0x02,
 			Label:   "gru",
 		}
-		addMutation(t, ol, edge, Set)
+		txn := &Txn{StartTs: 1}
+		addMutationHelper(t, ol, edge, Set, txn)
 		edge = &protos.DirectedEdge{
 			ValueId: 0x03,
 			Label:   "gru",
 		}
-		addMutation(t, ol, edge, Set)
+		txn = &Txn{StartTs: 1}
+		addMutationHelper(t, ol, edge, Set, txn)
+		ol.CommitMutation(context.Background(), 1, uint64(2))
 		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
@@ -427,242 +504,262 @@ func TestAddMutation_gru2(t *testing.T) {
 			ValueId: 0x02,
 			Label:   "gru",
 		}
-		addMutation(t, ol, edge, Del)
+		txn := &Txn{StartTs: 3}
+		addMutationHelper(t, ol, edge, Del, txn)
 		edge = &protos.DirectedEdge{
 			ValueId: 0x03,
 			Label:   "gru",
 		}
-		addMutation(t, ol, edge, Del)
+		addMutationHelper(t, ol, edge, Del, txn)
 
 		edge = &protos.DirectedEdge{
 			ValueId: 0x04,
 			Label:   "gru",
 		}
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 
 		merged, err := ol.SyncIfDirty(false)
+		ol.CommitMutation(context.Background(), 3, uint64(4))
 		require.NoError(t, err)
 		require.True(t, merged)
 	}
 
 	// Posting list should just have the new tag.
 	uids := []uint64{0x04}
-	require.Equal(t, uids, listToArray(t, 0, ol))
+	require.Equal(t, uids, listToArray(t, 0, ol, uint64(5)))
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAfterUIDCount(t *testing.T) {
-	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	key := x.DataKey("value", 22)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
 		Label: "jchiu",
 	}
 
+	txn := &Txn{StartTs: 1}
 	for i := 100; i < 300; i++ {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 200, ol.Length(0))
-	require.EqualValues(t, 100, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 200, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 100, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Delete half of the edges.
 	for i := 100; i < 300; i += 2 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Del)
+		addMutationHelper(t, ol, edge, Del, txn)
 	}
-	require.EqualValues(t, 100, ol.Length(0))
-	require.EqualValues(t, 50, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 100, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 50, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Try to delete half of the edges. Redundant deletes.
 	for i := 100; i < 300; i += 2 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Del)
+		addMutationHelper(t, ol, edge, Del, txn)
 	}
-	require.EqualValues(t, 100, ol.Length(0))
-	require.EqualValues(t, 50, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 100, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 50, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Delete everything.
 	for i := 100; i < 300; i++ {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Del)
+		addMutationHelper(t, ol, edge, Del, txn)
 	}
-	require.EqualValues(t, 0, ol.Length(0))
-	require.EqualValues(t, 0, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Insert 1/4 of the edges.
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 50, ol.Length(0))
-	require.EqualValues(t, 25, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 50, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 25, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Insert 1/4 of the edges.
 	edge.Label = "somethingelse"
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 50, ol.Length(0)) // Expect no change.
-	require.EqualValues(t, 25, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 50, ol.Length(txn.StartTs, 0)) // Expect no change.
+	require.EqualValues(t, 25, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Insert 1/4 of the edges.
 	for i := 103; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 100, ol.Length(0))
-	require.EqualValues(t, 50, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 100, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 50, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestAfterUIDCount2(t *testing.T) {
-	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	key := x.DataKey("value", 23)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
 		Label: "jchiu",
 	}
 
+	txn := &Txn{StartTs: 1}
 	for i := 100; i < 300; i++ {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 200, ol.Length(0))
-	require.EqualValues(t, 100, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 200, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 100, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Re-insert 1/4 of the edges. Counts should not change.
 	edge.Label = "somethingelse"
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 200, ol.Length(0))
-	require.EqualValues(t, 100, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 200, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 100, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
 func TestDelete(t *testing.T) {
-	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	key := x.DataKey("value", 25)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
 		Label: "jchiu",
 	}
 
+	txn := &Txn{StartTs: 1}
 	for i := 1; i <= 30; i++ {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 30, ol.Length(0))
-	ol.Lock()
-	ol.delete(context.Background(), "value")
-	ol.Unlock()
-	require.EqualValues(t, 0, ol.Length(0))
+	require.EqualValues(t, 30, ol.Length(txn.StartTs, 0))
+	edge.Value = []byte(x.Star)
+	addMutationHelper(t, ol, edge, Del, txn)
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 0))
+	ol.CommitMutation(context.Background(), txn.StartTs, txn.StartTs+1)
 	commited, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, commited)
 
-	require.EqualValues(t, 0, ol.Length(0))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs+2, 0))
 }
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
-	key := x.DataKey("value", 10)
-	ol := getNew(key, ps)
+	key := x.DataKey("value", 26)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
 		Label: "jchiu",
 	}
 
+	txn := &Txn{StartTs: 1}
 	for i := 100; i < 400; i++ {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 300, ol.Length(0))
-	require.EqualValues(t, 200, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(400))
+	require.EqualValues(t, 300, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 200, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 400))
 
 	// Commit to database.
+	ol.CommitMutation(context.Background(), txn.StartTs, txn.StartTs+1)
 	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
 
+	txn = &Txn{StartTs: 3}
 	// Mutation layer starts afresh from here.
 	// Delete half of the edges.
 	for i := 100; i < 400; i += 2 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Del)
+		addMutationHelper(t, ol, edge, Del, txn)
 	}
-	require.EqualValues(t, 150, ol.Length(0))
-	require.EqualValues(t, 100, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(400))
+	require.EqualValues(t, 150, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 100, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 400))
 
 	// Try to delete half of the edges. Redundant deletes.
 	for i := 100; i < 400; i += 2 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Del)
+		addMutationHelper(t, ol, edge, Del, txn)
 	}
-	require.EqualValues(t, 150, ol.Length(0))
-	require.EqualValues(t, 100, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(400))
+	require.EqualValues(t, 150, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 100, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 400))
 
 	// Delete everything.
 	for i := 100; i < 400; i++ {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Del)
+		addMutationHelper(t, ol, edge, Del, txn)
 	}
-	require.EqualValues(t, 0, ol.Length(0))
-	require.EqualValues(t, 0, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(400))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 400))
 
 	// Insert 1/4 of the edges.
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 50, ol.Length(0))
-	require.EqualValues(t, 25, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 50, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 25, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Insert 1/4 of the edges.
 	edge.Label = "somethingelse"
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 50, ol.Length(0)) // Expect no change.
-	require.EqualValues(t, 25, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 50, ol.Length(txn.StartTs, 0)) // Expect no change.
+	require.EqualValues(t, 25, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 
 	// Insert 1/4 of the edges.
 	for i := 103; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
-		addMutation(t, ol, edge, Set)
+		addMutationHelper(t, ol, edge, Set, txn)
 	}
-	require.EqualValues(t, 100, ol.Length(0))
-	require.EqualValues(t, 50, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 100, ol.Length(txn.StartTs, 0))
+	require.EqualValues(t, 50, ol.Length(txn.StartTs, 199))
+	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 	deletePl(t)
-	ps.Delete(ol.key)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(ol.key)
+	})
 }
 
-var ps *badger.KV
+var ps *badger.DB
 
 func TestMain(m *testing.M) {
 	x.Init(true)
@@ -675,9 +772,10 @@ func TestMain(m *testing.M) {
 	opt := badger.DefaultOptions
 	opt.Dir = dir
 	opt.ValueDir = dir
-	ps, err = badger.NewKV(&opt)
+	ps, err = badger.Open(opt)
 	x.Check(err)
 	Init(ps)
+	schema.Init(ps)
 
 	r := m.Run()
 
@@ -687,11 +785,13 @@ func TestMain(m *testing.M) {
 
 func BenchmarkAddMutations(b *testing.B) {
 	key := x.DataKey("name", 1)
-	l := getNew(key, ps)
+	l, err := getNew(key, ps)
+	if err != nil {
+		b.Error(err)
+	}
 	b.ResetTimer()
 
 	ctx := context.Background()
-	var err error
 	for i := 0; i < b.N; i++ {
 		if err != nil {
 			b.Error(err)
@@ -702,7 +802,8 @@ func BenchmarkAddMutations(b *testing.B) {
 			Label:   "testing",
 			Op:      protos.DirectedEdge_SET,
 		}
-		if _, err = l.AddMutation(ctx, edge); err != nil {
+		txn := &Txn{StartTs: 1}
+		if _, err = l.AddMutation(ctx, txn, edge); err != nil {
 			b.Error(err)
 		}
 	}

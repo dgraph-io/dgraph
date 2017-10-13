@@ -121,6 +121,7 @@ func (c *listCache) removeOldest() {
 		// If length of mutation layer is zero, then we won't call pstore.SetAsync and the
 		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
 		if committed, _ := e.pl.SyncIfDirty(true); !committed {
+			// Delta should have been written to disk by the time we evict.
 			delete(c.cache, e.key)
 		}
 	}
@@ -174,6 +175,8 @@ func (c *listCache) Reset() {
 	c.curSize = 0
 }
 
+// Ensure we call wait for applied watermark to catch up so that
+// we are sure the deltas of a transaction are  persisted.
 func (c *listCache) clear(remove func(key []byte) bool) error {
 	c.Lock()
 	defer c.Unlock()

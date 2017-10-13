@@ -89,6 +89,9 @@ func (s *scheduler) register(t *task) bool {
 	}
 }
 
+// We don't support schema mutations across nodes in a transaction.
+// Wait for all transactions to either abort or complete and all write transactions
+// involving the predicate are aborted until schema mutations are done.
 func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	if proposal.Mutations.DropAll {
 		if err := s.n.syncAllMarks(s.n.ctx, index-1); err != nil {
@@ -96,7 +99,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 			return err
 		}
 		schema.State().DeleteAll()
-		if err := posting.DeleteAll(); err != nil {
+		if err := posting.DeleteAll(proposal.StartTs); err != nil {
 			s.n.props.Done(proposal.Id, err)
 			return err
 		}
@@ -156,6 +159,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 			// Since committed entries are serialized, updateSchemaIfMissing is not
 			// needed, In future if schema needs to be changed, it would flow through
 			// raft so there won't be race conditions between read and update schema
+			// TODO(Txn): Add schema keys to delta
 			updateSchemaType(attr, storageType, index, s.n.gid)
 		}
 	}

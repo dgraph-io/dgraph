@@ -42,7 +42,7 @@ var (
 
 // runMutation goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
+func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Txn) error {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
@@ -59,7 +59,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 		if err = n.syncAllMarks(ctx, rv.Index-1); err != nil {
 			return err
 		}
-		if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
+		if err = txn.DeletePredicate(ctx, edge.Attr); err != nil {
 			return err
 		}
 		return nil
@@ -79,7 +79,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 		}
 	}
 
-	if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
+	if err = plist.AddMutationWithIndex(ctx, edge, txn); err != nil {
 		return err // abort applying the rest of them.
 	}
 	return nil
@@ -87,7 +87,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
-func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
+func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	n := groups().Node
 	// Wait for applied watermark to reach till previous index
@@ -99,7 +99,7 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	if !groups().ServesTablet(update.Predicate) {
 		return errUnservedTablet
 	}
-	if err := checkSchema(update); err != nil {
+	if err := checkSchema(update, txn.StartTs); err != nil {
 		return err
 	}
 	old, ok := schema.State().Get(update.Predicate)
@@ -120,17 +120,17 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	defer x.Printf("Done schema update %+v\n", update)
 	if !ok {
 		if current.Directive == protos.SchemaUpdate_INDEX {
-			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
+			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true, txn); err != nil {
 				return err
 			}
 		} else if current.Directive == protos.SchemaUpdate_REVERSE {
-			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
+			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true, txn); err != nil {
 				return err
 			}
 		}
 
 		if current.Count {
-			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true); err != nil {
+			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true, txn); err != nil {
 				return err
 			}
 		}
@@ -140,19 +140,19 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	if needReindexing(old, current) {
 		// Reindex if update.Index is true or remove index
 		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
-			current.Directive == protos.SchemaUpdate_INDEX); err != nil {
+			current.Directive == protos.SchemaUpdate_INDEX, txn); err != nil {
 			return err
 		}
 	} else if needsRebuildingReverses(old, current) {
 		// Add or remove reverse edge based on update.Reverse
 		if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
-			current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
+			current.Directive == protos.SchemaUpdate_REVERSE, txn); err != nil {
 			return err
 		}
 	}
 
 	if current.Count != old.Count {
-		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count); err != nil {
+		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count, txn); err != nil {
 		}
 	}
 	return nil
@@ -207,26 +207,12 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uin
 	updateSchema(attr, s, raftIndex, group)
 }
 
-func numEdges(attr string) int {
+func hasEdges(attr string, startTs uint64) bool {
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
-	it := pstore.NewIterator(iterOpt)
-	defer it.Close()
-	pk := x.ParsedKey{
-		Attr: attr,
-	}
-	prefix := pk.DataPrefix()
-	count := 0
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		count++
-	}
-	return count
-}
-
-func hasEdges(attr string) bool {
-	iterOpt := badger.DefaultIteratorOptions
-	iterOpt.PrefetchValues = false
-	it := pstore.NewIterator(iterOpt)
+	txn := pstore.NewTransactionAt(startTs, false)
+	defer txn.Discard()
+	it := txn.NewIterator(iterOpt)
 	defer it.Close()
 	pk := x.ParsedKey{
 		Attr: attr,
@@ -238,7 +224,7 @@ func hasEdges(attr string) bool {
 	return false
 }
 
-func checkSchema(s *protos.SchemaUpdate) error {
+func checkSchema(s *protos.SchemaUpdate, startTs uint64) error {
 	if len(s.Predicate) == 0 {
 		return x.Errorf("No predicate specified in schema mutation")
 	}
@@ -265,7 +251,7 @@ func checkSchema(s *protos.SchemaUpdate) error {
 		if t.IsScalar() == typ.IsScalar() {
 			// If old type was list and new type is non-list, we don't allow it until user
 			// has data.
-			if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate) {
+			if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, startTs) {
 				return x.Errorf("Schema change not allowed from [%s] => %s without"+
 					" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
 			}
@@ -273,7 +259,7 @@ func checkSchema(s *protos.SchemaUpdate) error {
 			return nil
 		}
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
-		if hasEdges(s.Predicate) {
+		if hasEdges(s.Predicate, startTs) {
 			return x.Errorf("Schema change not allowed from predicate to uid or vice versa"+
 				" till you have data for pred: %s", s.Predicate)
 		}

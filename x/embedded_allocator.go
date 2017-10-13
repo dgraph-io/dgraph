@@ -38,25 +38,27 @@ type EmbeddedUidAllocator struct {
 	sync.Mutex
 	nextLeaseId uint64
 	maxLeaseId  uint64
-	pstore      *badger.KV
+	pstore      *badger.DB
 }
 
 // Start lease from 2, 1 is used by _lease_
-func (e *EmbeddedUidAllocator) Init(kv *badger.KV) {
+func (e *EmbeddedUidAllocator) Init(kv *badger.DB) {
 	e.pstore = kv
-	var item badger.KVItem
-	// All keys start with 0x00 or 0x01 so shouldn't collide
-	e.pstore.Get([]byte("uid_lease"), &item)
 	e.maxLeaseId = 1
 	var n int
-	err := item.Value(func(val []byte) error {
-		if len(val) > 0 {
+	// All keys start with 0x00 or 0x01 so shouldn't collide
+	kv.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte("uid_lease"))
+		if err == nil {
+			val, err := item.Value()
+			if err != nil {
+				return err
+			}
 			e.maxLeaseId, n = binary.Uvarint(val)
 			AssertTrue(n > 0)
 		}
-		return nil
+		return err
 	})
-	Check(err)
 	e.nextLeaseId = e.maxLeaseId + 1
 }
 
@@ -85,7 +87,9 @@ func (e *EmbeddedUidAllocator) AssignUids(ctx context.Context,
 		e.maxLeaseId += howMany
 		val := make([]byte, 10)
 		n := binary.PutUvarint(val, e.maxLeaseId)
-		err := e.pstore.Set([]byte("uid_lease"), val[:n], 0x01)
+		err := e.pstore.Update(func(txn *badger.Txn) error {
+			return txn.Set([]byte("uid_lease"), val[:n], 0x01)
+		})
 		if err != nil {
 			return emptyAssignedIds, err
 		}

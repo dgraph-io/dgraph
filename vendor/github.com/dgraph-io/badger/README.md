@@ -1,87 +1,318 @@
 # Badger [![GoDoc](https://godoc.org/github.com/dgraph-io/badger?status.svg)](https://godoc.org/github.com/dgraph-io/badger) [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/badger)](https://goreportcard.com/report/github.com/dgraph-io/badger) [![Build Status](https://travis-ci.org/dgraph-io/badger.svg?branch=master)](https://travis-ci.org/dgraph-io/badger) ![Appveyor](https://ci.appveyor.com/api/projects/status/github/dgraph-io/badger?branch=master&svg=true) [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/badger/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/badger?branch=master)
 
-An embeddable, persistent, simple and fast key-value (KV) store, written purely in Go. It's meant to be a performant alternative to non Go based key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
+![Badger mascot](images/diggy-shadow.png)
 
-![Badger sketch](/images/sketch.jpg)
+Badger is an embeddable, persistent, simple and fast key-value (KV) store
+written in pure Go. It's meant to be a performant alternative to non-Go-based
+key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
 
-## About
+## Project Status
+We are currently gearing up for a [v1.0 release][v1-milestone]. We recently introduced
+transactions which involved a major API change.To use the previous version of
+the APIs, please use [tag v0.8][v0.8]. This tag can be specified via the
+Go dependency tool you're using.
 
-Badger is written out of frustration with existing KV stores which are either written in pure Go and slow, or fast but require usage of Cgo.
-Badger aims to provide an equal or better speed compared to industry leading KV stores (like RocksDB), while maintaining the entire code base in pure Go.
+[v1-milestone]: https://github.com/dgraph-io/badger/issues?q=is%3Aopen+is%3Aissue+milestone%3Av1.0
+[v0.8]: /tree/v0.8
 
-## Related Blog Posts
+## Table of Contents
+ * [Getting Started](#getting-started)
+    + [Installing](#installing)
+    + [Opening a database](#opening-a-database)
+    + [Transactions](#transactions)
+      - [Read-only transactions](#read-only-transactions)
+      - [Read-write transactions](#read-write-transactions)
+      - [Managing transactions manually](#managing-transactions-manually)
+    + [Using key/value pairs](#using-keyvalue-pairs)
+    + [Iterating over keys](#iterating-over-keys)
+      - [Prefix scans](#prefix-scans)
+      - [Key-only iteration](#key-only-iteration)
+    + [Database backups](#database-backups)
+    + [Statistics](#statistics)
+  * [Resources](#resources)
+    + [Blog Posts](#blog-posts)
+  * [Contact](#contact)
+  * [Design](#design)
+    + [Comparisons](#comparisons)
+    + [Benchmarks](#benchmarks)
+  * [Other Projects Using Badger](#other-projects-using-badger)
+  * [Frequently Asked Questions](#frequently-asked-questions)
 
-1. [Introducing Badger: A fast key-value store written natively in Go](https://open.dgraph.io/post/badger/)
+## Getting Started
+
+### Installing
+To start using Badger, install Go 1.8 or above and run `go get`:
+
+```sh
+$ go get github.com/dgraph-io/badger/...
+```
+
+This will retrieve the library and install the `badger_info` command line
+utility into your `$GOBIN` path.
+
+
+### Opening a database
+The top-level object in Badger is a `DB`. It represents multiple files on disk
+in specific directories, which contain the data for a single store.
+
+To open your database, use the `badger.Open()` function, with the appropriate
+options. The `Dir` and `ValueDir` options are mandatory and must be
+specified by the client. They can be set to the same value to simplify things.
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/dgraph-io/badger"
+)
+
+func main() {
+  // Open the Badger store located in the /tmp/badger directory.
+  // It will be created if it doesn't exist.
+  opts := badger.DefaultOptions
+  opts.Dir := "/tmp/badger"
+  opts.ValueDir := "/tmp/badger"
+  db, err := badger.Open(opts)
+  if err != nil {
+	  log.Fatal(err)
+  }
+  defer db.Close()
+	…
+}
+```
+
+Please note that Badger obtains a lock on the directories so multiple processes
+cannot open the same database at the same time.
+
+### Transactions
+
+#### Read-only transactions
+To start a read-only transaction, you can use the `DB.View()` method:
+
+```go
+err := db.View(func(tx *badger.Txn) error {
+	...
+	return nil
+})
+```
+
+You cannot perform any writes or deletes within this transaction. Badger
+ensures that you get a consistent view of the database within this closure. Any
+writes that happen elsewhere after the transaction has started, will not be
+seen by calls made within the closure.
+
+#### Read-write transactions
+To start a read-write transaction, you can use the `DB.Update()` method:
+
+```go
+err := db.Update(func(tx *badger.Txn) error {
+	...
+	return nil
+})
+```
+
+All database operations are allowed inside a read-write transaction.
+
+Always check the return error as it will report an `ErrConflict` in case of
+conflict or other errors, for e.g. due to disk failures. If you return an error
+within your closure it will be passed through.
+
+#### Managing transactions manually
+The `DB.View()` and `DB.Update()` methods are wrappers around the
+`DB.NewTransaction()` and `Txn.Commit()` methods (or `Txn.Discard()` in case of
+read-only transactions). These helper methods will start the transaction,
+execute a function, and then safely discard your transaction if an error is
+returned. This is the recommended way to use Badger transactions.
+
+However, sometimes you may want to manually create and commit your
+transactions. You can use the `DB.NewTransaction()` function directly but
+please be sure to commit or discard the transaction.
+
+```go
+// Start a writable transaction.
+txn, err := db.NewTransaction(true)
+if err != nil {
+    return err
+}
+defer tx.Discard()
+
+// Use the transaction...
+err := txn.Set([]byte("answer"), []byte("42"), 0)
+if err != nil {
+    return err
+}
+
+// Commit the transaction and check for error.
+if err := txn.Commit(nil); err != nil {
+    return err
+}
+```
+
+The first argument to `DB.NewTransaction()` is a boolean stating if the transaction
+should be writable.
+
+Badger allows an optional callback to the `Txn.Commit()` method. Normally, the
+callback can be set to `nil`, and the method will return after all the writes
+have succeeded. However, if this callback is provided, the `Txn.Commit()`
+method returns as soon as it has checked for any conflicts. The actual writing
+to the disk happens asynchronously, and the callback is invoked once the
+writing has finished, or an error has occurred. This can improve the throughput
+of the application in some cases. But it also means that a transaction is not
+durable until the callback has been invoked with a `nil` error value.
+
+### Using key/value pairs
+To save a key/value pair to a bucket, use the `Txn.Set()` method:
+
+```go
+err := db.Update(func(txn *badger.Txn) error {
+  err := txn.Set([]byte("answer"), []byte("42"), 0)
+  return err
+})
+```
+
+This will set the value of the `"answer"` key to `"42"`. To retrieve this
+value, we can use the `Txn.Get()` method:
+
+```go
+err := db.View(func(txn *badger.Txn) error {
+  item, err := txn.Get([]byte("answer"))
+  if err != nil {
+    return err
+  }
+  val, err := item.Value()
+  if err != nil {
+    return err
+  }
+  fmt.Printf("The answer is: %s\n", val)
+  return nil
+})
+```
+
+`Txn.Get()` returns `ErrKeyNotFound` if the value is not found.
+
+Please note that values returned from `Get()` are only valid while the
+transaction is open. If you need to use a value outside of the transaction
+then you must use `copy()` to copy it to another byte slice.
+
+Use the `Txn.Delete()` method to delete a key from the bucket.
+
+### Iterating over keys
+To iterate over keys, we can use an `Iterator`, which can be obtained using the
+`Txn.NewIterator()` method.
+
+
+```go
+err := db.View(func(txn *.Tx) error {
+  opts := DefaultIteratorOptions
+  opts.PrefetchSize = 10
+  it := txn.NewIterator(opts)
+  for it.Rewind(); it.Valid(); it.Next() {
+    item := it.Item()
+    k := item.Key()
+    v, err := item.Value()
+    if err != nil {
+      return err
+    }
+    fmt.Printf("key=%s, value=%s\n", k, v)
+  }
+  return nil
+})
+```
+
+The iterator allows you to move to a specific point in the list of keys and move
+forward or backward through the keys one at a time.
+
+By default, Badger prefetches the values of the next 100 items. You can adjust
+that with the `IteratorOptions.PrefetchSize` field. However, setting it to
+a value higher than GOMAXPROCS (which we recommend to be 128 or higher)
+shouldn’t give any additional benefits. You can also turn off the fetching of
+values altogether. See section below on key-only iteration.
+
+#### Prefix scans
+To iterate over a key prefix, you can combine `Seek()` and `ValidForPrefix()`:
+
+```go
+db.View(func(txn *badger.Txn) error {
+  it := txn.NewIterator(&DefaultIteratorOptions)
+  prefix := []byte("1234")
+  for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+    item := it.Item()
+    k := item.Key()
+    v, err := item.Value()
+    if err != nil {
+      return err
+    }
+    fmt.Printf("key=%s, value=%s\n", k, v)
+  }
+  return nil
+})
+```
+
+#### Key-only iteration
+Badger supports a unique mode of iteration called _key-only_ iteration. It is
+several order of magnitudes faster than regular iteration, because it involves
+access to the LSM-tree only, which is usually resident entirely in RAM. To
+enable key-only iteration, you need to set the `IteratorOptions.PrefetchValues`
+field to `false`. This can also be used to do sparse reads for selected keys
+during an iteration, by calling `item.Value()` only when required.
+
+```go
+err := db.View(func(txn *.Tx) error {
+  opts := DefaultIteratorOptions
+  opts.PrefetchValues = false
+  it := txn.NewIterator(opts)
+  for it.Rewind(); it.Valid(); it.Next() {
+    item := it.Item()
+    k := item.Key()
+    fmt.Printf("key=%s\n", k)
+  }
+  return nil
+})
+```
+
+### Database backup
+Database backup is an [open issue][bak-issue] for v1.0 and will be coming soon.
+
+[bak-issue]: https://github.com/dgraph-io/badger/issues/135
+
+### Statistics
+Badger records metrics using the [expvar] package, which is included in the Go
+standard library. All the metrics are documented in [y/metrics.go][metrics]
+file.
+
+`expvar` package adds a handler in to the default HTTP server (which has to be
+started explicitly), and serves up the metrics at the `/debug/vars` endpoint.
+These metrics can then be collected by a system like [Prometheus], to get
+better visibility into what Badger is doing.
+
+[expvar]: https://golang.org/pkg/expvar/
+[metrics]: https://github.com/dgraph-io/badger/blob/master/y/metrics.go
+[Prometheus]: https://prometheus.io/
+
+## Resources
+
+### Blog Posts
+1. [Introducing Badger: A fast key-value store written natively in
+Go](https://open.dgraph.io/post/badger/)
 2. [Make Badger crash resilient with ALICE](https://blog.dgraph.io/post/alice/)
-
-## Video Tutorials
-
-- [Getting Started](https://www.youtube.com/watch?v=XBKq39caRZ8) by [1lann](https://github.com/1lann)
-
-## Installation and Usage
-
-`go get -v github.com/dgraph-io/badger`
-
-If you want to run tests, also get testing dependencies by passing in `-t` flag.
-
-`go get -t -v github.com/dgraph-io/badger`
-
-From here, follow [docs](https://godoc.org/github.com/dgraph-io/badger) for usage.
-
-## Documentation
-
-Badger documentation is located at [godoc.org](https://godoc.org/github.com/dgraph-io/badger).
-
-## Design Goals
-
-Badger has these design goals in mind:
-
-- Write it purely in Go.
-- Use latest research to build the fastest KV store for data sets spanning terabytes.
-- Keep it simple, stupid. No support for transactions, versioning or snapshots -- anything that can be done outside of the store should be done outside.
-- Optimize for SSDs (more below).
-
-### Non-Goals
-
-- Try to be a database.
-
-## Users
-
-Badger is currently being used by [Dgraph](https://github.com/dgraph-io/dgraph).
-
-*If you're using Badger in a project, let us know.*
+3. [Badger vs LMDB vs BoltDB: Benchmarking key-value databases in Go](https://blog.dgraph.io/post/badger-lmdb-boltdb/)
+4. [Concurrent ACID Transactions in Badger](https://blog.dgraph.io/post/badger-txn/)
 
 ## Design
+Badger was written with these design goals in mind:
 
-Badger is based on [WiscKey paper by University of Wisconsin, Madison](https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf).
+- Write a key-value store in pure Go.
+- Use latest research to build the fastest KV store for data sets spanning terabytes.
+- Optimize for SSDs.
 
-In simplest terms, keys are stored in LSM trees along with pointers to values, which would be stored in write-ahead log files, aka value logs.
-Keys would typically be kept in RAM, values would be served directly off SSD.
+Badger’s design is based on a paper titled _[WiscKey: Separating Keys from
+Values in SSD-conscious Storage][wisckey]_.
 
-### Optimizations for SSD
+[wisckey]: https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf
 
-SSDs are best at doing serial writes (like HDD) and random reads (unlike HDD).
-Each write reduces the lifecycle of an SSD, so Badger aims to reduce the write amplification of a typical LSM tree.
-
-It achieves this by separating the keys from values. Keys tend to be smaller in size and are stored in the LSM tree.
-Values (which tend to be larger in size) are stored in value logs, which also double as write ahead logs for fault tolerance.
-
-Only a pointer to the value is stored along with the key, which significantly reduces the size of each KV pair in LSM tree.
-This allows storing lot more KV pairs per table. For e.g., a table of size 64MB can store 2 million KV pairs assuming an average key size of 16 bytes, and a value pointer of 16 bytes (with prefix diffing in Badger, the average key sizes stored in a table would be lower).
-Thus, lesser compactions are required to achieve stability for the LSM tree, which results in fewer writes (all writes being serial).
-
-It might be a good idea on ext4 to periodically invoke `fstrim` in case the file system [does not quickly reuse space from deleted files](http://www.ogris.de/blkalloc/).
-
-### Nature of LSM trees
-
-Because only keys (and value pointers) are stored in LSM tree, Badger generates much smaller LSM trees.
-Even for huge datasets, these smaller trees can fit nicely in RAM allowing for lot quicker accesses to and iteration through keys.
-For random gets, keys can be quickly looked up from within RAM, giving access to the value pointer.
-Then only a single pointed read from SSD (random read) is done to retrieve value.
-This improves random get performance significantly compared to traditional LSM tree design used by other KV stores.
-
-## Comparisons
-
+### Comparisons
 | Feature             | Badger                                       | RocksDB                       | BoltDB    |
 | -------             | ------                                       | -------                       | ------    |
 | Design              | LSM tree with value log                      | LSM tree only                 | B+ tree   |
@@ -90,40 +321,43 @@ This improves random get performance significantly compared to traditional LSM t
 | Embeddable          | Yes                                          | Yes                           | Yes       |
 | Sorted KV access    | Yes                                          | Yes                           | Yes       |
 | Pure Go (no Cgo)    | Yes                                          | No                            | Yes       |
-| Transactions        | No (but provides compare and set operations) | Yes (but non-ACID)            | Yes, ACID |
-| Snapshots           | No                                           | Yes                           | Yes       |
+| Transactions        | Yes, ACID, concurrent with SSI<sup>3</sup> | Yes (but non-ACID)            | Yes, ACID |
+| Snapshots           | Yes                                           | Yes                           | Yes       |
 
-<sup>1</sup> Badger is based on a paper called [WiscKey by University of Wisconsin, Madison](https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf), which saw big wins with separating values from keys, significantly reducing the write amplification compared to a typical LSM tree.
+<sup>1</sup> The [WISCKEY paper][wisckey] (on which Badger is based) saw big
+wins with separating values from keys, significantly reducing the write
+amplification compared to a typical LSM tree.
 
 <sup>2</sup> RocksDB is an SSD optimized version of LevelDB, which was designed specifically for rotating disks.
 As such RocksDB's design isn't aimed at SSDs.
 
-## Benchmarks
+<sup>3</sup> SSI: Serializable Snapshot Isolation. For more details, see the blog post [Concurrent ACID Transactions in Badger](https://blog.dgraph.io/post/badger-txn/)
 
-### RocksDB ([Link to blog post](https://blog.dgraph.io/post/badger/))
+### Benchmarks
+We have run comprehensive benchmarks against RocksDB, Bolt and LMDB. The
+benchmarking code, and the detailed logs for the benchmarks can be found in the
+[badger-bench] repo. More explanation, including graphs can be found the blog posts (linked
+above).
 
-![RocksDB Benchmarks](/images/benchmarks-rocksdb.png)
+[badger-bench]: https://github.com/dgraph-io/badger-bench
 
-## Crash Consistency
+## Other Projects Using Badger
+Below is a list of public, open source projects that use Badger:
 
-Badger is crash resilient. Any update which was applied successfully before a crash, would be available after the crash.
-Badger achieves this via its value log.
+* [Dgraph](https://github.com/dgraph-io/dgraph) - Distributed graph database.
+* [go-ipfs](https://github.com/ipfs/go-ipfs) - Go client for the InterPlanetary File System (IPFS), a new hypermedia distribution protocol.
+* [0-stor](https://github.com/zero-os/0-stor) - Single device object store.
 
-Badger's value log is a write-ahead log (WAL). Every update to Badger is written to this log first, before being applied to the LSM tree.
-Badger maintains a monotonically increasing pointer (head) in the LSM tree, pointing to the last update offset in the value log.
-As and when LSM table is persisted, the head gets persisted along with.
-Thus, the head always points to the latest persisted offset in the value log.
-Every time Badger opens the directory, it would first replay the updates after the head in order, bringing the updates back into the LSM tree; before it allows any reads or writes.
-This technique ensures data persistence in face of crashes.
-
-Furthermore, Badger can be run with `SyncWrites` option, which would open the WAL with O_DSYNC flag, hence syncing the writes to disk on every write.
+If you are using Badger in a project please send a pull request to add it to the list.
 
 ## Frequently Asked Questions
-
 - **My writes are really slow. Why?**
 
-You're probably doing writes serially, using `Set`. To get the best write performance, use `BatchSet`, and call it
-concurrently from multiple goroutines.
+Are you creating a new transaction for every single key update? This will lead
+to very low throughput. To get best write performance, batch up multiple writes
+inside a transaction using single `DB.Update()` call. You could also have
+multiple such `DB.Update()` calls being made concurrently from multiple
+goroutines.
 
 - **I don't see any disk write. Why?**
 
@@ -151,3 +385,4 @@ thread](https://groups.google.com/d/topic/golang-nuts/jPb_h3TvlKE/discussion).
 - Please use [Github issue tracker](https://github.com/dgraph-io/badger/issues) for filing bugs or feature requests.
 - Join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
 - Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).
+
