@@ -120,3 +120,12 @@ func (req *Req) Reset() {
 	req.gr.Mutation.DeleteJson = req.gr.Mutation.DeleteJson[:0]
 	req.gr.Mutation.Schema = req.gr.Mutation.Schema[:0]
 }
+
+// Set is used to set nquads directly. Most clients would find it easier to use SetObject instead.
+// TODO(pawan) - Hide this from user.
+func (req *Req) Set(nquad *protos.NQuad) {
+	if req.gr.Mutation == nil {
+		req.gr.Mutation = new(protos.Mutation)
+	}
+	req.gr.Mutation.Set = append(req.gr.Mutation.Set, nquad)
+}

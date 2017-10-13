@@ -127,20 +127,24 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	return dgraphClient.SetSchemaBlocking(ctx, su)
 }
 
-func (l *loader) uid(val string) (uint64, error) {
+func hex(uid uint64) string {
+	return fmt.Sprintf("%#x", uint64(uid))
+}
+
+func (l *loader) uid(val string) (string, error) {
 	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
-		return uid, nil
+		return hex(uid), nil
 	}
 
 	if strings.HasPrefix(val, "_:") {
 		uid, err := l.NodeBlank(val[2:])
 		if err != nil {
-			return 0, err
+			return "", err
 		}
-		return uid, nil
+		return hex(uid), nil
 	}
 	uid, err := l.NodeXid(val, *storeXid)
-	return uid, err
+	return hex(uid), err
 }
 
 func fileReader(file string) (io.Reader, *os.File) {
@@ -175,11 +179,8 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 
 	var line uint64
 	r := client.Req{}
-	edges := make([]map[string]interface{}, 0, *numRdf)
-	edge := make(map[string]interface{})
 	var batchSize int
 	for {
-		edge = make(map[string]interface{})
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -208,40 +209,26 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 		batchSize++
 		buf.Reset()
 
-		subject, err := l.uid(nq.Subject)
-		if err != nil {
+		if nq.Subject, err = l.uid(nq.Subject); err != nil {
 			return err
 		}
-		edge["_uid_"] = subject
-
 		if len(nq.ObjectId) > 0 {
-			objectId, err := l.uid(nq.ObjectId)
-			if err != nil {
+			if nq.ObjectId, err = l.uid(nq.ObjectId); err != nil {
 				return err
 			}
-			edge[nq.Predicate] = map[string]uint64{"_uid_": objectId}
-		} else {
-			// TODO - This is not ideal. We should store int/float as float and bool in boolean
-			// encoding and everything else as string. For now we store everything as string.
-			edge[nq.Predicate] = nq.ObjectVal
 		}
+		r.Set(&nq)
 
-		// TODO - Handle facets
-		edges = append(edges, edge)
 		if batchSize >= *numRdf {
-			r.SetObject(edges)
 			l.reqs <- r
-			atomic.AddUint64(&l.rdfs, uint64(len(edges)))
-			edges = edges[:0]
+			atomic.AddUint64(&l.rdfs, uint64(batchSize))
 			batchSize = 0
 			r = client.Req{}
 		}
 	}
 	if batchSize > 0 {
-		r.SetObject(edges)
 		l.reqs <- r
-		atomic.AddUint64(&l.rdfs, uint64(len(edges)))
-		edges = edges[:0]
+		atomic.AddUint64(&l.rdfs, uint64(batchSize))
 		r = client.Req{}
 	}
 	return nil
