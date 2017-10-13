@@ -86,7 +86,7 @@ type Res struct {
 
 func TestSchemaError(t *testing.T) {
 	req := client.Req{}
-	err := req.AddSchema(protos.SchemaUpdate{
+	err := req.AddSchema(&protos.SchemaUpdate{
 		Predicate: "dummy",
 		Tokenizer: []string{"term"},
 	})
@@ -96,7 +96,7 @@ func TestSchemaError(t *testing.T) {
 	require.Contains(t, err.Error(), "Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
 
 	req = client.Req{}
-	err = req.AddSchema(protos.SchemaUpdate{
+	err = req.AddSchema(&protos.SchemaUpdate{
 		Predicate: "dummy",
 		Directive: protos.SchemaUpdate_INDEX,
 	})

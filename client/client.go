@@ -18,6 +18,7 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/dgraph-io/dgraph/protos"
 )
@@ -98,6 +99,13 @@ func (req *Req) DeleteObject(v interface{}) error {
 	}
 	req.gr.Mutation.DeleteJson = b
 	return nil
+}
+
+// SetSchema sets schema mutation in req with the given schema
+// The schema is not checked until the request is run, when it is parsed and
+// checked server-side
+func (req *Req) SetSchema(q string) {
+	req.gr.Query = fmt.Sprintf("mutation {\nschema {\n%s\n}\n}", q)
 }
 
 func (req *Req) AddSchema(s *protos.SchemaUpdate) error {
