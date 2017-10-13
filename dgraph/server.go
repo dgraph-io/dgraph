@@ -125,6 +125,49 @@ func (s *ServerState) Dispose() error {
 // Server implements protos.DgraphServer
 type Server struct{}
 
+func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.Assigned, err error) {
+	if !isMutationAllowed(ctx) {
+		return nil, x.Errorf("No mutations allowed.")
+	}
+
+	emptyMutation :=
+		len(mu.GetSchema()) == 0 && len(mu.GetSetJson()) == 0 &&
+			len(mu.GetDeleteJson()) == 0 && !mu.GetDropAll()
+	if emptyMutation {
+		return nil, fmt.Errorf("empty mutation")
+	}
+	if mu.StartTs == 0 {
+		return nil, fmt.Errorf("Invalid start timestamp")
+	}
+
+	if mu.DropAll {
+		m := protos.Mutations{DropAll: true}
+		return nil, query.ApplyMutations(ctx, &m)
+	}
+
+	gmu, err := parseMutationObject(mu)
+	if err != nil {
+		return resp, err
+	}
+	// TODO: Maybe add some checks about the schema.
+	// Move validation from schema.Parse here.
+	for _, s := range mu.Schema {
+		s.Explicit = true
+	}
+	newUids, err := query.AssignUids(ctx, gmu.Set)
+	if err != nil {
+		return resp, err
+	}
+	resp.Uids = query.StripBlankNode(newUids)
+	edges, err := query.ToInternal(gmu, newUids)
+	if err != nil {
+		return resp, err
+	}
+	m := protos.Mutations{Edges: edges, Schema: mu.Schema}
+	err = query.ApplyMutations(ctx, &m)
+	return resp, err
+}
+
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Response, err error) {
@@ -149,19 +192,12 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		defer tr.Finish()
 	}
 
-	// Sanitize the context of the keys used for internal purposes only
-	ctx = context.WithValue(ctx, "_share_", nil)
-	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
-
 	resp = new(protos.Response)
-	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
-		len(req.Mutation.GetSchema()) == 0 && len(req.Mutation.GetSetJson()) == 0 &&
-		len(req.Mutation.GetDeleteJson()) == 0 && !req.Mutation.GetDropAll()
-	if len(req.Query) == 0 && emptyMutation && req.Schema == nil {
+	if len(req.Query) == 0 && req.Schema == nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Empty query and mutation.")
+			tr.LazyPrintf("Empty query")
 		}
-		return resp, fmt.Errorf("empty query and mutation.")
+		return resp, fmt.Errorf("empty query")
 	}
 
 	if Config.DebugMode {
@@ -175,7 +211,6 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 
 	res, err := gql.Parse(gql.Request{
 		Str:       req.Query,
-		Mutation:  req.Mutation,
 		Variables: req.Vars,
 		Http:      false,
 	})
@@ -183,17 +218,9 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		return resp, err
 	}
 
-	if err := parseMutationObject(&res, req); err != nil {
-		return resp, err
-	}
-
 	var cancel context.CancelFunc
-	// set timeout if schema mutation not present
-	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
-		// If schema mutation is not present
-		ctx, cancel = context.WithTimeout(ctx, time.Minute)
-		defer cancel()
-	}
+	ctx, cancel = context.WithTimeout(ctx, time.Minute)
+	defer cancel()
 
 	if req.Schema != nil && res.Schema != nil {
 		return resp, x.Errorf("Multiple schema blocks found")
@@ -207,23 +234,18 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		Latency:  &l,
 		GqlQuery: &res,
 	}
-	if req.Mutation != nil && len(req.Mutation.Schema) > 0 {
-		// Every update that comes from the client is explicit.
-		for _, s := range req.Mutation.Schema {
-			s.Explicit = true
-		}
-		queryRequest.SchemaUpdate = req.Mutation.Schema
-	}
 
 	var er query.ExecuteResult
-	if er, err = queryRequest.ProcessWithMutation(ctx); err != nil {
+	if er, err = queryRequest.Process(ctx); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while processing query: %+v", err)
 		}
 		return resp, x.Wrap(err)
 	}
-	resp.AssignedUids = er.Allocations
 	resp.Schema = er.SchemaNode
+
+	// err = query.ToJson(&l, res.Subgraphs, w,
+	// query.ConvertUidsToHex(res.Allocations), addLatency)
 
 	nodes, err := query.ToProtocolBuf(&l, er.Subgraphs)
 	if err != nil {
@@ -559,33 +581,21 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 	return mr.nquads, err
 }
 
-func parseMutationObject(res *gql.Result, q *protos.Request) error {
-	if q.Mutation == nil || (len(q.Mutation.SetJson) == 0 && len(q.Mutation.DeleteJson) == 0) {
-		return nil
-	}
-
-	var nquads []*protos.NQuad
+func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
+	res := &gql.Mutation{}
 	var err error
-	if len(q.Mutation.SetJson) > 0 {
-		nquads, err = nquadsFromJson(q.Mutation.SetJson, set)
+
+	if len(mu.SetJson) > 0 {
+		res.Set, err = nquadsFromJson(mu.SetJson, set)
 		if err != nil {
-			return err
+			return res, err
 		}
 	}
-
-	if res.Mutation == nil {
-		res.Mutation = &gql.Mutation{}
-	}
-	res.Mutation.Set = append(res.Mutation.Set, nquads...)
-
-	nquads = nquads[:0]
-	if len(q.Mutation.DeleteJson) > 0 {
-		nquads, err = nquadsFromJson(q.Mutation.DeleteJson, delete)
+	if len(mu.DeleteJson) > 0 {
+		res.Del, err = nquadsFromJson(mu.DeleteJson, delete)
 		if err != nil {
-			return err
+			return res, err
 		}
 	}
-	res.Mutation.Del = append(res.Mutation.Del, nquads...)
-
-	return nil
+	return res, nil
 }

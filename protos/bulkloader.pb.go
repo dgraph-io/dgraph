@@ -21,6 +21,7 @@
 		FacetsList
 		Function
 		FilterTree
+		Assigned
 		Num
 		AssignedIds
 		NQuad

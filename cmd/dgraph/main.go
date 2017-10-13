@@ -20,8 +20,6 @@ package main
 import (
 	"crypto/sha256"
 	"crypto/tls"
-	"encoding/gob"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -36,7 +34,6 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -48,14 +45,12 @@ import (
 
 	"github.com/cockroachdb/cmux"
 	"github.com/dgraph-io/dgraph/dgraph"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -216,175 +211,6 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func queryHandler(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	w.Header().Set("Content-Type", "application/json")
-
-	if err := x.HealthCheck(); err != nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		x.SetStatus(w, x.ErrorServiceUnavailable, err.Error())
-		return
-	}
-
-	x.PendingQueries.Add(1)
-	x.NumQueries.Add(1)
-	defer x.PendingQueries.Add(-1)
-
-	if r.Method == "OPTIONS" {
-		return
-	}
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
-	}
-
-	// Lets add the value of the debug query parameter to the context.
-	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
-	ctx = context.WithValue(ctx, "mutation_allowed", !dgraph.Config.Nomutations)
-
-	if rand.Float64() < worker.Config.Tracing {
-		var tr trace.Trace
-		tr, ctx = x.NewTrace("Query", ctx)
-		defer tr.Finish()
-	}
-
-	invalidRequest := func(err error, msg string) {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while reading query: %+v", err)
-		}
-		x.SetStatus(w, x.ErrorInvalidRequest, msg)
-	}
-
-	var l query.Latency
-	l.Start = time.Now()
-	defer r.Body.Close()
-	req, err := ioutil.ReadAll(r.Body)
-	q := string(req)
-	if err != nil || len(q) == 0 {
-		invalidRequest(err, "Error while reading query")
-		return
-	}
-
-	if dgraph.Config.DebugMode {
-		fmt.Printf("Received query: %+v\n", q)
-	}
-	parseStart := time.Now()
-	parsed, err := gql.Parse(gql.Request{
-		Str:       q,
-		Variables: map[string]string{},
-		Http:      true,
-	})
-	l.Parsing += time.Since(parseStart)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
-	var cancel context.CancelFunc
-	// set timeout if schema mutation not present
-	if parsed.Mutation == nil || len(parsed.Mutation.Schema) == 0 {
-		// If schema mutation is not present
-		ctx, cancel = context.WithTimeout(ctx, time.Minute)
-		defer cancel()
-	}
-
-	// After execution starts according to the GraphQL spec data key must be returned. It would be
-	// null if any error is encountered, else non-null.
-	var res query.ExecuteResult
-	var queryRequest = query.QueryRequest{
-		Latency:  &l,
-		GqlQuery: &parsed,
-	}
-	if res, err = queryRequest.ProcessWithMutation(ctx); err != nil {
-		switch errors.Cause(err).(type) {
-		case *query.InvalidRequestError:
-			x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
-		default: // internalError or other
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while handling mutations: %+v", err)
-			}
-			x.SetStatusWithData(w, x.Error, err.Error())
-		}
-		return
-	}
-
-	var addLatency bool
-	// If there is an error parsing, then addLatency would remain false.
-	addLatency, _ = strconv.ParseBool(r.URL.Query().Get("latency"))
-	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
-	addLatency = addLatency || debug
-
-	newUids := query.ConvertUidsToHex(res.Allocations)
-	if len(parsed.Query) == 0 {
-		schemaRes := map[string]interface{}{}
-		mp := map[string]interface{}{}
-		if parsed.Mutation != nil {
-			mp["code"] = x.Success
-			mp["message"] = "Done"
-			mp["uids"] = newUids
-		}
-		// Either Schema or query can be specified
-		if parsed.Schema != nil {
-			if len(res.SchemaNode) == 0 {
-				mp["schema"] = json.RawMessage("{}")
-			} else {
-				sort.Slice(res.SchemaNode, func(i, j int) bool {
-					return res.SchemaNode[i].Predicate < res.SchemaNode[j].Predicate
-				})
-				js, err := json.Marshal(res.SchemaNode)
-				if err != nil {
-					x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
-					return
-				}
-				mp["schema"] = json.RawMessage(string(js))
-			}
-		}
-		schemaRes["data"] = mp
-		if addLatency {
-			e := query.Extensions{
-				Latency: l.ToMap(),
-			}
-			schemaRes["extensions"] = e
-		}
-		if js, err := json.Marshal(schemaRes); err == nil {
-			w.Write(js)
-		} else {
-			x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
-		}
-		return
-	}
-
-	if len(dumpSubgraph) > 0 {
-		for _, sg := range res.Subgraphs {
-			x.Checkf(os.MkdirAll(dumpSubgraph, 0700), dumpSubgraph)
-			s := time.Now().Format("20060102.150405.000000.gob")
-			filename := path.Join(dumpSubgraph, s)
-			f, err := os.Create(filename)
-			x.Checkf(err, filename)
-			enc := gob.NewEncoder(f)
-			x.Check(enc.Encode(sg))
-			x.Checkf(f.Close(), filename)
-		}
-	}
-
-	err = query.ToJson(&l, res.Subgraphs, w,
-		query.ConvertUidsToHex(res.Allocations), addLatency)
-	if err != nil {
-		// since we performed w.Write in ToJson above,
-		// calling WriteHeader with 500 code will be ignored.
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while converting to JSON: %+v", err)
-		}
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Latencies: Total: %v Parsing: %v Process: %v Json: %v",
-			time.Since(l.Start), l.Parsing, l.Processing, l.Json)
-	}
-}
-
 // NewSharedQueryNQuads returns nquads with query and hash.
 func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
 	val := func(s string) *protos.Value {
@@ -398,61 +224,61 @@ func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
 }
 
 // shareHandler allows to share a query between users.
-func shareHandler(w http.ResponseWriter, r *http.Request) {
-	var mr query.InternalMutation
-	var err error
-	var rawQuery []byte
+// func shareHandler(w http.ResponseWriter, r *http.Request) {
+// 	var mr query.InternalMutation
+// 	var err error
+// 	var rawQuery []byte
 
-	w.Header().Set("Content-Type", "application/json")
-	x.AddCorsHeaders(w)
-	if r.Method != "POST" {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
-	}
-	ctx := context.Background()
-	defer r.Body.Close()
-	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while reading the stringified query payload: %+v", err)
-		}
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
-		return
-	}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	x.AddCorsHeaders(w)
+// 	if r.Method != "POST" {
+// 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+// 		return
+// 	}
+// 	ctx := context.Background()
+// 	defer r.Body.Close()
+// 	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
+// 		if tr, ok := trace.FromContext(ctx); ok {
+// 			tr.LazyPrintf("Error while reading the stringified query payload: %+v", err)
+// 		}
+// 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+// 		return
+// 	}
 
-	fail := func() {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error: %+v", err)
-		}
-		x.SetStatus(w, x.Error, err.Error())
-	}
-	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
-	newUids, err := query.AssignUids(ctx, nquads)
-	if err != nil {
-		fail()
-		return
-	}
-	if mr, err = query.ToInternal(ctx, nquads, nil, newUids); err != nil {
-		fail()
-		return
-	}
-	if err = query.ApplyMutations(ctx, &protos.Mutations{Edges: mr.Edges}); err != nil {
-		fail()
-		return
-	}
-	tempMap := query.StripBlankNode(newUids)
-	allocIdsStr := query.ConvertUidsToHex(tempMap)
-	payload := map[string]interface{}{
-		"code":    x.Success,
-		"message": "Done",
-		"uids":    allocIdsStr,
-	}
+// 	fail := func() {
+// 		if tr, ok := trace.FromContext(ctx); ok {
+// 			tr.LazyPrintf("Error: %+v", err)
+// 		}
+// 		x.SetStatus(w, x.Error, err.Error())
+// 	}
+// 	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
+// 	newUids, err := query.AssignUids(ctx, nquads)
+// 	if err != nil {
+// 		fail()
+// 		return
+// 	}
+// 	if mr, err = query.ToInternal(ctx, nquads, nil, newUids); err != nil {
+// 		fail()
+// 		return
+// 	}
+// 	if err = query.ApplyMutations(ctx, &protos.Mutations{Edges: mr.Edges}); err != nil {
+// 		fail()
+// 		return
+// 	}
+// 	tempMap := query.StripBlankNode(newUids)
+// 	allocIdsStr := query.ConvertUidsToHex(tempMap)
+// 	payload := map[string]interface{}{
+// 		"code":    x.Success,
+// 		"message": "Done",
+// 		"uids":    allocIdsStr,
+// 	}
 
-	if res, err := json.Marshal(payload); err == nil {
-		w.Write(res)
-	} else {
-		x.SetStatus(w, "Error", "Unable to marshal map")
-	}
-}
+// 	if res, err := json.Marshal(payload); err == nil {
+// 		w.Write(res)
+// 	} else {
+// 		x.SetStatus(w, "Error", "Unable to marshal map")
+// 	}
+// }
 
 // storeStatsHandler outputs some basic stats for data store.
 func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
@@ -697,8 +523,7 @@ func setupServer(che chan error) {
 	http2 := httpMux.Match(cmux.HTTP2())
 
 	http.HandleFunc("/health", healthCheck)
-	http.HandleFunc("/query", queryHandler)
-	http.HandleFunc("/share", shareHandler)
+	// http.HandleFunc("/share", shareHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)

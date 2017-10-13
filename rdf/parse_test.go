@@ -785,40 +785,6 @@ var testNQuads = []struct {
 		input:       `<alice> <password> "guess123"^^<pwd:password> .`,
 		expectedErr: true,
 	},
-	// Test variable in subject
-	{
-		input: `uid(alice) <knows> "stuff" .`,
-		nq: protos.NQuad{
-			Predicate:   "knows",
-			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"stuff"}},
-			SubjectVar:  "alice",
-		},
-	},
-	// Test variable in object
-	{
-		input: `<alice> <knows> uid(everyone) .`,
-		nq: protos.NQuad{
-			Subject:   "alice",
-			Predicate: "knows",
-			ObjectVar: "everyone",
-		},
-	},
-	{
-		input: `uid(alice) <knows> uid(everyone) .`,
-		nq: protos.NQuad{
-			SubjectVar: "alice",
-			Predicate:  "knows",
-			ObjectVar:  "everyone",
-		},
-	},
-	{
-		input: `uid(alice) * * .`,
-		nq: protos.NQuad{
-			SubjectVar:  "alice",
-			Predicate:   x.Star,
-			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
-		},
-	},
 	{
 		input: `* <pred> * .`,
 		nq: protos.NQuad{
