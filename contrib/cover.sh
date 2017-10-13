@@ -21,7 +21,7 @@ pushd $SRC &> /dev/null
 
 # create coverage output
 echo 'mode: atomic' > $OUT
-for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki'); do
+for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki|customtok'); do
   # Uncomment this once tests pass with race
   # if [ $TRAVIS_BRANCH =~ master|release\/ ]; then
   #  go test -race -covermode=atomic -coverprofile=$TMP $PKG

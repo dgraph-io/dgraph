@@ -52,6 +52,18 @@ func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 	return requiredTokenizer, false
 }
 
+func verifyCustomIndex(attr string, tokenizerName string) bool {
+	if !schema.State().IsIndexed(attr) {
+		return false
+	}
+	for _, tn := range schema.State().TokenizerNames(attr) {
+		if tn == tokenizerName {
+			return true
+		}
+	}
+	return false
+}
+
 // Return string tokens from function arguments. It maps function type to correct tokenizer.
 // Note: regexp functions require regexp compilation of argument, not tokenization.
 func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]string, error) {
@@ -114,7 +126,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	}
 
 	// Get the token for the value passed in function.
-	ineqTokens, err := tokenizer.Tokens(ineqValue)
+	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer)
 	if err != nil {
 		return nil, "", err
 	}

@@ -15,32 +15,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package tok
+package main
 
-import (
-	"github.com/dgraph-io/dgraph/x"
-)
+import "encoding/binary"
 
-//  Might want to allow user to replace this.
-var termTokenizer TermTokenizer
-var fullTextTokenizer FullTextTokenizer
+func Tokenizer() interface{} { return RuneTokenizer{} }
 
-func GetTokens(funcArgs []string) ([]string, error) {
-	return tokenize(funcArgs, termTokenizer)
-}
+type RuneTokenizer struct{}
 
-func GetTextTokens(funcArgs []string, lang string) ([]string, error) {
-	t, found := GetTokenizer("fulltext" + lang)
-	if found {
-		return tokenize(funcArgs, t)
+func (RuneTokenizer) Name() string     { return "rune" }
+func (RuneTokenizer) Type() string     { return "string" }
+func (RuneTokenizer) Identifier() byte { return 0xfd }
+
+func (t RuneTokenizer) Tokens(value interface{}) ([]string, error) {
+	var toks []string
+	for _, r := range value.(string) {
+		var buf [binary.MaxVarintLen32]byte
+		n := binary.PutVarint(buf[:], int64(r))
+		tok := string(buf[:n])
+		toks = append(toks, tok)
 	}
-	return nil, x.Errorf("Tokenizer not found for %s", "fulltext"+lang)
-}
-
-func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {
-	if len(funcArgs) != 1 {
-		return nil, x.Errorf("Function requires 1 arguments, but got %d",
-			len(funcArgs))
-	}
-	return BuildTokens(funcArgs[0], tokenizer)
+	return toks, nil
 }

@@ -15,32 +15,32 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package tok
+package main
 
-import (
-	"github.com/dgraph-io/dgraph/x"
-)
+import "net"
 
-//  Might want to allow user to replace this.
-var termTokenizer TermTokenizer
-var fullTextTokenizer FullTextTokenizer
+func Tokenizer() interface{} { return CIDRTokenizer{} }
 
-func GetTokens(funcArgs []string) ([]string, error) {
-	return tokenize(funcArgs, termTokenizer)
-}
+type CIDRTokenizer struct{}
 
-func GetTextTokens(funcArgs []string, lang string) ([]string, error) {
-	t, found := GetTokenizer("fulltext" + lang)
-	if found {
-		return tokenize(funcArgs, t)
+func (CIDRTokenizer) Name() string     { return "cidr" }
+func (CIDRTokenizer) Type() string     { return "string" }
+func (CIDRTokenizer) Identifier() byte { return 0xff }
+
+func (t CIDRTokenizer) Tokens(value interface{}) ([]string, error) {
+	_, ipnet, err := net.ParseCIDR(value.(string))
+	if err != nil {
+		return nil, err
 	}
-	return nil, x.Errorf("Tokenizer not found for %s", "fulltext"+lang)
-}
-
-func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {
-	if len(funcArgs) != 1 {
-		return nil, x.Errorf("Function requires 1 arguments, but got %d",
-			len(funcArgs))
+	ones, bits := ipnet.Mask.Size()
+	var toks []string
+	for i := ones; i >= 1; i-- {
+		m := net.CIDRMask(i, bits)
+		tok := net.IPNet{
+			IP:   ipnet.IP.Mask(m),
+			Mask: m,
+		}
+		toks = append(toks, tok.String())
 	}
-	return BuildTokens(funcArgs[0], tokenizer)
+	return toks, nil
 }

@@ -15,32 +15,41 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package tok
+package main
 
 import (
-	"github.com/dgraph-io/dgraph/x"
+	"encoding/binary"
+	"fmt"
 )
 
-//  Might want to allow user to replace this.
-var termTokenizer TermTokenizer
-var fullTextTokenizer FullTextTokenizer
+func Tokenizer() interface{} { return FactorTokenizer{} }
 
-func GetTokens(funcArgs []string) ([]string, error) {
-	return tokenize(funcArgs, termTokenizer)
+type FactorTokenizer struct{}
+
+func (FactorTokenizer) Name() string     { return "factor" }
+func (FactorTokenizer) Type() string     { return "int" }
+func (FactorTokenizer) Identifier() byte { return 0xfe }
+
+func (FactorTokenizer) Tokens(value interface{}) ([]string, error) {
+	x := value.(int64)
+	if x <= 1 {
+		return nil, fmt.Errorf("cannot factor int <= 1: %d", x)
+	}
+	var toks []string
+	for p := int64(2); x > 1; p++ {
+		if x%p == 0 {
+			toks = append(toks, encodeInt(p))
+			for x%p == 0 {
+				x /= p
+			}
+		}
+	}
+	return toks, nil
+
 }
 
-func GetTextTokens(funcArgs []string, lang string) ([]string, error) {
-	t, found := GetTokenizer("fulltext" + lang)
-	if found {
-		return tokenize(funcArgs, t)
-	}
-	return nil, x.Errorf("Tokenizer not found for %s", "fulltext"+lang)
-}
-
-func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {
-	if len(funcArgs) != 1 {
-		return nil, x.Errorf("Function requires 1 arguments, but got %d",
-			len(funcArgs))
-	}
-	return BuildTokens(funcArgs[0], tokenizer)
+func encodeInt(x int64) string {
+	var buf [binary.MaxVarintLen64]byte
+	n := binary.PutVarint(buf[:], x)
+	return string(buf[:n])
 }

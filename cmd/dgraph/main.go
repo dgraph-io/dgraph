@@ -48,6 +48,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -73,6 +74,8 @@ var (
 	tlsSystemCACerts bool
 	tlsMinVersion    string
 	tlsMaxVersion    string
+
+	customTokenizers string
 )
 
 func setupConfigOpts() {
@@ -112,7 +115,8 @@ func setupConfigOpts() {
 			" doubles the number of mutations going on in the system.")
 
 	flag.Float64Var(&config.AllottedMemory, "memory_mb", defaults.AllottedMemory,
-		"Estimated memory the process can take. Actual usage would be slightly more than specified here.")
+		"Estimated memory the process can take. "+
+			"Actual usage would be slightly more than specified here.")
 	flag.Float64Var(&config.CommitFraction, "gentlecommit", defaults.CommitFraction,
 		"Fraction of dirty posting lists to commit every few seconds.")
 
@@ -146,6 +150,9 @@ func setupConfigOpts() {
 	flag.BoolVar(&tlsSystemCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
 	flag.StringVar(&tlsMinVersion, "tls.min_version", "TLS11", "TLS min version.")
 	flag.StringVar(&tlsMaxVersion, "tls.max_version", "TLS12", "TLS max version.")
+	//Custom plugins.
+	flag.StringVar(&customTokenizers, "custom_tokenizers", "",
+		"Comma separated list of tokenizer plugins")
 
 	flag.Parse()
 	if !flag.Parsed() {
@@ -164,6 +171,16 @@ func setupConfigOpts() {
 	}
 
 	dgraph.SetConfiguration(config)
+	setupCustomTokenizers()
+}
+
+func setupCustomTokenizers() {
+	if customTokenizers == "" {
+		return
+	}
+	for _, soFile := range strings.Split(customTokenizers, ",") {
+		tok.LoadCustomTokenizer(soFile)
+	}
 }
 
 func httpPort() int {
