@@ -244,9 +244,6 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	}
 	resp.Schema = er.SchemaNode
 
-	// err = query.ToJson(&l, res.Subgraphs, w,
-	// query.ConvertUidsToHex(res.Allocations), addLatency)
-
 	json, err := query.ToJson(&l, er.Subgraphs)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {

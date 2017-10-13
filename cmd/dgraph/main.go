@@ -47,7 +47,6 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -467,7 +466,7 @@ func setupListener(addr string, port int) (listener net.Listener, err error) {
 
 func serveGRPC(l net.Listener) {
 	defer func() { dgraph.State.FinishCh <- struct{}{} }()
-	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
+	s := grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
