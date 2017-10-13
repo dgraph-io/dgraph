@@ -121,7 +121,8 @@ func setupConfigOpts() {
 			" doubles the number of mutations going on in the system.")
 
 	flag.Float64Var(&config.AllottedMemory, "memory_mb", defaults.AllottedMemory,
-		"Estimated memory the process can take. Actual usage would be slightly more than specified here.")
+		"Estimated memory the process can take. "+
+			"Actual usage would be slightly more than specified here.")
 	flag.Float64Var(&config.CommitFraction, "gentlecommit", defaults.CommitFraction,
 		"Fraction of dirty posting lists to commit every few seconds.")
 
@@ -156,7 +157,8 @@ func setupConfigOpts() {
 	flag.StringVar(&tlsMinVersion, "tls.min_version", "TLS11", "TLS min version.")
 	flag.StringVar(&tlsMaxVersion, "tls.max_version", "TLS12", "TLS max version.")
 	//Custom plugins.
-	flag.StringVar(&customTokenizers, "custom_tokenizers", "", "Comma separated list of tokenizer plugins")
+	flag.StringVar(&customTokenizers, "custom_tokenizers", "",
+		"Comma separated list of tokenizer plugins")
 
 	flag.Parse()
 	if !flag.Parsed() {

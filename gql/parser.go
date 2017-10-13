@@ -1433,7 +1433,7 @@ func validFuncName(name string) bool {
 
 	switch name {
 	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext",
-		"has", "uid", "uid_in", "customanyof", "customallof":
+		"has", "uid", "uid_in", "anyof", "allof":
 		return true
 	}
 	return false

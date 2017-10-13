@@ -260,7 +260,7 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return HasFn, f
 	case "uid_in":
 		return UidInFn, f
-	case "customanyof", "customallof":
+	case "anyof", "allof":
 		return CustomIndexFn, f
 	default:
 		if types.IsGeoFunc(f) {
@@ -1133,6 +1133,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.tokens, err = tok.BuildTokens(valToTok.Value, tokenizer)
 		fnName := strings.ToLower(q.SrcFunc.Name)
+		x.AssertTrue(fnName == "allof" || fnName == "anyof")
 		fc.intersectDest = strings.HasSuffix(fnName, "allof")
 		fc.n = len(fc.tokens)
 	case RegexFn:
