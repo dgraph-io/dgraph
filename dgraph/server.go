@@ -338,7 +338,6 @@ func parseFacets(val interface{}) ([]*protos.Facet, error) {
 				facetKey)
 		}
 
-		// TODO: Sort the facets by key.
 		// convert facet val interface{} to binary
 		tid := facets.TypeIDFor(&protos.Facet{ValType: f.ValType})
 		fVal := &types.Val{Tid: types.BinaryID}

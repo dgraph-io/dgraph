@@ -304,6 +304,7 @@ type Request struct {
 	Variables map[string]string
 	// We need this so that we don't try to do JSON.Unmarshal for request coming
 	// from Go client, as we directly get the variables in a map.
+	// TODO: Remove this flag.
 	Http bool
 }
 
