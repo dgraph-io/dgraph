@@ -17,16 +17,11 @@
 
 package main
 
-import (
-	"encoding/binary"
-)
+import "encoding/binary"
 
-func Tokenizer() interface{} {
-	return RuneTokenizer{}
-}
+func Tokenizer() interface{} { return RuneTokenizer{} }
 
-type RuneTokenizer struct {
-}
+type RuneTokenizer struct{}
 
 func (RuneTokenizer) Name() string     { return "rune" }
 func (RuneTokenizer) Type() string     { return "string" }

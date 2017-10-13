@@ -17,16 +17,11 @@
 
 package main
 
-import (
-	"net"
-)
+import "net"
 
-func Tokenizer() interface{} {
-	return CIDRTokenizer{}
-}
+func Tokenizer() interface{} { return CIDRTokenizer{} }
 
-type CIDRTokenizer struct {
-}
+type CIDRTokenizer struct{}
 
 func (CIDRTokenizer) Name() string     { return "cidr" }
 func (CIDRTokenizer) Type() string     { return "string" }

@@ -19,12 +19,9 @@ package main
 
 import "sort"
 
-func Tokenizer() interface{} {
-	return AnagramTokenizer{}
-}
+func Tokenizer() interface{} { return AnagramTokenizer{} }
 
-type AnagramTokenizer struct {
-}
+type AnagramTokenizer struct{}
 
 func (AnagramTokenizer) Name() string     { return "anagram" }
 func (AnagramTokenizer) Type() string     { return "string" }
