@@ -128,7 +128,7 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 		require.True(t, ok)
 	}
 	require.NoError(t, txn.CommitDeltas())
-	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs))
+	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs, commitTs))
 	require.NoError(t, commitMutations([][]byte{l.key}, commitTs))
 }
 
@@ -256,7 +256,7 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 	txn.addReverseMutation(context.Background(), edge)
 	require.NoError(t, txn.CommitDeltas())
 	l := Get(x.ReverseKey(attr, dst))
-	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs))
+	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs, commitTs))
 	require.NoError(t, commitMutations([][]byte{l.key}, commitTs))
 }
 

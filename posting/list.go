@@ -70,8 +70,8 @@ type List struct {
 	key           []byte
 	plist         *protos.PostingList
 	mlayer        []*protos.Posting // committed mutations, sorted by uid,ts
-	commitTs      uint64            // commit timestamp of immutable layer, reject reads before this ts.
-	lastCommitTs  uint64            // commit timestamp of mutable layer.
+	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
+	commitTs      uint64            // commit timestamp of mutable layer.
 	startTs       uint64            // start timestamp of ongoing transaction.
 	deleteMe      int32             // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
@@ -397,13 +397,10 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		return false, errConflict
 	}
 
-	l.Unlock()
-	if !l.canCommit(ctx, txn.StartTs) {
+	if !l.canPreWrite(ctx, txn.StartTs) {
 		txn.Abort()
-		l.Lock()
 		return false, errConflict
 	}
-	l.Lock()
 
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
@@ -449,63 +446,44 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 	return hasMutated, nil
 }
 
-// Updates the pl if necessary for given readTs
-func (l *List) tryUpdateCommitStatusForRead(readTs uint64) {
+// Tells whether we can do write at given ts.
+func (l *List) updateCommitStatusHelper(ctx context.Context) {
 	l.RLock()
-	if l.startTs == 0 || readTs <= l.startTs {
-		l.RUnlock()
-		return
-	}
 	startTs := l.startTs
 	l.RUnlock()
-
-	// We don't care about return value.
-	l.updateCommitStatusHelper(context.Background(), startTs, readTs)
-}
-
-// Tells whether we can do write at given ts.
-func (l *List) updateCommitStatusHelper(ctx context.Context, startTs, ts uint64) bool {
+	if l.startTs == 0 {
+		return
+	}
 	commitTs, aborted, err := checkCommitStatusHelper(l.key, startTs)
 	if err != nil {
-		return false
+		return
 	} else if aborted {
-		l.AbortTransaction(ctx)
-		return true
+		l.AbortTransaction(ctx, startTs)
 	} else if commitTs > 0 {
-		l.CommitMutation(ctx, commitTs)
-		if commitTs > ts {
-			return false
-		}
-	} else if commitTs == 0 {
-		// TODO: Handle slow or long running transactions.
-		return false
+		l.CommitMutation(ctx, startTs, commitTs)
 	}
-	return true
 }
 
-func (l *List) canCommit(ctx context.Context, ts uint64) bool {
-	l.Lock()
-	if ts < l.startTs || ts < l.lastCommitTs {
-		l.Unlock()
+func (l *List) canPreWrite(ctx context.Context, ts uint64) bool {
+	if ts < l.commitTs {
 		return false
 	}
 	if l.startTs == 0 || l.startTs == ts {
 		l.startTs = ts
-		l.Unlock()
 		return true
 	}
-	startTs := l.startTs
-	l.Unlock()
-	return l.updateCommitStatusHelper(ctx, startTs, ts)
+	// Try fixing if it's pending.
+	go l.updateCommitStatusHelper(context.Background())
+	return false
 }
 
-func (l *List) AbortTransaction(ctx context.Context) error {
+func (l *List) AbortTransaction(ctx context.Context, startTs uint64) error {
 	l.Lock()
 	defer l.Unlock()
-	return l.abortTransaction(ctx)
+	return l.abortTransaction(ctx, startTs)
 }
 
-func (l *List) abortTransaction(ctx context.Context) error {
+func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
@@ -513,7 +491,7 @@ func (l *List) abortTransaction(ctx context.Context) error {
 		return ErrRetry
 	}
 	l.AssertLock()
-	if l.startTs == 0 {
+	if l.startTs != startTs {
 		return nil
 	}
 	midx := 0
@@ -529,13 +507,13 @@ func (l *List) abortTransaction(ctx context.Context) error {
 	return nil
 }
 
-func (l *List) CommitMutation(ctx context.Context, commitTs uint64) error {
+func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) error {
 	l.Lock()
 	defer l.Unlock()
-	return l.commitMutation(ctx, commitTs)
+	return l.commitMutation(ctx, startTs, commitTs)
 }
 
-func (l *List) commitMutation(ctx context.Context, commitTs uint64) error {
+func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
@@ -544,7 +522,7 @@ func (l *List) commitMutation(ctx context.Context, commitTs uint64) error {
 	}
 
 	l.AssertLock()
-	if l.startTs == 0 {
+	if l.startTs != startTs {
 		return nil
 	}
 
@@ -556,7 +534,8 @@ func (l *List) commitMutation(ctx context.Context, commitTs uint64) error {
 	if atomic.LoadInt32(&l.markdeleteAll) == 1 {
 		l.deleteHelper(ctx)
 		l.startTs = 0
-		l.lastCommitTs = commitTs
+		l.commitTs = commitTs
+		l.minTs = commitTs
 		atomic.StoreInt32(&l.markdeleteAll, 0)
 		return nil
 	}
@@ -567,7 +546,7 @@ func (l *List) commitMutation(ctx context.Context, commitTs uint64) error {
 		mpost.Commit = commitTs
 	}
 	l.startTs = 0
-	l.lastCommitTs = commitTs
+	l.commitTs = commitTs
 	return nil
 }
 
@@ -592,7 +571,6 @@ func (l *List) deleteHelper(ctx context.Context) error {
 //    return false // to break iteration.
 //  })
 func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
-	l.tryUpdateCommitStatusForRead(readTs)
 	l.RLock()
 	defer l.RUnlock()
 	return l.iterate(readTs, afterUid, f)
@@ -619,13 +597,17 @@ func (l *List) canRead(commitTs, readTs uint64) bool {
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
 	l.AssertRLock()
+	if l.startTs != 0 && readTs > l.startTs {
+		go l.updateCommitStatusHelper(context.Background())
+		return errConflict
+	}
 	// current pending transaction deletes the pl
 	if readTs == l.startTs && atomic.LoadInt32(&l.markdeleteAll) == 1 {
 		return nil
 	}
 	midx := 0
 
-	if readTs < l.commitTs {
+	if readTs < l.minTs {
 		return errTsTooOld
 	}
 	mlayerLen := len(l.mlayer)
@@ -644,7 +626,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 	for cont {
 		if pitr.Valid() {
 			pp = pitr.Posting()
-			pp.Commit = l.commitTs
+			pp.Commit = l.minTs
 		} else {
 			pp = emptyPosting
 		}
@@ -687,8 +669,13 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 }
 
 // Add test for aftruid
+// TODO(Txn): Throw error
 func (l *List) length(readTs, afterUid uint64) int {
 	l.AssertRLock()
+	if l.startTs != 0 && readTs > l.startTs {
+		go l.updateCommitStatusHelper(context.Background())
+		return 0
+	}
 	if readTs == l.startTs && atomic.LoadInt32(&l.markdeleteAll) == 1 {
 		return 0
 	}
@@ -728,7 +715,6 @@ func (l *List) length(readTs, afterUid uint64) int {
 
 // Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(readTs, afterUid uint64) int {
-	l.tryUpdateCommitStatusForRead(readTs)
 	l.RLock()
 	defer l.RUnlock()
 	return l.length(readTs, afterUid)
@@ -768,8 +754,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	buf := make([]uint64, 0, bp128.BlockSize)
 
 	l.iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
-		if p.Commit > l.lastCommitTs {
-			l.lastCommitTs = p.Commit
+		if p.Commit > l.commitTs {
+			l.commitTs = p.Commit
 		}
 		buf = append(buf, p.Uid)
 		if len(buf) == bp128.BlockSize {
@@ -834,7 +820,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 
 	doAsyncWrite(0, l.key, data, uidOnlyPosting, f)
 	l.mlayer = l.mlayer[:0]
-	l.commitTs = l.lastCommitTs
+	l.minTs = l.commitTs
 	if l.startTs == 0 {
 		// We don't merge uncomitted entries.
 		atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll only after it's committed.

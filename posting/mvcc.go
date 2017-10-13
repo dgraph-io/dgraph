@@ -45,7 +45,8 @@ type Txn struct {
 	aborted uint32
 	// Fields which can changed after init
 	sync.Mutex
-	m map[string][]*protos.Posting
+	m       map[string][]*protos.Posting
+	delKeys [][]byte
 }
 
 func (t *Txn) Abort() {
@@ -62,6 +63,10 @@ func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 	if t.m == nil {
 		t.m = make(map[string][]*protos.Posting)
 	}
+	if p.Op == Del && bytes.Equal(p.Value, []byte(x.Star)) {
+		t.delKeys = append(t.delKeys, key)
+		return
+	}
 	t.m[string(key)] = append(t.m[string(key)], p)
 }
 
@@ -72,6 +77,7 @@ func (t *Txn) CommitDeltas() error {
 	t.Lock()
 	defer t.Unlock()
 	if t.Aborted() != 0 {
+		// TODO: Abort
 		return errConflict
 	}
 	txn := pstore.NewTransaction(true)
@@ -94,6 +100,12 @@ func (t *Txn) CommitDeltas() error {
 		val, err := pl.Marshal()
 		x.Check(err)
 		err = txn.Set([]byte(k), val, bitDeltaPosting)
+		if err != nil {
+			return err
+		}
+	}
+	for _, key := range t.delKeys {
+		err := txn.Set([]byte(key), nil, 0x00)
 		if err != nil {
 			return err
 		}
@@ -196,11 +208,11 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				// not yet committed.
 				l.startTs = item.Version()
 			} else if commitTs > 0 {
-				l.lastCommitTs = commitTs
+				l.commitTs = commitTs
 			}
-		} else if l.lastCommitTs == 0 {
+		} else if l.commitTs == 0 {
 			// First comitted entry
-			l.lastCommitTs = commitTs
+			l.commitTs = commitTs
 		}
 
 		val, err := item.Value()
@@ -209,7 +221,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		if item.UserMeta()&bitDeltaPosting == 0 {
 			if len(val) == 0 {
-				l.commitTs = item.Version()
+				l.minTs = item.Version()
 				break
 			}
 			// Found complete pl, no needn't iterate more
@@ -220,7 +232,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			} else if len(val) > 0 {
 				x.Check(l.plist.Unmarshal(val))
 			}
-			l.commitTs = item.Version()
+			l.minTs = item.Version()
 			break
 		}
 		// It's delta
