@@ -240,11 +240,6 @@ func getOrMutate(key []byte) (rlist *List) {
 		if pk != nil {
 			x.AssertTrue(pk.IsIndex() || pk.IsCount())
 			// This is a best effort set, hence we don't check error from callback.
-			if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil &&
-				err != badger.ErrKeyExists {
-				x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
-			}
-			// This is a best effort set, hence we don't check error from callback.
 			txn := pstore.NewTransaction(true)
 			defer txn.Discard()
 			_, err := txn.Get(key)
