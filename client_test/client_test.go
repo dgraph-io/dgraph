@@ -34,12 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	x.Init()
-	x.Logger = log.New(ioutil.Discard, "", 0)
-	os.Exit(m.Run())
-}
-
 func prepare() (res []string, options dgraph.Options) {
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
@@ -66,6 +60,19 @@ func removeDirs(dirs []string) {
 	}
 }
 
+var dgraphClient *client.Dgraph
+
+func TestMain(m *testing.M) {
+	x.Init(true)
+	x.Logger = log.New(ioutil.Discard, "", 0)
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+	dgraphClient = dgraph.NewEmbeddedDgraphClient(options)
+	r := m.Run()
+	dgraph.DisposeEmbeddedDgraph()
+	os.Exit(r)
+}
+
 type Person struct {
 	Name    string   `json:"name"`
 	Loc     string   `json:"loc"`
@@ -77,266 +84,9 @@ type Res struct {
 	Root []Person `json:"me"`
 }
 
-func TestClientDelete(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
-	req := client.Req{}
-	alice, err := dgraphClient.NodeBlank("")
-	require.NoError(t, err)
-	bob, err := dgraphClient.NodeBlank("")
-	require.NoError(t, err)
-
-	e := alice.Edge("name")
-	require.NoError(t, e.SetValueString("Alice"))
-	require.NoError(t, req.Set(e))
-	e = bob.Edge("name")
-	require.NoError(t, e.SetValueString("Bob"))
-	require.NoError(t, req.Set(e))
-	e = alice.Edge("falls.in")
-	require.NoError(t, e.SetValueString("Rabbit Hole"))
-	require.NoError(t, req.Set(e))
-	e = alice.ConnectTo("friend", bob)
-	require.NoError(t, req.Set(e))
-	e = alice.Edge("loc")
-	loc := `{"type":"Point","coordinates":[1.1,2]}`
-	require.NoError(t, e.SetValueGeoJson(loc))
-	require.NoError(t, req.Set(e))
-	aliceQuery := fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			name
-			loc
-			falls.in
-			friend {
-				name
-			}
-		}
-	}`, alice)
-	req.SetQuery(aliceQuery)
-	resp, err := dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-
-	var r Res
-	err = client.Unmarshal(resp.N, &r)
-	require.Equal(t, 1, len(r.Root))
-	require.Equal(t, "Alice", r.Root[0].Name)
-	require.Equal(t, loc, r.Root[0].Loc)
-	require.Equal(t, "Rabbit Hole", r.Root[0].FallsIn)
-	require.Equal(t, 1, len(r.Root[0].Friends))
-	require.Equal(t, "Bob", r.Root[0].Friends[0].Name)
-
-	// Lets test Edge delete
-	req = client.Req{}
-	r = Res{}
-	e = alice.Edge("name")
-	// S P * deletion for name.
-	x.Check(e.Delete())
-	x.Check(req.Delete(e))
-	// S P * deletion for friend.
-	e = alice.Edge("friend")
-	x.Check(e.Delete())
-	x.Check(req.Delete(e))
-	req.SetQuery(aliceQuery)
-	resp, err = dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-	err = client.Unmarshal(resp.N, &r)
-	require.Equal(t, 1, len(r.Root))
-	require.Equal(t, "", r.Root[0].Name)
-	require.Equal(t, "Rabbit Hole", r.Root[0].FallsIn)
-	require.Equal(t, 0, len(r.Root[0].Friends))
-
-	// Lets test Node delete now.
-	req = client.Req{}
-	r = Res{}
-	e = alice.Delete()
-	x.Check(e.Delete())
-	x.Check(req.Delete(e))
-	req.SetQuery(aliceQuery)
-	resp, err = dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-	err = client.Unmarshal(resp.N, &r)
-	require.Equal(t, 0, len(r.Root))
-}
-
-func TestClientAddFacets(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
-	req := client.Req{}
-	alice, err := dgraphClient.NodeBlank("")
-	require.NoError(t, err)
-
-	e := alice.Edge("name")
-	require.NoError(t, e.SetValueString("Alice"))
-	e.AddFacet("xyz", "2")
-	e.AddFacet("abc", "1")
-	require.NoError(t, req.Set(e))
-	aliceQuery := fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			name @facets(abc)
-		}
-	}`, alice)
-	req.SetQuery(aliceQuery)
-	resp, err := dgraphClient.Run(context.Background(), &req)
-	require.NoError(t, err)
-
-	require.Equal(t, "abc", resp.N[0].Children[0].Children[0].Children[0].Properties[0].Prop)
-	require.Equal(t, int64(1), resp.N[0].Children[0].Children[0].Children[0].Properties[0].Value.GetIntVal())
-}
-
-func TestClientAddFacetsError(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
-	req := client.Req{}
-	alice, err := dgraphClient.NodeBlank("")
-	require.NoError(t, err)
-
-	e := alice.Edge("name")
-	require.NoError(t, e.SetValueString("Alice"))
-	e.AddFacet("abc", "2")
-	e.AddFacet("abc", "1")
-	require.NoError(t, req.Set(e))
-	aliceQuery := fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			name @facets(abc)
-		}
-	}`, alice)
-	req.SetQuery(aliceQuery)
-	_, err = dgraphClient.Run(context.Background(), &req)
-	require.Error(t, err)
-}
-
-func TestClientDeletePredicate(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
-	req := client.Req{}
-	alice, err := dgraphClient.NodeBlank("")
-	require.NoError(t, err)
-	bob, err := dgraphClient.NodeBlank("")
-	require.NoError(t, err)
-	charlie, err := dgraphClient.NodeBlank("")
-	require.NoError(t, err)
-
-	e := alice.Edge("name")
-	require.NoError(t, e.SetValueString("Alice"))
-	require.NoError(t, req.Set(e))
-
-	e = bob.Edge("name")
-	require.NoError(t, e.SetValueString("Bob"))
-	require.NoError(t, req.Set(e))
-
-	e = charlie.Edge("name")
-	require.NoError(t, e.SetValueString("Charlie"))
-	require.NoError(t, req.Set(e))
-
-	e = alice.ConnectTo("friend", bob)
-	require.NoError(t, req.Set(e))
-	e = alice.ConnectTo("friend", charlie)
-	require.NoError(t, req.Set(e))
-	aliceQuery := fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			name
-			falls.in
-			friend {
-				name
-			}
-		}
-	}`, alice)
-	req.SetQuery(aliceQuery)
-	resp, err := dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-
-	var r Res
-	err = client.Unmarshal(resp.N, &r)
-	require.Equal(t, 1, len(r.Root))
-	require.Equal(t, 2, len(r.Root[0].Friends))
-
-	req = client.Req{}
-	req.SetQuery(aliceQuery)
-	req.Delete(client.DeletePredicate("friend"))
-	resp, err = dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-	r = Res{}
-	err = client.Unmarshal(resp.N, &r)
-	require.Equal(t, 1, len(r.Root))
-	require.Equal(t, 0, len(r.Root[0].Friends))
-}
-
-func TestLangTag(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
-	req := client.Req{}
-	alice, err := dgraphClient.NodeBlank("")
-	require.NoError(t, err)
-
-	e := alice.Edge("name")
-	require.NoError(t, e.SetValueString("Alice"))
-	require.NoError(t, req.Set(e))
-	aliceQuery := fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			name
-		}
-	}`, alice)
-	req.SetQuery(aliceQuery)
-	resp, err := dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-
-	var r Res
-	err = client.Unmarshal(resp.N, &r)
-	require.Equal(t, 1, len(r.Root))
-	require.Equal(t, "Alice", r.Root[0].Name)
-
-	type Person struct {
-		Name    string   `json:"name@ru"`
-		FallsIn string   `json:"falls.in"`
-		Friends []Person `json:"friend"`
-	}
-
-	type Res struct {
-		Root []Person `json:"me"`
-	}
-
-	var r2 Res
-
-	req = client.Req{}
-	e = alice.Edge("name")
-	require.NoError(t, e.SetValueStringWithLang("Алиса", "ru"))
-	require.NoError(t, req.Set(e))
-	aliceQuery = fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			name@ru
-		}
-	}`, alice)
-	req.SetQuery(aliceQuery)
-	resp, err = dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-	err = client.Unmarshal(resp.N, &r2)
-	require.Equal(t, 1, len(r2.Root))
-	require.Equal(t, "Алиса", r2.Root[0].Name)
-}
-
 func TestSchemaError(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
-
 	req := client.Req{}
-	err := req.AddSchema(protos.SchemaUpdate{
+	err := req.AddSchema(&protos.SchemaUpdate{
 		Predicate: "dummy",
 		Tokenizer: []string{"term"},
 	})
@@ -346,7 +96,7 @@ func TestSchemaError(t *testing.T) {
 	require.Contains(t, err.Error(), "Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
 
 	req = client.Req{}
-	err = req.AddSchema(protos.SchemaUpdate{
+	err = req.AddSchema(&protos.SchemaUpdate{
 		Predicate: "dummy",
 		Directive: protos.SchemaUpdate_INDEX,
 	})
@@ -355,22 +105,6 @@ func TestSchemaError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Tokenizer must be specified while indexing a predicate")
 
-}
-
-func TestEmptyString(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
-	req := client.Req{}
-	alice, err := dgraphClient.NodeBlank("")
-	require.NoError(t, err)
-	e := alice.Edge("name")
-	require.NoError(t, e.SetValueString(""))
-	require.NoError(t, req.Set(e))
-	_, err = dgraphClient.Run(context.Background(), &req)
-	require.NoError(t, err)
 }
 
 func TestSetObject(t *testing.T) {
@@ -389,11 +123,6 @@ func TestSetObject(t *testing.T) {
 		School   *School  `json:"school,omitempty"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	loc := `{"type":"Point","coordinates":[1.1,2]}`
@@ -472,11 +201,6 @@ func TestSetObject(t *testing.T) {
 }
 
 func TestSetObject2(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	type School struct {
@@ -538,11 +262,6 @@ func TestDeleteObject1(t *testing.T) {
 		School   *School  `json:"school,omitempty"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	loc := `{"type":"Point","coordinates":[1.1,2]}`
@@ -653,11 +372,6 @@ func TestDeleteObject2(t *testing.T) {
 		School   *School  `json:"school"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	loc := `{"type":"Point","coordinates":[1.1,2]}`
@@ -755,11 +469,6 @@ func TestDeleteObject2(t *testing.T) {
 }
 
 func TestSetObjectWithFacets(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	type friendFacet struct {
@@ -861,11 +570,6 @@ func TestSetObjectWithFacets(t *testing.T) {
 }
 
 func TestSetObjectUpdateFacets(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	type friendFacet struct {
@@ -970,11 +674,6 @@ func TestDeleteObjectNode(t *testing.T) {
 		Friends []*Person `json:"friend,omitempty"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	p := Person{
@@ -1061,11 +760,6 @@ func TestDeleteObjectPredicate(t *testing.T) {
 		Friends []*Person `json:"friend,omitempty"`
 	}
 
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	p := Person{
@@ -1150,11 +844,6 @@ func TestDeleteObjectPredicate(t *testing.T) {
 }
 
 func TestObjectList(t *testing.T) {
-	dirs, options := prepare()
-	defer removeDirs(dirs)
-
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
-	defer dgraph.DisposeEmbeddedDgraph()
 	req := client.Req{}
 
 	type Person struct {
@@ -1238,4 +927,60 @@ func TestObjectList(t *testing.T) {
 
 	require.NoError(t, client.Unmarshal(resp.N, &r))
 	require.Equal(t, p2, r.Me)
+}
+
+func TestInitialSchema(t *testing.T) {
+	req := client.Req{}
+	req.DeleteAll()
+	_, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	req = client.Req{}
+
+	req.SetQuery(`schema{}`)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(resp.Schema))
+	s := resp.Schema[0]
+	require.Equal(t, x.PredicateListAttr, s.Predicate)
+	require.Equal(t, &protos.SchemaNode{
+		Predicate: x.PredicateListAttr,
+		List:      true,
+		Type:      "string",
+	}, s)
+
+	type Person struct {
+		Name string `json:"name,omitempty"`
+		Age  int    `json:"age,omitempty"`
+	}
+
+	p := Person{
+		Name: "Alice",
+		Age:  26,
+	}
+
+	req.SetSchema(`
+		age: int .
+	`)
+
+	err = req.SetObject(&p)
+	require.NoError(t, err)
+
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	puid := resp.AssignedUids["blank-0"]
+	q := fmt.Sprintf(`{
+		me(func: uid(%d)) {
+			_predicate_
+		}
+	}`, puid)
+
+	req = client.Req{}
+	req.SetQuery(q)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	r := resp.N[0].Children[0]
+	require.Equal(t, 2, len(r.Properties))
+
 }

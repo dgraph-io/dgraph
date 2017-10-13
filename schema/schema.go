@@ -36,50 +36,43 @@ const (
 )
 
 var (
-	pstate *stateGroup
+	pstate *state
 	pstore *badger.KV
 	syncCh chan SyncEntry
 )
 
-type stateGroup struct {
-	// Can have fine grained locking later if necessary, per group or predicate
-	sync.RWMutex // x.SafeMutex is slow.
-	// Map containing predicate to type information.
-	predicate map[string]*protos.SchemaUpdate
-	elog      trace.EventLog
-}
-
-func (s *stateGroup) init() {
+func (s *state) init() {
 	s.predicate = make(map[string]*protos.SchemaUpdate)
 	s.elog = trace.NewEventLog("Dgraph", "Schema")
 }
 
 type state struct {
 	sync.RWMutex
-	m    map[uint32]*stateGroup
-	elog trace.EventLog
+	// Map containing predicate to type information.
+	predicate map[string]*protos.SchemaUpdate
+	elog      trace.EventLog
 }
 
 // SateFor returns the schema for given group
-func State() *stateGroup {
+func State() *state {
 	return pstate
 }
 
-func (s *stateGroup) DeleteAll() {
+func (s *state) DeleteAll() {
 	s.Lock()
 	defer s.Unlock()
 
-	s.predicate = map[string]*protos.SchemaUpdate{
-		"_predicate_": &protos.SchemaUpdate{
-			ValueType: uint32(types.StringID),
-			List:      true,
-		},
+	for pred := range s.predicate {
+		// We set schema for _predicate_, hence it shouldn't be deleted.
+		if pred != x.PredicateListAttr {
+			delete(s.predicate, pred)
+		}
 	}
 }
 
 // Update updates the schema in memory and sends an entry to syncCh so that it can be
 // committed later
-func (s *stateGroup) Update(se SyncEntry) {
+func (s *state) Update(se SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -92,7 +85,7 @@ func (s *stateGroup) Update(se SyncEntry) {
 
 // Delete updates the schema in memory and sends an entry to syncCh so that it can be
 // committed later
-func (s *stateGroup) Delete(se SyncEntry) {
+func (s *state) Delete(se SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -105,7 +98,7 @@ func (s *stateGroup) Delete(se SyncEntry) {
 
 // Remove deletes the schema from memory and disk. Used after predicate move to do
 // cleanup
-func (s *stateGroup) Remove(predicate string) error {
+func (s *state) Remove(predicate string) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -125,7 +118,7 @@ func logUpdate(schema protos.SchemaUpdate, pred string) string {
 // Set sets the schema for given predicate in memory
 // schema mutations must flow through update function, which are
 // synced to db
-func (s *stateGroup) Set(pred string, schema protos.SchemaUpdate) {
+func (s *state) Set(pred string, schema protos.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
@@ -133,7 +126,7 @@ func (s *stateGroup) Set(pred string, schema protos.SchemaUpdate) {
 }
 
 // Get gets the schema for given predicate
-func (s *stateGroup) Get(pred string) (protos.SchemaUpdate, bool) {
+func (s *state) Get(pred string) (protos.SchemaUpdate, bool) {
 	s.Lock()
 	defer s.Unlock()
 	schema, has := s.predicate[pred]
@@ -144,7 +137,7 @@ func (s *stateGroup) Get(pred string) (protos.SchemaUpdate, bool) {
 }
 
 // TypeOf returns the schema type of predicate
-func (s *stateGroup) TypeOf(pred string) (types.TypeID, error) {
+func (s *state) TypeOf(pred string) (types.TypeID, error) {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -154,7 +147,7 @@ func (s *stateGroup) TypeOf(pred string) (types.TypeID, error) {
 }
 
 // IsIndexed returns whether the predicate is indexed or not
-func (s *stateGroup) IsIndexed(pred string) bool {
+func (s *state) IsIndexed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -164,7 +157,7 @@ func (s *stateGroup) IsIndexed(pred string) bool {
 }
 
 // IndexedFields returns the list of indexed fields
-func (s *stateGroup) IndexedFields() []string {
+func (s *state) IndexedFields() []string {
 	s.RLock()
 	defer s.RUnlock()
 	var out []string
@@ -177,7 +170,7 @@ func (s *stateGroup) IndexedFields() []string {
 }
 
 // Predicates returns the list of predicates for given group
-func (s *stateGroup) Predicates() []string {
+func (s *state) Predicates() []string {
 	s.RLock()
 	defer s.RUnlock()
 	out := make([]string, 0, len(s.predicate))
@@ -188,7 +181,7 @@ func (s *stateGroup) Predicates() []string {
 }
 
 // Tokenizer returns the tokenizer for given predicate
-func (s *stateGroup) Tokenizer(pred string) []tok.Tokenizer {
+func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 	s.RLock()
 	defer s.RUnlock()
 	schema, ok := s.predicate[pred]
@@ -203,7 +196,7 @@ func (s *stateGroup) Tokenizer(pred string) []tok.Tokenizer {
 }
 
 // TokenizerNames returns the tokenizer names for given predicate
-func (s *stateGroup) TokenizerNames(pred string) []string {
+func (s *state) TokenizerNames(pred string) []string {
 	s.RLock()
 	defer s.RUnlock()
 	schema, ok := s.predicate[pred]
@@ -218,7 +211,7 @@ func (s *stateGroup) TokenizerNames(pred string) []string {
 }
 
 // IsReversed returns whether the predicate has reverse edge or not
-func (s *stateGroup) IsReversed(pred string) bool {
+func (s *state) IsReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -228,7 +221,7 @@ func (s *stateGroup) IsReversed(pred string) bool {
 }
 
 // HasCount returns whether we want to mantain a count index for the given predicate or not.
-func (s *stateGroup) HasCount(pred string) bool {
+func (s *state) HasCount(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -238,7 +231,7 @@ func (s *stateGroup) HasCount(pred string) bool {
 }
 
 // IsList returns whether the predicate is of list type.
-func (s *stateGroup) IsList(pred string) bool {
+func (s *state) IsList(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -266,7 +259,11 @@ func LoadFromDb() error {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		attr := x.Parse(key).Attr
+		pk := x.Parse(key)
+		if pk == nil {
+			continue
+		}
+		attr := pk.Attr
 		var s protos.SchemaUpdate
 		err := item.Value(func(val []byte) error {
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
@@ -277,15 +274,11 @@ func LoadFromDb() error {
 		}
 		State().Set(attr, s)
 	}
-	State().Set("_predicate_", protos.SchemaUpdate{
-		ValueType: uint32(types.StringID),
-		List:      true,
-	})
 	return nil
 }
 
 func reset() {
-	pstate = new(stateGroup)
+	pstate = new(state)
 	pstate.init()
 }
 

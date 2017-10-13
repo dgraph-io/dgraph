@@ -209,6 +209,10 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			// We shouldn't allow more members than the number of replicas.
 			return p.Id, errInvalidProposal
 		}
+
+		// Create a connection to this server.
+		go conn.Get().Connect(p.Member.Addr)
+
 		group.Members[p.Member.Id] = p.Member
 		// On replay of logs on restart we need to set nextGroup.
 		if n.server.nextGroup <= p.Member.GroupId {
@@ -242,15 +246,14 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		group.Tablets[p.Tablet.Predicate] = p.Tablet
 	}
+
 	if p.MaxLeaseId > state.MaxLeaseId {
 		state.MaxLeaseId = p.MaxLeaseId
-	} else if p.MaxLeaseId != 0 {
-		x.Printf("Could not apply lease, ignoring: proposedLease=%d existingLease=%d",
-			p.MaxLeaseId, state.MaxLeaseId)
-	}
-	if p.MaxLeaseId == 0 {
-		// Don't show lease proposals - they occur too frequently to be useful.
-		x.Printf("Applied proposal: %+v\n", p)
+	} else if p.MaxTxnTs > state.MaxTxnTs {
+		state.MaxTxnTs = p.MaxTxnTs
+	} else if p.MaxLeaseId != 0 || p.MaxTxnTs != 0 {
+		x.Printf("Could not apply lease, ignoring: proposedLease=%v maxLeaseId=%d maxTxnTs=%d",
+			p, state.MaxLeaseId, state.MaxTxnTs)
 	}
 	return p.Id, nil
 }
@@ -410,7 +413,7 @@ func (n *node) Run() {
 			// TODO: Should we move this to the top?
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
-					n.server.updateNextLeaseId()
+					n.server.updateLeases()
 					leader = true
 				}
 				n.triggerLeaderChange()

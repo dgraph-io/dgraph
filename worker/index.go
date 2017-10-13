@@ -93,10 +93,6 @@ func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) error {
 	return waitForSyncMark(ctx, n.gid, lastIndex)
 }
 
-func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) error {
-	return waitForSyncMark(ctx, n.gid, lastIndex)
-}
-
 func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) error {
 	// Wait for posting lists applying.
 	w := posting.SyncMarks()

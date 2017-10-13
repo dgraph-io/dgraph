@@ -134,6 +134,10 @@ func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*proto
 	return in, nil
 }
 
+func (z *zeroServer) Timestamps(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
+	return &protos.AssignedIds{}, nil
+}
+
 func StartDummyZero() *grpc.Server {
 	ln, err := net.Listen("tcp", "localhost:12341")
 	x.Check(err)
@@ -1943,7 +1947,7 @@ func TestMain(m *testing.M) {
 	dc := dgraph.DefaultConfig
 	dc.AllottedMemory = 2048.0
 	dgraph.SetConfiguration(dc)
-	x.Init()
+	x.Init(true)
 
 	dir1, dir2, _ := prepare()
 	time.Sleep(10 * time.Millisecond)

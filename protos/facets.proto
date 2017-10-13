@@ -19,6 +19,8 @@ syntax = "proto3";
 
 package protos;
 
+option java_package = "io.dgraph.proto";
+
 message Facet {
 	enum ValType {
 	     STRING = 0;

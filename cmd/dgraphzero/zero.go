@@ -54,7 +54,8 @@ type Server struct {
 	state       *protos.MembershipState
 
 	nextLeaseId uint64
-	leaseLock   sync.Mutex // protects nextLeaseId and lease proposals.
+	nextTxnTs   uint64
+	leaseLock   sync.Mutex // protects nextLeaseId, nextTxnTs and corresponding proposals.
 
 	// groupMap    map[uint32]*Group
 	nextGroup      uint32
@@ -71,6 +72,7 @@ func (s *Server) Init() {
 		Zeros:  make(map[uint64]*protos.Member),
 	}
 	s.nextLeaseId = 1
+	s.nextTxnTs = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.shutDownCh = make(chan struct{}, 1)
@@ -252,10 +254,12 @@ func (s *Server) Connect(ctx context.Context,
 		if !has {
 			break
 		}
-		conn.Get().Connect(member.Addr)
-		// Healthy connection exists to a machine with same id
-		if _, err := conn.Get().Get(member.Addr); err == nil {
-			return &emptyMembershipState, conn.ErrDuplicateRaftId
+		if member.Addr != m.Addr {
+			// Different address, then check if the last one is healthy or not.
+			if _, err := conn.Get().Get(member.Addr); err == nil {
+				// Healthy conn to the existing member with the same id.
+				return &emptyMembershipState, conn.ErrDuplicateRaftId
+			}
 		}
 	}
 	// Create a connection and check validity of the address by doing an Echo.

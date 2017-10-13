@@ -22,7 +22,6 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/protos"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1526,88 +1525,8 @@ func TestParseMutation(t *testing.T) {
 			}
 		}
 	`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.EqualValues(t, protos.NQuad{
-		Subject: "name", Predicate: "is", ObjectId: "something"},
-		*res.Mutation.Set[0])
-	require.EqualValues(t, protos.NQuad{
-		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
-		*res.Mutation.Set[1])
-	require.EqualValues(t, protos.NQuad{
-		Subject: "name", Predicate: "is", ObjectId: "something-else"},
-		*res.Mutation.Del[0])
-}
-
-func TestParseMutation_error1A(t *testing.T) {
-	query := `
-		mutation {
-			set {
-				<name> <is> <something> .
-				<hometown> <is> <san francisco> .
-			}
-			delete {
-				<name> <is> <something-else> .
-			}
-		}
-	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Unexpected character ' ' while parsing IRI")
-}
-
-func TestParseMutation_error1B(t *testing.T) {
-	query := `
-		mutation {
-			set {
-				<name> <is> <something> .
-				<hometown> <is> <san-francisco> .
-			}
-			delete {
-				<name> <is> <something-else> .
-		}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid mutation")
-}
-func TestParseMutation_error1C(t *testing.T) {
-	query := `
-		mutation {
-			set {
-				<name> <is> <something> .
-				<hometown> <is> <san-francisco> .
-			}
-			delete {
-				<name> <is> <something-else> .
-			}
-		}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-}
-
-func TestParseMutation_error2(t *testing.T) {
-	query := `
-		mutation {
-			set {
-				<name> <is> <something> .
-				<hometown> <is> <san-francisco> .
-			}
-			delete {
-				<name> <is> <something-else> .
-			}
-		}
-		mutation {
-			set {
-				another one?
-			}
-		}
-
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only one mutation block allowed.")
 }
 
 func TestParseMutationAndQueryWithComments(t *testing.T) {
@@ -1632,58 +1551,8 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 			}
 		}
 	`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.NotNil(t, res.Mutation)
-	require.EqualValues(t, protos.NQuad{
-		Subject: "name", Predicate: "is", ObjectId: "something"},
-		*res.Mutation.Set[0])
-	require.EqualValues(t, protos.NQuad{
-		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
-		*res.Mutation.Set[1])
-	require.EqualValues(t, protos.NQuad{
-		Subject: "name", Predicate: "is", ObjectId: "something-else"},
-		*res.Mutation.Del[0])
-
-	require.NotNil(t, res.Query[0])
-	//	require.Equal(t, 1, len(res.Query[0].UID))
-	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
-}
-
-func TestParseMutationAndQuery(t *testing.T) {
-	query := `
-		mutation {
-			set {
-				<name> <is> <something> .
-				<hometown> <is> <san/francisco> .
-			}
-			delete {
-				<name> <is> <something-else> .
-			}
-		}
-		query {
-			me(func: uid( 0x5)) {
-				name
-				hometown
-			}
-		}
-	`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.NotNil(t, res.Mutation)
-	require.EqualValues(t, protos.NQuad{
-		Subject: "name", Predicate: "is", ObjectId: "something"},
-		*res.Mutation.Set[0])
-	require.EqualValues(t, protos.NQuad{
-		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
-		*res.Mutation.Set[1])
-	require.EqualValues(t, protos.NQuad{
-		Subject: "name", Predicate: "is", ObjectId: "something-else"},
-		*res.Mutation.Del[0])
-
-	require.NotNil(t, res.Query[0])
-	//	require.Equal(t, 1, len(res.Query[0].UID))
-	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
 }
 
 func TestParseFragmentMultiQuery(t *testing.T) {
@@ -2765,95 +2634,6 @@ func TestParseIRIRefInvalidChar(t *testing.T) {
 	require.Contains(t, err.Error(), "Unexpected character '^' while parsing IRI")
 }
 
-func TestMutationOpenBrace(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			<m.0jx79w>  <type.object.name>  "Emma Miller {documentary actor)"@en .
-		}
-	}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-}
-
-func TestMutationCloseBrace(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			<m.0jx79w>  <type.object.name>  "Emma Miller }documentary actor)"@en .
-		}
-	}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-}
-
-func TestMutationOpenCloseBrace(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			<m.0jx79w>  <type.object.name>  "Emma Miller {documentary actor})"@en .
-		}
-	}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-}
-
-func TestMutationQuotes(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			<m.05vb159>  <type.object.name> "\"Maison de Hoodle, Satoko Tachibana"@en  .
-		}
-	}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-}
-
-func TestMutationSingleQuote(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			_:gabe <name> "Gabe' .
-		}
-	}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid mutation formatting")
-}
-
-func TestMutationDoubleQuote(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			_:gabe <name> "Gabe" .
-		}
-	}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-}
-
-func TestMutationSchema(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			<m.05vb159>  <type.object.name> "\"Maison de Hoodle, Satoko Tachibana"@en  .
-		}
-		schema {
-           name: string @index(exact)
-		}
-	}
-	`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.Equal(t, res.Mutation.Schema, "\n           name: string @index(exact)\n\t\t")
-}
-
 func TestLangs(t *testing.T) {
 	query := `
 	query {
@@ -3904,65 +3684,6 @@ func TestDotsEOF(t *testing.T) {
 	require.Contains(t, err.Error(), "Expected 3 periods")
 }
 
-func TestMutationVariables(t *testing.T) {
-	query := `
-		mutation {
-			set {
-				uid(adults) <isadult> "true" .
-				<0x900> <b> <0x901> .
-			}
-		}
-		{
-			me(func: uid( 0x900)) {
-				adults as friends @filter(gt(age, 18))
-			}
-		}
-	`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-
-	require.Equal(t, 1, len(res.MutationVars))
-
-	require.EqualValues(t, "adults", res.MutationVars[0])
-
-	expected := protos.NQuad{
-		Predicate:   "isadult",
-		ObjectValue: &protos.Value{&protos.Value_DefaultVal{"true"}},
-		SubjectVar:  "adults",
-	}
-	require.EqualValues(t, expected, *res.Mutation.Set[0])
-}
-
-func TestMutationVariables2(t *testing.T) {
-	query := `
-		mutation {
-			set {
-				uid(adults) <isadult> uid(engineer) .
-				<0x900> <b> <0x901> .
-			}
-		}
-		{
-			me(func: uid( 0x900)) {
-				adults as friends @filter(gt(age, 18))
-			}
-			engineer as me(func: uid(0x1))
-		}
-	`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-
-	require.Equal(t, 2, len(res.MutationVars))
-
-	require.EqualValues(t, []string{"adults", "engineer"}, res.MutationVars)
-
-	expected := protos.NQuad{
-		Predicate:  "isadult",
-		ObjectVar:  "engineer",
-		SubjectVar: "adults",
-	}
-	require.EqualValues(t, expected, *res.Mutation.Set[0])
-}
-
 func TestMathWithoutVarAlias(t *testing.T) {
 	query := `{
 			f(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -4107,44 +3828,6 @@ func TestFilterUid(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []uint64{1, 3, 5, 7}, gql.Query[0].UID)
 	require.Equal(t, []uint64{3, 7}, gql.Query[0].Filter.Func.UID)
-}
-
-func TestMultipleSetBlocks(t *testing.T) {
-	query := `
-	mutation {
-      set { <0x01> <name> "Bob"@en . }
-      set { <0x01> <name> "Sam" . }
-    }
-
-`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Multiple 'set' blocks not allowed")
-}
-
-func TestMultipleDelBlocks(t *testing.T) {
-	query := `
-	mutation {
-      delete { <0x01> <name> "Bob"@en . }
-      delete { <0x01> <name> "Sam" . }
-    }
-`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Multiple 'delete' blocks not allowed")
-
-}
-
-func TestMultipleSchemaBlocks(t *testing.T) {
-	query := `
-	mutation {
-		schema { name: string @index(term) }
-		schema { tag: string @index(exact) }
-    }
-`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Multiple 'schema' blocks not allowed")
 }
 
 func TestIdErr(t *testing.T) {

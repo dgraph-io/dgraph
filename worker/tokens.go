@@ -151,7 +151,9 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	for it.Seek(x.IndexKey(attr, ineqToken)); it.ValidForPrefix(indexPrefix); it.Next() {
 		key := it.Item().Key()
 		k := x.Parse(key)
-		x.AssertTrue(k != nil)
+		if k == nil {
+			continue
+		}
 		out = append(out, k.Term)
 	}
 	return out, ineqToken, nil

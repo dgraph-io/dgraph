@@ -35,12 +35,11 @@ func GetDefaultEmbeddedConfig() Options {
 	return config
 }
 
-func NewEmbeddedDgraphClient(config Options, opts client.BatchMutationOptions,
-	clientDir string) *client.Dgraph {
+func NewEmbeddedDgraphClient(config Options) *client.Dgraph {
 
 	SetConfiguration(config)
 
-	x.Init()
+	x.Init(config.DebugMode)
 	State = NewServerState()
 	schema.Init(State.Pstore)
 	posting.Init(State.Pstore)
@@ -48,7 +47,7 @@ func NewEmbeddedDgraphClient(config Options, opts client.BatchMutationOptions,
 	worker.StartRaftNodes(State.WALstore, false)
 
 	embedded := &inmemoryClient{&Server{}}
-	return client.NewClient([]protos.DgraphClient{embedded}, opts, clientDir)
+	return client.NewClient([]protos.DgraphClient{embedded})
 }
 
 func DisposeEmbeddedDgraph() {

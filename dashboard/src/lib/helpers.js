@@ -212,7 +212,7 @@ export function executeQuery(query, debug) {
  *
  */
 export const getSharedQuery = shareId => {
-  fetch(getEndpoint("query"), {
+  return fetch(getEndpoint("query"), {
     method: "POST",
     mode: "cors",
     headers: {
@@ -227,12 +227,7 @@ export const getSharedQuery = shareId => {
     .then(checkStatus)
     .then(response => response.json())
     .then(function(result) {
-      if (
-        result.data &&
-        result.data.query &&
-        result.data.query.length > 0 &&
-        result.data.query[0]._share_
-      ) {
+      if (result.data.query.length > 0 && result.data.query[0]._share_) {
         const query = decodeURI(result.data.query[0]._share_);
         return query;
       } else {

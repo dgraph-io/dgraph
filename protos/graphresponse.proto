@@ -21,10 +21,18 @@ import "schema.proto";
 
 package protos;
 
+option java_package = "io.dgraph.proto";
+
 service Dgraph {
+  // TODO(mrjn): Rename it to Query.
     rpc Run (Request) returns (Response) {};
+    rpc Mutate (Mutation) returns (Assigned) {};
     rpc CheckVersion(Check) returns (Version) {};
     rpc AssignUids(Num) returns (AssignedIds) {};
+}
+
+message Assigned {
+  map<string, uint64> Uids = 1;
 }
 
 message Num {
@@ -65,42 +73,36 @@ message Value {
 }
 
 message Mutation {
-    repeated NQuad set = 1;
-    repeated NQuad del = 2;
+    bytes set_json = 1;
+    bytes delete_json = 2;
     repeated SchemaUpdate schema = 3;
-    bytes set_json = 4;
-    bytes delete_json = 5;
-    bool DropAll = 6;
+
+    uint64 start_ts = 13;
+    bool DropAll = 14;
+
+    repeated NQuad set = 15;
+    repeated NQuad del = 16;
+
 }
 
 message Request {
     string query = 1;
-    Mutation mutation = 2;
     SchemaRequest schema = 3;
     map<string, string> vars = 4; // Support for GraphQL like variables.
+
+    uint64 start_ts = 13;
+    Mutation mutation = 100;
 }
 
 message Latency {
     string parsing = 1;
     string processing = 2;
-    string pb = 3;
-}
-
-message Property {
-    string prop = 1;
-    Value value = 2;
-}
-
-message Node {
-    string attribute = 1;
-    repeated Property properties = 2;
-    repeated Node children = 3; // Each node can have multiple children
+    string encoding = 3;
 }
 
 message Response {
-    repeated Node n = 1;
-    Latency l = 2;
-    map<string, uint64> AssignedUids = 3;
+    bytes json = 1;
+    Latency latency = 2;
     repeated SchemaNode schema = 4;
 }
 

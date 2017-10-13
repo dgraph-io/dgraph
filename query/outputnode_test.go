@@ -17,10 +17,8 @@
 package query
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"runtime"
 	"sync"
 	"testing"
@@ -51,45 +49,13 @@ func TestEncodeMemory(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < 1000; i++ {
-				n.encode(bufio.NewWriter(ioutil.Discard))
+				var buf bytes.Buffer
+				n.encode(&buf)
 			}
 		}()
 	}
 
 	wg.Wait()
-}
-
-func TestNormalizePBLimit(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping TestNormalizePBLimit")
-	}
-
-	n := (&protoNode{}).New("root")
-	require.NotNil(t, n)
-	for i := 0; i < 1000; i++ {
-		n.AddValue(fmt.Sprintf("very long attr name %06d", i),
-			types.ValueForType(types.StringID))
-		child1 := n.New("child1")
-		n.AddListChild("child1", child1)
-		for j := 0; j < 100; j++ {
-			child1.AddValue(fmt.Sprintf("long child1 attr %06d", j),
-				types.ValueForType(types.StringID))
-		}
-		child2 := n.New("child2")
-		n.AddListChild("child2", child2)
-		for j := 0; j < 100; j++ {
-			child2.AddValue(fmt.Sprintf("long child2 attr %06d", j),
-				types.ValueForType(types.StringID))
-		}
-		child3 := n.New("child3")
-		n.AddListChild("child3", child3)
-		for j := 0; j < 100; j++ {
-			child3.AddValue(fmt.Sprintf("long child3 attr %06d", j),
-				types.ValueForType(types.StringID))
-		}
-	}
-	_, err := n.(*protoNode).normalize()
-	require.Error(t, err, "Couldn't evaluate @normalize directive - to many results")
 }
 
 func TestNormalizeJSONLimit(t *testing.T) {
@@ -152,9 +118,7 @@ func TestNormalizeJSONUid1(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	buf := bufio.NewWriter(&b)
-	nn.(*fastJsonNode).encode(buf)
-	buf.Flush()
+	nn.(*fastJsonNode).encode(&b)
 	require.Equal(t, `{"alias":[{"_uid_":"0x3","attr1":"","attr2":"","attr3":""}]}`, b.String())
 }
 
@@ -185,8 +149,6 @@ func TestNormalizeJSONUid2(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	buf := bufio.NewWriter(&b)
-	nn.(*fastJsonNode).encode(buf)
-	buf.Flush()
+	nn.(*fastJsonNode).encode(&b)
 	require.Equal(t, `{"alias":[{"___attr1":"","___attr2":"","_uid_":"0x3","attr3":""}]}`, b.String())
 }

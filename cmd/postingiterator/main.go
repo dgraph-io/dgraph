@@ -32,7 +32,7 @@ var (
 
 func main() {
 	flag.Parse()
-	x.Init()
+	x.Init(true)
 
 	// All the writes to posting store should be synchronous. We use batched writers
 	// for posting lists, so the cost of sync writes is amortized.

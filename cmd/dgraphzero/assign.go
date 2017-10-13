@@ -35,10 +35,11 @@ const (
 	leaseBandwidth = uint64(10000)
 )
 
-func (s *Server) updateNextLeaseId() {
+func (s *Server) updateLeases() {
 	s.Lock()
 	defer s.Unlock()
 	s.nextLeaseId = s.state.MaxLeaseId + 1
+	s.nextTxnTs = s.state.MaxTxnTs + 1
 }
 
 func (s *Server) maxLeaseId() uint64 {
@@ -47,17 +48,23 @@ func (s *Server) maxLeaseId() uint64 {
 	return s.state.MaxLeaseId
 }
 
-// assignUids returns a byte slice containing uids.
+func (s *Server) maxTxnTs() uint64 {
+	s.RLock()
+	defer s.RUnlock()
+	return s.state.MaxTxnTs
+}
+
+// lease would either allocate ids or timestamps.
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the leasemanager
 // In essence, we just want one server to be handing out new uids.
-func (s *Server) assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+func (s *Server) lease(ctx context.Context, num *protos.Num, txn bool) (*protos.AssignedIds, error) {
 	node := s.Node
 	// TODO: Fix when we move to linearizable reads, need to check if we are the leader, might be
 	// based on leader leases. If this node gets partitioned and unless checkquorum is enabled, this
 	// node would still think that it's the leader.
 	if !node.AmLeader() {
-		return &emptyAssignedIds, x.Errorf("Assigning UIDs is only allowed on leader.")
+		return &emptyAssignedIds, x.Errorf("Assigning IDs is only allowed on leader.")
 	}
 
 	val := int(num.Val)
@@ -73,27 +80,40 @@ func (s *Server) assignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 		howMany = num.Val + leaseBandwidth
 	}
 
-	if s.nextLeaseId == 0 {
+	if s.nextLeaseId == 0 || s.nextTxnTs == 0 {
 		return nil, errors.New("Server not initialized.")
 	}
 
-	maxLease := s.maxLeaseId()
-	available := maxLease - s.nextLeaseId + 1
+	var maxLease, available uint64
+	var proposal protos.ZeroProposal
+
+	if txn {
+		maxLease = s.maxTxnTs()
+		available = maxLease - s.nextTxnTs + 1
+		proposal.MaxTxnTs = maxLease + howMany
+	} else {
+		maxLease = s.maxLeaseId()
+		available = maxLease - s.nextLeaseId + 1
+		proposal.MaxLeaseId = maxLease + howMany
+	}
 
 	if available < num.Val {
-		var proposal protos.ZeroProposal
-		proposal.MaxLeaseId = maxLease + howMany
-
+		// Blocking propose to get more ids or timestamps.
 		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
 			return nil, err
 		}
-		x.AssertTrue(s.maxLeaseId() == proposal.MaxLeaseId)
 	}
 
 	out := &protos.AssignedIds{}
-	out.StartId = s.nextLeaseId
-	out.EndId = out.StartId + num.Val - 1
-	s.nextLeaseId = out.EndId + 1
+	if txn {
+		out.StartId = s.nextTxnTs
+		out.EndId = out.StartId + num.Val - 1
+		s.nextTxnTs = out.EndId + 1
+	} else {
+		out.StartId = s.nextLeaseId
+		out.EndId = out.StartId + num.Val - 1
+		s.nextLeaseId = out.EndId + 1
+	}
 	return out, nil
 }
 
@@ -109,7 +129,29 @@ func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply, err = s.assignUids(ctx, num)
+		reply, err = s.lease(ctx, num, false)
+		c <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return reply, ctx.Err()
+	case err := <-c:
+		return reply, err
+	}
+}
+
+// Timestamps is used to assign new transaction
+func (s *Server) Timestamps(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	if ctx.Err() != nil {
+		return &emptyAssignedIds, ctx.Err()
+	}
+
+	reply := &emptyAssignedIds
+	c := make(chan error, 1)
+	go func() {
+		var err error
+		reply, err = s.lease(ctx, num, true)
 		c <- err
 	}()
 

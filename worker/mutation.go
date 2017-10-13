@@ -55,7 +55,10 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 	x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
 	if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
-		waitForSyncMark(ctx, 0, rv.Index-1)
+		n := groups().Node
+		if err = n.syncAllMarks(ctx, rv.Index-1); err != nil {
+			return err
+		}
 		if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
 			return err
 		}
@@ -90,7 +93,9 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	// Wait for applied watermark to reach till previous index
 	// All mutations before this should use old schema and after this
 	// should use new schema
-	n.waitForSyncMark(n.ctx, rv.Index-1)
+	if err := n.syncAllMarks(n.ctx, rv.Index-1); err != nil {
+		return err
+	}
 	if !groups().ServesTablet(update.Predicate) {
 		return errUnservedTablet
 	}
@@ -395,14 +400,6 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 			mutationMap[gid] = mu
 		}
 		mu.Schema = append(mu.Schema, schema)
-	}
-
-	if m.Upsert != nil {
-		gid := groups().BelongsTo(m.Upsert.Attr)
-		mu := mutationMap[gid]
-		// There should also be a corresponding mutation for this attribute when doing upsert.
-		x.AssertTrue(mu != nil)
-		mu.Upsert = m.Upsert
 	}
 
 	if m.DropAll {

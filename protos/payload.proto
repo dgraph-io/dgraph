@@ -22,6 +22,8 @@ import "task.proto";
 
 package protos;
 
+option java_package = "io.dgraph.proto";
+
 message Payload {
 	bytes Data = 1;
 }
@@ -49,29 +51,28 @@ message ExportPayload {
 }
 
 service Raft {
-	// Connection testing RPC.
-	rpc Echo (Payload)             returns (Payload) {}
-
+	rpc Echo (Payload)            returns (Payload) {}
 	rpc RaftMessage (Payload)     returns (Payload) {}
 	rpc JoinCluster (RaftContext) returns (Payload) {}
 }
 
 service Zero {
-	rpc Connect (Member) returns (MembershipState) {}
-	rpc Update (stream Group)  returns (stream MembershipState) {}
-	rpc ShouldServe (Tablet) returns (Tablet) {}
-	rpc AssignUids (Num)                 returns (AssignedIds) {}
+	rpc Connect (Member)      returns (MembershipState) {}
+	rpc Update (stream Group) returns (stream MembershipState) {}
+	rpc ShouldServe (Tablet)  returns (Tablet) {}
+	rpc AssignUids (Num)      returns (AssignedIds) {}
+  rpc Timestamps (Num)      returns (AssignedIds) {}
 }
 
 service Worker {
 	// Data serving RPCs.
-	rpc Mutate (Mutations)               returns (Payload) {}
-	rpc ServeTask (Query)                returns (Result) {}
+	rpc Mutate (Mutations)                        returns (Payload) {}
+	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
-	rpc Sort (SortMessage)                      returns (SortResult) {}
-	rpc Schema (SchemaRequest)                  returns (SchemaResult) {}
+	rpc Sort (SortMessage)                        returns (SortResult) {}
+	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
 
-	rpc Export (ExportPayload)                    returns (ExportPayload) {}
-	rpc ReceivePredicate(stream KV) returns (Payload) {}
+	rpc Export (ExportPayload)              returns (ExportPayload) {}
+	rpc ReceivePredicate(stream KV)         returns (Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (Payload) {}
 }

@@ -56,8 +56,10 @@ func getSchema(ctx context.Context, s *protos.SchemaRequest) (*protos.SchemaResu
 	}
 
 	for _, attr := range predicates {
+		// This can happen after a predicate is moved. We don't delete predicate from schema state
+		// immediately. So lets ignore this predicate.
 		if !groups().ServesTablet(attr) {
-			return &emptySchemaResult, errUnservedTablet
+			continue
 		}
 		if schemaNode := populateSchema(attr, fields); schemaNode != nil {
 			result.Schema = append(result.Schema, schemaNode)
@@ -161,6 +163,8 @@ func GetSchemaOverNetwork(ctx context.Context, schema *protos.SchemaRequest) ([]
 		}
 		return nil, err
 	}
+
+	// Map of groupd id => Predicates for that group.
 	schemaMap := make(map[uint32]*protos.SchemaRequest)
 	addToSchemaMap(schemaMap, schema)
 

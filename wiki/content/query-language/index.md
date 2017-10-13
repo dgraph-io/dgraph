@@ -388,13 +388,11 @@ Following table contains all supported languages and corresponding country-codes
 
 Query Example: All names that have `run`, `running`, etc and `man`.  Stop word removal eliminates `the` and `maybe`
 
-{{< runnable >}}
 {
   movie(func:alloftext(name@en, "the man maybe runs")) {
 	 name@en
   }
 }
-{{< /runnable >}}
 
 
 ### Inequality

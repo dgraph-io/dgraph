@@ -1,12 +1,18 @@
 #!/bin/bash
 set -e
 
+# TODO (pawan) - This file declares a lot of redundant variables. Simplify it.
 # This script is run when
 # 1. A cronjob is run on master which happens everyday and updates the nightly tag.
 # 2. A new tag is pushed i.e. when we make a new release.
 # 3. A release is updated.
 run_upload_script() {
-	if [[ $TRAVIS_TAG == "nightly" ]]; then
+  # So that script can run locally too.
+  if [[ "$TRAVIS" != true ]]; then
+    return 0
+  fi
+
+  if [[ $TRAVIS_TAG == "nightly" ]]; then
 		# We create nightly tag using the script so we don't want to run this script
 		# when the nightly build is triggered on updating where the commit points too.
 		echo "Nightly tag. Skipping script"
@@ -14,7 +20,7 @@ run_upload_script() {
 	fi
 
 	# We run a cron job daily on Travis which will update the nightly binaries.
-	if [ $TRAVIS_EVENT_TYPE == "cron" ] && [ "$TRAVIS" = true ]; then
+	if [ $TRAVIS_EVENT_TYPE == "cron" ]; then
 		if [ "$TRAVIS_BRANCH"  != "master" ];then
 			echo "Cron job can only be run on master branch"
 			return 1
@@ -102,7 +108,8 @@ source ${BUILD_DIR}/nightly/github.sh
 
 DGRAPH_REPO="dgraph-io/dgraph"
 DGRAPH_VERSION=$(get_version)
-LATEST_TAG=$(git describe --abbrev=0)
+LATEST_TAG=$(curl -s https://api.github.com/repos/dgraph-io/dgraph/releases/latest \
+ | grep "tag_name" | awk '{print $2}' | tr -dc '[:alnum:]-.\n\r' | head -n1)
 DGRAPH_COMMIT=$(git rev-parse HEAD)
 TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
 NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
@@ -111,6 +118,9 @@ SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
 ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 CURRENT_BRANCH=$TRAVIS_BRANCH
 CURRENT_DIR=$(pwd)
+
+WINDOWS_TAR_NAME="dgraph-windows-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
+NIGHTLY_WINDOWS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/$WINDOWS_TAR_NAME"
 
 update_or_create_asset() {
 	local release_id=$1
@@ -173,10 +183,10 @@ upload_assets() {
 	local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
 	update_or_create_asset $release_id $sha_name ${SHA_FILE}
 
-
 	if [[ $TRAVIS_OS_NAME == "linux" ]]; then
 		# As asset would be the same on both platforms, we only upload it from linux.
 		update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
+		update_or_create_asset $release_id $WINDOWS_TAR_NAME ${NIGHTLY_WINDOWS_FILE}
 
 		# We dont want to update description programatically for version releases and commit apart from
 		# nightly.
@@ -198,7 +208,7 @@ upload_assets() {
 DOCKER_TAG=""
 docker_tag() {
 	if [[ $BUILD_TAG == "nightly" ]]; then
-		DOCKER_TAG=$CURRENT_BRANCH
+		DOCKER_TAG="master"
 	else
 		DOCKER_TAG=$DGRAPH_VERSION
 	fi
@@ -244,8 +254,16 @@ upload_docker_image() {
 }
 
 pushd $DGRAPH > /dev/null
-echo "Building embedded binaries"
 contrib/releases/build.sh $ASSET_SUFFIX
+if [[ $TRAVIS_OS_NAME == "linux" ]]; then
+	contrib/releases/build-windows.sh $ASSET_SUFFIX
+fi
+
+if [[ $DOCKER_TAG == "" ]]; then
+  echo -e "No docker tag found. Exiting the script"
+  exit 0
+fi
+
 build_docker_image
 
 if [ "$TRAVIS" = true ]; then

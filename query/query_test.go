@@ -18,7 +18,6 @@
 package query
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -36,12 +35,10 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
-	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -436,17 +433,14 @@ func TestReturnUids(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 	require.NoError(t, err)
 
-	var buf bytes.Buffer
-	mp := map[string]string{
-		"a": "123",
-	}
-	require.NoError(t, ToJson(qr.Latency, qr.Subgraphs, &buf, mp, false))
-	js := buf.String()
+	buf, err := ToJson(qr.Latency, qr.Subgraphs)
+	require.NoError(t, err)
+	js := string(buf)
 	require.JSONEq(t,
-		`{"data": {"uids":{"a":"123"},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
 }
 
@@ -1078,7 +1072,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
 }
 
@@ -1120,87 +1114,6 @@ func TestQueryVarValOrderDescMissing(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me": []}}`, js)
-}
-
-func TestGroupByRootProto(t *testing.T) {
-	populateGraph(t)
-	query := `
-	{
-		me(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
-				count(_uid_)
-		}
-	}
-	`
-	pb := processToPB(t, query, map[string]string{}, false)
-	resreq := `attribute: "_root_"
-children: <
-  attribute: "me"
-  children: <
-    attribute: "@groupby"
-    properties: <
-      prop: "age"
-      value: <
-        int_val: 17
-      >
-    >
-    properties: <
-      prop: "count"
-      value: <
-        int_val: 1
-      >
-    >
-  >
-  children: <
-    attribute: "@groupby"
-    properties: <
-      prop: "age"
-      value: <
-        int_val: 19
-      >
-    >
-    properties: <
-      prop: "count"
-      value: <
-        int_val: 1
-      >
-    >
-  >
-  children: <
-    attribute: "@groupby"
-    properties: <
-      prop: "age"
-      value: <
-        int_val: 38
-      >
-    >
-    properties: <
-      prop: "count"
-      value: <
-        int_val: 1
-      >
-    >
-  >
-  children: <
-    attribute: "@groupby"
-    properties: <
-      prop: "age"
-      value: <
-        int_val: 15
-      >
-    >
-    properties: <
-      prop: "count"
-      value: <
-        int_val: 2
-      >
-    >
-  >
->
-`
-	res := proto.MarshalTextString(pb[0])
-	require.EqualValues(t,
-		resreq,
-		res)
 }
 
 func TestGroupByRoot(t *testing.T) {
@@ -1532,7 +1445,7 @@ func TestDoubleOrder(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -1577,7 +1490,7 @@ func TestVarInIneqError(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 
 	require.Error(t, err)
 }
@@ -1871,7 +1784,7 @@ func TestShortestPath_ExpandError(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -2063,7 +1976,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -2285,30 +2198,20 @@ func TestDebug1(t *testing.T) {
 
 	ctx := context.WithValue(defaultContext(), "debug", "true")
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 
 	require.NoError(t, err)
 
-	var buf bytes.Buffer
-	require.NoError(t, ToJson(qr.Latency, qr.Subgraphs, &buf, nil, true))
+	buf, err := ToJson(qr.Latency, qr.Subgraphs)
+	require.NoError(t, err)
 
 	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
+	require.NoError(t, json.Unmarshal(buf, &mp))
 
 	data := mp["data"].(map[string]interface{})
 	resp := data["me"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
-
-	extensions := mp["extensions"]
-	require.NotNil(t, extensions)
-	ext, ok := extensions.(map[string]interface{})
-	require.True(t, ok)
-	latency := ext["server_latency"]
-	require.NotNil(t, latency)
-	lat, ok := latency.(map[string]interface{})
-	require.True(t, ok)
-	require.Equal(t, 4, len(lat))
 }
 
 func TestDebug2(t *testing.T) {
@@ -2351,14 +2254,14 @@ func TestDebug3(t *testing.T) {
 	ctx := context.WithValue(defaultContext(), "debug", "true")
 
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 	require.NoError(t, err)
 
-	var buf bytes.Buffer
-	require.NoError(t, ToJson(qr.Latency, qr.Subgraphs, &buf, nil, true))
+	buf, err := ToJson(qr.Latency, qr.Subgraphs)
+	require.NoError(t, err)
 
 	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
+	require.NoError(t, json.Unmarshal(buf, &mp))
 
 	resp := mp["data"].(map[string]interface{})["me"]
 	require.NotNil(t, resp)
@@ -2462,30 +2365,6 @@ func TestCountError3(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCountDoNotTrackZeroCount(t *testing.T) {
-	populateGraph(t)
-	query := `
-	mutation{
-		schema{
-			aoeu: uid @count .
-		}
-		set{
-			_:a <aoeu> _:b .
-		}
-		delete{
-			* <aoeu> * .
-		}
-	}
-	{
-		q(func: lt(count(aoeu), 5)) {
-			count
-		}
-	}
-	`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"q":[]}}`, js)
-}
-
 func TestMultiCountSort(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
@@ -2574,7 +2453,7 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -2649,145 +2528,6 @@ func TestMinMultiAlias(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z"},{"dob":"1909-05-05T00:00:00Z"},{"dob":"1909-01-10T00:00:00Z"},{"dob":"1901-01-15T00:00:00Z"}],"maxdob":"1910-01-02T00:00:00Z","mindob":"1901-01-15T00:00:00Z","name":"Michonne"},{"friend":[{"dob":"1910-01-01T00:00:00Z"}],"maxdob":"1910-01-01T00:00:00Z","mindob":"1910-01-01T00:00:00Z","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05T00:00:00Z"}],"maxdob":"1909-05-05T00:00:00Z","mindob":"1909-05-05T00:00:00Z","name":"Andrea"},{"name":"Andrea With no friends"}]}}`,
 		js)
-}
-
-func TestMinMultiProto(t *testing.T) {
-	populateGraph(t)
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-	{
-		me(func: uid(1,23)) {
-			name
-			friend {
-				name
-				x as dob
-			}
-			min(val(x))
-			max(val(x))
-	}
-}
-`
-	pb := processToPB(t, query, map[string]string{}, false)
-	res := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "min(val(x))"
-    value: <
-      str_val: "1901-01-15T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "max(val(x))"
-    value: <
-      str_val: "1910-01-02T00:00:00Z"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-    properties: <
-      prop: "dob"
-      value: <
-        str_val: "1910-01-02T00:00:00Z"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-    properties: <
-      prop: "dob"
-      value: <
-        str_val: "1909-05-05T00:00:00Z"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-    properties: <
-      prop: "dob"
-      value: <
-        str_val: "1909-01-10T00:00:00Z"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-    properties: <
-      prop: "dob"
-      value: <
-        str_val: "1901-01-15T00:00:00Z"
-      >
-    >
-  >
->
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Rick Grimes"
-    >
-  >
-  properties: <
-    prop: "min(val(x))"
-    value: <
-      str_val: "1910-01-01T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "max(val(x))"
-    value: <
-      str_val: "1910-01-01T00:00:00Z"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Michonne"
-      >
-    >
-    properties: <
-      prop: "dob"
-      value: <
-        str_val: "1910-01-01T00:00:00Z"
-      >
-    >
-  >
->
-`
-	require.Equal(t, res, proto.MarshalTextString(pb[0]))
 }
 
 func TestMinSchema(t *testing.T) {
@@ -2924,7 +2664,7 @@ func TestPasswordExpandError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = queryRequest.ProcessQuery(defaultContext())
+	err = queryRequest.ProcessQuery(defaultContext())
 	require.NotNil(t, err)
 	require.Contains(t, err.Error(), "Repeated subgraph: [password]")
 }
@@ -3262,87 +3002,6 @@ func TestFieldAlias(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"alive":true,"Buddies":[{"BudName":"Rick Grimes"},{"BudName":"Glenn Rhee"},{"BudName":"Daryl Dixon"},{"BudName":"Andrea"}],"gender":"female","MyName":"Michonne"}]}}`,
 		js)
-}
-
-func TestFieldAliasProto(t *testing.T) {
-	populateGraph(t)
-
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(func: uid(0x01)) {
-				MyName:name
-				gender
-				alive
-				Buddies:friend {
-					BudName:name
-				}
-			}
-		}
-	`
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "MyName"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  properties: <
-    prop: "alive"
-    value: <
-      bool_val: true
-    >
-  >
-  children: <
-    attribute: "Buddies"
-    properties: <
-      prop: "BudName"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
-  children: <
-    attribute: "Buddies"
-    properties: <
-      prop: "BudName"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-  >
-  children: <
-    attribute: "Buddies"
-    properties: <
-      prop: "BudName"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-  >
-  children: <
-    attribute: "Buddies"
-    properties: <
-      prop: "BudName"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
->
-`
-	require.EqualValues(t,
-		expectedPb,
-		proto.MarshalTextString(pb[0]))
 }
 
 func TestToFastJSONFilter(t *testing.T) {
@@ -4518,274 +4177,6 @@ func TestToFastJSONReverseFilter(t *testing.T) {
 		js)
 }
 
-func getProperty(properties []*protos.Property, prop string) *protos.Value {
-	for _, p := range properties {
-		if p.Prop == prop {
-			return p.Value
-		}
-	}
-	return nil
-}
-
-func TestToProto(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x1)) {
-				_xid_
-				name
-				gender
-				alive
-				friend {
-					name
-				}
-			}
-		}
-  `
-	pb := processToPB(t, query, map[string]string{}, true)
-	require.EqualValues(t,
-		`attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "_uid_"
-    value: <
-      uid_val: 1
-    >
-  >
-  properties: <
-    prop: "_xid_"
-    value: <
-      default_val: "mich"
-    >
-  >
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  properties: <
-    prop: "alive"
-    value: <
-      bool_val: true
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 23
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 24
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 25
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 31
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 101
-      >
-    >
-  >
->
-`, proto.MarshalTextString(pb[0]))
-
-}
-
-func TestToProtoFilter(t *testing.T) {
-	populateGraph(t)
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(func: uid(0x01)) {
-				name
-				gender
-				friend @filter(anyofterms(name, "Andrea")) {
-					name
-				}
-			}
-		}
-	`
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
->
-`
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
-}
-
-func TestToProtoFilterOr(t *testing.T) {
-	populateGraph(t)
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(func: uid(0x01)) {
-				name
-				gender
-				friend @filter(anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rhee")) {
-					name
-				}
-			}
-		}
-	`
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
->
-`
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
-}
-
-func TestToProtoFilterAnd(t *testing.T) {
-	populateGraph(t)
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(func: uid(0x01)) {
-				name
-				gender
-				friend @filter(anyofterms(name, "Andrea") and anyofterms(name, "Glenn Rhee")) {
-					name
-				}
-			}
-		}
-	`
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
->
-`
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
-}
-
 // Test sorting / ordering by dob.
 func TestToFastJSONOrder(t *testing.T) {
 	populateGraph(t)
@@ -5010,186 +4401,6 @@ func rootSg(uidMatrix []*protos.List, srcUids *protos.List, names []string, ages
 		SrcUIDs:   srcUids,
 		uidMatrix: uidMatrix,
 	}
-}
-
-// Test sorting / ordering by dob.
-func TestToProtoOrder(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x01)) {
-				name
-				gender
-				friend(orderasc: dob) {
-					name
-				}
-			}
-		}
-	`
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
->
-`
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
-}
-
-// Test sorting / ordering by dob.
-func TestToProtoOrderCount(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x01)) {
-				name
-				gender
-				friend(orderasc: dob, first: 2) {
-					name
-				}
-			}
-		}
-	`
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-  >
->
-`
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
-}
-
-// Test sorting / ordering by dob.
-func TestToProtoOrderOffsetCount(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x01)) {
-				name
-				gender
-				friend(orderasc: dob, first: 2, offset: 1) {
-					name
-				}
-			}
-		}
-	`
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-  >
->
-`
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestSchema1(t *testing.T) {
@@ -5607,7 +4818,7 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = queryRequest.ProcessQuery(defaultContext())
+	err = queryRequest.ProcessQuery(defaultContext())
 
 	require.NotNil(t, err)
 }
@@ -5626,7 +4837,7 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = queryRequest.ProcessQuery(defaultContext())
+	err = queryRequest.ProcessQuery(defaultContext())
 
 	require.NotNil(t, err)
 }
@@ -5645,51 +4856,8 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = queryRequest.ProcessQuery(defaultContext())
+	err = queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
-}
-
-func TestToProtoMultiRoot(t *testing.T) {
-	populateGraph(t)
-	query := `
-    {
-			me(func:anyofterms(name, "Michonne Rick Glenn")) {
-        name
-      }
-    }
-  `
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
->
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Rick Grimes"
-    >
-  >
->
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Glenn Rhee"
-    >
-  >
->
-`
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestNearGenerator(t *testing.T) {
@@ -5854,268 +5022,6 @@ func TestIntersectsGenerator(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}, {"name":"Glenn Rhee"}]}}`, js)
 }
 
-// This test depends on other tests - don't run it alone.
-// TODO: find and remove dependency
-func TestToProtoNormalizeDirective(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x01)) @normalize {
-				mn: name
-				gender
-				friend {
-					n: name
-					d: dob
-					friend {
-						fn : name
-					}
-				}
-				son {
-					sn: name
-				}
-			}
-		}
-	`
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  properties: <
-    prop: "mn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "n"
-    value: <
-      str_val: "Rick Grimes"
-    >
-  >
-  properties: <
-    prop: "d"
-    value: <
-      str_val: "1910-01-02T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "fn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "sn"
-    value: <
-      str_val: "Andre"
-    >
-  >
->
-children: <
-  properties: <
-    prop: "mn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "n"
-    value: <
-      str_val: "Rick Grimes"
-    >
-  >
-  properties: <
-    prop: "d"
-    value: <
-      str_val: "1910-01-02T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "fn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "sn"
-    value: <
-      str_val: "Helmut"
-    >
-  >
->
-children: <
-  properties: <
-    prop: "mn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "n"
-    value: <
-      str_val: "Glenn Rhee"
-    >
-  >
-  properties: <
-    prop: "d"
-    value: <
-      str_val: "1909-05-05T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "sn"
-    value: <
-      str_val: "Andre"
-    >
-  >
->
-children: <
-  properties: <
-    prop: "mn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "n"
-    value: <
-      str_val: "Glenn Rhee"
-    >
-  >
-  properties: <
-    prop: "d"
-    value: <
-      str_val: "1909-05-05T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "sn"
-    value: <
-      str_val: "Helmut"
-    >
-  >
->
-children: <
-  properties: <
-    prop: "mn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "n"
-    value: <
-      str_val: "Daryl Dixon"
-    >
-  >
-  properties: <
-    prop: "d"
-    value: <
-      str_val: "1909-01-10T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "sn"
-    value: <
-      str_val: "Andre"
-    >
-  >
->
-children: <
-  properties: <
-    prop: "mn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "n"
-    value: <
-      str_val: "Daryl Dixon"
-    >
-  >
-  properties: <
-    prop: "d"
-    value: <
-      str_val: "1909-01-10T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "sn"
-    value: <
-      str_val: "Helmut"
-    >
-  >
->
-children: <
-  properties: <
-    prop: "mn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "n"
-    value: <
-      str_val: "Andrea"
-    >
-  >
-  properties: <
-    prop: "d"
-    value: <
-      str_val: "1901-01-15T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "fn"
-    value: <
-      str_val: "Glenn Rhee"
-    >
-  >
-  properties: <
-    prop: "sn"
-    value: <
-      str_val: "Andre"
-    >
-  >
->
-children: <
-  properties: <
-    prop: "mn"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "n"
-    value: <
-      str_val: "Andrea"
-    >
-  >
-  properties: <
-    prop: "d"
-    value: <
-      str_val: "1901-01-15T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "fn"
-    value: <
-      str_val: "Glenn Rhee"
-    >
-  >
-  properties: <
-    prop: "sn"
-    value: <
-      str_val: "Helmut"
-    >
-  >
->
-`
-	require.EqualValues(t,
-		expectedPb,
-		proto.MarshalTextString(pb[0]))
-}
-
 // this test is failing when executed alone, but pass when executed after other tests
 // TODO: find and remove the dependency
 func TestNormalizeDirective(t *testing.T) {
@@ -6143,160 +5049,6 @@ func TestNormalizeDirective(t *testing.T) {
 	require.EqualValues(t,
 		`{"data": {"me":[{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Helmut"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Helmut"},{"d":"1909-01-10T00:00:00Z","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1909-01-10T00:00:00Z","mn":"Michonne","n":"Daryl Dixon","sn":"Helmut"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Helmut"}]}}`,
 		js)
-}
-
-func TestSchema(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			debug(func: uid( 0x1 )) {
-				_xid_
-				name
-				gender
-				alive
-				loc
-				friend {
-					dob
-					name
-				}
-			}
-		}
-  `
-	gr := processToPB(t, query, map[string]string{}, true)
-	require.Equal(t, `attribute: "_root_"
-children: <
-  attribute: "debug"
-  properties: <
-    prop: "_uid_"
-    value: <
-      uid_val: 1
-    >
-  >
-  properties: <
-    prop: "_xid_"
-    value: <
-      default_val: "mich"
-    >
-  >
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  properties: <
-    prop: "alive"
-    value: <
-      bool_val: true
-    >
-  >
-  properties: <
-    prop: "loc"
-    value: <
-      geo_val: "\001\001\000\000\000\232\231\231\231\231\231\361?\000\000\000\000\000\000\000@"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 23
-      >
-    >
-    properties: <
-      prop: "dob"
-      value: <
-        str_val: "1910-01-02T00:00:00Z"
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 24
-      >
-    >
-    properties: <
-      prop: "dob"
-      value: <
-        str_val: "1909-05-05T00:00:00Z"
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 25
-      >
-    >
-    properties: <
-      prop: "dob"
-      value: <
-        str_val: "1909-01-10T00:00:00Z"
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 31
-      >
-    >
-    properties: <
-      prop: "dob"
-      value: <
-        str_val: "1901-01-15T00:00:00Z"
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_uid_"
-      value: <
-        uid_val: 101
-      >
-    >
-  >
->
-`, proto.MarshalTextString(gr[0]))
 }
 
 func TestNearPoint(t *testing.T) {
@@ -6981,6 +5733,10 @@ func (z *zeroServer) AssignUids(ctx context.Context, n *protos.Num) (*protos.Ass
 	return &protos.AssignedIds{}, nil
 }
 
+func (z *zeroServer) Timestamps(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
+	return &protos.AssignedIds{}, nil
+}
+
 func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.MembershipState, error) {
 	m := &protos.MembershipState{}
 	m.Zeros = make(map[uint64]*protos.Member)
@@ -7030,7 +5786,7 @@ func StartDummyZero() *grpc.Server {
 }
 
 func TestMain(m *testing.M) {
-	x.Init()
+	x.Init(true)
 
 	StartDummyZero()
 
@@ -7052,6 +5808,7 @@ func TestMain(m *testing.M) {
 	worker.Config.RaftId = 1
 	worker.Config.MyAddr = "localhost:12345"
 	worker.Config.ExpandEdge = true
+	worker.Config.NumPendingProposals = 100 // So that mutations can run.
 	schema.Init(ps)
 	posting.Init(ps)
 	worker.Init(ps)
@@ -7179,98 +5936,6 @@ func TestXidInvalidJSON(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestXidInvalidProto(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x01)) {
-				name
-				_xid_
-				gender
-				alive
-				friend {
-					_xid_
-					random
-					name
-				}
-			}
-		}
-	`
-	pb := processToPB(t, query, map[string]string{}, false)
-	expectedPb := `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "_xid_"
-    value: <
-      default_val: "mich"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  properties: <
-    prop: "alive"
-    value: <
-      bool_val: true
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "_xid_"
-      value: <
-        default_val: "g\"lenn"
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
->
-`
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
-}
-
 func TestToJSONReverseNegativeFirst(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -7355,7 +6020,7 @@ func TestBoolIndexgeRoot(t *testing.T) {
 		}`
 	res, _ := gql.Parse(gql.Request{Str: q})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err := queryRequest.ProcessQuery(defaultContext())
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.NotNil(t, err)
 }
 
@@ -7391,7 +6056,7 @@ func TestBoolSort(t *testing.T) {
 	`
 	res, _ := gql.Parse(gql.Request{Str: q, Http: true})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err := queryRequest.ProcessQuery(defaultContext())
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.NotNil(t, err)
 }
 
@@ -7401,59 +6066,6 @@ func TestJSONQueryVariables(t *testing.T) {
 	"variables" : { "$a": "2"}}`
 	js := processToFastJSON(t, q)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}}`, js)
-}
-
-func TestPBQueryVariables(t *testing.T) {
-	populateGraph(t)
-	q := `query test ($a: int = 1) { me(func: uid(0x01)) { name, gender, friend(first: $a) { name }}}`
-
-	variables := make(map[string]string)
-	variables["$a"] = "3"
-	pb := processToPB(t, q, variables, false)
-	require.Equal(t, `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-  >
->
-`, proto.MarshalTextString(pb[0]))
 }
 
 func TestStringEscape(t *testing.T) {
@@ -7523,7 +6135,7 @@ func TestHashTokGeqErr(t *testing.T) {
 	`
 	res, _ := gql.Parse(gql.Request{Str: query})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err := queryRequest.ProcessQuery(defaultContext())
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -7542,7 +6154,7 @@ func TestNameNotIndexed(t *testing.T) {
 	`
 	res, _ := gql.Parse(gql.Request{Str: query})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err := queryRequest.ProcessQuery(defaultContext())
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -7581,30 +6193,8 @@ func TestDuplicateAlias(t *testing.T) {
 		}`
 	res, _ := gql.Parse(gql.Request{Str: query})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err := queryRequest.ProcessQuery(defaultContext())
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
-}
-
-func TestMinSomething(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x01)) {
-				friendCount: count(friend)
-			}
-		}`
-	pb := processToPB(t, query, map[string]string{}, false)
-	require.Equal(t, `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "friendCount"
-    value: <
-      int_val: 5
-    >
-  >
->
-`, proto.MarshalTextString(pb[0]))
 }
 
 func TestGraphQLId(t *testing.T) {
@@ -7613,41 +6203,6 @@ func TestGraphQLId(t *testing.T) {
 	"variables" : { "$a": "[1, 31]"}}`
 	js := processToFastJSON(t, q)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"},{"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}}`, js)
-}
-
-func TestGraphQLIdProto(t *testing.T) {
-	populateGraph(t)
-	q := `query test ($id: string) { me(func: uid($id)) { name, gender, friend(first: 1) { name }}}`
-
-	variables := make(map[string]string)
-	variables["$id"] = "1"
-	pb := processToPB(t, q, variables, false)
-	require.Equal(t, `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
->
-`, proto.MarshalTextString(pb[0]))
 }
 
 func TestDebugUid(t *testing.T) {
@@ -7667,13 +6222,12 @@ func TestDebugUid(t *testing.T) {
 	ctx := context.WithValue(defaultContext(), "debug", "true")
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = queryRequest.ProcessQuery(ctx)
+	err = queryRequest.ProcessQuery(ctx)
 	require.NoError(t, err)
-	var buf bytes.Buffer
-	err = ToJson(queryRequest.Latency, queryRequest.Subgraphs, &buf, nil, false)
+	buf, err := ToJson(queryRequest.Latency, queryRequest.Subgraphs)
 	require.NoError(t, err)
 	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
+	require.NoError(t, json.Unmarshal(buf, &mp))
 	resp := mp["data"].(map[string]interface{})["me"]
 	body, err := json.Marshal(resp)
 	require.NoError(t, err)
@@ -7700,109 +6254,6 @@ func TestUidAlias(t *testing.T) {
 		js)
 }
 
-func TestUidAliasProto(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x1)) {
-				id: _uid_
-				alive
-				friend {
-					uid: _uid_
-					name
-				}
-			}
-		}
-	`
-	pb := processToPB(t, query, nil, false)
-	require.Equal(t, `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "id"
-    value: <
-      uid_val: 1
-    >
-  >
-  properties: <
-    prop: "alive"
-    value: <
-      bool_val: true
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "uid"
-      value: <
-        uid_val: 23
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "uid"
-      value: <
-        uid_val: 24
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Glenn Rhee"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "uid"
-      value: <
-        uid_val: 25
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Daryl Dixon"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "uid"
-      value: <
-        uid_val: 31
-      >
-    >
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "uid"
-      value: <
-        uid_val: 101
-      >
-    >
-  >
->
-`, proto.MarshalTextString(pb[0]))
-}
-
 func TestCountAtRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -7827,66 +6278,6 @@ func TestCountAtRoot2(t *testing.T) {
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"count": 4}]}}`, js)
-}
-
-func TestCountAtRoot2PB(t *testing.T) {
-	populateGraph(t)
-	query := `
-        {
-                me(func: anyofterms(name, "Michonne Rick Andrea")) {
-			name
-			count()
-		}
-        }
-        `
-	pb := processToPB(t, query, nil, false)
-	require.Equal(t, `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "count"
-    value: <
-      int_val: 4
-    >
-  >
->
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
->
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Rick Grimes"
-    >
-  >
->
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Andrea"
-    >
-  >
->
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Andrea With no friends"
-    >
-  >
->
-`, proto.MarshalTextString(pb[0]))
 }
 
 func TestCountAtRoot3(t *testing.T) {
@@ -8220,7 +6611,7 @@ func TestMathVarCrash(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = queryRequest.ProcessQuery(defaultContext())
+	err = queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -8374,7 +6765,7 @@ func TestMultipleGtError(t *testing.T) {
 	require.NoError(t, err)
 
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = queryRequest.ProcessQuery(defaultContext())
+	err = queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -8408,317 +6799,6 @@ func TestMultipleEqInt(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"name":"Rick Grimes","friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}]}}`, js)
-}
-
-func TestPBUnmarshalToStruct1(t *testing.T) {
-	type Person struct {
-		Name       string `json:"name"`
-		Age        int    `json:"age"`
-		Birth      string
-		BinaryData []byte   `json:"bin_data"`
-		Friends    []Person `json:"friend"`
-	}
-
-	type res struct {
-		Root Person `json:"me"`
-	}
-
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x01)) {
-				name
-				age
-				bin_data
-				Birth: dob
-				friend {
-					name
-					age
-				}
-			}
-		}
-	`
-	pb := processToPB(t, query, map[string]string{}, false)
-	var r res
-	err := client.Unmarshal(pb, &r)
-	require.NoError(t, err)
-	require.Equal(t, "Michonne", r.Root.Name)
-	require.Equal(t, 38, r.Root.Age)
-	require.Equal(t, "bin-data", string(r.Root.BinaryData))
-	require.Equal(t, "1910-01-01T00:00:00Z", r.Root.Birth)
-	require.Equal(t, 4, len(r.Root.Friends))
-	require.Equal(t, Person{
-		Name: "Rick Grimes",
-		Age:  15,
-	}, r.Root.Friends[0])
-}
-
-func TestPBUnmarshalToStruct2(t *testing.T) {
-	type Person struct {
-		Id       uint64    `json:"_uid_"`
-		Name     string    `json:"name"`
-		Age      int       `json:"age"`
-		Birth    time.Time `json:"dob"`
-		Alive    bool      `json:"alive"`
-		Survival float64   `json:"survival_rate"`
-		Location geom.T    `json:"location"`
-		Friends  []Person  `json:"friend"`
-	}
-
-	type res struct {
-		Root []Person `json:"me"`
-	}
-
-	populateGraph(t)
-	query := `
-		{
-			me(func: anyofterms(name, "Rick Michonne Andrea")) {
-				_uid_
-				name
-				age
-				dob
-				alive
-				survival_rate
-				friend (first: 1) {
-					_uid_
-					name
-					age
-					dob
-				}
-			}
-		}
-	`
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	var r res
-	err := client.Unmarshal(pb, &r)
-	require.NoError(t, err)
-	require.Equal(t, 4, len(r.Root))
-	js, err := json.Marshal(r.Root[0])
-	require.NoError(t, err)
-	require.JSONEq(t, `{"_uid_":1,"name":"Michonne","age":38,"dob":"1910-01-01T00:00:00Z","alive":true,"survival_rate":98.99,"location":null,"friend":[{"_uid_":23,"name":"Rick Grimes","age":15,"dob":"1910-01-02T00:00:00Z","alive":false,"survival_rate":0,"location":null,"friend":null}]}`, string(js))
-}
-
-func TestPBUnmarshalToStruct3(t *testing.T) {
-	type Person struct {
-		Id       uint64    `json:"_uid_"`
-		Name     string    `json:"name"`
-		Age      int       `json:"age"`
-		Birth    time.Time `json:"dob"`
-		Alive    bool      `json:"alive"`
-		Survival float64   `json:"survival_rate"`
-		Location []byte    `json:"loc"`
-		Friends  []*Person `json:"friend"`
-	}
-
-	type res struct {
-		Root []*Person `json:"me"`
-	}
-
-	populateGraph(t)
-	query := `
-		{
-			me(func: anyofterms(name, "Rick Michonne Andrea")) {
-				_uid_
-				name
-				age
-				dob
-				alive
-				loc
-				survival_rate
-				friend (first: 1) {
-					_uid_
-					name
-					age
-					dob
-				}
-			}
-		}
-	`
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	var r res
-	err := client.Unmarshal(pb, &r)
-	err = client.Unmarshal(pb, &r)
-	require.NoError(t, err)
-	require.NotEmpty(t, r.Root[0].Location)
-	require.Equal(t, 4, len(r.Root))
-	js, err := json.Marshal(r.Root[0])
-	require.NoError(t, err)
-	require.JSONEq(t, `{"_uid_":1,"name":"Michonne","age":38,"dob":"1910-01-01T00:00:00Z","alive":true,"survival_rate":98.99,"loc":"AQEAAACamZmZmZnxPwAAAAAAAABA","friend":[{"_uid_":23,"name":"Rick Grimes","age":15,"dob":"1910-01-02T00:00:00Z","alive":false,"survival_rate":0,"loc":null,"friend":null}]}`, string(js))
-}
-
-func TestPBUnmarshalToStruct4(t *testing.T) {
-	type Person struct {
-		Name    string `json:"name"`
-		Age     int    `json:"age"`
-		Birth   string
-		Friends []Person `json:"friend"`
-	}
-
-	type res struct {
-		Root *Person `json:"me"`
-	}
-
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x01)) {
-				name
-				age
-				Birth: dob
-				friend {
-					name
-					age
-				}
-			}
-		}
-	`
-	pb := processToPB(t, query, map[string]string{}, false)
-	var r res
-	err := client.Unmarshal(pb, &r)
-	require.NoError(t, err)
-	require.Equal(t, "Michonne", r.Root.Name)
-	require.Equal(t, 38, r.Root.Age)
-	require.Equal(t, "1910-01-01T00:00:00Z", r.Root.Birth)
-	require.Equal(t, 4, len(r.Root.Friends))
-	require.Equal(t, Person{
-		Name: "Rick Grimes",
-		Age:  15,
-	}, r.Root.Friends[0])
-}
-
-func TestPBUnmarshalToStruct5(t *testing.T) {
-	type Person struct {
-		Name string `json:"name@hi:ru"`
-	}
-
-	type res struct {
-		Root Person `json:"me"`
-	}
-
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(0x1001)) {
-				name@hi:ru
-			}
-		}
-	`
-	pb := processToPB(t, query, map[string]string{}, false)
-	var r res
-	err := client.Unmarshal(pb, &r)
-	require.NoError(t, err)
-	require.Equal(t, r.Root.Name, "Барсук")
-}
-
-func TestPBUnmarshalToStruct6(t *testing.T) {
-	populateGraph(t)
-
-	type Person struct {
-		Name string
-		Dob  time.Time
-	}
-
-	type res struct {
-		Me []Person
-	}
-
-	query := `
-		{
-			var(func: uid(1)) {
-				f as friend {
-					n as dob
-				}
-			}
-
-			Me(func: uid(f), orderasc: val(n)) {
-				Name: name
-				Dob: dob
-			}
-		}
-	`
-	pb := processToPB(t, query, map[string]string{}, true)
-	var r res
-	err := client.Unmarshal(pb, &r)
-	require.NoError(t, err)
-	require.Equal(t, 4, len(r.Me))
-	require.NotZero(t, r.Me[0].Name)
-	require.NotZero(t, r.Me[0].Dob)
-}
-
-func TestPBUnmarshalToStruct7(t *testing.T) {
-	populateGraph(t)
-
-	type Person struct {
-		Name string
-		Dob  time.Time
-	}
-
-	type res struct {
-		Me []Person
-	}
-
-	query := `
-		{
-			var(func: uid(1)) {
-				f as friend {
-					n as dob
-				}
-			}
-
-			Me(func: uid(f), orderasc: val(n)) {
-				Name: name
-				Dob: dob
-			}
-		}
-	`
-	pb := processToPB(t, query, map[string]string{}, true)
-	var r res
-	err := client.Unmarshal(pb, &r)
-	require.NoError(t, err)
-	// Lets unmarshal again, this should clear r first and then write to it.
-	err = client.Unmarshal(pb, &r)
-	require.NoError(t, err)
-	require.Equal(t, 4, len(r.Me))
-}
-
-func TestPBUnmarshalToStruct8(t *testing.T) {
-	type Person struct {
-		Name  string `json:"name"`
-		Age   int    `json:"age"`
-		Birth string
-	}
-
-	type res struct {
-		Root [2]Person `json:"me"`
-	}
-
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(1, 23, 31)) {
-				name
-				age
-				Birth: dob
-			}
-		}
-	`
-	pb := processToPB(t, query, map[string]string{}, false)
-	var r res
-	err := client.Unmarshal(pb, &r)
-	require.Error(t, err)
-}
-
-func TestPBUnmarshalError1(t *testing.T) {
-	var a int
-	err := client.Unmarshal([]*protos.Node{}, a)
-	require.Error(t, err)
-}
-
-func TestPBUnmarshalError2(t *testing.T) {
-	err := client.Unmarshal([]*protos.Node{}, nil)
-	require.Error(t, err)
 }
 
 func TestUidFunction(t *testing.T) {
@@ -8838,7 +6918,7 @@ func TestUidInFunctionAtRoot(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -8950,7 +7030,7 @@ func TestUseVariableBeforeDefinitionError(t *testing.T) {
 
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Variable: [avgAge] used before definition.")
 }
@@ -9043,58 +7123,6 @@ func TestAggregateRoot5(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me":[{"sum(val(m))":0.000000}]}}`, js)
-}
-
-func TestAggregateRootProto(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			var(func: anyofterms(name, "Rick Michonne Andrea")) {
-				a as age
-			}
-
-			me() {
-				minVal as min(val(a))
-				maxVal as max(val(a))
-				Sum: math(minVal + maxVal)
-			}
-		}
-	`
-
-	expected := `attribute: "_root_"
-children: <
-  attribute: "me"
-  children: <
-    attribute: "min(val(a))"
-    properties: <
-      prop: "min(val(a))"
-      value: <
-        int_val: 15
-      >
-    >
-  >
-  children: <
-    attribute: "max(val(a))"
-    properties: <
-      prop: "max(val(a))"
-      value: <
-        int_val: 38
-      >
-    >
-  >
-  children: <
-    attribute: "Sum"
-    properties: <
-      prop: "Sum"
-      value: <
-        double_val: 53
-      >
-    >
-  >
->
-`
-	pb := processToPB(t, query, map[string]string{}, false)
-	require.Equal(t, expected, proto.MarshalTextString(pb[0]))
 }
 
 func TestAggregateRootError(t *testing.T) {
@@ -9285,36 +7313,6 @@ func TestMultipleValueGroupByError(t *testing.T) {
 	_, err := processToFastJsonReqCtx(t, query, ctx)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Groupby not allowed for attr: graduation of type list")
-}
-
-func TestMultipleValueProto(t *testing.T) {
-	populateGraph(t)
-	query := `
-	{
-		me(func: ge(graduation, "1930")) {
-			name
-			graduation
-		}
-	}
-	`
-	type Person struct {
-		Name       string      `json:"name"`
-		Graduation []time.Time `json:"graduation"`
-	}
-
-	type res struct {
-		Root []Person `json:"me"`
-	}
-
-	pb := processToPB(t, query, map[string]string{}, false)
-	var r res
-	err := client.Unmarshal(pb, &r)
-	require.NoError(t, err)
-	require.Equal(t, 2, len(r.Root))
-	require.Equal(t, "Michonne", r.Root[0].Name)
-	require.Equal(t, 1, len(r.Root[0].Graduation))
-	require.Equal(t, "Andrea", r.Root[1].Name)
-	require.Equal(t, 2, len(r.Root[1].Graduation))
 }
 
 func TestMultiPolygonIntersects(t *testing.T) {
@@ -9628,4 +7626,19 @@ func TestPasswordError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t,
 		err.Error(), "checkpwd fn can only be used on attr: [name] with schema type password. Got type: string")
+}
+
+func TestCountPanic(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1, 300)) {
+			_uid_
+			name
+			count(name)
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"q":[{"_uid_":"0x1","name":"Michonne","count(name)":1},{"_uid_":"0x12c","count(name)":0}]}}`, js)
 }

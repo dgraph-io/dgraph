@@ -38,105 +38,10 @@ type Mutation struct {
 	Schema  string
 }
 
-func (m Mutation) HasVariables() bool {
-	for _, n := range m.Set {
-		if HasVariables(n) {
-			return true
-		}
-	}
-	for _, n := range m.Del {
-		if HasVariables(n) {
-			return true
-		}
-	}
-	return false
-}
-
 // HasOps returns true iff the mutation has at least one non-empty
 // part.
 func (m Mutation) HasOps() bool {
 	return len(m.Set) > 0 || len(m.Del) > 0 || len(m.Schema) > 0 || m.DropAll
-}
-
-// NeededVars retrieves NQuads and variable names of NQuads that refer a variable.
-func (m Mutation) NeededVars() (res []string) {
-	addIfVar := func(nq *protos.NQuad) {
-		if len(nq.SubjectVar) > 0 {
-			res = append(res, nq.SubjectVar)
-		}
-		if len(nq.ObjectVar) > 0 {
-			res = append(res, nq.ObjectVar)
-		}
-	}
-	for _, s := range m.Set {
-		addIfVar(s)
-	}
-	for _, d := range m.Del {
-		addIfVar(d)
-	}
-	return
-}
-
-type NQuads struct {
-	NQuads []*protos.NQuad
-	Types  []protos.DirectedEdge_Op
-}
-
-func WrapNQ(s []*protos.NQuad, typ protos.DirectedEdge_Op) NQuads {
-	t := make([]protos.DirectedEdge_Op, len(s))
-	for i := range t {
-		t[i] = typ
-	}
-	return NQuads{NQuads: s, Types: t}
-}
-
-func (n *NQuads) SetTypes(t protos.DirectedEdge_Op) {
-	n.Types = make([]protos.DirectedEdge_Op, len(n.NQuads))
-	for i := range n.Types {
-		n.Types[i] = t
-	}
-}
-
-func (n NQuads) IsEmpty() bool {
-	return len(n.NQuads) == 0
-}
-
-func (n NQuads) Add(m NQuads) (res NQuads) {
-	res.NQuads = n.NQuads
-	res.Types = n.Types
-	res.NQuads = append(res.NQuads, m.NQuads...)
-	res.Types = append(res.Types, m.Types...)
-	x.AssertTrue(len(res.NQuads) == len(n.NQuads)+len(m.NQuads))
-	x.AssertTrue(len(res.Types) == len(n.Types)+len(m.Types))
-	return
-}
-
-// Partitions NQuads using given predicate.
-func (n NQuads) Partition(by func(*protos.NQuad) bool) (t NQuads, f NQuads) {
-	t.NQuads = make([]*protos.NQuad, 0, 10)
-	f.NQuads = make([]*protos.NQuad, 0, 10)
-	t.Types = make([]protos.DirectedEdge_Op, 0, 10)
-	f.Types = make([]protos.DirectedEdge_Op, 0, 10)
-	p := func(nq *protos.NQuad, typ protos.DirectedEdge_Op) {
-		if by(nq) {
-			t.NQuads = append(t.NQuads, nq)
-			t.Types = append(t.Types, typ)
-		} else {
-			f.NQuads = append(f.NQuads, nq)
-			f.Types = append(f.Types, typ)
-		}
-	}
-	for i, s := range n.NQuads {
-		p(s, n.Types[i])
-	}
-	x.AssertTrue(len(t.NQuads)+len(f.NQuads) == len(n.NQuads))
-	x.AssertTrue(len(t.Types)+len(f.Types) == len(n.Types))
-	return
-}
-
-// HasVariables returns true iff given NQuad refers some variable.
-func HasVariables(n *protos.NQuad) bool {
-	return len(n.SubjectVar) > 0 || len(n.ObjectVar) > 0
 }
 
 // Gets the uid corresponding
@@ -287,6 +192,7 @@ func (nq NQuad) ToDeletePredEdge() (*protos.DirectedEdge, error) {
 		Label:  nq.Label,
 		Lang:   nq.Lang,
 		Facets: nq.Facets,
+		Op:     protos.DirectedEdge_DEL,
 	}
 
 	if err := copyValue(out, nq); err != nil {
@@ -322,62 +228,6 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, e
 	return edge, nil
 }
 
-func (nq *NQuad) ExpandVariables(newToUid map[string]uint64, subjectUids []uint64,
-	objectUids []uint64) (edges []*protos.DirectedEdge, err error) {
-	var edge *protos.DirectedEdge
-	edges = make([]*protos.DirectedEdge, 0, len(subjectUids)*len(objectUids))
-
-	// Empty subject variable.
-	if len(subjectUids) == 0 {
-		if len(nq.Subject) == 0 {
-			return
-		}
-		sUid, err := toUid(nq.Subject, newToUid)
-		if err != nil {
-			return nil, err
-		}
-		subjectUids = []uint64{sUid}[:]
-	}
-
-	// Empty object variable.
-	if len(objectUids) == 0 {
-		// No object id given, lets return
-		if len(nq.ObjectId) == 0 {
-			if nq.ObjectValue == nil {
-				return edges, nil
-			}
-		} else {
-			oUid, err := toUid(nq.ObjectId, newToUid)
-			if err != nil {
-				return edges, err
-			}
-			objectUids = append(objectUids, oUid)
-		}
-	}
-
-	switch nq.valueType() {
-	case x.ValueUid:
-		for _, sUid := range subjectUids {
-			for _, oUid := range objectUids {
-				edge = nq.CreateUidEdge(sUid, oUid)
-				edges = append(edges, edge)
-			}
-		}
-	case x.ValuePlain, x.ValueMulti:
-		for _, sUid := range subjectUids {
-			edge, err = nq.CreateValueEdge(sUid)
-			if err != nil {
-				return edges, err
-			}
-			edges = append(edges, edge)
-		}
-	default:
-		return edges, x.Errorf("unknown value type for nquad: %+v", nq)
-	}
-	return edges, nil
-
-}
-
 func copyValue(out *protos.DirectedEdge, nq NQuad) error {
 	var err error
 	var t types.TypeID
@@ -391,6 +241,6 @@ func copyValue(out *protos.DirectedEdge, nq NQuad) error {
 func (nq NQuad) valueType() x.ValueTypeInfo {
 	hasValue := nq.ObjectValue != nil
 	hasLang := len(nq.Lang) > 0
-	hasSpecialId := len(nq.ObjectId) == 0 && len(nq.ObjectVar) == 0
+	hasSpecialId := len(nq.ObjectId) == 0
 	return x.ValueType(hasValue, hasLang, hasSpecialId)
 }

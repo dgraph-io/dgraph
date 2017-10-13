@@ -150,7 +150,7 @@ func (s *suite) checkFatal(errs ...error) {
 func check(t *testing.T, err error) {
 	err = errors.Wrapf(err, "") // Add a stack.
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%+v", err)
 	}
 }
 

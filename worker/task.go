@@ -366,7 +366,11 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 		if err != nil || len(vals) == 0 {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
+			if q.DoCount {
+				out.Counts = append(out.Counts, 0)
+			} else {
+				out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
+			}
 			continue
 		}
 
@@ -551,16 +555,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		}
 	}
 	return nil
-}
-
-// This function should only be used by upsert. Upsert mutation also does a query which will wait
-// for the mutation to complete and hence would get stuck. Therefore, we only need to wait till
-// index - 1.
-func (n *node) processUpsertTask(ctx context.Context, t *task, gid uint32) (*protos.Result, error) {
-	if err := n.Applied.WaitForMark(ctx, t.rid-1); err != nil {
-		return nil, err
-	}
-	return helpProcessTask(ctx, t.upsert, gid)
 }
 
 // processTask processes the query, accumulates and returns the result.
@@ -1463,7 +1457,9 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 
 	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
 		key := it.Item().Key()
-		pl := posting.Get(key)
+		nk := make([]byte, len(key))
+		copy(nk, key)
+		pl := posting.Get(nk)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 	}
 	return nil

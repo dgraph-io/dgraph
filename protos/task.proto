@@ -22,6 +22,8 @@ import "graphresponse.proto";
 
 package protos;
 
+option java_package = "io.dgraph.proto";
+
 message List {
 	repeated fixed64 uids = 1;
 }
@@ -112,6 +114,7 @@ message ZeroProposal {
   Member member = 2;
   Tablet tablet = 3;
   uint64 maxLeaseId = 4;
+  uint64 maxTxnTs = 5;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -122,6 +125,7 @@ message MembershipState {
   map<uint32, Group> groups = 2;
   map<uint64, Member> zeros = 3;
   uint64 maxLeaseId = 4;
+  uint64 maxTxnTs = 5;
 }
 
 message Tablet {
@@ -152,8 +156,7 @@ message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
 	repeated SchemaUpdate schema = 3;
-	Query upsert = 4;
-	bool DropAll = 5;
+	bool DropAll = 4;
 }
 
 message KeyValues {

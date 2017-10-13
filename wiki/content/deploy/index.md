@@ -384,10 +384,6 @@ $ dgraph-live-loader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -
 
 ### `dgraph-bulk-loader`
 
-{{% notice "note" %}}
-This tool will become available in v0.8.3.
-{{% /notice %}}
-
 `dgraph-bulk-loader` serves a similar purpose to `dgraph-live-loader`, but can only be used
 while dgraph is offline for the initial population. It cannot run on an
 existing dgraph instance.

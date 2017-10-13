@@ -49,22 +49,23 @@ class FrameItem extends React.Component {
   };
 
   getAndExecuteSharedQuery = shareId => {
-    let query = getSharedQuery(shareId);
-    if (!query) {
-      this.setState({
-        errorMessage: `No query found for the shareId: ${shareId}`,
-        executed: true
-      });
-    } else {
-      this.executeFrameQuery(query);
-      const { frame, updateFrame } = this.props;
-      updateFrame({
-        query: query,
-        id: frame.id,
-        // Lets update share back to empty, because we now have the query.
-        share: ""
-      })();
-    }
+    const { frame, updateFrame } = this.props;
+    getSharedQuery(shareId).then(query => {
+      if (!query) {
+        this.setState({
+          errorMessage: `No query found for the shareId: ${shareId}`,
+          executed: true
+        });
+      } else {
+        this.executeFrameQuery(query);
+        updateFrame({
+          query: query,
+          id: frame.id,
+          // Lets update share back to empty, because we now have the query.
+          share: ""
+        });
+      }
+    });
   };
 
   executeOnJsonClick = () => {
