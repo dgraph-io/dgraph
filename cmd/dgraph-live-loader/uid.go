@@ -25,6 +25,7 @@ func (l *loader) NodeXid(xid string, storeXid bool) (uint64, error) {
 		return 0, fmt.Errorf("Empty xid not allowed")
 	}
 	uid, _, err := l.alloc.AssignUid(xidKey(xid))
+	// TODO(pawan) - Fix storing xids.
 	//	if storeXid && isNew {
 	//		e := n.Edge("xid")
 	//		x.Check(e.SetValueString(xid))

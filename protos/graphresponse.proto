@@ -48,7 +48,6 @@ message NQuad {
     repeated Facet facets = 7;
     string subject_var = 8;
     string object_var = 9;
-    string object_val = 10;
 }
 
 message Value {

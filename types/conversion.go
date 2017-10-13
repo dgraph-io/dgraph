@@ -556,34 +556,3 @@ func (v Val) MarshalJSON() ([]byte, error) {
 	}
 	return nil, x.Errorf("Invalid type for MarshalJSON: %v", v.Tid)
 }
-
-func ValFromObjectVal(val *protos.Value) Val {
-	switch val.Val.(type) {
-	case *protos.Value_BytesVal:
-		return Val{BinaryID, val.GetBytesVal()}
-	case *protos.Value_IntVal:
-		return Val{IntID, val.GetIntVal()}
-	case *protos.Value_StrVal:
-		if val.GetStrVal() == "" {
-			return Val{StringID, "_nil_"}
-		}
-		return Val{StringID, val.GetStrVal()}
-	case *protos.Value_BoolVal:
-		return Val{BoolID, val.GetBoolVal()}
-	case *protos.Value_DoubleVal:
-		return Val{FloatID, val.GetDoubleVal()}
-	case *protos.Value_GeoVal:
-		return Val{GeoID, val.GetGeoVal()}
-	case *protos.Value_DatetimeVal:
-		return Val{DateTimeID, val.GetDatetimeVal()}
-	case *protos.Value_PasswordVal:
-		return Val{PasswordID, val.GetPasswordVal()}
-	case *protos.Value_DefaultVal:
-		if val.GetDefaultVal() == "" {
-			return Val{DefaultID, "_nil_"}
-		}
-		return Val{DefaultID, val.GetDefaultVal()}
-	}
-
-	return Val{StringID, ""}
-}

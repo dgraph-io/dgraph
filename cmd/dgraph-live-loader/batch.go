@@ -213,9 +213,9 @@ func (l *loader) BatchFlush() error {
 
 	// After we have received response from server and sent the marks for completion,
 	// we need to wait for all of them to be processel.
-	for _, wm := range l.marks {
-		wm.wg.Wait()
-	}
+	//	for _, wm := range l.marks {
+	//		wm.wg.Wait()
+	//	}
 	// Write final checkpoint before stopping.
 	l.writeCheckpoint()
 	l.stopTickers()
