@@ -30,10 +30,9 @@ import (
 )
 
 type task struct {
-	rid    uint64 // raft index corresponding to the task
-	pid    uint32 // proposal id corresponding to the task
-	edge   *protos.DirectedEdge
-	upsert *protos.Query
+	rid  uint64 // raft index corresponding to the task
+	pid  uint32 // proposal id corresponding to the task
+	edge *protos.DirectedEdge
 }
 
 type scheduler struct {
@@ -70,11 +69,6 @@ func (s *scheduler) processTasks() {
 }
 
 func (t *task) key() uint32 {
-	if t.upsert != nil && t.upsert.Attr == t.edge.Attr {
-		// Serialize upserts by predicate.
-		return farm.Fingerprint32([]byte(t.edge.Attr))
-	}
-
 	key := fmt.Sprintf("%s|%d", t.edge.Attr, t.edge.Entity)
 	return farm.Fingerprint32([]byte(key))
 }
@@ -153,13 +147,6 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 			schemaMap[edge.Attr] = posting.TypeID(edge)
 		}
 	}
-	if proposal.Mutations.Upsert != nil {
-		attr := proposal.Mutations.Upsert.Attr
-		if tablet := groups().Tablet(attr); tablet != nil && tablet.ReadOnly {
-			s.n.props.Done(proposal.Id, errPredicateMoving)
-			return errPredicateMoving
-		}
-	}
 
 	s.n.props.IncRef(proposal.Id, total)
 	x.ActiveMutations.Add(int64(total))
@@ -175,10 +162,9 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 
 	for _, edge := range proposal.Mutations.Edges {
 		t := &task{
-			rid:    index,
-			pid:    proposal.Id,
-			edge:   edge,
-			upsert: proposal.Mutations.Upsert,
+			rid:  index,
+			pid:  proposal.Id,
+			edge: edge,
 		}
 		if s.register(t) {
 			s.tch <- t
