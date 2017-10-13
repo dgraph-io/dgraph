@@ -99,7 +99,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 			return err
 		}
 		schema.State().DeleteAll()
-		if err := posting.DeleteAll(); err != nil {
+		if err := posting.DeleteAll(proposal.StartTs); err != nil {
 			s.n.props.Done(proposal.Id, err)
 			return err
 		}

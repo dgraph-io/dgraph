@@ -225,7 +225,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 			if tablet := groups().Tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
 			}
-			if err := checkSchema(schema); err != nil {
+			if err := checkSchema(schema, proposal.StartTs); err != nil {
 				return err
 			}
 		}
@@ -388,10 +388,10 @@ func (n *node) processApplyCh() {
 }
 
 func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
-	ctx, _ := n.props.CtxAndTxn(pid)
+	ctx, txn := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(n.ctx, "raft", rv)
-	err := posting.DeletePredicate(ctx, predicate)
+	err := txn.DeletePredicate(ctx, predicate)
 	n.props.Done(pid, err)
 }
 

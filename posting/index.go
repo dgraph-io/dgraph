@@ -396,7 +396,7 @@ func deleteEntries(prefix []byte, readTs uint64) error {
 		x.Check(err)
 
 		if batchSize >= maxBatchSize {
-			if err := delTxn.Commit(nil); err != nil {
+			if err := delTxn.CommitAt(readTs, nil); err != nil {
 				return err
 			}
 			delTxn.Discard()
@@ -419,7 +419,7 @@ func compareAttrAndType(key []byte, attr string, typ byte) bool {
 	return false
 }
 
-func DeleteReverseEdges(ctx context.Context, attr string, startTs uint64) error {
+func (txn *Txn) DeleteReverseEdges(ctx context.Context, attr string) error {
 	err := lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteReverse)
 	})
@@ -429,7 +429,7 @@ func DeleteReverseEdges(ctx context.Context, attr string, startTs uint64) error 
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
-	if err := deleteEntries(prefix, startTs); err != nil {
+	if err := deleteEntries(prefix, txn.StartTs); err != nil {
 		return err
 	}
 	return nil
@@ -444,7 +444,7 @@ func deleteCountIndex(ctx context.Context, attr string, reverse bool, startTs ui
 	return nil
 }
 
-func DeleteCountIndex(ctx context.Context, attr string, startTs uint64) error {
+func (txn *Txn) DeleteCountIndex(ctx context.Context, attr string) error {
 	err := lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteCount)
 	})
@@ -458,10 +458,10 @@ func DeleteCountIndex(ctx context.Context, attr string, startTs uint64) error {
 		return err
 	}
 	// Delete index entries from data store.
-	if err := deleteCountIndex(ctx, attr, false, startTs); err != nil {
+	if err := deleteCountIndex(ctx, attr, false, txn.StartTs); err != nil {
 		return err
 	}
-	if err := deleteCountIndex(ctx, attr, true, startTs); err != nil { // delete reverse count indexes.
+	if err := deleteCountIndex(ctx, attr, true, txn.StartTs); err != nil { // delete reverse count indexes.
 		return err
 	}
 	return nil
@@ -648,7 +648,7 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 	return nil
 }
 
-func DeleteIndex(ctx context.Context, attr string, startTs uint64) error {
+func (txn *Txn) DeleteIndex(ctx context.Context, attr string) error {
 	err := lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteIndex)
 	})
@@ -658,7 +658,7 @@ func DeleteIndex(ctx context.Context, attr string, startTs uint64) error {
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	if err := deleteEntries(prefix, startTs); err != nil {
+	if err := deleteEntries(prefix, txn.StartTs); err != nil {
 		return err
 	}
 	return nil
@@ -762,7 +762,7 @@ func DeleteAll(startTs uint64) error {
 	return deleteEntries(nil, startTs)
 }
 
-func DeletePredicate(ctx context.Context, attr string, startTs uint64) error {
+func (txn *Txn) DeletePredicate(ctx context.Context, attr string) error {
 	err := lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
 	})
@@ -774,7 +774,7 @@ func DeletePredicate(ctx context.Context, attr string, startTs uint64) error {
 	}
 	prefix := pk.DataPrefix()
 	// Delete all data postings for the given predicate.
-	if err := deleteEntries(prefix, startTs); err != nil {
+	if err := deleteEntries(prefix, txn.StartTs); err != nil {
 		return err
 	}
 
@@ -782,18 +782,18 @@ func DeletePredicate(ctx context.Context, attr string, startTs uint64) error {
 	indexed := schema.State().IsIndexed(attr)
 	reversed := schema.State().IsReversed(attr)
 	if indexed {
-		if err := DeleteIndex(ctx, attr, startTs); err != nil {
+		if err := txn.DeleteIndex(ctx, attr); err != nil {
 			return err
 		}
 	} else if reversed {
-		if err := DeleteReverseEdges(ctx, attr, startTs); err != nil {
+		if err := txn.DeleteReverseEdges(ctx, attr); err != nil {
 			return err
 		}
 	}
 
 	hasCountIndex := schema.State().HasCount(attr)
 	if hasCountIndex {
-		if err := DeleteCountIndex(ctx, attr, startTs); err != nil {
+		if err := txn.DeleteCountIndex(ctx, attr); err != nil {
 			return err
 		}
 	}
