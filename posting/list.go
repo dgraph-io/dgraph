@@ -56,8 +56,6 @@ const (
 	Set uint32 = 0x01
 	// Del means delete in mutation layer. It contributes -1 in Length.
 	Del uint32 = 0x02
-	// Add means add new element in mutation layer. It contributes 1 in Length.
-	Add uint32 = 0x03
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
 	bitUidPostings  byte = 0x01
@@ -272,25 +270,7 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *protos.Posting) bool {
 			return false
 		}
 
-		// Here are the remaining cases.
-		// Add, Del, Set: Insert new post. Need to set mpost.Op to Add.
-		// Del, Del, Set: Insert new post.
-		// Set, Del, Set: Insert new post.
-		// Del, Del     : Shouldn't reach here.
-		// Set, Del     : Insert new post.
-		// Set, Set     : Insert new post.
-		// Add, Del     : Insert new post.
-		// Add, Set     : Insert new post. Need to set mpost.Op to Add.
-		if oldPost.Op == Add && mpost.Op == Set {
-			// Add followed by Set is considered an Add. Hence, mutate mpost.Op.
-			mpost.Op = Add
-		} else if oldPost.Op == Del && mpost.Op == Set && midx+1 < len(l.mlayer) {
-			prevOldPost := l.mlayer[midx+1]
-			if prevOldPost.Uid == oldPost.Uid && prevOldPost.Op == Add {
-				mpost.Op = Add
-			}
-		}
-		// Otherwise, add it where midx is pointing to.
+		// add it where midx is pointing to.
 		l.mlayer = append(l.mlayer, nil)
 		copy(l.mlayer[midx+1:], l.mlayer[midx:])
 		l.mlayer[midx] = mpost
@@ -298,23 +278,17 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *protos.Posting) bool {
 	}
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
-	var uidFound, psame bool
+	var psame bool
 	var pitr PIterator
 	pitr.Init(l.plist, mpost.Uid-1)
 	if pitr.Valid() {
 		pp := pitr.Posting()
-		puid := pp.Uid
-		uidFound = mpost.Uid == puid
 		psame = samePosting(pp, mpost)
 	}
 
 	if mpost.Op == Set {
 		if psame {
 			return false
-		}
-		if !uidFound {
-			// Posting not found in PL. This is considered an Add operation.
-			mpost.Op = Add
 		}
 	} else if !psame { // mpost.Op==Del
 		// Either we fail to find UID in immutable PL or contents don't match.
@@ -580,19 +554,11 @@ func (l *List) canRead(commitTs, readTs uint64) bool {
 	l.AssertRLock()
 	if l.startTs > 0 {
 		// Pending transaction
-		if commitTs == readTs {
-			return true
-		} else {
-			return false
-		}
+		return commitTs == readTs
 	}
 
 	// No pending transaction
-	if commitTs <= readTs {
-		return true
-	} else {
-		return false
-	}
+	return commitTs <= readTs
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
@@ -650,20 +616,21 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 			cont = f(pp)
 			pitr.Next()
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
-			if mp.Op == Add || mp.Op == Set {
+			if mp.Op != Del {
 				cont = f(mp)
 			}
+			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
-			if mp.Op == Add || mp.Op == Set {
+			if mp.Op != Del {
 				cont = f(mp)
 			}
+			prevUid = mp.Uid
 			pitr.Next()
 			midx++
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}
-		prevUid = mp.Uid
 	}
 	return nil
 }
@@ -672,44 +639,11 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 // TODO(Txn): Throw error
 func (l *List) length(readTs, afterUid uint64) int {
 	l.AssertRLock()
-	if l.startTs != 0 && readTs > l.startTs {
-		go l.updateCommitStatusHelper(context.Background())
-		return 0
-	}
-	if readTs == l.startTs && atomic.LoadInt32(&l.markdeleteAll) == 1 {
-		return 0
-	}
-
-	midx := 0
-
-	var bi bp128.BPackIterator
-	bi.Init(l.plist.Uids, afterUid)
-	if afterUid > 0 {
-		midx = sort.Search(len(l.mlayer), func(idx int) bool {
-			mp := l.mlayer[idx]
-			return afterUid < mp.Uid
-		})
-	}
-	count := bi.Length() - bi.StartIdx()
-	prevUid := uint64(0)
-	for midx < len(l.mlayer) {
-		p := l.mlayer[midx]
-		if p.Uid == prevUid {
-			// skip
-		} else if !l.canRead(p.Commit, readTs) {
-			// skip
-		} else if p.Op == Add {
-			count++
-		} else if p.Op == Del {
-			// We should ignore if it's Add, Del
-			if midx == len(l.mlayer)-1 || l.mlayer[midx+1].Uid != p.Uid ||
-				l.mlayer[midx+1].Op != Add {
-				count--
-			}
-		}
-		prevUid = p.Uid
-		midx++
-	}
+	count := 0
+	l.iterate(readTs, afterUid, func(p *protos.Posting) bool {
+		count++
+		return true
+	})
 	return count
 }
 
