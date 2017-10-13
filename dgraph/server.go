@@ -209,7 +209,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
 	}
 
-	res, err := gql.Parse(gql.Request{
+	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
 		Variables: req.Vars,
 		Http:      false,
@@ -222,17 +222,17 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	ctx, cancel = context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	if req.Schema != nil && res.Schema != nil {
+	if req.Schema != nil && parsedReq.Schema != nil {
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
 	// Schema Block and Mutation can be part of query string or request
-	if res.Schema == nil {
-		res.Schema = req.Schema
+	if parsedReq.Schema == nil {
+		parsedReq.Schema = req.Schema
 	}
 
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
-		GqlQuery: &res,
+		GqlQuery: &parsedReq,
 	}
 
 	var er query.ExecuteResult
