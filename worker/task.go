@@ -554,16 +554,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 	return nil
 }
 
-// This function should only be used by upsert. Upsert mutation also does a query which will wait
-// for the mutation to complete and hence would get stuck. Therefore, we only need to wait till
-// index - 1.
-func (n *node) processUpsertTask(ctx context.Context, t *task, gid uint32) (*protos.Result, error) {
-	if err := n.Applied.WaitForMark(ctx, t.rid-1); err != nil {
-		return nil, err
-	}
-	return helpProcessTask(ctx, t.upsert, gid)
-}
-
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	n := groups().Node

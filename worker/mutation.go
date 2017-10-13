@@ -402,14 +402,6 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		mu.Schema = append(mu.Schema, schema)
 	}
 
-	if m.Upsert != nil {
-		gid := groups().BelongsTo(m.Upsert.Attr)
-		mu := mutationMap[gid]
-		// There should also be a corresponding mutation for this attribute when doing upsert.
-		x.AssertTrue(mu != nil)
-		mu.Upsert = m.Upsert
-	}
-
 	if m.DropAll {
 		for _, gid := range groups().KnownGroups() {
 			mu := mutationMap[gid]

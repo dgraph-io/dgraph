@@ -30,7 +30,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger/y"
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -275,40 +274,10 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	return err
 }
 
-func (n *node) handleUpsert(task *task) (bool, error) {
-	if task.upsert == nil {
-		return true, nil
-	}
-
-	edge := task.edge
-	attr := task.upsert.Attr
-	if attr != edge.Attr {
-		return true, nil
-	}
-
-	gid := groups().BelongsTo(attr)
-	res, err := n.processUpsertTask(n.ctx, task, gid)
-	if err != nil {
-		return false, err
-	}
-	uids := algo.MergeSorted(res.UidMatrix)
-	if len(uids.Uids) > 0 {
-		return false, nil
-	}
-	return true, nil
-}
-
 func (n *node) processMutation(task *task) error {
 	pid := task.pid
 	ridx := task.rid
 	edge := task.edge
-
-	if cont, err := n.handleUpsert(task); err != nil {
-		return err
-	} else if !cont {
-		// We found a uid which has this value, so don't continue.
-		return nil
-	}
 
 	var ctx context.Context
 	var has bool
