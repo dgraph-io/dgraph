@@ -142,7 +142,6 @@ RETRY:
 	//		req.mark.Done(req.line)
 	//		req.markWg.Done()
 	//	}
-	atomic.AddUint64(&l.rdfs, uint64(req.Size()))
 	return nil
 }
 

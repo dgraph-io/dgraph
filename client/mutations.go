@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -68,25 +69,50 @@ func (d *Dgraph) DropAll(ctx context.Context) error {
 	return err
 }
 
-func (d *Dgraph) SetSchemaBlocking(ctx context.Context, q string) error {
-	req := new(Req)
-	che := make(chan error, 1)
-	req.SetSchema(q)
-	go func() {
-		if _, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr); err != nil {
-			che <- err
-			return
-		}
-		che <- nil
-	}()
-
-	// blocking wait until schema is applied
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-che:
-		return err
+func (d *Dgraph) CheckSchema(schema *protos.SchemaUpdate) error {
+	if len(schema.Predicate) == 0 {
+		return x.Errorf("No predicate specified for schemaUpdate")
 	}
+	typ := types.TypeID(schema.ValueType)
+	if typ == types.UidID && schema.Directive == protos.SchemaUpdate_INDEX {
+		// index on uid type
+		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
+			schema.Predicate)
+	} else if typ != types.UidID && schema.Directive == protos.SchemaUpdate_REVERSE {
+		// reverse on non-uid type
+		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
+	}
+	return nil
+}
+
+func (d *Dgraph) SetSchemaBlocking(ctx context.Context, updates []*protos.SchemaUpdate) error {
+	for _, s := range updates {
+		if err := d.CheckSchema(s); err != nil {
+			return err
+		}
+		req := new(Req)
+		che := make(chan error, 1)
+		req.AddSchema(s)
+		go func() {
+			if _, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr); err != nil {
+				che <- err
+				return
+			}
+			che <- nil
+		}()
+
+		// blocking wait until schema is applied
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-che:
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // Run runs the request in req and returns with the completed response from the server.  Calling

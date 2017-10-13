@@ -18,11 +18,8 @@ package client
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 type opType int
@@ -49,34 +46,11 @@ func (req *Req) Request() *protos.Request {
 	return &req.gr
 }
 
-func (d *Dgraph) CheckSchema(schema protos.SchemaUpdate) error {
-	if len(schema.Predicate) == 0 {
-		return x.Errorf("No predicate specified for schemaUpdate")
-	}
-	typ := types.TypeID(schema.ValueType)
-	if typ == types.UidID && schema.Directive == protos.SchemaUpdate_INDEX {
-		// index on uid type
-		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
-			schema.Predicate)
-	} else if typ != types.UidID && schema.Directive == protos.SchemaUpdate_REVERSE {
-		// reverse on non-uid type
-		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
-	}
-	return nil
-}
-
 // SetQuery sets the query in req to the given string.
 // The query string is not checked until the request is
 // run, when it is parsed and checked server-side.
 func (req *Req) SetQuery(q string) {
 	req.gr.Query = q
-}
-
-// SetSchema sets schema mutation in req with the given schema
-// The schema is not checked until the request is run, when it is parsed and
-// checked server-side
-func (req *Req) SetSchema(q string) {
-	req.gr.Query = fmt.Sprintf("mutation {\nschema {\n%s\n}\n}", q)
 }
 
 // SetQueryWithVariables sets query q (which contains graphQL variables mapped
@@ -126,43 +100,17 @@ func (req *Req) DeleteObject(v interface{}) error {
 	return nil
 }
 
-// DeleteAll is used to drop all the data in the database.
-func (req *Req) DeleteAll() {
+func (req *Req) AddSchema(s *protos.SchemaUpdate) error {
 	if req.gr.Mutation == nil {
 		req.gr.Mutation = new(protos.Mutation)
 	}
-	req.gr.Mutation.DropAll = true
-}
-
-// AddSchema adds the single schema mutation s to the request.
-func (req *Req) AddSchema(s protos.SchemaUpdate) error {
-	if req.gr.Mutation == nil {
-		req.gr.Mutation = new(protos.Mutation)
-	}
-	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema, &s)
+	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema, s)
 	return nil
 }
 
-// Size returns the total number of Set, Delete and Schema mutations that are part of the request.
-func (req *Req) Size() int {
-	if req.gr.Mutation == nil {
-		return 0
-	}
-	return len(req.gr.Mutation.Set) + len(req.gr.Mutation.Del) + len(req.gr.Mutation.Schema)
-}
-
-func (req *Req) reset() {
+func (req *Req) Reset() {
 	req.gr.Query = ""
 	req.gr.Mutation.SetJson = req.gr.Mutation.SetJson[:0]
 	req.gr.Mutation.DeleteJson = req.gr.Mutation.DeleteJson[:0]
 	req.gr.Mutation.Schema = req.gr.Mutation.Schema[:0]
-}
-
-func validateStr(val string) error {
-	for idx, c := range val {
-		if c == '"' && (idx == 0 || val[idx-1] != '\\') {
-			return fmt.Errorf(`" must be preceded by a \ in object value`)
-		}
-	}
-	return nil
 }

@@ -36,6 +36,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -47,6 +48,7 @@ import (
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -117,7 +119,12 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	if err != nil {
 		x.Checkf(err, "Error while reading file")
 	}
-	return dgraphClient.SetSchemaBlocking(ctx, string(b))
+
+	su, err := schema.Parse(string(b))
+	if err != nil {
+		return err
+	}
+	return dgraphClient.SetSchemaBlocking(ctx, su)
 }
 
 func (l *loader) uid(val string) (uint64, error) {
@@ -222,6 +229,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 		if batchSize >= *numRdf {
 			r.SetObject(edges)
 			l.reqs <- r
+			atomic.AddUint64(&l.rdfs, uint64(len(edges)))
 			edges = edges[:0]
 			batchSize = 0
 			r = new(client.Req)
@@ -230,6 +238,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	if batchSize > 0 {
 		r.SetObject(edges)
 		l.reqs <- r
+		atomic.AddUint64(&l.rdfs, uint64(len(edges)))
 		edges = edges[:0]
 	}
 	return nil
@@ -307,13 +316,12 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 		reqs:   make(chan *client.Req, opts.Pending*2),
 
 		// length includes opts.Pending for makeRequests, another one for makeSchemaRequests.
-		che: make(chan error, opts.Pending+1),
+		che: make(chan error, opts.Pending),
 	}
 
 	for i := 0; i < opts.Pending; i++ {
 		go l.makeRequests()
 	}
-	go l.makeSchemaRequests()
 
 	rand.Seed(time.Now().Unix())
 	if opts.PrintCounters {
@@ -380,12 +388,12 @@ func main() {
 	defer l.kv.Close()
 
 	if *storeXid {
-		if err := l.AddSchema(protos.SchemaUpdate{
+		if err := dgraphClient.SetSchemaBlocking(ctx, []*protos.SchemaUpdate{&protos.SchemaUpdate{
 			Predicate: "xid",
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"hash"},
 			Directive: protos.SchemaUpdate_INDEX,
-		}); err != nil {
+		}}); err != nil {
 			log.Fatal("While adding schema to batch ", err)
 		}
 	}
