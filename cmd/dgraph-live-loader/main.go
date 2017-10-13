@@ -174,7 +174,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	//	}
 
 	var line uint64
-	r := new(client.Req)
+	r := client.Req{}
 	edges := make([]map[string]interface{}, 0, *numRdf)
 	edge := make(map[string]interface{})
 	var batchSize int
@@ -221,6 +221,8 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 			}
 			edge[nq.Predicate] = map[string]uint64{"_uid_": objectId}
 		} else {
+			// TODO - This is not ideal. We should store int/float as float and bool in boolean
+			// encoding and everything else as string. For now we store everything as string.
 			edge[nq.Predicate] = nq.ObjectVal
 		}
 
@@ -232,7 +234,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 			atomic.AddUint64(&l.rdfs, uint64(len(edges)))
 			edges = edges[:0]
 			batchSize = 0
-			r = new(client.Req)
+			r = client.Req{}
 		}
 	}
 	if batchSize > 0 {
@@ -240,6 +242,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 		l.reqs <- r
 		atomic.AddUint64(&l.rdfs, uint64(len(edges)))
 		edges = edges[:0]
+		r = client.Req{}
 	}
 	return nil
 }
@@ -306,14 +309,14 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	)
 
 	l := &loader{
-		opts:   opts,
-		dc:     dc,
-		start:  time.Now(),
-		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
-		alloc:  alloc,
-		kv:     kv,
-		marks:  make(map[string]waterMark),
-		reqs:   make(chan *client.Req, opts.Pending*2),
+		opts:  opts,
+		dc:    dc,
+		start: time.Now(),
+		//	schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
+		alloc: alloc,
+		kv:    kv,
+		//		marks:  make(map[string]waterMark),
+		reqs: make(chan client.Req, opts.Pending*2),
 
 		// length includes opts.Pending for makeRequests, another one for makeSchemaRequests.
 		che: make(chan error, opts.Pending),

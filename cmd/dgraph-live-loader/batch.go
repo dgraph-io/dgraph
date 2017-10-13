@@ -68,7 +68,7 @@ type loader struct {
 
 	// Map of filename to x.Watermark. Used for checkpointing.
 	marks            syncMarks
-	reqs             chan *client.Req
+	reqs             chan client.Req
 	checkpointTicker *time.Ticker // Used to write checkpoints periodically.
 	che              chan error
 	// In case of max retries exceeded, we set this to 1.
@@ -105,7 +105,7 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
-func (l *loader) request(req *client.Req) error {
+func (l *loader) request(req client.Req) error {
 	counter := atomic.AddUint64(&l.mutations, 1)
 	factor := time.Second
 	var retries uint32
@@ -115,7 +115,7 @@ RETRY:
 		return l.opts.Ctx.Err()
 	default:
 	}
-	_, err := l.dc.Run(context.Background(), req)
+	_, err := l.dc.Run(context.Background(), &req)
 	if err != nil {
 		errString := err.Error()
 		// Irrecoverable
