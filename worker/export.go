@@ -261,7 +261,11 @@ func export(bdir string) error {
 	}()
 
 	// Iterate over key-value store
-	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	txn := pstore.NewTransaction(false)
+	defer txn.Discard()
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	prefix := new(bytes.Buffer)
 	prefix.Grow(100)
@@ -299,13 +303,11 @@ func export(bdir string) error {
 
 		if pk.IsSchema() {
 			s := &protos.SchemaUpdate{}
-			err := item.Value(func(val []byte) error {
-				x.Check(s.Unmarshal(val))
-				return nil
-			})
+			val, err := item.Value()
 			if err != nil {
 				return err
 			}
+			x.Check(s.Unmarshal(val))
 			chs <- &skv{
 				attr:   pk.Attr,
 				schema: s,
@@ -322,13 +324,11 @@ func export(bdir string) error {
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
 		pl := &protos.PostingList{}
-		err := item.Value(func(val []byte) error {
-			posting.UnmarshalOrCopy(val, item.UserMeta(), pl)
-			return nil
-		})
+		val, err := item.Value()
 		if err != nil {
 			return err
 		}
+		posting.UnmarshalOrCopy(val, item.UserMeta(), pl)
 		chkv <- kv{
 			prefix: prefix.String(),
 			list:   pl,

@@ -17,13 +17,11 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -61,7 +59,7 @@ func (l *loader) newSyncMarks(files []string) error {
 	l.checkpointTicker = t
 	go func(t *time.Ticker) {
 		for range t.C {
-			l.writeCheckpoint()
+			//l.writeCheckpoint()
 		}
 	}(t)
 	return nil
@@ -72,6 +70,7 @@ func checkpointKey(file string) []byte {
 	return []byte("\x02" + file)
 }
 
+/*
 // Get checkpoint for file from Badger.
 func (l *loader) checkpoint(file string) (uint64, error) {
 	var item badger.KVItem
@@ -94,6 +93,7 @@ func (l *loader) checkpoint(file string) (uint64, error) {
 	})
 	return lineNum, err
 }
+
 
 // Used to write checkpoints to Badger.
 func (l *loader) writeCheckpoint() {
@@ -119,7 +119,7 @@ func (l *loader) writeCheckpoint() {
 		}
 	}
 }
-
+*/
 func (g syncMarks) create(file string) waterMark {
 	x.AssertTrue(g != nil)
 

@@ -56,7 +56,7 @@ type loader struct {
 	dc     *client.Dgraph
 	alloc  *xidmap.XidMap
 	ticker *time.Ticker
-	kv     *badger.KV
+	kv     *badger.DB
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -217,7 +217,7 @@ func (l *loader) BatchFlush() error {
 	//		wm.wg.Wait()
 	//	}
 	// Write final checkpoint before stopping.
-	l.writeCheckpoint()
+	//l.writeCheckpoint()
 	l.stopTickers()
 	return nil
 }

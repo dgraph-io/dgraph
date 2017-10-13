@@ -281,7 +281,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	opt.Dir = *clientDir
 	opt.ValueDir = *clientDir
 
-	kv, err := badger.NewKV(&opt)
+	kv, err := badger.Open(opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
 	alloc := xidmap.New(kv,

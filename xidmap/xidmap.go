@@ -26,7 +26,7 @@ type Options struct {
 // because it uses an LRU cache.
 type XidMap struct {
 	shards []shard
-	kv     *badger.KV
+	kv     *badger.DB
 	up     UidProvider
 	opt    Options
 
@@ -78,7 +78,7 @@ type UidProvider interface {
 }
 
 // New creates an XidMap with given badger and uid provider.
-func New(kv *badger.KV, up UidProvider, opt Options) *XidMap {
+func New(kv *badger.DB, up UidProvider, opt Options) *XidMap {
 	x.AssertTrue(opt.LRUSize != 0)
 	x.AssertTrue(opt.NumShards != 0)
 	xm := &XidMap{
@@ -111,9 +111,11 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 		return uid, false, nil
 	}
 
-	var item badger.KVItem
-	x.Check(m.kv.Get([]byte(xid), &item))
-	x.Check(item.Value(func(uidBuf []byte) error {
+	x.Check(m.kv.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte(xid))
+		x.Check(err)
+		uidBuf, err := item.Value()
+		x.Check(err)
 		if uidBuf == nil {
 			return nil
 		}
@@ -172,7 +174,8 @@ func (s *shard) evict() {
 	const evictRatio = 0.5
 	evict := int(float64(s.queue.Len()) * evictRatio)
 	s.beingEvicted = make(map[string]uint64)
-	batch := make([]*badger.Entry, 0, evict)
+	txn := s.xm.kv.NewTransaction(true)
+	defer txn.Discard()
 	for i := 0; i < evict; i++ {
 		m := s.queue.Remove(s.queue.Front()).(*mapping)
 		delete(s.elems, m.xid)
@@ -180,18 +183,12 @@ func (s *shard) evict() {
 		if !m.persisted {
 			var uidBuf [binary.MaxVarintLen64]byte
 			n := binary.PutUvarint(uidBuf[:], m.uid)
-			batch = append(batch, &badger.Entry{
-				Key:   []byte(m.xid),
-				Value: uidBuf[:n],
-			})
+			txn.Set([]byte(m.xid), uidBuf[:n], 0x00)
 		}
 
 	}
-	s.xm.kv.BatchSetAsync(batch, func(err error) {
+	txn.Commit(func(err error) {
 		x.Check(err)
-		for _, e := range batch {
-			x.Check(e.Error)
-		}
 
 		s.Lock()
 		s.beingEvicted = nil
