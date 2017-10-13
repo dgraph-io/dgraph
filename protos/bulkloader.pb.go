@@ -29,8 +29,6 @@
 		Mutation
 		Request
 		Latency
-		Property
-		Node
 		Response
 		Check
 		Version
