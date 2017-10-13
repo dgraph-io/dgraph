@@ -47,6 +47,8 @@ type proposalCtx struct {
 	err   error
 	index uint64
 	n     *node
+	// Used for writing all deltas at end
+	txn *posting.Txn
 }
 
 type proposals struct {
@@ -83,13 +85,12 @@ func (p *proposals) IncRef(pid uint32, count int) {
 	return
 }
 
-func (p *proposals) Ctx(pid uint32) (context.Context, bool) {
+func (p *proposals) CtxAndTxn(pid uint32) (context.Context, *posting.Txn) {
 	p.RLock()
 	defer p.RUnlock()
-	if pd, has := p.ids[pid]; has {
-		return pd.ctx, true
-	}
-	return nil, false
+	pd, has := p.ids[pid]
+	x.AssertTrue(has)
+	return pd.ctx, pd.txn
 }
 
 func (p *proposals) Done(pid uint32, err error) {
@@ -108,10 +109,17 @@ func (p *proposals) Done(pid uint32, err error) {
 		return
 	}
 	delete(p.ids, pid)
+	if err = pd.txn.CommitDeltas(); err != nil {
+		pd.err = err
+	}
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
+
+	// TODO(txn): We write deltas immediately so we can snapshot based on applied.
+	// For linearazibility we need to wait until transaction is committed or aborted.
+	// Probably don't need syncMarks.
 	pd.n.Applied.Done(pd.index)
 	posting.SyncMarks().Done(pd.index)
 }
@@ -228,6 +236,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		ch:  che,
 		ctx: ctx,
 		n:   n,
+		txn: &posting.Txn{StartTs: proposal.StartTs},
 	}
 	for {
 		id := rand.Uint32()
@@ -279,14 +288,10 @@ func (n *node) processMutation(task *task) error {
 	ridx := task.rid
 	edge := task.edge
 
-	var ctx context.Context
-	var has bool
-	if ctx, has = n.props.Ctx(pid); !has {
-		ctx = n.ctx
-	}
+	ctx, txn := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: ridx}
 	ctx = context.WithValue(ctx, "raft", rv)
-	if err := runMutation(ctx, edge); err != nil {
+	if err := runMutation(ctx, edge, txn); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -296,14 +301,10 @@ func (n *node) processMutation(task *task) error {
 }
 
 func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.SchemaUpdate) error {
-	var ctx context.Context
-	var has bool
-	if ctx, has = n.props.Ctx(pid); !has {
-		ctx = n.ctx
-	}
+	ctx, txn := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
-	ctx = context.WithValue(n.ctx, "raft", rv)
-	if err := runSchemaMutation(ctx, s); err != nil {
+	ctx = context.WithValue(ctx, "raft", rv)
+	if err := runSchemaMutation(ctx, s, txn); err != nil {
 		if tr, ok := trace.FromContext(n.ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -360,6 +361,7 @@ func (n *node) processApplyCh() {
 				n:     n,
 				index: e.Index,
 				cnt:   1,
+				txn:   &posting.Txn{StartTs: proposal.StartTs},
 			}
 			n.props.Store(proposal.Id, pctx)
 		} else {
@@ -386,7 +388,7 @@ func (n *node) processApplyCh() {
 }
 
 func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
-	ctx, _ := n.props.Ctx(pid)
+	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(n.ctx, "raft", rv)
 	err := posting.DeletePredicate(ctx, predicate)
@@ -394,7 +396,7 @@ func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 }
 
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
-	ctx, _ := n.props.Ctx(pid)
+	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)
 	n.props.Done(pid, err)
 	return nil

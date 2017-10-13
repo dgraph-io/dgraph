@@ -89,6 +89,9 @@ func (s *scheduler) register(t *task) bool {
 	}
 }
 
+// We don't support schema mutations across nodes in a transaction.
+// Wait for all transactions to either abort or complete and all write transactions
+// involving the predicate are aborted until schema mutations are done.
 func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	if proposal.Mutations.DropAll {
 		if err := s.n.syncAllMarks(s.n.ctx, index-1); err != nil {

@@ -40,8 +40,11 @@ func BenchmarkGetLinear(b *testing.B) {
 	m := make(map[uint64]*List)
 	for i := 0; i < b.N; i++ {
 		k := uint64(i)
-		if l, ok := m[k]; !ok {
-			l = getNew(key, nil)
+		if _, ok := m[k]; !ok {
+			l, err := getNew(key, nil)
+			if err != nil {
+				b.Error(err)
+			}
 			m[k] = l
 		}
 	}

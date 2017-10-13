@@ -18,13 +18,16 @@ package badger
 
 import (
 	"github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/badger/y"
 )
 
 // NOTE: Keep the comments in the following to 75 chars width, so they
 // format nicely in godoc.
 
 // Options are params for creating DB object.
+//
+// This package provides DefaultOptions which contains options that should
+// work for most applications. Consider using that as a starting point before
+// customizing it for your own needs.
 type Options struct {
 	// 1. Mandatory flags
 	// -------------------
@@ -93,16 +96,13 @@ var DefaultOptions = Options{
 	NumLevelZeroTables:      5,
 	NumLevelZeroTablesStall: 10,
 	NumMemtables:            5,
-	SyncWrites:              false,
+	SyncWrites:              true,
 	// Nothing to read/write value log using standard File I/O
 	// MemoryMap to mmap() the value log files
 	ValueLogFileSize: 1 << 30,
 	ValueThreshold:   20,
 }
 
-func (opt *Options) estimateSize(entry *Entry) int {
-	if len(entry.Value) < opt.ValueThreshold {
-		return len(entry.Key) + len(entry.Value) + y.MetaSize + y.UserMetaSize + y.CasSize
-	}
-	return len(entry.Key) + 16 + y.MetaSize + y.UserMetaSize + y.CasSize
+func (opt *Options) estimateSize(e *entry) int {
+	return e.estimateSize(opt.ValueThreshold)
 }

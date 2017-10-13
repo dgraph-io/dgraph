@@ -17,18 +17,14 @@
 package y
 
 import (
+	"bytes"
+	"encoding/binary"
 	"hash/crc32"
+	"math"
 	"os"
 	"sync"
 
 	"github.com/pkg/errors"
-)
-
-// Constants used in serialization sizes, and in ValueStruct serialization
-const (
-	MetaSize     = 1
-	UserMetaSize = 1
-	CasSize      = 8
 )
 
 // ErrEOF indicates an end of file when trying to read from a memory mapped file
@@ -82,6 +78,52 @@ func OpenTruncFile(filename string, sync bool) (*os.File, error) {
 // Safecopy does append(a[:0], src...).
 func Safecopy(a []byte, src []byte) []byte {
 	return append(a[:0], src...)
+}
+
+// KeyWithTs generates a new key by appending ts to key.
+func KeyWithTs(key []byte, ts uint64) []byte {
+	out := make([]byte, len(key)+8)
+	copy(out, key)
+	binary.BigEndian.PutUint64(out[len(key):], math.MaxUint64-ts)
+	return out
+}
+
+// ParseTs parses the timestamp from the key bytes.
+func ParseTs(key []byte) uint64 {
+	if len(key) <= 8 {
+		return 0
+	}
+	return math.MaxUint64 - binary.BigEndian.Uint64(key[len(key)-8:])
+}
+
+// CompareKeys checks the key without timestamp and checks the timestamp if keyNoTs
+// is same.
+// a<timestamp> would be sorted higher than aa<timestamp> if we use bytes.compare
+// All keys should have timestamp.
+func CompareKeys(key1 []byte, key2 []byte) int {
+	AssertTruef(len(key1) > 8 && len(key2) > 8, "%q %q", key1, key2)
+	if cmp := bytes.Compare(key1[:len(key1)-8], key2[:len(key2)-8]); cmp != 0 {
+		return cmp
+	}
+	return bytes.Compare(key1[len(key1)-8:], key2[len(key2)-8:])
+}
+
+// ParseKey parses the actual key from the key bytes.
+func ParseKey(key []byte) []byte {
+	if key == nil {
+		return nil
+	}
+
+	AssertTruef(len(key) > 8, "key=%q", key)
+	return key[:len(key)-8]
+}
+
+// SameKey checks for key equality ignoring the version timestamp suffix.
+func SameKey(src, dst []byte) bool {
+	if len(src) != len(dst) {
+		return false
+	}
+	return bytes.Equal(ParseKey(src), ParseKey(dst))
 }
 
 // Slice holds a reusable buf, will reallocate if you request a larger size than ever before.

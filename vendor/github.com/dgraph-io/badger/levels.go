@@ -17,7 +17,6 @@
 package badger
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -38,7 +37,7 @@ type levelsController struct {
 
 	// The following are initialized once and const.
 	levels []*levelHandler
-	kv     *KV
+	kv     *DB
 
 	nextFileID uint64 // Atomic
 
@@ -56,7 +55,7 @@ var (
 // revertToManifest checks that all necessary table files exist and removes all table files not
 // referenced by the manifest.  idMap is a set of table file id's that were read from the directory
 // listing.
-func revertToManifest(kv *KV, mf *Manifest, idMap map[uint64]struct{}) error {
+func revertToManifest(kv *DB, mf *Manifest, idMap map[uint64]struct{}) error {
 	// 1. Check all files in manifest exist.
 	for id := range mf.Tables {
 		if _, ok := idMap[id]; !ok {
@@ -78,7 +77,7 @@ func revertToManifest(kv *KV, mf *Manifest, idMap map[uint64]struct{}) error {
 	return nil
 }
 
-func newLevelsController(kv *KV, mf *Manifest) (*levelsController, error) {
+func newLevelsController(kv *DB, mf *Manifest) (*levelsController, error) {
 	y.AssertTrue(kv.opt.NumLevelZeroTablesStall > kv.opt.NumLevelZeroTables)
 	s := &levelsController{
 		kv:     kv,
@@ -355,7 +354,7 @@ func (s *levelsController) compactBuildTables(
 	}
 
 	sort.Slice(newTables, func(i, j int) bool {
-		return bytes.Compare(newTables[i].Biggest(), newTables[j].Biggest()) < 0
+		return y.CompareKeys(newTables[i].Biggest(), newTables[j].Biggest()) < 0
 	})
 
 	return newTables, func() error { return decrRefs(newTables) }, nil
@@ -663,7 +662,9 @@ func (s *levelsController) get(key []byte) (y.ValueStruct, error) {
 	// read level L's tables post-compaction and level L+1's tables pre-compaction.  (If we do
 	// parallelize this, we will need to call the h.RLock() function by increasing order of level
 	// number.)
-	for _, h := range s.levels {
+
+	var maxVs y.ValueStruct
+	for l, h := range s.levels {
 		vs, err := h.get(key) // Calls h.RLock() and h.RUnlock().
 		if err != nil {
 			return y.ValueStruct{}, errors.Wrapf(err, "get key: %q", key)
@@ -671,9 +672,14 @@ func (s *levelsController) get(key []byte) (y.ValueStruct, error) {
 		if vs.Value == nil && vs.Meta == 0 {
 			continue
 		}
-		return vs, nil
+		if l == 0 {
+			return vs, nil
+		}
+		if maxVs.Version < vs.Version {
+			maxVs = vs
+		}
 	}
-	return y.ValueStruct{}, nil
+	return maxVs, nil
 }
 
 func appendIteratorsReversed(out []y.Iterator, th []*table.Table, reversed bool) []y.Iterator {

@@ -110,7 +110,8 @@ func TestIndexingInvalidLang(t *testing.T) {
 	require.Error(t, err)
 }
 
-func addMutationWithIndex(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32) {
+func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
+	startTs uint64, commitTs uint64, index bool) {
 	if op == Del {
 		edge.Op = protos.DirectedEdge_DEL
 	} else if op == Set {
@@ -118,7 +119,17 @@ func addMutationWithIndex(t *testing.T, l *List, edge *protos.DirectedEdge, op u
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge))
+	txn := &Txn{StartTs: startTs}
+	if index {
+		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
+	} else {
+		ok, err := l.AddMutation(context.Background(), txn, edge)
+		require.NoError(t, err)
+		require.True(t, ok)
+	}
+	require.NoError(t, txn.CommitDeltas())
+	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs))
+	require.NoError(t, commitMutations([][]byte{l.key}, commitTs))
 }
 
 const schemaVal = `
@@ -132,8 +143,11 @@ func TestTokensTable(t *testing.T) {
 	require.NoError(t, err)
 
 	key := x.DataKey("name", 1)
-	l := getNew(key, ps)
-	defer ps.Delete(key)
+	l, err := getNew(key, ps)
+	require.NoError(t, err)
+	defer ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(key)
+	})
 
 	edge := &protos.DirectedEdge{
 		Value:  []byte("david"),
@@ -141,32 +155,36 @@ func TestTokensTable(t *testing.T) {
 		Attr:   "name",
 		Entity: 157,
 	}
-	addMutationWithIndex(t, l, edge, Set)
+	addMutation(t, l, edge, Set, 1, 2, true)
 	_, err = l.SyncIfDirty(false)
 	x.Check(err)
 
-	key = x.IndexKey("name", "david")
-	var item badger.KVItem
+	key = x.IndexKey("name", "\x01david")
 	time.Sleep(10 * time.Millisecond)
-	err = ps.Get(key, &item)
-	require.NoError(t, err)
 
 	var pl protos.PostingList
-	require.NoError(t, item.Value(func(val []byte) error {
+	txn := ps.NewTransaction(false)
+	_, err = txn.Get(key)
+	require.NoError(t, err)
+	ps.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		require.NoError(t, err)
+		val, err := item.Value()
+		require.NoError(t, err)
 		UnmarshalOrCopy(val, item.UserMeta(), &pl)
 		return nil
-	}))
+	})
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
-	CommitLists(10, 1)
-
-	err = ps.Get(key, &item)
-	require.NoError(t, err)
-	require.NoError(t, item.Value(func(val []byte) error {
+	ps.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		require.NoError(t, err)
+		val, err := item.Value()
+		require.NoError(t, err)
 		UnmarshalOrCopy(val, item.UserMeta(), &pl)
 		return nil
-	}))
+	})
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 	deletePl(t)
@@ -176,7 +194,9 @@ func TestTokensTable(t *testing.T) {
 func tokensForTest(attr string) []string {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	txn := pstore.NewTransaction(false)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	var out []string
@@ -194,7 +214,7 @@ func tokensForTest(attr string) []string {
 
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, attr string, src uint64,
-	value string) {
+	value string, startTs, commitTs uint64) {
 	edge := &protos.DirectedEdge{
 		Value:  []byte(value),
 		Label:  "testing",
@@ -204,14 +224,12 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 	}
 	l := Get(x.DataKey(attr, src))
 	// No index entries added here as we do not call AddMutationWithIndex.
-	ok, err := l.AddMutation(context.Background(), edge)
-	require.NoError(t, err)
-	require.True(t, ok)
+	addMutation(t, l, edge, Set, startTs, commitTs, false)
 }
 
 // addEdgeToUID adds uid edge with reverse edge
 func addEdgeToUID(t *testing.T, attr string, src uint64,
-	dst uint64) {
+	dst uint64, startTs, commitTs uint64) {
 	edge := &protos.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
@@ -221,14 +239,12 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 	}
 	l := Get(x.DataKey(attr, src))
 	// No index entries added here as we do not call AddMutationWithIndex.
-	ok, err := l.AddMutation(context.Background(), edge)
-	require.NoError(t, err)
-	require.True(t, ok)
+	addMutation(t, l, edge, Set, startTs, commitTs, false)
 }
 
 // addEdgeToUID adds uid edge with reverse edge
 func addReverseEdge(t *testing.T, attr string, src uint64,
-	dst uint64) {
+	dst uint64, startTs, commitTs uint64) {
 	edge := &protos.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
@@ -236,31 +252,35 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      protos.DirectedEdge_SET,
 	}
-	addReverseMutation(context.Background(), edge)
+	txn := &Txn{StartTs: startTs}
+	addReverseMutation(context.Background(), edge, txn)
+	require.NoError(t, txn.CommitDeltas())
+	l := Get(x.ReverseKey(attr, dst))
+	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs))
+	require.NoError(t, commitMutations([][]byte{l.key}, commitTs))
 }
 
+/*
 func TestRebuildIndex(t *testing.T) {
 	schema.ParseBytes([]byte(schemaVal), 1)
-	addEdgeToValue(t, "name", 1, "Michonne")
-	addEdgeToValue(t, "name", 20, "David")
-
-	// RebuildIndex requires the data to be committed to data store.
-	CommitLists(10, 1)
-	time.Sleep(10 * time.Millisecond)
+	addEdgeToValue(t, "name", 1, "Michonne", uint64(1), uint64(2))
+	addEdgeToValue(t, "name", 20, "David", uint64(3), uint64(4))
 
 	// Create some fake wrong entries for data store.
-	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"), 0x00)
-	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"), 0x00)
+	ps.Update(func(txn *badger.Txn) error {
+		txn.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"), 0x00)
+		txn.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"), 0x00)
+		return nil
+	})
 
 	require.NoError(t, DeleteIndex(context.Background(), "name"))
-	require.NoError(t, RebuildIndex(context.Background(), "name"))
-
-	// Let's force a commit.
-	CommitLists(10, 1)
-	time.Sleep(10 * time.Millisecond)
+	tx := &Txn{StartTs: 5}
+	require.NoError(t, RebuildIndex(context.Background(), "name", tx))
 
 	// Check index entries in data store.
-	it := ps.NewIterator(badger.DefaultIteratorOptions)
+	txn := ps.NewTransaction(false)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
@@ -274,10 +294,9 @@ func TestRebuildIndex(t *testing.T) {
 		}
 		idxKeys = append(idxKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, item.Value(func(val []byte) error {
-			UnmarshalOrCopy(val, item.UserMeta(), pl)
-			return nil
-		}))
+		val, err := item.Value()
+		require.NoError(t, err)
+		UnmarshalOrCopy(val, item.UserMeta(), pl)
 		idxVals = append(idxVals, pl)
 	}
 	require.Len(t, idxKeys, 2)
@@ -294,29 +313,28 @@ func TestRebuildIndex(t *testing.T) {
 
 	l1 := Get(x.DataKey("name", 1))
 	deletePl(t)
-	ps.Delete(l1.key)
+	ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(l1.key)
+	})
 	l2 := Get(x.DataKey("name", 20))
 	deletePl(t)
-	ps.Delete(l2.key)
+	ps.Update(func(txn *badger.Txn) error {
+		return txn.Delete(l2.key)
+	})
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
-	addEdgeToUID(t, "friend", 1, 23)
-	addEdgeToUID(t, "friend", 1, 24)
-	addEdgeToUID(t, "friend", 2, 23)
+	addEdgeToUID(t, "friend", 1, 23, uint64(1), uint64(2))
+	addEdgeToUID(t, "friend", 1, 24, uint64(3), uint64(4))
+	addEdgeToUID(t, "friend", 2, 23, uint64(5), uint64(6))
 
-	// RebuildIndex requires the data to be committed to data store.
-	CommitLists(10, 1)
-	time.Sleep(10 * time.Millisecond)
-
-	require.NoError(t, RebuildReverseEdges(context.Background(), "friend"))
-
-	// Let's force a commit.
-	CommitLists(10, 1)
-	time.Sleep(10 * time.Millisecond)
+	tx := &Txn{StartTs: 5}
+	require.NoError(t, RebuildReverseEdges(context.Background(), "friend", tx))
 
 	// Check index entries in data store.
-	it := ps.NewIterator(badger.DefaultIteratorOptions)
+	txn := ps.NewTransaction(false)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	pk := x.ParsedKey{Attr: "friend"}
 	prefix := pk.ReversePrefix()
@@ -330,10 +348,9 @@ func TestRebuildReverseEdges(t *testing.T) {
 		}
 		revKeys = append(revKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, item.Value(func(val []byte) error {
-			UnmarshalOrCopy(val, item.UserMeta(), pl)
-			return nil
-		}))
+		val, err := item.Value()
+		require.NoError(t, err)
+		UnmarshalOrCopy(val, item.UserMeta(), pl)
 		revVals = append(revVals, pl)
 	}
 	require.Len(t, revKeys, 2)
@@ -347,3 +364,4 @@ func TestRebuildReverseEdges(t *testing.T) {
 	require.EqualValues(t, 2, uids0[1])
 	require.EqualValues(t, 1, uids1[0])
 }
+*/

@@ -33,7 +33,6 @@ Key differences:
 package skl
 
 import (
-	"bytes"
 	"math"
 	"math/rand"
 	"sync/atomic"
@@ -109,7 +108,7 @@ func newNode(arena *Arena, key []byte, v y.ValueStruct, height int) *node {
 	node.keyOffset = arena.putKey(key)
 	node.keySize = uint16(len(key))
 	node.height = uint16(height)
-	node.value = encodeValue(arena.putVal(v), uint16(len(v.Value)))
+	node.value = encodeValue(arena.putVal(v), v.EncodedSize())
 	return node
 }
 
@@ -146,7 +145,7 @@ func (s *node) key(arena *Arena) []byte {
 
 func (s *node) setValue(arena *Arena, v y.ValueStruct) {
 	valOffset := arena.putVal(v)
-	value := encodeValue(valOffset, uint16(len(v.Value)))
+	value := encodeValue(valOffset, v.EncodedSize())
 	atomic.StoreUint64(&s.value, value)
 }
 
@@ -162,7 +161,7 @@ func (s *node) casNextOffset(h int, old, val uint32) bool {
 // If n is nil, this is an "end" marker and we return false.
 //func (s *Skiplist) keyIsAfterNode(key []byte, n *node) bool {
 //	y.AssertTrue(n != s.head)
-//	return n != nil && bytes.Compare(key, n.key) > 0
+//	return n != nil && y.CompareKeys(key, n.key) > 0
 //}
 
 func randomHeight() int {
@@ -208,7 +207,7 @@ func (s *Skiplist) findNear(key []byte, less bool, allowEqual bool) (*node, bool
 		}
 
 		nextKey := next.key(s.arena)
-		cmp := bytes.Compare(key, nextKey)
+		cmp := y.CompareKeys(key, nextKey)
 		if cmp > 0 {
 			// x.key < next.key < key. We can continue to move right.
 			x = next
@@ -263,7 +262,7 @@ func (s *Skiplist) findSpliceForLevel(key []byte, before *node, level int) (*nod
 			return before, next
 		}
 		nextKey := next.key(s.arena)
-		cmp := bytes.Compare(key, nextKey)
+		cmp := y.CompareKeys(key, nextKey)
 		if cmp == 0 {
 			// Equality case.
 			return next, next
@@ -371,14 +370,23 @@ func (s *Skiplist) findLast() *node {
 	}
 }
 
-// Get gets the value associated with the key.
+// Get gets the value associated with the key. It returns a valid value if it finds equal or earlier
+// version of the same key.
 func (s *Skiplist) Get(key []byte) y.ValueStruct {
-	n, found := s.findNear(key, false, true) // findGreaterOrEqual.
-	if !found {
+	n, _ := s.findNear(key, false, true) // findGreaterOrEqual.
+	if n == nil {
 		return y.ValueStruct{}
 	}
+
+	nextKey := s.arena.getKey(n.keyOffset, n.keySize)
+	if !y.SameKey(key, nextKey) {
+		return y.ValueStruct{}
+	}
+
 	valOffset, valSize := n.getValueOffset()
-	return s.arena.getVal(valOffset, valSize)
+	vs := s.arena.getVal(valOffset, valSize)
+	vs.Version = y.ParseTs(nextKey)
+	return vs
 }
 
 // NewIterator returns a skiplist iterator.  You have to Close() the iterator.

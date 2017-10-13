@@ -28,7 +28,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
 
 	"github.com/dgryski/go-farm"
@@ -61,22 +60,23 @@ const (
 	Add uint32 = 0x03
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
-	bitUidPostings byte = 0x01
+	bitUidPostings  byte = 0x01
+	bitCommitMarker      = 0x02
+	bitDeltaPosting      = 0x04
 )
 
 type List struct {
 	x.SafeMutex
-	index         x.SafeMutex
 	key           []byte
 	plist         *protos.PostingList
-	mlayer        []*protos.Posting // mutations
-	lastCompact   time.Time
-	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
+	mlayer        []*protos.Posting // committed mutations, sorted by uid,ts
+	commitTs      uint64            // commit timestamp of immutable layer, reject reads before this ts.
+	lastCommitTs  uint64            // commit timestamp of mutable layer.
+	startTs       uint64            // start timestamp of ongoing transaction.
+	deleteMe      int32             // Using atomic for this, to avoid expensive SetForDeletion operation.
+	markdeleteAll int32
 	deleteAll     int32
 	estimatedSize uint32
-
-	water   *x.WaterMark
-	pending []uint64
 }
 
 // calculateSize would give you the size estimate. Does not consider elements in mutation layer.
@@ -86,7 +86,6 @@ func (l *List) calculateSize() uint32 {
 	sz += l.plist.Size()
 	sz += cap(l.key)
 	sz += cap(l.mlayer) * 8
-	sz += cap(l.pending) * 8
 	return uint32(sz)
 }
 
@@ -151,53 +150,13 @@ func (it *PIterator) Posting() *protos.Posting {
 	return it.uidPosting
 }
 
-func getNew(key []byte, pstore *badger.KV) *List {
-	l := new(List)
-	l.key = key
-
-	l.Lock()
-	defer l.Unlock()
-
-	var item badger.KVItem
-	var err error
-	for i := 0; i < 10; i++ {
-		x.PostingReads.Add(1)
-		if err = pstore.Get(l.key, &item); err == nil {
-			break
-		}
-	}
-	if err != nil {
-		x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, l.key)
-	}
-	l.plist = new(protos.PostingList)
-	err = item.Value(func(val []byte) error {
-		x.BytesRead.Add(int64(len(val)))
-		if item.UserMeta() == bitUidPostings {
-			l.plist.Uids = make([]byte, len(val))
-			copy(l.plist.Uids, val)
-		} else if val != nil {
-			x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
-		}
-		return nil
-	})
-	x.Checkf(err, "While trying to get Value from badger for key: %v", key)
-
-	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
-	return l
-}
-
 // ListOptions is used in List.Uids (in posting) to customize our output list of
 // UIDs, for each posting list. It should be internal to this package.
 type ListOptions struct {
+	ReadTs    uint64
 	AfterUID  uint64       // Any UID returned must be after this value.
 	Intersect *protos.List // Intersect results with this list of UIDs.
 }
-
-type ByUid []*protos.Posting
-
-func (pa ByUid) Len() int           { return len(pa) }
-func (pa ByUid) Swap(i, j int)      { pa[i], pa[j] = pa[j], pa[i] }
-func (pa ByUid) Less(i, j int) bool { return pa[i].Uid < pa[j].Uid }
 
 // samePosting tells whether this is same posting depending upon operation of new posting.
 // if operation is Del, we ignore facets and only care about uid and value.
@@ -262,6 +221,7 @@ func NewPosting(t *protos.DirectedEdge) *protos.Posting {
 		Label:       t.Label,
 		Op:          op,
 		Facets:      t.Facets,
+		Commit:      math.MaxUint64,
 	}
 }
 
@@ -274,9 +234,16 @@ func (l *List) SetForDeletion() {
 	atomic.StoreInt32(&l.deleteMe, 1)
 }
 
-func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
+// Ensure that you either abort the uncomitted postings or commit them before calling me.
+func (l *List) updateMutationLayer(startTs uint64, mpost *protos.Posting) bool {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+	// Conflict check should happend before calling this function.
+	x.AssertTrue(l.startTs == 0 || l.startTs == startTs)
+	if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
+		atomic.StoreInt32(&l.markdeleteAll, 1)
+		return true
+	}
 
 	// First check the mutable layer.
 	midx := sort.Search(len(l.mlayer), func(idx int) bool {
@@ -306,23 +273,26 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 		}
 
 		// Here are the remaining cases.
-		// Del, Set: Replace with new post.
-		// Del, Del: Replace with new post.
-		// Set, Del: Replace with new post.
-		// Set, Set: Replace with new post.
-		// Add, Del: Undo by removing oldPost.
-		// Add, Set: Replace with new post. Need to set mpost.Op to Add.
-		if oldPost.Op == Add {
-			if mpost.Op == Del {
-				// Undo old post.
-				copy(l.mlayer[midx:], l.mlayer[midx+1:])
-				l.mlayer[len(l.mlayer)-1] = nil
-				l.mlayer = l.mlayer[:len(l.mlayer)-1]
-				return true
-			}
+		// Add, Del, Set: Insert new post. Need to set mpost.Op to Add.
+		// Del, Del, Set: Insert new post.
+		// Set, Del, Set: Insert new post.
+		// Del, Del     : Shouldn't reach here.
+		// Set, Del     : Insert new post.
+		// Set, Set     : Insert new post.
+		// Add, Del     : Insert new post.
+		// Add, Set     : Insert new post. Need to set mpost.Op to Add.
+		if oldPost.Op == Add && mpost.Op == Set {
 			// Add followed by Set is considered an Add. Hence, mutate mpost.Op.
 			mpost.Op = Add
+		} else if oldPost.Op == Del && mpost.Op == Set && midx+1 < len(l.mlayer) {
+			prevOldPost := l.mlayer[midx+1]
+			if prevOldPost.Uid == oldPost.Uid && prevOldPost.Op == Add {
+				mpost.Op = Add
+			}
 		}
+		// Otherwise, add it where midx is pointing to.
+		l.mlayer = append(l.mlayer, nil)
+		copy(l.mlayer[midx+1:], l.mlayer[midx:])
 		l.mlayer[midx] = mpost
 		return true
 	}
@@ -368,7 +338,7 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge) (bool, error) {
 	t1 := time.Now()
 	l.Lock()
 	if dur := time.Since(t1); dur > time.Millisecond {
@@ -377,7 +347,7 @@ func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		}
 	}
 	defer l.Unlock()
-	return l.addMutation(ctx, t)
+	return l.addMutation(ctx, txn, t)
 }
 
 func edgeType(t *protos.DirectedEdge) x.ValueTypeInfo {
@@ -416,33 +386,24 @@ func TypeID(edge *protos.DirectedEdge) types.TypeID {
 	return types.TypeID(edge.ValueType)
 }
 
-func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
+func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
 		}
 		return false, ErrRetry
 	}
+	if txn.Aborted() != 0 {
+		return false, errConflict
+	}
 
-	l.AssertLock()
-	var index uint64
-	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-		index = rv.Index
+	l.Unlock()
+	if !l.canCommit(ctx, txn.StartTs) {
+		txn.Abort()
+		l.Lock()
+		return false, errConflict
 	}
-	// Calculate 5% of immutable layer
-	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
-	if numUids < 3000 {
-		numUids = 3000
-	}
-	if len(l.mlayer) > numUids ||
-		// All proposals are kept in before until they are snapshotted, this ensures that
-		// we don't have too many pending proposals.
-		// TODO: Come up with a good limit, based on size of proposals
-		(len(l.pending) > 0 && index > l.pending[0]+10000) {
-		if _, err := l.syncIfDirty(false); err != nil {
-			return false, err
-		}
-	}
+	l.Lock()
 
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
@@ -471,50 +432,151 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		}
 		return false, err
 	}
+
 	mpost := NewPosting(t)
-	atomic.AddUint32(&l.estimatedSize, uint32(mpost.Size()+16 /* various overhead */))
-
-	// Mutation arrives:
-	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
-	//		- If yes, then replace that mutation. Jump to a)
-	// a)		check if the entity exists in main posting list.
-	// 				- If yes, store the mutation.
-	// 				- If no, disregard this mutation.
-
+	mpost.Commit = txn.StartTs
 	t1 := time.Now()
-	hasMutated := l.updateMutationLayer(mpost)
+	hasMutated := l.updateMutationLayer(txn.StartTs, mpost)
+	atomic.AddUint32(&l.estimatedSize, uint32(mpost.Size()+16 /* various overhead */))
 	if dur := time.Since(t1); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Uids))
 		}
 	}
-
 	if hasMutated {
-		if index != 0 {
-			l.water.Begin(index)
-			l.pending = append(l.pending, index)
-		}
-		if dirtyChan != nil {
-			dirtyChan <- l.key
-		}
+		txn.AddDelta(l.key, mpost)
 	}
 	return hasMutated, nil
 }
 
-func (l *List) delete(ctx context.Context, attr string) error {
+// Updates the pl if necessary for given readTs
+func (l *List) tryUpdateCommitStatusForRead(readTs uint64) {
+	l.RLock()
+	if l.startTs == 0 || readTs <= l.startTs {
+		l.RUnlock()
+		return
+	}
+	startTs := l.startTs
+	l.RUnlock()
+
+	// We don't care about return value.
+	l.updateCommitStatusHelper(context.Background(), startTs, readTs)
+}
+
+// Tells whether we can do write at given ts.
+func (l *List) updateCommitStatusHelper(ctx context.Context, startTs, ts uint64) bool {
+	commitTs, aborted, err := checkCommitStatusHelper(l.key, startTs)
+	if err != nil {
+		return false
+	} else if aborted {
+		l.AbortTransaction(ctx)
+		return true
+	} else if commitTs > 0 {
+		l.CommitMutation(ctx, commitTs)
+		if commitTs > ts {
+			return false
+		}
+	} else if commitTs == 0 {
+		// TODO: Handle slow or long running transactions.
+		return false
+	}
+	return true
+}
+
+func (l *List) canCommit(ctx context.Context, ts uint64) bool {
+	l.Lock()
+	if ts < l.startTs || ts < l.lastCommitTs {
+		l.Unlock()
+		return false
+	}
+	if l.startTs == 0 || l.startTs == ts {
+		l.startTs = ts
+		l.Unlock()
+		return true
+	}
+	startTs := l.startTs
+	l.Unlock()
+	return l.updateCommitStatusHelper(ctx, startTs, ts)
+}
+
+func (l *List) AbortTransaction(ctx context.Context) error {
+	l.Lock()
+	defer l.Unlock()
+	return l.abortTransaction(ctx)
+}
+
+func (l *List) abortTransaction(ctx context.Context) error {
+	if atomic.LoadInt32(&l.deleteMe) == 1 {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("DELETEME set to true. Temporary error.")
+		}
+		return ErrRetry
+	}
+	l.AssertLock()
+	if l.startTs == 0 {
+		return nil
+	}
+	midx := 0
+	for _, mpost := range l.mlayer {
+		if mpost.Commit != l.startTs {
+			l.mlayer[midx] = mpost
+			midx++
+		}
+		// TODO: Estimate size
+	}
+	l.mlayer = l.mlayer[:midx]
+	l.startTs = 0
+	return nil
+}
+
+func (l *List) CommitMutation(ctx context.Context, commitTs uint64) error {
+	l.Lock()
+	defer l.Unlock()
+	return l.commitMutation(ctx, commitTs)
+}
+
+func (l *List) commitMutation(ctx context.Context, commitTs uint64) error {
+	if atomic.LoadInt32(&l.deleteMe) == 1 {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("DELETEME set to true. Temporary error.")
+		}
+		return ErrRetry
+	}
+
+	l.AssertLock()
+	if l.startTs == 0 {
+		return nil
+	}
+
+	if len(l.mlayer) > 1000 {
+		// picks a ts and merges mutation layer.
+		l.syncIfDirty(false)
+	}
+
+	if atomic.LoadInt32(&l.markdeleteAll) == 1 {
+		l.deleteHelper(ctx)
+		l.startTs = 0
+		l.lastCommitTs = commitTs
+		atomic.StoreInt32(&l.markdeleteAll, 0)
+		return nil
+	}
+	for _, mpost := range l.mlayer {
+		if mpost.Commit != l.startTs {
+			continue
+		}
+		mpost.Commit = commitTs
+	}
+	l.startTs = 0
+	l.lastCommitTs = commitTs
+	return nil
+}
+
+func (l *List) deleteHelper(ctx context.Context) error {
 	l.AssertLock()
 	l.plist = emptyList
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
-
-	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-		l.water.Begin(rv.Index)
-		l.pending = append(l.pending, rv.Index)
-	}
-	// if mutation doesn't come via raft
-	if dirtyChan != nil {
-		dirtyChan <- l.key
-	}
+	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 	return nil
 }
 
@@ -529,16 +591,43 @@ func (l *List) delete(ctx context.Context, attr string) error {
 //    return true  // to continue iteration.
 //    return false // to break iteration.
 //  })
-func (l *List) Iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
+func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
+	l.tryUpdateCommitStatusForRead(readTs)
 	l.RLock()
 	defer l.RUnlock()
-	l.iterate(afterUid, f)
+	return l.iterate(readTs, afterUid, f)
 }
 
-func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
+func (l *List) canRead(commitTs, readTs uint64) bool {
 	l.AssertRLock()
+	if l.startTs > 0 {
+		// Pending transaction
+		if commitTs == readTs {
+			return true
+		} else {
+			return false
+		}
+	}
+
+	// No pending transaction
+	if commitTs <= readTs {
+		return true
+	} else {
+		return false
+	}
+}
+
+func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
+	l.AssertRLock()
+	// current pending transaction deletes the pl
+	if readTs == l.startTs && atomic.LoadInt32(&l.markdeleteAll) == 1 {
+		return nil
+	}
 	midx := 0
 
+	if readTs < l.commitTs {
+		return errTsTooOld
+	}
 	mlayerLen := len(l.mlayer)
 	if afterUid > 0 {
 		midx = sort.Search(mlayerLen, func(idx int) bool {
@@ -551,32 +640,40 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	cont := true
 	var pitr PIterator
 	pitr.Init(l.plist, afterUid)
+	prevUid := uint64(0)
 	for cont {
 		if pitr.Valid() {
 			pp = pitr.Posting()
+			pp.Commit = l.commitTs
 		} else {
 			pp = emptyPosting
 		}
 
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
+			if !l.canRead(mp.Commit, readTs) {
+				midx++
+				continue
+			}
 		} else {
 			mp = emptyPosting
 		}
 
 		switch {
+		case prevUid != 0 && mp.Uid == prevUid:
+			midx++
 		case pp.Uid == 0 && mp.Uid == 0:
 			cont = false
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			cont = f(pp)
 			pitr.Next()
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
-			if mp.Op != Del {
+			if mp.Op == Add || mp.Op == Set {
 				cont = f(mp)
 			}
 			midx++
 		case pp.Uid == mp.Uid:
-			if mp.Op != Del {
+			if mp.Op == Add || mp.Op == Set {
 				cont = f(mp)
 			}
 			pitr.Next()
@@ -584,12 +681,17 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}
+		prevUid = mp.Uid
 	}
+	return nil
 }
 
 // Add test for aftruid
-func (l *List) length(afterUid uint64) int {
+func (l *List) length(readTs, afterUid uint64) int {
 	l.AssertRLock()
+	if readTs == l.startTs && atomic.LoadInt32(&l.markdeleteAll) == 1 {
+		return 0
+	}
 
 	midx := 0
 
@@ -602,33 +704,45 @@ func (l *List) length(afterUid uint64) int {
 		})
 	}
 	count := bi.Length() - bi.StartIdx()
-	for _, p := range l.mlayer[midx:] {
-		if p.Op == Add {
+	prevUid := uint64(0)
+	for midx < len(l.mlayer) {
+		p := l.mlayer[midx]
+		if p.Uid == prevUid {
+			// skip
+		} else if !l.canRead(p.Commit, readTs) {
+			// skip
+		} else if p.Op == Add {
 			count++
 		} else if p.Op == Del {
-			count--
+			// We should ignore if it's Add, Del
+			if midx == len(l.mlayer)-1 || l.mlayer[midx+1].Uid != p.Uid ||
+				l.mlayer[midx+1].Op != Add {
+				count--
+			}
 		}
+		prevUid = p.Uid
+		midx++
 	}
 	return count
 }
 
 // Length iterates over the mutation layer and counts number of elements.
-func (l *List) Length(afterUid uint64) int {
+func (l *List) Length(readTs, afterUid uint64) int {
+	l.tryUpdateCommitStatusForRead(readTs)
 	l.RLock()
 	defer l.RUnlock()
-	return l.length(afterUid)
+	return l.length(readTs, afterUid)
 }
 
-func doAsyncWrite(key []byte, data []byte, uidOnlyPosting bool, f func(error)) {
+func doAsyncWrite(commitTs uint64, key []byte, data []byte, uidOnlyPosting bool, f func(error)) {
+	txn := pstore.NewTransaction(true)
+	defer txn.Discard()
 	var meta byte
 	if uidOnlyPosting {
 		meta = bitUidPostings
 	}
-	if data == nil {
-		pstore.DeleteAsync(key, f)
-	} else {
-		pstore.SetAsync(key, data, meta, f)
-	}
+	txn.Set(key, data, meta)
+	txn.CommitAt(commitTs, f)
 }
 
 func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
@@ -637,20 +751,26 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	return l.syncIfDirty(delFromCache)
 }
 
+// Merge mutation layer and immutable layer.
 func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
 	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
-		l.water.DoneMany(l.pending)
-		l.pending = make([]uint64, 0, 3)
 		return false, nil
+	}
+	if l.startTs > 0 {
+		// TODO: Avoid merging
+		return true, nil
 	}
 
 	final := new(protos.PostingList)
 	var bp bp128.BPackEncoder
 	buf := make([]uint64, 0, bp128.BlockSize)
 
-	l.iterate(0, func(p *protos.Posting) bool {
+	l.iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
+		if p.Commit > l.lastCommitTs {
+			l.lastCommitTs = p.Commit
+		}
 		buf = append(buf, p.Uid)
 		if len(buf) == bp128.BlockSize {
 			bp.PackAppend(buf)
@@ -702,47 +822,24 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
-	retries := 0
-	// l.pending would have been modified by the time the callback is called hence we hold a
-	// reference to pending.
-	pending := l.pending
 	var f func(error)
 	f = func(err error) {
-		if err != nil {
-			elog.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
-			if retries > 5 {
-				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
-					l.key, err)
-			}
-			// Error from badger should be temporary, so we can retry.
-			retries += 1
-			doAsyncWrite(l.key, data, uidOnlyPosting, f)
-			return
-		}
 		x.BytesWrite.Add(int64(len(data)))
 		x.PostingWrites.Add(1)
-		if l.water != nil {
-			l.water.DoneMany(pending)
-		}
 		if delFromCache {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
 			lcache.delete(l.key)
 		}
 	}
 
-	doAsyncWrite(l.key, data, uidOnlyPosting, f)
-	// Now reset the mutation variables.
-	l.pending = make([]uint64, 0, 3)
+	doAsyncWrite(0, l.key, data, uidOnlyPosting, f)
 	l.mlayer = l.mlayer[:0]
-	l.lastCompact = time.Now()
-	atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll
+	l.commitTs = l.lastCommitTs
+	if l.startTs == 0 {
+		// We don't merge uncomitted entries.
+		atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll only after it's committed.
+	}
 	return true, nil
-}
-
-func (l *List) LastCompactionTs() time.Time {
-	l.RLock()
-	defer l.RUnlock()
-	return l.lastCompact
 }
 
 // Copies the val if it's uid only posting, be careful
@@ -762,7 +859,7 @@ func UnmarshalOrCopy(val []byte, metadata byte, pl *protos.PostingList) {
 func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	l.RLock()
-	res := make([]uint64, 0, l.length(opt.AfterUID))
+	res := make([]uint64, 0, l.length(opt.ReadTs, opt.AfterUID))
 	out := &protos.List{}
 	if len(l.mlayer) == 0 && opt.Intersect != nil {
 		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)
@@ -770,7 +867,7 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 		return out
 	}
 
-	l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
+	l.iterate(opt.ReadTs, opt.AfterUID, func(p *protos.Posting) bool {
 		if postingType(p) == x.ValueUid {
 			res = append(res, p.Uid)
 		}
@@ -792,7 +889,7 @@ func (l *List) Postings(opt ListOptions, postFn func(*protos.Posting) bool) {
 	l.RLock()
 	defer l.RUnlock()
 
-	l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
+	l.iterate(opt.ReadTs, opt.AfterUID, func(p *protos.Posting) bool {
 		if postingType(p) != x.ValueUid {
 			return true
 		}
@@ -800,11 +897,11 @@ func (l *List) Postings(opt ListOptions, postFn func(*protos.Posting) bool) {
 	})
 }
 
-func (l *List) AllValues() (vals []types.Val, rerr error) {
+func (l *List) AllValues(readTs uint64) (vals []types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
 
-	l.iterate(0, func(p *protos.Posting) bool {
+	l.iterate(readTs, 0, func(p *protos.Posting) bool {
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValType),
 			Value: p.Value,
@@ -816,10 +913,10 @@ func (l *List) AllValues() (vals []types.Val, rerr error) {
 
 // Returns Value from posting list.
 // This function looks only for "default" value (one without language).
-func (l *List) Value() (rval types.Val, rerr error) {
+func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
-	val, found := l.findValue(math.MaxUint64)
+	val, found := l.findValue(readTs, math.MaxUint64)
 	if !found {
 		return val, ErrNoValue
 	}
@@ -831,24 +928,24 @@ func (l *List) Value() (rval types.Val, rerr error) {
 // smallest Uid is returned.
 // If list consists of one or more languages, first available value is returned; if no language
 // from list match the values, processing is the same as for empty list.
-func (l *List) ValueFor(langs []string) (rval types.Val, rerr error) {
-	p, err := l.postingFor(langs)
+func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error) {
+	p, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return rval, err
 	}
 	return valueToTypesVal(p), nil
 }
 
-func (l *List) postingFor(langs []string) (p *protos.Posting, rerr error) {
+func (l *List) postingFor(readTs uint64, langs []string) (p *protos.Posting, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
-	return l.postingForLangs(langs)
+	return l.postingForLangs(readTs, langs)
 }
 
-func (l *List) ValueForTag(tag string) (rval types.Val, rerr error) {
+func (l *List) ValueForTag(readTs uint64, tag string) (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
-	p, err := l.postingForTag(tag)
+	p, err := l.postingForTag(readTs, tag)
 	if err != nil {
 		return rval, err
 	}
@@ -863,7 +960,7 @@ func valueToTypesVal(p *protos.Posting) (rval types.Val) {
 	return
 }
 
-func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error) {
+func (l *List) postingForLangs(readTs uint64, langs []string) (pos *protos.Posting, rerr error) {
 	l.AssertRLock()
 
 	any := false
@@ -873,7 +970,7 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 			any = true
 			break
 		}
-		pos, rerr = l.postingForTag(lang)
+		pos, rerr = l.postingForTag(readTs, lang)
 		if rerr == nil {
 			return pos, nil
 		}
@@ -881,7 +978,7 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 
 	// look for value without language
 	if any || len(langs) == 0 {
-		if found, pos := l.findPosting(math.MaxUint64); found {
+		if found, pos := l.findPosting(readTs, math.MaxUint64); found {
 			return pos, nil
 		}
 	}
@@ -889,7 +986,7 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 	var found bool
 	// last resort - return value with smallest lang Uid
 	if any {
-		l.iterate(0, func(p *protos.Posting) bool {
+		l.iterate(readTs, 0, func(p *protos.Posting) bool {
 			if postingType(p) == x.ValueMulti {
 				pos = p
 				found = true
@@ -906,10 +1003,10 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 	return pos, ErrNoValue
 }
 
-func (l *List) postingForTag(tag string) (p *protos.Posting, rerr error) {
+func (l *List) postingForTag(readTs uint64, tag string) (p *protos.Posting, rerr error) {
 	l.AssertRLock()
 	uid := farm.Fingerprint64([]byte(tag))
-	found, p := l.findPosting(uid)
+	found, p := l.findPosting(readTs, uid)
 	if !found {
 		return p, ErrNoValue
 	}
@@ -917,9 +1014,9 @@ func (l *List) postingForTag(tag string) (p *protos.Posting, rerr error) {
 	return p, nil
 }
 
-func (l *List) findValue(uid uint64) (rval types.Val, found bool) {
+func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool) {
 	l.AssertRLock()
-	found, p := l.findPosting(uid)
+	found, p := l.findPosting(readTs, uid)
 	if !found {
 		return rval, found
 	}
@@ -927,9 +1024,9 @@ func (l *List) findValue(uid uint64) (rval types.Val, found bool) {
 	return valueToTypesVal(p), true
 }
 
-func (l *List) findPosting(uid uint64) (found bool, pos *protos.Posting) {
+func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *protos.Posting) {
 	// Iterate starts iterating after the given argument, so we pass uid - 1
-	l.iterate(uid-1, func(p *protos.Posting) bool {
+	l.iterate(readTs, uid-1, func(p *protos.Posting) bool {
 		if p.Uid == uid {
 			pos = p
 			found = true
@@ -941,11 +1038,11 @@ func (l *List) findPosting(uid uint64) (found bool, pos *protos.Posting) {
 }
 
 // Facets gives facets for the posting representing value.
-func (l *List) Facets(param *protos.Param, langs []string) (fs []*protos.Facet,
+func (l *List) Facets(readTs uint64, param *protos.Param, langs []string) (fs []*protos.Facet,
 	ferr error) {
 	l.RLock()
 	defer l.RUnlock()
-	p, err := l.postingFor(langs)
+	p, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return nil, err
 	}

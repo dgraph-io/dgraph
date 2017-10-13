@@ -83,7 +83,7 @@ func (itr *blockIterator) Seek(key []byte, whence int) {
 	var done bool
 	for itr.Init(); itr.Valid(); itr.Next() {
 		k := itr.Key()
-		if bytes.Compare(k, key) >= 0 {
+		if y.CompareKeys(k, key) >= 0 {
 			// We are done as k is >= key.
 			done = true
 			break
@@ -279,9 +279,10 @@ func (itr *Iterator) seekFrom(key []byte, whence int) {
 	case current:
 	}
 
-	idx := sort.Search(len(itr.t.blockIndex), func(idx int) bool {
+	var idx int
+	idx = sort.Search(len(itr.t.blockIndex), func(idx int) bool {
 		ko := itr.t.blockIndex[idx]
-		return bytes.Compare(ko.key, key) > 0
+		return y.CompareKeys(ko.key, key) > 0
 	})
 	if idx == 0 {
 		// The smallest key in our table is already strictly > key. We can return that.
@@ -386,7 +387,7 @@ func (itr *Iterator) Key() []byte {
 
 // Value follows the y.Iterator interface
 func (itr *Iterator) Value() (ret y.ValueStruct) {
-	ret.DecodeEntireSlice(itr.bi.Value())
+	ret.Decode(itr.bi.Value())
 	return
 }
 
@@ -483,12 +484,12 @@ func (s *ConcatIterator) Seek(key []byte) {
 	var idx int
 	if !s.reversed {
 		idx = sort.Search(len(s.tables), func(i int) bool {
-			return bytes.Compare(s.tables[i].Biggest(), key) >= 0
+			return y.CompareKeys(s.tables[i].Biggest(), key) >= 0
 		})
 	} else {
 		n := len(s.tables)
 		idx = n - 1 - sort.Search(n, func(i int) bool {
-			return bytes.Compare(s.tables[n-1-i].Smallest(), key) <= 0
+			return y.CompareKeys(s.tables[n-1-i].Smallest(), key) <= 0
 		})
 	}
 	if idx >= len(s.tables) || idx < 0 {

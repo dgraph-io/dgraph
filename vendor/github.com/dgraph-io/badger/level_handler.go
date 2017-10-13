@@ -17,7 +17,6 @@
 package badger
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 	"sync"
@@ -41,7 +40,7 @@ type levelHandler struct {
 	level        int
 	strLevel     string
 	maxTotalSize int64
-	kv           *KV
+	db           *DB
 }
 
 func (s *levelHandler) getTotalSize() int64 {
@@ -70,7 +69,7 @@ func (s *levelHandler) initTables(tables []*table.Table) {
 	} else {
 		// Sort tables by keys.
 		sort.Slice(s.tables, func(i, j int) bool {
-			return bytes.Compare(s.tables[i].Smallest(), s.tables[j].Smallest()) < 0
+			return y.CompareKeys(s.tables[i].Smallest(), s.tables[j].Smallest()) < 0
 		})
 	}
 }
@@ -156,11 +155,11 @@ func decrRefs(tables []*table.Table) error {
 	return nil
 }
 
-func newLevelHandler(kv *KV, level int) *levelHandler {
+func newLevelHandler(db *DB, level int) *levelHandler {
 	return &levelHandler{
 		level:    level,
 		strLevel: fmt.Sprintf("l%d", level),
-		kv:       kv,
+		db:       db,
 	}
 }
 
@@ -170,7 +169,7 @@ func (s *levelHandler) tryAddLevel0Table(t *table.Table) bool {
 	// Need lock as we may be deleting the first table during a level 0 compaction.
 	s.Lock()
 	defer s.Unlock()
-	if len(s.tables) >= s.kv.opt.NumLevelZeroTablesStall {
+	if len(s.tables) >= s.db.opt.NumLevelZeroTablesStall {
 		return false
 	}
 
@@ -224,7 +223,7 @@ func (s *levelHandler) getTableForKey(key []byte) ([]*table.Table, func() error)
 	}
 	// For level >= 1, we can do a binary search as key range does not overlap.
 	idx := sort.Search(len(s.tables), func(i int) bool {
-		return bytes.Compare(s.tables[i].Biggest(), key) >= 0
+		return y.CompareKeys(s.tables[i].Biggest(), key) >= 0
 	})
 	if idx >= len(s.tables) {
 		// Given key is strictly > than every element we have.
@@ -235,12 +234,13 @@ func (s *levelHandler) getTableForKey(key []byte) ([]*table.Table, func() error)
 	return []*table.Table{tbl}, tbl.DecrRef
 }
 
-// get returns value for a given key. If not found, return nil.
+// get returns value for a given key or the key after that. If not found, return nil.
 func (s *levelHandler) get(key []byte) (y.ValueStruct, error) {
 	tables, decr := s.getTableForKey(key)
+	keyNoTs := y.ParseKey(key)
 
 	for _, th := range tables {
-		if th.DoesNotHave(key) {
+		if th.DoesNotHave(keyNoTs) {
 			y.NumLSMBloomHits.Add(s.strLevel, 1)
 			continue
 		}
@@ -253,8 +253,10 @@ func (s *levelHandler) get(key []byte) (y.ValueStruct, error) {
 		if !it.Valid() {
 			continue
 		}
-		if bytes.Equal(key, it.Key()) {
-			return it.Value(), decr()
+		if y.SameKey(key, it.Key()) {
+			vs := it.Value()
+			vs.Version = y.ParseTs(it.Key())
+			return vs, decr()
 		}
 	}
 	return y.ValueStruct{}, decr()
@@ -281,10 +283,10 @@ type levelHandlerRLocked struct{}
 // pass an empty parameter declaring such.
 func (s *levelHandler) overlappingTables(_ levelHandlerRLocked, kr keyRange) (int, int) {
 	left := sort.Search(len(s.tables), func(i int) bool {
-		return bytes.Compare(kr.left, s.tables[i].Biggest()) <= 0
+		return y.CompareKeys(kr.left, s.tables[i].Biggest()) <= 0
 	})
 	right := sort.Search(len(s.tables), func(i int) bool {
-		return bytes.Compare(kr.right, s.tables[i].Smallest()) < 0
+		return y.CompareKeys(kr.right, s.tables[i].Smallest()) < 0
 	})
 	return left, right
 }
