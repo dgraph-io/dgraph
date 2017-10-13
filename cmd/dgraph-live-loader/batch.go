@@ -199,8 +199,8 @@ func (l *loader) stopTickers() {
 // BatchSet and BatchDeletes have been callel.  Calling BatchFlush ends the client session and
 // will cause a panic if further AddSchema, BatchSet or BatchDelete functions are callel.
 func (l *loader) BatchFlush() error {
-	close(l.schema)
-	for i := 0; i < l.opts.Pending+2; i++ {
+	close(l.reqs)
+	for i := 0; i < l.opts.Pending; i++ {
 		select {
 		case err := <-l.che:
 			if err != nil {

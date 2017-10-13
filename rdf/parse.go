@@ -112,6 +112,7 @@ L:
 			if err != nil {
 				return rnq, x.Wrapf(err, "while unquoting")
 			}
+			rnq.ObjectVal = oval
 			if oval == "" {
 				oval = "_nil_"
 			}

@@ -221,7 +221,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 			}
 			edge[nq.Predicate] = map[string]uint64{"_uid_": objectId}
 		} else {
-			edge[nq.Predicate] = types.ValFromObjectVal(nq.ObjectValue).Value
+			edge[nq.Predicate] = nq.ObjectVal
 		}
 
 		// TODO - Handle facets

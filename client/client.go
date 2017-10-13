@@ -101,9 +101,7 @@ func (req *Req) DeleteObject(v interface{}) error {
 	return nil
 }
 
-// SetSchema sets schema mutation in req with the given schema
-// The schema is not checked until the request is run, when it is parsed and
-// checked server-side
+// TODO - This can be removed. Right now removing it causes some tests to break in client_test package.
 func (req *Req) SetSchema(q string) {
 	req.gr.Query = fmt.Sprintf("mutation {\nschema {\n%s\n}\n}", q)
 }
