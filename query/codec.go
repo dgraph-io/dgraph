@@ -50,14 +50,8 @@ func (c *Codec) Marshal(v interface{}) ([]byte, error) {
 		if err != nil {
 			return []byte{}, err
 		}
+		return b, nil
 
-		for _, it := range val.N {
-			select {
-			// Passing onto to channel which would put it into the sync pool.
-			case nodeCh <- it:
-			default:
-			}
-		}
 	default:
 		log.Fatalf("Invalid type of value: %+v", v)
 	}

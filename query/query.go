@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -99,22 +98,10 @@ import (
 // the query. It also contains information about the time it took to convert the
 // result into a format(JSON/Protocol Buffer) that the client expects.
 type Latency struct {
-	Start          time.Time     `json:"-"`
-	Parsing        time.Duration `json:"query_parsing"`
-	Processing     time.Duration `json:"processing"`
-	Json           time.Duration `json:"json_conversion"`
-	ProtocolBuffer time.Duration `json:"pb_conversion"`
-}
-
-// ToMap converts the latency object to a map.
-func (l *Latency) ToMap() map[string]string {
-	m := make(map[string]string)
-	j := time.Since(l.Start) - l.Processing - l.Parsing
-	m["parsing"] = x.Round(l.Parsing).String()
-	m["processing"] = x.Round(l.Processing).String()
-	m["json"] = x.Round(j).String()
-	m["total"] = x.Round(time.Since(l.Start)).String()
-	return m
+	Start      time.Time     `json:"-"`
+	Parsing    time.Duration `json:"query_parsing"`
+	Processing time.Duration `json:"processing"`
+	Json       time.Duration `json:"json_conversion"`
 }
 
 type params struct {
@@ -239,33 +226,6 @@ func getValue(tv *protos.TaskValue) (types.Val, error) {
 	val := types.ValueForType(vID)
 	val.Value = tv.Val
 	return val, nil
-}
-
-var nodePool = sync.Pool{
-	New: func() interface{} {
-		return &protos.Node{}
-	},
-}
-
-var nodeCh chan *protos.Node
-
-func release() {
-	for n := range nodeCh {
-		// In case of mutations, n is nil
-		if n == nil {
-			continue
-		}
-		for i := 0; i < len(n.Children); i++ {
-			nodeCh <- n.Children[i]
-		}
-		*n = protos.Node{}
-		nodePool.Put(n)
-	}
-}
-
-func init() {
-	nodeCh = make(chan *protos.Node, 1000)
-	go release()
 }
 
 var (
@@ -564,11 +524,6 @@ func convertWithBestEffort(tv *protos.TaskValue, attr string) (types.Val, error)
 	sv, err := types.Convert(v, v.Tid)
 	x.Checkf(err, "Error while interpreting appropriate type from binary")
 	return sv, nil
-}
-
-func createProperty(prop string, v types.Val) *protos.Property {
-	pval := toProtoValue(v)
-	return &protos.Property{Prop: prop, Value: pval}
 }
 
 func isPresent(list []string, str string) bool {

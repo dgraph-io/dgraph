@@ -26,8 +26,6 @@ import (
 	"sort"
 	"testing"
 
-	"google.golang.org/grpc/metadata"
-
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
@@ -215,9 +213,8 @@ func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (s
 	if err != nil {
 		return "", err
 	}
-	var buf bytes.Buffer
-	err = ToJson(queryRequest.Latency, queryRequest.Subgraphs, &buf, nil, false)
-	return string(buf.Bytes()), err
+	out, err := ToJson(queryRequest.Latency, queryRequest.Subgraphs)
+	return string(out), err
 }
 
 func processToFastJSON(t *testing.T, query string) string {
@@ -234,26 +231,6 @@ func processSchemaQuery(t *testing.T, q string) []*protos.SchemaNode {
 	schema, err := worker.GetSchemaOverNetwork(ctx, res.Schema)
 	require.NoError(t, err)
 	return schema
-}
-
-func processToPB(t *testing.T, query string, variables map[string]string,
-	debug bool) []*protos.Node {
-	res, err := gql.Parse(gql.Request{Str: query, Variables: variables})
-	require.NoError(t, err)
-	var ctx context.Context
-	if debug {
-		ctx = metadata.NewIncomingContext(context.Background(), metadata.Pairs("debug", "true"))
-	} else {
-		ctx = context.Background()
-	}
-
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(ctx)
-	require.NoError(t, err)
-
-	pb, err := ToProtocolBuf(queryRequest.Latency, queryRequest.Subgraphs)
-	require.NoError(t, err)
-	return pb
 }
 
 func loadPolygon(name string) (geom.T, error) {
