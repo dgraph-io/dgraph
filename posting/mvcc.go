@@ -213,6 +213,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				break
 			}
 			// Found complete pl, no needn't iterate more
+			// TODO: Move it at commit marker.
 			if item.UserMeta()&bitUidPostings != 0 {
 				l.plist.Uids = make([]byte, len(val))
 				copy(l.plist.Uids, val)

@@ -78,8 +78,8 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 // t represents the original uid -> value edge.
 // TODO - See if we need to pass op as argument as t should already have Op.
-func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
-	op protos.DirectedEdge_Op, txn *Txn) error {
+func (txn *Txn) addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
+	op protos.DirectedEdge_Op) error {
 	attr := t.Attr
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
@@ -98,15 +98,15 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	}
 
 	for _, token := range tokens {
-		if err := addIndexMutation(ctx, edge, token, txn); err != nil {
+		if err := txn.addIndexMutation(ctx, edge, token); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
-	token string, txn *Txn) error {
+func (txn *Txn) addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
+	token string) error {
 	key := x.IndexKey(edge.Attr, token)
 
 	t := time.Now()
@@ -141,7 +141,7 @@ type countParams struct {
 	reverse     bool
 }
 
-func addReverseMutation(ctx context.Context, t *protos.DirectedEdge, txn *Txn) error {
+func (txn *Txn) addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	plist := Get(key)
 
@@ -175,13 +175,13 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge, txn *Txn) e
 	x.PredicateStats.Add(fmt.Sprintf("r.%s", edge.Attr), 1)
 
 	if hasCountIndex && countAfter != countBefore {
-		if err := updateCount(ctx, countParams{
+		if err := txn.updateCount(ctx, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
 			countAfter:  countAfter,
 			entity:      edge.Entity,
 			reverse:     true,
-		}, txn); err != nil {
+		}); err != nil {
 			return err
 		}
 	}
@@ -205,7 +205,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge,
 		if isReversed {
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
-			if err := addReverseMutation(ctx, delEdge, txn); err != nil {
+			if err := txn.addReverseMutation(ctx, delEdge); err != nil {
 				iterErr = err
 				return false
 			}
@@ -216,7 +216,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge,
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			if err := addIndexMutations(ctx, t, p, protos.DirectedEdge_DEL, txn); err != nil {
+			if err := txn.addIndexMutations(ctx, t, p, protos.DirectedEdge_DEL); err != nil {
 				iterErr = err
 				return false
 			}
@@ -229,12 +229,12 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge,
 	if hasCount {
 		// Delete uid from count index. Deletion of reverses is taken care by addReverseMutation
 		// above.
-		if err := updateCount(ctx, countParams{
+		if err := txn.updateCount(ctx, countParams{
 			attr:        t.Attr,
 			countBefore: plen,
 			countAfter:  0,
 			entity:      t.Entity,
-		}, txn); err != nil {
+		}); err != nil {
 			return err
 		}
 	}
@@ -245,8 +245,8 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge,
 	return err
 }
 
-func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
-	reverse bool, txn *Txn) error {
+func (txn *Txn) addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
+	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
 	plist := getOrMutate(key)
 
@@ -265,21 +265,21 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 
 }
 
-func updateCount(ctx context.Context, params countParams, txn *Txn) error {
+func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 	edge := protos.DirectedEdge{
 		ValueId: params.entity,
 		Attr:    params.attr,
 		Op:      protos.DirectedEdge_DEL,
 	}
-	if err := addCountMutation(ctx, &edge, uint32(params.countBefore),
-		params.reverse, txn); err != nil {
+	if err := txn.addCountMutation(ctx, &edge, uint32(params.countBefore),
+		params.reverse); err != nil {
 		return err
 	}
 
 	if params.countAfter > 0 {
 		edge.Op = protos.DirectedEdge_SET
-		if err := addCountMutation(ctx, &edge, uint32(params.countAfter),
-			params.reverse, txn); err != nil {
+		if err := txn.addCountMutation(ctx, &edge, uint32(params.countAfter),
+			params.reverse); err != nil {
 			return err
 		}
 	}
@@ -336,12 +336,12 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 		}
 		x.PredicateStats.Add(t.Attr, 1)
 		if hasCountIndex && countAfter != countBefore {
-			if err := updateCount(ctx, countParams{
+			if err := txn.updateCount(ctx, countParams{
 				attr:        t.Attr,
 				countBefore: countBefore,
 				countAfter:  countAfter,
 				entity:      t.Entity,
-			}, txn); err != nil {
+			}); err != nil {
 				return err
 			}
 		}
@@ -351,7 +351,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
-			if err := addIndexMutations(ctx, t, val, protos.DirectedEdge_DEL, txn); err != nil {
+			if err := txn.addIndexMutations(ctx, t, val, protos.DirectedEdge_DEL); err != nil {
 				return err
 			}
 		}
@@ -360,7 +360,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 				Tid:   types.TypeID(t.ValueType),
 				Value: t.Value,
 			}
-			if err := addIndexMutations(ctx, t, p, protos.DirectedEdge_SET, txn); err != nil {
+			if err := txn.addIndexMutations(ctx, t, p, protos.DirectedEdge_SET); err != nil {
 				return err
 			}
 		}
@@ -368,7 +368,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
-		if err := addReverseMutation(ctx, t, txn); err != nil {
+		if err := txn.addReverseMutation(ctx, t); err != nil {
 			return err
 		}
 	}
@@ -386,6 +386,7 @@ func deleteEntries(prefix []byte, readTs uint64) error {
 	defer idxIt.Close()
 
 	var batchSize int
+	// TODO: Potentially use purge.
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		key := idxIt.Item().Key()
 		data := make([]byte, len(key))
@@ -404,7 +405,7 @@ func deleteEntries(prefix []byte, readTs uint64) error {
 		}
 	}
 	defer delTxn.Discard()
-	return delTxn.Commit(nil)
+	return delTxn.CommitAt(readTs, nil)
 }
 
 func compareAttrAndType(key []byte, attr string, typ byte) bool {
@@ -466,7 +467,7 @@ func DeleteCountIndex(ctx context.Context, attr string, startTs uint64) error {
 	return nil
 }
 
-func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error, txn *Txn) {
+func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error) {
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
@@ -479,7 +480,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				if err = addCountMutation(ctx, t, uint32(l.Length(txn.StartTs, 0)), reverse, txn); err != nil {
+				if err = txn.addCountMutation(ctx, t, uint32(l.Length(txn.StartTs, 0)), reverse); err != nil {
 					break
 				}
 			}
@@ -506,12 +507,13 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		if bytes.Equal(key, prevKey) {
 			continue
 		}
+		nk := make([]byte, len(key))
+		copy(nk, key)
+		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
 			continue
 		}
-		nk := make([]byte, len(key))
-		copy(nk, key)
 		// readPostingList advances the iterator until it finds complete pl
 		l, err := readPostingList(nk, it)
 		if err != nil {
@@ -523,7 +525,6 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 			uid:  pki.Uid,
 			list: l,
 		}
-		prevKey = nk
 	}
 	close(ch)
 	var finalErr error
@@ -535,12 +536,12 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 	errCh <- finalErr
 }
 
-func RebuildCountIndex(ctx context.Context, attr string, txn *Txn) error {
+func (txn *Txn) RebuildCountIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
 	errCh := make(chan error, 2)
 	// Lets rebuild forward and reverse count indexes concurrently.
-	go rebuildCountIndex(ctx, attr, false, errCh, txn)
-	go rebuildCountIndex(ctx, attr, true, errCh, txn)
+	go txn.rebuildCountIndex(ctx, attr, false, errCh)
+	go txn.rebuildCountIndex(ctx, attr, true, errCh)
 
 	var rebuildErr error
 	for i := 0; i < 2; i++ {
@@ -562,7 +563,7 @@ type item struct {
 }
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
-func RebuildReverseEdges(ctx context.Context, attr string, txn *Txn) error {
+func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
@@ -585,11 +586,11 @@ func RebuildReverseEdges(ctx context.Context, attr string, txn *Txn) error {
 			edge.Op = protos.DirectedEdge_SET
 			edge.Facets = pp.Facets
 			edge.Label = pp.Label
-			err = addReverseMutation(ctx, &edge, txn)
+			err = txn.addReverseMutation(ctx, &edge)
 			// We retry once in case we do GetLru and stop the world happens
 			// before we do addmutation
 			if err == ErrRetry {
-				err = addReverseMutation(ctx, &edge, txn)
+				err = txn.addReverseMutation(ctx, &edge)
 			}
 			if err != nil {
 				return false
@@ -621,12 +622,13 @@ func RebuildReverseEdges(ctx context.Context, attr string, txn *Txn) error {
 		if !bytes.HasPrefix(key, prevKey) {
 			continue
 		}
+		nk := make([]byte, len(key))
+		copy(nk, key)
+		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
 			continue
 		}
-		nk := make([]byte, len(key))
-		copy(nk, key)
 		l, err := readPostingList(nk, it)
 		if err != nil {
 			return err
@@ -636,7 +638,6 @@ func RebuildReverseEdges(ctx context.Context, attr string, txn *Txn) error {
 			uid:  pki.Uid,
 			list: l,
 		}
-		prevKey = nk
 	}
 	close(ch)
 	for i := 0; i < 1000; i++ {
@@ -666,7 +667,7 @@ func DeleteIndex(ctx context.Context, attr string, startTs uint64) error {
 // RebuildIndex rebuilds index for a given attribute.
 // Ignore for now
 // TODO: Commit the mutations immediately
-func RebuildIndex(ctx context.Context, attr string, txn *Txn) error {
+func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
@@ -688,11 +689,11 @@ func RebuildIndex(ctx context.Context, attr string, txn *Txn) error {
 				Value: p.Value,
 				Tid:   types.TypeID(p.ValType),
 			}
-			err = addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET, txn)
+			err = txn.addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
 			// We retry once in case we do GetLru and stop the world happens
 			// before we do addmutation
 			if err == ErrRetry {
-				err = addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET, txn)
+				err = txn.addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
 			}
 			if err != nil {
 				return false
@@ -728,12 +729,13 @@ func RebuildIndex(ctx context.Context, attr string, txn *Txn) error {
 		if !bytes.Equal(key, prevKey) {
 			continue
 		}
+		nk := make([]byte, len(key))
+		copy(nk, key)
+		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
 			continue
 		}
-		nk := make([]byte, len(key))
-		copy(nk, key)
 		l, err := readPostingList(nk, it)
 		if err != nil {
 			return err
@@ -743,7 +745,6 @@ func RebuildIndex(ctx context.Context, attr string, txn *Txn) error {
 			uid:  pki.Uid,
 			list: l,
 		}
-		prevKey = nk
 	}
 	close(ch)
 	for i := 0; i < 1000; i++ {

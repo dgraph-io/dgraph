@@ -253,7 +253,7 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 		Op:      protos.DirectedEdge_SET,
 	}
 	txn := &Txn{StartTs: startTs}
-	addReverseMutation(context.Background(), edge, txn)
+	txn.addReverseMutation(context.Background(), edge)
 	require.NoError(t, txn.CommitDeltas())
 	l := Get(x.ReverseKey(attr, dst))
 	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs))
