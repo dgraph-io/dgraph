@@ -6,10 +6,10 @@
 FROM ubuntu:16.04
 MAINTAINER Dgraph Labs <contact@dgraph.io>
 
-RUN apt-get update
-
-RUN apt-get -y --force-yes install wget curl tar
-
-RUN mkdir /dgraph
+RUN mkdir /dgraph \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /dgraph
+
