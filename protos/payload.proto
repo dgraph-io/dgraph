@@ -50,6 +50,12 @@ message ExportPayload {
 	Status status = 3;
 }
 
+message TxnContext {
+  repeated string keys = 1;
+	uint64 start_ts = 2;
+	uint64 commit_ts = 3;
+}
+
 service Raft {
 	rpc Echo (Payload)            returns (Payload) {}
 	rpc RaftMessage (Payload)     returns (Payload) {}
@@ -67,6 +73,7 @@ service Zero {
 service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                        returns (Payload) {}
+	rpc CommitOrAbortTxn(TxnContext)              returns (Payload) {}
 	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}

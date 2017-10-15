@@ -110,6 +110,10 @@ func (p *proposals) Done(pid uint32, err error) {
 	}
 	delete(p.ids, pid)
 	if err = pd.txn.CommitDeltas(); err != nil {
+		abortMutations(pd.ctx, &protos.TxnContext{
+			Keys:    pd.txn.Keys(),
+			StartTs: pd.txn.StartTs,
+		})
 		pd.err = err
 	}
 	pd.ch <- pd.err
@@ -199,6 +203,9 @@ func (h *header) Decode(in []byte) {
 func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
+	}
+	if proposal.StartTs == 0 {
+		return x.Errorf("StartTs cannot be zero")
 	}
 	// TODO: Should be based on number of edges (amount of work)
 	pendingProposals <- struct{}{}

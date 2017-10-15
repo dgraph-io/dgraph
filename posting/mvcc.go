@@ -46,7 +46,7 @@ type Txn struct {
 	// Fields which can changed after init
 	sync.Mutex
 	m       map[string][]*protos.Posting
-	delKeys [][]byte
+	delKeys []string
 }
 
 func (t *Txn) Abort() {
@@ -64,20 +64,35 @@ func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 		t.m = make(map[string][]*protos.Posting)
 	}
 	if p.Op == Del && bytes.Equal(p.Value, []byte(x.Star)) {
-		t.delKeys = append(t.delKeys, key)
+		t.delKeys = append(t.delKeys, string(key))
 		return
 	}
 	t.m[string(key)] = append(t.m[string(key)], p)
 }
 
+func (t *Txn) Keys() []string {
+	var keys []string
+	t.Lock()
+	defer t.Unlock()
+	for k, _ := range t.m {
+		keys = append(keys, k)
+	}
+	for _, k := range t.delKeys {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // Write All deltas per transaction at once.
 // Called after all mutations are applied in memory and checked for locks/conflicts.
 func (t *Txn) CommitDeltas() error {
+	if t == nil {
+		return nil
+	}
 	// TODO: Avoid delta for schema mutations, directly commit.
 	t.Lock()
 	defer t.Unlock()
 	if t.Aborted() != 0 {
-		// TODO: Abort
 		return errConflict
 	}
 	txn := pstore.NewTransaction(true)
@@ -133,7 +148,7 @@ func checkCommitStatusHelper(key []byte, vs uint64) (uint64, bool, error) {
 		return 0, true, nil
 	}
 	if commitTs > 0 {
-		err := commitMutations([][]byte{key}, commitTs)
+		err := CommitMutations([]string{string(key)}, commitTs)
 		if err == nil {
 			clean(key, vs)
 		}
@@ -145,12 +160,12 @@ func checkCommitStatusHelper(key []byte, vs uint64) (uint64, bool, error) {
 
 // Writes all commit keys of the transaction.
 // Called after all mutations are committed in memory.
-func commitMutations(keys [][]byte, commitTs uint64) error {
+func CommitMutations(keys []string, commitTs uint64) error {
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
 	for _, k := range keys {
-		err := txn.Set(k, nil, bitCommitMarker)
+		err := txn.Set([]byte(k), nil, bitCommitMarker)
 		if err != nil {
 			return nil
 		}
@@ -160,12 +175,12 @@ func commitMutations(keys [][]byte, commitTs uint64) error {
 
 // Delete all deltas we wrote to badger.
 // Called after mutations are aborted in memory.
-func abortMutations(keys [][]byte, startTs uint64) error {
+func AbortMutations(keys []string, startTs uint64) error {
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
 	for _, k := range keys {
-		err := txn.Delete(k)
+		err := txn.Delete([]byte(k))
 		if err != nil {
 			return nil
 		}

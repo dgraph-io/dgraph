@@ -85,6 +85,26 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 	return nil
 }
 
+func abortMutations(ctx context.Context, tc *protos.TxnContext) error {
+	for _, key := range tc.Keys {
+		plist := posting.Get([]byte(key))
+		if err := plist.AbortTransaction(ctx, tc.StartTs); err != nil {
+			return err
+		}
+	}
+	return posting.AbortMutations(tc.Keys, tc.StartTs)
+}
+
+func commitMutations(ctx context.Context, tc *protos.TxnContext) error {
+	for _, key := range tc.Keys {
+		plist := posting.Get([]byte(key))
+		if err := plist.CommitMutation(ctx, tc.StartTs, tc.CommitTs); err != nil {
+			return err
+		}
+	}
+	return posting.CommitMutations(tc.Keys, tc.CommitTs)
+}
+
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
 func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
@@ -431,6 +451,15 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	}
 	close(errorCh)
 	return e
+}
+
+func (w *grpcWorker) CommitOrAbortTxn(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
+	if tc.CommitTs == 0 {
+		err := abortMutations(ctx, tc)
+		return &protos.Payload{}, err
+	}
+	err := commitMutations(ctx, tc)
+	return &protos.Payload{}, err
 }
 
 // Mutate is used to apply mutations over the network on other instances.
