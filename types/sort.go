@@ -120,6 +120,9 @@ func Less(a, b Val) (bool, error) {
 }
 
 func less(a, b Val) bool {
+	if a.Tid != b.Tid {
+		return mismatchedLess(a, b)
+	}
 	switch a.Tid {
 	case DateTimeID:
 		return a.Value.(time.Time).Before(b.Value.(time.Time))
@@ -133,6 +136,25 @@ func less(a, b Val) bool {
 		return (a.Value.(string)) < (b.Value.(string))
 	}
 	return false
+}
+
+func mismatchedLess(a, b Val) bool {
+	x.AssertTrue(a.Tid != b.Tid)
+	if (a.Tid != IntID && a.Tid != FloatID) || (b.Tid != IntID && b.Tid != FloatID) {
+		// Non-float/int are sorted arbitrarily by type.
+		return a.Tid < b.Tid
+	}
+
+	// Floats and ints can be sorted together in a sensible way. The approach
+	// here isn't 100% correct, and will be wrong when dealing with ints and
+	// floats close to each other and greater in magnitude than 1<<53 (the
+	// point at which consecutive floats are more than 1 apart).
+	if a.Tid == FloatID {
+		return a.Value.(float64) < float64(b.Value.(int64))
+	} else {
+		x.AssertTrue(b.Tid == FloatID)
+		return float64(a.Value.(int64)) < b.Value.(float64)
+	}
 }
 
 // Equal returns true if a is equal to b.
@@ -151,6 +173,9 @@ func Equal(a, b Val) (bool, error) {
 }
 
 func equal(a, b Val) bool {
+	if a.Tid != b.Tid {
+		return false
+	}
 	switch a.Tid {
 	case DateTimeID:
 		return a.Value.(time.Time) == (b.Value.(time.Time))
