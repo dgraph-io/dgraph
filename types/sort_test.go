@@ -106,3 +106,56 @@ func TestSortDateTimes(t *testing.T) {
 			"2006-01-02T15:04:06Z", "2016-01-02T15:04:05Z"},
 		toString(t, list, DateTimeID))
 }
+
+func TestSortIntAndFloat(t *testing.T) {
+	list := [][]Val{
+		[]Val{Val{Tid: IntID, Value: int64(55)}},
+		[]Val{Val{Tid: FloatID, Value: 21.5}},
+		[]Val{Val{Tid: IntID, Value: int64(100)}},
+	}
+	ul := getUIDList(3)
+	require.NoError(t, Sort(list, ul, []bool{false}))
+	require.EqualValues(t, []uint64{200, 100, 300}, ul.Uids)
+	require.EqualValues(t,
+		[]string{"2.15E+01", "55", "100"},
+		toString(t, list, DateTimeID))
+
+}
+
+func findIndex(t *testing.T, uids []uint64, uid uint64) int {
+	for i := range uids {
+		if uids[i] == uid {
+			return i
+		}
+	}
+	t.Errorf("Could not find index")
+	return -1
+}
+
+func TestSortMismatchedTypes(t *testing.T) {
+	list := [][]Val{
+		[]Val{Val{Tid: StringID, Value: "cat"}},
+		[]Val{Val{Tid: IntID, Value: int64(55)}},
+		[]Val{Val{Tid: BoolID, Value: true}},
+		[]Val{Val{Tid: FloatID, Value: 21.5}},
+		[]Val{Val{Tid: StringID, Value: "aardvark"}},
+		[]Val{Val{Tid: StringID, Value: "buffalo"}},
+		[]Val{Val{Tid: FloatID, Value: 33.33}},
+	}
+	ul := getUIDList(7)
+	require.NoError(t, Sort(list, ul, []bool{false}))
+
+	// Don't care about relative ordering between types. However, like types
+	// should be sorted with each other.
+	catIdx := findIndex(t, ul.Uids, 100)
+	aarIdx := findIndex(t, ul.Uids, 500)
+	bufIdx := findIndex(t, ul.Uids, 600)
+	require.True(t, aarIdx < bufIdx)
+	require.True(t, bufIdx < catIdx)
+
+	idx55 := findIndex(t, ul.Uids, 200)
+	idx21 := findIndex(t, ul.Uids, 400)
+	idx33 := findIndex(t, ul.Uids, 700)
+	require.True(t, idx21 < idx33)
+	require.True(t, idx33 < idx55)
+}
