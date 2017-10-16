@@ -550,8 +550,8 @@ func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 	return l.iterate(readTs, afterUid, f)
 }
 
+// canRead must hold a read lock.
 func (l *List) canRead(commitTs, readTs uint64) bool {
-	l.AssertRLock()
 	if l.startTs > 0 {
 		// Pending transaction
 		return commitTs == readTs
@@ -661,8 +661,12 @@ func doAsyncWrite(commitTs uint64, key []byte, data []byte, uidOnlyPosting bool,
 	if uidOnlyPosting {
 		meta = bitUidPostings
 	}
-	txn.Set(key, data, meta)
-	txn.CommitAt(commitTs, f)
+	if err := txn.Set(key, data, meta); err != nil {
+		f(err)
+	}
+	if err := txn.CommitAt(commitTs, f); err != nil {
+		f(err)
+	}
 }
 
 func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
@@ -744,6 +748,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 
 	var f func(error)
 	f = func(err error) {
+		// TODO: Check for error.
 		x.BytesWrite.Add(int64(len(data)))
 		x.PostingWrites.Add(1)
 		if delFromCache {
