@@ -239,8 +239,15 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 func (s *Server) Connect(ctx context.Context,
 	m *protos.Member) (resp *protos.MembershipState, err error) {
 	x.Printf("Got connection request: %+v\n", m)
+	defer x.Println("Connected")
+
 	if ctx.Err() != nil {
 		return &emptyMembershipState, ctx.Err()
+	}
+	if m.CluterInfoOnly {
+		// This request only wants to access the membership state, and nothing else. Most likely
+		// from our clients.
+		return s.membershipState(), nil
 	}
 	if m.Id == 0 {
 		return &emptyMembershipState, errInvalidId

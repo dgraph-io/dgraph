@@ -126,6 +126,7 @@ func (s *ServerState) Dispose() error {
 type Server struct{}
 
 func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.Assigned, err error) {
+	resp = &protos.Assigned{}
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed.")
 	}

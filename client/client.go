@@ -17,6 +17,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -128,4 +129,39 @@ func (req *Req) Set(nquad *protos.NQuad) {
 		req.gr.Mutation = new(protos.Mutation)
 	}
 	req.gr.Mutation.Set = append(req.gr.Mutation.Set, nquad)
+}
+
+type Txn struct {
+	startTs  uint64
+	commitTs uint64
+
+	dg *Dgraph
+}
+
+func (d *Dgraph) NewTxn() *Txn {
+	ts := d.getTimestamp()
+	txn := &Txn{
+		startTs: ts,
+		dg:      d,
+	}
+	return txn
+}
+
+func (txn *Txn) Query(q string, vars map[string]string) (*protos.Response, error) {
+	req := &protos.Request{
+		Query:   q,
+		Vars:    vars,
+		StartTs: txn.startTs,
+	}
+	return txn.dg.run(context.Background(), req)
+}
+
+func (txn *Txn) Mutate(mu *protos.Mutation) (*protos.Assigned, error) {
+	mu.StartTs = txn.startTs
+	return txn.dg.mutate(context.Background(), mu)
+}
+
+func (txn *Txn) Commit() error {
+	txn.commitTs = txn.dg.getTimestamp()
+	return nil
 }

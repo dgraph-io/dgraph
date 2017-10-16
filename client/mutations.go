@@ -19,9 +19,10 @@ package client
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/rand"
-
-	"google.golang.org/grpc"
+	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
@@ -29,23 +30,14 @@ import (
 )
 
 type Dgraph struct {
-	dc []protos.DgraphClient
-}
+	zero protos.ZeroClient
+	dc   []protos.DgraphClient
 
-// NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
-// conns.
-// The client can be backed by multiple connections (to the same server, or multiple servers in a
-// cluster).
-//
-// A single client is thread safe for sharing with multiple go routines (though a single Req
-// should not be shared unless the go routines negotiate exclusive assess to the Req functions).
-func NewDgraphClient(conns []*grpc.ClientConn) *Dgraph {
-	var clients []protos.DgraphClient
-	for _, conn := range conns {
-		client := protos.NewDgraphClient(conn)
-		clients = append(clients, client)
-	}
-	return NewClient(clients)
+	mu     sync.Mutex
+	needTs []chan uint64
+	notify chan struct{}
+
+	state *protos.MembershipState
 }
 
 // TODO(tzdybal) - hide this function from users
@@ -57,17 +49,77 @@ func NewClient(clients []protos.DgraphClient) *Dgraph {
 	return d
 }
 
-// DropAll deletes all edges and schema from Dgraph.
-func (d *Dgraph) DropAll(ctx context.Context) error {
-	req := &Req{
-		gr: protos.Request{
-			Mutation: &protos.Mutation{DropAll: true},
-		},
+// NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
+// conns.
+// The client can be backed by multiple connections (to the same server, or multiple servers in a
+// cluster).
+//
+// A single client is thread safe for sharing with multiple go routines (though a single Req
+// should not be shared unless the go routines negotiate exclusive assess to the Req functions).
+func NewDgraphClient(zero protos.ZeroClient, dc protos.DgraphClient) *Dgraph {
+	dg := &Dgraph{
+		zero:   zero,
+		dc:     []protos.DgraphClient{dc},
+		notify: make(chan struct{}, 1),
 	}
 
-	_, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr)
-	return err
+	go dg.fillTimestampRequests()
+	return dg
 }
+
+func (d *Dgraph) getTimestamp() uint64 {
+	ch := make(chan uint64)
+	d.mu.Lock()
+	d.needTs = append(d.needTs, ch)
+	d.mu.Unlock()
+
+	select {
+	case d.notify <- struct{}{}:
+	default:
+	}
+	return <-ch
+}
+
+func (d *Dgraph) fillTimestampRequests() {
+	var chs []chan uint64
+	for range d.notify {
+	RETRY:
+		d.mu.Lock()
+		chs = append(chs, d.needTs...)
+		d.needTs = d.needTs[:0]
+		d.mu.Unlock()
+
+		if len(chs) == 0 {
+			continue
+		}
+		num := &protos.Num{Val: uint64(len(chs))}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ts, err := d.zero.Timestamps(ctx, num)
+		cancel()
+		if err != nil {
+			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
+			goto RETRY
+		}
+		x.Printf("Got ts lease: %+v\n", ts)
+		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
+		for i, ch := range chs {
+			ch <- ts.StartId + uint64(i)
+		}
+		chs = chs[:0]
+	}
+}
+
+// DropAll deletes all edges and schema from Dgraph.
+// func (d *Dgraph) DropAll(ctx context.Context) error {
+// 	req := &Req{
+// 		gr: protos.Request{
+// 			Mutation: &protos.Mutation{DropAll: true},
+// 		},
+// 	}
+
+// 	_, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr)
+// 	return err
+// }
 
 func (d *Dgraph) CheckSchema(schema *protos.SchemaUpdate) error {
 	if len(schema.Predicate) == 0 {
@@ -85,35 +137,35 @@ func (d *Dgraph) CheckSchema(schema *protos.SchemaUpdate) error {
 	return nil
 }
 
-func (d *Dgraph) SetSchemaBlocking(ctx context.Context, updates []*protos.SchemaUpdate) error {
-	for _, s := range updates {
-		if err := d.CheckSchema(s); err != nil {
-			return err
-		}
-		req := new(Req)
-		che := make(chan error, 1)
-		req.AddSchema(s)
-		go func() {
-			if _, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr); err != nil {
-				che <- err
-				return
-			}
-			che <- nil
-		}()
+// func (d *Dgraph) SetSchemaBlocking(ctx context.Context, updates []*protos.SchemaUpdate) error {
+// 	for _, s := range updates {
+// 		if err := d.CheckSchema(s); err != nil {
+// 			return err
+// 		}
+// 		req := new(Req)
+// 		che := make(chan error, 1)
+// 		req.AddSchema(s)
+// 		go func() {
+// 			if _, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr); err != nil {
+// 				che <- err
+// 				return
+// 			}
+// 			che <- nil
+// 		}()
 
-		// blocking wait until schema is applied
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case err := <-che:
-			if err != nil {
-				return err
-			}
-		}
-	}
+// 		// blocking wait until schema is applied
+// 		select {
+// 		case <-ctx.Done():
+// 			return ctx.Err()
+// 		case err := <-che:
+// 			if err != nil {
+// 				return err
+// 			}
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // Run runs the request in req and returns with the completed response from the server.  Calling
 // Run has no effect on batched mutations.
@@ -175,12 +227,14 @@ func (d *Dgraph) SetSchemaBlocking(ctx context.Context, updates []*protos.Schema
 //
 // It's often easier to unpack directly into a struct with Unmarshal, than to
 // step through the response.
-func (d *Dgraph) Run(ctx context.Context, req *Req) (*protos.Response, error) {
-	res, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr)
-	if err == nil {
-		req = &Req{}
-	}
-	return res, err
+func (d *Dgraph) run(ctx context.Context, req *protos.Request) (*protos.Response, error) {
+	dc := d.anyClient()
+	return dc.Run(ctx, req)
+}
+
+func (d *Dgraph) mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
+	dc := d.anyClient()
+	return dc.Mutate(ctx, mu)
 }
 
 // CheckVersion checks if the version of dgraph and dgraph-live-loader are the same.  If either the
@@ -201,6 +255,6 @@ You can get the latest version from https://docs.dgraph.io
 	}
 }
 
-func (d *Dgraph) AnyClient() protos.DgraphClient {
+func (d *Dgraph) anyClient() protos.DgraphClient {
 	return d.dc[rand.Intn(len(d.dc))]
 }
