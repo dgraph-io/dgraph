@@ -92,7 +92,7 @@ func (t *Txn) WriteDeltas() error {
 	if t.Aborted() != 0 {
 		return errConflict
 	}
-	txn := pstore.NewTransaction(true)
+	txn := pstore.NewTransactionAt(t.StartTs, true)
 	defer txn.Discard()
 
 	if t.ServesPrimary {
@@ -108,7 +108,7 @@ func (t *Txn) WriteDeltas() error {
 		var pl protos.PostingList
 		item, err := txn.Get([]byte(d.key))
 
-		if err == nil {
+		if err == nil && item.Version() == t.StartTs {
 			val, err := item.Value()
 			if err != nil {
 				return err
@@ -158,7 +158,9 @@ func checkCommitStatusHelper(key []byte, vs uint64) (uint64, bool, error) {
 		return 0, true, nil
 	}
 	if commitTs > 0 {
-		err := CommitMutations([]string{string(key)}, commitTs)
+		tctx := &protos.TxnContext{CommitTs: commitTs}
+		tctx.Keys = []string{string(key)}
+		err := CommitMutations(tctx, false)
 		if err == nil {
 			clean(key, vs)
 		}
@@ -177,16 +179,16 @@ func CommitMutations(tx *protos.TxnContext, writeLock bool) error {
 	if writeLock {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], tx.CommitTs)
-		if err := txn.Set(x.LockKey(tx.Primary), buf, nil); err != nil {
+		if err := txn.Set(x.LockKey(tx.Primary), buf[:], 0); err != nil {
 			return err
 		}
 	}
-	for _, k := range keys {
+	for _, k := range tx.Keys {
 		if err := txn.Set([]byte(k), nil, bitCommitMarker); err != nil {
 			return nil
 		}
 	}
-	return txn.CommitAt(commitTs, nil)
+	return txn.CommitAt(tx.CommitTs, nil)
 }
 
 // Delete all deltas we wrote to badger.

@@ -100,7 +100,6 @@ func (d *Dgraph) fillTimestampRequests() {
 			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
 			goto RETRY
 		}
-		x.Printf("Got ts lease: %+v\n", ts)
 		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
 		for i, ch := range chs {
 			ch <- ts.StartId + uint64(i)

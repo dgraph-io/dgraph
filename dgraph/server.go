@@ -135,17 +135,17 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		len(mu.GetSchema()) == 0 && len(mu.GetSetJson()) == 0 &&
 			len(mu.GetDeleteJson()) == 0 && !mu.GetDropAll()
 	if emptyMutation {
-		return nil, fmt.Errorf("empty mutation")
+		return resp, fmt.Errorf("empty mutation")
 	}
 	if mu.StartTs == 0 {
-		return nil, fmt.Errorf("Invalid start timestamp")
+		return resp, fmt.Errorf("Invalid start timestamp")
 	}
 
 	if mu.DropAll {
 		m := protos.Mutations{DropAll: true}
 		// TODO: Handle delete as special case. Abort all pending transactions
 		_, err := query.ApplyMutations(ctx, &m)
-		return nil, err
+		return resp, err
 	}
 
 	gmu, err := parseMutationObject(mu)

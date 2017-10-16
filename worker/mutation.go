@@ -459,9 +459,9 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 	// TODO: Propose and do this over network.
 	// TODO: Do this first over primary, then others.
 	if txn.CommitTs == 0 {
-		return nil, abortMutations(ctx, txn)
+		return &protos.Payload{}, abortMutations(ctx, txn)
 	} else {
-		return nil, commitMutations(ctx, txn)
+		return &protos.Payload{}, commitMutations(ctx, txn)
 	}
 }
 
