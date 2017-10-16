@@ -139,23 +139,22 @@ func less(a, b Val) bool {
 }
 
 func mismatchedLess(a, b Val) bool {
+	x.AssertTrue(a.Tid != b.Tid)
 	if (a.Tid != IntID && a.Tid != FloatID) || (b.Tid != IntID && b.Tid != FloatID) {
 		// Non-float/int are sorted arbitrarily by type.
 		return a.Tid < b.Tid
 	}
-	// Floats and ints can be sorted together in a sensible way.
-	var af, bf float64
-	if a.Tid == IntID {
-		af = float64(a.Value.(int64))
+
+	// Floats and ints can be sorted together in a sensible way. The approach
+	// here isn't 100% correct, and will be wrong when dealing with ints and
+	// floats close to each other and greater in magnitude than 1<<53 (the
+	// point at which consecutive floats are more than 1 apart).
+	if a.Tid == FloatID {
+		return a.Value.(float64) < float64(b.Value.(int64))
 	} else {
-		af = a.Value.(float64)
+		x.AssertTrue(b.Tid == FloatID)
+		return float64(a.Value.(int64)) < b.Value.(float64)
 	}
-	if b.Tid == IntID {
-		bf = float64(b.Value.(int64))
-	} else {
-		bf = b.Value.(float64)
-	}
-	return af < bf
 }
 
 // Equal returns true if a is equal to b.
