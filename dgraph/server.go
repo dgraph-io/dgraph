@@ -166,8 +166,20 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	if err != nil {
 		return resp, err
 	}
+
 	m := protos.Mutations{Edges: edges, Schema: mu.Schema, StartTs: mu.StartTs}
-	resp.Keys, err = query.ApplyMutations(ctx, &m)
+	// Now fill in the primary attribute.
+	for _, e := range edges {
+		if e.Op == protos.DirectedEdge_SET {
+			m.PrimaryAttr = e.Attr
+			break
+		}
+	}
+	if len(m.PrimaryAttr) == 0 {
+		// No set edge. Just pick the first.
+		m.PrimaryAttr = edges[0].Attr
+	}
+	resp.Context, err = query.ApplyMutations(ctx, &m)
 	return resp, err
 }
 
@@ -265,6 +277,10 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 
 	resp.Latency = gl
 	return resp, err
+}
+
+func (s *Server) CommitOrAbort(ctx context.Context, txn *protos.TxnContext) (*protos.Payload, error) {
+	return worker.CommitOverNetwork(ctx, txn)
 }
 
 func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {

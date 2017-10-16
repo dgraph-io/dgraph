@@ -19,6 +19,7 @@ package posting
 
 import (
 	"bytes"
+	"encoding/binary"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -39,14 +40,20 @@ func commitTimestamp(startTs uint64) (commitTs uint64, aborted bool, err error) 
 	return 0, false, nil
 }
 
+type delta struct {
+	key     []byte
+	posting *protos.Posting
+}
 type Txn struct {
-	StartTs uint64
+	StartTs       uint64
+	PrimaryAttr   string
+	ServesPrimary bool
+
 	// atomic
 	aborted uint32
 	// Fields which can changed after init
 	sync.Mutex
-	m       map[string][]*protos.Posting
-	delKeys []string
+	deltas []delta
 }
 
 func (t *Txn) Abort() {
@@ -60,32 +67,22 @@ func (t *Txn) Aborted() uint32 {
 func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 	t.Lock()
 	defer t.Unlock()
-	if t.m == nil {
-		t.m = make(map[string][]*protos.Posting)
-	}
-	if p.Op == Del && bytes.Equal(p.Value, []byte(x.Star)) {
-		t.delKeys = append(t.delKeys, string(key))
-		return
-	}
-	t.m[string(key)] = append(t.m[string(key)], p)
+	t.deltas = append(t.deltas, delta{key: key, posting: p})
 }
 
-func (t *Txn) Keys() []string {
-	var keys []string
+func (t *Txn) Fill(ctx *protos.TxnContext) {
 	t.Lock()
 	defer t.Unlock()
-	for k, _ := range t.m {
-		keys = append(keys, k)
+	ctx.StartTs = t.StartTs
+	ctx.Primary = t.PrimaryAttr
+	for _, d := range t.deltas {
+		ctx.Keys = append(ctx.Keys, string(d.key))
 	}
-	for _, k := range t.delKeys {
-		keys = append(keys, k)
-	}
-	return keys
 }
 
 // Write All deltas per transaction at once.
 // Called after all mutations are applied in memory and checked for locks/conflicts.
-func (t *Txn) CommitDeltas() error {
+func (t *Txn) WriteDeltas() error {
 	if t == nil {
 		return nil
 	}
@@ -98,30 +95,43 @@ func (t *Txn) CommitDeltas() error {
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
-	for k, v := range t.m {
+	if t.ServesPrimary {
+		lk := x.LockKey(t.PrimaryAttr)
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], 0) // Indicates pending or aborted.
+		if err := txn.Set(lk, buf[:], 0); err != nil {
+			return err
+		}
+	}
+
+	for _, d := range t.deltas {
 		var pl protos.PostingList
-		item, err := txn.Get([]byte(k))
+		item, err := txn.Get([]byte(d.key))
+
 		if err == nil {
 			val, err := item.Value()
 			if err != nil {
 				return err
 			}
 			x.Check(pl.Unmarshal(val))
-		}
-
-		// We can have multiple proposals for same transaction if client does
-		// multiple writes so accumulate changes from previous deltas at same ts.
-		pl.Postings = append(pl.Postings, v...)
-		val, err := pl.Marshal()
-		x.Check(err)
-		err = txn.Set([]byte(k), val, bitDeltaPosting)
-		if err != nil {
+			x.AssertTrue(pl.PrimaryAttr == t.PrimaryAttr)
+		} else if err != badger.ErrKeyNotFound {
 			return err
 		}
-	}
-	for _, key := range t.delKeys {
-		err := txn.Set([]byte(key), nil, 0x00)
-		if err != nil {
+
+		var meta byte
+		pl.PrimaryAttr = t.PrimaryAttr
+		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
+			pl.Postings = pl.Postings[:0]
+			meta = 0 // Indicates that this is the full posting list.
+		} else {
+			pl.Postings = append(pl.Postings, d.posting)
+			meta = bitDeltaPosting
+		}
+
+		val, err := pl.Marshal()
+		x.Check(err)
+		if err = txn.Set([]byte(d.key), val, meta); err != nil {
 			return err
 		}
 	}
@@ -160,13 +170,19 @@ func checkCommitStatusHelper(key []byte, vs uint64) (uint64, bool, error) {
 
 // Writes all commit keys of the transaction.
 // Called after all mutations are committed in memory.
-func CommitMutations(keys []string, commitTs uint64) error {
+func CommitMutations(tx *protos.TxnContext, writeLock bool) error {
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
+	if writeLock {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], tx.CommitTs)
+		if err := txn.Set(x.LockKey(tx.Primary), buf, nil); err != nil {
+			return err
+		}
+	}
 	for _, k := range keys {
-		err := txn.Set([]byte(k), nil, bitCommitMarker)
-		if err != nil {
+		if err := txn.Set([]byte(k), nil, bitCommitMarker); err != nil {
 			return nil
 		}
 	}

@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func ApplyMutations(ctx context.Context, m *protos.Mutations) ([]string, error) {
+func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
 	if worker.Config.ExpandEdge {
 		err := handleInternalEdge(ctx, m)
 		if err != nil {
@@ -31,13 +31,13 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) ([]string, error) 
 			}
 		}
 	}
-	keys, err := worker.MutateOverNetwork(ctx, m)
+	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while MutateOverNetwork: %+v", err)
 		}
 	}
-	return keys, err
+	return tctx, err
 }
 
 func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
@@ -147,7 +147,8 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 	num.Val = uint64(len(newUids))
 	if int(num.Val) > 0 {
 		var res *protos.AssignedIds
-		// TODO: Optimize later by prefetching
+		// TODO: Optimize later by prefetching. Also consolidate all the UID requests into a single
+		// pending request from this server to zero.
 		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while AssignUidsOverNetwork for newUids: %+v", err)

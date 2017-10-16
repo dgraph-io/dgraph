@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type opType int
@@ -132,8 +133,8 @@ func (req *Req) Set(nquad *protos.NQuad) {
 }
 
 type Txn struct {
-	startTs  uint64
-	commitTs uint64
+	startTs uint64
+	context *protos.TxnContext
 
 	dg *Dgraph
 }
@@ -156,12 +157,38 @@ func (txn *Txn) Query(q string, vars map[string]string) (*protos.Response, error
 	return txn.dg.run(context.Background(), req)
 }
 
+func (txn *Txn) mergeContext(src *protos.TxnContext) error {
+	if txn.context == nil {
+		txn.context = src
+		return nil
+	}
+	if txn.context.Primary != src.Primary {
+		return x.Errorf("Primary key mismatch")
+	}
+	if txn.context.StartTs != src.StartTs {
+		return x.Errorf("StartTs mismatch")
+	}
+	txn.context.Keys = append(txn.context.Keys, src.Keys...)
+	return nil
+}
+
 func (txn *Txn) Mutate(mu *protos.Mutation) (*protos.Assigned, error) {
 	mu.StartTs = txn.startTs
-	return txn.dg.mutate(context.Background(), mu)
+	ag, err := txn.dg.mutate(context.Background(), mu)
+	if err == nil {
+		err = txn.mergeContext(ag.Context)
+	}
+	return ag, err
+}
+
+func (txn *Txn) Abort() error {
+	txn.context.CommitTs = 0
+	_, err := txn.dg.commitOrAbort(context.Background(), txn.context)
+	return err
 }
 
 func (txn *Txn) Commit() error {
-	txn.commitTs = txn.dg.getTimestamp()
-	return nil
+	txn.context.CommitTs = txn.dg.getTimestamp()
+	_, err := txn.dg.commitOrAbort(context.Background(), txn.context)
+	return err
 }

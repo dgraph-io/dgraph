@@ -26,7 +26,6 @@ const (
 	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has byteType and
 	// bytePrefix. Change it so that it just has one field which has all the information.
 	ByteData     = byte(0x00)
-	byteSchema   = byte(0x01)
 	ByteIndex    = byte(0x02)
 	ByteReverse  = byte(0x04)
 	ByteCount    = byte(0x08)
@@ -34,6 +33,8 @@ const (
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
+	byteSchema    = byte(0x01)
+	byteLock      = byte(0x02)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -50,13 +51,20 @@ func writeAttr(buf []byte, attr string) []byte {
 // schema keys are stored separately with unique prefix,
 // since we need to iterate over all schema keys
 func SchemaKey(attr string) []byte {
-	buf := make([]byte, 2+len(attr)+2)
+	buf := make([]byte, 1+2+len(attr))
 	buf[0] = byteSchema
 	rest := buf[1:]
 
-	rest = writeAttr(rest, attr)
-	rest[0] = byteSchema
+	writeAttr(rest, attr)
+	return buf
+}
 
+func LockKey(attr string) []byte {
+	buf := make([]byte, 1+2+len(attr))
+	buf[0] = byteLock
+	rest := buf[1:]
+
+	writeAttr(rest, attr)
 	return buf
 }
 
@@ -146,6 +154,10 @@ func (p ParsedKey) IsSchema() bool {
 	return p.byteType == byteSchema
 }
 
+func (p ParsedKey) IsLock() bool {
+	return p.byteType == byteLock
+}
+
 func (p ParsedKey) IsType(typ byte) bool {
 	switch typ {
 	case ByteCount, ByteCountRev:
@@ -182,9 +194,15 @@ func (p ParsedKey) SkipRangeOfSameType() []byte {
 }
 
 func (p ParsedKey) SkipSchema() []byte {
-	buf := make([]byte, 1)
+	var buf [1]byte
 	buf[0] = byteSchema + 1
-	return buf
+	return buf[:]
+}
+
+func (p ParsedKey) SkipLock() []byte {
+	var buf [1]byte
+	buf[0] = byteLock + 1
+	return buf[:]
 }
 
 // DataPrefix returns the prefix for data keys.
@@ -237,9 +255,15 @@ func (p ParsedKey) CountPrefix(reverse bool) []byte {
 
 // SchemaPrefix returns the prefix for Schema keys.
 func SchemaPrefix() []byte {
-	buf := make([]byte, 1)
+	var buf [1]byte
 	buf[0] = byteSchema
-	return buf
+	return buf[:]
+}
+
+func LockPrefix() []byte {
+	var buf [1]byte
+	buf[0] = byteLock
+	return buf[:]
 }
 
 // PredicatePrefix returns the prefix for all keys belonging
@@ -261,6 +285,12 @@ func Parse(key []byte) *ParsedKey {
 
 	p.Attr = string(k[:sz])
 	k = k[sz:]
+
+	switch p.bytePrefix {
+	case byteSchema, byteLock:
+		return p
+	default:
+	}
 
 	p.byteType = k[0]
 	k = k[1:]
@@ -284,8 +314,6 @@ func Parse(key []byte) *ParsedKey {
 			return nil
 		}
 		p.Count = binary.BigEndian.Uint32(k)
-	case byteSchema:
-		break
 	default:
 		// Some other data type.
 		return nil

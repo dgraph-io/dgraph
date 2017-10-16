@@ -40,6 +40,11 @@ func (i *inmemoryClient) Mutate(ctx context.Context, in *protos.Mutation,
 	return i.srv.Mutate(ctx, in)
 }
 
+func (i *inmemoryClient) CommitOrAbort(ctx context.Context, in *protos.TxnContext,
+	_ ...grpc.CallOption) (*protos.Payload, error) {
+	return i.srv.CommitOrAbort(ctx, in)
+}
+
 func (i *inmemoryClient) CheckVersion(ctx context.Context, in *protos.Check,
 	_ ...grpc.CallOption) (*protos.Version, error) {
 	return i.srv.CheckVersion(ctx, in)

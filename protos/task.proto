@@ -232,6 +232,8 @@ message PostingList {
 	bytes checksum = 2;
 	uint64 commit = 3; // More inclination towards smaller values.
 	bytes uids = 4; // Encoded list of uids in this posting list.
+
+  string primary_attr = 7; // Used to find the status of txn.
 }
 
 // Facet messages.
@@ -356,8 +358,9 @@ message ExportPayload {
 
 message TxnContext {
   repeated string keys = 1;
-	uint64 start_ts = 2;
-	uint64 commit_ts = 3;
+  string primary = 2;
+	uint64 start_ts = 3;
+	uint64 commit_ts = 4;
 }
 
 service Raft {
@@ -377,7 +380,7 @@ service Zero {
 service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                        returns (TxnContext) {}
-	rpc CommitOrAbortTxn(TxnContext)              returns (Payload) {}
+	rpc CommitOrAbort(TxnContext)                 returns (Payload) {}
 	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
@@ -391,15 +394,16 @@ service Worker {
 // Graph response.
 service Dgraph {
   // TODO(mrjn): Rename it to Query.
-    rpc Run (Request) returns (Response) {};
-    rpc Mutate (Mutation) returns (Assigned) {};
-    rpc CheckVersion(Check) returns (Version) {};
-    rpc AssignUids(Num) returns (AssignedIds) {};
+    rpc Run (Request)             returns (Response) {}
+    rpc Mutate (Mutation)         returns (Assigned) {}
+    rpc CheckVersion(Check)       returns (Version) {}
+    rpc AssignUids(Num)           returns (AssignedIds) {}
+    rpc CommitOrAbort(TxnContext) returns (Payload) {}
 }
 
 message Assigned {
-  map<string, uint64> Uids = 1;
-	repeated string keys = 2;
+  map<string, uint64> uids = 1;
+  TxnContext context = 2;
 }
 
 message Num {
@@ -444,6 +448,7 @@ message Mutation {
     bytes delete_json = 2;
     repeated SchemaUpdate schema = 3;
 
+    string primary = 12;
     uint64 start_ts = 13;
     bool DropAll = 14;
 

@@ -102,7 +102,7 @@ func commitMutations(ctx context.Context, tc *protos.TxnContext) error {
 			return err
 		}
 	}
-	return posting.CommitMutations(tc.Keys, tc.CommitTs)
+	return posting.CommitMutations(tc, groups().ServesTablet(tc.Primary))
 }
 
 // This is serialized with mutations, called after applied watermarks catch up
@@ -358,11 +358,14 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 	if groups().ServesGroup(gid) {
 		node := groups().Node
 		// we don't timeout after proposing
-		txn := &posting.Txn{StartTs: m.StartTs}
-		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
-		if res.err != nil {
-			res.keys = txn.Keys()
+		txn := &posting.Txn{
+			StartTs:       m.StartTs,
+			PrimaryAttr:   m.PrimaryAttr,
+			ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
 		}
+		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
+		res.ctx = &protos.TxnContext{}
+		txn.Fill(res.ctx)
 		chr <- res
 		return
 	}
@@ -378,26 +381,40 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 	}
 	conn := pl.Get()
 
+	var tc *protos.TxnContext
 	c := protos.NewWorkerClient(conn)
+
 	ch := make(chan error, 1)
 	go func() {
-		tc, err := c.Mutate(ctx, m)
-		res.keys = tc.Keys
-		res.err = err
+		var err error
+		tc, err = c.Mutate(ctx, m)
 		ch <- err
 	}()
+
 	select {
 	case <-ctx.Done():
 		res.err = ctx.Err()
-	case <-ch:
+		res.ctx = nil
+	case err := <-ch:
+		res.err = err
+		res.ctx = tc
 	}
 	chr <- res
 }
 
+func setPrimary(src *protos.Mutations, edge *protos.DirectedEdge) {
+	if len(src.PrimaryAttr) == 0 {
+		return
+	}
+	if groups().ServesTablet(edge.Attr) {
+		src.PrimaryAttr = edge.Attr
+	}
+}
+
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutations) error {
-	for _, edge := range m.Edges {
+func addToMutationMap(mutationMap map[uint32]*protos.Mutations, src *protos.Mutations) error {
+	for _, edge := range src.Edges {
 		gid := groups().BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
 		if mu == nil {
@@ -405,8 +422,12 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 			mutationMap[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
+		setPrimary(src, edge)
 	}
-	for _, schema := range m.Schema {
+	if len(src.Edges) > 0 && len(src.PrimaryAttr) == 0 {
+		src.PrimaryAttr = src.Edges[0].Attr
+	}
+	for _, schema := range src.Schema {
 		gid := groups().BelongsTo(schema.Predicate)
 		mu := mutationMap[gid]
 		if mu == nil {
@@ -416,7 +437,7 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 		mu.Schema = append(mu.Schema, schema)
 	}
 
-	if m.DropAll {
+	if src.DropAll {
 		for _, gid := range groups().KnownGroups() {
 			mu := mutationMap[gid]
 			if mu == nil {
@@ -426,30 +447,41 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 			mu.DropAll = true
 		}
 	}
-
 	return nil
 }
 
 type res struct {
-	err  error
-	keys []string
+	err error
+	ctx *protos.TxnContext
+}
+
+func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Payload, error) {
+	// TODO: Propose and do this over network.
+	// TODO: Do this first over primary, then others.
+	if txn.CommitTs == 0 {
+		return nil, abortMutations(ctx, txn)
+	} else {
+		return nil, commitMutations(ctx, txn)
+	}
 }
 
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
-func MutateOverNetwork(ctx context.Context, m *protos.Mutations) ([]string, error) {
-	var keys []string
+func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
+	tctx := &protos.TxnContext{StartTs: m.StartTs}
 	mutationMap := make(map[uint32]*protos.Mutations)
 	if err := addToMutationMap(mutationMap, m); err != nil {
-		return keys, err
+		return tctx, err
 	}
+	tctx.Primary = m.PrimaryAttr
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
-			return keys, errUnservedTablet
+			return tctx, errUnservedTablet
 		}
 		mu.StartTs = m.StartTs
+		mu.PrimaryAttr = m.PrimaryAttr
 		go proposeOrSend(ctx, gid, mu, resCh)
 	}
 
@@ -464,13 +496,13 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) ([]string, erro
 				tr.LazyPrintf("Error while running all mutations: %+v", res.err)
 			}
 		}
-		keys = append(keys, res.keys...)
+		tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
 	}
 	close(resCh)
-	return keys, e
+	return tctx, e
 }
 
-func (w *grpcWorker) CommitOrAbortTxn(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
+func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
 	if tc.CommitTs == 0 {
 		err := abortMutations(ctx, tc)
 		return &protos.Payload{}, err
@@ -485,21 +517,23 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 	if ctx.Err() != nil {
 		return txnCtx, ctx.Err()
 	}
-
-	// TODO: Use ServesTablet instead.
 	if !groups().ServesGroup(m.GroupId) {
 		return txnCtx, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
+
 	node := groups().Node
 	if rand.Float64() < Config.Tracing {
 		var tr trace.Trace
 		tr, ctx = x.NewTrace("GrpcMutate", ctx)
 		defer tr.Finish()
 	}
-	txn := &posting.Txn{StartTs: m.StartTs}
-	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
-	if err != nil {
-		txnCtx.Keys = txn.Keys()
+
+	txn := &posting.Txn{
+		StartTs:       m.StartTs,
+		PrimaryAttr:   m.PrimaryAttr,
+		ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
 	}
+	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
+	txn.Fill(txnCtx)
 	return txnCtx, err
 }
