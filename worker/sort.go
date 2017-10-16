@@ -595,7 +595,7 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 			return multiSortVals, ctx.Err()
 		default:
 			uid := ul.Uids[i]
-			val, err := fetchValue(uid, order.Attr, order.Langs, typ)
+			val, err := fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
 			if err != nil {
 				// If a value is missing, skip that UID in the result.
 				continue
@@ -615,12 +615,13 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 }
 
 // fetchValue gets the value for a given UID.
-func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID) (types.Val, error) {
+func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID,
+	readTs uint64) (types.Val, error) {
 	// Don't put the values in memory
 	pl := posting.GetNoStore(x.DataKey(attr, uid))
 
 	// TODO(Txn): Pass read ts around
-	src, err := pl.ValueFor(0, langs)
+	src, err := pl.ValueFor(readTs, langs)
 
 	if err != nil {
 		return types.Val{}, err

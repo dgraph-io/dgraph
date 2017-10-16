@@ -33,6 +33,7 @@ service Dgraph {
 
 message Assigned {
   map<string, uint64> Uids = 1;
+	repeated string keys = 2;
 }
 
 message Num {

@@ -14,11 +14,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
+func ApplyMutations(ctx context.Context, m *protos.Mutations) ([]string, error) {
 	if worker.Config.ExpandEdge {
 		err := handleInternalEdge(ctx, m)
 		if err != nil {
-			return x.Wrapf(err, "While adding internal edges")
+			return nil, x.Wrapf(err, "While adding internal edges")
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Added Internal edges")
@@ -26,18 +26,18 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 	} else {
 		for _, mu := range m.Edges {
 			if mu.Attr == x.Star && !worker.Config.ExpandEdge {
-				return x.Errorf("Expand edge (--expand_edge) is set to false." +
+				return nil, x.Errorf("Expand edge (--expand_edge) is set to false." +
 					" Cannot perform S * * deletion.")
 			}
 		}
 	}
-	if err := worker.MutateOverNetwork(ctx, m); err != nil {
+	keys, err := worker.MutateOverNetwork(ctx, m)
+	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while MutateOverNetwork: %+v", err)
 		}
-		return err
 	}
-	return nil
+	return keys, err
 }
 
 func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {

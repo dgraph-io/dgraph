@@ -41,20 +41,21 @@ message SrcFunction {
 
 message Query {
 	string attr = 1;
-	repeated string langs = 2; // language list for attribute
-	fixed64 after_uid = 3;  // Only return UIDs greater than this.
-	bool do_count = 4;      // Are we just getting lengths?
+	uint64 read_ts = 2;
+	repeated string langs = 3; // language list for attribute
+	fixed64 after_uid = 4;  // Only return UIDs greater than this.
+	bool do_count = 5;      // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
-	List uid_list = 5;
+	List uid_list = 6;
 
 	// Function to generate or filter UIDs.
-	SrcFunction src_func = 6;
+	SrcFunction src_func = 7;
 
-	bool reverse = 7;  // Whether this is a reverse edge.
+	bool reverse = 8;  // Whether this is a reverse edge.
 
-	Param facet_param = 8; // which facets to fetch
-	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
+	Param facet_param = 9; // which facets to fetch
+	FilterTree facets_filter = 10; // filtering on facets : has Op (and/or/not) tree
 }
 
 message ValueList {
@@ -77,6 +78,7 @@ message Order {
 
 message SortMessage {
 	repeated Order order = 1;
+	uint64 read_ts = 2;
 	repeated List uid_matrix = 3;
 	int32 count = 4;   // Return this many elements.
 	int32 offset = 5;  // Skip this many elements.
@@ -156,9 +158,10 @@ message DirectedEdge {
 
 message Mutations {
 	uint32 group_id = 1;
-	repeated DirectedEdge edges = 2;
-	repeated SchemaUpdate schema = 3;
-	bool DropAll = 4;
+	uint64 start_ts = 2;
+	repeated DirectedEdge edges = 3;
+	repeated SchemaUpdate schema = 4;
+	bool DropAll = 5;
 }
 
 message KeyValues {

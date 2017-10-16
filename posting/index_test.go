@@ -129,7 +129,7 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 	}
 	require.NoError(t, txn.CommitDeltas())
 	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs, commitTs))
-	require.NoError(t, commitMutations([][]byte{l.key}, commitTs))
+	require.NoError(t, CommitMutations([]string{string(l.key)}, commitTs))
 }
 
 const schemaVal = `
@@ -257,7 +257,7 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 	require.NoError(t, txn.CommitDeltas())
 	l := Get(x.ReverseKey(attr, dst))
 	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs, commitTs))
-	require.NoError(t, commitMutations([][]byte{l.key}, commitTs))
+	require.NoError(t, CommitMutations([]string{string(l.key)}, commitTs))
 }
 
 /*

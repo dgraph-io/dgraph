@@ -154,6 +154,7 @@ type Function struct {
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
+	ReadTs       uint64
 	Attr         string
 	Params       params
 	counts       []uint32
@@ -621,12 +622,13 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	return key
 }
 
-func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
+func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph, readTs uint64) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 	attrsSeen := make(map[string]struct{})
+	sg.ReadTs = readTs
 
 	for _, gchild := range gq.Children {
 		if sg.Params.Alias == "shortest" && gchild.Expand != "" {
@@ -736,7 +738,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		sg.Children = append(sg.Children, dst)
-		if err := treeCopy(ctx, gchild, dst); err != nil {
+		if err := treeCopy(ctx, gchild, dst, readTs); err != nil {
 			return err
 		}
 	}
@@ -798,12 +800,12 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 }
 
 // ToSubGraph converts the GraphQuery into the internal SubGraph instance type.
-func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+func ToSubGraph(ctx context.Context, gq *gql.GraphQuery, readTs uint64) (*SubGraph, error) {
 	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		return nil, err
 	}
-	err = treeCopy(ctx, gq, sg)
+	err = treeCopy(ctx, gq, sg, readTs)
 	return sg, err
 }
 
@@ -958,6 +960,7 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 		}
 	}
 	out := &protos.Query{
+		ReadTs:       sg.ReadTs,
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
@@ -2272,6 +2275,7 @@ func ConvertUidsToHex(m map[string]uint64) (res map[string]string) {
 // Initially Latency and GqlQuery needs to be set. Subgraphs, Vars
 // and schemaUpdate are filled when processing query.
 type QueryRequest struct {
+	ReadTs   uint64
 	Latency  *Latency
 	GqlQuery *gql.Result
 
@@ -2299,7 +2303,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 			}
 			return err
 		}
-		sg, err := ToSubGraph(ctx, gq)
+		sg, err := ToSubGraph(ctx, gq, req.ReadTs)
 		if err != nil {
 			return err
 		}

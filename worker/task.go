@@ -357,10 +357,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		var vals []types.Val
 		// Even if its a list type and value is asked in a language we return that.
 		if listType && len(q.Langs) == 0 {
-			vals, err = pl.AllValues(0)
+			vals, err = pl.AllValues(args.q.ReadTs)
 		} else {
 			var val types.Val
-			val, err = pl.ValueFor(0, q.Langs)
+			val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
 			vals = append(vals, val)
 		}
 
@@ -408,7 +408,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 		// add facets to result.
 		if q.FacetParam != nil {
-			fs, err := pl.Facets(0, q.FacetParam, q.Langs)
+			fs, err := pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
 			if err != nil {
 				fs = []*protos.Facet{}
 			}
@@ -418,7 +418,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 		switch {
 		case q.DoCount:
-			out.Counts = append(out.Counts, uint32(pl.Length(0, 0)))
+			out.Counts = append(out.Counts, uint32(pl.Length(args.q.ReadTs, 0)))
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 		case srcFn.fnType == AggregatorFn:
@@ -490,7 +490,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
 
 		var perr error
-		filteredRes = make([]*result, 0, pl.Length(0, opts.AfterUID))
+		filteredRes = make([]*result, 0, pl.Length(args.q.ReadTs, opts.AfterUID))
 		pl.Postings(opts, func(p *protos.Posting) bool {
 			res := true
 			res, perr = applyFacetsTree(p.Facets, facetsTree)
@@ -519,17 +519,17 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		switch {
 		case q.DoCount:
-			out.Counts = append(out.Counts, uint32(pl.Length(0, 0)))
+			out.Counts = append(out.Counts, uint32(pl.Length(args.q.ReadTs, 0)))
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 		case srcFn.fnType == CompareScalarFn:
-			count := int64(pl.Length(0, 0))
+			count := int64(pl.Length(args.q.ReadTs, 0))
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
 				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == HasFn:
-			count := int64(pl.Length(0, 0))
+			count := int64(pl.Length(args.q.ReadTs, 0))
 			if EvalCompare("gt", count, 0) {
 				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
@@ -750,9 +750,9 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 
 			var val types.Val
 			if lang != "" {
-				val, err = pl.ValueForTag(0, lang)
+				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
 			} else {
-				val, err = pl.Value(0)
+				val, err = pl.Value(arg.q.ReadTs)
 			}
 
 			if err != nil {
@@ -811,7 +811,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 				switch lang {
 				case "":
 					pl := posting.GetNoStore(x.DataKey(attr, uid))
-					sv, err := pl.Value(0)
+					sv, err := pl.Value(arg.q.ReadTs)
 					if err == nil {
 						dst, err := types.Convert(sv, typ)
 						return err == nil &&
@@ -820,7 +820,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					return false
 				case ".":
 					pl := posting.GetNoStore(x.DataKey(attr, uid))
-					values, _ := pl.AllValues(0)
+					values, _ := pl.AllValues(arg.q.ReadTs)
 					for _, sv := range values {
 						dst, err := types.Convert(sv, typ)
 						if err == nil &&
@@ -830,7 +830,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					}
 					return false
 				default:
-					sv, err := fetchValue(uid, attr, arg.q.Langs, typ)
+					sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
 					if sv.Value == nil || err != nil {
 						return false
 					}
@@ -850,7 +850,7 @@ func filterGeoFunction(arg funcArgs) {
 		key := x.DataKey(attr, uid)
 		pl := posting.Get(key)
 
-		val, err := pl.Value(0)
+		val, err := pl.Value(arg.q.ReadTs)
 		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
@@ -881,13 +881,13 @@ func filterStringFunction(arg funcArgs) {
 		var err error
 		if lang == "" {
 			if schema.State().IsList(attr) {
-				vals, err = pl.AllValues(0)
+				vals, err = pl.AllValues(arg.q.ReadTs)
 			} else {
-				val, err = pl.Value(0)
+				val, err = pl.Value(arg.q.ReadTs)
 				vals = append(vals, val)
 			}
 		} else {
-			val, err = pl.ValueForTag(0, lang)
+			val, err = pl.ValueForTag(arg.q.ReadTs, lang)
 			vals = append(vals, val)
 		}
 		if err != nil {

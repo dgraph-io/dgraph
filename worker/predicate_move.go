@@ -129,7 +129,8 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 
 	for kv := range kvs {
 		if size >= 32<<20 { // 32 MB
-			if err := n.ProposeAndWait(ctx, proposal); err != nil {
+			// TODO: Fix me
+			if err := n.ProposeAndWait(ctx, proposal, nil); err != nil {
 				return err
 			}
 			proposal.Kv = proposal.Kv[:0]
@@ -142,7 +143,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 			pk := x.Parse(kv.Key)
 			// Delete on all nodes.
 			p := &protos.Proposal{CleanPredicate: pk.Attr}
-			err := groups().Node.ProposeAndWait(ctx, p)
+			err := groups().Node.ProposeAndWait(ctx, p, nil)
 			if err != nil {
 				x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 			}
@@ -151,7 +152,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 		size = size + len(kv.Key) + len(kv.Val)
 	}
 	// Propose remaining keys.
-	if err := n.ProposeAndWait(ctx, proposal); err != nil {
+	if err := n.ProposeAndWait(ctx, proposal, nil); err != nil {
 		return err
 	}
 	return nil
@@ -222,7 +223,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	}
 
 	// Ensures that all future mtuations beyond this point are rejected
-	if err := n.ProposeAndWait(ctx, &protos.Proposal{State: in.State}); err != nil {
+	if err := n.ProposeAndWait(ctx, &protos.Proposal{State: in.State}, nil); err != nil {
 		return &emptyPayload, err
 	}
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.

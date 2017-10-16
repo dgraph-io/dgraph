@@ -200,12 +200,9 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) error {
+func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal, txn *posting.Txn) error {
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
-	}
-	if proposal.StartTs == 0 {
-		return x.Errorf("StartTs cannot be zero")
 	}
 	// TODO: Should be based on number of edges (amount of work)
 	pendingProposals <- struct{}{}
@@ -218,6 +215,10 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
+		if proposal.Mutations.StartTs == 0 {
+			return x.Errorf("StartTs cannot be zero")
+		}
+		proposal.StartTs = proposal.Mutations.StartTs
 		for _, edge := range proposal.Mutations.Edges {
 			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
@@ -243,8 +244,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		ch:  che,
 		ctx: ctx,
 		n:   n,
-		txn: &posting.Txn{StartTs: proposal.StartTs},
 	}
+	pctx.txn = txn
 	for {
 		id := rand.Uint32()
 		if n.props.Store(id, pctx) {
@@ -368,7 +369,9 @@ func (n *node) processApplyCh() {
 				n:     n,
 				index: e.Index,
 				cnt:   1,
-				txn:   &posting.Txn{StartTs: proposal.StartTs},
+			}
+			if proposal.Mutations != nil {
+				pctx.txn = &posting.Txn{StartTs: proposal.StartTs}
 			}
 			n.props.Store(proposal.Id, pctx)
 		} else {
@@ -394,6 +397,7 @@ func (n *node) processApplyCh() {
 	}
 }
 
+// TODO: Pass timestamp
 func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	ctx, txn := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
@@ -402,6 +406,7 @@ func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	n.props.Done(pid, err)
 }
 
+// TODO: Pass timestamp
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)

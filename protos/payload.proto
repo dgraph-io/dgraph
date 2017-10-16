@@ -72,7 +72,7 @@ service Zero {
 
 service Worker {
 	// Data serving RPCs.
-	rpc Mutate (Mutations)                        returns (Payload) {}
+	rpc Mutate (Mutations)                        returns (TxnContext) {}
 	rpc CommitOrAbortTxn(TxnContext)              returns (Payload) {}
 	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}

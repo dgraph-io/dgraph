@@ -152,7 +152,8 @@ func (g *groupi) proposeInitialSchema() {
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.
-	if err := MutateOverNetwork(gr.ctx, &m); err != nil {
+	// TODO: Fix me
+	if _, err := MutateOverNetwork(gr.ctx, &m); err != nil {
 		fmt.Println("Error while proposing initial schema: ", err)
 	}
 }
@@ -446,7 +447,7 @@ START:
 			}
 			if n.AmLeader() {
 				proposal := &protos.Proposal{State: state}
-				go n.ProposeAndWait(context.Background(), proposal)
+				go n.ProposeAndWait(context.Background(), proposal, nil)
 			}
 		}
 	}()

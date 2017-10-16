@@ -353,21 +353,27 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
 // the leader of the group gid for proposing.
-func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che chan error) {
+func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr chan res) {
+	res := res{}
 	if groups().ServesGroup(gid) {
 		node := groups().Node
 		// we don't timeout after proposing
-		che <- node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
+		txn := &posting.Txn{StartTs: m.StartTs}
+		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
+		if res.err != nil {
+			res.keys = txn.Keys()
+		}
+		chr <- res
 		return
 	}
 
 	pl := groups().Leader(gid)
 	if pl == nil {
-		err := conn.ErrNoConnection
+		res.err = conn.ErrNoConnection
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
+			tr.LazyPrintf(res.err.Error())
 		}
-		che <- err
+		chr <- res
 		return
 	}
 	conn := pl.Get()
@@ -375,15 +381,17 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	c := protos.NewWorkerClient(conn)
 	ch := make(chan error, 1)
 	go func() {
-		_, err := c.Mutate(ctx, m)
+		tc, err := c.Mutate(ctx, m)
+		res.keys = tc.Keys
+		res.err = err
 		ch <- err
 	}()
 	select {
 	case <-ctx.Done():
-		che <- ctx.Err()
-	case err := <-ch:
-		che <- err
+		res.err = ctx.Err()
+	case <-ch:
 	}
+	chr <- res
 }
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
@@ -422,35 +430,44 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 	return nil
 }
 
+type res struct {
+	err  error
+	keys []string
+}
+
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
-func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
+func MutateOverNetwork(ctx context.Context, m *protos.Mutations) ([]string, error) {
+	var keys []string
 	mutationMap := make(map[uint32]*protos.Mutations)
 	if err := addToMutationMap(mutationMap, m); err != nil {
-		return err
+		return keys, err
 	}
 
-	errorCh := make(chan error, len(mutationMap))
+	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
-			return errUnservedTablet
+			return keys, errUnservedTablet
 		}
-		go proposeOrSend(ctx, gid, mu, errorCh)
+		mu.StartTs = m.StartTs
+		go proposeOrSend(ctx, gid, mu, resCh)
 	}
 
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
 	var e error
 	for i := 0; i < len(mutationMap); i++ {
-		if err := <-errorCh; err != nil {
-			e = err
+		res := <-resCh
+		if res.err != nil {
+			e = res.err
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while running all mutations: %+v", err)
+				tr.LazyPrintf("Error while running all mutations: %+v", res.err)
 			}
 		}
+		keys = append(keys, res.keys...)
 	}
-	close(errorCh)
-	return e
+	close(resCh)
+	return keys, e
 }
 
 func (w *grpcWorker) CommitOrAbortTxn(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
@@ -463,14 +480,15 @@ func (w *grpcWorker) CommitOrAbortTxn(ctx context.Context, tc *protos.TxnContext
 }
 
 // Mutate is used to apply mutations over the network on other instances.
-func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.Payload, error) {
+func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
+	txnCtx := &protos.TxnContext{}
 	if ctx.Err() != nil {
-		return &protos.Payload{}, ctx.Err()
+		return txnCtx, ctx.Err()
 	}
 
 	// TODO: Use ServesTablet instead.
 	if !groups().ServesGroup(m.GroupId) {
-		return &protos.Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
+		return txnCtx, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 	node := groups().Node
 	if rand.Float64() < Config.Tracing {
@@ -478,6 +496,10 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 		tr, ctx = x.NewTrace("GrpcMutate", ctx)
 		defer tr.Finish()
 	}
-	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
-	return &protos.Payload{}, err
+	txn := &posting.Txn{StartTs: m.StartTs}
+	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
+	if err != nil {
+		txnCtx.Keys = txn.Keys()
+	}
+	return txnCtx, err
 }

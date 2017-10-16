@@ -143,7 +143,9 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 
 	if mu.DropAll {
 		m := protos.Mutations{DropAll: true}
-		return nil, query.ApplyMutations(ctx, &m)
+		// TODO: Handle delete as special case. Abort all pending transactions
+		_, err := query.ApplyMutations(ctx, &m)
+		return nil, err
 	}
 
 	gmu, err := parseMutationObject(mu)
@@ -164,8 +166,8 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	if err != nil {
 		return resp, err
 	}
-	m := protos.Mutations{Edges: edges, Schema: mu.Schema}
-	err = query.ApplyMutations(ctx, &m)
+	m := protos.Mutations{Edges: edges, Schema: mu.Schema, StartTs: mu.StartTs}
+	resp.Keys, err = query.ApplyMutations(ctx, &m)
 	return resp, err
 }
 
@@ -234,6 +236,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
 		GqlQuery: &parsedReq,
+		ReadTs:   req.StartTs,
 	}
 
 	var er query.ExecuteResult
