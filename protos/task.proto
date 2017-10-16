@@ -16,9 +16,6 @@
 
 // Use protos/gen.sh to generate .pb.go files.
 syntax = "proto3";
-import "facets.proto";
-import "schema.proto";
-import "graphresponse.proto";
 
 package protos;
 
@@ -162,6 +159,8 @@ message Mutations {
 	repeated DirectedEdge edges = 3;
 	repeated SchemaUpdate schema = 4;
 	bool DropAll = 5;
+
+  string primary_attr = 7; // Used to keep track of transaction status.
 }
 
 message KeyValues {
@@ -192,4 +191,289 @@ message KC {
 message GroupKeys {
 	uint32 group_id = 1;
 	repeated KC keys = 2;
+}
+
+// Posting messages.
+message Posting {
+	fixed64 uid = 1;
+	bytes value = 2;
+	enum ValType {
+		DEFAULT = 0;
+		BINARY = 1;
+		INT = 2; // We treat it as int64.
+		FLOAT = 3;
+		BOOL = 4;
+		DATETIME = 5;
+		GEO = 6;
+		UID = 7;
+		PASSWORD = 8;
+		STRING = 9;
+
+	}
+	ValType val_type = 3;
+	enum PostingType {
+		REF=0;          // UID
+		VALUE=1;        // simple, plain value
+		VALUE_LANG=2;   // value with specified language
+        // VALUE_TIMESERIES=3; // value from timeseries, with specified timestamp
+	}
+	PostingType posting_type = 4;
+	bytes metadata = 5; // for VALUE_LANG: Language, for VALUE_TIMESERIES: timestamp, etc..
+	string label = 6;
+	uint64 commit = 7;  // More inclination towards smaller values.
+	repeated Facet facets = 8;
+
+	// TODO: op is only used temporarily. See if we can remove it from here.
+	uint32 op = 12;
+}
+
+message PostingList {
+	repeated Posting postings = 1;
+	bytes checksum = 2;
+	uint64 commit = 3; // More inclination towards smaller values.
+	bytes uids = 4; // Encoded list of uids in this posting list.
+}
+
+// Facet messages.
+message Facet {
+	enum ValType {
+	     STRING = 0;
+	     INT = 1;
+	     FLOAT = 2;
+	     BOOL = 3;
+	     DATETIME = 4;
+	}
+
+	string key = 1;
+	bytes value = 2;
+	ValType val_type = 3;
+	repeated string tokens = 4; // tokens of value.
+
+	// Only used by the Go client, so that we can parse and tokenize facets
+	// on the server.
+	string val=5;
+}
+
+message Param {
+	bool all_keys = 1;
+	repeated string keys = 2;
+}
+
+message Facets {
+	repeated Facet facets = 1;
+}
+
+message FacetsList {
+	repeated Facets facets_list = 1;
+}
+
+message Function {
+	string name = 1;          // Name of the function : eq, le
+	string key = 2;           // Facet key over which to run the function.
+	repeated string args = 3; // Arguments of the function.
+}
+
+// Op and Children are internal nodes and Func on leaves.
+message FilterTree {
+	string op = 1;
+	repeated FilterTree children = 2;
+	Function func = 3;
+}
+
+// Schema messages.
+message SchemaRequest {
+	uint32 group_id = 1;
+	repeated string predicates = 2;
+	// fields can be on of type, index, reverse or tokenizer
+	repeated string fields = 3;
+}
+
+message SchemaResult {
+	repeated SchemaNode schema = 1;
+}
+
+message SchemaNode {
+	string predicate = 1;
+	string type = 2;
+	bool index = 3;
+	repeated string tokenizer = 4;
+	bool reverse = 5;
+	bool count = 6;
+	bool list = 7;
+}
+
+message SchemaUpdate {
+	string predicate = 1;
+	uint32 value_type = 2;
+	enum Directive {
+	   NONE = 0;
+	   INDEX = 1;
+	   REVERSE = 2;
+	   DELETE = 3;
+	}
+	Directive directive = 3;
+	repeated string tokenizer = 4;
+	bool count = 5;
+	bool list = 6;
+	bool explicit = 7; // whether schema was set by the user.
+}
+
+// Bulk loader proto.
+message MapEntry {
+	bytes key = 1;
+
+	// Only one should be set.
+	fixed64 uid = 2;
+	Posting posting = 3;
+}
+
+// Worker services.
+message Payload {
+	bytes Data = 1;
+}
+
+message MovePredicatePayload {
+ string predicate = 1;
+ uint32 source_group_id = 2;
+ uint32 dest_group_id = 3;
+ MembershipState state = 4;
+}
+
+// BackupPayload is used both as a request and a response.
+// When used in request, groups represents the list of groups that need to be backed up.
+// When used in response, groups represent the list of groups that were backed up.
+message ExportPayload {
+	uint64 req_id = 1;    // Use req_id to handle duplicate requests.
+	uint32 group_id = 2;  // Group id to back up.
+	enum Status {
+		NONE      = 0;
+		SUCCESS   = 1;
+		DUPLICATE = 2;
+		FAILED    = 3;
+	}
+	Status status = 3;
+}
+
+message TxnContext {
+  repeated string keys = 1;
+	uint64 start_ts = 2;
+	uint64 commit_ts = 3;
+}
+
+service Raft {
+	rpc Echo (Payload)            returns (Payload) {}
+	rpc RaftMessage (Payload)     returns (Payload) {}
+	rpc JoinCluster (RaftContext) returns (Payload) {}
+}
+
+service Zero {
+	rpc Connect (Member)      returns (MembershipState) {}
+	rpc Update (stream Group) returns (stream MembershipState) {}
+	rpc ShouldServe (Tablet)  returns (Tablet) {}
+	rpc AssignUids (Num)      returns (AssignedIds) {}
+  rpc Timestamps (Num)      returns (AssignedIds) {}
+}
+
+service Worker {
+	// Data serving RPCs.
+	rpc Mutate (Mutations)                        returns (TxnContext) {}
+	rpc CommitOrAbortTxn(TxnContext)              returns (Payload) {}
+	rpc ServeTask (Query)                         returns (Result) {}
+	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
+	rpc Sort (SortMessage)                        returns (SortResult) {}
+	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
+
+	rpc Export (ExportPayload)              returns (ExportPayload) {}
+	rpc ReceivePredicate(stream KV)         returns (Payload) {}
+	rpc MovePredicate(MovePredicatePayload) returns (Payload) {}
+}
+
+// Graph response.
+service Dgraph {
+  // TODO(mrjn): Rename it to Query.
+    rpc Run (Request) returns (Response) {};
+    rpc Mutate (Mutation) returns (Assigned) {};
+    rpc CheckVersion(Check) returns (Version) {};
+    rpc AssignUids(Num) returns (AssignedIds) {};
+}
+
+message Assigned {
+  map<string, uint64> Uids = 1;
+	repeated string keys = 2;
+}
+
+message Num {
+    uint64 val = 1;
+}
+
+message AssignedIds {
+    uint64 startId = 1;
+    uint64 endId = 2;
+}
+
+message NQuad {
+    string subject = 1;
+    string predicate = 2;
+    string object_id = 3;
+    Value object_value = 4;
+    string label = 5;
+    string lang = 6;
+    repeated Facet facets = 7;
+    string subject_var = 8;
+    string object_var = 9;
+}
+
+message Value {
+    oneof val {
+        string default_val = 1;
+        bytes bytes_val = 2;
+        int64 int_val = 3;
+        bool bool_val = 4;
+        string str_val = 5;
+        double double_val = 6;
+        bytes geo_val = 7;  // Geo data in WKB format
+        bytes date_val = 8;
+        bytes datetime_val = 9;
+        string password_val = 10;
+        uint64 uid_val=11;
+    }
+}
+
+message Mutation {
+    bytes set_json = 1;
+    bytes delete_json = 2;
+    repeated SchemaUpdate schema = 3;
+
+    uint64 start_ts = 13;
+    bool DropAll = 14;
+
+    repeated NQuad set = 15;
+    repeated NQuad del = 16;
+}
+
+message Request {
+    string query = 1;
+    SchemaRequest schema = 3;
+    map<string, string> vars = 4; // Support for GraphQL like variables.
+
+    uint64 start_ts = 13;
+    Mutation mutation = 100;
+}
+
+message Latency {
+    string parsing = 1;
+    string processing = 2;
+    string encoding = 3;
+}
+
+message Response {
+    bytes json = 1;
+    Latency latency = 2;
+    repeated SchemaNode schema = 4;
+}
+
+message Check {}
+
+message Version {
+    string tag = 1;
 }
