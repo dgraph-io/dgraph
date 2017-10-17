@@ -120,7 +120,7 @@ func (t *Txn) WriteDeltas() error {
 				x.Check(pl.Unmarshal(val))
 				x.AssertTrue(pl.PrimaryAttr == t.PrimaryAttr)
 			} else {
-				x.AssertTrue(item.UserMeta()&bitCommitMarker != 0)
+				x.AssertTrue(item.UserMeta()&bitCommitMarker >= 0)
 			}
 		} else if err != badger.ErrKeyNotFound {
 			return err
@@ -323,7 +323,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if item.UserMeta()&bitCompletePosting > 0 {
 			x.Check(l.plist.Unmarshal(val))
 			if commitTs == 0 {
-				l.PrimayKey = l.plist.PrimaryAttr
+				l.primayKey = l.plist.PrimaryAttr
 			}
 			break
 		} else if item.UserMeta()&bitDeltaPosting > 0 {
@@ -336,7 +336,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			}
 			l.mlayer = append(l.mlayer, pl.Postings...)
 			if commitTs == 0 {
-				l.PrimayKey = pl.PrimaryAttr
+				l.primayKey = pl.PrimaryAttr
 			}
 		} else {
 			x.Fatalf("unexpected meta")

@@ -72,7 +72,7 @@ type List struct {
 	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
 	commitTs      uint64            // commit timestamp of mutable layer.
 	startTs       uint64            // start timestamp of ongoing transaction.
-	PrimayKey     string
+	primayKey     string
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
 	deleteAll     int32
@@ -439,7 +439,7 @@ func (l *List) canPreWrite(ctx context.Context, txn *Txn) bool {
 	}
 	if l.startTs == 0 || l.startTs == txn.StartTs {
 		l.startTs = txn.StartTs
-		l.PrimayKey = txn.PrimaryAttr
+		l.primayKey = txn.PrimaryAttr
 		return true
 	}
 	return false
@@ -472,7 +472,7 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) (bool, erro
 	}
 	l.mlayer = l.mlayer[:midx]
 	l.startTs = 0
-	l.PrimayKey = ""
+	l.primayKey = ""
 	return true, nil
 }
 
@@ -498,7 +498,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) (bo
 	if atomic.LoadInt32(&l.markdeleteAll) == 1 {
 		l.deleteHelper(ctx)
 		l.startTs = 0
-		l.PrimayKey = ""
+		l.primayKey = ""
 		l.commitTs = commitTs
 		l.minTs = commitTs
 		atomic.StoreInt32(&l.markdeleteAll, 0)
@@ -511,7 +511,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) (bo
 		mpost.Commit = commitTs
 	}
 	l.startTs = 0
-	l.PrimayKey = ""
+	l.primayKey = ""
 	l.commitTs = commitTs
 	if len(l.mlayer) > 1000 {
 		l.syncIfDirty(false)
