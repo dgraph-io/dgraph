@@ -482,8 +482,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				} else if convErr != nil {
 					return convErr
 				}
-				// Only strings can have empty values.
-				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
+				// Only strings and default can have empty values.
+				if (sv.Tid == types.StringID || sv.Tid == types.DefaultID) &&
+					sv.Value.(string) == "_nil_" {
 					sv.Value = ""
 				}
 				if !pc.Params.Normalize {
