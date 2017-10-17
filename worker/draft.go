@@ -110,9 +110,6 @@ func (p *proposals) Done(pid uint32, err error) {
 	}
 	delete(p.ids, pid)
 	if err = pd.txn.WriteDeltas(); err != nil {
-		var txnCtx protos.TxnContext
-		pd.txn.Fill(&txnCtx)
-		abortMutations(pd.ctx, &txnCtx)
 		pd.err = err
 	}
 	pd.ch <- pd.err
