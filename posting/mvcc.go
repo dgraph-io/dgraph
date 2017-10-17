@@ -35,12 +35,6 @@ var (
 	errTsTooOld = x.Errorf("Transaction is too old")
 )
 
-// Dummy function for now
-func commitTimestamp(startTs uint64) (commitTs uint64, aborted bool, err error) {
-	// Ask group zero/primary key regarding the status of transaction.
-	return 0, false, nil
-}
-
 type delta struct {
 	key     []byte
 	posting *protos.Posting
@@ -165,25 +159,6 @@ func clean(key []byte, startTs uint64) {
 	if err := txn.CommitAt(startTs, func(err error) {}); err != nil {
 		x.Printf("Error while cleaning key %q %v\n", key, err)
 	}
-}
-
-// checks the status and aborts/cleanups based on the response.
-func checkCommitStatusHelper(key []byte, vs uint64) error {
-	commitTs, aborted, err := commitTimestamp(vs)
-	if err != nil {
-		return err
-	}
-	if aborted {
-		return AbortMutations(context.Background(), []string{string(key)}, vs)
-	}
-
-	if commitTs > 0 {
-		tctx := &protos.TxnContext{CommitTs: commitTs, StartTs: vs}
-		tctx.Keys = []string{string(key)}
-		return CommitMutations(context.Background(), tctx, false)
-	}
-	// uncommitted
-	return nil
 }
 
 // Writes all commit keys of the transaction.

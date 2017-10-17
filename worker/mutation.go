@@ -611,18 +611,10 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 	return txnCtx, err
 }
 
-func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*protos.TxnContext, error) {
-	if ctx.Err() != nil {
-		return in, ctx.Err()
-	}
-	if !groups().ServesTablet(in.Primary) {
-		return in, x.Errorf("Server doesn't serve primary attribute: %s", in.Primary)
-	}
+func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	if in.StartTs == 0 {
 		return in, x.Errorf("Invalid start timestamp")
 	}
-	in.CommitTs = 0
-
 	txn := pstore.NewTransactionAt(in.StartTs, false)
 	defer txn.Discard()
 	item, err := txn.Get(x.LockKey(in.Primary))
@@ -638,4 +630,61 @@ func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*pro
 	}
 	in.CommitTs = binary.BigEndian.Uint64(val)
 	return in, nil
+}
+
+func TxnStatusOverNetwork(ctx context.Context, in *protos.TxnContext) (*protos.TxnContext, error) {
+	in.CommitTs = 0
+	if groups().ServesTablet(in.Primary) {
+		return checkTxnStatus(in)
+	}
+
+	gid := groups().BelongsTo(in.Primary)
+	pl := groups().Leader(gid)
+	if pl == nil {
+		return nil, conn.ErrNoConnection
+	}
+	client := protos.NewWorkerClient(pl.Get())
+	return client.TxnStatus(ctx, in)
+}
+
+func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*protos.TxnContext, error) {
+	if ctx.Err() != nil {
+		return in, ctx.Err()
+	}
+	if !groups().ServesTablet(in.Primary) {
+		return in, x.Errorf("Server doesn't serve primary attribute: %s", in.Primary)
+	}
+
+	return checkTxnStatus(in)
+}
+
+func fixConflict(key []byte, pl *posting.List) {
+	ctx := context.Background()
+	var primary string // TODO: Fill this up from posting.list
+	in := &protos.TxnContext{
+		Primary: primary,
+		StartTs: pl.StartTs(),
+	}
+	var first bool
+CHECK:
+	out, err := TxnStatusOverNetwork(ctx, in)
+	if err != nil {
+		x.Printf("Error while trying to determine transaction status: %v", err)
+		return
+	}
+	if out.CommitTs == 0 {
+		// Wait for 10s. And then retry.
+		if first {
+			time.Sleep(10 * time.Second)
+			first = false
+			goto CHECK
+		}
+
+		err := posting.AbortMutations(ctx, []string{string(key)}, in.StartTs)
+		x.Printf("Aborted mutation at key %q. Err: %v\n", key, err)
+		return
+	}
+
+	err = posting.CommitMutations(ctx, out, groups().ServesTablet(out.Primary))
+	x.Printf("Committed mutation at key %q. Err: %v\n", key, err)
 }

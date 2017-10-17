@@ -424,17 +424,6 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 	return hasMutated, nil
 }
 
-// Tells whether we can do write at given ts.
-func (l *List) updateCommitStatusHelper(ctx context.Context) {
-	l.RLock()
-	startTs := l.startTs
-	l.RUnlock()
-	if l.startTs == 0 {
-		return
-	}
-	checkCommitStatusHelper(l.key, startTs)
-}
-
 func (l *List) canPreWrite(ctx context.Context, txn *Txn) bool {
 	if txn.StartTs < l.commitTs {
 		return false
@@ -562,6 +551,12 @@ func (l *List) HasConflict(readTs uint64) bool {
 	l.RLock()
 	defer l.RUnlock()
 	return l.startTs != 0 && readTs > l.startTs
+}
+
+func (l *List) StartTs() uint64 {
+	l.RLock()
+	defer l.RUnlock()
+	return l.startTs
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
