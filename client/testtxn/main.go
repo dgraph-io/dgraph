@@ -214,20 +214,22 @@ func TestConflict(dg *client.Dgraph) {
 }
 
 func TestConflictTimeout(dg *client.Dgraph) {
-	txn := dg.NewTxn()
-
-	mu := &protos.Mutation{}
-	mu.SetJson = []byte(`{"name": "Manish"}`)
-	assigned, err := txn.Mutate(mu)
-	if err != nil {
-		log.Fatalf("Error while running mutation: %v\n", err)
-	}
-	if len(assigned.Uids) != 1 {
-		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
-	}
 	var uid uint64
-	for _, u := range assigned.Uids {
-		uid = u
+	{
+		txn := dg.NewTxn()
+
+		mu := &protos.Mutation{}
+		mu.SetJson = []byte(`{"name": "Manish"}`)
+		assigned, err := txn.Mutate(mu)
+		if err != nil {
+			log.Fatalf("Error while running mutation: %v\n", err)
+		}
+		if len(assigned.Uids) != 1 {
+			log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
+		}
+		for _, u := range assigned.Uids {
+			uid = u
+		}
 	}
 
 	txn2 := dg.NewTxn()
@@ -239,9 +241,10 @@ func TestConflictTimeout(dg *client.Dgraph) {
 	x.Check(err)
 	fmt.Printf("Response should be empty. JSON: %q\n", resp.Json)
 
-	mu = &protos.Mutation{}
+	mu := &protos.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Jan the man\"}", uid))
-	assigned, err = txn2.Mutate(mu)
+	_, err = txn2.Mutate(mu)
+	fmt.Printf("txn2.mutate error: %v\n", err)
 	if err == nil {
 		x.Check(txn2.Commit())
 	}

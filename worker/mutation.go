@@ -528,11 +528,27 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 }
 
 func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
+	txn := pstore.NewTransactionAt(tc.StartTs, false)
+	defer txn.Discard()
+	item, err := txn.Get(posting.TxnKey)
+	if err == nil && item.Version() == tc.StartTs {
+		data, err := item.Value()
+		if err != nil {
+			return &protos.Payload{}, err
+		}
+		var prev protos.TxnContext
+		if err := prev.Unmarshal(data); err != nil {
+			return &protos.Payload{}, err
+		}
+		x.AssertTrue(prev.StartTs == tc.StartTs)
+		x.AssertTrue(prev.Primary == tc.Primary)
+		tc.Keys = append(tc.Keys, prev.Keys...)
+	}
 	if tc.CommitTs == 0 {
 		err := posting.AbortMutations(ctx, tc, groups().ServesTablet(tc.Primary))
 		return &protos.Payload{}, err
 	}
-	err := posting.CommitMutations(ctx, tc, groups().ServesTablet(tc.Primary))
+	err = posting.CommitMutations(ctx, tc, groups().ServesTablet(tc.Primary))
 	return &protos.Payload{}, err
 }
 
@@ -670,10 +686,12 @@ func fixConflict(key []byte, pl *posting.List) error {
 	if startTs == 0 {
 		return nil
 	}
+
 	in := &protos.TxnContext{
 		Primary: primary,
 		StartTs: startTs,
 	}
+
 	first := true
 CHECK:
 	out, err := TxnStatusOverNetwork(ctx, in)
@@ -688,13 +706,7 @@ CHECK:
 			first = false
 			goto CHECK
 		}
-
-		err := posting.AbortMutations(ctx, in, groups().ServesTablet(out.Primary))
-		x.Printf("Aborted mutation at key %q. Err: %v\n", key, err)
-		return err
 	}
-
-	err = posting.CommitMutations(ctx, out, groups().ServesTablet(out.Primary))
-	x.Printf("Committed mutation at key %q. Err: %v\n", key, err)
+	_, err = CommitOverNetwork(ctx, out)
 	return err
 }

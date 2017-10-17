@@ -427,7 +427,6 @@ func (l *List) canPreWrite(ctx context.Context, txn *Txn) bool {
 	if txn.StartTs < l.commitTs {
 		return false
 	}
-	fmt.Printf("key, startts, primary: %q, %d, %q\n", l.key, l.startTs, l.primaryAttr)
 	if l.startTs == 0 || l.startTs == txn.StartTs {
 		l.startTs = txn.StartTs
 		l.primaryAttr = txn.PrimaryAttr
@@ -450,6 +449,9 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 		return ErrRetry
 	}
 	l.AssertLock()
+	if l.startTs == 0 {
+		return nil
+	}
 	if l.startTs != startTs {
 		return ErrInvalidTxn
 	}
@@ -482,6 +484,9 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	}
 
 	l.AssertLock()
+	if l.startTs == 0 && l.commitTs == commitTs {
+		return nil
+	}
 	if l.startTs != startTs {
 		return ErrInvalidTxn
 	}

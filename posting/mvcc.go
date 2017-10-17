@@ -33,6 +33,7 @@ import (
 var (
 	ErrConflict = x.Errorf("Transaction aborted due to conflict")
 	errTsTooOld = x.Errorf("Transaction is too old")
+	TxnKey      = x.LockKey("_dgraph_txn_")
 )
 
 type delta struct {
@@ -65,14 +66,18 @@ func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 	t.deltas = append(t.deltas, delta{key: key, posting: p})
 }
 
-func (t *Txn) Fill(ctx *protos.TxnContext) {
-	t.Lock()
-	defer t.Unlock()
+func (t *Txn) fill(ctx *protos.TxnContext) {
 	ctx.StartTs = t.StartTs
 	ctx.Primary = t.PrimaryAttr
 	for _, d := range t.deltas {
 		ctx.Keys = append(ctx.Keys, string(d.key))
 	}
+}
+
+func (t *Txn) Fill(ctx *protos.TxnContext) {
+	t.Lock()
+	defer t.Unlock()
+	t.fill(ctx)
 }
 
 // Write All deltas per transaction at once.
@@ -148,6 +153,32 @@ func (t *Txn) WriteDeltas() error {
 		if err = txn.Set([]byte(d.key), val, meta); err != nil {
 			return err
 		}
+	}
+
+	var tctx protos.TxnContext
+	t.fill(&tctx)
+	item, err := txn.Get(TxnKey)
+	if err == nil && item.Version() == t.StartTs {
+		data, err := item.Value()
+		if err != nil {
+			return err
+		}
+		var prev protos.TxnContext
+		if err := prev.Unmarshal(data); err != nil {
+			return err
+		}
+		x.AssertTrue(prev.StartTs == tctx.StartTs)
+		x.AssertTrue(prev.Primary == tctx.Primary)
+		tctx.Keys = append(tctx.Keys, prev.Keys...)
+	} else if err == badger.ErrKeyNotFound {
+		// pass
+	} else if err != nil {
+		return err
+	}
+	data, err := tctx.Marshal()
+	x.Check(err)
+	if err = txn.Set(TxnKey, data, 0); err != nil {
+		return err
 	}
 	return txn.CommitAt(t.StartTs, nil)
 }
