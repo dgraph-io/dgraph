@@ -87,25 +87,11 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 }
 
 func abortMutations(ctx context.Context, tc *protos.TxnContext) error {
-	// TODO: All logic should be really done by posting.AbortMutations
-	for _, key := range tc.Keys {
-		plist := posting.Get([]byte(key))
-		if err := plist.AbortTransaction(ctx, tc.StartTs); err != nil {
-			return err
-		}
-	}
-	return posting.AbortMutations(tc.Keys, tc.StartTs)
+	return posting.AbortMutations(ctx, tc.Keys, tc.StartTs)
 }
 
 func commitMutations(ctx context.Context, tc *protos.TxnContext) error {
-	// TODO: All logic should be really done by posting.CommitMutations
-	for _, key := range tc.Keys {
-		plist := posting.Get([]byte(key))
-		if err := plist.CommitMutation(ctx, tc.StartTs, tc.CommitTs); err != nil {
-			return err
-		}
-	}
-	return posting.CommitMutations(tc, groups().ServesTablet(tc.Primary))
+	return posting.CommitMutations(ctx, tc, groups().ServesTablet(tc.Primary))
 }
 
 // This is serialized with mutations, called after applied watermarks catch up

@@ -428,14 +428,7 @@ func (l *List) updateCommitStatusHelper(ctx context.Context) {
 	if l.startTs == 0 {
 		return
 	}
-	commitTs, aborted, err := checkCommitStatusHelper(l.key, startTs)
-	if err != nil {
-		return
-	} else if aborted {
-		l.AbortTransaction(ctx, startTs)
-	} else if commitTs > 0 {
-		l.CommitMutation(ctx, startTs, commitTs)
-	}
+	checkCommitStatusHelper(l.key, startTs)
 }
 
 func (l *List) canPreWrite(ctx context.Context, ts uint64) bool {
@@ -446,8 +439,6 @@ func (l *List) canPreWrite(ctx context.Context, ts uint64) bool {
 		l.startTs = ts
 		return true
 	}
-	// Try fixing if it's pending.
-	go l.updateCommitStatusHelper(context.Background())
 	return false
 }
 
@@ -561,10 +552,15 @@ func (l *List) canRead(commitTs, readTs uint64) bool {
 	return commitTs <= readTs
 }
 
+func (l *List) HasConflict(readTs uint64) bool {
+	l.RLock()
+	defer l.RUnlock()
+	return l.startTs != 0 && readTs > l.startTs
+}
+
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
 	l.AssertRLock()
 	if l.startTs != 0 && readTs > l.startTs {
-		go l.updateCommitStatusHelper(context.Background())
 		return errConflict
 	}
 	// current pending transaction deletes the pl
@@ -911,6 +907,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *protos.Posti
 	var found bool
 	// last resort - return value with smallest lang Uid
 	if any {
+		// TODO: Return error here.
 		l.iterate(readTs, 0, func(p *protos.Posting) bool {
 			if postingType(p) == x.ValueMulti {
 				pos = p

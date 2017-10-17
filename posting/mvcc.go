@@ -19,6 +19,7 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"sort"
 	"sync"
@@ -149,31 +150,34 @@ func clean(key []byte, startTs uint64) {
 }
 
 // checks the status and aborts/cleanups based on the response.
-func checkCommitStatusHelper(key []byte, vs uint64) (uint64, bool, error) {
+func checkCommitStatusHelper(key []byte, vs uint64) error {
 	commitTs, aborted, err := commitTimestamp(vs)
 	if err != nil {
-		return 0, false, err
+		return err
 	}
 	if aborted {
-		clean(key, vs)
-		return 0, true, nil
+		return AbortMutations(context.Background(), []string{string(key)}, vs)
 	}
+
 	if commitTs > 0 {
-		tctx := &protos.TxnContext{CommitTs: commitTs}
+		tctx := &protos.TxnContext{CommitTs: commitTs, StartTs: vs}
 		tctx.Keys = []string{string(key)}
-		err := CommitMutations(tctx, false)
-		if err == nil {
-			clean(key, vs)
-		}
-		return commitTs, false, err
+		return CommitMutations(context.Background(), tctx, false)
 	}
 	// uncommitted
-	return 0, false, nil
+	return nil
 }
 
 // Writes all commit keys of the transaction.
 // Called after all mutations are committed in memory.
-func CommitMutations(tx *protos.TxnContext, writeLock bool) error {
+func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) error {
+	for _, key := range tx.Keys {
+		plist := Get([]byte(key))
+		if err := plist.CommitMutation(ctx, tx.StartTs, tx.CommitTs); err != nil {
+			return err
+		}
+	}
+
 	if writeLock {
 		// First update the primary key to indicate the status of transaction.
 		txn := pstore.NewTransaction(true)
@@ -202,7 +206,13 @@ func CommitMutations(tx *protos.TxnContext, writeLock bool) error {
 
 // Delete all deltas we wrote to badger.
 // Called after mutations are aborted in memory.
-func AbortMutations(keys []string, startTs uint64) error {
+func AbortMutations(ctx context.Context, keys []string, startTs uint64) error {
+	for _, key := range keys {
+		plist := Get([]byte(key))
+		if err := plist.AbortTransaction(ctx, startTs); err != nil {
+			return err
+		}
+	}
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 
@@ -229,7 +239,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if !bytes.Equal(item.Key(), l.key) {
 			break
 		}
-		if item.UserMeta()&bitCommitMarker != 0 {
+		if item.UserMeta()&bitCommitMarker > 0 {
 			// It's a commit key.
 			commitTs = item.Version()
 			it.Next()
@@ -238,20 +248,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 		// Found some uncommitted entry
 		if commitTs == 0 {
-			var aborted bool
-			var err error
-			// There would be at most one uncommitted entry per pl
-			commitTs, aborted, err = checkCommitStatusHelper(item.Key(), item.Version())
-			if err != nil {
-				return nil, err
-			} else if aborted {
-				continue
-			} else if commitTs == 0 {
-				// not yet committed.
-				l.startTs = item.Version()
-			} else if commitTs > 0 {
-				l.commitTs = commitTs
-			}
+			l.startTs = item.Version()
 		} else if l.commitTs == 0 {
 			// First comitted entry
 			l.commitTs = commitTs
