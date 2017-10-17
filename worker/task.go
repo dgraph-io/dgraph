@@ -130,6 +130,18 @@ func processWithBackupRequest(
 	}
 }
 
+var errConflict = errors.New("List has a pending write.")
+
+func getValidList(key []byte, startTs uint64) (*posting.List, error) {
+	pl := posting.Get(key)
+	if pl.HasConflict(startTs) {
+		if err := fixConflict(key, pl); err != nil {
+			return nil, err
+		}
+	}
+	return pl, nil
+}
+
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
@@ -342,7 +354,6 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 	}
 
 	var key []byte
-	var err error
 	listType := schema.State().IsList(attr)
 	for i := 0; i < srcFn.n; i++ {
 		select {
@@ -353,7 +364,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		key = x.DataKey(attr, q.UidList.Uids[i])
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.Get(key)
+		pl, err := getValidList(key, args.q.ReadTs)
+		if err != nil {
+			return err
+		}
 		var vals []types.Val
 		// Even if its a list type and value is asked in a language we return that.
 		if listType && len(q.Langs) == 0 {
@@ -483,7 +497,10 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		}
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.Get(key)
+		pl, err := getValidList(key, args.q.ReadTs)
+		if err != nil {
+			return err
+		}
 
 		// get filtered uids and facets.
 		var filteredRes []*result
@@ -537,6 +554,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		case srcFn.fnType == UidInFn:
 			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
 			topts := posting.ListOptions{
+				ReadTs:    args.q.ReadTs,
 				AfterUID:  0,
 				Intersect: reqList,
 			}
@@ -607,6 +625,7 @@ func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.
 	srcFn.atype = typ
 
 	opts := posting.ListOptions{
+		ReadTs:   q.ReadTs,
 		AfterUID: uint64(q.AfterUid),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
@@ -684,6 +703,7 @@ func handleHasFunction(arg funcArgs) error {
 			attr, arg.srcFn.fname)
 	}
 	cp := countParams{
+		readTs:  arg.q.ReadTs,
 		count:   0,
 		fn:      "gt",
 		attr:    attr,
@@ -746,7 +766,10 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			key := x.DataKey(attr, uid)
-			pl := posting.Get(key)
+			pl, err := getValidList(key, arg.q.ReadTs)
+			if err != nil {
+				return err
+			}
 
 			var val types.Val
 			if lang != "" {
@@ -842,13 +865,16 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 	return nil
 }
 
-func filterGeoFunction(arg funcArgs) {
+func filterGeoFunction(arg funcArgs) error {
 	attr := arg.q.Attr
 	var values []*protos.TaskValue
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.Get(key)
+		pl, err := getValidList(key, arg.q.ReadTs)
+		if err != nil {
+			return err
+		}
 
 		val, err := pl.Value(arg.q.ReadTs)
 		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
@@ -864,9 +890,10 @@ func filterGeoFunction(arg funcArgs) {
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
 		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}
+	return nil
 }
 
-func filterStringFunction(arg funcArgs) {
+func filterStringFunction(arg funcArgs) error {
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	var values [][]types.Val
@@ -874,11 +901,13 @@ func filterStringFunction(arg funcArgs) {
 	lang := langForFunc(arg.q.Langs)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.Get(key)
+		pl, err := getValidList(key, arg.q.ReadTs)
+		if err != nil {
+			return err
+		}
 
 		var vals []types.Val
 		var val types.Val
-		var err error
 		if lang == "" {
 			if schema.State().IsList(attr) {
 				vals, err = pl.AllValues(arg.q.ReadTs)
@@ -934,6 +963,7 @@ func filterStringFunction(arg funcArgs) {
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
 		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}
+	return nil
 }
 
 func matchRegex(uids *protos.List, values []types.Val, regex *cregexp.Regexp) *protos.List {
@@ -1400,6 +1430,7 @@ func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
 }
 
 type countParams struct {
+	readTs  uint64
 	count   int64
 	attr    string
 	gid     uint32
@@ -1432,7 +1463,7 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
 		pl := posting.Get(countKey)
-		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{ReadTs: cp.readTs}))
 		return nil
 	}
 
@@ -1462,7 +1493,7 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 		nk := make([]byte, len(key))
 		copy(nk, key)
 		pl := posting.Get(nk)
-		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{ReadTs: cp.readTs}))
 	}
 	return nil
 }

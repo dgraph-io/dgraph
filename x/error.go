@@ -76,9 +76,6 @@ func AssertTruefNoTrace(b bool, format string, args ...interface{}) {
 
 // Wrap wraps errors from external lib.
 func Wrap(err error) error {
-	if !Config.DebugMode {
-		return err
-	}
 	return errors.Wrap(err, "")
 }
 

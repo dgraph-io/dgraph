@@ -158,6 +158,7 @@ func (txn *Txn) Query(q string, vars map[string]string) (*protos.Response, error
 }
 
 func (txn *Txn) mergeContext(src *protos.TxnContext) error {
+	x.AssertTrue(src != nil)
 	if txn.context == nil {
 		txn.context = src
 		return nil
