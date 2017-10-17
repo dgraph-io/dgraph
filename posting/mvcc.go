@@ -110,13 +110,18 @@ func (t *Txn) WriteDeltas() error {
 		var pl protos.PostingList
 		item, err := txn.Get([]byte(d.key))
 
-		if err == nil && item.Version() == t.StartTs {
-			val, err := item.Value()
-			if err != nil {
-				return err
+		if err == nil {
+			// We should either find a commit entry or prewrite at same ts
+			if item.Version() == t.StartTs {
+				val, err := item.Value()
+				if err != nil {
+					return err
+				}
+				x.Check(pl.Unmarshal(val))
+				x.AssertTrue(pl.PrimaryAttr == t.PrimaryAttr)
+			} else {
+				x.AssertTrue(item.UserMeta()&bitCommitMarker != 0)
 			}
-			x.Check(pl.Unmarshal(val))
-			x.AssertTrue(pl.PrimaryAttr == t.PrimaryAttr)
 		} else if err != badger.ErrKeyNotFound {
 			return err
 		}
@@ -125,9 +130,22 @@ func (t *Txn) WriteDeltas() error {
 		pl.PrimaryAttr = t.PrimaryAttr
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
 			pl.Postings = pl.Postings[:0]
-			meta = 0 // Indicates that this is the full posting list.
+			meta = bitCompletePosting // Indicates that this is the full posting list.
 		} else {
-			pl.Postings = append(pl.Postings, d.posting)
+			midx := sort.Search(len(pl.Postings), func(idx int) bool {
+				mp := pl.Postings[idx]
+				return d.posting.Uid <= mp.Uid
+			})
+			if midx >= len(pl.Postings) {
+				pl.Postings = append(pl.Postings, d.posting)
+			} else if pl.Postings[midx].Uid == d.posting.Uid {
+				// Replace
+				pl.Postings[midx] = d.posting
+			} else {
+				pl.Postings = append(pl.Postings, nil)
+				copy(pl.Postings[midx+1:], pl.Postings[midx:])
+				pl.Postings[midx] = d.posting
+			}
 			meta = bitDeltaPosting
 		}
 
@@ -171,12 +189,20 @@ func checkCommitStatusHelper(key []byte, vs uint64) error {
 // Writes all commit keys of the transaction.
 // Called after all mutations are committed in memory.
 func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) error {
+	idx := 0
 	for _, key := range tx.Keys {
 		plist := Get([]byte(key))
-		if err := plist.CommitMutation(ctx, tx.StartTs, tx.CommitTs); err != nil {
+		committed, err := plist.CommitMutation(ctx, tx.StartTs, tx.CommitTs)
+		if err != nil {
 			return err
 		}
+		// Ensures that we don't write commit keys if pl was already committed.
+		if committed {
+			tx.Keys[idx] = key
+			idx++
+		}
 	}
+	tx.Keys = tx.Keys[:idx]
 
 	if writeLock {
 		// First update the primary key to indicate the status of transaction.
@@ -207,15 +233,22 @@ func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool)
 // Delete all deltas we wrote to badger.
 // Called after mutations are aborted in memory.
 func AbortMutations(ctx context.Context, keys []string, startTs uint64) error {
+	idx := 0
 	for _, key := range keys {
 		plist := Get([]byte(key))
-		if err := plist.AbortTransaction(ctx, startTs); err != nil {
+		aborted, err := plist.AbortTransaction(ctx, startTs)
+		if err != nil {
 			return err
 		}
+		if aborted {
+			keys[idx] = key
+			idx++
+		}
 	}
+	keys = keys[:idx]
+
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
-
 	for _, k := range keys {
 		err := txn.Delete([]byte(k))
 		if err != nil {
@@ -223,6 +256,26 @@ func AbortMutations(ctx context.Context, keys []string, startTs uint64) error {
 		}
 	}
 	return txn.CommitAt(startTs, nil)
+}
+
+func unmarshalOrCopy(plist *protos.PostingList, item *badger.Item) error {
+	// It's delta
+	val, err := item.Value()
+	if err != nil {
+		return err
+	}
+	if len(val) == 0 {
+		// empty pl
+		return nil
+	}
+	// Found complete pl, no needn't iterate more
+	if item.UserMeta()&bitUidPostings != 0 {
+		plist.Uids = make([]byte, len(val))
+		copy(plist.Uids, val)
+	} else if len(val) > 0 {
+		x.Check(plist.Unmarshal(val))
+	}
+	return nil
 }
 
 // constructs the posting list from the disk using the passed iterator.
@@ -234,6 +287,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 	var commitTs uint64
 	// CommitMarkers and Deltas are always interleaved.
+	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
 		item := it.Item()
 		if !bytes.Equal(item.Key(), l.key) {
@@ -242,49 +296,54 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if item.UserMeta()&bitCommitMarker > 0 {
 			// It's a commit key.
 			commitTs = item.Version()
-			it.Next()
-			continue
+			l.minTs = commitTs
+			if l.commitTs == 0 { // highest commitTs
+				l.commitTs = commitTs
+			}
+
+			// No posting is present here
+			if item.UserMeta()&bitCompletePosting == 0 {
+				it.Next()
+				continue
+			}
+			if err := unmarshalOrCopy(l.plist, item); err != nil {
+				return l, err
+			}
+			break
 		}
 
-		// Found some uncommitted entry
-		if commitTs == 0 {
-			l.startTs = item.Version()
-		} else if l.commitTs == 0 {
-			// First comitted entry
-			l.commitTs = commitTs
-		}
-
+		// It's delta
 		val, err := item.Value()
 		if err != nil {
 			return nil, err
 		}
-		if item.UserMeta()&bitDeltaPosting == 0 {
-			if len(val) == 0 {
-				l.minTs = item.Version()
-				break
+		if commitTs == 0 {
+			l.startTs = item.Version()
+		}
+		if item.UserMeta()&bitCompletePosting > 0 {
+			x.Check(l.plist.Unmarshal(val))
+			if commitTs == 0 {
+				l.PrimayKey = l.plist.PrimaryAttr
 			}
-			// Found complete pl, no needn't iterate more
-			// TODO: Move it at commit marker.
-			if item.UserMeta()&bitUidPostings != 0 {
-				l.plist.Uids = make([]byte, len(val))
-				copy(l.plist.Uids, val)
-			} else if len(val) > 0 {
-				x.Check(l.plist.Unmarshal(val))
-			}
-			l.minTs = item.Version()
 			break
-		}
-		// It's delta
-		var pl protos.PostingList
-		x.Check(pl.Unmarshal(val))
-		for _, mpost := range pl.Postings {
-			if commitTs > 0 {
-				mpost.Commit = commitTs
+		} else if item.UserMeta()&bitDeltaPosting > 0 {
+			var pl protos.PostingList
+			x.Check(pl.Unmarshal(val))
+			for _, mpost := range pl.Postings {
+				if commitTs > 0 {
+					mpost.Commit = commitTs
+				}
 			}
-			// else delta with corresponding commitTs
+			l.mlayer = append(l.mlayer, pl.Postings...)
+			if commitTs == 0 {
+				l.PrimayKey = pl.PrimaryAttr
+			}
+		} else {
+			x.Fatalf("unexpected meta")
 		}
-		l.mlayer = append(l.mlayer, pl.Postings...)
+		it.Next()
 	}
+
 	// Sort by Uid, Ts
 	sort.Slice(l.mlayer, func(i, j int) bool {
 		if l.mlayer[i].Uid != l.mlayer[j].Uid {
@@ -292,6 +351,7 @@ func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		return l.mlayer[i].Commit > l.mlayer[j].Commit
 	})
+
 	l.Lock()
 	size := l.calculateSize()
 	l.Unlock()

@@ -188,6 +188,10 @@ func (txn *Txn) Abort() error {
 }
 
 func (txn *Txn) Commit() error {
+	if len(txn.context.Keys) == 0 {
+		// If all the prewrites don't change anything.
+		return nil
+	}
 	txn.context.CommitTs = txn.dg.getTimestamp()
 	_, err := txn.dg.commitOrAbort(context.Background(), txn.context)
 	return err

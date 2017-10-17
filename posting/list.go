@@ -58,9 +58,10 @@ const (
 	Del uint32 = 0x02
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
-	bitUidPostings  byte = 0x01
-	bitCommitMarker      = 0x02
-	bitDeltaPosting      = 0x04
+	bitUidPostings     byte = 0x01
+	bitCommitMarker         = 0x02
+	bitDeltaPosting         = 0x04
+	bitCompletePosting      = 0x08
 )
 
 type List struct {
@@ -71,7 +72,8 @@ type List struct {
 	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
 	commitTs      uint64            // commit timestamp of mutable layer.
 	startTs       uint64            // start timestamp of ongoing transaction.
-	deleteMe      int32             // Using atomic for this, to avoid expensive SetForDeletion operation.
+	PrimayKey     string
+	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
 	deleteAll     int32
 	estimatedSize uint32
@@ -371,7 +373,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		return false, errConflict
 	}
 
-	if !l.canPreWrite(ctx, txn.StartTs) {
+	if !l.canPreWrite(ctx, txn) {
 		txn.Abort()
 		return false, errConflict
 	}
@@ -431,33 +433,34 @@ func (l *List) updateCommitStatusHelper(ctx context.Context) {
 	checkCommitStatusHelper(l.key, startTs)
 }
 
-func (l *List) canPreWrite(ctx context.Context, ts uint64) bool {
-	if ts < l.commitTs {
+func (l *List) canPreWrite(ctx context.Context, txn *Txn) bool {
+	if txn.StartTs < l.commitTs {
 		return false
 	}
-	if l.startTs == 0 || l.startTs == ts {
-		l.startTs = ts
+	if l.startTs == 0 || l.startTs == txn.StartTs {
+		l.startTs = txn.StartTs
+		l.PrimayKey = txn.PrimaryAttr
 		return true
 	}
 	return false
 }
 
-func (l *List) AbortTransaction(ctx context.Context, startTs uint64) error {
+func (l *List) AbortTransaction(ctx context.Context, startTs uint64) (bool, error) {
 	l.Lock()
 	defer l.Unlock()
 	return l.abortTransaction(ctx, startTs)
 }
 
-func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
+func (l *List) abortTransaction(ctx context.Context, startTs uint64) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
 		}
-		return ErrRetry
+		return false, ErrRetry
 	}
 	l.AssertLock()
 	if l.startTs != startTs {
-		return nil
+		return false, nil
 	}
 	midx := 0
 	for _, mpost := range l.mlayer {
@@ -469,40 +472,37 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 	}
 	l.mlayer = l.mlayer[:midx]
 	l.startTs = 0
-	return nil
+	l.PrimayKey = ""
+	return true, nil
 }
 
-func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) error {
+func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) (bool, error) {
 	l.Lock()
 	defer l.Unlock()
 	return l.commitMutation(ctx, startTs, commitTs)
 }
 
-func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) error {
+func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
 		}
-		return ErrRetry
+		return false, ErrRetry
 	}
 
 	l.AssertLock()
 	if l.startTs != startTs {
-		return nil
-	}
-
-	if len(l.mlayer) > 1000 {
-		// picks a ts and merges mutation layer.
-		l.syncIfDirty(false)
+		return false, nil
 	}
 
 	if atomic.LoadInt32(&l.markdeleteAll) == 1 {
 		l.deleteHelper(ctx)
 		l.startTs = 0
+		l.PrimayKey = ""
 		l.commitTs = commitTs
 		l.minTs = commitTs
 		atomic.StoreInt32(&l.markdeleteAll, 0)
-		return nil
+		return true, nil
 	}
 	for _, mpost := range l.mlayer {
 		if mpost.Commit != l.startTs {
@@ -511,8 +511,12 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		mpost.Commit = commitTs
 	}
 	l.startTs = 0
+	l.PrimayKey = ""
 	l.commitTs = commitTs
-	return nil
+	if len(l.mlayer) > 1000 {
+		l.syncIfDirty(false)
+	}
+	return true, nil
 }
 
 func (l *List) deleteHelper(ctx context.Context) error {
@@ -657,6 +661,7 @@ func doAsyncWrite(commitTs uint64, key []byte, data []byte, uidOnlyPosting bool,
 	if uidOnlyPosting {
 		meta = bitUidPostings
 	}
+	meta = meta | bitCompletePosting
 	if err := txn.Set(key, data, meta); err != nil {
 		f(err)
 	}
