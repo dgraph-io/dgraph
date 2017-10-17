@@ -82,6 +82,9 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			src := types.ValueForType(vID)
 			src.Value = p.Value
 			str, err := types.Convert(src, types.StringID)
+			if (vID == types.StringID || vID == types.DefaultID) && str.Value.(string) == "_nil_" {
+				str.Value = ""
+			}
 			x.Check(err)
 			buf.WriteString(strconv.Quote(str.Value.(string)))
 			if p.PostingType == protos.Posting_VALUE_LANG {
