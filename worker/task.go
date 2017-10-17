@@ -1462,7 +1462,6 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
 		pl := posting.Get(countKey)
-		// TODO: We must pass a read timestamp here.
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{ReadTs: cp.readTs}))
 		return nil
 	}
@@ -1493,7 +1492,6 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 		nk := make([]byte, len(key))
 		copy(nk, key)
 		pl := posting.Get(nk)
-		// TODO: We must pass a read timestamp here.
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{ReadTs: cp.readTs}))
 	}
 	return nil
