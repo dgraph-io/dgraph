@@ -661,9 +661,13 @@ func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*pro
 func fixConflict(key []byte, pl *posting.List) {
 	ctx := context.Background()
 	var primary string // TODO: Fill this up from posting.list
+	startTs, primary := pl.Pending()
+	if startTs == 0 {
+		return
+	}
 	in := &protos.TxnContext{
 		Primary: primary,
-		StartTs: pl.StartTs(),
+		StartTs: startTs,
 	}
 	var first bool
 CHECK:

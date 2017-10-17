@@ -553,10 +553,10 @@ func (l *List) HasConflict(readTs uint64) bool {
 	return l.startTs != 0 && readTs > l.startTs
 }
 
-func (l *List) StartTs() uint64 {
+func (l *List) Pending() (uint64, string) {
 	l.RLock()
 	defer l.RUnlock()
-	return l.startTs
+	return l.startTs, l.primaryAttr
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
