@@ -19,6 +19,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/rand"
 	"time"
 
@@ -86,6 +87,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 }
 
 func abortMutations(ctx context.Context, tc *protos.TxnContext) error {
+	// TODO: All logic should be really done by posting.AbortMutations
 	for _, key := range tc.Keys {
 		plist := posting.Get([]byte(key))
 		if err := plist.AbortTransaction(ctx, tc.StartTs); err != nil {
@@ -96,6 +98,7 @@ func abortMutations(ctx context.Context, tc *protos.TxnContext) error {
 }
 
 func commitMutations(ctx context.Context, tc *protos.TxnContext) error {
+	// TODO: All logic should be really done by posting.CommitMutations
 	for _, key := range tc.Keys {
 		plist := posting.Get([]byte(key))
 		if err := plist.CommitMutation(ctx, tc.StartTs, tc.CommitTs); err != nil {
@@ -536,4 +539,33 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 	txn.Fill(txnCtx)
 	return txnCtx, err
+}
+
+func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*protos.TxnContext, error) {
+	if ctx.Err() != nil {
+		return in, ctx.Err()
+	}
+	if !groups().ServesTablet(in.Primary) {
+		return in, x.Errorf("Server doesn't serve primary attribute: %s", in.Primary)
+	}
+	if in.StartTs == 0 {
+		return in, x.Errorf("Invalid start timestamp")
+	}
+	in.CommitTs = 0
+
+	txn := pstore.NewTransactionAt(in.StartTs, false)
+	defer txn.Discard()
+	item, err := txn.Get(x.LockKey(in.Primary))
+	if err != nil {
+		return in, x.Errorf("Unable to read primary key")
+	}
+	if item.Version() != in.StartTs {
+		return in, x.Errorf("Unable to find primary key at start ts")
+	}
+	val, err := item.Value()
+	if err != nil {
+		return in, err
+	}
+	in.CommitTs = binary.BigEndian.Uint64(val)
+	return in, nil
 }

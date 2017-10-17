@@ -381,6 +381,7 @@ service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                        returns (TxnContext) {}
 	rpc CommitOrAbort(TxnContext)                 returns (Payload) {}
+  rpc TxnStatus(TxnContext)                     returns (TxnContext) {}
 	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
