@@ -68,7 +68,7 @@ func TestTxnRead1(dg *client.Dgraph) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
-	txn.Commit()
+	x.Check(txn.Commit())
 }
 
 // readTs < commitTs
@@ -90,7 +90,7 @@ func TestTxnRead2(dg *client.Dgraph) {
 	}
 
 	txn2 := dg.NewTxn()
-	txn.Commit()
+	x.Check(txn.Commit())
 
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
 	resp, err := txn2.Query(q, nil)
@@ -118,7 +118,7 @@ func TestTxnRead3(dg *client.Dgraph) {
 		uid = u
 	}
 
-	txn.Commit()
+	x.Check(txn.Commit())
 	txn = dg.NewTxn()
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
 	resp, err := txn.Query(q, nil)
@@ -146,7 +146,7 @@ func TestTxnRead4(dg *client.Dgraph) {
 		uid = u
 	}
 
-	txn.Commit()
+	x.Check(txn.Commit())
 	txn2 := dg.NewTxn()
 
 	txn3 := dg.NewTxn()
@@ -197,7 +197,7 @@ func TestConflict(dg *client.Dgraph) {
 	assigned, err = txn2.Mutate(mu)
 	x.AssertTrue(err != nil)
 
-	txn.Commit()
+	x.Check(txn.Commit())
 	txn = dg.NewTxn()
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
 	resp, err := txn.Query(q, nil)

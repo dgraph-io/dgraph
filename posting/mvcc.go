@@ -99,6 +99,7 @@ func (t *Txn) WriteDeltas() error {
 		lk := x.LockKey(t.PrimaryAttr)
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], 0) // Indicates pending or aborted.
+		// This write is only for determining the status of the transaction. Nothing else.
 		if err := txn.Set(lk, buf[:], 0); err != nil {
 			return err
 		}
@@ -173,19 +174,27 @@ func checkCommitStatusHelper(key []byte, vs uint64) (uint64, bool, error) {
 // Writes all commit keys of the transaction.
 // Called after all mutations are committed in memory.
 func CommitMutations(tx *protos.TxnContext, writeLock bool) error {
-	txn := pstore.NewTransaction(true)
-	defer txn.Discard()
-
 	if writeLock {
+		// First update the primary key to indicate the status of transaction.
+		txn := pstore.NewTransaction(true)
+		defer txn.Discard()
+
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], tx.CommitTs)
 		if err := txn.Set(x.LockKey(tx.Primary), buf[:], 0); err != nil {
 			return err
 		}
+		if err := txn.CommitAt(tx.StartTs, nil); err != nil {
+			return err
+		}
 	}
+
+	// Now write the commit markers.
+	txn := pstore.NewTransaction(true)
+	defer txn.Discard()
 	for _, k := range tx.Keys {
 		if err := txn.Set([]byte(k), nil, bitCommitMarker); err != nil {
-			return nil
+			return err
 		}
 	}
 	return txn.CommitAt(tx.CommitTs, nil)
