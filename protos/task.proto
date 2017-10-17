@@ -171,7 +171,7 @@ message Proposal {
 	uint32 id = 1;
 	uint64 start_ts = 2;
 	Mutations mutations = 3;
-	Member membership = 4;
+	TxnContext txn_context = 4;
 	repeated KV kv = 5;
 	MembershipState state = 6;
 	string clean_predicate = 7; // Delete the predicate which was moved to other group.

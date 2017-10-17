@@ -86,14 +86,6 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 	return nil
 }
 
-func abortMutations(ctx context.Context, tc *protos.TxnContext) error {
-	return posting.AbortMutations(ctx, tc.Keys, tc.StartTs)
-}
-
-func commitMutations(ctx context.Context, tc *protos.TxnContext) error {
-	return posting.CommitMutations(ctx, tc, groups().ServesTablet(tc.Primary))
-}
-
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
 func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
@@ -439,19 +431,114 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, src *protos.Muta
 	return nil
 }
 
-type res struct {
-	err error
-	ctx *protos.TxnContext
+func proposeOrSendTctx(ctx context.Context, gid uint32, tctx *protos.TxnContext) error {
+	if groups().ServesGroup(gid) {
+		node := groups().Node
+		return node.ProposeAndWait(ctx, &protos.Proposal{TxnContext: tctx}, nil)
+	}
+
+	pl := groups().Leader(gid)
+	if pl == nil {
+		return conn.ErrNoConnection
+	}
+	conn := pl.Get()
+	c := protos.NewWorkerClient(conn)
+
+	ch := make(chan error, 1)
+	go func() {
+		_, err := c.CommitOrAbort(ctx, tctx)
+		ch <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-ch:
+		return err
+	}
+}
+
+func addToTxnMap(txnMap map[uint32]*protos.TxnContext, tctx *protos.TxnContext) error {
+	for _, key := range tctx.Keys {
+		pk := x.Parse([]byte(key))
+		x.AssertTrue(pk != nil)
+		gid := groups().BelongsTo(pk.Attr)
+		tc := txnMap[gid]
+		if tc == nil {
+			txnMap[gid] = &protos.TxnContext{
+				StartTs:  tctx.StartTs,
+				Primary:  tctx.Primary,
+				CommitTs: tctx.CommitTs,
+				Keys:     []string{key},
+			}
+			continue
+		}
+		tc.Keys = append(tc.Keys, key)
+	}
+
+	primaryGid := groups().BelongsTo(tctx.Primary)
+	if _, ok := txnMap[primaryGid]; ok {
+		return nil
+	}
+	// Can happen when mutations don't cause any diff.
+	txnMap[primaryGid] = &protos.TxnContext{
+		StartTs:  tctx.StartTs,
+		Primary:  tctx.Primary,
+		CommitTs: tctx.CommitTs,
+	}
+	return nil
 }
 
 func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Payload, error) {
-	// TODO: Propose and do this over network.
-	// TODO: Do this first over primary, then others.
-	if txn.CommitTs == 0 {
-		return &protos.Payload{}, abortMutations(ctx, txn)
-	} else {
-		return &protos.Payload{}, commitMutations(ctx, txn)
+	txnMap := make(map[uint32]*protos.TxnContext)
+	if err := addToTxnMap(txnMap, txn); err != nil {
+		return &protos.Payload{}, err
 	}
+
+	primaryGid := groups().BelongsTo(txn.Primary)
+	ptctx, ok := txnMap[primaryGid]
+	x.AssertTrue(ok)
+	if err := proposeOrSendTctx(ctx, primaryGid, ptctx); err != nil {
+		return &protos.Payload{}, err
+	}
+
+	errCh := make(chan error, len(txnMap))
+	for gid, tctx := range txnMap {
+		if gid == 0 {
+			return &protos.Payload{}, errUnservedTablet
+		}
+		if gid == primaryGid {
+			errCh <- nil
+			continue
+		}
+		go func(gid uint32, tctx *protos.TxnContext) {
+			errCh <- proposeOrSendTctx(ctx, gid, tctx)
+		}(gid, tctx)
+	}
+
+	// wait for all goroutines to reply back
+	var e error
+	for i := 0; i < len(txnMap); i++ {
+		err := <-errCh
+		if err != nil {
+			e = err
+		}
+	}
+	return &protos.Payload{}, e
+}
+
+func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
+	if tc.CommitTs == 0 {
+		err := posting.AbortMutations(ctx, tc.Keys, tc.StartTs)
+		return &protos.Payload{}, err
+	}
+	err := posting.CommitMutations(ctx, tc, groups().ServesTablet(tc.Primary))
+	return &protos.Payload{}, err
+}
+
+type res struct {
+	err error
+	ctx *protos.TxnContext
 }
 
 // MutateOverNetwork checks which group should be running the mutations
@@ -492,11 +579,8 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 }
 
 func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
-	if tc.CommitTs == 0 {
-		err := abortMutations(ctx, tc)
-		return &protos.Payload{}, err
-	}
-	err := commitMutations(ctx, tc)
+	node := groups().Node
+	err := node.ProposeAndWait(ctx, &protos.Proposal{TxnContext: tc}, nil)
 	return &protos.Payload{}, err
 }
 

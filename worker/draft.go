@@ -269,19 +269,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal, tx
 		return x.Wrapf(err, "While proposing")
 	}
 
-	// Wait for the proposal to be committed.
-	if proposal.Mutations != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal: mutations.")
-		}
-	} else if len(proposal.Kv) > 0 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal: key-values.")
-		}
-	} else {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal: %v.", proposal)
-		}
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Waiting for the proposal.")
 	}
 
 	err = <-che
@@ -381,8 +370,6 @@ func (n *node) processApplyCh() {
 		}
 		if proposal.Mutations != nil {
 			n.sch.schedule(proposal, e.Index)
-		} else if proposal.Membership != nil {
-			x.Fatalf("Dgraph does not handle membership proposals anymore.")
 		} else if len(proposal.Kv) > 0 {
 			go n.processKeyValues(e.Index, proposal.Id, proposal.Kv)
 		} else if proposal.State != nil {
@@ -393,10 +380,18 @@ func (n *node) processApplyCh() {
 			n.props.Done(proposal.Id, nil)
 		} else if len(proposal.CleanPredicate) > 0 {
 			go n.deletePredicate(e.Index, proposal.Id, proposal.CleanPredicate)
+		} else if proposal.TxnContext != nil {
+			go n.commitOrAbort(proposal.Id, proposal.TxnContext)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
 	}
+}
+
+func (n *node) commitOrAbort(pid uint32, tctx *protos.TxnContext) {
+	ctx, _ := n.props.CtxAndTxn(pid)
+	_, err := commitOrAbort(ctx, tctx)
+	n.props.Done(pid, err)
 }
 
 // TODO: Pass timestamp
