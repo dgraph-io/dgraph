@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	errConflict = x.Errorf("Transaction aborted due to conflict")
+	ErrConflict = x.Errorf("Transaction aborted due to conflict")
 	errTsTooOld = x.Errorf("Transaction is too old")
 )
 
@@ -85,7 +85,7 @@ func (t *Txn) WriteDeltas() error {
 	t.Lock()
 	defer t.Unlock()
 	if t.Aborted() != 0 {
-		return errConflict
+		return ErrConflict
 	}
 	txn := pstore.NewTransactionAt(t.StartTs, true)
 	defer txn.Discard()
@@ -200,10 +200,22 @@ func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool)
 
 // Delete all deltas we wrote to badger.
 // Called after mutations are aborted in memory.
-func AbortMutations(ctx context.Context, keys []string, startTs uint64) error {
-	for _, key := range keys {
+func AbortMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) error {
+	if writeLock {
+		txn := pstore.NewTransactionAt(tx.StartTs, true)
+		defer txn.Discard()
+		if err := txn.Delete(x.LockKey(tx.Primary)); err != nil {
+			return err
+		}
+		if err := txn.CommitAt(tx.StartTs, nil); err != nil {
+			return err
+		}
+	}
+
+	// In memory.
+	for _, key := range tx.Keys {
 		plist := Get([]byte(key))
-		err := plist.AbortTransaction(ctx, startTs)
+		err := plist.AbortTransaction(ctx, tx.StartTs)
 		if err != nil {
 			return err
 		}
@@ -211,13 +223,12 @@ func AbortMutations(ctx context.Context, keys []string, startTs uint64) error {
 
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
-	for _, k := range keys {
-		err := txn.Delete([]byte(k))
-		if err != nil {
-			return nil
+	for _, k := range tx.Keys {
+		if err := txn.Delete([]byte(k)); err != nil {
+			return err
 		}
 	}
-	return txn.CommitAt(startTs, nil)
+	return txn.CommitAt(tx.StartTs, nil)
 }
 
 func unmarshalOrCopy(plist *protos.PostingList, item *badger.Item) error {

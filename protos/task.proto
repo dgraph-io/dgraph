@@ -361,6 +361,7 @@ message TxnContext {
   string primary = 2;
 	uint64 start_ts = 3;
 	uint64 commit_ts = 4;
+  bool aborted = 5;
 }
 
 service Raft {

@@ -42,6 +42,7 @@ func main() {
 	TestTxnRead3(dg)
 	TestTxnRead4(dg)
 	TestConflict(dg)
+	TestConflictTimeout(dg)
 }
 
 // readTs == startTs
@@ -67,6 +68,7 @@ func TestTxnRead1(dg *client.Dgraph) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
+	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
 	x.Check(txn.Commit())
 }
@@ -97,6 +99,7 @@ func TestTxnRead2(dg *client.Dgraph) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
+	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTruef(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[]}}")), "%s", resp.Json)
 }
 
@@ -125,6 +128,7 @@ func TestTxnRead3(dg *client.Dgraph) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
+	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
 }
 
@@ -156,13 +160,14 @@ func TestTxnRead4(dg *client.Dgraph) {
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
-	txn3.Commit()
+	x.Check(txn3.Commit())
 
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
 	resp, err := txn2.Query(q, nil)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
+	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
 
 	txn4 := dg.NewTxn()
@@ -204,5 +209,49 @@ func TestConflict(dg *client.Dgraph) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
+	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
+}
+
+func TestConflictTimeout(dg *client.Dgraph) {
+	txn := dg.NewTxn()
+
+	mu := &protos.Mutation{}
+	mu.SetJson = []byte(`{"name": "Manish"}`)
+	assigned, err := txn.Mutate(mu)
+	if err != nil {
+		log.Fatalf("Error while running mutation: %v\n", err)
+	}
+	if len(assigned.Uids) != 1 {
+		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
+	}
+	var uid uint64
+	for _, u := range assigned.Uids {
+		uid = u
+	}
+
+	txn2 := dg.NewTxn()
+	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
+	resp, err := txn2.Query(q, nil)
+	x.Check(err)
+
+	resp, err = txn2.Query(q, nil)
+	x.Check(err)
+	fmt.Printf("Response should be empty. JSON: %q\n", resp.Json)
+
+	mu = &protos.Mutation{}
+	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Jan the man\"}", uid))
+	assigned, err = txn2.Mutate(mu)
+	if err == nil {
+		x.Check(txn2.Commit())
+	}
+
+	// err = txn.Commit()
+	// fmt.Printf("This txn should fail with error. Err got: %v\n", err)
+
+	txn3 := dg.NewTxn()
+	q = fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
+	resp, err = txn3.Query(q, nil)
+	x.Check(err)
+	fmt.Printf("Final Response JSON: %q\n", resp.Json)
 }

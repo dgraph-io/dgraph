@@ -46,11 +46,10 @@ var (
 	// In such a case, retry.
 	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue   = fmt.Errorf("No value found")
-	ErrCommitted = fmt.Errorf("Txn is already committed")
-	ErrAborted   = fmt.Errorf("Txn is already aborted")
-	emptyPosting = &protos.Posting{}
-	emptyList    = &protos.PostingList{}
+	ErrNoValue    = fmt.Errorf("No value found")
+	ErrInvalidTxn = fmt.Errorf("Invalid transaction")
+	emptyPosting  = &protos.Posting{}
+	emptyList     = &protos.PostingList{}
 )
 
 const (
@@ -372,12 +371,12 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		return false, ErrRetry
 	}
 	if txn.Aborted() != 0 {
-		return false, errConflict
+		return false, ErrConflict
 	}
 
 	if !l.canPreWrite(ctx, txn) {
 		txn.Abort()
-		return false, errConflict
+		return false, ErrConflict
 	}
 
 	// All edges with a value without LANGTAG, have the same uid. In other words,
@@ -428,6 +427,7 @@ func (l *List) canPreWrite(ctx context.Context, txn *Txn) bool {
 	if txn.StartTs < l.commitTs {
 		return false
 	}
+	fmt.Printf("key, startts, primary: %q, %d, %q\n", l.key, l.startTs, l.primaryAttr)
 	if l.startTs == 0 || l.startTs == txn.StartTs {
 		l.startTs = txn.StartTs
 		l.primaryAttr = txn.PrimaryAttr
@@ -451,7 +451,7 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 	}
 	l.AssertLock()
 	if l.startTs != startTs {
-		return ErrAborted
+		return ErrInvalidTxn
 	}
 	midx := 0
 	for _, mpost := range l.mlayer {
@@ -483,7 +483,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 
 	l.AssertLock()
 	if l.startTs != startTs {
-		return ErrCommitted
+		return ErrInvalidTxn
 	}
 
 	if atomic.LoadInt32(&l.markdeleteAll) == 1 {
@@ -562,7 +562,7 @@ func (l *List) Pending() (uint64, string) {
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
 	l.AssertRLock()
 	if l.startTs != 0 && readTs > l.startTs {
-		return errConflict
+		return ErrConflict
 	}
 	// current pending transaction deletes the pl
 	if readTs == l.startTs && atomic.LoadInt32(&l.markdeleteAll) == 1 {

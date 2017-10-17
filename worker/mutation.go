@@ -529,7 +529,7 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 
 func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
 	if tc.CommitTs == 0 {
-		err := posting.AbortMutations(ctx, tc.Keys, tc.StartTs)
+		err := posting.AbortMutations(ctx, tc, groups().ServesTablet(tc.Primary))
 		return &protos.Payload{}, err
 	}
 	err := posting.CommitMutations(ctx, tc, groups().ServesTablet(tc.Primary))
@@ -618,11 +618,16 @@ func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	txn := pstore.NewTransactionAt(in.StartTs, false)
 	defer txn.Discard()
 	item, err := txn.Get(x.LockKey(in.Primary))
+	if err == badger.ErrKeyNotFound {
+		in.Aborted = true
+		return in, nil
+	}
 	if err != nil {
 		return in, x.Errorf("Unable to read primary key")
 	}
 	if item.Version() != in.StartTs {
-		return in, x.Errorf("Unable to find primary key at start ts")
+		in.Aborted = true
+		return in, nil
 	}
 	val, err := item.Value()
 	if err != nil {
@@ -658,37 +663,38 @@ func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*pro
 	return checkTxnStatus(in)
 }
 
-func fixConflict(key []byte, pl *posting.List) {
+func fixConflict(key []byte, pl *posting.List) error {
 	ctx := context.Background()
 	var primary string // TODO: Fill this up from posting.list
 	startTs, primary := pl.Pending()
 	if startTs == 0 {
-		return
+		return nil
 	}
 	in := &protos.TxnContext{
 		Primary: primary,
 		StartTs: startTs,
 	}
-	var first bool
+	first := true
 CHECK:
 	out, err := TxnStatusOverNetwork(ctx, in)
 	if err != nil {
 		x.Printf("Error while trying to determine transaction status: %v", err)
-		return
+		return err
 	}
 	if out.CommitTs == 0 {
 		// Wait for 10s. And then retry.
-		if first {
+		if first && !out.Aborted {
 			time.Sleep(10 * time.Second)
 			first = false
 			goto CHECK
 		}
 
-		err := posting.AbortMutations(ctx, []string{string(key)}, in.StartTs)
+		err := posting.AbortMutations(ctx, in, groups().ServesTablet(out.Primary))
 		x.Printf("Aborted mutation at key %q. Err: %v\n", key, err)
-		return
+		return err
 	}
 
 	err = posting.CommitMutations(ctx, out, groups().ServesTablet(out.Primary))
 	x.Printf("Committed mutation at key %q. Err: %v\n", key, err)
+	return err
 }
