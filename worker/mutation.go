@@ -384,7 +384,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 }
 
 func setPrimary(src *protos.Mutations, edge *protos.DirectedEdge) {
-	if len(src.PrimaryAttr) == 0 {
+	if len(src.PrimaryAttr) > 0 {
 		return
 	}
 	if groups().ServesTablet(edge.Attr) {

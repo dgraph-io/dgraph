@@ -66,6 +66,9 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 
 func (txn *Txn) Mutate(mu *protos.Mutation) (*protos.Assigned, error) {
 	mu.StartTs = txn.startTs
+	if txn.context != nil {
+		mu.Primary = txn.context.Primary
+	}
 	ag, err := txn.dg.mutate(context.Background(), mu)
 	if err == nil {
 		err = txn.mergeContext(ag.Context)

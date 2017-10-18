@@ -133,7 +133,8 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 
 	emptyMutation :=
 		len(mu.GetSchema()) == 0 && len(mu.GetSetJson()) == 0 &&
-			len(mu.GetDeleteJson()) == 0 && !mu.GetDropAll()
+			len(mu.GetDeleteJson()) == 0 && !mu.GetDropAll() &&
+			len(mu.Set) == 0 && len(mu.Del) == 0
 	if emptyMutation {
 		return resp, fmt.Errorf("empty mutation")
 	}
@@ -168,18 +169,9 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	}
 
 	m := protos.Mutations{Edges: edges, Schema: mu.Schema, StartTs: mu.StartTs}
-	// Now fill in the primary attribute.
-	for _, e := range edges {
-		if e.Op == protos.DirectedEdge_SET {
-			m.PrimaryAttr = e.Attr
-			break
-		}
-	}
-	if len(m.PrimaryAttr) == 0 {
-		// No set edge. Just pick the first.
-		m.PrimaryAttr = edges[0].Attr
-	}
+
 	resp.Context, err = query.ApplyMutations(ctx, &m)
+	x.Printf("Length of edges is %+v, primary: %q\n", len(edges), m.PrimaryAttr)
 	return resp, err
 }
 
@@ -617,5 +609,7 @@ func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
 			return res, err
 		}
 	}
+	res.Set = append(res.Set, mu.Set...)
+	res.Del = append(res.Del, mu.Del...)
 	return res, nil
 }

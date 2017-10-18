@@ -214,7 +214,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal, tx
 		if proposal.Mutations.StartTs == 0 {
 			return x.Errorf("StartTs cannot be zero.")
 		}
-		if len(proposal.Mutations.PrimaryAttr) == 0 {
+		if len(proposal.Mutations.Edges) > 0 && len(proposal.Mutations.PrimaryAttr) == 0 {
 			return x.Errorf("Primary attribute cannot be empty.")
 		}
 		proposal.StartTs = proposal.Mutations.StartTs

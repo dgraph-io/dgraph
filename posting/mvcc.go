@@ -89,9 +89,6 @@ func (t *Txn) WriteDeltas() error {
 	// TODO: Avoid delta for schema mutations, directly commit.
 	t.Lock()
 	defer t.Unlock()
-	if t.Aborted() != 0 {
-		return ErrConflict
-	}
 	txn := pstore.NewTransactionAt(t.StartTs, true)
 	defer txn.Discard()
 
@@ -195,14 +192,6 @@ func clean(key []byte, startTs uint64) {
 // Writes all commit keys of the transaction.
 // Called after all mutations are committed in memory.
 func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) error {
-	for _, key := range tx.Keys {
-		plist := Get([]byte(key))
-		err := plist.CommitMutation(ctx, tx.StartTs, tx.CommitTs)
-		if err != nil {
-			return err
-		}
-	}
-
 	if writeLock {
 		// First update the primary key to indicate the status of transaction.
 		txn := pstore.NewTransaction(true)
@@ -226,7 +215,18 @@ func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool)
 			return err
 		}
 	}
-	return txn.CommitAt(tx.CommitTs, nil)
+	if err := txn.CommitAt(tx.CommitTs, nil); err != nil {
+		return err
+	}
+
+	for _, key := range tx.Keys {
+		plist := Get([]byte(key))
+		err := plist.CommitMutation(ctx, tx.StartTs, tx.CommitTs)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Delete all deltas we wrote to badger.
@@ -243,6 +243,17 @@ func AbortMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) 
 		}
 	}
 
+	txn := pstore.NewTransaction(true)
+	defer txn.Discard()
+	for _, k := range tx.Keys {
+		if err := txn.Delete([]byte(k)); err != nil {
+			return err
+		}
+	}
+	if err := txn.CommitAt(tx.StartTs, nil); err != nil {
+		return err
+	}
+
 	// In memory.
 	for _, key := range tx.Keys {
 		plist := Get([]byte(key))
@@ -251,15 +262,7 @@ func AbortMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) 
 			return err
 		}
 	}
-
-	txn := pstore.NewTransaction(true)
-	defer txn.Discard()
-	for _, k := range tx.Keys {
-		if err := txn.Delete([]byte(k)); err != nil {
-			return err
-		}
-	}
-	return txn.CommitAt(tx.StartTs, nil)
+	return nil
 }
 
 func unmarshalOrCopy(plist *protos.PostingList, item *badger.Item) error {

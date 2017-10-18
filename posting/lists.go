@@ -240,14 +240,7 @@ func getOrMutate(key []byte) (rlist *List) {
 		if pk != nil {
 			x.AssertTrue(pk.IsIndex() || pk.IsCount())
 			// This is a best effort set, hence we don't check error from callback.
-			txn := pstore.NewTransaction(true)
-			defer txn.Discard()
-			_, err := txn.Get(key)
-			if err == badger.ErrKeyNotFound {
-				txn.Set(key, nil, 0x00)
-			}
-			txn.Commit(func(err error) {
-			})
+			// TODO: Not needed.
 		}
 	}
 	return lp
