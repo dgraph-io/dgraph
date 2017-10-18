@@ -367,6 +367,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				out.Counts = append(out.Counts, 0)
 			} else {
 				out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
+				out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{})
 			}
 			continue
 		}
