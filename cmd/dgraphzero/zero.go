@@ -37,6 +37,8 @@ var (
 	emptyMembershipState protos.MembershipState
 	errInvalidId         = errors.New("Invalid server id")
 	errInvalidAddress    = errors.New("Invalid address")
+	errEmptyPredicate    = errors.New("Empty predicate")
+	errInvalidGroup      = errors.New("Invalid group id")
 	errInvalidQuery      = errors.New("Invalid query")
 	errInternalError     = errors.New("Internal server error")
 	errJoinCluster       = errors.New("Unable to join cluster")
@@ -332,9 +334,11 @@ func (s *Server) Connect(ctx context.Context,
 
 func (s *Server) ShouldServe(
 	ctx context.Context, tablet *protos.Tablet) (resp *protos.Tablet, err error) {
-
-	if len(tablet.Predicate) == 0 || tablet.GroupId == 0 {
-		return resp, errInvalidQuery
+	if len(tablet.Predicate) == 0 {
+		return resp, errEmptyPredicate
+	}
+	if tablet.GroupId == 0 {
+		return resp, errInvalidGroup
 	}
 
 	// Check who is serving this tablet.

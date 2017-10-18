@@ -375,7 +375,9 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 	}
 
 	if !l.canPreWrite(ctx, txn) {
-		txn.Abort()
+		pk := x.Parse(l.key)
+		fmt.Printf("Can't prewrite due to %+v. txnstart=%d\n", pk, txn.StartTs)
+		txn.Abort(&protos.TxnContext{StartTs: l.startTs, Primary: l.primaryAttr})
 		return false, ErrConflict
 	}
 
@@ -425,6 +427,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 
 func (l *List) canPreWrite(ctx context.Context, txn *Txn) bool {
 	if txn.StartTs < l.commitTs {
+		fmt.Printf("starts < committs")
 		return false
 	}
 	if l.startTs == 0 || l.startTs == txn.StartTs {

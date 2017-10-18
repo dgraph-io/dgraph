@@ -18,9 +18,11 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 type Txn struct {
@@ -49,7 +51,9 @@ func (txn *Txn) Query(q string, vars map[string]string) (*protos.Response, error
 }
 
 func (txn *Txn) mergeContext(src *protos.TxnContext) error {
-	x.AssertTrue(src != nil)
+	if src == nil {
+		return nil
+	}
 	if txn.context == nil {
 		txn.context = src
 		return nil
@@ -70,13 +74,22 @@ func (txn *Txn) Mutate(mu *protos.Mutation) (*protos.Assigned, error) {
 		mu.Primary = txn.context.Primary
 	}
 	ag, err := txn.dg.mutate(context.Background(), mu)
-	if err == nil {
-		err = txn.mergeContext(ag.Context)
+	if ag != nil {
+		if err := txn.mergeContext(ag.Context); err != nil {
+			fmt.Printf("error while merging context: %v\n", err)
+		}
+		if len(ag.Error) > 0 {
+			// fmt.Printf("Mutate failed. start=%d ag= %+v\n", txn.startTs, ag)
+			return ag, errors.New(ag.Error)
+		}
 	}
 	return ag, err
 }
 
 func (txn *Txn) Abort() error {
+	if txn.context == nil {
+		txn.context = &protos.TxnContext{StartTs: txn.startTs}
+	}
 	txn.context.CommitTs = 0
 	_, err := txn.dg.commitOrAbort(context.Background(), txn.context)
 	return err

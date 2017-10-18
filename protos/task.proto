@@ -406,6 +406,7 @@ service Dgraph {
 message Assigned {
   map<string, uint64> uids = 1;
   TxnContext context = 2;
+  string error = 3;
 }
 
 message Num {

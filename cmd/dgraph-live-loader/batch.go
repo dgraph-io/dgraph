@@ -46,8 +46,8 @@ type loader struct {
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
 	rdfs uint64
-	// Num of mutations sent
-	mutations uint64
+	// Num of txns sent
+	txns uint64
 	// Num of aborts
 	aborts uint64
 	// To get time elapsel.
@@ -63,7 +63,7 @@ type Counter struct {
 	// Number of RDF's processed by server.
 	Rdfs uint64
 	// Number of mutations processed by the server.
-	Mutations uint64
+	TxnsDone uint64
 	// Number of Aborts
 	Aborts uint64
 	// Time elapsed sinze the batch startel.
@@ -71,7 +71,6 @@ type Counter struct {
 }
 
 func (l *loader) request(req protos.Mutation) error {
-	atomic.AddUint64(&l.mutations, 1)
 RETRY:
 	select {
 	case <-l.opts.Ctx.Done():
@@ -79,16 +78,29 @@ RETRY:
 	default:
 	}
 	txn := l.dc.NewTxn()
-	_, err := txn.Mutate(&req)
+	var err error
+	for i := 0; i < 3; i++ {
+		_, err = txn.Mutate(&req)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
+		if err := txn.Abort(); err != nil {
+			fmt.Printf("Error while aborting: %v\n", err)
+		}
 		atomic.AddUint64(&l.aborts, 1)
+		time.Sleep(10 * time.Second)
 		goto RETRY
 	}
 	err = txn.Commit()
 	if err != nil {
+		// fmt.Printf("Error while commit: %v\n", err)
+		txn.Abort()
 		atomic.AddUint64(&l.aborts, 1)
 		goto RETRY
 	}
+	atomic.AddUint64(&l.txns, 1)
 	return nil
 }
 
@@ -113,8 +125,8 @@ func (l *loader) printCounters() {
 		counter := l.Counter()
 		rate := float64(counter.Rdfs) / counter.Elapsed.Seconds()
 		elapsed := ((time.Since(start) / time.Second) * time.Second).String()
-		fmt.Printf("[Request: %6d] Total RDFs done: %8d RDFs per second: %7.0f Time Elapsed: %v, Aborts: %d\r",
-			counter.Mutations, counter.Rdfs, rate, elapsed, counter.Aborts)
+		fmt.Printf("Total Txns done: %8d RDFs per second: %7.0f Time Elapsed: %v, Aborts: %d\n",
+			counter.TxnsDone, rate, elapsed, counter.Aborts)
 
 	}
 }
@@ -122,10 +134,10 @@ func (l *loader) printCounters() {
 // Counter returns the current state of the BatchMutation.
 func (l *loader) Counter() Counter {
 	return Counter{
-		Rdfs:      atomic.LoadUint64(&l.rdfs),
-		Mutations: atomic.LoadUint64(&l.mutations),
-		Elapsed:   time.Since(l.start),
-		Aborts:    atomic.LoadUint64(&l.aborts),
+		Rdfs:     atomic.LoadUint64(&l.rdfs),
+		TxnsDone: atomic.LoadUint64(&l.txns),
+		Elapsed:  time.Since(l.start),
+		Aborts:   atomic.LoadUint64(&l.aborts),
 	}
 }
 

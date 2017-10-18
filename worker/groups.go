@@ -153,9 +153,9 @@ func (g *groupi) proposeInitialSchema() {
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.
 	// TODO: Fix me
-	if _, err := MutateOverNetwork(gr.ctx, &m); err != nil {
-		fmt.Println("Error while proposing initial schema: ", err)
-	}
+	// if _, err := MutateOverNetwork(gr.ctx, &m); err != nil {
+	// 	fmt.Println("Error while proposing initial schema: ", err)
+	// }
 }
 
 // No locks are acquired while accessing this function.

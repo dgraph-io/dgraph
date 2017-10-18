@@ -59,12 +59,13 @@ func SchemaKey(attr string) []byte {
 	return buf
 }
 
-func LockKey(attr string) []byte {
-	buf := make([]byte, 1+2+len(attr))
+func LockKey(attr string, ts uint64) []byte {
+	buf := make([]byte, 1+2+len(attr)+8)
 	buf[0] = byteLock
 	rest := buf[1:]
 
-	writeAttr(rest, attr)
+	rest = writeAttr(rest, attr)
+	binary.BigEndian.PutUint64(rest, ts)
 	return buf
 }
 

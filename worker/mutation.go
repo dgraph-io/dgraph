@@ -530,7 +530,8 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
 	txn := pstore.NewTransactionAt(tc.StartTs, false)
 	defer txn.Discard()
-	item, err := txn.Get(posting.TxnKey)
+	tk := x.LockKey(posting.TxnKey, tc.StartTs)
+	item, err := txn.Get(tk)
 	if err == nil && item.Version() == tc.StartTs {
 		data, err := item.Value()
 		if err != nil {
@@ -541,7 +542,6 @@ func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload,
 			return &protos.Payload{}, err
 		}
 		x.AssertTrue(prev.StartTs == tc.StartTs)
-		x.AssertTrue(prev.Primary == tc.Primary)
 		tc.Keys = append(tc.Keys, prev.Keys...)
 	}
 	if tc.CommitTs == 0 {
@@ -562,10 +562,11 @@ type res struct {
 func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
 	tctx := &protos.TxnContext{StartTs: m.StartTs}
 	mutationMap := make(map[uint32]*protos.Mutations)
-	if err := addToMutationMap(mutationMap, m); err != nil {
+	err := addToMutationMap(mutationMap, m)
+	tctx.Primary = m.PrimaryAttr
+	if err != nil {
 		return tctx, err
 	}
-	tctx.Primary = m.PrimaryAttr
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
@@ -633,7 +634,7 @@ func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	}
 	txn := pstore.NewTransactionAt(in.StartTs, false)
 	defer txn.Discard()
-	item, err := txn.Get(x.LockKey(in.Primary))
+	item, err := txn.Get(x.LockKey(in.Primary, in.StartTs))
 	if err == badger.ErrKeyNotFound {
 		in.Aborted = true
 		return in, nil
@@ -679,17 +680,17 @@ func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*pro
 	return checkTxnStatus(in)
 }
 
-func fixConflict(key []byte, pl *posting.List) error {
-	ctx := context.Background()
-	var primary string // TODO: Fill this up from posting.list
-	startTs, primary := pl.Pending()
-	if startTs == 0 {
-		return nil
+func fixConflicts(tctxs []*protos.TxnContext) {
+	// TODO: Probably deduplicate
+	for _, tctx := range tctxs {
+		fixConflict(tctx)
 	}
+}
 
-	in := &protos.TxnContext{
-		Primary: primary,
-		StartTs: startTs,
+func fixConflict(in *protos.TxnContext) error {
+	ctx := context.Background()
+	if in.StartTs == 0 {
+		return nil
 	}
 
 	first := true

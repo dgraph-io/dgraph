@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"sync"
 
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -175,6 +177,8 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 		}
 	}
 	s.n.props.Done(proposal.Id, nil)
+	// Do proposals one by one.
+	s.n.Applied.WaitForMark(context.Background(), index)
 	return nil
 }
 

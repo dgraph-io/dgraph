@@ -171,8 +171,10 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	m := protos.Mutations{Edges: edges, Schema: mu.Schema, StartTs: mu.StartTs}
 
 	resp.Context, err = query.ApplyMutations(ctx, &m)
-	x.Printf("Length of edges is %+v, primary: %q\n", len(edges), m.PrimaryAttr)
-	return resp, err
+	if err != nil {
+		resp.Error = err.Error()
+	}
+	return resp, nil
 }
 
 // This method is used to execute the query and return the response to the

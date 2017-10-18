@@ -61,7 +61,7 @@ var (
 	dgraph     = flag.String("d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	zero       = flag.String("z", "127.0.0.1:8888", "Dgraphzero gRPC server address")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
-	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
+	numRdf     = flag.Int("m", 100, "Number of RDF N-Quads to send as part of a mutation.")
 	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
 	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
 	blockRate  = flag.Int("block", 0, "Block profiling rate")
@@ -405,7 +405,7 @@ func main() {
 	if interrupted {
 		fmt.Println("Interrupted.")
 	}
-	fmt.Printf("Number of mutations run   : %d\n", c.Mutations)
+	fmt.Printf("Number of mutations run   : %d\n", c.TxnsDone)
 	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
 

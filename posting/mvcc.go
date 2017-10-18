@@ -33,7 +33,7 @@ import (
 var (
 	ErrConflict = x.Errorf("Transaction aborted due to conflict")
 	errTsTooOld = x.Errorf("Transaction is too old")
-	TxnKey      = x.LockKey("_dgraph_txn_")
+	TxnKey      = "_dgraph_txn_"
 )
 
 type delta struct {
@@ -49,11 +49,24 @@ type Txn struct {
 	aborted uint32
 	// Fields which can changed after init
 	sync.Mutex
-	deltas []delta
+	deltas    []delta
+	conflicts []*protos.TxnContext
 }
 
-func (t *Txn) Abort() {
+func (t *Txn) Abort(conflict *protos.TxnContext) {
 	atomic.StoreUint32(&t.aborted, 1)
+	t.Lock()
+	defer t.Unlock()
+	t.conflicts = append(t.conflicts, conflict)
+}
+
+func (t *Txn) Conflicts() []*protos.TxnContext {
+	if t == nil {
+		return nil
+	}
+	t.Lock()
+	defer t.Unlock()
+	return t.conflicts
 }
 
 func (t *Txn) Aborted() uint32 {
@@ -93,7 +106,7 @@ func (t *Txn) WriteDeltas() error {
 	defer txn.Discard()
 
 	if t.ServesPrimary {
-		lk := x.LockKey(t.PrimaryAttr)
+		lk := x.LockKey(t.PrimaryAttr, t.StartTs)
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], 0) // Indicates pending or aborted.
 		// This write is only for determining the status of the transaction. Nothing else.
@@ -152,9 +165,10 @@ func (t *Txn) WriteDeltas() error {
 		}
 	}
 
+	tk := x.LockKey(TxnKey, t.StartTs)
 	var tctx protos.TxnContext
 	t.fill(&tctx)
-	item, err := txn.Get(TxnKey)
+	item, err := txn.Get(tk)
 	if err == nil && item.Version() == t.StartTs {
 		data, err := item.Value()
 		if err != nil {
@@ -174,7 +188,7 @@ func (t *Txn) WriteDeltas() error {
 	}
 	data, err := tctx.Marshal()
 	x.Check(err)
-	if err = txn.Set(TxnKey, data, 0); err != nil {
+	if err = txn.Set(tk, data, 0); err != nil {
 		return err
 	}
 	return txn.CommitAt(t.StartTs, nil)
@@ -193,13 +207,30 @@ func clean(key []byte, startTs uint64) {
 // Called after all mutations are committed in memory.
 func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) error {
 	if writeLock {
+		lk := x.LockKey(tx.Primary, tx.StartTs)
 		// First update the primary key to indicate the status of transaction.
 		txn := pstore.NewTransaction(true)
 		defer txn.Discard()
 
+		item, err := txn.Get(lk)
+		if err == badger.ErrKeyNotFound {
+			// Already aborted.
+			return ErrInvalidTxn
+		} else if err != nil {
+			return err
+		}
+		val, err := item.Value()
+		if err != nil {
+			return err
+		}
+		ts := binary.BigEndian.Uint64(val)
+		if ts > 0 && ts != tx.CommitTs {
+			// Already committed.
+			return ErrInvalidTxn
+		}
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], tx.CommitTs)
-		if err := txn.Set(x.LockKey(tx.Primary), buf[:], 0); err != nil {
+		if err := txn.Set(x.LockKey(tx.Primary, tx.StartTs), buf[:], 0); err != nil {
 			return err
 		}
 		if err := txn.CommitAt(tx.StartTs, nil); err != nil {
@@ -233,9 +264,27 @@ func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool)
 // Called after mutations are aborted in memory.
 func AbortMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) error {
 	if writeLock {
+		lk := x.LockKey(tx.Primary, tx.StartTs)
 		txn := pstore.NewTransactionAt(tx.StartTs, true)
 		defer txn.Discard()
-		if err := txn.Delete(x.LockKey(tx.Primary)); err != nil {
+
+		item, err := txn.Get(lk)
+		if err == badger.ErrKeyNotFound {
+			// Already aborted.
+			return nil
+		} else if err != nil {
+			return err
+		}
+		val, err := item.Value()
+		if err != nil {
+			return err
+		}
+		ts := binary.BigEndian.Uint64(val)
+		if ts > 0 {
+			// Already committed.
+			return ErrInvalidTxn
+		}
+		if err := txn.Delete(lk); err != nil {
 			return err
 		}
 		if err := txn.CommitAt(tx.StartTs, nil); err != nil {

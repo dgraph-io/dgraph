@@ -109,6 +109,7 @@ func (p *proposals) Done(pid uint32, err error) {
 		return
 	}
 	delete(p.ids, pid)
+	go fixConflicts(pd.txn.Conflicts())
 	if err = pd.txn.WriteDeltas(); err != nil {
 		pd.err = err
 	}
