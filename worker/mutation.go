@@ -96,7 +96,7 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *po
 		if ok {
 			schema.State().Set(update.Predicate, oldSchema)
 		} else {
-			schema.State().Remove(update.Predicate)
+			schema.State().Remove(update.Predicate, txn.StartTs)
 		}
 		return err
 	}
@@ -109,7 +109,7 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *po
 		return false
 	})
 	rv := ctx.Value("raft").(x.RaftValue)
-	updateSchema(update.Predicate, *update, rv.Index, rv.Group)
+	updateSchema(update.Predicate, *update, rv.Index, txn.StartTs)
 	return nil
 }
 
@@ -213,17 +213,18 @@ func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
 	return false
 }
 
-func updateSchema(attr string, s protos.SchemaUpdate, raftIndex uint64, group uint32) {
+func updateSchema(attr string, s protos.SchemaUpdate, index uint64, ts uint64) {
 	ce := schema.SyncEntry{
-		Attr:   attr,
-		Schema: s,
-		Index:  raftIndex,
-		Water:  posting.SyncMarks(),
+		Attr:    attr,
+		Schema:  s,
+		Index:   index,
+		Water:   posting.SyncMarks(),
+		StartTs: ts,
 	}
 	schema.State().Update(ce)
 }
 
-func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
+func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, ts uint64) {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -232,7 +233,7 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uin
 	} else {
 		s = protos.SchemaUpdate{ValueType: uint32(typ)}
 	}
-	updateSchema(attr, s, raftIndex, group)
+	updateSchema(attr, s, raftIndex, ts)
 }
 
 func hasEdges(attr string, startTs uint64) bool {

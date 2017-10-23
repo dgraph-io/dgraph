@@ -75,10 +75,9 @@ func (s *state) Update(se SyncEntry) {
 	se.Water.Begin(se.Index)
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
-	// TODO: What to do with errors
-	// Pass in timestamps
+	// TODO: Retry on errors
 	data, _ := se.Schema.Marshal()
-	txn.Set(x.SchemaKey(se.Attr), data, 0x00)
+	x.Check(txn.Set(x.SchemaKey(se.Attr), data, 0x00))
 	txn.Commit(func(err error) {
 		s.elog.Printf(logUpdate(se.Schema, se.Attr))
 		x.Printf(logUpdate(se.Schema, se.Attr))
@@ -96,8 +95,8 @@ func (s *state) Delete(se SyncEntry) {
 	se.Water.Begin(se.Index)
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
-	txn.Delete(x.SchemaKey(se.Attr))
-	txn.Commit(func(err error) {
+	x.Check(txn.Set(x.SchemaKey(se.Attr), nil, 0x00))
+	txn.CommitAt(se.StartTs, func(err error) {
 		s.elog.Printf("Deleting schema for attr: %s", se.Attr)
 		x.Printf("Deleting schema for attr: %s", se.Attr)
 		se.Water.Done(se.Index)
@@ -106,15 +105,15 @@ func (s *state) Delete(se SyncEntry) {
 
 // Remove deletes the schema from memory and disk. Used after predicate move to do
 // cleanup
-// TODO(Txn): Take timestamps
-func (s *state) Remove(predicate string) error {
+func (s *state) Remove(predicate string, startTs uint64) error {
 	s.Lock()
 	defer s.Unlock()
 
 	delete(s.predicate, predicate)
-	return pstore.Update(func(txn *badger.Txn) error {
-		return txn.Delete(x.SchemaKey(predicate))
-	})
+	txn := pstore.NewTransaction(true)
+	defer txn.Discard()
+	x.Check(txn.Set(x.SchemaKey(predicate), nil, 0x00))
+	return txn.CommitAt(startTs, nil)
 }
 
 func logUpdate(schema protos.SchemaUpdate, pred string) string {
@@ -280,6 +279,9 @@ func LoadFromDb() error {
 		if err != nil {
 			return err
 		}
+		if len(val) == 0 {
+			continue
+		}
 		x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
 		State().Set(attr, s)
 	}
@@ -293,10 +295,11 @@ func reset() {
 
 // SyncEntry stores the schema mutation information
 type SyncEntry struct {
-	Attr   string
-	Schema protos.SchemaUpdate
-	Water  *x.WaterMark
-	Index  uint64
+	Attr    string
+	Schema  protos.SchemaUpdate
+	Water   *x.WaterMark
+	Index   uint64
+	StartTs uint64
 }
 
 func addToEntriesMap(entriesMap map[*x.WaterMark][]uint64, entries []SyncEntry) {

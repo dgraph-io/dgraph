@@ -392,7 +392,7 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) 
 func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	ctx, txn := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
-	ctx = context.WithValue(n.ctx, "raft", rv)
+	ctx = context.WithValue(ctx, "raft", rv)
 	err := txn.DeletePredicate(ctx, predicate)
 	n.props.Done(pid, err)
 }

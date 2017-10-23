@@ -845,14 +845,15 @@ func (txn *Txn) DeletePredicate(ctx context.Context, attr string) error {
 	}
 	if index == 0 {
 		// This function is called by cleaning thread(after predicate move)
-		return schema.State().Remove(attr)
+		return schema.State().Remove(attr, txn.StartTs)
 	}
 	if !s.Explicit {
 		// Delete predicate from schema.
 		se := schema.SyncEntry{
-			Attr:  attr,
-			Index: index,
-			Water: SyncMarks(),
+			Attr:    attr,
+			Index:   index,
+			Water:   SyncMarks(),
+			StartTs: txn.StartTs,
 			Schema: protos.SchemaUpdate{
 				Predicate: attr,
 				Directive: protos.SchemaUpdate_DELETE,
