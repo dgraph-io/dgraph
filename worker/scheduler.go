@@ -155,14 +155,13 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 
 	s.n.props.IncRef(proposal.Id, total)
 	x.ActiveMutations.Add(int64(total))
-	_, txn := s.n.props.CtxAndTxn(proposal.Id)
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
 			// Schema doesn't exist
 			// Since committed entries are serialized, updateSchemaIfMissing is not
 			// needed, In future if schema needs to be changed, it would flow through
 			// raft so there won't be race conditions between read and update schema
-			updateSchemaType(attr, storageType, index, txn.StartTs)
+			updateSchemaType(attr, storageType, index, proposal.Mutations.StartTs)
 		}
 	}
 
