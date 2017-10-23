@@ -281,7 +281,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 	for i, ul := range r.reply.UidMatrix {
 		x.AssertTrue(len(ul.Uids) == len(r.vals[i]))
 		for j, uid := range ul.Uids {
-			uidx := algo.IndexOf(destUids, uid)
+			uidx := algo.BinarySearchIndexOf(destUids, uid)
 			x.AssertTrue(uidx >= 0)
 
 			if seen[uid] {
@@ -351,7 +351,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 	for i, ul := range r.reply.UidMatrix {
 		vals := make([][]types.Val, len(ul.Uids))
 		for j, uid := range ul.Uids {
-			idx := algo.IndexOf(destUids, uid)
+			idx := algo.BinarySearchIndexOf(destUids, uid)
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}

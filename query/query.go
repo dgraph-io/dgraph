@@ -420,7 +420,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 
-		idx := algo.IndexOf(pc.SrcUIDs, uid)
+		idx := algo.LinearSearchIndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
 			continue
 		}
@@ -1313,7 +1313,7 @@ func (sg *SubGraph) updateFacetMatrix() {
 		out := sg.facetsMatrix[lidx].FacetsList[:0]
 		for idx, uid := range l.Uids {
 			// If uid wasn't filtered then we keep the facet for it.
-			if algo.IndexOf(sg.DestUIDs, uid) >= 0 {
+			if algo.BinarySearchIndexOf(sg.DestUIDs, uid) >= 0 {
 				out = append(out, sg.facetsMatrix[lidx].FacetsList[idx])
 			}
 		}
@@ -1328,7 +1328,7 @@ func (sg *SubGraph) updateUidMatrix() {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
-				i := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
+				i := algo.BinarySearchIndexOf(sg.DestUIDs, uid) // Binary search.
 				if i >= 0 {
 					return true
 				}
@@ -2117,7 +2117,7 @@ func (sg *SubGraph) updateDestUids() {
 	included := make([]bool, len(sg.DestUIDs.Uids))
 	for _, ul := range sg.uidMatrix {
 		for _, uid := range ul.Uids {
-			idx := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
+			idx := algo.BinarySearchIndexOf(sg.DestUIDs, uid) // Binary search.
 			if idx >= 0 {
 				included[idx] = true
 			}
