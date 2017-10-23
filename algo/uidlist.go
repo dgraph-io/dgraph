@@ -390,12 +390,23 @@ func MergeSorted(lists []*protos.List) *protos.List {
 	return &protos.List{Uids: output}
 }
 
-// IndexOf performs a binary search on the uids slice and returns the index at
-// which it finds the uid, else returns -1
-func IndexOf(u *protos.List, uid uint64) int {
+// BinarySearchIndexOf performs a binary search on the uids slice and returns
+// the index at which it finds the uid, else returns -1
+func BinarySearchIndexOf(u *protos.List, uid uint64) int {
 	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
 	if i < len(u.Uids) && u.Uids[i] == uid {
 		return i
+	}
+	return -1
+}
+
+// LinearSearchIndexOf performs a linear search for the index of a uid. Returns
+// -1 for not found. Uids don't have to be sorted.
+func LinearSearchIndexOf(u *protos.List, uid uint64) int {
+	for i := range u.Uids {
+		if u.Uids[i] == uid {
+			return i
+		}
 	}
 	return -1
 }

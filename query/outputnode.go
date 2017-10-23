@@ -297,7 +297,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 	} else {
 		for _, uid := range sg.uidMatrix[0].Uids {
 			// For the root, the name is stored in Alias, not Attr.
-			if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+			if algo.BinarySearchIndexOf(sg.DestUIDs, uid) < 0 {
 				// This UID was filtered. So Ignore it.
 				continue
 			}
@@ -696,7 +696,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	lenList := len(sg.uidMatrix[0].Uids)
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
-		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+		if algo.BinarySearchIndexOf(sg.DestUIDs, uid) < 0 {
 			// This UID was filtered. So Ignore it.
 			continue
 		}
