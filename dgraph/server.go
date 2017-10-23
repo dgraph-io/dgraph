@@ -243,6 +243,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		Latency:  &l,
 		GqlQuery: &parsedReq,
 		ReadTs:   req.StartTs,
+		LinRead:  req.LinRead,
 	}
 
 	var er query.ExecuteResult
@@ -270,6 +271,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	}
 
 	resp.Latency = gl
+	resp.LinRead = queryRequest.LinRead
 	return resp, err
 }
 

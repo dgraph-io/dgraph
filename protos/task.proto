@@ -36,23 +36,29 @@ message SrcFunction {
   bool isCount = 4;
 }
 
+message LinRead {
+  map<uint32, uint64> ids = 1;
+}
+
 message Query {
 	string attr = 1;
-	uint64 read_ts = 2;
-	repeated string langs = 3; // language list for attribute
-	fixed64 after_uid = 4;  // Only return UIDs greater than this.
-	bool do_count = 5;      // Are we just getting lengths?
+	repeated string langs = 2; // language list for attribute
+	fixed64 after_uid = 3;  // Only return UIDs greater than this.
+	bool do_count = 4;      // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
-	List uid_list = 6;
+	List uid_list = 5;
 
 	// Function to generate or filter UIDs.
-	SrcFunction src_func = 7;
+	SrcFunction src_func = 6;
 
-	bool reverse = 8;  // Whether this is a reverse edge.
+	bool reverse = 7;  // Whether this is a reverse edge.
 
-	Param facet_param = 9; // which facets to fetch
-	FilterTree facets_filter = 10; // filtering on facets : has Op (and/or/not) tree
+	Param facet_param = 8; // which facets to fetch
+	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
+
+	uint64 read_ts = 13;
+  LinRead lin_read = 14;
 }
 
 message ValueList {
@@ -65,6 +71,8 @@ message Result {
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
 	repeated FacetsList facet_matrix = 5;
+
+  LinRead lin_read = 14;
 }
 
 message Order {
@@ -75,14 +83,18 @@ message Order {
 
 message SortMessage {
 	repeated Order order = 1;
-	uint64 read_ts = 2;
-	repeated List uid_matrix = 3;
-	int32 count = 4;   // Return this many elements.
-	int32 offset = 5;  // Skip this many elements.
+	repeated List uid_matrix = 2;
+	int32 count = 3;   // Return this many elements.
+	int32 offset = 4;  // Skip this many elements.
+
+	uint64 read_ts = 13;
+  LinRead lin_read = 14;
 }
 
 message SortResult {
 	repeated List uid_matrix = 1;
+
+  LinRead lin_read = 14;
 }
 
 message RaftContext {
@@ -463,6 +475,7 @@ message Request {
     map<string, string> vars = 4; // Support for GraphQL like variables.
 
     uint64 start_ts = 13;
+    LinRead lin_read = 14;
     Mutation mutation = 100;
 }
 
@@ -474,8 +487,9 @@ message Latency {
 
 message Response {
     bytes json = 1;
-    Latency latency = 2;
-    repeated SchemaNode schema = 4;
+    repeated SchemaNode schema = 2;
+    Latency latency = 12;
+    LinRead lin_read = 13;
 }
 
 message Check {}
