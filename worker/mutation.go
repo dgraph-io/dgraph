@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/rand"
+	"sort"
 	"time"
 
 	"golang.org/x/net/context"
@@ -193,6 +194,7 @@ func updateSchema(attr string, s protos.SchemaUpdate, raftIndex uint64, group ui
 		Index:  raftIndex,
 		Water:  posting.SyncMarks(),
 	}
+	// TODO(txn): Use batch set Async, removed batch sync loop.
 	schema.State().Update(ce)
 }
 
@@ -525,23 +527,20 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 }
 
 func commitOrAbort(ctx context.Context, tc *protos.TxnContext, index uint64) (*protos.Payload, error) {
-	// Lock key is written in async way
-	servesPrimary := groups().ServesTablet(tc.Primary)
-	if servesPrimary {
-		posting.SyncMarks().WaitForMark(ctx, index-1)
-	}
+	n := groups().Node
+	n.Applied.WaitForMark(ctx, index-1)
 	txn := posting.Txns().Get(tc.StartTs)
 	if txn == nil {
 		return &protos.Payload{}, posting.ErrInvalidTxn
 	}
 	if tc.CommitTs == 0 {
-		err := txn.AbortMutations(ctx, servesPrimary)
+		err := txn.AbortMutations(ctx)
 		if err != nil {
 			posting.Txns().Done(tc.StartTs)
 		}
 		return &protos.Payload{}, err
 	}
-	err := txn.CommitMutations(ctx, tc.CommitTs, servesPrimary)
+	err := txn.CommitMutations(ctx, tc.CommitTs, groups().ServesTablet(tc.Primary))
 	if err != nil {
 		posting.Txns().Done(tc.StartTs)
 	}
@@ -625,7 +624,7 @@ func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	if in.StartTs == 0 {
 		return in, x.Errorf("Invalid start timestamp")
 	}
-	// LockKey might not have made to disk so check memory first
+	// check memory first
 	if tx := posting.Txns().Get(in.StartTs); tx != nil {
 		// Pending transaction.
 		return in, nil
@@ -680,8 +679,16 @@ func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*pro
 }
 
 func fixConflicts(tctxs []*protos.TxnContext) {
-	// TODO: Probably deduplicate
+	// deduplicate fixConflict involves network call
+	sort.Slice(tctxs, func(i, j int) bool {
+		return tctxs[i].StartTs < tctxs[j].StartTs
+	})
+	var prevTs uint64
 	for _, tctx := range tctxs {
+		if tctx.StartTs == prevTs {
+			continue
+		}
+		prevTs = tctx.StartTs
 		fixConflict(tctx)
 	}
 }

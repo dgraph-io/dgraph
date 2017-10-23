@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -43,7 +44,7 @@ func writeBatch(ctx context.Context, pstore *badger.DB, kv chan *protos.KV, che 
 	batchWriteNum := 1
 	for i := range kv {
 		if len(i.Val) == 0 {
-			txn.Delete(i.Key)
+			txn.Set(i.Key, i.Val, posting.BitCompletePosting)
 		} else {
 			txn.Set(i.Key, i.Val, i.UserMeta[0])
 		}

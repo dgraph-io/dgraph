@@ -110,7 +110,6 @@ func (p *proposals) Done(pid uint32, err error) {
 	}
 	delete(p.ids, pid)
 	go fixConflicts(pd.txn.Conflicts())
-	pd.txn.WriteLock(pd.index)
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
@@ -389,7 +388,7 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) 
 	n.props.Done(pid, err)
 }
 
-// TODO: Pass timestamp
+// TODO(txn): Pass timestamp
 func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	ctx, txn := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
@@ -398,7 +397,7 @@ func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	n.props.Done(pid, err)
 }
 
-// TODO: Pass timestamp
+// TODO(txn): Pass timestamp
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)

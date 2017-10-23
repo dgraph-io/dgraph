@@ -105,25 +105,28 @@ func (c *listCache) PutIfMissing(key string, pl *List) (res *List) {
 }
 
 func (c *listCache) removeOldest() {
+	ele := c.ll.Back()
 	for c.curSize > c.MaxSize {
-		ele := c.ll.Back()
 		if ele == nil {
 			c.curSize = 0
 			break
 		}
-		c.ll.Remove(ele)
-		c.evicts++
-
 		e := ele.Value.(*entry)
-		c.curSize -= e.size
 
-		e.pl.SetForDeletion()
+		if !e.pl.SetForDeletion() {
+			ele.Prev()
+			continue
+		}
 		// If length of mutation layer is zero, then we won't call pstore.SetAsync and the
 		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
 		if committed, _ := e.pl.SyncIfDirty(true); !committed {
-			// Delta should have been written to disk by the time we evict.
 			delete(c.cache, e.key)
 		}
+
+		c.ll.Remove(ele)
+		c.evicts++
+		c.curSize -= e.size
+		ele.Prev()
 	}
 }
 
@@ -175,8 +178,7 @@ func (c *listCache) Reset() {
 	c.curSize = 0
 }
 
-// Ensure we call wait for applied watermark to catch up so that
-// we are sure the deltas of a transaction are  persisted.
+// Doesn't sync to disk, call this function only when you are deleting the pls.
 func (c *listCache) clear(remove func(key []byte) bool) error {
 	c.Lock()
 	defer c.Unlock()
@@ -188,9 +190,7 @@ func (c *listCache) clear(remove func(key []byte) bool) error {
 
 		c.ll.Remove(e)
 		kv.pl.SetForDeletion()
-		if committed, _ := kv.pl.SyncIfDirty(true); !committed {
-			delete(c.cache, k)
-		}
+		delete(c.cache, k)
 	}
 	return nil
 }

@@ -96,27 +96,6 @@ func (t *transactions) GetOrCreate(startTs uint64, primary string, servesPrimary
 	return txn
 }
 
-func (t *Txn) WriteLock(index uint64) error {
-	if t == nil {
-		return nil
-	}
-	if !t.ServesPrimary {
-		return nil
-	}
-	txn := pstore.NewTransaction(true)
-	defer txn.Discard()
-	var buf [8]byte
-	if err := txn.Set(x.LockKey(t.PrimaryAttr, t.StartTs), buf[:], 0); err != nil {
-		return err
-	}
-	SyncMarks().Begin(index)
-	return txn.Commit(func(err error) {
-		// TODO: Retry
-		// If this errors out txn won't be committed.
-		SyncMarks().Done(index)
-	})
-}
-
 func (t *Txn) AddConflict(conflict *protos.TxnContext) {
 	atomic.StoreUint32(&t.hasConflict, 1)
 	t.Lock()
@@ -155,7 +134,13 @@ func (t *Txn) Fill(ctx *protos.TxnContext) {
 }
 
 // TODO: Use commitAsync
+// Don't call this for schema mutations. Directly commit them.
 func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock bool) error {
+	tx.Lock()
+	defer tx.Unlock()
+	if tx.HasConflict() {
+		return ErrInvalidTxn
+	}
 	if writeLock {
 		lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
 		// First update the primary key to indicate the status of transaction.
@@ -194,7 +179,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 		var meta byte
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
 			pl.Postings = pl.Postings[:0]
-			meta = bitCompletePosting // Indicates that this is the full posting list.
+			meta = BitCompletePosting // Indicates that this is the full posting list.
 		} else {
 			midx := sort.Search(len(pl.Postings), func(idx int) bool {
 				mp := pl.Postings[idx]
@@ -222,47 +207,48 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 	if err := txn.CommitAt(commitTs, nil); err != nil {
 		return err
 	}
+	return tx.commitMutationsMemory(ctx, commitTs)
+}
 
+func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error {
+	return tx.commitMutationsMemory(ctx, commitTs)
+}
+
+func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
 	for _, d := range tx.deltas {
 		plist := Get([]byte(d.key))
-		err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
-		if err != nil {
+		if err := plist.CommitMutation(ctx, tx.StartTs, commitTs); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (tx *Txn) AbortMutations(ctx context.Context, writeLock bool) error {
-	if writeLock {
-		lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
-		// First update the primary key to indicate the status of transaction.
-		txn := pstore.NewTransaction(true)
-		defer txn.Discard()
+func (tx *Txn) AbortMutations(ctx context.Context) error {
+	tx.Lock()
+	defer tx.Unlock()
+	lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
+	// First update the primary key to indicate the status of transaction.
+	txn := pstore.NewTransaction(true)
+	defer txn.Discard()
 
-		item, err := txn.Get(lk)
-		if err == badger.ErrKeyNotFound {
-			// We write lock key in async way, if lock key write fails no issue we can
-			// still abort the transaction.
-		} else if err != nil {
-			return err
-		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		ts := binary.BigEndian.Uint64(val)
-		if ts > 0 {
-			// Already committed
-			return ErrInvalidTxn
-		}
-		if err := txn.Delete(lk); err != nil {
-			return err
-		}
-		if err := txn.CommitAt(tx.StartTs, nil); err != nil {
-			return err
-		}
+	_, err := txn.Get(lk)
+	if err == badger.ErrKeyNotFound {
+		// Nothing to do
+	} else if err != nil {
+		return err
+	} else {
+		// Already committed
+		return ErrInvalidTxn
 	}
+	return tx.abortMutationsMemory(ctx)
+}
+
+func (tx *Txn) AbortMutationsMemory(ctx context.Context) error {
+	return tx.abortMutationsMemory(ctx)
+}
+
+func (tx *Txn) abortMutationsMemory(ctx context.Context) error {
 	for _, d := range tx.deltas {
 		plist := Get([]byte(d.key))
 		err := plist.AbortTransaction(ctx, tx.StartTs)
@@ -270,6 +256,7 @@ func (tx *Txn) AbortMutations(ctx context.Context, writeLock bool) error {
 			return err
 		}
 	}
+	atomic.StoreUint32(&tx.hasConflict, 1)
 	return nil
 }
 
@@ -315,8 +302,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if err != nil {
 			return nil, err
 		}
-		if item.UserMeta()&bitCompletePosting > 0 {
-			x.Check(l.plist.Unmarshal(val))
+		if item.UserMeta()&BitCompletePosting > 0 {
+			if err := unmarshalOrCopy(l.plist, item); err != nil {
+				return nil, err
+			}
 			break
 		} else if item.UserMeta()&bitDeltaPosting > 0 {
 			var pl protos.PostingList
