@@ -96,8 +96,8 @@ func (txn *Txn) Abort() error {
 }
 
 func (txn *Txn) Commit() error {
-	if len(txn.context.Keys) == 0 {
-		// If there were no prewrites
+	if txn.context == nil {
+		// If there were no mutations
 		return nil
 	}
 	txn.context.CommitTs = txn.dg.getTimestamp()

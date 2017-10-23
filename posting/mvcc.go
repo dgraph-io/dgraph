@@ -37,6 +37,7 @@ var (
 )
 
 func init() {
+	txns = new(transactions)
 	txns.m = make(map[uint64]*Txn)
 }
 
@@ -74,7 +75,7 @@ func (t *transactions) Get(startTs uint64) *Txn {
 
 func (t *transactions) Done(startTs uint64) {
 	t.Lock()
-	defer t.RUnlock()
+	defer t.Unlock()
 	delete(t.m, startTs)
 }
 
@@ -149,18 +150,18 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 
 		item, err := txn.Get(lk)
 		if err == badger.ErrKeyNotFound {
-			// Already aborted.
-			return ErrInvalidTxn
+			// Nothing to do
 		} else if err != nil {
 			return err
-		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		ts := binary.BigEndian.Uint64(val)
-		if ts > 0 && ts != commitTs {
-			return ErrInvalidTxn
+		} else {
+			val, err := item.Value()
+			if err != nil {
+				return err
+			}
+			ts := binary.BigEndian.Uint64(val)
+			if ts > 0 && ts != commitTs {
+				return ErrInvalidTxn
+			}
 		}
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], commitTs)
