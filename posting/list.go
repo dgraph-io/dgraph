@@ -60,7 +60,6 @@ const (
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
 	bitUidPostings     byte = 0x01
-	bitCommitMarker         = 0x02
 	bitDeltaPosting         = 0x04
 	bitCompletePosting      = 0x08
 )
@@ -370,14 +369,14 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		}
 		return false, ErrRetry
 	}
-	if txn.Aborted() != 0 {
+	if txn.HasConflict() {
 		return false, ErrConflict
 	}
 
 	if !l.canPreWrite(ctx, txn) {
 		pk := x.Parse(l.key)
 		fmt.Printf("Can't prewrite due to %+v. txnstart=%d\n", pk, txn.StartTs)
-		txn.Abort(&protos.TxnContext{StartTs: l.startTs, Primary: l.primaryAttr})
+		txn.AddConflict(&protos.TxnContext{StartTs: l.startTs, Primary: l.primaryAttr})
 		return false, ErrConflict
 	}
 
@@ -426,8 +425,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 }
 
 func (l *List) canPreWrite(ctx context.Context, txn *Txn) bool {
-	if txn.StartTs < l.commitTs {
-		fmt.Printf("starts < committs")
+	if txn.StartTs <= l.commitTs {
 		return false
 	}
 	if l.startTs == 0 || l.startTs == txn.StartTs {

@@ -20,14 +20,12 @@ package worker
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
 	"io"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -83,7 +81,9 @@ func writeBatch(ctx context.Context, pstore *badger.DB, kv chan *protos.KV, che 
 func streamKeys(pstore *badger.DB, stream protos.Worker_PredicateAndSchemaDataClient) error {
 	txn := pstore.NewTransaction(false)
 	defer txn.Discard()
-	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.PrefetchValues = false
+	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 
 	g := &protos.GroupKeys{
@@ -99,13 +99,6 @@ func streamKeys(pstore *badger.DB, stream protos.Worker_PredicateAndSchemaDataCl
 			it.Next()
 			continue
 		}
-		// No need to send KC for schema keys, since we won't save anything
-		// by sending checksum of schema key
-		if pk.IsSchema() {
-			it.Seek(pk.SkipSchema())
-			// Do not go next.
-			continue
-		}
 
 		if !groups().ServesTablet(pk.Attr) {
 			it.Seek(pk.SkipPredicate())
@@ -117,12 +110,7 @@ func streamKeys(pstore *badger.DB, stream protos.Worker_PredicateAndSchemaDataCl
 		key := &protos.KC{
 			Key: kdup,
 		}
-		val, err := iterItem.Value()
-		if err != nil {
-			return err
-		}
-		checksum := md5.Sum(val)
-		key.Checksum = checksum[:]
+		key.Timestamp = iterItem.Version()
 		g.Keys = append(g.Keys, key)
 		if len(g.Keys) >= 1000 {
 			if err := stream.Send(g); err != nil {
@@ -215,13 +203,28 @@ func populateShard(ctx context.Context, ps *badger.DB, pl *conn.Pool, group uint
 	return count, nil
 }
 
+func sendKV(stream protos.Worker_PredicateAndSchemaDataServer, item *badger.Item) error {
+	val, err := item.Value()
+	if err != nil {
+		return err
+	}
+	kv := &protos.KV{
+		Key:      item.Key(),
+		Val:      val,
+		UserMeta: []byte{item.UserMeta()},
+	}
+	if err := stream.Send(kv); err != nil {
+		return err
+	}
+	return nil
+}
+
 // PredicateAndSchemaData can be used to return data corresponding to a predicate over
 // a stream.
 func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSchemaDataServer) error {
 	gkeys := &protos.GroupKeys{}
 
 	// Receive all keys from client first.
-	// TODO: Weird that we batch keys in batches of 1000 on the client, but but not here.
 	// TODO: Don't fetch all at once, use stream and iterate in parallel
 	for {
 		keys, err := stream.Recv()
@@ -255,7 +258,9 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 
 	txn := pstore.NewTransaction(false)
 	defer txn.Discard()
-	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 
 	var count int
@@ -271,58 +276,39 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 			continue
 		}
 
-		// No checksum check for schema keys
-		var v []byte
-		val, err := iterItem.Value()
-		if err != nil {
+		// If a key is present in follower but not in leader, send a kv with empty value
+		// so that the follower can delete it
+		for gidx < len(gkeys.Keys) && bytes.Compare(gkeys.Keys[gidx].Key, k) < 0 {
+			kv := &protos.KV{Key: gkeys.Keys[gidx].Key}
+			gidx++
+			if err := stream.Send(kv); err != nil {
+				return err
+			}
+		}
+
+		// Found a match, send all versions greater than followers timestamp
+		if gidx < len(gkeys.Keys) && bytes.Equal(k, gkeys.Keys[gidx].Key) {
+			t := gkeys.Keys[gidx]
+			gidx++
+
+			for bytes.Equal(iterItem.Key(), t.Key) {
+				if iterItem.Version() > t.Timestamp {
+					if err := sendKV(stream, iterItem); err != nil {
+						return err
+					}
+					count++
+				}
+				it.Next()
+				iterItem = it.Item()
+			}
+			continue
+		}
+
+		// This key is not present in follower.
+		if err := sendKV(stream, iterItem); err != nil {
 			return err
 		}
-		v = make([]byte, len(val))
-		// Copy it as we have to access it outside.
-		copy(v, val)
-
-		if !pk.IsSchema() {
-			var pl protos.PostingList
-			posting.UnmarshalOrCopy(v, iterItem.UserMeta(), &pl)
-
-			// If a key is present in follower but not in leader, send a kv with empty value
-			// so that the follower can delete it
-			for gidx < len(gkeys.Keys) && bytes.Compare(gkeys.Keys[gidx].Key, k) < 0 {
-				kv := &protos.KV{Key: gkeys.Keys[gidx].Key}
-				gidx++
-				if err := stream.Send(kv); err != nil {
-					return err
-				}
-			}
-
-			// Found a match.
-			if gidx < len(gkeys.Keys) && bytes.Compare(k, gkeys.Keys[gidx].Key) == 0 {
-				t := gkeys.Keys[gidx]
-				gidx++
-				// Different keys would have the same prefix. So, check Checksum first,
-				// it would be cheaper when there's no match.
-				// TODO: What if checksum collides ?
-				checksum := md5.Sum(v)
-				if bytes.Equal(checksum[:], t.Checksum) {
-					it.Next()
-					continue
-				}
-			}
-		}
-		// TODO - Verify that schema key is deleted from follower after leader deletes it.
-
-		// We just need to stream this kv. So, we can directly use the key
-		// and val without any copying.
-		kv := &protos.KV{
-			Key:      k,
-			Val:      v,
-			UserMeta: []byte{iterItem.UserMeta()},
-		}
-
 		count++
-		if err := stream.Send(kv); err != nil {
-			return err
-		}
 		it.Next()
 	} // end of iterator
 	// All these keys are not present in leader, so mark them for deletion

@@ -339,11 +339,8 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 	if groups().ServesGroup(gid) {
 		node := groups().Node
 		// we don't timeout after proposing
-		txn := &posting.Txn{
-			StartTs:       m.StartTs,
-			PrimaryAttr:   m.PrimaryAttr,
-			ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
-		}
+		txn := posting.Txns().GetOrCreate(m.StartTs, m.PrimaryAttr,
+			groups().ServesTablet(m.PrimaryAttr))
 		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 		res.ctx = &protos.TxnContext{}
 		txn.Fill(res.ctx)
@@ -527,28 +524,27 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 	return &protos.Payload{}, e
 }
 
-func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
-	txn := pstore.NewTransactionAt(tc.StartTs, false)
-	defer txn.Discard()
-	tk := x.LockKey(posting.TxnKey, tc.StartTs)
-	item, err := txn.Get(tk)
-	if err == nil && item.Version() == tc.StartTs {
-		data, err := item.Value()
-		if err != nil {
-			return &protos.Payload{}, err
-		}
-		var prev protos.TxnContext
-		if err := prev.Unmarshal(data); err != nil {
-			return &protos.Payload{}, err
-		}
-		x.AssertTrue(prev.StartTs == tc.StartTs)
-		tc.Keys = append(tc.Keys, prev.Keys...)
+func commitOrAbort(ctx context.Context, tc *protos.TxnContext, index uint64) (*protos.Payload, error) {
+	// Lock key is written in async way
+	servesPrimary := groups().ServesTablet(tc.Primary)
+	if servesPrimary {
+		posting.SyncMarks().WaitForMark(ctx, index-1)
+	}
+	txn := posting.Txns().Get(tc.StartTs)
+	if txn == nil {
+		return &protos.Payload{}, posting.ErrInvalidTxn
 	}
 	if tc.CommitTs == 0 {
-		err := posting.AbortMutations(ctx, tc, groups().ServesTablet(tc.Primary))
+		err := txn.AbortMutations(ctx, servesPrimary)
+		if err != nil {
+			posting.Txns().Done(tc.StartTs)
+		}
 		return &protos.Payload{}, err
 	}
-	err = posting.CommitMutations(ctx, tc, groups().ServesTablet(tc.Primary))
+	err := txn.CommitMutations(ctx, tc.CommitTs, servesPrimary)
+	if err != nil {
+		posting.Txns().Done(tc.StartTs)
+	}
 	return &protos.Payload{}, err
 }
 
@@ -618,11 +614,8 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 		defer tr.Finish()
 	}
 
-	txn := &posting.Txn{
-		StartTs:       m.StartTs,
-		PrimaryAttr:   m.PrimaryAttr,
-		ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
-	}
+	txn := posting.Txns().GetOrCreate(m.StartTs, m.PrimaryAttr,
+		groups().ServesTablet(m.PrimaryAttr))
 	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 	txn.Fill(txnCtx)
 	return txnCtx, err
@@ -632,6 +625,12 @@ func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	if in.StartTs == 0 {
 		return in, x.Errorf("Invalid start timestamp")
 	}
+	// LockKey might not have made to disk so check memory first
+	if tx := posting.Txns().Get(in.StartTs); tx != nil {
+		// Pending transaction.
+		return in, nil
+	}
+
 	txn := pstore.NewTransactionAt(in.StartTs, false)
 	defer txn.Discard()
 	item, err := txn.Get(x.LockKey(in.Primary, in.StartTs))

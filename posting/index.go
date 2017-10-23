@@ -515,7 +515,7 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 			continue
 		}
 		// readPostingList advances the iterator until it finds complete pl
-		l, err := readPostingList(nk, it)
+		l, err := ReadPostingList(nk, it)
 		if err != nil {
 			errCh <- err
 			return
@@ -629,7 +629,7 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 		if pki == nil {
 			continue
 		}
-		l, err := readPostingList(nk, it)
+		l, err := ReadPostingList(nk, it)
 		if err != nil {
 			return err
 		}
@@ -736,7 +736,7 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 		if pki == nil {
 			continue
 		}
-		l, err := readPostingList(nk, it)
+		l, err := ReadPostingList(nk, it)
 		if err != nil {
 			return err
 		}

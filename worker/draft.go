@@ -110,17 +110,12 @@ func (p *proposals) Done(pid uint32, err error) {
 	}
 	delete(p.ids, pid)
 	go fixConflicts(pd.txn.Conflicts())
-	if err = pd.txn.WriteDeltas(); err != nil {
-		pd.err = err
-	}
+	pd.txn.WriteLock(pd.index)
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
 
-	// TODO(txn): We write deltas immediately so we can snapshot based on applied.
-	// For linearazibility we need to wait until transaction is committed or aborted.
-	// Probably don't need syncMarks.
 	pd.n.Applied.Done(pd.index)
 	posting.SyncMarks().Done(pd.index)
 }
@@ -360,7 +355,9 @@ func (n *node) processApplyCh() {
 				cnt:   1,
 			}
 			if proposal.Mutations != nil {
-				pctx.txn = &posting.Txn{StartTs: proposal.StartTs}
+				m := proposal.Mutations
+				pctx.txn = posting.Txns().GetOrCreate(m.StartTs, m.PrimaryAttr,
+					groups().ServesTablet(m.PrimaryAttr))
 			}
 			n.props.Store(proposal.Id, pctx)
 		} else {
@@ -379,16 +376,16 @@ func (n *node) processApplyCh() {
 		} else if len(proposal.CleanPredicate) > 0 {
 			go n.deletePredicate(e.Index, proposal.Id, proposal.CleanPredicate)
 		} else if proposal.TxnContext != nil {
-			go n.commitOrAbort(proposal.Id, proposal.TxnContext)
+			go n.commitOrAbort(e.Index, proposal.Id, proposal.TxnContext)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
 	}
 }
 
-func (n *node) commitOrAbort(pid uint32, tctx *protos.TxnContext) {
+func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) {
 	ctx, _ := n.props.CtxAndTxn(pid)
-	_, err := commitOrAbort(ctx, tctx)
+	_, err := commitOrAbort(ctx, tctx, index)
 	n.props.Done(pid, err)
 }
 

@@ -33,8 +33,16 @@ import (
 var (
 	ErrConflict = x.Errorf("Transaction aborted due to conflict")
 	errTsTooOld = x.Errorf("Transaction is too old")
-	TxnKey      = "_dgraph_txn_"
+	txns        *transactions
 )
+
+func init() {
+	txns.m = make(map[uint64]*Txn)
+}
+
+func Txns() *transactions {
+	return txns
+}
 
 type delta struct {
 	key     []byte
@@ -46,15 +54,71 @@ type Txn struct {
 	ServesPrimary bool
 
 	// atomic
-	aborted uint32
+	hasConflict uint32
 	// Fields which can changed after init
 	sync.Mutex
 	deltas    []delta
 	conflicts []*protos.TxnContext
 }
 
-func (t *Txn) Abort(conflict *protos.TxnContext) {
-	atomic.StoreUint32(&t.aborted, 1)
+type transactions struct {
+	x.SafeMutex
+	m map[uint64]*Txn
+}
+
+func (t *transactions) Get(startTs uint64) *Txn {
+	t.RLock()
+	defer t.RUnlock()
+	return t.m[startTs]
+}
+
+func (t *transactions) Done(startTs uint64) {
+	t.Lock()
+	defer t.RUnlock()
+	delete(t.m, startTs)
+}
+
+func (t *transactions) GetOrCreate(startTs uint64, primary string, servesPrimary bool) *Txn {
+	if txn := t.Get(startTs); txn != nil {
+		return txn
+	}
+	t.Lock()
+	defer t.Unlock()
+	if txn := t.m[startTs]; txn != nil {
+		return txn
+	}
+	txn := &Txn{
+		StartTs:       startTs,
+		PrimaryAttr:   primary,
+		ServesPrimary: servesPrimary,
+	}
+	t.m[startTs] = txn
+	return txn
+}
+
+func (t *Txn) WriteLock(index uint64) error {
+	if t == nil {
+		return nil
+	}
+	if !t.ServesPrimary {
+		return nil
+	}
+	txn := pstore.NewTransaction(true)
+	defer txn.Discard()
+	var buf [8]byte
+	if err := txn.Set(x.LockKey(t.PrimaryAttr, t.StartTs), buf[:], 0); err != nil {
+		return err
+	}
+	SyncMarks().Begin(index)
+	return txn.Commit(func(err error) {
+		// TODO: Retry
+		// If this errors out txn won't be committed.
+		SyncMarks().Done(index)
+	})
+}
+
+func (t *Txn) AddConflict(conflict *protos.TxnContext) {
+	atomic.StoreUint32(&t.hasConflict, 1)
 	t.Lock()
 	defer t.Unlock()
 	t.conflicts = append(t.conflicts, conflict)
@@ -69,8 +133,8 @@ func (t *Txn) Conflicts() []*protos.TxnContext {
 	return t.conflicts
 }
 
-func (t *Txn) Aborted() uint32 {
-	return atomic.LoadUint32(&t.aborted)
+func (t *Txn) HasConflict() bool {
+	return atomic.LoadUint32(&t.hasConflict) > 0
 }
 
 func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
@@ -82,9 +146,6 @@ func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 func (t *Txn) fill(ctx *protos.TxnContext) {
 	ctx.StartTs = t.StartTs
 	ctx.Primary = t.PrimaryAttr
-	for _, d := range t.deltas {
-		ctx.Keys = append(ctx.Keys, string(d.key))
-	}
 }
 
 func (t *Txn) Fill(ctx *protos.TxnContext) {
@@ -93,50 +154,44 @@ func (t *Txn) Fill(ctx *protos.TxnContext) {
 	t.fill(ctx)
 }
 
-// Write All deltas per transaction at once.
-// Called after all mutations are applied in memory and checked for locks/conflicts.
-func (t *Txn) WriteDeltas() error {
-	if t == nil {
-		return nil
-	}
-	// TODO: Avoid delta for schema mutations, directly commit.
-	t.Lock()
-	defer t.Unlock()
-	txn := pstore.NewTransactionAt(t.StartTs, true)
-	defer txn.Discard()
+// TODO: Use commitAsync
+func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock bool) error {
+	if writeLock {
+		lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
+		// First update the primary key to indicate the status of transaction.
+		txn := pstore.NewTransaction(true)
+		defer txn.Discard()
 
-	if t.ServesPrimary {
-		lk := x.LockKey(t.PrimaryAttr, t.StartTs)
+		item, err := txn.Get(lk)
+		if err == badger.ErrKeyNotFound {
+			// Already aborted.
+			return ErrInvalidTxn
+		} else if err != nil {
+			return err
+		}
+		val, err := item.Value()
+		if err != nil {
+			return err
+		}
+		ts := binary.BigEndian.Uint64(val)
+		if ts > 0 && ts != commitTs {
+			return ErrInvalidTxn
+		}
 		var buf [8]byte
-		binary.BigEndian.PutUint64(buf[:], 0) // Indicates pending or aborted.
-		// This write is only for determining the status of the transaction. Nothing else.
+		binary.BigEndian.PutUint64(buf[:], commitTs)
 		if err := txn.Set(lk, buf[:], 0); err != nil {
 			return err
 		}
-	}
-
-	for _, d := range t.deltas {
-		var pl protos.PostingList
-		item, err := txn.Get([]byte(d.key))
-
-		if err == nil {
-			// We should either find a commit entry or prewrite at same ts
-			if item.Version() == t.StartTs {
-				val, err := item.Value()
-				if err != nil {
-					return err
-				}
-				x.Check(pl.Unmarshal(val))
-				x.AssertTrue(pl.PrimaryAttr == t.PrimaryAttr)
-			} else {
-				x.AssertTrue(item.UserMeta()&bitCommitMarker > 0)
-			}
-		} else if err != badger.ErrKeyNotFound {
+		if err := txn.CommitAt(tx.StartTs, nil); err != nil {
 			return err
 		}
+	}
 
+	txn := pstore.NewTransaction(true)
+	defer txn.Discard()
+	for _, d := range tx.deltas {
+		var pl protos.PostingList
 		var meta byte
-		pl.PrimaryAttr = t.PrimaryAttr
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
 			pl.Postings = pl.Postings[:0]
 			meta = bitCompletePosting // Indicates that this is the full posting list.
@@ -164,95 +219,13 @@ func (t *Txn) WriteDeltas() error {
 			return err
 		}
 	}
-
-	tk := x.LockKey(TxnKey, t.StartTs)
-	var tctx protos.TxnContext
-	t.fill(&tctx)
-	item, err := txn.Get(tk)
-	if err == nil && item.Version() == t.StartTs {
-		data, err := item.Value()
-		if err != nil {
-			return err
-		}
-		var prev protos.TxnContext
-		if err := prev.Unmarshal(data); err != nil {
-			return err
-		}
-		x.AssertTrue(prev.StartTs == tctx.StartTs)
-		x.AssertTrue(prev.Primary == tctx.Primary)
-		tctx.Keys = append(tctx.Keys, prev.Keys...)
-	} else if err == badger.ErrKeyNotFound {
-		// pass
-	} else if err != nil {
-		return err
-	}
-	data, err := tctx.Marshal()
-	x.Check(err)
-	if err = txn.Set(tk, data, 0); err != nil {
-		return err
-	}
-	return txn.CommitAt(t.StartTs, nil)
-}
-
-// clean deletes the key with startTs after txn is aborted.
-func clean(key []byte, startTs uint64) {
-	txn := pstore.NewTransactionAt(startTs, true)
-	txn.Delete(key)
-	if err := txn.CommitAt(startTs, func(err error) {}); err != nil {
-		x.Printf("Error while cleaning key %q %v\n", key, err)
-	}
-}
-
-// Writes all commit keys of the transaction.
-// Called after all mutations are committed in memory.
-func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) error {
-	if writeLock {
-		lk := x.LockKey(tx.Primary, tx.StartTs)
-		// First update the primary key to indicate the status of transaction.
-		txn := pstore.NewTransaction(true)
-		defer txn.Discard()
-
-		item, err := txn.Get(lk)
-		if err == badger.ErrKeyNotFound {
-			// Already aborted.
-			return ErrInvalidTxn
-		} else if err != nil {
-			return err
-		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		ts := binary.BigEndian.Uint64(val)
-		if ts > 0 && ts != tx.CommitTs {
-			// Already committed.
-			return ErrInvalidTxn
-		}
-		var buf [8]byte
-		binary.BigEndian.PutUint64(buf[:], tx.CommitTs)
-		if err := txn.Set(x.LockKey(tx.Primary, tx.StartTs), buf[:], 0); err != nil {
-			return err
-		}
-		if err := txn.CommitAt(tx.StartTs, nil); err != nil {
-			return err
-		}
-	}
-
-	// Now write the commit markers.
-	txn := pstore.NewTransaction(true)
-	defer txn.Discard()
-	for _, k := range tx.Keys {
-		if err := txn.Set([]byte(k), nil, bitCommitMarker); err != nil {
-			return err
-		}
-	}
-	if err := txn.CommitAt(tx.CommitTs, nil); err != nil {
+	if err := txn.CommitAt(commitTs, nil); err != nil {
 		return err
 	}
 
-	for _, key := range tx.Keys {
-		plist := Get([]byte(key))
-		err := plist.CommitMutation(ctx, tx.StartTs, tx.CommitTs)
+	for _, d := range tx.deltas {
+		plist := Get([]byte(d.key))
+		err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		if err != nil {
 			return err
 		}
@@ -260,18 +233,17 @@ func CommitMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool)
 	return nil
 }
 
-// Delete all deltas we wrote to badger.
-// Called after mutations are aborted in memory.
-func AbortMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) error {
+func (tx *Txn) AbortMutations(ctx context.Context, writeLock bool) error {
 	if writeLock {
-		lk := x.LockKey(tx.Primary, tx.StartTs)
-		txn := pstore.NewTransactionAt(tx.StartTs, true)
+		lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
+		// First update the primary key to indicate the status of transaction.
+		txn := pstore.NewTransaction(true)
 		defer txn.Discard()
 
 		item, err := txn.Get(lk)
 		if err == badger.ErrKeyNotFound {
-			// Already aborted.
-			return nil
+			// We write lock key in async way, if lock key write fails no issue we can
+			// still abort the transaction.
 		} else if err != nil {
 			return err
 		}
@@ -281,7 +253,7 @@ func AbortMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) 
 		}
 		ts := binary.BigEndian.Uint64(val)
 		if ts > 0 {
-			// Already committed.
+			// Already committed
 			return ErrInvalidTxn
 		}
 		if err := txn.Delete(lk); err != nil {
@@ -291,21 +263,8 @@ func AbortMutations(ctx context.Context, tx *protos.TxnContext, writeLock bool) 
 			return err
 		}
 	}
-
-	txn := pstore.NewTransaction(true)
-	defer txn.Discard()
-	for _, k := range tx.Keys {
-		if err := txn.Delete([]byte(k)); err != nil {
-			return err
-		}
-	}
-	if err := txn.CommitAt(tx.StartTs, nil); err != nil {
-		return err
-	}
-
-	// In memory.
-	for _, key := range tx.Keys {
-		plist := Get([]byte(key))
+	for _, d := range tx.deltas {
+		plist := Get([]byte(d.key))
 		err := plist.AbortTransaction(ctx, tx.StartTs)
 		if err != nil {
 			return err
@@ -336,64 +295,33 @@ func unmarshalOrCopy(plist *protos.PostingList, item *badger.Item) error {
 
 // constructs the posting list from the disk using the passed iterator.
 // Use forward iterator with allversions enabled in iter options.
-func readPostingList(key []byte, it *badger.Iterator) (*List, error) {
+func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.plist = new(protos.PostingList)
 
-	var commitTs uint64
-	// CommitMarkers and Deltas are always interleaved.
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
 		item := it.Item()
 		if !bytes.Equal(item.Key(), l.key) {
 			break
 		}
-		if item.UserMeta()&bitCommitMarker > 0 {
-			// It's a commit key.
-			commitTs = item.Version()
-			l.minTs = commitTs
-			if l.commitTs == 0 { // highest commitTs
-				l.commitTs = commitTs
-			}
-
-			// No posting is present here
-			if item.UserMeta()&bitCompletePosting == 0 {
-				it.Next()
-				continue
-			}
-			if err := unmarshalOrCopy(l.plist, item); err != nil {
-				return l, err
-			}
-			break
+		l.minTs = item.Version()
+		if l.commitTs == 0 { // highest commitTs
+			l.commitTs = item.Version()
 		}
 
-		// It's delta
 		val, err := item.Value()
 		if err != nil {
 			return nil, err
 		}
-		if commitTs == 0 {
-			l.startTs = item.Version()
-		}
 		if item.UserMeta()&bitCompletePosting > 0 {
 			x.Check(l.plist.Unmarshal(val))
-			if commitTs == 0 {
-				l.primaryAttr = l.plist.PrimaryAttr
-			}
 			break
 		} else if item.UserMeta()&bitDeltaPosting > 0 {
 			var pl protos.PostingList
 			x.Check(pl.Unmarshal(val))
-			for _, mpost := range pl.Postings {
-				if commitTs > 0 {
-					mpost.Commit = commitTs
-				}
-			}
 			l.mlayer = append(l.mlayer, pl.Postings...)
-			if commitTs == 0 {
-				l.primaryAttr = pl.PrimaryAttr
-			}
 		} else {
 			x.Fatalf("unexpected meta")
 		}
@@ -425,5 +353,5 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 	it.Seek(key)
-	return readPostingList(key, it)
+	return ReadPostingList(key, it)
 }
