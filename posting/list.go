@@ -517,8 +517,12 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	l.startTs = 0
 	l.primaryAttr = ""
 	l.commitTs = commitTs
-	// TODO(txn): Change it back to 5% of immutable layer.
-	if len(l.mlayer) > 1000 {
+	// Calculate 5% of immutable layer
+	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
+	if numUids < 1000 {
+		numUids = 1000
+	}
+	if len(l.mlayer) > numUids {
 		l.syncIfDirty(false)
 	}
 	return nil
@@ -758,9 +762,20 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
+	retries := 0
 	var f func(error)
 	f = func(err error) {
-		// TODO: Check for error.
+		if err != nil {
+			x.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
+			if retries > 5 {
+				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
+					l.key, err)
+			}
+			// Error from badger should be temporary, so we can retry.
+			retries += 1
+			doAsyncWrite(l.commitTs, l.key, data, uidOnlyPosting, f)
+			return
+		}
 		x.BytesWrite.Add(int64(len(data)))
 		x.PostingWrites.Add(1)
 		if delFromCache {
@@ -769,7 +784,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
-	doAsyncWrite(0, l.key, data, uidOnlyPosting, f)
+	doAsyncWrite(l.commitTs, l.key, data, uidOnlyPosting, f)
 	l.mlayer = l.mlayer[:0]
 	l.minTs = l.commitTs
 	if l.startTs == 0 {

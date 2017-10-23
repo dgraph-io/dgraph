@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path"
@@ -46,7 +47,7 @@ const numExportRoutines = 10
 
 type kv struct {
 	prefix string
-	list   *protos.PostingList
+	list   *posting.List
 }
 
 type skv struct {
@@ -69,11 +70,7 @@ var rdfTypeMap = map[types.TypeID]string{
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
-	pl := item.list
-	var pitr posting.PIterator
-	pitr.Init(pl, 0)
-	for ; pitr.Valid(); pitr.Next() {
-		p := pitr.Posting()
+	item.list.Iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
 		buf.WriteString(item.prefix)
 		if !bytes.Equal(p.Value, nil) {
 			// Value posting
@@ -130,7 +127,8 @@ func toRDF(buf *bytes.Buffer, item kv) {
 		}
 		// End dot.
 		buf.WriteString(" .\n")
-	}
+		return true
+	})
 }
 
 func toSchema(buf *bytes.Buffer, s *skv) {
@@ -273,9 +271,18 @@ func export(bdir string) error {
 	prefix := new(bytes.Buffer)
 	prefix.Grow(100)
 	var debugCount int
+	var prevKey []byte
 	for it.Rewind(); it.Valid(); debugCount++ {
 		item := it.Item()
 		key := item.Key()
+		if bytes.Equal(key, prevKey) {
+			it.Next()
+			continue
+		}
+		if cap(prevKey) < len(key) {
+			prevKey = make([]byte, len(key))
+		}
+		copy(prevKey, key)
 		pk := x.Parse(key)
 		if pk == nil {
 			it.Next()
@@ -326,15 +333,13 @@ func export(bdir string) error {
 		prefix.WriteString("> <")
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
-		pl := &protos.PostingList{}
-		val, err := item.Value()
+		l, err := posting.ReadPostingList(key, it)
 		if err != nil {
 			return err
 		}
-		posting.UnmarshalOrCopy(val, item.UserMeta(), pl)
 		chkv <- kv{
 			prefix: prefix.String(),
-			list:   pl,
+			list:   l,
 		}
 		prefix.Reset()
 		it.Next()

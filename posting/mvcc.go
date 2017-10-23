@@ -126,6 +126,7 @@ func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 func (t *Txn) fill(ctx *protos.TxnContext) {
 	ctx.StartTs = t.StartTs
 	ctx.Primary = t.PrimaryAttr
+	// TODO(txn): Fix commitOrAbort since we are no longer passing keys.
 }
 
 func (t *Txn) Fill(ctx *protos.TxnContext) {
@@ -176,6 +177,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 	txn := pstore.NewTransaction(true)
 	defer txn.Discard()
 	for _, d := range tx.deltas {
+		d.posting.Commit = commitTs
 		var pl protos.PostingList
 		var meta byte
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
@@ -217,7 +219,7 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
 	for _, d := range tx.deltas {
-		plist := Get([]byte(d.key))
+		plist := Get(d.key)
 		if err := plist.CommitMutation(ctx, tx.StartTs, commitTs); err != nil {
 			return err
 		}
@@ -307,6 +309,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			if err := unmarshalOrCopy(l.plist, item); err != nil {
 				return nil, err
 			}
+			it.Next()
 			break
 		} else if item.UserMeta()&bitDeltaPosting > 0 {
 			var pl protos.PostingList

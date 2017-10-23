@@ -110,7 +110,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	key := x.IndexKey(edge.Attr, token)
 
 	t := time.Now()
-	plist := Get(key)
+	plist := getOrMutate(key, txn.StartTs)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("getOrMutate took %v", dur)
@@ -248,7 +248,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge,
 func (txn *Txn) addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
-	plist := Get(key)
+	plist := getOrMutate(key, txn.StartTs)
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
@@ -508,10 +508,12 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 	it := t.NewIterator(iterOpts)
 	defer it.Close()
 	var prevKey []byte
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	it.Seek(prefix)
+	for it.ValidForPrefix(prefix) {
 		iterItem := it.Item()
 		key := iterItem.Key()
 		if bytes.Equal(key, prevKey) {
+			it.Next()
 			continue
 		}
 		nk := make([]byte, len(key))
@@ -519,6 +521,7 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
+			it.Next()
 			continue
 		}
 		// readPostingList advances the iterator until it finds complete pl
@@ -632,10 +635,12 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 	}
 
 	var prevKey []byte
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	it.Seek(prefix)
+	for it.ValidForPrefix(prefix) {
 		iterItem := it.Item()
 		key := iterItem.Key()
-		if !bytes.HasPrefix(key, prevKey) {
+		if bytes.Equal(key, prevKey) {
+			it.Next()
 			continue
 		}
 		nk := make([]byte, len(key))
@@ -643,6 +648,7 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
+			it.Next()
 			continue
 		}
 		l, err := ReadPostingList(nk, it)
@@ -683,7 +689,8 @@ func (txn *Txn) DeleteIndex(ctx context.Context, attr string) error {
 // RebuildIndex rebuilds index for a given attribute.
 // We frequently commit mutations with startTs, on error if just abort the prewrites
 // present in memory, anything which made to disk due to lru eviction won't be rollbacked.
-// Error would be returned to the user so they can retry.
+// Error would be returned to the user so they can retry. Schema won't be updated on error
+// so these edges wont' be used for queries.
 func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 	// Add index entries to data store.
@@ -749,10 +756,12 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 	}
 
 	var prevKey []byte
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	it.Seek(prefix)
+	for it.ValidForPrefix(prefix) {
 		iterItem := it.Item()
 		key := iterItem.Key()
-		if !bytes.Equal(key, prevKey) {
+		if bytes.Equal(key, prevKey) {
+			it.Next()
 			continue
 		}
 		nk := make([]byte, len(key))
@@ -760,6 +769,7 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
+			it.Next()
 			continue
 		}
 		l, err := ReadPostingList(nk, it)

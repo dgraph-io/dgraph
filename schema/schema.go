@@ -31,14 +31,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	syncChCapacity = 10000
-)
-
 var (
 	pstate *state
 	pstore *badger.DB
-	syncCh chan SyncEntry
 )
 
 func (s *state) init() {
@@ -78,9 +73,17 @@ func (s *state) Update(se SyncEntry) {
 
 	s.predicate[se.Attr] = &se.Schema
 	se.Water.Begin(se.Index)
-	syncCh <- se
-	s.elog.Printf(logUpdate(se.Schema, se.Attr))
-	x.Printf(logUpdate(se.Schema, se.Attr))
+	txn := pstore.NewTransaction(true)
+	defer txn.Discard()
+	// TODO: What to do with errors
+	// Pass in timestamps
+	data, _ := se.Schema.Marshal()
+	txn.Set(x.SchemaKey(se.Attr), data, 0x00)
+	txn.Commit(func(err error) {
+		s.elog.Printf(logUpdate(se.Schema, se.Attr))
+		x.Printf(logUpdate(se.Schema, se.Attr))
+		se.Water.Done(se.Index)
+	})
 }
 
 // Delete updates the schema in memory and sends an entry to syncCh so that it can be
@@ -91,9 +94,14 @@ func (s *state) Delete(se SyncEntry) {
 
 	delete(s.predicate, se.Attr)
 	se.Water.Begin(se.Index)
-	syncCh <- se
-	s.elog.Printf("Deleting schema for attr: %s", se.Attr)
-	x.Printf("Deleting schema for attr: %s", se.Attr)
+	txn := pstore.NewTransaction(true)
+	defer txn.Discard()
+	txn.Delete(x.SchemaKey(se.Attr))
+	txn.Commit(func(err error) {
+		s.elog.Printf("Deleting schema for attr: %s", se.Attr)
+		x.Printf("Deleting schema for attr: %s", se.Attr)
+		se.Water.Done(se.Index)
+	})
 }
 
 // Remove deletes the schema from memory and disk. Used after predicate move to do
@@ -245,7 +253,6 @@ func (s *state) IsList(pred string) bool {
 
 func Init(ps *badger.DB) {
 	pstore = ps
-	syncCh = make(chan SyncEntry, syncChCapacity)
 	reset()
 }
 

@@ -178,6 +178,17 @@ func (c *listCache) Reset() {
 	c.curSize = 0
 }
 
+func (c *listCache) iterate(cont func(l *List) bool) {
+	c.Lock()
+	defer c.Unlock()
+	for _, e := range c.cache {
+		kv := e.Value.(*entry)
+		if !cont(kv.pl) {
+			return
+		}
+	}
+}
+
 // Doesn't sync to disk, call this function only when you are deleting the pls.
 func (c *listCache) clear(remove func(key []byte) bool) error {
 	c.Lock()

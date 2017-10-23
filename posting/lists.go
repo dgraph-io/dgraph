@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -217,6 +218,41 @@ func Get(key []byte) (rlist *List) {
 	return lp
 }
 
+// getOrMutate is similar to GetLru the only difference being that for index and count keys it also // does a SetIfAbsentAsync. This function should be called by functions in the mutation path only.
+func getOrMutate(key []byte, ts uint64) (rlist *List) {
+	lp := lcache.Get(string(key))
+	if lp != nil {
+		x.CacheHit.Add(1)
+		return lp
+	}
+	x.CacheMiss.Add(1)
+
+	// Any initialization for l must be done before PutIfMissing. Once it's added
+	// to the map, any other goroutine can retrieve it.
+	l, _ := getNew(key, pstore)
+	// We are always going to return lp to caller, whether it is l or not
+	lp = lcache.PutIfMissing(string(key), l)
+
+	if lp != l {
+		x.CacheRace.Add(1)
+	} else {
+		pk := x.Parse(key)
+		if pk != nil {
+			x.AssertTrue(pk.IsIndex() || pk.IsCount())
+			// This is a best effort set, hence we don't check error from callback.
+			txn := pstore.NewTransactionAt(ts, true)
+			defer txn.Discard()
+			_, err := txn.Get(key)
+			if err == badger.ErrKeyNotFound {
+				txn.Set(key, nil, BitCompletePosting)
+			}
+			txn.CommitAt(ts, func(err error) {
+			})
+		}
+	}
+	return lp
+}
+
 // GetNoStore takes a key. It checks if the in-memory map has an updated value and returns it if it exists
 // or it gets from the store and DOES NOT ADD to lru cache.
 func GetNoStore(key []byte) (rlist *List) {
@@ -228,8 +264,36 @@ func GetNoStore(key []byte) (rlist *List) {
 	return lp
 }
 
-// This doesn't sync, so call this only when you don't care about dirty posting lists in
-// memory(for example before populating snapshot) or after calling syncAllMarks
+// This doesn't sync, so call this only when you don't care about dirty posting lists in // memory(for example before populating snapshot) or after calling syncAllMarks
 func EvictLRU() {
 	lcache.Reset()
+}
+
+func CommitLists(commit func(key []byte) bool) {
+	// We iterate over lru and pushing values (List) into this
+	// channel. Then goroutines right below will commit these lists to data store.
+	workChan := make(chan *List, 10000)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for l := range workChan {
+				l.SyncIfDirty(false)
+			}
+		}()
+	}
+
+	lcache.iterate(func(l *List) bool {
+		if commit(l.key) {
+			workChan <- l
+		}
+		return true
+	})
+	close(workChan)
+	wg.Wait()
+
+	// TODO: Wait for it to sync. Hacky solution write some dummy value
+	// probaly x.LockKey("_dummy_", 0)
 }

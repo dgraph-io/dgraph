@@ -90,6 +90,30 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
 func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
+	oldSchema, ok := schema.State().Get(update.Predicate)
+	if err := runSchemaMutationHelper(ctx, update, txn); err != nil {
+		// On error revert the schema state.
+		if ok {
+			schema.State().Set(update.Predicate, oldSchema)
+		} else {
+			schema.State().Remove(update.Predicate)
+		}
+		return err
+	}
+	// Flush to disk
+	posting.CommitLists(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == update.Predicate {
+			return true
+		}
+		return false
+	})
+	rv := ctx.Value("raft").(x.RaftValue)
+	updateSchema(update.Predicate, *update, rv.Index, rv.Group)
+	return nil
+}
+
+func runSchemaMutationHelper(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	n := groups().Node
 	// Wait for applied watermark to reach till previous index
@@ -106,7 +130,9 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *po
 	}
 	old, ok := schema.State().Get(update.Predicate)
 	current := *update
-	updateSchema(update.Predicate, current, rv.Index, rv.Group)
+	// Sets only in memory, we will update it on disk only after schema mutations is successful and persisted
+	// to disk.
+	schema.State().Set(update.Predicate, current)
 
 	// Once we remove index or reverse edges from schema, even though the values
 	// are present in db, they won't be used due to validation in work/task.go
@@ -194,7 +220,6 @@ func updateSchema(attr string, s protos.SchemaUpdate, raftIndex uint64, group ui
 		Index:  raftIndex,
 		Water:  posting.SyncMarks(),
 	}
-	// TODO(txn): Use batch set Async, removed batch sync loop.
 	schema.State().Update(ce)
 }
 
