@@ -1328,7 +1328,7 @@ func (sg *SubGraph) updateUidMatrix() {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
-				i := algo.BinarySearchIndexOf(sg.DestUIDs, uid) // Binary search.
+				i := algo.BinarySearchIndexOf(sg.DestUIDs, uid)
 				if i >= 0 {
 					return true
 				}
@@ -2117,7 +2117,7 @@ func (sg *SubGraph) updateDestUids() {
 	included := make([]bool, len(sg.DestUIDs.Uids))
 	for _, ul := range sg.uidMatrix {
 		for _, uid := range ul.Uids {
-			idx := algo.BinarySearchIndexOf(sg.DestUIDs, uid) // Binary search.
+			idx := algo.BinarySearchIndexOf(sg.DestUIDs, uid)
 			if idx >= 0 {
 				included[idx] = true
 			}
