@@ -407,7 +407,7 @@ service Worker {
 // Graph response.
 service Dgraph {
   // TODO(mrjn): Rename it to Query.
-    rpc Run (Request)             returns (Response) {}
+    rpc Query (Request)             returns (Response) {}
     rpc Mutate (Mutation)         returns (Assigned) {}
     rpc CheckVersion(Check)       returns (Version) {}
     rpc AssignUids(Num)           returns (AssignedIds) {}

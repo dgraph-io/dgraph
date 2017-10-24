@@ -179,7 +179,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Response, err error) {
+func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.Response, err error) {
 	// we need membership information
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {

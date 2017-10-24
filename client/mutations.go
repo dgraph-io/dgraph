@@ -241,9 +241,9 @@ func (d *Dgraph) CheckSchema(schema *protos.SchemaUpdate) error {
 //
 // It's often easier to unpack directly into a struct with Unmarshal, than to
 // step through the response.
-func (d *Dgraph) run(ctx context.Context, req *protos.Request) (*protos.Response, error) {
+func (d *Dgraph) query(ctx context.Context, req *protos.Request) (*protos.Response, error) {
 	dc := d.anyClient()
-	return dc.Run(ctx, req)
+	return dc.Query(ctx, req)
 }
 
 func (d *Dgraph) mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
