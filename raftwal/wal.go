@@ -29,11 +29,11 @@ import (
 )
 
 type Wal struct {
-	wals *badger.DB
+	wals *badger.ManagedDB
 	id   uint64
 }
 
-func Init(walStore *badger.DB, id uint64) *Wal {
+func Init(walStore *badger.ManagedDB, id uint64) *Wal {
 	return &Wal{wals: walStore, id: id}
 }
 
@@ -70,7 +70,7 @@ func (w *Wal) prefix(gid uint32) []byte {
 }
 
 func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
-	txn := w.wals.NewTransaction(true)
+	txn := w.wals.NewTransactionAt(1, true)
 	defer txn.Discard()
 	if raft.IsEmptySnap(s) {
 		return nil
@@ -106,7 +106,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 
 	// Failure to delete entries is not a fatal error, so should be
 	// ok to ignore
-	if err := txn.Commit(nil); err != nil {
+	if err := txn.CommitAt(1, nil); err != nil {
 		x.Printf("Error while storing snapshot %v\n", err)
 	}
 	return nil
@@ -114,7 +114,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 
 // Store stores the hardstate and entries for a given RAFT group.
 func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
-	txn := w.wals.NewTransaction(true)
+	txn := w.wals.NewTransactionAt(1, true)
 
 	var t, i uint64
 	for _, e := range es {
@@ -160,14 +160,14 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 			}
 		}
 	}
-	if err := txn.Commit(nil); err != nil {
+	if err := txn.CommitAt(1, nil); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
-	txn := w.wals.NewTransaction(false)
+	txn := w.wals.NewTransactionAt(1, false)
 	defer txn.Discard()
 	item, err := txn.Get(w.snapshotKey(gid))
 	if err == badger.ErrKeyNotFound {
@@ -185,7 +185,7 @@ func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
 }
 
 func (w *Wal) HardState(gid uint32) (hd raftpb.HardState, rerr error) {
-	txn := w.wals.NewTransaction(false)
+	txn := w.wals.NewTransactionAt(1, false)
 	defer txn.Discard()
 	item, err := txn.Get(w.hardStateKey(gid))
 	if err == badger.ErrKeyNotFound {
@@ -205,7 +205,7 @@ func (w *Wal) HardState(gid uint32) (hd raftpb.HardState, rerr error) {
 func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry, rerr error) {
 	start := w.entryKey(gid, fromTerm, fromIndex)
 	prefix := w.prefix(gid)
-	txn := w.wals.NewTransaction(false)
+	txn := w.wals.NewTransactionAt(1, false)
 	defer txn.Discard()
 	itr := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer itr.Close()

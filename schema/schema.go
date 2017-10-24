@@ -20,6 +20,7 @@ package schema
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/dgraph-io/badger"
@@ -33,7 +34,7 @@ import (
 
 var (
 	pstate *state
-	pstore *badger.DB
+	pstore *badger.ManagedDB
 )
 
 func (s *state) init() {
@@ -73,12 +74,12 @@ func (s *state) Update(se SyncEntry) {
 
 	s.predicate[se.Attr] = &se.Schema
 	se.Water.Begin(se.Index)
-	txn := pstore.NewTransaction(true)
+	txn := pstore.NewTransactionAt(se.StartTs, true)
 	defer txn.Discard()
 	// TODO: Retry on errors
 	data, _ := se.Schema.Marshal()
 	x.Check(txn.Set(x.SchemaKey(se.Attr), data, 0x00))
-	txn.Commit(func(err error) {
+	txn.CommitAt(se.StartTs, func(err error) {
 		s.elog.Printf(logUpdate(se.Schema, se.Attr))
 		x.Printf(logUpdate(se.Schema, se.Attr))
 		se.Water.Done(se.Index)
@@ -93,7 +94,7 @@ func (s *state) Delete(se SyncEntry) {
 
 	delete(s.predicate, se.Attr)
 	se.Water.Begin(se.Index)
-	txn := pstore.NewTransaction(true)
+	txn := pstore.NewTransactionAt(se.StartTs, true)
 	defer txn.Discard()
 	x.Check(txn.Set(x.SchemaKey(se.Attr), nil, 0x00))
 	txn.CommitAt(se.StartTs, func(err error) {
@@ -110,7 +111,7 @@ func (s *state) Remove(predicate string, startTs uint64) error {
 	defer s.Unlock()
 
 	delete(s.predicate, predicate)
-	txn := pstore.NewTransaction(true)
+	txn := pstore.NewTransactionAt(startTs, true)
 	defer txn.Discard()
 	x.Check(txn.Set(x.SchemaKey(predicate), nil, 0x00))
 	return txn.CommitAt(startTs, nil)
@@ -250,7 +251,7 @@ func (s *state) IsList(pred string) bool {
 	return false
 }
 
-func Init(ps *badger.DB) {
+func Init(ps *badger.ManagedDB) {
 	pstore = ps
 	reset()
 }
@@ -258,7 +259,7 @@ func Init(ps *badger.DB) {
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
 	prefix := x.SchemaPrefix()
-	txn := pstore.NewTransaction(false)
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
 	defer itr.Close()

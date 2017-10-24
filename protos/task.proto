@@ -364,6 +364,7 @@ message ExportPayload {
 		FAILED    = 3;
 	}
 	Status status = 3;
+	uint64 read_ts = 4;
 }
 
 message TxnContext {
@@ -477,7 +478,6 @@ message Request {
 
     uint64 start_ts = 13;
     LinRead lin_read = 14;
-    Mutation mutation = 100;
 }
 
 message Latency {

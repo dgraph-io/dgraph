@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -354,7 +355,9 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := context.Background()
-	if err := worker.ExportOverNetwork(ctx); err != nil {
+	// TODO: Get timestamp from zero.
+	// Export logic can be moved to dgraphzero.
+	if err := worker.ExportOverNetwork(ctx, math.MaxUint64); err != nil {
 		x.SetStatus(w, err.Error(), "Export failed.")
 		return
 	}

@@ -158,7 +158,7 @@ func sortWithIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
 	iterOpt.Reverse = order.Desc
-	txn := pstore.NewTransaction(false)
+	txn := pstore.NewTransactionAt(ts.ReadTs, false)
 	defer txn.Discard()
 	it := txn.NewIterator(iterOpt)
 	defer it.Close()

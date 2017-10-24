@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -141,7 +142,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 	if writeLock {
 		lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
 		// First update the primary key to indicate the status of transaction.
-		txn := pstore.NewTransaction(true)
+		txn := pstore.NewTransactionAt(math.MaxUint64, true)
 		defer txn.Discard()
 
 		item, err := txn.Get(lk)
@@ -169,7 +170,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 		}
 	}
 
-	txn := pstore.NewTransaction(true)
+	txn := pstore.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 	for _, d := range tx.deltas {
 		d.posting.Commit = commitTs
@@ -227,7 +228,7 @@ func (tx *Txn) AbortMutations(ctx context.Context) error {
 	defer tx.Unlock()
 	lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
 	// First update the primary key to indicate the status of transaction.
-	txn := pstore.NewTransaction(true)
+	txn := pstore.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 
 	_, err := txn.Get(lk)
@@ -332,8 +333,8 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-func getNew(key []byte, pstore *badger.DB) (*List, error) {
-	txn := pstore.NewTransaction(false)
+func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 
 	iterOpts := badger.DefaultIteratorOptions
