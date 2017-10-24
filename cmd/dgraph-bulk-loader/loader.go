@@ -57,7 +57,7 @@ type state struct {
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
 	dbs        []*badger.DB
-	writeTS    uint64
+	writeTs    uint64 // All badger writes use this timestamp
 }
 
 type loader struct {
@@ -78,7 +78,7 @@ func newLoader(opt options) *loader {
 		sm:   newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
-		writeTS:    getWriteTimestamp(zero),
+		writeTs:    getWriteTimestamp(zero),
 	}
 	ld := &loader{
 		state:   st,
