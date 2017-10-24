@@ -227,10 +227,6 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		return resp, err
 	}
 
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-
 	if req.Schema != nil && parsedReq.Schema != nil {
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
