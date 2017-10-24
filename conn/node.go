@@ -34,7 +34,6 @@ import (
 )
 
 var (
-	errReadIndex       = x.Errorf("cannot get linerized read (time expired or no configured leader)")
 	ErrDuplicateRaftId = x.Errorf("Node is already part of group")
 )
 

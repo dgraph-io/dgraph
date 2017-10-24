@@ -455,9 +455,9 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 func (s *Server) latestMembershipState(ctx context.Context) (*protos.MembershipState, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
-	// TODO: Wait for applied to reach quorum state.
-	// if err := s.Node.WaitLinearizableRead(ctx); err != nil {
-	// 	return nil, err
-	// }
+
+	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
+		return nil, err
+	}
 	return s.membershipState(), nil
 }
