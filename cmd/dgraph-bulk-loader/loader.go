@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
@@ -20,6 +21,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+	"google.golang.org/grpc"
 )
 
 type options struct {
@@ -37,6 +39,7 @@ type options struct {
 	NumShufflers  int
 	Version       bool
 	StoreXids     bool
+	ZeroAddr      string
 
 	MapShards    int
 	ReduceShards int
@@ -48,7 +51,7 @@ type state struct {
 	opt        options
 	prog       *progress
 	um         *xidmap.XidMap
-	up         *uidProvider
+	up         *zeroUidProvider
 	ss         *schemaStore
 	sm         *shardMap
 	rdfChunkCh chan *bytes.Buffer
@@ -63,9 +66,12 @@ type loader struct {
 }
 
 func newLoader(opt options) *loader {
+	zeroConn, err := grpc.Dial(opt.ZeroAddr, grpc.WithInsecure())
+	x.Check(err)
 	st := &state{
 		opt:  opt,
 		prog: newProgress(),
+		up:   &zeroUidProvider{protos.NewZeroClient(zeroConn)},
 		ss:   newSchemaStore(readSchema(opt.SchemaFile), opt),
 		sm:   newShardMap(opt.MapShards),
 
@@ -147,13 +153,17 @@ func findRDFFiles(dir string) []string {
 	return files
 }
 
-type uidProvider uint64
+type zeroUidProvider struct {
+	client protos.ZeroClient
+}
 
-func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
+func (z *zeroUidProvider) ReserveUidRange() (start, end uint64, err error) {
+	// Use a very long timeout since a failed request is fatal.
+	ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	const uidChunk = 1e5
-	end = atomic.AddUint64((*uint64)(p), uidChunk)
-	start = end - uidChunk + 1
-	return
+	uids, err := z.client.AssignUids(ctx, &protos.Num{Val: uidChunk})
+	return uids.GetStartId(), uids.GetEndId(), err
 }
 
 func (ld *loader) mapStage() {
@@ -169,7 +179,6 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.up = new(uidProvider)
 	ld.um = xidmap.New(ld.xidDB, ld.up, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
@@ -235,8 +244,7 @@ func (ld *loader) writeLease() {
 	// Obtain a fresh uid range - since uids are allocated in increasing order,
 	// the start of the new range can be used as the lease.
 	lease, _, err := ld.up.ReserveUidRange()
-	// Cannot give an error because uid ranges are produced by incrementing an integer.
-	x.AssertTrue(err == nil)
+	x.Check(err)
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%d\n", lease)
 	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))

@@ -63,6 +63,7 @@ func main() {
 			"more parallelism, but increases memory usage.")
 	flag.BoolVar(&opt.Version, "version", false, "Prints the version of dgraph-bulk-loader.")
 	flag.BoolVar(&opt.StoreXids, "x", false, "Generate an xid edge for each node.")
+	flag.StringVar(&opt.ZeroAddr, "z", "localhost:8888", "gRPC address for dgraphzero")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {
