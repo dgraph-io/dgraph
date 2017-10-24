@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"math"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
@@ -37,8 +38,8 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func writeBatch(ctx context.Context, pstore *badger.DB, kv chan *protos.KV, che chan error) {
-	txn := pstore.NewTransaction(true)
+func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *protos.KV, che chan error) {
+	txn := pstore.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 	batchSize := 0
 	batchWriteNum := 1
@@ -64,7 +65,7 @@ func writeBatch(ctx context.Context, pstore *badger.DB, kv chan *protos.KV, che 
 			batchSize = 0
 			// Since we are writing data in batches, we need to clear up items enqueued
 			// for batch write after every successful write.
-			txn = pstore.NewTransaction(true)
+			txn = pstore.NewTransactionAt(math.MaxUint64, true)
 		}
 	}
 	if batchSize > 0 {
@@ -79,8 +80,8 @@ func writeBatch(ctx context.Context, pstore *badger.DB, kv chan *protos.KV, che 
 	che <- nil
 }
 
-func streamKeys(pstore *badger.DB, stream protos.Worker_PredicateAndSchemaDataClient) error {
-	txn := pstore.NewTransaction(false)
+func streamKeys(pstore *badger.ManagedDB, stream protos.Worker_PredicateAndSchemaDataClient) error {
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.PrefetchValues = false
@@ -129,7 +130,7 @@ func streamKeys(pstore *badger.DB, stream protos.Worker_PredicateAndSchemaDataCl
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func populateShard(ctx context.Context, ps *badger.DB, pl *conn.Pool, group uint32) (int, error) {
+func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, group uint32) (int, error) {
 	conn := pl.Get()
 	c := protos.NewWorkerClient(conn)
 
@@ -257,7 +258,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		}
 	}
 
-	txn := pstore.NewTransaction(false)
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
