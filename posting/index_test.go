@@ -36,10 +36,8 @@ const schemaStr = `
 name:string @index(term) .
 `
 
-func uids(pl *protos.PostingList) []uint64 {
-	l := &List{}
-	l.plist = pl
-	r := l.Uids(ListOptions{})
+func uids(l *List, readTs uint64) []uint64 {
+	r := l.Uids(ListOptions{ReadTs: readTs})
 	return r.Uids
 }
 
@@ -119,7 +117,12 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	txn := &Txn{StartTs: startTs}
+	txn := &Txn{
+		StartTs:       startTs,
+		PrimaryAttr:   "primary",
+		ServesPrimary: true,
+	}
+	txn = Txns().GetOrCreate(txn)
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {
@@ -127,13 +130,12 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 		require.NoError(t, err)
 		require.True(t, ok)
 	}
-	require.NoError(t, txn.CommitDeltas())
-	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs, commitTs))
-	require.NoError(t, CommitMutations([]string{string(l.key)}, commitTs))
+	require.NoError(t, txn.CommitMutations(context.Background(), commitTs, true))
 }
 
 const schemaVal = `
 name:string @index(term) .
+name2:string @index(term) .
 dob:dateTime @index(year) .
 friend:uid @reverse .
 	`
@@ -144,10 +146,8 @@ func TestTokensTable(t *testing.T) {
 
 	key := x.DataKey("name", 1)
 	l, err := getNew(key, ps)
+	lcache.PutIfMissing(string(l.key), l)
 	require.NoError(t, err)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(key)
-	})
 
 	edge := &protos.DirectedEdge{
 		Value:  []byte("david"),
@@ -187,7 +187,6 @@ func TestTokensTable(t *testing.T) {
 	})
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
-	deletePl(t)
 }
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
@@ -252,40 +251,48 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      protos.DirectedEdge_SET,
 	}
-	txn := &Txn{StartTs: startTs}
+	txn := Txn{
+		StartTs:       startTs,
+		PrimaryAttr:   attr,
+		ServesPrimary: true,
+	}
 	txn.addReverseMutation(context.Background(), edge)
-	require.NoError(t, txn.CommitDeltas())
-	l := Get(x.ReverseKey(attr, dst))
-	require.NoError(t, l.CommitMutation(context.Background(), txn.StartTs, commitTs))
-	require.NoError(t, CommitMutations([]string{string(l.key)}, commitTs))
+	require.NoError(t, txn.CommitMutations(context.Background(), commitTs, true))
 }
 
-/*
 func TestRebuildIndex(t *testing.T) {
 	schema.ParseBytes([]byte(schemaVal), 1)
-	addEdgeToValue(t, "name", 1, "Michonne", uint64(1), uint64(2))
-	addEdgeToValue(t, "name", 20, "David", uint64(3), uint64(4))
+	addEdgeToValue(t, "name2", 91, "Michonne", uint64(1), uint64(2))
+	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
 
-	// Create some fake wrong entries for data store.
-	ps.Update(func(txn *badger.Txn) error {
-		txn.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"), 0x00)
-		txn.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"), 0x00)
-		return nil
-	})
+	{
+		txn := ps.NewTransactionAt(1, true)
+		require.NoError(t, txn.Set(x.IndexKey("name2", "wrongname21"), []byte("nothing"), 0x00))
+		require.NoError(t, txn.Set(x.IndexKey("name2", "wrongname22"), []byte("nothing"), 0x00))
+		require.NoError(t, txn.CommitAt(1, nil))
+	}
 
-	require.NoError(t, DeleteIndex(context.Background(), "name"))
 	tx := &Txn{StartTs: 5}
-	require.NoError(t, RebuildIndex(context.Background(), "name", tx))
+	require.NoError(t, tx.DeleteIndex(context.Background(), "name2"))
+	require.NoError(t, tx.RebuildIndex(context.Background(), "name2"))
+	CommitLists(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == "name2" {
+			return true
+		}
+		return false
+	})
+	time.Sleep(time.Second * 5)
 
 	// Check index entries in data store.
 	txn := ps.NewTransaction(false)
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
-	pk := x.ParsedKey{Attr: "name"}
+	pk := x.ParsedKey{Attr: "name2"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
-	var idxVals []*protos.PostingList
+	var idxVals []*List
 	for it.Seek(prefix); it.Valid(); it.Next() {
 		item := it.Item()
 		key := item.Key()
@@ -293,75 +300,78 @@ func TestRebuildIndex(t *testing.T) {
 			break
 		}
 		idxKeys = append(idxKeys, string(key))
-		pl := new(protos.PostingList)
-		val, err := item.Value()
-		require.NoError(t, err)
-		UnmarshalOrCopy(val, item.UserMeta(), pl)
-		idxVals = append(idxVals, pl)
+		l := Get(key)
+		idxVals = append(idxVals, l)
 	}
-	require.Len(t, idxKeys, 2)
-	require.Len(t, idxVals, 2)
-	require.EqualValues(t, idxKeys[0], x.IndexKey("name", "\x01david"))
-	require.EqualValues(t, idxKeys[1], x.IndexKey("name", "\x01michonne"))
+	require.Len(t, idxKeys, 4)
+	require.Len(t, idxVals, 4)
+	require.EqualValues(t, idxKeys[0], x.IndexKey("name2", "\x01david"))
+	require.EqualValues(t, idxKeys[1], x.IndexKey("name2", "\x01michonne"))
 
-	uids1 := uids(idxVals[0])
-	uids2 := uids(idxVals[1])
+	uids1 := uids(idxVals[0], 6)
+	uids2 := uids(idxVals[1], 6)
+	uids3 := uids(idxVals[2], 6)
+	uids4 := uids(idxVals[2], 6)
 	require.Len(t, uids1, 1)
 	require.Len(t, uids2, 1)
-	require.EqualValues(t, 20, uids1[0])
-	require.EqualValues(t, 1, uids2[0])
-
-	l1 := Get(x.DataKey("name", 1))
-	deletePl(t)
-	ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(l1.key)
-	})
-	l2 := Get(x.DataKey("name", 20))
-	deletePl(t)
-	ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(l2.key)
-	})
+	require.Len(t, uids3, 0)
+	require.Len(t, uids4, 0)
+	require.EqualValues(t, 92, uids1[0])
+	require.EqualValues(t, 91, uids2[0])
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
-	addEdgeToUID(t, "friend", 1, 23, uint64(1), uint64(2))
-	addEdgeToUID(t, "friend", 1, 24, uint64(3), uint64(4))
-	addEdgeToUID(t, "friend", 2, 23, uint64(5), uint64(6))
+	schema.ParseBytes([]byte(schemaVal), 1)
+	addEdgeToUID(t, "friend", 1, 23, uint64(10), uint64(11))
+	addEdgeToUID(t, "friend", 1, 24, uint64(12), uint64(13))
+	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
-	tx := &Txn{StartTs: 5}
-	require.NoError(t, RebuildReverseEdges(context.Background(), "friend", tx))
+	tx := &Txn{StartTs: 16}
+	require.NoError(t, tx.RebuildReverseEdges(context.Background(), "friend"))
+	CommitLists(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == "friend" {
+			return true
+		}
+		return false
+	})
+	time.Sleep(time.Second * 5)
 
 	// Check index entries in data store.
 	txn := ps.NewTransaction(false)
 	defer txn.Discard()
-	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 	pk := x.ParsedKey{Attr: "friend"}
 	prefix := pk.ReversePrefix()
 	var revKeys []string
-	var revVals []*protos.PostingList
-	for it.Seek(prefix); it.Valid(); it.Next() {
+	var revVals []*List
+	var prevKey []byte
+	it.Seek(prefix)
+	for it.ValidForPrefix(prefix) {
 		item := it.Item()
 		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
+		if bytes.Equal(key, prevKey) {
+			it.Next()
+			continue
 		}
+		prevKey := make([]byte, len(key))
+		copy(prevKey, key)
 		revKeys = append(revKeys, string(key))
-		pl := new(protos.PostingList)
-		val, err := item.Value()
+		l, err := ReadPostingList(key, it)
 		require.NoError(t, err)
-		UnmarshalOrCopy(val, item.UserMeta(), pl)
-		revVals = append(revVals, pl)
+		revVals = append(revVals, l)
 	}
 	require.Len(t, revKeys, 2)
 	require.Len(t, revVals, 2)
 
-	uids0 := uids(revVals[0])
-	uids1 := uids(revVals[1])
+	uids0 := uids(revVals[0], 17)
+	uids1 := uids(revVals[1], 17)
 	require.Len(t, uids0, 2)
 	require.Len(t, uids1, 1)
 	require.EqualValues(t, 1, uids0[0])
 	require.EqualValues(t, 2, uids0[1])
 	require.EqualValues(t, 1, uids1[0])
 }
-*/

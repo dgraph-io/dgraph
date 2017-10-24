@@ -58,10 +58,6 @@ func checkUids(t *testing.T, l *List, uids []uint64, readTs uint64) {
 	}
 }
 
-func deletePl(t *testing.T) {
-	lcache.Reset()
-}
-
 func addMutationHelper(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32, txn *Txn) {
 	if op == Del {
 		edge.Op = protos.DirectedEdge_DEL
@@ -126,10 +122,6 @@ func TestAddMutation(t *testing.T) {
 	// Try reading the same data in another PostingList.
 	dl := Get(key)
 	checkUids(t, dl, uids, 3)
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(dl.key)
-	})
 }
 
 func getFirst(l *List, readTs uint64) (res protos.Posting) {
@@ -170,11 +162,6 @@ func TestAddMutation_Value(t *testing.T) {
 	txn = &Txn{StartTs: 3}
 	addMutationHelper(t, ol, edge, Set, txn)
 	checkValue(t, ol, "119", txn.StartTs)
-
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(ol.key)
-	})
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
@@ -224,11 +211,6 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	addMutationHelper(t, ol, edge, Set, txn)
 	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
 	checkValue(t, ol, "cars", txn.StartTs)
-
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(ol.key)
-	})
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
@@ -353,11 +335,6 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	}
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
-
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(ol.key)
-	})
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
@@ -418,11 +395,6 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	}
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
-
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(ol.key)
-	})
 }
 
 func TestAddMutation_gru(t *testing.T) {
@@ -461,16 +433,11 @@ func TestAddMutation_gru(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Del, txn)
-		ol.CommitMutation(context.Background(), 1, uint64(4))
+		ol.CommitMutation(context.Background(), 3, uint64(4))
 		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
 	}
-
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(ol.key)
-	})
 }
 
 func TestAddMutation_gru2(t *testing.T) {
@@ -520,17 +487,13 @@ func TestAddMutation_gru2(t *testing.T) {
 
 		merged, err := ol.SyncIfDirty(false)
 		ol.CommitMutation(context.Background(), 3, uint64(4))
-		require.NoError(t, err)
-		require.True(t, merged)
+		require.Equal(t, err, errUncomitted)
+		require.False(t, merged)
 	}
 
 	// Posting list should just have the new tag.
 	uids := []uint64{0x04}
 	require.Equal(t, uids, listToArray(t, 0, ol, uint64(5)))
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(ol.key)
-	})
 }
 
 func TestAfterUIDCount(t *testing.T) {
@@ -605,10 +568,6 @@ func TestAfterUIDCount(t *testing.T) {
 	require.EqualValues(t, 100, ol.Length(txn.StartTs, 0))
 	require.EqualValues(t, 50, ol.Length(txn.StartTs, 199))
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(ol.key)
-	})
 }
 
 func TestAfterUIDCount2(t *testing.T) {
@@ -639,10 +598,6 @@ func TestAfterUIDCount2(t *testing.T) {
 	require.EqualValues(t, 200, ol.Length(txn.StartTs, 0))
 	require.EqualValues(t, 100, ol.Length(txn.StartTs, 199))
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(ol.key)
-	})
 }
 
 func TestDelete(t *testing.T) {
@@ -753,10 +708,6 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 100, ol.Length(txn.StartTs, 0))
 	require.EqualValues(t, 50, ol.Length(txn.StartTs, 199))
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
-	deletePl(t)
-	defer ps.Update(func(txn *badger.Txn) error {
-		return txn.Delete(ol.key)
-	})
 }
 
 var ps *badger.DB

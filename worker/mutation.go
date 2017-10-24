@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/rand"
+	"sort"
 	"time"
 
 	"golang.org/x/net/context"
@@ -89,6 +90,30 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
 func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
+	oldSchema, ok := schema.State().Get(update.Predicate)
+	if err := runSchemaMutationHelper(ctx, update, txn); err != nil {
+		// On error revert the schema state.
+		if ok {
+			schema.State().Set(update.Predicate, oldSchema)
+		} else {
+			schema.State().Remove(update.Predicate, txn.StartTs)
+		}
+		return err
+	}
+	// Flush to disk
+	posting.CommitLists(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == update.Predicate {
+			return true
+		}
+		return false
+	})
+	rv := ctx.Value("raft").(x.RaftValue)
+	updateSchema(update.Predicate, *update, rv.Index, txn.StartTs)
+	return nil
+}
+
+func runSchemaMutationHelper(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	n := groups().Node
 	// Wait for applied watermark to reach till previous index
@@ -105,7 +130,9 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *po
 	}
 	old, ok := schema.State().Get(update.Predicate)
 	current := *update
-	updateSchema(update.Predicate, current, rv.Index, rv.Group)
+	// Sets only in memory, we will update it on disk only after schema mutations is successful and persisted
+	// to disk.
+	schema.State().Set(update.Predicate, current)
 
 	// Once we remove index or reverse edges from schema, even though the values
 	// are present in db, they won't be used due to validation in work/task.go
@@ -186,17 +213,18 @@ func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
 	return false
 }
 
-func updateSchema(attr string, s protos.SchemaUpdate, raftIndex uint64, group uint32) {
+func updateSchema(attr string, s protos.SchemaUpdate, index uint64, ts uint64) {
 	ce := schema.SyncEntry{
-		Attr:   attr,
-		Schema: s,
-		Index:  raftIndex,
-		Water:  posting.SyncMarks(),
+		Attr:    attr,
+		Schema:  s,
+		Index:   index,
+		Water:   posting.SyncMarks(),
+		StartTs: ts,
 	}
 	schema.State().Update(ce)
 }
 
-func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
+func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, ts uint64) {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -205,7 +233,7 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uin
 	} else {
 		s = protos.SchemaUpdate{ValueType: uint32(typ)}
 	}
-	updateSchema(attr, s, raftIndex, group)
+	updateSchema(attr, s, raftIndex, ts)
 }
 
 func hasEdges(attr string, startTs uint64) bool {
@@ -344,6 +372,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 			PrimaryAttr:   m.PrimaryAttr,
 			ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
 		}
+		txn = posting.Txns().GetOrCreate(txn)
 		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 		res.ctx = &protos.TxnContext{}
 		txn.Fill(res.ctx)
@@ -527,28 +556,24 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 	return &protos.Payload{}, e
 }
 
-func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
-	txn := pstore.NewTransactionAt(tc.StartTs, false)
-	defer txn.Discard()
-	tk := x.LockKey(posting.TxnKey, tc.StartTs)
-	item, err := txn.Get(tk)
-	if err == nil && item.Version() == tc.StartTs {
-		data, err := item.Value()
-		if err != nil {
-			return &protos.Payload{}, err
-		}
-		var prev protos.TxnContext
-		if err := prev.Unmarshal(data); err != nil {
-			return &protos.Payload{}, err
-		}
-		x.AssertTrue(prev.StartTs == tc.StartTs)
-		tc.Keys = append(tc.Keys, prev.Keys...)
+func commitOrAbort(ctx context.Context, tc *protos.TxnContext, index uint64) (*protos.Payload, error) {
+	n := groups().Node
+	n.Applied.WaitForMark(ctx, index-1)
+	txn := posting.Txns().Get(tc.StartTs)
+	if txn == nil {
+		return &protos.Payload{}, posting.ErrInvalidTxn
 	}
 	if tc.CommitTs == 0 {
-		err := posting.AbortMutations(ctx, tc, groups().ServesTablet(tc.Primary))
+		err := txn.AbortMutations(ctx)
+		if err != nil {
+			posting.Txns().Done(tc.StartTs)
+		}
 		return &protos.Payload{}, err
 	}
-	err = posting.CommitMutations(ctx, tc, groups().ServesTablet(tc.Primary))
+	err := txn.CommitMutations(ctx, tc.CommitTs, groups().ServesTablet(tc.Primary))
+	if err != nil {
+		posting.Txns().Done(tc.StartTs)
+	}
 	return &protos.Payload{}, err
 }
 
@@ -618,11 +643,13 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 		defer tr.Finish()
 	}
 
+	// TODO: Move txn creating from here to single place based on proposal.
 	txn := &posting.Txn{
 		StartTs:       m.StartTs,
 		PrimaryAttr:   m.PrimaryAttr,
 		ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
 	}
+	txn = posting.Txns().GetOrCreate(txn)
 	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 	txn.Fill(txnCtx)
 	return txnCtx, err
@@ -632,6 +659,13 @@ func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	if in.StartTs == 0 {
 		return in, x.Errorf("Invalid start timestamp")
 	}
+	in.CommitTs = 0
+	// check memory first
+	if tx := posting.Txns().Get(in.StartTs); tx != nil {
+		// Pending transaction.
+		return in, nil
+	}
+
 	txn := pstore.NewTransactionAt(in.StartTs, false)
 	defer txn.Discard()
 	item, err := txn.Get(x.LockKey(in.Primary, in.StartTs))
@@ -681,8 +715,16 @@ func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*pro
 }
 
 func fixConflicts(tctxs []*protos.TxnContext) {
-	// TODO: Probably deduplicate
+	// deduplicate fixConflict involves network call
+	sort.Slice(tctxs, func(i, j int) bool {
+		return tctxs[i].StartTs < tctxs[j].StartTs
+	})
+	var prevTs uint64
 	for _, tctx := range tctxs {
+		if tctx.StartTs == prevTs {
+			continue
+		}
+		prevTs = tctx.StartTs
 		fixConflict(tctx)
 	}
 }

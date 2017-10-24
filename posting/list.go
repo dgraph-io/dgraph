@@ -48,6 +48,7 @@ var (
 	// ErrNoValue would be returned if no value was found in the posting list.
 	ErrNoValue    = fmt.Errorf("No value found")
 	ErrInvalidTxn = fmt.Errorf("Invalid transaction")
+	errUncomitted = fmt.Errorf("Posting List has uncomitted data")
 	emptyPosting  = &protos.Posting{}
 	emptyList     = &protos.PostingList{}
 )
@@ -60,9 +61,8 @@ const (
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
 	bitUidPostings     byte = 0x01
-	bitCommitMarker         = 0x02
 	bitDeltaPosting         = 0x04
-	bitCompletePosting      = 0x08
+	BitCompletePosting      = 0x08
 )
 
 type List struct {
@@ -231,8 +231,14 @@ func (l *List) EstimatedSize() uint32 {
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
-func (l *List) SetForDeletion() {
+func (l *List) SetForDeletion() bool {
+	l.Lock()
+	defer l.Unlock()
+	if l.startTs > 0 {
+		return false
+	}
 	atomic.StoreInt32(&l.deleteMe, 1)
+	return true
 }
 
 // Ensure that you either abort the uncomitted postings or commit them before calling me.
@@ -370,14 +376,14 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		}
 		return false, ErrRetry
 	}
-	if txn.Aborted() != 0 {
+	if txn.HasConflict() {
 		return false, ErrConflict
 	}
 
 	if !l.canPreWrite(ctx, txn) {
 		pk := x.Parse(l.key)
 		fmt.Printf("Can't prewrite due to %+v. txnstart=%d\n", pk, txn.StartTs)
-		txn.Abort(&protos.TxnContext{StartTs: l.startTs, Primary: l.primaryAttr})
+		txn.AddConflict(&protos.TxnContext{StartTs: l.startTs, Primary: l.primaryAttr})
 		return false, ErrConflict
 	}
 
@@ -427,7 +433,6 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 
 func (l *List) canPreWrite(ctx context.Context, txn *Txn) bool {
 	if txn.StartTs < l.commitTs {
-		fmt.Printf("starts < committs")
 		return false
 	}
 	if l.startTs == 0 || l.startTs == txn.StartTs {
@@ -512,7 +517,12 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	l.startTs = 0
 	l.primaryAttr = ""
 	l.commitTs = commitTs
-	if len(l.mlayer) > 1000 {
+	// Calculate 5% of immutable layer
+	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
+	if numUids < 1000 {
+		numUids = 1000
+	}
+	if len(l.mlayer) > numUids {
 		l.syncIfDirty(false)
 	}
 	return nil
@@ -664,9 +674,9 @@ func doAsyncWrite(commitTs uint64, key []byte, data []byte, uidOnlyPosting bool,
 	defer txn.Discard()
 	var meta byte
 	if uidOnlyPosting {
-		meta = bitUidPostings
+		meta = meta | bitUidPostings
 	}
-	meta = meta | bitCompletePosting
+	meta = meta | BitCompletePosting
 	if err := txn.Set(key, data, meta); err != nil {
 		f(err)
 	}
@@ -689,8 +699,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		return false, nil
 	}
 	if l.startTs > 0 {
-		// TODO: Avoid merging
-		return true, nil
+		// Don't merge if there is pending transaction.
+		return false, errUncomitted
 	}
 
 	final := new(protos.PostingList)
@@ -752,9 +762,20 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
+	retries := 0
 	var f func(error)
 	f = func(err error) {
-		// TODO: Check for error.
+		if err != nil {
+			x.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
+			if retries > 5 {
+				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
+					l.key, err)
+			}
+			// Error from badger should be temporary, so we can retry.
+			retries += 1
+			doAsyncWrite(l.commitTs, l.key, data, uidOnlyPosting, f)
+			return
+		}
 		x.BytesWrite.Add(int64(len(data)))
 		x.PostingWrites.Add(1)
 		if delFromCache {
@@ -763,7 +784,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
-	doAsyncWrite(0, l.key, data, uidOnlyPosting, f)
+	doAsyncWrite(l.commitTs, l.key, data, uidOnlyPosting, f)
 	l.mlayer = l.mlayer[:0]
 	l.minTs = l.commitTs
 	if l.startTs == 0 {
@@ -917,7 +938,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *protos.Posti
 	var found bool
 	// last resort - return value with smallest lang Uid
 	if any {
-		// TODO: Return error here.
+		// TODO(txn): Return error here.
 		l.iterate(readTs, 0, func(p *protos.Posting) bool {
 			if postingType(p) == x.ValueMulti {
 				pos = p

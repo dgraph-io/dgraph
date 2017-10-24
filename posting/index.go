@@ -110,7 +110,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	key := x.IndexKey(edge.Attr, token)
 
 	t := time.Now()
-	plist := getOrMutate(key)
+	plist := Get(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("getOrMutate took %v", dur)
@@ -248,7 +248,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge,
 func (txn *Txn) addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
-	plist := getOrMutate(key)
+	plist := Get(key)
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
@@ -375,7 +375,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 	return nil
 }
 
-// TODO: Write commit markers also
 func deleteEntries(prefix []byte, readTs uint64) error {
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
@@ -386,13 +385,13 @@ func deleteEntries(prefix []byte, readTs uint64) error {
 	defer idxIt.Close()
 
 	var batchSize int
-	// TODO: Potentially use purge.
+	// TODO(txn): Potentially use purge.
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		key := idxIt.Item().Key()
 		data := make([]byte, len(key))
 		copy(data, key)
 		batchSize += len(key)
-		err := delTxn.Set(data, nil, 0x00)
+		err := delTxn.Set(data, nil, BitCompletePosting)
 		x.Check(err)
 
 		if batchSize >= maxBatchSize {
@@ -473,6 +472,7 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 	for i := 0; i < 1000; i++ {
 		go func() {
 			var err error
+			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
 			for it := range ch {
 				l := it.list
 				t := &protos.DirectedEdge{
@@ -480,9 +480,15 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				if err = txn.addCountMutation(ctx, t, uint32(l.Length(txn.StartTs, 0)), reverse); err != nil {
+				err = txn.addCountMutation(ctx, t, uint32(l.Length(txn.StartTs, 0)), reverse)
+				if err == nil {
+					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
+				}
+				if err != nil {
+					txn.AbortMutationsMemory(ctx)
 					break
 				}
+				txn.deltas = nil
 			}
 			che <- err
 		}()
@@ -501,10 +507,12 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 	it := t.NewIterator(iterOpts)
 	defer it.Close()
 	var prevKey []byte
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	it.Seek(prefix)
+	for it.ValidForPrefix(prefix) {
 		iterItem := it.Item()
 		key := iterItem.Key()
 		if bytes.Equal(key, prevKey) {
+			it.Next()
 			continue
 		}
 		nk := make([]byte, len(key))
@@ -512,10 +520,11 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
+			it.Next()
 			continue
 		}
 		// readPostingList advances the iterator until it finds complete pl
-		l, err := readPostingList(nk, it)
+		l, err := ReadPostingList(nk, it)
 		if err != nil {
 			errCh <- err
 			return
@@ -576,7 +585,7 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 	defer it.Close()
 
 	// Helper function - Add reverse entries for values in posting list
-	addReversePostings := func(uid uint64, pl *List) error {
+	addReversePostings := func(uid uint64, pl *List, txn *Txn) error {
 		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
 		var err error
 		pl.Iterate(txn.StartTs, 0, func(pp *protos.Posting) bool {
@@ -605,21 +614,29 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 	for i := 0; i < 1000; i++ {
 		go func() {
 			var err error
+			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
 			for it := range ch {
-				err = addReversePostings(it.uid, it.list)
+				err = addReversePostings(it.uid, it.list, txn)
+				if err == nil {
+					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
+				}
 				if err != nil {
+					txn.AbortMutationsMemory(ctx)
 					break
 				}
+				txn.deltas = nil
 			}
 			che <- err
 		}()
 	}
 
 	var prevKey []byte
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	it.Seek(prefix)
+	for it.ValidForPrefix(prefix) {
 		iterItem := it.Item()
 		key := iterItem.Key()
-		if !bytes.HasPrefix(key, prevKey) {
+		if bytes.Equal(key, prevKey) {
+			it.Next()
 			continue
 		}
 		nk := make([]byte, len(key))
@@ -627,9 +644,10 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
+			it.Next()
 			continue
 		}
-		l, err := readPostingList(nk, it)
+		l, err := ReadPostingList(nk, it)
 		if err != nil {
 			return err
 		}
@@ -665,8 +683,10 @@ func (txn *Txn) DeleteIndex(ctx context.Context, attr string) error {
 }
 
 // RebuildIndex rebuilds index for a given attribute.
-// Ignore for now
-// TODO: Commit the mutations immediately
+// We frequently commit mutations with startTs, on error if just abort the prewrites
+// present in memory, anything which made to disk due to lru eviction won't be rollbacked.
+// Error would be returned to the user so they can retry. Schema won't be updated on error
+// so these edges wont' be used for queries.
 func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 	// Add index entries to data store.
@@ -680,7 +700,7 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 	defer it.Close()
 
 	// Helper function - Add index entries for values in posting list
-	addPostingsToIndex := func(uid uint64, pl *List) error {
+	addPostingsToIndex := func(uid uint64, pl *List, txn *Txn) error {
 		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
 		var err error
 		pl.Iterate(txn.StartTs, 0, func(p *protos.Posting) bool {
@@ -712,21 +732,29 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 	for i := 0; i < 1000; i++ {
 		go func() {
 			var err error
+			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
 			for it := range ch {
-				err = addPostingsToIndex(it.uid, it.list)
+				err = addPostingsToIndex(it.uid, it.list, txn)
+				if err == nil {
+					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
+				}
 				if err != nil {
+					txn.AbortMutationsMemory(ctx)
 					break
 				}
+				txn.deltas = nil
 			}
 			che <- err
 		}()
 	}
 
 	var prevKey []byte
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	it.Seek(prefix)
+	for it.ValidForPrefix(prefix) {
 		iterItem := it.Item()
 		key := iterItem.Key()
-		if !bytes.Equal(key, prevKey) {
+		if bytes.Equal(key, prevKey) {
+			it.Next()
 			continue
 		}
 		nk := make([]byte, len(key))
@@ -734,9 +762,10 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
+			it.Next()
 			continue
 		}
-		l, err := readPostingList(nk, it)
+		l, err := ReadPostingList(nk, it)
 		if err != nil {
 			return err
 		}
@@ -809,14 +838,15 @@ func (txn *Txn) DeletePredicate(ctx context.Context, attr string) error {
 	}
 	if index == 0 {
 		// This function is called by cleaning thread(after predicate move)
-		return schema.State().Remove(attr)
+		return schema.State().Remove(attr, txn.StartTs)
 	}
 	if !s.Explicit {
 		// Delete predicate from schema.
 		se := schema.SyncEntry{
-			Attr:  attr,
-			Index: index,
-			Water: SyncMarks(),
+			Attr:    attr,
+			Index:   index,
+			Water:   SyncMarks(),
+			StartTs: txn.StartTs,
 			Schema: protos.SchemaUpdate{
 				Predicate: attr,
 				Directive: protos.SchemaUpdate_DELETE,

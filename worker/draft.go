@@ -110,17 +110,11 @@ func (p *proposals) Done(pid uint32, err error) {
 	}
 	delete(p.ids, pid)
 	go fixConflicts(pd.txn.Conflicts())
-	if err = pd.txn.WriteDeltas(); err != nil {
-		pd.err = err
-	}
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
 
-	// TODO(txn): We write deltas immediately so we can snapshot based on applied.
-	// For linearazibility we need to wait until transaction is committed or aborted.
-	// Probably don't need syncMarks.
 	pd.n.Applied.Done(pd.index)
 	posting.SyncMarks().Done(pd.index)
 }
@@ -360,7 +354,13 @@ func (n *node) processApplyCh() {
 				cnt:   1,
 			}
 			if proposal.Mutations != nil {
-				pctx.txn = &posting.Txn{StartTs: proposal.StartTs}
+				m := proposal.Mutations
+				txn := &posting.Txn{
+					StartTs:       m.StartTs,
+					PrimaryAttr:   m.PrimaryAttr,
+					ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
+				}
+				pctx.txn = posting.Txns().GetOrCreate(txn)
 			}
 			n.props.Store(proposal.Id, pctx)
 		} else {
@@ -379,29 +379,29 @@ func (n *node) processApplyCh() {
 		} else if len(proposal.CleanPredicate) > 0 {
 			go n.deletePredicate(e.Index, proposal.Id, proposal.CleanPredicate)
 		} else if proposal.TxnContext != nil {
-			go n.commitOrAbort(proposal.Id, proposal.TxnContext)
+			go n.commitOrAbort(e.Index, proposal.Id, proposal.TxnContext)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
 	}
 }
 
-func (n *node) commitOrAbort(pid uint32, tctx *protos.TxnContext) {
+func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) {
 	ctx, _ := n.props.CtxAndTxn(pid)
-	_, err := commitOrAbort(ctx, tctx)
+	_, err := commitOrAbort(ctx, tctx, index)
 	n.props.Done(pid, err)
 }
 
-// TODO: Pass timestamp
+// TODO(txn): Pass timestamp
 func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	ctx, txn := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
-	ctx = context.WithValue(n.ctx, "raft", rv)
+	ctx = context.WithValue(ctx, "raft", rv)
 	err := txn.DeletePredicate(ctx, predicate)
 	n.props.Done(pid, err)
 }
 
-// TODO: Pass timestamp
+// TODO(txn): Pass timestamp
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)

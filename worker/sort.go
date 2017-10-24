@@ -620,7 +620,6 @@ func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID,
 	// Don't put the values in memory
 	pl := posting.GetNoStore(x.DataKey(attr, uid))
 
-	// TODO(Txn): Pass read ts around
 	src, err := pl.ValueFor(readTs, langs)
 
 	if err != nil {
