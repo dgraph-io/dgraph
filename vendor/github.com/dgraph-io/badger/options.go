@@ -73,6 +73,10 @@ type Options struct {
 	// Number of compaction workers to run concurrently.
 	NumCompactors int
 
+	// Transaction start and commit timestamps are manaVgedTxns by end-user. This
+	// is a private option used by ManagedDB.
+	managedTxns bool
+
 	// 4. Flags for testing purposes
 	// ------------------------------
 	DoNotCompact bool // Stops LSM tree from compactions.

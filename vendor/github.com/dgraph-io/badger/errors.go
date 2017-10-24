@@ -70,16 +70,21 @@ var (
 
 	// ErrInvalidRequest is returned if the user request is invalid.
 	ErrInvalidRequest = errors.New("Invalid request")
+
+	// ErrManagedTxn is returned if the user tries to use an API which isn't
+	// allowed due to external management of transactions, when using ManagedDB.
+	ErrManagedTxn = errors.New(
+		"Invalid API request. Not allowed to perform this action using ManagedDB")
 )
 
 const maxKeySize = 1 << 20
 
 func exceedsMaxKeySizeError(key []byte) error {
-	return errors.Errorf("Key with size %d exceeded %dMB limit. Key:\n%s",
-		len(key), maxKeySize<<20, hex.Dump(key[:1<<10]))
+	return errors.Errorf("Key with size %d exceeded %dMiB limit. Key:\n%s",
+		len(key), maxKeySize>>20, hex.Dump(key[:1<<10]))
 }
 
 func exceedsMaxValueSizeError(value []byte, maxValueSize int64) error {
-	return errors.Errorf("Value with size %d exceeded ValueLogFileSize (%dMB). Key:\n%s",
-		len(value), maxValueSize<<20, hex.Dump(value[:1<<10]))
+	return errors.Errorf("Value with size %d exceeded ValueLogFileSize (%dMiB). Key:\n%s",
+		len(value), maxValueSize>>20, hex.Dump(value[:1<<10]))
 }
