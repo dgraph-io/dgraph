@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
-	"math"
 	"math/rand"
 	"os"
 	"path"
@@ -69,9 +68,8 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.PasswordID: "xs:string",
 }
 
-func toRDF(buf *bytes.Buffer, item kv) {
-	// TODO: Fix me
-	item.list.Iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
+func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
+	item.list.Iterate(readTs, 0, func(p *protos.Posting) bool {
 		buf.WriteString(item.prefix)
 		if !bytes.Equal(p.Value, nil) {
 			// Value posting
@@ -222,7 +220,7 @@ func export(bdir string, readTs uint64) error {
 			buf := new(bytes.Buffer)
 			buf.Grow(50000)
 			for item := range chkv {
-				toRDF(buf, item)
+				toRDF(buf, item, readTs)
 				if buf.Len() >= 40000 {
 					tmp := make([]byte, buf.Len())
 					copy(tmp, buf.Bytes())

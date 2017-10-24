@@ -251,6 +251,7 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *protos.Posting) bool {
 		atomic.StoreInt32(&l.markdeleteAll, 1)
 		return true
 	}
+	atomic.StoreInt32(&l.markdeleteAll, 0)
 
 	// First check the mutable layer.
 	midx := sort.Search(len(l.mlayer), func(idx int) bool {

@@ -138,8 +138,7 @@ func (l *loader) uid(val string) (string, error) {
 		return hex(uid), nil
 	}
 
-	// TODO: Fix me.
-	// Have a local map.
+	// TODO(txn): Fix me.
 	return fmt.Sprintf("%d", farm.Fingerprint64([]byte(val))), nil
 }
 

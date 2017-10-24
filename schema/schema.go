@@ -20,7 +20,6 @@ package schema
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"sync"
 
 	"github.com/dgraph-io/badger"
@@ -71,50 +70,33 @@ func (s *state) DeleteAll() {
 func (s *state) Update(se SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
-
 	s.predicate[se.Attr] = &se.Schema
 	se.Water.Begin(se.Index)
-	txn := pstore.NewTransactionAt(se.StartTs, true)
+	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	// TODO: Retry on errors
 	data, _ := se.Schema.Marshal()
 	x.Check(txn.Set(x.SchemaKey(se.Attr), data, 0x00))
-	txn.CommitAt(se.StartTs, func(err error) {
+	txn.CommitAt(1, func(err error) {
 		s.elog.Printf(logUpdate(se.Schema, se.Attr))
 		x.Printf(logUpdate(se.Schema, se.Attr))
 		se.Water.Done(se.Index)
 	})
+
 }
 
-// Delete updates the schema in memory and sends an entry to syncCh so that it can be
-// committed later
-func (s *state) Delete(se SyncEntry) {
+// Delete updates the schema in memory and disk
+func (s *state) Delete(attr string) error {
 	s.Lock()
 	defer s.Unlock()
 
-	delete(s.predicate, se.Attr)
-	se.Water.Begin(se.Index)
-	txn := pstore.NewTransactionAt(se.StartTs, true)
-	defer txn.Discard()
-	x.Check(txn.Set(x.SchemaKey(se.Attr), nil, 0x00))
-	txn.CommitAt(se.StartTs, func(err error) {
-		s.elog.Printf("Deleting schema for attr: %s", se.Attr)
-		x.Printf("Deleting schema for attr: %s", se.Attr)
-		se.Water.Done(se.Index)
-	})
-}
-
-// Remove deletes the schema from memory and disk. Used after predicate move to do
-// cleanup
-func (s *state) Remove(predicate string, startTs uint64) error {
-	s.Lock()
-	defer s.Unlock()
-
-	delete(s.predicate, predicate)
-	txn := pstore.NewTransactionAt(startTs, true)
-	defer txn.Discard()
-	x.Check(txn.Set(x.SchemaKey(predicate), nil, 0x00))
-	return txn.CommitAt(startTs, nil)
+	delete(s.predicate, attr)
+	txn := pstore.NewTransactionAt(1, true)
+	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
+		return err
+	}
+	// Delete is called rarely so sync write should be fine.
+	return txn.CommitAt(1, nil)
 }
 
 func logUpdate(schema protos.SchemaUpdate, pred string) string {
@@ -259,7 +241,7 @@ func Init(ps *badger.ManagedDB) {
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
 	prefix := x.SchemaPrefix()
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
 	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
 	defer itr.Close()
@@ -296,17 +278,8 @@ func reset() {
 
 // SyncEntry stores the schema mutation information
 type SyncEntry struct {
-	Attr    string
-	Schema  protos.SchemaUpdate
-	Water   *x.WaterMark
-	Index   uint64
-	StartTs uint64
-}
-
-func addToEntriesMap(entriesMap map[*x.WaterMark][]uint64, entries []SyncEntry) {
-	for _, entry := range entries {
-		if entry.Water != nil {
-			entriesMap[entry.Water] = append(entriesMap[entry.Water], entry.Index)
-		}
-	}
+	Attr   string
+	Schema protos.SchemaUpdate
+	Water  *x.WaterMark
+	Index  uint64
 }
