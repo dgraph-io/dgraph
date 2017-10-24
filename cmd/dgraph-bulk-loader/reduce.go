@@ -82,7 +82,7 @@ func (r *reducer) reduce(job shuffleOutput) {
 	outputPostingList()
 
 	NumBadgerWrites.Add(1)
-	x.Check(r.state.writeTs, txn.Commit(func(err error) {
+	x.Check(txn.CommitAt(r.state.writeTs, func(err error) {
 		x.Check(err)
 		NumBadgerWrites.Add(-1)
 		r.writesThr.Done()

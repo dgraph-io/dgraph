@@ -74,12 +74,12 @@ func newLoader(opt options) *loader {
 		opt:  opt,
 		prog: newProgress(),
 		up:   &zeroUidProvider{zero},
-		ss:   newSchemaStore(readSchema(opt.SchemaFile), opt),
 		sm:   newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:    getWriteTimestamp(zero),
 	}
+	st.ss = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
