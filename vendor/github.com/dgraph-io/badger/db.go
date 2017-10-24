@@ -55,9 +55,9 @@ type closers struct {
 type DB struct {
 	sync.RWMutex // Guards list of inmemory tables, not individual reads and writes.
 
-	dirLockGuard *DirectoryLockGuard
+	dirLockGuard *directoryLockGuard
 	// nil if Dir and ValueDir are the same
-	valueDirGuard *DirectoryLockGuard
+	valueDirGuard *directoryLockGuard
 
 	closers   closers
 	elog      trace.EventLog
@@ -187,25 +187,25 @@ func Open(opt Options) (db *DB, err error) {
 		return nil, err
 	}
 
-	dirLockGuard, err := AcquireDirectoryLock(opt.Dir, lockFile)
+	dirLockGuard, err := acquireDirectoryLock(opt.Dir, lockFile)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if dirLockGuard != nil {
-			_ = dirLockGuard.Release()
+			_ = dirLockGuard.release()
 		}
 	}()
-	var valueDirLockGuard *DirectoryLockGuard
+	var valueDirLockGuard *directoryLockGuard
 	if absValueDir != absDir {
-		valueDirLockGuard, err = AcquireDirectoryLock(opt.ValueDir, lockFile)
+		valueDirLockGuard, err = acquireDirectoryLock(opt.ValueDir, lockFile)
 		if err != nil {
 			return nil, err
 		}
 	}
 	defer func() {
 		if valueDirLockGuard != nil {
-			_ = valueDirLockGuard.Release()
+			_ = valueDirLockGuard.release()
 		}
 	}()
 	if !(opt.ValueLogFileSize <= 2<<30 && opt.ValueLogFileSize >= 1<<20) {
@@ -222,6 +222,7 @@ func Open(opt Options) (db *DB, err error) {
 	}()
 
 	orc := &oracle{
+		isManaged:      opt.managedTxns,
 		nextCommit:     1,
 		pendingCommits: make(map[uint64]struct{}),
 		commits:        make(map[uint64]uint64),
@@ -370,11 +371,11 @@ func (db *DB) Close() (err error) {
 
 	db.elog.Finish()
 
-	if guardErr := db.dirLockGuard.Release(); err == nil {
+	if guardErr := db.dirLockGuard.release(); err == nil {
 		err = errors.Wrap(guardErr, "DB.Close")
 	}
 	if db.valueDirGuard != nil {
-		if guardErr := db.valueDirGuard.Release(); err == nil {
+		if guardErr := db.valueDirGuard.release(); err == nil {
 			err = errors.Wrap(guardErr, "DB.Close")
 		}
 	}
@@ -403,7 +404,7 @@ const (
 // in order to guarantee the file is visible (if the system crashes).  (See the man page for fsync,
 // or see https://github.com/coreos/etcd/issues/6368 for an example.)
 func syncDir(dir string) error {
-	f, err := OpenDir(dir)
+	f, err := openDir(dir)
 	if err != nil {
 		return errors.Wrapf(err, "While opening directory: %s.", dir)
 	}
@@ -996,5 +997,17 @@ func (db *DB) RunValueLogGC(discardRatio float64) error {
 	if discardRatio >= 1.0 || discardRatio <= 0.0 {
 		return ErrInvalidRequest
 	}
-	return db.vlog.runGC(discardRatio)
+
+	headKey := y.KeyWithTs(head, math.MaxUint64)
+	// Need to pass with timestamp, lsm get removes the last 8 bytes and compares key
+	val, err := db.lc.get(headKey)
+	if err != nil {
+		return errors.Wrap(err, "Retrieving head from on-disk LSM")
+	}
+
+	var head valuePointer
+	if len(val.Value) > 0 {
+		head.Decode(val.Value)
+	}
+	return db.vlog.runGC(discardRatio, head)
 }

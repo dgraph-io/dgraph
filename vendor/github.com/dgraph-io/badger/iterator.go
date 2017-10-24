@@ -385,7 +385,7 @@ FILL:
 	// Reverse direction.
 	nextTs := y.ParseTs(mi.Key())
 	mik := y.ParseKey(mi.Key())
-	if nextTs <= it.readTs && bytes.Compare(mik, item.key) == 0 {
+	if nextTs <= it.readTs && bytes.Equal(mik, item.key) {
 		// This is a valid potential candidate.
 		goto FILL
 	}

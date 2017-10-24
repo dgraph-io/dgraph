@@ -1,8 +1,8 @@
-# Badger [![GoDoc](https://godoc.org/github.com/dgraph-io/badger?status.svg)](https://godoc.org/github.com/dgraph-io/badger) [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/badger)](https://goreportcard.com/report/github.com/dgraph-io/badger) [![Build Status](https://travis-ci.org/dgraph-io/badger.svg?branch=master)](https://travis-ci.org/dgraph-io/badger) ![Appveyor](https://ci.appveyor.com/api/projects/status/github/dgraph-io/badger?branch=master&svg=true) [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/badger/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/badger?branch=master)
+# BadgerDB [![GoDoc](https://godoc.org/github.com/dgraph-io/badger?status.svg)](https://godoc.org/github.com/dgraph-io/badger) [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/badger)](https://goreportcard.com/report/github.com/dgraph-io/badger) [![Build Status](https://travis-ci.org/dgraph-io/badger.svg?branch=master)](https://travis-ci.org/dgraph-io/badger) ![Appveyor](https://ci.appveyor.com/api/projects/status/github/dgraph-io/badger?branch=master&svg=true) [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/badger/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/badger?branch=master)
 
 ![Badger mascot](images/diggy-shadow.png)
 
-Badger is an embeddable, persistent, simple and fast key-value (KV) store
+BadgerDB is an embeddable, persistent, simple and fast key-value (KV) database
 written in pure Go. It's meant to be a performant alternative to non-Go-based
 key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
 
@@ -27,6 +27,7 @@ Go dependency tool you're using.
     + [Iterating over keys](#iterating-over-keys)
       - [Prefix scans](#prefix-scans)
       - [Key-only iteration](#key-only-iteration)
+    + [Garbage Collection](#garbage-collection)
     + [Database backups](#database-backups)
     + [Statistics](#statistics)
   * [Resources](#resources)
@@ -53,7 +54,7 @@ utility into your `$GOBIN` path.
 
 ### Opening a database
 The top-level object in Badger is a `DB`. It represents multiple files on disk
-in specific directories, which contain the data for a single store.
+in specific directories, which contain the data for a single database.
 
 To open your database, use the `badger.Open()` function, with the appropriate
 options. The `Dir` and `ValueDir` options are mandatory and must be
@@ -69,17 +70,17 @@ import (
 )
 
 func main() {
-  // Open the Badger store located in the /tmp/badger directory.
+  // Open the Badger database located in the /tmp/badger directory.
   // It will be created if it doesn't exist.
   opts := badger.DefaultOptions
-  opts.Dir := "/tmp/badger"
-  opts.ValueDir := "/tmp/badger"
+  opts.Dir = "/tmp/badger"
+  opts.ValueDir = "/tmp/badger"
   db, err := badger.Open(opts)
   if err != nil {
 	  log.Fatal(err)
   }
   defer db.Close()
-	…
+  // Your code here…
 }
 ```
 
@@ -93,8 +94,8 @@ To start a read-only transaction, you can use the `DB.View()` method:
 
 ```go
 err := db.View(func(tx *badger.Txn) error {
-	...
-	return nil
+  // Your code here…
+  return nil
 })
 ```
 
@@ -108,8 +109,8 @@ To start a read-write transaction, you can use the `DB.Update()` method:
 
 ```go
 err := db.Update(func(tx *badger.Txn) error {
-	...
-	return nil
+  // Your code here…
+  return nil
 })
 ```
 
@@ -127,8 +128,16 @@ execute a function, and then safely discard your transaction if an error is
 returned. This is the recommended way to use Badger transactions.
 
 However, sometimes you may want to manually create and commit your
-transactions. You can use the `DB.NewTransaction()` function directly but
-please be sure to commit or discard the transaction.
+transactions. You can use the `DB.NewTransaction()` function directly, which
+takes in a boolean argument to specify whether a read-write transaction is
+required. For read-write transactions, it is necessary to call `Txn,Commit()`
+to ensure the transaction is committed. For read-only transactions, calling
+`Txn.Discard()` is sufficient. `Txn.Commit()` also calls `Txn.Discard()`
+internally to cleanup the transaction, so just calling `Txn.Commit()` is
+sufficient for read-write transaction. However, if your code doesn’t call
+`Txn.Commit()` for some reason (for e.g it returns prematurely with an error),
+then please make sure you call `Txn.Discard()` in a `defer` block. Refer to the
+code below.
 
 ```go
 // Start a writable transaction.
@@ -136,7 +145,7 @@ txn, err := db.NewTransaction(true)
 if err != nil {
     return err
 }
-defer tx.Discard()
+defer txn.Discard()
 
 // Use the transaction...
 err := txn.Set([]byte("answer"), []byte("42"), 0)
@@ -259,7 +268,7 @@ field to `false`. This can also be used to do sparse reads for selected keys
 during an iteration, by calling `item.Value()` only when required.
 
 ```go
-err := db.View(func(txn *.Tx) error {
+err := db.View(func(txn *badger.Txn) error {
   opts := DefaultIteratorOptions
   opts.PrefetchValues = false
   it := txn.NewIterator(opts)
@@ -271,6 +280,32 @@ err := db.View(func(txn *.Tx) error {
   return nil
 })
 ```
+
+### Garbage Collection
+Badger values need to be garbage collected, because of two reasons:
+
+* Badger keeps values separately from the LSM tree. This means that the compaction operations
+that clean up the LSM tree do not touch the values at all. Values need to be cleaned up
+separately.
+
+* Concurrent read/write transactions could leave behind multiple values for a single key, because they
+are stored with different versions. These could accumulate, and take up unneeded space beyond the
+time these older versions are needed.
+
+Badger relies on the client to perform garbage collection at a time of their choosing. It provides
+the following methods, which can be invoked at an appropriate time:
+
+* `DB.PurgeOlderVersions()`: This method iterates over the database, and cleans up all but the latest
+versions of the key-value pairs. It marks the older versions as deleted, which makes them eligible for
+garbage collection.
+* `DB.PurgeVersionsBelow(key, ts)`: This method is useful to do a more targeted clean up of older versions
+of key-value pairs. You can specify a key, and a timestamp. All versions of the key older than the timestamp
+are marked as deleted, making them eligible for garbage collection.
+* `DB.RunValueLogGC()`: This method triggers a value log garbage collection for a single log file. There
+are no guarantees that a call would result in space reclamation. Every run would rewrite at most one log
+file. So, repeated calls may be necessary. Please ensure that you call the `DB.Purge…()` methods first
+before invoking this method.
+
 
 ### Database backup
 Database backup is an [open issue][bak-issue] for v1.0 and will be coming soon.
@@ -303,8 +338,8 @@ Go](https://open.dgraph.io/post/badger/)
 ## Design
 Badger was written with these design goals in mind:
 
-- Write a key-value store in pure Go.
-- Use latest research to build the fastest KV store for data sets spanning terabytes.
+- Write a key-value database in pure Go.
+- Use latest research to build the fastest KV database for data sets spanning terabytes.
 - Optimize for SSDs.
 
 Badger’s design is based on a paper titled _[WiscKey: Separating Keys from
@@ -316,7 +351,8 @@ Values in SSD-conscious Storage][wisckey]_.
 | Feature             | Badger                                       | RocksDB                       | BoltDB    |
 | -------             | ------                                       | -------                       | ------    |
 | Design              | LSM tree with value log                      | LSM tree only                 | B+ tree   |
-| High RW Performance | Yes                                          | Yes                           | No        |
+| High Read throughput | Yes                                          | No                           | Yes        |
+| High Write throughput | Yes                                          | Yes                           | No        |
 | Designed for SSDs   | Yes (with latest research <sup>1</sup>)      | Not specifically <sup>2</sup> | No        |
 | Embeddable          | Yes                                          | Yes                           | Yes       |
 | Sorted KV access    | Yes                                          | Yes                           | Yes       |
@@ -365,7 +401,7 @@ If you're using Badger with `SyncWrites=false`, then your writes might not be wr
 and won't get synced to disk immediately. Writes to LSM tree are done inmemory first, before they
 get compacted to disk. The compaction would only happen once `MaxTableSize` has been reached. So, if
 you're doing a few writes and then checking, you might not see anything on disk. Once you `Close`
-the store, you'll see these writes on disk.
+the database, you'll see these writes on disk.
 
 - **Which instances should I use for Badger?**
 

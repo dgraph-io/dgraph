@@ -1,5 +1,5 @@
 /*
-Package badger implements an embeddable, simple and fast key-value store,
+Package badger implements an embeddable, simple and fast key-value database,
 written in pure Go. It is designed to be highly performant for both reads and
 writes simultaneously. Badger uses Multi-Version Concurrency Control (MVCC), and
 supports transactions. It runs transactions concurrently, with serializable
