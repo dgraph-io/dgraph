@@ -35,9 +35,7 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool,
 	// Remove index edges
 	posting.DeleteIndex(ctx, attr)
 	if rebuild {
-		if err := txn.RebuildIndex(ctx, attr); err != nil {
-			return err
-		}
+		txn.RebuildIndex(ctx, attr)
 	}
 	return nil
 }

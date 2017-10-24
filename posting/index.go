@@ -673,7 +673,7 @@ func DeleteIndex(ctx context.Context, attr string) error {
 // present in memory, anything which made to disk due to lru eviction won't be rollbacked.
 // Error would be returned to the user so they can retry. Schema won't be updated on error
 // so these edges wont' be used for queries.
-func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
+func (txn *Txn) RebuildIndex(ctx context.Context, attr string) {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
@@ -686,7 +686,7 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 	defer it.Close()
 
 	// Helper function - Add index entries for values in posting list
-	addPostingsToIndex := func(uid uint64, pl *List, txn *Txn) error {
+	addPostingsToIndex := func(uid uint64, pl *List, txn *Txn) {
 		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
 		var err error
 		pl.Iterate(txn.StartTs, 0, func(p *protos.Posting) bool {
@@ -698,15 +698,16 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 			err = txn.addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
 			// We retry once in case we do GetLru and stop the world happens
 			// before we do addmutation
-			if err == ErrRetry {
+			// TODO: Try a few more times to add the mutation.
+			for err == ErrRetry {
+				time.Sleep(10 * time.Millisecond)
 				err = txn.addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
 			}
 			if err != nil {
-				return false
+				x.Printf("Error while adding index mutation: %v\n", err)
 			}
 			return true
 		})
-		return err
 	}
 
 	type item struct {
@@ -720,13 +721,10 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 			var err error
 			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
 			for it := range ch {
-				err = addPostingsToIndex(it.uid, it.list, txn)
-				if err == nil {
-					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
-				}
+				addPostingsToIndex(it.uid, it.list, txn)
+				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				if err != nil {
 					txn.AbortMutationsMemory(ctx)
-					break
 				}
 				txn.deltas = nil
 			}
@@ -753,7 +751,7 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 		}
 		l, err := ReadPostingList(nk, it)
 		if err != nil {
-			return err
+			continue
 		}
 
 		ch <- item{
@@ -764,10 +762,9 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 	close(ch)
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			return err
+			x.Printf("Error while committing: %v\n", err)
 		}
 	}
-	return nil
 }
 
 func DeleteAll(startTs uint64) error {

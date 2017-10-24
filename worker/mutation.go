@@ -90,7 +90,8 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
 func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
-	// Todo(txn):Fix conflicts, iterate over txnmap
+	// TODO(txn): Abort all the pending transactions here.
+	oldSchema, ok := schema.State().Get(update.Predicate)
 	if err := runSchemaMutationHelper(ctx, update, txn); err != nil {
 		return err
 	}
