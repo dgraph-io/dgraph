@@ -376,6 +376,9 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 		res.ctx = &protos.TxnContext{}
 		txn.Fill(res.ctx)
+		res.ctx.LinRead = &protos.LinRead{
+			Ids: make(map[uint32]uint64),
+		}
 		res.ctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
 		chr <- res
 		return
@@ -583,20 +586,11 @@ type res struct {
 	ctx *protos.TxnContext
 }
 
-func mergeLinPickMax(dst *protos.LinRead, src *protos.LinRead) {
-	for gid, sid := range src.Ids {
-		if did, has := dst.Ids[gid]; has && sid <= did {
-			// do nothing.
-		} else {
-			dst.Ids[gid] = sid
-		}
-	}
-}
-
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
 	tctx := &protos.TxnContext{StartTs: m.StartTs}
+	tctx.LinRead = &protos.LinRead{Ids: make(map[uint32]uint64)}
 	mutationMap := make(map[uint32]*protos.Mutations)
 	err := addToMutationMap(mutationMap, m)
 	tctx.Primary = m.PrimaryAttr
@@ -625,7 +619,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 				tr.LazyPrintf("Error while running all mutations: %+v", res.err)
 			}
 		}
-		mergeLinPickMax(tctx.LinRead, res.ctx.LinRead)
+		x.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
 		tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
 	}
 	close(resCh)

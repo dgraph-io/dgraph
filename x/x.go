@@ -324,11 +324,17 @@ func (b *BytesBuffer) TruncateBy(n int) {
 }
 
 func MergeLinReads(dst *protos.LinRead, src *protos.LinRead) {
-	for gid, pid := range src.Ids {
-		if v, has := dst.Ids[gid]; !has {
-			dst.Ids[gid] = pid
-		} else if pid < v {
-			dst.Ids[gid] = pid
+	if src == nil || src.Ids == nil {
+		return
+	}
+	if dst.Ids == nil {
+		dst.Ids = make(map[uint32]uint64)
+	}
+	for gid, sid := range src.Ids {
+		if did, has := dst.Ids[gid]; has && did >= sid {
+			// do nothing.
+		} else {
+			dst.Ids[gid] = sid
 		}
 	}
 }

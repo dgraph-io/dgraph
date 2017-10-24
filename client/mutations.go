@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/proto"
 )
 
 type Dgraph struct {
@@ -37,7 +38,8 @@ type Dgraph struct {
 	needTs []chan uint64
 	notify chan struct{}
 
-	state *protos.MembershipState
+	linRead *protos.LinRead
+	state   *protos.MembershipState
 }
 
 // TODO(tzdybal) - hide this function from users
@@ -58,9 +60,10 @@ func NewClient(clients []protos.DgraphClient) *Dgraph {
 // should not be shared unless the go routines negotiate exclusive assess to the Req functions).
 func NewDgraphClient(zero protos.ZeroClient, dc protos.DgraphClient) *Dgraph {
 	dg := &Dgraph{
-		zero:   zero,
-		dc:     []protos.DgraphClient{dc},
-		notify: make(chan struct{}, 1),
+		zero:    zero,
+		dc:      []protos.DgraphClient{dc},
+		notify:  make(chan struct{}, 1),
+		linRead: &protos.LinRead{},
 	}
 
 	go dg.fillTimestampRequests()
@@ -78,6 +81,18 @@ func (d *Dgraph) getTimestamp() uint64 {
 	default:
 	}
 	return <-ch
+}
+
+func (d *Dgraph) mergeLinRead(src *protos.LinRead) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	x.MergeLinReads(d.linRead, src)
+}
+
+func (d *Dgraph) getLinRead() *protos.LinRead {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return proto.Clone(d.linRead).(*protos.LinRead)
 }
 
 func (d *Dgraph) fillTimestampRequests() {

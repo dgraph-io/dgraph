@@ -597,6 +597,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	if err != nil {
 		return &emptyResult, err
 	}
+	out.LinRead = &protos.LinRead{Ids: make(map[uint32]uint64)}
 	out.LinRead.Ids[n.RaftContext.Group] = n.Applied.DoneUntil()
 	return out, nil
 }

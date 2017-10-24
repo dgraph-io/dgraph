@@ -146,6 +146,9 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 }
 
 func (n *Node) WaitForMinProposal(ctx context.Context, read *protos.LinRead) error {
+	if read == nil || read.Ids == nil {
+		return nil
+	}
 	gid := n.RaftContext.Group
 	min := read.Ids[gid]
 	return n.Applied.WaitForMark(ctx, min)
