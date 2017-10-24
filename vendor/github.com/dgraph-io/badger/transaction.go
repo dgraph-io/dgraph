@@ -332,7 +332,7 @@ func (txn *Txn) Discard() {
 // tree won't be updated, so there's no need for any rollback.
 func (txn *Txn) Commit(callback func(error)) error {
 	if txn.commitTs == 0 && txn.db.opt.managedTxns {
-		return ErrManagedTxn
+		panic("Cannot use Commit() for ManagedDB. Use CommitAt() instead.")
 	}
 	if txn.discarded {
 		return ErrDiscardedTxn

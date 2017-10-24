@@ -380,31 +380,16 @@ func deleteEntries(prefix []byte, readTs uint64) error {
 	iterOpt.PrefetchValues = false
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
-	delTxn := pstore.NewTransaction(true)
 	idxIt := txn.NewIterator(iterOpt)
 	defer idxIt.Close()
 
-	var batchSize int
-	// TODO(txn): Potentially use purge.
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
-		key := idxIt.Item().Key()
-		data := make([]byte, len(key))
-		copy(data, key)
-		batchSize += len(key)
-		err := delTxn.Set(data, nil, BitCompletePosting)
-		x.Check(err)
-
-		if batchSize >= maxBatchSize {
-			if err := delTxn.CommitAt(readTs, nil); err != nil {
-				return err
-			}
-			delTxn.Discard()
-			delTxn = pstore.NewTransaction(true)
-			batchSize = 0
+		item := idxIt.Item()
+		if err := pstore.PurgeVersionsBelow(item.Key(), item.Version()+1); err != nil {
+			return err
 		}
 	}
-	defer delTxn.Discard()
-	return delTxn.CommitAt(readTs, nil)
+	return nil
 }
 
 func compareAttrAndType(key []byte, attr string, typ byte) bool {

@@ -66,7 +66,7 @@ func (db *ManagedDB) NewTransactionAt(readTs uint64, update bool) *Txn {
 // can be ignored by most users.
 func (txn *Txn) CommitAt(commitTs uint64, callback func(error)) error {
 	if !txn.db.opt.managedTxns {
-		return ErrManagedTxn
+		panic("CommitAt() can only be used with ManagedDB. Use Commit() instead.")
 	}
 	txn.commitTs = commitTs
 	return txn.Commit(callback)

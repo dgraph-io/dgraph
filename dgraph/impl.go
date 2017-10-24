@@ -30,9 +30,9 @@ type inmemoryClient struct {
 	srv *Server
 }
 
-func (i *inmemoryClient) Run(ctx context.Context, in *protos.Request,
+func (i *inmemoryClient) Query(ctx context.Context, in *protos.Request,
 	_ ...grpc.CallOption) (*protos.Response, error) {
-	return i.srv.Run(ctx, in)
+	return i.srv.Query(ctx, in)
 }
 
 func (i *inmemoryClient) Mutate(ctx context.Context, in *protos.Mutation,

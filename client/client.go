@@ -56,7 +56,7 @@ func (txn *Txn) Query(ctx context.Context, q string,
 		LinRead: txn.linRead,
 	}
 	fmt.Printf("Sending request: %+v\n", req)
-	resp, err := txn.dg.run(ctx, req)
+	resp, err := txn.dg.query(ctx, req)
 	x.MergeLinReads(txn.linRead, resp.LinRead)
 	txn.dg.mergeLinRead(resp.LinRead)
 	fmt.Printf("txn lin read after query: %+v\n", txn.linRead)

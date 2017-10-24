@@ -70,6 +70,7 @@ var rdfTypeMap = map[types.TypeID]string{
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
+	// TODO: Fix me
 	item.list.Iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
 		buf.WriteString(item.prefix)
 		if !bytes.Equal(p.Value, nil) {
@@ -190,7 +191,7 @@ func writeToFile(fpath string, ch chan []byte) error {
 }
 
 // Export creates a export of data by exporting it as an RDF gzip.
-func export(bdir string) error {
+func export(bdir string, readTs uint64) error {
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)
 	if err != nil {
@@ -262,7 +263,7 @@ func export(bdir string) error {
 	}()
 
 	// Iterate over key-value store
-	txn := pstore.NewTransaction(false)
+	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
@@ -358,62 +359,47 @@ func export(bdir string) error {
 
 // TODO: How do we want to handle export for group, do we pause mutations, sync all and then export ?
 // TODO: Should we move export logic to dgraphzero?
-func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
+func handleExportForGroup(ctx context.Context, in *protos.ExportPayload) *protos.ExportPayload {
 	n := groups().Node
-	if gid == groups().groupId() && n != nil && n.AmLeader() {
+	if in.GroupId == groups().groupId() && n != nil && n.AmLeader() {
 		lastIndex, _ := n.Store.LastIndex()
 		n.syncAllMarks(n.ctx, lastIndex)
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Leader of group: %d. Running export.", gid)
+			tr.LazyPrintf("Leader of group: %d. Running export.", in.GroupId)
 		}
-		if err := export(Config.ExportPath); err != nil {
+		if err := export(Config.ExportPath, in.ReadTs); err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
-			return &protos.ExportPayload{
-				ReqId:  reqId,
-				Status: protos.ExportPayload_FAILED,
-			}
+			in.Status = protos.ExportPayload_FAILED
+			return in
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Export done for group: %d.", gid)
+			tr.LazyPrintf("Export done for group: %d.", in.GroupId)
 		}
-		return &protos.ExportPayload{
-			ReqId:   reqId,
-			Status:  protos.ExportPayload_SUCCESS,
-			GroupId: gid,
-		}
+		in.Status = protos.ExportPayload_SUCCESS
+		return in
 	}
 
-	pl := groups().Leader(gid)
+	pl := groups().Leader(in.GroupId)
 	if pl == nil {
 		// Unable to find any connection to any of these servers. This should be exceedingly rare.
 		// But probably not worthy of crashing the server. We can just skip the export.
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Unable to find a server to export group: %d", gid)
+			tr.LazyPrintf("Unable to find a server to export group: %d", in.GroupId)
 		}
-		return &protos.ExportPayload{
-			ReqId:   reqId,
-			Status:  protos.ExportPayload_FAILED,
-			GroupId: gid,
-		}
+		in.Status = protos.ExportPayload_FAILED
+		return in
 	}
 
 	c := protos.NewWorkerClient(pl.Get())
-	nr := &protos.ExportPayload{
-		ReqId:   reqId,
-		GroupId: gid,
-	}
-	nrep, err := c.Export(ctx, nr)
+	nrep, err := c.Export(ctx, in)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
-		return &protos.ExportPayload{
-			ReqId:   reqId,
-			Status:  protos.ExportPayload_FAILED,
-			GroupId: gid,
-		}
+		in.Status = protos.ExportPayload_FAILED
+		return in
 	}
 	return nrep
 }
@@ -435,7 +421,7 @@ func (w *grpcWorker) Export(ctx context.Context, req *protos.ExportPayload) (*pr
 
 	chb := make(chan *protos.ExportPayload, 1)
 	go func() {
-		chb <- handleExportForGroup(ctx, req.ReqId, req.GroupId)
+		chb <- handleExportForGroup(ctx, req)
 	}()
 
 	select {
@@ -446,7 +432,7 @@ func (w *grpcWorker) Export(ctx context.Context, req *protos.ExportPayload) (*pr
 	}
 }
 
-func ExportOverNetwork(ctx context.Context) error {
+func ExportOverNetwork(ctx context.Context, readTs uint64) error {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -467,8 +453,12 @@ func ExportOverNetwork(ctx context.Context) error {
 	ch := make(chan *protos.ExportPayload, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
-			reqId := uint64(rand.Int63())
-			ch <- handleExportForGroup(ctx, reqId, group)
+			req := &protos.ExportPayload{
+				ReqId:   uint64(rand.Int63()),
+				GroupId: group,
+				ReadTs:  readTs,
+			}
+			ch <- handleExportForGroup(ctx, req)
 		}(gid)
 	}
 

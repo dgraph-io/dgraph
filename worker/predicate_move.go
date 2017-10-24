@@ -20,6 +20,7 @@ package worker
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 
 	"golang.org/x/net/context"
@@ -42,7 +43,7 @@ func populateKeyValues(ctx context.Context, kvs []*protos.KV) error {
 	// single tablet.
 	groups().waitForBackgroundDeletion()
 	x.Printf("Writing %d keys\n", len(kvs))
-	txn := pstore.NewTransaction(true)
+	txn := pstore.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 	// Badger does batching internally so no need to batch it.
 	for _, kv := range kvs {
@@ -83,7 +84,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	}
 
 	// sends all data except schema, schema key has different prefix
-	txn := pstore.NewTransaction(false)
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()

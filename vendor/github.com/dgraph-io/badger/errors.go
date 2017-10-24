@@ -72,7 +72,7 @@ var (
 	ErrInvalidRequest = errors.New("Invalid request")
 
 	// ErrManagedTxn is returned if the user tries to use an API which isn't
-	// allowed due to external management of transactions, when using ManagedDB.
+	// allowed due toV external management of transactions, when using ManagedDB.
 	ErrManagedTxn = errors.New(
 		"Invalid API request. Not allowed to perform this action using ManagedDB")
 )
