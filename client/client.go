@@ -41,13 +41,14 @@ func (d *Dgraph) NewTxn() *Txn {
 	return txn
 }
 
-func (txn *Txn) Query(q string, vars map[string]string) (*protos.Response, error) {
+func (txn *Txn) Query(ctx context.Context, q string,
+	vars map[string]string) (*protos.Response, error) {
 	req := &protos.Request{
 		Query:   q,
 		Vars:    vars,
 		StartTs: txn.startTs,
 	}
-	return txn.dg.run(context.Background(), req)
+	return txn.dg.run(ctx, req)
 }
 
 func (txn *Txn) mergeContext(src *protos.TxnContext) error {
@@ -68,12 +69,12 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 	return nil
 }
 
-func (txn *Txn) Mutate(mu *protos.Mutation) (*protos.Assigned, error) {
+func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
 	mu.StartTs = txn.startTs
 	if txn.context != nil {
 		mu.Primary = txn.context.Primary
 	}
-	ag, err := txn.dg.mutate(context.Background(), mu)
+	ag, err := txn.dg.mutate(ctx, mu)
 	if ag != nil {
 		if err := txn.mergeContext(ag.Context); err != nil {
 			fmt.Printf("error while merging context: %v\n", err)
@@ -86,21 +87,21 @@ func (txn *Txn) Mutate(mu *protos.Mutation) (*protos.Assigned, error) {
 	return ag, err
 }
 
-func (txn *Txn) Abort() error {
+func (txn *Txn) Abort(ctx context.Context) error {
 	if txn.context == nil {
 		txn.context = &protos.TxnContext{StartTs: txn.startTs}
 	}
 	txn.context.CommitTs = 0
-	_, err := txn.dg.commitOrAbort(context.Background(), txn.context)
+	_, err := txn.dg.commitOrAbort(ctx, txn.context)
 	return err
 }
 
-func (txn *Txn) Commit() error {
+func (txn *Txn) Commit(ctx context.Context) error {
 	if txn.context == nil || len(txn.context.Primary) == 0 {
 		// If there were no mutations
 		return nil
 	}
 	txn.context.CommitTs = txn.dg.getTimestamp()
-	_, err := txn.dg.commitOrAbort(context.Background(), txn.context)
+	_, err := txn.dg.commitOrAbort(ctx, txn.context)
 	return err
 }
