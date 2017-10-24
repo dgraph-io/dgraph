@@ -36,7 +36,7 @@ func (r *reducer) reduce(job shuffleOutput) {
 	var currentKey []byte
 	var uids []uint64
 	pl := new(protos.PostingList)
-	txn := job.db.NewTransaction(true)
+	txn := job.db.NewTransactionAt(r.state.writeTs, true)
 
 	outputPostingList := func() {
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
