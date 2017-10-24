@@ -57,6 +57,7 @@ type state struct {
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
 	dbs        []*badger.DB
+	writeTS    uint64
 }
 
 type loader struct {
@@ -68,15 +69,16 @@ type loader struct {
 func newLoader(opt options) *loader {
 	zeroConn, err := grpc.Dial(opt.ZeroAddr, grpc.WithInsecure())
 	x.Check(err)
+	zero := protos.NewZeroClient(zeroConn)
 	st := &state{
 		opt:  opt,
 		prog: newProgress(),
-		up:   &zeroUidProvider{protos.NewZeroClient(zeroConn)},
+		up:   &zeroUidProvider{zero},
 		ss:   newSchemaStore(readSchema(opt.SchemaFile), opt),
 		sm:   newShardMap(opt.MapShards),
-
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
+		writeTS:    getWriteTimestamp(zero),
 	}
 	ld := &loader{
 		state:   st,
@@ -87,6 +89,14 @@ func newLoader(opt options) *loader {
 	}
 	go ld.prog.report()
 	return ld
+}
+
+func getWriteTimestamp(zero protos.ZeroClient) uint64 {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ts, err := zero.Timestamps(ctx, &protos.Num{Val: 1})
+	x.Check(err)
+	return ts.GetStartId()
 }
 
 func readSchema(filename string) []*protos.SchemaUpdate {
@@ -159,7 +169,7 @@ type zeroUidProvider struct {
 
 func (z *zeroUidProvider) ReserveUidRange() (start, end uint64, err error) {
 	// Use a very long timeout since a failed request is fatal.
-	ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	const uidChunk = 1e5
 	uids, err := z.client.AssignUids(ctx, &protos.Num{Val: uidChunk})
