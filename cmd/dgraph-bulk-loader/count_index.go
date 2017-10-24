@@ -17,7 +17,7 @@ type current struct {
 
 type countIndexer struct {
 	*state
-	db     *badger.DB
+	db     *badger.ManagedDB
 	cur    current
 	counts map[int][]uint64
 	wg     sync.WaitGroup
@@ -63,7 +63,7 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 			0x01,
 		))
 	}
-	x.Check(txn.Commit(nil))
+	x.Check(txn.CommitAt(c.state.writeTs, nil))
 	c.wg.Done()
 }
 

@@ -29,7 +29,7 @@ func (s *shuffler) run() {
 	thr := x.NewThrottle(s.opt.NumShufflers)
 	for i := 0; i < s.opt.ReduceShards; i++ {
 		thr.Start()
-		go func(i int, db *badger.DB) {
+		go func(i int, db *badger.ManagedDB) {
 			mapFiles := filenamesInTree(shardDirs[i])
 			shuffleInputChs := make([]chan *protos.MapEntry, len(mapFiles))
 			for i, mapFile := range mapFiles {
@@ -47,13 +47,13 @@ func (s *shuffler) run() {
 	close(s.output)
 }
 
-func (s *shuffler) createBadger(i int) *badger.DB {
+func (s *shuffler) createBadger(i int) *badger.ManagedDB {
 	opt := badger.DefaultOptions
 	opt.SyncWrites = false
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = s.opt.shardOutputDirs[i]
 	opt.ValueDir = opt.Dir
-	db, err := badger.Open(opt)
+	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 	s.dbs = append(s.dbs, db)
 	return db
