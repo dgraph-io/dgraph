@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"sync/atomic"
 
-	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -37,7 +36,7 @@ func (r *reducer) reduce(job shuffleOutput) {
 	var currentKey []byte
 	var uids []uint64
 	pl := new(protos.PostingList)
-	var entries []*badger.Entry
+	txn := job.kv.NewTransaction(true)
 
 	outputPostingList := func() {
 		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
@@ -47,17 +46,14 @@ func (r *reducer) reduce(job shuffleOutput) {
 		// list when the value is read by dgraph.  For a value posting list,
 		// the full protos.Posting type is used (which internally contains the
 		// delta packed UID list).
-		e := &badger.Entry{Key: currentKey}
 		if len(pl.Postings) == 0 {
-			e.Value = bp128.DeltaPack(uids)
-			e.UserMeta = 0x01
+			txn.Set(currentKey, bp128.DeltaPack(uids), 0x01)
 		} else {
 			pl.Uids = bp128.DeltaPack(uids)
-			var err error
-			e.Value, err = pl.Marshal()
+			val, err := pl.Marshal()
 			x.Check(err)
+			txn.Set(currentKey, val, 0x00)
 		}
-		entries = append(entries, e)
 
 		uids = uids[:0]
 		pl.Reset()
@@ -86,12 +82,9 @@ func (r *reducer) reduce(job shuffleOutput) {
 	outputPostingList()
 
 	NumBadgerWrites.Add(1)
-	job.kv.BatchSetAsync(entries, func(err error) {
+	x.Check(txn.Commit(func(err error) {
 		x.Check(err)
-		for _, e := range entries {
-			x.Check(e.Error)
-		}
 		NumBadgerWrites.Add(-1)
 		r.writesThr.Done()
-	})
+	}))
 }

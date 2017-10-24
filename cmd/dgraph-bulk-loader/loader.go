@@ -53,13 +53,13 @@ type state struct {
 	sm         *shardMap
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	kvs        []*badger.KV
+	kvs        []*badger.DB
 }
 
 type loader struct {
 	*state
 	mappers []*mapper
-	xidKV   *badger.KV
+	xidKV   *badger.DB
 }
 
 func newLoader(opt options) *loader {
@@ -167,7 +167,7 @@ func (ld *loader) mapStage() {
 	opt.Dir = xidDir
 	opt.ValueDir = xidDir
 	var err error
-	ld.xidKV, err = badger.NewKV(&opt)
+	ld.xidKV, err = badger.Open(opt)
 	x.Check(err)
 	ld.up = new(uidProvider)
 	ld.um = xidmap.New(ld.xidKV, ld.up, xidmap.Options{
@@ -243,7 +243,7 @@ func (ld *loader) writeLease() {
 }
 
 type shuffleOutput struct {
-	kv         *badger.KV
+	kv         *badger.DB
 	mapEntries []*protos.MapEntry
 }
 

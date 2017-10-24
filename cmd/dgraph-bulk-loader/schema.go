@@ -76,11 +76,13 @@ func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 	}
 }
 
-func (s *schemaStore) write(kv *badger.KV) {
+func (s *schemaStore) write(kv *badger.DB) {
+	txn := kv.NewTransaction(true)
 	for pred, sch := range s.m {
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
-		x.Check(kv.Set(k, v, 0x00))
+		x.Check(txn.Set(k, v, 0x00))
 	}
+	x.Check(txn.Commit(nil))
 }
