@@ -96,7 +96,7 @@ func (txn *Txn) Abort() error {
 }
 
 func (txn *Txn) Commit() error {
-	if txn.context == nil {
+	if txn.context == nil || len(txn.context.Primary) == 0 {
 		// If there were no mutations
 		return nil
 	}

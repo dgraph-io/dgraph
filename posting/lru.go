@@ -108,7 +108,9 @@ func (c *listCache) removeOldest() {
 	ele := c.ll.Back()
 	for c.curSize > c.MaxSize {
 		if ele == nil {
-			c.curSize = 0
+			if c.curSize < 0 {
+				c.curSize = 0
+			}
 			break
 		}
 		e := ele.Value.(*entry)

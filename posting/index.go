@@ -110,7 +110,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	key := x.IndexKey(edge.Attr, token)
 
 	t := time.Now()
-	plist := getOrMutate(key, txn.StartTs)
+	plist := Get(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("getOrMutate took %v", dur)
@@ -248,7 +248,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge,
 func (txn *Txn) addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
-	plist := getOrMutate(key, txn.StartTs)
+	plist := Get(key)
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
@@ -481,15 +481,14 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 					Op:      protos.DirectedEdge_SET,
 				}
 				err = txn.addCountMutation(ctx, t, uint32(l.Length(txn.StartTs, 0)), reverse)
+				if err == nil {
+					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
+				}
 				if err != nil {
 					txn.AbortMutationsMemory(ctx)
 					break
 				}
-				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
-				if err != nil {
-					txn.AbortMutationsMemory(ctx)
-					break
-				}
+				txn.deltas = nil
 			}
 			che <- err
 		}()
@@ -618,12 +617,9 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
 			for it := range ch {
 				err = addReversePostings(it.uid, it.list, txn)
-				if err != nil {
-					// Abort in memory
-					txn.AbortMutationsMemory(ctx)
-					break
+				if err == nil {
+					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				}
-				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				if err != nil {
 					txn.AbortMutationsMemory(ctx)
 					break
@@ -739,12 +735,9 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) error {
 			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
 			for it := range ch {
 				err = addPostingsToIndex(it.uid, it.list, txn)
-				if err != nil {
-					// Abort in memory
-					txn.AbortMutationsMemory(ctx)
-					break
+				if err == nil {
+					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				}
-				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				if err != nil {
 					txn.AbortMutationsMemory(ctx)
 					break

@@ -355,8 +355,12 @@ func (n *node) processApplyCh() {
 			}
 			if proposal.Mutations != nil {
 				m := proposal.Mutations
-				pctx.txn = posting.Txns().GetOrCreate(m.StartTs, m.PrimaryAttr,
-					groups().ServesTablet(m.PrimaryAttr))
+				txn := &posting.Txn{
+					StartTs:       m.StartTs,
+					PrimaryAttr:   m.PrimaryAttr,
+					ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
+				}
+				pctx.txn = posting.Txns().GetOrCreate(txn)
 			}
 			n.props.Store(proposal.Id, pctx)
 		} else {

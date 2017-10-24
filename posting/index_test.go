@@ -117,7 +117,12 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	txn := Txns().GetOrCreate(startTs, "primary", true)
+	txn := &Txn{
+		StartTs:       startTs,
+		PrimaryAttr:   "primary",
+		ServesPrimary: true,
+	}
+	txn = Txns().GetOrCreate(txn)
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {
@@ -246,7 +251,11 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      protos.DirectedEdge_SET,
 	}
-	txn := Txns().GetOrCreate(startTs, attr, true)
+	txn := Txn{
+		StartTs:       startTs,
+		PrimaryAttr:   attr,
+		ServesPrimary: true,
+	}
 	txn.addReverseMutation(context.Background(), edge)
 	require.NoError(t, txn.CommitMutations(context.Background(), commitTs, true))
 }
@@ -266,8 +275,14 @@ func TestRebuildIndex(t *testing.T) {
 	tx := &Txn{StartTs: 5}
 	require.NoError(t, tx.DeleteIndex(context.Background(), "name2"))
 	require.NoError(t, tx.RebuildIndex(context.Background(), "name2"))
-	// Allow for index keys to be touched
-	time.Sleep(time.Second)
+	CommitLists(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == "name2" {
+			return true
+		}
+		return false
+	})
+	time.Sleep(time.Second * 5)
 
 	// Check index entries in data store.
 	txn := ps.NewTransaction(false)
@@ -320,7 +335,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 		}
 		return false
 	})
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 5)
 
 	// Check index entries in data store.
 	txn := ps.NewTransaction(false)

@@ -79,21 +79,16 @@ func (t *transactions) Done(startTs uint64) {
 	delete(t.m, startTs)
 }
 
-func (t *transactions) GetOrCreate(startTs uint64, primary string, servesPrimary bool) *Txn {
-	if txn := t.Get(startTs); txn != nil {
+func (t *transactions) GetOrCreate(txn *Txn) *Txn {
+	if txn := t.Get(txn.StartTs); txn != nil {
 		return txn
 	}
 	t.Lock()
 	defer t.Unlock()
-	if txn := t.m[startTs]; txn != nil {
+	if txn := t.m[txn.StartTs]; txn != nil {
 		return txn
 	}
-	txn := &Txn{
-		StartTs:       startTs,
-		PrimaryAttr:   primary,
-		ServesPrimary: servesPrimary,
-	}
-	t.m[startTs] = txn
+	t.m[txn.StartTs] = txn
 	return txn
 }
 

@@ -367,8 +367,12 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 	if groups().ServesGroup(gid) {
 		node := groups().Node
 		// we don't timeout after proposing
-		txn := posting.Txns().GetOrCreate(m.StartTs, m.PrimaryAttr,
-			groups().ServesTablet(m.PrimaryAttr))
+		txn := &posting.Txn{
+			StartTs:       m.StartTs,
+			PrimaryAttr:   m.PrimaryAttr,
+			ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
+		}
+		txn = posting.Txns().GetOrCreate(txn)
 		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 		res.ctx = &protos.TxnContext{}
 		txn.Fill(res.ctx)
@@ -639,8 +643,13 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 		defer tr.Finish()
 	}
 
-	txn := posting.Txns().GetOrCreate(m.StartTs, m.PrimaryAttr,
-		groups().ServesTablet(m.PrimaryAttr))
+	// TODO: Move txn creating from here to single place based on proposal.
+	txn := &posting.Txn{
+		StartTs:       m.StartTs,
+		PrimaryAttr:   m.PrimaryAttr,
+		ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
+	}
+	txn = posting.Txns().GetOrCreate(txn)
 	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 	txn.Fill(txnCtx)
 	return txnCtx, err
@@ -650,6 +659,7 @@ func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	if in.StartTs == 0 {
 		return in, x.Errorf("Invalid start timestamp")
 	}
+	in.CommitTs = 0
 	// check memory first
 	if tx := posting.Txns().Get(in.StartTs); tx != nil {
 		// Pending transaction.
