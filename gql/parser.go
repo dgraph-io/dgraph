@@ -1479,6 +1479,9 @@ L:
 			if val == "" {
 				return nil, x.Errorf("Empty argument received")
 			}
+			if val == "uid" {
+				return nil, x.Errorf("Argument cannot be %q", val)
+			}
 
 			if isDollar {
 				val = "$" + val
