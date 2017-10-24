@@ -77,6 +77,7 @@ func TestTxnRead1(ctx context.Context, dg *client.Dgraph) {
 
 // readTs < commitTs
 func TestTxnRead2(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestTxnRead2")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
@@ -107,6 +108,7 @@ func TestTxnRead2(ctx context.Context, dg *client.Dgraph) {
 
 // readTs > commitTs
 func TestTxnRead3(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestTxnRead3")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
@@ -136,6 +138,7 @@ func TestTxnRead3(ctx context.Context, dg *client.Dgraph) {
 
 // readTs > commitTs
 func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestTxnRead4")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
@@ -162,6 +165,7 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
+	fmt.Println("Committing txn3")
 	x.Check(txn3.Commit(ctx))
 
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
@@ -182,6 +186,7 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 }
 
 func TestConflict(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestConflict")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
@@ -216,6 +221,7 @@ func TestConflict(ctx context.Context, dg *client.Dgraph) {
 }
 
 func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestConflictTimeout")
 	var uid uint64
 	{
 		txn := dg.NewTxn()

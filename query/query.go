@@ -155,6 +155,7 @@ type Function struct {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	ReadTs       uint64
+	LinRead      *protos.LinRead
 	Attr         string
 	Params       params
 	counts       []uint32
@@ -177,6 +178,16 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *protos.List
+}
+
+func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
+	set(sg)
+	for _, child := range sg.Children {
+		child.recurse(set)
+	}
+	for _, filter := range sg.Filters {
+		filter.recurse(set)
+	}
 }
 
 func (sg *SubGraph) IsGroupBy() bool {
@@ -623,13 +634,13 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	return key
 }
 
-func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph, readTs uint64) error {
+func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 	attrsSeen := make(map[string]struct{})
-	sg.ReadTs = readTs
+	// sg.ReadTs = readTs
 
 	for _, gchild := range gq.Children {
 		if sg.Params.Alias == "shortest" && gchild.Expand != "" {
@@ -739,7 +750,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph, readTs uint
 		}
 
 		sg.Children = append(sg.Children, dst)
-		if err := treeCopy(ctx, gchild, dst, readTs); err != nil {
+		if err := treeCopy(gchild, dst); err != nil {
 			return err
 		}
 	}
@@ -801,12 +812,15 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 }
 
 // ToSubGraph converts the GraphQuery into the internal SubGraph instance type.
-func ToSubGraph(ctx context.Context, gq *gql.GraphQuery, readTs uint64) (*SubGraph, error) {
+func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		return nil, err
 	}
-	err = treeCopy(ctx, gq, sg, readTs)
+	err = treeCopy(gq, sg)
+	if err != nil {
+		return nil, err
+	}
 	return sg, err
 }
 
@@ -962,6 +976,7 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 	}
 	out := &protos.Query{
 		ReadTs:       sg.ReadTs,
+		LinRead:      sg.LinRead,
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
@@ -1799,6 +1814,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.valueMatrix = result.ValueMatrix
 			sg.facetsMatrix = result.FacetMatrix
 			sg.counts = result.Counts
+			sg.LinRead = result.LinRead
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
@@ -2052,6 +2068,8 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
+		ReadTs:    sg.ReadTs,
+		LinRead:   sg.LinRead,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
@@ -2283,6 +2301,8 @@ type QueryRequest struct {
 	Subgraphs []*SubGraph
 
 	vars map[string]varValue
+
+	LinRead *protos.LinRead
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2304,10 +2324,14 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 			}
 			return err
 		}
-		sg, err := ToSubGraph(ctx, gq, req.ReadTs)
+		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
 			return err
 		}
+		sg.recurse(func(sg *SubGraph) {
+			sg.ReadTs = req.ReadTs
+			sg.LinRead = req.LinRead
+		})
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Query parsed")
 		}
@@ -2429,6 +2453,15 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 	if len(shortestSg) != 0 {
 		req.Subgraphs = append(req.Subgraphs, shortestSg...)
 	}
+
+	// Generate lin read response.
+	dst := &protos.LinRead{}
+	for _, sg := range req.Subgraphs {
+		sg.recurse(func(s *SubGraph) {
+			x.MergeLinReads(dst, s.LinRead)
+		})
+	}
+	req.LinRead = dst
 	return nil
 }
 
@@ -2450,6 +2483,7 @@ func (e *InternalError) Error() string {
 	return "internal error: " + e.err.Error()
 }
 
+// TODO: This looks unnecessary.
 type ExecuteResult struct {
 	Subgraphs  []*SubGraph
 	SchemaNode []*protos.SchemaNode

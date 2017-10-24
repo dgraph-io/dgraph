@@ -368,7 +368,6 @@ func (n *node) Run() {
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
-	go n.RunReadIndexLoop(closer, readStateCh)
 
 	for {
 		select {

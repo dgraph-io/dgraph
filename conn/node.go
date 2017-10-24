@@ -27,7 +27,6 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -46,9 +45,6 @@ type sendmsg struct {
 
 type Node struct {
 	x.SafeMutex
-
-	// Changed after init but not protected by SafeMutex
-	RequestCh chan linReadReq
 
 	// SafeMutex is for fields which can be changed after init.
 	_confState *raftpb.ConfState
@@ -97,32 +93,12 @@ func NewNode(rc *protos.RaftContext) *Node {
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
 		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
-		RequestCh:   make(chan linReadReq, 100),
 	}
 	n.Applied.Init()
 	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.
 	// This can happen once we get rid of groups.
 	n_ = n
 	return n
-}
-
-func (n *Node) WaitLinearizableRead(ctx context.Context) error {
-	replyCh, err := n.ReadIndex(ctx)
-	if err != nil {
-		return err
-	}
-	select {
-	case index := <-replyCh:
-		if index == raft.None {
-			return errReadIndex
-		}
-		if err := n.Applied.WaitForMark(ctx, index); err != nil {
-			return err
-		}
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }
 
 // SetRaft would set the provided raft.Node to this node.
@@ -167,6 +143,15 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
 	Get().Connect(addr)
 	n.peers[pid] = addr
+}
+
+func (n *Node) WaitForMinProposal(ctx context.Context, read *protos.LinRead) error {
+	if read == nil || read.Ids == nil {
+		return nil
+	}
+	gid := n.RaftContext.Group
+	min := read.Ids[gid]
+	return n.Applied.WaitForMark(ctx, min)
 }
 
 func (n *Node) Send(m raftpb.Message) {
@@ -354,80 +339,6 @@ func (n *Node) Connect(pid uint64, addr string) {
 	}
 	Get().Connect(addr)
 	n.peers[pid] = addr
-}
-
-type linReadReq struct {
-	// A one-shot chan which we send a raft index upon
-	indexCh chan<- uint64
-}
-
-func (n *Node) ReadIndex(ctx context.Context) (chan uint64, error) {
-	ch := make(chan uint64, 1)
-	select {
-	case n.RequestCh <- linReadReq{ch}:
-		return ch, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
-
-func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
-	defer closer.Done()
-	counter := x.NewNonceCounter()
-	requests := []linReadReq{}
-	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
-	// requestCh.
-	for {
-		select {
-		case <-closer.HasBeenClosed():
-			return
-		case <-readStateCh:
-			// Do nothing, discard ReadState info we don't have an activeRctx for
-		case req := <-n.RequestCh:
-		slurpLoop:
-			for {
-				requests = append(requests, req)
-				select {
-				case req = <-n.RequestCh:
-				default:
-					break slurpLoop
-				}
-			}
-			activeRctx := counter.Generate()
-			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
-			// successful response.  If we don't see one, the raft leader wasn't configured, or the
-			// raft leader didn't respond.
-
-			// This is supposed to use context.Background().  We don't want to cancel the timer
-			// externally.  We want equivalent functionality to time.NewTimer.
-			// TODO: Second is high, if a node gets partitioned we would have to throw error sooner.
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			// We ignore the err - it would be n.ctx cancellation (which we must ignore because
-			// it's our duty to continue until `stop` is triggered) or raft.ErrStopped (which we
-			// must ignore for the same reason).
-			_ = n.Raft().ReadIndex(ctx, activeRctx[:])
-		again:
-			select {
-			case <-closer.HasBeenClosed():
-				cancel()
-				return
-			case rs := <-readStateCh:
-				if 0 != bytes.Compare(activeRctx[:], rs.RequestCtx) {
-					goto again
-				}
-				cancel()
-				index := rs.Index
-				for _, req := range requests {
-					req.indexCh <- index
-				}
-			case <-ctx.Done():
-				for _, req := range requests {
-					req.indexCh <- raft.None
-				}
-			}
-			requests = requests[:0]
-		}
-	}
 }
 
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {

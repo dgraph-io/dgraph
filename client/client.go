@@ -28,6 +28,7 @@ import (
 type Txn struct {
 	startTs uint64
 	context *protos.TxnContext
+	linRead *protos.LinRead
 
 	dg *Dgraph
 }
@@ -37,7 +38,12 @@ func (d *Dgraph) NewTxn() *Txn {
 	txn := &Txn{
 		startTs: ts,
 		dg:      d,
+		linRead: d.getLinRead(),
 	}
+	if txn.linRead == nil {
+		txn.linRead = &protos.LinRead{}
+	}
+	fmt.Printf("New Txn linread: %+v\n\n", txn.linRead)
 	return txn
 }
 
@@ -47,14 +53,24 @@ func (txn *Txn) Query(ctx context.Context, q string,
 		Query:   q,
 		Vars:    vars,
 		StartTs: txn.startTs,
+		LinRead: txn.linRead,
 	}
-	return txn.dg.run(ctx, req)
+	fmt.Printf("Sending request: %+v\n", req)
+	resp, err := txn.dg.run(ctx, req)
+	x.MergeLinReads(txn.linRead, resp.LinRead)
+	txn.dg.mergeLinRead(resp.LinRead)
+	fmt.Printf("txn lin read after query: %+v\n", txn.linRead)
+	return resp, err
 }
 
 func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 	if src == nil {
 		return nil
 	}
+
+	x.MergeLinReads(txn.linRead, src.LinRead)
+	txn.dg.mergeLinRead(src.LinRead) // Also merge it with client.
+
 	if txn.context == nil {
 		txn.context = src
 		return nil
@@ -84,6 +100,7 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 			return ag, errors.New(ag.Error)
 		}
 	}
+	fmt.Printf("Got mutate context: %+v\n", ag.Context)
 	return ag, err
 }
 
