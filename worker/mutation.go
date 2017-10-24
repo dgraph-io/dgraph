@@ -376,6 +376,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 		res.ctx = &protos.TxnContext{}
 		txn.Fill(res.ctx)
+		res.ctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
 		chr <- res
 		return
 	}
@@ -582,6 +583,16 @@ type res struct {
 	ctx *protos.TxnContext
 }
 
+func mergeLinPickMax(dst *protos.LinRead, src *protos.LinRead) {
+	for gid, sid := range src.Ids {
+		if did, has := dst.Ids[gid]; has && sid <= did {
+			// do nothing.
+		} else {
+			dst.Ids[gid] = sid
+		}
+	}
+}
+
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
@@ -614,6 +625,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 				tr.LazyPrintf("Error while running all mutations: %+v", res.err)
 			}
 		}
+		mergeLinPickMax(tctx.LinRead, res.ctx.LinRead)
 		tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
 	}
 	close(resCh)
@@ -652,6 +664,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 	txn = posting.Txns().GetOrCreate(txn)
 	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
 	txn.Fill(txnCtx)
+	txnCtx.LinRead.Ids[m.GroupId] = node.Applied.DoneUntil()
 	return txnCtx, err
 }
 

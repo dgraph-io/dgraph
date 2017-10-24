@@ -372,6 +372,7 @@ message TxnContext {
 	uint64 start_ts = 3;
 	uint64 commit_ts = 4;
   bool aborted = 5;
+  LinRead lin_read = 13;
 }
 
 service Raft {
