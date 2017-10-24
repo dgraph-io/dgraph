@@ -18,6 +18,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"math/rand"
 	"sync"
@@ -78,7 +79,58 @@ type node struct {
 	server      *Server
 	ctx         context.Context
 	props       proposals
+	reads       map[uint64]chan uint64
 	subscribers map[uint32]chan struct{}
+}
+
+func (n *node) setRead(ch chan uint64) uint64 {
+	n.Lock()
+	defer n.Unlock()
+	if n.reads == nil {
+		n.reads = make(map[uint64]chan uint64)
+	}
+	for {
+		ri := uint64(rand.Int63())
+		if _, has := n.reads[ri]; has {
+			continue
+		}
+		n.reads[ri] = ch
+		return ri
+	}
+}
+
+func (n *node) sendReadIndex(ri, id uint64) {
+	n.Lock()
+	ch, has := n.reads[ri]
+	delete(n.reads, ri)
+	n.Unlock()
+	if has {
+		ch <- id
+	}
+}
+
+var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
+
+func (n *node) WaitLinearizableRead(ctx context.Context) error {
+	ch := make(chan uint64, 1)
+	ri := n.setRead(ch)
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], ri)
+	if err := n.Raft().ReadIndex(ctx, b[:]); err != nil {
+		return err
+	}
+	select {
+	case index := <-ch:
+		if index == raft.None {
+			return errReadIndex
+		}
+		if err := n.Applied.WaitForMark(ctx, index); err != nil {
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (n *node) RegisterForUpdates(ch chan struct{}) uint32 {
@@ -360,15 +412,10 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	// This chan could have capacity zero, because runReadIndexLoop never blocks without selecting
-	// on readStateCh.  It's 2 so that sending rarely blocks (so the Go runtime doesn't have to
-	// switch threads as much.)
-	readStateCh := make(chan raft.ReadState, 2)
 	closer := y.NewCloser(1)
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
-	go n.RunReadIndexLoop(closer, readStateCh)
 
 	for {
 		select {
@@ -377,7 +424,8 @@ func (n *node) Run() {
 
 		case rd := <-n.Raft().Ready():
 			for _, rs := range rd.ReadStates {
-				readStateCh <- rs
+				ri := binary.BigEndian.Uint64(rs.RequestCtx)
+				n.sendReadIndex(ri, rs.Index)
 			}
 			// First store the entries, then the hardstate and snapshot.
 			x.Check(n.Wal.Store(0, rd.HardState, rd.Entries))

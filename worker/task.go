@@ -68,7 +68,7 @@ func invokeNetworkRequest(
 	return f(ctx, c)
 }
 
-const backupRequestGracePeriod = 10 * time.Millisecond
+const backupRequestGracePeriod = time.Second
 
 // TODO: Cross-server cancellation as described in Jeff Dean's talk.
 func processWithBackupRequest(
@@ -583,7 +583,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	n := groups().Node
-	if err := n.WaitLinearizableRead(ctx); err != nil {
+	if err := n.WaitForMinProposal(ctx, q.LinRead); err != nil {
 		return &emptyResult, err
 	}
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it
@@ -593,7 +593,13 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	if !groups().ServesTablet(q.Attr) {
 		return &emptyResult, errUnservedTablet
 	}
-	return helpProcessTask(ctx, q, gid)
+	out, err := helpProcessTask(ctx, q, gid)
+	if err != nil {
+		return &emptyResult, err
+	}
+	out.LinRead = &protos.LinRead{Ids: make(map[uint32]uint64)}
+	out.LinRead.Ids[n.RaftContext.Group] = n.Applied.DoneUntil()
+	return out, nil
 }
 
 func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {

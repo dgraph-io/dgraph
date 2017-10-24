@@ -30,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos"
 	"golang.org/x/net/trace"
 )
 
@@ -320,4 +321,20 @@ func (b *BytesBuffer) TruncateBy(n int) {
 	b.off -= n
 	b.sz -= n
 	AssertTrue(b.off >= 0 && b.sz >= 0)
+}
+
+func MergeLinReads(dst *protos.LinRead, src *protos.LinRead) {
+	if src == nil || src.Ids == nil {
+		return
+	}
+	if dst.Ids == nil {
+		dst.Ids = make(map[uint32]uint64)
+	}
+	for gid, sid := range src.Ids {
+		if did, has := dst.Ids[gid]; has && did >= sid {
+			// do nothing.
+		} else {
+			dst.Ids[gid] = sid
+		}
+	}
 }

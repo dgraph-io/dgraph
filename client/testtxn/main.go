@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -37,21 +38,22 @@ func main() {
 	}
 	wg.Wait()
 
-	TestTxnRead1(dg)
-	TestTxnRead2(dg)
-	TestTxnRead3(dg)
-	TestTxnRead4(dg)
-	TestConflict(dg)
-	TestConflictTimeout(dg)
+	ctx := context.Background()
+	TestTxnRead1(ctx, dg)
+	TestTxnRead2(ctx, dg)
+	TestTxnRead3(ctx, dg)
+	TestTxnRead4(ctx, dg)
+	TestConflict(ctx, dg)
+	TestConflictTimeout(ctx, dg)
 }
 
 // readTs == startTs
-func TestTxnRead1(dg *client.Dgraph) {
+func TestTxnRead1(ctx context.Context, dg *client.Dgraph) {
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
-	assigned, err := txn.Mutate(mu)
+	assigned, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
@@ -64,22 +66,23 @@ func TestTxnRead1(dg *client.Dgraph) {
 	}
 
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
-	resp, err := txn.Query(q, nil)
+	resp, err := txn.Query(ctx, q, nil)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
-	x.Check(txn.Commit())
+	x.Check(txn.Commit(ctx))
 }
 
 // readTs < commitTs
-func TestTxnRead2(dg *client.Dgraph) {
+func TestTxnRead2(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestTxnRead2")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
-	assigned, err := txn.Mutate(mu)
+	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
@@ -92,10 +95,10 @@ func TestTxnRead2(dg *client.Dgraph) {
 	}
 
 	txn2 := dg.NewTxn()
-	x.Check(txn.Commit())
+	x.Check(txn.Commit(ctx))
 
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
-	resp, err := txn2.Query(q, nil)
+	resp, err := txn2.Query(ctx, q, nil)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
@@ -104,12 +107,13 @@ func TestTxnRead2(dg *client.Dgraph) {
 }
 
 // readTs > commitTs
-func TestTxnRead3(dg *client.Dgraph) {
+func TestTxnRead3(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestTxnRead3")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
-	assigned, err := txn.Mutate(mu)
+	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
@@ -121,10 +125,10 @@ func TestTxnRead3(dg *client.Dgraph) {
 		uid = u
 	}
 
-	x.Check(txn.Commit())
+	x.Check(txn.Commit(ctx))
 	txn = dg.NewTxn()
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
-	resp, err := txn.Query(q, nil)
+	resp, err := txn.Query(ctx, q, nil)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
@@ -133,12 +137,13 @@ func TestTxnRead3(dg *client.Dgraph) {
 }
 
 // readTs > commitTs
-func TestTxnRead4(dg *client.Dgraph) {
+func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestTxnRead4")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
-	assigned, err := txn.Mutate(mu)
+	assigned, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
@@ -150,20 +155,21 @@ func TestTxnRead4(dg *client.Dgraph) {
 		uid = u
 	}
 
-	x.Check(txn.Commit())
+	x.Check(txn.Commit(ctx))
 	txn2 := dg.NewTxn()
 
 	txn3 := dg.NewTxn()
 	mu = &protos.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Manish2\"}", uid))
-	assigned, err = txn3.Mutate(mu)
+	assigned, err = txn3.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
-	x.Check(txn3.Commit())
+	fmt.Println("Committing txn3")
+	x.Check(txn3.Commit(ctx))
 
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
-	resp, err := txn2.Query(q, nil)
+	resp, err := txn2.Query(ctx, q, nil)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
@@ -172,19 +178,20 @@ func TestTxnRead4(dg *client.Dgraph) {
 
 	txn4 := dg.NewTxn()
 	q = fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
-	resp, err = txn4.Query(q, nil)
+	resp, err = txn4.Query(ctx, q, nil)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish2\"}]}}")))
 }
 
-func TestConflict(dg *client.Dgraph) {
+func TestConflict(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestConflict")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
-	assigned, err := txn.Mutate(mu)
+	assigned, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
@@ -199,13 +206,13 @@ func TestConflict(dg *client.Dgraph) {
 	txn2 := dg.NewTxn()
 	mu = &protos.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Manish\"}", uid))
-	assigned, err = txn2.Mutate(mu)
+	assigned, err = txn2.Mutate(ctx, mu)
 	x.AssertTrue(err != nil)
 
-	x.Check(txn.Commit())
+	x.Check(txn.Commit(ctx))
 	txn = dg.NewTxn()
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
-	resp, err := txn.Query(q, nil)
+	resp, err := txn.Query(ctx, q, nil)
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
@@ -213,14 +220,15 @@ func TestConflict(dg *client.Dgraph) {
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
 }
 
-func TestConflictTimeout(dg *client.Dgraph) {
+func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestConflictTimeout")
 	var uid uint64
 	{
 		txn := dg.NewTxn()
 
 		mu := &protos.Mutation{}
 		mu.SetJson = []byte(`{"name": "Manish"}`)
-		assigned, err := txn.Mutate(mu)
+		assigned, err := txn.Mutate(ctx, mu)
 		if err != nil {
 			log.Fatalf("Error while running mutation: %v\n", err)
 		}
@@ -234,19 +242,19 @@ func TestConflictTimeout(dg *client.Dgraph) {
 
 	txn2 := dg.NewTxn()
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
-	resp, err := txn2.Query(q, nil)
+	resp, err := txn2.Query(ctx, q, nil)
 	x.Check(err)
 
-	resp, err = txn2.Query(q, nil)
+	resp, err = txn2.Query(ctx, q, nil)
 	x.Check(err)
 	fmt.Printf("Response should be empty. JSON: %q\n", resp.Json)
 
 	mu := &protos.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Jan the man\"}", uid))
-	_, err = txn2.Mutate(mu)
+	_, err = txn2.Mutate(ctx, mu)
 	fmt.Printf("txn2.mutate error: %v\n", err)
 	if err == nil {
-		x.Check(txn2.Commit())
+		x.Check(txn2.Commit(ctx))
 	}
 
 	// err = txn.Commit()
@@ -254,7 +262,7 @@ func TestConflictTimeout(dg *client.Dgraph) {
 
 	txn3 := dg.NewTxn()
 	q = fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
-	resp, err = txn3.Query(q, nil)
+	resp, err = txn3.Query(ctx, q, nil)
 	x.Check(err)
 	fmt.Printf("Final Response JSON: %q\n", resp.Json)
 }

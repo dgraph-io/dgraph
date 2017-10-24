@@ -268,30 +268,29 @@ type orderResult struct {
 
 func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error {
 	// SrcUids for other queries are all the uids present in the response of the first sort.
-	destUids := destUids(r.reply.UidMatrix)
+	dest := destUids(r.reply.UidMatrix)
 
 	// For each uid in dest uids, we have multiple values which belong to different attributes.
 	// 1  -> [ "Alice", 23, "1932-01-01"]
 	// 10 -> [ "Bob", 35, "1912-02-01" ]
-	sortVals := make([][]types.Val, len(destUids.Uids))
+	sortVals := make([][]types.Val, len(dest.Uids))
 	for idx := range sortVals {
 		sortVals[idx] = make([]types.Val, len(ts.Order))
 	}
 
-	seen := make(map[uint64]bool)
+	seen := make(map[uint64]struct{})
 	// Walk through the uidMatrix and put values for this attribute in sortVals.
 	for i, ul := range r.reply.UidMatrix {
 		x.AssertTrue(len(ul.Uids) == len(r.vals[i]))
 		for j, uid := range ul.Uids {
-			uidx := algo.IndexOf(destUids, uid)
+			uidx := algo.IndexOf(dest, uid)
 			x.AssertTrue(uidx >= 0)
 
-			if seen[uid] {
+			if _, ok := seen[uid]; ok {
 				// We have already seen this uid.
 				continue
 			}
-			seen[uid] = true
-
+			seen[uid] = struct{}{}
 			sortVals[uidx][0] = r.vals[i][j]
 		}
 	}
@@ -301,8 +300,9 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 	for i := 1; i < len(ts.Order); i++ {
 		in := &protos.Query{
 			Attr:    ts.Order[i].Attr,
-			UidList: destUids,
+			UidList: dest,
 			Langs:   ts.Order[i].Langs,
+			LinRead: ts.LinRead,
 		}
 		go fetchValues(ctx, in, i, och)
 	}
@@ -319,8 +319,8 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 		}
 
 		result := or.r
-		x.AssertTrue(len(result.ValueMatrix) == len(destUids.Uids))
-		for i, _ := range destUids.Uids {
+		x.AssertTrue(len(result.ValueMatrix) == len(dest.Uids))
+		for i, _ := range dest.Uids {
 			v := result.ValueMatrix[i].Values[0]
 			val := types.ValueForType(types.TypeID(v.ValType))
 			var sv types.Val
@@ -338,6 +338,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 			}
 			sortVals[i][or.idx] = sv
 		}
+		x.MergeLinReads(r.reply.LinRead, result.LinRead)
 	}
 
 	if oerr != nil {
@@ -353,7 +354,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 	for i, ul := range r.reply.UidMatrix {
 		vals := make([][]types.Val, len(ul.Uids))
 		for j, uid := range ul.Uids {
-			idx := algo.IndexOf(destUids, uid)
+			idx := algo.IndexOf(dest, uid)
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
@@ -379,15 +380,13 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 // iterating over the index.
 func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
 	n := groups().Node
-	if err := n.WaitLinearizableRead(ctx); err != nil {
+	if err := n.WaitForMinProposal(ctx, ts.LinRead); err != nil {
 		return &emptySortResult, err
 	}
-
 	if ts.Count < 0 {
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Order[0].Attr, ts.Count)
 	}
-
 	if schema.State().IsList(ts.Order[0].Attr) {
 		return nil, x.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Order[0].Attr)
 	}
@@ -423,9 +422,13 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		r = <-resCh
 	}
 
+	if r.err != nil {
+		return nil, r.err
+	}
+	r.reply.LinRead.Ids[n.RaftContext.Group] = n.Applied.DoneUntil()
 	// If request didn't have multiple attributes we return.
-	if !(len(ts.Order) > 1) {
-		return r.reply, r.err
+	if len(ts.Order) <= 1 {
+		return r.reply, nil
 	}
 
 	err := multiSort(ctx, r, ts)
@@ -433,13 +436,10 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 }
 
 func destUids(uidMatrix []*protos.List) *protos.List {
-	included := make(map[uint64]bool)
+	included := make(map[uint64]struct{})
 	for _, ul := range uidMatrix {
 		for _, uid := range ul.Uids {
-			if included[uid] {
-				continue
-			}
-			included[uid] = true
+			included[uid] = struct{}{}
 		}
 	}
 
