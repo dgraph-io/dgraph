@@ -53,13 +53,13 @@ type state struct {
 	sm         *shardMap
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	kvs        []*badger.DB
+	dbs        []*badger.DB
 }
 
 type loader struct {
 	*state
 	mappers []*mapper
-	xidKV   *badger.DB
+	xidDB   *badger.DB
 }
 
 func newLoader(opt options) *loader {
@@ -167,10 +167,10 @@ func (ld *loader) mapStage() {
 	opt.Dir = xidDir
 	opt.ValueDir = xidDir
 	var err error
-	ld.xidKV, err = badger.Open(opt)
+	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
 	ld.up = new(uidProvider)
-	ld.um = xidmap.New(ld.xidKV, ld.up, xidmap.Options{
+	ld.um = xidmap.New(ld.xidDB, ld.up, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})
@@ -226,7 +226,7 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	ld.writeLease()
-	x.Check(ld.xidKV.Close())
+	x.Check(ld.xidDB.Close())
 	ld.um = nil
 	runtime.GC()
 }
@@ -243,7 +243,7 @@ func (ld *loader) writeLease() {
 }
 
 type shuffleOutput struct {
-	kv         *badger.DB
+	db         *badger.DB
 	mapEntries []*protos.MapEntry
 }
 
@@ -265,14 +265,14 @@ func (ld *loader) reduceStage() {
 }
 
 func (ld *loader) writeSchema() {
-	for _, kv := range ld.kvs {
-		ld.ss.write(kv)
+	for _, db := range ld.dbs {
+		ld.ss.write(db)
 	}
 }
 
 func (ld *loader) cleanup() {
-	for _, kv := range ld.kvs {
-		x.Check(kv.Close())
+	for _, db := range ld.dbs {
+		x.Check(db.Close())
 	}
 	ld.prog.endSummary()
 }

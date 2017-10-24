@@ -29,7 +29,7 @@ func (s *shuffler) run() {
 	thr := x.NewThrottle(s.opt.NumShufflers)
 	for i := 0; i < s.opt.ReduceShards; i++ {
 		thr.Start()
-		go func(i int, kv *badger.DB) {
+		go func(i int, db *badger.DB) {
 			mapFiles := filenamesInTree(shardDirs[i])
 			shuffleInputChs := make([]chan *protos.MapEntry, len(mapFiles))
 			for i, mapFile := range mapFiles {
@@ -37,7 +37,7 @@ func (s *shuffler) run() {
 				go readMapOutput(mapFile, shuffleInputChs[i])
 			}
 
-			ci := &countIndexer{state: s.state, kv: kv}
+			ci := &countIndexer{state: s.state, db: db}
 			s.shufflePostings(shuffleInputChs, ci)
 			ci.wait()
 			thr.Done()
@@ -53,10 +53,10 @@ func (s *shuffler) createBadger(i int) *badger.DB {
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = s.opt.shardOutputDirs[i]
 	opt.ValueDir = opt.Dir
-	kv, err := badger.Open(opt)
+	db, err := badger.Open(opt)
 	x.Check(err)
-	s.kvs = append(s.kvs, kv)
-	return kv
+	s.dbs = append(s.dbs, db)
+	return db
 }
 
 func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
@@ -119,7 +119,7 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *coun
 		}
 
 		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
-			s.output <- shuffleOutput{mapEntries: batch, kv: ci.kv}
+			s.output <- shuffleOutput{mapEntries: batch, db: ci.db}
 			NumQueuedReduceJobs.Add(1)
 			batch = make([]*protos.MapEntry, 0, batchAlloc)
 		}
@@ -128,7 +128,7 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *coun
 		plistLen++
 	}
 	if len(batch) > 0 {
-		s.output <- shuffleOutput{mapEntries: batch, kv: ci.kv}
+		s.output <- shuffleOutput{mapEntries: batch, db: ci.db}
 		NumQueuedReduceJobs.Add(1)
 	}
 	if plistLen > 0 {
