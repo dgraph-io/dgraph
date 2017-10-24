@@ -43,8 +43,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -63,7 +61,6 @@ var (
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 100, "Number of RDF N-Quads to send as part of a mutation.")
 	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
-	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
 	blockRate  = flag.Int("block", 0, "Block profiling rate")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
@@ -142,6 +139,7 @@ func (l *loader) uid(val string) (string, error) {
 	}
 
 	// TODO: Fix me.
+	// Have a local map.
 	return fmt.Sprintf("%d", farm.Fingerprint64([]byte(val))), nil
 }
 
@@ -260,13 +258,6 @@ func fileList(files string) []string {
 }
 
 func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
-	x.Check(os.MkdirAll(*clientDir, 0700))
-	opt := badger.DefaultOptions
-	opt.SyncWrites = true // So that checkpoints are persisted immediately.
-	opt.TableLoadingMode = options.MemoryMap
-	opt.Dir = *clientDir
-	opt.ValueDir = *clientDir
-
 	l := &loader{
 		opts:  opts,
 		dc:    dc,

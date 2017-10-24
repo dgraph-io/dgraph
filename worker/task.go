@@ -1088,7 +1088,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 					q.SrcFunc)
 			}
 			// Get tokens ge / le ineqValueToken.
-			if tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f,
+			if tokens, fc.ineqValueToken, err = getInequalityTokens(q.ReadTs, attr, f,
 				fc.ineqValue); err != nil {
 				return nil, err
 			}
@@ -1490,7 +1490,7 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = cp.fn == "le" || cp.fn == "lt"
-	txn := pstore.NewTransaction(false)
+	txn := pstore.NewTransactionAt(cp.readTs, false)
 	defer txn.Discard()
 	it := txn.NewIterator(itOpt)
 	defer it.Close()

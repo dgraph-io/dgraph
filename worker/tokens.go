@@ -119,7 +119,8 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 
 // getInequalityTokens gets tokens ge / le compared to given token using the first sortable
 // index that is found for the predicate.
-func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string, error) {
+func getInequalityTokens(readTs uint64, attr, f string,
+	ineqValue types.Val) ([]string, string, error) {
 	tokenizer, err := pickTokenizer(attr, f)
 	if err != nil {
 		return nil, "", err
@@ -143,7 +144,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = !isgeOrGt
-	txn := pstore.NewTransaction(false)
+	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 	it := txn.NewIterator(itOpt)
 	defer it.Close()

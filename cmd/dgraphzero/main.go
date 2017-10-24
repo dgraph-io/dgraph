@@ -171,7 +171,7 @@ func main() {
 	kvOpt.Dir = *w
 	kvOpt.ValueDir = *w
 	kvOpt.TableLoadingMode = options.MemoryMap
-	kv, err := badger.Open(kvOpt)
+	kv, err := badger.OpenManaged(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 	wal := raftwal.Init(kv, *nodeId)

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"container/heap"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -44,6 +45,8 @@ func (u *uint64Heap) Pop() interface{} {
 }
 
 type oracle struct {
+	isManaged bool // Does not change value, so no locking required.
+
 	sync.Mutex
 	curRead    uint64
 	nextCommit uint64
@@ -77,6 +80,9 @@ func (o *oracle) decrRef() {
 }
 
 func (o *oracle) readTs() uint64 {
+	if o.isManaged {
+		return math.MaxUint64
+	}
 	return atomic.LoadUint64(&o.curRead)
 }
 
@@ -108,7 +114,7 @@ func (o *oracle) newCommitTs(txn *Txn) uint64 {
 	}
 
 	var ts uint64
-	if txn.commitTs == 0 {
+	if !o.isManaged {
 		// This is the general case, when user doesn't specify the read and commit ts.
 		ts = o.nextCommit
 		o.nextCommit++
@@ -116,13 +122,14 @@ func (o *oracle) newCommitTs(txn *Txn) uint64 {
 	} else {
 		// If commitTs is set, use it instead.
 		ts = txn.commitTs
-		if o.nextCommit <= ts { // Update this to max+1 commit ts, so replay works.
-			o.nextCommit = ts + 1
-		}
 	}
 
 	for _, w := range txn.writes {
 		o.commits[w] = ts // Update the commitTs.
+	}
+	if o.isManaged {
+		// No need to update the heap.
+		return ts
 	}
 	heap.Push(&o.commitMark, ts)
 	if _, has := o.pendingCommits[ts]; has {
@@ -133,6 +140,10 @@ func (o *oracle) newCommitTs(txn *Txn) uint64 {
 }
 
 func (o *oracle) doneCommit(cts uint64) {
+	if o.isManaged {
+		// No need to update anything.
+		return
+	}
 	o.Lock()
 	defer o.Unlock()
 
@@ -243,7 +254,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 
 	item = new(Item)
 	if txn.update {
-		if e, has := txn.pendingWrites[string(key)]; has && bytes.Compare(key, e.Key) == 0 {
+		if e, has := txn.pendingWrites[string(key)]; has && bytes.Equal(key, e.Key) {
 			// Fulfill from cache.
 			item.meta = e.Meta
 			item.val = e.Value
@@ -320,6 +331,9 @@ func (txn *Txn) Discard() {
 // If error is nil, the transaction is successfully committed. In case of a non-nil error, the LSM
 // tree won't be updated, so there's no need for any rollback.
 func (txn *Txn) Commit(callback func(error)) error {
+	if txn.commitTs == 0 && txn.db.opt.managedTxns {
+		panic("Cannot use Commit() for ManagedDB. Use CommitAt() instead.")
+	}
 	if txn.discarded {
 		return ErrDiscardedTxn
 	}
@@ -360,14 +374,6 @@ func (txn *Txn) Commit(callback func(error)) error {
 	return txn.db.batchSetAsync(entries, callback)
 }
 
-// CommitAt commits the transaction, following the same logic as Commit(), but at the given
-// commit timestamp. This API is only useful for databases built on top of Badger (like Dgraph), and
-// can be ignored by most users.
-func (txn *Txn) CommitAt(commitTs uint64, callback func(error)) error {
-	txn.commitTs = commitTs
-	return txn.Commit(callback)
-}
-
 // NewTransaction creates a new transaction. Badger supports concurrent execution of transactions,
 // providing serializable snapshot isolation, avoiding write skews. Badger achieves this by tracking
 // the keys read and at Commit time, ensuring that these read keys weren't concurrently modified by
@@ -401,18 +407,12 @@ func (db *DB) NewTransaction(update bool) *Txn {
 	return txn
 }
 
-// NewTransactionAt follows the same logic as NewTransaction, but uses the provided read timestamp.
-// This API is only useful for databases built on top of Badger (like Dgraph), and can be ignored by
-// most users.
-func (db *DB) NewTransactionAt(readTs uint64, update bool) *Txn {
-	txn := db.NewTransaction(update)
-	txn.readTs = readTs
-	return txn
-}
-
 // View executes a function creating and managing a read-only transaction for the user. Error
 // returned by the function is relayed by the View method.
 func (db *DB) View(fn func(txn *Txn) error) error {
+	if db.opt.managedTxns {
+		return ErrManagedTxn
+	}
 	txn := db.NewTransaction(false)
 	defer txn.Discard()
 
@@ -422,6 +422,9 @@ func (db *DB) View(fn func(txn *Txn) error) error {
 // Update executes a function, creating and managing a read-write transaction
 // for the user. Error returned by the function is relayed by the Update method.
 func (db *DB) Update(fn func(txn *Txn) error) error {
+	if db.opt.managedTxns {
+		return ErrManagedTxn
+	}
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
 

@@ -45,8 +45,8 @@ type ServerState struct {
 	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
 	ShutdownCh chan struct{} // channel to signal shutdown.
 
-	Pstore   *badger.DB
-	WALstore *badger.DB
+	Pstore   *badger.ManagedDB
+	WALstore *badger.ManagedDB
 
 	vlogTicker *time.Ticker
 }
@@ -65,7 +65,7 @@ func NewServerState() (state ServerState) {
 	return state
 }
 
-func (s *ServerState) runVlogGC(store *badger.DB) {
+func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
 	// TODO - Make this smarter later. Maybe get size of directories from badger and only run GC
 	// if size increases by more than 1GB.
 	for range s.vlogTicker.C {
@@ -83,7 +83,7 @@ func (s *ServerState) initStorage() {
 	kvOpt.TableLoadingMode = options.MemoryMap
 
 	var err error
-	s.WALstore, err = badger.Open(kvOpt)
+	s.WALstore, err = badger.OpenManaged(kvOpt)
 	x.Checkf(err, "Error while creating badger KV WAL store")
 
 	// Postings directory
@@ -104,7 +104,7 @@ func (s *ServerState) initStorage() {
 	default:
 		x.Fatalf("Invalid Posting Tables options")
 	}
-	s.Pstore, err = badger.Open(opt)
+	s.Pstore, err = badger.OpenManaged(opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	s.vlogTicker = time.NewTicker(10 * time.Minute)
 	go s.runVlogGC(s.Pstore)
@@ -210,7 +210,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	}
 
 	if Config.DebugMode {
-		x.Printf("Received query: %+v, mutation: %+v\n", req.Query, req.Mutation)
+		x.Printf("Received query: %+v\n", req.Query)
 	}
 	var l query.Latency
 	l.Start = time.Now()

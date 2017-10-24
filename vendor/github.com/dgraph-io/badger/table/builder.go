@@ -85,8 +85,8 @@ type Builder struct {
 // NewTableBuilder makes a new TableBuilder.
 func NewTableBuilder() *Builder {
 	return &Builder{
-		keyBuf:     newBuffer(32 << 20),
-		buf:        newBuffer(64 << 20),
+		keyBuf:     newBuffer(1 << 20),
+		buf:        newBuffer(1 << 20),
 		prevOffset: math.MaxUint32, // Used for the first element!
 	}
 }

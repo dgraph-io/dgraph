@@ -800,17 +800,24 @@ func valueBytesToEntry(buf []byte) (e entry) {
 	return
 }
 
-func (vlog *valueLog) pickLog() *logFile {
+func (vlog *valueLog) pickLog(head valuePointer) *logFile {
 	vlog.filesLock.RLock()
 	defer vlog.filesLock.RUnlock()
 	fids := vlog.sortedFids()
-	if len(fids) <= 1 {
+	if len(fids) <= 1 || head.Fid == 0 {
 		return nil
 	}
-	// This file shouldn't be being written to.
-	idx := rand.Intn(len(fids))
+
+	i := sort.Search(len(fids), func(i int) bool {
+		return fids[i] == head.Fid
+	})
+	if i == len(fids) {
+		return nil
+	}
+
+	idx := rand.Intn(i) // Don’t include head.Fid. We pick a random file before it.
 	if idx > 0 {
-		idx = rand.Intn(idx) // Another level of rand to favor smaller fids.
+		idx = rand.Intn(idx + 1) // Another level of rand to favor smaller fids.
 	}
 	return vlog.filesMap[fids[idx]]
 }
@@ -835,8 +842,8 @@ func discardEntry(e entry, vs y.ValueStruct) bool {
 	return false
 }
 
-func (vlog *valueLog) doRunGC(gcThreshold float64) error {
-	lf := vlog.pickLog()
+func (vlog *valueLog) doRunGC(gcThreshold float64, head valuePointer) error {
+	lf := vlog.pickLog(head)
 	if lf == nil {
 		return ErrNoRewrite
 	}
@@ -950,10 +957,10 @@ func (vlog *valueLog) waitOnGC(lc *y.Closer) {
 	vlog.garbageCh <- struct{}{}
 }
 
-func (vlog *valueLog) runGC(gcThreshold float64) error {
+func (vlog *valueLog) runGC(gcThreshold float64, head valuePointer) error {
 	select {
 	case vlog.garbageCh <- struct{}{}:
-		err := vlog.doRunGC(gcThreshold)
+		err := vlog.doRunGC(gcThreshold, head)
 		<-vlog.garbageCh
 		return err
 	default:
