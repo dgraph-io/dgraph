@@ -44,7 +44,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 		State().Set(update.Predicate, *update)
 	}
 	State().Set("_predicate_", protos.SchemaUpdate{
-		ValueType: uint32(types.StringID),
+		ValueType: protos.Posting_STRING,
 		List:      true,
 	})
 	return nil
@@ -118,7 +118,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 			return nil, x.Errorf("Unsupported type for list: [%s].", types.TypeID(t).Name())
 		}
 	}
-	schema.ValueType = uint32(t)
+	schema.ValueType = t.Enum()
 
 	// Check for index / reverse.
 	it.Next()

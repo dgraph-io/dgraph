@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -153,7 +152,7 @@ func (g *groupi) proposeInitialSchema() {
 	m.StartTs = 1
 	m.Schema = append(m.Schema, &protos.SchemaUpdate{
 		Predicate: x.PredicateListAttr,
-		ValueType: uint32(types.StringID),
+		ValueType: protos.Posting_STRING,
 		List:      true,
 	})
 
