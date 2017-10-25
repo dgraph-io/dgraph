@@ -710,7 +710,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 }
 
-var ps *badger.DB
+var ps *badger.ManagedDB
 
 func TestMain(m *testing.M) {
 	x.Init(true)
@@ -723,7 +723,7 @@ func TestMain(m *testing.M) {
 	opt := badger.DefaultOptions
 	opt.Dir = dir
 	opt.ValueDir = dir
-	ps, err = badger.Open(opt)
+	ps, err = badger.OpenManaged(opt)
 	x.Check(err)
 	Init(ps)
 	schema.Init(ps)
