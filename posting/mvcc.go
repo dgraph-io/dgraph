@@ -267,7 +267,7 @@ func unmarshalOrCopy(plist *protos.PostingList, item *badger.Item) error {
 		return nil
 	}
 	// Found complete pl, no needn't iterate more
-	if item.UserMeta()&bitUidPostings != 0 {
+	if item.UserMeta()&BitUidPosting != 0 {
 		plist.Uids = make([]byte, len(val))
 		copy(plist.Uids, val)
 	} else if len(val) > 0 {

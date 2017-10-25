@@ -487,7 +487,7 @@ func TestAddMutation_gru2(t *testing.T) {
 
 		merged, err := ol.SyncIfDirty(false)
 		ol.CommitMutation(context.Background(), 3, uint64(4))
-		require.Equal(t, err, errUncomitted)
+		require.Equal(t, err, errUncommitted)
 		require.False(t, merged)
 	}
 

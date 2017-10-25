@@ -110,6 +110,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		"-s", schemaFile,
 		"-d", ":"+s.liveCluster.dgraphPort,
 		"-z", ":"+s.liveCluster.zeroPort,
+		"-c=1", // use only 1 concurrent transaction to avoid txn conflicts
 	)
 	liveCmd.Dir = liveDir
 	liveCmd.Stdout = os.Stdout
@@ -149,7 +150,7 @@ func (s *suite) singleQuery(query, wantResult string) func(*testing.T) {
 
 func (s *suite) multiQuery(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
-		for i, cluster := range []*DgraphCluster{s.bulkCluster, s.liveCluster} {
+		for _, cluster := range []*DgraphCluster{s.bulkCluster, s.liveCluster} {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			txn := cluster.client.NewTxn()

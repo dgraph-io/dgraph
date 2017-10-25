@@ -6,6 +6,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -60,7 +61,7 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 		x.Check(txn.Set(
 			x.CountKey(pred, uint32(count), rev),
 			bp128.DeltaPack(uids),
-			0x01,
+			posting.BitCompletePosting|posting.BitUidPosting,
 		))
 	}
 	x.Check(txn.CommitAt(c.state.writeTs, nil))

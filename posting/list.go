@@ -46,11 +46,11 @@ var (
 	// In such a case, retry.
 	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue    = fmt.Errorf("No value found")
-	ErrInvalidTxn = fmt.Errorf("Invalid transaction")
-	errUncomitted = fmt.Errorf("Posting List has uncomitted data")
-	emptyPosting  = &protos.Posting{}
-	emptyList     = &protos.PostingList{}
+	ErrNoValue     = fmt.Errorf("No value found")
+	ErrInvalidTxn  = fmt.Errorf("Invalid transaction")
+	errUncommitted = fmt.Errorf("Posting List has uncommitted data")
+	emptyPosting   = &protos.Posting{}
+	emptyList      = &protos.PostingList{}
 )
 
 const (
@@ -60,9 +60,9 @@ const (
 	Del uint32 = 0x02
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
-	bitUidPostings     byte = 0x01
-	bitDeltaPosting         = 0x04
-	BitCompletePosting      = 0x08
+	BitUidPosting      byte = 0x01
+	bitDeltaPosting    byte = 0x04
+	BitCompletePosting byte = 0x08
 )
 
 type List struct {
@@ -675,7 +675,7 @@ func doAsyncWrite(commitTs uint64, key []byte, data []byte, uidOnlyPosting bool,
 	defer txn.Discard()
 	var meta byte
 	if uidOnlyPosting {
-		meta = meta | bitUidPostings
+		meta = meta | BitUidPosting
 	}
 	meta = meta | BitCompletePosting
 	if err := txn.Set(key, data, meta); err != nil {
@@ -701,7 +701,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	}
 	if l.startTs > 0 {
 		// Don't merge if there is pending transaction.
-		return false, errUncomitted
+		return false, errUncommitted
 	}
 
 	final := new(protos.PostingList)
@@ -798,7 +798,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 
 // Copies the val if it's uid only posting, be careful
 func UnmarshalOrCopy(val []byte, metadata byte, pl *protos.PostingList) {
-	if metadata == bitUidPostings {
+	if metadata == BitUidPosting {
 		buf := make([]byte, len(val))
 		copy(buf, val)
 		pl.Uids = buf
