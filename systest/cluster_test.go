@@ -8,7 +8,9 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc"
 )
 
 type DgraphCluster struct {
@@ -19,6 +21,8 @@ type DgraphCluster struct {
 	dir       string
 	zero      *exec.Cmd
 	dgraph    *exec.Cmd
+
+	client protos.DgraphClient
 }
 
 func NewDgraphCluster(dir string) *DgraphCluster {
@@ -57,6 +61,12 @@ func (d *DgraphCluster) Start() error {
 		return err
 	}
 
+	conn, err := grpc.Dial(d.grpcPort)
+	if err != nil {
+		return err
+	}
+	d.client = protos.NewDgraphClient(conn)
+
 	// Wait for dgraph to start accepting requests. TODO: Could do this
 	// programmatically by hitting the query port. This would be quicker than
 	// just waiting 4 seconds (which seems to be the smallest amount of time to
@@ -74,6 +84,9 @@ func (d *DgraphCluster) Close() {
 func (d *DgraphCluster) GRPCPort() string {
 	return d.grpcPort
 }
+
+//func (d *DgraphCluster) DropAll() error {
+//}
 
 func (d *DgraphCluster) Query(q string) (string, error) {
 	resp, err := http.Post("http://127.0.0.1:"+d.queryPort+"/query", "", bytes.NewBufferString(q))

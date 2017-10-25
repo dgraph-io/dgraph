@@ -47,6 +47,7 @@ func TestPlugins(t *testing.T) {
 	}
 	suite := func(setupQuery string, cases []testCase) {
 		for _, q := range []string{`mutation{dropall{}}`, setupQuery} {
+			t.Log("Runing query:", q)
 			resp, err := cluster.Query(q)
 			check(t, err)
 			if !strings.ContainsAny(resp, "Success") {
