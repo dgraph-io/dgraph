@@ -73,12 +73,13 @@ func newLoader(opt options) *loader {
 	st := &state{
 		opt:  opt,
 		prog: newProgress(),
-		up:   &zeroUidProvider{zero},
+		up:   &zeroUidProvider{client: zero, ch: make(chan uidRangeResponse, 10)},
 		sm:   newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:    getWriteTimestamp(zero),
 	}
+	go st.up.fetchUids()
 	st.ss = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
 		state:   st,
@@ -95,7 +96,7 @@ func getWriteTimestamp(zero protos.ZeroClient) uint64 {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	ts, err := zero.Timestamps(ctx, &protos.Num{Val: 1})
-	x.Check(err)
+	x.Check(x.Wrapf(err, "error communicating with dgraphzero, is it running?"))
 	return ts.GetStartId()
 }
 
@@ -163,17 +164,36 @@ func findRDFFiles(dir string) []string {
 	return files
 }
 
+type uidRangeResponse struct {
+	uids *protos.AssignedIds
+	err  error
+}
+
 type zeroUidProvider struct {
 	client protos.ZeroClient
+	ch     chan uidRangeResponse
+}
+
+func (z *zeroUidProvider) fetchUids() {
+	for {
+		// Use a very long timeout since a failed request is fatal.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		// Assuming a loading rate of 1M RDFs/sec, an upper bound on the number
+		// of UIDs we need to assign is 1M/sec. 100k uids per request results
+		// in an average 10 requests/sec to dgraphzero.
+		const uidChunk = 1e6
+		uids, err := z.client.AssignUids(ctx, &protos.Num{Val: uidChunk})
+		cancel()
+		z.ch <- uidRangeResponse{
+			uids: uids,
+			err:  x.Wrapf(err, "error communicating with dgraphzero, is it running?"),
+		}
+	}
 }
 
 func (z *zeroUidProvider) ReserveUidRange() (start, end uint64, err error) {
-	// Use a very long timeout since a failed request is fatal.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	const uidChunk = 1e5
-	uids, err := z.client.AssignUids(ctx, &protos.Num{Val: uidChunk})
-	return uids.GetStartId(), uids.GetEndId(), err
+	response := <-z.ch
+	return response.uids.GetStartId(), response.uids.GetEndId(), response.err
 }
 
 func (ld *loader) mapStage() {
