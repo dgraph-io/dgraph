@@ -452,7 +452,7 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 	return nil
 }
 
-func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error) {
+func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh chan struct{}) {
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
@@ -467,12 +467,15 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 					Op:      protos.DirectedEdge_SET,
 				}
 				err = txn.addCountMutation(ctx, t, uint32(l.Length(txn.StartTs, 0)), reverse)
+				for err == ErrRetry {
+					time.Sleep(10 * time.Millisecond)
+					err = txn.addCountMutation(ctx, t, uint32(l.Length(txn.StartTs, 0)), reverse)
+				}
 				if err == nil {
 					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				}
 				if err != nil {
 					txn.AbortMutationsMemory(ctx)
-					break
 				}
 				txn.deltas = nil
 			}
@@ -512,8 +515,7 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 		// readPostingList advances the iterator until it finds complete pl
 		l, err := ReadPostingList(nk, it)
 		if err != nil {
-			errCh <- err
-			return
+			continue
 		}
 
 		ch <- item{
@@ -522,34 +524,26 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 		}
 	}
 	close(ch)
-	var finalErr error
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			finalErr = err
+			x.Printf("Error while rebuilding count index %v\n", err)
 		}
 	}
-	errCh <- finalErr
+	doneCh <- struct{}{}
 }
 
-func (txn *Txn) RebuildCountIndex(ctx context.Context, attr string) error {
+func (txn *Txn) RebuildCountIndex(ctx context.Context, attr string) {
 	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
-	errCh := make(chan error, 2)
+	doneCh := make(chan struct{}, 2)
 	// Lets rebuild forward and reverse count indexes concurrently.
-	go txn.rebuildCountIndex(ctx, attr, false, errCh)
-	go txn.rebuildCountIndex(ctx, attr, true, errCh)
+	go txn.rebuildCountIndex(ctx, attr, false, doneCh)
+	go txn.rebuildCountIndex(ctx, attr, true, doneCh)
 
-	var rebuildErr error
 	for i := 0; i < 2; i++ {
 		select {
-		case err := <-errCh:
-			if err != nil {
-				rebuildErr = err
-			}
-		case <-ctx.Done():
-			rebuildErr = ctx.Err()
+		case <-doneCh:
 		}
 	}
-	return rebuildErr
 }
 
 type item struct {
@@ -558,7 +552,7 @@ type item struct {
 }
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
-func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
+func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
@@ -571,7 +565,7 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 	defer it.Close()
 
 	// Helper function - Add reverse entries for values in posting list
-	addReversePostings := func(uid uint64, pl *List, txn *Txn) error {
+	addReversePostings := func(uid uint64, pl *List, txn *Txn) {
 		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
 		var err error
 		pl.Iterate(txn.StartTs, 0, func(pp *protos.Posting) bool {
@@ -582,17 +576,15 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 			edge.Facets = pp.Facets
 			edge.Label = pp.Label
 			err = txn.addReverseMutation(ctx, &edge)
-			// We retry once in case we do GetLru and stop the world happens
-			// before we do addmutation
-			if err == ErrRetry {
+			for err == ErrRetry {
+				time.Sleep(10 * time.Millisecond)
 				err = txn.addReverseMutation(ctx, &edge)
 			}
 			if err != nil {
-				return false
+				x.Printf("Error while adding reverse mutation: %v\n", err)
 			}
 			return true
 		})
-		return err
 	}
 
 	ch := make(chan item, 10000)
@@ -602,13 +594,10 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 			var err error
 			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
 			for it := range ch {
-				err = addReversePostings(it.uid, it.list, txn)
-				if err == nil {
-					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
-				}
+				addReversePostings(it.uid, it.list, txn)
+				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				if err != nil {
 					txn.AbortMutationsMemory(ctx)
-					break
 				}
 				txn.deltas = nil
 			}
@@ -635,7 +624,7 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 		}
 		l, err := ReadPostingList(nk, it)
 		if err != nil {
-			return err
+			continue
 		}
 
 		ch <- item{
@@ -646,10 +635,9 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) error {
 	close(ch)
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			return err
+			x.Printf("Error while committing: %v\n", err)
 		}
 	}
-	return nil
 }
 
 func DeleteIndex(ctx context.Context, attr string) error {
@@ -669,10 +657,7 @@ func DeleteIndex(ctx context.Context, attr string) error {
 }
 
 // RebuildIndex rebuilds index for a given attribute.
-// We frequently commit mutations with startTs, on error if just abort the prewrites
-// present in memory, anything which made to disk due to lru eviction won't be rollbacked.
-// Error would be returned to the user so they can retry. Schema won't be updated on error
-// so these edges wont' be used for queries.
+// We commit mutations with startTs and ignore the errors.
 func (txn *Txn) RebuildIndex(ctx context.Context, attr string) {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 	// Add index entries to data store.
@@ -696,9 +681,6 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) {
 				Tid:   types.TypeID(p.ValType),
 			}
 			err = txn.addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
-			// We retry once in case we do GetLru and stop the world happens
-			// before we do addmutation
-			// TODO: Try a few more times to add the mutation.
 			for err == ErrRetry {
 				time.Sleep(10 * time.Millisecond)
 				err = txn.addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
