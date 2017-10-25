@@ -122,13 +122,6 @@ func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 func (t *Txn) fill(ctx *protos.TxnContext) {
 	ctx.StartTs = t.StartTs
 	ctx.Primary = t.PrimaryAttr
-	// TODO(txn): Fix commitOrAbort since we are no longer passing keys.
-}
-
-func (t *Txn) Fill(ctx *protos.TxnContext) {
-	t.Lock()
-	defer t.Unlock()
-	t.fill(ctx)
 }
 
 // TODO: Use commitAsync
@@ -210,6 +203,8 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 }
 
 func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error {
+	tx.Lock()
+	defer tx.Unlock()
 	return tx.commitMutationsMemory(ctx, commitTs)
 }
 
@@ -244,6 +239,8 @@ func (tx *Txn) AbortMutations(ctx context.Context) error {
 }
 
 func (tx *Txn) AbortMutationsMemory(ctx context.Context) error {
+	tx.Lock()
+	defer tx.Unlock()
 	return tx.abortMutationsMemory(ctx)
 }
 

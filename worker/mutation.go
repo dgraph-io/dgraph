@@ -61,7 +61,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 		if err = n.syncAllMarks(ctx, rv.Index-1); err != nil {
 			return err
 		}
-		if err = txn.DeletePredicate(ctx, edge.Attr); err != nil {
+		if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
 			return err
 		}
 		return nil
@@ -90,16 +90,11 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
 func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
-	oldSchema, ok := schema.State().Get(update.Predicate)
+	// TODO(txn): Abort all the pending transactions here.
 	if err := runSchemaMutationHelper(ctx, update, txn); err != nil {
-		// On error revert the schema state.
-		if ok {
-			schema.State().Set(update.Predicate, oldSchema)
-		} else {
-			schema.State().Remove(update.Predicate, txn.StartTs)
-		}
 		return err
 	}
+
 	// Flush to disk
 	posting.CommitLists(func(key []byte) bool {
 		pk := x.Parse(key)
@@ -108,8 +103,9 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *po
 		}
 		return false
 	})
+	// Write schema to disk.
 	rv := ctx.Value("raft").(x.RaftValue)
-	updateSchema(update.Predicate, *update, rv.Index, txn.StartTs)
+	updateSchema(update.Predicate, *update, rv.Index)
 	return nil
 }
 
@@ -213,18 +209,17 @@ func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
 	return false
 }
 
-func updateSchema(attr string, s protos.SchemaUpdate, index uint64, ts uint64) {
+func updateSchema(attr string, s protos.SchemaUpdate, index uint64) {
 	ce := schema.SyncEntry{
-		Attr:    attr,
-		Schema:  s,
-		Index:   index,
-		Water:   posting.SyncMarks(),
-		StartTs: ts,
+		Attr:   attr,
+		Schema: s,
+		Index:  index,
+		Water:  posting.SyncMarks(),
 	}
 	schema.State().Update(ce)
 }
 
-func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, ts uint64) {
+func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -233,7 +228,7 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, ts uint64
 	} else {
 		s = protos.SchemaUpdate{ValueType: uint32(typ)}
 	}
-	updateSchema(attr, s, raftIndex, ts)
+	updateSchema(attr, s, index)
 }
 
 func hasEdges(attr string, startTs uint64) bool {
@@ -367,15 +362,8 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 	if groups().ServesGroup(gid) {
 		node := groups().Node
 		// we don't timeout after proposing
-		txn := &posting.Txn{
-			StartTs:       m.StartTs,
-			PrimaryAttr:   m.PrimaryAttr,
-			ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
-		}
-		txn = posting.Txns().GetOrCreate(txn)
-		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
-		res.ctx = &protos.TxnContext{}
-		txn.Fill(res.ctx)
+		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
+		res.ctx = &protos.TxnContext{StartTs: m.StartTs, Primary: m.PrimaryAttr}
 		res.ctx.LinRead = &protos.LinRead{
 			Ids: make(map[uint32]uint64),
 		}
@@ -467,7 +455,7 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, src *protos.Muta
 func proposeOrSendTctx(ctx context.Context, gid uint32, tctx *protos.TxnContext) error {
 	if groups().ServesGroup(gid) {
 		node := groups().Node
-		return node.ProposeAndWait(ctx, &protos.Proposal{TxnContext: tctx}, nil)
+		return node.ProposeAndWait(ctx, &protos.Proposal{TxnContext: tctx})
 	}
 
 	pl := groups().Leader(gid)
@@ -628,7 +616,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 
 func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
 	node := groups().Node
-	err := node.ProposeAndWait(ctx, &protos.Proposal{TxnContext: tc}, nil)
+	err := node.ProposeAndWait(ctx, &protos.Proposal{TxnContext: tc})
 	return &protos.Payload{}, err
 }
 
@@ -649,15 +637,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 		defer tr.Finish()
 	}
 
-	// TODO: Move txn creating from here to single place based on proposal.
-	txn := &posting.Txn{
-		StartTs:       m.StartTs,
-		PrimaryAttr:   m.PrimaryAttr,
-		ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
-	}
-	txn = posting.Txns().GetOrCreate(txn)
-	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}, txn)
-	txn.Fill(txnCtx)
+	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
+	txnCtx.StartTs = m.StartTs
+	txnCtx.Primary = m.PrimaryAttr
 	txnCtx.LinRead.Ids[m.GroupId] = node.Applied.DoneUntil()
 	return txnCtx, err
 }

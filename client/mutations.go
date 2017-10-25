@@ -42,6 +42,10 @@ type Dgraph struct {
 	state   *protos.MembershipState
 }
 
+func (d *Dgraph) ZeroClient() protos.ZeroClient {
+	return d.zero
+}
+
 // TODO(tzdybal) - hide this function from users
 func NewClient(clients []protos.DgraphClient) *Dgraph {
 	d := &Dgraph{

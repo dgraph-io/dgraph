@@ -59,21 +59,8 @@ type proposals struct {
 func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
 	p.Lock()
 	defer p.Unlock()
-	if _, has := p.ids[pid]; has {
-		return false
-	}
 	p.ids[pid] = pctx
 	return true
-}
-
-func (p *proposals) SetIndex(pid uint32, index uint64) {
-	p.Lock()
-	defer p.Unlock()
-	pd, has := p.ids[pid]
-	x.AssertTrue(has)
-	pd.index = index
-	pd.cnt = 1
-	return
 }
 
 func (p *proposals) IncRef(pid uint32, count int) {
@@ -83,6 +70,12 @@ func (p *proposals) IncRef(pid uint32, count int) {
 	x.AssertTrue(has)
 	pd.cnt += count
 	return
+}
+
+func (p *proposals) pctx(pid uint32) *proposalCtx {
+	p.RLock()
+	defer p.RUnlock()
+	return p.ids[pid]
 }
 
 func (p *proposals) CtxAndTxn(pid uint32) (context.Context, *posting.Txn) {
@@ -191,7 +184,7 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal, txn *posting.Txn) error {
+func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")
 	}
@@ -238,8 +231,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal, tx
 		ch:  che,
 		ctx: ctx,
 		n:   n,
+		cnt: 1,
 	}
-	pctx.txn = txn
 	for {
 		id := rand.Uint32()
 		if n.props.Store(id, pctx) {
@@ -345,27 +338,28 @@ func (n *node) processApplyCh() {
 
 		// One final applied and synced watermark would be emitted when proposal ctx ref count
 		// becomes zero.
-		if !n.props.Has(proposal.Id) {
-			pctx := &proposalCtx{
-				ch:    make(chan error, 1),
-				ctx:   n.ctx,
-				n:     n,
-				index: e.Index,
-				cnt:   1,
+		pctx := n.props.pctx(proposal.Id)
+		if pctx == nil {
+			// This is during replay of logs after restart
+			pctx = &proposalCtx{
+				ch:  make(chan error, 1),
+				ctx: n.ctx,
+				n:   n,
+				cnt: 1,
 			}
-			if proposal.Mutations != nil {
-				m := proposal.Mutations
-				txn := &posting.Txn{
-					StartTs:       m.StartTs,
-					PrimaryAttr:   m.PrimaryAttr,
-					ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
-				}
-				pctx.txn = posting.Txns().GetOrCreate(txn)
-			}
-			n.props.Store(proposal.Id, pctx)
-		} else {
-			n.props.SetIndex(proposal.Id, e.Index)
 		}
+		if proposal.Mutations != nil {
+			m := proposal.Mutations
+			txn := &posting.Txn{
+				StartTs:       m.StartTs,
+				PrimaryAttr:   m.PrimaryAttr,
+				ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
+			}
+			pctx.txn = posting.Txns().GetOrCreate(txn)
+		}
+		pctx.index = e.Index
+		n.props.Store(proposal.Id, pctx)
+
 		if proposal.Mutations != nil {
 			n.sch.schedule(proposal, e.Index)
 		} else if len(proposal.Kv) > 0 {
@@ -392,16 +386,14 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) 
 	n.props.Done(pid, err)
 }
 
-// TODO(txn): Pass timestamp
 func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
-	ctx, txn := n.props.CtxAndTxn(pid)
+	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
-	err := txn.DeletePredicate(ctx, predicate)
+	err := posting.DeletePredicate(ctx, predicate)
 	n.props.Done(pid, err)
 }
 
-// TODO(txn): Pass timestamp
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)
