@@ -40,10 +40,25 @@ func main() {
 	wg.Wait()
 
 	ctx := context.Background()
+
+	op := &protos.Operation{}
+	op.Schema = `name: string @index(fulltext) .`
+	x.Check(dg.Alter(ctx, op))
+
 	TestTxnRead1(ctx, dg)
 	TestTxnRead2(ctx, dg)
+
+	op = &protos.Operation{}
+	op.DropAttr = "name"
+	x.Check(dg.Alter(ctx, op))
+
 	TestTxnRead3(ctx, dg)
 	TestTxnRead4(ctx, dg)
+
+	op = &protos.Operation{}
+	op.DropAll = true
+	x.Check(dg.Alter(ctx, op))
+
 	TestConflict(ctx, dg)
 	TestConflictTimeout(ctx, dg)
 	TestConflictTimeout2(ctx, dg)

@@ -410,7 +410,7 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func hasGraphOps(mu *protos.Mutation) bool {
-	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
+	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Set) > 0 || len(mu.Del) > 0
 }
 
 func bestEffortGopath() (string, bool) {

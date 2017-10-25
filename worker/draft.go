@@ -199,12 +199,6 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
-		if proposal.Mutations.StartTs == 0 {
-			return x.Errorf("StartTs cannot be zero.")
-		}
-		if len(proposal.Mutations.Edges) > 0 && len(proposal.Mutations.PrimaryAttr) == 0 {
-			return x.Errorf("Primary attribute cannot be empty.")
-		}
 		proposal.StartTs = proposal.Mutations.StartTs
 		for _, edge := range proposal.Mutations.Edges {
 			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
