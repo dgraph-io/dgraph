@@ -113,6 +113,9 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 
 	x.Check(m.kv.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(xid))
+		if err == badger.ErrKeyNotFound {
+			return nil
+		}
 		x.Check(err)
 		uidBuf, err := item.Value()
 		x.Check(err)

@@ -27,6 +27,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -344,6 +345,7 @@ func main() {
 		Pending:       *concurrent,
 		PrintCounters: true,
 		Ctx:           ctx,
+		MaxRetries:    math.MaxUint32,
 	}
 	zc := protos.NewZeroClient(connzero)
 	dc := protos.NewDgraphClient(conn)
