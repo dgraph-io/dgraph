@@ -298,6 +298,10 @@ func TestConflictTimeout2(ctx context.Context, dg *client.Dgraph) {
 
 	time.Sleep(time.Second * 15)
 
+	err = txn2.Commit(ctx)
+	x.AssertTrue(err != nil)
+	fmt.Printf("This txn commit should fail with error. Err got: %v\n", err)
+
 	txn3 := dg.NewTxn()
 	mu = &protos.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Jan the man\"}", uid))

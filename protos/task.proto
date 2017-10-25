@@ -193,7 +193,7 @@ message KV {
 	bytes key = 1;
 	bytes val = 2;
 	bytes userMeta = 3;
-	uint64 ts = 4;
+	uint64 version = 4;
 }
 
 message KC {

@@ -540,9 +540,7 @@ func (txn *Txn) RebuildCountIndex(ctx context.Context, attr string) {
 	go txn.rebuildCountIndex(ctx, attr, true, doneCh)
 
 	for i := 0; i < 2; i++ {
-		select {
-		case <-doneCh:
-		}
+		<-doneCh
 	}
 }
 

@@ -35,7 +35,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -132,17 +131,9 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	return err
 }
 
-func hex(uid uint64) string {
-	return fmt.Sprintf("%#x", uint64(uid))
-}
-
 func (l *loader) uid(val string) (string, error) {
-	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
-		return hex(uid), nil
-	}
-
 	uid, _, err := l.alloc.AssignUid(val)
-	return hex(uid), err
+	return fmt.Sprintf("%#x", uint64(uid)), err
 }
 
 func fileReader(file string) (io.Reader, *os.File) {
