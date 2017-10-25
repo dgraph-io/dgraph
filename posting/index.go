@@ -747,7 +747,7 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) {
 	}
 }
 
-func DeleteAll(startTs uint64) error {
+func DeleteAll() error {
 	if err := lcache.clear(func([]byte) bool { return true }); err != nil {
 		return err
 	}

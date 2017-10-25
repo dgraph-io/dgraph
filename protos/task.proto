@@ -408,9 +408,9 @@ service Worker {
 
 // Graph response.
 service Dgraph {
-  // TODO(mrjn): Rename it to Query.
-    rpc Query (Request)             returns (Response) {}
+    rpc Query (Request)           returns (Response) {}
     rpc Mutate (Mutation)         returns (Assigned) {}
+    rpc Alter (Operation)         returns (Payload) {}
     rpc CheckVersion(Check)       returns (Version) {}
     rpc AssignUids(Num)           returns (AssignedIds) {}
     rpc CommitOrAbort(TxnContext) returns (Payload) {}
@@ -460,16 +460,19 @@ message Value {
 }
 
 message Mutation {
-    bytes set_json = 1;
-    bytes delete_json = 2;
-    repeated SchemaUpdate schema = 3;
+  bytes set_json = 1;
+  bytes delete_json = 2;
+  repeated NQuad set = 3;
+  repeated NQuad del = 4;
 
-    string primary = 12;
-    uint64 start_ts = 13;
-    bool DropAll = 14;
+  string primary = 12;
+  uint64 start_ts = 13;
+}
 
-    repeated NQuad set = 15;
-    repeated NQuad del = 16;
+message Operation {
+  string schema = 1;
+  string drop_attr = 2;
+  bool drop_all = 3;
 }
 
 message Request {

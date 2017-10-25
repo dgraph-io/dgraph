@@ -18,6 +18,8 @@
 package worker
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -94,24 +96,23 @@ func (s *scheduler) register(t *task) bool {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
+func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error) {
+	defer func() {
+		s.n.props.Done(proposal.Id, err)
+		s.n.Applied.WaitForMark(context.Background(), index)
+	}()
+
 	if proposal.Mutations.DropAll {
-		if err := s.n.syncAllMarks(s.n.ctx, index-1); err != nil {
-			s.n.props.Done(proposal.Id, err)
+		if err = s.n.syncAllMarks(s.n.ctx, index-1); err != nil {
 			return err
 		}
 		schema.State().DeleteAll()
-		if err := posting.DeleteAll(proposal.StartTs); err != nil {
-			s.n.props.Done(proposal.Id, err)
-			return err
-		}
-		s.n.props.Done(proposal.Id, nil)
-		return nil
+		err = posting.DeleteAll()
+		return
 	}
 
 	// ensures that index is not mark completed until all tasks
 	// are submitted to scheduler
-	total := len(proposal.Mutations.Edges)
 	for _, supdate := range proposal.Mutations.Schema {
 		// This is neceassry to ensure that there is no race between when we start reading
 		// from badger and new mutation getting commited via raft and getting applied.
@@ -121,17 +122,11 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 		// would have proposed membershipstate, and all nodes would have the proposed state
 		// or some state after that before reaching here.
 		if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
-			s.n.props.Done(proposal.Id, errPredicateMoving)
-			return errPredicateMoving
+			err = errPredicateMoving
+			return
 		}
-		if err := s.n.processSchemaMutations(proposal.Id, index, supdate); err != nil {
-			s.n.props.Done(proposal.Id, err)
-			return err
-		}
-	}
-	if total == 0 {
-		s.n.props.Done(proposal.Id, nil)
-		return nil
+		err = s.n.processSchemaMutations(proposal.Id, index, supdate)
+		return
 	}
 
 	// Scheduler tracks tasks at subject, predicate level, so doing
@@ -145,14 +140,30 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-			s.n.props.Done(proposal.Id, errPredicateMoving)
-			return errPredicateMoving
+			err = errPredicateMoving
+			return
+		}
+		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+			// We should only have one edge drop in one mutation call.
+			ctx, _ := s.n.props.CtxAndTxn(proposal.Id)
+			if err = s.n.syncAllMarks(ctx, index-1); err != nil {
+				return
+			}
+			err = posting.DeletePredicate(ctx, edge.Attr)
+			return
 		}
 		if _, ok := schemaMap[edge.Attr]; !ok {
 			schemaMap[edge.Attr] = posting.TypeID(edge)
 		}
 	}
+	if proposal.StartTs == 0 {
+		return errors.New("StartTs must be provided.")
+	}
+	if len(proposal.Mutations.PrimaryAttr) == 0 {
+		return errors.New("Primary attribute must be provided.")
+	}
 
+	total := len(proposal.Mutations.Edges)
 	s.n.props.IncRef(proposal.Id, total)
 	x.ActiveMutations.Add(int64(total))
 	for attr, storageType := range schemaMap {
@@ -175,10 +186,9 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 			s.tch <- t
 		}
 	}
-	s.n.props.Done(proposal.Id, nil)
-	// Do proposals one by one.
-	s.n.Applied.WaitForMark(context.Background(), index)
-	return nil
+	err = nil
+	// Block until the above edges are applied.
+	return
 }
 
 func (s *scheduler) nextTask(t *task) *task {
