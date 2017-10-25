@@ -181,7 +181,7 @@ func (z *zeroUidFetcher) fetchUids() {
 		// Assuming a loading rate of 1M RDFs/sec, an upper bound on the number
 		// of UIDs we need to assign is 1M/sec. 100k uids per request results
 		// in an average 10 requests/sec to dgraphzero.
-		const uidChunk = 1e6
+		const uidChunk = 1e5
 		uids, err := z.client.AssignUids(ctx, &protos.Num{Val: uidChunk})
 		cancel()
 		z.ch <- uidRangeResponse{
