@@ -261,9 +261,9 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	resp.Json = json
 
 	gl := &protos.Latency{
-		Parsing:    l.Parsing.String(),
-		Processing: l.Processing.String(),
-		Encoding:   l.Json.String(),
+		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
+		ProcessingNs: uint64(l.Processing.Nanoseconds()),
+		EncodingNs:   uint64(l.Json.Nanoseconds()),
 	}
 
 	resp.Latency = gl
