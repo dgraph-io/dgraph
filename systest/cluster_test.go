@@ -92,11 +92,6 @@ func (d *DgraphCluster) Close() {
 	d.dgraph.Process.Kill()
 }
 
-// TODO: Rename. Or do we even need this at all?
-func (d *DgraphCluster) GRPCPort() string {
-	return d.dgraphPort
-}
-
 func (d *DgraphCluster) Query(q string) (string, error) {
 	//resp, err := http.Post("http://127.0.0.1:"+d.queryPort+"/query", "", bytes.NewBufferString(q))
 	//if err != nil {

@@ -22,7 +22,7 @@ func init() {
 	}
 	for _, name := range []string{
 		"dgraph-bulk-loader",
-		//"dgraph-live-loader", // TODO: Bring back once compiles
+		"dgraph-live-loader",
 		"dgraph",
 		"dgraphzero",
 	} {
@@ -91,17 +91,16 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	s.bulkCluster = NewDgraphCluster(bulkDir)
 	s.checkFatal(s.bulkCluster.Start())
 
-	// TODO: Bring back once compiles.
-	// s.liveCluster = NewDgraphCluster(liveDir)
-	// s.checkFatal(s.liveCluster.Start())
+	s.liveCluster = NewDgraphCluster(liveDir)
+	s.checkFatal(s.liveCluster.Start())
 
-	// liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-live-loader"), "-r", rdfFile,
-	// 	"-s", schemaFile, "-d", ":"+s.liveCluster.grpcPort, "-x=true")
-	// liveCmd.Dir = liveDir
-	// if out, err := liveCmd.CombinedOutput(); err != nil {
-	// 	s.cleanup()
-	// 	s.t.Fatalf("Live Loader didn't run: %v\nOutput:\n%s", err, string(out))
-	// }
+	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-live-loader"), "-r", rdfFile,
+		"-s", schemaFile, "-d", ":"+s.liveCluster.dgraphPort, "-x=true")
+	liveCmd.Dir = liveDir
+	if out, err := liveCmd.CombinedOutput(); err != nil {
+		s.cleanup()
+		s.t.Fatalf("Live Loader didn't run: %v\nOutput:\n%s", err, string(out))
+	}
 }
 
 func makeDirEmpty(dir string) error {
