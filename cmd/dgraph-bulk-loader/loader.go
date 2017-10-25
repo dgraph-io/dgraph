@@ -48,16 +48,16 @@ type options struct {
 }
 
 type state struct {
-	opt         options
-	prog        *progress
-	xids        *xidmap.XidMap
-	uidProvider *zeroUidProvider
-	schema      *schemaStore
-	shards      *shardMap
-	rdfChunkCh  chan *bytes.Buffer
-	mapFileId   uint32 // Used atomically to name the output files of the mappers.
-	dbs         []*badger.ManagedDB
-	writeTs     uint64 // All badger writes use this timestamp
+	opt        options
+	prog       *progress
+	xids       *xidmap.XidMap
+	uidFetcher *zeroUidFetcher
+	schema     *schemaStore
+	shards     *shardMap
+	rdfChunkCh chan *bytes.Buffer
+	mapFileId  uint32 // Used atomically to name the output files of the mappers.
+	dbs        []*badger.ManagedDB
+	writeTs    uint64 // All badger writes use this timestamp
 }
 
 type loader struct {
@@ -71,15 +71,15 @@ func newLoader(opt options) *loader {
 	x.Check(err)
 	zero := protos.NewZeroClient(zeroConn)
 	st := &state{
-		opt:         opt,
-		prog:        newProgress(),
-		uidProvider: &zeroUidProvider{client: zero, ch: make(chan uidRangeResponse)},
-		shards:      newShardMap(opt.MapShards),
+		opt:        opt,
+		prog:       newProgress(),
+		uidFetcher: &zeroUidFetcher{client: zero, ch: make(chan uidRangeResponse)},
+		shards:     newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:    getWriteTimestamp(zero),
 	}
-	go st.uidProvider.fetchUids()
+	go st.uidFetcher.fetchUids()
 	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
 		state:   st,
@@ -169,12 +169,12 @@ type uidRangeResponse struct {
 	err  error
 }
 
-type zeroUidProvider struct {
+type zeroUidFetcher struct {
 	client protos.ZeroClient
 	ch     chan uidRangeResponse
 }
 
-func (z *zeroUidProvider) fetchUids() {
+func (z *zeroUidFetcher) fetchUids() {
 	for {
 		// Use a very long timeout since a failed request is fatal.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -191,7 +191,7 @@ func (z *zeroUidProvider) fetchUids() {
 	}
 }
 
-func (z *zeroUidProvider) ReserveUidRange() (start, end uint64, err error) {
+func (z *zeroUidFetcher) ReserveUidRange() (start, end uint64, err error) {
 	response := <-z.ch
 	return response.uids.GetStartId(), response.uids.GetEndId(), response.err
 }
@@ -209,7 +209,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, ld.uidProvider, xidmap.Options{
+	ld.xids = xidmap.New(ld.xidDB, ld.uidFetcher, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})
@@ -273,7 +273,7 @@ func (ld *loader) mapStage() {
 func (ld *loader) writeLease() {
 	// Obtain a fresh uid range - since uids are allocated in increasing order,
 	// the start of the new range can be used as the lease.
-	lease, _, err := ld.uidProvider.ReserveUidRange()
+	lease, _, err := ld.uidFetcher.ReserveUidRange()
 	x.Check(err)
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%d\n", lease)
