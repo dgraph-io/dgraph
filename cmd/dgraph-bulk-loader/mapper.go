@@ -179,7 +179,7 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	}
 
 	fwd, rev := m.createPostings(nq, de)
-	shard := m.state.sm.shardFor(nq.Predicate)
+	shard := m.state.shards.shardFor(nq.Predicate)
 	key := x.DataKey(nq.Predicate, sid)
 	m.addMapEntry(key, fwd, shard)
 
@@ -198,7 +198,7 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid, isNew, err := m.um.AssignUid(xid)
+	uid, isNew, err := m.xids.AssignUid(xid)
 	x.Check(err)
 	if !isNew || !m.opt.StoreXids {
 		return uid
@@ -239,10 +239,10 @@ func (m *mapper) createPredicatePosting(predicate string) *protos.Posting {
 func (m *mapper) createPostings(nq gql.NQuad,
 	de *protos.DirectedEdge) (*protos.Posting, *protos.Posting) {
 
-	m.ss.validateType(de, nq.ObjectValue == nil)
+	m.schema.validateType(de, nq.ObjectValue == nil)
 
 	p := posting.NewPosting(de)
-	sch := m.ss.getSchema(nq.GetPredicate())
+	sch := m.schema.getSchema(nq.GetPredicate())
 	if nq.GetObjectValue() != nil {
 		if lang := de.GetLang(); len(lang) > 0 {
 			p.Uid = farm.Fingerprint64([]byte(lang))
@@ -262,7 +262,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	// Reverse predicate
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 	de.Entity, de.ValueId = de.ValueId, de.Entity
-	m.ss.validateType(de, true)
+	m.schema.validateType(de, true)
 	rp := posting.NewPosting(de)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
@@ -275,7 +275,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 		return // Cannot index UIDs
 	}
 
-	sch := m.ss.getSchema(nq.GetPredicate())
+	sch := m.schema.getSchema(nq.GetPredicate())
 
 	for _, tokerName := range sch.GetTokenizer() {
 
@@ -309,7 +309,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 					Uid:         de.GetEntity(),
 					PostingType: protos.Posting_REF,
 				},
-				m.state.sm.shardFor(nq.Predicate),
+				m.state.shards.shardFor(nq.Predicate),
 			)
 		}
 	}
