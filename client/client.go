@@ -100,7 +100,7 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 			return ag, errors.New(ag.Error)
 		}
 	}
-	fmt.Printf("Got mutate context: %+v\n", ag.Context)
+	fmt.Printf("Got mutate context: %+v\n", ag.GetContext())
 	return ag, err
 }
 
