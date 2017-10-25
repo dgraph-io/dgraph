@@ -60,8 +60,7 @@ func NewClient(clients []protos.DgraphClient) *Dgraph {
 // The client can be backed by multiple connections (to the same server, or multiple servers in a
 // cluster).
 //
-// A single client is thread safe for sharing with multiple go routines (though a single Req
-// should not be shared unless the go routines negotiate exclusive assess to the Req functions).
+// A single client is thread safe for sharing with multiple go routines.
 func NewDgraphClient(zero protos.ZeroClient, dc protos.DgraphClient) *Dgraph {
 	dg := &Dgraph{
 		zero:    zero,
@@ -150,96 +149,6 @@ func (d *Dgraph) CheckSchema(schema *protos.SchemaUpdate) error {
 	return nil
 }
 
-// func (d *Dgraph) SetSchemaBlocking(ctx context.Context, updates []*protos.SchemaUpdate) error {
-// 	for _, s := range updates {
-// 		if err := d.CheckSchema(s); err != nil {
-// 			return err
-// 		}
-// 		req := new(Req)
-// 		che := make(chan error, 1)
-// 		req.AddSchema(s)
-// 		go func() {
-// 			if _, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr); err != nil {
-// 				che <- err
-// 				return
-// 			}
-// 			che <- nil
-// 		}()
-
-// 		// blocking wait until schema is applied
-// 		select {
-// 		case <-ctx.Done():
-// 			return ctx.Err()
-// 		case err := <-che:
-// 			if err != nil {
-// 				return err
-// 			}
-// 		}
-// 	}
-
-// 	return nil
-// }
-
-// Run runs the request in req and returns with the completed response from the server.  Calling
-// Run has no effect on batched mutations.
-//
-// Mutations in the request are run before a query --- except when query variables link the
-// mutation and query (see for example NodeUidVar) when the query is run first.
-//
-// Run returns a protos.Response which has the following fields
-//
-// - L : Latency information
-//
-// - Schema : Result of a schema query
-//
-// - AssignedUids : a map[string]uint64 of blank node name to assigned UID (if the query string
-// contained a mutation with blank nodes)
-//
-// - N : Slice of *protos.Node returned by the query (Note: protos.Node not client.Node).
-//
-// There is an N[i], with Attribute "_root_", for each named query block in the query added to req.
-// The N[i] also have a slice of nodes, N[i].Children each with Attribute equal to the query name,
-// for every answer to that query block.  From there, the Children represent nested blocks in the
-// query, the Attribute is the edge followed and the Properties are the scalar edges.
-//
-// Print a response with
-// 	"github.com/gogo/protobuf/proto"
-// 	...
-// 	req.SetQuery(`{
-// 		friends(func: eq(name, "Alex")) {
-//			name
-//			friend {
-// 				name
-//			}
-//		}
-//	}`)
-// 	...
-// 	resp, err := dgraphClient.Run(context.Background(), &req)
-// 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
-// Outputs
-//	n: <
-//	  attribute: "_root_"
-//	  children: <
-//	    attribute: "friends"
-//	    properties: <
-//	      prop: "name"
-//	      value: <
-//	        str_val: "Alex"
-//	      >
-//	    >
-//	    children: <
-//	      attribute: "friend"
-//	      properties: <
-//	        prop: "name"
-//	        value: <
-//	          str_val: "Chris"
-//	        >
-//	      >
-//	    >
-//	...
-//
-// It's often easier to unpack directly into a struct with Unmarshal, than to
-// step through the response.
 func (d *Dgraph) query(ctx context.Context, req *protos.Request) (*protos.Response, error) {
 	dc := d.anyClient()
 	return dc.Query(ctx, req)
