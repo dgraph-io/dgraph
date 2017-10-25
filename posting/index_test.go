@@ -38,7 +38,8 @@ name:string @index(term) .
 `
 
 func uids(l *List, readTs uint64) []uint64 {
-	r := l.Uids(ListOptions{ReadTs: readTs})
+	r, err := l.Uids(ListOptions{ReadTs: readTs})
+	x.Check(err)
 	return r.Uids
 }
 
@@ -122,8 +123,9 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 		StartTs:       startTs,
 		PrimaryAttr:   "primary",
 		ServesPrimary: true,
+		Indices:       []uint64{1},
 	}
-	txn = Txns().GetOrCreate(txn)
+	txn = Txns().PutOrMergeIndex(txn)
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {
@@ -255,9 +257,8 @@ func TestRebuildIndex(t *testing.T) {
 		require.NoError(t, txn.CommitAt(1, nil))
 	}
 
-	tx := &Txn{StartTs: 5}
 	require.NoError(t, DeleteIndex(context.Background(), "name2"))
-	tx.RebuildIndex(context.Background(), "name2")
+	RebuildIndex(context.Background(), "name2", 5)
 	CommitLists(func(key []byte) bool {
 		pk := x.Parse(key)
 		if pk.Attr == "name2" {
@@ -304,8 +305,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 1, 24, uint64(12), uint64(13))
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
-	tx := &Txn{StartTs: 16}
-	tx.RebuildReverseEdges(context.Background(), "friend")
+	RebuildReverseEdges(context.Background(), "friend", 16)
 	CommitLists(func(key []byte) bool {
 		pk := x.Parse(key)
 		if pk.Attr == "friend" {

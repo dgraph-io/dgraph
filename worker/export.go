@@ -265,7 +265,7 @@ func export(bdir string, readTs uint64) error {
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
-	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 	prefix := new(bytes.Buffer)
 	prefix.Grow(100)
@@ -360,8 +360,7 @@ func export(bdir string, readTs uint64) error {
 func handleExportForGroup(ctx context.Context, in *protos.ExportPayload) *protos.ExportPayload {
 	n := groups().Node
 	if in.GroupId == groups().groupId() && n != nil && n.AmLeader() {
-		lastIndex, _ := n.Store.LastIndex()
-		n.syncAllMarks(n.ctx, lastIndex)
+		n.applyAllMarks(n.ctx)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Leader of group: %d. Running export.", in.GroupId)
 		}

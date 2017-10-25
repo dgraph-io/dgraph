@@ -192,7 +192,7 @@ func (c *listCache) iterate(cont func(l *List) bool) {
 }
 
 // Doesn't sync to disk, call this function only when you are deleting the pls.
-func (c *listCache) clear(remove func(key []byte) bool) error {
+func (c *listCache) clear(remove func(key []byte) bool) {
 	c.Lock()
 	defer c.Unlock()
 	for k, e := range c.cache {
@@ -202,10 +202,8 @@ func (c *listCache) clear(remove func(key []byte) bool) error {
 		}
 
 		c.ll.Remove(e)
-		kv.pl.SetForDeletion()
 		delete(c.cache, k)
 	}
-	return nil
 }
 
 // delete removes a key from cache
