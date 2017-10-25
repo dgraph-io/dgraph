@@ -46,7 +46,7 @@ func (c *countIndexer) addUid(rawKey []byte, count int) {
 		}
 		c.cur.pred = key.Attr
 		c.cur.rev = key.IsReverse()
-		c.cur.track = c.ss.getSchema(key.Attr).GetCount()
+		c.cur.track = c.schema.getSchema(key.Attr).GetCount()
 	}
 	if c.cur.track {
 		c.counts[count] = append(c.counts[count], key.Uid)

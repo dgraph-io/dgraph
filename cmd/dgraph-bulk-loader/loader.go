@@ -48,16 +48,16 @@ type options struct {
 }
 
 type state struct {
-	opt        options
-	prog       *progress
-	um         *xidmap.XidMap
-	up         *zeroUidProvider
-	ss         *schemaStore
-	sm         *shardMap
-	rdfChunkCh chan *bytes.Buffer
-	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	dbs        []*badger.ManagedDB
-	writeTs    uint64 // All badger writes use this timestamp
+	opt         options
+	prog        *progress
+	xids        *xidmap.XidMap
+	uidProvider *zeroUidProvider
+	schema      *schemaStore
+	shards      *shardMap
+	rdfChunkCh  chan *bytes.Buffer
+	mapFileId   uint32 // Used atomically to name the output files of the mappers.
+	dbs         []*badger.ManagedDB
+	writeTs     uint64 // All badger writes use this timestamp
 }
 
 type loader struct {
@@ -71,16 +71,16 @@ func newLoader(opt options) *loader {
 	x.Check(err)
 	zero := protos.NewZeroClient(zeroConn)
 	st := &state{
-		opt:  opt,
-		prog: newProgress(),
-		up:   &zeroUidProvider{client: zero, ch: make(chan uidRangeResponse, 10)},
-		sm:   newShardMap(opt.MapShards),
+		opt:         opt,
+		prog:        newProgress(),
+		uidProvider: &zeroUidProvider{client: zero, ch: make(chan uidRangeResponse)},
+		shards:      newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:    getWriteTimestamp(zero),
 	}
-	go st.up.fetchUids()
-	st.ss = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
+	go st.uidProvider.fetchUids()
+	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
@@ -209,7 +209,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.um = xidmap.New(ld.xidDB, ld.up, xidmap.Options{
+	ld.xids = xidmap.New(ld.xidDB, ld.uidProvider, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})
@@ -266,14 +266,14 @@ func (ld *loader) mapStage() {
 	}
 	ld.writeLease()
 	x.Check(ld.xidDB.Close())
-	ld.um = nil
+	ld.xids = nil
 	runtime.GC()
 }
 
 func (ld *loader) writeLease() {
 	// Obtain a fresh uid range - since uids are allocated in increasing order,
 	// the start of the new range can be used as the lease.
-	lease, _, err := ld.up.ReserveUidRange()
+	lease, _, err := ld.uidProvider.ReserveUidRange()
 	x.Check(err)
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%d\n", lease)
@@ -304,7 +304,7 @@ func (ld *loader) reduceStage() {
 
 func (ld *loader) writeSchema() {
 	for _, db := range ld.dbs {
-		ld.ss.write(db)
+		ld.schema.write(db)
 	}
 }
 
