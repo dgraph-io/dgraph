@@ -37,6 +37,8 @@ func Init(walStore *badger.ManagedDB, id uint64) *Wal {
 	return &Wal{wals: walStore, id: id}
 }
 
+var idKey = []byte("raftid")
+
 func (w *Wal) snapshotKey(gid uint32) []byte {
 	b := make([]byte, 14)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
@@ -67,6 +69,35 @@ func (w *Wal) prefix(gid uint32) []byte {
 	binary.BigEndian.PutUint64(b[0:8], w.id)
 	binary.BigEndian.PutUint32(b[8:12], gid)
 	return b
+}
+
+func (w *Wal) StoreRaftId(id uint64) error {
+	txn := w.wals.NewTransactionAt(1, true)
+	defer txn.Discard()
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], id)
+	if err := txn.Set(idKey, b[:], 0); err != nil {
+		return err
+	}
+	return txn.CommitAt(1, nil)
+}
+
+func RaftId(wals *badger.ManagedDB) (uint64, error) {
+	txn := wals.NewTransactionAt(1, false)
+	defer txn.Discard()
+	item, err := txn.Get(idKey)
+	if err == badger.ErrKeyNotFound {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	val, err := item.Value()
+	if err != nil {
+		return 0, err
+	}
+	id := binary.BigEndian.Uint64(val)
+	return id, nil
 }
 
 func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {

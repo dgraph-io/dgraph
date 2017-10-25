@@ -128,6 +128,7 @@ message ZeroProposal {
   Tablet tablet = 3;
   uint64 maxLeaseId = 4;
   uint64 maxTxnTs = 5;
+  uint64 maxRaftId = 6;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -139,6 +140,7 @@ message MembershipState {
   map<uint64, Member> zeros = 3;
   uint64 maxLeaseId = 4;
   uint64 maxTxnTs = 5;
+  uint64 maxRaftId = 6;
 }
 
 message Tablet {

@@ -87,15 +87,21 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	}
 
 	if Config.InMemoryComm {
+		Config.RaftId = 1
 		atomic.StoreUint32(&gr.gid, 1)
 		gr.state = &protos.MembershipState{}
 		gr.state.Groups = make(map[uint32]*protos.Group)
 		gr.state.Groups[gr.groupId()] = &protos.Group{}
 		inMemoryTablet = &protos.Tablet{GroupId: gr.groupId()}
+
 	} else {
 		x.AssertTruefNoTrace(len(Config.PeerAddr) > 0, "Providing dgraphzero address is mandatory.")
 		x.AssertTruefNoTrace(Config.PeerAddr != Config.MyAddr,
 			"Dgraphzero address and Dgraph address can't be the same.")
+
+		id, err := raftwal.RaftId(walStore)
+		x.Check(err)
+		Config.RaftId = id
 
 		// Successfully connect with dgraphzero, before doing anything else.
 		p := conn.Get().Connect(Config.PeerAddr)

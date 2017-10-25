@@ -251,9 +251,6 @@ func (s *Server) Connect(ctx context.Context,
 		// from our clients.
 		return s.membershipState(), nil
 	}
-	if m.Id == 0 {
-		return &emptyMembershipState, errInvalidId
-	}
 	if len(m.Addr) == 0 {
 		fmt.Println("No address provided.")
 		return &emptyMembershipState, errInvalidAddress
@@ -284,6 +281,10 @@ func (s *Server) Connect(ctx context.Context,
 			if _, has := group.Members[m.Id]; has {
 				return nil
 			}
+		}
+		if m.Id == 0 {
+			m.Id = s.state.MaxRaftId
+			proposal.MaxRaftId = s.state.MaxRaftId
 		}
 
 		// We don't have this member. So, let's see if it has preference for a group.
