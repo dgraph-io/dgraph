@@ -8,8 +8,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/xidmap"
 )
 
 var (
@@ -35,13 +38,20 @@ var defaultOptions = batchMutationOptions{
 	MaxRetries:    math.MaxUint32,
 }
 
+type uidProvider struct {
+	zero protos.ZeroClient
+	ctx  context.Context
+}
+
 // loader is the data structure held by the user program for all interactions with the Dgraph
 // server.  After making grpc connection a new Dgraph is created by function NewDgraphClient.
 type loader struct {
 	opts batchMutationOptions
 
 	dc     *client.Dgraph
+	alloc  *xidmap.XidMap
 	ticker *time.Ticker
+	kv     *badger.DB
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -55,6 +65,27 @@ type loader struct {
 
 	reqs chan protos.Mutation
 	che  chan error
+	// In case of max retries exceeded, we set this to 1.
+	retriesExceeded int32
+}
+
+func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
+	factor := time.Second
+	for {
+		assignedIds, err := p.zero.AssignUids(context.Background(), &protos.Num{Val: 1000})
+		if err == nil {
+			return assignedIds.StartId, assignedIds.EndId, nil
+		}
+		x.Printf("Error while getting lease %v\n", err)
+		select {
+		case <-time.After(factor):
+		case <-p.ctx.Done():
+			return 0, 0, p.ctx.Err()
+		}
+		if factor < 256*time.Second {
+			factor = factor * 2
+		}
+	}
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -71,7 +102,14 @@ type Counter struct {
 }
 
 func (l *loader) request(req protos.Mutation) error {
+	var retries uint32
 RETRY:
+	if retries >= l.opts.MaxRetries {
+		atomic.CompareAndSwapInt32(&l.retriesExceeded, 0, 1)
+		return ErrMaxTries
+	}
+	retries++
+
 	select {
 	case <-l.opts.Ctx.Done():
 		return l.opts.Ctx.Err()
@@ -80,23 +118,23 @@ RETRY:
 	txn := l.dc.NewTxn()
 	var err error
 	for i := 0; i < 3; i++ {
-		_, err = txn.Mutate(&req)
+		_, err = txn.Mutate(l.opts.Ctx, &req)
 		if err == nil {
 			break
 		}
 	}
 	if err != nil {
-		if err := txn.Abort(); err != nil {
+		if err := txn.Abort(l.opts.Ctx); err != nil {
 			fmt.Printf("Error while aborting: %v\n", err)
 		}
 		atomic.AddUint64(&l.aborts, 1)
 		time.Sleep(10 * time.Second)
 		goto RETRY
 	}
-	err = txn.Commit()
+	err = txn.Commit(l.opts.Ctx)
 	if err != nil {
 		// fmt.Printf("Error while commit: %v\n", err)
-		txn.Abort()
+		txn.Abort(l.opts.Ctx)
 		atomic.AddUint64(&l.aborts, 1)
 		goto RETRY
 	}
@@ -109,6 +147,11 @@ RETRY:
 // caller functions.
 func (l *loader) makeRequests() {
 	for req := range l.reqs {
+		if atomic.LoadInt32(&l.retriesExceeded) == 1 {
+			l.che <- ErrMaxTries
+			return
+		}
+
 		if err := l.request(req); err != nil {
 			l.che <- err
 			return

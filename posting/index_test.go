@@ -20,6 +20,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -140,6 +141,7 @@ dob:dateTime @index(year) .
 friend:uid @reverse .
 	`
 
+// TODO(Txn): We can't read index key on disk if it was written in same txn.
 func TestTokensTable(t *testing.T) {
 	err := schema.ParseBytes([]byte(schemaVal), 1)
 	require.NoError(t, err)
@@ -156,35 +158,16 @@ func TestTokensTable(t *testing.T) {
 		Entity: 157,
 	}
 	addMutation(t, l, edge, Set, 1, 2, true)
-	_, err = l.SyncIfDirty(false)
-	x.Check(err)
+	merged, err := l.SyncIfDirty(false)
+	require.True(t, merged)
+	require.NoError(t, err)
 
 	key = x.IndexKey("name", "\x01david")
 	time.Sleep(10 * time.Millisecond)
 
-	var pl protos.PostingList
-	txn := ps.NewTransaction(false)
+	txn := ps.NewTransactionAt(3, false)
 	_, err = txn.Get(key)
 	require.NoError(t, err)
-	ps.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(key)
-		require.NoError(t, err)
-		val, err := item.Value()
-		require.NoError(t, err)
-		UnmarshalOrCopy(val, item.UserMeta(), &pl)
-		return nil
-	})
-
-	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
-
-	ps.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(key)
-		require.NoError(t, err)
-		val, err := item.Value()
-		require.NoError(t, err)
-		UnmarshalOrCopy(val, item.UserMeta(), &pl)
-		return nil
-	})
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 }
@@ -193,7 +176,7 @@ func TestTokensTable(t *testing.T) {
 func tokensForTest(attr string) []string {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	txn := pstore.NewTransaction(false)
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
@@ -273,8 +256,8 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	tx := &Txn{StartTs: 5}
-	require.NoError(t, tx.DeleteIndex(context.Background(), "name2"))
-	require.NoError(t, tx.RebuildIndex(context.Background(), "name2"))
+	require.NoError(t, DeleteIndex(context.Background(), "name2"))
+	tx.RebuildIndex(context.Background(), "name2")
 	CommitLists(func(key []byte) bool {
 		pk := x.Parse(key)
 		if pk.Attr == "name2" {
@@ -282,10 +265,9 @@ func TestRebuildIndex(t *testing.T) {
 		}
 		return false
 	})
-	time.Sleep(time.Second * 5)
 
 	// Check index entries in data store.
-	txn := ps.NewTransaction(false)
+	txn := ps.NewTransactionAt(6, false)
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
@@ -303,19 +285,15 @@ func TestRebuildIndex(t *testing.T) {
 		l := Get(key)
 		idxVals = append(idxVals, l)
 	}
-	require.Len(t, idxKeys, 4)
-	require.Len(t, idxVals, 4)
+	require.Len(t, idxKeys, 2)
+	require.Len(t, idxVals, 2)
 	require.EqualValues(t, idxKeys[0], x.IndexKey("name2", "\x01david"))
 	require.EqualValues(t, idxKeys[1], x.IndexKey("name2", "\x01michonne"))
 
 	uids1 := uids(idxVals[0], 6)
 	uids2 := uids(idxVals[1], 6)
-	uids3 := uids(idxVals[2], 6)
-	uids4 := uids(idxVals[2], 6)
 	require.Len(t, uids1, 1)
 	require.Len(t, uids2, 1)
-	require.Len(t, uids3, 0)
-	require.Len(t, uids4, 0)
 	require.EqualValues(t, 92, uids1[0])
 	require.EqualValues(t, 91, uids2[0])
 }
@@ -327,7 +305,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
 	tx := &Txn{StartTs: 16}
-	require.NoError(t, tx.RebuildReverseEdges(context.Background(), "friend"))
+	tx.RebuildReverseEdges(context.Background(), "friend")
 	CommitLists(func(key []byte) bool {
 		pk := x.Parse(key)
 		if pk.Attr == "friend" {
@@ -335,10 +313,9 @@ func TestRebuildReverseEdges(t *testing.T) {
 		}
 		return false
 	})
-	time.Sleep(time.Second * 5)
 
 	// Check index entries in data store.
-	txn := ps.NewTransaction(false)
+	txn := ps.NewTransactionAt(17, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true

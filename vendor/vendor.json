@@ -169,40 +169,40 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "Cy4iPjPY2qLzFy9lSk7P/w761LI=",
+			"checksumSHA1": "QktSpRHhIXI3cjlC4tYW+djmOVs=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "436e090d4fe648aa0582322759bfd50fc775b08f",
-			"revisionTime": "2017-10-23T09:12:24Z"
+			"revision": "3df50307826d0db0f5c6de1bb8b5bc0f4969865d",
+			"revisionTime": "2017-10-25T01:53:20Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "436e090d4fe648aa0582322759bfd50fc775b08f",
-			"revisionTime": "2017-10-23T09:12:24Z"
+			"revision": "3df50307826d0db0f5c6de1bb8b5bc0f4969865d",
+			"revisionTime": "2017-10-25T01:53:20Z"
 		},
 		{
 			"checksumSHA1": "FB7rDZgiLfpIGi9RqWbgxjZ0Vjg=",
 			"path": "github.com/dgraph-io/badger/protos",
-			"revision": "436e090d4fe648aa0582322759bfd50fc775b08f",
-			"revisionTime": "2017-10-23T09:12:24Z"
+			"revision": "3df50307826d0db0f5c6de1bb8b5bc0f4969865d",
+			"revisionTime": "2017-10-25T01:53:20Z"
 		},
 		{
 			"checksumSHA1": "PbfYA5nvlgi/zvRHlKJQRDb149s=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "436e090d4fe648aa0582322759bfd50fc775b08f",
-			"revisionTime": "2017-10-23T09:12:24Z"
+			"revision": "3df50307826d0db0f5c6de1bb8b5bc0f4969865d",
+			"revisionTime": "2017-10-25T01:53:20Z"
 		},
 		{
 			"checksumSHA1": "BzVv53FxzPfogVEHIBwf8BGxiRQ=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "436e090d4fe648aa0582322759bfd50fc775b08f",
-			"revisionTime": "2017-10-23T09:12:24Z"
+			"revision": "3df50307826d0db0f5c6de1bb8b5bc0f4969865d",
+			"revisionTime": "2017-10-25T01:53:20Z"
 		},
 		{
 			"checksumSHA1": "wfXCTe4hMkTrrMPtU8N1SxTFR08=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "436e090d4fe648aa0582322759bfd50fc775b08f",
-			"revisionTime": "2017-10-23T09:12:24Z"
+			"revision": "3df50307826d0db0f5c6de1bb8b5bc0f4969865d",
+			"revisionTime": "2017-10-25T01:53:20Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",

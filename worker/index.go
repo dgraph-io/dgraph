@@ -29,22 +29,13 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool,
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 
-	// Current raft index has pending applied watermark
-	// Raft index starts from 1
-	n.syncAllMarks(ctx, rv.Index-1)
-
 	if schema.State().IsIndexed(attr) != rebuild {
 		return x.Errorf("Predicate %s index mismatch, rebuild %v", attr, rebuild)
 	}
 	// Remove index edges
-	// For delete we since mutations would have been applied, we needn't
-	// wait for synced watermarks if we delete through mutations, but
-	// it would use by lhmap
-	txn.DeleteIndex(ctx, attr)
+	posting.DeleteIndex(ctx, attr)
 	if rebuild {
-		if err := txn.RebuildIndex(ctx, attr); err != nil {
-			return err
-		}
+		txn.RebuildIndex(ctx, attr)
 	}
 	return nil
 }
@@ -53,19 +44,13 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 
-	// Current raft index has pending applied watermark
-	// Raft index starts from 1
-	n.syncAllMarks(ctx, rv.Index-1)
-
 	if schema.State().IsReversed(attr) != rebuild {
 		return x.Errorf("Predicate %s reverse mismatch, rebuild %v", attr, rebuild)
 	}
-	txn.DeleteReverseEdges(ctx, attr)
+	posting.DeleteReverseEdges(ctx, attr)
 	if rebuild {
 		// Remove reverse edges
-		if err := txn.RebuildReverseEdges(ctx, attr); err != nil {
-			return err
-		}
+		txn.RebuildReverseEdges(ctx, attr)
 	}
 	return nil
 }
@@ -74,14 +59,9 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 
-	// Current raft index has pending applied watermark
-	// Raft index starts from 1
-	n.syncAllMarks(ctx, rv.Index-1)
-	txn.DeleteCountIndex(ctx, attr)
+	posting.DeleteCountIndex(ctx, attr)
 	if rebuild {
-		if err := txn.RebuildCountIndex(ctx, attr); err != nil {
-			return err
-		}
+		txn.RebuildCountIndex(ctx, attr)
 	}
 	return nil
 }

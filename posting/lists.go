@@ -258,7 +258,10 @@ func CommitLists(commit func(key []byte) bool) {
 	})
 	close(workChan)
 	wg.Wait()
-
-	// TODO: Wait for it to sync. Hacky solution write some dummy value
-	// probaly x.LockKey("_dummy_", 0)
+	// TODO(txn): Consider using sync in syncIfDirty instead of async.
+	// Hacky solution for now, ensures that everything is flushed to disk before we return.
+	txn := pstore.NewTransactionAt(1, true)
+	defer txn.Discard()
+	txn.Set(x.LockKey("_dummy_", 0), nil, 0)
+	txn.CommitAt(1, nil)
 }

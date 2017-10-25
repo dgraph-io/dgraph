@@ -27,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -136,6 +137,9 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 }
 
 func (g *groupi) proposeInitialSchema() {
+	if !Config.ExpandEdge {
+		return
+	}
 	g.RLock()
 	_, ok := g.tablets[x.PredicateListAttr]
 	g.RUnlock()
@@ -145,6 +149,8 @@ func (g *groupi) proposeInitialSchema() {
 
 	// Propose schema mutation.
 	var m protos.Mutations
+	// schema for _predicate_ is not changed once set.
+	m.StartTs = 1
 	m.Schema = append(m.Schema, &protos.SchemaUpdate{
 		Predicate: x.PredicateListAttr,
 		ValueType: uint32(types.StringID),
@@ -153,10 +159,9 @@ func (g *groupi) proposeInitialSchema() {
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.
-	// TODO: Fix me
-	// if _, err := MutateOverNetwork(gr.ctx, &m); err != nil {
-	// 	fmt.Println("Error while proposing initial schema: ", err)
-	// }
+	if _, err := MutateOverNetwork(gr.ctx, &m); err != nil {
+		fmt.Println("Error while proposing initial schema: ", err)
+	}
 }
 
 // No locks are acquired while accessing this function.
@@ -448,7 +453,7 @@ START:
 			}
 			if n.AmLeader() {
 				proposal := &protos.Proposal{State: state}
-				go n.ProposeAndWait(context.Background(), proposal, nil)
+				go n.ProposeAndWait(context.Background(), proposal)
 			}
 		}
 	}()
@@ -541,8 +546,8 @@ func (g *groupi) cleanupTablets() {
 						return
 					}
 					g.delPred <- struct{}{}
-					// TODO: Should happen via transaction ignore for now.
-					//posting.DeletePredicate(context.Background(), pk.Attr)
+					// Predicate moves are disabled during deletion, deletePredicate purges everything.
+					posting.DeletePredicate(context.Background(), pk.Attr)
 					<-g.delPred
 					return
 				}
