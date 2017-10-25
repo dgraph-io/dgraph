@@ -48,7 +48,6 @@ import (
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 
@@ -119,16 +118,9 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 		x.Checkf(err, "Error while reading file")
 	}
 
-	su, err := schema.Parse(string(b))
-	if err != nil {
-		return err
-	}
-	mu := &protos.Mutation{Schema: su}
-	txn := dgraphClient.NewTxn()
-	// TODO(txn): Change it later
-	// There's no commit step for schema mutation.
-	_, err = txn.Mutate(ctx, mu)
-	return err
+	return dgraphClient.Alter(ctx, &protos.Operation{
+		Schema: string(b),
+	})
 }
 
 func (l *loader) uid(val string) (string, error) {

@@ -14,10 +14,13 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestPlugins(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+
 	var soFiles []string
 	for i, src := range []string{
 		"./customtok/anagram/main.go",
@@ -50,38 +53,33 @@ func TestPlugins(t *testing.T) {
 		query      string
 		wantResult string
 	}
-	suite := func(initialSchema []*protos.SchemaUpdate, setJSON string, cases []testCase) {
+	suite := func(initialSchema string, setJSON string, cases []testCase) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		// TODO: Run dropall after it's been implemented in the client to give
-		// isolation between each suite.
-
-		txn := cluster.client.NewTxn()
-		x.Check2(txn.Mutate(ctx, &protos.Mutation{
+		check(t, cluster.client.Alter(ctx, &protos.Operation{
+			DropAll: true,
+		}))
+		check(t, cluster.client.Alter(ctx, &protos.Operation{
 			Schema: initialSchema,
 		}))
-		x.Check(txn.Commit(ctx))
 
-		txn = cluster.client.NewTxn()
-		x.Check2(txn.Mutate(ctx, &protos.Mutation{SetJson: []byte(setJSON)}))
-		x.Check(txn.Commit(ctx))
+		txn := cluster.client.NewTxn()
+		_, err = txn.Mutate(ctx, &protos.Mutation{SetJson: []byte(setJSON)})
+		check(t, err)
+		check(t, txn.Commit(ctx))
 
 		for _, test := range cases {
 			txn := cluster.client.NewTxn()
 			reply, err := txn.Query(ctx, test.query, nil)
-			x.Check(err)
+			check(t, err)
 			CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
 	}
 
 	suite(
-		[]*protos.SchemaUpdate{&protos.SchemaUpdate{
-			Predicate: "word",
-			ValueType: uint32(protos.Posting_STRING),
-			Directive: protos.SchemaUpdate_INDEX,
-			Tokenizer: []string{"anagram"},
-		}},
+		"word: string @index(anagram) .",
+		//}},
 		`[
 			{ "word": "airmen" },
 			{ "word": "marine" },
@@ -122,12 +120,7 @@ func TestPlugins(t *testing.T) {
 	)
 
 	suite(
-		[]*protos.SchemaUpdate{&protos.SchemaUpdate{
-			Predicate: "ip",
-			ValueType: uint32(protos.Posting_STRING),
-			Directive: protos.SchemaUpdate_INDEX,
-			Tokenizer: []string{"cidr"},
-		}},
+		"ip: string @index(cidr) .",
 		`[
 			{ "ip": "100.55.22.11/32" },
 			{ "ip": "100.33.81.19/32" },
@@ -178,12 +171,7 @@ func TestPlugins(t *testing.T) {
 	)
 
 	suite(
-		[]*protos.SchemaUpdate{&protos.SchemaUpdate{
-			Predicate: "name",
-			ValueType: uint32(protos.Posting_STRING),
-			Directive: protos.SchemaUpdate_INDEX,
-			Tokenizer: []string{"rune"},
-		}},
+		"name: string @index(rune) .",
 		`[
 			{ "name": "Adam" },
 			{ "name": "Aaron" },
@@ -256,12 +244,7 @@ func TestPlugins(t *testing.T) {
 		},
 	)
 	suite(
-		[]*protos.SchemaUpdate{&protos.SchemaUpdate{
-			Predicate: "num",
-			ValueType: uint32(protos.Posting_INT),
-			Directive: protos.SchemaUpdate_INDEX,
-			Tokenizer: []string{"factor"},
-		}},
+		"num: int @index(factor) .",
 		`[
 			{ "num": 2 },
 			{ "num": 3 },
