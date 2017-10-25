@@ -309,7 +309,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			x.Check(pl.Unmarshal(val))
 			l.mlayer = append(l.mlayer, pl.Postings...)
 		} else {
-			x.Fatalf("unexpected meta")
+			x.Fatalf("unexpected meta: %d", item.UserMeta())
 		}
 		it.Next()
 	}

@@ -117,6 +117,7 @@ func (d *Dgraph) fillTimestampRequests() {
 		cancel()
 		if err != nil {
 			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
+			time.Sleep(time.Millisecond * 100)
 			goto RETRY
 		}
 		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))

@@ -7,7 +7,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -32,24 +31,29 @@ func NewDgraphCluster(dir string) *DgraphCluster {
 	}
 }
 
-func (d *DgraphCluster) Start() error {
+func (d *DgraphCluster) StartZeroOnly() error {
 	d.zero = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"),
 		"-w=wz",
 		"-idx=1",
 		"-port", d.zeroPort,
-		//"-port", freePort(),
-		//"-my", ":"+d.zeroPort,
-		//"-bindall",
 	)
 	d.zero.Dir = d.dir
 	d.zero.Stdout = os.Stdout
 	d.zero.Stderr = os.Stderr
+
 	if err := d.zero.Start(); err != nil {
 		return err
 	}
 
-	// Wait for dgraphzero to start listening.
-	time.Sleep(time.Second * 1)
+	// Wait for dgraphzero to start listening and become the leader.
+	time.Sleep(time.Second * 4)
+	return nil
+}
+
+func (d *DgraphCluster) Start() error {
+	if err := d.StartZeroOnly(); err != nil {
+		return err
+	}
 
 	d.dgraph = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"-memory_mb=1024",
@@ -88,23 +92,10 @@ func (d *DgraphCluster) Start() error {
 
 func (d *DgraphCluster) Close() {
 	// Ignore errors
-	d.zero.Process.Kill()
-	d.dgraph.Process.Kill()
-}
-
-func (d *DgraphCluster) Query(q string) (string, error) {
-	//resp, err := http.Post("http://127.0.0.1:"+d.queryPort+"/query", "", bytes.NewBufferString(q))
-	//if err != nil {
-	//	return "", err
-	//}
-	//defer resp.Body.Close()
-	//if resp.StatusCode != http.StatusOK {
-	//	return "", x.Errorf("Bad status: %v", resp.Status)
-	//}
-	//body, err := ioutil.ReadAll(resp.Body)
-	//if err != nil {
-	//	return "", x.Wrapf(err, "could not ready body")
-	//}
-	//return string(body), nil
-	return "", errors.New("not implemented")
+	if d.zero != nil {
+		d.zero.Process.Kill()
+	}
+	if d.dgraph != nil {
+		d.dgraph.Process.Kill()
+	}
 }
