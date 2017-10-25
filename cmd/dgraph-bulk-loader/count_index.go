@@ -17,7 +17,7 @@ type current struct {
 
 type countIndexer struct {
 	*state
-	kv     *badger.KV
+	db     *badger.ManagedDB
 	cur    current
 	counts map[int][]uint64
 	wg     sync.WaitGroup
@@ -46,7 +46,7 @@ func (c *countIndexer) addUid(rawKey []byte, count int) {
 		}
 		c.cur.pred = key.Attr
 		c.cur.rev = key.IsReverse()
-		c.cur.track = c.ss.getSchema(key.Attr).GetCount()
+		c.cur.track = c.schema.getSchema(key.Attr).GetCount()
 	}
 	if c.cur.track {
 		c.counts[count] = append(c.counts[count], key.Uid)
@@ -54,19 +54,16 @@ func (c *countIndexer) addUid(rawKey []byte, count int) {
 }
 
 func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64) {
-	entries := make([]*badger.Entry, 0, len(counts))
+	txn := c.db.NewTransactionAt(c.state.writeTs, true)
 	for count, uids := range counts {
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-		entries = append(entries, &badger.Entry{
-			Key:      x.CountKey(pred, uint32(count), rev),
-			Value:    bp128.DeltaPack(uids),
-			UserMeta: 0x01,
-		})
+		x.Check(txn.Set(
+			x.CountKey(pred, uint32(count), rev),
+			bp128.DeltaPack(uids),
+			0x01,
+		))
 	}
-	x.Check(c.kv.BatchSet(entries))
-	for _, e := range entries {
-		x.Check(e.Error)
-	}
+	x.Check(txn.CommitAt(c.state.writeTs, nil))
 	c.wg.Done()
 }
 

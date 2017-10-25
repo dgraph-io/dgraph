@@ -15,9 +15,10 @@ import (
 type schemaStore struct {
 	sync.RWMutex
 	m map[string]*protos.SchemaUpdate
+	*state
 }
 
-func newSchemaStore(initial []*protos.SchemaUpdate, opt options) *schemaStore {
+func newSchemaStore(initial []*protos.SchemaUpdate, opt options, state *state) *schemaStore {
 	s := &schemaStore{
 		m: map[string]*protos.SchemaUpdate{
 			"_predicate_": &protos.SchemaUpdate{
@@ -26,6 +27,7 @@ func newSchemaStore(initial []*protos.SchemaUpdate, opt options) *schemaStore {
 				Explicit:  true,
 			},
 		},
+		state: state,
 	}
 	if opt.StoreXids {
 		s.m["xid"] = &protos.SchemaUpdate{
@@ -76,11 +78,13 @@ func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 	}
 }
 
-func (s *schemaStore) write(kv *badger.KV) {
+func (s *schemaStore) write(db *badger.ManagedDB) {
+	txn := db.NewTransactionAt(s.state.writeTs, true)
 	for pred, sch := range s.m {
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
-		x.Check(kv.Set(k, v, 0x00))
+		x.Check(txn.Set(k, v, 0x00))
 	}
+	x.Check(txn.CommitAt(s.state.writeTs, nil))
 }

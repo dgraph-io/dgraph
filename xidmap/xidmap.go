@@ -113,12 +113,13 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 
 	x.Check(m.kv.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(xid))
+		if err == badger.ErrKeyNotFound {
+			return nil
+		}
 		x.Check(err)
 		uidBuf, err := item.Value()
 		x.Check(err)
-		if uidBuf == nil {
-			return nil
-		}
+		x.AssertTrue(len(uidBuf) > 0)
 		var n int
 		uid, n = binary.Uvarint(uidBuf)
 		x.AssertTrue(n == len(uidBuf))

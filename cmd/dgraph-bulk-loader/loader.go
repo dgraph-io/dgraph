@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
@@ -20,6 +21,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+	"google.golang.org/grpc"
 )
 
 type options struct {
@@ -37,6 +39,7 @@ type options struct {
 	NumShufflers  int
 	Version       bool
 	StoreXids     bool
+	ZeroAddr      string
 
 	MapShards    int
 	ReduceShards int
@@ -47,31 +50,37 @@ type options struct {
 type state struct {
 	opt        options
 	prog       *progress
-	um         *xidmap.XidMap
-	up         *uidProvider
-	ss         *schemaStore
-	sm         *shardMap
+	xids       *xidmap.XidMap
+	uidFetcher *zeroUidFetcher
+	schema     *schemaStore
+	shards     *shardMap
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	kvs        []*badger.KV
+	dbs        []*badger.ManagedDB
+	writeTs    uint64 // All badger writes use this timestamp
 }
 
 type loader struct {
 	*state
 	mappers []*mapper
-	xidKV   *badger.KV
+	xidDB   *badger.DB
 }
 
 func newLoader(opt options) *loader {
+	zeroConn, err := grpc.Dial(opt.ZeroAddr, grpc.WithInsecure())
+	x.Check(err)
+	zero := protos.NewZeroClient(zeroConn)
 	st := &state{
-		opt:  opt,
-		prog: newProgress(),
-		ss:   newSchemaStore(readSchema(opt.SchemaFile), opt),
-		sm:   newShardMap(opt.MapShards),
-
+		opt:        opt,
+		prog:       newProgress(),
+		uidFetcher: &zeroUidFetcher{client: zero, ch: make(chan uidRangeResponse)},
+		shards:     newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
+		writeTs:    getWriteTimestamp(zero),
 	}
+	go st.uidFetcher.fetchUids()
+	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
@@ -81,6 +90,14 @@ func newLoader(opt options) *loader {
 	}
 	go ld.prog.report()
 	return ld
+}
+
+func getWriteTimestamp(zero protos.ZeroClient) uint64 {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ts, err := zero.Timestamps(ctx, &protos.Num{Val: 1})
+	x.Check(x.Wrapf(err, "error communicating with dgraphzero, is it running?"))
+	return ts.GetStartId()
 }
 
 func readSchema(filename string) []*protos.SchemaUpdate {
@@ -147,13 +164,36 @@ func findRDFFiles(dir string) []string {
 	return files
 }
 
-type uidProvider uint64
+type uidRangeResponse struct {
+	uids *protos.AssignedIds
+	err  error
+}
 
-func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
-	const uidChunk = 1e5
-	end = atomic.AddUint64((*uint64)(p), uidChunk)
-	start = end - uidChunk + 1
-	return
+type zeroUidFetcher struct {
+	client protos.ZeroClient
+	ch     chan uidRangeResponse
+}
+
+func (z *zeroUidFetcher) fetchUids() {
+	for {
+		// Use a very long timeout since a failed request is fatal.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		// Assuming a loading rate of 1M RDFs/sec, an upper bound on the number
+		// of UIDs we need to assign is 1M/sec. 100k uids per request results
+		// in an average 10 requests/sec to dgraphzero.
+		const uidChunk = 1e6
+		uids, err := z.client.AssignUids(ctx, &protos.Num{Val: uidChunk})
+		cancel()
+		z.ch <- uidRangeResponse{
+			uids: uids,
+			err:  x.Wrapf(err, "error communicating with dgraphzero, is it running?"),
+		}
+	}
+}
+
+func (z *zeroUidFetcher) ReserveUidRange() (start, end uint64, err error) {
+	response := <-z.ch
+	return response.uids.GetStartId(), response.uids.GetEndId(), response.err
 }
 
 func (ld *loader) mapStage() {
@@ -167,10 +207,9 @@ func (ld *loader) mapStage() {
 	opt.Dir = xidDir
 	opt.ValueDir = xidDir
 	var err error
-	ld.xidKV, err = badger.NewKV(&opt)
+	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.up = new(uidProvider)
-	ld.um = xidmap.New(ld.xidKV, ld.up, xidmap.Options{
+	ld.xids = xidmap.New(ld.xidDB, ld.uidFetcher, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})
@@ -226,24 +265,23 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	ld.writeLease()
-	x.Check(ld.xidKV.Close())
-	ld.um = nil
+	x.Check(ld.xidDB.Close())
+	ld.xids = nil
 	runtime.GC()
 }
 
 func (ld *loader) writeLease() {
 	// Obtain a fresh uid range - since uids are allocated in increasing order,
 	// the start of the new range can be used as the lease.
-	lease, _, err := ld.up.ReserveUidRange()
-	// Cannot give an error because uid ranges are produced by incrementing an integer.
-	x.AssertTrue(err == nil)
+	lease, _, err := ld.uidFetcher.ReserveUidRange()
+	x.Check(err)
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%d\n", lease)
 	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))
 }
 
 type shuffleOutput struct {
-	kv         *badger.KV
+	db         *badger.ManagedDB
 	mapEntries []*protos.MapEntry
 }
 
@@ -265,14 +303,14 @@ func (ld *loader) reduceStage() {
 }
 
 func (ld *loader) writeSchema() {
-	for _, kv := range ld.kvs {
-		ld.ss.write(kv)
+	for _, db := range ld.dbs {
+		ld.schema.write(db)
 	}
 }
 
 func (ld *loader) cleanup() {
-	for _, kv := range ld.kvs {
-		x.Check(kv.Close())
+	for _, db := range ld.dbs {
+		x.Check(db.Close())
 	}
 	ld.prog.endSummary()
 }
