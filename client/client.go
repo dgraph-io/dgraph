@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Dgraph Labs, Inc.
+ * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,105 +19,169 @@ package client
 import (
 	"context"
 	"fmt"
+	"log"
+	"math/rand"
+	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
+	"github.com/gogo/protobuf/proto"
 )
 
-type Txn struct {
-	startTs uint64
-	context *protos.TxnContext
+type Dgraph struct {
+	zero protos.ZeroClient
+	dc   []protos.DgraphClient
+
+	mu     sync.Mutex
+	needTs []chan uint64
+	notify chan struct{}
+
 	linRead *protos.LinRead
-
-	dg *Dgraph
+	state   *protos.MembershipState
 }
 
-func (d *Dgraph) NewTxn() *Txn {
-	ts := d.getTimestamp()
-	txn := &Txn{
-		startTs: ts,
-		dg:      d,
-		linRead: d.getLinRead(),
-	}
-	if txn.linRead == nil {
-		txn.linRead = &protos.LinRead{}
-	}
-	return txn
+func (d *Dgraph) ZeroClient() protos.ZeroClient {
+	return d.zero
 }
 
-func (txn *Txn) Query(ctx context.Context, q string,
-	vars map[string]string) (*protos.Response, error) {
-	req := &protos.Request{
-		Query:   q,
-		Vars:    vars,
-		StartTs: txn.startTs,
-		LinRead: txn.linRead,
+// TODO(tzdybal) - hide this function from users
+func NewClient(clients []protos.DgraphClient) *Dgraph {
+	d := &Dgraph{
+		dc: clients,
 	}
-	resp, err := txn.dg.query(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	x.MergeLinReads(txn.linRead, resp.LinRead)
-	txn.dg.mergeLinRead(resp.LinRead)
-	return resp, nil
+
+	return d
 }
 
-func (txn *Txn) mergeContext(src *protos.TxnContext) error {
-	if src == nil {
-		return nil
+// NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
+// conns.
+// The client can be backed by multiple connections (to the same server, or multiple servers in a
+// cluster).
+//
+// A single client is thread safe for sharing with multiple go routines.
+func NewDgraphClient(zero protos.ZeroClient, dc protos.DgraphClient) *Dgraph {
+	dg := &Dgraph{
+		zero:    zero,
+		dc:      []protos.DgraphClient{dc},
+		notify:  make(chan struct{}, 1),
+		linRead: &protos.LinRead{},
 	}
 
-	x.MergeLinReads(txn.linRead, src.LinRead)
-	txn.dg.mergeLinRead(src.LinRead) // Also merge it with client.
+	go dg.fillTimestampRequests()
+	return dg
+}
 
-	if txn.context == nil {
-		txn.context = src
-		return nil
+func (d *Dgraph) getTimestamp() uint64 {
+	ch := make(chan uint64)
+	d.mu.Lock()
+	d.needTs = append(d.needTs, ch)
+	d.mu.Unlock()
+
+	select {
+	case d.notify <- struct{}{}:
+	default:
 	}
-	if txn.context.Primary != src.Primary {
-		return x.Errorf("Primary key mismatch")
+	return <-ch
+}
+
+func (d *Dgraph) mergeLinRead(src *protos.LinRead) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	x.MergeLinReads(d.linRead, src)
+}
+
+func (d *Dgraph) getLinRead() *protos.LinRead {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return proto.Clone(d.linRead).(*protos.LinRead)
+}
+
+func (d *Dgraph) fillTimestampRequests() {
+	var chs []chan uint64
+	for range d.notify {
+	RETRY:
+		d.mu.Lock()
+		chs = append(chs, d.needTs...)
+		d.needTs = d.needTs[:0]
+		d.mu.Unlock()
+
+		if len(chs) == 0 {
+			continue
+		}
+		num := &protos.Num{Val: uint64(len(chs))}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ts, err := d.zero.Timestamps(ctx, num)
+		cancel()
+		if err != nil {
+			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
+			goto RETRY
+		}
+		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
+		for i, ch := range chs {
+			ch <- ts.StartId + uint64(i)
+		}
+		chs = chs[:0]
 	}
-	if txn.context.StartTs != src.StartTs {
-		return x.Errorf("StartTs mismatch")
+}
+
+// DropAll deletes all edges and schema from Dgraph.
+func (d *Dgraph) Alter(ctx context.Context, op *protos.Operation) error {
+	dc := d.anyClient()
+	_, err := dc.Alter(ctx, op)
+	return err
+}
+
+func (d *Dgraph) CheckSchema(schema *protos.SchemaUpdate) error {
+	if len(schema.Predicate) == 0 {
+		return x.Errorf("No predicate specified for schemaUpdate")
 	}
-	txn.context.Keys = append(txn.context.Keys, src.Keys...)
+	typ := types.TypeID(schema.ValueType)
+	if typ == types.UidID && schema.Directive == protos.SchemaUpdate_INDEX {
+		// index on uid type
+		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
+			schema.Predicate)
+	} else if typ != types.UidID && schema.Directive == protos.SchemaUpdate_REVERSE {
+		// reverse on non-uid type
+		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
+	}
 	return nil
 }
 
-func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
-	mu.StartTs = txn.startTs
-	if txn.context != nil {
-		mu.Primary = txn.context.Primary
-	}
-	ag, err := txn.dg.mutate(ctx, mu)
-	if ag != nil {
-		if err := txn.mergeContext(ag.Context); err != nil {
-			fmt.Printf("error while merging context: %v\n", err)
-		}
-		if len(ag.Error) > 0 {
-			// fmt.Printf("Mutate failed. start=%d ag= %+v\n", txn.startTs, ag)
-			return ag, errors.New(ag.Error)
-		}
-	}
-	return ag, err
+func (d *Dgraph) query(ctx context.Context, req *protos.Request) (*protos.Response, error) {
+	dc := d.anyClient()
+	return dc.Query(ctx, req)
 }
 
-func (txn *Txn) Abort(ctx context.Context) error {
-	if txn.context == nil {
-		txn.context = &protos.TxnContext{StartTs: txn.startTs}
-	}
-	txn.context.CommitTs = 0
-	_, err := txn.dg.commitOrAbort(ctx, txn.context)
-	return err
+func (d *Dgraph) mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
+	dc := d.anyClient()
+	return dc.Mutate(ctx, mu)
 }
 
-func (txn *Txn) Commit(ctx context.Context) error {
-	if txn.context == nil || len(txn.context.Primary) == 0 {
-		// If there were no mutations
-		return nil
+func (d *Dgraph) commitOrAbort(ctx context.Context, txn *protos.TxnContext) (*protos.Payload, error) {
+	dc := d.anyClient()
+	return dc.CommitOrAbort(ctx, txn)
+}
+
+// CheckVersion checks if the version of dgraph and dgraph-live-loader are the same.  If either the
+// versions don't match or the version information could not be obtained an error message is
+// printed.
+func (d *Dgraph) CheckVersion(ctx context.Context) {
+	v, err := d.dc[rand.Intn(len(d.dc))].CheckVersion(ctx, &protos.Check{})
+	if err != nil {
+		fmt.Printf(`Could not fetch version information from Dgraph. Got err: %v.`, err)
+	} else {
+		version := x.Version()
+		if version != "" && v.Tag != "" && version != v.Tag {
+			fmt.Printf(`
+Dgraph server: %v, loader: %v dont match.
+You can get the latest version from https://docs.dgraph.io
+`, v.Tag, version)
+		}
 	}
-	txn.context.CommitTs = txn.dg.getTimestamp()
-	_, err := txn.dg.commitOrAbort(ctx, txn.context)
-	return err
+}
+
+func (d *Dgraph) anyClient() protos.DgraphClient {
+	return d.dc[rand.Intn(len(d.dc))]
 }

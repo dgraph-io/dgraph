@@ -20,6 +20,7 @@ package worker
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"math/rand"
 	"sort"
 	"time"
@@ -48,23 +49,13 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
-	if !groups().ServesTablet(edge.Attr) {
-		return errUnservedTablet
-	}
+	x.AssertTrue(groups().ServesTablet(edge.Attr))
 
-	rv := ctx.Value("raft").(x.RaftValue)
 	typ, err := schema.State().TypeOf(edge.Attr)
 	x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
 	if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
-		n := groups().Node
-		if err = n.syncAllMarks(ctx, rv.Index-1); err != nil {
-			return err
-		}
-		if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
-			return err
-		}
-		return nil
+		return errors.New("We should never reach here")
 	}
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not

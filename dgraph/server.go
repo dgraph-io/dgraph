@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -125,38 +126,62 @@ func (s *ServerState) Dispose() error {
 // Server implements protos.DgraphServer
 type Server struct{}
 
+func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Payload, error) {
+	empty := &protos.Payload{}
+	if op.DropAll {
+		m := protos.Mutations{DropAll: true}
+		// TODO: Handle delete as special case. Abort all pending transactions
+		_, err := query.ApplyMutations(ctx, &m)
+		return empty, err
+	}
+	if len(op.DropAttr) > 0 {
+		nq := &protos.NQuad{
+			Subject:     x.Star,
+			Predicate:   op.DropAttr,
+			ObjectValue: &protos.Value{&protos.Value_StrVal{x.Star}},
+		}
+		wnq := &gql.NQuad{nq}
+		edge, err := wnq.ToDeletePredEdge()
+		if err != nil {
+			return empty, err
+		}
+		edges := []*protos.DirectedEdge{edge}
+		m := &protos.Mutations{Edges: edges}
+		_, err = query.ApplyMutations(ctx, m)
+		return empty, err
+	}
+	updates, err := schema.Parse(op.Schema)
+	if err != nil {
+		return empty, err
+	}
+	for _, u := range updates {
+		u.Explicit = true
+	}
+	fmt.Printf("Got schema: %+v\n", updates)
+	// TODO: Maybe add some checks about the schema.
+	m := &protos.Mutations{Schema: updates}
+	_, err = query.ApplyMutations(ctx, m)
+	return empty, err
+}
+
 func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.Assigned, err error) {
 	resp = &protos.Assigned{}
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed.")
 	}
-
+	if mu.StartTs == 0 {
+		return resp, fmt.Errorf("Invalid start timestamp")
+	}
 	emptyMutation :=
-		len(mu.GetSchema()) == 0 && len(mu.GetSetJson()) == 0 &&
-			len(mu.GetDeleteJson()) == 0 && !mu.GetDropAll() &&
+		len(mu.GetSetJson()) == 0 &&
+			len(mu.GetDeleteJson()) == 0 &&
 			len(mu.Set) == 0 && len(mu.Del) == 0
 	if emptyMutation {
 		return resp, fmt.Errorf("empty mutation")
 	}
-	if mu.StartTs == 0 {
-		return resp, fmt.Errorf("Invalid start timestamp")
-	}
-
-	if mu.DropAll {
-		m := protos.Mutations{DropAll: true}
-		// TODO: Handle delete as special case. Abort all pending transactions
-		_, err := query.ApplyMutations(ctx, &m)
-		return resp, err
-	}
-
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return resp, err
-	}
-	// TODO: Maybe add some checks about the schema.
-	// Move validation from schema.Parse here.
-	for _, s := range mu.Schema {
-		s.Explicit = true
 	}
 	newUids, err := query.AssignUids(ctx, gmu.Set)
 	if err != nil {
@@ -168,9 +193,8 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		return resp, err
 	}
 
-	m := protos.Mutations{Edges: edges, Schema: mu.Schema, StartTs: mu.StartTs}
-
-	resp.Context, err = query.ApplyMutations(ctx, &m)
+	m := &protos.Mutations{Edges: edges, StartTs: mu.StartTs}
+	resp.Context, err = query.ApplyMutations(ctx, m)
 	if err != nil {
 		resp.Error = err.Error()
 	}
@@ -261,9 +285,9 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	resp.Json = json
 
 	gl := &protos.Latency{
-		Parsing:    l.Parsing.String(),
-		Processing: l.Processing.String(),
-		Encoding:   l.Json.String(),
+		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
+		ProcessingNs: uint64(l.Processing.Nanoseconds()),
+		EncodingNs:   uint64(l.Json.Nanoseconds()),
 	}
 
 	resp.Latency = gl

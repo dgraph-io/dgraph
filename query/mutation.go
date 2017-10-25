@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 
 	"golang.org/x/net/trace"
@@ -171,7 +172,6 @@ func ToInternal(gmu *gql.Mutation,
 
 	// Wrapper for a pointer to protos.Nquad
 	var wnq *gql.NQuad
-	var delPred []*protos.NQuad
 
 	parse := func(nq *protos.NQuad, op protos.DirectedEdge_Op) error {
 		wnq = &gql.NQuad{nq}
@@ -199,21 +199,11 @@ func ToInternal(gmu *gql.Mutation,
 	}
 	for _, nq := range gmu.Del {
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			delPred = append(delPred, nq)
-			continue
+			return edges, errors.New("Predicate deletion should not be called via Mutate.")
 		}
 		if err := parse(nq, protos.DirectedEdge_DEL); err != nil {
 			return edges, err
 		}
-	}
-
-	for _, nq := range delPred {
-		wnq = &gql.NQuad{nq}
-		edge, err := wnq.ToDeletePredEdge()
-		if err != nil {
-			return edges, err
-		}
-		edges = append(edges, edge)
 	}
 
 	return edges, nil
