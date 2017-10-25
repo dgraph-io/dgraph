@@ -868,29 +868,33 @@ func (db *DB) updateSize(lc *y.Closer) {
 
 // PurgeVersionsBelow will delete all versions of a key below the specified version
 func (db *DB) PurgeVersionsBelow(key []byte, ts uint64) error {
-	return db.View(func(txn *Txn) error {
-		opts := DefaultIteratorOptions
-		opts.AllVersions = true
-		opts.PrefetchValues = false
-		it := txn.NewIterator(opts)
+	txn := db.NewTransaction(false)
+	defer txn.Discard()
+	return db.purgeVersionsBelow(txn, key, ts)
+}
 
-		var entries []*entry
+func (db *DB) purgeVersionsBelow(txn *Txn, key []byte, ts uint64) error {
+	opts := DefaultIteratorOptions
+	opts.AllVersions = true
+	opts.PrefetchValues = false
+	it := txn.NewIterator(opts)
 
-		for it.Seek(key); it.ValidForPrefix(key); it.Next() {
-			item := it.Item()
-			if !bytes.Equal(key, item.Key()) || item.Version() >= ts {
-				continue
-			}
+	var entries []*entry
 
-			// Found an older version. Mark for deletion
-			entries = append(entries,
-				&entry{
-					Key:  y.KeyWithTs(key, item.version),
-					Meta: bitDelete,
-				})
+	for it.Seek(key); it.ValidForPrefix(key); it.Next() {
+		item := it.Item()
+		if !bytes.Equal(key, item.Key()) || item.Version() >= ts {
+			continue
 		}
-		return db.batchSet(entries)
-	})
+
+		// Found an older version. Mark for deletion
+		entries = append(entries,
+			&entry{
+				Key:  y.KeyWithTs(key, item.version),
+				Meta: bitDelete,
+			})
+	}
+	return db.batchSet(entries)
 }
 
 // PurgeOlderVersions deletes older versions of all keys.

@@ -27,6 +27,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -34,7 +35,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -43,12 +43,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgraph-io/dgraph/xidmap"
 
 	"github.com/pkg/profile"
 )
@@ -61,6 +63,7 @@ var (
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 100, "Number of RDF N-Quads to send as part of a mutation.")
 	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
+	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
 	blockRate  = flag.Int("block", 0, "Block profiling rate")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
@@ -122,25 +125,15 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	}
 	mu := &protos.Mutation{Schema: su}
 	txn := dgraphClient.NewTxn()
-	_, err = txn.Mutate(mu)
-	if err != nil {
-		return err
-	}
-	return txn.Commit()
-}
-
-func hex(uid uint64) string {
-	return fmt.Sprintf("%#x", uint64(uid))
+	// TODO(txn): Change it later
+	// There's no commit step for schema mutation.
+	_, err = txn.Mutate(ctx, mu)
+	return err
 }
 
 func (l *loader) uid(val string) (string, error) {
-	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
-		return hex(uid), nil
-	}
-
-	// TODO: Fix me.
-	// Have a local map.
-	return fmt.Sprintf("%d", farm.Fingerprint64([]byte(val))), nil
+	uid, _, err := l.alloc.AssignUid(val)
+	return fmt.Sprintf("%#x", uint64(uid)), err
 }
 
 func fileReader(file string) (io.Reader, *os.File) {
@@ -258,12 +251,34 @@ func fileList(files string) []string {
 }
 
 func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
+	x.Check(os.MkdirAll(*clientDir, 0700))
+	opt := badger.DefaultOptions
+	opt.SyncWrites = true // So that checkpoints are persisted immediately.
+	opt.TableLoadingMode = options.MemoryMap
+	opt.Dir = *clientDir
+	opt.ValueDir = *clientDir
+
+	kv, err := badger.Open(opt)
+	x.Checkf(err, "Error while creating badger KV posting store")
+
+	alloc := xidmap.New(kv,
+		&uidProvider{
+			zero: dc.ZeroClient(),
+			ctx:  opts.Ctx,
+		},
+		xidmap.Options{
+			NumShards: 100,
+			LRUSize:   1e5,
+		},
+	)
+
 	l := &loader{
 		opts:  opts,
 		dc:    dc,
 		start: time.Now(),
 		reqs:  make(chan protos.Mutation, opts.Pending*2),
-
+		alloc: alloc,
+		kv:    kv,
 		// length includes opts.Pending for makeRequests, another one for makeSchemaRequests.
 		che: make(chan error, opts.Pending),
 	}
@@ -321,6 +336,7 @@ func main() {
 		Pending:       *concurrent,
 		PrintCounters: true,
 		Ctx:           ctx,
+		MaxRetries:    math.MaxUint32,
 	}
 	zc := protos.NewZeroClient(connzero)
 	dc := protos.NewDgraphClient(conn)

@@ -66,8 +66,15 @@ func (db *ManagedDB) NewTransactionAt(readTs uint64, update bool) *Txn {
 // can be ignored by most users.
 func (txn *Txn) CommitAt(commitTs uint64, callback func(error)) error {
 	if !txn.db.opt.managedTxns {
-		panic("CommitAt() can only be used with ManagedDB. Use Commit() instead.")
+		return ErrManagedTxn
 	}
 	txn.commitTs = commitTs
 	return txn.Commit(callback)
+}
+
+// PurgeVersionsBelow will delete all versions of a key below the specified version
+func (db *ManagedDB) PurgeVersionsBelow(key []byte, ts uint64) error {
+	txn := db.NewTransactionAt(ts, false)
+	defer txn.Discard()
+	return db.purgeVersionsBelow(txn, key, ts)
 }

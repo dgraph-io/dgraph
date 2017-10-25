@@ -43,7 +43,6 @@ func (d *Dgraph) NewTxn() *Txn {
 	if txn.linRead == nil {
 		txn.linRead = &protos.LinRead{}
 	}
-	fmt.Printf("New Txn linread: %+v\n\n", txn.linRead)
 	return txn
 }
 
@@ -55,11 +54,9 @@ func (txn *Txn) Query(ctx context.Context, q string,
 		StartTs: txn.startTs,
 		LinRead: txn.linRead,
 	}
-	fmt.Printf("Sending request: %+v\n", req)
 	resp, err := txn.dg.query(ctx, req)
 	x.MergeLinReads(txn.linRead, resp.LinRead)
 	txn.dg.mergeLinRead(resp.LinRead)
-	fmt.Printf("txn lin read after query: %+v\n", txn.linRead)
 	return resp, err
 }
 
@@ -100,7 +97,6 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 			return ag, errors.New(ag.Error)
 		}
 	}
-	fmt.Printf("Got mutate context: %+v\n", ag.Context)
 	return ag, err
 }
 

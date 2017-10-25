@@ -144,6 +144,8 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = !isgeOrGt
+	// TODO(txn): If some new index key was written as part of same transaction it won't be on disk
+	// until the txn is committed. Merge it with inmemory keys.
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 	it := txn.NewIterator(itOpt)
