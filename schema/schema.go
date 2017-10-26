@@ -254,6 +254,26 @@ func Init(ps *badger.KV) {
 	go batchSync()
 }
 
+func Load(predicate string) error {
+	if len(predicate) == 0 {
+		return x.Errorf("Empty predicate")
+	}
+	key := x.SchemaKey(predicate)
+	var item badger.KVItem
+	err := pstore.Get(key, &item)
+	if err != nil {
+		return err
+	}
+	return item.Value(func(val []byte) error {
+		var s protos.SchemaUpdate
+		x.Check(s.Unmarshal(val))
+		State().Set(predicate, s)
+		State().elog.Printf(logUpdate(s, predicate))
+		x.Printf(logUpdate(s, predicate))
+		return nil
+	})
+}
+
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
 	prefix := x.SchemaPrefix()
