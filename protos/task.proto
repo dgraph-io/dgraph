@@ -471,6 +471,8 @@ message Mutation {
   bytes delete_json = 2;
   repeated NQuad set = 3;
   repeated NQuad del = 4;
+  bytes set_rdf = 5;
+  bytes del_rdf = 6;
 
   string primary = 12;
   uint64 start_ts = 13;

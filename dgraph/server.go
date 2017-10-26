@@ -17,6 +17,7 @@
 package dgraph
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -32,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -175,7 +177,8 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	emptyMutation :=
 		len(mu.GetSetJson()) == 0 &&
 			len(mu.GetDeleteJson()) == 0 &&
-			len(mu.Set) == 0 && len(mu.Del) == 0
+			len(mu.Set) == 0 && len(mu.Del) == 0 &&
+			len(mu.SetRdf) == 0 && len(mu.DelRdf) == 0
 	if emptyMutation {
 		return resp, fmt.Errorf("empty mutation")
 	}
@@ -617,23 +620,54 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 	return mr.nquads, err
 }
 
+func nquadsFromRDF(b []byte, op int) ([]*protos.NQuad, error) {
+	var nqs []*protos.NQuad
+	for _, line := range bytes.Split(b, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		nq, err := rdf.Parse(string(line))
+		if err != nil {
+			return nil, err
+		}
+		if op == set && (nq.Subject == x.Star || nq.Predicate == x.Star ||
+			nq.ObjectValue.GetDefaultVal() == x.Star) {
+			return nil, errors.New("cannot use * in set mutation")
+		}
+		nqs = append(nqs, &nq)
+	}
+	return nil, errors.New("not implemented")
+}
+
 func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
-	res := &gql.Mutation{}
+	var jsonSet, jsonDel, rdfSet, rdfDel []*protos.NQuad
 	var err error
 
 	if len(mu.SetJson) > 0 {
-		res.Set, err = nquadsFromJson(mu.SetJson, set)
+		jsonSet, err = nquadsFromJson(mu.SetJson, set)
 		if err != nil {
-			return res, err
+			return nil, err
 		}
 	}
 	if len(mu.DeleteJson) > 0 {
-		res.Del, err = nquadsFromJson(mu.DeleteJson, delete)
+		jsonDel, err = nquadsFromJson(mu.DeleteJson, delete)
 		if err != nil {
-			return res, err
+			return nil, err
 		}
 	}
-	res.Set = append(res.Set, mu.Set...)
-	res.Del = append(res.Del, mu.Del...)
-	return res, nil
+	if len(mu.SetRdf) > 0 {
+		rdfSet, err = nquadsFromRDF(mu.SetRdf, set)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(mu.DelRdf) > 0 {
+		rdfDel, err = nquadsFromRDF(mu.DelRdf, delete)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &gql.Mutation{
+		Set: append(append(mu.Set, jsonSet...), rdfSet...),
+		Del: append(append(mu.Del, jsonDel...), rdfDel...),
+	}, nil
 }
