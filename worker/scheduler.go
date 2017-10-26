@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
-
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -99,7 +97,7 @@ func (s *scheduler) register(t *task) bool {
 func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error) {
 	defer func() {
 		s.n.props.Done(proposal.Id, err)
-		s.n.Applied.WaitForMark(context.Background(), index)
+		// s.n.Applied.WaitForMark(context.Background(), index)
 	}()
 
 	if proposal.Mutations.DropAll {

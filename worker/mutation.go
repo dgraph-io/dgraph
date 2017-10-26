@@ -551,7 +551,9 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 				tr.LazyPrintf("Error while running all mutations: %+v", res.err)
 			}
 		}
-		x.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
+		if res.ctx != nil {
+			x.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
+		}
 	}
 	close(resCh)
 	return tctx, e

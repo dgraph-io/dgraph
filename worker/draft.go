@@ -252,7 +252,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	err = <-che
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
+			tr.LazyPrintf("Raft Propose error: %v", err)
 		}
 	}
 	return err
@@ -264,11 +264,14 @@ func (n *node) processMutation(task *task) error {
 	edge := task.edge
 
 	ctx, txn := n.props.CtxAndTxn(pid)
+	if txn.HasConflict() {
+		return posting.ErrConflict
+	}
 	rv := x.RaftValue{Group: n.gid, Index: ridx}
 	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runMutation(ctx, edge, txn); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
+			tr.LazyPrintf("process mutation: %v", err)
 		}
 		return err
 	}

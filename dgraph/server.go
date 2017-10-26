@@ -179,6 +179,11 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	if emptyMutation {
 		return resp, fmt.Errorf("empty mutation")
 	}
+	if rand.Float64() < worker.Config.Tracing {
+		var tr trace.Trace
+		tr, ctx = x.NewTrace("GrpcMutate", ctx)
+		defer tr.Finish()
+	}
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return resp, err
