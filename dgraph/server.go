@@ -625,6 +625,9 @@ func parseNQuads(b []byte, op int) ([]*protos.NQuad, error) {
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
 		line = bytes.TrimSpace(line)
 		nq, err := rdf.Parse(string(line))
+		if err == rdf.ErrEmpty {
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -634,7 +637,7 @@ func parseNQuads(b []byte, op int) ([]*protos.NQuad, error) {
 		}
 		nqs = append(nqs, &nq)
 	}
-	return nil, errors.New("not implemented")
+	return nqs, nil
 }
 
 func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {

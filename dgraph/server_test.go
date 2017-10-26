@@ -209,3 +209,31 @@ func TestNquadsFromJsonDelete(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, nq[0], makeNquadEdge("1000", "friend", "1001"))
 }
+
+func TestParseNQuads(t *testing.T) {
+	nquads := `
+		_:a <predA> "A" .
+		_:b <predB> "B" .
+		# this line is a comment
+		_:a <join> _:b .
+	`
+	nqs, err := parseNQuads([]byte(nquads), set)
+	require.NoError(t, err)
+	require.Equal(t, []*protos.NQuad{
+		makeNquad("_:a", "predA", &protos.Value{&protos.Value_DefaultVal{"A"}}),
+		makeNquad("_:b", "predB", &protos.Value{&protos.Value_DefaultVal{"B"}}),
+		makeNquadEdge("_:a", "join", "_:b"),
+	}, nqs)
+}
+
+func TestParseNQuadsNoStarInSet(t *testing.T) {
+	nquads := `_:a * * .`
+	_, err := parseNQuads([]byte(nquads), set)
+	require.Error(t, err)
+}
+
+func TestParseNQuadsDelete(t *testing.T) {
+	nquads := `_:a * * .`
+	_, err := parseNQuads([]byte(nquads), set)
+	require.Error(t, err)
+}
