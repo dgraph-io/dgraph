@@ -7,6 +7,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -226,14 +227,11 @@ func TestParseNQuads(t *testing.T) {
 	}, nqs)
 }
 
-func TestParseNQuadsNoStarInSet(t *testing.T) {
-	nquads := `_:a * * .`
-	_, err := parseNQuads([]byte(nquads), set)
-	require.Error(t, err)
-}
-
 func TestParseNQuadsDelete(t *testing.T) {
 	nquads := `_:a * * .`
-	_, err := parseNQuads([]byte(nquads), set)
-	require.Error(t, err)
+	nqs, err := parseNQuads([]byte(nquads), delete)
+	require.NoError(t, err)
+	require.Equal(t, []*protos.NQuad{
+		makeNquad("_:a", x.Star, &protos.Value{&protos.Value_DefaultVal{x.Star}}),
+	}, nqs)
 }
