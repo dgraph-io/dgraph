@@ -175,8 +175,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		return resp, fmt.Errorf("Invalid start timestamp")
 	}
 	emptyMutation :=
-		len(mu.GetSetJson()) == 0 &&
-			len(mu.GetDeleteJson()) == 0 &&
+		len(mu.GetSetJson()) == 0 && len(mu.GetDeleteJson()) == 0 &&
 			len(mu.Set) == 0 && len(mu.Del) == 0 &&
 			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
