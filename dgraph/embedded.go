@@ -30,7 +30,7 @@ func GetDefaultEmbeddedConfig() Options {
 	config.InMemoryComm = true
 	config.BaseWorkerPort = 0
 	config.MyAddr = ""
-	config.PeerAddr = ""
+	config.ZeroAddr = ""
 
 	return config
 }

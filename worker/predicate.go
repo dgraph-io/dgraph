@@ -22,6 +22,7 @@ import (
 	"context"
 	"io"
 	"math"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
@@ -39,45 +40,28 @@ const (
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
 func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *protos.KV, che chan error) {
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-	batchSize := 0
-	batchWriteNum := 1
+	var hasError int32
 	for i := range kv {
+		txn := pstore.NewTransactionAt(math.MaxUint64, true)
 		if len(i.Val) == 0 {
-			txn.Set(i.Key, i.Val, posting.BitCompletePosting)
+			pstore.PurgeVersionsBelow(i.Key, math.MaxUint64)
 		} else {
 			txn.Set(i.Key, i.Val, i.UserMeta[0])
+			txn.CommitAt(i.Version, func(err error) {
+				// We don't care about exact error
+				x.Printf("Error while committing kv to badger %v\n", err)
+				if err != nil {
+					atomic.StoreInt32(&hasError, 1)
+				}
+			})
 		}
-		batchSize += len(i.Key) + len(i.Val)
-		// We write in batches of size 32MB.
-		if batchSize >= 32*MB {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("SNAPSHOT: Doing batch write num: %d", batchWriteNum)
-			}
-			if err := txn.Commit(nil); err != nil {
-				che <- err
-				return
-			}
-
-			batchWriteNum++
-			// Resetting batch size after a batch write.
-			batchSize = 0
-			// Since we are writing data in batches, we need to clear up items enqueued
-			// for batch write after every successful write.
-			txn = pstore.NewTransactionAt(math.MaxUint64, true)
-		}
+		defer txn.Discard()
 	}
-	if batchSize > 0 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Doing batch write %d.", batchWriteNum)
-		}
-		if err := txn.Commit(nil); err != nil {
-			che <- err
-			return
-		}
+	if hasError == 0 {
+		che <- nil
+	} else {
+		che <- x.Errorf("Error while writing to badger")
 	}
-	che <- nil
 }
 
 func streamKeys(pstore *badger.ManagedDB, stream protos.Worker_PredicateAndSchemaDataClient) error {
@@ -104,6 +88,14 @@ func streamKeys(pstore *badger.ManagedDB, stream protos.Worker_PredicateAndSchem
 
 		if !groups().ServesTablet(pk.Attr) {
 			it.Seek(pk.SkipPredicate())
+			continue
+		} else if pk.IsSchema() {
+			// No version check for schema keys.
+			it.Seek(pk.SkipSchema())
+			continue
+		} else if pk.IsLock() {
+			// No version check for lock keys.
+			it.Seek(pk.SkipLock())
 			continue
 		}
 
@@ -205,15 +197,37 @@ func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, gro
 	return count, nil
 }
 
-func sendKV(stream protos.Worker_PredicateAndSchemaDataServer, item *badger.Item) error {
-	val, err := item.Value()
-	if err != nil {
-		return err
+func sendKV(stream protos.Worker_PredicateAndSchemaDataServer, it *badger.Iterator) error {
+	item := it.Item()
+	key := item.Key()
+	pk := x.Parse(key)
+	if pk == nil {
+		it.Next()
+		return nil
 	}
-	kv := &protos.KV{
-		Key:      item.Key(),
-		Val:      val,
-		UserMeta: []byte{item.UserMeta()},
+
+	var kv *protos.KV
+	if pk.IsSchema() || pk.IsLock() {
+		val, err := item.Value()
+		if err != nil {
+			return err
+		}
+		kv = &protos.KV{
+			Key:      key,
+			Val:      val,
+			UserMeta: []byte{item.UserMeta()},
+			Version:  item.Version(),
+		}
+		it.Next()
+	} else {
+		l, err := posting.ReadPostingList(key, it)
+		if err != nil {
+			return nil
+		}
+		kv, err = l.MarshalToKv()
+		if err != nil {
+			return err
+		}
 	}
 	if err := stream.Send(kv); err != nil {
 		return err
@@ -258,6 +272,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		}
 	}
 
+	// TODO: Think about timestamp
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
@@ -267,16 +282,19 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 
 	var count int
 	var gidx int
+	var prevKey []byte
 	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
 	for it.Rewind(); it.Valid(); {
 		iterItem := it.Item()
 		k := iterItem.Key()
-		pk := x.Parse(k)
-
-		if pk == nil {
+		if bytes.Equal(k, prevKey) {
 			it.Next()
 			continue
 		}
+		if cap(prevKey) < len(k) {
+			prevKey = make([]byte, len(k))
+		}
+		copy(prevKey, k)
 
 		// If a key is present in follower but not in leader, send a kv with empty value
 		// so that the follower can delete it
@@ -288,30 +306,21 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 			}
 		}
 
-		// Found a match, send all versions greater than followers timestamp
+		// Found a match, skip if version is <= version on follower
 		if gidx < len(gkeys.Keys) && bytes.Equal(k, gkeys.Keys[gidx].Key) {
 			t := gkeys.Keys[gidx]
 			gidx++
-
-			for bytes.Equal(iterItem.Key(), t.Key) {
-				if iterItem.Version() > t.Timestamp {
-					if err := sendKV(stream, iterItem); err != nil {
-						return err
-					}
-					count++
-				}
+			if iterItem.Version() <= t.Timestamp {
 				it.Next()
-				iterItem = it.Item()
+				continue
 			}
-			continue
 		}
 
 		// This key is not present in follower.
-		if err := sendKV(stream, iterItem); err != nil {
+		if err := sendKV(stream, it); err != nil {
 			return err
 		}
 		count++
-		it.Next()
 	} // end of iterator
 	// All these keys are not present in leader, so mark them for deletion
 	for gidx < len(gkeys.Keys) {

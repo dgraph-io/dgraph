@@ -41,7 +41,7 @@ func uidsForRegex(attr string, gid uint32,
 		opts.Intersect = intersect
 	}
 
-	uidsForTrigram := func(trigram string) *protos.List {
+	uidsForTrigram := func(trigram string) (*protos.List, error) {
 		key := x.IndexKey(attr, trigram)
 		pl := posting.Get(key)
 		return pl.Uids(opts)
@@ -51,7 +51,10 @@ func uidsForRegex(attr string, gid uint32,
 	case cindex.QAnd:
 		tok.EncodeRegexTokens(query.Trigram)
 		for _, t := range query.Trigram {
-			trigramUids := uidsForTrigram(t)
+			trigramUids, err := uidsForTrigram(t)
+			if err != nil {
+				return nil, err
+			}
 			if results == nil {
 				results = trigramUids
 			} else {
@@ -83,8 +86,12 @@ func uidsForRegex(attr string, gid uint32,
 	case cindex.QOr:
 		tok.EncodeRegexTokens(query.Trigram)
 		uidMatrix := make([]*protos.List, len(query.Trigram))
+		var err error
 		for i, t := range query.Trigram {
-			uidMatrix[i] = uidsForTrigram(t)
+			uidMatrix[i], err = uidsForTrigram(t)
+			if err != nil {
+				return nil, err
+			}
 		}
 		results = algo.MergeSorted(uidMatrix)
 		for _, sub := range query.Sub {

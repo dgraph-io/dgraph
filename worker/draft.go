@@ -107,9 +107,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
-
 	pd.n.Applied.Done(pd.index)
-	posting.SyncMarks().Done(pd.index)
 }
 
 func (p *proposals) Has(pid uint32) bool {
@@ -199,7 +197,6 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
-		proposal.StartTs = proposal.Mutations.StartTs
 		for _, edge := range proposal.Mutations.Edges {
 			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
@@ -214,7 +211,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 			if tablet := groups().Tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
 			}
-			if err := checkSchema(schema, proposal.StartTs); err != nil {
+			if err := checkSchema(schema); err != nil {
 				return err
 			}
 		}
@@ -278,11 +275,12 @@ func (n *node) processMutation(task *task) error {
 	return nil
 }
 
-func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.SchemaUpdate) error {
-	ctx, txn := n.props.CtxAndTxn(pid)
+func (n *node) processSchemaMutations(pid uint32, index uint64,
+	startTs uint64, s *protos.SchemaUpdate) error {
+	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
-	if err := runSchemaMutation(ctx, s, txn); err != nil {
+	if err := runSchemaMutation(ctx, s, startTs); err != nil {
 		if tr, ok := trace.FromContext(n.ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -305,7 +303,6 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	n.SetConfState(cs)
 	// Not present in proposal map
 	n.Applied.Done(e.Index)
-	posting.SyncMarks().Done(e.Index)
 	groups().triggerMembershipSync()
 }
 
@@ -314,7 +311,6 @@ func (n *node) processApplyCh() {
 		if len(e.Data) == 0 {
 			// This is not in the proposal map
 			n.Applied.Done(e.Index)
-			posting.SyncMarks().Done(e.Index)
 			continue
 		}
 
@@ -342,19 +338,12 @@ func (n *node) processApplyCh() {
 				cnt: 1,
 			}
 		}
-		if proposal.Mutations != nil {
-			m := proposal.Mutations
-			txn := &posting.Txn{
-				StartTs:       m.StartTs,
-				PrimaryAttr:   m.PrimaryAttr,
-				ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
-			}
-			pctx.txn = posting.Txns().GetOrCreate(txn)
-		}
 		pctx.index = e.Index
 		n.props.Store(proposal.Id, pctx)
 
+		posting.SyncMarks().Begin(e.Index)
 		if proposal.Mutations != nil {
+			// syncmarks for this shouldn't be marked done until it's comitted.
 			n.sch.schedule(proposal, e.Index)
 		} else if len(proposal.Kv) > 0 {
 			go n.processKeyValues(e.Index, proposal.Id, proposal.Kv)
@@ -363,6 +352,7 @@ func (n *node) processApplyCh() {
 			// a state which is latest or equal to this.
 			groups().applyState(proposal.State)
 			// When proposal is done it emits done watermarks.
+			posting.SyncMarks().Done(e.Index)
 			n.props.Done(proposal.Id, nil)
 		} else if len(proposal.CleanPredicate) > 0 {
 			go n.deletePredicate(e.Index, proposal.Id, proposal.CleanPredicate)
@@ -376,7 +366,12 @@ func (n *node) processApplyCh() {
 
 func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) {
 	ctx, _ := n.props.CtxAndTxn(pid)
-	_, err := commitOrAbort(ctx, tctx, index)
+	n.Applied.WaitForMark(ctx, index-1)
+	_, err := commitOrAbort(ctx, tctx)
+	if err == nil {
+		posting.Txns().Done(tctx.StartTs)
+	}
+	posting.SyncMarks().Done(index)
 	n.props.Done(pid, err)
 }
 
@@ -385,14 +380,23 @@ func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
 	err := posting.DeletePredicate(ctx, predicate)
+	posting.SyncMarks().Done(index)
 	n.props.Done(pid, err)
 }
 
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)
+	posting.SyncMarks().Done(index)
 	n.props.Done(pid, err)
 	return nil
+}
+
+func (n *node) applyAllMarks(ctx context.Context) {
+	// Get index of last committed.
+	lastIndex, err := n.Store.LastIndex()
+	x.Checkf(err, "Error while getting last index")
+	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
 func (n *node) retrieveSnapshot(peerID uint64) {
@@ -404,13 +408,10 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 			peerID, err)
 	}
 
-	// Get index of last committed.
-	lastIndex, err := n.Store.LastIndex()
-	x.Checkf(err, "Error while getting last index")
 	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
 	// the values might get overwritten
 	// Safe to keep this line
-	n.syncAllMarks(n.ctx, lastIndex)
+	n.applyAllMarks(n.ctx)
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
@@ -507,7 +508,6 @@ func (n *node) Run() {
 				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
 				// possible sequentially
 				n.Applied.Begin(entry.Index)
-				posting.SyncMarks().Begin(entry.Index)
 
 				if !leader && entry.Type == raftpb.EntryConfChange {
 					// Config changes in followers must be applied straight away.

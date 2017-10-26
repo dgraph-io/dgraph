@@ -32,15 +32,13 @@ type Options struct {
 	Nomutations   bool
 
 	AllottedMemory float64
-	CommitFraction float64
 
 	BaseWorkerPort      int
 	ExportPath          string
 	NumPendingProposals int
 	Tracing             float64
-	GroupIds            string
 	MyAddr              string
-	PeerAddr            string
+	ZeroAddr            string
 	RaftId              uint64
 	MaxPendingCount     uint64
 	ExpandEdge          bool
@@ -61,15 +59,13 @@ var DefaultConfig = Options{
 
 	// User must specify this.
 	AllottedMemory: -1.0,
-	CommitFraction: 0.10,
 
 	BaseWorkerPort:      12345,
 	ExportPath:          "export",
 	NumPendingProposals: 2000,
 	Tracing:             0.0,
-	GroupIds:            "0,1",
 	MyAddr:              "",
-	PeerAddr:            "",
+	ZeroAddr:            "",
 	MaxPendingCount:     1000,
 	ExpandEdge:          true,
 	InMemoryComm:        false,
@@ -114,7 +110,6 @@ func setConfVar(conf Options) {
 	x.Conf.Set("posting_tables", newStr(conf.PostingTables))
 	x.Conf.Set("wal_dir", newStr(conf.WALDir))
 	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
-	x.Conf.Set("commit_fraction", newFloat(conf.CommitFraction))
 	x.Conf.Set("tracing", newFloat(conf.Tracing))
 	x.Conf.Set("max_pending_count", newInt(int(conf.MaxPendingCount)))
 	x.Conf.Set("num_pending_proposals", newInt(conf.NumPendingProposals))
@@ -130,15 +125,12 @@ func SetConfiguration(newConfig Options) {
 	posting.Config.AllottedMemory = Config.AllottedMemory
 	posting.Config.Mu.Unlock()
 
-	posting.Config.CommitFraction = Config.CommitFraction
-
 	worker.Config.BaseWorkerPort = Config.BaseWorkerPort
 	worker.Config.ExportPath = Config.ExportPath
 	worker.Config.NumPendingProposals = Config.NumPendingProposals
 	worker.Config.Tracing = Config.Tracing
-	worker.Config.GroupIds = Config.GroupIds
 	worker.Config.MyAddr = Config.MyAddr
-	worker.Config.PeerAddr = Config.PeerAddr
+	worker.Config.ZeroAddr = Config.ZeroAddr
 	worker.Config.RaftId = Config.RaftId
 	worker.Config.MaxPendingCount = Config.MaxPendingCount
 	worker.Config.ExpandEdge = Config.ExpandEdge

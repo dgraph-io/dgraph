@@ -55,8 +55,10 @@ func (txn *Txn) Query(ctx context.Context, q string,
 		LinRead: txn.linRead,
 	}
 	resp, err := txn.dg.query(ctx, req)
-	x.MergeLinReads(txn.linRead, resp.GetLinRead())
-	txn.dg.mergeLinRead(resp.GetLinRead())
+	if err == nil {
+		x.MergeLinReads(txn.linRead, resp.LinRead)
+		txn.dg.mergeLinRead(resp.LinRead)
+	}
 	return resp, err
 }
 
@@ -78,7 +80,7 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 	if txn.context.StartTs != src.StartTs {
 		return x.Errorf("StartTs mismatch")
 	}
-	txn.context.Keys = append(txn.context.Keys, src.Keys...)
+	x.MergeLinReads(txn.context.LinRead, src.LinRead)
 	return nil
 }
 
