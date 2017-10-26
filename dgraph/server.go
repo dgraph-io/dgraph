@@ -202,6 +202,20 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	resp.Context, err = query.ApplyMutations(ctx, m)
 	if err != nil {
 		resp.Error = err.Error()
+		return resp, nil
+	}
+	if mu.CommitImmediately {
+		tr, ok := trace.FromContext(ctx)
+		if ok {
+			tr.LazyPrintf("Prewrites OK. Attempting to commit immediately.")
+		}
+		ctxn := resp.Context
+		ctxn.CommitTs = ctxn.StartTs
+		_, err := worker.CommitOverNetwork(ctx, ctxn)
+		if ok {
+			tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, err)
+		}
+		return resp, err
 	}
 	return resp, nil
 }

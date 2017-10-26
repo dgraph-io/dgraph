@@ -269,8 +269,6 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 		reqs:  make(chan protos.Mutation, opts.Pending*2),
 		alloc: alloc,
 		kv:    kv,
-		// length includes opts.Pending for makeRequests, another one for makeSchemaRequests.
-		che: make(chan error, opts.Pending),
 	}
 
 	for i := 0; i < opts.Pending; i++ {
@@ -374,16 +372,6 @@ func main() {
 				interrupted = true
 			} else {
 				log.Fatal("While processing file ", err)
-			}
-		}
-	}
-
-	{
-		if err := l.BatchFlush(); err != nil {
-			if err == context.Canceled {
-				interrupted = true
-			} else {
-				log.Fatalf("While doing BatchFlush: %+v\n", err)
 			}
 		}
 	}

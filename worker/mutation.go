@@ -597,6 +597,7 @@ func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	// check memory first
 	if tx := posting.Txns().Get(in.StartTs); tx != nil {
 		// Pending transaction.
+		in.CommitTs = tx.CommitTs()
 		return in, nil
 	}
 
@@ -677,9 +678,9 @@ CHECK:
 		return err
 	}
 	if out.CommitTs == 0 {
-		// Wait for 10s. And then retry.
+		// Wait for a bit. And then retry.
 		if first && !out.Aborted {
-			time.Sleep(10 * time.Second)
+			time.Sleep(2 * time.Second)
 			first = false
 			goto CHECK
 		}

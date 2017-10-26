@@ -372,7 +372,8 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) 
 	n.Applied.WaitForMark(ctx, index-1)
 	_, err := commitOrAbort(ctx, tctx)
 	if err == nil {
-		posting.Txns().Done(tctx.StartTs)
+		// TODO: For committed ones, push them into LRU cache.
+		// posting.Txns().Done(tctx.StartTs)
 	}
 	posting.SyncMarks().Done(index)
 	n.props.Done(pid, err)

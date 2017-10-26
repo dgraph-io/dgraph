@@ -471,6 +471,7 @@ message Mutation {
 
   string primary = 12;
   uint64 start_ts = 13;
+  bool commit_immediately = 14;
 }
 
 message Operation {
