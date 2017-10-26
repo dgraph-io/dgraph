@@ -591,14 +591,3 @@ func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 
 	return stream.Send(group)
 }
-
-// SyncAllMarks syncs marks of all nodes of the worker group.
-func syncAllMarks(ctx context.Context) error {
-	n := groups().Node
-	lastIndex, err := n.Store.LastIndex()
-	if err != nil {
-		return err
-	}
-	n.syncAllMarks(ctx, lastIndex)
-	return nil
-}

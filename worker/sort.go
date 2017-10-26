@@ -499,7 +499,10 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		listOpt := posting.ListOptions{
 			Intersect: ul,
 		}
-		result := pl.Uids(listOpt) // The actual intersection work is done here.
+		result, err := pl.Uids(listOpt) // The actual intersection work is done here.
+		if err != nil {
+			return err
+		}
 		n := len(result.Uids)
 
 		// Check offsets[i].

@@ -129,6 +129,9 @@ func (d *Dgraph) fillTimestampRequests() {
 // DropAll deletes all edges and schema from Dgraph.
 func (d *Dgraph) Alter(ctx context.Context, op *protos.Operation) error {
 	dc := d.anyClient()
+	if len(op.Schema) > 0 {
+		op.StartTs = d.getTimestamp()
+	}
 	_, err := dc.Alter(ctx, op)
 	return err
 }

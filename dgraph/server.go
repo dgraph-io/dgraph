@@ -161,7 +161,7 @@ func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Paylo
 	}
 	fmt.Printf("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
-	m := &protos.Mutations{Schema: updates}
+	m := &protos.Mutations{Schema: updates, StartTs: op.StartTs}
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }

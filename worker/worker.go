@@ -25,14 +25,12 @@ import (
 	"math"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
@@ -119,12 +117,6 @@ func BlockingStop() {
 	groups().Node.Stop()     // blocking stop raft node.
 	if workerServer != nil { // possible if Config.InMemoryComm == true
 		workerServer.GracefulStop() // blocking stop server
-	}
-	// blocking sync all marks
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	if err := syncAllMarks(ctx); err != nil {
-		x.Printf("Error in sync watermarks : %s", err.Error())
 	}
 	groups().Node.snapshot(0)
 }
