@@ -99,10 +99,12 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 		x.AssertTruefNoTrace(Config.PeerAddr != Config.MyAddr,
 			"Dgraphzero address and Dgraph address can't be the same.")
 
-		id, err := raftwal.RaftId(walStore)
-		x.Check(err)
-		Config.RaftId = id
-		x.Printf("Current Raft Id: %d\n", id)
+		if Config.RaftId == 0 {
+			id, err := raftwal.RaftId(walStore)
+			x.Check(err)
+			Config.RaftId = id
+		}
+		x.Printf("Current Raft Id: %d\n", Config.RaftId)
 
 		// Successfully connect with dgraphzero, before doing anything else.
 		p := conn.Get().Connect(Config.PeerAddr)

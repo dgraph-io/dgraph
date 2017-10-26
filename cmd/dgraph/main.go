@@ -37,6 +37,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -44,7 +45,6 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
-	"github.com/cockroachdb/cmux"
 	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -107,6 +107,8 @@ func setupConfigOpts() {
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	flag.StringVar(&config.PeerAddr, "peer", defaults.PeerAddr,
 		"IP_ADDRESS:PORT of any healthy peer.")
+	flag.Uint64Var(&config.RaftId, "idx", 0,
+		"Optional Raft ID that this server will use to join RAFT groups.")
 	flag.Uint64Var(&config.MaxPendingCount, "sc", defaults.MaxPendingCount,
 		"Max number of pending entries in wal after which snapshot is taken")
 	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
@@ -331,21 +333,8 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 
 func shutdownServer() {
 	x.Printf("Got clean exit request")
-	stopProfiling()                       // stop profiling
-	dgraph.State.ShutdownCh <- struct{}{} // exit grpc and http servers.
-
-	// wait for grpc and http servers to finish pending reqs and
-	// then stop all nodes, internal grpc servers and sync all the marks
-	go func() {
-		defer func() { dgraph.State.ShutdownCh <- struct{}{} }()
-
-		// wait for grpc, http and http2 servers to stop
-		<-dgraph.State.FinishCh
-		<-dgraph.State.FinishCh
-		<-dgraph.State.FinishCh
-
-		worker.BlockingStop()
-	}()
+	stopProfiling() // stop profiling
+	sdCh <- os.Interrupt
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
@@ -482,8 +471,8 @@ func setupListener(addr string, port int) (listener net.Listener, err error) {
 	return listener, err
 }
 
-func serveGRPC(l net.Listener) {
-	defer func() { dgraph.State.FinishCh <- struct{}{} }()
+func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
+	defer wg.Done()
 	s := grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
@@ -494,14 +483,13 @@ func serveGRPC(l net.Listener) {
 	s.GracefulStop()
 }
 
-func serveHTTP(l net.Listener) {
-	defer func() { dgraph.State.FinishCh <- struct{}{} }()
+func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
+	defer wg.Done()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
 		IdleTimeout:  2 * time.Minute,
 	}
-
 	err := srv.Serve(l)
 	log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
 	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
@@ -513,7 +501,7 @@ func serveHTTP(l net.Listener) {
 	}
 }
 
-func setupServer(che chan error) {
+func setupServer() {
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 	go worker.RunServer(bindall) // For internal communication.
@@ -533,12 +521,6 @@ func setupServer(che chan error) {
 		log.Fatal(err)
 	}
 
-	// TODO: Consider removing the cmux here. We already separated gprc and http listeners to
-	// different ports.
-	httpMux := cmux.New(httpListener)
-	httpl := httpMux.Match(cmux.HTTP1Fast())
-	http2 := httpMux.Match(cmux.HTTP2())
-
 	http.HandleFunc("/health", healthCheck)
 	// http.HandleFunc("/share", shareHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -554,12 +536,14 @@ func setupServer(che chan error) {
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.
-	go serveGRPC(grpcListener)
-	go serveHTTP(httpl)
-	go serveHTTP(http2)
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go serveGRPC(grpcListener, &wg)
+	go serveHTTP(httpListener, &wg)
 
 	go func() {
-		<-dgraph.State.ShutdownCh
+		defer wg.Done()
+		<-sdCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		grpcListener.Close()
 		httpListener.Close()
@@ -567,11 +551,10 @@ func setupServer(che chan error) {
 
 	log.Println("gRPC server started.  Listening on port", grpcPort())
 	log.Println("HTTP server started.  Listening on port", httpPort())
-
-	err = httpMux.Serve()     // Start cmux serving. blocking call
-	<-dgraph.State.ShutdownCh // wait for shutdownServer to finish
-	che <- err                // final close for main.
+	wg.Wait()
 }
+
+var sdCh chan os.Signal
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -605,7 +588,7 @@ func main() {
 	worker.Init(dgraph.State.Pstore)
 
 	// setup shutdown os signal handler
-	sdCh := make(chan os.Signal, 3)
+	sdCh = make(chan os.Signal, 3)
 	var numShutDownSig int
 	defer close(sdCh)
 	// sigint : Ctrl-C, sigterm : kill command.
@@ -631,12 +614,7 @@ func main() {
 	_ = numShutDownSig
 
 	// Setup external communication.
-	che := make(chan error, 1)
-	go setupServer(che)
 	go worker.StartRaftNodes(dgraph.State.WALstore, bindall)
-
-	if err := <-che; !strings.Contains(err.Error(),
-		"use of closed network connection") {
-		log.Fatal(err)
-	}
+	setupServer()
+	worker.BlockingStop()
 }

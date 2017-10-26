@@ -21,12 +21,6 @@
 			"revisionTime": "2016-08-04T10:47:26Z"
 		},
 		{
-			"checksumSHA1": "fgxkKPz4jLzKDSg0Gmx1G0rPOWY=",
-			"path": "github.com/bkaradzic/go-lz4",
-			"revision": "7224d8d8f27ef618c0a95f1ae69dbb0488abc33a",
-			"revisionTime": "2016-09-24T22:28:19Z"
-		},
-		{
 			"checksumSHA1": "ywqbUZb6r4Mxq2MBAbv/vaYcmdw=",
 			"path": "github.com/blevesearch/bleve/analysis",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
@@ -133,12 +127,6 @@
 			"path": "github.com/blevesearch/segment",
 			"revision": "762005e7a34fd909a84586299f1dd457371d36ee",
 			"revisionTime": "2016-09-15T18:50:41Z"
-		},
-		{
-			"checksumSHA1": "HlDspvrfA33+zVOgm5mvoiWvRhg=",
-			"path": "github.com/cockroachdb/cmux",
-			"revision": "30d10be492927e2dcae0089c374c455d42414fcb",
-			"revisionTime": "2017-01-10T19:26:07Z"
 		},
 		{
 			"checksumSHA1": "7gK+lSShSu1NRw83/A95BcgMqsI=",
@@ -255,12 +243,6 @@
 		{
 			"checksumSHA1": "kBeNcaKk56FguvPSUCEaH6AxpRc=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "2bba0603135d7d7f5cb73b2125beeda19c09f4ef",
-			"revisionTime": "2017-03-31T03:19:02Z"
-		},
-		{
-			"checksumSHA1": "lZFWy27Qo6+m/keDjNFYTxSmvZw=",
-			"path": "github.com/golang/protobuf/ptypes/any",
 			"revision": "2bba0603135d7d7f5cb73b2125beeda19c09f4ef",
 			"revisionTime": "2017-03-31T03:19:02Z"
 		},
@@ -407,18 +389,6 @@
 			"path": "golang.org/x/crypto/blowfish",
 			"revision": "22ddb68eccda408bbf17759ac18d3120ce0d4f3f",
 			"revisionTime": "2017-02-07T22:51:51Z"
-		},
-		{
-			"checksumSHA1": "5EW9+Ej/HUL6hRVqji5I4/F3Twg=",
-			"path": "golang.org/x/net/http2",
-			"revision": "d1e1b351919c6738fdeb9893d5c998b161464f0c",
-			"revisionTime": "2016-12-29T22:47:41Z"
-		},
-		{
-			"checksumSHA1": "CBoO1DFToP49Ezph60yZ4J4PBBs=",
-			"path": "golang.org/x/net/http2/hpack",
-			"revision": "d1e1b351919c6738fdeb9893d5c998b161464f0c",
-			"revisionTime": "2016-12-29T22:47:41Z"
 		},
 		{
 			"checksumSHA1": "nf+CWRQfmxmZkdYRpxEuA8u+qwI=",
