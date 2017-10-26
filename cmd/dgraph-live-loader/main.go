@@ -118,9 +118,18 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 		x.Checkf(err, "Error while reading file")
 	}
 
-	return dgraphClient.Alter(ctx, &protos.Operation{
-		Schema: string(b),
-	})
+	for _, sch := range strings.Split(string(b), "\n") {
+		sch = strings.TrimSpace(sch)
+		if sch == "" {
+			continue
+		}
+		if err := dgraphClient.Alter(ctx, &protos.Operation{
+			Schema: sch,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (l *loader) uid(val string) (string, error) {
