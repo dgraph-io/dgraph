@@ -630,10 +630,6 @@ func parseNQuads(b []byte, op int) ([]*protos.NQuad, error) {
 		if err != nil {
 			return nil, err
 		}
-		if op == set && (nq.Subject == x.Star || nq.Predicate == x.Star ||
-			nq.ObjectValue.GetDefaultVal() == x.Star) {
-			return nil, errors.New("cannot use * in set mutation")
-		}
 		nqs = append(nqs, &nq)
 	}
 	return nqs, nil
@@ -668,8 +664,15 @@ func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
 		}
 	}
 
-	return &gql.Mutation{
+	gmu := &gql.Mutation{
 		Set: append(append(mu.Set, jsonSet...), nquadsSet...),
 		Del: append(append(mu.Del, jsonDel...), nquadsDel...),
-	}, nil
+	}
+	for _, nq := range gmu.Set {
+		if nq.Subject == x.Star || nq.Predicate == x.Star ||
+			nq.ObjectValue.GetDefaultVal() == x.Star {
+			return nil, x.Errorf("cannot use * in set mutation")
+		}
+	}
+	return gmu, nil
 }
