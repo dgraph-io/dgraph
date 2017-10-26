@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -76,31 +77,49 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		makeDirEmpty(liveDir),
 	)
 
-	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-bulk-loader"), "-r", rdfFile,
-		"-s", schemaFile, "-http", ":"+freePort(), "-j=1", "-x=true")
+	s.bulkCluster = NewDgraphCluster(bulkDir)
+	s.checkFatal(s.bulkCluster.StartZeroOnly())
+
+	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-bulk-loader"),
+		"-r", rdfFile,
+		"-s", schemaFile,
+		"-http", ":"+freePort(),
+		"-z", ":"+s.bulkCluster.zeroPort,
+		"-j=1", "-x=true",
+	)
+	bulkCmd.Stdout = os.Stdout
+	bulkCmd.Stderr = os.Stdout
 	bulkCmd.Dir = bulkDir
-	if out, err := bulkCmd.CombinedOutput(); err != nil {
+	if err := bulkCmd.Run(); err != nil {
 		s.cleanup()
-		s.t.Fatalf("Bulkloader didn't run: %v\nOutput:\n%s", err, string(out))
+		s.t.Fatalf("Bulkloader didn't run: %v\n", err)
 	}
+	s.bulkCluster.zero.Process.Kill()
+	s.bulkCluster.zero.Wait()
 	s.checkFatal(os.Rename(
 		filepath.Join(bulkDir, "out", "0", "p"),
 		filepath.Join(bulkDir, "p"),
 	))
 
-	s.bulkCluster = NewDgraphCluster(bulkDir)
-	s.checkFatal(s.bulkCluster.Start())
-
 	s.liveCluster = NewDgraphCluster(liveDir)
 	s.checkFatal(s.liveCluster.Start())
+	s.checkFatal(s.bulkCluster.Start())
 
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-live-loader"), "-r", rdfFile,
-		"-s", schemaFile, "-d", ":"+s.liveCluster.grpcPort, "-x=true")
+	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-live-loader"),
+		"-r", rdfFile,
+		"-s", schemaFile,
+		"-d", ":"+s.liveCluster.dgraphPort,
+		"-z", ":"+s.liveCluster.zeroPort,
+		"-c=1", // use only 1 concurrent transaction to avoid txn conflicts
+	)
 	liveCmd.Dir = liveDir
-	if out, err := liveCmd.CombinedOutput(); err != nil {
+	liveCmd.Stdout = os.Stdout
+	liveCmd.Stderr = os.Stdout
+	if err := liveCmd.Run(); err != nil {
 		s.cleanup()
-		s.t.Fatalf("Live Loader didn't run: %v\nOutput:\n%s", err, string(out))
+		s.t.Fatalf("Live Loader didn't run: %v\n", err)
 	}
+
 }
 
 func makeDirEmpty(dir string) error {
@@ -113,8 +132,12 @@ func makeDirEmpty(dir string) error {
 func (s *suite) cleanup() {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
 	// called when we detect an error (don't want to mask the original problem).
-	s.liveCluster.Close()
-	s.bulkCluster.Close()
+	if s.liveCluster != nil {
+		s.liveCluster.Close()
+	}
+	if s.bulkCluster != nil {
+		s.bulkCluster.Close()
+	}
 	_ = os.RemoveAll(rootDir)
 }
 
@@ -128,11 +151,14 @@ func (s *suite) singleQuery(query, wantResult string) func(*testing.T) {
 func (s *suite) multiQuery(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
 		for _, cluster := range []*DgraphCluster{s.bulkCluster, s.liveCluster} {
-			resp, err := cluster.Query(query)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			txn := cluster.client.NewTxn()
+			resp, err := txn.Query(ctx, query, nil)
 			if err != nil {
 				t.Fatalf("Could not query: %v", err)
 			}
-			CompareJSON(t, wantResult, resp)
+			CompareJSON(t, wantResult, string(resp.GetJson()))
 		}
 	}
 }

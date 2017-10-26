@@ -1,52 +1,65 @@
 package main
 
 import (
-	"bytes"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"os/exec"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos"
+	"google.golang.org/grpc"
 )
 
 type DgraphCluster struct {
 	TokenizerPluginsArg string
 
-	queryPort string
-	grpcPort  string
-	dir       string
-	zero      *exec.Cmd
-	dgraph    *exec.Cmd
+	dgraphPort string
+	zeroPort   string
+
+	dir    string
+	zero   *exec.Cmd
+	dgraph *exec.Cmd
+
+	client *client.Dgraph
 }
 
 func NewDgraphCluster(dir string) *DgraphCluster {
 	return &DgraphCluster{
-		grpcPort:  freePort(),
-		queryPort: freePort(),
-		dir:       dir,
+		dgraphPort: freePort(),
+		zeroPort:   freePort(),
+		dir:        dir,
 	}
 }
 
-func (d *DgraphCluster) Start() error {
-	port := freePort()
-	d.zero = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"), "-w=wz", "-idx=1", "-port", port)
+func (d *DgraphCluster) StartZeroOnly() error {
+	d.zero = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"),
+		"-w=wz",
+		"-idx=1",
+		"-port", d.zeroPort,
+	)
 	d.zero.Dir = d.dir
 	d.zero.Stdout = os.Stdout
 	d.zero.Stderr = os.Stderr
+
 	if err := d.zero.Start(); err != nil {
 		return err
 	}
 
-	// Wait for dgraphzero to start listening.
-	time.Sleep(time.Second * 1)
+	// Wait for dgraphzero to start listening and become the leader.
+	time.Sleep(time.Second * 4)
+	return nil
+}
+
+func (d *DgraphCluster) Start() error {
+	if err := d.StartZeroOnly(); err != nil {
+		return err
+	}
 
 	d.dgraph = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"-memory_mb=1024",
-		"-peer", ":"+port,
-		"-port", d.queryPort,
-		"-grpc_port", d.grpcPort,
+		"-peer", ":"+d.zeroPort,
+		"-port", freePort(),
+		"-grpc_port", d.dgraphPort,
 		"-workerport", freePort(),
 		"-custom_tokenizers", d.TokenizerPluginsArg,
 	)
@@ -57,36 +70,32 @@ func (d *DgraphCluster) Start() error {
 		return err
 	}
 
+	dgConn, err := grpc.Dial(":"+d.dgraphPort, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	zeroConn, err := grpc.Dial(":"+d.zeroPort, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+
 	// Wait for dgraph to start accepting requests. TODO: Could do this
 	// programmatically by hitting the query port. This would be quicker than
 	// just waiting 4 seconds (which seems to be the smallest amount of time to
 	// reliably wait).
 	time.Sleep(time.Second * 4)
+
+	d.client = client.NewDgraphClient(protos.NewZeroClient(zeroConn), protos.NewDgraphClient(dgConn))
+
 	return nil
 }
 
 func (d *DgraphCluster) Close() {
 	// Ignore errors
-	d.zero.Process.Kill()
-	d.dgraph.Process.Kill()
-}
-
-func (d *DgraphCluster) GRPCPort() string {
-	return d.grpcPort
-}
-
-func (d *DgraphCluster) Query(q string) (string, error) {
-	resp, err := http.Post("http://127.0.0.1:"+d.queryPort+"/query", "", bytes.NewBufferString(q))
-	if err != nil {
-		return "", err
+	if d.zero != nil {
+		d.zero.Process.Kill()
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", x.Errorf("Bad status: %v", resp.Status)
+	if d.dgraph != nil {
+		d.dgraph.Process.Kill()
 	}
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", x.Wrapf(err, "could not ready body")
-	}
-	return string(body), nil
 }
