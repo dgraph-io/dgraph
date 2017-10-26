@@ -262,6 +262,10 @@ func TestCountIndex(t *testing.T) {
 }
 
 func TestGoldenData(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+
 	s := newSuiteFromFile(t,
 		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.schema"),
 		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.rdf.gz"),
