@@ -70,7 +70,11 @@ func TestNQuadMutation(t *testing.T) {
 
 	txn = cluster.client.NewTxn()
 	_, err = txn.Mutate(ctx, &protos.Mutation{
-		DelNquads: []byte(fmt.Sprintf("<%#x> <fruit> * .", assigned.Uids["breakfast"])),
+		DelNquads: []byte(fmt.Sprintf(`
+			<%#x> <fruit> <%#x> .
+			<%#x> <cereal> <%#x> .`,
+			assigned.Uids["breakfast"], assigned.Uids["banana"],
+			assigned.Uids["breakfast"], assigned.Uids["weetbix"])),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
@@ -79,8 +83,8 @@ func TestNQuadMutation(t *testing.T) {
 	resp, err = txn.Query(ctx, breakfastQuery, nil)
 	require.NoError(t, err)
 	CompareJSON(t, `{ "data": { "q": [ {
-		"cereal": [
-			{ "xid": "weetbix" }
+		"fruit": [
+			{ "xid": "apple" }
 		]
 	}]}}`, string(resp.Json))
 }
