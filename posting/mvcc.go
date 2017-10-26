@@ -258,8 +258,7 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
 	for _, d := range tx.deltas {
-		plist := lcache.Get(string(d.key))
-		x.AssertTrue(plist != nil)
+		plist := Get(d.key)
 		if err := plist.CommitMutation(ctx, tx.StartTs, commitTs); err != nil {
 			return err
 		}
