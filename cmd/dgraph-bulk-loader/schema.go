@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	wk "github.com/dgraph-io/dgraph/worker"
@@ -84,7 +85,7 @@ func (s *schemaStore) write(db *badger.ManagedDB) {
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
-		x.Check(txn.Set(k, v, 0x00))
+		x.Check(txn.Set(k, v, posting.BitCompletePosting))
 	}
 	x.Check(txn.CommitAt(s.state.writeTs, nil))
 }

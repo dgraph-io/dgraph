@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -10,9 +11,16 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/dgraph-io/dgraph/protos"
 )
 
 func TestPlugins(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+
 	var soFiles []string
 	for i, src := range []string{
 		"./customtok/anagram/main.go",
@@ -45,35 +53,41 @@ func TestPlugins(t *testing.T) {
 		query      string
 		wantResult string
 	}
-	suite := func(setupQuery string, cases []testCase) {
-		for _, q := range []string{`mutation{dropall{}}`, setupQuery} {
-			resp, err := cluster.Query(q)
-			check(t, err)
-			if !strings.ContainsAny(resp, "Success") {
-				t.Fatal("couldn't do setup query")
-			}
-		}
+	suite := func(initialSchema string, setJSON string, cases []testCase) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		check(t, cluster.client.Alter(ctx, &protos.Operation{
+			DropAll: true,
+		}))
+		check(t, cluster.client.Alter(ctx, &protos.Operation{
+			Schema: initialSchema,
+		}))
+
+		txn := cluster.client.NewTxn()
+		_, err = txn.Mutate(ctx, &protos.Mutation{SetJson: []byte(setJSON)})
+		check(t, err)
+		check(t, txn.Commit(ctx))
+
 		for _, test := range cases {
-			resp, err := cluster.Query(test.query)
+			txn := cluster.client.NewTxn()
+			reply, err := txn.Query(ctx, test.query, nil)
 			check(t, err)
-			CompareJSON(t, test.wantResult, resp)
+			CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
 	}
 
-	suite(`
-		mutation{
-			schema{
-				word: string @index(anagram) .
-			}
-			set{
-				_:1 <word> "airmen" .
-				_:2 <word> "marine" .
-				_:3 <word> "beat" .
-				_:4 <word> "beta" .
-				_:5 <word> "race" .
-				_:6 <word> "care" .
-			}
-		}`,
+	suite(
+		"word: string @index(anagram) .",
+		//}},
+		`[
+			{ "word": "airmen" },
+			{ "word": "marine" },
+			{ "word": "beat" },
+			{ "word": "beta" },
+			{ "word": "race" },
+			{ "word": "care" }
+		]`,
 		[]testCase{
 			{`
 				{ q(func: allof(word, anagram, "remain")) {
@@ -105,19 +119,15 @@ func TestPlugins(t *testing.T) {
 		},
 	)
 
-	suite(`
-		mutation{
-			schema{
-				ip: string @index(cidr) .
-			}
-			set{
-				_:a <ip> "100.55.22.11/32" .
-				_:b <ip> "100.33.81.19/32" .
-				_:c <ip> "100.49.21.25/32" .
-				_:d <ip> "101.0.0.5/32" .
-				_:e <ip> "100.176.2.1/32" .
-			}
-		}`,
+	suite(
+		"ip: string @index(cidr) .",
+		`[
+			{ "ip": "100.55.22.11/32" },
+			{ "ip": "100.33.81.19/32" },
+			{ "ip": "100.49.21.25/32" },
+			{ "ip": "101.0.0.5/32" },
+			{ "ip": "100.176.2.1/32" }
+		]`,
 		[]testCase{
 			{`
 				{ q(func: allof(ip, cidr, "100.48.0.0/12")) {
@@ -159,18 +169,15 @@ func TestPlugins(t *testing.T) {
 			},
 		},
 	)
-	suite(`
-		mutation{
-			schema{
-				name: string @index(rune) .
-			}
-			set{
-				_:ad <name> "Adam" .
-				_:aa <name> "Aaron" .
-				_:am <name> "Amy" .
-				_:ro <name> "Ronald" .
-			}
-		}`,
+
+	suite(
+		"name: string @index(rune) .",
+		`[
+			{ "name": "Adam" },
+			{ "name": "Aaron" },
+			{ "name": "Amy" },
+			{ "name": "Ronald" }
+		]`,
 		[]testCase{
 			{`
 				{ q(func: allof(name, rune, "An")) {
@@ -236,43 +243,39 @@ func TestPlugins(t *testing.T) {
 			},
 		},
 	)
-	suite(`
-		mutation{
-			schema{
-				num: int @index(factor) .
-			}
-			set{
-				_:2 <num> "2"^^<xs:int> .
-				_:3 <num> "3"^^<xs:int> .
-				_:4 <num> "4"^^<xs:int> .
-				_:5 <num> "5"^^<xs:int> .
-				_:6 <num> "6"^^<xs:int> .
-				_:7 <num> "7"^^<xs:int> .
-				_:8 <num> "8"^^<xs:int> .
-				_:9 <num> "9"^^<xs:int> .
-				_:10 <num> "10"^^<xs:int> .
-				_:11 <num> "11"^^<xs:int> .
-				_:12 <num> "12"^^<xs:int> .
-				_:13 <num> "13"^^<xs:int> .
-				_:14 <num> "14"^^<xs:int> .
-				_:15 <num> "15"^^<xs:int> .
-				_:16 <num> "16"^^<xs:int> .
-				_:17 <num> "17"^^<xs:int> .
-				_:18 <num> "18"^^<xs:int> .
-				_:19 <num> "19"^^<xs:int> .
-				_:20 <num> "20"^^<xs:int> .
-				_:21 <num> "21"^^<xs:int> .
-				_:22 <num> "22"^^<xs:int> .
-				_:23 <num> "23"^^<xs:int> .
-				_:24 <num> "24"^^<xs:int> .
-				_:25 <num> "25"^^<xs:int> .
-				_:26 <num> "26"^^<xs:int> .
-				_:27 <num> "27"^^<xs:int> .
-				_:28 <num> "28"^^<xs:int> .
-				_:29 <num> "29"^^<xs:int> .
-				_:30 <num> "30"^^<xs:int> .
-			}
-		}`,
+	suite(
+		"num: int @index(factor) .",
+		`[
+			{ "num": 2 },
+			{ "num": 3 },
+			{ "num": 4 },
+			{ "num": 5 },
+			{ "num": 6 },
+			{ "num": 7 },
+			{ "num": 8 },
+			{ "num": 9 },
+			{ "num": 10 },
+			{ "num": 11 },
+			{ "num": 12 },
+			{ "num": 13 },
+			{ "num": 14 },
+			{ "num": 15 },
+			{ "num": 16 },
+			{ "num": 17 },
+			{ "num": 18 },
+			{ "num": 19 },
+			{ "num": 20 },
+			{ "num": 21 },
+			{ "num": 22 },
+			{ "num": 23 },
+			{ "num": 24 },
+			{ "num": 25 },
+			{ "num": 26 },
+			{ "num": 27 },
+			{ "num": 28 },
+			{ "num": 29 },
+			{ "num": 30 }
+		]`,
 		[]testCase{
 			{`
 				{

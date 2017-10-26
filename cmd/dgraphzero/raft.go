@@ -246,6 +246,12 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 
 	state := n.server.state
 	state.Counter = e.Index
+	if p.MaxRaftId > 0 {
+		if p.MaxRaftId <= state.MaxRaftId {
+			return p.Id, errInvalidProposal
+		}
+		state.MaxRaftId = p.MaxRaftId
+	}
 	if p.Member != nil {
 		if p.Member.GroupId == 0 {
 			state.Zeros[p.Member.Id] = p.Member

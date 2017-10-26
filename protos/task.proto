@@ -128,6 +128,7 @@ message ZeroProposal {
   Tablet tablet = 3;
   uint64 maxLeaseId = 4;
   uint64 maxTxnTs = 5;
+  uint64 maxRaftId = 6;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -139,6 +140,12 @@ message MembershipState {
   map<uint64, Member> zeros = 3;
   uint64 maxLeaseId = 4;
   uint64 maxTxnTs = 5;
+  uint64 maxRaftId = 6;
+}
+
+message ConnectionState {
+  Member member = 1;
+  MembershipState state = 2;
 }
 
 message Tablet {
@@ -384,7 +391,7 @@ service Raft {
 }
 
 service Zero {
-	rpc Connect (Member)      returns (MembershipState) {}
+	rpc Connect (Member)      returns (ConnectionState) {}
 	rpc Update (stream Group) returns (stream MembershipState) {}
 	rpc ShouldServe (Tablet)  returns (Tablet) {}
 	rpc AssignUids (Num)      returns (AssignedIds) {}

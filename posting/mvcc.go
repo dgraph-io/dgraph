@@ -267,7 +267,7 @@ func unmarshalOrCopy(plist *protos.PostingList, item *badger.Item) error {
 		return nil
 	}
 	// Found complete pl, no needn't iterate more
-	if item.UserMeta()&bitUidPostings != 0 {
+	if item.UserMeta()&BitUidPosting != 0 {
 		plist.Uids = make([]byte, len(val))
 		copy(plist.Uids, val)
 	} else if len(val) > 0 {
@@ -309,7 +309,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			x.Check(pl.Unmarshal(val))
 			l.mlayer = append(l.mlayer, pl.Postings...)
 		} else {
-			x.Fatalf("unexpected meta")
+			x.Fatalf("unexpected meta: %d", item.UserMeta())
 		}
 		it.Next()
 	}

@@ -107,40 +107,6 @@ func TestFacets(t *testing.T) {
 	`))
 }
 
-func TestXids(t *testing.T) {
-	s := newSuite(t, `
-		name: string @index(exact) .
-	`, `
-		<abc> <name> "ABC" .
-		_:def <name> "DEF" .
-	`)
-	defer s.cleanup()
-
-	t.Run("xid", s.singleQuery(`
-		q(func: eq(name, "ABC")) {
-			xid
-		}
-	`, `
-		"q": [ { "xid": "abc" } ]
-	`))
-
-	t.Run("blank node", s.singleQuery(`
-		q(func: eq(name, "DEF")) {
-			xid
-		}
-	`, `
-		"q": []
-	`))
-
-	t.Run("index", s.singleQuery(`
-		q(func: eq(xid, "abc")) {
-			name
-		}
-	`, `
-		"q": [ { "name" : "ABC" } ]
-	`))
-}
-
 func TestCountIndex(t *testing.T) {
 	s := newSuite(t, `
 		name: string @index(exact) .
@@ -296,6 +262,10 @@ func TestCountIndex(t *testing.T) {
 }
 
 func TestGoldenData(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
+
 	s := newSuiteFromFile(t,
 		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.schema"),
 		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.rdf.gz"),

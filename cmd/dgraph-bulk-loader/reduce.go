@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -46,13 +47,15 @@ func (r *reducer) reduce(job shuffleOutput) {
 		// list when the value is read by dgraph.  For a value posting list,
 		// the full protos.Posting type is used (which internally contains the
 		// delta packed UID list).
+		meta := posting.BitCompletePosting
 		if len(pl.Postings) == 0 {
-			txn.Set(currentKey, bp128.DeltaPack(uids), 0x01)
+			meta |= posting.BitUidPosting
+			txn.Set(currentKey, bp128.DeltaPack(uids), meta)
 		} else {
 			pl.Uids = bp128.DeltaPack(uids)
 			val, err := pl.Marshal()
 			x.Check(err)
-			txn.Set(currentKey, val, 0x00)
+			txn.Set(currentKey, val, meta)
 		}
 
 		uids = uids[:0]
