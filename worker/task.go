@@ -437,7 +437,11 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 		switch {
 		case q.DoCount:
-			out.Counts = append(out.Counts, uint32(pl.Length(args.q.ReadTs, 0)))
+			len := pl.Length(args.q.ReadTs, 0)
+			if len == -1 {
+				return posting.ErrTsTooOld
+			}
+			out.Counts = append(out.Counts, uint32(len))
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 		case srcFn.fnType == AggregatorFn:
@@ -512,8 +516,8 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
 
 		var perr error
-		filteredRes = make([]*result, 0, pl.Length(args.q.ReadTs, opts.AfterUID))
-		pl.Postings(opts, func(p *protos.Posting) bool {
+		filteredRes = make([]*result, 0)
+		err = pl.Postings(opts, func(p *protos.Posting) bool {
 			res := true
 			res, perr = applyFacetsTree(p.Facets, facetsTree)
 			if perr != nil {
@@ -526,7 +530,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			return true // continue iteration.
 		})
-		if perr != nil {
+		if err != nil || perr != nil {
 			return perr
 		}
 
@@ -541,17 +545,29 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		switch {
 		case q.DoCount:
-			out.Counts = append(out.Counts, uint32(pl.Length(args.q.ReadTs, 0)))
+			len := pl.Length(args.q.ReadTs, 0)
+			if len == -1 {
+				return posting.ErrTsTooOld
+			}
+			out.Counts = append(out.Counts, uint32(len))
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 		case srcFn.fnType == CompareScalarFn:
-			count := int64(pl.Length(args.q.ReadTs, 0))
+			len := pl.Length(args.q.ReadTs, 0)
+			if len == -1 {
+				return posting.ErrTsTooOld
+			}
+			count := int64(len)
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
 				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == HasFn:
-			count := int64(pl.Length(args.q.ReadTs, 0))
+			len := pl.Length(args.q.ReadTs, 0)
+			if len == -1 {
+				return posting.ErrTsTooOld
+			}
+			count := int64(len)
 			if EvalCompare("gt", count, 0) {
 				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
@@ -563,7 +579,10 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				AfterUID:  0,
 				Intersect: reqList,
 			}
-			plist := pl.Uids(topts)
+			plist, err := pl.Uids(topts)
+			if err != nil {
+				return err
+			}
 			if len(plist.Uids) > 0 {
 				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
@@ -1474,7 +1493,11 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
 		pl := posting.Get(countKey)
-		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{ReadTs: cp.readTs}))
+		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
+		if err != nil {
+			return err
+		}
+		out.UidMatrix = append(out.UidMatrix, uids)
 		return nil
 	}
 
@@ -1504,7 +1527,11 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 		nk := make([]byte, len(key))
 		copy(nk, key)
 		pl := posting.Get(nk)
-		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{ReadTs: cp.readTs}))
+		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
+		if err != nil {
+			return err
+		}
+		out.UidMatrix = append(out.UidMatrix, uids)
 	}
 	return nil
 }

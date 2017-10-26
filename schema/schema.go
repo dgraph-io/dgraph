@@ -65,26 +65,6 @@ func (s *state) DeleteAll() {
 	}
 }
 
-// Update updates the schema in memory and sends an entry to syncCh so that it can be
-// committed later
-func (s *state) Update(se SyncEntry) {
-	s.Lock()
-	defer s.Unlock()
-	s.predicate[se.Attr] = &se.Schema
-	se.Water.Begin(se.Index)
-	txn := pstore.NewTransactionAt(1, true)
-	defer txn.Discard()
-	// TODO: Retry on errors
-	data, _ := se.Schema.Marshal()
-	x.Check(txn.Set(x.SchemaKey(se.Attr), data, 0x00))
-	txn.CommitAt(1, func(err error) {
-		s.elog.Printf(logUpdate(se.Schema, se.Attr))
-		x.Printf(logUpdate(se.Schema, se.Attr))
-		se.Water.Done(se.Index)
-	})
-
-}
-
 // Delete updates the schema in memory and disk
 func (s *state) Delete(attr string) error {
 	s.Lock()
@@ -274,12 +254,4 @@ func LoadFromDb() error {
 func reset() {
 	pstate = new(state)
 	pstate.init()
-}
-
-// SyncEntry stores the schema mutation information
-type SyncEntry struct {
-	Attr   string
-	Schema protos.SchemaUpdate
-	Water  *x.WaterMark
-	Index  uint64
 }
