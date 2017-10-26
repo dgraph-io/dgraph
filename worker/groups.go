@@ -95,9 +95,9 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 		inMemoryTablet = &protos.Tablet{GroupId: gr.groupId()}
 
 	} else {
-		x.AssertTruefNoTrace(len(Config.PeerAddr) > 0, "Providing dgraphzero address is mandatory.")
-		x.AssertTruefNoTrace(Config.PeerAddr != Config.MyAddr,
-			"Dgraphzero address and Dgraph address can't be the same.")
+		x.AssertTruefNoTrace(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
+		x.AssertTruefNoTrace(Config.ZeroAddr != Config.MyAddr,
+			"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
 
 		if Config.RaftId == 0 {
 			id, err := raftwal.RaftId(walStore)
@@ -107,7 +107,7 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 		x.Printf("Current Raft Id: %d\n", Config.RaftId)
 
 		// Successfully connect with dgraphzero, before doing anything else.
-		p := conn.Get().Connect(Config.PeerAddr)
+		p := conn.Get().Connect(Config.ZeroAddr)
 
 		// Connect with dgraphzero and figure out what group we should belong to.
 		zc := protos.NewZeroClient(p.Get())
