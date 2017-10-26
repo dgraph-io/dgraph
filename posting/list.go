@@ -426,9 +426,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Uids))
 		}
 	}
-	if hasMutated {
-		txn.AddDelta(l.key, mpost)
-	}
+	txn.AddDelta(l.key, mpost)
 	return hasMutated, nil
 }
 
