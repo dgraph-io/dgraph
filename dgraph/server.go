@@ -664,15 +664,8 @@ func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
 		}
 	}
 
-	gmu := &gql.Mutation{
+	return &gql.Mutation{
 		Set: append(append(mu.Set, jsonSet...), nquadsSet...),
 		Del: append(append(mu.Del, jsonDel...), nquadsDel...),
-	}
-	for _, nq := range gmu.Set {
-		if nq.Subject == x.Star || nq.Predicate == x.Star ||
-			nq.ObjectValue.GetDefaultVal() == x.Star {
-			return nil, x.Errorf("cannot use * in set mutation")
-		}
-	}
-	return gmu, nil
+	}, nil
 }
