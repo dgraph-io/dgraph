@@ -35,6 +35,7 @@ import (
 
 var (
 	emptyMembershipState protos.MembershipState
+	emptyConnectionState protos.ConnectionState
 	errInvalidId         = errors.New("Invalid server id")
 	errInvalidAddress    = errors.New("Invalid address")
 	errEmptyPredicate    = errors.New("Empty predicate")
@@ -239,21 +240,23 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 
 // Connect is used to connect the very first time with group zero.
 func (s *Server) Connect(ctx context.Context,
-	m *protos.Member) (resp *protos.MembershipState, err error) {
+	m *protos.Member) (resp *protos.ConnectionState, err error) {
 	x.Printf("Got connection request: %+v\n", m)
 	defer x.Println("Connected")
 
 	if ctx.Err() != nil {
-		return &emptyMembershipState, ctx.Err()
+		return &emptyConnectionState, ctx.Err()
 	}
 	if m.CluterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
-		return s.membershipState(), nil
+		ms, err := s.latestMembershipState(ctx)
+		cs := &protos.ConnectionState{State: ms}
+		return cs, err
 	}
 	if len(m.Addr) == 0 {
 		fmt.Println("No address provided.")
-		return &emptyMembershipState, errInvalidAddress
+		return &emptyConnectionState, errInvalidAddress
 	}
 	for _, group := range s.state.Groups {
 		member, has := group.Members[m.Id]
@@ -264,7 +267,7 @@ func (s *Server) Connect(ctx context.Context,
 			// Different address, then check if the last one is healthy or not.
 			if _, err := conn.Get().Get(member.Addr); err == nil {
 				// Healthy conn to the existing member with the same id.
-				return &emptyMembershipState, conn.ErrDuplicateRaftId
+				return &emptyConnectionState, conn.ErrDuplicateRaftId
 			}
 		}
 	}
@@ -283,8 +286,8 @@ func (s *Server) Connect(ctx context.Context,
 			}
 		}
 		if m.Id == 0 {
-			m.Id = s.state.MaxRaftId
-			proposal.MaxRaftId = s.state.MaxRaftId
+			m.Id = s.state.MaxRaftId + 1
+			proposal.MaxRaftId = m.Id
 		}
 
 		// We don't have this member. So, let's see if it has preference for a group.
@@ -327,10 +330,14 @@ func (s *Server) Connect(ctx context.Context,
 	proposal := createProposal()
 	if proposal != nil {
 		if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
-			return &emptyMembershipState, err
+			return &emptyConnectionState, err
 		}
 	}
-	return s.membershipState(), nil
+	resp = &protos.ConnectionState{
+		State:  s.membershipState(),
+		Member: m,
+	}
+	return resp, nil
 }
 
 func (s *Server) ShouldServe(
@@ -454,9 +461,6 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 }
 
 func (s *Server) latestMembershipState(ctx context.Context) (*protos.MembershipState, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
-
 	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
 		return nil, err
 	}

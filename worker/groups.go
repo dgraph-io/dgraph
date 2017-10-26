@@ -102,27 +102,29 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 		id, err := raftwal.RaftId(walStore)
 		x.Check(err)
 		Config.RaftId = id
+		x.Printf("Current Raft Id: %d\n", id)
 
 		// Successfully connect with dgraphzero, before doing anything else.
 		p := conn.Get().Connect(Config.PeerAddr)
 
 		// Connect with dgraphzero and figure out what group we should belong to.
 		zc := protos.NewZeroClient(p.Get())
-		var state *protos.MembershipState
+		var connState *protos.ConnectionState
 		m := &protos.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 		for i := 0; i < 100; i++ { // Generous number of attempts.
 			var err error
-			state, err = zc.Connect(gr.ctx, m)
+			connState, err = zc.Connect(gr.ctx, m)
 			if err == nil {
 				break
 			}
 			x.Printf("Error while connecting with group zero: %v", err)
 		}
-		if state == nil {
+		if connState.GetMember() == nil || connState.GetState() == nil {
 			x.Fatalf("Unable to join cluster via dgraphzero")
 		}
-		x.Printf("Connected to group zero. State: %+v\n", state)
-		gr.applyState(state)
+		x.Printf("Connected to group zero. Connection state: %+v\n", connState)
+		Config.RaftId = connState.GetMember().GetId()
+		gr.applyState(connState.GetState())
 	}
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)

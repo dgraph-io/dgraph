@@ -34,7 +34,9 @@ type Wal struct {
 }
 
 func Init(walStore *badger.ManagedDB, id uint64) *Wal {
-	return &Wal{wals: walStore, id: id}
+	w := &Wal{wals: walStore, id: id}
+	x.Check(w.StoreRaftId(id))
+	return w
 }
 
 var idKey = []byte("raftid")

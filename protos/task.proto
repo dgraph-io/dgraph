@@ -143,6 +143,11 @@ message MembershipState {
   uint64 maxRaftId = 6;
 }
 
+message ConnectionState {
+  Member member = 1;
+  MembershipState state = 2;
+}
+
 message Tablet {
   uint32 group_id  = 1; // Served by which group.
   string predicate = 2;
@@ -386,7 +391,7 @@ service Raft {
 }
 
 service Zero {
-	rpc Connect (Member)      returns (MembershipState) {}
+	rpc Connect (Member)      returns (ConnectionState) {}
 	rpc Update (stream Group) returns (stream MembershipState) {}
 	rpc ShouldServe (Tablet)  returns (Tablet) {}
 	rpc AssignUids (Num)      returns (AssignedIds) {}
