@@ -18,14 +18,18 @@
 package worker
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math"
 	"strconv"
+	"sync"
+	"sync/atomic"
 
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -43,13 +47,25 @@ func populateKeyValues(ctx context.Context, kvs []*protos.KV) error {
 	// single tablet.
 	groups().waitForBackgroundDeletion()
 	x.Printf("Writing %d keys\n", len(kvs))
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-	// Badger does batching internally so no need to batch it.
+
+	var hasError uint32
+	var wg sync.WaitGroup
+	wg.Add(len(kvs))
 	for _, kv := range kvs {
+		txn := pstore.NewTransactionAt(math.MaxUint64, true)
 		txn.Set(kv.Key, kv.Val, kv.UserMeta[0])
+		txn.CommitAt(kv.Version, func(err error) {
+			if err != nil {
+				atomic.StoreUint32(&hasError, 1)
+			}
+			wg.Done()
+		})
+		txn.Discard()
 	}
-	return txn.Commit(nil)
+	if hasError > 0 {
+		return x.Errorf("Error while writing to badger")
+	}
+	return nil
 }
 
 func movePredicateHelper(ctx context.Context, predicate string, gid uint32) error {
@@ -64,45 +80,61 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	}
 
 	count := 0
-	sendItem := func(stream protos.Worker_ReceivePredicateClient, item *badger.Item) error {
-		kv := &protos.KV{}
-		key := item.Key()
-		if len(key) == 0 {
-			return nil
-		}
-		kv.Key = make([]byte, len(key))
-		copy(kv.Key, key)
-		kv.UserMeta = []byte{item.UserMeta()}
-
-		val, err := item.Value()
+	sendPl := func(stream protos.Worker_ReceivePredicateClient, l *posting.List) error {
+		kv, err := l.MarshalToKv()
 		if err != nil {
 			return err
 		}
-		kv.Val = make([]byte, len(val))
-		copy(kv.Val, val)
 		return stream.Send(kv)
 	}
 
 	// sends all data except schema, schema key has different prefix
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
-	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	it := txn.NewIterator(iterOpts)
 	defer it.Close()
+
 	prefix := x.PredicatePrefix(predicate)
+	var prevKey []byte
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		item := it.Item()
+		key := item.Key()
+		if bytes.Equal(key, prevKey) {
+			it.Next()
+			continue
+		}
+		if cap(prevKey) < len(key) {
+			prevKey = make([]byte, len(key))
+		}
+		copy(prevKey, key)
+		l, err := posting.ReadPostingList(key, it)
+		if err != nil {
+			return err
+		}
 		count++
-		if err := sendItem(stream, item); err != nil {
+		if err := sendPl(stream, l); err != nil {
 			return err
 		}
 	}
 
 	// send schema
-	item, err := txn.Get(x.SchemaKey(predicate))
+	schemaKey := x.SchemaKey(predicate)
+	item, err := txn.Get(schemaKey)
 	if err != nil && err != badger.ErrKeyNotFound {
 		return err
 	}
-	if err := sendItem(stream, item); err != nil {
+	val, err := item.Value()
+	if err != nil {
+		return err
+	}
+	kv := &protos.KV{}
+	kv.Key = schemaKey
+	kv.Val = val
+	kv.Version = 1
+	kv.UserMeta = []byte{item.UserMeta()}
+	if err := stream.Send(kv); err != nil {
 		return err
 	}
 	count++
@@ -227,10 +259,16 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if err := n.ProposeAndWait(ctx, &protos.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
-	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
-	if err := syncAllMarks(ctx); err != nil {
-		return &emptyPayload, err
+	tctxs := posting.Txns().Iterate(func(key []byte) bool {
+		pk := x.Parse(key)
+		return pk.Attr == in.Predicate
+	})
+	if len(tctxs) > 0 {
+		go fixConflicts(tctxs)
+		return &emptyPayload, posting.ErrConflict
 	}
+	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
+	n.applyAllMarks(ctx)
 
 	err := movePredicateHelper(ctx, in.Predicate, in.DestGroupId)
 	return &emptyPayload, err

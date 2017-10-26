@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"math"
 	"math/rand"
 	"sort"
 	"time"
@@ -80,9 +81,8 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
-func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
-	// TODO(txn): Abort all the pending transactions here.
-	if err := runSchemaMutationHelper(ctx, update, txn); err != nil {
+func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, startTs uint64) error {
+	if err := runSchemaMutationHelper(ctx, update, startTs); err != nil {
 		return err
 	}
 
@@ -100,19 +100,12 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, txn *po
 	return nil
 }
 
-func runSchemaMutationHelper(ctx context.Context, update *protos.SchemaUpdate, txn *posting.Txn) error {
-	rv := ctx.Value("raft").(x.RaftValue)
+func runSchemaMutationHelper(ctx context.Context, update *protos.SchemaUpdate, startTs uint64) error {
 	n := groups().Node
-	// Wait for applied watermark to reach till previous index
-	// All mutations before this should use old schema and after this
-	// should use new schema
-	if err := n.syncAllMarks(n.ctx, rv.Index-1); err != nil {
-		return err
-	}
 	if !groups().ServesTablet(update.Predicate) {
 		return errUnservedTablet
 	}
-	if err := checkSchema(update, txn.StartTs); err != nil {
+	if err := checkSchema(update); err != nil {
 		return err
 	}
 	old, ok := schema.State().Get(update.Predicate)
@@ -135,17 +128,17 @@ func runSchemaMutationHelper(ctx context.Context, update *protos.SchemaUpdate, t
 	defer x.Printf("Done schema update %+v\n", update)
 	if !ok {
 		if current.Directive == protos.SchemaUpdate_INDEX {
-			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true, txn); err != nil {
+			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true, startTs); err != nil {
 				return err
 			}
 		} else if current.Directive == protos.SchemaUpdate_REVERSE {
-			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true, txn); err != nil {
+			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true, startTs); err != nil {
 				return err
 			}
 		}
 
 		if current.Count {
-			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true, txn); err != nil {
+			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true, startTs); err != nil {
 				return err
 			}
 		}
@@ -155,19 +148,19 @@ func runSchemaMutationHelper(ctx context.Context, update *protos.SchemaUpdate, t
 	if needReindexing(old, current) {
 		// Reindex if update.Index is true or remove index
 		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
-			current.Directive == protos.SchemaUpdate_INDEX, txn); err != nil {
+			current.Directive == protos.SchemaUpdate_INDEX, startTs); err != nil {
 			return err
 		}
 	} else if needsRebuildingReverses(old, current) {
 		// Add or remove reverse edge based on update.Reverse
 		if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
-			current.Directive == protos.SchemaUpdate_REVERSE, txn); err != nil {
+			current.Directive == protos.SchemaUpdate_REVERSE, startTs); err != nil {
 			return err
 		}
 	}
 
 	if current.Count != old.Count {
-		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count, txn); err != nil {
+		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count, startTs); err != nil {
 		}
 	}
 	return nil
@@ -200,14 +193,18 @@ func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
 	return false
 }
 
-func updateSchema(attr string, s protos.SchemaUpdate, index uint64) {
-	ce := schema.SyncEntry{
-		Attr:   attr,
-		Schema: s,
-		Index:  index,
-		Water:  posting.SyncMarks(),
+// We commit schema to disk in blocking way, should be ok because this happens
+// only during schema mutations or we see a new predicate.
+func updateSchema(attr string, s protos.SchemaUpdate, index uint64) error {
+	schema.State().Set(attr, s)
+	txn := pstore.NewTransactionAt(1, true)
+	defer txn.Discard()
+	data, err := s.Marshal()
+	x.Check(err)
+	if err := txn.Set(x.SchemaKey(attr), data, 0x00); err != nil {
+		return err
 	}
-	schema.State().Update(ce)
+	return txn.CommitAt(1, nil)
 }
 
 func updateSchemaType(attr string, typ types.TypeID, index uint64) {
@@ -239,7 +236,7 @@ func hasEdges(attr string, startTs uint64) bool {
 	return false
 }
 
-func checkSchema(s *protos.SchemaUpdate, startTs uint64) error {
+func checkSchema(s *protos.SchemaUpdate) error {
 	if len(s.Predicate) == 0 {
 		return x.Errorf("No predicate specified in schema mutation")
 	}
@@ -266,7 +263,7 @@ func checkSchema(s *protos.SchemaUpdate, startTs uint64) error {
 		if t.IsScalar() == typ.IsScalar() {
 			// If old type was list and new type is non-list, we don't allow it until user
 			// has data.
-			if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, startTs) {
+			if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, math.MaxUint64) {
 				return x.Errorf("Schema change not allowed from [%s] => %s without"+
 					" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
 			}
@@ -274,7 +271,7 @@ func checkSchema(s *protos.SchemaUpdate, startTs uint64) error {
 			return nil
 		}
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
-		if hasEdges(s.Predicate, startTs) {
+		if hasEdges(s.Predicate, math.MaxUint64) {
 			return x.Errorf("Schema change not allowed from predicate to uid or vice versa"+
 				" till you have data for pred: %s", s.Predicate)
 		}
@@ -470,52 +467,18 @@ func proposeOrSendTctx(ctx context.Context, gid uint32, tctx *protos.TxnContext)
 	}
 }
 
-func addToTxnMap(txnMap map[uint32]*protos.TxnContext, tctx *protos.TxnContext) error {
-	for _, key := range tctx.Keys {
-		pk := x.Parse([]byte(key))
-		x.AssertTrue(pk != nil)
-		gid := groups().BelongsTo(pk.Attr)
-		tc := txnMap[gid]
-		if tc == nil {
-			txnMap[gid] = &protos.TxnContext{
-				StartTs:  tctx.StartTs,
-				Primary:  tctx.Primary,
-				CommitTs: tctx.CommitTs,
-				Keys:     []string{key},
-			}
-			continue
-		}
-		tc.Keys = append(tc.Keys, key)
-	}
-
-	primaryGid := groups().BelongsTo(tctx.Primary)
-	if _, ok := txnMap[primaryGid]; ok {
-		return nil
-	}
-	// Can happen when mutations don't cause any diff.
-	txnMap[primaryGid] = &protos.TxnContext{
-		StartTs:  tctx.StartTs,
-		Primary:  tctx.Primary,
-		CommitTs: tctx.CommitTs,
-	}
-	return nil
-}
-
 func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Payload, error) {
-	txnMap := make(map[uint32]*protos.TxnContext)
-	if err := addToTxnMap(txnMap, txn); err != nil {
-		return &protos.Payload{}, err
+	if len(txn.Primary) == 0 {
+		return &protos.Payload{}, x.Errorf("Primary Attr is empty")
 	}
 
 	primaryGid := groups().BelongsTo(txn.Primary)
-	ptctx, ok := txnMap[primaryGid]
-	x.AssertTrue(ok)
-	if err := proposeOrSendTctx(ctx, primaryGid, ptctx); err != nil {
+	if err := proposeOrSendTctx(ctx, primaryGid, txn); err != nil {
 		return &protos.Payload{}, err
 	}
 
-	errCh := make(chan error, len(txnMap))
-	for gid, tctx := range txnMap {
+	errCh := make(chan error, len(txn.LinRead.Ids))
+	for gid := range txn.LinRead.Ids {
 		if gid == 0 {
 			return &protos.Payload{}, errUnservedTablet
 		}
@@ -523,14 +486,12 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 			errCh <- nil
 			continue
 		}
-		go func(gid uint32, tctx *protos.TxnContext) {
-			errCh <- proposeOrSendTctx(ctx, gid, tctx)
-		}(gid, tctx)
+		errCh <- proposeOrSendTctx(ctx, gid, txn)
 	}
 
 	// wait for all goroutines to reply back
 	var e error
-	for i := 0; i < len(txnMap); i++ {
+	for i := 0; i < len(txn.LinRead.Ids); i++ {
 		err := <-errCh
 		if err != nil {
 			e = err
@@ -539,24 +500,16 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 	return &protos.Payload{}, e
 }
 
-func commitOrAbort(ctx context.Context, tc *protos.TxnContext, index uint64) (*protos.Payload, error) {
-	n := groups().Node
-	n.Applied.WaitForMark(ctx, index-1)
+func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
 	txn := posting.Txns().Get(tc.StartTs)
 	if txn == nil {
 		return &protos.Payload{}, posting.ErrInvalidTxn
 	}
 	if tc.CommitTs == 0 {
 		err := txn.AbortMutations(ctx)
-		if err != nil {
-			posting.Txns().Done(tc.StartTs)
-		}
 		return &protos.Payload{}, err
 	}
 	err := txn.CommitMutations(ctx, tc.CommitTs, groups().ServesTablet(tc.Primary))
-	if err != nil {
-		posting.Txns().Done(tc.StartTs)
-	}
 	return &protos.Payload{}, err
 }
 
@@ -599,7 +552,6 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 			}
 		}
 		x.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
-		tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
 	}
 	close(resCh)
 	return tctx, e
@@ -730,6 +682,11 @@ CHECK:
 			goto CHECK
 		}
 	}
+	// Fix all prewrites corresponding to the in.StartTs on this node only.
+	out.LinRead = &protos.LinRead{
+		Ids: make(map[uint32]uint64),
+	}
+	out.LinRead.Ids[groups().gid] = 1 // value doesn't matter
 	_, err = CommitOverNetwork(ctx, out)
 	return err
 }

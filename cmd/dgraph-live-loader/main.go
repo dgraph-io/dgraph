@@ -118,20 +118,9 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 		x.Checkf(err, "Error while reading file")
 	}
 
-	// TODO: Once dgraph accepts multiple schemas at once, we don't need to do
-	// the split here.
-	for _, sch := range strings.Split(string(b), "\n") {
-		sch = strings.TrimSpace(sch)
-		if sch == "" {
-			continue
-		}
-		if err := dgraphClient.Alter(ctx, &protos.Operation{
-			Schema: sch,
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
+	op := &protos.Operation{}
+	op.Schema = string(b)
+	return dgraphClient.Alter(ctx, op)
 }
 
 func (l *loader) uid(val string) (string, error) {

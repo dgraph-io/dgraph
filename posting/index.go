@@ -159,10 +159,16 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *protos.DirectedEdge) 
 	plist.Lock()
 	if hasCountIndex {
 		countBefore = plist.length(txn.StartTs, 0)
+		if countBefore == -1 {
+			return ErrTsTooOld
+		}
 	}
 	_, err := plist.addMutation(ctx, txn, edge)
 	if hasCountIndex {
 		countAfter = plist.length(txn.StartTs, 0)
+		if countAfter == -1 {
+			return ErrTsTooOld
+		}
 	}
 	plist.Unlock()
 	if err != nil {
@@ -297,6 +303,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 
 	var val types.Val
 	var found bool
+	var err error
 
 	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
 		return l.handleDeleteAll(ctx, t, txn)
@@ -315,19 +322,28 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.
 			if len(t.Lang) > 0 {
-				val, found = l.findValue(0, farm.Fingerprint64([]byte(t.Lang)))
+				val, found, err = l.findValue(txn.StartTs, farm.Fingerprint64([]byte(t.Lang)))
 			} else {
-				val, found = l.findValue(0, math.MaxUint64)
+				val, found, err = l.findValue(txn.StartTs, math.MaxUint64)
+			}
+			if err != nil {
+				return err
 			}
 		}
 		countBefore, countAfter := 0, 0
 		hasCountIndex := schema.State().HasCount(t.Attr)
 		if hasCountIndex {
 			countBefore = l.length(txn.StartTs, 0)
+			if countBefore == -1 {
+				return ErrTsTooOld
+			}
 		}
 		_, err := l.addMutation(ctx, txn, t)
 		if hasCountIndex {
 			countAfter = l.length(txn.StartTs, 0)
+			if countAfter == -1 {
+				return ErrTsTooOld
+			}
 		}
 		l.Unlock()
 
@@ -375,7 +391,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 	return nil
 }
 
-// TODO(txn): Ensure that scheduler does it in blocking way to avoid race condition.
 func deleteEntries(prefix []byte) error {
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
@@ -405,12 +420,9 @@ func compareAttrAndType(key []byte, attr string, typ byte) bool {
 }
 
 func DeleteReverseEdges(ctx context.Context, attr string) error {
-	err := lcache.clear(func(key []byte) bool {
+	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteReverse)
 	})
-	if err != nil {
-		return err
-	}
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
@@ -430,18 +442,12 @@ func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
 }
 
 func DeleteCountIndex(ctx context.Context, attr string) error {
-	err := lcache.clear(func(key []byte) bool {
+	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteCount)
 	})
-	if err != nil {
-		return err
-	}
-	err = lcache.clear(func(key []byte) bool {
+	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteCountRev)
 	})
-	if err != nil {
-		return err
-	}
 	// Delete index entries from data store.
 	if err := deleteCountIndex(ctx, attr, false); err != nil {
 		return err
@@ -452,13 +458,13 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 	return nil
 }
 
-func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh chan struct{}) {
+func rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh chan struct{}, startTs uint64) {
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
 		go func() {
 			var err error
-			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
+			txn := &Txn{StartTs: startTs}
 			for it := range ch {
 				l := it.list
 				t := &protos.DirectedEdge{
@@ -466,10 +472,14 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				err = txn.addCountMutation(ctx, t, uint32(l.Length(txn.StartTs, 0)), reverse)
+				len := l.Length(txn.StartTs, 0)
+				if len == -1 {
+					continue
+				}
+				err = txn.addCountMutation(ctx, t, uint32(len), reverse)
 				for err == ErrRetry {
 					time.Sleep(10 * time.Millisecond)
-					err = txn.addCountMutation(ctx, t, uint32(l.Length(txn.StartTs, 0)), reverse)
+					err = txn.addCountMutation(ctx, t, uint32(len), reverse)
 				}
 				if err == nil {
 					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
@@ -489,7 +499,7 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 		prefix = pk.ReversePrefix()
 	}
 
-	t := pstore.NewTransactionAt(txn.StartTs, false)
+	t := pstore.NewTransactionAt(startTs, false)
 	defer t.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
@@ -532,12 +542,12 @@ func (txn *Txn) rebuildCountIndex(ctx context.Context, attr string, reverse bool
 	doneCh <- struct{}{}
 }
 
-func (txn *Txn) RebuildCountIndex(ctx context.Context, attr string) {
+func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) {
 	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
 	doneCh := make(chan struct{}, 2)
 	// Lets rebuild forward and reverse count indexes concurrently.
-	go txn.rebuildCountIndex(ctx, attr, false, doneCh)
-	go txn.rebuildCountIndex(ctx, attr, true, doneCh)
+	go rebuildCountIndex(ctx, attr, false, doneCh, startTs)
+	go rebuildCountIndex(ctx, attr, true, doneCh, startTs)
 
 	for i := 0; i < 2; i++ {
 		<-doneCh
@@ -550,12 +560,12 @@ type item struct {
 }
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
-func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) {
+func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
-	t := pstore.NewTransactionAt(txn.StartTs, false)
+	t := pstore.NewTransactionAt(startTs, false)
 	defer t.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
@@ -590,7 +600,7 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) {
 	for i := 0; i < 1000; i++ {
 		go func() {
 			var err error
-			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
+			txn := &Txn{StartTs: startTs}
 			for it := range ch {
 				addReversePostings(it.uid, it.list, txn)
 				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
@@ -639,12 +649,9 @@ func (txn *Txn) RebuildReverseEdges(ctx context.Context, attr string) {
 }
 
 func DeleteIndex(ctx context.Context, attr string) error {
-	err := lcache.clear(func(key []byte) bool {
+	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteIndex)
 	})
-	if err != nil {
-		return err
-	}
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
@@ -656,12 +663,12 @@ func DeleteIndex(ctx context.Context, attr string) error {
 
 // RebuildIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
-func (txn *Txn) RebuildIndex(ctx context.Context, attr string) {
+func RebuildIndex(ctx context.Context, attr string, startTs uint64) {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
-	t := pstore.NewTransactionAt(txn.StartTs, false)
+	t := pstore.NewTransactionAt(startTs, false)
 	defer t.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
@@ -699,7 +706,7 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) {
 	for i := 0; i < 1000; i++ {
 		go func() {
 			var err error
-			txn := &Txn{StartTs: txn.StartTs, PrimaryAttr: txn.PrimaryAttr}
+			txn := &Txn{StartTs: startTs}
 			for it := range ch {
 				addPostingsToIndex(it.uid, it.list, txn)
 				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
@@ -748,19 +755,14 @@ func (txn *Txn) RebuildIndex(ctx context.Context, attr string) {
 }
 
 func DeleteAll() error {
-	if err := lcache.clear(func([]byte) bool { return true }); err != nil {
-		return err
-	}
+	lcache.clear(func([]byte) bool { return true })
 	return deleteEntries(nil)
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	err := lcache.clear(func(key []byte) bool {
+	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
 	})
-	if err != nil {
-		return err
-	}
 	pk := x.ParsedKey{
 		Attr: attr,
 	}

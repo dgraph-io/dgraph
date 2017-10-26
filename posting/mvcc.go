@@ -32,8 +32,8 @@ import (
 )
 
 var (
-	ErrConflict = x.Errorf("Transaction aborted due to conflict")
-	errTsTooOld = x.Errorf("Transaction is too old")
+	ErrConflict = x.Errorf("Conflicts with pending transaction")
+	ErrTsTooOld = x.Errorf("Transaction is too old")
 	txns        *transactions
 )
 
@@ -61,11 +61,46 @@ type Txn struct {
 	sync.Mutex
 	deltas    []delta
 	conflicts []*protos.TxnContext
+	Indices   []uint64
 }
 
 type transactions struct {
 	x.SafeMutex
 	m map[uint64]*Txn
+}
+
+func (t *transactions) Reset() {
+	t.Lock()
+	defer t.Unlock()
+	for _, txn := range t.m {
+		txn.done()
+	}
+	t.m = make(map[uint64]*Txn)
+}
+
+func (t *transactions) Iterate(ok func(key []byte) bool) []*protos.TxnContext {
+	t.RLock()
+	defer t.RUnlock()
+	var tctxs []*protos.TxnContext
+	for _, txn := range t.m {
+		if tctx := txn.fillIf(ok); tctx != nil {
+			tctxs = append(tctxs, tctx)
+		}
+	}
+	return tctxs
+}
+
+func (t *Txn) fillIf(ok func(key []byte) bool) *protos.TxnContext {
+	t.Lock()
+	defer t.Unlock()
+	for _, d := range t.deltas {
+		if ok(d.key) {
+			tctx := &protos.TxnContext{}
+			t.fill(tctx)
+			return tctx
+		}
+	}
+	return nil
 }
 
 func (t *transactions) Get(startTs uint64) *Txn {
@@ -77,19 +112,32 @@ func (t *transactions) Get(startTs uint64) *Txn {
 func (t *transactions) Done(startTs uint64) {
 	t.Lock()
 	defer t.Unlock()
+	txn, ok := t.m[startTs]
+	if !ok {
+		return
+	}
+	txn.done()
 	delete(t.m, startTs)
 }
 
-func (t *transactions) GetOrCreate(txn *Txn) *Txn {
-	if txn := t.Get(txn.StartTs); txn != nil {
-		return txn
-	}
+func (t *Txn) done() {
 	t.Lock()
 	defer t.Unlock()
-	if txn := t.m[txn.StartTs]; txn != nil {
+	SyncMarks().DoneMany(t.Indices)
+}
+
+func (t *transactions) PutOrMergeIndex(txn *Txn) *Txn {
+	t.Lock()
+	defer t.Unlock()
+	tx := t.m[txn.StartTs]
+	if tx == nil {
+		t.m[txn.StartTs] = txn
 		return txn
 	}
-	t.m[txn.StartTs] = txn
+	x.AssertTrue(tx.StartTs == txn.StartTs)
+	x.AssertTrue(tx.PrimaryAttr == txn.PrimaryAttr)
+	tx.Indices = append(tx.Indices, txn.Indices...)
+	t.m[txn.StartTs] = tx
 	return txn
 }
 
@@ -210,7 +258,8 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
 	for _, d := range tx.deltas {
-		plist := Get(d.key)
+		plist := lcache.Get(string(d.key))
+		x.AssertTrue(plist != nil)
 		if err := plist.CommitMutation(ctx, tx.StartTs, commitTs); err != nil {
 			return err
 		}

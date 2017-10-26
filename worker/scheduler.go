@@ -103,29 +103,51 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 	}()
 
 	if proposal.Mutations.DropAll {
-		if err = s.n.syncAllMarks(s.n.ctx, index-1); err != nil {
+		if err = s.n.Applied.WaitForMark(s.n.ctx, index-1); err != nil {
 			return err
 		}
 		schema.State().DeleteAll()
 		err = posting.DeleteAll()
+		posting.Txns().Reset()
+		posting.SyncMarks().Done(index)
 		return
 	}
 
-	// ensures that index is not mark completed until all tasks
-	// are submitted to scheduler
-	for _, supdate := range proposal.Mutations.Schema {
-		// This is neceassry to ensure that there is no race between when we start reading
-		// from badger and new mutation getting commited via raft and getting applied.
-		// Before Moving the predicate we would flush all and wait for watermark to catch up
-		// but there might be some proposals which got proposed but not comitted yet.
-		// It's ok to reject the proposal here and same would happen on all nodes because we
-		// would have proposed membershipstate, and all nodes would have the proposed state
-		// or some state after that before reaching here.
-		if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
-			err = errPredicateMoving
-			return
+	if len(proposal.Mutations.Schema) > 0 {
+		if err = s.n.Applied.WaitForMark(s.n.ctx, index-1); err != nil {
+			return err
 		}
-		err = s.n.processSchemaMutations(proposal.Id, index, supdate)
+		startTs := proposal.Mutations.StartTs
+		if startTs == 0 {
+			return errors.New("StartTs must be provided.")
+		}
+		for _, supdate := range proposal.Mutations.Schema {
+			// This is neceassry to ensure that there is no race between when we start reading
+			// from badger and new mutation getting commited via raft and getting applied.
+			// Before Moving the predicate we would flush all and wait for watermark to catch up
+			// but there might be some proposals which got proposed but not comitted yet.
+			// It's ok to reject the proposal here and same would happen on all nodes because we
+			// would have proposed membershipstate, and all nodes would have the proposed state
+			// or some state after that before reaching here.
+			if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
+				err = errPredicateMoving
+				break
+			}
+			tctxs := posting.Txns().Iterate(func(key []byte) bool {
+				pk := x.Parse(key)
+				return pk.Attr == supdate.Predicate && (pk.IsIndex() || pk.IsCount() || pk.IsReverse())
+			})
+			if len(tctxs) > 0 {
+				go fixConflicts(tctxs)
+				err = posting.ErrConflict
+			} else {
+				err = s.n.processSchemaMutations(proposal.Id, index, startTs, supdate)
+			}
+			if err != nil {
+				break
+			}
+		}
+		posting.SyncMarks().Done(index)
 		return
 	}
 
@@ -146,17 +168,27 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only have one edge drop in one mutation call.
 			ctx, _ := s.n.props.CtxAndTxn(proposal.Id)
-			if err = s.n.syncAllMarks(ctx, index-1); err != nil {
+			if err = s.n.Applied.WaitForMark(ctx, index-1); err != nil {
 				return
 			}
-			err = posting.DeletePredicate(ctx, edge.Attr)
+			tctxs := posting.Txns().Iterate(func(key []byte) bool {
+				pk := x.Parse(key)
+				return pk.Attr == edge.Attr
+			})
+			if len(tctxs) > 0 {
+				go fixConflicts(tctxs)
+				err = posting.ErrConflict
+			} else {
+				err = posting.DeletePredicate(ctx, edge.Attr)
+			}
+			posting.SyncMarks().Done(index)
 			return
 		}
 		if _, ok := schemaMap[edge.Attr]; !ok {
 			schemaMap[edge.Attr] = posting.TypeID(edge)
 		}
 	}
-	if proposal.StartTs == 0 {
+	if proposal.Mutations.StartTs == 0 {
 		return errors.New("StartTs must be provided.")
 	}
 	if len(proposal.Mutations.PrimaryAttr) == 0 {
@@ -176,7 +208,15 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 		}
 	}
 
-	for _, edge := range proposal.Mutations.Edges {
+	m := proposal.Mutations
+	pctx := s.n.props.pctx(proposal.Id)
+	txn := &posting.Txn{
+		StartTs:       m.StartTs,
+		PrimaryAttr:   m.PrimaryAttr,
+		ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
+	}
+	pctx.txn = posting.Txns().PutOrMergeIndex(txn)
+	for _, edge := range m.Edges {
 		t := &task{
 			rid:  index,
 			pid:  proposal.Id,
