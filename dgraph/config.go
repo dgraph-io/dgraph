@@ -70,7 +70,6 @@ var DefaultConfig = Options{
 	GroupIds:            "0,1",
 	MyAddr:              "",
 	PeerAddr:            "",
-	RaftId:              1,
 	MaxPendingCount:     1000,
 	ExpandEdge:          true,
 	InMemoryComm:        false,

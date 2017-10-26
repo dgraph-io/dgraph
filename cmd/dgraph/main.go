@@ -107,8 +107,6 @@ func setupConfigOpts() {
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	flag.StringVar(&config.PeerAddr, "peer", defaults.PeerAddr,
 		"IP_ADDRESS:PORT of any healthy peer.")
-	flag.Uint64Var(&config.RaftId, "idx", defaults.RaftId,
-		"RAFT ID that this server will use to join RAFT groups.")
 	flag.Uint64Var(&config.MaxPendingCount, "sc", defaults.MaxPendingCount,
 		"Max number of pending entries in wal after which snapshot is taken")
 	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
