@@ -178,7 +178,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		len(mu.GetSetJson()) == 0 &&
 			len(mu.GetDeleteJson()) == 0 &&
 			len(mu.Set) == 0 && len(mu.Del) == 0 &&
-			len(mu.SetRdf) == 0 && len(mu.DelRdf) == 0
+			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
 		return resp, fmt.Errorf("empty mutation")
 	}
@@ -620,7 +620,7 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 	return mr.nquads, err
 }
 
-func nquadsFromRDF(b []byte, op int) ([]*protos.NQuad, error) {
+func parseNQuads(b []byte, op int) ([]*protos.NQuad, error) {
 	var nqs []*protos.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
 		line = bytes.TrimSpace(line)
@@ -638,7 +638,7 @@ func nquadsFromRDF(b []byte, op int) ([]*protos.NQuad, error) {
 }
 
 func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
-	var jsonSet, jsonDel, rdfSet, rdfDel []*protos.NQuad
+	var jsonSet, jsonDel, nquadsSet, nquadsDel []*protos.NQuad
 	var err error
 
 	if len(mu.SetJson) > 0 {
@@ -653,21 +653,21 @@ func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
 			return nil, err
 		}
 	}
-	if len(mu.SetRdf) > 0 {
-		rdfSet, err = nquadsFromRDF(mu.SetRdf, set)
+	if len(mu.SetNquads) > 0 {
+		nquadsSet, err = parseNQuads(mu.SetNquads, set)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if len(mu.DelRdf) > 0 {
-		rdfDel, err = nquadsFromRDF(mu.DelRdf, delete)
+	if len(mu.DelNquads) > 0 {
+		nquadsDel, err = parseNQuads(mu.DelNquads, delete)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &gql.Mutation{
-		Set: append(append(mu.Set, jsonSet...), rdfSet...),
-		Del: append(append(mu.Del, jsonDel...), rdfDel...),
+		Set: append(append(mu.Set, jsonSet...), nquadsSet...),
+		Del: append(append(mu.Del, jsonDel...), nquadsDel...),
 	}, nil
 }
