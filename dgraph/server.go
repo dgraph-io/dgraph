@@ -200,24 +200,31 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 
 	m := &protos.Mutations{Edges: edges, StartTs: mu.StartTs}
 	resp.Context, err = query.ApplyMutations(ctx, m)
-	if err != nil {
-		resp.Error = err.Error()
+	if !mu.CommitImmediately {
+		if err != nil {
+			// TODO: Investigate if this is really necessary.
+			resp.Error = err.Error()
+		}
 		return resp, nil
 	}
-	if mu.CommitImmediately {
-		tr, ok := trace.FromContext(ctx)
-		if ok {
-			tr.LazyPrintf("Prewrites OK. Attempting to commit immediately.")
-		}
-		ctxn := resp.Context
+
+	tr, ok := trace.FromContext(ctx)
+	if ok {
+		tr.LazyPrintf("Prewrites OK. Attempting to commit immediately.")
+	}
+	ctxn := resp.Context
+	if err == nil {
 		ctxn.CommitTs = ctxn.StartTs
-		_, err := worker.CommitOverNetwork(ctx, ctxn)
-		if ok {
-			tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, err)
-		}
+	}
+	// If CommitTs is zero, this would abort.
+	_, aerr := worker.CommitOverNetwork(ctx, ctxn)
+	if ok {
+		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, aerr)
+	}
+	if err != nil {
 		return resp, err
 	}
-	return resp, nil
+	return resp, aerr
 }
 
 // This method is used to execute the query and return the response to the
@@ -245,7 +252,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	}
 
 	resp = new(protos.Response)
-	if len(req.Query) == 0 && req.Schema == nil {
+	if len(req.Query) == 0 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Empty query")
 		}
@@ -270,14 +277,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 		return resp, err
 	}
 
-	if req.Schema != nil && parsedReq.Schema != nil {
-		return resp, x.Errorf("Multiple schema blocks found")
-	}
 	// Schema Block and Mutation can be part of query string or request
-	if parsedReq.Schema == nil {
-		parsedReq.Schema = req.Schema
-	}
-
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
 		GqlQuery: &parsedReq,

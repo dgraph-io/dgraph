@@ -597,7 +597,11 @@ func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	// check memory first
 	if tx := posting.Txns().Get(in.StartTs); tx != nil {
 		// Pending transaction.
-		in.CommitTs = tx.CommitTs()
+		if tx.HasConflict() {
+			in.Aborted = true
+		} else {
+			in.CommitTs = tx.CommitTs()
+		}
 		return in, nil
 	}
 

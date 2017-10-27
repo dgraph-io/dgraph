@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -52,6 +53,7 @@ type loader struct {
 	alloc  *xidmap.XidMap
 	ticker *time.Ticker
 	kv     *badger.DB
+	wg     sync.WaitGroup
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -98,26 +100,39 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
+func (l *loader) infinitelyRetry(req protos.Mutation) {
+	defer l.wg.Done()
+	for {
+		txn := l.dc.NewTxn()
+		req.CommitImmediately = true
+		_, err := txn.Mutate(l.opts.Ctx, &req)
+		if err == nil {
+			atomic.AddUint64(&l.txns, 1)
+			return
+		}
+		atomic.AddUint64(&l.aborts, 1)
+	}
+}
+
 func (l *loader) request(req protos.Mutation) {
 	txn := l.dc.NewTxn()
 	req.CommitImmediately = true
 	_, err := txn.Mutate(l.opts.Ctx, &req)
 
-	if err != nil {
-		if err := txn.Abort(l.opts.Ctx); err != nil {
-			fmt.Printf("Error while aborting: %v\n", err)
-		}
-		atomic.AddUint64(&l.aborts, 1)
-		go func() { l.reqs <- req }()
+	if err == nil {
+		atomic.AddUint64(&l.txns, 1)
 		return
 	}
-	atomic.AddUint64(&l.txns, 1)
+	atomic.AddUint64(&l.aborts, 1)
+	l.wg.Add(1)
+	go l.infinitelyRetry(req)
 }
 
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
 // It doesn't need to batch the requests anymore. Batching is already done for it by the
 // caller functions.
 func (l *loader) makeRequests() {
+	defer l.wg.Done()
 	for req := range l.reqs {
 		l.request(req)
 	}

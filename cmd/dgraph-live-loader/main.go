@@ -271,6 +271,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 		kv:    kv,
 	}
 
+	l.wg.Add(opts.Pending)
 	for i := 0; i < opts.Pending; i++ {
 		go l.makeRequests()
 	}
@@ -288,14 +289,6 @@ func main() {
 		x.PrintVersionOnly()
 	}
 	runtime.SetBlockProfileRate(*blockRate)
-
-	interruptChan := make(chan os.Signal)
-	// signal.Notify(interruptChan, syscall.SIGINT, syscall.SIGTERM)
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-interruptChan
-		cancel()
-	}()
 
 	go http.ListenAndServe("localhost:6060", nil)
 	switch *mode {
@@ -319,6 +312,7 @@ func main() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
+	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          *numRdf,
 		Pending:       *concurrent,
@@ -365,17 +359,14 @@ func main() {
 		}(file)
 	}
 
-	interrupted := false
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			if err == context.Canceled {
-				interrupted = true
-			} else {
-				log.Fatal("While processing file ", err)
-			}
+			log.Fatal("While processing file ", err)
 		}
 	}
 
+	close(l.reqs)
+	l.wg.Wait()
 	c := l.Counter()
 	var rate uint64
 	if c.Elapsed.Seconds() < 1 {
@@ -387,9 +378,6 @@ func main() {
 	// previous printed line.
 	fmt.Printf("%100s\r", "")
 
-	if interrupted {
-		fmt.Println("Interrupted.")
-	}
 	fmt.Printf("Number of mutations run   : %d\n", c.TxnsDone)
 	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)

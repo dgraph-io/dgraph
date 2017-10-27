@@ -385,6 +385,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		pk := x.Parse(l.key)
 		fmt.Printf("Can't prewrite due to %+v. txnstart=%d\n", pk, txn.StartTs)
 		if len(pk.Term) > 0 {
+			// TODO: See if we can do this in ParsedKey instead.
 			fmt.Printf("Term: %q\n", pk.Term[1:])
 		}
 		txn.AddConflict(&protos.TxnContext{StartTs: l.startTs, Primary: l.primaryAttr})

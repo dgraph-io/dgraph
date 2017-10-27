@@ -214,6 +214,8 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 		if err := txn.Set(lk, buf[:], 0); err != nil {
 			return err
 		}
+		// TODO: Update sync marks based on this.
+		// Have new index keys in memory for iteration.
 		if err := txn.CommitAt(tx.StartTs, x.Check); err != nil {
 			return err
 		}
