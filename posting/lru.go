@@ -124,7 +124,6 @@ func (c *listCache) removeOldest() {
 		if committed, err := e.pl.SyncIfDirty(true); err != nil {
 			continue
 		} else if !committed {
-			x.AssertTrue(err == nil)
 			delete(c.cache, e.key)
 		}
 
