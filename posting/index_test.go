@@ -305,6 +305,8 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 1, 24, uint64(12), uint64(13))
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
+	// TODO: Remove after fixing sync marks.
+	time.Sleep(time.Second)
 	RebuildReverseEdges(context.Background(), "friend", 16)
 	CommitLists(func(key []byte) bool {
 		pk := x.Parse(key)

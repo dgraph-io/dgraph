@@ -65,6 +65,9 @@ func (s *scheduler) processTasks() {
 		nextTask := t
 		for nextTask != nil {
 			err := s.n.processMutation(nextTask)
+			if err == posting.ErrRetry {
+				continue
+			}
 			n.props.Done(nextTask.pid, err)
 			x.ActiveMutations.Add(-1)
 			nextTask = s.nextTask(nextTask)

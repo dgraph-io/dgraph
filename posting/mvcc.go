@@ -408,13 +408,21 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	}
 	if item.UserMeta()&BitCompletePosting > 0 {
 		err = unmarshalOrCopy(l.plist, item)
-		return l, err
+		l.minTs = item.Version()
+		l.commitTs = item.Version()
+	} else {
+		iterOpts := badger.DefaultIteratorOptions
+		iterOpts.AllVersions = true
+		it := txn.NewIterator(iterOpts)
+		defer it.Close()
+		it.Seek(key)
+		l, err = ReadPostingList(key, it)
 	}
 
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	it := txn.NewIterator(iterOpts)
-	defer it.Close()
-	it.Seek(key)
-	return ReadPostingList(key, it)
+	l.Lock()
+	size := l.calculateSize()
+	l.Unlock()
+	x.BytesRead.Add(int64(size))
+	atomic.StoreUint32(&l.estimatedSize, size)
+	return l, err
 }

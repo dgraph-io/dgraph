@@ -116,12 +116,13 @@ func (c *listCache) removeOldest() {
 		e := ele.Value.(*entry)
 
 		if !e.pl.SetForDeletion() {
-			ele.Prev()
+			ele = ele.Prev()
 			continue
 		}
 		// If length of mutation layer is zero, then we won't call pstore.SetAsync and the
 		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
 		if committed, err := e.pl.SyncIfDirty(true); err != nil {
+			ele = ele.Prev()
 			continue
 		} else if !committed {
 			delete(c.cache, e.key)
@@ -130,7 +131,7 @@ func (c *listCache) removeOldest() {
 		c.ll.Remove(ele)
 		c.evicts++
 		c.curSize -= e.size
-		ele.Prev()
+		ele = ele.Prev()
 	}
 }
 

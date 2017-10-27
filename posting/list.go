@@ -383,10 +383,12 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 
 	if !l.canPreWrite(ctx, txn) {
 		pk := x.Parse(l.key)
-		fmt.Printf("Can't prewrite due to %+v. txnstart=%d\n", pk, txn.StartTs)
-		if len(pk.Term) > 0 {
-			// TODO: See if we can do this in ParsedKey instead.
-			fmt.Printf("Term: %q\n", pk.Term[1:])
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Can't prewrite due to %+v. txnstart=%d\n", pk, txn.StartTs)
+			if len(pk.Term) > 0 {
+				//TODO: See if we can do this in ParsedKey instead.
+				tr.LazyPrintf("Term: %q\n", pk.Term[1:])
+			}
 		}
 		txn.AddConflict(&protos.TxnContext{StartTs: l.startTs, Primary: l.primaryAttr})
 		return false, ErrConflict
@@ -498,6 +500,10 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	}
 
 	l.AssertLock()
+	if l.startTs > commitTs || l.commitTs > commitTs {
+		// Txn got committed and new one has started.
+		return nil
+	}
 	if l.startTs == 0 && l.commitTs == commitTs {
 		return nil
 	}
@@ -733,9 +739,6 @@ func (l *List) rollup() (*protos.PostingList, error) {
 	buf := make([]uint64, 0, bp128.BlockSize)
 
 	err := l.iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
-		if p.Commit > l.commitTs {
-			l.commitTs = p.Commit
-		}
 		buf = append(buf, p.Uid)
 		if len(buf) == bp128.BlockSize {
 			bp.PackAppend(buf)
@@ -850,6 +853,7 @@ func (l *List) Uids(opt ListOptions) (*protos.List, error) {
 	out := &protos.List{}
 	if len(l.mlayer) == 0 && opt.Intersect != nil {
 		if opt.ReadTs < l.minTs {
+			l.RUnlock()
 			return out, ErrTsTooOld
 		}
 		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)

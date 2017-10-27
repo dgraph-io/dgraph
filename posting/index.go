@@ -38,6 +38,8 @@ import (
 
 const maxBatchSize = 32 * (1 << 20)
 
+var emptyCountParams countParams
+
 // IndexTokens return tokens, without the predicate prefix and index rune.
 func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 	schemaType, err := schema.State().TypeOf(attr)
@@ -141,6 +143,37 @@ type countParams struct {
 	reverse     bool
 }
 
+func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
+	hasCountIndex bool, edge *protos.DirectedEdge) (countParams, error) {
+	countBefore, countAfter := 0, 0
+	plist.Lock()
+	defer plist.Unlock()
+	if hasCountIndex {
+		countBefore = plist.length(txn.StartTs, 0)
+		if countBefore == -1 {
+			return emptyCountParams, ErrTsTooOld
+		}
+	}
+	_, err := plist.addMutation(ctx, txn, edge)
+	if err != nil {
+		return emptyCountParams, err
+	}
+	if hasCountIndex {
+		countAfter = plist.length(txn.StartTs, 0)
+		if countAfter == -1 {
+			return emptyCountParams, ErrTsTooOld
+		}
+		return countParams{
+			attr:        edge.Attr,
+			countBefore: countBefore,
+			countAfter:  countAfter,
+			entity:      edge.ValueId,
+			reverse:     true,
+		}, nil
+	}
+	return emptyCountParams, nil
+}
+
 func (txn *Txn) addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	plist := Get(key)
@@ -154,23 +187,8 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *protos.DirectedEdge) 
 		Facets:  t.Facets,
 	}
 
-	countBefore, countAfter := 0, 0
 	hasCountIndex := schema.State().HasCount(t.Attr)
-	plist.Lock()
-	if hasCountIndex {
-		countBefore = plist.length(txn.StartTs, 0)
-		if countBefore == -1 {
-			return ErrTsTooOld
-		}
-	}
-	_, err := plist.addMutation(ctx, txn, edge)
-	if hasCountIndex {
-		countAfter = plist.length(txn.StartTs, 0)
-		if countAfter == -1 {
-			return ErrTsTooOld
-		}
-	}
-	plist.Unlock()
+	cp, err := txn.addReverseMutationHelper(ctx, plist, hasCountIndex, edge)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error adding/deleting reverse edge for attr %s entity %d: %v",
@@ -180,14 +198,8 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *protos.DirectedEdge) 
 	}
 	x.PredicateStats.Add(fmt.Sprintf("r.%s", edge.Attr), 1)
 
-	if hasCountIndex && countAfter != countBefore {
-		if err := txn.updateCount(ctx, countParams{
-			attr:        t.Attr,
-			countBefore: countBefore,
-			countAfter:  countAfter,
-			entity:      edge.Entity,
-			reverse:     true,
-		}); err != nil {
+	if hasCountIndex && cp.countAfter != cp.countBefore {
+		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
 		}
 	}
@@ -292,6 +304,58 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 	return nil
 }
 
+func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bool,
+	hasCountIndex bool, t *protos.DirectedEdge) (types.Val, bool, countParams, error) {
+	var val types.Val
+	var found bool
+	var err error
+
+	t1 := time.Now()
+	l.Lock()
+	defer l.Unlock()
+	if dur := time.Since(t1); dur > time.Millisecond {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("acquired lock %v %v %v", dur, t.Attr, t.Entity)
+		}
+	}
+
+	if doUpdateIndex {
+		// Check original value BEFORE any mutation actually happens.
+		if len(t.Lang) > 0 {
+			val, found, err = l.findValue(txn.StartTs, farm.Fingerprint64([]byte(t.Lang)))
+		} else {
+			val, found, err = l.findValue(txn.StartTs, math.MaxUint64)
+		}
+		if err != nil {
+			return val, found, emptyCountParams, err
+		}
+	}
+	countBefore, countAfter := 0, 0
+	if hasCountIndex {
+		countBefore = l.length(txn.StartTs, 0)
+		if countBefore == -1 {
+			return val, found, emptyCountParams, ErrTsTooOld
+		}
+	}
+	_, err = l.addMutation(ctx, txn, t)
+	if err != nil {
+		return val, found, emptyCountParams, err
+	}
+	if hasCountIndex {
+		countAfter = l.length(txn.StartTs, 0)
+		if countAfter == -1 {
+			return val, found, emptyCountParams, ErrTsTooOld
+		}
+		return val, found, countParams{
+			attr:        t.Attr,
+			countBefore: countBefore,
+			countAfter:  countAfter,
+			entity:      t.Entity,
+		}, nil
+	}
+	return val, found, emptyCountParams, nil
+}
+
 // AddMutationWithIndex is AddMutation with support for indexing. It also
 // supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
@@ -301,65 +365,20 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 			" and value: [%v]", t.Entity, t.ValueId, t.Value)
 	}
 
-	var val types.Val
-	var found bool
-	var err error
-
 	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
 		return l.handleDeleteAll(ctx, t, txn)
 	}
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
-	{
-		t1 := time.Now()
-		l.Lock()
-		if dur := time.Since(t1); dur > time.Millisecond {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("acquired lock %v %v %v", dur, t.Attr, t.Entity)
-			}
-		}
-
-		if doUpdateIndex {
-			// Check original value BEFORE any mutation actually happens.
-			if len(t.Lang) > 0 {
-				val, found, err = l.findValue(txn.StartTs, farm.Fingerprint64([]byte(t.Lang)))
-			} else {
-				val, found, err = l.findValue(txn.StartTs, math.MaxUint64)
-			}
-			if err != nil {
-				return err
-			}
-		}
-		countBefore, countAfter := 0, 0
-		hasCountIndex := schema.State().HasCount(t.Attr)
-		if hasCountIndex {
-			countBefore = l.length(txn.StartTs, 0)
-			if countBefore == -1 {
-				return ErrTsTooOld
-			}
-		}
-		_, err := l.addMutation(ctx, txn, t)
-		if hasCountIndex {
-			countAfter = l.length(txn.StartTs, 0)
-			if countAfter == -1 {
-				return ErrTsTooOld
-			}
-		}
-		l.Unlock()
-
-		if err != nil {
+	hasCountIndex := schema.State().HasCount(t.Attr)
+	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, t)
+	if err != nil {
+		return err
+	}
+	x.PredicateStats.Add(t.Attr, 1)
+	if hasCountIndex && cp.countAfter != cp.countBefore {
+		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
-		}
-		x.PredicateStats.Add(t.Attr, 1)
-		if hasCountIndex && countAfter != countBefore {
-			if err := txn.updateCount(ctx, countParams{
-				attr:        t.Attr,
-				countBefore: countBefore,
-				countAfter:  countAfter,
-				entity:      t.Entity,
-			}); err != nil {
-				return err
-			}
 		}
 	}
 	// We should always set index set and we can take care of stale indexes in

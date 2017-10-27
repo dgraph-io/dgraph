@@ -111,6 +111,7 @@ func (l *loader) infinitelyRetry(req protos.Mutation) {
 			return
 		}
 		atomic.AddUint64(&l.aborts, 1)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
