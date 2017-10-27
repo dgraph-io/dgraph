@@ -417,6 +417,9 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
+		// Ensures that txn is aborted.
+		txn.AddConflict(nil)
+		l.startTs = 0
 		return false, err
 	}
 
