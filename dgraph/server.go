@@ -312,16 +312,6 @@ func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.V
 	return v, nil
 }
 
-func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("request rejected %v", err)
-		}
-		return &protos.AssignedIds{}, err
-	}
-	return worker.AssignUidsOverNetwork(ctx, num)
-}
-
 //-------------------------------------------------------------------------------------------------
 // HELPER FUNCTIONS
 //-------------------------------------------------------------------------------------------------

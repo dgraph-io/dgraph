@@ -417,7 +417,6 @@ service Dgraph {
     rpc Mutate (Mutation)         returns (Assigned) {}
     rpc Alter (Operation)         returns (Payload) {}
     rpc CheckVersion(Check)       returns (Version) {}
-    rpc AssignUids(Num)           returns (AssignedIds) {}
     rpc CommitOrAbort(TxnContext) returns (Payload) {}
 }
 
@@ -483,8 +482,7 @@ message Operation {
 
 message Request {
     string query = 1;
-    SchemaRequest schema = 3;
-    map<string, string> vars = 4; // Support for GraphQL like variables.
+    map<string, string> vars = 2; // Support for GraphQL like variables.
 
     uint64 start_ts = 13;
     LinRead lin_read = 14;
