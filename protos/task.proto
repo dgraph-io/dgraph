@@ -129,6 +129,7 @@ message ZeroProposal {
   uint64 maxLeaseId = 4;
   uint64 maxTxnTs = 5;
   uint64 maxRaftId = 6;
+  TxnContext txn = 7;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -379,6 +380,7 @@ message TxnContext {
   uint64 start_ts = 2;
   uint64 commit_ts = 3;
   bool aborted = 4;
+  repeated string keys = 5;
   LinRead lin_read = 13;
 }
 
@@ -394,6 +396,7 @@ service Zero {
 	rpc ShouldServe (Tablet)  returns (Tablet) {}
 	rpc AssignUids (Num)      returns (AssignedIds) {}
   rpc Timestamps (Num)      returns (AssignedIds) {}
+  rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
 }
 
 service Worker {

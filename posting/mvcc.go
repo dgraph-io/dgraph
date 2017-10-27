@@ -178,9 +178,18 @@ func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 	t.deltas = append(t.deltas, delta{key: key, posting: p})
 }
 
+func (t *Txn) Fill(ctx *protos.TxnContext) {
+	t.Lock()
+	defer t.Unlock()
+	t.fill(ctx)
+}
+
 func (t *Txn) fill(ctx *protos.TxnContext) {
 	ctx.StartTs = t.StartTs
 	ctx.Primary = t.PrimaryAttr
+	for _, d := range t.deltas {
+		ctx.Keys = append(ctx.Keys, string(d.key))
+	}
 }
 
 // TODO: Use commitAsync

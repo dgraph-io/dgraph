@@ -351,7 +351,10 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 		node := groups().Node
 		// we don't timeout after proposing
 		res.err = node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
-		res.ctx = &protos.TxnContext{StartTs: m.StartTs, Primary: m.PrimaryAttr}
+		res.ctx = &protos.TxnContext{}
+		if txn := posting.Txns().Get(m.StartTs); txn != nil {
+			txn.Fill(res.ctx)
+		}
 		res.ctx.LinRead = &protos.LinRead{
 			Ids: make(map[uint32]uint64),
 		}
@@ -553,6 +556,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 		}
 		if res.ctx != nil {
 			x.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
+			tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
 		}
 	}
 	close(resCh)
