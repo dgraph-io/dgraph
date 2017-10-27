@@ -61,7 +61,7 @@ type Txn struct {
 	sync.Mutex
 	deltas    []delta
 	conflicts []*protos.TxnContext
-	Indices   []uint64
+	Indices   []uint64 // Accessed in serial way
 	commitTs  uint64
 }
 
@@ -130,6 +130,7 @@ func (t *transactions) Done(startTs uint64) {
 func (t *Txn) done() {
 	t.Lock()
 	defer t.Unlock()
+	// All indices should have been added by  now.
 	SyncMarks().DoneMany(t.Indices)
 }
 
@@ -150,6 +151,9 @@ func (t *transactions) PutOrMergeIndex(txn *Txn) *Txn {
 
 func (t *Txn) AddConflict(conflict *protos.TxnContext) {
 	atomic.StoreUint32(&t.hasConflict, 1)
+	if conflict == nil {
+		return
+	}
 	t.Lock()
 	defer t.Unlock()
 	t.conflicts = append(t.conflicts, conflict)
@@ -389,8 +393,23 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 }
 
 func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
+	l := new(List)
+	l.key = key
+	l.plist = new(protos.PostingList)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
+
+	item, err := txn.Get(key)
+	if err == badger.ErrKeyNotFound {
+		return l, nil
+	}
+	if err != nil {
+		return l, err
+	}
+	if item.UserMeta()&BitCompletePosting > 0 {
+		err = unmarshalOrCopy(l.plist, item)
+		return l, err
+	}
 
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
