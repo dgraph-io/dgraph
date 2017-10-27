@@ -417,6 +417,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
+		// TODO: Abort
 		return false, err
 	}
 

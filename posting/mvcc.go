@@ -54,6 +54,7 @@ type Txn struct {
 	StartTs       uint64
 	PrimaryAttr   string
 	ServesPrimary bool
+	Indices       []uint64 // Accessed in serial way
 
 	// atomic
 	hasConflict uint32
@@ -61,7 +62,6 @@ type Txn struct {
 	sync.Mutex
 	deltas    []delta
 	conflicts []*protos.TxnContext
-	Indices   []uint64
 	commitTs  uint64
 }
 
@@ -128,8 +128,7 @@ func (t *transactions) Done(startTs uint64) {
 }
 
 func (t *Txn) done() {
-	t.Lock()
-	defer t.Unlock()
+	// All indices should have been added by  now.
 	SyncMarks().DoneMany(t.Indices)
 }
 
@@ -389,8 +388,23 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 }
 
 func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
+	l := new(List)
+	l.key = key
+	l.plist = new(protos.PostingList)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
+
+	item, err := txn.Get(key)
+	if err == badger.ErrKeyNotFound {
+		return l, nil
+	}
+	if err != nil {
+		return l, err
+	}
+	if item.UserMeta()&BitCompletePosting > 0 {
+		err = unmarshalOrCopy(l.plist, item)
+		return l, nil
+	}
 
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
