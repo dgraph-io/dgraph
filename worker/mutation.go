@@ -551,7 +551,9 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 				tr.LazyPrintf("Error while running all mutations: %+v", res.err)
 			}
 		}
-		x.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
+		if res.ctx != nil {
+			x.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
+		}
 	}
 	close(resCh)
 	return tctx, e
@@ -595,6 +597,11 @@ func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
 	// check memory first
 	if tx := posting.Txns().Get(in.StartTs); tx != nil {
 		// Pending transaction.
+		if tx.HasConflict() {
+			in.Aborted = true
+		} else {
+			in.CommitTs = tx.CommitTs()
+		}
 		return in, nil
 	}
 
@@ -675,9 +682,9 @@ CHECK:
 		return err
 	}
 	if out.CommitTs == 0 {
-		// Wait for 10s. And then retry.
+		// Wait for a bit. And then retry.
 		if first && !out.Aborted {
-			time.Sleep(10 * time.Second)
+			time.Sleep(2 * time.Second)
 			first = false
 			goto CHECK
 		}

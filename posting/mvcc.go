@@ -62,6 +62,13 @@ type Txn struct {
 	deltas    []delta
 	conflicts []*protos.TxnContext
 	Indices   []uint64
+	commitTs  uint64
+}
+
+func (txn *Txn) CommitTs() uint64 {
+	txn.Lock()
+	defer txn.Unlock()
+	return txn.commitTs
 }
 
 type transactions struct {
@@ -180,6 +187,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 	if tx.HasConflict() {
 		return ErrInvalidTxn
 	}
+	tx.commitTs = commitTs
 	if writeLock {
 		lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
 		// First update the primary key to indicate the status of transaction.
@@ -206,7 +214,9 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 		if err := txn.Set(lk, buf[:], 0); err != nil {
 			return err
 		}
-		if err := txn.CommitAt(tx.StartTs, nil); err != nil {
+		// TODO: Update sync marks based on this.
+		// Have new index keys in memory for iteration.
+		if err := txn.CommitAt(tx.StartTs, x.Check); err != nil {
 			return err
 		}
 	}
@@ -244,7 +254,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock b
 			return err
 		}
 	}
-	if err := txn.CommitAt(commitTs, nil); err != nil {
+	if err := txn.CommitAt(commitTs, x.Check); err != nil {
 		return err
 	}
 	return tx.commitMutationsMemory(ctx, commitTs)

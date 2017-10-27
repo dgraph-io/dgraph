@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -52,6 +53,7 @@ type loader struct {
 	alloc  *xidmap.XidMap
 	ticker *time.Ticker
 	kv     *badger.DB
+	wg     sync.WaitGroup
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -64,9 +66,6 @@ type loader struct {
 	start time.Time
 
 	reqs chan protos.Mutation
-	che  chan error
-	// In case of max retries exceeded, we set this to 1.
-	retriesExceeded int32
 }
 
 func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
@@ -101,63 +100,42 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
-func (l *loader) request(req protos.Mutation) error {
-	var retries uint32
-RETRY:
-	if retries >= l.opts.MaxRetries {
-		atomic.CompareAndSwapInt32(&l.retriesExceeded, 0, 1)
-		return ErrMaxTries
-	}
-	retries++
-
-	select {
-	case <-l.opts.Ctx.Done():
-		return l.opts.Ctx.Err()
-	default:
-	}
-	txn := l.dc.NewTxn()
-	var err error
-	for i := 0; i < 3; i++ {
-		_, err = txn.Mutate(l.opts.Ctx, &req)
+func (l *loader) infinitelyRetry(req protos.Mutation) {
+	defer l.wg.Done()
+	for {
+		txn := l.dc.NewTxn()
+		req.CommitImmediately = true
+		_, err := txn.Mutate(l.opts.Ctx, &req)
 		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		if err := txn.Abort(l.opts.Ctx); err != nil {
-			fmt.Printf("Error while aborting: %v\n", err)
+			atomic.AddUint64(&l.txns, 1)
+			return
 		}
 		atomic.AddUint64(&l.aborts, 1)
-		time.Sleep(10 * time.Second)
-		goto RETRY
 	}
-	err = txn.Commit(l.opts.Ctx)
-	if err != nil {
-		// fmt.Printf("Error while commit: %v\n", err)
-		txn.Abort(l.opts.Ctx)
-		atomic.AddUint64(&l.aborts, 1)
-		goto RETRY
+}
+
+func (l *loader) request(req protos.Mutation) {
+	txn := l.dc.NewTxn()
+	req.CommitImmediately = true
+	_, err := txn.Mutate(l.opts.Ctx, &req)
+
+	if err == nil {
+		atomic.AddUint64(&l.txns, 1)
+		return
 	}
-	atomic.AddUint64(&l.txns, 1)
-	return nil
+	atomic.AddUint64(&l.aborts, 1)
+	l.wg.Add(1)
+	go l.infinitelyRetry(req)
 }
 
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
 // It doesn't need to batch the requests anymore. Batching is already done for it by the
 // caller functions.
 func (l *loader) makeRequests() {
+	defer l.wg.Done()
 	for req := range l.reqs {
-		if atomic.LoadInt32(&l.retriesExceeded) == 1 {
-			l.che <- ErrMaxTries
-			return
-		}
-
-		if err := l.request(req); err != nil {
-			l.che <- err
-			return
-		}
+		l.request(req)
 	}
-	l.che <- nil
 }
 
 func (l *loader) printCounters() {
@@ -188,31 +166,4 @@ func (l *loader) stopTickers() {
 	if l.ticker != nil {
 		l.ticker.Stop()
 	}
-}
-
-// BatchFlush waits for all pending requests to complete. It should always be called after all
-// BatchSet and BatchDeletes have been callel.  Calling BatchFlush ends the client session and
-// will cause a panic if further AddSchema, BatchSet or BatchDelete functions are callel.
-func (l *loader) BatchFlush() error {
-	close(l.reqs)
-	for i := 0; i < l.opts.Pending; i++ {
-		select {
-		case err := <-l.che:
-			if err != nil {
-				// To signal other go-routines to stop.
-				l.stopTickers()
-				return err
-			}
-		}
-	}
-
-	// After we have received response from server and sent the marks for completion,
-	// we need to wait for all of them to be processel.
-	//	for _, wm := range l.marks {
-	//		wm.wg.Wait()
-	//	}
-	// Write final checkpoint before stopping.
-	//l.writeCheckpoint()
-	l.stopTickers()
-	return nil
 }
