@@ -371,6 +371,9 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) 
 	ctx, _ := n.props.CtxAndTxn(pid)
 	n.Applied.WaitForMark(ctx, index-1)
 	_, err := commitOrAbort(ctx, tctx)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Status of commitOrAbort %+v %v\n", tctx, err)
+	}
 	if err == nil {
 		// TODO: For committed ones, push them into LRU cache.
 		// posting.Txns().Done(tctx.StartTs)

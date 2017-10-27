@@ -472,6 +472,11 @@ func CommitOverNetwork(ctx context.Context, txn *protos.TxnContext) (*protos.Pay
 		return &protos.Payload{}, x.Errorf("Primary Attr is empty")
 	}
 
+	if rand.Float64() < Config.Tracing {
+		var tr trace.Trace
+		tr, ctx = x.NewTrace("GrpcCommitOrAbort", ctx)
+		defer tr.Finish()
+	}
 	primaryGid := groups().BelongsTo(txn.Primary)
 	if err := proposeOrSendTctx(ctx, primaryGid, txn); err != nil {
 		return &protos.Payload{}, err

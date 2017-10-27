@@ -160,6 +160,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *protos.DirectedEdge) 
 	if hasCountIndex {
 		countBefore = plist.length(txn.StartTs, 0)
 		if countBefore == -1 {
+			plist.Unlock()
 			return ErrTsTooOld
 		}
 	}
@@ -167,6 +168,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *protos.DirectedEdge) 
 	if hasCountIndex {
 		countAfter = plist.length(txn.StartTs, 0)
 		if countAfter == -1 {
+			plist.Unlock()
 			return ErrTsTooOld
 		}
 	}
@@ -327,6 +329,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 				val, found, err = l.findValue(txn.StartTs, math.MaxUint64)
 			}
 			if err != nil {
+				l.Unlock()
 				return err
 			}
 		}
@@ -335,6 +338,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 		if hasCountIndex {
 			countBefore = l.length(txn.StartTs, 0)
 			if countBefore == -1 {
+				l.Unlock()
 				return ErrTsTooOld
 			}
 		}
@@ -342,6 +346,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge,
 		if hasCountIndex {
 			countAfter = l.length(txn.StartTs, 0)
 			if countAfter == -1 {
+				l.Unlock()
 				return ErrTsTooOld
 			}
 		}

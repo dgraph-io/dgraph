@@ -210,7 +210,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 
 	tr, ok := trace.FromContext(ctx)
 	if ok {
-		tr.LazyPrintf("Prewrites OK. Attempting to commit immediately.")
+		tr.LazyPrintf("Prewrites err: %v. Attempting to commit/abort immediately.", err)
 	}
 	ctxn := resp.Context
 	if err == nil {
