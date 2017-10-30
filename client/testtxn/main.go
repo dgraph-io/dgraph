@@ -238,6 +238,7 @@ func TestTxnRead5(ctx context.Context, dg *client.Dgraph, dc protos.DgraphClient
 	mu = &protos.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Manish2\"}", uid))
 
+	mu.CommitImmediately = true
 	res, err := dc.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)

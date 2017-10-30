@@ -498,9 +498,9 @@ message Latency {
 message Response {
     bytes json = 1;
     repeated SchemaNode schema = 2;
+    uint64 start_ts = 3;
     Latency latency = 12;
     LinRead lin_read = 13;
-    uint64 start_ts = 15;
 }
 
 message Check {}

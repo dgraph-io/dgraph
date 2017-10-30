@@ -134,6 +134,8 @@ func (s *ServerState) Dispose() error {
 // Server implements protos.DgraphServer
 type Server struct{}
 
+// TODO(pawan) - Remove this logic from client after client doesn't have to fetch ts
+// for Commit API.
 func (s *ServerState) fillTimestampRequests() {
 	var chs []chan uint64
 
@@ -221,7 +223,6 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	}
 	if mu.StartTs == 0 {
 		mu.StartTs = State.getTimestamp()
-		mu.CommitImmediately = true
 	}
 	emptyMutation :=
 		len(mu.GetSetJson()) == 0 &&
