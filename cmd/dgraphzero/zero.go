@@ -52,6 +52,7 @@ type Server struct {
 	x.SafeMutex
 	wal  *raftwal.Wal
 	Node *node
+	orc  *Oracle
 
 	NumReplicas int
 	state       *protos.MembershipState
