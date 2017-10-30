@@ -500,6 +500,7 @@ message Response {
     repeated SchemaNode schema = 2;
     Latency latency = 12;
     LinRead lin_read = 13;
+    uint64 start_ts = 15;
 }
 
 message Check {}

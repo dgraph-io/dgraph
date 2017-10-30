@@ -221,7 +221,8 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		return nil, x.Errorf("No mutations allowed.")
 	}
 	if mu.StartTs == 0 {
-		return resp, fmt.Errorf("Invalid start timestamp")
+		mu.StartTs = State.getTimestamp()
+		mu.CommitImmediately = true
 	}
 	emptyMutation :=
 		len(mu.GetSetJson()) == 0 &&
@@ -331,6 +332,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp()
 	}
+	resp.StartTs = req.StartTs
 
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
