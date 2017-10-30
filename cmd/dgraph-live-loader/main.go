@@ -230,7 +230,9 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second))
 }
 
 func fileList(files string) []string {
@@ -307,10 +309,12 @@ func main() {
 	conn, err := setupConnection(*dgraph)
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
+	fmt.Println("conn", conn, "err", err)
 
 	connzero, err := setupConnection(*zero)
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
+	fmt.Println("zero", connzero, "err", err)
 
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
@@ -324,11 +328,11 @@ func main() {
 	dc := protos.NewDgraphClient(conn)
 	dgraphClient := client.NewDgraphClient(zc, dc)
 
-	{
-		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)
-		dgraphClient.CheckVersion(ctxTimeout)
-		cancelTimeout()
-	}
+	//	{
+	//		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)
+	//		dgraphClient.CheckVersion(ctxTimeout)
+	//		cancelTimeout()
+	//	}
 
 	l := setup(bmOpts, dgraphClient)
 
