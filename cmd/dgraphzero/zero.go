@@ -71,6 +71,8 @@ func (s *Server) Init() {
 	s.Lock()
 	defer s.Unlock()
 
+	s.orc = &Oracle{}
+	s.orc.Init()
 	s.state = &protos.MembershipState{
 		Groups: make(map[uint32]*protos.Group),
 		Zeros:  make(map[uint64]*protos.Member),

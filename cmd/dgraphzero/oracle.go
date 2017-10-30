@@ -19,7 +19,7 @@ package main
 
 import (
 	"errors"
-	"sync"
+	"math/rand"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -27,12 +27,25 @@ import (
 )
 
 type Oracle struct {
-	sync.RWMutex
-	commits   map[uint64]uint64 // start -> commit
-	rowCommit map[string]uint64 // fp(key) -> commit
-	aborts    map[uint64]struct{}
-	pending   map[uint64]struct{}
+	x.SafeMutex
+	commits    map[uint64]uint64 // start -> commit
+	rowCommit  map[string]uint64 // fp(key) -> commit
+	aborts     map[uint64]struct{}
+	pending    map[uint64]struct{}
+	maxPending uint64
 	// Implement Tmax.
+	subscribers map[int]chan *protos.OracleDelta
+	updates     chan *protos.TxnContext
+}
+
+func (o *Oracle) Init() {
+	o.commits = make(map[uint64]uint64)
+	o.rowCommit = make(map[string]uint64)
+	o.aborts = make(map[uint64]struct{})
+	o.pending = make(map[uint64]struct{})
+	o.subscribers = make(map[int]chan *protos.OracleDelta)
+	o.updates = make(chan *protos.TxnContext, 100000) // Keeping 1 second worth of updates.
+	go o.sendDeltasToSubscribers()
 }
 
 func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
@@ -57,9 +70,73 @@ func (o *Oracle) commit(src *protos.TxnContext) error {
 	return nil
 }
 
+func (o *Oracle) currentState() *protos.OracleDelta {
+	o.AssertRLock()
+	resp := &protos.OracleDelta{}
+	for start, commit := range o.commits {
+		resp.Commits[start] = commit
+	}
+	for abort := range o.aborts {
+		resp.Aborts = append(resp.Aborts, abort)
+	}
+	resp.MaxPending = o.maxPending
+	return resp
+}
+
+func (o *Oracle) newSubscriber() (<-chan *protos.OracleDelta, int) {
+	o.Lock()
+	defer o.Unlock()
+	var id int
+	for {
+		id = rand.Int()
+		if _, has := o.subscribers[id]; !has {
+			break
+		}
+	}
+	ch := make(chan *protos.OracleDelta, 1000)
+	ch <- o.currentState() // Queue up the full state as the first entry.
+	o.subscribers[id] = ch
+	return ch, id
+}
+
+func (o *Oracle) removeSubscriber(id int) {
+	o.Lock()
+	defer o.Unlock()
+	delete(o.subscribers, id)
+}
+
+func (o *Oracle) sendDeltasToSubscribers() {
+	delta := new(protos.OracleDelta)
+	for {
+		select {
+		case tctx, open := <-o.updates:
+			if !open {
+				return
+			}
+			if tctx.Aborted {
+				delta.Aborts = append(delta.Aborts, tctx.StartTs)
+			} else {
+				delta.Commits[tctx.StartTs] = tctx.CommitTs
+			}
+		default:
+			o.Lock()
+			for id, ch := range o.subscribers {
+				select {
+				case ch <- delta:
+				default:
+					close(ch)
+					delete(o.subscribers, id)
+				}
+			}
+			o.Unlock()
+			delta = new(protos.OracleDelta)
+		}
+	}
+}
+
 func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
-	// TODO: Send this out to all the subscribers.
 	// TODO: Have a way to clear out the commits and aborts.
+	o.updates <- src
 	o.Lock()
 	defer o.Unlock()
 	delete(o.pending, src.StartTs)
@@ -73,6 +150,10 @@ func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
 func (o *Oracle) storePending(ids *protos.AssignedIds) {
 	o.Lock()
 	defer o.Unlock()
+	max := ids.EndId - 1
+	if o.maxPending < max {
+		o.maxPending = max
+	}
 	for id := ids.StartId; id < ids.EndId; id++ {
 		o.pending[id] = struct{}{}
 	}
@@ -128,6 +209,25 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*pr
 	return src, err
 }
 
+var errClosed = errors.New("Streaming closed by Oracle.")
+
 func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer) error {
+	ch, id := s.orc.newSubscriber()
+	defer s.orc.removeSubscriber(id)
+
+	ctx := server.Context()
+	for {
+		select {
+		case delta, open := <-ch:
+			if !open {
+				return errClosed
+			}
+			if err := server.Send(delta); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	return nil
 }
