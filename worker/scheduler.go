@@ -214,9 +214,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 	m := proposal.Mutations
 	pctx := s.n.props.pctx(proposal.Id)
 	txn := &posting.Txn{
-		StartTs:       m.StartTs,
-		PrimaryAttr:   m.PrimaryAttr,
-		ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
+		StartTs: m.StartTs,
 	}
 	pctx.txn = posting.Txns().PutOrMergeIndex(txn)
 	for _, edge := range m.Edges {

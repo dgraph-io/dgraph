@@ -504,7 +504,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh ch
 					err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				}
 				if err != nil {
-					txn.AbortMutationsMemory(ctx)
+					txn.AbortMutations(ctx)
 				}
 				txn.deltas = nil
 			}
@@ -624,7 +624,7 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) {
 				addReversePostings(it.uid, it.list, txn)
 				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				if err != nil {
-					txn.AbortMutationsMemory(ctx)
+					txn.AbortMutations(ctx)
 				}
 				txn.deltas = nil
 			}
@@ -730,7 +730,7 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) {
 				addPostingsToIndex(it.uid, it.list, txn)
 				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				if err != nil {
-					txn.AbortMutationsMemory(ctx)
+					txn.AbortMutations(ctx)
 				}
 				txn.deltas = nil
 			}

@@ -34,7 +34,6 @@ const (
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
-	byteLock      = byte(0x02)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -56,16 +55,6 @@ func SchemaKey(attr string) []byte {
 	rest := buf[1:]
 
 	writeAttr(rest, attr)
-	return buf
-}
-
-func LockKey(attr string, ts uint64) []byte {
-	buf := make([]byte, 1+2+len(attr)+8)
-	buf[0] = byteLock
-	rest := buf[1:]
-
-	rest = writeAttr(rest, attr)
-	binary.BigEndian.PutUint64(rest, ts)
 	return buf
 }
 
@@ -155,10 +144,6 @@ func (p ParsedKey) IsSchema() bool {
 	return p.byteType == byteSchema
 }
 
-func (p ParsedKey) IsLock() bool {
-	return p.byteType == byteLock
-}
-
 func (p ParsedKey) IsType(typ byte) bool {
 	switch typ {
 	case ByteCount, ByteCountRev:
@@ -197,12 +182,6 @@ func (p ParsedKey) SkipRangeOfSameType() []byte {
 func (p ParsedKey) SkipSchema() []byte {
 	var buf [1]byte
 	buf[0] = byteSchema + 1
-	return buf[:]
-}
-
-func (p ParsedKey) SkipLock() []byte {
-	var buf [1]byte
-	buf[0] = byteLock + 1
 	return buf[:]
 }
 
@@ -261,12 +240,6 @@ func SchemaPrefix() []byte {
 	return buf[:]
 }
 
-func LockPrefix() []byte {
-	var buf [1]byte
-	buf[0] = byteLock
-	return buf[:]
-}
-
 // PredicatePrefix returns the prefix for all keys belonging
 // to this predicate except schema key.
 func PredicatePrefix(predicate string) []byte {
@@ -288,7 +261,7 @@ func Parse(key []byte) *ParsedKey {
 	k = k[sz:]
 
 	switch p.bytePrefix {
-	case byteSchema, byteLock:
+	case byteSchema:
 		return p
 	default:
 	}
