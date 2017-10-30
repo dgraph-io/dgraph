@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
-
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -102,7 +100,6 @@ func (s *scheduler) register(t *task) bool {
 func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error) {
 	defer func() {
 		s.n.props.Done(proposal.Id, err)
-		s.n.Applied.WaitForMark(context.Background(), index)
 	}()
 
 	if proposal.Mutations.DropAll {
@@ -141,7 +138,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 				return pk.Attr == supdate.Predicate && (pk.IsIndex() || pk.IsCount() || pk.IsReverse())
 			})
 			if len(tctxs) > 0 {
-				go fixConflicts(tctxs)
+				go tryAbortTransactions(tctxs)
 				err = posting.ErrConflict
 			} else {
 				err = s.n.processSchemaMutations(proposal.Id, index, startTs, supdate)
@@ -179,7 +176,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 				return pk.Attr == edge.Attr
 			})
 			if len(tctxs) > 0 {
-				go fixConflicts(tctxs)
+				go tryAbortTransactions(tctxs)
 				err = posting.ErrConflict
 			} else {
 				err = posting.DeletePredicate(ctx, edge.Attr)
