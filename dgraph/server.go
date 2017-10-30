@@ -132,8 +132,7 @@ func (s *ServerState) Dispose() error {
 }
 
 // Server implements protos.DgraphServer
-type Server struct {
-}
+type Server struct{}
 
 func (s *ServerState) fillTimestampRequests() {
 	var chs []chan uint64
