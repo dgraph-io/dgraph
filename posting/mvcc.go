@@ -53,7 +53,7 @@ type Txn struct {
 	StartTs uint64
 
 	// atomic
-	hasConflict uint32
+	shouldAbort uint32
 	// Fields which can changed after init
 	sync.Mutex
 	deltas  []delta
@@ -74,29 +74,27 @@ func (t *transactions) Reset() {
 	t.m = make(map[uint64]*Txn)
 }
 
-func (t *transactions) Iterate(ok func(key []byte) bool) []*protos.TxnContext {
+func (t *transactions) Iterate(ok func(key []byte) bool) []uint64 {
 	t.RLock()
 	defer t.RUnlock()
-	var tctxs []*protos.TxnContext
+	var timestamps []uint64
 	for _, txn := range t.m {
-		if tctx := txn.fillIf(ok); tctx != nil {
-			tctxs = append(tctxs, tctx)
+		if txn.conflicts(ok) {
+			timestamps = append(timestamps, txn.StartTs)
 		}
 	}
-	return tctxs
+	return timestamps
 }
 
-func (t *Txn) fillIf(ok func(key []byte) bool) *protos.TxnContext {
+func (t *Txn) conflicts(ok func(key []byte) bool) bool {
 	t.Lock()
 	defer t.Unlock()
 	for _, d := range t.deltas {
 		if ok(d.key) {
-			tctx := &protos.TxnContext{}
-			t.fill(tctx)
-			return tctx
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 func (t *transactions) Get(startTs uint64) *Txn {
@@ -138,11 +136,11 @@ func (t *transactions) PutOrMergeIndex(txn *Txn) *Txn {
 }
 
 func (t *Txn) SetAbort() {
-	atomic.StoreUint32(&t.hasConflict, 1)
+	atomic.StoreUint32(&t.shouldAbort, 1)
 }
 
 func (t *Txn) ShouldAbort() bool {
-	return atomic.LoadUint32(&t.hasConflict) > 0
+	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
 
 func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
@@ -229,7 +227,7 @@ func (tx *Txn) AbortMutations(ctx context.Context) error {
 			return err
 		}
 	}
-	atomic.StoreUint32(&tx.hasConflict, 1)
+	atomic.StoreUint32(&tx.shouldAbort, 1)
 	return nil
 }
 

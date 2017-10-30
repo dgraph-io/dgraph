@@ -507,6 +507,7 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 func (l *List) canRead(mpost *protos.Posting, readTs uint64) bool {
 	l.AssertRLock()
 	if mpost.CommitTs == 0 {
+		// TODO: Check in local cache for commitTs
 		return mpost.StartTs == readTs
 	}
 	return mpost.CommitTs <= readTs
