@@ -36,7 +36,6 @@ func GetDefaultEmbeddedConfig() Options {
 }
 
 func NewEmbeddedDgraphClient(config Options) *client.Dgraph {
-
 	SetConfiguration(config)
 
 	x.Init(config.DebugMode)
