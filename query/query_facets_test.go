@@ -1220,3 +1220,31 @@ func TestFilterUidFacetMismatch(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Glenn Rhee","@facets":{"_":{"close":true,"family":true,"since":"2004-05-02T15:04:05Z","tag":"Domain3"}}},{"@facets":{"_":{"age":33,"close":true,"family":false,"since":"2005-05-02T15:04:05Z"}}}]}]}}`, js)
 }
+
+func TestRecurseFacetOrder(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	query := `
+    {
+		recurse(func: uid(1), depth: 2) {
+			friend @facets(orderdesc: since)
+			_uid_
+			name
+		}
+	}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"recurse":[{"friend":[{"_uid_":"0x19","name":"Daryl Dixon","@facets":{"_":{"since":"2007-05-02T15:04:05Z"}}},{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}}],"_uid_":"0x17","name":"Rick Grimes","@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}},{"_uid_":"0x1f","name":"Andrea","@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}},{"_uid_":"0x65","@facets":{"_":{"since":"2005-05-02T15:04:05Z"}}},{"_uid_":"0x18","name":"Glenn Rhee","@facets":{"_":{"since":"2004-05-02T15:04:05Z"}}}],"_uid_":"0x1","name":"Michonne"}]}}`, js)
+
+	query = `
+    {
+		recurse(func: uid(1), depth: 2) {
+			friend @facets(orderasc: since)
+			_uid_
+			name
+		}
+	}
+  `
+	js = processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"recurse":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee","@facets":{"_":{"since":"2004-05-02T15:04:05Z"}}},{"_uid_":"0x65","@facets":{"_":{"since":"2005-05-02T15:04:05Z"}}},{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}}],"_uid_":"0x17","name":"Rick Grimes","@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}},{"_uid_":"0x1f","name":"Andrea","@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}},{"_uid_":"0x19","name":"Daryl Dixon","@facets":{"_":{"since":"2007-05-02T15:04:05Z"}}}],"_uid_":"0x1","name":"Michonne"}]}}`, js)
+}
