@@ -20,6 +20,7 @@ package worker
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -339,6 +340,21 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 	conn := pl.Get()
 	c := protos.NewZeroClient(conn)
 	return c.AssignUids(ctx, num)
+}
+
+func Timestamps(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	if Config.InMemoryComm {
+		// TODO - Handle
+		return nil, fmt.Errorf("Couldn't get TS")
+	}
+	pl := groups().Leader(0)
+	if pl == nil {
+		return nil, conn.ErrNoConnection
+	}
+
+	conn := pl.Get()
+	c := protos.NewZeroClient(conn)
+	return c.Timestamps(ctx, num)
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to

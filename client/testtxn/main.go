@@ -54,6 +54,7 @@ func main() {
 
 	TestTxnRead3(ctx, dg)
 	TestTxnRead4(ctx, dg)
+	TestTxnRead5(ctx, dg, dc)
 
 	op = &protos.Operation{}
 	op.DropAll = true
@@ -200,6 +201,54 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish2\"}]}}")))
+}
+
+func TestTxnRead5(ctx context.Context, dg *client.Dgraph, dc protos.DgraphClient) {
+	fmt.Println("TestTxnRead5")
+	txn := dg.NewTxn()
+
+	mu := &protos.Mutation{}
+	mu.SetJson = []byte(`{"name": "Manish"}`)
+	assigned, err := txn.Mutate(ctx, mu)
+	if err != nil {
+		log.Fatalf("Error while running mutation: %v\n", err)
+	}
+	if len(assigned.Uids) != 1 {
+		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
+	}
+	var uid uint64
+	for _, u := range assigned.Uids {
+		uid = u
+	}
+
+	x.Check(txn.Commit(ctx))
+	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
+	// We don't supply startTs, it should be fetched from zero by dgraph server.
+	req := protos.Request{
+		Query: q,
+	}
+	resp, err := dc.Query(ctx, &req)
+	if err != nil {
+		log.Fatalf("Error while running query: %v\n", err)
+	}
+	fmt.Printf("Response JSON: %q\n", resp.Json)
+	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
+	x.AssertTrue(resp.StartTs > 0)
+
+	mu = &protos.Mutation{}
+	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Manish2\"}", uid))
+
+	mu.CommitImmediately = true
+	res, err := dc.Mutate(ctx, mu)
+	if err != nil {
+		log.Fatalf("Error while running mutation: %v\n", err)
+	}
+	x.AssertTrue(res.Context.StartTs > 0)
+	resp, err = dc.Query(ctx, &req)
+	if err != nil {
+		log.Fatalf("Error while running query: %v\n", err)
+	}
+	x.AssertTrue(bytes.Equal(resp.Json, []byte(`{"data": {"me":[{"name":"Manish2"}]}}`)))
 }
 
 func TestConflict(ctx context.Context, dg *client.Dgraph) {
