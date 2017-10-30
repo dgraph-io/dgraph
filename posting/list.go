@@ -672,6 +672,8 @@ func (l *List) rollup() (*protos.PostingList, error) {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
+			p.StartTs = 0
+			p.CommitTs = 0
 			final.Postings = append(final.Postings, p)
 		}
 		return true
