@@ -204,6 +204,7 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 }
 
 func TestTxnRead5(ctx context.Context, dg *client.Dgraph, dc protos.DgraphClient) {
+	fmt.Println("TestTxnRead5")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
