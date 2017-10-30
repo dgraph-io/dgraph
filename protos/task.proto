@@ -428,7 +428,6 @@ service Dgraph {
     rpc Mutate (Mutation)         returns (Assigned) {}
     rpc Alter (Operation)         returns (Payload) {}
     rpc CheckVersion(Check)       returns (Version) {}
-    rpc CommitOrAbort(TxnContext) returns (Payload) {}
 }
 
 message Assigned {

@@ -142,6 +142,7 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	if !Config.InMemoryComm {
 		go gr.periodicMembershipUpdate() // Now set it to be run periodically.
 		go gr.cleanupTablets()
+		go gr.processOracleDeltaStream()
 	}
 	gr.proposeInitialSchema()
 }
@@ -590,4 +591,43 @@ func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 	}
 
 	return stream.Send(group)
+}
+
+func (g *groupi) processOracleDeltaStream() {
+START:
+	pl := g.AnyServer(0)
+	// We should always have some connection to dgraphzero.
+	if pl == nil {
+		x.Printf("WARNING: We don't have address of any dgraphzero server.")
+		time.Sleep(time.Second)
+		goto START
+	}
+
+	c := protos.NewZeroClient(pl.Get())
+	ctx, cancel := context.WithCancel(context.Background())
+	stream, err := c.Oracle(ctx, &protos.Payload{})
+	if err != nil {
+		x.Printf("Error while calling Oracle %v\n", err)
+		time.Sleep(time.Second)
+		goto START
+	}
+
+	for {
+		oracleDelta, err := stream.Recv()
+		if err != nil || oracleDelta == nil {
+			x.Printf("Error in oracel delta stream. Error: %v", err)
+			cancel()
+			break
+		}
+		posting.Oracle().ProcessOracleDelta(oracleDelta)
+		for startTs, commitTs := range oracleDelta.Commits {
+			tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTs}
+			go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+		}
+		for _, startTs := range oracleDelta.Aborts {
+			tctx := &protos.TxnContext{StartTs: startTs}
+			go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+		}
+	}
+	goto START
 }
