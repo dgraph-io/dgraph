@@ -384,6 +384,13 @@ message TxnContext {
   LinRead lin_read = 13;
 }
 
+message OracleDelta {
+  map<uint64, uint64> commits = 1;
+  repeated uint64 aborts = 2;
+  uint64 max_pending = 3;
+  // implement tmax.
+}
+
 service Raft {
 	rpc Echo (Payload)            returns (Payload) {}
 	rpc RaftMessage (Payload)     returns (Payload) {}
@@ -393,6 +400,7 @@ service Raft {
 service Zero {
 	rpc Connect (Member)      returns (ConnectionState) {}
 	rpc Update (stream Group) returns (stream MembershipState) {}
+  rpc Oracle (Payload) returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)  returns (Tablet) {}
 	rpc AssignUids (Num)      returns (AssignedIds) {}
   rpc Timestamps (Num)      returns (AssignedIds) {}

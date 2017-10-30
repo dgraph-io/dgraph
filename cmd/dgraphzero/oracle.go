@@ -28,16 +28,16 @@ import (
 
 type Oracle struct {
 	sync.RWMutex
-	commits    map[uint64]uint64 // start -> commit
-	lastCommit map[string]uint64 // fp(key) -> commit
-	aborts     map[uint64]struct{}
-	pending    map[uint64]struct{}
+	commits   map[uint64]uint64 // start -> commit
+	rowCommit map[string]uint64 // fp(key) -> commit
+	aborts    map[uint64]struct{}
+	pending   map[uint64]struct{}
 	// Implement Tmax.
 }
 
 func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
 	for _, k := range src.Keys {
-		if last := o.lastCommit[k]; last > src.StartTs {
+		if last := o.rowCommit[k]; last > src.StartTs {
 			return true
 		}
 	}
@@ -52,13 +52,14 @@ func (o *Oracle) commit(src *protos.TxnContext) error {
 		return errConflict
 	}
 	for _, k := range src.Keys {
-		o.lastCommit[k] = src.CommitTs
+		o.rowCommit[k] = src.CommitTs // CommitTs is handed out before calling this func.
 	}
 	return nil
 }
 
 func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
 	// TODO: Send this out to all the subscribers.
+	// TODO: Have a way to clear out the commits and aborts.
 	o.Lock()
 	defer o.Unlock()
 	delete(o.pending, src.StartTs)
@@ -125,4 +126,8 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*pr
 	}
 	err := s.commit(ctx, src)
 	return src, err
+}
+
+func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer) error {
+	return nil
 }
