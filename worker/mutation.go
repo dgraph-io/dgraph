@@ -19,7 +19,6 @@ package worker
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"math"
 	"math/rand"
@@ -594,68 +593,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 	return txnCtx, err
 }
 
-func checkTxnStatus(in *protos.TxnContext) (*protos.TxnContext, error) {
-	if in.StartTs == 0 {
-		return in, x.Errorf("Invalid start timestamp")
-	}
-	in.CommitTs = 0
-	// check memory first
-	if tx := posting.Txns().Get(in.StartTs); tx != nil {
-		// Pending transaction.
-		if tx.HasConflict() {
-			in.Aborted = true
-		} else {
-			in.CommitTs = tx.CommitTs()
-		}
-		return in, nil
-	}
-
-	txn := pstore.NewTransactionAt(in.StartTs, false)
-	defer txn.Discard()
-	item, err := txn.Get(x.LockKey(in.Primary, in.StartTs))
-	if err == badger.ErrKeyNotFound {
-		in.Aborted = true
-		return in, nil
-	}
-	if err != nil {
-		return in, x.Errorf("Unable to read primary key")
-	}
-	if item.Version() != in.StartTs {
-		in.Aborted = true
-		return in, nil
-	}
-	val, err := item.Value()
-	if err != nil {
-		return in, err
-	}
-	in.CommitTs = binary.BigEndian.Uint64(val)
-	return in, nil
-}
-
 func TxnStatusOverNetwork(ctx context.Context, in *protos.TxnContext) (*protos.TxnContext, error) {
 	in.CommitTs = 0
-	if groups().ServesTablet(in.Primary) {
-		return checkTxnStatus(in)
-	}
-
-	gid := groups().BelongsTo(in.Primary)
-	pl := groups().Leader(gid)
-	if pl == nil {
-		return nil, conn.ErrNoConnection
-	}
-	client := protos.NewWorkerClient(pl.Get())
-	return client.TxnStatus(ctx, in)
-}
-
-func (w *grpcWorker) TxnStatus(ctx context.Context, in *protos.TxnContext) (*protos.TxnContext, error) {
-	if ctx.Err() != nil {
-		return in, ctx.Err()
-	}
-	if !groups().ServesTablet(in.Primary) {
-		return in, x.Errorf("Server doesn't serve primary attribute: %s", in.Primary)
-	}
-
-	return checkTxnStatus(in)
+	return in, nil
 }
 
 func fixConflicts(tctxs []*protos.TxnContext) {
@@ -664,6 +604,7 @@ func fixConflicts(tctxs []*protos.TxnContext) {
 		return tctxs[i].StartTs < tctxs[j].StartTs
 	})
 	var prevTs uint64
+	// TODO: Do in batch at once.
 	for _, tctx := range tctxs {
 		if tctx.StartTs == prevTs {
 			continue

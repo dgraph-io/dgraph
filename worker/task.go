@@ -134,11 +134,10 @@ var errConflict = errors.New("List has a pending write.")
 
 func getValidList(key []byte, startTs uint64) (*posting.List, error) {
 	pl := posting.Get(key)
-	if pl.HasConflict(startTs) {
-		startTs, primary := pl.Pending()
+	conflicts := pl.Conflicts(startTs)
+	for _, ts := range conflicts {
 		if err := fixConflict(&protos.TxnContext{
-			StartTs: startTs,
-			Primary: primary,
+			StartTs: ts,
 		}); err != nil {
 			return nil, err
 		}

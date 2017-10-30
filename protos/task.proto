@@ -239,8 +239,9 @@ message Posting {
 	PostingType posting_type = 4;
 	bytes metadata = 5; // for VALUE_LANG: Language, for VALUE_TIMESERIES: timestamp, etc..
 	string label = 6;
-	uint64 commit = 7;  // More inclination towards smaller values.
-	repeated Facet facets = 8;
+	uint64 start_ts = 7;
+	uint64 commit_ts = 8;  // More inclination towards smaller values.
+	repeated Facet facets = 9;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;
@@ -400,7 +401,6 @@ service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                        returns (TxnContext) {}
 	rpc CommitOrAbort(TxnContext)                 returns (Payload) {}
-  rpc TxnStatus(TxnContext)                     returns (TxnContext) {}
 	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
