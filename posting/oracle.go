@@ -58,6 +58,12 @@ func (o *oracle) Done(startTs uint64) {
 	delete(o.aborts, startTs)
 }
 
+func (o *oracle) commitTs(startTs uint64) uint64 {
+	o.RLock()
+	defer o.RUnlock()
+	return o.commits[startTs]
+}
+
 func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	o.Lock()
 	if o.maxpending >= startTs {
