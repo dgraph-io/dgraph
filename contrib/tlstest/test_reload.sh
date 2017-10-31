@@ -1,11 +1,17 @@
 #!/bin/bash
 
+killall dgraph dgraphzero
+
 SERVER=./server_reload.sh
 CLIENT=./client_nopass.sh
 EXPECTED=1
 
 cp server.crt server_reload.crt
 cp server.key server_reload.key
+
+
+$GOPATH/src/github.com/dgraph-io/dgraph/cmd/dgraphzero/dgraphzero -w zw > /dev/null 2>&1 &
+sleep 5
 
 # start the server
 $SERVER > /dev/null 2>&1 &

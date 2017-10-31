@@ -202,7 +202,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 }
 
 func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
-	if !*tlsEnabled || insecure {
+	if insecure {
 		return grpc.Dial(host,
 			grpc.WithDefaultCallOptions(
 				grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
@@ -306,14 +306,13 @@ func main() {
 		// do nothing
 	}
 
-	conn, err := setupConnection(*dgraph, false)
+	conn, err := setupConnection(*dgraph, !*tlsEnabled)
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
 	connzero, err := setupConnection(*zero, true)
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
-	fmt.Println("zero", connzero, "err", err)
 
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
@@ -327,11 +326,11 @@ func main() {
 	dc := protos.NewDgraphClient(conn)
 	dgraphClient := client.NewDgraphClient(zc, dc)
 
-	//	{
-	//		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)
-	//		dgraphClient.CheckVersion(ctxTimeout)
-	//		cancelTimeout()
-	//	}
+	{
+		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)
+		dgraphClient.CheckVersion(ctxTimeout)
+		cancelTimeout()
+	}
 
 	l := setup(bmOpts, dgraphClient)
 

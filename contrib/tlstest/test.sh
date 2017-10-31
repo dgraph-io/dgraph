@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -e
+
+killall dgraph dgraphzero > /dev/null 2>&1
 
 DGRAPH_ROOT=$GOPATH/src/github.com/dgraph-io/dgraph/cmd
 function build {
@@ -17,19 +18,14 @@ build "dgraphzero"
 build "dgraph"
 build "dgraph-live-loader"
 
-$DGRAPH_ROOT/dgraphzero/dgraphzero -w zw &
+$DGRAPH_ROOT/dgraphzero/dgraphzero -w zw > /dev/null 2>&1 &
 sleep 5
 
 
-$SERVER &
-echo $CLIENT
-timeout 7s $CLIENT &> client.log
+$SERVER > /dev/null 2>&1 &
+timeout 30s $CLIENT > client.log 2>&1
 RESULT=$?
-pkill dgraph > /dev/null 2>&1
-rm -rf p w
-
-pkill dgraphzero > /dev/null 2>&1
-rm -rf zw
+# echo -e "Result $RESULT"
 
 echo "$SERVER <-> $CLIENT: $RESULT (expected: $EXPECTED)"
 
