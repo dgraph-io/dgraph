@@ -311,6 +311,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	// TODO - Remove after testing.
 	fmt.Println("resp", resp)
 	response := map[string]interface{}{}
 	mp := map[string]interface{}{}
