@@ -595,7 +595,7 @@ func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 
 func (g *groupi) processOracleDeltaStream() {
 START:
-	pl := g.AnyServer(0)
+	pl := g.Leader(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		x.Printf("WARNING: We don't have address of any dgraphzero server.")
@@ -604,8 +604,7 @@ START:
 	}
 
 	c := protos.NewZeroClient(pl.Get())
-	ctx, cancel := context.WithCancel(context.Background())
-	stream, err := c.Oracle(ctx, &protos.Payload{})
+	stream, err := c.Oracle(context.Background(), &protos.Payload{})
 	if err != nil {
 		x.Printf("Error while calling Oracle %v\n", err)
 		time.Sleep(time.Second)
@@ -616,10 +615,12 @@ START:
 		oracleDelta, err := stream.Recv()
 		if err != nil || oracleDelta == nil {
 			x.Printf("Error in oracel delta stream. Error: %v", err)
-			cancel()
 			break
 		}
 		posting.Oracle().ProcessOracleDelta(oracleDelta)
+		if !g.Node.AmLeader() {
+			continue
+		}
 		for startTs, commitTs := range oracleDelta.Commits {
 			tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTs}
 			go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})

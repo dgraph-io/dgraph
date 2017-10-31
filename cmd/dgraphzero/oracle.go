@@ -222,6 +222,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*pr
 var errClosed = errors.New("Streaming closed by Oracle.")
 
 func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer) error {
+	// TODO: Add leader check and test leader changes.
 	ch, id := s.orc.newSubscriber()
 	defer s.orc.removeSubscriber(id)
 

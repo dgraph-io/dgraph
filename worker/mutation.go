@@ -556,8 +556,6 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 	return txnCtx, err
 }
 
-// TODO: We commit schema mutations without oracle, so add a check to reject
-// transaction if startTs is less than last commiTs of pl.
 func tryAbortTransactions(timestamps []uint64) {
 	// Add endpoint in zero.
 }

@@ -162,7 +162,8 @@ func (d *Dgraph) mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assig
 	return dc.Mutate(ctx, mu)
 }
 
-func (d *Dgraph) commitOrAbort(ctx context.Context, txn *protos.TxnContext) (*protos.TxnContext, error) {
+func (d *Dgraph) commitOrAbort(ctx context.Context, txn *protos.TxnContext) (*protos.TxnContext,
+	error) {
 	return d.zero.CommitOrAbort(ctx, txn)
 }
 

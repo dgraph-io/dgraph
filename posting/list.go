@@ -71,6 +71,7 @@ type List struct {
 	plist         *protos.PostingList
 	mlayer        []*protos.Posting // committed mutations, sorted by uid,ts
 	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
+	commitTs      uint64            // last commitTs of this pl
 	activeTxns    []uint64
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
@@ -335,7 +336,8 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		return false, ErrConflict
 	}
 	// We can have atmax one pending <s> <p> * mutation.
-	if len(l.activeTxns) > 0 && l.activeTxns[0] != txn.StartTs && l.markdeleteAll > 0 {
+	if (len(l.activeTxns) > 0 && l.activeTxns[0] != txn.StartTs && l.markdeleteAll > 0) ||
+		(txn.StartTs < l.commitTs) {
 		txn.SetAbort()
 		return false, ErrConflict
 	}
@@ -455,6 +457,9 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	if tidx < len(l.activeTxns) {
 		copy(l.activeTxns[tidx:], l.activeTxns[tidx+1:])
 		l.activeTxns = l.activeTxns[:len(l.activeTxns)-1]
+	}
+	if commitTs > l.commitTs {
+		l.commitTs = commitTs
 	}
 	// Calculate 5% of immutable layer
 	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
@@ -655,6 +660,7 @@ func marshalPostingList(plist *protos.PostingList) (data []byte, meta byte) {
 
 func (l *List) rollup() (*protos.PostingList, error) {
 	l.AssertLock()
+	// TODO: Fix
 	x.AssertTrue(len(l.activeTxns) == 0)
 	final := new(protos.PostingList)
 	var bp bp128.BPackEncoder
@@ -691,6 +697,7 @@ func (l *List) rollup() (*protos.PostingList, error) {
 		bp.WriteTo(final.Uids)
 	}
 	l.mlayer = l.mlayer[:0]
+	l.commitTs = l.minTs
 	return final, nil
 }
 
