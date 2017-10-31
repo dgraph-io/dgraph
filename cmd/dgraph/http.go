@@ -159,11 +159,12 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	response["data"] = mp
 	fmt.Println("response", response)
 
-	if js, err := json.Marshal(response); err == nil {
-		w.Write(js)
-	} else {
-		x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
+	js, err := json.Marshal(response)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
 	}
+	w.Write(js)
 }
 
 func alterHandler(w http.ResponseWriter, r *http.Request) {
@@ -181,30 +182,30 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	op := &protos.Operation{}
-	dropall := r.FormValue("dropall")
-	drop, err := strconv.ParseBool(dropall)
-	if err == nil {
-		op.DropAll = drop
-	}
-	op.DropAttr = r.FormValue("drop_attr")
 
-	if len(op.DropAttr) == 0 && !op.DropAll {
-		defer r.Body.Close()
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
+	defer r.Body.Close()
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	err = json.Unmarshal(b, &op)
+	if err != nil {
 		op.Schema = string(b)
 	}
+	fmt.Printf("Op: %+v\n", op)
 
-	payload, err := new(Server).Alter(context.Background(), op)
+	_, err = (&dgraph.Server{}).Alter(context.Background(), op)
 	if err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 
-	js, err := json.Marshal(payload)
+	res := map[string]interface{}{}
+	res["code"] = x.Success
+	res["message"] = "Done"
+	js, err := json.Marshal(res)
 	if err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
