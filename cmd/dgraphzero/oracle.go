@@ -19,6 +19,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -53,6 +54,10 @@ func (o *Oracle) Init() {
 func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
 	for _, k := range src.Keys {
 		if last := o.rowCommit[k]; last > src.StartTs {
+			pk := x.Parse([]byte(k))
+			if len(pk.Term) > 0 {
+				fmt.Printf("Aborted due to key %+v %d %d\n", pk.Term[1:], last, src.StartTs)
+			}
 			return true
 		}
 	}

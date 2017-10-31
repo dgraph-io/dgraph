@@ -502,13 +502,20 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 	return tctx, e
 }
 
-func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) (*protos.TxnContext, error) {
+func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) error {
 	pl := groups().Leader(0)
 	if pl == nil {
-		return &protos.TxnContext{}, nil
+		return conn.ErrNoConnection
 	}
 	zc := protos.NewZeroClient(pl.Get())
-	return zc.CommitOrAbort(ctx, tc)
+	tctx, err := zc.CommitOrAbort(ctx, tc)
+	if err != nil {
+		return err
+	}
+	if tctx.Aborted {
+		return posting.ErrConflict
+	}
+	return nil
 }
 
 func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
