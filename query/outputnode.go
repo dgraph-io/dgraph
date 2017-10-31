@@ -474,7 +474,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 }
 
 type Extensions struct {
-	Latency map[string]string  `json:"server_latency"`
+	Latency *protos.Latency    `json:"server_latency"`
 	Txn     *protos.TxnContext `json:"txn"`
 }
 

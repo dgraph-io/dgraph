@@ -20,7 +20,6 @@ package main
 import (
 	"crypto/sha256"
 	"crypto/tls"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -47,10 +46,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/dgraph"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
@@ -212,121 +209,6 @@ func stopProfiling() {
 		}
 		pprof.WriteHeapProfile(f)
 		f.Close()
-	}
-}
-
-// This method should just build the request and proxy it to the Query method of dgraph.Server.
-// It can then encode the response as appropriate before sending it back to the user.
-func queryHandler(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "OPTIONS" {
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
-	}
-
-	defer r.Body.Close()
-	q, err := ioutil.ReadAll(r.Body)
-	req := protos.Request{
-		Query: string(q),
-	}
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	resp, err := (&dgraph.Server{}).Query(ctx, &req)
-	if err != nil {
-		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
-	response := map[string]interface{}{}
-	if err := json.Unmarshal(resp.Json, &response); err != nil {
-		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
-	addLatency, _ := strconv.ParseBool(r.URL.Query().Get("latency"))
-	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
-	addLatency = addLatency || debug
-
-	if addLatency {
-		e := query.Extensions{
-			Latency: l.ToMap(),
-			Txn:     response["txn"].(protos.Txn),
-		}
-		response["extensions"] = e
-		delete(response, "txn")
-	}
-
-	fmt.Printf("Resp: %+v\n", response)
-	if js, err := json.Marshal(response); err == nil {
-		w.Write(js)
-	} else {
-		x.SetStatusWithData(w, x.Error, "Unable to marshal response")
-	}
-	// TODO - Verify schema, server latency is encoded as it was before.
-	// Encode linRead and readts under extensions key.
-}
-
-func mutationHandler(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "OPTIONS" {
-		return
-	}
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
-	}
-	defer r.Body.Close()
-	m, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
-	mu, err := gql.ParseMutation(string(m))
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
-	mu.CommitImmediatelly = true
-	resp, err := (&dgraph.Server{}).Mutate(context.Background(), mu)
-	if err != nil {
-		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
-	e := query.Extensions{
-		Txn: resp.Context,
-	}
-	response["extensions"] = e
-	response := map[string]interface{}{}
-	mp := map[string]interface{}{}
-	mp["code"] = x.Success
-	mp["message"] = "Done"
-	mp["uids"] = query.ConvertUidsToHex(resp.Uids)
-	response["data"] = mp
-	fmt.Println("response", response)
-
-	if js, err := json.Marshal(response); err == nil {
-		w.Write(js)
-	} else {
-		x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
 	}
 }
 
