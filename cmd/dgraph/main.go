@@ -305,6 +305,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mu.CommitImmediatelly = true
 	resp, err := (&dgraph.Server{}).Mutate(context.Background(), mu)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
