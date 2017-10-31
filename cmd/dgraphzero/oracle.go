@@ -19,7 +19,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 
 	"github.com/dgraph-io/dgraph/protos"

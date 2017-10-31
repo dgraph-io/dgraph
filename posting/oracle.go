@@ -97,19 +97,3 @@ func (o *oracle) ProcessOracleDelta(od *protos.OracleDelta) {
 	}
 	o.maxpending = od.MaxPending
 }
-
-func (o *oracle) TxnStatus(timestamps []uint64) []*protos.TxnContext {
-	o.RLock()
-	defer o.RUnlock()
-	var tctx []*protos.TxnContext
-	for _, ts := range timestamps {
-		tcx := &protos.TxnContext{StartTs: ts}
-		if commitTs, ok := o.commits[ts]; ok {
-			tcx.CommitTs = commitTs
-		} else if _, ok := o.aborts[ts]; ok {
-			tcx.Aborted = true
-		}
-		tctx = append(tctx, tcx)
-	}
-	return tctx
-}
