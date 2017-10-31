@@ -332,7 +332,9 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp()
 	}
-	resp.StartTs = req.StartTs
+	resp.Txn = &protos.TxnContext{
+		StartTs: req.StartTs,
+	}
 
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
@@ -366,7 +368,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	}
 
 	resp.Latency = gl
-	resp.LinRead = queryRequest.LinRead
+	resp.Txn.LinRead = queryRequest.LinRead
 	return resp, err
 }
 

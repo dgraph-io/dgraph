@@ -20,6 +20,7 @@ package main
 import (
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -49,6 +50,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
@@ -244,12 +246,35 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	resp, err := (&dgraph.Server{}).Query(ctx, &req)
 	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	fmt.Printf("Resp: %+v\n", resp)
-	w.Write(resp.Json)
 
+	response := map[string]interface{}{}
+	if err := json.Unmarshal(resp.Json, &response); err != nil {
+		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	response["txn"] = resp.Txn
+
+	addLatency, _ := strconv.ParseBool(r.URL.Query().Get("latency"))
+	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
+	addLatency = addLatency || debug
+
+	if addLatency {
+		e := query.Extensions{
+			Latency: l.ToMap(),
+		}
+		response["extensions"] = e
+	}
+
+	fmt.Printf("Resp: %+v\n", response)
+	if js, err := json.Marshal(response); err == nil {
+		w.Write(js)
+	} else {
+		x.SetStatusWithData(w, x.Error, "Unable to marshal response")
+	}
 	// TODO - Verify schema, server latency is encoded as it was before.
 	// Encode linRead and readts under extensions key.
 }

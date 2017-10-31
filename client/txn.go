@@ -56,8 +56,8 @@ func (txn *Txn) Query(ctx context.Context, q string,
 	}
 	resp, err := txn.dg.query(ctx, req)
 	if err == nil {
-		x.MergeLinReads(txn.linRead, resp.LinRead)
-		txn.dg.mergeLinRead(resp.LinRead)
+		x.MergeLinReads(txn.linRead, resp.Txn.LinRead)
+		txn.dg.mergeLinRead(resp.Txn.LinRead)
 	}
 	return resp, err
 }
