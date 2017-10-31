@@ -109,7 +109,7 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *protos.Mutation) error
 					return x.Errorf("Multiple 'delete' blocks not allowed.")
 				}
 				mu.Del = nquads
-				// TODO - Verify schema can be done here.
+				// TODO - How does user do schema/dropall via http?
 			} else if op == "schema" {
 				return x.Errorf("Altering schema not supported through http client.")
 			} else if op == "dropall" {
