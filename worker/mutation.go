@@ -556,6 +556,11 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 	return txnCtx, err
 }
 
-func tryAbortTransactions(timestamps []uint64) {
-	// Add endpoint in zero.
+func tryAbortTransactions(startTimestamps []uint64) {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return
+	}
+	zc := protos.NewZeroClient(pl.Get())
+	zc.TryAbort(context.Background(), &protos.Transactions{StartTs: startTimestamps})
 }

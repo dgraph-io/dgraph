@@ -118,6 +118,12 @@ func (txn *Txn) Commit(ctx context.Context) error {
 		return nil
 	}
 	txn.context.CommitTs = txn.dg.getTimestamp()
-	_, err := txn.dg.commitOrAbort(ctx, txn.context)
-	return err
+	tctx, err := txn.dg.commitOrAbort(ctx, txn.context)
+	if err != nil {
+		return err
+	}
+	if tctx.Aborted {
+		return x.Errorf("Transaction aborted")
+	}
+	return nil
 }
