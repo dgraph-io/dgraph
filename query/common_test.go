@@ -25,8 +25,8 @@ import (
 	"os"
 	"sort"
 	"testing"
+	"time"
 
-	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -67,8 +67,11 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 		})
 	}
 	l := posting.Get(x.DataKey(attr, src))
+	txn := &posting.Txn{
+		StartTs: uint64(time.Now().Unix()),
+	}
 	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
+		l.AddMutationWithIndex(context.Background(), edge, txn))
 }
 
 func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {
@@ -185,7 +188,7 @@ func delEdgeToLangValue(t *testing.T, attr string, src uint64, value, lang strin
 	addEdge(t, attr, src, edge)
 }
 
-func addGeoData(t *testing.T, ps *badger.KV, uid uint64, p geom.T, name string) {
+func addGeoData(t *testing.T, uid uint64, p geom.T, name string) {
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.GeoID)
 	src.Value = p

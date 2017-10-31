@@ -65,7 +65,7 @@ func addPassword(t *testing.T, uid uint64, attr, password string) {
 	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
 }
 
-var ps *badger.KV
+var ps *badger.ManagedDB
 
 func populateGraph(t *testing.T) {
 	x.AssertTrue(ps != nil)
@@ -239,33 +239,33 @@ func populateGraph(t *testing.T) {
 
 	// GEO stuff
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	addGeoData(t, ps, 5101, p, "Googleplex")
+	addGeoData(t, 5101, p, "Googleplex")
 
 	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.080668, 37.426753})
-	addGeoData(t, ps, 5102, p, "Shoreline Amphitheater")
+	addGeoData(t, 5102, p, "Shoreline Amphitheater")
 
 	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.2527428, 37.513653})
-	addGeoData(t, ps, 5103, p, "San Carlos Airport")
+	addGeoData(t, 5103, p, "San Carlos Airport")
 
 	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-121.6, 37.1}, {-122.4, 37.3}, {-122.6, 37.8}, {-122.5, 38.3}, {-121.9, 38},
 			{-121.6, 37.1}},
 	})
-	addGeoData(t, ps, 5104, poly, "SF Bay area")
+	addGeoData(t, 5104, poly, "SF Bay area")
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43},
 			{-122.04, 37.43}, {-122.06, 37.37}},
 	})
-	addGeoData(t, ps, 5105, poly, "Mountain View")
+	addGeoData(t, 5105, poly, "Mountain View")
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122.25, 37.49}, {-122.28, 37.49}, {-122.27, 37.51}, {-122.25, 37.52},
 			{-122.25, 37.49}},
 	})
-	addGeoData(t, ps, 5106, poly, "San Carlos")
+	addGeoData(t, 5106, poly, "San Carlos")
 
 	multipoly, err := loadPolygon("testdata/nyc-coordinates.txt")
 	require.NoError(t, err)
-	addGeoData(t, ps, 5107, multipoly, "New York")
+	addGeoData(t, 5107, multipoly, "New York")
 
 	addEdgeToValue(t, "film.film.initial_release_date", 23, "1900-01-02", nil)
 	addEdgeToValue(t, "film.film.initial_release_date", 24, "1909-05-05", nil)
@@ -5796,14 +5796,14 @@ func TestMain(m *testing.M) {
 	opt := badger.DefaultOptions
 	opt.Dir = dir
 	opt.ValueDir = dir
-	ps, err = badger.NewKV(&opt)
+	ps, err = badger.OpenManaged(opt)
 	defer ps.Close()
 	x.Check(err)
 
 	worker.Config.RaftId = 1
 	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
-	worker.Config.PeerAddr = "localhost:12340"
+	worker.Config.ZeroAddr = "localhost:12340"
 	worker.Config.RaftId = 1
 	worker.Config.MyAddr = "localhost:12345"
 	worker.Config.ExpandEdge = true
@@ -5820,7 +5820,7 @@ func TestMain(m *testing.M) {
 	kvOpt.Dir = dir2
 	kvOpt.ValueDir = dir2
 	kvOpt.TableLoadingMode = options.LoadToRAM
-	walStore, err := badger.NewKV(&kvOpt)
+	walStore, err := badger.OpenManaged(kvOpt)
 	x.Check(err)
 
 	worker.StartRaftNodes(walStore, false)
@@ -7352,7 +7352,7 @@ func TestMultiPolygonContains(t *testing.T) {
 	// We should get this back as a result as it should contain our Denver polygon.
 	multipoly, err := loadPolygon("testdata/us-coordinates.txt")
 	require.NoError(t, err)
-	addGeoData(t, ps, 5108, multipoly, "USA")
+	addGeoData(t, 5108, multipoly, "USA")
 
 	query := `{
 		me(func: contains(geometry, "[[[ -1185.8203125, 41.27780646738183 ], [ -1189.1162109375, 37.64903402157866 ], [ -1182.1728515625, 36.84446074079564 ], [ -1185.8203125, 41.27780646738183 ]]]")) {
