@@ -31,11 +31,12 @@ type Oracle struct {
 	commits    map[uint64]uint64 // start -> commit
 	rowCommit  map[string]uint64 // fp(key) -> commit
 	aborts     map[uint64]struct{}
-	pending    map[uint64]struct{}
+	pending    map[uint64]struct{} // TODO: Do we need this?
 	maxPending uint64
 	// Implement Tmax.
 	subscribers map[int]chan *protos.OracleDelta
 	updates     chan *protos.OracleDelta
+	doneUntil   x.WaterMark
 }
 
 func (o *Oracle) Init() {
@@ -45,6 +46,7 @@ func (o *Oracle) Init() {
 	o.pending = make(map[uint64]struct{})
 	o.subscribers = make(map[int]chan *protos.OracleDelta)
 	o.updates = make(chan *protos.OracleDelta, 100000) // Keeping 1 second worth of updates.
+	o.doneUntil.Init()
 	go o.sendDeltasToSubscribers()
 }
 
@@ -181,6 +183,9 @@ func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
 }
 
 func (o *Oracle) storePending(ids *protos.AssignedIds) {
+	// Wait to finish up processing everything before start id.
+	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
+	// Now send it out to updates.
 	o.updates <- &protos.OracleDelta{MaxPending: ids.EndId}
 	o.Lock()
 	defer o.Unlock()
@@ -229,7 +234,11 @@ func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
 	if err := s.orc.commit(src); err != nil {
 		src.Aborted = true
 	}
-	return s.proposeTxn(ctx, src)
+	// Propose txn should be used to set watermark as done.
+	err = s.proposeTxn(ctx, src)
+	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
+	s.orc.doneUntil.Done(src.CommitTs)
+	return err
 }
 
 func (s *Server) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*protos.TxnContext, error) {
@@ -276,4 +285,30 @@ func (s *Server) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*pro
 		}
 	}
 	return &protos.Payload{}, nil
+}
+
+// Timestamps is used to assign startTs for a new transaction
+func (s *Server) Timestamps(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	if ctx.Err() != nil {
+		return &emptyAssignedIds, ctx.Err()
+	}
+
+	reply := &emptyAssignedIds
+	c := make(chan error, 1)
+	go func() {
+		var err error
+		reply, err = s.lease(ctx, num, true)
+		c <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return reply, ctx.Err()
+	case err := <-c:
+		if err == nil {
+			s.orc.doneUntil.Done(reply.EndId)
+			go s.orc.storePending(reply)
+		}
+		return reply, err
+	}
 }

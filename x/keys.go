@@ -141,7 +141,7 @@ func (p ParsedKey) IsIndex() bool {
 }
 
 func (p ParsedKey) IsSchema() bool {
-	return p.byteType == byteSchema
+	return p.bytePrefix == byteSchema
 }
 
 func (p ParsedKey) IsType(typ byte) bool {
