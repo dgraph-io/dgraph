@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 killall dgraph dgraphzero > /dev/null 2>&1
 
 DGRAPH_ROOT=$GOPATH/src/github.com/dgraph-io/dgraph/cmd
@@ -18,7 +17,7 @@ build "dgraphzero"
 build "dgraph"
 build "dgraph-live-loader"
 
-$DGRAPH_ROOT/dgraphzero/dgraphzero -w zw > /dev/null 2>&1 &
+$DGRAPH_ROOT/dgraphzero/dgraphzero -w zw > zero.log 2>&1 &
 sleep 5
 
 
