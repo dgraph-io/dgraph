@@ -267,7 +267,7 @@ func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer)
 	return nil
 }
 
-func (s *Server) TryAbort(ctx context.Context, txns *protos.Transactions) (*protos.Payload, error) {
+func (s *Server) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.Payload, error) {
 	for _, startTs := range txns.StartTs {
 		// Do via proposals to avoid race
 		tctx := &protos.TxnContext{StartTs: startTs, Aborted: true}

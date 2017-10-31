@@ -562,5 +562,5 @@ func tryAbortTransactions(startTimestamps []uint64) {
 		return
 	}
 	zc := protos.NewZeroClient(pl.Get())
-	zc.TryAbort(context.Background(), &protos.Transactions{StartTs: startTimestamps})
+	zc.TryAbort(context.Background(), &protos.TxnTimestamps{StartTs: startTimestamps})
 }
