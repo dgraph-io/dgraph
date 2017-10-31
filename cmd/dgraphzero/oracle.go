@@ -108,29 +108,38 @@ func (o *Oracle) removeSubscriber(id int) {
 func (o *Oracle) sendDeltasToSubscribers() {
 	delta := new(protos.OracleDelta)
 	for {
-		select {
-		case tctx, open := <-o.updates:
-			if !open {
-				return
-			}
+		tctx, open := <-o.updates
+		if !open {
+			return
+		}
+	slurp_loop:
+		for {
+			// Consume tctx.
 			if tctx.Aborted {
 				delta.Aborts = append(delta.Aborts, tctx.StartTs)
 			} else {
 				delta.Commits[tctx.StartTs] = tctx.CommitTs
 			}
-		default:
-			o.Lock()
-			for id, ch := range o.subscribers {
-				select {
-				case ch <- delta:
-				default:
-					close(ch)
-					delete(o.subscribers, id)
+			select {
+			case tctx, open = <-o.updates:
+				if !open {
+					return
 				}
+			default:
+				break slurp_loop
 			}
-			o.Unlock()
-			delta = new(protos.OracleDelta)
 		}
+		o.Lock()
+		for id, ch := range o.subscribers {
+			select {
+			case ch <- delta:
+			default:
+				close(ch)
+				delete(o.subscribers, id)
+			}
+		}
+		o.Unlock()
+		delta = new(protos.OracleDelta)
 	}
 }
 
