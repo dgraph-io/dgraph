@@ -307,10 +307,21 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := (&dgraph.Server{}).Mutate(context.Background(), mu)
 	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 	fmt.Println("resp", resp)
+	response := map[string]interface{}{}
+	mp := map[string]interface{}{}
+	mp["code"] = x.Success
+	mp["message"] = "Done"
+	mp["uids"] = query.ConvertUidsToHex(resp.Uids)
+	response["data"] = mp
+	if js, err := json.Marshal(response); err == nil {
+		w.Write(js)
+	} else {
+		x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
+	}
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
