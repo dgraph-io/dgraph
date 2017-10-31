@@ -630,6 +630,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 func (l *List) MarshalToKv() (*protos.KV, error) {
 	l.Lock()
 	defer l.Unlock()
+	x.AssertTrue(len(l.activeTxns) == 0)
 	final, err := l.rollup()
 	if err != nil {
 		return nil, err
@@ -660,15 +661,18 @@ func marshalPostingList(plist *protos.PostingList) (data []byte, meta byte) {
 
 func (l *List) rollup() (*protos.PostingList, error) {
 	l.AssertLock()
-	// TODO: Fix
-	x.AssertTrue(len(l.activeTxns) == 0)
 	final := new(protos.PostingList)
 	var bp bp128.BPackEncoder
 	buf := make([]uint64, 0, bp128.BlockSize)
 
-	err := l.iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
+	// Pick all committed entries
+	midx := 0
+	err := l.iterate(l.commitTs, 0, func(p *protos.Posting) bool {
 		if p.CommitTs > l.minTs {
 			l.minTs = p.CommitTs
+		} else if p.CommitTs == 0 {
+			l.mlayer[midx] = p
+			midx++
 		}
 		buf = append(buf, p.Uid)
 		if len(buf) == bp128.BlockSize {
@@ -696,7 +700,7 @@ func (l *List) rollup() (*protos.PostingList, error) {
 		// TODO: Add bytes method
 		bp.WriteTo(final.Uids)
 	}
-	l.mlayer = l.mlayer[:0]
+	l.mlayer = l.mlayer[:midx]
 	l.commitTs = l.minTs
 	return final, nil
 }
@@ -708,8 +712,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	if len(l.mlayer) == 0 && l.plist != emptyList {
 		return false, nil
 	}
-	if len(l.activeTxns) > 0 {
-		// Don't merge if there is pending transaction.
+	if delFromCache && len(l.activeTxns) > 0 {
+		// Don't evict if there is pending transaction.
 		return false, errUncommitted
 	}
 
