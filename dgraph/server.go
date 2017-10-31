@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -52,6 +54,10 @@ type ServerState struct {
 	WALstore *badger.ManagedDB
 
 	vlogTicker *time.Ticker
+
+	mu     sync.Mutex
+	needTs []chan uint64
+	notify chan struct{}
 }
 
 // TODO(tzdybal) - remove global
@@ -60,12 +66,14 @@ var State ServerState
 func NewServerState() (state ServerState) {
 	Config.validate()
 
-	state.FinishCh = make(chan struct{})
-	state.ShutdownCh = make(chan struct{})
+	State.FinishCh = make(chan struct{})
+	State.ShutdownCh = make(chan struct{})
+	State.notify = make(chan struct{}, 1)
 
-	state.initStorage()
+	State.initStorage()
 
-	return state
+	go State.fillTimestampRequests()
+	return State
 }
 
 func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
@@ -128,6 +136,50 @@ func (s *ServerState) Dispose() error {
 // Server implements protos.DgraphServer
 type Server struct{}
 
+// TODO(pawan) - Remove this logic from client after client doesn't have to fetch ts
+// for Commit API.
+func (s *ServerState) fillTimestampRequests() {
+	var chs []chan uint64
+
+	for range s.notify {
+	RETRY:
+		s.mu.Lock()
+		chs = append(chs, s.needTs...)
+		s.needTs = s.needTs[:0]
+		s.mu.Unlock()
+
+		if len(chs) == 0 {
+			continue
+		}
+		num := &protos.Num{Val: uint64(len(chs))}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ts, err := worker.Timestamps(ctx, num)
+		cancel()
+		if err != nil {
+			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
+			goto RETRY
+		}
+		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
+		for i, ch := range chs {
+			ch <- ts.StartId + uint64(i)
+		}
+		chs = chs[:0]
+	}
+}
+
+func (s *ServerState) getTimestamp() uint64 {
+	ch := make(chan uint64)
+	s.mu.Lock()
+	s.needTs = append(s.needTs, ch)
+	s.mu.Unlock()
+
+	select {
+	case s.notify <- struct{}{}:
+	default:
+	}
+	return <-ch
+}
+
 func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Payload, error) {
 	empty := &protos.Payload{}
 	if op.DropAll {
@@ -172,7 +224,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		return nil, x.Errorf("No mutations allowed.")
 	}
 	if mu.StartTs == 0 {
-		return resp, fmt.Errorf("Invalid start timestamp")
+		mu.StartTs = State.getTimestamp()
 	}
 	emptyMutation :=
 		len(mu.GetSetJson()) == 0 && len(mu.GetDeleteJson()) == 0 &&
@@ -180,6 +232,11 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
 		return resp, fmt.Errorf("empty mutation")
+	}
+	if rand.Float64() < worker.Config.Tracing {
+		var tr trace.Trace
+		tr, ctx = x.NewTrace("GrpcMutate", ctx)
+		defer tr.Finish()
 	}
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
@@ -197,10 +254,31 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 
 	m := &protos.Mutations{Edges: edges, StartTs: mu.StartTs}
 	resp.Context, err = query.ApplyMutations(ctx, m)
-	if err != nil {
-		resp.Error = err.Error()
+	if !mu.CommitImmediately {
+		if err != nil {
+			// TODO: Investigate if this is really necessary.
+			resp.Error = err.Error()
+		}
+		return resp, nil
 	}
-	return resp, nil
+
+	tr, ok := trace.FromContext(ctx)
+	if ok {
+		tr.LazyPrintf("Prewrites err: %v. Attempting to commit/abort immediately.", err)
+	}
+	ctxn := resp.Context
+	if err == nil {
+		ctxn.CommitTs = ctxn.StartTs
+	}
+	// If CommitTs is zero, this would abort.
+	_, aerr := worker.CommitOverNetwork(ctx, ctxn)
+	if ok {
+		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, aerr)
+	}
+	if err != nil {
+		return resp, err
+	}
+	return resp, aerr
 }
 
 // This method is used to execute the query and return the response to the
@@ -228,7 +306,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	}
 
 	resp = new(protos.Response)
-	if len(req.Query) == 0 && req.Schema == nil {
+	if len(req.Query) == 0 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Empty query")
 		}
@@ -253,13 +331,10 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 		return resp, err
 	}
 
-	if req.Schema != nil && parsedReq.Schema != nil {
-		return resp, x.Errorf("Multiple schema blocks found")
+	if req.StartTs == 0 {
+		req.StartTs = State.getTimestamp()
 	}
-	// Schema Block and Mutation can be part of query string or request
-	if parsedReq.Schema == nil {
-		parsedReq.Schema = req.Schema
-	}
+	resp.StartTs = req.StartTs
 
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
@@ -312,16 +387,6 @@ func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.V
 	v = new(protos.Version)
 	v.Tag = x.Version()
 	return v, nil
-}
-
-func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("request rejected %v", err)
-		}
-		return &protos.AssignedIds{}, err
-	}
-	return worker.AssignUidsOverNetwork(ctx, num)
 }
 
 //-------------------------------------------------------------------------------------------------

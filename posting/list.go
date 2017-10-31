@@ -71,12 +71,9 @@ type List struct {
 	plist         *protos.PostingList
 	mlayer        []*protos.Posting // committed mutations, sorted by uid,ts
 	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
-	commitTs      uint64            // commit timestamp of mutable layer.
-	startTs       uint64            // start timestamp of ongoing transaction.
-	primaryAttr   string
+	activeTxns    []uint64
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
-	deleteAll     int32
 	estimatedSize uint32
 }
 
@@ -222,7 +219,6 @@ func NewPosting(t *protos.DirectedEdge) *protos.Posting {
 		Label:       t.Label,
 		Op:          op,
 		Facets:      t.Facets,
-		Commit:      math.MaxUint64,
 	}
 }
 
@@ -234,7 +230,7 @@ func (l *List) EstimatedSize() uint32 {
 func (l *List) SetForDeletion() bool {
 	l.Lock()
 	defer l.Unlock()
-	if l.startTs > 0 {
+	if len(l.activeTxns) > 0 {
 		return false
 	}
 	atomic.StoreInt32(&l.deleteMe, 1)
@@ -245,66 +241,20 @@ func (l *List) SetForDeletion() bool {
 func (l *List) updateMutationLayer(startTs uint64, mpost *protos.Posting) bool {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
-	// Conflict check should happend before calling this function.
-	x.AssertTrue(l.startTs == 0 || l.startTs == startTs)
 	if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
 		atomic.StoreInt32(&l.markdeleteAll, 1)
 		return true
 	}
 	atomic.StoreInt32(&l.markdeleteAll, 0)
 
-	// First check the mutable layer.
+	// Check the mutable layer.
 	midx := sort.Search(len(l.mlayer), func(idx int) bool {
 		mp := l.mlayer[idx]
-		return mpost.Uid <= mp.Uid
+		if mpost.Uid != mp.Uid {
+			return mpost.Uid < mp.Uid
+		}
+		return mpost.StartTs >= mp.StartTs
 	})
-
-	// This block handles the case where mpost.UID is found in mutation layer.
-	if midx < len(l.mlayer) && l.mlayer[midx].Uid == mpost.Uid {
-		// mp is the posting found in mlayer.
-		oldPost := l.mlayer[midx]
-
-		// Note that mpost.Op is either Set or Del, whereas oldPost.Op can be
-		// either Set or Del or Add.
-		msame := samePosting(oldPost, mpost)
-		if msame && ((mpost.Op == Del) == (oldPost.Op == Del)) {
-			// This posting has similar content as what is found in mlayer. If the
-			// ops are similar, then we do nothing. Note that Add and Set are
-			// considered similar, and the second clause is true also when
-			// mpost.Op==Add and oldPost.Op==Set.
-			return false
-		}
-
-		if !msame && mpost.Op == Del {
-			// Invalid Del as contents do not match.
-			return false
-		}
-
-		// add it where midx is pointing to.
-		l.mlayer = append(l.mlayer, nil)
-		copy(l.mlayer[midx+1:], l.mlayer[midx:])
-		l.mlayer[midx] = mpost
-		return true
-	}
-
-	// Didn't find it in mutable layer. Now check the immutable layer.
-	var psame bool
-	var pitr PIterator
-	pitr.Init(l.plist, mpost.Uid-1)
-	if pitr.Valid() {
-		pp := pitr.Posting()
-		psame = samePosting(pp, mpost)
-	}
-
-	if mpost.Op == Set {
-		if psame {
-			return false
-		}
-	} else if !psame { // mpost.Op==Del
-		// Either we fail to find UID in immutable PL or contents don't match.
-		return false
-	}
-
 	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
 	if midx >= len(l.mlayer) {
 		// Add it at the end.
@@ -312,6 +262,10 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *protos.Posting) bool {
 		return true
 	}
 
+	if l.mlayer[midx].Uid == mpost.Uid && l.mlayer[midx].StartTs == startTs {
+		l.mlayer[midx] = mpost
+		return true
+	}
 	// Otherwise, add it where midx is pointing to.
 	l.mlayer = append(l.mlayer, nil)
 	copy(l.mlayer[midx+1:], l.mlayer[midx:])
@@ -377,14 +331,12 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		}
 		return false, ErrRetry
 	}
-	if txn.HasConflict() {
+	if txn.ShouldAbort() {
 		return false, ErrConflict
 	}
-
-	if !l.canPreWrite(ctx, txn) {
-		pk := x.Parse(l.key)
-		fmt.Printf("Can't prewrite due to %+v. txnstart=%d\n", pk, txn.StartTs)
-		txn.AddConflict(&protos.TxnContext{StartTs: l.startTs, Primary: l.primaryAttr})
+	// We can have atmax one pending <s> <p> * mutation.
+	if len(l.activeTxns) > 0 && l.activeTxns[0] != txn.StartTs && l.markdeleteAll > 0 {
+		txn.SetAbort()
 		return false, ErrConflict
 	}
 
@@ -413,11 +365,13 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
+		// Ensures that txn is aborted.
+		txn.SetAbort()
 		return false, err
 	}
 
 	mpost := NewPosting(t)
-	mpost.Commit = txn.StartTs
+	mpost.StartTs = txn.StartTs
 	t1 := time.Now()
 	hasMutated := l.updateMutationLayer(txn.StartTs, mpost)
 	atomic.AddUint32(&l.estimatedSize, uint32(mpost.Size()+16 /* various overhead */))
@@ -426,22 +380,14 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Uids))
 		}
 	}
-	if hasMutated {
-		txn.AddDelta(l.key, mpost)
+	tidx := sort.Search(len(l.activeTxns), func(idx int) bool {
+		return l.activeTxns[idx] == txn.StartTs
+	})
+	if tidx >= len(l.activeTxns) {
+		l.activeTxns = append(l.activeTxns, txn.StartTs)
 	}
+	txn.AddDelta(l.key, mpost)
 	return hasMutated, nil
-}
-
-func (l *List) canPreWrite(ctx context.Context, txn *Txn) bool {
-	if txn.StartTs < l.commitTs {
-		return false
-	}
-	if l.startTs == 0 || l.startTs == txn.StartTs {
-		l.startTs = txn.StartTs
-		l.primaryAttr = txn.PrimaryAttr
-		return true
-	}
-	return false
 }
 
 func (l *List) AbortTransaction(ctx context.Context, startTs uint64) error {
@@ -458,23 +404,22 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 		return ErrRetry
 	}
 	l.AssertLock()
-	if l.startTs == 0 {
-		return nil
-	}
-	if l.startTs != startTs {
-		return ErrInvalidTxn
-	}
 	midx := 0
 	for _, mpost := range l.mlayer {
-		if mpost.Commit != l.startTs {
+		if mpost.StartTs != startTs {
 			l.mlayer[midx] = mpost
 			midx++
 		}
 		// TODO: Estimate size
 	}
 	l.mlayer = l.mlayer[:midx]
-	l.startTs = 0
-	l.primaryAttr = ""
+	tidx := sort.Search(len(l.activeTxns), func(idx int) bool {
+		return l.activeTxns[idx] == startTs
+	})
+	if tidx < len(l.activeTxns) {
+		copy(l.activeTxns[tidx:], l.activeTxns[tidx+1:])
+		l.activeTxns = l.activeTxns[:len(l.activeTxns)-1]
+	}
 	return nil
 }
 
@@ -493,31 +438,24 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	}
 
 	l.AssertLock()
-	if l.startTs == 0 && l.commitTs == commitTs {
-		return nil
-	}
-	if l.startTs != startTs {
-		return ErrInvalidTxn
-	}
-
-	if atomic.LoadInt32(&l.markdeleteAll) == 1 {
+	if l.markdeleteAll == 1 {
 		l.deleteHelper(ctx)
-		l.startTs = 0
-		l.primaryAttr = ""
-		l.commitTs = commitTs
 		l.minTs = commitTs
-		atomic.StoreInt32(&l.markdeleteAll, 0)
-		return nil
-	}
-	for _, mpost := range l.mlayer {
-		if mpost.Commit != l.startTs {
-			continue
+		l.markdeleteAll = 0
+	} else {
+		for _, mpost := range l.mlayer {
+			if mpost.StartTs == startTs {
+				mpost.CommitTs = commitTs
+			}
 		}
-		mpost.Commit = commitTs
 	}
-	l.startTs = 0
-	l.primaryAttr = ""
-	l.commitTs = commitTs
+	tidx := sort.Search(len(l.activeTxns), func(idx int) bool {
+		return l.activeTxns[idx] == startTs
+	})
+	if tidx < len(l.activeTxns) {
+		copy(l.activeTxns[tidx:], l.activeTxns[tidx+1:])
+		l.activeTxns = l.activeTxns[:len(l.activeTxns)-1]
+	}
 	// Calculate 5% of immutable layer
 	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
 	if numUids < 1000 {
@@ -533,7 +471,6 @@ func (l *List) deleteHelper(ctx context.Context) error {
 	l.AssertLock()
 	l.plist = emptyList
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
-	atomic.StoreInt32(&l.deleteAll, 1)
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 	return nil
 }
@@ -555,40 +492,34 @@ func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 	return l.iterate(readTs, afterUid, f)
 }
 
-// canRead must hold a read lock.
-func (l *List) canRead(commitTs, readTs uint64) bool {
-	if l.startTs > 0 {
-		// Pending transaction
-		return commitTs == readTs
+func (l *List) Conflicts(readTs uint64) []uint64 {
+	l.RLock()
+	defer l.RUnlock()
+	var conflicts []uint64
+	for _, ts := range l.activeTxns {
+		if ts < readTs {
+			conflicts = append(conflicts, ts)
+		}
 	}
-
-	// No pending transaction
-	return commitTs <= readTs
+	return conflicts
 }
 
-func (l *List) HasConflict(readTs uint64) bool {
-	l.RLock()
-	defer l.RUnlock()
-	return l.startTs != 0 && readTs > l.startTs
-}
-
-func (l *List) Pending() (uint64, string) {
-	l.RLock()
-	defer l.RUnlock()
-	return l.startTs, l.primaryAttr
+func (l *List) canRead(mpost *protos.Posting, readTs uint64) bool {
+	l.AssertRLock()
+	if mpost.CommitTs == 0 {
+		// TODO: Check in local cache for commitTs
+		return mpost.StartTs == readTs
+	}
+	return mpost.CommitTs <= readTs
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
 	l.AssertRLock()
-	if l.startTs != 0 && readTs > l.startTs {
-		return ErrConflict
-	}
-	// current pending transaction deletes the pl
-	if readTs == l.startTs && atomic.LoadInt32(&l.markdeleteAll) == 1 {
-		return nil
-	}
 	midx := 0
 
+	if len(l.activeTxns) > 0 && l.activeTxns[0] == readTs && l.markdeleteAll > 0 {
+		return nil
+	}
 	if readTs < l.minTs {
 		return ErrTsTooOld
 	}
@@ -608,14 +539,14 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 	for cont {
 		if pitr.Valid() {
 			pp = pitr.Posting()
-			pp.Commit = l.minTs
+			pp.CommitTs = l.minTs
 		} else {
 			pp = emptyPosting
 		}
 
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
-			if !l.canRead(mp.Commit, readTs) {
+			if !l.canRead(mp, readTs) {
 				midx++
 				continue
 			}
@@ -698,7 +629,7 @@ func (l *List) MarshalToKv() (*protos.KV, error) {
 	}
 
 	kv := &protos.KV{}
-	kv.Version = l.commitTs
+	kv.Version = l.minTs
 	kv.Key = l.key
 	val, meta := marshalPostingList(final)
 	kv.UserMeta = []byte{meta}
@@ -722,14 +653,14 @@ func marshalPostingList(plist *protos.PostingList) (data []byte, meta byte) {
 
 func (l *List) rollup() (*protos.PostingList, error) {
 	l.AssertLock()
-	x.AssertTrue(l.startTs == 0)
+	x.AssertTrue(len(l.activeTxns) == 0)
 	final := new(protos.PostingList)
 	var bp bp128.BPackEncoder
 	buf := make([]uint64, 0, bp128.BlockSize)
 
 	err := l.iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
-		if p.Commit > l.commitTs {
-			l.commitTs = p.Commit
+		if p.CommitTs > l.minTs {
+			l.minTs = p.CommitTs
 		}
 		buf = append(buf, p.Uid)
 		if len(buf) == bp128.BlockSize {
@@ -741,6 +672,8 @@ func (l *List) rollup() (*protos.PostingList, error) {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
+			p.StartTs = 0
+			p.CommitTs = 0
 			final.Postings = append(final.Postings, p)
 		}
 		return true
@@ -755,17 +688,18 @@ func (l *List) rollup() (*protos.PostingList, error) {
 		// TODO: Add bytes method
 		bp.WriteTo(final.Uids)
 	}
+	l.mlayer = l.mlayer[:0]
 	return final, nil
 }
 
 // Merge mutation layer and immutable layer.
 func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
-	// deleteAll is used to differentiate when we don't have any updates, v/s
+	// emptyList is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
-	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
+	if len(l.mlayer) == 0 && l.plist != emptyList {
 		return false, nil
 	}
-	if l.startTs > 0 {
+	if len(l.activeTxns) > 0 {
 		// Don't merge if there is pending transaction.
 		return false, errUncommitted
 	}
@@ -801,7 +735,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			}
 			// Error from badger should be temporary, so we can retry.
 			retries += 1
-			doAsyncWrite(l.commitTs, l.key, data, meta, f)
+			doAsyncWrite(l.minTs, l.key, data, meta, f)
 			return
 		}
 		x.BytesWrite.Add(int64(len(data)))
@@ -810,16 +744,10 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
 			lcache.delete(l.key)
 		}
-		pstore.PurgeVersionsBelow(l.key, l.commitTs)
+		pstore.PurgeVersionsBelow(l.key, l.minTs)
 	}
 
-	doAsyncWrite(l.commitTs, l.key, data, meta, f)
-	l.mlayer = l.mlayer[:0]
-	l.minTs = l.commitTs
-	if l.startTs == 0 {
-		// We don't merge uncomitted entries.
-		atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll only after it's committed.
-	}
+	doAsyncWrite(l.minTs, l.key, data, meta, f)
 	return true, nil
 }
 
@@ -845,6 +773,7 @@ func (l *List) Uids(opt ListOptions) (*protos.List, error) {
 	out := &protos.List{}
 	if len(l.mlayer) == 0 && opt.Intersect != nil {
 		if opt.ReadTs < l.minTs {
+			l.RUnlock()
 			return out, ErrTsTooOld
 		}
 		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)

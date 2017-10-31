@@ -54,8 +54,3 @@ func (i *inmemoryClient) CheckVersion(ctx context.Context, in *protos.Check,
 	_ ...grpc.CallOption) (*protos.Version, error) {
 	return i.srv.CheckVersion(ctx, in)
 }
-
-func (i *inmemoryClient) AssignUids(ctx context.Context, in *protos.Num,
-	_ ...grpc.CallOption) (*protos.AssignedIds, error) {
-	return i.srv.AssignUids(ctx, in)
-}

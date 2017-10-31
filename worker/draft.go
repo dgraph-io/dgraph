@@ -102,7 +102,6 @@ func (p *proposals) Done(pid uint32, err error) {
 		return
 	}
 	delete(p.ids, pid)
-	go fixConflicts(pd.txn.Conflicts())
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
@@ -252,7 +251,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	err = <-che
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
+			tr.LazyPrintf("Raft Propose error: %v", err)
 		}
 	}
 	return err
@@ -264,11 +263,14 @@ func (n *node) processMutation(task *task) error {
 	edge := task.edge
 
 	ctx, txn := n.props.CtxAndTxn(pid)
+	if txn.ShouldAbort() {
+		return posting.ErrConflict
+	}
 	rv := x.RaftValue{Group: n.gid, Index: ridx}
 	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runMutation(ctx, edge, txn); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
+			tr.LazyPrintf("process mutation: %v", err)
 		}
 		return err
 	}
@@ -368,6 +370,9 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) 
 	ctx, _ := n.props.CtxAndTxn(pid)
 	n.Applied.WaitForMark(ctx, index-1)
 	_, err := commitOrAbort(ctx, tctx)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Status of commitOrAbort %+v %v\n", tctx, err)
+	}
 	if err == nil {
 		posting.Txns().Done(tctx.StartTs)
 	}

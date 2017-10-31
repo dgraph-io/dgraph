@@ -65,6 +65,9 @@ func (s *scheduler) processTasks() {
 		nextTask := t
 		for nextTask != nil {
 			err := s.n.processMutation(nextTask)
+			if err == posting.ErrRetry {
+				continue
+			}
 			n.props.Done(nextTask.pid, err)
 			x.ActiveMutations.Add(-1)
 			nextTask = s.nextTask(nextTask)
@@ -211,9 +214,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 	m := proposal.Mutations
 	pctx := s.n.props.pctx(proposal.Id)
 	txn := &posting.Txn{
-		StartTs:       m.StartTs,
-		PrimaryAttr:   m.PrimaryAttr,
-		ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
+		StartTs: m.StartTs,
 	}
 	pctx.txn = posting.Txns().PutOrMergeIndex(txn)
 	for _, edge := range m.Edges {

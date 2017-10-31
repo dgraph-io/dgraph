@@ -425,6 +425,11 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 	if r.err != nil {
 		return nil, r.err
 	}
+	if r.reply.LinRead == nil {
+		r.reply.LinRead = &protos.LinRead{
+			Ids: make(map[uint32]uint64),
+		}
+	}
 	r.reply.LinRead.Ids[n.RaftContext.Group] = n.Applied.DoneUntil()
 	// If request didn't have multiple attributes we return.
 	if len(ts.Order) <= 1 {

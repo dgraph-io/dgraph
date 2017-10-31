@@ -59,11 +59,10 @@ var (
 	baseGrpcPort int
 	bindall      bool
 
-	exposeTrace  bool
-	cpuprofile   string
-	memprofile   string
-	blockRate    int
-	dumpSubgraph string
+	exposeTrace bool
+	cpuprofile  string
+	memprofile  string
+	blockRate   int
 
 	// TLS configuration
 	tlsEnabled       bool
@@ -101,12 +100,10 @@ func setupConfigOpts() {
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.Float64Var(&config.Tracing, "trace", defaults.Tracing,
 		"The ratio of queries to trace.")
-	flag.StringVar(&config.GroupIds, "groups", defaults.GroupIds,
-		"RAFT groups handled by this server.")
 	flag.StringVar(&config.MyAddr, "my", defaults.MyAddr,
-		"addr:port of this server, so other Dgraph servers can talk to this.")
-	flag.StringVar(&config.PeerAddr, "peer", defaults.PeerAddr,
-		"IP_ADDRESS:PORT of any healthy peer.")
+		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
+	flag.StringVar(&config.ZeroAddr, "zero", defaults.ZeroAddr,
+		"IP_ADDRESS:PORT of Dgraph zero.")
 	flag.Uint64Var(&config.RaftId, "idx", 0,
 		"Optional Raft ID that this server will use to join RAFT groups.")
 	flag.Uint64Var(&config.MaxPendingCount, "sc", defaults.MaxPendingCount,
@@ -118,8 +115,6 @@ func setupConfigOpts() {
 	flag.Float64Var(&config.AllottedMemory, "memory_mb", defaults.AllottedMemory,
 		"Estimated memory the process can take. "+
 			"Actual usage would be slightly more than specified here.")
-	flag.Float64Var(&config.CommitFraction, "gentlecommit", defaults.CommitFraction,
-		"Fraction of dirty posting lists to commit every few seconds.")
 
 	flag.StringVar(&config.ConfigFile, "config", defaults.ConfigFile,
 		"YAML configuration file containing dgraph settings.")
@@ -140,7 +135,6 @@ func setupConfigOpts() {
 	flag.StringVar(&cpuprofile, "cpu", "", "write cpu profile to file")
 	flag.StringVar(&memprofile, "mem", "", "write memory profile to file")
 	flag.IntVar(&blockRate, "block", 0, "Block profiling rate")
-	flag.StringVar(&dumpSubgraph, "dumpsg", "", "Directory to save subgraph for testing, debugging")
 	// TLS configurations
 	flag.BoolVar(&tlsEnabled, "tls.on", false, "Use TLS connections with clients.")
 	flag.StringVar(&tlsCert, "tls.cert", "", "Certificate file path.")

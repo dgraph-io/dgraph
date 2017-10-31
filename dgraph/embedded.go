@@ -30,13 +30,12 @@ func GetDefaultEmbeddedConfig() Options {
 	config.InMemoryComm = true
 	config.BaseWorkerPort = 0
 	config.MyAddr = ""
-	config.PeerAddr = ""
+	config.ZeroAddr = ""
 
 	return config
 }
 
 func NewEmbeddedDgraphClient(config Options) *client.Dgraph {
-
 	SetConfiguration(config)
 
 	x.Init(config.DebugMode)

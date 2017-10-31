@@ -23,7 +23,7 @@ type Options struct {
 	Tracing             float64
 	GroupIds            string
 	MyAddr              string
-	PeerAddr            string
+	ZeroAddr            string
 	RaftId              uint64
 	MaxPendingCount     uint64
 	ExpandEdge          bool
