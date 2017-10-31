@@ -590,7 +590,11 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
 	txnCtx.StartTs = m.StartTs
 	txnCtx.Primary = m.PrimaryAttr
-	txnCtx.LinRead.Ids[m.GroupId] = node.Applied.DoneUntil()
+	txnCtx.LinRead = &protos.LinRead{
+		Ids: map[uint32]uint64{
+			m.GroupId: node.Applied.DoneUntil(),
+		},
+	}
 	return txnCtx, err
 }
 
