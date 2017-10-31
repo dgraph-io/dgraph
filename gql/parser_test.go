@@ -22,6 +22,7 @@ import (
 	"runtime/debug"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1513,7 +1514,7 @@ func TestParseSchemaErrorMulti(t *testing.T) {
 	require.Contains(t, err.Error(), "Only one schema block allowed")
 }
 
-func TestParseMutation(t *testing.T) {
+func TestParseMutationError(t *testing.T) {
 	query := `
 		mutation {
 			set {
@@ -4214,4 +4215,31 @@ func TestParseUidAsArgument(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Argument cannot be \"uid\"")
+}
+
+func TestParseMutation(t *testing.T) {
+	m := `
+		mutation {
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san/francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+	`
+	mu, err := ParseMutation(m)
+	require.NoError(t, err)
+	require.NotNil(t, mu)
+	require.EqualValues(t, &protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something"},
+		mu.Set[0])
+	require.EqualValues(t, &protos.NQuad{
+		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
+		mu.Set[1])
+	require.EqualValues(t, &protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something-else"},
+		mu.Del[0])
+
 }

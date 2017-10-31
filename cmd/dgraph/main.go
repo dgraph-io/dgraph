@@ -46,6 +46,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/dgraph"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -210,6 +211,81 @@ func stopProfiling() {
 		pprof.WriteHeapProfile(f)
 		f.Close()
 	}
+}
+
+// This method should just build the request and proxy it to the Query method of dgraph.Server.
+// It can then encode the response as appropriate before sending it back to the user.
+func queryHandler(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	// TODO - Confirm we want this as get.
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	defer r.Body.Close()
+	q, err := ioutil.ReadAll(r.Body)
+	req := protos.Request{
+		Query: string(q),
+	}
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	resp, err := (&dgraph.Server{}).Query(ctx, &req)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	fmt.Printf("Resp: %+v\n", resp)
+	w.Write(resp.Json)
+
+	// TODO - Verify schema, server latency is encoded as it was before.
+	// Encode linRead and readts under extensions key.
+}
+
+func mutationHandler(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+	defer r.Body.Close()
+	m, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	mu, err := gql.ParseMutation(string(m))
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	resp, err := (&dgraph.Server{}).Mutate(context.Background(), mu)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	fmt.Println("resp", resp)
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
@@ -515,6 +591,8 @@ func setupServer() {
 		log.Fatal(err)
 	}
 
+	http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/mutate", mutationHandler)
 	http.HandleFunc("/health", healthCheck)
 	// http.HandleFunc("/share", shareHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
