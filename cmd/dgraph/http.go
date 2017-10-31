@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -69,11 +70,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{}
-	if err := json.Unmarshal(resp.Json, &response); err != nil {
-		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
 	addLatency, _ := strconv.ParseBool(r.URL.Query().Get("latency"))
 	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
 	addLatency = addLatency || debug
@@ -87,7 +83,29 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		response["extensions"] = e
 	}
 
-	fmt.Printf("Resp: %+v\n", response)
+	// User can either ask for schema or have a query.
+	if len(resp.Schema) > 0 {
+		sort.Slice(resp.Schema, func(i, j int) bool {
+			return resp.Schema[i].Predicate < resp.Schema[j].Predicate
+		})
+		js, err := json.Marshal(resp.Schema)
+		if err != nil {
+			x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
+			return
+		}
+		mp := map[string]interface{}{}
+		mp["schema"] = json.RawMessage(string(js))
+		response["data"] = mp
+	} else {
+
+		jsonRes := map[string]interface{}{}
+		if err := json.Unmarshal(resp.Json, &jsonRes); err != nil {
+			x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		response["data"] = jsonRes["data"]
+	}
+
 	if js, err := json.Marshal(response); err == nil {
 		w.Write(js)
 	} else {
@@ -97,6 +115,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// Encode linRead and readts under extensions key.
 }
 
+// TODO - Modify UI to call mutate endpoint when string has set/delete.
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
