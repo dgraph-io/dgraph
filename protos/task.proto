@@ -129,6 +129,7 @@ message ZeroProposal {
   uint64 maxLeaseId = 4;
   uint64 maxTxnTs = 5;
   uint64 maxRaftId = 6;
+  TxnContext txn = 7;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -239,11 +240,12 @@ message Posting {
 	PostingType posting_type = 4;
 	bytes metadata = 5; // for VALUE_LANG: Language, for VALUE_TIMESERIES: timestamp, etc..
 	string label = 6;
-	uint64 commit = 7;  // More inclination towards smaller values.
-	repeated Facet facets = 8;
+	repeated Facet facets = 9;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;
+	uint64 start_ts = 13;   // Meant to use only inmemory
+	uint64 commit_ts = 14;  // Meant to use only inmemory
 }
 
 message PostingList {
@@ -379,7 +381,15 @@ message TxnContext {
   uint64 start_ts = 2;
   uint64 commit_ts = 3;
   bool aborted = 4;
+  repeated string keys = 5;
   LinRead lin_read = 13;
+}
+
+message OracleDelta {
+  map<uint64, uint64> commits = 1;
+  repeated uint64 aborts = 2;
+  uint64 max_pending = 3;
+  // implement tmax.
 }
 
 service Raft {
@@ -391,16 +401,17 @@ service Raft {
 service Zero {
 	rpc Connect (Member)      returns (ConnectionState) {}
 	rpc Update (stream Group) returns (stream MembershipState) {}
+  rpc Oracle (Payload) returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)  returns (Tablet) {}
 	rpc AssignUids (Num)      returns (AssignedIds) {}
   rpc Timestamps (Num)      returns (AssignedIds) {}
+  rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
 }
 
 service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                        returns (TxnContext) {}
 	rpc CommitOrAbort(TxnContext)                 returns (Payload) {}
-  rpc TxnStatus(TxnContext)                     returns (TxnContext) {}
 	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
@@ -466,9 +477,11 @@ message Value {
 message Mutation {
   bytes set_json = 1;
   bytes delete_json = 2;
-  repeated NQuad set = 3;
-  repeated NQuad del = 4;
+  bytes set_nquads = 3;
+  bytes del_nquads = 4;
 
+  repeated NQuad set = 10;
+  repeated NQuad del = 11;
   string primary = 12;
   uint64 start_ts = 13;
   bool commit_immediately = 14;
@@ -498,6 +511,7 @@ message Latency {
 message Response {
     bytes json = 1;
     repeated SchemaNode schema = 2;
+    uint64 start_ts = 3;
     Latency latency = 12;
     LinRead lin_read = 13;
 }

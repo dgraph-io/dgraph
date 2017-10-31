@@ -134,15 +134,11 @@ var errConflict = errors.New("List has a pending write.")
 
 func getValidList(key []byte, startTs uint64) (*posting.List, error) {
 	pl := posting.Get(key)
-	if pl.HasConflict(startTs) {
-		startTs, primary := pl.Pending()
-		if err := fixConflict(&protos.TxnContext{
-			StartTs: startTs,
-			Primary: primary,
-		}); err != nil {
-			return nil, err
-		}
-	}
+	timestamps := pl.Conflicts(startTs)
+	// check if local cache has the information or else go to zero and update
+	// local cache.
+	// TODO: Fixing can be done in background.
+	go fixConflicts(timestamps)
 	return pl, nil
 }
 

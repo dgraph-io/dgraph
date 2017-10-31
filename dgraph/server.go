@@ -17,11 +17,14 @@
 package dgraph
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -32,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -50,6 +54,10 @@ type ServerState struct {
 	WALstore *badger.ManagedDB
 
 	vlogTicker *time.Ticker
+
+	mu     sync.Mutex
+	needTs []chan uint64
+	notify chan struct{}
 }
 
 // TODO(tzdybal) - remove global
@@ -58,12 +66,14 @@ var State ServerState
 func NewServerState() (state ServerState) {
 	Config.validate()
 
-	state.FinishCh = make(chan struct{})
-	state.ShutdownCh = make(chan struct{})
+	State.FinishCh = make(chan struct{})
+	State.ShutdownCh = make(chan struct{})
+	State.notify = make(chan struct{}, 1)
 
-	state.initStorage()
+	State.initStorage()
 
-	return state
+	go State.fillTimestampRequests()
+	return State
 }
 
 func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
@@ -126,6 +136,50 @@ func (s *ServerState) Dispose() error {
 // Server implements protos.DgraphServer
 type Server struct{}
 
+// TODO(pawan) - Remove this logic from client after client doesn't have to fetch ts
+// for Commit API.
+func (s *ServerState) fillTimestampRequests() {
+	var chs []chan uint64
+
+	for range s.notify {
+	RETRY:
+		s.mu.Lock()
+		chs = append(chs, s.needTs...)
+		s.needTs = s.needTs[:0]
+		s.mu.Unlock()
+
+		if len(chs) == 0 {
+			continue
+		}
+		num := &protos.Num{Val: uint64(len(chs))}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ts, err := worker.Timestamps(ctx, num)
+		cancel()
+		if err != nil {
+			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
+			goto RETRY
+		}
+		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
+		for i, ch := range chs {
+			ch <- ts.StartId + uint64(i)
+		}
+		chs = chs[:0]
+	}
+}
+
+func (s *ServerState) getTimestamp() uint64 {
+	ch := make(chan uint64)
+	s.mu.Lock()
+	s.needTs = append(s.needTs, ch)
+	s.mu.Unlock()
+
+	select {
+	case s.notify <- struct{}{}:
+	default:
+	}
+	return <-ch
+}
+
 func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Payload, error) {
 	empty := &protos.Payload{}
 	if op.DropAll {
@@ -170,12 +224,12 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		return nil, x.Errorf("No mutations allowed.")
 	}
 	if mu.StartTs == 0 {
-		return resp, fmt.Errorf("Invalid start timestamp")
+		mu.StartTs = State.getTimestamp()
 	}
 	emptyMutation :=
-		len(mu.GetSetJson()) == 0 &&
-			len(mu.GetDeleteJson()) == 0 &&
-			len(mu.Set) == 0 && len(mu.Del) == 0
+		len(mu.GetSetJson()) == 0 && len(mu.GetDeleteJson()) == 0 &&
+			len(mu.Set) == 0 && len(mu.Del) == 0 &&
+			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
 		return resp, fmt.Errorf("empty mutation")
 	}
@@ -208,6 +262,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		return resp, nil
 	}
 
+	// The following logic is for committing immediately.
 	tr, ok := trace.FromContext(ctx)
 	if ok {
 		tr.LazyPrintf("Prewrites err: %v. Attempting to commit/abort immediately.", err)
@@ -277,7 +332,11 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 		return resp, err
 	}
 
-	// Schema Block and Mutation can be part of query string or request
+	if req.StartTs == 0 {
+		req.StartTs = State.getTimestamp()
+	}
+	resp.StartTs = req.StartTs
+
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
 		GqlQuery: &parsedReq,
@@ -626,23 +685,51 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 	return mr.nquads, err
 }
 
+func parseNQuads(b []byte, op int) ([]*protos.NQuad, error) {
+	var nqs []*protos.NQuad
+	for _, line := range bytes.Split(b, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		nq, err := rdf.Parse(string(line))
+		if err == rdf.ErrEmpty {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		nqs = append(nqs, &nq)
+	}
+	return nqs, nil
+}
+
 func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
-	var err error
-
 	if len(mu.SetJson) > 0 {
-		res.Set, err = nquadsFromJson(mu.SetJson, set)
+		nqs, err := nquadsFromJson(mu.SetJson, set)
 		if err != nil {
-			return res, err
+			return nil, err
 		}
+		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DeleteJson) > 0 {
-		res.Del, err = nquadsFromJson(mu.DeleteJson, delete)
+		nqs, err := nquadsFromJson(mu.DeleteJson, delete)
 		if err != nil {
-			return res, err
+			return nil, err
 		}
+		res.Del = append(res.Del, nqs...)
 	}
-	res.Set = append(res.Set, mu.Set...)
-	res.Del = append(res.Del, mu.Del...)
+	if len(mu.SetNquads) > 0 {
+		nqs, err := parseNQuads(mu.SetNquads, set)
+		if err != nil {
+			return nil, err
+		}
+		res.Set = append(res.Set, nqs...)
+	}
+	if len(mu.DelNquads) > 0 {
+		nqs, err := parseNQuads(mu.DelNquads, delete)
+		if err != nil {
+			return nil, err
+		}
+		res.Del = append(res.Del, nqs...)
+	}
 	return res, nil
 }

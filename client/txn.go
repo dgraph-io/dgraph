@@ -80,6 +80,7 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 	if txn.context.StartTs != src.StartTs {
 		return x.Errorf("StartTs mismatch")
 	}
+	txn.context.Keys = append(txn.context.Keys, src.Keys...)
 	x.MergeLinReads(txn.context.LinRead, src.LinRead)
 	return nil
 }

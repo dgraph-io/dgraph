@@ -120,10 +120,8 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 		x.Fatalf("Unhandled op: %v", op)
 	}
 	txn := &Txn{
-		StartTs:       startTs,
-		PrimaryAttr:   "primary",
-		ServesPrimary: true,
-		Indices:       []uint64{1},
+		StartTs: startTs,
+		Indices: []uint64{1},
 	}
 	txn = Txns().PutOrMergeIndex(txn)
 	if index {
@@ -237,9 +235,7 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 		Op:      protos.DirectedEdge_SET,
 	}
 	txn := Txn{
-		StartTs:       startTs,
-		PrimaryAttr:   attr,
-		ServesPrimary: true,
+		StartTs: startTs,
 	}
 	txn.addReverseMutation(context.Background(), edge)
 	require.NoError(t, txn.CommitMutations(context.Background(), commitTs, true))

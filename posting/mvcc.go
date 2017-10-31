@@ -20,7 +20,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"math"
 	"sort"
 	"sync"
@@ -51,24 +50,14 @@ type delta struct {
 	posting *protos.Posting
 }
 type Txn struct {
-	StartTs       uint64
-	PrimaryAttr   string
-	ServesPrimary bool
+	StartTs uint64
 
 	// atomic
-	hasConflict uint32
+	shouldAbort uint32
 	// Fields which can changed after init
 	sync.Mutex
-	deltas    []delta
-	conflicts []*protos.TxnContext
-	Indices   []uint64 // Accessed in serial way
-	commitTs  uint64
-}
-
-func (txn *Txn) CommitTs() uint64 {
-	txn.Lock()
-	defer txn.Unlock()
-	return txn.commitTs
+	deltas  []delta
+	Indices []uint64 // Accessed in serial way
 }
 
 type transactions struct {
@@ -85,29 +74,27 @@ func (t *transactions) Reset() {
 	t.m = make(map[uint64]*Txn)
 }
 
-func (t *transactions) Iterate(ok func(key []byte) bool) []*protos.TxnContext {
+func (t *transactions) Iterate(ok func(key []byte) bool) []uint64 {
 	t.RLock()
 	defer t.RUnlock()
-	var tctxs []*protos.TxnContext
+	var timestamps []uint64
 	for _, txn := range t.m {
-		if tctx := txn.fillIf(ok); tctx != nil {
-			tctxs = append(tctxs, tctx)
+		if txn.conflicts(ok) {
+			timestamps = append(timestamps, txn.StartTs)
 		}
 	}
-	return tctxs
+	return timestamps
 }
 
-func (t *Txn) fillIf(ok func(key []byte) bool) *protos.TxnContext {
+func (t *Txn) conflicts(ok func(key []byte) bool) bool {
 	t.Lock()
 	defer t.Unlock()
 	for _, d := range t.deltas {
 		if ok(d.key) {
-			tctx := &protos.TxnContext{}
-			t.fill(tctx)
-			return tctx
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 func (t *transactions) Get(startTs uint64) *Txn {
@@ -143,33 +130,17 @@ func (t *transactions) PutOrMergeIndex(txn *Txn) *Txn {
 		return txn
 	}
 	x.AssertTrue(tx.StartTs == txn.StartTs)
-	x.AssertTrue(tx.PrimaryAttr == txn.PrimaryAttr)
 	tx.Indices = append(tx.Indices, txn.Indices...)
 	t.m[txn.StartTs] = tx
 	return txn
 }
 
-func (t *Txn) AddConflict(conflict *protos.TxnContext) {
-	atomic.StoreUint32(&t.hasConflict, 1)
-	if conflict == nil {
-		return
-	}
-	t.Lock()
-	defer t.Unlock()
-	t.conflicts = append(t.conflicts, conflict)
+func (t *Txn) SetAbort() {
+	atomic.StoreUint32(&t.shouldAbort, 1)
 }
 
-func (t *Txn) Conflicts() []*protos.TxnContext {
-	if t == nil {
-		return nil
-	}
-	t.Lock()
-	defer t.Unlock()
-	return t.conflicts
-}
-
-func (t *Txn) HasConflict() bool {
-	return atomic.LoadUint32(&t.hasConflict) > 0
+func (t *Txn) ShouldAbort() bool {
+	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
 
 func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
@@ -178,9 +149,17 @@ func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
 	t.deltas = append(t.deltas, delta{key: key, posting: p})
 }
 
+func (t *Txn) Fill(ctx *protos.TxnContext) {
+	t.Lock()
+	defer t.Unlock()
+	t.fill(ctx)
+}
+
 func (t *Txn) fill(ctx *protos.TxnContext) {
 	ctx.StartTs = t.StartTs
-	ctx.Primary = t.PrimaryAttr
+	for _, d := range t.deltas {
+		ctx.Keys = append(ctx.Keys, string(d.key))
+	}
 }
 
 // TODO: Use commitAsync
@@ -188,47 +167,14 @@ func (t *Txn) fill(ctx *protos.TxnContext) {
 func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock bool) error {
 	tx.Lock()
 	defer tx.Unlock()
-	if tx.HasConflict() {
+	if tx.ShouldAbort() {
 		return ErrInvalidTxn
-	}
-	tx.commitTs = commitTs
-	if writeLock {
-		lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
-		// First update the primary key to indicate the status of transaction.
-		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		defer txn.Discard()
-
-		item, err := txn.Get(lk)
-		if err == badger.ErrKeyNotFound {
-			// Nothing to do
-		} else if err != nil {
-			return err
-		} else {
-			val, err := item.Value()
-			if err != nil {
-				return err
-			}
-			ts := binary.BigEndian.Uint64(val)
-			if ts > 0 && ts != commitTs {
-				return ErrInvalidTxn
-			}
-		}
-		var buf [8]byte
-		binary.BigEndian.PutUint64(buf[:], commitTs)
-		if err := txn.Set(lk, buf[:], 0); err != nil {
-			return err
-		}
-		// TODO: Update sync marks based on this.
-		// Have new index keys in memory for iteration.
-		if err := txn.CommitAt(tx.StartTs, x.Check); err != nil {
-			return err
-		}
 	}
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 	for _, d := range tx.deltas {
-		d.posting.Commit = commitTs
+		d.posting.CommitTs = commitTs
 		var pl protos.PostingList
 		var meta byte
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
@@ -283,30 +229,6 @@ func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error
 func (tx *Txn) AbortMutations(ctx context.Context) error {
 	tx.Lock()
 	defer tx.Unlock()
-	lk := x.LockKey(tx.PrimaryAttr, tx.StartTs)
-	// First update the primary key to indicate the status of transaction.
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-
-	_, err := txn.Get(lk)
-	if err == badger.ErrKeyNotFound {
-		// Nothing to do
-	} else if err != nil {
-		return err
-	} else {
-		// Already committed
-		return ErrInvalidTxn
-	}
-	return tx.abortMutationsMemory(ctx)
-}
-
-func (tx *Txn) AbortMutationsMemory(ctx context.Context) error {
-	tx.Lock()
-	defer tx.Unlock()
-	return tx.abortMutationsMemory(ctx)
-}
-
-func (tx *Txn) abortMutationsMemory(ctx context.Context) error {
 	for _, d := range tx.deltas {
 		plist := Get([]byte(d.key))
 		err := plist.AbortTransaction(ctx, tx.StartTs)
@@ -314,7 +236,7 @@ func (tx *Txn) abortMutationsMemory(ctx context.Context) error {
 			return err
 		}
 	}
-	atomic.StoreUint32(&tx.hasConflict, 1)
+	atomic.StoreUint32(&tx.shouldAbort, 1)
 	return nil
 }
 
@@ -352,9 +274,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			break
 		}
 		l.minTs = item.Version()
-		if l.commitTs == 0 { // highest commitTs
-			l.commitTs = item.Version()
-		}
 
 		val, err := item.Value()
 		if err != nil {
@@ -381,7 +300,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if l.mlayer[i].Uid != l.mlayer[j].Uid {
 			return l.mlayer[i].Uid < l.mlayer[j].Uid
 		}
-		return l.mlayer[i].Commit > l.mlayer[j].Commit
+		return l.mlayer[i].CommitTs > l.mlayer[j].CommitTs
 	})
 
 	l.Lock()
@@ -409,7 +328,6 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	if item.UserMeta()&BitCompletePosting > 0 {
 		err = unmarshalOrCopy(l.plist, item)
 		l.minTs = item.Version()
-		l.commitTs = item.Version()
 	} else {
 		iterOpts := badger.DefaultIteratorOptions
 		iterOpts.AllVersions = true

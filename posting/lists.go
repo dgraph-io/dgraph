@@ -263,6 +263,6 @@ func CommitLists(commit func(key []byte) bool) {
 	// Hacky solution for now, ensures that everything is flushed to disk before we return.
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
-	txn.Set(x.LockKey("_dummy_", 0), nil, 0)
+	txn.Set(x.DataKey("_dummy_", 0), nil, 0)
 	txn.CommitAt(1, nil)
 }

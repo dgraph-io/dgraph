@@ -93,10 +93,6 @@ func streamKeys(pstore *badger.ManagedDB, stream protos.Worker_PredicateAndSchem
 			// No version check for schema keys.
 			it.Seek(pk.SkipSchema())
 			continue
-		} else if pk.IsLock() {
-			// No version check for lock keys.
-			it.Seek(pk.SkipLock())
-			continue
 		}
 
 		kdup := make([]byte, len(k))
@@ -207,7 +203,7 @@ func sendKV(stream protos.Worker_PredicateAndSchemaDataServer, it *badger.Iterat
 	}
 
 	var kv *protos.KV
-	if pk.IsSchema() || pk.IsLock() {
+	if pk.IsSchema() {
 		val, err := item.Value()
 		if err != nil {
 			return err

@@ -141,7 +141,7 @@ func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 	}
 }
 
-// Timestamps is used to assign new transaction
+// Timestamps is used to assign startTs for a new transaction
 func (s *Server) Timestamps(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
@@ -159,6 +159,9 @@ func (s *Server) Timestamps(ctx context.Context, num *protos.Num) (*protos.Assig
 	case <-ctx.Done():
 		return reply, ctx.Err()
 	case err := <-c:
+		if err == nil {
+			s.orc.storePending(reply)
+		}
 		return reply, err
 	}
 }

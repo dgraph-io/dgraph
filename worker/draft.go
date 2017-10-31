@@ -102,7 +102,6 @@ func (p *proposals) Done(pid uint32, err error) {
 		return
 	}
 	delete(p.ids, pid)
-	go fixConflicts(pd.txn.Conflicts())
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
@@ -264,7 +263,7 @@ func (n *node) processMutation(task *task) error {
 	edge := task.edge
 
 	ctx, txn := n.props.CtxAndTxn(pid)
-	if txn.HasConflict() {
+	if txn.ShouldAbort() {
 		return posting.ErrConflict
 	}
 	rv := x.RaftValue{Group: n.gid, Index: ridx}
@@ -375,8 +374,7 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) 
 		tr.LazyPrintf("Status of commitOrAbort %+v %v\n", tctx, err)
 	}
 	if err == nil {
-		// TODO: For committed ones, push them into LRU cache.
-		// posting.Txns().Done(tctx.StartTs)
+		posting.Txns().Done(tctx.StartTs)
 	}
 	posting.SyncMarks().Done(index)
 	n.props.Done(pid, err)
