@@ -392,6 +392,10 @@ message OracleDelta {
   // implement tmax.
 }
 
+message TxnTimestamps {
+  repeated uint64 start_ts = 1;
+}
+
 service Raft {
 	rpc Echo (Payload)            returns (Payload) {}
 	rpc RaftMessage (Payload)     returns (Payload) {}
@@ -406,6 +410,7 @@ service Zero {
 	rpc AssignUids (Num)      returns (AssignedIds) {}
   rpc Timestamps (Num)      returns (AssignedIds) {}
   rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
+	rpc TryAbort (TxnTimestamps) returns (Payload) {}
 }
 
 service Worker {
@@ -428,7 +433,6 @@ service Dgraph {
     rpc Mutate (Mutation)         returns (Assigned) {}
     rpc Alter (Operation)         returns (Payload) {}
     rpc CheckVersion(Check)       returns (Version) {}
-    rpc CommitOrAbort(TxnContext) returns (Payload) {}
 }
 
 message Assigned {

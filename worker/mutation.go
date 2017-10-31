@@ -517,6 +517,15 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 	return tctx, e
 }
 
+func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) (*protos.TxnContext, error) {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return &protos.TxnContext{}, nil
+	}
+	zc := protos.NewZeroClient(pl.Get())
+	return zc.CommitOrAbort(ctx, tc)
+}
+
 func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
 	node := groups().Node
 	err := node.ProposeAndWait(ctx, &protos.Proposal{TxnContext: tc})
@@ -551,11 +560,11 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 	return txnCtx, err
 }
 
-func fixConflicts(timestamps []uint64) {
-	// TODO: Check local cache if not go to zero.
-	n := groups().Node
-	var tctxs []*protos.TxnContext
-	for _, tctx := range tctxs {
-		n.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+func tryAbortTransactions(startTimestamps []uint64) {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return
 	}
+	zc := protos.NewZeroClient(pl.Get())
+	zc.TryAbort(context.Background(), &protos.TxnTimestamps{StartTs: startTimestamps})
 }

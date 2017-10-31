@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
@@ -67,6 +66,7 @@ func main() {
 
 // readTs == startTs
 func TestTxnRead1(ctx context.Context, dg *client.Dgraph) {
+	fmt.Println("TestTxnRead1")
 	txn := dg.NewTxn()
 
 	mu := &protos.Mutation{}
@@ -272,10 +272,12 @@ func TestConflict(ctx context.Context, dg *client.Dgraph) {
 	txn2 := dg.NewTxn()
 	mu = &protos.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Manish\"}", uid))
-	assigned, err = txn2.Mutate(ctx, mu)
-	x.AssertTrue(err != nil)
+	x.Check2(txn2.Mutate(ctx, mu))
 
 	x.Check(txn.Commit(ctx))
+	err = txn2.Commit(ctx)
+	x.AssertTrue(err != nil)
+
 	txn = dg.NewTxn()
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
 	resp, err := txn.Query(ctx, q, nil)
@@ -289,9 +291,8 @@ func TestConflict(ctx context.Context, dg *client.Dgraph) {
 func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {
 	fmt.Println("TestConflictTimeout")
 	var uid uint64
+	txn := dg.NewTxn()
 	{
-		txn := dg.NewTxn()
-
 		mu := &protos.Mutation{}
 		mu.SetJson = []byte(`{"name": "Manish"}`)
 		assigned, err := txn.Mutate(ctx, mu)
@@ -310,9 +311,6 @@ func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
 	resp, err := txn2.Query(ctx, q, nil)
 	x.Check(err)
-
-	resp, err = txn2.Query(ctx, q, nil)
-	x.Check(err)
 	fmt.Printf("Response should be empty. JSON: %q\n", resp.Json)
 
 	mu := &protos.Mutation{}
@@ -323,8 +321,9 @@ func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {
 		x.Check(txn2.Commit(ctx))
 	}
 
-	// err = txn.Commit()
-	// fmt.Printf("This txn should fail with error. Err got: %v\n", err)
+	err = txn.Commit(ctx)
+	fmt.Printf("This txn should fail with error. Err got: %v\n", err)
+	x.AssertTrue(err != nil)
 
 	txn3 := dg.NewTxn()
 	q = fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
@@ -336,8 +335,8 @@ func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {
 func TestConflictTimeout2(ctx context.Context, dg *client.Dgraph) {
 	fmt.Println("TestConflictTimeout2")
 	var uid uint64
+	txn := dg.NewTxn()
 	{
-		txn := dg.NewTxn()
 
 		mu := &protos.Mutation{}
 		mu.SetJson = []byte(`{"name": "Manish"}`)
@@ -356,13 +355,10 @@ func TestConflictTimeout2(ctx context.Context, dg *client.Dgraph) {
 	txn2 := dg.NewTxn()
 	mu := &protos.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Jan the man\"}", uid))
-	_, err := txn2.Mutate(ctx, mu)
-	fmt.Printf("This txn should fail with error. Err got: %v\n", err)
-	x.AssertTrue(err != nil)
+	x.Check2(txn2.Mutate(ctx, mu))
 
-	time.Sleep(time.Second * 15)
-
-	err = txn2.Commit(ctx)
+	x.Check(txn.Commit(ctx))
+	err := txn2.Commit(ctx)
 	x.AssertTrue(err != nil)
 	fmt.Printf("This txn commit should fail with error. Err got: %v\n", err)
 

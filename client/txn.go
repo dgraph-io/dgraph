@@ -25,6 +25,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var ErrAborted = x.Errorf("Transaction has been aborted due to conflict")
+
 type Txn struct {
 	startTs uint64
 	context *protos.TxnContext
@@ -118,6 +120,12 @@ func (txn *Txn) Commit(ctx context.Context) error {
 		return nil
 	}
 	txn.context.CommitTs = txn.dg.getTimestamp()
-	_, err := txn.dg.commitOrAbort(ctx, txn.context)
-	return err
+	tctx, err := txn.dg.commitOrAbort(ctx, txn.context)
+	if err != nil {
+		return err
+	}
+	if tctx.Aborted {
+		return ErrAborted
+	}
+	return nil
 }

@@ -375,6 +375,7 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) 
 	}
 	if err == nil {
 		posting.Txns().Done(tctx.StartTs)
+		posting.Oracle().Done(tctx.StartTs)
 	}
 	posting.SyncMarks().Done(index)
 	n.props.Done(pid, err)
