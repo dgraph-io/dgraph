@@ -19,7 +19,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -124,9 +123,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			for id, ch := range o.subscribers {
 				select {
 				case ch <- delta:
-					fmt.Printf("Sending delta\n")
 				default:
-					fmt.Printf("closing\n")
 					close(ch)
 					delete(o.subscribers, id)
 				}
