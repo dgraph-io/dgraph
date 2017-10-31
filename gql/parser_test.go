@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/stretchr/testify/require"
 )
 
@@ -4219,7 +4220,7 @@ func TestParseUidAsArgument(t *testing.T) {
 
 func TestParseMutation(t *testing.T) {
 	m := `
-		mutation {
+		{
 			set {
 				<name> <is> <something> .
 				<hometown> <is> <san/francisco> .
@@ -4232,14 +4233,18 @@ func TestParseMutation(t *testing.T) {
 	mu, err := ParseMutation(m)
 	require.NoError(t, err)
 	require.NotNil(t, mu)
+	sets, err := rdf.ConvertToNQuads(string(mu.SetNquads))
+	require.NoError(t, err)
 	require.EqualValues(t, &protos.NQuad{
 		Subject: "name", Predicate: "is", ObjectId: "something"},
-		mu.Set[0])
+		sets[0])
 	require.EqualValues(t, &protos.NQuad{
 		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
-		mu.Set[1])
+		sets[1])
+	dels, err := rdf.ConvertToNQuads(string(mu.DelNquads))
+	require.NoError(t, err)
 	require.EqualValues(t, &protos.NQuad{
 		Subject: "name", Predicate: "is", ObjectId: "something-else"},
-		mu.Del[0])
+		dels[0])
 
 }

@@ -18,8 +18,6 @@
 package gql
 
 import (
-	"fmt"
-
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -27,30 +25,16 @@ import (
 
 func ParseMutation(mutation string) (*protos.Mutation, error) {
 	lexer := lex.Lexer{Input: mutation}
-	lexer.Run(lexTopLevel)
-
+	lexer.Run(lexInsideMutation)
 	it := lexer.NewIterator()
-	for it.Next() {
-		item := it.Item()
-		switch item.Typ {
-		case lex.ItemError:
-			return nil, x.Errorf(item.Val)
-		case itemOpType:
-			if item.Val != "mutation" {
-				return nil, x.Errorf("Expected mutation. Got: %s", item.Val)
-			}
-			return getMutation(it)
-		}
-	}
-	return nil, fmt.Errorf("Couldn't parse mutation")
-}
-
-func getMutation(it *lex.ItemIterator) (*protos.Mutation, error) {
-	mu := new(protos.Mutation)
+	var mu *protos.Mutation
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemText {
 			continue
+		}
+		if item.Typ == itemLeftCurl {
+			mu = new(protos.Mutation)
 		}
 		if item.Typ == itemRightCurl {
 			return mu, nil
