@@ -97,7 +97,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		mp["schema"] = json.RawMessage(string(js))
 		response["data"] = mp
 	} else {
-
 		jsonRes := map[string]interface{}{}
 		if err := json.Unmarshal(resp.Json, &jsonRes); err != nil {
 			x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
@@ -111,8 +110,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		x.SetStatusWithData(w, x.Error, "Unable to marshal response")
 	}
-	// TODO - Verify schema, server latency is encoded as it was before.
-	// Encode linRead and readts under extensions key.
 }
 
 // TODO - Modify UI to call mutate endpoint when string has set/delete.
@@ -167,4 +164,50 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
 	}
+}
+
+func alterHandler(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	if r.Method != "PUT" {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	op := &protos.Operation{}
+	dropall := r.FormValue("dropall")
+	drop, err := strconv.ParseBool(dropall)
+	if err == nil {
+		op.DropAll = drop
+	}
+	op.DropAttr = r.FormValue("drop_attr")
+
+	if len(op.DropAttr) == 0 && !op.DropAll {
+		defer r.Body.Close()
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		op.Schema = string(b)
+	}
+
+	payload, err := new(Server).Alter(context.Background(), op)
+	if err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	js, err := json.Marshal(payload)
+	if err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+	w.Write(js)
 }
