@@ -191,9 +191,6 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 	if proposal.Mutations.StartTs == 0 {
 		return errors.New("StartTs must be provided.")
 	}
-	if len(proposal.Mutations.PrimaryAttr) == 0 {
-		return errors.New("Primary attribute must be provided.")
-	}
 
 	total := len(proposal.Mutations.Edges)
 	s.n.props.IncRef(proposal.Id, total)

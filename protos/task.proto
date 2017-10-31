@@ -179,8 +179,6 @@ message Mutations {
 	repeated DirectedEdge edges = 3;
 	repeated SchemaUpdate schema = 4;
 	bool DropAll = 5;
-
-  string primary_attr = 7; // Used to keep track of transaction status.
 }
 
 message KeyValues {
@@ -377,11 +375,10 @@ message ExportPayload {
 }
 
 message TxnContext {
-  string primary = 1;
-  uint64 start_ts = 2;
-  uint64 commit_ts = 3;
-  bool aborted = 4;
-  repeated string keys = 5;
+  uint64 start_ts = 1;
+  uint64 commit_ts = 2;
+  bool aborted = 3;
+  repeated string keys = 4;
   LinRead lin_read = 13;
 }
 
@@ -486,7 +483,6 @@ message Mutation {
 
   repeated NQuad set = 10;
   repeated NQuad del = 11;
-  string primary = 12;
   uint64 start_ts = 13;
   bool commit_immediately = 14;
 }

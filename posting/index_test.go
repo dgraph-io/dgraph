@@ -131,7 +131,7 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 		require.NoError(t, err)
 		require.True(t, ok)
 	}
-	require.NoError(t, txn.CommitMutations(context.Background(), commitTs, true))
+	require.NoError(t, txn.CommitMutations(context.Background(), commitTs))
 }
 
 const schemaVal = `
@@ -238,7 +238,7 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 		StartTs: startTs,
 	}
 	txn.addReverseMutation(context.Background(), edge)
-	require.NoError(t, txn.CommitMutations(context.Background(), commitTs, true))
+	require.NoError(t, txn.CommitMutations(context.Background(), commitTs))
 }
 
 func TestRebuildIndex(t *testing.T) {

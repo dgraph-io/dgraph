@@ -164,7 +164,7 @@ func (t *Txn) fill(ctx *protos.TxnContext) {
 
 // TODO: Use commitAsync
 // Don't call this for schema mutations. Directly commit them.
-func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64, writeLock bool) error {
+func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	tx.Lock()
 	defer tx.Unlock()
 	if tx.ShouldAbort() {
