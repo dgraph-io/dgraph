@@ -22,7 +22,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -67,11 +66,9 @@ func getMutation(it *lex.ItemIterator) (*protos.Mutation, error) {
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
 func parseMutationOp(it *lex.ItemIterator, op string, mu *protos.Mutation) error {
-	var err error
 	if mu == nil {
 		return x.Errorf("Mutation is nil.")
 	}
-	var nquads []*protos.NQuad
 
 	parse := false
 	for it.Next() {
@@ -90,26 +87,9 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *protos.Mutation) error
 				return x.Errorf("Mutation syntax invalid.")
 			}
 			if op == "set" {
-				if len(item.Val) > 0 {
-					if nquads, err = rdf.ConvertToNQuads(item.Val); err != nil {
-						return x.Wrap(err)
-					}
-				}
-				if mu.Set != nil {
-					return x.Errorf("Multiple 'set' blocks not allowed.")
-				}
-				mu.Set = nquads
+				mu.SetNquads = []byte(item.Val)
 			} else if op == "delete" {
-				if len(item.Val) > 0 {
-					if nquads, err = rdf.ConvertToNQuads(item.Val); err != nil {
-						return x.Wrap(err)
-					}
-				}
-				if mu.Del != nil {
-					return x.Errorf("Multiple 'delete' blocks not allowed.")
-				}
-				mu.Del = nquads
-				// TODO - How does user do schema/dropall via http?
+				mu.DelNquads = []byte(item.Val)
 			} else if op == "schema" {
 				return x.Errorf("Altering schema not supported through http client.")
 			} else if op == "dropall" {

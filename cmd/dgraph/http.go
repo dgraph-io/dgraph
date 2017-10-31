@@ -61,6 +61,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+	// TODO - Check if debug still works.
 	resp, err := (&dgraph.Server{}).Query(ctx, &req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
@@ -80,10 +81,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if addLatency {
 		e := query.Extensions{
 			Latency: resp.Latency,
-			Txn:     response["txn"].(*protos.TxnContext),
+			Txn:     resp.Txn,
 		}
+
 		response["extensions"] = e
-		delete(response, "txn")
 	}
 
 	fmt.Printf("Resp: %+v\n", response)
@@ -129,6 +130,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO - Don't send keys array which is part of txn context.
 	e := query.Extensions{
 		Txn: resp.Context,
 	}
