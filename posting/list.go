@@ -717,10 +717,16 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		return false, errUncommitted
 	}
 
+	minTs := l.minTs
 	final, err := l.rollup()
 	if err != nil {
 		return false, err
 	}
+	if l.minTs == minTs {
+		// There was no change in immutable layer.
+		return false, nil
+	}
+	x.AssertTrue(l.minTs > 0)
 	data, meta := marshalPostingList(final)
 	l.plist = final
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())

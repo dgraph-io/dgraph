@@ -272,7 +272,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		ctxn.CommitTs = ctxn.StartTs
 	}
 	// If CommitTs is zero, this would abort.
-	_, aerr := worker.CommitOverNetwork(ctx, ctxn)
+	aerr := worker.CommitOverNetwork(ctx, ctxn)
 	if ok {
 		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, aerr)
 	}
@@ -727,5 +727,7 @@ func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
 		}
 		res.Del = append(res.Del, nqs...)
 	}
+	res.Set = append(res.Set, mu.Set...)
+	res.Del = append(res.Del, mu.Del...)
 	return res, nil
 }
