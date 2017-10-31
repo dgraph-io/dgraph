@@ -477,9 +477,11 @@ message Value {
 message Mutation {
   bytes set_json = 1;
   bytes delete_json = 2;
-  repeated NQuad set = 3;
-  repeated NQuad del = 4;
+  bytes set_nquads = 3;
+  bytes del_nquads = 4;
 
+  repeated NQuad set = 10;
+  repeated NQuad del = 11;
   string primary = 12;
   uint64 start_ts = 13;
   bool commit_immediately = 14;
