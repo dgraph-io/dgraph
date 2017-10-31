@@ -106,6 +106,7 @@ func (o *Oracle) removeSubscriber(id int) {
 }
 
 func (o *Oracle) sendDeltasToSubscribers() {
+	// TODO: Send deltas
 	delta := new(protos.OracleDelta)
 	for {
 		tctx, open := <-o.updates
