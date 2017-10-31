@@ -225,8 +225,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO - Confirm we want this as get.
-	if r.Method != "GET" {
+	if r.Method != "POST" {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
@@ -256,8 +255,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response["txn"] = resp.Txn
-
 	addLatency, _ := strconv.ParseBool(r.URL.Query().Get("latency"))
 	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
 	addLatency = addLatency || debug
@@ -265,8 +262,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if addLatency {
 		e := query.Extensions{
 			Latency: l.ToMap(),
+			Txn:     response["txn"].(protos.Txn),
 		}
 		response["extensions"] = e
+		delete(response, "txn")
 	}
 
 	fmt.Printf("Resp: %+v\n", response)
@@ -311,14 +310,19 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	// TODO - Remove after testing.
-	fmt.Println("resp", resp)
+
+	e := query.Extensions{
+		Txn: resp.Context,
+	}
+	response["extensions"] = e
 	response := map[string]interface{}{}
 	mp := map[string]interface{}{}
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = query.ConvertUidsToHex(resp.Uids)
 	response["data"] = mp
+	fmt.Println("response", response)
+
 	if js, err := json.Marshal(response); err == nil {
 		w.Write(js)
 	} else {
