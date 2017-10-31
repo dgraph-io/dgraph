@@ -17,6 +17,7 @@
 package dgraph
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -34,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -225,9 +227,9 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		mu.StartTs = State.getTimestamp()
 	}
 	emptyMutation :=
-		len(mu.GetSetJson()) == 0 &&
-			len(mu.GetDeleteJson()) == 0 &&
-			len(mu.Set) == 0 && len(mu.Del) == 0
+		len(mu.GetSetJson()) == 0 && len(mu.GetDeleteJson()) == 0 &&
+			len(mu.Set) == 0 && len(mu.Del) == 0 &&
+			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
 		return resp, fmt.Errorf("empty mutation")
 	}
@@ -260,6 +262,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		return resp, nil
 	}
 
+	// The following logic is for committing immediately.
 	tr, ok := trace.FromContext(ctx)
 	if ok {
 		tr.LazyPrintf("Prewrites err: %v. Attempting to commit/abort immediately.", err)
@@ -370,10 +373,6 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	resp.Latency = gl
 	resp.Txn.LinRead = queryRequest.LinRead
 	return resp, err
-}
-
-func (s *Server) CommitOrAbort(ctx context.Context, txn *protos.TxnContext) (*protos.Payload, error) {
-	return worker.CommitOverNetwork(ctx, txn)
 }
 
 func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {
@@ -684,23 +683,51 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 	return mr.nquads, err
 }
 
+func parseNQuads(b []byte, op int) ([]*protos.NQuad, error) {
+	var nqs []*protos.NQuad
+	for _, line := range bytes.Split(b, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		nq, err := rdf.Parse(string(line))
+		if err == rdf.ErrEmpty {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		nqs = append(nqs, &nq)
+	}
+	return nqs, nil
+}
+
 func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
-	var err error
-
 	if len(mu.SetJson) > 0 {
-		res.Set, err = nquadsFromJson(mu.SetJson, set)
+		nqs, err := nquadsFromJson(mu.SetJson, set)
 		if err != nil {
-			return res, err
+			return nil, err
 		}
+		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DeleteJson) > 0 {
-		res.Del, err = nquadsFromJson(mu.DeleteJson, delete)
+		nqs, err := nquadsFromJson(mu.DeleteJson, delete)
 		if err != nil {
-			return res, err
+			return nil, err
 		}
+		res.Del = append(res.Del, nqs...)
 	}
-	res.Set = append(res.Set, mu.Set...)
-	res.Del = append(res.Del, mu.Del...)
+	if len(mu.SetNquads) > 0 {
+		nqs, err := parseNQuads(mu.SetNquads, set)
+		if err != nil {
+			return nil, err
+		}
+		res.Set = append(res.Set, nqs...)
+	}
+	if len(mu.DelNquads) > 0 {
+		nqs, err := parseNQuads(mu.DelNquads, delete)
+		if err != nil {
+			return nil, err
+		}
+		res.Del = append(res.Del, nqs...)
+	}
 	return res, nil
 }

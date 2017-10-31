@@ -132,13 +132,9 @@ func processWithBackupRequest(
 
 var errConflict = errors.New("List has a pending write.")
 
+// TODO: Remove this function
 func getValidList(key []byte, startTs uint64) (*posting.List, error) {
 	pl := posting.Get(key)
-	timestamps := pl.Conflicts(startTs)
-	// check if local cache has the information or else go to zero and update
-	// local cache.
-	// TODO: Fixing can be done in background.
-	go fixConflicts(timestamps)
 	return pl, nil
 }
 
@@ -599,6 +595,9 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	n := groups().Node
 	if err := n.WaitForMinProposal(ctx, q.LinRead); err != nil {
+		return &emptyResult, err
+	}
+	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it

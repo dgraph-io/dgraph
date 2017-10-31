@@ -71,6 +71,7 @@ type List struct {
 	plist         *protos.PostingList
 	mlayer        []*protos.Posting // committed mutations, sorted by uid,ts
 	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
+	commitTs      uint64            // last commitTs of this pl
 	activeTxns    []uint64
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
@@ -335,7 +336,8 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		return false, ErrConflict
 	}
 	// We can have atmax one pending <s> <p> * mutation.
-	if len(l.activeTxns) > 0 && l.activeTxns[0] != txn.StartTs && l.markdeleteAll > 0 {
+	if (len(l.activeTxns) > 0 && l.activeTxns[0] != txn.StartTs && l.markdeleteAll > 0) ||
+		(txn.StartTs < l.commitTs) {
 		txn.SetAbort()
 		return false, ErrConflict
 	}
@@ -456,6 +458,9 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		copy(l.activeTxns[tidx:], l.activeTxns[tidx+1:])
 		l.activeTxns = l.activeTxns[:len(l.activeTxns)-1]
 	}
+	if commitTs > l.commitTs {
+		l.commitTs = commitTs
+	}
 	// Calculate 5% of immutable layer
 	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
 	if numUids < 1000 {
@@ -507,7 +512,9 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 func (l *List) canRead(mpost *protos.Posting, readTs uint64) bool {
 	l.AssertRLock()
 	if mpost.CommitTs == 0 {
-		// TODO: Check in local cache for commitTs
+		mpost.CommitTs = Oracle().commitTs(mpost.StartTs)
+	}
+	if mpost.CommitTs == 0 {
 		return mpost.StartTs == readTs
 	}
 	return mpost.CommitTs <= readTs
@@ -623,6 +630,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 func (l *List) MarshalToKv() (*protos.KV, error) {
 	l.Lock()
 	defer l.Unlock()
+	x.AssertTrue(len(l.activeTxns) == 0)
 	final, err := l.rollup()
 	if err != nil {
 		return nil, err
@@ -653,14 +661,18 @@ func marshalPostingList(plist *protos.PostingList) (data []byte, meta byte) {
 
 func (l *List) rollup() (*protos.PostingList, error) {
 	l.AssertLock()
-	x.AssertTrue(len(l.activeTxns) == 0)
 	final := new(protos.PostingList)
 	var bp bp128.BPackEncoder
 	buf := make([]uint64, 0, bp128.BlockSize)
 
-	err := l.iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
+	// Pick all committed entries
+	midx := 0
+	err := l.iterate(l.commitTs, 0, func(p *protos.Posting) bool {
 		if p.CommitTs > l.minTs {
 			l.minTs = p.CommitTs
+		} else if p.CommitTs == 0 {
+			l.mlayer[midx] = p
+			midx++
 		}
 		buf = append(buf, p.Uid)
 		if len(buf) == bp128.BlockSize {
@@ -688,7 +700,8 @@ func (l *List) rollup() (*protos.PostingList, error) {
 		// TODO: Add bytes method
 		bp.WriteTo(final.Uids)
 	}
-	l.mlayer = l.mlayer[:0]
+	l.mlayer = l.mlayer[:midx]
+	l.commitTs = l.minTs
 	return final, nil
 }
 
@@ -699,8 +712,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	if len(l.mlayer) == 0 && l.plist != emptyList {
 		return false, nil
 	}
-	if len(l.activeTxns) > 0 {
-		// Don't merge if there is pending transaction.
+	if delFromCache && len(l.activeTxns) > 0 {
+		// Don't evict if there is pending transaction.
 		return false, errUncommitted
 	}
 

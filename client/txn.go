@@ -25,6 +25,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var ErrAborted = x.Errorf("Transaction has been aborted due to conflict")
+
 type Txn struct {
 	startTs uint64
 	context *protos.TxnContext
@@ -74,9 +76,6 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 		txn.context = src
 		return nil
 	}
-	if txn.context.Primary != src.Primary {
-		return x.Errorf("Primary key mismatch")
-	}
 	if txn.context.StartTs != src.StartTs {
 		return x.Errorf("StartTs mismatch")
 	}
@@ -87,9 +86,6 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 
 func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
 	mu.StartTs = txn.startTs
-	if txn.context != nil {
-		mu.Primary = txn.context.Primary
-	}
 	ag, err := txn.dg.mutate(ctx, mu)
 	if ag != nil {
 		if err := txn.mergeContext(ag.Context); err != nil {
@@ -113,11 +109,17 @@ func (txn *Txn) Abort(ctx context.Context) error {
 }
 
 func (txn *Txn) Commit(ctx context.Context) error {
-	if txn.context == nil || len(txn.context.Primary) == 0 {
+	if txn.context == nil {
 		// If there were no mutations
 		return nil
 	}
 	txn.context.CommitTs = txn.dg.getTimestamp()
-	_, err := txn.dg.commitOrAbort(ctx, txn.context)
-	return err
+	tctx, err := txn.dg.commitOrAbort(ctx, txn.context)
+	if err != nil {
+		return err
+	}
+	if tctx.Aborted {
+		return ErrAborted
+	}
+	return nil
 }

@@ -409,15 +409,6 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 	chr <- res
 }
 
-func setPrimary(src *protos.Mutations, edge *protos.DirectedEdge) {
-	if len(src.PrimaryAttr) > 0 {
-		return
-	}
-	if groups().ServesTablet(edge.Attr) {
-		src.PrimaryAttr = edge.Attr
-	}
-}
-
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
 func addToMutationMap(mutationMap map[uint32]*protos.Mutations, src *protos.Mutations) error {
@@ -429,10 +420,6 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, src *protos.Muta
 			mutationMap[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
-		setPrimary(src, edge)
-	}
-	if len(src.Edges) > 0 && len(src.PrimaryAttr) == 0 {
-		src.PrimaryAttr = src.Edges[0].Attr
 	}
 	for _, schema := range src.Schema {
 		gid := groups().BelongsTo(schema.Predicate)
@@ -466,7 +453,7 @@ func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload,
 		err := txn.AbortMutations(ctx)
 		return &protos.Payload{}, err
 	}
-	err := txn.CommitMutations(ctx, tc.CommitTs, groups().ServesTablet(tc.Primary))
+	err := txn.CommitMutations(ctx, tc.CommitTs)
 	return &protos.Payload{}, err
 }
 
@@ -482,7 +469,6 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 	tctx.LinRead = &protos.LinRead{Ids: make(map[uint32]uint64)}
 	mutationMap := make(map[uint32]*protos.Mutations)
 	err := addToMutationMap(mutationMap, m)
-	tctx.Primary = m.PrimaryAttr
 	if err != nil {
 		return tctx, err
 	}
@@ -493,7 +479,6 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 			return tctx, errUnservedTablet
 		}
 		mu.StartTs = m.StartTs
-		mu.PrimaryAttr = m.PrimaryAttr
 		go proposeOrSend(ctx, gid, mu, resCh)
 	}
 
@@ -515,6 +500,15 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 	}
 	close(resCh)
 	return tctx, e
+}
+
+func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) (*protos.TxnContext, error) {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return &protos.TxnContext{}, nil
+	}
+	zc := protos.NewZeroClient(pl.Get())
+	return zc.CommitOrAbort(ctx, tc)
 }
 
 func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
@@ -542,16 +536,19 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.T
 
 	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
 	txnCtx.StartTs = m.StartTs
-	txnCtx.Primary = m.PrimaryAttr
-	txnCtx.LinRead.Ids[m.GroupId] = node.Applied.DoneUntil()
+	txnCtx.LinRead = &protos.LinRead{
+		Ids: map[uint32]uint64{
+			m.GroupId: node.Applied.DoneUntil(),
+		},
+	}
 	return txnCtx, err
 }
 
-func fixConflicts(timestamps []uint64) {
-	// TODO: Check local cache if not go to zero.
-	n := groups().Node
-	var tctxs []*protos.TxnContext
-	for _, tctx := range tctxs {
-		n.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+func tryAbortTransactions(startTimestamps []uint64) {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return
 	}
+	zc := protos.NewZeroClient(pl.Get())
+	zc.TryAbort(context.Background(), &protos.TxnTimestamps{StartTs: startTimestamps})
 }

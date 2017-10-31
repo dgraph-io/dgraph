@@ -179,8 +179,6 @@ message Mutations {
 	repeated DirectedEdge edges = 3;
 	repeated SchemaUpdate schema = 4;
 	bool DropAll = 5;
-
-  string primary_attr = 7; // Used to keep track of transaction status.
 }
 
 message KeyValues {
@@ -377,11 +375,10 @@ message ExportPayload {
 }
 
 message TxnContext {
-  string primary = 1;
-  uint64 start_ts = 2;
-  uint64 commit_ts = 3;
-  bool aborted = 4;
-  repeated string keys = 5;
+  uint64 start_ts = 1;
+  uint64 commit_ts = 2;
+  bool aborted = 3;
+  repeated string keys = 4;
   LinRead lin_read = 13;
 }
 
@@ -390,6 +387,10 @@ message OracleDelta {
   repeated uint64 aborts = 2;
   uint64 max_pending = 3;
   // implement tmax.
+}
+
+message TxnTimestamps {
+  repeated uint64 start_ts = 1;
 }
 
 service Raft {
@@ -406,6 +407,7 @@ service Zero {
 	rpc AssignUids (Num)      returns (AssignedIds) {}
   rpc Timestamps (Num)      returns (AssignedIds) {}
   rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
+	rpc TryAbort (TxnTimestamps) returns (Payload) {}
 }
 
 service Worker {
@@ -428,7 +430,6 @@ service Dgraph {
     rpc Mutate (Mutation)         returns (Assigned) {}
     rpc Alter (Operation)         returns (Payload) {}
     rpc CheckVersion(Check)       returns (Version) {}
-    rpc CommitOrAbort(TxnContext) returns (Payload) {}
 }
 
 message Assigned {
@@ -477,10 +478,11 @@ message Value {
 message Mutation {
   bytes set_json = 1;
   bytes delete_json = 2;
-  repeated NQuad set = 3;
-  repeated NQuad del = 4;
+  bytes set_nquads = 3;
+  bytes del_nquads = 4;
 
-  string primary = 12;
+  repeated NQuad set = 10;
+  repeated NQuad del = 11;
   uint64 start_ts = 13;
   bool commit_immediately = 14;
 }
