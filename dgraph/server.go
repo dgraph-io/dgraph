@@ -636,36 +636,34 @@ func parseNQuads(b []byte, op int) ([]*protos.NQuad, error) {
 }
 
 func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
-	var jsonSet, jsonDel, nquadsSet, nquadsDel []*protos.NQuad
-	var err error
-
+	res := &gql.Mutation{}
 	if len(mu.SetJson) > 0 {
-		jsonSet, err = nquadsFromJson(mu.SetJson, set)
+		nqs, err := nquadsFromJson(mu.SetJson, set)
 		if err != nil {
 			return nil, err
 		}
+		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DeleteJson) > 0 {
-		jsonDel, err = nquadsFromJson(mu.DeleteJson, delete)
+		nqs, err := nquadsFromJson(mu.DeleteJson, delete)
 		if err != nil {
 			return nil, err
 		}
+		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
-		nquadsSet, err = parseNQuads(mu.SetNquads, set)
+		nqs, err := parseNQuads(mu.SetNquads, set)
 		if err != nil {
 			return nil, err
 		}
+		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DelNquads) > 0 {
-		nquadsDel, err = parseNQuads(mu.DelNquads, delete)
+		nqs, err := parseNQuads(mu.DelNquads, delete)
 		if err != nil {
 			return nil, err
 		}
+		res.Del = append(res.Del, nqs...)
 	}
-
-	return &gql.Mutation{
-		Set: append(append(mu.Set, jsonSet...), nquadsSet...),
-		Del: append(append(mu.Del, jsonDel...), nquadsDel...),
-	}, nil
+	return res, nil
 }

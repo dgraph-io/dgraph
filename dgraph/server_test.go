@@ -227,6 +227,16 @@ func TestParseNQuads(t *testing.T) {
 	}, nqs)
 }
 
+func TestParseNQuadsWindowsNewline(t *testing.T) {
+	nquads := "_:a <predA> \"A\" .\r\n_:b <predB> \"B\" ."
+	nqs, err := parseNQuads([]byte(nquads), set)
+	require.NoError(t, err)
+	require.Equal(t, []*protos.NQuad{
+		makeNquad("_:a", "predA", &protos.Value{&protos.Value_DefaultVal{"A"}}),
+		makeNquad("_:b", "predB", &protos.Value{&protos.Value_DefaultVal{"B"}}),
+	}, nqs)
+}
+
 func TestParseNQuadsDelete(t *testing.T) {
 	nquads := `_:a * * .`
 	nqs, err := parseNQuads([]byte(nquads), delete)
