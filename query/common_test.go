@@ -21,11 +21,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
@@ -67,14 +67,17 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 		})
 	}
 	l := posting.Get(x.DataKey(attr, src))
+	startTs := timestamp()
 	txn := &posting.Txn{
-		StartTs: uint64(time.Now().Unix()),
+		StartTs: startTs,
 		Indices: []uint64{1},
 	}
 	txn = posting.Txns().PutOrMergeIndex(txn)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, txn))
-	require.NoError(t, txn.CommitMutations(context.Background(), uint64(time.Now().Unix())))
+
+	commit := commitTs(startTs)
+	require.NoError(t, txn.CommitMutations(context.Background(), timestamp()))
 }
 
 func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {
@@ -214,7 +217,8 @@ func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (s
 	if err != nil {
 		return "", err
 	}
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res, ReadTs: uint64(time.Now().Unix())}
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res, ReadTs: timestamp()}
+	fmt.Println(queryRequest.ReadTs)
 	err = queryRequest.ProcessQuery(ctx)
 	if err != nil {
 		return "", err

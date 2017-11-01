@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,6 +51,21 @@ import (
 )
 
 var passwordCache map[string]string = make(map[string]string, 2)
+
+var ts uint64
+var odch chan *protos.OracleDelta
+
+func timestamp() uint64 {
+	return atomic.AddUint64(&ts, 1)
+}
+
+func commitTs(startTs uint64) uint64 {
+	odch <- protos.OracleDelta{
+		Commit: map[uint64]uint64{
+			startTs: commitTs,
+		},
+	}
+}
 
 func addPassword(t *testing.T, uid uint64, attr, password string) {
 	value := types.ValueForType(types.BinaryID)
@@ -5783,12 +5799,11 @@ func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*proto
 }
 
 func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) error {
-	for {
-		delta := protos.OracleDelta{}
+	for delta := range odch {
 		if err := server.Send(&delta); err != nil {
 			return err
 		}
-		time.Sleep(time.Second)
+		time.Sleep(10 * time.Millisecond)
 	}
 	return nil
 }
@@ -5852,6 +5867,7 @@ func TestMain(m *testing.M) {
 	err = schema.ParseBytes([]byte(schemaStr), 1)
 	x.Check(err)
 
+	odch = make(chan *protos.OracleDelta, 100)
 	r := m.Run()
 
 	os.RemoveAll(dir)
