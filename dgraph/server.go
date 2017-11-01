@@ -213,6 +213,9 @@ func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Paylo
 	}
 	fmt.Printf("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
+	if op.StartTs == 0 {
+		op.StartTs = State.getTimestamp()
+	}
 	m := &protos.Mutations{Schema: updates, StartTs: op.StartTs}
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
@@ -272,13 +275,14 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		ctxn.CommitTs = ctxn.StartTs
 	}
 	// If CommitTs is zero, this would abort.
-	aerr := worker.CommitOverNetwork(ctx, ctxn)
+	cts, aerr := worker.CommitOverNetwork(ctx, ctxn)
 	if ok {
 		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, aerr)
 	}
 	if err != nil {
 		return resp, err
 	}
+	resp.Context.CommitTs = cts
 	return resp, aerr
 }
 
@@ -335,7 +339,9 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp()
 	}
-	resp.StartTs = req.StartTs
+	resp.Txn = &protos.TxnContext{
+		StartTs: req.StartTs,
+	}
 
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
@@ -369,7 +375,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	}
 
 	resp.Latency = gl
-	resp.LinRead = queryRequest.LinRead
+	resp.Txn.LinRead = queryRequest.LinRead
 	return resp, err
 }
 

@@ -58,8 +58,8 @@ func (txn *Txn) Query(ctx context.Context, q string,
 	}
 	resp, err := txn.dg.query(ctx, req)
 	if err == nil {
-		x.MergeLinReads(txn.linRead, resp.LinRead)
-		txn.dg.mergeLinRead(resp.LinRead)
+		x.MergeLinReads(txn.linRead, resp.Txn.LinRead)
+		txn.dg.mergeLinRead(resp.Txn.LinRead)
 	}
 	return resp, err
 }
@@ -103,7 +103,7 @@ func (txn *Txn) Abort(ctx context.Context) error {
 	if txn.context == nil {
 		txn.context = &protos.TxnContext{StartTs: txn.startTs}
 	}
-	txn.context.CommitTs = 0
+	txn.context.Aborted = true
 	_, err := txn.dg.commitOrAbort(ctx, txn.context)
 	return err
 }
