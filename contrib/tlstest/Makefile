@@ -24,7 +24,7 @@ test: all
 all: ca $(KEYS) $(CERTS)
 
 clean:
-	rm -rf newcerts index.* serial *.old *.key *.csr *.crt p w
+	rm -rf newcerts index.* serial *.old *.key *.csr *.crt p w zw
 
 ca:
 	@mkdir -p newcerts
@@ -59,5 +59,5 @@ server_pass.csr: server_pass.key
 client_pass.csr: client_pass.key
 	openssl req -new -key client_pass.key -out client_pass.csr -subj "/C=AU/L=Sydney/O=Dgraph/CN=client2.dgraph.io" -passin pass:$(PASS) -passout pass:$(PASS)
 
-%.crt: %.csr ca.crt ca.key 
+%.crt: %.csr ca.crt ca.key
 	openssl ca -config openssl.cnf -days 365 -notext -cert ca.crt -keyfile ca.key -in $< -out $@ -batch
