@@ -426,7 +426,6 @@ service Worker {
 
 // Graph response.
 service Dgraph {
-    rpc StartTs (Payload)       returns (TxnContext) {}
     rpc Query (Request)           returns (Response) {}
     rpc Mutate (Mutation)         returns (Assigned) {}
     rpc Alter (Operation)         returns (Payload) {}

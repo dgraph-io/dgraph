@@ -33,19 +33,14 @@ type Txn struct {
 	dg *Dgraph
 }
 
-func (d *Dgraph) NewTxn() (*Txn, error) {
+func (d *Dgraph) NewTxn() *Txn {
 	txn := &Txn{
 		dg: d,
 		context: &protos.TxnContext{
 			LinRead: d.getLinRead(),
 		},
 	}
-	startTs, err := txn.dg.startTs(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	txn.context.StartTs = startTs
-	return txn, nil
+	return txn
 }
 
 func (txn *Txn) Query(ctx context.Context, q string,
@@ -72,6 +67,9 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 	x.MergeLinReads(txn.context.LinRead, src.LinRead)
 	txn.dg.mergeLinRead(src.LinRead) // Also merge it with client.
 
+	if txn.context.StartTs == 0 {
+		txn.context.StartTs = src.StartTs
+	}
 	if txn.context.StartTs != src.StartTs {
 		return x.Errorf("StartTs mismatch")
 	}

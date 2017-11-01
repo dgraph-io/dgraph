@@ -190,12 +190,6 @@ func (s *ServerState) getTimestamp() uint64 {
 	return <-ch
 }
 
-func (s *Server) StartTs(ctx context.Context, p *protos.Payload) (*protos.TxnContext, error) {
-	return &protos.TxnContext{
-		StartTs: State.getTimestamp(),
-	}, nil
-}
-
 func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Payload, error) {
 	empty := &protos.Payload{}
 	if op.DropAll {

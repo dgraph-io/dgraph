@@ -105,12 +105,6 @@ func (d *Dgraph) CheckSchema(schema *protos.SchemaUpdate) error {
 	return nil
 }
 
-func (d *Dgraph) startTs(ctx context.Context) (uint64, error) {
-	dc := d.anyClient()
-	tctx, err := dc.StartTs(ctx, &protos.Payload{})
-	return tctx.StartTs, err
-}
-
 func (d *Dgraph) query(ctx context.Context, req *protos.Request) (*protos.Response, error) {
 	dc := d.anyClient()
 	return dc.Query(ctx, req)

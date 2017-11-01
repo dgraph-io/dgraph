@@ -30,11 +30,6 @@ type inmemoryClient struct {
 	srv *Server
 }
 
-func (i *inmemoryClient) StartTs(ctx context.Context, in *protos.Payload,
-	_ ...grpc.CallOption) (*protos.TxnContext, error) {
-	return i.srv.StartTs(ctx, in)
-}
-
 func (i *inmemoryClient) Query(ctx context.Context, in *protos.Request,
 	_ ...grpc.CallOption) (*protos.Response, error) {
 	return i.srv.Query(ctx, in)
