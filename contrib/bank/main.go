@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
@@ -19,17 +20,21 @@ import (
 var (
 	users = flag.Int("users", 5, "Number of accounts.")
 	conc  = flag.Int("txns", 100, "Number of concurrent transactions.")
+	num   = flag.Int("num", 1e5, "Number of total transactions to run.")
 )
 
 type Account struct {
-	Uid uint64 `json:"_uid_"`
+	Uid string `json:"_uid_"`
 	Bal int    `json:"bal"`
 }
 
 type State struct {
 	sync.RWMutex
-	dg   *client.Dgraph
-	uids []uint64
+	dg     *client.Dgraph
+	uids   []string
+	total  int32
+	aborts int32
+	runs   int32
 }
 
 func (s *State) createAccounts() {
@@ -57,7 +62,7 @@ func (s *State) createAccounts() {
 	s.Lock()
 	defer s.Unlock()
 	for _, uid := range assigned.GetUids() {
-		s.uids = append(s.uids, uid)
+		s.uids = append(s.uids, fmt.Sprintf("%#x", uid))
 	}
 }
 
@@ -66,27 +71,63 @@ func (s *State) runTransaction() error {
 	s.RLock()
 	defer s.RUnlock()
 
-	from := s.uids[rand.Intn(len(s.uids))]
-	to := s.uids[rand.Intn(len(s.uids))]
+	var from, to string
+	for {
+		from = s.uids[rand.Intn(len(s.uids))]
+		to = s.uids[rand.Intn(len(s.uids))]
+		if from != to {
+			break
+		}
+	}
 
 	txn := s.dg.NewTxn()
-	fq := fmt.Sprintf(`{me(func: uid(%d, %d)) { _uid_, bal }}`, from, to)
+	fq := fmt.Sprintf(`{me(func: uid(%s, %s)) { _uid_, bal }}`, from, to)
 	resp, err := txn.Query(ctx, fq, nil)
 	if err != nil {
 		return err
 	}
 
-	type S struct {
-		both []Account `json:"me"`
+	type Accounts struct {
+		Both []Account `json:"me"`
 	}
-	var s S
-	if err := json.Unmarshal(resp.Json, &s); err != nil {
+	var a Accounts
+	if err := json.Unmarshal(resp.Json, &a); err != nil {
 		return err
 	}
-	if len(s.both) != 2 {
+	if len(a.Both) != 2 {
 		return errors.New("Unable to find both accounts")
 	}
-	s.both[0].Bal
+	fmt.Printf("A: %+v\n", a)
+
+	a.Both[0].Bal += 5
+	a.Both[1].Bal -= 5
+
+	var mu protos.Mutation
+	data, err := json.Marshal(a.Both)
+	x.Check(err)
+	fmt.Printf("data=%q\n", data)
+	mu.SetJson = data
+	_, err = txn.Mutate(ctx, &mu)
+	if err != nil {
+		return err
+	}
+	return txn.Commit(ctx)
+}
+
+func (s *State) loop(wg *sync.WaitGroup) {
+	defer wg.Done()
+	if sofar := atomic.AddInt32(&s.total, 1); int(sofar) >= *num {
+		return
+	}
+	if err := s.runTransaction(); err != nil {
+		if n := atomic.AddInt32(&s.aborts, 1); n%10 == 0 {
+			fmt.Println("Aborts: ", n)
+		}
+	} else {
+		if n := atomic.AddInt32(&s.runs, 1); n%10 == 0 {
+			fmt.Println("Runs: ", n)
+		}
+	}
 }
 
 func main() {
@@ -107,4 +148,12 @@ func main() {
 	s := State{dg: dg}
 	s.createAccounts()
 	fmt.Printf("s.uids: %v\n", s.uids)
+
+	var wg sync.WaitGroup
+	wg.Add(*conc)
+	for i := 0; i < *conc; i++ {
+		go s.loop(&wg)
+	}
+	wg.Wait()
+	fmt.Printf("State=%+v\n", s)
 }
