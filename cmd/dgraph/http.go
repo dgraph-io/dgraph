@@ -20,7 +20,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sort"
@@ -71,12 +70,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 				"Error while unmarshalling LinRead header into map")
 			return
 		}
-		fmt.Printf("LinRead: %+v\n", lr)
 		req.LinRead = &protos.LinRead{
 			Ids: lr,
 		}
 	}
-	fmt.Printf("Req: %+v\n", req)
 
 	defer r.Body.Close()
 	q, err := ioutil.ReadAll(r.Body)
@@ -314,7 +311,6 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		op.Schema = string(b)
 	}
-	fmt.Printf("Op: %+v\n", op)
 
 	_, err = (&dgraph.Server{}).Alter(context.Background(), op)
 	if err != nil {
