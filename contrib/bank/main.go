@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -18,9 +19,9 @@ import (
 )
 
 var (
-	users = flag.Int("users", 5, "Number of accounts.")
-	conc  = flag.Int("txns", 100, "Number of concurrent transactions.")
-	num   = flag.Int("num", 1e5, "Number of total transactions to run.")
+	users = flag.Int("users", 100, "Number of accounts.")
+	conc  = flag.Int("txns", 10, "Number of concurrent transactions.")
+	num   = flag.Int("num", 1e3, "Number of total transactions to run.")
 )
 
 type Account struct {
@@ -32,7 +33,6 @@ type State struct {
 	sync.RWMutex
 	dg     *client.Dgraph
 	uids   []string
-	total  int32
 	aborts int32
 	runs   int32
 }
@@ -64,6 +64,25 @@ func (s *State) createAccounts() {
 	for _, uid := range assigned.GetUids() {
 		s.uids = append(s.uids, fmt.Sprintf("%#x", uid))
 	}
+}
+
+func (s *State) runTotal() int {
+	q := fmt.Sprintf(
+		`
+		{
+			var(func: uid(%s)) {
+				b as bal
+			}
+			total() {
+				bal: sum(val(b))
+			}
+		}
+	`, strings.Join(s.uids, ","))
+	txn := s.dg.NewTxn()
+	resp, err := txn.Query(context.Background(), q, nil)
+	x.Check(err)
+	fmt.Printf("response json: %q\n", resp.Json)
+	return 0
 }
 
 func (s *State) runTransaction() error {
@@ -105,7 +124,6 @@ func (s *State) runTransaction() error {
 	var mu protos.Mutation
 	data, err := json.Marshal(a.Both)
 	x.Check(err)
-	fmt.Printf("data=%q\n", data)
 	mu.SetJson = data
 	_, err = txn.Mutate(ctx, &mu)
 	if err != nil {
@@ -116,16 +134,19 @@ func (s *State) runTransaction() error {
 
 func (s *State) loop(wg *sync.WaitGroup) {
 	defer wg.Done()
-	if sofar := atomic.AddInt32(&s.total, 1); int(sofar) >= *num {
-		return
-	}
-	if err := s.runTransaction(); err != nil {
-		if n := atomic.AddInt32(&s.aborts, 1); n%10 == 0 {
-			fmt.Println("Aborts: ", n)
-		}
-	} else {
-		if n := atomic.AddInt32(&s.runs, 1); n%10 == 0 {
-			fmt.Println("Runs: ", n)
+	for {
+		if err := s.runTransaction(); err != nil {
+			if n := atomic.AddInt32(&s.aborts, 1); n%10 == 0 {
+				fmt.Println("Aborts: ", n)
+			}
+		} else {
+			n := atomic.AddInt32(&s.runs, 1)
+			if n%10 == 0 {
+				fmt.Println("Runs: ", n)
+			}
+			if int(n) >= *num {
+				return
+			}
 		}
 	}
 }
@@ -147,7 +168,7 @@ func main() {
 	dg := client.NewDgraphClient(zero, dc)
 	s := State{dg: dg}
 	s.createAccounts()
-	fmt.Printf("s.uids: %v\n", s.uids)
+	s.runTotal()
 
 	var wg sync.WaitGroup
 	wg.Add(*conc)
@@ -155,5 +176,7 @@ func main() {
 		go s.loop(&wg)
 	}
 	wg.Wait()
-	fmt.Printf("State=%+v\n", s)
+	fmt.Println("Total aborts", s.aborts)
+	fmt.Println("Total success", s.runs)
+	s.runTotal()
 }
