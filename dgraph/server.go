@@ -140,7 +140,11 @@ type Server struct{}
 // for Commit API.
 func (s *ServerState) fillTimestampRequests() {
 	var chs []chan uint64
-
+	const (
+		initDelay = 10 * time.Millisecond
+		maxDelay  = 10 * time.Second
+	)
+	delay := initDelay
 	for range s.notify {
 	RETRY:
 		s.mu.Lock()
@@ -157,8 +161,14 @@ func (s *ServerState) fillTimestampRequests() {
 		cancel()
 		if err != nil {
 			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
+			time.Sleep(delay)
+			delay *= 2
+			if delay > maxDelay {
+				delay = maxDelay
+			}
 			goto RETRY
 		}
+		delay = initDelay
 		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
 		for i, ch := range chs {
 			ch <- ts.StartId + uint64(i)

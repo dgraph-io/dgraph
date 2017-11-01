@@ -28,22 +28,17 @@ import (
 var ErrAborted = x.Errorf("Transaction has been aborted due to conflict")
 
 type Txn struct {
-	startTs uint64
 	context *protos.TxnContext
-	linRead *protos.LinRead
 
 	dg *Dgraph
 }
 
 func (d *Dgraph) NewTxn() *Txn {
-	ts := d.getTimestamp()
 	txn := &Txn{
-		startTs: ts,
-		dg:      d,
-		linRead: d.getLinRead(),
-	}
-	if txn.linRead == nil {
-		txn.linRead = &protos.LinRead{}
+		dg: d,
+		context: &protos.TxnContext{
+			LinRead: d.getLinRead(),
+		},
 	}
 	return txn
 }
@@ -53,12 +48,12 @@ func (txn *Txn) Query(ctx context.Context, q string,
 	req := &protos.Request{
 		Query:   q,
 		Vars:    vars,
-		StartTs: txn.startTs,
-		LinRead: txn.linRead,
+		StartTs: txn.context.StartTs,
+		LinRead: txn.context.LinRead,
 	}
 	resp, err := txn.dg.query(ctx, req)
 	if err == nil {
-		x.MergeLinReads(txn.linRead, resp.Txn.LinRead)
+		x.MergeLinReads(txn.context.LinRead, resp.Txn.LinRead)
 		txn.dg.mergeLinRead(resp.Txn.LinRead)
 	}
 	return resp, err
@@ -69,12 +64,11 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 		return nil
 	}
 
-	x.MergeLinReads(txn.linRead, src.LinRead)
+	x.MergeLinReads(txn.context.LinRead, src.LinRead)
 	txn.dg.mergeLinRead(src.LinRead) // Also merge it with client.
 
-	if txn.context == nil {
-		txn.context = src
-		return nil
+	if txn.context.StartTs == 0 {
+		txn.context.StartTs = src.StartTs
 	}
 	if txn.context.StartTs != src.StartTs {
 		return x.Errorf("StartTs mismatch")
@@ -85,7 +79,7 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 }
 
 func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
-	mu.StartTs = txn.startTs
+	mu.StartTs = txn.context.StartTs
 	ag, err := txn.dg.mutate(ctx, mu)
 	if ag != nil {
 		if err := txn.mergeContext(ag.Context); err != nil {
@@ -101,7 +95,7 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 
 func (txn *Txn) Abort(ctx context.Context) error {
 	if txn.context == nil {
-		txn.context = &protos.TxnContext{StartTs: txn.startTs}
+		txn.context = &protos.TxnContext{StartTs: txn.context.StartTs}
 	}
 	txn.context.Aborted = true
 	_, err := txn.dg.commitOrAbort(ctx, txn.context)
@@ -113,7 +107,6 @@ func (txn *Txn) Commit(ctx context.Context) error {
 		// If there were no mutations
 		return nil
 	}
-	txn.context.CommitTs = txn.dg.getTimestamp()
 	tctx, err := txn.dg.commitOrAbort(ctx, txn.context)
 	if err != nil {
 		return err
