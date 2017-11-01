@@ -69,9 +69,12 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 	l := posting.Get(x.DataKey(attr, src))
 	txn := &posting.Txn{
 		StartTs: uint64(time.Now().Unix()),
+		Indices: []uint64{1},
 	}
+	txn = posting.Txns().PutOrMergeIndex(txn)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, txn))
+	require.NoError(t, txn.CommitMutations(context.Background(), uint64(time.Now().Unix())))
 }
 
 func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {
@@ -211,7 +214,7 @@ func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (s
 	if err != nil {
 		return "", err
 	}
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res, ReadTs: uint64(time.Now().Unix())}
 	err = queryRequest.ProcessQuery(ctx)
 	if err != nil {
 		return "", err

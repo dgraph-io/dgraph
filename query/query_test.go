@@ -5737,7 +5737,11 @@ func (z *zeroServer) Timestamps(ctx context.Context, n *protos.Num) (*protos.Ass
 	return &protos.AssignedIds{}, nil
 }
 
-func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.MembershipState, error) {
+func (z *zeroServer) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*protos.TxnContext, error) {
+	return &protos.TxnContext{}, nil
+}
+
+func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.ConnectionState, error) {
 	m := &protos.MembershipState{}
 	m.Zeros = make(map[uint64]*protos.Member)
 	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
@@ -5746,7 +5750,12 @@ func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.Me
 	g.Members = make(map[uint64]*protos.Member)
 	g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
 	m.Groups[1] = g
-	return m, nil
+
+	c := &protos.ConnectionState{
+		Member: in,
+		State:  m,
+	}
+	return c, nil
 }
 
 // Used by sync membership
@@ -5771,6 +5780,21 @@ func (z *zeroServer) Update(stream protos.Zero_UpdateServer) error {
 func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*protos.Tablet, error) {
 	in.GroupId = 1
 	return in, nil
+}
+
+func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) error {
+	for {
+		delta := protos.OracleDelta{}
+		if err := server.Send(&delta); err != nil {
+			return err
+		}
+		time.Sleep(time.Second)
+	}
+	return nil
+}
+
+func (s *zeroServer) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.Payload, error) {
+	return &protos.Payload{}, nil
 }
 
 func StartDummyZero() *grpc.Server {
