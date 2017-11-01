@@ -610,10 +610,11 @@ func setupListener(addr string, port int) (listener net.Listener, err error) {
 	} else {
 		var tlsCfg *tls.Config
 		tlsCfg, reload, err = x.GenerateTLSConfig(x.TLSHelperConfig{
-			ConfigType:   x.TLSServerConfig,
-			CertRequired: tlsEnabled,
-			Cert:         tlsCert,
-
+			ConfigType:             x.TLSServerConfig,
+			CertRequired:           tlsEnabled,
+			Cert:                   tlsCert,
+			Key:                    tlsKey,
+			KeyPassphrase:          tlsKeyPass,
 			ClientAuth:             tlsClientAuth,
 			ClientCACerts:          tlsClientCACerts,
 			UseSystemClientCACerts: tlsSystemCACerts,
