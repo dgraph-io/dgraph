@@ -23,6 +23,7 @@ import (
 	"container/list"
 	"context"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -55,12 +56,14 @@ type entry struct {
 
 // New creates a new Cache.
 func newListCache(maxSize uint64) *listCache {
-	return &listCache{
+	lc := &listCache{
 		ctx:     context.Background(),
 		MaxSize: maxSize,
 		ll:      list.New(),
 		cache:   make(map[string]*list.Element),
 	}
+	go lc.removeOldestLoop()
+	return lc
 }
 
 func (c *listCache) UpdateMaxSize() {
@@ -99,12 +102,21 @@ func (c *listCache) PutIfMissing(key string, pl *List) (res *List) {
 	c.curSize += e.size
 	ele := c.ll.PushFront(e)
 	c.cache[key] = ele
-	c.removeOldest()
 
 	return e.pl
 }
 
+func (c *listCache) removeOldestLoop() {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		c.removeOldest()
+	}
+}
+
 func (c *listCache) removeOldest() {
+	c.Lock()
+	defer c.Unlock()
 	ele := c.ll.Back()
 	for c.curSize > c.MaxSize {
 		if ele == nil {
