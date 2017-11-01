@@ -121,12 +121,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		mp["schema"] = json.RawMessage(string(js))
 		response["data"] = mp
 	} else {
-		result := map[string]interface{}{}
-		if err := json.Unmarshal(resp.Json, &result); err != nil {
-			x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-		response["data"] = result["data"]
+		response["data"] = json.RawMessage(string(resp.Json))
 	}
 
 	if js, err := json.Marshal(response); err == nil {
