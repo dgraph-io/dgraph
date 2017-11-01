@@ -350,6 +350,7 @@ func setupServer() {
 
 	http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/mutate", mutationHandler)
+	http.HandleFunc("/commit", commitHandler)
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
 	// http.HandleFunc("/share", shareHandler)

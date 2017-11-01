@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -137,7 +138,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TODO - Modify UI to call mutate endpoint when string has set/delete.
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
@@ -164,6 +164,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Maybe rename it so that default is CommitImmediately.
 	commit := r.Header.Get("X-Commit")
 	if commit != "" {
 		c, err := strconv.ParseBool(commit)
@@ -202,6 +203,80 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["code"] = x.Success
 	mp["message"] = "Done"
 	mp["uids"] = query.ConvertUidsToHex(resp.Uids)
+	response["data"] = mp
+
+	js, err := json.Marshal(response)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	w.Write(js)
+}
+
+func commitHandler(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	resp := &protos.Assigned{}
+	tc := &protos.TxnContext{}
+	resp.Context = tc
+
+	// Maybe pass start-ts and keys in body?
+	startTs := r.Header.Get("X-StartTs")
+	if startTs == "" {
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"StartTs header is mandatory while trying to commit")
+		return
+	}
+	ts, err := strconv.ParseUint(startTs, 10, 64)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"Error while parsing StartTs header as uint64")
+		return
+	}
+	tc.StartTs = ts
+
+	keys := r.Header.Get("X-Keys")
+	if keys == "" {
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"Keys header is mandatory while trying to commit")
+		return
+	}
+
+	var k []string
+	if err := json.Unmarshal([]byte(keys), &k); err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"Error while unmarshalling keys header into array")
+		return
+	}
+	tc.Keys = k
+
+	zctx, aerr := worker.CommitOverNetwork(context.Background(), tc)
+	if aerr != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+	resp.Context.CommitTs = zctx.CommitTs
+
+	e := query.Extensions{
+		Txn: resp.Context,
+	}
+	e.Txn.Keys = e.Txn.Keys[:0]
+	response := map[string]interface{}{}
+	response["extensions"] = e
+	mp := map[string]interface{}{}
+	mp["code"] = x.Success
+	mp["message"] = "Done"
 	response["data"] = mp
 
 	js, err := json.Marshal(response)
