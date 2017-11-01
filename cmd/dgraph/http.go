@@ -50,15 +50,40 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req := protos.Request{}
+	startTs := r.Header.Get("X-StartTs")
+	if startTs != "" {
+		ts, err := strconv.ParseUint(startTs, 10, 64)
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest,
+				"Error while parsing StartTs header as uint64")
+			return
+		}
+		req.StartTs = ts
+	}
+
+	linRead := r.Header.Get("X-LinRead")
+	if linRead != "" {
+		lr := make(map[uint32]uint64)
+		if err := json.Unmarshal([]byte(linRead), &lr); err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest,
+				"Error while unmarshalling LinRead header into map")
+			return
+		}
+		fmt.Printf("LinRead: %+v\n", lr)
+		req.LinRead = &protos.LinRead{
+			Ids: lr,
+		}
+	}
+	fmt.Printf("Req: %+v\n", req)
+
 	defer r.Body.Close()
 	q, err := ioutil.ReadAll(r.Body)
-	req := protos.Request{
-		Query: string(q),
-	}
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	req.Query = string(q)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -139,14 +164,35 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mu.CommitImmediately = true
+	commit := r.Header.Get("X-Commit")
+	if commit != "" {
+		c, err := strconv.ParseBool(commit)
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest,
+				"Error while parsing Commit header as bool")
+			return
+		}
+		mu.CommitImmediately = c
+	}
+
+	startTs := r.Header.Get("X-StartTs")
+	if startTs != "" {
+		ts, err := strconv.ParseUint(startTs, 10, 64)
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest,
+				"Error while parsing StartTs header as uint64")
+			return
+		}
+		mu.StartTs = ts
+	}
+
 	resp, err := (&dgraph.Server{}).Mutate(context.Background(), mu)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 
-	// TODO - Don't send keys array which is part of txn context.
+	// TODO - Don't send keys array which is part of txn context if its commit immediately.
 	e := query.Extensions{
 		Txn: resp.Context,
 	}
@@ -157,7 +203,6 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp["message"] = "Done"
 	mp["uids"] = query.ConvertUidsToHex(resp.Uids)
 	response["data"] = mp
-	fmt.Println("response", response)
 
 	js, err := json.Marshal(response)
 	if err != nil {

@@ -274,14 +274,14 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	if err == nil {
 		ctxn.CommitTs = ctxn.StartTs
 	}
-	// If CommitTs is zero, this would abort.
-	_, aerr := worker.CommitOverNetwork(ctx, ctxn)
+	zctx, aerr := worker.CommitOverNetwork(ctx, ctxn)
 	if ok {
 		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, aerr)
 	}
 	if err != nil {
 		return resp, err
 	}
+	resp.Context.CommitTs = zctx.CommitTs
 	return resp, aerr
 }
 
