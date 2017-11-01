@@ -89,7 +89,7 @@ func TestTxnRead1(ctx context.Context, dg *client.Dgraph) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
+	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 	x.Check(txn.Commit(ctx))
 }
 
@@ -121,7 +121,7 @@ func TestTxnRead2(ctx context.Context, dg *client.Dgraph) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
-	x.AssertTruef(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[]}}")), "%s", resp.Json)
+	x.AssertTruef(bytes.Equal(resp.Json, []byte("{\"me\":[]}")), "%s", resp.Json)
 }
 
 // readTs > commitTs
@@ -151,7 +151,7 @@ func TestTxnRead3(ctx context.Context, dg *client.Dgraph) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
+	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 }
 
 // readTs > commitTs
@@ -192,7 +192,7 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
+	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 
 	txn4 := dg.NewTxn()
 	q = fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
@@ -200,7 +200,7 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish2\"}]}}")))
+	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish2\"}]}")))
 }
 
 func TestTxnRead5(ctx context.Context, dg *client.Dgraph, dc protos.DgraphClient) {
@@ -232,7 +232,7 @@ func TestTxnRead5(ctx context.Context, dg *client.Dgraph, dc protos.DgraphClient
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
+	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 	x.AssertTrue(resp.Txn.StartTs > 0)
 
 	mu = &protos.Mutation{}
@@ -248,7 +248,7 @@ func TestTxnRead5(ctx context.Context, dg *client.Dgraph, dc protos.DgraphClient
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	x.AssertTrue(bytes.Equal(resp.Json, []byte(`{"data": {"me":[{"name":"Manish2"}]}}`)))
+	x.AssertTrue(bytes.Equal(resp.Json, []byte(`{"me":[{"name":"Manish2"}]}`)))
 }
 
 func TestConflict(ctx context.Context, dg *client.Dgraph) {
@@ -285,7 +285,7 @@ func TestConflict(ctx context.Context, dg *client.Dgraph) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"data\": {\"me\":[{\"name\":\"Manish\"}]}}")))
+	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 }
 
 func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {

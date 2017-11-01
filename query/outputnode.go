@@ -498,13 +498,10 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	// https://facebook.github.io/graphql/#sec-Response-Format
 
 	var bufw bytes.Buffer
-	bufw.WriteString(`{`)
-	bufw.WriteString(`"data": `)
 	if len(n.(*fastJsonNode).attrs) == 0 {
 		bufw.WriteString(`{}`)
 	} else {
 		n.(*fastJsonNode).encode(&bufw)
 	}
-	bufw.WriteString(`}`)
 	return bufw.Bytes(), nil
 }
