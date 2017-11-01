@@ -229,6 +229,7 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 	}
 
 	g.state = state
+	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
 	g.tablets = make(map[string]*protos.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
@@ -297,7 +298,7 @@ func (g *groupi) Tablet(key string) *protos.Tablet {
 		return tablet
 	}
 
-	fmt.Printf("Asking if I can serve tablet for: %v\n", key)
+	x.Printf("Asking if I can serve tablet for: %v\n", key)
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
 	pl := g.AnyServer(0)

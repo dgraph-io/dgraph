@@ -79,8 +79,9 @@ func (o *Oracle) commit(src *protos.TxnContext) error {
 
 func (o *Oracle) currentState() *protos.OracleDelta {
 	o.AssertRLock()
-	resp := &protos.OracleDelta{}
-	resp.Commits = make(map[uint64]uint64, len(o.commits))
+	resp := &protos.OracleDelta{
+		Commits: make(map[uint64]uint64, len(o.commits)),
+	}
 	for start, commit := range o.commits {
 		resp.Commits[start] = commit
 	}
