@@ -19,6 +19,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -31,11 +32,12 @@ type Oracle struct {
 	commits    map[uint64]uint64 // start -> commit
 	rowCommit  map[string]uint64 // fp(key) -> commit
 	aborts     map[uint64]struct{}
-	pending    map[uint64]struct{}
+	pending    map[uint64]struct{} // TODO: Do we need this?
 	maxPending uint64
 	// Implement Tmax.
 	subscribers map[int]chan *protos.OracleDelta
-	updates     chan *protos.TxnContext
+	updates     chan *protos.OracleDelta
+	doneUntil   x.WaterMark
 }
 
 func (o *Oracle) Init() {
@@ -44,13 +46,18 @@ func (o *Oracle) Init() {
 	o.aborts = make(map[uint64]struct{})
 	o.pending = make(map[uint64]struct{})
 	o.subscribers = make(map[int]chan *protos.OracleDelta)
-	o.updates = make(chan *protos.TxnContext, 100000) // Keeping 1 second worth of updates.
+	o.updates = make(chan *protos.OracleDelta, 100000) // Keeping 1 second worth of updates.
+	o.doneUntil.Init()
 	go o.sendDeltasToSubscribers()
 }
 
 func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
 	for _, k := range src.Keys {
 		if last := o.rowCommit[k]; last > src.StartTs {
+			pk := x.Parse([]byte(k))
+			if len(pk.Term) > 0 {
+				fmt.Printf("Aborted due to key %+v %d %d\n", pk.Term[1:], last, src.StartTs)
+			}
 			return true
 		}
 	}
@@ -106,22 +113,28 @@ func (o *Oracle) removeSubscriber(id int) {
 }
 
 func (o *Oracle) sendDeltasToSubscribers() {
-	delta := new(protos.OracleDelta)
+	delta := &protos.OracleDelta{
+		Commits: make(map[uint64]uint64),
+	}
 	for {
-		tctx, open := <-o.updates
+		update, open := <-o.updates
 		if !open {
 			return
 		}
 	slurp_loop:
 		for {
 			// Consume tctx.
-			if tctx.Aborted {
-				delta.Aborts = append(delta.Aborts, tctx.StartTs)
-			} else {
-				delta.Commits[tctx.StartTs] = tctx.CommitTs
+			if update.MaxPending > delta.MaxPending {
+				delta.MaxPending = update.MaxPending
+			}
+			for _, startTs := range update.Aborts {
+				delta.Aborts = append(delta.Aborts, startTs)
+			}
+			for startTs, commitTs := range update.Commits {
+				delta.Commits[startTs] = commitTs
 			}
 			select {
-			case tctx, open = <-o.updates:
+			case update, open = <-o.updates:
 				if !open {
 					return
 				}
@@ -139,31 +152,53 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			}
 		}
 		o.Unlock()
-		delta = new(protos.OracleDelta)
+		delta = &protos.OracleDelta{
+			Commits: make(map[uint64]uint64),
+		}
 	}
 }
 
-func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
+func (o *Oracle) updateCommitStatusHelper(src *protos.TxnContext) bool {
 	// TODO: Have a way to clear out the commits and aborts.
-	o.updates <- src
 	o.Lock()
 	defer o.Unlock()
+	if _, ok := o.pending[src.StartTs]; !ok {
+		return false
+	}
 	delete(o.pending, src.StartTs)
 	if src.Aborted {
 		o.aborts[src.StartTs] = struct{}{}
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
+	return true
+}
+
+func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
+	if o.updateCommitStatusHelper(src) {
+		delta := new(protos.OracleDelta)
+		if src.Aborted {
+			delta.Aborts = append(delta.Aborts, src.StartTs)
+		} else {
+			delta.Commits = make(map[uint64]uint64)
+			delta.Commits[src.StartTs] = src.CommitTs
+		}
+		o.updates <- delta
+	}
 }
 
 func (o *Oracle) storePending(ids *protos.AssignedIds) {
+	// Wait to finish up processing everything before start id.
+	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
+	// Now send it out to updates.
+	o.updates <- &protos.OracleDelta{MaxPending: ids.EndId}
 	o.Lock()
 	defer o.Unlock()
-	max := ids.EndId - 1
+	max := ids.EndId
 	if o.maxPending < max {
 		o.maxPending = max
 	}
-	for id := ids.StartId; id < ids.EndId; id++ {
+	for id := ids.StartId; id <= ids.EndId; id++ {
 		o.pending[id] = struct{}{}
 	}
 }
@@ -204,7 +239,11 @@ func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
 	if err := s.orc.commit(src); err != nil {
 		src.Aborted = true
 	}
-	return s.proposeTxn(ctx, src)
+	// Propose txn should be used to set watermark as done.
+	err = s.proposeTxn(ctx, src)
+	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
+	s.orc.doneUntil.Done(src.CommitTs)
+	return err
 }
 
 func (s *Server) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*protos.TxnContext, error) {
@@ -221,6 +260,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*pr
 var errClosed = errors.New("Streaming closed by Oracle.")
 
 func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer) error {
+	// TODO: Add leader check and test leader changes.
 	ch, id := s.orc.newSubscriber()
 	defer s.orc.removeSubscriber(id)
 
@@ -239,4 +279,41 @@ func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer)
 		}
 	}
 	return nil
+}
+
+func (s *Server) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.Payload, error) {
+	for _, startTs := range txns.StartTs {
+		// Do via proposals to avoid race
+		tctx := &protos.TxnContext{StartTs: startTs, Aborted: true}
+		if err := s.proposeTxn(ctx, tctx); err != nil {
+			return &protos.Payload{}, err
+		}
+	}
+	return &protos.Payload{}, nil
+}
+
+// Timestamps is used to assign startTs for a new transaction
+func (s *Server) Timestamps(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	if ctx.Err() != nil {
+		return &emptyAssignedIds, ctx.Err()
+	}
+
+	reply := &emptyAssignedIds
+	c := make(chan error, 1)
+	go func() {
+		var err error
+		reply, err = s.lease(ctx, num, true)
+		c <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return reply, ctx.Err()
+	case err := <-c:
+		if err == nil {
+			s.orc.doneUntil.Done(reply.EndId)
+			go s.orc.storePending(reply)
+		}
+		return reply, err
+	}
 }

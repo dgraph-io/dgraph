@@ -100,6 +100,11 @@ func (d *Dgraph) getLinRead() *protos.LinRead {
 
 func (d *Dgraph) fillTimestampRequests() {
 	var chs []chan uint64
+	const (
+		initDelay = 10 * time.Millisecond
+		maxDelay  = 10 * time.Second
+	)
+	delay := initDelay
 	for range d.notify {
 	RETRY:
 		d.mu.Lock()
@@ -115,9 +120,15 @@ func (d *Dgraph) fillTimestampRequests() {
 		ts, err := d.zero.Timestamps(ctx, num)
 		cancel()
 		if err != nil {
-			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
+			log.Printf("Error while retrieving timestamps: %v. Will retry in %v\n", err, delay)
+			time.Sleep(delay)
+			delay *= 2
+			if delay > maxDelay {
+				delay = maxDelay
+			}
 			goto RETRY
 		}
+		delay = initDelay
 		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
 		for i, ch := range chs {
 			ch <- ts.StartId + uint64(i)
@@ -162,9 +173,9 @@ func (d *Dgraph) mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assig
 	return dc.Mutate(ctx, mu)
 }
 
-func (d *Dgraph) commitOrAbort(ctx context.Context, txn *protos.TxnContext) (*protos.Payload, error) {
-	dc := d.anyClient()
-	return dc.CommitOrAbort(ctx, txn)
+func (d *Dgraph) commitOrAbort(ctx context.Context, txn *protos.TxnContext) (*protos.TxnContext,
+	error) {
+	return d.zero.CommitOrAbort(ctx, txn)
 }
 
 // CheckVersion checks if the version of dgraph and dgraph-live-loader are the same.  If either the

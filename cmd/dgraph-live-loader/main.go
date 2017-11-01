@@ -201,8 +201,8 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	return nil
 }
 
-func setupConnection(host string) (*grpc.ClientConn, error) {
-	if !*tlsEnabled {
+func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
+	if insecure {
 		return grpc.Dial(host,
 			grpc.WithDefaultCallOptions(
 				grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
@@ -230,7 +230,9 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second))
 }
 
 func fileList(files string) []string {
@@ -304,11 +306,11 @@ func main() {
 		// do nothing
 	}
 
-	conn, err := setupConnection(*dgraph)
+	conn, err := setupConnection(*dgraph, !*tlsEnabled)
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	connzero, err := setupConnection(*zero)
+	connzero, err := setupConnection(*zero, true)
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 

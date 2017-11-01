@@ -395,6 +395,8 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 }
 
 func (n *node) trySnapshot() {
+	// TODO: FIx later
+	return
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 	si := existing.Metadata.Index

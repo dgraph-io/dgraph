@@ -264,7 +264,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return pk.Attr == in.Predicate
 	})
 	if len(tctxs) > 0 {
-		go fixConflicts(tctxs)
+		go tryAbortTransactions(tctxs)
 		return &emptyPayload, posting.ErrConflict
 	}
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.

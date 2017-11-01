@@ -109,6 +109,7 @@ func (s *Server) lease(ctx context.Context, num *protos.Num, txn bool) (*protos.
 		out.StartId = s.nextTxnTs
 		out.EndId = out.StartId + num.Val - 1
 		s.nextTxnTs = out.EndId + 1
+		s.orc.doneUntil.Begin(out.EndId)
 	} else {
 		out.StartId = s.nextLeaseId
 		out.EndId = out.StartId + num.Val - 1
@@ -137,31 +138,6 @@ func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 	case <-ctx.Done():
 		return reply, ctx.Err()
 	case err := <-c:
-		return reply, err
-	}
-}
-
-// Timestamps is used to assign startTs for a new transaction
-func (s *Server) Timestamps(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if ctx.Err() != nil {
-		return &emptyAssignedIds, ctx.Err()
-	}
-
-	reply := &emptyAssignedIds
-	c := make(chan error, 1)
-	go func() {
-		var err error
-		reply, err = s.lease(ctx, num, true)
-		c <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return reply, ctx.Err()
-	case err := <-c:
-		if err == nil {
-			s.orc.storePending(reply)
-		}
 		return reply, err
 	}
 }
