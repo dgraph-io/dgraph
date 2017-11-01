@@ -300,22 +300,10 @@ func (s *Server) Timestamps(ctx context.Context, num *protos.Num) (*protos.Assig
 		return &emptyAssignedIds, ctx.Err()
 	}
 
-	reply := &emptyAssignedIds
-	c := make(chan error, 1)
-	go func() {
-		var err error
-		reply, err = s.lease(ctx, num, true)
-		c <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return reply, ctx.Err()
-	case err := <-c:
-		if err == nil {
-			s.orc.doneUntil.Done(reply.EndId)
-			go s.orc.storePending(reply)
-		}
-		return reply, err
+	reply, err := s.lease(ctx, num, true)
+	if err == nil {
+		s.orc.doneUntil.Done(reply.EndId)
+		go s.orc.storePending(reply)
 	}
+	return reply, err
 }

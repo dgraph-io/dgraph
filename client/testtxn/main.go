@@ -113,7 +113,6 @@ func TestTxnRead2(ctx context.Context, dg *client.Dgraph) {
 	}
 
 	txn2 := dg.NewTxn()
-	x.Check(txn.Commit(ctx))
 
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
 	resp, err := txn2.Query(ctx, q, nil)
@@ -122,6 +121,7 @@ func TestTxnRead2(ctx context.Context, dg *client.Dgraph) {
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTruef(bytes.Equal(resp.Json, []byte("{\"me\":[]}")), "%s", resp.Json)
+	x.Check(txn.Commit(ctx))
 }
 
 // readTs > commitTs
@@ -183,9 +183,6 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
-	fmt.Println("Committing txn3")
-	x.Check(txn3.Commit(ctx))
-
 	q := fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
 	resp, err := txn2.Query(ctx, q, nil)
 	if err != nil {
@@ -193,6 +190,9 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
+
+	fmt.Println("Committing txn3")
+	x.Check(txn3.Commit(ctx))
 
 	txn4 := dg.NewTxn()
 	q = fmt.Sprintf(`{ me(func: uid(%d)) { name }}`, uid)
