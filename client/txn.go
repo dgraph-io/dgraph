@@ -103,7 +103,7 @@ func (txn *Txn) Abort(ctx context.Context) error {
 	if txn.context == nil {
 		txn.context = &protos.TxnContext{StartTs: txn.startTs}
 	}
-	txn.context.CommitTs = 0
+	txn.context.Aborted = true
 	_, err := txn.dg.commitOrAbort(ctx, txn.context)
 	return err
 }

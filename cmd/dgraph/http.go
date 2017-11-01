@@ -284,6 +284,58 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
+func abortHandler(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	if r.Method != "PUT" {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	resp := &protos.Assigned{}
+	tc := &protos.TxnContext{}
+	resp.Context = tc
+
+	// Maybe pass start-ts and keys in body?
+	startTs := r.Header.Get("X-StartTs")
+	if startTs == "" {
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"StartTs header is mandatory while trying to abort")
+		return
+	}
+	ts, err := strconv.ParseUint(startTs, 10, 64)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"Error while parsing StartTs header as uint64")
+		return
+	}
+	tc.StartTs = ts
+	tc.Aborted = true
+
+	_, aerr := worker.CommitOverNetwork(context.Background(), tc)
+	if aerr != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	response := map[string]interface{}{}
+	response["code"] = x.Success
+	response["message"] = "Done"
+
+	js, err := json.Marshal(response)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	w.Write(js)
+}
+
 func alterHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
