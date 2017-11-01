@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
@@ -32,6 +31,10 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+)
+
+const (
+	startTsHeader = "X-Dgraph-StartTs"
 )
 
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
@@ -51,9 +54,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := protos.Request{}
-	startTs := r.Header.Get("X-StartTs")
+	startTs := r.Header.Get(startTsHeader)
 	if startTs != "" {
-		ts, err := strconv.ParseUint(startTs, 10, 64)
+		ts, err := strconv.ParseUint(startTs, 0, 64)
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest,
 				"Error while parsing StartTs header as uint64")
@@ -62,7 +65,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		req.StartTs = ts
 	}
 
-	linRead := r.Header.Get("X-LinRead")
+	linRead := r.Header.Get("X-Dgraph-LinRead")
 	if linRead != "" {
 		lr := make(map[uint32]uint64)
 		if err := json.Unmarshal([]byte(linRead), &lr); err != nil {
@@ -83,10 +86,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Query = string(q)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 	// TODO - Check if debug still works.
-	resp, err := (&dgraph.Server{}).Query(ctx, &req)
+	resp, err := (&dgraph.Server{}).Query(context.Background(), &req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -120,12 +121,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		mp["schema"] = json.RawMessage(string(js))
 		response["data"] = mp
 	} else {
-		jsonRes := map[string]interface{}{}
-		if err := json.Unmarshal(resp.Json, &jsonRes); err != nil {
+		result := map[string]interface{}{}
+		if err := json.Unmarshal(resp.Json, &result); err != nil {
 			x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 			return
 		}
-		response["data"] = jsonRes["data"]
+		response["data"] = result["data"]
 	}
 
 	if js, err := json.Marshal(response); err == nil {
@@ -162,7 +163,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Maybe rename it so that default is CommitImmediately.
-	commit := r.Header.Get("X-Commit")
+	commit := r.Header.Get("X-Dgraph-CommitNow")
 	if commit != "" {
 		c, err := strconv.ParseBool(commit)
 		if err != nil {
@@ -173,9 +174,9 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		mu.CommitImmediately = c
 	}
 
-	startTs := r.Header.Get("X-StartTs")
+	startTs := r.Header.Get(startTsHeader)
 	if startTs != "" {
-		ts, err := strconv.ParseUint(startTs, 10, 64)
+		ts, err := strconv.ParseUint(startTs, 0, 64)
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest,
 				"Error while parsing StartTs header as uint64")
@@ -229,13 +230,13 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	resp.Context = tc
 
 	// Maybe pass start-ts and keys in body?
-	startTs := r.Header.Get("X-StartTs")
+	startTs := r.Header.Get(startTsHeader)
 	if startTs == "" {
 		x.SetStatus(w, x.ErrorInvalidRequest,
 			"StartTs header is mandatory while trying to commit")
 		return
 	}
-	ts, err := strconv.ParseUint(startTs, 10, 64)
+	ts, err := strconv.ParseUint(startTs, 0, 64)
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest,
 			"Error while parsing StartTs header as uint64")
@@ -243,7 +244,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	tc.StartTs = ts
 
-	keys := r.Header.Get("X-Keys")
+	keys := r.Header.Get("X-Dgraph-Keys")
 	if keys == "" {
 		x.SetStatus(w, x.ErrorInvalidRequest,
 			"Keys header is mandatory while trying to commit")
@@ -303,13 +304,13 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 	resp.Context = tc
 
 	// Maybe pass start-ts and keys in body?
-	startTs := r.Header.Get("X-StartTs")
+	startTs := r.Header.Get(startTsHeader)
 	if startTs == "" {
 		x.SetStatus(w, x.ErrorInvalidRequest,
 			"StartTs header is mandatory while trying to abort")
 		return
 	}
-	ts, err := strconv.ParseUint(startTs, 10, 64)
+	ts, err := strconv.ParseUint(startTs, 0, 64)
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest,
 			"Error while parsing StartTs header as uint64")
