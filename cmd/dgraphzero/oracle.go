@@ -221,14 +221,8 @@ func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
 	}
-	s.orc.RLock()
-	conflict := s.orc.hasConflict(src)
-	s.orc.RUnlock()
-	if conflict {
-		src.Aborted = true
-		return s.proposeTxn(ctx, src)
-	}
 
+	// We can't do any conflict detection without timestamp.
 	// TODO: Consider Tmax here.
 	var num protos.Num
 	num.Val = 1
