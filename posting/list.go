@@ -509,7 +509,7 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	return conflicts
 }
 
-func (l *List) canRead(mpost *protos.Posting, readTs uint64) bool {
+func (l *List) inSnapshot(mpost *protos.Posting, readTs uint64) bool {
 	l.AssertRLock()
 	if mpost.CommitTs == 0 {
 		mpost.CommitTs = Oracle().commitTs(mpost.StartTs)
@@ -553,7 +553,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
-			if !l.canRead(mp, readTs) {
+			if !l.inSnapshot(mp, readTs) {
 				midx++
 				continue
 			}

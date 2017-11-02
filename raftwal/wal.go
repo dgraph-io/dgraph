@@ -141,6 +141,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	// ok to ignore
 	if err := txn.CommitAt(1, nil); err != nil {
 		x.Printf("Error while storing snapshot %v\n", err)
+		return err
 	}
 	return nil
 }
