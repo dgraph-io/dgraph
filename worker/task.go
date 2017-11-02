@@ -522,7 +522,9 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			return true // continue iteration.
 		})
-		if err != nil || perr != nil {
+		if err != nil {
+			return err
+		} else if perr != nil {
 			return perr
 		}
 
