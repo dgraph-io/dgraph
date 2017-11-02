@@ -2181,7 +2181,8 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	buf, _ := processToFastJsonReq(t, query)
+	ctx := context.WithValue(defaultContext(), "debug", "true")
+	buf, _ := processToFastJsonReqCtx(t, query, ctx)
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
@@ -2226,20 +2227,13 @@ func TestDebug3(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
 	ctx := context.WithValue(defaultContext(), "debug", "true")
+	buf, err := processToFastJsonReqCtx(t, query, ctx)
 
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
-	require.NoError(t, err)
-
-	buf, err := ToJson(qr.Latency, qr.Subgraphs)
 	require.NoError(t, err)
 
 	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal(buf, &mp))
+	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
 
 	resp := mp["data"].(map[string]interface{})["me"]
 	require.NotNil(t, resp)
@@ -6209,18 +6203,11 @@ func TestDebugUid(t *testing.T) {
 				}
 			}
 		}`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
 	ctx := context.WithValue(defaultContext(), "debug", "true")
-
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(ctx)
-	require.NoError(t, err)
-	buf, err := ToJson(queryRequest.Latency, queryRequest.Subgraphs)
+	buf, err := processToFastJsonReqCtx(t, query, ctx)
 	require.NoError(t, err)
 	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal(buf, &mp))
+	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
 	resp := mp["data"].(map[string]interface{})["me"]
 	body, err := json.Marshal(resp)
 	require.NoError(t, err)
