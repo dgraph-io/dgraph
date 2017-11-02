@@ -132,12 +132,6 @@ func processWithBackupRequest(
 
 var errConflict = errors.New("List has a pending write.")
 
-// TODO: Remove this function
-func getValidList(key []byte, startTs uint64) (*posting.List, error) {
-	pl := posting.Get(key)
-	return pl, nil
-}
-
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
@@ -360,10 +354,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		key = x.DataKey(attr, q.UidList.Uids[i])
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl, err := getValidList(key, args.q.ReadTs)
-		if err != nil {
-			return err
-		}
+		pl := posting.Get(key)
+		var err error
 		var vals []types.Val
 		// Even if its a list type and value is asked in a language we return that.
 		if listType && len(q.Langs) == 0 {
@@ -498,10 +490,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		}
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl, err := getValidList(key, args.q.ReadTs)
-		if err != nil {
-			return err
-		}
+		pl := posting.Get(key)
 
 		// get filtered uids and facets.
 		var filteredRes []*result
@@ -794,12 +783,10 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			key := x.DataKey(attr, uid)
-			pl, err := getValidList(key, arg.q.ReadTs)
-			if err != nil {
-				return err
-			}
+			pl := posting.Get(key)
 
 			var val types.Val
+			var err error
 			if lang != "" {
 				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
 			} else {
@@ -899,10 +886,7 @@ func filterGeoFunction(arg funcArgs) error {
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl, err := getValidList(key, arg.q.ReadTs)
-		if err != nil {
-			return err
-		}
+		pl := posting.Get(key)
 
 		val, err := pl.Value(arg.q.ReadTs)
 		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
@@ -929,13 +913,11 @@ func filterStringFunction(arg funcArgs) error {
 	lang := langForFunc(arg.q.Langs)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl, err := getValidList(key, arg.q.ReadTs)
-		if err != nil {
-			return err
-		}
+		pl := posting.Get(key)
 
 		var vals []types.Val
 		var val types.Val
+		var err error
 		if lang == "" {
 			if schema.State().IsList(attr) {
 				vals, err = pl.AllValues(arg.q.ReadTs)

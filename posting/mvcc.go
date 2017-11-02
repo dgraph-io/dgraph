@@ -34,11 +34,18 @@ var (
 	ErrConflict = x.Errorf("Conflicts with pending transaction")
 	ErrTsTooOld = x.Errorf("Transaction is too old")
 	txns        *transactions
+	txnMarks    *x.WaterMark // Used to find out till which index we can snapshot.
 )
 
 func init() {
 	txns = new(transactions)
 	txns.m = make(map[uint64]*Txn)
+	txnMarks = &x.WaterMark{Name: "Transaction watermark"}
+	txnMarks.Init()
+}
+
+func TxnMarks() *x.WaterMark {
+	return txnMarks
 }
 
 func Txns() *transactions {
@@ -56,8 +63,10 @@ type Txn struct {
 	shouldAbort uint32
 	// Fields which can changed after init
 	sync.Mutex
-	deltas  []delta
-	Indices []uint64 // Accessed in serial way
+	deltas []delta
+	// Stores list of proposal indexes belonging to the transaction, the watermark would
+	// be marked as done only when it's committed.
+	Indices []uint64
 }
 
 type transactions struct {
@@ -118,7 +127,7 @@ func (t *Txn) done() {
 	t.Lock()
 	defer t.Unlock()
 	// All indices should have been added by  now.
-	SyncMarks().DoneMany(t.Indices)
+	TxnMarks().DoneMany(t.Indices)
 }
 
 func (t *transactions) PutOrMergeIndex(txn *Txn) *Txn {
@@ -162,7 +171,6 @@ func (t *Txn) fill(ctx *protos.TxnContext) {
 	}
 }
 
-// TODO: Use commitAsync
 // Don't call this for schema mutations. Directly commit them.
 func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	tx.Lock()
@@ -174,7 +182,19 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 	for _, d := range tx.deltas {
-		d.posting.CommitTs = commitTs
+		plist := Get(d.key)
+		changed, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
+		for err == ErrRetry {
+			plist = Get(d.key)
+			changed, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
+		}
+		if err != nil {
+			return err
+		}
+		if !changed {
+			continue
+		}
+
 		var pl protos.PostingList
 		var meta byte
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
@@ -204,10 +224,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 			return err
 		}
 	}
-	if err := txn.CommitAt(commitTs, x.Check); err != nil {
-		return err
-	}
-	return tx.commitMutationsMemory(ctx, commitTs)
+	return txn.CommitAt(commitTs, nil)
 }
 
 func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error {
@@ -219,7 +236,12 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
 	for _, d := range tx.deltas {
 		plist := Get(d.key)
-		if err := plist.CommitMutation(ctx, tx.StartTs, commitTs); err != nil {
+		_, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
+		for err == ErrRetry {
+			plist = Get(d.key)
+			_, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -232,6 +254,10 @@ func (tx *Txn) AbortMutations(ctx context.Context) error {
 	for _, d := range tx.deltas {
 		plist := Get([]byte(d.key))
 		err := plist.AbortTransaction(ctx, tx.StartTs)
+		for err == ErrRetry {
+			plist = Get(d.key)
+			err = plist.AbortTransaction(ctx, tx.StartTs)
+		}
 		if err != nil {
 			return err
 		}
@@ -291,7 +317,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		} else if item.UserMeta()&bitDeltaPosting > 0 {
 			var pl protos.PostingList
 			x.Check(pl.Unmarshal(val))
-			l.mlayer = append(l.mlayer, pl.Postings...)
+			for _, mpost := range pl.Postings {
+				// commitTs, startTs are meant to be only in memory, not
+				// stored on disk.
+				mpost.CommitTs = item.Version()
+				l.mlayer = append(l.mlayer, mpost)
+			}
 		} else {
 			x.Fatalf("unexpected meta: %d", item.UserMeta())
 		}
@@ -310,7 +341,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	size := l.calculateSize()
 	l.Unlock()
 	x.BytesRead.Add(int64(size))
-	atomic.StoreUint32(&l.estimatedSize, size)
+	atomic.StoreInt32(&l.estimatedSize, size)
 	return l, nil
 }
 
@@ -345,6 +376,6 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	size := l.calculateSize()
 	l.Unlock()
 	x.BytesRead.Add(int64(size))
-	atomic.StoreUint32(&l.estimatedSize, size)
+	atomic.StoreInt32(&l.estimatedSize, size)
 	return l, err
 }

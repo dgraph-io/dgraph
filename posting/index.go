@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -418,13 +419,31 @@ func deleteEntries(prefix []byte) error {
 	idxIt := txn.NewIterator(iterOpt)
 	defer idxIt.Close()
 
+	// Throttle number of parallel purges.
+	pending := make(chan struct{}, 1000)
+	var wg sync.WaitGroup
+	var m sync.Mutex
+	var err error
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		item := idxIt.Item()
-		if err := pstore.PurgeVersionsBelow(item.Key(), item.Version()+1); err != nil {
-			return err
-		}
+		nkey := make([]byte, len(item.Key()))
+		copy(nkey, item.Key())
+
+		pending <- struct{}{}
+		wg.Add(1)
+		go func(key []byte, version uint64) {
+			e := pstore.PurgeVersionsBelow(key, version)
+			if e != nil {
+				m.Lock()
+				err = e
+				m.Unlock()
+			}
+			<-pending
+			wg.Done()
+		}(nkey, item.Version()+1)
 	}
-	return nil
+	wg.Wait()
+	return err
 }
 
 func compareAttrAndType(key []byte, attr string, typ byte) bool {

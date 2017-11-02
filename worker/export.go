@@ -429,7 +429,7 @@ func (w *grpcWorker) Export(ctx context.Context, req *protos.ExportPayload) (*pr
 	}
 }
 
-func ExportOverNetwork(ctx context.Context, readTs uint64) error {
+func ExportOverNetwork(ctx context.Context) error {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -437,6 +437,14 @@ func ExportOverNetwork(ctx context.Context, readTs uint64) error {
 		}
 		return err
 	}
+	// Get ReadTs from zero and wait for stream to catch up.
+	ts, err := Timestamps(ctx, &protos.Num{Val: 1})
+	if err != nil {
+		return err
+	}
+	readTs := ts.StartId
+	posting.Oracle().WaitForTs(ctx, readTs)
+
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
 

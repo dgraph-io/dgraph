@@ -109,7 +109,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 		schema.State().DeleteAll()
 		err = posting.DeleteAll()
 		posting.Txns().Reset()
-		posting.SyncMarks().Done(index)
+		posting.TxnMarks().Done(index)
 		return
 	}
 
@@ -147,7 +147,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 				break
 			}
 		}
-		posting.SyncMarks().Done(index)
+		posting.TxnMarks().Done(index)
 		return
 	}
 
@@ -181,7 +181,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 			} else {
 				err = posting.DeletePredicate(ctx, edge.Attr)
 			}
-			posting.SyncMarks().Done(index)
+			posting.TxnMarks().Done(index)
 			return
 		}
 		if _, ok := schemaMap[edge.Attr]; !ok {

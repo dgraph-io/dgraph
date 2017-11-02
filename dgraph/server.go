@@ -195,7 +195,6 @@ func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Paylo
 	empty := &protos.Payload{}
 	if op.DropAll {
 		m := protos.Mutations{DropAll: true}
-		// TODO: Handle delete as special case. Abort all pending transactions
 		_, err := query.ApplyMutations(ctx, &m)
 		return empty, err
 	}
