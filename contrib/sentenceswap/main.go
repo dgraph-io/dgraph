@@ -67,12 +67,18 @@ func main() {
 	uids := setup(c, sents)
 
 	// Check invariants before doing any mutations as a sanity check.
-	checkInvariants(c, uids, sents)
+	x.Check(checkInvariants(c, uids, sents))
 
 	go func() {
 		ticker := time.NewTicker(time.Second / time.Duration(*invPerSec))
 		for range ticker.C {
-			checkInvariants(c, uids, sents)
+			for {
+				if err := checkInvariants(c, uids, sents); err == nil {
+					break
+				} else {
+					fmt.Printf("Error while running inv: %v\n", err)
+				}
+			}
 			atomic.AddUint64(&invChecks, 1)
 		}
 	}()
@@ -106,7 +112,7 @@ func main() {
 			)
 		case <-done:
 			// One final check for invariants.
-			checkInvariants(c, uids, sents)
+			x.Check(checkInvariants(c, uids, sents))
 			return
 		}
 	}
@@ -240,7 +246,7 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 	atomic.AddUint64(&successCount, 1)
 }
 
-func checkInvariants(c *client.Dgraph, uids []string, sentences []string) {
+func checkInvariants(c *client.Dgraph, uids []string, sentences []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 
@@ -258,7 +264,9 @@ func checkInvariants(c *client.Dgraph, uids []string, sentences []string) {
 		}
 	}
 	`, uidList), nil)
-	x.Check(err)
+	if err != nil {
+		return err
+	}
 	decode := struct {
 		Q []struct {
 			Sentence *string
@@ -298,7 +306,9 @@ func checkInvariants(c *client.Dgraph, uids []string, sentences []string) {
 		`, word)
 
 		resp, err := txn.Query(ctx, q, nil)
-		x.Check(err)
+		if err != nil {
+			return err
+		}
 		decode := struct {
 			Q []struct {
 				Uid *string
@@ -322,4 +332,5 @@ func checkInvariants(c *client.Dgraph, uids []string, sentences []string) {
 		}
 	}
 	fmt.Println("Invariant successful")
+	return nil
 }

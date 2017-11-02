@@ -76,6 +76,7 @@ type List struct {
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
 	estimatedSize uint32
+	numCommits    int
 }
 
 // calculateSize would give you the size estimate. Does not consider elements in mutation layer.
@@ -448,6 +449,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		for _, mpost := range l.mlayer {
 			if mpost.StartTs == startTs {
 				mpost.CommitTs = commitTs
+				l.numCommits++
 			}
 		}
 	}
@@ -466,7 +468,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	if numUids < 1000 {
 		numUids = 1000
 	}
-	if len(l.mlayer) > numUids {
+	if l.numCommits > numUids {
 		// TODO: REMOVE THIS.
 		l.syncIfDirty(false)
 	}
@@ -529,7 +531,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 		return nil
 	}
 	if readTs < l.minTs {
-		return ErrTsTooOld
+		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
 	mlayerLen := len(l.mlayer)
 	if afterUid > 0 {
@@ -706,6 +708,7 @@ func (l *List) rollup() error {
 	l.mlayer = l.mlayer[:midx]
 	l.minTs = l.commitTs
 	l.plist = final
+	l.numCommits = 0
 	return nil
 }
 
