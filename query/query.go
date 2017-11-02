@@ -1722,6 +1722,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			temp := new(SubGraph)
 			*temp = *child
 			temp.ReadTs = sg.ReadTs
+			temp.LinRead = sg.LinRead
 			temp.Params.isInternal = false
 			temp.Params.Expand = ""
 			temp.Attr = k
@@ -1974,8 +1975,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for _, it := range sg.Params.groupbyAttrs {
 			// TODO - Throw error if Attr is of list type.
 			sg.Children = append(sg.Children, &SubGraph{
-				Attr:   it.Attr,
-				ReadTs: sg.ReadTs,
+				Attr:    it.Attr,
+				ReadTs:  sg.ReadTs,
+				LinRead: sg.LinRead,
 				Params: params{
 					ignoreResult: true,
 					Langs:        it.Langs,

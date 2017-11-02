@@ -69,7 +69,6 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 	startTs := timestamp()
 	txn := &posting.Txn{
 		StartTs: startTs,
-		Indices: []uint64{1},
 	}
 	txn = posting.Txns().PutOrMergeIndex(txn)
 	require.NoError(t,
