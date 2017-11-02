@@ -594,15 +594,12 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	n := groups().Node
-	fmt.Println("linread", q.LinRead)
 	if err := n.WaitForMinProposal(ctx, q.LinRead); err != nil {
 		return &emptyResult, err
 	}
-	fmt.Println("readTs", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}
-	fmt.Println("yo")
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it
 	// wouldn't know that this group is no longer serving this predicate.
 	// There's no issue if a we are serving a particular tablet and we get partitioned away from

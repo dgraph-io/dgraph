@@ -60,11 +60,15 @@ func timestamp() uint64 {
 }
 
 func commitTs(startTs uint64) uint64 {
-	odch <- protos.OracleDelta{
-		Commit: map[uint64]uint64{
-			startTs: commitTs,
+	commit := timestamp()
+	od := &protos.OracleDelta{
+		Commits: map[uint64]uint64{
+			startTs: commit,
 		},
+		MaxPending: atomic.LoadUint64(&ts),
 	}
+	posting.Oracle().ProcessOracleDelta(od)
+	return commit
 }
 
 func addPassword(t *testing.T, uid uint64, attr, password string) {
@@ -5800,10 +5804,9 @@ func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*proto
 
 func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) error {
 	for delta := range odch {
-		if err := server.Send(&delta); err != nil {
+		if err := server.Send(delta); err != nil {
 			return err
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 	return nil
 }
@@ -5823,6 +5826,17 @@ func StartDummyZero() *grpc.Server {
 	go s.Serve(ln)
 	return s
 }
+
+func updateMaxPending() {
+	for mp := range maxPendingCh {
+		posting.Oracle().ProcessOracleDelta(&protos.OracleDelta{
+			MaxPending: mp,
+		})
+	}
+
+}
+
+var maxPendingCh chan uint64
 
 func TestMain(m *testing.M) {
 	x.Init(true)
@@ -5868,6 +5882,8 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 
 	odch = make(chan *protos.OracleDelta, 100)
+	maxPendingCh = make(chan uint64, 100)
+	go updateMaxPending()
 	r := m.Run()
 
 	os.RemoveAll(dir)
