@@ -260,7 +260,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	if err != nil {
 		return resp, err
 	}
-	resp.Uids = query.StripBlankNode(newUids)
+	resp.Uids = query.ConvertUidsToHex(query.StripBlankNode(newUids))
 	edges, err := query.ToInternal(gmu, newUids)
 	if err != nil {
 		return resp, err

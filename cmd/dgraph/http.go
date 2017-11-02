@@ -195,7 +195,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	mp := map[string]interface{}{}
 	mp["code"] = x.Success
 	mp["message"] = "Done"
-	mp["uids"] = query.ConvertUidsToHex(resp.Uids)
+	mp["uids"] = resp.Uids
 	response["data"] = mp
 
 	js, err := json.Marshal(response)

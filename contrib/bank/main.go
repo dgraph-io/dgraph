@@ -63,7 +63,7 @@ func (s *State) createAccounts() {
 	s.Lock()
 	defer s.Unlock()
 	for _, uid := range assigned.GetUids() {
-		s.uids = append(s.uids, fmt.Sprintf("%#x", uid))
+		s.uids = append(s.uids, uid)
 	}
 }
 
