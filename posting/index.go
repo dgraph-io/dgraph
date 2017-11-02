@@ -167,7 +167,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 			attr:        edge.Attr,
 			countBefore: countBefore,
 			countAfter:  countAfter,
-			entity:      edge.ValueId,
+			entity:      edge.Entity,
 			reverse:     true,
 		}, nil
 	}
