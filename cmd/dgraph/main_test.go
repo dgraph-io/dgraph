@@ -30,6 +30,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -97,16 +98,21 @@ func (z *zeroServer) AssignUids(ctx context.Context, n *protos.Num) (*protos.Ass
 	return a, nil
 }
 
-func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.MembershipState, error) {
+func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.ConnectionState, error) {
 	m := &protos.MembershipState{}
 	m.Zeros = make(map[uint64]*protos.Member)
-	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12341"}
+	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
 	m.Groups = make(map[uint32]*protos.Group)
 	g := &protos.Group{}
 	g.Members = make(map[uint64]*protos.Member)
 	g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
 	m.Groups[1] = g
-	return m, nil
+
+	c := &protos.ConnectionState{
+		Member: in,
+		State:  m,
+	}
+	return c, nil
 }
 
 // Used by sync membership
@@ -129,6 +135,21 @@ func (z *zeroServer) Update(stream protos.Zero_UpdateServer) error {
 	}
 }
 
+var odch chan *protos.OracleDelta
+
+func (s *zeroServer) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.Payload, error) {
+	return &protos.Payload{}, nil
+}
+
+func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) error {
+	for delta := range odch {
+		if err := server.Send(delta); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*protos.Tablet, error) {
 	in.GroupId = 1
 	return in, nil
@@ -136,6 +157,10 @@ func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*proto
 
 func (z *zeroServer) Timestamps(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
 	return &protos.AssignedIds{}, nil
+}
+
+func (z *zeroServer) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*protos.TxnContext, error) {
+	return &protos.TxnContext{}, nil
 }
 
 func StartDummyZero() *grpc.Server {
@@ -175,7 +200,7 @@ func prepare() (dir1, dir2 string, rerr error) {
 	schema.Init(dgraph.State.Pstore)
 	worker.Init(dgraph.State.Pstore)
 	worker.Config.MyAddr = "localhost:12345"
-	worker.Config.PeerAddr = "localhost:12341"
+	worker.Config.ZeroAddr = "localhost:12341"
 	worker.Config.RaftId = 1
 	worker.StartRaftNodes(dgraph.State.WALstore, false)
 	return dir1, dir2, nil
@@ -198,6 +223,12 @@ func defaultContext() context.Context {
 	return context.WithValue(context.Background(), "mutation_allowed", true)
 }
 
+var ts uint64
+
+func timestamp() uint64 {
+	return atomic.AddUint64(&ts, 1)
+}
+
 func processToFastJSON(q string) string {
 	res, err := gql.Parse(gql.Request{Str: q, Http: true})
 	if err != nil {
@@ -206,19 +237,18 @@ func processToFastJSON(q string) string {
 
 	var l query.Latency
 	ctx := defaultContext()
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res, ReadTs: timestamp()}
+	err = qr.ProcessQuery(ctx)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var buf bytes.Buffer
-	err = query.ToJson(&l, qr.Subgraphs, &buf, nil, false)
+	buf, err := query.ToJson(&l, qr.Subgraphs)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return string(buf.Bytes())
+	return string(buf)
 }
 
 func runQuery(q string) (string, error) {
