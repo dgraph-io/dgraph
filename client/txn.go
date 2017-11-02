@@ -53,8 +53,9 @@ func (txn *Txn) Query(ctx context.Context, q string,
 	}
 	resp, err := txn.dg.query(ctx, req)
 	if err == nil {
-		x.MergeLinReads(txn.context.LinRead, resp.Txn.LinRead)
-		txn.dg.mergeLinRead(resp.Txn.LinRead)
+		if err := txn.mergeContext(resp.GetTxn()); err != nil {
+			return nil, err
+		}
 	}
 	return resp, err
 }
@@ -74,7 +75,6 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 		return x.Errorf("StartTs mismatch")
 	}
 	txn.context.Keys = append(txn.context.Keys, src.Keys...)
-	x.MergeLinReads(txn.context.LinRead, src.LinRead)
 	return nil
 }
 
@@ -84,6 +84,7 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 	if ag != nil {
 		if err := txn.mergeContext(ag.Context); err != nil {
 			fmt.Printf("error while merging context: %v\n", err)
+			return nil, err
 		}
 		if len(ag.Error) > 0 {
 			// fmt.Printf("Mutate failed. start=%d ag= %+v\n", txn.startTs, ag)

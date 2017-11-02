@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
@@ -66,7 +67,7 @@ func (s *State) createAccounts() {
 	}
 }
 
-func (s *State) runTotal() int {
+func (s *State) runTotal() error {
 	q := fmt.Sprintf(
 		`
 		{
@@ -80,9 +81,21 @@ func (s *State) runTotal() int {
 	`, strings.Join(s.uids, ","))
 	txn := s.dg.NewTxn()
 	resp, err := txn.Query(context.Background(), q, nil)
-	x.Check(err)
-	fmt.Printf("response json: %q\n", resp.Json)
-	return 0
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nresponse json: %q\n", resp.Json)
+	return nil
+}
+
+func (s *State) runTotalInLoop() {
+	for {
+		err := s.runTotal()
+		if err != nil {
+			continue
+		}
+		time.Sleep(time.Second)
+	}
 }
 
 func (s *State) runTransaction() error {
@@ -116,7 +129,6 @@ func (s *State) runTransaction() error {
 	if len(a.Both) != 2 {
 		return errors.New("Unable to find both accounts")
 	}
-	fmt.Printf("A: %+v\n", a)
 
 	a.Both[0].Bal += 5
 	a.Both[1].Bal -= 5
@@ -136,15 +148,14 @@ func (s *State) loop(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
 		if err := s.runTransaction(); err != nil {
-			if n := atomic.AddInt32(&s.aborts, 1); n%10 == 0 {
-				fmt.Println("Aborts: ", n)
-			}
+			atomic.AddInt32(&s.aborts, 1)
 		} else {
-			n := atomic.AddInt32(&s.runs, 1)
-			if n%10 == 0 {
-				fmt.Println("Runs: ", n)
+			r := atomic.AddInt32(&s.runs, 1)
+			if r%100 == 0 {
+				a := atomic.LoadInt32(&s.aborts)
+				fmt.Printf("Runs: %d. Aborts: %d\r", r, a)
 			}
-			if int(n) >= *num {
+			if int(r) >= *num {
 				return
 			}
 		}
@@ -168,7 +179,7 @@ func main() {
 	dg := client.NewDgraphClient(zero, dc)
 	s := State{dg: dg}
 	s.createAccounts()
-	s.runTotal()
+	go s.runTotalInLoop()
 
 	var wg sync.WaitGroup
 	wg.Add(*conc)
@@ -176,6 +187,7 @@ func main() {
 		go s.loop(&wg)
 	}
 	wg.Wait()
+	fmt.Println()
 	fmt.Println("Total aborts", s.aborts)
 	fmt.Println("Total success", s.runs)
 	s.runTotal()
