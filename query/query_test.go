@@ -39,7 +39,6 @@ import (
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -2874,55 +2873,6 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
 	require.Contains(t, err.Error(), "Got invalid keyword: invalidorderasc")
 }
 
-func TestProcessGraph(t *testing.T) {
-	populateGraph(t)
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(func: uid( 0x01)) {
-				friend {
-					name
-				}
-				name
-				gender
-				alive
-			}
-		}
-	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	require.EqualValues(t, childAttrs(sg), []string{"friend", "name", "gender", "alive"})
-	require.EqualValues(t, childAttrs(sg.Children[0]), []string{"name"})
-
-	child := sg.Children[0]
-	require.EqualValues(t,
-		[][]uint64{
-			{23, 24, 25, 31, 101},
-		}, algo.ToUintsListForTest(child.uidMatrix))
-
-	require.EqualValues(t, []string{"name"}, childAttrs(child))
-
-	child = child.Children[0]
-	require.EqualValues(t,
-		[]string{"Rick Grimes", "Glenn Rhee", "Daryl Dixon", "Andrea", ""},
-		taskValues(t, child.valueMatrix))
-
-	require.EqualValues(t, []string{"Michonne"},
-		taskValues(t, sg.Children[1].valueMatrix))
-	require.EqualValues(t, []string{"female"},
-		taskValues(t, sg.Children[2].valueMatrix))
-}
-
 func TestToFastJSON(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
@@ -3076,16 +3026,7 @@ func TestFilterRegexError(t *testing.T) {
     }
 `
 
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
+	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
 

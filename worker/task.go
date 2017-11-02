@@ -779,7 +779,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := protos.List{}
-	uids, err := uidsForRegex(attr, arg.gid, query, &empty)
+	uids, err := uidsForRegex(attr, arg, query, &empty)
 	lang := langForFunc(arg.q.Langs)
 	if uids != nil {
 		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
