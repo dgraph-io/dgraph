@@ -1515,6 +1515,8 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	return nil
 }
 
+// TODO - Check that on deletion we delete the key-val from Badger.
+// Handle languages.
 func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result) error {
 	mu := &sync.Mutex{}
 	numPart := uint64(32)
@@ -1533,7 +1535,7 @@ func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Running go-routine %v for iteration", i)
 		}
-		go func(i uint64) {
+		go func(i uint64, mu *sync.Mutex) {
 			itOpt := badger.DefaultIteratorOptions
 			itOpt.PrefetchValues = false
 			it := txn.NewIterator(itOpt)
@@ -1581,7 +1583,7 @@ func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result)
 				mu.Unlock()
 			}
 			errChan <- nil
-		}(i)
+		}(i, mu)
 	}
 
 	var finalErr error
