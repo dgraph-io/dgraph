@@ -19,10 +19,8 @@ package client
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
@@ -69,21 +67,7 @@ func NewDgraphClient(zero protos.ZeroClient, dc protos.DgraphClient) *Dgraph {
 		linRead: &protos.LinRead{},
 	}
 
-	go dg.fillTimestampRequests()
 	return dg
-}
-
-func (d *Dgraph) getTimestamp() uint64 {
-	ch := make(chan uint64)
-	d.mu.Lock()
-	d.needTs = append(d.needTs, ch)
-	d.mu.Unlock()
-
-	select {
-	case d.notify <- struct{}{}:
-	default:
-	}
-	return <-ch
 }
 
 func (d *Dgraph) mergeLinRead(src *protos.LinRead) {
@@ -98,51 +82,9 @@ func (d *Dgraph) getLinRead() *protos.LinRead {
 	return proto.Clone(d.linRead).(*protos.LinRead)
 }
 
-func (d *Dgraph) fillTimestampRequests() {
-	var chs []chan uint64
-	const (
-		initDelay = 10 * time.Millisecond
-		maxDelay  = 10 * time.Second
-	)
-	delay := initDelay
-	for range d.notify {
-	RETRY:
-		d.mu.Lock()
-		chs = append(chs, d.needTs...)
-		d.needTs = d.needTs[:0]
-		d.mu.Unlock()
-
-		if len(chs) == 0 {
-			continue
-		}
-		num := &protos.Num{Val: uint64(len(chs))}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		ts, err := d.zero.Timestamps(ctx, num)
-		cancel()
-		if err != nil {
-			log.Printf("Error while retrieving timestamps: %v. Will retry in %v\n", err, delay)
-			time.Sleep(delay)
-			delay *= 2
-			if delay > maxDelay {
-				delay = maxDelay
-			}
-			goto RETRY
-		}
-		delay = initDelay
-		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
-		for i, ch := range chs {
-			ch <- ts.StartId + uint64(i)
-		}
-		chs = chs[:0]
-	}
-}
-
 // DropAll deletes all edges and schema from Dgraph.
 func (d *Dgraph) Alter(ctx context.Context, op *protos.Operation) error {
 	dc := d.anyClient()
-	if len(op.Schema) > 0 {
-		op.StartTs = d.getTimestamp()
-	}
 	_, err := dc.Alter(ctx, op)
 	return err
 }

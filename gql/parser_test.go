@@ -22,6 +22,8 @@ import (
 	"runtime/debug"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1513,7 +1515,7 @@ func TestParseSchemaErrorMulti(t *testing.T) {
 	require.Contains(t, err.Error(), "Only one schema block allowed")
 }
 
-func TestParseMutation(t *testing.T) {
+func TestParseMutationError(t *testing.T) {
 	query := `
 		mutation {
 			set {
@@ -4214,4 +4216,35 @@ func TestParseUidAsArgument(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Argument cannot be \"uid\"")
+}
+
+func TestParseMutation(t *testing.T) {
+	m := `
+		{
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san/francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+	`
+	mu, err := ParseMutation(m)
+	require.NoError(t, err)
+	require.NotNil(t, mu)
+	sets, err := rdf.ConvertToNQuads(string(mu.SetNquads))
+	require.NoError(t, err)
+	require.EqualValues(t, &protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something"},
+		sets[0])
+	require.EqualValues(t, &protos.NQuad{
+		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
+		sets[1])
+	dels, err := rdf.ConvertToNQuads(string(mu.DelNquads))
+	require.NoError(t, err)
+	require.EqualValues(t, &protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something-else"},
+		dels[0])
+
 }

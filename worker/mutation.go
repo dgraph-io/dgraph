@@ -43,6 +43,10 @@ var (
 	allocator          x.EmbeddedUidAllocator
 )
 
+func deletePredicateEdge(edge *protos.DirectedEdge) bool {
+	return edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star))
+}
+
 // runMutation goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
 func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Txn) error {
@@ -54,7 +58,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge, txn *posting.Tx
 	typ, err := schema.State().TypeOf(edge.Attr)
 	x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
-	if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+	if deletePredicateEdge(edge) {
 		return errors.New("We should never reach here")
 	}
 	// Once mutation comes via raft we do best effort conversion
@@ -281,6 +285,9 @@ func checkSchema(s *protos.SchemaUpdate) error {
 // If storage type is specified, then check compatibility or convert to schema type
 // if no storage type is specified then convert to schema type.
 func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) error {
+	if deletePredicateEdge(edge) {
+		return nil
+	}
 	if types.TypeID(edge.ValueType) == types.DefaultID && string(edge.Value) == x.Star {
 		if edge.Op != protos.DirectedEdge_DEL {
 			return x.Errorf("* allowed only with delete operation")
@@ -502,20 +509,20 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 	return tctx, e
 }
 
-func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) error {
+func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) (uint64, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
-		return conn.ErrNoConnection
+		return 0, conn.ErrNoConnection
 	}
 	zc := protos.NewZeroClient(pl.Get())
 	tctx, err := zc.CommitOrAbort(ctx, tc)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if tctx.Aborted {
-		return posting.ErrConflict
+		return 0, posting.ErrConflict
 	}
-	return nil
+	return tctx.CommitTs, nil
 }
 
 func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {

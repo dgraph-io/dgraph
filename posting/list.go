@@ -509,7 +509,7 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	return conflicts
 }
 
-func (l *List) canRead(mpost *protos.Posting, readTs uint64) bool {
+func (l *List) inSnapshot(mpost *protos.Posting, readTs uint64) bool {
 	l.AssertRLock()
 	if mpost.CommitTs == 0 {
 		mpost.CommitTs = Oracle().commitTs(mpost.StartTs)
@@ -553,7 +553,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
-			if !l.canRead(mp, readTs) {
+			if !l.inSnapshot(mp, readTs) {
 				midx++
 				continue
 			}
@@ -612,7 +612,6 @@ func (l *List) Length(readTs, afterUid uint64) int {
 func doAsyncWrite(commitTs uint64, key []byte, data []byte, meta byte, f func(error)) {
 	txn := pstore.NewTransactionAt(commitTs, true)
 	defer txn.Discard()
-	meta = meta | BitCompletePosting
 	if err := txn.Set(key, data, meta); err != nil {
 		f(err)
 	}
@@ -656,6 +655,7 @@ func marshalPostingList(plist *protos.PostingList) (data []byte, meta byte) {
 		data = plist.Uids
 		meta = BitUidPosting
 	}
+	meta = meta | BitCompletePosting
 	return
 }
 
@@ -666,13 +666,10 @@ func (l *List) rollup() (*protos.PostingList, error) {
 	buf := make([]uint64, 0, bp128.BlockSize)
 
 	// Pick all committed entries
-	midx := 0
+	x.AssertTrue(l.minTs <= l.commitTs)
 	err := l.iterate(l.commitTs, 0, func(p *protos.Posting) bool {
-		if p.CommitTs > l.minTs {
-			l.minTs = p.CommitTs
-		} else if p.CommitTs == 0 {
-			l.mlayer[midx] = p
-			midx++
+		if p.CommitTs == 0 || p.CommitTs > l.commitTs {
+			return true
 		}
 		buf = append(buf, p.Uid)
 		if len(buf) == bp128.BlockSize {
@@ -700,8 +697,16 @@ func (l *List) rollup() (*protos.PostingList, error) {
 		// TODO: Add bytes method
 		bp.WriteTo(final.Uids)
 	}
+	// TODO: May be have different iterator later.
+	midx := 0
+	for _, mpost := range l.mlayer {
+		if mpost.CommitTs == 0 || mpost.CommitTs > l.commitTs {
+			l.mlayer[midx] = mpost
+			midx++
+		}
+	}
 	l.mlayer = l.mlayer[:midx]
-	l.commitTs = l.minTs
+	l.minTs = l.commitTs
 	return final, nil
 }
 

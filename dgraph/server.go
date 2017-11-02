@@ -23,6 +23,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -140,7 +141,11 @@ type Server struct{}
 // for Commit API.
 func (s *ServerState) fillTimestampRequests() {
 	var chs []chan uint64
-
+	const (
+		initDelay = 10 * time.Millisecond
+		maxDelay  = 10 * time.Second
+	)
+	delay := initDelay
 	for range s.notify {
 	RETRY:
 		s.mu.Lock()
@@ -157,8 +162,14 @@ func (s *ServerState) fillTimestampRequests() {
 		cancel()
 		if err != nil {
 			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
+			time.Sleep(delay)
+			delay *= 2
+			if delay > maxDelay {
+				delay = maxDelay
+			}
 			goto RETRY
 		}
+		delay = initDelay
 		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
 		for i, ch := range chs {
 			ch <- ts.StartId + uint64(i)
@@ -213,6 +224,9 @@ func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Paylo
 	}
 	fmt.Printf("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
+	if op.StartTs == 0 {
+		op.StartTs = State.getTimestamp()
+	}
 	m := &protos.Mutations{Schema: updates, StartTs: op.StartTs}
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
@@ -272,13 +286,14 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		ctxn.CommitTs = ctxn.StartTs
 	}
 	// If CommitTs is zero, this would abort.
-	aerr := worker.CommitOverNetwork(ctx, ctxn)
+	cts, aerr := worker.CommitOverNetwork(ctx, ctxn)
 	if ok {
 		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, aerr)
 	}
 	if err != nil {
 		return resp, err
 	}
+	resp.Context.CommitTs = cts
 	return resp, aerr
 }
 
@@ -335,7 +350,9 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp()
 	}
-	resp.StartTs = req.StartTs
+	resp.Txn = &protos.TxnContext{
+		StartTs: req.StartTs,
+	}
 
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
@@ -369,7 +386,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	}
 
 	resp.Latency = gl
-	resp.LinRead = queryRequest.LinRead
+	resp.Txn.LinRead = queryRequest.LinRead
 	return resp, err
 }
 
@@ -528,9 +545,16 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 	var mr mapResponse
 	// Check field in map.
 	if uidVal, ok := m["_uid_"]; ok {
-		// Should be convertible to uint64. Maybe we also want to allow string later.
-		if id, ok := uidVal.(float64); ok && uint64(id) != 0 {
-			mr.uid = fmt.Sprintf("%d", uint64(id))
+		var uid uint64
+		if id, ok := uidVal.(float64); ok {
+			uid = uint64(id)
+		} else if id, ok := uidVal.(string); ok {
+			if u, err := strconv.ParseInt(id, 0, 64); err == nil {
+				uid = uint64(u)
+			}
+		}
+		if uid > 0 {
+			mr.uid = fmt.Sprintf("%d", uid)
 		}
 	}
 

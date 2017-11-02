@@ -79,7 +79,9 @@ func (o *Oracle) commit(src *protos.TxnContext) error {
 
 func (o *Oracle) currentState() *protos.OracleDelta {
 	o.AssertRLock()
-	resp := &protos.OracleDelta{}
+	resp := &protos.OracleDelta{
+		Commits: make(map[uint64]uint64, len(o.commits)),
+	}
 	for start, commit := range o.commits {
 		resp.Commits[start] = commit
 	}
@@ -219,6 +221,8 @@ func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
 	}
+
+	// Use the start timestamp to check if we have a conflict, before we need to assign a commit ts.
 	s.orc.RLock()
 	conflict := s.orc.hasConflict(src)
 	s.orc.RUnlock()
@@ -298,22 +302,10 @@ func (s *Server) Timestamps(ctx context.Context, num *protos.Num) (*protos.Assig
 		return &emptyAssignedIds, ctx.Err()
 	}
 
-	reply := &emptyAssignedIds
-	c := make(chan error, 1)
-	go func() {
-		var err error
-		reply, err = s.lease(ctx, num, true)
-		c <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return reply, ctx.Err()
-	case err := <-c:
-		if err == nil {
-			s.orc.doneUntil.Done(reply.EndId)
-			go s.orc.storePending(reply)
-		}
-		return reply, err
+	reply, err := s.lease(ctx, num, true)
+	if err == nil {
+		s.orc.doneUntil.Done(reply.EndId)
+		go s.orc.storePending(reply)
 	}
+	return reply, err
 }
