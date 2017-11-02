@@ -109,10 +109,10 @@ func (d *Dgraph) mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assig
 	return dc.Mutate(ctx, mu)
 }
 
-func (d *Dgraph) commitOrAbort(ctx context.Context, txn *protos.TxnContext) (*protos.TxnContext,
+func (d *Dgraph) commitOrAbort(ctx context.Context, tctx *protos.TxnContext) (*protos.TxnContext,
 	error) {
 	dc := d.anyClient()
-	return dc.CommitOrAbort(ctx, txn)
+	return dc.CommitOrAbort(ctx, tctx)
 }
 
 // CheckVersion checks if the version of dgraph and dgraph-live-loader are the same.  If either the
