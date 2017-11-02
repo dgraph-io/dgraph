@@ -3694,16 +3694,7 @@ func TestToFastJSONOrderNameError(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
+	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
 
@@ -5982,9 +5973,8 @@ func TestBoolSort(t *testing.T) {
 			}
 		}
 	`
-	res, _ := gql.Parse(gql.Request{Str: q, Http: true})
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err := queryRequest.ProcessQuery(defaultContext())
+
+	_, err := processToFastJsonReq(t, q)
 	require.NotNil(t, err)
 }
 
@@ -6946,13 +6936,8 @@ func TestUseVariableBeforeDefinitionError(t *testing.T) {
 		avgAge as avg(val(x))
 	}
 }`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
 
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
-	require.Error(t, err)
+	_, err := processToFastJsonReq(t, query)
 	require.Contains(t, err.Error(), "Variable: [avgAge] used before definition.")
 }
 
@@ -7301,6 +7286,7 @@ func TestNearPointMultiPolygon(t *testing.T) {
 
 func TestMultiSort1(t *testing.T) {
 	populateGraph(t)
+	time.Sleep(10 * time.Millisecond)
 
 	query := `{
 		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age) {
