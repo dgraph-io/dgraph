@@ -448,17 +448,8 @@ func TestReturnUids(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(gql.Request{Str: query})
+	js, err := processToFastJsonReq(t, query)
 	require.NoError(t, err)
-
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
-	require.NoError(t, err)
-
-	buf, err := ToJson(qr.Latency, qr.Subgraphs)
-	require.NoError(t, err)
-	js := string(buf)
 	require.JSONEq(t,
 		`{"data": {"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
@@ -1087,12 +1078,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err := processToFastJsonReq(t, query)
 	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
 }
 
@@ -1460,12 +1446,7 @@ func TestDoubleOrder(t *testing.T) {
 		}
 	}
   `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
 
@@ -1505,13 +1486,7 @@ func TestVarInIneqError(t *testing.T) {
 			}
 		}
   `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
-
+	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
 
@@ -1799,12 +1774,8 @@ func TestShortestPath_ExpandError(t *testing.T) {
 				name
 			}
 		}`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
 
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
 
@@ -1991,12 +1962,8 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 				name
 			}
 		}`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
 
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
 
@@ -2213,20 +2180,11 @@ func TestDebug1(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
 
-	ctx := context.WithValue(defaultContext(), "debug", "true")
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
-
-	require.NoError(t, err)
-
-	buf, err := ToJson(qr.Latency, qr.Subgraphs)
-	require.NoError(t, err)
+	buf, _ := processToFastJsonReq(t, query)
 
 	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal(buf, &mp))
+	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
 
 	data := mp["data"].(map[string]interface{})
 	resp := data["me"]
@@ -2468,12 +2426,7 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 		}
 	}
 `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
 
@@ -2681,11 +2634,8 @@ func TestPasswordExpandError(t *testing.T) {
 		}
     }
 	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
-	require.NotNil(t, err)
+
+	_, err := processToFastJsonReq(t, query)
 	require.Contains(t, err.Error(), "Repeated subgraph: [password]")
 }
 
@@ -4834,12 +4784,8 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
 
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
-
+	_, err := processToFastJsonReq(t, query)
 	require.NotNil(t, err)
 }
 
@@ -4853,12 +4799,8 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
 
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
-
+	_, err := processToFastJsonReq(t, query)
 	require.NotNil(t, err)
 }
 
@@ -4872,11 +4814,8 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
 
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = queryRequest.ProcessQuery(defaultContext())
+	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
 
@@ -6073,9 +6012,8 @@ func TestBoolIndexgeRoot(t *testing.T) {
 				}
 			}
 		}`
-	res, _ := gql.Parse(gql.Request{Str: q})
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err := queryRequest.ProcessQuery(defaultContext())
+
+	_, err := processToFastJsonReq(t, q)
 	require.NotNil(t, err)
 }
 

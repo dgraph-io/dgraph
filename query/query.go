@@ -1973,7 +1973,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for _, it := range sg.Params.groupbyAttrs {
 			// TODO - Throw error if Attr is of list type.
 			sg.Children = append(sg.Children, &SubGraph{
-				Attr: it.Attr,
+				Attr:   it.Attr,
+				ReadTs: sg.ReadTs,
 				Params: params{
 					ignoreResult: true,
 					Langs:        it.Langs,

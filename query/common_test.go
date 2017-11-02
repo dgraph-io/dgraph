@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"sort"
@@ -221,7 +220,6 @@ func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (s
 	startTs := timestamp()
 	maxPendingCh <- startTs
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res, ReadTs: startTs}
-	fmt.Println(queryRequest.ReadTs)
 	err = queryRequest.ProcessQuery(ctx)
 	if err != nil {
 		return "", err
