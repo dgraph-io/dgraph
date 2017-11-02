@@ -751,6 +751,7 @@ func handleCompareScalarFunction(arg funcArgs) error {
 		count:   count,
 		attr:    attr,
 		gid:     arg.gid,
+		readTs:  arg.q.ReadTs,
 		reverse: arg.q.Reverse,
 	}
 	return cp.evaluate(arg.out)
