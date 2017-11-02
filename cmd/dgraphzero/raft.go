@@ -313,6 +313,10 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		x.Printf("Could not apply lease, ignoring: proposedLease=%v maxLeaseId=%d maxTxnTs=%d",
 			p, state.MaxLeaseId, state.MaxTxnTs)
 	}
+	if p.Txn != nil {
+		n.server.orc.updateCommitStatus(p.Txn)
+	}
+
 	return p.Id, nil
 }
 
@@ -391,6 +395,8 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 }
 
 func (n *node) trySnapshot() {
+	// TODO: FIx later
+	return
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 	si := existing.Metadata.Index

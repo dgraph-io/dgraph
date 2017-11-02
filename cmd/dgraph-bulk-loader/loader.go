@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -28,7 +27,6 @@ type options struct {
 	RDFDir        string
 	SchemaFile    string
 	DgraphsDir    string
-	LeaseFile     string
 	TmpDir        string
 	NumGoroutines int
 	MapBufSize    int64
@@ -264,20 +262,9 @@ func (ld *loader) mapStage() {
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
-	ld.writeLease()
 	x.Check(ld.xidDB.Close())
 	ld.xids = nil
 	runtime.GC()
-}
-
-func (ld *loader) writeLease() {
-	// Obtain a fresh uid range - since uids are allocated in increasing order,
-	// the start of the new range can be used as the lease.
-	lease, _, err := ld.uidFetcher.ReserveUidRange()
-	x.Check(err)
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "%d\n", lease)
-	x.Check(ioutil.WriteFile(ld.opt.LeaseFile, buf.Bytes(), 0644))
 }
 
 type shuffleOutput struct {

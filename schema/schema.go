@@ -218,6 +218,32 @@ func Init(ps *badger.ManagedDB) {
 	reset()
 }
 
+func Load(predicate string) error {
+	if len(predicate) == 0 {
+		return x.Errorf("Empty predicate")
+	}
+	key := x.SchemaKey(predicate)
+	txn := pstore.NewTransactionAt(1, false)
+	defer txn.Discard()
+	item, err := txn.Get(key)
+	if err == badger.ErrKeyNotFound {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	val, err := item.Value()
+	if err != nil {
+		return err
+	}
+	var s protos.SchemaUpdate
+	x.Check(s.Unmarshal(val))
+	State().Set(predicate, s)
+	State().elog.Printf(logUpdate(s, predicate))
+	x.Printf(logUpdate(s, predicate))
+	return nil
+}
+
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
 	prefix := x.SchemaPrefix()

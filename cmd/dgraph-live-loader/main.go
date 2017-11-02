@@ -32,12 +32,10 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -203,8 +201,8 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	return nil
 }
 
-func setupConnection(host string) (*grpc.ClientConn, error) {
-	if !*tlsEnabled {
+func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
+	if insecure {
 		return grpc.Dial(host,
 			grpc.WithDefaultCallOptions(
 				grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
@@ -232,7 +230,9 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
+		grpc.WithBlock(),
+		grpc.WithTimeout(5*time.Second))
 }
 
 func fileList(files string) []string {
@@ -271,10 +271,9 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 		reqs:  make(chan protos.Mutation, opts.Pending*2),
 		alloc: alloc,
 		kv:    kv,
-		// length includes opts.Pending for makeRequests, another one for makeSchemaRequests.
-		che: make(chan error, opts.Pending),
 	}
 
+	l.wg.Add(opts.Pending)
 	for i := 0; i < opts.Pending; i++ {
 		go l.makeRequests()
 	}
@@ -293,14 +292,6 @@ func main() {
 	}
 	runtime.SetBlockProfileRate(*blockRate)
 
-	interruptChan := make(chan os.Signal)
-	signal.Notify(interruptChan, syscall.SIGINT, syscall.SIGTERM)
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-interruptChan
-		cancel()
-	}()
-
 	go http.ListenAndServe("localhost:6060", nil)
 	switch *mode {
 	case "cpu":
@@ -315,14 +306,15 @@ func main() {
 		// do nothing
 	}
 
-	conn, err := setupConnection(*dgraph)
+	conn, err := setupConnection(*dgraph, !*tlsEnabled)
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	connzero, err := setupConnection(*zero)
+	connzero, err := setupConnection(*zero, true)
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
+	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          *numRdf,
 		Pending:       *concurrent,
@@ -369,27 +361,14 @@ func main() {
 		}(file)
 	}
 
-	interrupted := false
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			if err == context.Canceled {
-				interrupted = true
-			} else {
-				log.Fatal("While processing file ", err)
-			}
+			log.Fatal("While processing file ", err)
 		}
 	}
 
-	{
-		if err := l.BatchFlush(); err != nil {
-			if err == context.Canceled {
-				interrupted = true
-			} else {
-				log.Fatalf("While doing BatchFlush: %+v\n", err)
-			}
-		}
-	}
-
+	close(l.reqs)
+	l.wg.Wait()
 	c := l.Counter()
 	var rate uint64
 	if c.Elapsed.Seconds() < 1 {
@@ -401,9 +380,6 @@ func main() {
 	// previous printed line.
 	fmt.Printf("%100s\r", "")
 
-	if interrupted {
-		fmt.Println("Interrupted.")
-	}
 	fmt.Printf("Number of mutations run   : %d\n", c.TxnsDone)
 	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)

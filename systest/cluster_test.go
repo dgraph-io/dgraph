@@ -57,7 +57,7 @@ func (d *DgraphCluster) Start() error {
 
 	d.dgraph = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"-memory_mb=1024",
-		"-peer", ":"+d.zeroPort,
+		"-zero", ":"+d.zeroPort,
 		"-port", freePort(),
 		"-grpc_port", d.dgraphPort,
 		"-workerport", freePort(),

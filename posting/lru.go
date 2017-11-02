@@ -23,6 +23,7 @@ import (
 	"container/list"
 	"context"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -55,12 +56,14 @@ type entry struct {
 
 // New creates a new Cache.
 func newListCache(maxSize uint64) *listCache {
-	return &listCache{
+	lc := &listCache{
 		ctx:     context.Background(),
 		MaxSize: maxSize,
 		ll:      list.New(),
 		cache:   make(map[string]*list.Element),
 	}
+	go lc.removeOldestLoop()
+	return lc
 }
 
 func (c *listCache) UpdateMaxSize() {
@@ -99,12 +102,21 @@ func (c *listCache) PutIfMissing(key string, pl *List) (res *List) {
 	c.curSize += e.size
 	ele := c.ll.PushFront(e)
 	c.cache[key] = ele
-	c.removeOldest()
 
 	return e.pl
 }
 
+func (c *listCache) removeOldestLoop() {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		c.removeOldest()
+	}
+}
+
 func (c *listCache) removeOldest() {
+	c.Lock()
+	defer c.Unlock()
 	ele := c.ll.Back()
 	for c.curSize > c.MaxSize {
 		if ele == nil {
@@ -116,19 +128,22 @@ func (c *listCache) removeOldest() {
 		e := ele.Value.(*entry)
 
 		if !e.pl.SetForDeletion() {
-			ele.Prev()
+			ele = ele.Prev()
 			continue
 		}
 		// If length of mutation layer is zero, then we won't call pstore.SetAsync and the
 		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
-		if committed, _ := e.pl.SyncIfDirty(true); !committed {
+		if committed, err := e.pl.SyncIfDirty(true); err != nil {
+			ele = ele.Prev()
+			continue
+		} else if !committed {
 			delete(c.cache, e.key)
 		}
 
 		c.ll.Remove(ele)
 		c.evicts++
 		c.curSize -= e.size
-		ele.Prev()
+		ele = ele.Prev()
 	}
 }
 

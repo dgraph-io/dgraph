@@ -893,6 +893,7 @@ func (db *DB) purgeVersionsBelow(txn *Txn, key []byte, ts uint64) error {
 				Key:  y.KeyWithTs(key, item.version),
 				Meta: bitDelete,
 			})
+		db.vlog.updateGCStats(item)
 	}
 	return db.batchSet(entries)
 }
@@ -947,6 +948,7 @@ func (db *DB) PurgeOlderVersions() error {
 					Key:  y.KeyWithTs(lastKey, item.version),
 					Meta: bitDelete,
 				})
+			db.vlog.updateGCStats(item)
 			count++
 
 			// Batch up 1000 entries at a time and write
@@ -1002,6 +1004,7 @@ func (db *DB) RunValueLogGC(discardRatio float64) error {
 		return ErrInvalidRequest
 	}
 
+	// Find head on disk
 	headKey := y.KeyWithTs(head, math.MaxUint64)
 	// Need to pass with timestamp, lsm get removes the last 8 bytes and compares key
 	val, err := db.lc.get(headKey)
@@ -1013,5 +1016,7 @@ func (db *DB) RunValueLogGC(discardRatio float64) error {
 	if len(val.Value) > 0 {
 		head.Decode(val.Value)
 	}
+
+	// Pick a log file and run GC
 	return db.vlog.runGC(discardRatio, head)
 }

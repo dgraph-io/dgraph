@@ -31,8 +31,6 @@ func main() {
 		"Location of schema file to load.")
 	flag.StringVar(&opt.DgraphsDir, "out", "out",
 		"Location to write the final dgraph data directories.")
-	flag.StringVar(&opt.LeaseFile, "l", "LEASE",
-		"Location to write the lease file.")
 	flag.StringVar(&opt.TmpDir, "tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")

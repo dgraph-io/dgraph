@@ -310,7 +310,7 @@ func Parse(s string) ([]*protos.SchemaUpdate, error) {
 		case itemNewLine:
 			// pass empty line
 		default:
-			return nil, x.Errorf("Unexpected token: %v", item)
+			return nil, x.Errorf("Unexpected token: %v while parsing schema", item)
 		}
 	}
 	return nil, x.Errorf("Shouldn't reach here")

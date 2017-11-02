@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
-
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -65,6 +63,9 @@ func (s *scheduler) processTasks() {
 		nextTask := t
 		for nextTask != nil {
 			err := s.n.processMutation(nextTask)
+			if err == posting.ErrRetry {
+				continue
+			}
 			n.props.Done(nextTask.pid, err)
 			x.ActiveMutations.Add(-1)
 			nextTask = s.nextTask(nextTask)
@@ -99,7 +100,6 @@ func (s *scheduler) register(t *task) bool {
 func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error) {
 	defer func() {
 		s.n.props.Done(proposal.Id, err)
-		s.n.Applied.WaitForMark(context.Background(), index)
 	}()
 
 	if proposal.Mutations.DropAll {
@@ -138,7 +138,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 				return pk.Attr == supdate.Predicate && (pk.IsIndex() || pk.IsCount() || pk.IsReverse())
 			})
 			if len(tctxs) > 0 {
-				go fixConflicts(tctxs)
+				go tryAbortTransactions(tctxs)
 				err = posting.ErrConflict
 			} else {
 				err = s.n.processSchemaMutations(proposal.Id, index, startTs, supdate)
@@ -176,7 +176,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 				return pk.Attr == edge.Attr
 			})
 			if len(tctxs) > 0 {
-				go fixConflicts(tctxs)
+				go tryAbortTransactions(tctxs)
 				err = posting.ErrConflict
 			} else {
 				err = posting.DeletePredicate(ctx, edge.Attr)
@@ -190,9 +190,6 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 	}
 	if proposal.Mutations.StartTs == 0 {
 		return errors.New("StartTs must be provided.")
-	}
-	if len(proposal.Mutations.PrimaryAttr) == 0 {
-		return errors.New("Primary attribute must be provided.")
 	}
 
 	total := len(proposal.Mutations.Edges)
@@ -211,9 +208,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 	m := proposal.Mutations
 	pctx := s.n.props.pctx(proposal.Id)
 	txn := &posting.Txn{
-		StartTs:       m.StartTs,
-		PrimaryAttr:   m.PrimaryAttr,
-		ServesPrimary: groups().ServesTablet(m.PrimaryAttr),
+		StartTs: m.StartTs,
 	}
 	pctx.txn = posting.Txns().PutOrMergeIndex(txn)
 	for _, edge := range m.Edges {

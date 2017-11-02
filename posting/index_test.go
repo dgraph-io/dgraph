@@ -120,10 +120,8 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 		x.Fatalf("Unhandled op: %v", op)
 	}
 	txn := &Txn{
-		StartTs:       startTs,
-		PrimaryAttr:   "primary",
-		ServesPrimary: true,
-		Indices:       []uint64{1},
+		StartTs: startTs,
+		Indices: []uint64{1},
 	}
 	txn = Txns().PutOrMergeIndex(txn)
 	if index {
@@ -133,7 +131,7 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
 		require.NoError(t, err)
 		require.True(t, ok)
 	}
-	require.NoError(t, txn.CommitMutations(context.Background(), commitTs, true))
+	require.NoError(t, txn.CommitMutations(context.Background(), commitTs))
 }
 
 const schemaVal = `
@@ -237,12 +235,10 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 		Op:      protos.DirectedEdge_SET,
 	}
 	txn := Txn{
-		StartTs:       startTs,
-		PrimaryAttr:   attr,
-		ServesPrimary: true,
+		StartTs: startTs,
 	}
 	txn.addReverseMutation(context.Background(), edge)
-	require.NoError(t, txn.CommitMutations(context.Background(), commitTs, true))
+	require.NoError(t, txn.CommitMutations(context.Background(), commitTs))
 }
 
 func TestRebuildIndex(t *testing.T) {
@@ -305,6 +301,8 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 1, 24, uint64(12), uint64(13))
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
+	// TODO: Remove after fixing sync marks.
+	time.Sleep(time.Second)
 	RebuildReverseEdges(context.Background(), "friend", 16)
 	CommitLists(func(key []byte) bool {
 		pk := x.Parse(key)

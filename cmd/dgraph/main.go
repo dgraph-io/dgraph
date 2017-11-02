@@ -18,13 +18,10 @@
 package main
 
 import (
-	"crypto/sha256"
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -35,7 +32,6 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -222,75 +218,6 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// NewSharedQueryNQuads returns nquads with query and hash.
-func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
-	val := func(s string) *protos.Value {
-		return &protos.Value{&protos.Value_DefaultVal{s}}
-	}
-	qHash := fmt.Sprintf("%x", sha256.Sum256(query))
-	return []*protos.NQuad{
-		{Subject: "_:share", Predicate: "_share_", ObjectValue: val(string(query))},
-		{Subject: "_:share", Predicate: "_share_hash_", ObjectValue: val(qHash)},
-	}
-}
-
-// shareHandler allows to share a query between users.
-// func shareHandler(w http.ResponseWriter, r *http.Request) {
-// 	var mr query.InternalMutation
-// 	var err error
-// 	var rawQuery []byte
-
-// 	w.Header().Set("Content-Type", "application/json")
-// 	x.AddCorsHeaders(w)
-// 	if r.Method != "POST" {
-// 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-// 		return
-// 	}
-// 	ctx := context.Background()
-// 	defer r.Body.Close()
-// 	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
-// 		if tr, ok := trace.FromContext(ctx); ok {
-// 			tr.LazyPrintf("Error while reading the stringified query payload: %+v", err)
-// 		}
-// 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
-// 		return
-// 	}
-
-// 	fail := func() {
-// 		if tr, ok := trace.FromContext(ctx); ok {
-// 			tr.LazyPrintf("Error: %+v", err)
-// 		}
-// 		x.SetStatus(w, x.Error, err.Error())
-// 	}
-// 	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
-// 	newUids, err := query.AssignUids(ctx, nquads)
-// 	if err != nil {
-// 		fail()
-// 		return
-// 	}
-// 	if mr, err = query.ToInternal(ctx, nquads, nil, newUids); err != nil {
-// 		fail()
-// 		return
-// 	}
-// 	if err = query.ApplyMutations(ctx, &protos.Mutations{Edges: mr.Edges}); err != nil {
-// 		fail()
-// 		return
-// 	}
-// 	tempMap := query.StripBlankNode(newUids)
-// 	allocIdsStr := query.ConvertUidsToHex(tempMap)
-// 	payload := map[string]interface{}{
-// 		"code":    x.Success,
-// 		"message": "Done",
-// 		"uids":    allocIdsStr,
-// 	}
-
-// 	if res, err := json.Marshal(payload); err == nil {
-// 		w.Write(res)
-// 	} else {
-// 		x.SetStatus(w, "Error", "Unable to marshal map")
-// 	}
-// }
-
 // storeStatsHandler outputs some basic stats for data store.
 func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
@@ -298,100 +225,6 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("<pre>"))
 	w.Write([]byte(worker.StoreStats()))
 	w.Write([]byte("</pre>"))
-}
-
-// handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method != http.MethodGet {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return false
-	}
-
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !net.ParseIP(ip).IsLoopback() {
-		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
-		return false
-	}
-	return true
-}
-
-func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
-		return
-	}
-
-	shutdownServer()
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`))
-}
-
-func shutdownServer() {
-	x.Printf("Got clean exit request")
-	stopProfiling() // stop profiling
-	sdCh <- os.Interrupt
-}
-
-func exportHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
-		return
-	}
-	ctx := context.Background()
-	// TODO: Get timestamp from zero.
-	// Export logic can be moved to dgraphzero.
-	if err := worker.ExportOverNetwork(ctx, math.MaxUint64); err != nil {
-		x.SetStatus(w, err.Error(), "Export failed.")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"code": "Success", "message": "Export completed."}`))
-}
-
-func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		memoryLimitGetHandler(w, r)
-	case http.MethodPut:
-		memoryLimitPutHandler(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
-}
-
-func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	memoryMB, err := strconv.ParseFloat(string(body), 64)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if memoryMB < dgraph.MinAllottedMemory {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "memory_mb must be at least %.0f\n", dgraph.MinAllottedMemory)
-		return
-	}
-
-	posting.Config.Mu.Lock()
-	posting.Config.AllottedMemory = memoryMB
-	posting.Config.Mu.Unlock()
-	w.WriteHeader(http.StatusOK)
-}
-
-func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
-	posting.Config.Mu.Lock()
-	memoryMB := posting.Config.AllottedMemory
-	posting.Config.Mu.Unlock()
-
-	if _, err := fmt.Fprintln(w, memoryMB); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func hasGraphOps(mu *protos.Mutation) bool {
-	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.SetJson) > 0 || len(mu.DeleteJson) > 0
 }
 
 func bestEffortGopath() (string, bool) {
@@ -436,10 +269,11 @@ func setupListener(addr string, port int) (listener net.Listener, err error) {
 	} else {
 		var tlsCfg *tls.Config
 		tlsCfg, reload, err = x.GenerateTLSConfig(x.TLSHelperConfig{
-			ConfigType:   x.TLSServerConfig,
-			CertRequired: tlsEnabled,
-			Cert:         tlsCert,
-
+			ConfigType:             x.TLSServerConfig,
+			CertRequired:           tlsEnabled,
+			Cert:                   tlsCert,
+			Key:                    tlsKey,
+			KeyPassphrase:          tlsKeyPass,
 			ClientAuth:             tlsClientAuth,
 			ClientCACerts:          tlsClientCACerts,
 			UseSystemClientCACerts: tlsSystemCACerts,
@@ -515,6 +349,11 @@ func setupServer() {
 		log.Fatal(err)
 	}
 
+	http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/mutate", mutationHandler)
+	http.HandleFunc("/commit", commitHandler)
+	http.HandleFunc("/abort", abortHandler)
+	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
 	// http.HandleFunc("/share", shareHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
