@@ -1519,6 +1519,7 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 // Handle languages.
 func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result) error {
 	mu := &sync.Mutex{}
+	tlist := &protos.List{}
 	numPart := uint64(32)
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	errChan := make(chan error, numPart)
@@ -1577,9 +1578,8 @@ func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result)
 					break
 				}
 
-				tlist := &protos.List{[]uint64{pk.Uid}}
 				mu.Lock()
-				out.UidMatrix = append(out.UidMatrix, tlist)
+				tlist.Uids = append(tlist.Uids, pk.Uid)
 				mu.Unlock()
 			}
 			errChan <- nil
@@ -1605,5 +1605,7 @@ func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result)
 			finalErr = ctx.Err()
 		}
 	}
+
+	out.UidMatrix = append(out.UidMatrix, tlist)
 	return finalErr
 }
