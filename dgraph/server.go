@@ -390,6 +390,13 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	return resp, err
 }
 
+func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.TxnContext, error) {
+	commitTs, err := worker.CommitOverNetwork(ctx, tc)
+	return &protos.TxnContext{
+		CommitTs: commitTs,
+	}, err
+}
+
 func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
