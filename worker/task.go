@@ -20,10 +20,12 @@ package worker
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/metadata"
@@ -674,7 +676,7 @@ func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
-		if err := handleHasFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := handleHasFunction(ctx, q, out); err != nil {
 			return nil, err
 		}
 	}
@@ -719,24 +721,6 @@ func needsStringFiltering(srcFn *functionContext, langs []string) bool {
 	return srcFn.isStringFn && langForFunc(langs) != "." &&
 		(srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
 			srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn)
-}
-
-func handleHasFunction(arg funcArgs) error {
-	attr := arg.q.Attr
-	if ok := schema.State().HasCount(attr); !ok {
-		return x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root.",
-			attr, arg.srcFn.fname)
-	}
-	cp := countParams{
-		readTs:  arg.q.ReadTs,
-		count:   0,
-		fn:      "gt",
-		attr:    attr,
-		gid:     arg.gid,
-		reverse: arg.q.Reverse,
-	}
-	cp.evaluate(arg.out)
-	return nil
 }
 
 func handleCompareScalarFunction(arg funcArgs) error {
@@ -1529,4 +1513,95 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 		out.UidMatrix = append(out.UidMatrix, uids)
 	}
 	return nil
+}
+
+func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result) error {
+	mu := &sync.Mutex{}
+	numPart := uint64(32)
+	grpSize := uint64(math.MaxUint64 / uint64(numPart))
+	errChan := make(chan error, numPart)
+
+	txn := pstore.NewTransactionAt(q.ReadTs, false)
+	defer txn.Discard()
+
+	for i := uint64(0); i < numPart; i++ {
+		minUid := grpSize*i + 1
+		maxUid := grpSize * (i + 1)
+		if i == numPart-1 {
+			maxUid = math.MaxUint64
+		}
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Running go-routine %v for iteration", i)
+		}
+		go func(i uint64) {
+			itOpt := badger.DefaultIteratorOptions
+			itOpt.PrefetchValues = false
+			it := txn.NewIterator(itOpt)
+			defer it.Close()
+
+			startKey := x.DataKey(q.Attr, minUid)
+			pk := x.Parse(startKey)
+			prefix := pk.DataPrefix()
+			if q.Reverse {
+				startKey = x.ReverseKey(q.Attr, minUid)
+				pk = x.Parse(startKey)
+				prefix = pk.ReversePrefix()
+			}
+
+			w := 0
+			for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
+				pk := x.Parse(it.Item().Key())
+				if pk.Attr != q.Attr {
+					errChan <- fmt.Errorf("Invalid key obtained for comparison" +
+						" while evaluating has")
+					return
+				}
+
+				if w%1000 == 0 {
+					select {
+					case <-ctx.Done():
+						errChan <- ctx.Err()
+						return
+					default:
+						if tr, ok := trace.FromContext(ctx); ok {
+							tr.LazyPrintf("iterateParallel:"+
+								" go-routine-id: %v key: %v:%v",
+								i, pk.Attr, pk.Uid)
+						}
+					}
+				}
+				w++
+				if pk.Uid > maxUid {
+					break
+				}
+
+				tlist := &protos.List{[]uint64{pk.Uid}}
+				mu.Lock()
+				out.UidMatrix = append(out.UidMatrix, tlist)
+				mu.Unlock()
+			}
+			errChan <- nil
+		}(i)
+	}
+
+	var finalErr error
+	for i := 0; i < int(numPart); i++ {
+		select {
+		case err := <-errChan:
+			if err != nil {
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while running iterateParallel: %+v", err)
+				}
+				// Note we dont return here so that all goroutines above can complete otherwise we
+				// get trace panics.
+				finalErr = err
+			}
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+			}
+			finalErr = ctx.Err()
+		}
+	}
+	return finalErr
 }
