@@ -21,7 +21,7 @@ import (
 var (
 	dgraAddr  = flag.String("d", "localhost:9080", "dgraph address")
 	zeroAddr  = flag.String("z", "localhost:8888", "zero address")
-	timeout   = flag.Int("timeout", 5, "query/mutation timeout")
+	timeout   = flag.Int("timeout", 60, "query/mutation timeout")
 	numSents  = flag.Int("sentences", 100, "number of sentences")
 	numSwaps  = flag.Int("swaps", 1000, "number of swaps to attempt")
 	concurr   = flag.Int("concurrency", 10, "number of concurrent swaps to run concurrently")
@@ -38,26 +38,40 @@ func main() {
 	flag.Parse()
 
 	sents := createSentences(*numSents)
-	for i, s := range sents {
-		fmt.Printf("%d: %s\n", i, s)
-	}
 	sort.Strings(sents)
+	wordCount := make(map[string]int)
+	for _, s := range sents {
+		words := strings.Split(s, " ")
+		for _, w := range words {
+			wordCount[w] += 1
+		}
+	}
+	type wc struct {
+		word  string
+		count int
+	}
+	var wcs []wc
+	for w, c := range wordCount {
+		wcs = append(wcs, wc{w, c})
+	}
+	sort.Slice(wcs, func(i, j int) bool {
+		wi := wcs[i]
+		wj := wcs[j]
+		return wi.word < wj.word
+	})
+	for _, w := range wcs {
+		fmt.Printf("%15s: %3d\n", w.word, w.count)
+	}
 
 	c := newClient()
 	uids := setup(c, sents)
-	for _, uid := range uids {
-		fmt.Printf("%#x\n", uid)
-	}
 
 	// Check invariants before doing any mutations as a sanity check.
 	checkInvariants(c, uids, sents)
 
 	go func() {
 		ticker := time.NewTicker(time.Second / time.Duration(*invPerSec))
-		for {
-			select {
-			case <-ticker.C:
-			}
+		for range ticker.C {
 			checkInvariants(c, uids, sents)
 			atomic.AddUint64(&invChecks, 1)
 		}
@@ -147,7 +161,7 @@ func newClient() *client.Dgraph {
 	)
 }
 
-func setup(c *client.Dgraph, sentences []string) []uint64 {
+func setup(c *client.Dgraph, sentences []string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 	x.Check(c.Alter(ctx, &protos.Operation{
@@ -166,14 +180,14 @@ func setup(c *client.Dgraph, sentences []string) []uint64 {
 	x.Check(err)
 	x.Check(txn.Commit(ctx))
 
-	var uids []uint64
+	var uids []string
 	for _, uid := range assigned.GetUids() {
-		uids = append(uids, uid)
+		uids = append(uids, fmt.Sprintf("%#x", uid))
 	}
 	return uids
 }
 
-func swapSentences(c *client.Dgraph, node1, node2 uint64) {
+func swapSentences(c *client.Dgraph, node1, node2 string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 
@@ -184,10 +198,10 @@ func swapSentences(c *client.Dgraph, node1, node2 uint64) {
 	// TODO: Use query variables...
 	resp, err := txn.Query(ctx, fmt.Sprintf(`
 	{
-		node1(func: uid(%d)) {
+		node1(func: uid(%s)) {
 			sentence
 		}
-		node2(func: uid(%d)) {
+		node2(func: uid(%s)) {
 			sentence
 		}
 	}
@@ -209,22 +223,24 @@ func swapSentences(c *client.Dgraph, node1, node2 uint64) {
 	x.AssertTrue(decode.Node2[0].Sentence != nil)
 
 	rdfs := fmt.Sprintf(`
-		<%#x> <sentence> %q .
-		<%#x> <sentence> %q .
+		<%s> <sentence> %q .
+		<%s> <sentence> %q .
 	`,
 		node1, *decode.Node2[0].Sentence,
 		node2, *decode.Node1[0].Sentence,
 	)
 	if _, err := txn.Mutate(ctx, &protos.Mutation{SetNquads: []byte(rdfs)}); err != nil {
 		atomic.AddUint64(&failCount, 1)
+		return
 	}
 	if err := txn.Commit(ctx); err != nil {
 		atomic.AddUint64(&failCount, 1)
+		return
 	}
 	atomic.AddUint64(&successCount, 1)
 }
 
-func checkInvariants(c *client.Dgraph, uids []uint64, sentences []string) {
+func checkInvariants(c *client.Dgraph, uids []string, sentences []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 
@@ -233,13 +249,7 @@ func checkInvariants(c *client.Dgraph, uids []uint64, sentences []string) {
 	// is the same.
 
 	txn := c.NewTxn()
-	uidList := ""
-	for i, uid := range uids {
-		if i != 0 {
-			uidList += ","
-		}
-		uidList += fmt.Sprintf("%#x", uid)
-	}
+	uidList := strings.Join(uids, ",")
 	resp, err := txn.Query(ctx, fmt.Sprintf(`
 	{
 		q(func: uid(%s)) {
@@ -269,16 +279,25 @@ func checkInvariants(c *client.Dgraph, uids []uint64, sentences []string) {
 		}
 	}
 	sort.Strings(gotSentences)
-	x.AssertTruef(reflect.DeepEqual(gotSentences, sentences), "sentences didn't match")
+	for i := 0; i < len(sentences); i++ {
+		if sentences[i] != gotSentences[i] {
+			fmt.Printf("Sentence doesn't match. Wanted: %q. Got: %q\n", sentences[i], gotSentences[i])
+			fmt.Printf("All sentences: %v\n", sentences)
+			fmt.Printf("Got sentences: %v\n", gotSentences)
+			x.AssertTrue(false)
+		}
+	}
 
 	for word, uids := range index {
-		resp, err := txn.Query(ctx, fmt.Sprintf(`
+		q := fmt.Sprintf(`
 		{
 			q(func: anyofterms(sentence, %q)) {
 				uid: _uid_
 			}
 		}
-		`, word), nil)
+		`, word)
+
+		resp, err := txn.Query(ctx, q, nil)
 		x.Check(err)
 		decode := struct {
 			Q []struct {
@@ -286,7 +305,6 @@ func checkInvariants(c *client.Dgraph, uids []uint64, sentences []string) {
 			}
 		}{}
 		x.Check(json.Unmarshal(resp.GetJson(), &decode))
-		x.AssertTrue(len(decode.Q) > 0)
 		var gotUids []string
 		for _, node := range decode.Q {
 			x.AssertTrue(node.Uid != nil)
@@ -296,10 +314,12 @@ func checkInvariants(c *client.Dgraph, uids []uint64, sentences []string) {
 		sort.Strings(gotUids)
 		sort.Strings(uids)
 		if !reflect.DeepEqual(gotUids, uids) {
-			panic(fmt.Sprintf(`uids in index for %q didn't match
-				calculated: %v
+			panic(fmt.Sprintf(`query: %s\n
+			Uids in index for %q didn't match
+			calculated: %v. Len: %d
 				got:        %v
-			`, word, uids, gotUids))
+			`, q, word, uids, len(uids), gotUids))
 		}
 	}
+	fmt.Println("Invariant successful")
 }

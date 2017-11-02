@@ -467,7 +467,8 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		numUids = 1000
 	}
 	if len(l.mlayer) > numUids {
-		l.syncIfDirty(false)
+		// TODO: REMOVE THIS.
+		// l.syncIfDirty(false)
 	}
 	return nil
 }
@@ -521,6 +522,7 @@ func (l *List) inSnapshot(mpost *protos.Posting, readTs uint64) bool {
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
+	fmt.Printf("iterate. Key: %q. Mlayer: %d (min=%d, readts=%d). mlayer=%v\n", l.key, len(l.mlayer), l.minTs, readTs, l.mlayer)
 	l.AssertRLock()
 	midx := 0
 
@@ -661,6 +663,7 @@ func marshalPostingList(plist *protos.PostingList) (data []byte, meta byte) {
 
 func (l *List) rollup() (*protos.PostingList, error) {
 	l.AssertLock()
+	fmt.Printf("rolling up: %q\n", l.key)
 	final := new(protos.PostingList)
 	var bp bp128.BPackEncoder
 	buf := make([]uint64, 0, bp128.BlockSize)
