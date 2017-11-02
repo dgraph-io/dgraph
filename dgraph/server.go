@@ -23,6 +23,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -544,9 +545,16 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 	var mr mapResponse
 	// Check field in map.
 	if uidVal, ok := m["_uid_"]; ok {
-		// Should be convertible to uint64. Maybe we also want to allow string later.
-		if id, ok := uidVal.(float64); ok && uint64(id) != 0 {
-			mr.uid = fmt.Sprintf("%d", uint64(id))
+		var uid uint64
+		if id, ok := uidVal.(float64); ok {
+			uid = uint64(id)
+		} else if id, ok := uidVal.(string); ok {
+			if u, err := strconv.ParseInt(id, 0, 64); err == nil {
+				uid = uint64(u)
+			}
+		}
+		if uid > 0 {
+			mr.uid = fmt.Sprintf("%d", uid)
 		}
 	}
 
