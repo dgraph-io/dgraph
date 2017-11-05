@@ -61,6 +61,9 @@ If there is a demand for it, Dgraph could support [Cypher](https://neo4j.com/dev
 ### Can Dgraph support X?
 Please see Dgraph [product roadmap](https://github.com/dgraph-io/dgraph/issues/1) of what we're planning to support for v1.0. If `request X` is not part of it, please feel free to start a discussion at [discuss.dgraph.io](https://discuss.dgraph.io), or file a [Github Issue](https://github.com/dgraph-io/dgraph/issues).
 
+### Is Dgraph an RDF tripple store?
+No, Dgraph isn’t an RDF triple store. We parse RDF due to the vast amount of RDF formatted data availabile. That said, RDF is being being by JSON as the primary data injest format.
+
 ## Long Term Plans
 
 ### Will Dgraph remain open source?
