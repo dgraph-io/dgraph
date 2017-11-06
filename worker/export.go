@@ -264,24 +264,14 @@ func export(bdir string, readTs uint64) error {
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 	prefix := new(bytes.Buffer)
 	prefix.Grow(100)
 	var debugCount int
-	var prevKey []byte
 	for it.Rewind(); it.Valid(); debugCount++ {
 		item := it.Item()
 		key := item.Key()
-		if bytes.Equal(key, prevKey) {
-			it.Next()
-			continue
-		}
-		if cap(prevKey) < len(key) {
-			prevKey = make([]byte, len(key))
-		}
-		copy(prevKey, key)
 		pk := x.Parse(key)
 		if pk == nil {
 			it.Next()
@@ -304,7 +294,7 @@ func export(bdir string, readTs uint64) error {
 			continue
 		}
 
-		if pk.Attr == "_predicate_" {
+		if pk.Attr == "_predicate_" || pk.Attr == "_dummy_" {
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())
 			continue
@@ -332,16 +322,13 @@ func export(bdir string, readTs uint64) error {
 		prefix.WriteString("> <")
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
-		// ReadPostingList advances the iterator, so don't call it.Next
-		l, err := posting.ReadPostingList(key, it)
-		if err != nil {
-			return err
-		}
+		l := posting.GetNoStore(key)
 		chkv <- kv{
 			prefix: prefix.String(),
 			list:   l,
 		}
 		prefix.Reset()
+		it.Next()
 	}
 
 	close(chkv) // We have stopped output to chkv.

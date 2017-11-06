@@ -25,6 +25,9 @@ import (
 	"math"
 	"net"
 	"sync"
+	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
@@ -118,5 +121,10 @@ func BlockingStop() {
 	if workerServer != nil { // possible if Config.InMemoryComm == true
 		workerServer.GracefulStop() // blocking stop server
 	}
+	// Sleep for 5 seconds to ensure that commit/abort is proposed.
+	time.Sleep(5 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	groups().Node.waitForTxnMarks(ctx)
 	groups().Node.snapshot(0)
 }
