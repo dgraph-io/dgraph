@@ -20,12 +20,10 @@ package worker
 import (
 	"errors"
 	"fmt"
-	"math"
 	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc/metadata"
@@ -1518,94 +1516,45 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 // TODO - Check that on deletion we delete the key-val from Badger.
 // Handle languages.
 func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result) error {
-	mu := &sync.Mutex{}
 	tlist := &protos.List{}
-	numPart := uint64(32)
-	grpSize := uint64(math.MaxUint64 / uint64(numPart))
-	errChan := make(chan error, numPart)
 
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
 
-	for i := uint64(0); i < numPart; i++ {
-		minUid := grpSize*i + 1
-		maxUid := grpSize * (i + 1)
-		if i == numPart-1 {
-			maxUid = math.MaxUint64
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Running go-routine %v for iteration", i)
-		}
-		go func(i uint64, mu *sync.Mutex) {
-			itOpt := badger.DefaultIteratorOptions
-			itOpt.PrefetchValues = false
-			it := txn.NewIterator(itOpt)
-			defer it.Close()
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.PrefetchValues = false
+	it := txn.NewIterator(itOpt)
+	defer it.Close()
 
-			startKey := x.DataKey(q.Attr, minUid)
-			pk := x.Parse(startKey)
-			prefix := pk.DataPrefix()
-			if q.Reverse {
-				startKey = x.ReverseKey(q.Attr, minUid)
-				pk = x.Parse(startKey)
-				prefix = pk.ReversePrefix()
-			}
-
-			w := 0
-			for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
-				pk := x.Parse(it.Item().Key())
-				if pk.Attr != q.Attr {
-					errChan <- fmt.Errorf("Invalid key obtained for comparison" +
-						" while evaluating has")
-					return
-				}
-
-				if w%1000 == 0 {
-					select {
-					case <-ctx.Done():
-						errChan <- ctx.Err()
-						return
-					default:
-						if tr, ok := trace.FromContext(ctx); ok {
-							tr.LazyPrintf("iterateParallel:"+
-								" go-routine-id: %v key: %v:%v",
-								i, pk.Attr, pk.Uid)
-						}
-					}
-				}
-				w++
-				if pk.Uid > maxUid {
-					break
-				}
-
-				mu.Lock()
-				tlist.Uids = append(tlist.Uids, pk.Uid)
-				mu.Unlock()
-			}
-			errChan <- nil
-		}(i, mu)
+	pk := x.ParsedKey{
+		Attr: q.Attr,
+	}
+	startKey := x.DataKey(q.Attr, 0)
+	prefix := pk.DataPrefix()
+	if q.Reverse {
+		startKey = x.ReverseKey(q.Attr, 0)
+		prefix = pk.ReversePrefix()
 	}
 
-	var finalErr error
-	for i := 0; i < int(numPart); i++ {
-		select {
-		case err := <-errChan:
-			if err != nil {
+	w := 0
+	for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
+		pk := x.Parse(it.Item().Key())
+
+		if w%1000 == 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while running iterateParallel: %+v", err)
+					tr.LazyPrintf("handleHasFunction:"+
+						" key: %v:%v", pk.Attr, pk.Uid)
 				}
-				// Note we dont return here so that all goroutines above can complete otherwise we
-				// get trace panics.
-				finalErr = err
 			}
-		case <-ctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
-			}
-			finalErr = ctx.Err()
 		}
+		w++
+		tlist.Uids = append(tlist.Uids, pk.Uid)
 	}
 
 	out.UidMatrix = append(out.UidMatrix, tlist)
-	return finalErr
+	return nil
 }
