@@ -195,7 +195,6 @@ func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Paylo
 	empty := &protos.Payload{}
 	if op.DropAll {
 		m := protos.Mutations{DropAll: true}
-		// TODO: Handle delete as special case. Abort all pending transactions
 		_, err := query.ApplyMutations(ctx, &m)
 		return empty, err
 	}
@@ -260,7 +259,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	if err != nil {
 		return resp, err
 	}
-	resp.Uids = query.StripBlankNode(newUids)
+	resp.Uids = query.ConvertUidsToHex(query.StripBlankNode(newUids))
 	edges, err := query.ToInternal(gmu, newUids)
 	if err != nil {
 		return resp, err
@@ -388,6 +387,14 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	resp.Latency = gl
 	resp.Txn.LinRead = queryRequest.LinRead
 	return resp, err
+}
+
+func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.TxnContext,
+	error) {
+	commitTs, err := worker.CommitOverNetwork(ctx, tc)
+	return &protos.TxnContext{
+		CommitTs: commitTs,
+	}, err
 }
 
 func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {

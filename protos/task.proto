@@ -429,11 +429,12 @@ service Dgraph {
     rpc Query (Request)           returns (Response) {}
     rpc Mutate (Mutation)         returns (Assigned) {}
     rpc Alter (Operation)         returns (Payload) {}
+    rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
     rpc CheckVersion(Check)       returns (Version) {}
 }
 
 message Assigned {
-  map<string, uint64> uids = 1;
+  map<string, string> uids = 1;
   TxnContext context = 2;
   string error = 3;
 }

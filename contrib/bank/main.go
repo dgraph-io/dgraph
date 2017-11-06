@@ -63,7 +63,7 @@ func (s *State) createAccounts() {
 	s.Lock()
 	defer s.Unlock()
 	for _, uid := range assigned.GetUids() {
-		s.uids = append(s.uids, fmt.Sprintf("%#x", uid))
+		s.uids = append(s.uids, uid)
 	}
 }
 
@@ -164,19 +164,14 @@ func (s *State) loop(wg *sync.WaitGroup) {
 
 func main() {
 	flag.Parse()
-	conn, err := grpc.Dial("localhost:8888", grpc.WithInsecure())
-	if err != nil {
-		log.Fatal(err)
-	}
-	zero := protos.NewZeroClient(conn)
 
-	conn, err = grpc.Dial("localhost:9080", grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
 	dc := protos.NewDgraphClient(conn)
 
-	dg := client.NewDgraphClient(zero, dc)
+	dg := client.NewDgraphClient(dc)
 	s := State{dg: dg}
 	s.createAccounts()
 	go s.runTotalInLoop()

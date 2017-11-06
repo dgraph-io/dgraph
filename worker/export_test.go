@@ -19,10 +19,9 @@ package worker
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
-	"encoding/binary"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,8 +30,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
-	geom "github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/wkb"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -78,7 +75,7 @@ func populateGraphExport(t *testing.T) {
 	}
 }
 
-func initTestExport(t *testing.T, schemaStr string) (string, *badger.KV) {
+func initTestExport(t *testing.T, schemaStr string) (string, *badger.ManagedDB) {
 	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -87,24 +84,40 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.KV) {
 	opt := badger.DefaultOptions
 	opt.Dir = dir
 	opt.ValueDir = dir
-	ps, err := badger.NewKV(&opt)
+	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 
-	posting.Init(ps)
-	Init(ps)
+	posting.Init(db)
+	Init(db)
 	val, err := (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
-	ps.Set(x.SchemaKey("friend"), val, 0x00)
+
+	txn := db.NewTransactionAt(math.MaxUint64, true)
+	txn.Set(x.SchemaKey("friend"), val, 0x00)
+	txn.CommitAt(timestamp(), func(err error) {
+		require.NoError(t, err)
+	})
+	txn.Discard()
+
+	require.NoError(t, err)
 	val, err = (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
-	ps.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val, 0x00)
-	ps.Set(x.SchemaKey("friend_not_served"), val, 0x00)
+
+	txn = db.NewTransactionAt(math.MaxUint64, true)
+	txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val, 0x00)
+	require.NoError(t, err)
+	txn.Set(x.SchemaKey("friend_not_served"), val, 0x00)
+	txn.CommitAt(timestamp(), func(err error) {
+		require.NoError(t, err)
+	})
+	txn.Discard()
+
+	require.NoError(t, err)
 	populateGraphExport(t)
 
-	return dir, ps
+	return dir, db
 }
 
-// TODO: Add Test cases to test backup for cluster
 func TestExport(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
 	dir, ps := initTestExport(t, "name:string @index .")
@@ -115,17 +128,10 @@ func TestExport(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
-	for i := 1; i <= 10; i++ {
-		posting.CommitLists(10, uint32(i))
-	}
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	err = export(bdir)
-	require.NoError(t, err)
-
-	// We have 2 name type edges(with index). FP("name")%10 =7.
-	err = export(bdir)
+	err = export(bdir, timestamp())
 	require.NoError(t, err)
 
 	searchDir := bdir
@@ -247,94 +253,94 @@ func TestExport(t *testing.T) {
 	require.Equal(t, 1, count)
 }
 
-func generateBenchValues() []kv {
-	byteInt := make([]byte, 4)
-	binary.LittleEndian.PutUint32(byteInt, 123)
-
-	fac := []*protos.Facet{
-		{
-			Key:   "facetTest",
-			Value: []byte("testVal"),
-		},
-	}
-
-	geoData, _ := wkb.Marshal(geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518}), binary.LittleEndian)
-
-	// Posting_STRING   Posting_ValType = 0
-	// Posting_BINARY   Posting_ValType = 1
-	// Posting_INT    Posting_ValType = 2
-	// Posting_FLOAT    Posting_ValType = 3
-	// Posting_BOOL     Posting_ValType = 4
-	// Posting_DATE     Posting_ValType = 5
-	// Posting_DATETIME Posting_ValType = 6
-	// Posting_GEO      Posting_ValType = 7
-	// Posting_UID      Posting_ValType = 8
-	benchItems := []kv{
-		{
-			prefix: "testString",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_STRING,
-					Value:   []byte("手機裡的眼淚"),
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
-			},
-		},
-		{prefix: "testGeo",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_GEO,
-					Value:   geoData,
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
-			}},
-		{prefix: "testPassword",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_PASSWORD,
-					Value:   []byte("test"),
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
-			}},
-		{prefix: "testInt",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_INT,
-					Value:   byteInt,
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
-			}},
-		{prefix: "testUid",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_INT,
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
-			}},
-	}
-
-	return benchItems
-}
-
-func BenchmarkToRDF(b *testing.B) {
-	buf := new(bytes.Buffer)
-	buf.Grow(50000)
-
-	items := generateBenchValues()
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		toRDF(buf, items[0])
-		toRDF(buf, items[1])
-		toRDF(buf, items[2])
-		toRDF(buf, items[3])
-		toRDF(buf, items[4])
-		buf.Reset()
-	}
-}
+// func generateBenchValues() []kv {
+// 	byteInt := make([]byte, 4)
+// 	binary.LittleEndian.PutUint32(byteInt, 123)
+//
+// 	fac := []*protos.Facet{
+// 		{
+// 			Key:   "facetTest",
+// 			Value: []byte("testVal"),
+// 		},
+// 	}
+//
+// 	geoData, _ := wkb.Marshal(geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518}), binary.LittleEndian)
+//
+// 	// Posting_STRING   Posting_ValType = 0
+// 	// Posting_BINARY   Posting_ValType = 1
+// 	// Posting_INT    Posting_ValType = 2
+// 	// Posting_FLOAT    Posting_ValType = 3
+// 	// Posting_BOOL     Posting_ValType = 4
+// 	// Posting_DATE     Posting_ValType = 5
+// 	// Posting_DATETIME Posting_ValType = 6
+// 	// Posting_GEO      Posting_ValType = 7
+// 	// Posting_UID      Posting_ValType = 8
+// 	benchItems := []kv{
+// 		{
+// 			prefix: "testString",
+// 			list: &protos.PostingList{
+// 				Postings: []*protos.Posting{{
+// 					ValType: protos.Posting_STRING,
+// 					Value:   []byte("手機裡的眼淚"),
+// 					Uid:     uint64(65454),
+// 					Facets:  fac,
+// 				}},
+// 			},
+// 		},
+// 		{prefix: "testGeo",
+// 			list: &protos.PostingList{
+// 				Postings: []*protos.Posting{{
+// 					ValType: protos.Posting_GEO,
+// 					Value:   geoData,
+// 					Uid:     uint64(65454),
+// 					Facets:  fac,
+// 				}},
+// 			}},
+// 		{prefix: "testPassword",
+// 			list: &protos.PostingList{
+// 				Postings: []*protos.Posting{{
+// 					ValType: protos.Posting_PASSWORD,
+// 					Value:   []byte("test"),
+// 					Uid:     uint64(65454),
+// 					Facets:  fac,
+// 				}},
+// 			}},
+// 		{prefix: "testInt",
+// 			list: &protos.PostingList{
+// 				Postings: []*protos.Posting{{
+// 					ValType: protos.Posting_INT,
+// 					Value:   byteInt,
+// 					Uid:     uint64(65454),
+// 					Facets:  fac,
+// 				}},
+// 			}},
+// 		{prefix: "testUid",
+// 			list: &protos.PostingList{
+// 				Postings: []*protos.Posting{{
+// 					ValType: protos.Posting_INT,
+// 					Uid:     uint64(65454),
+// 					Facets:  fac,
+// 				}},
+// 			}},
+// 	}
+//
+// 	return benchItems
+// }
+//
+// func BenchmarkToRDF(b *testing.B) {
+// 	buf := new(bytes.Buffer)
+// 	buf.Grow(50000)
+//
+// 	items := generateBenchValues()
+//
+// 	b.ReportAllocs()
+// 	b.ResetTimer()
+// 	for i := 0; i < b.N; i++ {
+// 		toRDF(buf, items[0])
+// 		toRDF(buf, items[1])
+// 		toRDF(buf, items[2])
+// 		toRDF(buf, items[3])
+// 		toRDF(buf, items[4])
+// 		buf.Reset()
+// 	}
+// }

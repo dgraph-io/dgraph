@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -167,7 +168,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 			attr:        edge.Attr,
 			countBefore: countBefore,
 			countAfter:  countAfter,
-			entity:      edge.ValueId,
+			entity:      edge.Entity,
 			reverse:     true,
 		}, nil
 	}
@@ -418,13 +419,30 @@ func deleteEntries(prefix []byte) error {
 	idxIt := txn.NewIterator(iterOpt)
 	defer idxIt.Close()
 
+	// Throttle number of parallel purges.
+	pending := make(chan struct{}, 1000)
+	var m sync.Mutex
+	var err error
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		item := idxIt.Item()
-		if err := pstore.PurgeVersionsBelow(item.Key(), item.Version()+1); err != nil {
-			return err
-		}
+		nkey := make([]byte, len(item.Key()))
+		copy(nkey, item.Key())
+
+		pending <- struct{}{}
+		go func(key []byte, version uint64) {
+			e := pstore.PurgeVersionsBelow(key, version)
+			if e != nil {
+				m.Lock()
+				err = e
+				m.Unlock()
+			}
+			<-pending
+		}(nkey, item.Version()+1)
 	}
-	return nil
+	for i := 0; i < 1000; i++ {
+		pending <- struct{}{}
+	}
+	return err
 }
 
 func compareAttrAndType(key []byte, attr string, typ byte) bool {

@@ -268,8 +268,11 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		}
 	}
 
-	// TODO: Think about timestamp
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+	// Any commit which happens in the future will have commitTs greater than
+	// this.
+	// TODO: Ensure all deltas have made to disk and read in memory before checking disk.
+	timestamp := posting.Oracle().MaxPending()
+	txn := pstore.NewTransactionAt(timestamp, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true

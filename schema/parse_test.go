@@ -360,7 +360,7 @@ func TestParseScalarListError4(t *testing.T) {
 	require.Contains(t, err.Error(), "Unsupported type for list: [bool]")
 }
 
-var ps *badger.KV
+var ps *badger.ManagedDB
 
 func TestMain(m *testing.M) {
 	x.Init(true)
@@ -370,7 +370,7 @@ func TestMain(m *testing.M) {
 	kvOpt := badger.DefaultOptions
 	kvOpt.Dir = dir
 	kvOpt.ValueDir = dir
-	ps, err = badger.NewKV(&kvOpt)
+	ps, err = badger.OpenManaged(kvOpt)
 	x.Check(err)
 	Init(ps)
 

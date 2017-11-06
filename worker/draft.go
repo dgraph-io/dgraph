@@ -343,7 +343,7 @@ func (n *node) processApplyCh() {
 		pctx.index = e.Index
 		n.props.Store(proposal.Id, pctx)
 
-		posting.SyncMarks().Begin(e.Index)
+		posting.TxnMarks().Begin(e.Index)
 		if proposal.Mutations != nil {
 			// syncmarks for this shouldn't be marked done until it's comitted.
 			n.sch.schedule(proposal, e.Index)
@@ -354,7 +354,7 @@ func (n *node) processApplyCh() {
 			// a state which is latest or equal to this.
 			groups().applyState(proposal.State)
 			// When proposal is done it emits done watermarks.
-			posting.SyncMarks().Done(e.Index)
+			posting.TxnMarks().Done(e.Index)
 			n.props.Done(proposal.Id, nil)
 		} else if len(proposal.CleanPredicate) > 0 {
 			go n.deletePredicate(e.Index, proposal.Id, proposal.CleanPredicate)
@@ -377,7 +377,7 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) 
 		posting.Txns().Done(tctx.StartTs)
 		posting.Oracle().Done(tctx.StartTs)
 	}
-	posting.SyncMarks().Done(index)
+	posting.TxnMarks().Done(index)
 	n.props.Done(pid, err)
 }
 
@@ -386,14 +386,14 @@ func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
 	err := posting.DeletePredicate(ctx, predicate)
-	posting.SyncMarks().Done(index)
+	posting.TxnMarks().Done(index)
 	n.props.Done(pid, err)
 }
 
 func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)
-	posting.SyncMarks().Done(index)
+	posting.TxnMarks().Done(index)
 	n.props.Done(pid, err)
 	return nil
 }
@@ -605,7 +605,7 @@ func (n *node) snapshot(skip uint64) {
 		// regenerate the state on a crash. Therefore, don't take snapshots.
 		return
 	}
-	water := posting.SyncMarks()
+	water := posting.TxnMarks()
 	le := water.DoneUntil()
 
 	existing, err := n.Store.Snapshot()
@@ -656,7 +656,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	idx, restart, err := n.InitFromWal(wal)
 	x.Check(err)
 	n.Applied.SetDoneUntil(idx)
-	posting.SyncMarks().SetDoneUntil(idx)
+	posting.TxnMarks().SetDoneUntil(idx)
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)

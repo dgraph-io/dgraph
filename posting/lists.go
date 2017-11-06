@@ -168,19 +168,11 @@ func updateMemoryMetrics() {
 
 var (
 	pstore *badger.ManagedDB
-	marks  *x.WaterMark
 	lcache *listCache
 )
 
-func SyncMarks() *x.WaterMark {
-	return marks
-}
-
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.ManagedDB) {
-	marks = &x.WaterMark{Name: "Synced watermark"}
-	marks.Init()
-
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
 	x.LcacheCapacity.Set(math.MaxInt64)

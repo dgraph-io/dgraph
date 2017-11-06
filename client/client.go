@@ -29,8 +29,7 @@ import (
 )
 
 type Dgraph struct {
-	zero protos.ZeroClient
-	dc   []protos.DgraphClient
+	dc []protos.DgraphClient
 
 	mu     sync.Mutex
 	needTs []chan uint64
@@ -38,10 +37,6 @@ type Dgraph struct {
 
 	linRead *protos.LinRead
 	state   *protos.MembershipState
-}
-
-func (d *Dgraph) ZeroClient() protos.ZeroClient {
-	return d.zero
 }
 
 // TODO(tzdybal) - hide this function from users
@@ -59,9 +54,8 @@ func NewClient(clients []protos.DgraphClient) *Dgraph {
 // cluster).
 //
 // A single client is thread safe for sharing with multiple go routines.
-func NewDgraphClient(zero protos.ZeroClient, dc protos.DgraphClient) *Dgraph {
+func NewDgraphClient(dc protos.DgraphClient) *Dgraph {
 	dg := &Dgraph{
-		zero:    zero,
 		dc:      []protos.DgraphClient{dc},
 		notify:  make(chan struct{}, 1),
 		linRead: &protos.LinRead{},
@@ -115,9 +109,10 @@ func (d *Dgraph) mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assig
 	return dc.Mutate(ctx, mu)
 }
 
-func (d *Dgraph) commitOrAbort(ctx context.Context, txn *protos.TxnContext) (*protos.TxnContext,
+func (d *Dgraph) commitOrAbort(ctx context.Context, tctx *protos.TxnContext) (*protos.TxnContext,
 	error) {
-	return d.zero.CommitOrAbort(ctx, txn)
+	dc := d.anyClient()
+	return dc.CommitOrAbort(ctx, tctx)
 }
 
 // CheckVersion checks if the version of dgraph and dgraph-live-loader are the same.  If either the
