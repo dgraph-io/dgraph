@@ -20,7 +20,6 @@ import (
 
 var (
 	dgraAddr  = flag.String("d", "localhost:9080", "dgraph address")
-	zeroAddr  = flag.String("z", "localhost:8888", "zero address")
 	timeout   = flag.Int("timeout", 60, "query/mutation timeout")
 	numSents  = flag.Int("sentences", 100, "number of sentences")
 	numSwaps  = flag.Int("swaps", 1000, "number of swaps to attempt")

@@ -56,7 +56,7 @@ func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
 		if last := o.rowCommit[k]; last > src.StartTs {
 			pk := x.Parse([]byte(k))
 			if len(pk.Term) > 0 {
-				fmt.Printf("Aborted due to key %+v %d %d\n", pk.Term[1:], last, src.StartTs)
+				fmt.Printf("Aborted due to key %q %d %d\n", pk.Term[1:], last, src.StartTs)
 			}
 			return true
 		}
