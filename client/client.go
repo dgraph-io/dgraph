@@ -45,7 +45,7 @@ type Dgraph struct {
 // cluster).
 //
 // A single client is thread safe for sharing with multiple go routines.
-func NewDgraphClient(clients []protos.DgraphClient) *Dgraph {
+func NewDgraphClient(clients ...protos.DgraphClient) *Dgraph {
 	dg := &Dgraph{
 		dc:      clients,
 		notify:  make(chan struct{}, 1),

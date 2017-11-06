@@ -36,7 +36,7 @@ func Example_setObject() {
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
 	// else a new node is created.
@@ -85,8 +85,7 @@ func Example_setObject() {
 	}
 
 	mu.SetJson = pb
-	mu.CommitImmediately = true
-	assigned, err := dg.NewTxn().Mutate(context.Background(), mu)
+	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}

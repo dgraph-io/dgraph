@@ -109,7 +109,7 @@ func ExampleDgraph_DropAll() {
 	defer os.RemoveAll(clientDir)
 
 	dc := protos.NewDgraphClient(conn)
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 
 	op := protos.Operation{
 		DropAll: true,
@@ -203,7 +203,7 @@ func ExampleUnmarshal() {
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
 	// else a new node is created.
@@ -252,7 +252,7 @@ func ExampleUnmarshal() {
 
 	mu.SetJson = pb
 	mu.CommitImmediately = true
-	assigned, err := txn.Mutate(context.Background(), mu)
+	assigned, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func ExampleUnmarshal() {
 		}
 	}`, puid)
 
-	resp, err := dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -478,7 +478,7 @@ func ExampleReq_SetObject() {
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 
 	type School struct {
 		Name string `json:"name@en,omitempty"`
@@ -545,7 +545,7 @@ func ExampleReq_SetObject() {
 
 	mu.SetJson = pb
 	mu.CommitImmediately = true
-	assigned, err := txn.Mutate(context.Background(), mu)
+	assigned, err := txn.Mutate(ctx, mu)
 
 	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
 	puid := assigned.Uids["blank-0"]
@@ -568,7 +568,7 @@ func ExampleReq_SetObject() {
 		}
 	}`, puid)
 
-	resp, err := dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -592,7 +592,7 @@ func ExampleReq_SetObject_facets(t *testing.T) {
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 
 	// This example shows example for SetObject using facets.
 	type friendFacet struct {
@@ -655,6 +655,7 @@ func ExampleReq_SetObject_facets(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
 	mu := &protos.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -663,7 +664,7 @@ func ExampleReq_SetObject_facets(t *testing.T) {
 
 	mu.SetJson = pb
 	mu.CommitImmediately = true
-	assigned, err := dg.NewTxn().Mutate(context.Background(), mu)
+	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -685,7 +686,7 @@ func ExampleReq_SetObject_facets(t *testing.T) {
         }
     }`, auid)
 
-	resp, err := dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -709,7 +710,7 @@ func ExampleReq_SetObject_list(t *testing.T) {
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 	// This example shows example for SetObject for predicates with list type.
 	type Person struct {
 		Uid         uint64   `json:"_uid_"`
@@ -741,7 +742,7 @@ func ExampleReq_SetObject_list(t *testing.T) {
 
 	mu.SetJson = pb
 	mu.CommitImmediately = true
-	assigned, err := dg.NewTxn().Mutate(context.Background(), mu)
+	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -758,7 +759,7 @@ func ExampleReq_SetObject_list(t *testing.T) {
 	}
 	`, uid)
 
-	resp, err := dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -782,7 +783,7 @@ func ExampleReq_DeleteObject_edges() {
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 
 	type School struct {
 		Uid  uint64 `json:"_uid_"`
@@ -842,7 +843,7 @@ func ExampleReq_DeleteObject_edges() {
 
 	mu.SetJson = pb
 	mu.CommitImmediately = true
-	_, err = dg.NewTxn().Mutate(context.Background(), mu)
+	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -883,7 +884,7 @@ func ExampleReq_DeleteObject_edges() {
 		}
 	}`)
 
-	resp, err := dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -904,12 +905,12 @@ func ExampleReq_DeleteObject_edges() {
 
 	mu.DeleteJson = pb
 	mu.CommitImmediately = true
-	_, err = dg.NewTxn().Mutate(context.Background(), mu)
+	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	resp, err = dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err = dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -936,7 +937,7 @@ func ExampleReq_DeleteObject_node() {
 	defer os.RemoveAll(clientDir)
 
 	dc := protos.NewDgraphClient(conn)
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 
 	// In this test we check S * * deletion.
 	type Person struct {
@@ -984,7 +985,7 @@ func ExampleReq_DeleteObject_node() {
 	}
 
 	mu.SetJson = pb
-	_, err = dg.NewTxn().Mutate(context.Background(), mu)
+	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1015,7 +1016,7 @@ func ExampleReq_DeleteObject_node() {
 		}
 	}`)
 
-	resp, err := dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1045,12 +1046,12 @@ func ExampleReq_DeleteObject_node() {
 	}
 
 	mu.DeleteJson = pb
-	_, err = dg.NewTxn().Mutate(context.Background(), mu)
+	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	resp, err = dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err = dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1068,7 +1069,7 @@ func ExampleReq_DeleteObject_predicate() {
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
 		Uid     uint64   `json:"_uid_,omitempty"`
@@ -1115,7 +1116,7 @@ func ExampleReq_DeleteObject_predicate() {
 	}
 
 	mu.SetJson = pb
-	_, err = dg.NewTxn().Mutate(context.Background(), mu)
+	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1134,7 +1135,7 @@ func ExampleReq_DeleteObject_predicate() {
 		}
 	}`)
 
-	resp, err := dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1161,7 +1162,7 @@ func ExampleReq_DeleteObject_predicate() {
 	}
 
 	// Also lets run the query again to verify that predicate data was deleted.
-	resp, err = dg.NewTxn().Query(context.Background(), q, nil)
+	resp, err = dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
