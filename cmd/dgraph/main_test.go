@@ -30,6 +30,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -97,16 +98,21 @@ func (z *zeroServer) AssignUids(ctx context.Context, n *protos.Num) (*protos.Ass
 	return a, nil
 }
 
-func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.MembershipState, error) {
+func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.ConnectionState, error) {
 	m := &protos.MembershipState{}
 	m.Zeros = make(map[uint64]*protos.Member)
-	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12341"}
+	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
 	m.Groups = make(map[uint32]*protos.Group)
 	g := &protos.Group{}
 	g.Members = make(map[uint64]*protos.Member)
 	g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
 	m.Groups[1] = g
-	return m, nil
+
+	c := &protos.ConnectionState{
+		Member: in,
+		State:  m,
+	}
+	return c, nil
 }
 
 // Used by sync membership
@@ -129,6 +135,21 @@ func (z *zeroServer) Update(stream protos.Zero_UpdateServer) error {
 	}
 }
 
+var odch chan *protos.OracleDelta
+
+func (s *zeroServer) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.Payload, error) {
+	return &protos.Payload{}, nil
+}
+
+func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) error {
+	for delta := range odch {
+		if err := server.Send(delta); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*protos.Tablet, error) {
 	in.GroupId = 1
 	return in, nil
@@ -136,6 +157,10 @@ func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*proto
 
 func (z *zeroServer) Timestamps(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
 	return &protos.AssignedIds{}, nil
+}
+
+func (z *zeroServer) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*protos.TxnContext, error) {
+	return &protos.TxnContext{}, nil
 }
 
 func StartDummyZero() *grpc.Server {
@@ -175,7 +200,7 @@ func prepare() (dir1, dir2 string, rerr error) {
 	schema.Init(dgraph.State.Pstore)
 	worker.Init(dgraph.State.Pstore)
 	worker.Config.MyAddr = "localhost:12345"
-	worker.Config.PeerAddr = "localhost:12341"
+	worker.Config.ZeroAddr = "localhost:12341"
 	worker.Config.RaftId = 1
 	worker.StartRaftNodes(dgraph.State.WALstore, false)
 	return dir1, dir2, nil
@@ -198,6 +223,12 @@ func defaultContext() context.Context {
 	return context.WithValue(context.Background(), "mutation_allowed", true)
 }
 
+var ts uint64
+
+func timestamp() uint64 {
+	return atomic.AddUint64(&ts, 1)
+}
+
 func processToFastJSON(q string) string {
 	res, err := gql.Parse(gql.Request{Str: q, Http: true})
 	if err != nil {
@@ -206,19 +237,18 @@ func processToFastJSON(q string) string {
 
 	var l query.Latency
 	ctx := defaultContext()
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	_, err = qr.ProcessQuery(ctx)
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res, ReadTs: timestamp()}
+	err = qr.ProcessQuery(ctx)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var buf bytes.Buffer
-	err = query.ToJson(&l, qr.Subgraphs, &buf, nil, false)
+	buf, err := query.ToJson(&l, qr.Subgraphs)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return string(buf.Bytes())
+	return string(buf)
 }
 
 func runQuery(q string) (string, error) {
@@ -243,15 +273,23 @@ func runQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	res, err := gql.Parse(gql.Request{Str: m, Http: true})
+	req, err := http.NewRequest("POST", "/mutate", bytes.NewBufferString(m))
 	if err != nil {
 		return err
 	}
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(queryHandler)
+	handler.ServeHTTP(rr, req)
 
-	var l query.Latency
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	_, err = qr.ProcessWithMutation(defaultContext())
-	return err
+	if status := rr.Code; status != http.StatusOK {
+		return fmt.Errorf("Unexpected status code: %v", status)
+	}
+	var qr x.QueryResWithData
+	json.Unmarshal(rr.Body.Bytes(), &qr)
+	if len(qr.Errors) > 0 {
+		return errors.New(qr.Errors[0].Message)
+	}
+	return nil
 }
 
 func TestDeletePredicate(t *testing.T) {
@@ -266,7 +304,7 @@ func TestDeletePredicate(t *testing.T) {
 	`
 
 	var m1 = `
-	mutation {
+	{
 		set {
 			<0x1> <friend> <0x2> .
 			<0x1> <friend> <0x3> .
@@ -956,18 +994,6 @@ func TestDeleteAllSP1(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestQuery(t *testing.T) {
-	res, err := gql.Parse(gql.Request{Str: m, Http: true})
-	require.NoError(t, err)
-
-	var l query.Latency
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	_, err = qr.ProcessWithMutation(defaultContext())
-
-	output := processToFastJSON(q0)
-	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
-}
-
 var m5 = `
 	mutation {
 		set {
@@ -1011,25 +1037,25 @@ var q6 = `
 	}
 `
 
-func TestSchemaConversion(t *testing.T) {
-	res, err := gql.Parse(gql.Request{Str: m6, Http: true})
-	require.NoError(t, err)
-
-	var l query.Latency
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	_, err = qr.ProcessWithMutation(defaultContext())
-
-	require.NoError(t, err)
-	output := processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
-	require.JSONEq(t, `{"data": {"user":[{"name2":1}]}}`, output)
-
-	s, ok := schema.State().Get("name2")
-	require.True(t, ok)
-	s.ValueType = uint32(types.FloatID)
-	schema.State().Set("name2", s)
-	output = processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
-	require.JSONEq(t, `{"data": {"user":[{"name2":1.5}]}}`, output)
-}
+//func TestSchemaConversion(t *testing.T) {
+//	res, err := gql.Parse(gql.Request{Str: m6, Http: true})
+//	require.NoError(t, err)
+//
+//	var l query.Latency
+//	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+//	_, err = qr.ProcessWithMutation(defaultContext())
+//
+//	require.NoError(t, err)
+//	output := processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
+//	require.JSONEq(t, `{"data": {"user":[{"name2":1}]}}`, output)
+//
+//	s, ok := schema.State().Get("name2")
+//	require.True(t, ok)
+//	s.ValueType = uint32(types.FloatID)
+//	schema.State().Set("name2", s)
+//	output = processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
+//	require.JSONEq(t, `{"data": {"user":[{"name2":1.5}]}}`, output)
+//}
 
 var qErr = `
  	mutation {
@@ -1040,12 +1066,7 @@ var qErr = `
  `
 
 func TestMutationError(t *testing.T) {
-	res, err := gql.Parse(gql.Request{Str: qErr, Http: true})
-	require.NoError(t, err)
-
-	var l query.Latency
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	_, err = qr.ProcessWithMutation(defaultContext())
+	err := runMutation(qErr)
 	require.Error(t, err)
 }
 
@@ -1060,21 +1081,21 @@ var qm = `
 	}
 `
 
-func TestAssignUid(t *testing.T) {
-	res, err := gql.Parse(gql.Request{Str: qm, Http: true})
-	require.NoError(t, err)
-
-	var l query.Latency
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	er, err := qr.ProcessWithMutation(defaultContext())
-	require.NoError(t, err)
-
-	require.EqualValues(t, len(er.Allocations), 2, "Expected two UIDs to be allocated")
-	_, ok := er.Allocations["x"]
-	require.True(t, ok)
-	_, ok = er.Allocations["y"]
-	require.True(t, ok)
-}
+//func TestAssignUid(t *testing.T) {
+//	res, err := gql.Parse(gql.Request{Str: qm, Http: true})
+//	require.NoError(t, err)
+//
+//	var l query.Latency
+//	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+//	er, err := qr.ProcessWithMutation(defaultContext())
+//	require.NoError(t, err)
+//
+//	require.EqualValues(t, len(er.Allocations), 2, "Expected two UIDs to be allocated")
+//	_, ok := er.Allocations["x"]
+//	require.True(t, ok)
+//	_, ok = er.Allocations["y"]
+//	require.True(t, ok)
+//}
 
 var q1 = `
 {
@@ -1252,190 +1273,6 @@ var threeNiceFriends = `{
 	  ]
 	}
 }`
-
-func TestMutationSubjectVariables(t *testing.T) {
-	m1 := `
-		mutation {
-			set {
-                <0x500>    <friend>   <_:alice> .
-                <0x500>    <friend>   <_:bob> .
-                <0x500>    <friend>   <_:chris> .
-			}
-		}
-    `
-	err := runMutation(m1)
-	require.NoError(t, err)
-
-	m2 := `
-        mutation {
-			set {
-				uid(myfriend) <nice> "true" .
-			}
-		}
-		{
-			me(func: uid( 0x500)) {
-				myfriend as friend
-			}
-		}`
-
-	parsed, err := gql.Parse(gql.Request{Str: m2, Http: true})
-	require.NoError(t, err)
-
-	var l query.Latency
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
-	_, err = qr.ProcessWithMutation(defaultContext())
-	require.NoError(t, err)
-
-	q1 := `
-		{
-			me(func: uid( 0x500)) {
-				friend  {
-					nice
-				}
-			}
-		}
-    `
-	r, err := runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, threeNiceFriends, r)
-}
-
-func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
-	m1 := `
-		mutation {
-			set {
-                <0x700>          <friend>   <_:alice> .
-                <0x700>          <friend>   <_:bob> .
-                <0x700>          <friend>   <_:chris> .
-				uid(myfriend) <nice>     "true" .
-			}
-		}
-		{
-			me(func: uid( 0x700)) {
-				myfriend as friend
-			}
-		}
-    `
-
-	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
-	require.NoError(t, err)
-
-	var l query.Latency
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
-	_, err = qr.ProcessWithMutation(defaultContext())
-	require.NoError(t, err)
-
-	q1 := `
-		{
-			me(func: uid( 0x700)) {
-				friend  {
-					nice
-				}
-			}
-		}
-    `
-	r, err := runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, threeNiceFriends, r)
-}
-
-func TestMutationObjectVariables(t *testing.T) {
-	m1 := `
-		mutation {
-			set {
-                <0x600>    <friend>   <0x501> .
-                <0x600>    <friend>   <0x502> .
-                <0x600>    <friend>   <0x503> .
-				<0x600>    <likes>    uid(myfriend) .
-			}
-		}
-		{
-			me(func: uid( 0x600)) {
-				myfriend as friend
-			}
-		}
-    `
-
-	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
-	require.NoError(t, err)
-
-	var l query.Latency
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
-	_, err = qr.ProcessWithMutation(defaultContext())
-
-	require.NoError(t, err)
-
-	q1 := `
-		{
-			me(func: uid( 0x600)) {
-				count(likes)
-            }
-		}
-    `
-	r, err := runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"count(likes)":3}]}}`, r)
-}
-
-func TestMutationSubjectObjectVariables(t *testing.T) {
-	m1 := `
-		mutation {
-			set {
-				<0x601>    <friend>   <0x501> .
-				<0x601>    <friend>   <0x502> .
-				<0x601>    <friend>   <0x503> .
-				uid(user)    <likes>    uid(myfriend) .
-			}
-		}
-		{
-			user as var(func: uid(0x601))
-			me(func: uid(0x601)) {
-				myfriend as friend
-			}
-		}
-    `
-
-	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
-	require.NoError(t, err)
-
-	var l query.Latency
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
-	_, err = qr.ProcessWithMutation(defaultContext())
-
-	require.NoError(t, err)
-
-	q1 := `
-		{
-			me(func: uid(0x601)) {
-				count(likes)
-            }
-		}
-    `
-	r, err := runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"count(likes)":3}]}}`, r)
-}
-
-func TestMutationObjectVariablesError(t *testing.T) {
-	m1 := `
-		mutation {
-			set {
-                <0x600>    <friend>   <0x501> .
-                <0x600>    <friend>   <0x502> .
-                <0x600>    <friend>   <0x503> .
-				<0x600>    <likes>    val(myfriend) .
-			}
-		}
-		{
-			me(func: uid(0x600)) {
-				myfriend as friend
-			}
-		}
-    `
-
-	_, err := gql.Parse(gql.Request{Str: m1, Http: true})
-	require.Error(t, err)
-}
 
 // change from uid to scalar or vice versa
 func TestSchemaMutation4Error(t *testing.T) {

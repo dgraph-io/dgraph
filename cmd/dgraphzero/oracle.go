@@ -221,6 +221,8 @@ func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
 	}
+
+	// Use the start timestamp to check if we have a conflict, before we need to assign a commit ts.
 	s.orc.RLock()
 	conflict := s.orc.hasConflict(src)
 	s.orc.RUnlock()

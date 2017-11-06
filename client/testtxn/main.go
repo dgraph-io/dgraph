@@ -14,19 +14,13 @@ import (
 )
 
 func main() {
-	conn, err := grpc.Dial("localhost:8888", grpc.WithInsecure())
-	if err != nil {
-		log.Fatal(err)
-	}
-	zero := protos.NewZeroClient(conn)
-
-	conn, err = grpc.Dial("localhost:9080", grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
 	dc := protos.NewDgraphClient(conn)
 
-	dg := client.NewDgraphClient(zero, dc)
+	dg := client.NewDgraphClient(dc)
 	var wg sync.WaitGroup
 
 	for i := 0; i < 50; i++ {

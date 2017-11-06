@@ -3,7 +3,7 @@ title = "Contribute to Dgraph"
 +++
 # Getting Started
 - Read the [Getting Started Guide](https://docs.dgraph.io/get-started/)
-- [Do the tour](https://tour.dgraph.io)
+- [Take the Dgraph tour](https://tour.dgraph.io)
 
 ## Setting Up the Development Environment
 

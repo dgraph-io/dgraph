@@ -26,7 +26,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -67,8 +66,16 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 		})
 	}
 	l := posting.Get(x.DataKey(attr, src))
+	startTs := timestamp()
+	txn := &posting.Txn{
+		StartTs: startTs,
+	}
+	txn = posting.Txns().PutOrMergeIndex(txn)
 	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
+		l.AddMutationWithIndex(context.Background(), edge, txn))
+
+	commit := commitTs(startTs)
+	require.NoError(t, txn.CommitMutations(context.Background(), commit))
 }
 
 func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {
@@ -185,7 +192,7 @@ func delEdgeToLangValue(t *testing.T, attr string, src uint64, value, lang strin
 	addEdge(t, attr, src, edge)
 }
 
-func addGeoData(t *testing.T, ps *badger.KV, uid uint64, p geom.T, name string) {
+func addGeoData(t *testing.T, uid uint64, p geom.T, name string) {
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.GeoID)
 	src.Value = p
@@ -208,13 +215,24 @@ func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (s
 	if err != nil {
 		return "", err
 	}
-	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+
+	startTs := timestamp()
+	maxPendingCh <- startTs
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res, ReadTs: startTs}
 	err = queryRequest.ProcessQuery(ctx)
 	if err != nil {
 		return "", err
 	}
+
 	out, err := ToJson(queryRequest.Latency, queryRequest.Subgraphs)
-	return string(out), err
+	if err != nil {
+		return "", err
+	}
+	response := map[string]interface{}{}
+	response["data"] = json.RawMessage(string(out))
+	resp, err := json.Marshal(response)
+	require.NoError(t, err)
+	return string(resp), err
 }
 
 func processToFastJSON(t *testing.T, query string) string {

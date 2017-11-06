@@ -23,6 +23,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -259,7 +260,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	if err != nil {
 		return resp, err
 	}
-	resp.Uids = query.StripBlankNode(newUids)
+	resp.Uids = query.ConvertUidsToHex(query.StripBlankNode(newUids))
 	edges, err := query.ToInternal(gmu, newUids)
 	if err != nil {
 		return resp, err
@@ -387,6 +388,14 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	resp.Latency = gl
 	resp.Txn.LinRead = queryRequest.LinRead
 	return resp, err
+}
+
+func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.TxnContext,
+	error) {
+	commitTs, err := worker.CommitOverNetwork(ctx, tc)
+	return &protos.TxnContext{
+		CommitTs: commitTs,
+	}, err
 }
 
 func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {
@@ -544,9 +553,16 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 	var mr mapResponse
 	// Check field in map.
 	if uidVal, ok := m["_uid_"]; ok {
-		// Should be convertible to uint64. Maybe we also want to allow string later.
-		if id, ok := uidVal.(float64); ok && uint64(id) != 0 {
-			mr.uid = fmt.Sprintf("%d", uint64(id))
+		var uid uint64
+		if id, ok := uidVal.(float64); ok {
+			uid = uint64(id)
+		} else if id, ok := uidVal.(string); ok {
+			if u, err := strconv.ParseInt(id, 0, 64); err == nil {
+				uid = uint64(u)
+			}
+		}
+		if uid > 0 {
+			mr.uid = fmt.Sprintf("%d", uid)
 		}
 	}
 
