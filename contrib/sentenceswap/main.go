@@ -196,7 +196,6 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 	// garbage values for good measure.
 
 	txn := c.NewTxn()
-	// TODO: Use query variables...
 	resp, err := txn.Query(ctx, fmt.Sprintf(`
 	{
 		node1(func: uid(%s)) {
@@ -326,6 +325,5 @@ func checkInvariants(c *client.Dgraph, uids []string, sentences []string) error 
 			`, q, word, uids, len(uids), gotUids))
 		}
 	}
-	fmt.Println("Invariant successful")
 	return nil
 }

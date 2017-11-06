@@ -22,7 +22,6 @@ package posting
 import (
 	"container/list"
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -161,7 +160,6 @@ func (c *listCache) Get(key string) (pl *List) {
 		e.size = est
 		return e.pl
 	}
-	fmt.Printf("key: %q. Miss\n", key)
 	return nil
 }
 

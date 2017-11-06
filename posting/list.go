@@ -469,7 +469,6 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		numUids = 1000
 	}
 	if l.numCommits > numUids {
-		// TODO: REMOVE THIS.
 		l.syncIfDirty(false)
 	}
 	return nil
