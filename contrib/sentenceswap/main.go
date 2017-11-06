@@ -119,11 +119,6 @@ func main() {
 
 }
 
-type sentence struct {
-	first string
-	whole string
-}
-
 func createSentences(n int) []string {
 	sents := make([]string, n)
 	for i := range sents {
