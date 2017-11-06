@@ -87,7 +87,7 @@ func setup(c *client.Dgraph) {
 			first:  string   @index(term) .
 			last:   string   @index(hash) .
 			age:    int      @index(int)  .
-			access: int                   .
+			when:   int                   .
 		`,
 	}))
 }
@@ -165,7 +165,7 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 	}
 
 	nq := fmt.Sprintf(`
-		<%s> <access> "%d"^^<xs:int> .
+		<%s> <when> "%d"^^<xs:int> .
 	`,
 		uid, time.Now().Nanosecond(),
 	)
