@@ -152,12 +152,9 @@ func createSentences(n int) []string {
 }
 
 func newClient() *client.Dgraph {
-	z, err := grpc.Dial(*zeroAddr, grpc.WithInsecure())
-	x.Check(err)
 	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
 	x.Check(err)
 	return client.NewDgraphClient(
-		protos.NewZeroClient(z),
 		protos.NewDgraphClient(d),
 	)
 }
