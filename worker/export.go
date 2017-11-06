@@ -332,6 +332,7 @@ func export(bdir string, readTs uint64) error {
 		prefix.WriteString("> <")
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
+		// ReadPostingList advances the iterator, so don't call it.Next
 		l, err := posting.ReadPostingList(key, it)
 		if err != nil {
 			return err
@@ -341,7 +342,6 @@ func export(bdir string, readTs uint64) error {
 			list:   l,
 		}
 		prefix.Reset()
-		it.Next()
 	}
 
 	close(chkv) // We have stopped output to chkv.
