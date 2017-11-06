@@ -49,22 +49,10 @@ func init() {
 	}
 }
 
-var (
-	successCount uint64
-	retryCount   uint64
-)
-
 func main() {
 	flag.Parse()
 	c := newClient()
 	setup(c)
-	go func() {
-		for {
-			fmt.Printf("Success: %d Retries: %d\n",
-				atomic.LoadUint64(&successCount), atomic.LoadUint64(&retryCount))
-			time.Sleep(100 * time.Millisecond)
-		}
-	}()
 	doUpserts(c)
 	checkIntegrity(c)
 }
@@ -106,8 +94,19 @@ func doUpserts(c *client.Dgraph) {
 	wg.Wait()
 }
 
+var (
+	successCount uint64
+	retryCount   uint64
+	lastStatus   time.Time
+)
+
 func upsert(c *client.Dgraph, acc account) {
 	for {
+		if time.Since(lastStatus) > 100*time.Millisecond {
+			fmt.Printf("Success: %d Retries: %d\n",
+				atomic.LoadUint64(&successCount), atomic.LoadUint64(&retryCount))
+			lastStatus = time.Now()
+		}
 		err := tryUpsert(c, acc)
 		if err == nil {
 			atomic.AddUint64(&successCount, 1)
@@ -157,6 +156,7 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 		mu := &protos.Mutation{SetNquads: []byte(nqs)}
 		assigned, err := txn.Mutate(ctx, mu)
 		if err != nil {
+			txn.Abort(ctx)
 			return err
 		}
 		uid = assigned.GetUids()["acct"]
@@ -171,6 +171,7 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 	)
 	mu := &protos.Mutation{SetNquads: []byte(nq)}
 	if _, err = txn.Mutate(ctx, mu); err != nil {
+		txn.Abort(ctx)
 		return err
 	}
 
@@ -202,7 +203,6 @@ func checkIntegrity(c *client.Dgraph) {
 	x.Check(json.Unmarshal(resp.GetJson(), &decode))
 
 	// Make sure there is exactly one of each account.
-	x.AssertTrue(len(decode.All) == len(accounts))
 	accountSet := make(map[string]struct{})
 	for _, record := range decode.All {
 		x.AssertTrue(record.First != nil)
@@ -211,6 +211,7 @@ func checkIntegrity(c *client.Dgraph) {
 		str := fmt.Sprintf("%s_%s_%d", *record.First, *record.Last, *record.Age)
 		accountSet[str] = struct{}{}
 	}
+	x.AssertTrue(len(accountSet) == len(accounts))
 	for _, acct := range accounts {
 		str := fmt.Sprintf("%s_%s_%d", acct.first, acct.last, acct.age)
 		_, ok := accountSet[str]
