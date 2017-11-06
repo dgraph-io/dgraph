@@ -33,10 +33,12 @@ const maxUidsForTrigram = 1000000
 
 var regexTooWideErr = errors.New("Regular expression is too wide-ranging and can't be executed efficiently.")
 
-func uidsForRegex(attr string, gid uint32,
+func uidsForRegex(attr string, arg funcArgs,
 	query *cindex.Query, intersect *protos.List) (*protos.List, error) {
 	var results *protos.List
-	opts := posting.ListOptions{}
+	opts := posting.ListOptions{
+		ReadTs: arg.q.ReadTs,
+	}
 	if intersect.Size() > 0 {
 		opts.Intersect = intersect
 	}
@@ -73,7 +75,7 @@ func uidsForRegex(attr string, gid uint32,
 			}
 			// current list of result is passed for intersection
 			var err error
-			results, err = uidsForRegex(attr, gid, sub, results)
+			results, err = uidsForRegex(attr, arg, sub, results)
 			if err != nil {
 				return nil, err
 			}
@@ -98,7 +100,7 @@ func uidsForRegex(attr string, gid uint32,
 			if results == nil {
 				results = intersect
 			}
-			subUids, err := uidsForRegex(attr, gid, sub, intersect)
+			subUids, err := uidsForRegex(attr, arg, sub, intersect)
 			if err != nil {
 				return nil, err
 			}

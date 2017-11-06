@@ -303,6 +303,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 			UidList: dest,
 			Langs:   ts.Order[i].Langs,
 			LinRead: ts.LinRead,
+			ReadTs:  ts.ReadTs,
 		}
 		go fetchValues(ctx, in, i, och)
 	}
@@ -503,6 +504,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		// Intersect index with i-th input UID list.
 		listOpt := posting.ListOptions{
 			Intersect: ul,
+			ReadTs:    ts.ReadTs,
 		}
 		result, err := pl.Uids(listOpt) // The actual intersection work is done here.
 		if err != nil {

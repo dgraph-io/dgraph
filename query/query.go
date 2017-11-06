@@ -1711,7 +1711,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		if child.Params.Expand == "_all_" {
 			// Get the predicate list for expansion. Otherwise we already
 			// have the list populated.
-			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
+			child.ExpandPreds, err = getNodePredicates(ctx, sg)
 			if err != nil {
 				return out, err
 			}
@@ -1721,6 +1721,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		for k, _ := range up {
 			temp := new(SubGraph)
 			*temp = *child
+			temp.ReadTs = sg.ReadTs
+			temp.LinRead = sg.LinRead
 			temp.Params.isInternal = false
 			temp.Params.Expand = ""
 			temp.Attr = k
@@ -1973,7 +1975,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for _, it := range sg.Params.groupbyAttrs {
 			// TODO - Throw error if Attr is of list type.
 			sg.Children = append(sg.Children, &SubGraph{
-				Attr: it.Attr,
+				Attr:    it.Attr,
+				ReadTs:  sg.ReadTs,
+				LinRead: sg.LinRead,
 				Params: params{
 					ignoreResult: true,
 					Langs:        it.Langs,
@@ -2231,10 +2235,12 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func getNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueList, error) {
+func getNodePredicates(ctx context.Context, sg *SubGraph) ([]*protos.ValueList, error) {
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
-	temp.SrcUIDs = uids
+	temp.SrcUIDs = sg.DestUIDs
+	temp.ReadTs = sg.ReadTs
+	temp.LinRead = sg.LinRead
 	taskQuery, err := createTaskQuery(temp)
 	if err != nil {
 		return nil, err

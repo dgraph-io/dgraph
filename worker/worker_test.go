@@ -21,6 +21,7 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"sync/atomic"
 	"testing"
 
 	"github.com/dgraph-io/badger"
@@ -34,21 +35,26 @@ import (
 )
 
 var raftIndex uint64
+var ts uint64
+
+func timestamp() uint64 {
+	return atomic.AddUint64(&ts, 1)
+}
 
 func addEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
 	edge.Op = protos.DirectedEdge_SET
-	raftIndex++
-	rv := x.RaftValue{Group: 1, Index: raftIndex}
-	ctx := context.WithValue(context.Background(), "raft", rv)
-	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
+	//	raftIndex++
+	//	rv := x.RaftValue{Group: 1, Index: raftIndex}
+	//	ctx := context.WithValue(context.Background(), "raft", rv)
+	commitTransaction(t, edge, l)
 }
 
 func delEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
 	edge.Op = protos.DirectedEdge_DEL
-	raftIndex++
-	rv := x.RaftValue{Group: 1, Index: raftIndex}
-	ctx := context.WithValue(context.Background(), "raft", rv)
-	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
+	//	raftIndex++
+	//	rv := x.RaftValue{Group: 1, Index: raftIndex}
+	//	ctx := context.WithValue(context.Background(), "raft", rv)
+	commitTransaction(t, edge, l)
 }
 
 func getOrCreate(key []byte) *posting.List {
@@ -104,7 +110,7 @@ func taskValues(t *testing.T, v []*protos.TaskValue) []string {
 	return out
 }
 
-func initTest(t *testing.T, schemaStr string) (string, *badger.KV) {
+func initTest(t *testing.T, schemaStr string) (string, *badger.ManagedDB) {
 	err := schema.ParseBytes([]byte(schemaStr), 1)
 	require.NoError(t, err)
 
@@ -114,7 +120,7 @@ func initTest(t *testing.T, schemaStr string) (string, *badger.KV) {
 	opt := badger.DefaultOptions
 	opt.Dir = dir
 	opt.ValueDir = dir
-	ps, err := badger.NewKV(&opt)
+	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
 	pstore = ps
 
@@ -154,6 +160,7 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *protos.Query {
 		UidList: &protos.List{uids},
 		SrcFunc: srcFun,
 		Attr:    attr,
+		ReadTs:  timestamp(),
 	}
 	// It will have either nothing or attr, lang
 	if len(srcFunc) > 0 && srcFunc[1] != "" {

@@ -615,7 +615,7 @@ START:
 	for {
 		oracleDelta, err := stream.Recv()
 		if err != nil || oracleDelta == nil {
-			x.Printf("Error in oracel delta stream. Error: %v", err)
+			x.Printf("Error in oracle delta stream. Error: %v", err)
 			break
 		}
 		posting.Oracle().ProcessOracleDelta(oracleDelta)

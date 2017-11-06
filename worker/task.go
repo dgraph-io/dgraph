@@ -751,6 +751,7 @@ func handleCompareScalarFunction(arg funcArgs) error {
 		count:   count,
 		attr:    attr,
 		gid:     arg.gid,
+		readTs:  arg.q.ReadTs,
 		reverse: arg.q.Reverse,
 	}
 	return cp.evaluate(arg.out)
@@ -778,7 +779,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := protos.List{}
-	uids, err := uidsForRegex(attr, arg.gid, query, &empty)
+	uids, err := uidsForRegex(attr, arg, query, &empty)
 	lang := langForFunc(arg.q.Langs)
 	if uids != nil {
 		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
