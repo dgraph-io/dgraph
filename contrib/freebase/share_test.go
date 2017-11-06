@@ -85,5 +85,4 @@ func TestShare(t *testing.T) {
 	require.Equal(t, 1, len(r2.Root))
 	require.Equal(t, q, r2.Root[0].Share)
 	require.NotNil(t, r2.Root[0].ShareHash)
-
 }

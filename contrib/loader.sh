@@ -48,13 +48,11 @@ start
 popd &> /dev/null
 
 #Set Schema
-curl -X POST  -d 'mutation {
-  schema {
+curl -X POST  -d '
     name: string @index(term) .
     xid: string @index(exact) .
     initial_release_date: datetime @index(year) .
-  }
-}' "http://localhost:8080/query"
+' "http://localhost:8080/alter"
 
 res=$(curl -X POST  -d 'schema {}' "http://localhost:8080/query")
 expected='{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"initial_release_date","type":"datetime","index":true,"tokenizer":["year"]},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]},{"predicate":"xid","type":"string","index":true,"tokenizer":["exact"]}]}}'

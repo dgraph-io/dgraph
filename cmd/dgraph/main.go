@@ -355,7 +355,7 @@ func setupServer() {
 	http.HandleFunc("/abort", abortHandler)
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
-	// http.HandleFunc("/share", shareHandler)
+	http.HandleFunc("/share", shareHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)

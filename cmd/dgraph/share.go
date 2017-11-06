@@ -18,10 +18,18 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 
+	"golang.org/x/net/trace"
+
+	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // NewSharedQueryNQuads returns nquads with query and hash.
@@ -37,58 +45,44 @@ func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
 }
 
 // shareHandler allows to share a query between users.
-// func shareHandler(w http.ResponseWriter, r *http.Request) {
-// 	var mr query.InternalMutation
-// 	var err error
-// 	var rawQuery []byte
+func shareHandler(w http.ResponseWriter, r *http.Request) {
+	var err error
+	var rawQuery []byte
 
-// 	w.Header().Set("Content-Type", "application/json")
-// 	x.AddCorsHeaders(w)
-// 	if r.Method != "POST" {
-// 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-// 		return
-// 	}
-// 	ctx := context.Background()
-// 	defer r.Body.Close()
-// 	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
-// 		if tr, ok := trace.FromContext(ctx); ok {
-// 			tr.LazyPrintf("Error while reading the stringified query payload: %+v", err)
-// 		}
-// 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
-// 		return
-// 	}
+	w.Header().Set("Content-Type", "application/json")
+	x.AddCorsHeaders(w)
+	if r.Method != "POST" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+	ctx := context.Background()
+	defer r.Body.Close()
+	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while reading the stringified query payload: %+v", err)
+		}
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+		return
+	}
 
-// 	fail := func() {
-// 		if tr, ok := trace.FromContext(ctx); ok {
-// 			tr.LazyPrintf("Error: %+v", err)
-// 		}
-// 		x.SetStatus(w, x.Error, err.Error())
-// 	}
-// 	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
-// 	newUids, err := query.AssignUids(ctx, nquads)
-// 	if err != nil {
-// 		fail()
-// 		return
-// 	}
-// 	if mr, err = query.ToInternal(ctx, nquads, nil, newUids); err != nil {
-// 		fail()
-// 		return
-// 	}
-// 	if err = query.ApplyMutations(ctx, &protos.Mutations{Edges: mr.Edges}); err != nil {
-// 		fail()
-// 		return
-// 	}
-// 	tempMap := query.StripBlankNode(newUids)
-// 	allocIdsStr := query.ConvertUidsToHex(tempMap)
-// 	payload := map[string]interface{}{
-// 		"code":    x.Success,
-// 		"message": "Done",
-// 		"uids":    allocIdsStr,
-// 	}
+	mu := &protos.Mutation{
+		Set:               NewSharedQueryNQuads(rawQuery),
+		CommitImmediately: true,
+	}
+	resp, err := (&dgraph.Server{}).Mutate(context.Background(), mu)
+	if err != nil {
+		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	mp := map[string]interface{}{}
+	mp["code"] = x.Success
+	mp["message"] = "Done"
+	mp["uids"] = resp.Uids
 
-// 	if res, err := json.Marshal(payload); err == nil {
-// 		w.Write(res)
-// 	} else {
-// 		x.SetStatus(w, "Error", "Unable to marshal map")
-// 	}
-// }
+	js, err := json.Marshal(mp)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	w.Write(js)
+}
