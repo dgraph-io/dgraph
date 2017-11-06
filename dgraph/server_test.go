@@ -33,13 +33,18 @@ type School struct {
 	Name string `json:",omitempty"`
 }
 
+type address struct {
+	Type   string    `json:"type,omitempty"`
+	Coords []float64 `json:"coordinates,omitempty"`
+}
+
 type Person struct {
 	Uid     uint64     `json:"_uid_,omitempty"`
 	Name    string     `json:"name,omitempty"`
 	Age     int        `json:"age,omitempty"`
 	Married *bool      `json:"married,omitempty"`
 	Now     *time.Time `json:"now,omitempty"`
-	Address string     `json:"address,omitempty"` // geo value
+	Address address    `json:"address,omitempty"` // geo value
 	Friends []Person   `json:"friend,omitempty"`
 	School  *School    `json:"school,omitempty"`
 }
@@ -53,7 +58,10 @@ func TestNquadsFromJson1(t *testing.T) {
 		Age:     26,
 		Married: &m,
 		Now:     &tn,
-		Address: geoVal,
+		Address: address{
+			Type:   "Point",
+			Coords: []float64{1.1, 2.0},
+		},
 	}
 
 	b, err := json.Marshal(p)

@@ -504,19 +504,6 @@ func handleBasicType(k string, v interface{}, op int, nq *protos.NQuad) error {
 			return nil
 		}
 
-		var g geom.T
-		err := geojson.Unmarshal([]byte(v.(string)), &g)
-		// We try to parse the value as a GeoJSON. If we can't, then we store as a string.
-		if err == nil {
-			geo, err := types.ObjectValue(types.GeoID, g)
-			if err != nil {
-				return x.Errorf("Couldn't convert value: %s to geo type", v.(string))
-			}
-
-			nq.ObjectValue = geo
-			return nil
-		}
-
 		nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}
 	case float64:
 		if v == 0 && op == delete {
@@ -548,6 +535,21 @@ func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
 			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
 		})
 	}
+}
+
+func tryParseAsGeo(b []byte, nq *protos.NQuad) (bool, error) {
+	var g geom.T
+	err := geojson.Unmarshal(b, &g)
+	if err == nil {
+		geo, err := types.ObjectValue(types.GeoID, g)
+		if err != nil {
+			return false, x.Errorf("Couldn't convert value: %s to geo type", string(b))
+		}
+
+		nq.ObjectValue = geo
+		return true, nil
+	}
+	return false, nil
 }
 
 func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error) {
@@ -623,6 +625,30 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 			}
 			mr.nquads = append(mr.nquads, &nq)
 		case map[string]interface{}:
+			val := v.(map[string]interface{})
+			if len(val) == 0 {
+				continue
+			}
+
+			// Geojson geometry should have type and coordinates.
+			_, hasType := val["type"]
+			_, hasCoordinates := val["coordinates"]
+			if len(val) == 2 && hasType && hasCoordinates {
+				b, err := json.Marshal(val)
+				if err != nil {
+					return mr, x.Errorf("Error while trying to parse "+
+						"value: %+v as geo val", val)
+				}
+				ok, err := tryParseAsGeo(b, &nq)
+				if err != nil {
+					return mr, err
+				}
+				if ok {
+					mr.nquads = append(mr.nquads, &nq)
+					continue
+				}
+			}
+
 			cr, err := mapToNquads(v.(map[string]interface{}), idx, op)
 			if err != nil {
 				return mr, err

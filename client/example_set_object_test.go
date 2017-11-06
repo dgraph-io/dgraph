@@ -16,18 +16,23 @@ type School struct {
 	Name string `json:"name,omitempty"`
 }
 
+type loc struct {
+	Type   string    `json:"type,omitempty"`
+	Coords []float64 `json:"coordinates,omitempty"`
+}
+
 // If omitempty is not set, then edges with empty values (0 for int/float, "" for string, false
 // for bool) would be created for values not specified explicitly.
 
 type Person struct {
-	Uid      uint64   `json:"_uid_,omitempty"`
+	Uid      string   `json:"_uid_,omitempty"`
 	Name     string   `json:"name,omitempty"`
 	Age      int      `json:"age,omitempty"`
 	Married  bool     `json:"married,omitempty"`
 	Raw      []byte   `json:"raw_bytes",omitempty`
 	Friends  []Person `json:"friend,omitempty"`
-	Location string   `json:"loc,omitempty"`
-	School   School   `json:"school,omitempty"`
+	Location loc      `json:"loc,omitempty"`
+	School   []School `json:"school,omitempty"`
 }
 
 func Example_setObject() {
@@ -44,24 +49,26 @@ func Example_setObject() {
 	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
 	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
 
-	loc := `{"type":"Point","coordinates":[1.1,2]}`
 	p := Person{
-		Name:     "Alice",
-		Age:      26,
-		Married:  true,
-		Location: loc,
-		Raw:      []byte("raw_bytes"),
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Location: loc{
+			Type:   "Point",
+			Coords: []float64{1.1, 2},
+		},
+		Raw: []byte("raw_bytes"),
 		Friends: []Person{{
-			Uid:  1000,
+			Uid:  "1000",
 			Name: "Bob",
 			Age:  24,
 		}, {
 			Name: "Charlie",
 			Age:  29,
 		}},
-		School: School{
+		School: []School{{
 			Name: "Crown Public School",
-		},
+		}},
 	}
 
 	op := &protos.Operation{}
@@ -93,7 +100,7 @@ func Example_setObject() {
 	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
 	puid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
-		me(func: uid(%d)) {
+		me(func: uid(%s)) {
 			_uid_
 			name
 			age
@@ -117,7 +124,7 @@ func Example_setObject() {
 	}
 
 	type Root struct {
-		Me Person `json:"me"`
+		Me []Person `json:"me"`
 	}
 
 	var r Root

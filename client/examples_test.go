@@ -188,14 +188,13 @@ func ExampleUnmarshal() {
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
-		Name     string   `json:"name,omitempty"`
-		Age      int      `json:"age,omitempty"`
-		Married  bool     `json:"married,omitempty"`
-		Raw      []byte   `json:"raw_bytes",omitempty`
-		Friends  []Person `json:"friend,omitempty"`
-		Location string   `json:"loc,omitempty"`
-		School   School   `json:"school,omitempty"`
+		Uid     string   `json:"_uid_,omitempty"`
+		Name    string   `json:"name,omitempty"`
+		Age     int      `json:"age,omitempty"`
+		Married bool     `json:"married,omitempty"`
+		Raw     []byte   `json:"raw_bytes",omitempty`
+		Friends []Person `json:"friend,omitempty"`
+		School  []School `json:"school,omitempty"`
 	}
 
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -211,24 +210,22 @@ func ExampleUnmarshal() {
 	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
 	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
 
-	loc := `{"type":"Point","coordinates":[1.1,2]}`
 	p := Person{
-		Name:     "Alice",
-		Age:      26,
-		Married:  true,
-		Location: loc,
-		Raw:      []byte("raw_bytes"),
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Raw:     []byte("raw_bytes"),
 		Friends: []Person{{
-			Uid:  1000,
+			Uid:  "1000",
 			Name: "Bob",
 			Age:  24,
 		}, {
 			Name: "Charlie",
 			Age:  29,
 		}},
-		School: School{
+		School: []School{{
 			Name: "Crown Public School",
-		},
+		}},
 	}
 
 	op := &protos.Operation{}
@@ -260,7 +257,7 @@ func ExampleUnmarshal() {
 	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
 	puid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
-		me(func: uid(%d)) {
+		me(func: uid(%s)) {
 			_uid_
 			name
 			age
@@ -284,7 +281,7 @@ func ExampleUnmarshal() {
 	}
 
 	type Root struct {
-		Me Person `json:"me"`
+		Me []Person `json:"me"`
 	}
 
 	var r Root
@@ -293,7 +290,6 @@ func ExampleUnmarshal() {
 		log.Fatal(err)
 	}
 	fmt.Printf("Me: %+v\n", r.Me)
-
 }
 
 // func ExampleUnmarshal_facetsUpdate() {
@@ -488,14 +484,13 @@ func ExampleReq_SetObject() {
 	// for bool) would be created for values not specified explicitly.
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
-		Name     string   `json:"name,omitempty"`
-		Age      int      `json:"age,omitempty"`
-		Married  bool     `json:"married,omitempty"`
-		Raw      []byte   `json:"raw_bytes",omitempty`
-		Friends  []Person `json:"friend,omitempty"`
-		Location string   `json:"loc,omitempty"`
-		School   *School  `json:"school,omitempty"`
+		Uid     string    `json:"_uid_,omitempty"`
+		Name    string    `json:"name,omitempty"`
+		Age     int       `json:"age,omitempty"`
+		Married bool      `json:"married,omitempty"`
+		Raw     []byte    `json:"raw_bytes",omitempty`
+		Friends []Person  `json:"friend,omitempty"`
+		School  []*School `json:"school,omitempty"`
 	}
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
@@ -504,24 +499,22 @@ func ExampleReq_SetObject() {
 	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
 	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
 
-	loc := `{"type":"Point","coordinates":[1.1,2]}`
 	p := Person{
-		Name:     "Alice",
-		Age:      26,
-		Married:  true,
-		Location: loc,
-		Raw:      []byte("raw_bytes"),
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Raw:     []byte("raw_bytes"),
 		Friends: []Person{{
-			Uid:  1000,
+			Uid:  "1000",
 			Name: "Bob",
 			Age:  24,
 		}, {
 			Name: "Charlie",
 			Age:  29,
 		}},
-		School: &School{
+		School: []*School{&School{
 			Name: "Crown Public School",
-		},
+		}},
 	}
 
 	op := &protos.Operation{}
@@ -550,7 +543,7 @@ func ExampleReq_SetObject() {
 	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
 	puid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
-		me(func: uid(%d)) {
+		me(func: uid(%s)) {
 			_uid_
 			name
 			age
@@ -574,7 +567,7 @@ func ExampleReq_SetObject() {
 	}
 
 	type Root struct {
-		Me Person `json:"me"`
+		Me []Person `json:"me"`
 	}
 
 	var r Root
@@ -713,7 +706,7 @@ func ExampleReq_SetObject_list(t *testing.T) {
 	dg := client.NewDgraphClient(dc)
 	// This example shows example for SetObject for predicates with list type.
 	type Person struct {
-		Uid         uint64   `json:"_uid_"`
+		Uid         string   `json:"_uid_"`
 		Address     []string `json:"address"`
 		PhoneNumber []int64  `json:"phone_number"`
 	}
@@ -751,7 +744,7 @@ func ExampleReq_SetObject_list(t *testing.T) {
 
 	q := fmt.Sprintf(`
 	{
-		me(func: uid(%d)) {
+		me(func: uid(%s)) {
 			_uid_
 			address
 			phone_number
@@ -765,7 +758,7 @@ func ExampleReq_SetObject_list(t *testing.T) {
 	}
 
 	type Root struct {
-		Me Person `json:"me"`
+		Me []Person `json:"me"`
 	}
 
 	var r Root
@@ -786,41 +779,39 @@ func ExampleReq_DeleteObject_edges() {
 	dg := client.NewDgraphClient(dc)
 
 	type School struct {
-		Uid  uint64 `json:"_uid_"`
+		Uid  string `json:"_uid_"`
 		Name string `json:"name@en,omitempty"`
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
-		Name     string   `json:"name,omitempty"`
-		Age      int      `json:"age,omitempty"`
-		Married  bool     `json:"married,omitempty"`
-		Friends  []Person `json:"friend,omitempty"`
-		Location string   `json:"loc,omitempty"`
-		School   *School  `json:"school,omitempty"`
+		Uid      string    `json:"_uid_,omitempty"`
+		Name     string    `json:"name,omitempty"`
+		Age      int       `json:"age,omitempty"`
+		Married  bool      `json:"married,omitempty"`
+		Friends  []Person  `json:"friend,omitempty"`
+		Location string    `json:"loc,omitempty"`
+		School   []*School `json:"school,omitempty"`
 	}
 
 	// Lets add some data first.
-	loc := `{"type":"Point","coordinates":[1.1,2]}`
 	p := Person{
-		Uid:      1000,
-		Name:     "Alice",
-		Age:      26,
-		Married:  true,
-		Location: loc,
+		Uid:     "1000",
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
 		Friends: []Person{{
-			Uid:  1001,
+			Uid:  "1001",
 			Name: "Bob",
 			Age:  24,
 		}, {
-			Uid:  1002,
+			Uid:  "1002",
 			Name: "Charlie",
 			Age:  29,
 		}},
-		School: &School{
-			Uid:  1003,
+		School: []*School{&School{
+			Uid:  "1003",
 			Name: "Crown Public School",
-		},
+		}},
 	}
 
 	op := &protos.Operation{}
@@ -892,9 +883,9 @@ func ExampleReq_DeleteObject_edges() {
 	// Now lets delete the edge between Alice and Bob.
 	// Also lets delete the location for Alice.
 	p2 := Person{
-		Uid:      1000,
+		Uid:      "1000",
 		Location: "",
-		Friends:  []Person{Person{Uid: 1001}},
+		Friends:  []Person{Person{Uid: "1001"}},
 	}
 
 	mu = &protos.Mutation{}
@@ -916,10 +907,10 @@ func ExampleReq_DeleteObject_edges() {
 	}
 
 	type Root struct {
-		Me  Person `json:"me"`
-		Me2 Person `json:"me2"`
-		Me3 School `json:"me3"`
-		Me4 Person `json:"me4"`
+		Me  []Person `json:"me"`
+		Me2 []Person `json:"me2"`
+		Me3 []School `json:"me3"`
+		Me4 []Person `json:"me4"`
 	}
 
 	var r Root
@@ -1072,7 +1063,7 @@ func ExampleReq_DeleteObject_predicate() {
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
-		Uid     uint64   `json:"_uid_,omitempty"`
+		Uid     string   `json:"_uid_,omitempty"`
 		Name    string   `json:"name,omitempty"`
 		Age     int      `json:"age,omitempty"`
 		Married bool     `json:"married,omitempty"`
@@ -1080,16 +1071,16 @@ func ExampleReq_DeleteObject_predicate() {
 	}
 
 	p := Person{
-		Uid:     1000,
+		Uid:     "1000",
 		Name:    "Alice",
 		Age:     26,
 		Married: true,
 		Friends: []Person{Person{
-			Uid:  1001,
+			Uid:  "1001",
 			Name: "Bob",
 			Age:  24,
 		}, Person{
-			Uid:  1002,
+			Uid:  "1002",
 			Name: "Charlie",
 			Age:  29,
 		}},
@@ -1141,10 +1132,13 @@ func ExampleReq_DeleteObject_predicate() {
 	}
 
 	type Root struct {
-		Me Person `json:"me"`
+		Me []Person `json:"me"`
 	}
 	var r Root
 	err = json.Unmarshal(resp.Json, &r)
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("Response after SetObject: %+v\n\n", r)
 
 	op = &protos.Operation{
@@ -1168,6 +1162,9 @@ func ExampleReq_DeleteObject_predicate() {
 	}
 
 	err = json.Unmarshal(resp.Json, &r)
+	if err != nil {
+		log.Fatal(err)
+	}
 	// Alice should have no friends and only two attributes now.
 	fmt.Printf("Response after deletion: %+v\n", r)
 }
