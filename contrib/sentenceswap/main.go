@@ -188,9 +188,6 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 
-	// TODO: We could do some intermediate deletes and put in some intermediate
-	// garbage values for good measure.
-
 	txn := c.NewTxn()
 	resp, err := txn.Query(ctx, fmt.Sprintf(`
 	{
@@ -218,6 +215,34 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 	x.AssertTrue(decode.Node1[0].Sentence != nil)
 	x.AssertTrue(decode.Node2[0].Sentence != nil)
 
+	// Delete sentences as an intermediate step.
+	delRDFs := fmt.Sprintf(`
+		<%s> <sentence> %q .
+		<%s> <sentence> %q .
+	`,
+		node1, *decode.Node1[0].Sentence,
+		node2, *decode.Node2[0].Sentence,
+	)
+	if _, err := txn.Mutate(ctx, &protos.Mutation{DelNquads: []byte(delRDFs)}); err != nil {
+		atomic.AddUint64(&failCount, 1)
+		txn.Abort(ctx)
+		return
+	}
+
+	// Add garbage data as an intermediate step.
+	garbageRDFs := fmt.Sprintf(`
+		<%s> <sentence> "...garbage..." .
+		<%s> <sentence> "...garbage..." .
+	`,
+		node1, node2,
+	)
+	if _, err := txn.Mutate(ctx, &protos.Mutation{SetNquads: []byte(garbageRDFs)}); err != nil {
+		atomic.AddUint64(&failCount, 1)
+		txn.Abort(ctx)
+		return
+	}
+
+	// Perform swap.
 	rdfs := fmt.Sprintf(`
 		<%s> <sentence> %q .
 		<%s> <sentence> %q .
@@ -227,10 +252,12 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 	)
 	if _, err := txn.Mutate(ctx, &protos.Mutation{SetNquads: []byte(rdfs)}); err != nil {
 		atomic.AddUint64(&failCount, 1)
+		txn.Abort(ctx)
 		return
 	}
 	if err := txn.Commit(ctx); err != nil {
 		atomic.AddUint64(&failCount, 1)
+		txn.Abort(ctx)
 		return
 	}
 	atomic.AddUint64(&successCount, 1)
