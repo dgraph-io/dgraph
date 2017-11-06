@@ -74,10 +74,6 @@ func (d *DgraphCluster) Start() error {
 	if err != nil {
 		return err
 	}
-	zeroConn, err := grpc.Dial(":"+d.zeroPort, grpc.WithInsecure())
-	if err != nil {
-		return err
-	}
 
 	// Wait for dgraph to start accepting requests. TODO: Could do this
 	// programmatically by hitting the query port. This would be quicker than
@@ -85,7 +81,7 @@ func (d *DgraphCluster) Start() error {
 	// reliably wait).
 	time.Sleep(time.Second * 4)
 
-	d.client = client.NewDgraphClient(protos.NewZeroClient(zeroConn), protos.NewDgraphClient(dgConn))
+	d.client = client.NewDgraphClient([]protos.DgraphClient{protos.NewDgraphClient(dgConn)})
 
 	return nil
 }
