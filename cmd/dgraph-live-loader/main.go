@@ -253,9 +253,12 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	kv, err := badger.Open(opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
+	connzero, err := setupConnection(*zero, true)
+	x.Checkf(err, "While trying to dial gRPC")
+
 	alloc := xidmap.New(kv,
 		&uidProvider{
-			zero: dc.ZeroClient(),
+			zero: protos.NewZeroClient(connzero),
 			ctx:  opts.Ctx,
 		},
 		xidmap.Options{
@@ -265,12 +268,13 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	)
 
 	l := &loader{
-		opts:  opts,
-		dc:    dc,
-		start: time.Now(),
-		reqs:  make(chan protos.Mutation, opts.Pending*2),
-		alloc: alloc,
-		kv:    kv,
+		opts:     opts,
+		dc:       dc,
+		start:    time.Now(),
+		reqs:     make(chan protos.Mutation, opts.Pending*2),
+		alloc:    alloc,
+		kv:       kv,
+		zeroconn: connzero,
 	}
 
 	l.wg.Add(opts.Pending)
@@ -306,14 +310,6 @@ func main() {
 		// do nothing
 	}
 
-	conn, err := setupConnection(*dgraph, !*tlsEnabled)
-	x.Checkf(err, "While trying to dial gRPC")
-	defer conn.Close()
-
-	connzero, err := setupConnection(*zero, true)
-	x.Checkf(err, "While trying to dial gRPC")
-	defer conn.Close()
-
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          *numRdf,
@@ -322,9 +318,18 @@ func main() {
 		Ctx:           ctx,
 		MaxRetries:    math.MaxUint32,
 	}
-	zc := protos.NewZeroClient(connzero)
-	dc := protos.NewDgraphClient(conn)
-	dgraphClient := client.NewDgraphClient(zc, dc)
+
+	ds := strings.Split(*dgraph, ",")
+	var clients []protos.DgraphClient
+	for _, d := range ds {
+		conn, err := setupConnection(d, !*tlsEnabled)
+		x.Checkf(err, "While trying to dial gRPC")
+		defer conn.Close()
+
+		dc := protos.NewDgraphClient(conn)
+		clients = append(clients, dc)
+	}
+	dgraphClient := client.NewDgraphClient(clients)
 
 	{
 		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)
@@ -333,6 +338,7 @@ func main() {
 	}
 
 	l := setup(bmOpts, dgraphClient)
+	defer l.zeroconn.Close()
 
 	if len(*schemaFile) > 0 {
 		if err := processSchemaFile(ctx, *schemaFile, dgraphClient); err != nil {

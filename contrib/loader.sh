@@ -48,13 +48,10 @@ start
 popd &> /dev/null
 
 #Set Schema
-curl -X POST  -d 'mutation {
-  schema {
+curl -X PUT  -d '
     name: string @index(term) .
-    xid: string @index(exact) .
     initial_release_date: datetime @index(year) .
-  }
-}' "http://localhost:8080/query"
+' "http://localhost:8080/alter"
 
 res=$(curl -X POST  -d 'schema {}' "http://localhost:8080/query")
 expected='{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"initial_release_date","type":"datetime","index":true,"tokenizer":["year"]},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]},{"predicate":"xid","type":"string","index":true,"tokenizer":["exact"]}]}}'
@@ -72,8 +69,7 @@ echo -e "\nBuilding and running dgraph-live-loader."
 pushd cmd/dgraph-live-loader &> /dev/null
 # Delete client directory to clear checkpoints.
 rm -rf c
-go build .
-./dgraph-live-loader -r $benchmark/goldendata.rdf.gz -x true -d "localhost:8080,localhost:8082"
+go build . && ./dgraph-live-loader -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9080,127.0.0.1:9082" -z "127.0.0.1:12340" -c 1 -m 10000
 popd &> /dev/null
 
 

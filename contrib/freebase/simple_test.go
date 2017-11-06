@@ -27,6 +27,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func mutate(m string) {
+	dgraphServer := "http://localhost:8080/mutate"
+	client := new(http.Client)
+	req, err := http.NewRequest("POST", dgraphServer, strings.NewReader(m))
+	req.Header.Set("X-Dgraph-CommitNow", "true")
+	_, err = client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func decodeResponse(q string) string {
 	dgraphServer := "http://localhost:8080/query"
 	client := new(http.Client)
@@ -41,7 +52,7 @@ func decodeResponse(q string) string {
 
 func TestSimple(t *testing.T) {
 	// Run mutation.
-	m := `mutation {
+	m := `{
         set {
             <0x999999> <type> <0x3453> .
             <0x999999> <character> <0x9874> .
@@ -56,7 +67,7 @@ func TestSimple(t *testing.T) {
         }
      }`
 
-	decodeResponse(m)
+	mutate(m)
 
 	q := `
     {
