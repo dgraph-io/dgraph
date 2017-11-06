@@ -20,6 +20,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -41,13 +42,15 @@ func main() {
 	opt.ValueDir = *postingDir
 	opt.TableLoadingMode = options.MemoryMap
 
-	ps, err := badger.NewKV(&opt)
+	ps, err := badger.OpenManaged(opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()
 
+	txn := ps.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
-	it := ps.NewIterator(iterOpt)
+	it := txn.NewIterator(iterOpt)
 	defer it.Close()
 
 	for it.Rewind(); it.Valid(); it.Next() {

@@ -594,6 +594,23 @@ func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 	return stream.Send(group)
 }
 
+func (g *groupi) proposeDelta(oracleDelta *protos.OracleDelta) {
+	for startTs, commitTs := range oracleDelta.Commits {
+		if posting.Txns().Get(startTs) == nil {
+			continue
+		}
+		tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTs}
+		go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+	}
+	for _, startTs := range oracleDelta.Aborts {
+		if posting.Txns().Get(startTs) == nil {
+			continue
+		}
+		tctx := &protos.TxnContext{StartTs: startTs}
+		go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+	}
+}
+
 func (g *groupi) processOracleDeltaStream() {
 START:
 	pl := g.Leader(0)
@@ -612,6 +629,18 @@ START:
 		goto START
 	}
 
+	go func() {
+		// In the event where there in no leader for a group, commit/abort won't get proposed.
+		// So periodically check oracle and propose
+		ticker := time.NewTicker(time.Second * 2)
+		for {
+			<-ticker.C
+			if g.Node.AmLeader() {
+				g.proposeDelta(posting.Oracle().CurrentState())
+			}
+		}
+	}()
+
 	for {
 		oracleDelta, err := stream.Recv()
 		if err != nil || oracleDelta == nil {
@@ -619,17 +648,6 @@ START:
 			break
 		}
 		posting.Oracle().ProcessOracleDelta(oracleDelta)
-		if !g.Node.AmLeader() {
-			continue
-		}
-		for startTs, commitTs := range oracleDelta.Commits {
-			tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTs}
-			go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
-		}
-		for _, startTs := range oracleDelta.Aborts {
-			tctx := &protos.TxnContext{StartTs: startTs}
-			go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
-		}
 	}
 	goto START
 }

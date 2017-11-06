@@ -164,7 +164,6 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 
 	for kv := range kvs {
 		if size >= 32<<20 { // 32 MB
-			// TODO: Fix me
 			if err := n.ProposeAndWait(ctx, proposal); err != nil {
 				return err
 			}
