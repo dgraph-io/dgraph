@@ -76,6 +76,7 @@ type List struct {
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
 	estimatedSize uint32
+	numCommits    int
 }
 
 // calculateSize would give you the size estimate. Does not consider elements in mutation layer.
@@ -448,6 +449,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		for _, mpost := range l.mlayer {
 			if mpost.StartTs == startTs {
 				mpost.CommitTs = commitTs
+				l.numCommits++
 			}
 		}
 	}
@@ -466,7 +468,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	if numUids < 1000 {
 		numUids = 1000
 	}
-	if len(l.mlayer) > numUids {
+	if l.numCommits > numUids {
 		l.syncIfDirty(false)
 	}
 	return nil
@@ -528,7 +530,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 		return nil
 	}
 	if readTs < l.minTs {
-		return ErrTsTooOld
+		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
 	mlayerLen := len(l.mlayer)
 	if afterUid > 0 {
@@ -544,13 +546,6 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 	pitr.Init(l.plist, afterUid)
 	prevUid := uint64(0)
 	for cont {
-		if pitr.Valid() {
-			pp = pitr.Posting()
-			pp.CommitTs = l.minTs
-		} else {
-			pp = emptyPosting
-		}
-
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
 			if !l.inSnapshot(mp, readTs) {
@@ -559,6 +554,12 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 			}
 		} else {
 			mp = emptyPosting
+		}
+		if pitr.Valid() {
+			pp = pitr.Posting()
+			pp.CommitTs = l.minTs
+		} else {
+			pp = emptyPosting
 		}
 
 		switch {
@@ -630,15 +631,14 @@ func (l *List) MarshalToKv() (*protos.KV, error) {
 	l.Lock()
 	defer l.Unlock()
 	x.AssertTrue(len(l.activeTxns) == 0)
-	final, err := l.rollup()
-	if err != nil {
+	if err := l.rollup(); err != nil {
 		return nil, err
 	}
 
 	kv := &protos.KV{}
 	kv.Version = l.minTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(final)
+	val, meta := marshalPostingList(l.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Val = val
 	return kv, nil
@@ -659,7 +659,7 @@ func marshalPostingList(plist *protos.PostingList) (data []byte, meta byte) {
 	return
 }
 
-func (l *List) rollup() (*protos.PostingList, error) {
+func (l *List) rollup() error {
 	l.AssertLock()
 	final := new(protos.PostingList)
 	var bp bp128.BPackEncoder
@@ -681,8 +681,7 @@ func (l *List) rollup() (*protos.PostingList, error) {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
-			p.StartTs = 0
-			p.CommitTs = 0
+			p.StartTs, p.CommitTs = 0, 0
 			final.Postings = append(final.Postings, p)
 		}
 		return true
@@ -707,7 +706,9 @@ func (l *List) rollup() (*protos.PostingList, error) {
 	}
 	l.mlayer = l.mlayer[:midx]
 	l.minTs = l.commitTs
-	return final, nil
+	l.plist = final
+	l.numCommits = 0
+	return nil
 }
 
 // Merge mutation layer and immutable layer.
@@ -723,8 +724,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	}
 
 	minTs := l.minTs
-	final, err := l.rollup()
-	if err != nil {
+	if err := l.rollup(); err != nil {
 		return false, err
 	}
 	if l.minTs == minTs {
@@ -732,8 +732,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		return false, nil
 	}
 	x.AssertTrue(l.minTs > 0)
-	data, meta := marshalPostingList(final)
-	l.plist = final
+	data, meta := marshalPostingList(l.plist)
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 
 	for {
