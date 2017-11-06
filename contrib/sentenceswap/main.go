@@ -180,7 +180,7 @@ func setup(c *client.Dgraph, sentences []string) []string {
 
 	var uids []string
 	for _, uid := range assigned.GetUids() {
-		uids = append(uids, fmt.Sprintf("%#x", uid))
+		uids = append(uids, uid)
 	}
 	return uids
 }
