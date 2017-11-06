@@ -46,7 +46,7 @@ func NewEmbeddedDgraphClient(config Options) *client.Dgraph {
 	worker.StartRaftNodes(State.WALstore, false)
 
 	embedded := &inmemoryClient{&Server{}}
-	return client.NewClient([]protos.DgraphClient{embedded})
+	return client.NewDgraphClient([]protos.DgraphClient{embedded})
 }
 
 func DisposeEmbeddedDgraph() {

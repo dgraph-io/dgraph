@@ -20,7 +20,7 @@ func main() {
 	}
 	dc := protos.NewDgraphClient(conn)
 
-	dg := client.NewDgraphClient(dc)
+	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
 	var wg sync.WaitGroup
 
 	for i := 0; i < 50; i++ {
@@ -72,7 +72,7 @@ func TestTxnRead1(ctx context.Context, dg *client.Dgraph) {
 	if len(assigned.Uids) != 1 {
 		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
 	}
-	var uid uint64
+	var uid string
 	for _, u := range assigned.Uids {
 		uid = u
 	}
@@ -101,7 +101,7 @@ func TestTxnRead2(ctx context.Context, dg *client.Dgraph) {
 	if len(assigned.Uids) != 1 {
 		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
 	}
-	var uid uint64
+	var uid string
 	for _, u := range assigned.Uids {
 		uid = u
 	}
@@ -132,7 +132,7 @@ func TestTxnRead3(ctx context.Context, dg *client.Dgraph) {
 	if len(assigned.Uids) != 1 {
 		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
 	}
-	var uid uint64
+	var uid string
 	for _, u := range assigned.Uids {
 		uid = u
 	}
@@ -162,7 +162,7 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 	if len(assigned.Uids) != 1 {
 		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
 	}
-	var uid uint64
+	var uid string
 	for _, u := range assigned.Uids {
 		uid = u
 	}
@@ -210,7 +210,7 @@ func TestTxnRead5(ctx context.Context, dg *client.Dgraph, dc protos.DgraphClient
 	if len(assigned.Uids) != 1 {
 		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
 	}
-	var uid uint64
+	var uid string
 	for _, u := range assigned.Uids {
 		uid = u
 	}
@@ -258,7 +258,7 @@ func TestConflict(ctx context.Context, dg *client.Dgraph) {
 	if len(assigned.Uids) != 1 {
 		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
 	}
-	var uid uint64
+	var uid string
 	for _, u := range assigned.Uids {
 		uid = u
 	}
@@ -284,7 +284,7 @@ func TestConflict(ctx context.Context, dg *client.Dgraph) {
 
 func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {
 	fmt.Println("TestConflictTimeout")
-	var uid uint64
+	var uid string
 	txn := dg.NewTxn()
 	{
 		mu := &protos.Mutation{}
@@ -328,7 +328,7 @@ func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {
 
 func TestConflictTimeout2(ctx context.Context, dg *client.Dgraph) {
 	fmt.Println("TestConflictTimeout2")
-	var uid uint64
+	var uid string
 	txn := dg.NewTxn()
 	{
 

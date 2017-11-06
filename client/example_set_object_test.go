@@ -2,10 +2,12 @@ package client_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
@@ -33,9 +35,8 @@ func Example_setObject() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn})
-
-	req := client.Req{}
+	dc := protos.NewDgraphClient(conn)
+	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
 	// else a new node is created.
@@ -63,23 +64,35 @@ func Example_setObject() {
 		},
 	}
 
-	req.SetSchema(`
+	op := &protos.Operation{}
+	op.Schema = `
 		age: int .
 		married: bool .
-	`)
+	`
 
-	err = req.SetObject(&p)
+	ctx := context.Background()
+	err = dg.Alter(ctx, op)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	resp, err := dgraphClient.Run(context.Background(), &req)
+	mu := &protos.Mutation{
+		CommitImmediately: true,
+	}
+	pb, err := json.Marshal(p)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mu.SetJson = pb
+	mu.CommitImmediately = true
+	assigned, err := dg.NewTxn().Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
-	puid := resp.AssignedUids["blank-0"]
+	puid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
 		me(func: uid(%d)) {
 			_uid_
@@ -99,9 +112,7 @@ func Example_setObject() {
 		}
 	}`, puid)
 
-	req = client.Req{}
-	req.SetQuery(q)
-	resp, err = dgraphClient.Run(context.Background(), &req)
+	resp, err := dg.NewTxn().Query(context.Background(), q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -111,7 +122,7 @@ func Example_setObject() {
 	}
 
 	var r Root
-	err = client.Unmarshal(resp.N, &r)
+	err = json.Unmarshal(resp.Json, &r)
 	if err != nil {
 		log.Fatal(err)
 	}
