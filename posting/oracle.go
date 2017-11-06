@@ -38,6 +38,7 @@ func init() {
 type oracle struct {
 	x.SafeMutex
 	commits    map[uint64]uint64
+	aborts     map[uint64]struct{}
 	maxpending uint64
 
 	// Used for waiting logic.
@@ -46,6 +47,7 @@ type oracle struct {
 
 func (o *oracle) init() {
 	o.commits = make(map[uint64]uint64)
+	o.aborts = make(map[uint64]struct{})
 	o.waiters = make(map[uint64][]chan struct{})
 }
 
@@ -53,6 +55,7 @@ func (o *oracle) Done(startTs uint64) {
 	o.Lock()
 	defer o.Unlock()
 	delete(o.commits, startTs)
+	delete(o.aborts, startTs)
 }
 
 func (o *oracle) commitTs(startTs uint64) uint64 {
@@ -70,6 +73,26 @@ func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 	ch := make(chan struct{})
 	o.waiters[startTs] = append(o.waiters[startTs], ch)
 	return ch, true
+}
+
+func (o *oracle) MaxPending() uint64 {
+	o.RLock()
+	defer o.RUnlock()
+	return o.maxpending
+}
+
+func (o *oracle) CurrentState() *protos.OracleDelta {
+	od := new(protos.OracleDelta)
+	od.Commits = make(map[uint64]uint64)
+	o.RLock()
+	defer o.RUnlock()
+	for startTs := range o.aborts {
+		od.Aborts = append(od.Aborts, startTs)
+	}
+	for startTs, commitTs := range o.commits {
+		od.Commits[startTs] = commitTs
+	}
+	return od
 }
 
 func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
@@ -90,6 +113,9 @@ func (o *oracle) ProcessOracleDelta(od *protos.OracleDelta) {
 	defer o.Unlock()
 	for startTs, commitTs := range od.Commits {
 		o.commits[startTs] = commitTs
+	}
+	for _, startTs := range od.Aborts {
+		o.aborts[startTs] = struct{}{}
 	}
 	if od.MaxPending <= o.maxpending {
 		return

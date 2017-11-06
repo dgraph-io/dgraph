@@ -72,21 +72,21 @@ type List struct {
 	mlayer        []*protos.Posting // committed mutations, sorted by uid,ts
 	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
 	commitTs      uint64            // last commitTs of this pl
-	activeTxns    []uint64
+	activeTxns    map[uint64]struct{}
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
-	estimatedSize uint32
+	estimatedSize int32
 	numCommits    int
 }
 
 // calculateSize would give you the size estimate. Does not consider elements in mutation layer.
 // Expensive, so don't run it carefully.
-func (l *List) calculateSize() uint32 {
+func (l *List) calculateSize() int32 {
 	sz := int(unsafe.Sizeof(l))
 	sz += l.plist.Size()
 	sz += cap(l.key)
 	sz += cap(l.mlayer) * 8
-	return uint32(sz)
+	return int32(sz)
 }
 
 type PIterator struct {
@@ -224,8 +224,8 @@ func NewPosting(t *protos.DirectedEdge) *protos.Posting {
 	}
 }
 
-func (l *List) EstimatedSize() uint32 {
-	return atomic.LoadUint32(&l.estimatedSize)
+func (l *List) EstimatedSize() int32 {
+	return atomic.LoadInt32(&l.estimatedSize)
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
@@ -337,7 +337,8 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		return false, ErrConflict
 	}
 	// We can have atmax one pending <s> <p> * mutation.
-	if (len(l.activeTxns) > 0 && l.activeTxns[0] != txn.StartTs && l.markdeleteAll > 0) ||
+	_, ok := l.activeTxns[txn.StartTs]
+	if (len(l.activeTxns) > 0 && !ok && l.markdeleteAll > 0) ||
 		(txn.StartTs < l.commitTs) {
 		txn.SetAbort()
 		return false, ErrConflict
@@ -377,18 +378,13 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 	mpost.StartTs = txn.StartTs
 	t1 := time.Now()
 	hasMutated := l.updateMutationLayer(txn.StartTs, mpost)
-	atomic.AddUint32(&l.estimatedSize, uint32(mpost.Size()+16 /* various overhead */))
+	atomic.AddInt32(&l.estimatedSize, int32(mpost.Size()+16 /* various overhead */))
 	if dur := time.Since(t1); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Uids))
 		}
 	}
-	tidx := sort.Search(len(l.activeTxns), func(idx int) bool {
-		return l.activeTxns[idx] == txn.StartTs
-	})
-	if tidx >= len(l.activeTxns) {
-		l.activeTxns = append(l.activeTxns, txn.StartTs)
-	}
+	l.activeTxns[txn.StartTs] = struct{}{}
 	txn.AddDelta(l.key, mpost)
 	return hasMutated, nil
 }
@@ -413,34 +409,33 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 			l.mlayer[midx] = mpost
 			midx++
 		}
-		// TODO: Estimate size
+		atomic.AddInt32(&l.estimatedSize, -1*int32(mpost.Size()+16 /* various overhead */))
 	}
 	l.mlayer = l.mlayer[:midx]
-	tidx := sort.Search(len(l.activeTxns), func(idx int) bool {
-		return l.activeTxns[idx] == startTs
-	})
-	if tidx < len(l.activeTxns) {
-		copy(l.activeTxns[tidx:], l.activeTxns[tidx+1:])
-		l.activeTxns = l.activeTxns[:len(l.activeTxns)-1]
-	}
+	delete(l.activeTxns, startTs)
 	return nil
 }
 
-func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) error {
+func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) (bool, error) {
 	l.Lock()
 	defer l.Unlock()
 	return l.commitMutation(ctx, startTs, commitTs)
 }
 
-func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) error {
+func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
 		}
-		return ErrRetry
+		return false, ErrRetry
 	}
 
 	l.AssertLock()
+	if _, ok := l.activeTxns[startTs]; !ok {
+		// It was already committed, might be happening due to replay.
+		return false, nil
+	}
+	delete(l.activeTxns, startTs)
 	if l.markdeleteAll == 1 {
 		l.deleteHelper(ctx)
 		l.minTs = commitTs
@@ -453,13 +448,6 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 			}
 		}
 	}
-	tidx := sort.Search(len(l.activeTxns), func(idx int) bool {
-		return l.activeTxns[idx] == startTs
-	})
-	if tidx < len(l.activeTxns) {
-		copy(l.activeTxns[tidx:], l.activeTxns[tidx+1:])
-		l.activeTxns = l.activeTxns[:len(l.activeTxns)-1]
-	}
 	if commitTs > l.commitTs {
 		l.commitTs = commitTs
 	}
@@ -471,14 +459,14 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	if l.numCommits > numUids {
 		l.syncIfDirty(false)
 	}
-	return nil
+	return true, nil
 }
 
 func (l *List) deleteHelper(ctx context.Context) error {
 	l.AssertLock()
 	l.plist = emptyList
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
-	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
+	atomic.StoreInt32(&l.estimatedSize, l.calculateSize())
 	return nil
 }
 
@@ -503,7 +491,7 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	l.RLock()
 	defer l.RUnlock()
 	var conflicts []uint64
-	for _, ts := range l.activeTxns {
+	for ts := range l.activeTxns {
 		if ts < readTs {
 			conflicts = append(conflicts, ts)
 		}
@@ -526,7 +514,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 	l.AssertRLock()
 	midx := 0
 
-	if len(l.activeTxns) > 0 && l.activeTxns[0] == readTs && l.markdeleteAll > 0 {
+	if _, ok := l.activeTxns[readTs]; ok && l.markdeleteAll > 0 {
 		return nil
 	}
 	if readTs < l.minTs {
@@ -706,7 +694,11 @@ func (l *List) rollup() error {
 	}
 	l.mlayer = l.mlayer[:midx]
 	l.minTs = l.commitTs
-	l.plist = final
+	if sz > 0 {
+		// Don't overwrite plist if nothing new is merged.
+		// We set plist to emptyList when we do sp*
+		l.plist = final
+	}
 	l.numCommits = 0
 	return nil
 }
@@ -727,13 +719,13 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	if err := l.rollup(); err != nil {
 		return false, err
 	}
-	if l.minTs == minTs {
+	if l.minTs == minTs && l.plist != emptyList { // Would be emptyList for s p *
 		// There was no change in immutable layer.
 		return false, nil
 	}
 	x.AssertTrue(l.minTs > 0)
 	data, meta := marshalPostingList(l.plist)
-	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
+	atomic.StoreInt32(&l.estimatedSize, l.calculateSize())
 
 	for {
 		pLen := atomic.LoadInt64(&x.MaxPlSz)

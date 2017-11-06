@@ -115,7 +115,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	if err := txn.Set(w.snapshotKey(gid), data, 0x00); err != nil {
 		return err
 	}
-	x.Printf("Writing snapshot to WAL, metadata: %d\n", s.Metadata)
+	x.Printf("Writing snapshot to WAL, metadata: %+v, len(data): %d\n", s.Metadata, len(s.Data))
 
 	// Delete all entries before this snapshot to save disk space.
 	start := w.entryKey(gid, 0, 0)
