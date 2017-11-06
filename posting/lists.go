@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -179,6 +180,10 @@ func Init(ps *badger.ManagedDB) {
 
 	go periodicUpdateStats()
 	go updateMemoryMetrics()
+}
+
+func StopLRUEviction() {
+	atomic.StoreInt32(&lcache.done, 1)
 }
 
 // Get stores the List corresponding to key, if it's not there already.

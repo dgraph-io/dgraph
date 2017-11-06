@@ -209,6 +209,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 	pctx := s.n.props.pctx(proposal.Id)
 	txn := &posting.Txn{
 		StartTs: m.StartTs,
+		Indices: []uint64{index},
 	}
 	pctx.txn = posting.Txns().PutOrMergeIndex(txn)
 	for _, edge := range m.Edges {
