@@ -713,7 +713,11 @@ func (l *List) rollup() error {
 	}
 	l.mlayer = l.mlayer[:midx]
 	l.minTs = l.commitTs
-	l.plist = final
+	if sz > 0 {
+		// Don't overwrite plist if nothing new is merged.
+		// We set plist to emptyList when we do sp*
+		l.plist = final
+	}
 	l.numCommits = 0
 	return nil
 }
