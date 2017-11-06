@@ -59,6 +59,10 @@ var typeNameMap = map[string]TypeID{
 
 type TypeID protos.Posting_ValType
 
+func (t TypeID) Enum() protos.Posting_ValType {
+	return protos.Posting_ValType(t)
+}
+
 func (t TypeID) Name() string {
 	switch t {
 	case IntID:

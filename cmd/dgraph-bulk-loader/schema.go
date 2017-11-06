@@ -23,7 +23,7 @@ func newSchemaStore(initial []*protos.SchemaUpdate, opt options, state *state) *
 	s := &schemaStore{
 		m: map[string]*protos.SchemaUpdate{
 			"_predicate_": &protos.SchemaUpdate{
-				ValueType: uint32(types.StringID),
+				ValueType: protos.Posting_STRING,
 				List:      true,
 				Explicit:  true,
 			},
@@ -32,7 +32,7 @@ func newSchemaStore(initial []*protos.SchemaUpdate, opt options, state *state) *
 	}
 	if opt.StoreXids {
 		s.m["xid"] = &protos.SchemaUpdate{
-			ValueType: uint32(protos.Posting_STRING),
+			ValueType: protos.Posting_STRING,
 			Tokenizer: []string{"hash"},
 			Explicit:  true,
 		}
@@ -56,7 +56,7 @@ func (s *schemaStore) getSchema(pred string) *protos.SchemaUpdate {
 
 func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 	if objectIsUID {
-		de.ValueType = uint32(protos.Posting_UID)
+		de.ValueType = protos.Posting_UID
 	}
 
 	s.RLock()

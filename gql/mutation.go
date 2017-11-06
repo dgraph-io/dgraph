@@ -234,7 +234,7 @@ func copyValue(out *protos.DirectedEdge, nq NQuad) error {
 	if out.Value, t, err = byteVal(nq); err != nil {
 		return err
 	}
-	out.ValueType = uint32(t)
+	out.ValueType = t.Enum()
 	return nil
 }
 

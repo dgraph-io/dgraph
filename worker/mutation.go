@@ -215,9 +215,9 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 	// type is not present
 	s, ok := schema.State().Get(attr)
 	if ok {
-		s.ValueType = uint32(typ)
+		s.ValueType = typ.Enum()
 	} else {
-		s = protos.SchemaUpdate{ValueType: uint32(typ)}
+		s = protos.SchemaUpdate{ValueType: typ.Enum()}
 	}
 	updateSchema(attr, s, index)
 }
@@ -330,7 +330,7 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 	if err = types.Marshal(dst, &b); err != nil {
 		return err
 	}
-	edge.ValueType = uint32(schemaType)
+	edge.ValueType = schemaType.Enum()
 	edge.Value = b.Value.([]byte)
 	return nil
 }

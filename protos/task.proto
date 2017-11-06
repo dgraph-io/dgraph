@@ -161,7 +161,7 @@ message DirectedEdge {
 	fixed64 entity = 1;    // Subject or source node / UID.
 	string attr = 2;       // Attribute or predicate. Labels the edge.
 	bytes value = 3;       // Edge points to a value.
-	uint32 value_type = 4;  // The type of the value
+	Posting.ValType value_type = 4;  // The type of the value
 	fixed64 value_id = 5;   // Object or destination node / UID.
 	string label = 6;
 	string lang = 7;
@@ -323,7 +323,7 @@ message SchemaNode {
 
 message SchemaUpdate {
 	string predicate = 1;
-	uint32 value_type = 2;
+	Posting.ValType value_type = 2;
 	enum Directive {
 	   NONE = 0;
 	   INDEX = 1;
