@@ -24,6 +24,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos"
@@ -185,6 +186,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		plist := Get(d.key)
 		changed, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		for err == ErrRetry {
+			time.Sleep(5 * time.Millisecond)
 			plist = Get(d.key)
 			changed, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		}
@@ -238,6 +240,7 @@ func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error
 		plist := Get(d.key)
 		_, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		for err == ErrRetry {
+			time.Sleep(5 * time.Millisecond)
 			plist = Get(d.key)
 			_, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		}
@@ -255,6 +258,7 @@ func (tx *Txn) AbortMutations(ctx context.Context) error {
 		plist := Get([]byte(d.key))
 		err := plist.AbortTransaction(ctx, tx.StartTs)
 		for err == ErrRetry {
+			time.Sleep(5 * time.Millisecond)
 			plist = Get(d.key)
 			err = plist.AbortTransaction(ctx, tx.StartTs)
 		}
@@ -291,6 +295,7 @@ func unmarshalOrCopy(plist *protos.PostingList, item *badger.Item) error {
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
+	l.activeTxns = make(map[uint64]struct{})
 	l.plist = new(protos.PostingList)
 
 	// Iterates from highest Ts to lowest Ts
@@ -336,18 +341,13 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		return l.mlayer[i].CommitTs > l.mlayer[j].CommitTs
 	})
-
-	l.Lock()
-	size := l.calculateSize()
-	l.Unlock()
-	x.BytesRead.Add(int64(size))
-	atomic.StoreInt32(&l.estimatedSize, size)
 	return l, nil
 }
 
 func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	l := new(List)
 	l.key = key
+	l.activeTxns = make(map[uint64]struct{})
 	l.plist = new(protos.PostingList)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()

@@ -421,7 +421,6 @@ func deleteEntries(prefix []byte) error {
 
 	// Throttle number of parallel purges.
 	pending := make(chan struct{}, 1000)
-	var wg sync.WaitGroup
 	var m sync.Mutex
 	var err error
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
@@ -430,7 +429,6 @@ func deleteEntries(prefix []byte) error {
 		copy(nkey, item.Key())
 
 		pending <- struct{}{}
-		wg.Add(1)
 		go func(key []byte, version uint64) {
 			e := pstore.PurgeVersionsBelow(key, version)
 			if e != nil {
@@ -439,10 +437,11 @@ func deleteEntries(prefix []byte) error {
 				m.Unlock()
 			}
 			<-pending
-			wg.Done()
 		}(nkey, item.Version()+1)
 	}
-	wg.Wait()
+	for i := 0; i < 1000; i++ {
+		pending <- struct{}{}
+	}
 	return err
 }
 

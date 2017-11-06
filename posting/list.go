@@ -72,7 +72,7 @@ type List struct {
 	mlayer        []*protos.Posting // committed mutations, sorted by uid,ts
 	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
 	commitTs      uint64            // last commitTs of this pl
-	activeTxns    []uint64
+	activeTxns    map[uint64]struct{}
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	markdeleteAll int32
 	estimatedSize int32
@@ -337,7 +337,8 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		return false, ErrConflict
 	}
 	// We can have atmax one pending <s> <p> * mutation.
-	if (len(l.activeTxns) > 0 && l.activeTxns[0] != txn.StartTs && l.markdeleteAll > 0) ||
+	_, ok := l.activeTxns[txn.StartTs]
+	if (len(l.activeTxns) > 0 && !ok && l.markdeleteAll > 0) ||
 		(txn.StartTs < l.commitTs) {
 		txn.SetAbort()
 		return false, ErrConflict
@@ -383,16 +384,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Uids))
 		}
 	}
-	tidx := sort.Search(len(l.activeTxns), func(idx int) bool {
-		return l.activeTxns[idx] >= txn.StartTs
-	})
-	if tidx >= len(l.activeTxns) {
-		l.activeTxns = append(l.activeTxns, txn.StartTs)
-	} else if l.activeTxns[tidx] != txn.StartTs {
-		l.activeTxns = append(l.activeTxns, 0)
-		copy(l.activeTxns[tidx+1:], l.activeTxns[tidx:])
-		l.activeTxns[tidx] = txn.StartTs
-	}
+	l.activeTxns[txn.StartTs] = struct{}{}
 	txn.AddDelta(l.key, mpost)
 	return hasMutated, nil
 }
@@ -420,13 +412,7 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 		atomic.AddInt32(&l.estimatedSize, -1*int32(mpost.Size()+16 /* various overhead */))
 	}
 	l.mlayer = l.mlayer[:midx]
-	tidx := sort.Search(len(l.activeTxns), func(idx int) bool {
-		return l.activeTxns[idx] == startTs
-	})
-	if tidx < len(l.activeTxns) {
-		copy(l.activeTxns[tidx:], l.activeTxns[tidx+1:])
-		l.activeTxns = l.activeTxns[:len(l.activeTxns)-1]
-	}
+	delete(l.activeTxns, startTs)
 	return nil
 }
 
@@ -445,16 +431,11 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) (bo
 	}
 
 	l.AssertLock()
-	tidx := sort.Search(len(l.activeTxns), func(idx int) bool {
-		return l.activeTxns[idx] >= startTs
-	})
-	if tidx < len(l.activeTxns) && l.activeTxns[tidx] == startTs {
-		copy(l.activeTxns[tidx:], l.activeTxns[tidx+1:])
-		l.activeTxns = l.activeTxns[:len(l.activeTxns)-1]
-	} else {
+	if _, ok := l.activeTxns[startTs]; !ok {
 		// It was already committed, might be happening due to replay.
 		return false, nil
 	}
+	delete(l.activeTxns, startTs)
 	if l.markdeleteAll == 1 {
 		l.deleteHelper(ctx)
 		l.minTs = commitTs
@@ -510,7 +491,7 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	l.RLock()
 	defer l.RUnlock()
 	var conflicts []uint64
-	for _, ts := range l.activeTxns {
+	for ts := range l.activeTxns {
 		if ts < readTs {
 			conflicts = append(conflicts, ts)
 		}
@@ -533,7 +514,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 	l.AssertRLock()
 	midx := 0
 
-	if len(l.activeTxns) > 0 && l.activeTxns[0] == readTs && l.markdeleteAll > 0 {
+	if _, ok := l.activeTxns[readTs]; ok && l.markdeleteAll > 0 {
 		return nil
 	}
 	if readTs < l.minTs {
