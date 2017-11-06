@@ -13,6 +13,7 @@ function quit {
 }
 
 function start {
+	rm -rf $BUILD/p $BUILD/p2 $BUILD/w $BUILD/w2
   echo -e "Starting first server.\n"
   ./dgraph -p $BUILD/p -w $BUILD/w -memory_mb 2048 --idx 1 --my "127.0.0.1:12345" --zero "127.0.0.1:12340"> $BUILD/server.log &
   sleep 5
@@ -20,13 +21,14 @@ function start {
   ./dgraph -p $BUILD/p2 -w $BUILD/w2 -memory_mb 2048 --idx 2 --my "127.0.0.1:12346" --zero "127.0.0.1:12340" --port 8082 --grpc_port 9082 --workerport 12346 > $BUILD/server2.log &
   # Wait for membership sync to happen.
 	# TODO: Change this to wait for health check.
-  sleep 45
+  sleep 10
   return 0
 }
 
 function startZero {
+	rm -rf $BUILD/wz
 	echo -e "Staring dgraph zero.\n"
   ./dgraphzero -w $BUILD/wz -port 12340 &
   # To ensure dgraph doesn't start before dgraphzero.
-	sleep 30
+	sleep 5
 }

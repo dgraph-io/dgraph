@@ -310,10 +310,6 @@ func main() {
 		// do nothing
 	}
 
-	conn, err := setupConnection(*dgraph, !*tlsEnabled)
-	x.Checkf(err, "While trying to dial gRPC")
-	defer conn.Close()
-
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          *numRdf,
@@ -322,8 +318,18 @@ func main() {
 		Ctx:           ctx,
 		MaxRetries:    math.MaxUint32,
 	}
-	dc := protos.NewDgraphClient(conn)
-	dgraphClient := client.NewDgraphClient([]protos.DgraphClient{dc})
+
+	ds := strings.Split(*dgraph, ",")
+	var clients []protos.DgraphClient
+	for _, d := range ds {
+		conn, err := setupConnection(d, !*tlsEnabled)
+		x.Checkf(err, "While trying to dial gRPC")
+		defer conn.Close()
+
+		dc := protos.NewDgraphClient(conn)
+		clients = append(clients, dc)
+	}
+	dgraphClient := client.NewDgraphClient(clients)
 
 	{
 		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)

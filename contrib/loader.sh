@@ -48,9 +48,8 @@ start
 popd &> /dev/null
 
 #Set Schema
-curl -X POST  -d '
+curl -X PUT  -d '
     name: string @index(term) .
-    xid: string @index(exact) .
     initial_release_date: datetime @index(year) .
 ' "http://localhost:8080/alter"
 
@@ -70,8 +69,7 @@ echo -e "\nBuilding and running dgraph-live-loader."
 pushd cmd/dgraph-live-loader &> /dev/null
 # Delete client directory to clear checkpoints.
 rm -rf c
-go build .
-./dgraph-live-loader -r $benchmark/goldendata.rdf.gz -x true -d "localhost:8080,localhost:8082"
+go build . && ./dgraph-live-loader -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9080,127.0.0.1:9082" -z "127.0.0.1:12340" -c 1 -m 10000
 popd &> /dev/null
 
 
