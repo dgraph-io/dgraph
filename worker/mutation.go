@@ -519,7 +519,7 @@ func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) (uint64, erro
 	if err != nil {
 		return 0, err
 	}
-	if tctx.Aborted {
+	if !tc.Aborted && tctx.Aborted {
 		return 0, posting.ErrConflict
 	}
 	return tctx.CommitTs, nil
