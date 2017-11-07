@@ -555,7 +555,7 @@ func tryParseAsGeo(b []byte, nq *protos.NQuad) (bool, error) {
 }
 
 // TODO - Abstract these parameters to a struct.
-func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapResponse, error) {
+func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
 	if uidVal, ok := m["_uid_"]; ok {
@@ -601,7 +601,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 			}
 		}
 
-		prefix := fmt.Sprintf("%s:", pred)
+		prefix := pred + ":"
 		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
 		// to call parseFacets everytime.
 		fts, err := parseFacets(m, prefix)
@@ -698,7 +698,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 		}
 	}
 
-	fts, err := parseFacets(m, fmt.Sprintf("%s:", k))
+	fts, err := parseFacets(m, parentPred+":")
 	mr.fcts = fts
 	return mr, err
 }
