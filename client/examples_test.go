@@ -303,7 +303,6 @@ func ExampleTxn_Mutate_bytes() {
 		Me []Person `json:"q"`
 	}
 
-	fmt.Println(string(resp.Json))
 	var r Root
 	err = json.Unmarshal(resp.Json, &r)
 	if err != nil {
@@ -514,7 +513,6 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 		Me []Person `json:"me"`
 	}
 
-	fmt.Println(string(resp.Json))
 	var r Root
 	err = json.Unmarshal(resp.Json, &r)
 	if err != nil {

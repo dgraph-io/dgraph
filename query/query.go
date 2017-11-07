@@ -434,12 +434,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
-					//		fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
 						uc.AddValue(fmt.Sprintf("%s:%s", fieldName, f.Key),
 							facets.ValFor(f))
 					}
-					//			dst.AddListChild(fieldName, fc)
 				}
 				if !uc.IsEmpty() {
 					dst.AddListChild(fieldName, uc)
