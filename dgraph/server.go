@@ -426,23 +426,27 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-func parseFacets(val interface{}) ([]*protos.Facet, error) {
-	if val == nil {
+func parseFacets(m map[string]interface{}, prefix string) ([]*protos.Facet, error) {
+	// This happens at root.
+	if prefix == "" {
 		return nil, nil
 	}
 
-	facetObj, ok := val.(map[string]interface{})
-	if !ok {
-		return nil, x.Errorf("Facets : %v should always be a map", val)
-	}
-
-	facetsForPred := make([]*protos.Facet, 0, len(facetObj))
+	facetsForPred := make([]*protos.Facet, 0, 2)
 	var fv interface{}
-	for facetKey, facetVal := range facetObj {
+	for fname, facetVal := range m {
 		if facetVal == nil {
 			continue
 		}
-		f := &protos.Facet{Key: facetKey}
+		if !strings.HasPrefix(fname, prefix) {
+			continue
+		}
+
+		keys := strings.Split(fname, ":")
+		if len(keys[1]) == 0 {
+			return nil, x.Errorf("Facet key can't be empty. Found empty: %s", fname)
+		}
+		f := &protos.Facet{Key: keys[1]}
 		switch v := facetVal.(type) {
 		case string:
 			if t, err := types.ParseTime(v); err == nil {
@@ -461,7 +465,7 @@ func parseFacets(val interface{}) ([]*protos.Facet, error) {
 			f.ValType = protos.Facet_BOOL
 		default:
 			return nil, x.Errorf("Facet value for key: %s can only be string/float64/bool.",
-				facetKey)
+				fname)
 		}
 
 		// convert facet val interface{} to binary
@@ -552,7 +556,8 @@ func tryParseAsGeo(b []byte, nq *protos.NQuad) (bool, error) {
 	return false, nil
 }
 
-func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error) {
+// TODO - Abstract these parameters to a struct.
+func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
 	if uidVal, ok := m["_uid_"]; ok {
@@ -579,7 +584,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if k == "_uid_" || strings.HasSuffix(k, "@facets") {
+		if k == "_uid_" || strings.Index(k, ":") > 0 {
 			continue
 		}
 
@@ -598,8 +603,8 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 			}
 		}
 
-		fkey := fmt.Sprintf("%s@facets", k)
-		fts, err := parseFacets(m[fkey])
+		prefix := fmt.Sprintf("%s:", k)
+		fts, err := parseFacets(m, prefix)
 		if err != nil {
 			return mr, err
 		}
@@ -649,7 +654,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 				}
 			}
 
-			cr, err := mapToNquads(v.(map[string]interface{}), idx, op)
+			cr, err := mapToNquads(v.(map[string]interface{}), idx, op, k)
 			if err != nil {
 				return mr, err
 			}
@@ -674,8 +679,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 					}
 					mr.nquads = append(mr.nquads, &nq)
 				case map[string]interface{}:
-
-					cr, err := mapToNquads(iv, idx, op)
+					cr, err := mapToNquads(iv, idx, op, k)
 					if err != nil {
 						return mr, err
 					}
@@ -694,7 +698,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int) (mapResponse, error
 		}
 	}
 
-	fts, err := parseFacets(m["@facets"])
+	fts, err := parseFacets(m, k)
 	mr.fcts = fts
 	return mr, err
 }
@@ -725,7 +729,7 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 			if _, ok := obj.(map[string]interface{}); !ok {
 				return nil, x.Errorf("Only array of map allowed at root.")
 			}
-			mr, err := mapToNquads(obj.(map[string]interface{}), &idx, op)
+			mr, err := mapToNquads(obj.(map[string]interface{}), &idx, op, "")
 			if err != nil {
 				return mr.nquads, err
 			}
@@ -735,7 +739,7 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 		return nquads, nil
 	}
 
-	mr, err := mapToNquads(ms, &idx, op)
+	mr, err := mapToNquads(ms, &idx, op, "")
 	checkForDeletion(&mr, ms, op)
 	return mr.nquads, err
 }
