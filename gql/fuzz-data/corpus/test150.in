@@ -3,7 +3,7 @@
 		me(func: uid(0x1)) {
 			friends @groupby(name) {
 				name
-				count(_uid_)
+				count(uid)
 			}
 			hometown
 			age

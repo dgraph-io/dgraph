@@ -2870,12 +2870,12 @@ func TestParseNormalize(t *testing.T) {
 func TestParseGroupbyRoot(t *testing.T) {
 	query := `
 	query {
-		me(func: uid( 1, 2, 3)) @groupby(friends) {
-				a as count(_uid_)
+		me(func: uid(1, 2, 3)) @groupby(friends) {
+				a as count(uid)
 		}
 
 		groups(func: uid(a)) {
-			_uid_
+			uid
 			val(a)
 		}
 	}
@@ -2892,14 +2892,14 @@ func TestParseGroupbyWithCountVar(t *testing.T) {
 	query {
 		me(func: uid(0x1)) {
 			friends @groupby(friends) {
-				a as count(_uid_)
+				a as count(uid)
 			}
 			hometown
 			age
 		}
 
 		groups(func: uid(a)) {
-			_uid_
+			uid
 			val(a)
 		}
 	}
@@ -2923,7 +2923,7 @@ func TestParseGroupbyWithMaxVar(t *testing.T) {
 		}
 
 		groups(func: uid(a)) {
-			_uid_
+			uid
 			val(a)
 		}
 	}
@@ -2942,7 +2942,7 @@ func TestParseGroupby(t *testing.T) {
 	query {
 		me(func: uid(0x1)) {
 			friends @groupby(name@en) {
-				count(_uid_)
+				count(uid)
 			}
 			hometown
 			age
@@ -2963,7 +2963,7 @@ func TestParseGroupbyError(t *testing.T) {
 		me(func: uid(0x1)) {
 			friends @groupby(name) {
 				name
-				count(_uid_)
+				count(uid)
 			}
 			hometown
 			age
@@ -3197,7 +3197,7 @@ func TestParseFacetsMultipleVar(t *testing.T) {
 			age
 		}
 		h(func: uid(a, b)) {
-			_uid_
+			uid
 		}
 	}
 `
@@ -4144,7 +4144,7 @@ func TestInvalidValUsage(t *testing.T) {
 	query := `
 		{
 			me(func: uid(0x01)) {
-				val(_uid_) {
+				val(uid) {
 					nope
 				}
 			}
@@ -4181,7 +4181,7 @@ func TestParseLangTagAfterStringInRoot(t *testing.T) {
 	query := `
 		{
 			q(func: anyofterms(name, "Hello"@en)) {
-				_uid_
+				uid
 			}
 		}
 	`
@@ -4195,7 +4195,7 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 	query := `
 		{
 			q(func: uid(0x01)) @filter(eq(name, "Hello"@en)) {
-				_uid_
+				uid
 			}
 		}
 	`
@@ -4209,7 +4209,7 @@ func TestParseUidAsArgument(t *testing.T) {
 	query := `
 		{
 			q(func: gt(uid, 0)) {
-				_uid_
+				uid
 			}
 		}
 	`

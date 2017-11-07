@@ -2277,6 +2277,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
 		item := it.Item()
+		fmt.Printf("item: %+v\n", item)
 		switch item.Typ {
 		case lex.ItemError:
 			return x.Errorf(item.Val)
@@ -2469,7 +2470,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					goto Fall
 				}
 
-				peekIt, err := it.Peek(1)
+				peekIt, err := it.Peek(2)
 				if err != nil {
 					return err
 				}
