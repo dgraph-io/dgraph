@@ -69,7 +69,7 @@ var rdfTypeMap = map[types.TypeID]string{
 }
 
 func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
-	item.list.Iterate(readTs, 0, func(p *protos.Posting) bool {
+	err := item.list.Iterate(readTs, 0, func(p *protos.Posting) bool {
 		buf.WriteString(item.prefix)
 		if !bytes.Equal(p.Value, nil) {
 			// Value posting
@@ -128,6 +128,11 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 		buf.WriteString(" .\n")
 		return true
 	})
+	if err != nil {
+		// TODO: Throw error back to the user.
+		// Ensure that we are not missing errCheck at other places.
+		x.Printf("Error while exporting :%v\n", err)
+	}
 }
 
 func toSchema(buf *bytes.Buffer, s *skv) {
@@ -264,6 +269,7 @@ func export(bdir string, readTs uint64) error {
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.PrefetchValues = false
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 	prefix := new(bytes.Buffer)
@@ -322,7 +328,9 @@ func export(bdir string, readTs uint64) error {
 		prefix.WriteString("> <")
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
-		l := posting.GetNoStore(key)
+		nkey := make([]byte, len(key))
+		copy(nkey, key)
+		l := posting.GetNoStore(nkey)
 		chkv <- kv{
 			prefix: prefix.String(),
 			list:   l,
