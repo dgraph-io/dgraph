@@ -79,7 +79,6 @@ func TestPlugins(t *testing.T) {
 
 	suite(
 		"word: string @index(anagram) .",
-		//}},
 		`[
 			{ "word": "airmen" },
 			{ "word": "marine" },
@@ -93,28 +92,28 @@ func TestPlugins(t *testing.T) {
 				{ q(func: allof(word, anagram, "remain")) {
 					word
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "word": "airmen" },
 					{ "word": "marine" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: allof(word, anagram, "acre")) {
 					word
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "word": "race" },
 					{ "word": "care" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: allof(word, anagram, "beta")) {
 					word
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "word": "beta" },
 					{ "word": "beat" }
-				]}}`,
+				]}`,
 			},
 		},
 	)
@@ -133,39 +132,39 @@ func TestPlugins(t *testing.T) {
 				{ q(func: allof(ip, cidr, "100.48.0.0/12")) {
 					ip
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "ip": "100.55.22.11/32" },
 					{ "ip": "100.49.21.25/32" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: allof(ip, cidr, "100.32.0.0/11")) {
 					ip
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "ip": "100.55.22.11/32" },
 					{ "ip": "100.33.81.19/32" },
 					{ "ip": "100.49.21.25/32" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: allof(ip, cidr, "100.0.0.0/8")) {
 					ip
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "ip": "100.55.22.11/32" },
 					{ "ip": "100.33.81.19/32" },
 					{ "ip": "100.49.21.25/32" },
 					{ "ip": "100.176.2.1/32" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: allof(ip, cidr, "101.0.0.0/8")) {
 					ip
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "ip": "101.0.0.5/32" }
-				]}}`,
+				]}`,
 			},
 		},
 	)
@@ -183,63 +182,63 @@ func TestPlugins(t *testing.T) {
 				{ q(func: allof(name, rune, "An")) {
 					name
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "name": "Aaron" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: allof(name, rune, "Am")) {
 					name
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "name": "Amy" },
 					{ "name": "Adam" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: allof(name, rune, "ron")) {
 					name
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "name": "Aaron" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: allof(name, rune, "ron")) {
 					name
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "name": "Aaron" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: allof(name, rune, "no")) {
 					name
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "name": "Ronald" },
 					{ "name": "Aaron" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: anyof(name, rune, "mr")) {
 					name
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "name": "Adam" },
 					{ "name": "Aaron" },
 					{ "name": "Amy" }
-				]}}`,
+				]}`,
 			},
 			{`
 				{ q(func: anyof(name, rune, "da")) {
 					name
 				}}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "name": "Adam" },
 					{ "name": "Aaron" },
 					{ "name": "Ronald" }
-				]}}`,
+				]}`,
 			},
 		},
 	)
@@ -283,14 +282,14 @@ func TestPlugins(t *testing.T) {
 						num
 					}
 				}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "num": 15 },
 					{ "num": 20 },
 					{ "num": 5 },
 					{ "num": 10 },
 					{ "num": 30 },
 					{ "num": 25 }
-				]}}`,
+				]}`,
 			},
 			{`
 				{
@@ -298,10 +297,10 @@ func TestPlugins(t *testing.T) {
 						num
 					}
 				}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "num": 15 },
 					{ "num": 30 }
-				]}}`,
+				]}`,
 			},
 			{`
 				{
@@ -309,7 +308,7 @@ func TestPlugins(t *testing.T) {
 						num
 					}
 				}`, `
-				{ "data": { "q": [
+				{ "q": [
 					{ "num": 3 },
 					{ "num": 5 },
 					{ "num": 6 },
@@ -324,7 +323,7 @@ func TestPlugins(t *testing.T) {
 					{ "num": 25 },
 					{ "num": 27 },
 					{ "num": 30 }
-				]}}`,
+				]}`,
 			},
 		},
 	)

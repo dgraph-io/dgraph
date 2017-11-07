@@ -81,7 +81,7 @@ func (d *DgraphCluster) Start() error {
 	// reliably wait).
 	time.Sleep(time.Second * 4)
 
-	d.client = client.NewDgraphClient([]protos.DgraphClient{protos.NewDgraphClient(dgConn)})
+	d.client = client.NewDgraphClient(protos.NewDgraphClient(dgConn))
 
 	return nil
 }
