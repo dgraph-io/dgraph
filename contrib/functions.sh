@@ -13,7 +13,6 @@ function quit {
 }
 
 function start {
-	rm -rf $BUILD/p $BUILD/p2 $BUILD/w $BUILD/w2
   echo -e "Starting first server.\n"
   ./dgraph -p $BUILD/p -w $BUILD/w -memory_mb 2048 --idx 1 --my "127.0.0.1:12345" --zero "127.0.0.1:12340"> $BUILD/server.log &
   sleep 5
@@ -26,7 +25,6 @@ function start {
 }
 
 function startZero {
-	rm -rf $BUILD/wz
 	echo -e "Staring dgraph zero.\n"
   ./dgraphzero -w $BUILD/wz -port 12340 &
   # To ensure dgraph doesn't start before dgraphzero.

@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -125,7 +124,6 @@ func (s *ServerState) initStorage() {
 }
 
 func (s *ServerState) Dispose() error {
-	posting.StopLRUEviction()
 	if err := s.Pstore.Close(); err != nil {
 		return errors.Wrapf(err, "While closing postings store")
 	}

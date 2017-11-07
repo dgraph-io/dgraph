@@ -540,6 +540,7 @@ func (g *groupi) cleanupTablets() {
 			for itr.Rewind(); itr.Valid(); {
 				item := itr.Item()
 
+				// TODO: Investiage out of bounds.
 				pk := x.Parse(item.Key())
 				if pk == nil {
 					itr.Next()
@@ -596,6 +597,7 @@ func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 func (g *groupi) proposeDelta(oracleDelta *protos.OracleDelta) {
 	for startTs, commitTs := range oracleDelta.Commits {
 		if posting.Txns().Get(startTs) == nil {
+			posting.Oracle().Done(startTs)
 			continue
 		}
 		tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTs}
@@ -603,6 +605,7 @@ func (g *groupi) proposeDelta(oracleDelta *protos.OracleDelta) {
 	}
 	for _, startTs := range oracleDelta.Aborts {
 		if posting.Txns().Get(startTs) == nil {
+			posting.Oracle().Done(startTs)
 			continue
 		}
 		tctx := &protos.TxnContext{StartTs: startTs}

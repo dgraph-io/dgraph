@@ -329,7 +329,7 @@ func main() {
 		dc := protos.NewDgraphClient(conn)
 		clients = append(clients, dc)
 	}
-	dgraphClient := client.NewDgraphClient(clients)
+	dgraphClient := client.NewDgraphClient(clients...)
 
 	{
 		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)

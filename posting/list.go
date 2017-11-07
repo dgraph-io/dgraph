@@ -435,7 +435,6 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) (bo
 		// It was already committed, might be happening due to replay.
 		return false, nil
 	}
-	delete(l.activeTxns, startTs)
 	if l.markdeleteAll == 1 {
 		l.deleteHelper(ctx)
 		l.minTs = commitTs
@@ -451,6 +450,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) (bo
 	if commitTs > l.commitTs {
 		l.commitTs = commitTs
 	}
+	delete(l.activeTxns, startTs)
 	// Calculate 5% of immutable layer
 	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
 	if numUids < 1000 {
@@ -759,7 +759,6 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
 			lcache.delete(l.key)
 		}
-		pstore.PurgeVersionsBelow(l.key, l.minTs)
 	}
 
 	doAsyncWrite(l.minTs, l.key, data, meta, f)
