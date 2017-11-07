@@ -16,35 +16,35 @@ func TestHelloWorld(t *testing.T) {
 	`)
 	defer s.cleanup()
 
-	t.Run("Pan and Jackson", s.singleQuery(`
-		q(func: anyofterms(name, "Peter")) {
+	t.Run("Pan and Jackson", s.multiQuery(`
+		{q(func: anyofterms(name, "Peter")) {
 			name
-		}
+		}}
 	`, `
-		"q": [
+		{"q": [
 			{ "name": "Peter Pan" },
 			{ "name": "Peter Jackson" }
-		]
+		]}
 	`))
 
-	t.Run("Pan only", s.singleQuery(`
-		q(func: anyofterms(name, "Pan")) {
+	t.Run("Pan only", s.multiQuery(`
+		{q(func: anyofterms(name, "Pan")) {
 			name
-		}
+		}}
 	`, `
-		"q": [
+		{"q": [
 			{ "name": "Peter Pan" }
-		]
+		]}
 	`))
 
-	t.Run("Jackson only", s.singleQuery(`
-		q(func: anyofterms(name, "Jackson")) {
+	t.Run("Jackson only", s.multiQuery(`
+		{q(func: anyofterms(name, "Jackson")) {
 			name
-		}
+		}}
 	`, `
-		"q": [
+		{"q": [
 			{ "name": "Peter Jackson" }
-		]
+		]}
 	`))
 }
 
@@ -59,27 +59,27 @@ func TestFacets(t *testing.T) {
 	`)
 	defer s.cleanup()
 
-	t.Run("facet on terminal edge", s.singleQuery(`
-		q(func: eq(name, "Alice")) {
+	t.Run("facet on terminal edge", s.multiQuery(`
+		{q(func: eq(name, "Alice")) {
 			name @facets(middle_initial)
-		}
+		}}
 	`, `
-		"q": [ {
+		{"q": [ {
 			"@facets": {
 				"name": {
 					"middle_initial": "J"
 				}
 			},
 			"name": "Alice"
-		} ]
+		} ]}
 	`))
 
-	t.Run("facets on fwd uid edge", s.singleQuery(`
-		q(func: eq(name, "Bob")) {
+	t.Run("facets on fwd uid edge", s.multiQuery(`
+		{q(func: eq(name, "Bob")) {
 			boss @facets(since)
-		}
+		}}
 	`, `
-		"q": [ {
+		{"q": [ {
 			"boss": [ {
 				"@facets": {
 					"_": {
@@ -87,15 +87,15 @@ func TestFacets(t *testing.T) {
 					}
 				}
 			} ]
-		} ]
+		} ]}
 	`))
 
-	t.Run("facets on rev uid edge", s.singleQuery(`
-		q(func: eq(name, "Alice")) {
+	t.Run("facets on rev uid edge", s.multiQuery(`
+		{q(func: eq(name, "Alice")) {
 			~boss @facets(since)
-		}
+		}}
 	`, `
-		"q": [ {
+		{"q": [ {
 			"~boss": [ {
 				"@facets": {
 					"_": {
@@ -103,7 +103,7 @@ func TestFacets(t *testing.T) {
 					}
 				}
 			} ]
-		} ]
+		} ]}
 	`))
 }
 
@@ -204,7 +204,7 @@ func TestCountIndex(t *testing.T) {
 		},
 	}
 	`, `
-	{"data": {
+	{
 		"alice_friend_count": [
 			{ "count(friend)": 3 }
 		],
@@ -257,7 +257,7 @@ func TestCountIndex(t *testing.T) {
 			{ "name": "Carol" }
 		],
 		"has_6_rev_friends": []
-	}}
+	}
 	`))
 }
 
@@ -272,14 +272,14 @@ func TestGoldenData(t *testing.T) {
 	)
 	defer s.cleanup()
 
-	t.Run("basic", s.singleQuery(`
-		pj_films(func:allofterms(name@en,"Peter Jackson")) {
+	t.Run("basic", s.multiQuery(`
+		{pj_films(func:allofterms(name@en,"Peter Jackson")) {
 			director.film (orderasc: name@en, first: 10) {
 				name@en
 			}
-		}
+		}}
 	`, `
-		"pj_films": [ { "director.film": [
+		{"pj_films": [ { "director.film": [
 			{ "name@en": "Bad Taste" },
 			{ "name@en": "Heavenly Creatures" },
 			{ "name@en": "Forgotten Silver" },
@@ -290,7 +290,7 @@ func TestGoldenData(t *testing.T) {
 			{ "name@en": "King Kong" },
 			{ "name@en": "The Frighteners" },
 			{ "name@en": "Gollum's Acceptance Speech" }
-		] } ]
+		] } ]}
 	`))
 
 	// TODO: Add the test cases from contrib/goldendata-queries.sh The tests

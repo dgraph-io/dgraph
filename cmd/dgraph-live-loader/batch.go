@@ -99,7 +99,7 @@ type Counter struct {
 	TxnsDone uint64
 	// Number of Aborts
 	Aborts uint64
-	// Time elapsed sinze the batch startel.
+	// Time elapsed since the batch started.
 	Elapsed time.Duration
 }
 

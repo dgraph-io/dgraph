@@ -142,13 +142,6 @@ func (s *suite) cleanup() {
 	_ = os.RemoveAll(rootDir)
 }
 
-func (s *suite) singleQuery(query, wantResult string) func(*testing.T) {
-	return s.multiQuery(
-		fmt.Sprintf(`{ %s }`, query),
-		fmt.Sprintf(`{ "data" : { %s } }`, wantResult),
-	)
-}
-
 func (s *suite) multiQuery(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
 		for _, cluster := range []*DgraphCluster{s.bulkCluster, s.liveCluster} {
