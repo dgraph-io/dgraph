@@ -63,7 +63,7 @@ export const getShareId = queryText => {
   const checkQuery = `
 {
   query(func:eq(_share_hash_, ${queryHash})) {
-      _uid_
+      uid
       _share_
   }
 }`;
@@ -88,14 +88,14 @@ export const getShareId = queryText => {
       }
 
       if (matchingQueries.length === 1) {
-        return matchingQueries[0]._uid_;
+        return matchingQueries[0].uid;
       }
 
       // If more than one result, we have a hash collision. Break it.
       for (let i = 0; i < matchingQueries.length; i++) {
         const q = matchingQueries[i];
         if (`"${q._share_}"` === encodedQuery) {
-          return q._uid_;
+          return q.uid;
         }
       }
     });

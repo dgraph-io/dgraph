@@ -251,7 +251,7 @@ func checkInvariants(c *client.Dgraph, uids []string, sentences []string) error 
 	{
 		q(func: uid(%s)) {
 			sentence
-			uid: _uid_
+			uid: uid
 		}
 	}
 	`, uidList), nil)
@@ -291,7 +291,7 @@ func checkInvariants(c *client.Dgraph, uids []string, sentences []string) error 
 		q := fmt.Sprintf(`
 		{
 			q(func: anyofterms(sentence, %q)) {
-				uid: _uid_
+				uid: uid
 			}
 		}
 		`, word)

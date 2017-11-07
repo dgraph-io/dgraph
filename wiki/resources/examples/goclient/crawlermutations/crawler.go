@@ -104,13 +104,13 @@ var (
 //
 // See also our crawlerRDF example for more description about Unmarshal and structs.
 type namedNode struct {
-	ID   uint64 `json:"_uid_"`
+	ID   uint64 `json:"uid"`
 	Name string `json:"name@en"`
 }
 
 type movie struct {
 	ReleaseDate time.Time      `json:"initial_release_date"`
-	ID          uint64         `json:"_uid_"`
+	ID          uint64         `json:"uid"`
 	Name        string         `json:"EnglishName"`
 	NameDE      string         `json:"GermanName"`
 	NameIT      string         `json:"ItalianName"`
@@ -179,33 +179,33 @@ var (
 	// map changed.
 	movieByNameTemplate = `{
 	movie(func: eq(name@en, $a)) @filter(has(genre)) {
-		_uid_
+		uid
 	}
 }`
 	movieByNameMap = make(map[string]string)
 
 	movieByIDTemplate = `{
 	movie(func: uid($a)) {
-		_uid_
+		uid
 		EnglishName: name@en
 		GermanName: name@de
 		ItalianName: name@it
       	starring {
         	performance.actor {
-				_uid_
+				uid
         		name@en
         	}
 			performance.character {
-				_uid_
+				uid
 				name@en
 			}
 		}
 		genre {
-			_uid_
+			uid
 			name@en
 		}
 		~director.film {
-			_uid_
+			uid
 			name@en
 		}
 		initial_release_date
@@ -219,7 +219,7 @@ var (
 	actor(func: uid(%v)) {
 		actor.film {
 			performance.film {
-				_uid_
+				uid
 			}
 		}
 	}
@@ -544,7 +544,7 @@ func visitActor(a *namedNode, dgraphClient *client.Dgraph) (result []uint64) {
 
 				for _, prop := range actorPerformance.Properties {
 					switch prop.Prop {
-					case "_uid_":
+					case "uid":
 						uid = prop.GetValue().GetUidVal()
 					}
 				}

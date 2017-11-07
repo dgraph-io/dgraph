@@ -33,7 +33,7 @@ function extractFacets(val, edgeAttributes, properties) {
 
 function findAndMerge(nodes, n) {
   let properties = JSON.parse(n.title),
-    uid = properties["attrs"]["_uid_"],
+    uid = properties["attrs"]["uid"],
     idx = nodes.findIndex(function(node) {
       return node.id === uid;
     });
@@ -431,8 +431,8 @@ export function processGraph(
       uid: string;
 
     // Some nodes like results of aggregation queries, max , min, count etc don't have a
-    // _uid_, so we need to assign thme one.
-    uid = obj.node["_uid_"] === undefined ? uuid() : obj.node["_uid_"];
+    // uid, so we need to assign thme one.
+    uid = obj.node["uid"] === undefined ? uuid() : obj.node["uid"];
     id = treeView
       ? // For tree view, the id is the join of ids of this node
         // with all its ancestors. That would make it unique.
@@ -501,7 +501,7 @@ export function processGraph(
 
     let n: Node = {
       id: id,
-      uid: obj.node["_uid_"],
+      uid: obj.node["uid"],
       x: x,
       // For aggregation nodes, label is the actual value, for other nodes its
       // the value of name.

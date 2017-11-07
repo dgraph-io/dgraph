@@ -277,10 +277,10 @@ mutation {
 // }
 // {
 // 	friends(func: eq(name, "Alex")) {
-// 		_uid_
+// 		uid
 // 		name
 // 		friend @facets {
-// 			_uid_
+// 			uid
 // 			name
 // 		}
 // 	}
@@ -301,7 +301,7 @@ mutation {
 //
 // 	// A type representing information in the graph.
 // 	type person struct {
-// 		ID           uint64        `json:"_uid_"` // record the UID for our update
+// 		ID           uint64        `json:"uid"` // record the UID for our update
 // 		Name         string        `json:"name"`
 // 		Friends      []*person     `json:"friend"` // Unmarshal with pointers to structs
 // 		FriendFacets *friendFacets `json:"@facets"`
@@ -439,7 +439,7 @@ func ExampleReq_SetObject() {
 	// for bool) would be created for values not specified explicitly.
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
+		Uid      uint64   `json:"uid,omitempty"`
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
@@ -494,14 +494,14 @@ func ExampleReq_SetObject() {
 	puid := resp.AssignedUids["blank-0"]
 	q := fmt.Sprintf(`{
 		me(func: uid(%d)) {
-			_uid_
+			uid
 			name
 			age
 			loc
 			raw_bytes
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
@@ -657,7 +657,7 @@ func ExampleReq_SetObject_list(t *testing.T) {
 
 	// This example shows example for SetObject for predicates with list type.
 	type Person struct {
-		Uid         uint64   `json:"_uid_"`
+		Uid         uint64   `json:"uid"`
 		Address     []string `json:"address"`
 		PhoneNumber []int64  `json:"phone_number"`
 	}
@@ -686,7 +686,7 @@ func ExampleReq_SetObject_list(t *testing.T) {
 	q := fmt.Sprintf(`
 	{
 		me(func: uid(%d)) {
-			_uid_
+			uid
 			address
 			phone_number
 		}
@@ -722,12 +722,12 @@ func ExampleReq_DeleteObject_edges() {
 	req := client.Req{}
 
 	type School struct {
-		Uid  uint64 `json:"_uid_"`
+		Uid  uint64 `json:"uid"`
 		Name string `json:"name@en,omitempty"`
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
+		Uid      uint64   `json:"uid,omitempty"`
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
@@ -771,35 +771,35 @@ func ExampleReq_DeleteObject_edges() {
 
 	q := fmt.Sprintf(`{
 		me(func: uid(1000)) {
-			_uid_
+			uid
 			name
 			age
 			loc
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
 			school {
-				_uid_
+				uid
 				name@en
 			}
 		}
 
 		me2(func: uid(1001)) {
-			_uid_
+			uid
 			name
 			age
 		}
 
 		me3(func: uid(1003)) {
-			_uid_
+			uid
 			name@en
 		}
 
 		me4(func: uid(1002)) {
-			_uid_
+			uid
 			name
 			age
 		}
@@ -855,7 +855,7 @@ func ExampleReq_DeleteObject_node() {
 
 	// In this test we check S * * deletion.
 	type Person struct {
-		Uid     uint64    `json:"_uid_,omitempty"`
+		Uid     uint64    `json:"uid,omitempty"`
 		Name    string    `json:"name,omitempty"`
 		Age     int       `json:"age,omitempty"`
 		Married bool      `json:"married,omitempty"`
@@ -892,25 +892,25 @@ func ExampleReq_DeleteObject_node() {
 
 	q := fmt.Sprintf(`{
 		me(func: uid(1000)) {
-			_uid_
+			uid
 			name
 			age
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
 		}
 
 		me2(func: uid(1001)) {
-			_uid_
+			uid
 			name
 			age
 		}
 
 		me3(func: uid(1002)) {
-			_uid_
+			uid
 			name
 			age
 		}
@@ -963,7 +963,7 @@ func ExampleReq_DeleteObject_predicate() {
 	req := client.Req{}
 
 	type Person struct {
-		Uid     uint64   `json:"_uid_,omitempty"`
+		Uid     uint64   `json:"uid,omitempty"`
 		Name    string   `json:"name,omitempty"`
 		Age     int      `json:"age,omitempty"`
 		Married bool     `json:"married,omitempty"`
@@ -998,12 +998,12 @@ func ExampleReq_DeleteObject_predicate() {
 
 	q := fmt.Sprintf(`{
 		me(func: uid(1000)) {
-			_uid_
+			uid
 			name
 			age
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}

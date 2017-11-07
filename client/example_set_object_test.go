@@ -18,7 +18,7 @@ type School struct {
 // for bool) would be created for values not specified explicitly.
 
 type Person struct {
-	Uid      uint64   `json:"_uid_,omitempty"`
+	Uid      uint64   `json:"uid,omitempty"`
 	Name     string   `json:"name,omitempty"`
 	Age      int      `json:"age,omitempty"`
 	Married  bool     `json:"married,omitempty"`
@@ -82,14 +82,14 @@ func Example_setObject() {
 	puid := resp.AssignedUids["blank-0"]
 	q := fmt.Sprintf(`{
 		me(func: uid(%d)) {
-			_uid_
+			uid
 			name
 			age
 			loc
 			raw_bytes
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}

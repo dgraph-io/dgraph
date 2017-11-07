@@ -158,7 +158,7 @@ javac -cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar DgraphMain.java
 java -cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar:. DgraphMain
 Jun 29, 2016 12:28:03 AM io.grpc.internal.ManagedChannelImpl <init>
 INFO: [ManagedChannelImpl@5d3411d] Created with target localhost:9080
-{"_root_":[{"_uid_":"0x8c84811dffd0a905","_xid_":"alice","name":"Alice","follows":[{"_uid_":"0xdd77c65008e3c71","_xid_":"bob","name":"Bob"},{"_uid_":"0x5991e7d8205041b3","_xid_":"greg","name":"Greg"}]}],"server_latency":{"pb":"11.487µs","parsing":"85.504µs","processing":"270.597µs"}}
+{"_root_":[{"uid":"0x8c84811dffd0a905","_xid_":"alice","name":"Alice","follows":[{"uid":"0xdd77c65008e3c71","_xid_":"bob","name":"Bob"},{"uid":"0x5991e7d8205041b3","_xid_":"greg","name":"Greg"}]}],"server_latency":{"pb":"11.487µs","parsing":"85.504µs","processing":"270.597µs"}}
 ```
 
 ### Shell

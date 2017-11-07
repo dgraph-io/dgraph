@@ -3,7 +3,7 @@
   director.film {
    directed_by {
     director.film(orderasc: initial_release_date, first: 5, offset: 10) {
-     _uid_
+     uid
      initial_release_date
     }
    }

@@ -172,7 +172,7 @@ func TestTxnRead4(ctx context.Context, dg *client.Dgraph) {
 
 	txn3 := dg.NewTxn()
 	mu = &protos.Mutation{}
-	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Manish2\"}", uid))
+	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": %d, \"name\": \"Manish2\"}", uid))
 	assigned, err = txn3.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
@@ -230,7 +230,7 @@ func TestTxnRead5(ctx context.Context, dg *client.Dgraph, dc protos.DgraphClient
 	x.AssertTrue(resp.Txn.StartTs > 0)
 
 	mu = &protos.Mutation{}
-	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Manish2\"}", uid))
+	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": %d, \"name\": \"Manish2\"}", uid))
 
 	mu.CommitImmediately = true
 	res, err := dc.Mutate(ctx, mu)
@@ -265,7 +265,7 @@ func TestConflict(ctx context.Context, dg *client.Dgraph) {
 
 	txn2 := dg.NewTxn()
 	mu = &protos.Mutation{}
-	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Manish\"}", uid))
+	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": %d, \"name\": \"Manish\"}", uid))
 	x.Check2(txn2.Mutate(ctx, mu))
 
 	x.Check(txn.Commit(ctx))
@@ -308,7 +308,7 @@ func TestConflictTimeout(ctx context.Context, dg *client.Dgraph) {
 	fmt.Printf("Response should be empty. JSON: %q\n", resp.Json)
 
 	mu := &protos.Mutation{}
-	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Jan the man\"}", uid))
+	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": %d, \"name\": \"Jan the man\"}", uid))
 	_, err = txn2.Mutate(ctx, mu)
 	fmt.Printf("txn2.mutate error: %v\n", err)
 	if err == nil {
@@ -348,7 +348,7 @@ func TestConflictTimeout2(ctx context.Context, dg *client.Dgraph) {
 
 	txn2 := dg.NewTxn()
 	mu := &protos.Mutation{}
-	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Jan the man\"}", uid))
+	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": %d, \"name\": \"Jan the man\"}", uid))
 	x.Check2(txn2.Mutate(ctx, mu))
 
 	x.Check(txn.Commit(ctx))
@@ -358,7 +358,7 @@ func TestConflictTimeout2(ctx context.Context, dg *client.Dgraph) {
 
 	txn3 := dg.NewTxn()
 	mu = &protos.Mutation{}
-	mu.SetJson = []byte(fmt.Sprintf("{\"_uid_\": %d, \"name\": \"Jan the man\"}", uid))
+	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": %d, \"name\": \"Jan the man\"}", uid))
 	assigned, err := txn3.Mutate(ctx, mu)
 	fmt.Printf("txn2.mutate error: %v\n", err)
 	if err == nil {
