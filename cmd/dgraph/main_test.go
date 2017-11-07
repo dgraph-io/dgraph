@@ -1532,7 +1532,7 @@ func TestUpsert2(t *testing.T) {
 	uids := m["data"].(map[string]interface{})["uids"].(map[string]interface{})
 	require.Equal(t, 2, len(uids))
 
-	// Upsert shouldn't assign a new _uid_ now.
+	// Upsert shouldn't assign a new uid now.
 	query = `
 	{
 		me(func: eq(name, "person")) @upsert {
@@ -1677,7 +1677,7 @@ func TestDropAll(t *testing.T) {
 	}
 	{
 		q(func: allofterms(name, "Foo")) {
-			_uid_
+			uid
 			name
 		}
 	}`
@@ -1712,7 +1712,7 @@ func TestDropAll(t *testing.T) {
 	q5 := `
 	{
 		q(func: allofterms(name, "Foo")) {
-			_uid_
+			uid
 			name
 		}
 	}`
