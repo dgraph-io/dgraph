@@ -2517,12 +2517,12 @@ func TestMinSchema(t *testing.T) {
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"min(val(x))":1.600000}]}}`,
 		js)
 
-	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.IntID)})
+	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: protos.Posting_ValType(types.IntID)})
 	js = processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"min(val(x))":1}]}}`,
 		js)
-	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.FloatID)})
+	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: protos.Posting_ValType(types.FloatID)})
 }
 
 func TestAvg(t *testing.T) {

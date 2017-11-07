@@ -138,7 +138,7 @@ func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 	require.NoError(t, err)
 	edge := &protos.DirectedEdge{
 		Value:     value,
-		ValueType: uint32(typ),
+		ValueType: protos.Posting_ValType(typ),
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
@@ -157,7 +157,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 		ValueId: dst,
 		// This is used to set uid schema type for pred for the purpose of tests. Actual mutation
 		// won't set ValueType to types.UidID.
-		ValueType: uint32(types.UidID),
+		ValueType: protos.Posting_ValType(types.UidID),
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
@@ -170,7 +170,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 
 func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
 	edge := &protos.DirectedEdge{
-		ValueType: uint32(types.UidID),
+		ValueType: protos.Posting_ValType(types.UidID),
 		ValueId:   dst,
 		Label:     "testing",
 		Attr:      attr,
