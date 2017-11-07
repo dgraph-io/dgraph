@@ -432,7 +432,7 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*protos.Facet, erro
 		return nil, nil
 	}
 
-	facetsForPred := make([]*protos.Facet, 0, 2)
+	var facetsForPred []*protos.Facet
 	var fv interface{}
 	for fname, facetVal := range m {
 		if facetVal == nil {
