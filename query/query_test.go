@@ -511,7 +511,7 @@ func TestLevelBasedFacetVarAggSum(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}}},{"@facets":{"_":{"weight":0.700000}}}],"sumw":0.800000}]}}`,
+		`{"data":{"friend":[{"path":[{"path:weight":0.100000},{"path:weight":0.700000}],"sumw":0.800000}]}}`,
 		js)
 }
 
@@ -535,7 +535,7 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"count(follow)":1,"val(L4)":1.200000},{"@facets":{"_":{"weight":1.500000}},"count(follow)":1,"val(L4)":3.900000}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"count(follow)":1,"val(L4)":3.900000}]}]}],"sum":[{"name":"John","val(L4)":3.900000},{"name":"Matt","val(L4)":1.200000}]}}`,
+	require.JSONEq(t, `{"data":{"friend":[{"path":[{"path":[{"count(follow)":1,"val(L4)":1.200000,"path:weight":0.100000},{"count(follow)":1,"val(L4)":3.900000,"path:weight":1.500000}],"path:weight":0.100000},{"path":[{"count(follow)":1,"val(L4)":3.900000,"path:weight":0.600000}],"path:weight":0.700000}]}],"sum":[{"name":"John","val(L4)":3.900000},{"name":"Matt","val(L4)":1.200000}]}}`,
 		js)
 }
 
@@ -557,7 +557,7 @@ func TestLevelBasedSumMix1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"age":38,"path":[{"@facets":{"_":{"weight":0.200000}},"val(L2)":38.200000},{"@facets":{"_":{"weight":0.100000}},"val(L2)":38.100000}]}],"sum":[{"name":"Glenn Rhee","val(L2)":38.200000},{"name":"Andrea","val(L2)":38.100000}]}}`,
+		`{"data":{"friend":[{"age":38,"path":[{"val(L2)":38.200000,"path:weight":0.200000},{"val(L2)":38.100000,"path:weight":0.100000}]}],"sum":[{"name":"Glenn Rhee","val(L2)":38.200000},{"name":"Andrea","val(L2)":38.100000}]}}`,
 		js)
 }
 
@@ -581,7 +581,7 @@ func TestLevelBasedFacetVarSum1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"name":"Bob","path":[{"@facets":{"_":{"weight":0.100000}},"val(L3)":0.200000},{"@facets":{"_":{"weight":1.500000}},"val(L3)":2.900000}]},{"@facets":{"_":{"weight":0.700000}},"name":"Matt","path":[{"@facets":{"_":{"weight":0.600000}},"val(L3)":2.900000}]}]}],"sum":[{"name":"John","val(L3)":2.900000},{"name":"Matt","val(L3)":0.200000}]}}`,
+		`{"data":{"friend":[{"path":[{"name":"Bob","path":[{"val(L3)":0.200000,"path:weight":0.100000},{"val(L3)":2.900000,"path:weight":1.500000}],"path:weight":0.100000},{"name":"Matt","path":[{"val(L3)":2.900000,"path:weight":0.600000}],"path:weight":0.700000}]}],"sum":[{"name":"John","val(L3)":2.900000},{"name":"Matt","val(L3)":0.200000}]}}`,
 		js)
 }
 
@@ -606,7 +606,7 @@ func TestLevelBasedFacetVarSum2(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.600000}},"val(L4)":0.800000}]},{"@facets":{"_":{"weight":1.500000}},"path":[{"val(L4)":2.900000}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"path":[{"val(L4)":2.900000}]}]}]}],"sum":[{"name":"Bob","val(L4)":2.900000},{"name":"John","val(L4)":0.800000}]}}`,
+		`{"data":{"friend":[{"path":[{"path":[{"path":[{"val(L4)":0.800000,"path:weight":0.600000}],"path:weight":0.100000},{"path":[{"val(L4)":2.900000}],"path:weight":1.500000}],"path:weight":0.100000},{"path":[{"path":[{"val(L4)":2.900000}],"path:weight":0.600000}],"path:weight":0.700000}]}],"sum":[{"name":"Bob","val(L4)":2.900000},{"name":"John","val(L4)":0.800000}]}}`,
 		js)
 }
 
@@ -1367,7 +1367,7 @@ func TestFilterFacetval(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.200000}},"name":"Glenn Rhee"},{"@facets":{"_":{"weight":0.100000}},"friend":[{"name":"Glenn Rhee","val(L)":0.200000}],"name":"Andrea"}]}]}}`,
+		`{"data":{"friend":[{"path":[{"name":"Glenn Rhee","path:weight":0.200000},{"name":"Andrea","friend":[{"name":"Glenn Rhee","val(L)":0.200000}],"path:weight":0.100000}]}]}}`,
 		js)
 }
 
@@ -1387,7 +1387,7 @@ func TestFilterFacetVar1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"name":"Glenn Rhee"},{"@facets":{"_":{"weight1":0.200000}},"name":"Andrea"}]}]}}`,
+		`{"data":{"friend":[{"path":[{"name":"Glenn Rhee"},{"name":"Andrea","path:weight1":0.200000}]}]}}`,
 		js)
 }
 
@@ -1824,7 +1824,7 @@ func TestKShortestPathWeighted(t *testing.T) {
 	// We only get one path in this case as the facet is present only in one path.
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9"}]}]}]}]}}`,
+		`{"data":{"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path:weight":0.100000}],"path:weight":0.100000}],"path:weight":0.100000}]}]}}`,
 		js)
 }
 
@@ -1853,7 +1853,7 @@ func TestKShortestPathWeighted1(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.700000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":1.500000}},"_uid_":"0x3eb"}]}]}]}]}]}}`,
+		`{"data":{"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3ea","path":[{"_uid_":"0x3eb","path:weight":0.600000}],"path:weight":0.100000}],"path:weight":0.100000}],"path:weight":0.100000}],"path:weight":0.100000}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3ea","path":[{"_uid_":"0x3eb","path:weight":0.600000}],"path:weight":0.700000}],"path:weight":0.100000}],"path:weight":0.100000}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3eb","path:weight":1.500000}],"path:weight":0.100000}],"path:weight":0.100000}],"path:weight":0.100000}]}]}}`,
 		js)
 }
 
@@ -1980,7 +1980,7 @@ func TestShortestPathWeights(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3ea"}]}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"}]}}`,
+		`{"data":{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"}],"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3ea","path:weight":0.100000}],"path:weight":0.100000}],"path:weight":0.100000}],"path:weight":0.100000}]}]}}`,
 		js)
 }
 
@@ -2517,12 +2517,12 @@ func TestMinSchema(t *testing.T) {
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"min(val(x))":1.600000}]}}`,
 		js)
 
-	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.IntID)})
+	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: protos.Posting_ValType(types.IntID)})
 	js = processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"min(val(x))":1}]}}`,
 		js)
-	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.FloatID)})
+	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: protos.Posting_ValType(types.FloatID)})
 }
 
 func TestAvg(t *testing.T) {
