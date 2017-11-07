@@ -45,7 +45,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -461,7 +460,7 @@ func TestSchemaMutation(t *testing.T) {
 		"name": {
 			Predicate: "name",
 			Tokenizer: []string{"term", "exact"},
-			ValueType: uint32(types.StringID),
+			ValueType: protos.Posting_STRING,
 			Directive: protos.SchemaUpdate_INDEX,
 			Explicit:  true},
 	}
@@ -487,10 +486,8 @@ func TestSchemaMutation1(t *testing.T) {
 ` // reset schema
 	schema.ParseBytes([]byte(""), 1)
 	expected := map[string]*protos.SchemaUpdate{
-		"pred1": {
-			ValueType: uint32(types.StringID)},
-		"pred2": {
-			ValueType: uint32(types.DefaultID)},
+		"pred1": {ValueType: protos.Posting_STRING},
+		"pred2": {ValueType: protos.Posting_DEFAULT},
 	}
 
 	err := runMutation(m)

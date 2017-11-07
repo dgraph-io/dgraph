@@ -124,54 +124,54 @@ func TestCheckSchema(t *testing.T) {
 	dir, _ := initTest(t, "name:string @index(term) .")
 	defer os.RemoveAll(dir)
 	// non uid to uid
-	s1 := &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID)}
+	s1 := &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_UID}
 	require.NoError(t, checkSchema(s1))
 
 	// uid to non uid
 	err := schema.ParseBytes([]byte("name:uid ."), 1)
 	require.NoError(t, err)
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID)}
+	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_STRING}
 	require.NoError(t, checkSchema(s1))
 
 	// string to int
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID)}
+	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_FLOAT}
 	require.NoError(t, checkSchema(s1))
 
 	// index on uid type
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID), Directive: protos.SchemaUpdate_INDEX}
+	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_UID, Directive: protos.SchemaUpdate_INDEX}
 	require.Error(t, checkSchema(s1))
 
 	// reverse on non-uid type
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID), Directive: protos.SchemaUpdate_REVERSE}
+	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_REVERSE}
 	require.Error(t, checkSchema(s1))
 
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_FLOAT, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
 	require.NoError(t, checkSchema(s1))
 
-	s1 = &protos.SchemaUpdate{Predicate: "friend", ValueType: uint32(types.UidID), Directive: protos.SchemaUpdate_REVERSE}
+	s1 = &protos.SchemaUpdate{Predicate: "friend", ValueType: protos.Posting_UID, Directive: protos.SchemaUpdate_REVERSE}
 	require.NoError(t, checkSchema(s1))
 }
 
 func TestNeedReindexing(t *testing.T) {
-	s1 := protos.SchemaUpdate{ValueType: uint32(types.UidID)}
-	s2 := protos.SchemaUpdate{ValueType: uint32(types.UidID)}
+	s1 := protos.SchemaUpdate{ValueType: protos.Posting_UID}
+	s2 := protos.SchemaUpdate{ValueType: protos.Posting_UID}
 	require.False(t, needReindexing(s1, s2))
 
-	s1 = protos.SchemaUpdate{ValueType: uint32(types.StringID), Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = protos.SchemaUpdate{ValueType: uint32(types.StringID), Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s1 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s2 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
 	require.False(t, needReindexing(s1, s2))
 
-	s1 = protos.SchemaUpdate{ValueType: uint32(types.StringID), Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
-	s2 = protos.SchemaUpdate{ValueType: uint32(types.StringID), Directive: protos.SchemaUpdate_INDEX}
+	s1 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s2 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX}
 	require.True(t, needReindexing(s1, s2))
 
-	s1 = protos.SchemaUpdate{ValueType: uint32(types.StringID), Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = protos.SchemaUpdate{ValueType: uint32(types.FloatID), Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s1 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s2 = protos.SchemaUpdate{ValueType: protos.Posting_FLOAT, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
 	require.True(t, needReindexing(s1, s2))
 
-	s1 = protos.SchemaUpdate{ValueType: uint32(types.StringID), Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = protos.SchemaUpdate{ValueType: uint32(types.FloatID), Directive: protos.SchemaUpdate_NONE}
+	s1 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s2 = protos.SchemaUpdate{ValueType: protos.Posting_FLOAT, Directive: protos.SchemaUpdate_NONE}
 	require.True(t, needReindexing(s1, s2))
 }

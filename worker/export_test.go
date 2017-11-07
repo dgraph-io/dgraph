@@ -89,7 +89,7 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.ManagedDB) 
 
 	posting.Init(db)
 	Init(db)
-	val, err := (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
+	val, err := (&protos.SchemaUpdate{ValueType: protos.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn := db.NewTransactionAt(math.MaxUint64, true)
@@ -99,7 +99,7 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.ManagedDB) 
 	txn.Discard()
 
 	require.NoError(t, err)
-	val, err = (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
+	val, err = (&protos.SchemaUpdate{ValueType: protos.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn = db.NewTransactionAt(math.MaxUint64, true)
