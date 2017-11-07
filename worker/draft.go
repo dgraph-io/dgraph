@@ -405,6 +405,13 @@ func (n *node) applyAllMarks(ctx context.Context) {
 	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
+func (n *node) waitForTxnMarks(ctx context.Context) {
+	// Get index of last committed.
+	lastIndex, err := n.Store.LastIndex()
+	x.Checkf(err, "Error while getting last index")
+	posting.TxnMarks().WaitForMark(ctx, lastIndex)
+}
+
 func (n *node) retrieveSnapshot(peerID uint64) {
 	addr, _ := n.Peer(peerID)
 	pool, err := conn.Get().Get(addr)

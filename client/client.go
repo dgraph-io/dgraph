@@ -39,24 +39,15 @@ type Dgraph struct {
 	state   *protos.MembershipState
 }
 
-// TODO(tzdybal) - hide this function from users
-func NewClient(clients []protos.DgraphClient) *Dgraph {
-	d := &Dgraph{
-		dc: clients,
-	}
-
-	return d
-}
-
 // NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
 // conns.
 // The client can be backed by multiple connections (to the same server, or multiple servers in a
 // cluster).
 //
 // A single client is thread safe for sharing with multiple go routines.
-func NewDgraphClient(dc protos.DgraphClient) *Dgraph {
+func NewDgraphClient(clients ...protos.DgraphClient) *Dgraph {
 	dg := &Dgraph{
-		dc:      []protos.DgraphClient{dc},
+		dc:      clients,
 		notify:  make(chan struct{}, 1),
 		linRead: &protos.LinRead{},
 	}

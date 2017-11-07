@@ -2,10 +2,12 @@ package client_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
@@ -14,18 +16,23 @@ type School struct {
 	Name string `json:"name,omitempty"`
 }
 
+type loc struct {
+	Type   string    `json:"type,omitempty"`
+	Coords []float64 `json:"coordinates,omitempty"`
+}
+
 // If omitempty is not set, then edges with empty values (0 for int/float, "" for string, false
 // for bool) would be created for values not specified explicitly.
 
 type Person struct {
-	Uid      uint64   `json:"_uid_,omitempty"`
+	Uid      string   `json:"_uid_,omitempty"`
 	Name     string   `json:"name,omitempty"`
 	Age      int      `json:"age,omitempty"`
 	Married  bool     `json:"married,omitempty"`
 	Raw      []byte   `json:"raw_bytes",omitempty`
 	Friends  []Person `json:"friend,omitempty"`
-	Location string   `json:"loc,omitempty"`
-	School   School   `json:"school,omitempty"`
+	Location loc      `json:"loc,omitempty"`
+	School   []School `json:"school,omitempty"`
 }
 
 func Example_setObject() {
@@ -33,9 +40,8 @@ func Example_setObject() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn})
-
-	req := client.Req{}
+	dc := protos.NewDgraphClient(conn)
+	dg := client.NewDgraphClient(dc)
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
 	// else a new node is created.
@@ -43,45 +49,58 @@ func Example_setObject() {
 	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
 	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
 
-	loc := `{"type":"Point","coordinates":[1.1,2]}`
 	p := Person{
-		Name:     "Alice",
-		Age:      26,
-		Married:  true,
-		Location: loc,
-		Raw:      []byte("raw_bytes"),
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Location: loc{
+			Type:   "Point",
+			Coords: []float64{1.1, 2},
+		},
+		Raw: []byte("raw_bytes"),
 		Friends: []Person{{
-			Uid:  1000,
+			Uid:  "1000",
 			Name: "Bob",
 			Age:  24,
 		}, {
 			Name: "Charlie",
 			Age:  29,
 		}},
-		School: School{
+		School: []School{{
 			Name: "Crown Public School",
-		},
+		}},
 	}
 
-	req.SetSchema(`
+	op := &protos.Operation{}
+	op.Schema = `
 		age: int .
 		married: bool .
-	`)
+	`
 
-	err = req.SetObject(&p)
+	ctx := context.Background()
+	err = dg.Alter(ctx, op)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	resp, err := dgraphClient.Run(context.Background(), &req)
+	mu := &protos.Mutation{
+		CommitImmediately: true,
+	}
+	pb, err := json.Marshal(p)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mu.SetJson = pb
+	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
-	puid := resp.AssignedUids["blank-0"]
+	puid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
-		me(func: uid(%d)) {
+		me(func: uid(%s)) {
 			_uid_
 			name
 			age
@@ -99,19 +118,17 @@ func Example_setObject() {
 		}
 	}`, puid)
 
-	req = client.Req{}
-	req.SetQuery(q)
-	resp, err = dgraphClient.Run(context.Background(), &req)
+	resp, err := dg.NewTxn().Query(ctx, q, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	type Root struct {
-		Me Person `json:"me"`
+		Me []Person `json:"me"`
 	}
 
 	var r Root
-	err = client.Unmarshal(resp.N, &r)
+	err = json.Unmarshal(resp.Json, &r)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -25,7 +25,7 @@ popd &> /dev/null
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph --p $BUILD/p0 --w $BUILD/w0 --memory_mb 4000 --peer "localhost:12340" &
+./dgraph --p $BUILD/p0 --w $BUILD/w0 --memory_mb 4000 --zero "localhost:12340" &
 
 # Wait for server to start in the background.
 until nc -z 127.0.0.1 8080;

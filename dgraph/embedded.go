@@ -19,7 +19,6 @@ package dgraph
 import (
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -46,7 +45,7 @@ func NewEmbeddedDgraphClient(config Options) *client.Dgraph {
 	worker.StartRaftNodes(State.WALstore, false)
 
 	embedded := &inmemoryClient{&Server{}}
-	return client.NewClient([]protos.DgraphClient{embedded})
+	return client.NewDgraphClient(embedded)
 }
 
 func DisposeEmbeddedDgraph() {

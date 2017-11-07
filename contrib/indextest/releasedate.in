@@ -1,5 +1,5 @@
 {
- me(func:eq(xid,"m.07mv_h")) {
+ me(func:eq(name@en,"Chi Chi LaRue")) {
   director.film {
    directed_by {
     director.film {

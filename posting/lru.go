@@ -23,6 +23,7 @@ import (
 	"container/list"
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -40,6 +41,7 @@ type listCache struct {
 	evicts  uint64
 	ll      *list.List
 	cache   map[string]*list.Element
+	done    int32
 }
 
 type CacheStats struct {
@@ -79,7 +81,6 @@ func (c *listCache) UpdateMaxSize() {
 	c.MaxSize = c.curSize
 }
 
-// TODO: fingerprint can collide
 // Add adds a value to the cache.
 func (c *listCache) PutIfMissing(key string, pl *List) (res *List) {
 	c.Lock()
@@ -111,6 +112,9 @@ func (c *listCache) removeOldestLoop() {
 	defer ticker.Stop()
 	for range ticker.C {
 		c.removeOldest()
+		if atomic.LoadInt32(&c.done) > 0 {
+			return
+		}
 	}
 }
 
@@ -118,7 +122,7 @@ func (c *listCache) removeOldest() {
 	c.Lock()
 	defer c.Unlock()
 	ele := c.ll.Back()
-	for c.curSize > c.MaxSize {
+	for c.curSize > c.MaxSize && atomic.LoadInt32(&c.done) == 0 {
 		if ele == nil {
 			if c.curSize < 0 {
 				c.curSize = 0
