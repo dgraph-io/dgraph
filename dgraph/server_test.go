@@ -168,7 +168,7 @@ func checkCount(t *testing.T, nq []*protos.NQuad, pred string, count int) {
 }
 
 func TestNquadsFromJsonFacets1(t *testing.T) {
-	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123","mobile@facets":{"since":"2006-01-02T15:04:05Z"},"car@facets":{"first":"true"}}]`
+	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123","mobile:since":"2006-01-02T15:04:05Z","car:first":"true"}]`
 
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
@@ -179,7 +179,7 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 
 func TestNquadsFromJsonFacets2(t *testing.T) {
 	// Dave has uid facets which should go on the edge between Alice and Dave
-	json := `[{"name":"Alice","friend":[{"name":"Dave","@facets":{"close":"true"}}]}]`
+	json := `[{"name":"Alice","friend":[{"name":"Dave","friend:close":"true"}]}]`
 
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
