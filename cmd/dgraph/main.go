@@ -417,7 +417,6 @@ func main() {
 	// schema before calling posting.Init().
 	schema.Init(dgraph.State.Pstore)
 	posting.Init(dgraph.State.Pstore)
-	worker.Config.InMemoryComm = false
 	worker.Init(dgraph.State.Pstore)
 
 	// setup shutdown os signal handler

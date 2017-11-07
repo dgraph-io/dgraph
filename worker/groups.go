@@ -70,13 +70,9 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
-	if Config.InMemoryComm {
-		Config.MyAddr = "inmemory"
-	}
-
 	if len(Config.MyAddr) == 0 {
 		Config.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
-	} else if !Config.InMemoryComm {
+	} else {
 		// check if address is valid or not
 		ok := x.ValidateAddress(Config.MyAddr)
 		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
@@ -85,48 +81,38 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 		}
 	}
 
-	if Config.InMemoryComm {
-		Config.RaftId = 1
-		atomic.StoreUint32(&gr.gid, 1)
-		gr.state = &protos.MembershipState{}
-		gr.state.Groups = make(map[uint32]*protos.Group)
-		gr.state.Groups[gr.groupId()] = &protos.Group{}
-		inMemoryTablet = &protos.Tablet{GroupId: gr.groupId()}
+	x.AssertTruefNoTrace(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
+	x.AssertTruefNoTrace(Config.ZeroAddr != Config.MyAddr,
+		"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
 
-	} else {
-		x.AssertTruefNoTrace(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
-		x.AssertTruefNoTrace(Config.ZeroAddr != Config.MyAddr,
-			"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
-
-		if Config.RaftId == 0 {
-			id, err := raftwal.RaftId(walStore)
-			x.Check(err)
-			Config.RaftId = id
-		}
-		x.Printf("Current Raft Id: %d\n", Config.RaftId)
-
-		// Successfully connect with dgraphzero, before doing anything else.
-		p := conn.Get().Connect(Config.ZeroAddr)
-
-		// Connect with dgraphzero and figure out what group we should belong to.
-		zc := protos.NewZeroClient(p.Get())
-		var connState *protos.ConnectionState
-		m := &protos.Member{Id: Config.RaftId, Addr: Config.MyAddr}
-		for i := 0; i < 100; i++ { // Generous number of attempts.
-			var err error
-			connState, err = zc.Connect(gr.ctx, m)
-			if err == nil {
-				break
-			}
-			x.Printf("Error while connecting with group zero: %v", err)
-		}
-		if connState.GetMember() == nil || connState.GetState() == nil {
-			x.Fatalf("Unable to join cluster via dgraphzero")
-		}
-		x.Printf("Connected to group zero. Connection state: %+v\n", connState)
-		Config.RaftId = connState.GetMember().GetId()
-		gr.applyState(connState.GetState())
+	if Config.RaftId == 0 {
+		id, err := raftwal.RaftId(walStore)
+		x.Check(err)
+		Config.RaftId = id
 	}
+	x.Printf("Current Raft Id: %d\n", Config.RaftId)
+
+	// Successfully connect with dgraphzero, before doing anything else.
+	p := conn.Get().Connect(Config.ZeroAddr)
+
+	// Connect with dgraphzero and figure out what group we should belong to.
+	zc := protos.NewZeroClient(p.Get())
+	var connState *protos.ConnectionState
+	m := &protos.Member{Id: Config.RaftId, Addr: Config.MyAddr}
+	for i := 0; i < 100; i++ { // Generous number of attempts.
+		var err error
+		connState, err = zc.Connect(gr.ctx, m)
+		if err == nil {
+			break
+		}
+		x.Printf("Error while connecting with group zero: %v", err)
+	}
+	if connState.GetMember() == nil || connState.GetState() == nil {
+		x.Fatalf("Unable to join cluster via dgraphzero")
+	}
+	x.Printf("Connected to group zero. Connection state: %+v\n", connState)
+	Config.RaftId = connState.GetMember().GetId()
+	gr.applyState(connState.GetState())
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
 	gr.triggerCh = make(chan struct{}, 1)
@@ -138,11 +124,9 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	gr.Node.InitAndStartNode(gr.wal)
 
 	x.UpdateHealthStatus(true)
-	if !Config.InMemoryComm {
-		go gr.periodicMembershipUpdate() // Now set it to be run periodically.
-		go gr.cleanupTablets()
-		go gr.processOracleDeltaStream()
-	}
+	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
+	go gr.cleanupTablets()
+	go gr.processOracleDeltaStream()
 	gr.proposeInitialSchema()
 }
 
@@ -257,9 +241,6 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 }
 
 func (g *groupi) BelongsTo(key string) uint32 {
-	if Config.InMemoryComm {
-		return g.groupId()
-	}
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
@@ -274,8 +255,6 @@ func (g *groupi) BelongsTo(key string) uint32 {
 	return 0
 }
 
-var inMemoryTablet *protos.Tablet
-
 func (g *groupi) ServesTablet(key string) bool {
 	tablet := g.Tablet(key)
 	if tablet != nil && tablet.GroupId == groups().groupId() {
@@ -287,9 +266,6 @@ func (g *groupi) ServesTablet(key string) bool {
 // Do not modify the returned Tablet
 func (g *groupi) Tablet(key string) *protos.Tablet {
 	// TODO: Remove all this later, create a membership state and apply it
-	if Config.InMemoryComm {
-		return inMemoryTablet
-	}
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()

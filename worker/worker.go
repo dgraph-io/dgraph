@@ -57,14 +57,10 @@ func Init(ps *badger.ManagedDB) {
 	pstore = ps
 	// needs to be initialized after group config
 	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
-	if Config.InMemoryComm {
-		allocator.Init(ps)
-	} else {
-		workerServer = grpc.NewServer(
-			grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-			grpc.MaxSendMsgSize(x.GrpcMaxSize),
-			grpc.MaxConcurrentStreams(math.MaxInt32))
-	}
+	workerServer = grpc.NewServer(
+		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
+		grpc.MaxSendMsgSize(x.GrpcMaxSize),
+		grpc.MaxConcurrentStreams(math.MaxInt32))
 }
 
 // grpcWorker struct implements the gRPC server interface.
@@ -90,10 +86,6 @@ func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
 // RunServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
 func RunServer(bindall bool) {
-	if Config.InMemoryComm {
-		return
-	}
-
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"

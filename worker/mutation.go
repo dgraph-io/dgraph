@@ -20,7 +20,6 @@ package worker
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -41,7 +40,6 @@ var (
 	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
 	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
 	errAborted         = x.Errorf("Transaction aborted")
-	allocator          x.EmbeddedUidAllocator
 )
 
 func deletePredicateEdge(edge *protos.DirectedEdge) bool {
@@ -337,9 +335,6 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 }
 
 func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if Config.InMemoryComm {
-		return allocator.AssignUids(ctx, num)
-	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
@@ -351,10 +346,6 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 }
 
 func Timestamps(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if Config.InMemoryComm {
-		// TODO - Handle
-		return nil, fmt.Errorf("Couldn't get TS")
-	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
