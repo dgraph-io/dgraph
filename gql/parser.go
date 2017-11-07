@@ -2277,7 +2277,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
 		item := it.Item()
-		fmt.Printf("item: %+v\n", item)
 		switch item.Typ {
 		case lex.ItemError:
 			return x.Errorf(item.Val)
@@ -2486,6 +2485,13 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						gq.UidCount = alias
 					}
 					it.Next()
+				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
+					// count(uid) case which occurs inside @groupby
+					val = uid
+					// Skip uid)
+					it.Next()
+					it.Next()
+					goto Fall
 				}
 				continue
 			} else if valLower == value {
@@ -2523,9 +2529,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp = nil
 				continue
 			} else if valLower == uid {
-				if varName != "" {
-					return x.Errorf("Cannot assign a variable to uid()")
-				}
 				if count == seen {
 					return x.Errorf("count of a variable is not allowed")
 				}

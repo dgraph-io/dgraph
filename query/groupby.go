@@ -41,8 +41,8 @@ type groupResult struct {
 
 func (grp *groupResult) aggregateChild(child *SubGraph) error {
 	if child.Params.DoCount {
-		if child.Attr != "_uid_" {
-			return x.Errorf("Only _uid_ predicate is allowed in count within groupby")
+		if child.Attr != "uid" {
+			return x.Errorf("Only uid predicate is allowed in count within groupby")
 		}
 		grp.aggregates = append(grp.aggregates, groupPair{
 			attr: "count",

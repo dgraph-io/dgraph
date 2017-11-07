@@ -7124,8 +7124,9 @@ func TestAppendDummyValuesPanic(t *testing.T) {
 			count()
 		}
 	}`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"n": []}}`, js)
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `Argument cannot be "uid"`)
 }
 
 func TestMultipleValueFilter(t *testing.T) {
