@@ -58,7 +58,6 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	predefined := []string{
 		"@facets",
 		"@filter",
-		"_uid_",
 		"after",
 		"allofterms",
 		"alloftext",

@@ -39,7 +39,7 @@ type address struct {
 }
 
 type Person struct {
-	Uid     uint64     `json:"_uid_,omitempty"`
+	Uid     string     `json:"uid,omitempty"`
 	Name    string     `json:"name,omitempty"`
 	Age     int        `json:"age,omitempty"`
 	Married *bool      `json:"married,omitempty"`
@@ -102,7 +102,7 @@ func TestNquadsFromJson2(t *testing.T) {
 			Name:    "Charlie",
 			Married: &m,
 		}, {
-			Uid:  1000,
+			Uid:  "1000",
 			Name: "Bob",
 		}},
 	}
@@ -200,7 +200,7 @@ func TestNquadsFromJsonError1(t *testing.T) {
 
 	_, err = nquadsFromJson(b, delete)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "_uid_ must be present and non-zero.")
+	require.Contains(t, err.Error(), "uid must be present and non-zero.")
 }
 
 func TestNquadsFromJsonList(t *testing.T) {
@@ -212,7 +212,7 @@ func TestNquadsFromJsonList(t *testing.T) {
 }
 
 func TestNquadsFromJsonDelete(t *testing.T) {
-	json := `{"_uid_":1000,"friend":[{"_uid_":1001}]}`
+	json := `{"uid":1000,"friend":[{"uid":1001}]}`
 
 	nq, err := nquadsFromJson([]byte(json), delete)
 	require.NoError(t, err)

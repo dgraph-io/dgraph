@@ -26,7 +26,7 @@ var (
 )
 
 type Account struct {
-	Uid string `json:"_uid_"`
+	Uid string `json:"uid"`
 	Bal int    `json:"bal"`
 }
 
@@ -116,7 +116,7 @@ func (s *State) runTransaction() error {
 	txn := s.dg.NewTxn()
 	defer txn.Discard(ctx)
 
-	fq := fmt.Sprintf(`{me(func: uid(%s, %s)) { _uid_, bal }}`, from, to)
+	fq := fmt.Sprintf(`{me(func: uid(%s, %s)) { uid, bal }}`, from, to)
 	resp, err := txn.Query(ctx, fq, nil)
 	if err != nil {
 		return err

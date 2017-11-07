@@ -113,7 +113,7 @@ func TestSetObject(t *testing.T) {
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
+		Uid      uint64   `json:"uid,omitempty"`
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
@@ -165,7 +165,7 @@ func TestSetObject(t *testing.T) {
 			raw_bytes
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
@@ -209,7 +209,7 @@ func TestSetObject2(t *testing.T) {
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
+		Uid      uint64   `json:"uid,omitempty"`
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
@@ -248,12 +248,12 @@ func TestSetObject2(t *testing.T) {
 func TestDeleteObject1(t *testing.T) {
 	// In this test we check S P O deletion.
 	type School struct {
-		Uid  uint64 `json:"_uid_"`
+		Uid  uint64 `json:"uid"`
 		Name string `json:"name@en,omitempty"`
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
+		Uid      uint64   `json:"uid,omitempty"`
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
@@ -301,12 +301,12 @@ func TestDeleteObject1(t *testing.T) {
 			loc
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
 			school {
-				_uid_
+				uid
 				name@en
 			}
 		}
@@ -358,12 +358,12 @@ func TestDeleteObject1(t *testing.T) {
 func TestDeleteObject2(t *testing.T) {
 	// In this test we check S P * deletion.
 	type School struct {
-		Uid  uint64 `json:"_uid_"`
+		Uid  uint64 `json:"uid"`
 		Name string `json:"name@en,omitempty"`
 	}
 
 	type Person struct {
-		Uid      uint64   `json:"_uid_,omitempty"`
+		Uid      uint64   `json:"uid,omitempty"`
 		Name     *string  `json:"name"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
@@ -412,12 +412,12 @@ func TestDeleteObject2(t *testing.T) {
 			loc
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
 			school {
-				_uid_
+				uid
 				name@en
 			}
 		}
@@ -585,7 +585,7 @@ func TestSetObjectUpdateFacets(t *testing.T) {
 	}
 
 	type Person struct {
-		Uid        uint64      `json:"_uid_"`
+		Uid        uint64      `json:"uid"`
 		Name       string      `json:"name"`
 		NameFacets nameFacets  `json:"name@facets"`
 		Facets     friendFacet `json:"@facets"`
@@ -641,10 +641,10 @@ func TestSetObjectUpdateFacets(t *testing.T) {
 	{
 
 		me(func: uid(1001)) {
-			_uid_
+			uid
 			name @facets
 			friend @facets {
-				_uid_
+				uid
 				name
 			}
 
@@ -667,7 +667,7 @@ func TestSetObjectUpdateFacets(t *testing.T) {
 func TestDeleteObjectNode(t *testing.T) {
 	// In this test we check S * * deletion.
 	type Person struct {
-		Uid     uint64    `json:"_uid_,omitempty"`
+		Uid     uint64    `json:"uid,omitempty"`
 		Name    string    `json:"name,omitempty"`
 		Age     int       `json:"age,omitempty"`
 		Married bool      `json:"married,omitempty"`
@@ -706,7 +706,7 @@ func TestDeleteObjectNode(t *testing.T) {
 			age
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
@@ -753,7 +753,7 @@ func TestDeleteObjectNode(t *testing.T) {
 func TestDeleteObjectPredicate(t *testing.T) {
 	// In this test we check * P * deletion.
 	type Person struct {
-		Uid     uint64    `json:"_uid_,omitempty"`
+		Uid     uint64    `json:"uid,omitempty"`
 		Name    string    `json:"name,omitempty"`
 		Age     int       `json:"age,omitempty"`
 		Married bool      `json:"married,omitempty"`
@@ -792,7 +792,7 @@ func TestDeleteObjectPredicate(t *testing.T) {
 			age
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
@@ -847,7 +847,7 @@ func TestObjectList(t *testing.T) {
 	req := client.Req{}
 
 	type Person struct {
-		Uid         uint64   `json:"_uid_"`
+		Uid         uint64   `json:"uid"`
 		Address     []string `json:"address"`
 		PhoneNumber []int64  `json:"phone_number"`
 	}
@@ -872,7 +872,7 @@ func TestObjectList(t *testing.T) {
 	q := fmt.Sprintf(`
 	{
 		me(func: uid(%d)) {
-			_uid_
+			uid
 			address
 			phone_number
 		}

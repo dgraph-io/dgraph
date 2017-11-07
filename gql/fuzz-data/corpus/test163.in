@@ -8,6 +8,6 @@
 			age
 		}
 		h(func: uid(a, b)) {
-			_uid_
+			uid
 		}
 	}

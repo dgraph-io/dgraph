@@ -41,7 +41,7 @@ func ExampleTxn_Query_variables() {
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
-		Uid  string `json:"_uid_,omitempty"`
+		Uid  string `json:"uid,omitempty"`
 		Name string `json:"name,omitempty"`
 	}
 
@@ -132,7 +132,7 @@ func ExampleTxn_Mutate() {
 	// for bool) would be created for values not specified explicitly.
 
 	type Person struct {
-		Uid      string   `json:"_uid_,omitempty"`
+		Uid      string   `json:"uid,omitempty"`
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
@@ -207,14 +207,14 @@ func ExampleTxn_Mutate() {
 	puid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
 		me(func: uid(%s)) {
-			_uid_
+			uid
 			name
 			age
 			loc
 			raw_bytes
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
@@ -251,7 +251,7 @@ func ExampleTxn_Mutate_bytes() {
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
-		Uid   string `json:"_uid_,omitempty"`
+		Uid   string `json:"uid,omitempty"`
 		Name  string `json:"name,omitempty"`
 		Bytes []byte `json:"bytes,omitempty"`
 	}
@@ -288,7 +288,7 @@ func ExampleTxn_Mutate_bytes() {
 
 	q := `{
 	q(func: eq(name, "Alice")) {
-		_uid_
+		uid
 		name
 		bytes
 	}
@@ -317,7 +317,7 @@ func ExampleTxn_Query_unmarshal() {
 	}
 
 	type Person struct {
-		Uid     string   `json:"_uid_,omitempty"`
+		Uid     string   `json:"uid,omitempty"`
 		Name    string   `json:"name,omitempty"`
 		Age     int      `json:"age,omitempty"`
 		Married bool     `json:"married,omitempty"`
@@ -387,14 +387,14 @@ func ExampleTxn_Query_unmarshal() {
 	puid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
 		me(func: uid(%s)) {
-			_uid_
+			uid
 			name
 			age
 			loc
 			raw_bytes
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
@@ -531,7 +531,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	dg := client.NewDgraphClient(dc)
 	// This example shows example for SetObject for predicates with list type.
 	type Person struct {
-		Uid         string   `json:"_uid_"`
+		Uid         string   `json:"uid"`
 		Address     []string `json:"address"`
 		PhoneNumber []int64  `json:"phone_number"`
 	}
@@ -570,7 +570,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	q := fmt.Sprintf(`
 	{
 		me(func: uid(%s)) {
-			_uid_
+			uid
 			address
 			phone_number
 		}
@@ -604,12 +604,12 @@ func ExampleTxn_Mutate_delete() {
 	dg := client.NewDgraphClient(dc)
 
 	type School struct {
-		Uid  string `json:"_uid_"`
+		Uid  string `json:"uid"`
 		Name string `json:"name@en,omitempty"`
 	}
 
 	type Person struct {
-		Uid      string    `json:"_uid_,omitempty"`
+		Uid      string    `json:"uid,omitempty"`
 		Name     string    `json:"name,omitempty"`
 		Age      int       `json:"age,omitempty"`
 		Married  bool      `json:"married,omitempty"`
@@ -667,35 +667,35 @@ func ExampleTxn_Mutate_delete() {
 
 	q := fmt.Sprintf(`{
 		me(func: uid(1000)) {
-			_uid_
+			uid
 			name
 			age
 			loc
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
 			school {
-				_uid_
+				uid
 				name@en
 			}
 		}
 
 		me2(func: uid(1001)) {
-			_uid_
+			uid
 			name
 			age
 		}
 
 		me3(func: uid(1003)) {
-			_uid_
+			uid
 			name@en
 		}
 
 		me4(func: uid(1002)) {
-			_uid_
+			uid
 			name
 			age
 		}
@@ -758,7 +758,7 @@ func ExampleTxn_Mutate_deleteNode() {
 
 	// In this test we check S * * deletion.
 	type Person struct {
-		Uid     string    `json:"_uid_,omitempty"`
+		Uid     string    `json:"uid,omitempty"`
 		Name    string    `json:"name,omitempty"`
 		Age     int       `json:"age,omitempty"`
 		Married bool      `json:"married,omitempty"`
@@ -809,25 +809,25 @@ func ExampleTxn_Mutate_deleteNode() {
 
 	q := fmt.Sprintf(`{
 		me(func: uid(1000)) {
-			_uid_
+			uid
 			name
 			age
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
 		}
 
 		me2(func: uid(1001)) {
-			_uid_
+			uid
 			name
 			age
 		}
 
 		me3(func: uid(1002)) {
-			_uid_
+			uid
 			name
 			age
 		}
@@ -889,7 +889,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
-		Uid     string   `json:"_uid_,omitempty"`
+		Uid     string   `json:"uid,omitempty"`
 		Name    string   `json:"name,omitempty"`
 		Age     int      `json:"age,omitempty"`
 		Married bool     `json:"married,omitempty"`
@@ -940,12 +940,12 @@ func ExampleTxn_Mutate_deletePredicate() {
 
 	q := fmt.Sprintf(`{
 		me(func: uid(1000)) {
-			_uid_
+			uid
 			name
 			age
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}

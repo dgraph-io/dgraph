@@ -529,7 +529,7 @@ func handleBasicType(k string, v interface{}, op int, nq *protos.NQuad) error {
 }
 
 func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
-	// Since _uid_ is the only key, this must be S * * deletion.
+	// Since uid is the only key, this must be S * * deletion.
 	if op == delete && len(mr.uid) > 0 && len(m) == 1 {
 		mr.nquads = append(mr.nquads, &protos.NQuad{
 			Subject:     mr.uid,
@@ -558,7 +558,7 @@ func tryParseAsGeo(b []byte, nq *protos.NQuad) (bool, error) {
 func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
-	if uidVal, ok := m["_uid_"]; ok {
+	if uidVal, ok := m["uid"]; ok {
 		var uid uint64
 		if id, ok := uidVal.(float64); ok {
 			uid = uint64(id)
@@ -582,7 +582,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if pred == "_uid_" || strings.Index(pred, ":") > 0 {
+		if pred == "uid" || strings.Index(pred, ":") > 0 {
 			continue
 		}
 
@@ -597,7 +597,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				continue
 			} else if len(mr.uid) == 0 {
 				// Delete operations with a non-nil value must have a uid specified.
-				return mr, x.Errorf("_uid_ must be present and non-zero. Got: %+v", m)
+				return mr, x.Errorf("uid must be present and non-zero. Got: %+v", m)
 			}
 		}
 

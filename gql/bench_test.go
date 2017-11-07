@@ -107,7 +107,7 @@ var q3 = `{
   debug(id: m.06pj8) {
     type.object.name.en
     film.director.film @filter(allofterms(type.object.name.en, "jones indiana") or allofterms(type.object.name.en, "jurassic park"))  {
-	      _uid_
+	      uid
 	      type.object.name.en
      }
   }

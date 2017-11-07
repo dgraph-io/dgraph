@@ -3,7 +3,7 @@
   director.film {
    directed_by {
     director.film @filter(ge(initial_release_date, "2000-01-05")) {
-     _uid_
+     uid
      initial_release_date
     }
    }

@@ -35,7 +35,7 @@ Query Example: In the example dataset, as well as edges that link movies to dire
 {{< runnable >}}
 {
   bladerunner(func: eq(name@en, "Blade Runner")) {
-    _uid_
+    uid
     name@en
     initial_release_date
     netflix_id
@@ -45,14 +45,14 @@ Query Example: In the example dataset, as well as edges that link movies to dire
 
 The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
 
-Every node had a unique 64 bit identifier.  The `_uid_` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
+Every node had a unique 64 bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
 
 Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
   bladerunner(func: uid(0x146a6)) {
-    _uid_
+    uid
     name@en
     initial_release_date
     netflix_id
@@ -67,7 +67,7 @@ Query Example: All nodes that have either "Blade" or "Runner" in the name.
 {{< runnable >}}
 {
   bladerunner(func: anyofterms(name@en, "Blade Runner")) {
-    _uid_
+    uid
     name@en
     initial_release_date
     netflix_id
@@ -81,7 +81,7 @@ Query Example:
 {{< runnable >}}
 {
   movies(func: uid(0x146a6, 0x34a7c)) {
-    _uid_
+    uid
     name@en
     initial_release_date
     netflix_id
@@ -143,7 +143,7 @@ Query Example: Movies with either "Blade" or "Runner" in the title and released 
 {{< runnable >}}
 {
   bladerunner(func: anyofterms(name@en, "Blade Runner")) @filter(le(initial_release_date, "2000")) {
-    _uid_
+    uid
     name@en
     initial_release_date
     netflix_id
@@ -822,7 +822,7 @@ Query Example : All Steven Spielberg movies that contain either both "indiana" a
   me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
     director.film @filter(allofterms(name@en, "jones indiana") OR allofterms(name@en, "jurassic park"))  {
-      _uid_
+      uid
       name@en
     }
   }
@@ -855,7 +855,7 @@ Query Example: Directors with `name` matching term `Steven`, their UID, english 
   }
 
   films(func: uid(ID)) {
-    director_id : _uid_
+    director_id : uid
     english_name : name@en
     average_actors : val(average)
     num_films : count(director.film)
@@ -876,7 +876,7 @@ Pagination allows returning only a portion, rather than the whole, result set.  
 
 Pagination is often used with [sorting]({{< relref "#sorting">}}).
 
-{{% notice "note" %}}Without a sort order specified, the results are sorted by `_uid_`, which is assigned randomly. So the ordering, while deterministic, might not be what you expected.{{% /notice  %}}
+{{% notice "note" %}}Without a sort order specified, the results are sorted by `uid`, which is assigned randomly. So the ordering, while deterministic, might not be what you expected.{{% /notice  %}}
 
 ### First
 
@@ -979,7 +979,7 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
     director.film (first:5) {
-      _uid_
+      uid
       name@en
     }
   }
@@ -993,7 +993,7 @@ The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
     director.film (first:5, after: 0x52753) {
-      _uid_
+      uid
       name@en
     }
   }
@@ -1172,7 +1172,7 @@ Query Example: The movies Mackenzie Crook has acted in and the movies Jack Daven
     name@en
     actor.film {
       performance.film {
-        _uid_
+        uid
         name@en
       }
       performance.character {
@@ -1185,7 +1185,7 @@ Query Example: The movies Mackenzie Crook has acted in and the movies Jack Daven
     name@en
     actor.film {
       performance.film {
-        _uid_
+        uid
         name@en
       }
       performance.character {
@@ -1682,12 +1682,12 @@ Query Example: Compute a score for each Steven Spielberg movie and then aggregat
 Syntax Examples:
 
 * `q(func: ...) @groupby(predicate) { min(...) }`
-* `predicate @groupby(pred) { count(_uid_) }``
+* `predicate @groupby(pred) { count(uid) }``
 
 
-A `groupby` query aggregates query results given a set of properties on which to group elements.  For example, a query containing the block `friend @groupby(age) { count(_uid_) }`, finds all nodes reachable along the friend edge, partitions these into groups based on age, then counts how many nodes are in each group.  The returned result is the grouped edges and the aggregations.
+A `groupby` query aggregates query results given a set of properties on which to group elements.  For example, a query containing the block `friend @groupby(age) { count(uid) }`, finds all nodes reachable along the friend edge, partitions these into groups based on age, then counts how many nodes are in each group.  The returned result is the grouped edges and the aggregations.
 
-Inside a `groupby` block, only aggregations are allowed and `count` may only be applied to `_uid_`.
+Inside a `groupby` block, only aggregations are allowed and `count` may only be applied to `uid`.
 
 If the `groupby` is applied to a `uid` predicate, the resulting aggregations can be saved in a variable (mapping the grouped UIDs to aggregate values) and used elsewhere in the query to extract information other than the grouped or aggregated edges.
 
@@ -1698,7 +1698,7 @@ Query Example: For Steven Spielberg movies, count the number of movies in each g
 {
   var(func:allofterms(name@en, "steven spielberg")) {
     director.film @groupby(genre) {
-      a as count(_uid_)
+      a as count(uid)
       # a is a genre UID to count value variable
     }
   }
@@ -1716,7 +1716,7 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
   var(func:allofterms(name@en, "Tim Burton")) {
     director.film {
       starring @groupby(performance.actor) {
-        a as count(_uid_)
+        a as count(uid)
         # a is an actor UID to count value variable
       }
     }
@@ -1773,7 +1773,7 @@ Query Example: Predicates saved to a variable and queried with `expand()`.
     expand(val(pred)) {
       expand(_all_) {
         name@.
-        _uid_
+        uid
       }
     }
   }
@@ -1887,7 +1887,7 @@ Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the r
 
 ## Debug
 
-For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `_uid_` attribute for all the entities along with the `server_latency` information.
+For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `uid` attribute for all the entities along with the `server_latency` information.
 
 Query with debug as a query parameter
 ```
@@ -1898,25 +1898,25 @@ curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-Returns `_uid_` and `server_latency`
+Returns `uid` and `server_latency`
 ```
 {
   "data": {
     "tbl": [
       {
-        "_uid_": "0x41434",
+        "uid": "0x41434",
         "name@en": "The Big Lebowski"
       },
       {
-        "_uid_": "0x145834",
+        "uid": "0x145834",
         "name@en": "The Big Lebowski 2"
       },
       {
-        "_uid_": "0x2c8a40",
+        "uid": "0x2c8a40",
         "name@en": "Jeffrey \"The Big\" Lebowski"
       },
       {
-        "_uid_": "0x3454c4",
+        "uid": "0x3454c4",
         "name@en": "The Big Lebowski"
       }
     ],
@@ -3426,10 +3426,10 @@ Which returns the following results. (Note, without considering the `weight` fac
     ],
     "_path_": [
       {
-        "_uid_": "0x2",
+        "uid": "0x2",
         "friend": [
           {
-            "_uid_": "0x5"
+            "uid": "0x5"
           }
         ]
       }
@@ -3488,16 +3488,16 @@ curl localhost:8080/query -XPOST -d $'{
     ],
     "_path_": [
       {
-        "_uid_": "0x2",
+        "uid": "0x2",
         "friend": [
           {
-            "_uid_": "0x3",
+            "uid": "0x3",
             "friend": [
               {
-                "_uid_": "0x4",
+                "uid": "0x4",
                 "friend": [
                   {
-                    "_uid_": "0x5",
+                    "uid": "0x5",
                     "@facets": {
                       "_": {
                         "weight": 0.3

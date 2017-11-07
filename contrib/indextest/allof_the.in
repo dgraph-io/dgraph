@@ -3,7 +3,7 @@
   director.film {
    directed_by {
     director.film @filter(allofterms(name@en, "the")) {
-     _uid_
+     uid
      name@en
     }
    }

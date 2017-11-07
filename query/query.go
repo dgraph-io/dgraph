@@ -361,7 +361,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		// then we dont return the uids at this level so that UI doesn't render
 		// nodes without any other properties.
 		if sg.Params.uidCount == "" || len(sg.Children) != 0 {
-			dst.SetUID(uid, "_uid_")
+			dst.SetUID(uid, "uid")
 		}
 	}
 
@@ -456,7 +456,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
 
-			if pc.Attr == "_uid_" {
+			if pc.Attr == "uid" {
 				dst.SetUID(uid, pc.fieldName())
 				continue
 			}
@@ -1339,9 +1339,9 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	for i, uid := range sg.DestUIDs.Uids {
 		var exclude bool
 		for _, child := range sg.Children {
-			// For _uid_ we dont actually populate the uidMatrix or values. So a node asking for
-			// _uid_ would always be excluded. Therefore we skip it.
-			if child.Attr == "_uid_" {
+			// For uid we dont actually populate the uidMatrix or values. So a node asking for
+			// uid would always be excluded. Therefore we skip it.
+			if child.Attr == "uid" {
 				continue
 			}
 
@@ -1427,8 +1427,8 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 
 		// This implies it is a value variable.
 	} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
-		if sg.Attr == "_uid_" {
-			// Its still an entity variable if its _uid_.
+		if sg.Attr == "uid" {
+			// Its still an entity variable if its uid.
 			doneVars[sg.Params.Var] = varValue{
 				Uids: sg.SrcUIDs,
 				path: sgPath,
@@ -1729,8 +1729,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
-	if sg.Attr == "_uid_" {
-		// We dont need to call ProcessGraph for _uid_, as we already have uids
+	if sg.Attr == "uid" {
+		// We dont need to call ProcessGraph for uid, as we already have uids
 		// populated from parent and there is nothing to process but uidMatrix
 		// and values need to have the right sizes so that preTraverse works.
 		sg.appendDummyValues()
