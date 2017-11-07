@@ -93,6 +93,7 @@ Branch           : %v`,
 // PrintVersionOnly prints version and other helpful information if --version.
 func PrintVersionOnly() {
 	printBuildDetails()
+	fmt.Println()
 	fmt.Println("Copyright 2017 Dgraph Labs, Inc.")
 	fmt.Println(`
 Licensed under AGPLv3.

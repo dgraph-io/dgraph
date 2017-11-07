@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/spf13/pflag"
 )
 
 type tlsConfigType int8
@@ -50,6 +52,18 @@ type TLSHelperConfig struct {
 	UseSystemClientCACerts bool
 	MinVersion             string
 	MaxVersion             string
+}
+
+func SetTLSFlags(conf *TLSHelperConfig, flag *pflag.FlagSet) {
+	flag.BoolVar(&conf.CertRequired, "tls.on", false, "Use TLS connections with clients.")
+	flag.StringVar(&conf.Cert, "tls.cert", "", "Certificate file path.")
+	flag.StringVar(&conf.Key, "tls.cert_key", "", "Certificate key file path.")
+	flag.StringVar(&conf.KeyPassphrase, "tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	flag.StringVar(&conf.ClientAuth, "tls.client_auth", "", "Enable TLS client authentication")
+	flag.StringVar(&conf.ClientCACerts, "tls.ca_certs", "", "CA Certs file path.")
+	flag.BoolVar(&conf.UseSystemClientCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
+	flag.StringVar(&conf.MinVersion, "tls.min_version", "TLS11", "TLS min version.")
+	flag.StringVar(&conf.MaxVersion, "tls.max_version", "TLS12", "TLS max version.")
 }
 
 func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error) {
