@@ -25,10 +25,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrAborted = x.Errorf("Transaction has been aborted due to conflict")
+var (
+	ErrAborted   = x.Errorf("Transaction has been aborted due to conflict")
+	ErrDiscarded = x.Errorf("Transaction has already been aborted or committed")
+)
 
 type Txn struct {
-	context *protos.TxnContext
+	context   *protos.TxnContext
+	discarded bool
 
 	dg *Dgraph
 }
@@ -45,6 +49,9 @@ func (d *Dgraph) NewTxn() *Txn {
 
 func (txn *Txn) Query(ctx context.Context, q string,
 	vars map[string]string) (*protos.Response, error) {
+	if txn.discarded {
+		return nil, ErrDiscarded
+	}
 	req := &protos.Request{
 		Query:   q,
 		Vars:    vars,
@@ -64,7 +71,6 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 	if src == nil {
 		return nil
 	}
-
 	x.MergeLinReads(txn.context.LinRead, src.LinRead)
 	txn.dg.mergeLinRead(src.LinRead) // Also merge it with client.
 
@@ -79,6 +85,9 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 }
 
 func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
+	if txn.discarded {
+		return nil, ErrDiscarded
+	}
 	mu.StartTs = txn.context.StartTs
 	ag, err := txn.dg.mutate(ctx, mu)
 	if ag != nil {
@@ -95,6 +104,11 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 }
 
 func (txn *Txn) Abort(ctx context.Context) error {
+	if txn.discarded {
+		return ErrDiscarded
+	}
+	txn.discarded = true
+
 	if txn.context == nil {
 		txn.context = &protos.TxnContext{StartTs: txn.context.StartTs}
 	}
@@ -104,6 +118,11 @@ func (txn *Txn) Abort(ctx context.Context) error {
 }
 
 func (txn *Txn) Commit(ctx context.Context) error {
+	if txn.discarded {
+		return ErrDiscarded
+	}
+	txn.discarded = true
+
 	if txn.context == nil {
 		// If there were no mutations
 		return nil
@@ -116,4 +135,12 @@ func (txn *Txn) Commit(ctx context.Context) error {
 		return ErrAborted
 	}
 	return nil
+}
+
+// Discard aborts a transaction if it hasn't been committed or aborted yet.
+func (txn *Txn) Discard(ctx context.Context) error {
+	if txn.discarded {
+		return nil
+	}
+	return txn.Abort(ctx)
 }
