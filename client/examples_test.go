@@ -431,64 +431,47 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	dg := client.NewDgraphClient(dc)
 
 	// This example shows example for SetObject using facets.
-	type friendFacet struct {
-		Since  time.Time `json:"since"`
-		Family string    `json:"family"`
-		Age    float64   `json:"age"`
-		Close  bool      `json:"close"`
-	}
-
-	type nameFacets struct {
-		Origin string `json:"origin"`
-	}
-
-	type schoolFacet struct {
-		Since time.Time `json:"since"`
-	}
-
 	type School struct {
-		Name   string      `json:"name"`
-		Facets schoolFacet `json:"@facets"`
+		Name  string    `json:"name,omitempty"`
+		Since time.Time `json:"school:since,omitempty"`
 	}
 
 	type Person struct {
-		Name       string      `json:"name"`
-		NameFacets nameFacets  `json:"name@facets"`
-		Facets     friendFacet `json:"@facets"`
-		Friends    []Person    `json:"friend"`
-		School     School      `json:"school"`
+		Name       string   `json:"name,omitempty"`
+		NameOrigin string   `json:"name:origin,omitempty"`
+		Friends    []Person `json:"friend,omitempty"`
+
+		// These are facets on the friend edge.
+		Since  time.Time `json:"friend:since,omitempty"`
+		Family string    `json:"friend:family,omitempty"`
+		Age    float64   `json:"friend:age,omitempty"`
+		Close  bool      `json:"friend:close,omitempty"`
+
+		School []School `json:"school,omitempty"`
 	}
 
 	ti := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 	p := Person{
-		Name: "Alice",
-		NameFacets: nameFacets{
-			Origin: "Indonesia",
-		},
+		Name:       "Alice",
+		NameOrigin: "Indonesia",
 		Friends: []Person{
 			Person{
-				Name: "Bob",
-				Facets: friendFacet{
-					Since:  ti,
-					Family: "yes",
-					Age:    13,
-					Close:  true,
-				},
+				Name:   "Bob",
+				Since:  ti,
+				Family: "yes",
+				Age:    13,
+				Close:  true,
 			},
 			Person{
-				Name: "Charlie",
-				Facets: friendFacet{
-					Family: "maybe",
-					Age:    16,
-				},
+				Name:   "Charlie",
+				Family: "maybe",
+				Age:    16,
 			},
 		},
-		School: School{
-			Name: "Wellington School",
-			Facets: schoolFacet{
-				Since: ti,
-			},
-		},
+		School: []School{School{
+			Name:  "Wellington School",
+			Since: ti,
+		}},
 	}
 
 	ctx := context.Background()
@@ -528,9 +511,10 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	}
 
 	type Root struct {
-		Me Person `json:"me"`
+		Me []Person `json:"me"`
 	}
 
+	fmt.Println(string(resp.Json))
 	var r Root
 	err = json.Unmarshal(resp.Json, &r)
 	if err != nil {

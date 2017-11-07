@@ -107,7 +107,7 @@ func TestRetrieveFacetsSimple(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"@facets":{"name":{"origin":"french"}},"gender":"female","name":"Michonne"}]}}`,
+		`{"data":{"me":[{"name:origin":"french","name":"Michonne","gender":"female"}]}}`,
 		js)
 }
 
@@ -190,7 +190,7 @@ func TestRetrieveFacetsUidValues(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"},"name":{"origin":"french"}},"name":"Rick Grimes"},{"@facets":{"_":{"close":true,"family":true,"since":"2004-05-02T15:04:05Z","tag":"Domain3"},"name":{"origin":"french"}},"name":"Glenn Rhee"},{"@facets":{"_":{"close":false,"family":true,"since":"2007-05-02T15:04:05Z", "tag":34}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"age":33,"close":true,"family":false,"since":"2005-05-02T15:04:05Z"}}}]}]}}`,
+		`{"data":{"me":[{"friend":[{"name:origin":"french","name":"Rick Grimes","friend:since":"2006-01-02T15:04:05Z"},{"name:origin":"french","name":"Glenn Rhee","friend:close":true,"friend:family":true,"friend:since":"2004-05-02T15:04:05Z","friend:tag":"Domain3"},{"name":"Daryl Dixon","friend:close":false,"friend:family":true,"friend:since":"2007-05-02T15:04:05Z","friend:tag":34},{"name":"Andrea","friend:since":"2006-01-02T15:04:05Z"},{"friend:age":33,"friend:close":true,"friend:family":false,"friend:since":"2005-05-02T15:04:05Z"}]}]}}`,
 		js)
 }
 

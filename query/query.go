@@ -434,15 +434,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
-					fc := dst.New(fieldName)
+					//		fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						fc.AddValue(f.Key, facets.ValFor(f))
+						uc.AddValue(fmt.Sprintf("%s:%s", fieldName, f.Key),
+							facets.ValFor(f))
 					}
-					if !fc.IsEmpty() {
-						fcParent := dst.New("_")
-						fcParent.AddMapChild("_", fc, false)
-						uc.AddMapChild("@facets", fcParent, true)
-					}
+					//			dst.AddListChild(fieldName, fc)
 				}
 				if !uc.IsEmpty() {
 					dst.AddListChild(fieldName, uc)
@@ -472,16 +469,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
-				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					fc.AddValue(f.Key, facets.ValFor(f))
-				}
-				if !fc.IsEmpty() {
-					if facetsNode == nil {
-						facetsNode = dst.New("@facets")
-					}
-					facetsNode.AddMapChild(fieldName, fc, false)
+					dst.AddValue(fmt.Sprintf("%s:%s", fieldName, f.Key),
+						facets.ValFor(f))
 				}
 			}
 
