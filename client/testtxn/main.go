@@ -20,7 +20,7 @@ func main() {
 	}
 	dc := protos.NewDgraphClient(conn)
 
-	dg := client.NewDgraphClient([]protos.DgraphClient{dc})
+	dg := client.NewDgraphClient(dc)
 	var wg sync.WaitGroup
 
 	for i := 0; i < 50; i++ {
