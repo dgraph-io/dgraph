@@ -1,5 +1,5 @@
 # Dgraph
-**Scalable, Distributed, Low Latency, High Throughput Graph Database.**
+**Fast, Transactional, Distributed Graph Database.**
 
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://docs.dgraph.io)
 [![Build Status](https://travis-ci.org/dgraph-io/dgraph.svg?branch=master)](https://travis-ci.org/dgraph-io/dgraph)
@@ -7,9 +7,14 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
+Dgraph is a distributed graph database. It's built from ground up to perform, for
+a rich set of queries. It's a native graph database, which tightly controls how the
+data is arranged on disk to optimize for query performance and throughput,
+reducing disk seeks and network calls in a cluster.
+
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
-Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/).
+Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP.
 
 ## Get Started
 **To get started with Dgraph, follow:**
@@ -28,6 +33,34 @@ robustness.  We recommend using it in your projects. If you plan to use Dgraph
 for user-facing production environment, [come talk to
 us](mailto:manish@dgraph.io).
 
+## Is Dgraph the right choice for me?
+
+- Do you have more than 10 SQL tables, connected to each other via foreign ids?
+- Do you have sparse data, which doesn't correctly fit into SQL tables?
+- Do you want a simple and flexible schema, which is readable and maintainable
+  over time?
+- Do you care about horizontal scalability?
+
+If the answers to the above are YES, then Dgraph would be a great fit for your
+application. Dgraph provides NoSQL like scalability while providing SQL like
+transactions and ability to select, filter and aggregate data points. It
+combines that with distributed joins, traversals and graph operations, which
+makes it easy to build applications with it.
+
+## Dgraph compared to other graph DBs
+
+| Features | Dgraph | Neo4j | Janus Graph |
+| -------- | ------ | ----- | ----------- |
+| Architecture | Distributed | Single server | Layer on top of other distributed DBs |
+| Replication | Consistent | None (only available in Enterprise) | Via underlying DB |
+| Data movement for shard rebalancing | Automatic | Not applicable (all data lies on one server) | Via underlying DB |
+| Language | GraphQL inspired | Cypher, Gremlin | Gremlin |
+| Protocols | Grpc / HTTP + JSON / RDF | Bolt + Cypher | Websocket / HTTP |
+| Transactions | Distributed ACID transactions | Single server ACID transactions | Not typically ACID
+| Full Text Search | Native support | Native support | Via External Indexing System |
+| Regular Expressions | Native support | Native support | Via External Indexing System |
+| Geo Search | Native support | External support only | Via External Indexing System |
+| License | AGPL v3 for server + Apache 2.0 for client | GPL v3 | Apache 2.0 |
 
 ## Users
 - **Dgraph official documentation is present at [docs.dgraph.io](https://docs.dgraph.io).**
@@ -52,3 +85,4 @@ us](mailto:manish@dgraph.io).
 - Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) for filing bugs or feature requests.
 - Join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
 - Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).
+
