@@ -115,10 +115,8 @@ func BlockingStop() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	groups().Node.waitForTxnMarks(ctx)
-	groups().Node.Stop()     // blocking stop raft node.
-	if workerServer != nil { // possible if Config.InMemoryComm == true
-		workerServer.GracefulStop() // blocking stop server
-	}
+	groups().Node.Stop()        // blocking stop raft node.
+	workerServer.GracefulStop() // blocking stop server
 	posting.StopLRUEviction()
 	posting.CommitLists(func(key []byte) bool {
 		return true
