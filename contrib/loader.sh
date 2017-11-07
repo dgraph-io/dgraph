@@ -49,7 +49,7 @@ popd &> /dev/null
 
 #Set Schema
 curl -X PUT  -d '
-    name: string @index(term) .
+    name: string @index(term, exact) .
     initial_release_date: datetime @index(year) .
 ' "http://localhost:8080/alter"
 
@@ -103,7 +103,7 @@ curl http://localhost:8080/admin/export
 echo -e "\nExport done."
 
 # This is count of RDF's in goldendata.rdf.gz + xids because we ran dgraph-live-loader with -xid flag.
-dataCount="1475250"
+dataCount="1120879"
 # Concat exported files to get total count.
 cat $(ls -t export/dgraph-1-* | head -1) $(ls -t export/dgraph-2-* | head -1) > export/dgraph-export.rdf.gz
 if [[ $TRAVIS_OS_NAME == "osx" ]]; then

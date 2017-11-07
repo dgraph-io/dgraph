@@ -40,6 +40,7 @@ import (
 var (
 	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
 	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
+	errAborted         = x.Errorf("Transaction aborted")
 	allocator          x.EmbeddedUidAllocator
 )
 
@@ -456,6 +457,9 @@ func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload,
 	if txn == nil {
 		return &protos.Payload{}, posting.ErrInvalidTxn
 	}
+	// Ensures that we wait till prewrite is applied
+	idx := txn.Index()
+	groups().Node.Applied.WaitForMark(ctx, idx)
 	if tc.CommitTs == 0 {
 		err := txn.AbortMutations(ctx)
 		return &protos.Payload{}, err
@@ -520,7 +524,7 @@ func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) (uint64, erro
 		return 0, err
 	}
 	if tctx.Aborted {
-		return 0, posting.ErrConflict
+		return 0, errAborted
 	}
 	return tctx.CommitTs, nil
 }

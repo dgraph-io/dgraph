@@ -57,25 +57,25 @@ func TestSchema(t *testing.T) {
 	checkSchema(t, State().predicate, []nameType{
 		{"name", &protos.SchemaUpdate{
 			Predicate: "name",
-			ValueType: uint32(types.StringID),
+			ValueType: protos.Posting_STRING,
 			Explicit:  true,
 		}},
 		{"_predicate_", &protos.SchemaUpdate{
-			ValueType: uint32(types.StringID),
+			ValueType: protos.Posting_STRING,
 			List:      true,
 		}},
 		{"address", &protos.SchemaUpdate{
 			Predicate: "address",
-			ValueType: uint32(types.StringID),
+			ValueType: protos.Posting_STRING,
 			Explicit:  true}},
 		{"http://scalar.com/helloworld/", &protos.SchemaUpdate{
 			Predicate: "http://scalar.com/helloworld/",
-			ValueType: uint32(types.StringID),
+			ValueType: protos.Posting_STRING,
 			Explicit:  true,
 		}},
 		{"age", &protos.SchemaUpdate{
 			Predicate: "age",
-			ValueType: uint32(types.IntID),
+			ValueType: protos.Posting_INT,
 			Explicit:  true,
 		}},
 	})
@@ -179,12 +179,12 @@ func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().predicate, []nameType{
 		{"_predicate_", &protos.SchemaUpdate{
-			ValueType: uint32(types.StringID),
+			ValueType: protos.Posting_STRING,
 			List:      true,
 		}},
 		{"name", &protos.SchemaUpdate{
 			Predicate: "name",
-			ValueType: uint32(types.StringID),
+			ValueType: protos.Posting_STRING,
 			Tokenizer: []string{"exact"},
 			Directive: protos.SchemaUpdate_INDEX,
 			Count:     true,
@@ -192,27 +192,27 @@ func TestSchemaIndexCustom(t *testing.T) {
 		}},
 		{"address", &protos.SchemaUpdate{
 			Predicate: "address",
-			ValueType: uint32(types.StringID),
+			ValueType: protos.Posting_STRING,
 			Tokenizer: []string{"term"},
 			Directive: protos.SchemaUpdate_INDEX,
 			Explicit:  true,
 		}},
 		{"age", &protos.SchemaUpdate{
 			Predicate: "age",
-			ValueType: uint32(types.IntID),
+			ValueType: protos.Posting_INT,
 			Tokenizer: []string{"int"},
 			Directive: protos.SchemaUpdate_INDEX,
 			Explicit:  true,
 		}},
 		{"id", &protos.SchemaUpdate{
 			Predicate: "id",
-			ValueType: uint32(types.StringID),
+			ValueType: protos.Posting_STRING,
 			Tokenizer: []string{"exact", "term"},
 			Directive: protos.SchemaUpdate_INDEX,
 			Explicit:  true,
 		}},
 		{"friend", &protos.SchemaUpdate{
-			ValueType: uint32(types.UidID),
+			ValueType: protos.Posting_UID,
 			Predicate: "friend",
 			Directive: protos.SchemaUpdate_REVERSE,
 			Count:     true,

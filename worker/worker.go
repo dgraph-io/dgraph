@@ -31,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -117,14 +118,18 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	groups().Node.Stop()     // blocking stop raft node.
-	if workerServer != nil { // possible if Config.InMemoryComm == true
-		workerServer.GracefulStop() // blocking stop server
-	}
 	// Sleep for 5 seconds to ensure that commit/abort is proposed.
 	time.Sleep(5 * time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	groups().Node.waitForTxnMarks(ctx)
+	groups().Node.Stop()     // blocking stop raft node.
+	if workerServer != nil { // possible if Config.InMemoryComm == true
+		workerServer.GracefulStop() // blocking stop server
+	}
+	posting.StopLRUEviction()
+	posting.CommitLists(func(key []byte) bool {
+		return true
+	})
 	groups().Node.snapshot(0)
 }

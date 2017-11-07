@@ -131,6 +131,15 @@ func (t *Txn) done() {
 	TxnMarks().DoneMany(t.Indices)
 }
 
+func (t *Txn) Index() uint64 {
+	t.Lock()
+	defer t.Unlock()
+	if l := len(t.Indices); l > 0 {
+		return t.Indices[l-1]
+	}
+	return 0
+}
+
 func (t *transactions) PutOrMergeIndex(txn *Txn) *Txn {
 	t.Lock()
 	defer t.Unlock()
@@ -182,22 +191,38 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
-	for _, d := range tx.deltas {
-		plist := Get(d.key)
-		changed, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
-		for err == ErrRetry {
-			time.Sleep(5 * time.Millisecond)
-			plist = Get(d.key)
-			changed, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
+	// Sort by keys so that we have all postings for same pl side by side.
+	sort.Slice(tx.deltas, func(i, j int) bool {
+		return bytes.Compare(tx.deltas[i].key, tx.deltas[j].key) < 0
+	})
+	var prevKey []byte
+	var pl *protos.PostingList
+	i := 0
+	for i < len(tx.deltas) {
+		d := tx.deltas[i]
+		if !bytes.Equal(prevKey, d.key) {
+			// First check the lru to ensure that we don't write delta if it's already committed.
+			plist := Get(d.key)
+			changed, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
+			for err == ErrRetry {
+				time.Sleep(5 * time.Millisecond)
+				plist = Get(d.key)
+				changed, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
+			}
+			if err != nil {
+				return err
+			}
+			// Skip all deltas for the key if it was already comitted.
+			if !changed {
+				i++
+				for i < len(tx.deltas) && bytes.Equal(tx.deltas[i].key, d.key) {
+					i++
+				}
+				continue
+			}
+			pl = new(protos.PostingList)
 		}
-		if err != nil {
-			return err
-		}
-		if !changed {
-			continue
-		}
-
-		var pl protos.PostingList
+		prevKey = d.key
 		var meta byte
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
 			pl.Postings = pl.Postings[:0]
@@ -225,6 +250,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		if err = txn.Set([]byte(d.key), val, meta); err != nil {
 			return err
 		}
+		i++
 	}
 	return txn.CommitAt(commitTs, nil)
 }
@@ -304,7 +330,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if !bytes.Equal(item.Key(), l.key) {
 			break
 		}
-		l.minTs = item.Version()
 		if l.commitTs == 0 {
 			l.commitTs = item.Version()
 		}
@@ -317,6 +342,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			if err := unmarshalOrCopy(l.plist, item); err != nil {
 				return nil, err
 			}
+			l.minTs = item.Version()
 			it.Next()
 			break
 		} else if item.UserMeta()&bitDeltaPosting > 0 {
@@ -339,7 +365,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if l.mlayer[i].Uid != l.mlayer[j].Uid {
 			return l.mlayer[i].Uid < l.mlayer[j].Uid
 		}
-		return l.mlayer[i].CommitTs > l.mlayer[j].CommitTs
+		return l.mlayer[i].CommitTs >= l.mlayer[j].CommitTs
 	})
 	return l, nil
 }
@@ -377,5 +403,6 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	l.Unlock()
 	x.BytesRead.Add(int64(size))
 	atomic.StoreInt32(&l.estimatedSize, size)
+	go pstore.PurgeVersionsBelow(l.key, l.minTs)
 	return l, err
 }

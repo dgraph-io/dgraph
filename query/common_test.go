@@ -75,7 +75,9 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 		l.AddMutationWithIndex(context.Background(), edge, txn))
 
 	commit := commitTs(startTs)
-	require.NoError(t, txn.CommitMutations(context.Background(), commit))
+	go func() {
+		require.NoError(t, txn.CommitMutations(context.Background(), commit))
+	}()
 }
 
 func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {
