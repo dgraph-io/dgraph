@@ -25,10 +25,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrAborted = x.Errorf("Transaction has been aborted due to conflict")
+var (
+	ErrAborted  = x.Errorf("Transaction has been aborted due to conflict")
+	ErrFinished = x.Errorf("Transaction has already been committed or discarded")
+)
 
 type Txn struct {
 	context *protos.TxnContext
+
+	finished bool
+	mutated  bool
 
 	dg *Dgraph
 }
@@ -45,6 +51,9 @@ func (d *Dgraph) NewTxn() *Txn {
 
 func (txn *Txn) Query(ctx context.Context, q string,
 	vars map[string]string) (*protos.Response, error) {
+	if txn.finished {
+		return nil, ErrFinished
+	}
 	req := &protos.Request{
 		Query:   q,
 		Vars:    vars,
@@ -79,33 +88,33 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 }
 
 func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
+	if txn.finished {
+		return nil, ErrFinished
+	}
+
 	mu.StartTs = txn.context.StartTs
 	ag, err := txn.dg.mutate(ctx, mu)
-	if ag != nil {
-		if err := txn.mergeContext(ag.Context); err != nil {
-			fmt.Printf("error while merging context: %v\n", err)
-			return nil, err
-		}
-		if len(ag.Error) > 0 {
-			// fmt.Printf("Mutate failed. start=%d ag= %+v\n", txn.startTs, ag)
-			return ag, errors.New(ag.Error)
-		}
+	if err != nil {
+		return nil, err
 	}
-	return ag, err
-}
-
-func (txn *Txn) Abort(ctx context.Context) error {
-	if txn.context == nil {
-		txn.context = &protos.TxnContext{StartTs: txn.context.StartTs}
+	txn.mutated = true
+	if err := txn.mergeContext(ag.Context); err != nil {
+		fmt.Printf("error while merging context: %v\n", err)
+		return nil, err
 	}
-	txn.context.Aborted = true
-	_, err := txn.dg.commitOrAbort(ctx, txn.context)
-	return err
+	if len(ag.Error) > 0 {
+		return nil, errors.New(ag.Error)
+	}
+	return ag, nil
 }
 
 func (txn *Txn) Commit(ctx context.Context) error {
-	if txn.context == nil {
-		// If there were no mutations
+	if txn.finished {
+		return ErrFinished
+	}
+	txn.finished = true
+
+	if !txn.mutated {
 		return nil
 	}
 	tctx, err := txn.dg.commitOrAbort(ctx, txn.context)
@@ -116,4 +125,27 @@ func (txn *Txn) Commit(ctx context.Context) error {
 		return ErrAborted
 	}
 	return nil
+}
+
+// Discard cleans up the resources associated with an uncommitted transaction
+// that contains mutations. It is a no-op on transactions that have already
+// been committed or don't contain mutations. Therefore it is safe (and
+// recommended) to call as a deferred function immediately after a new
+// transaction is created.
+//
+// In some cases, the transaction can't be discarded, e.g. the grpc connection
+// is unavailable. In these cases, the server will eventually do the
+// transaction clean up.
+func (txn *Txn) Discard(ctx context.Context) error {
+	if txn.finished {
+		return nil
+	}
+	txn.finished = true
+
+	if !txn.mutated {
+		return nil
+	}
+	txn.context.Aborted = true
+	_, err := txn.dg.commitOrAbort(ctx, txn.context)
+	return err
 }
