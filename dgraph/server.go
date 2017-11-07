@@ -442,11 +442,11 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*protos.Facet, erro
 			continue
 		}
 
-		keys := strings.Split(fname, ":")
-		if len(keys[1]) == 0 {
-			return nil, x.Errorf("Facet key can't be empty. Found empty: %s", fname)
+		if len(fname) <= len(prefix) {
+			return nil, x.Errorf("Facet key is invalid: %s", fname)
 		}
-		f := &protos.Facet{Key: keys[1]}
+		// Prefix includes colon, predicate:
+		f := &protos.Facet{Key: fname[len(prefix):]}
 		switch v := facetVal.(type) {
 		case string:
 			if t, err := types.ParseTime(v); err == nil {
@@ -579,12 +579,12 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 		*idx++
 	}
 
-	for k, v := range m {
+	for pred, v := range m {
 		// We have already extracted the uid above so we skip that edge.
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if k == "_uid_" || strings.Index(k, ":") > 0 {
+		if pred == "_uid_" || strings.Index(pred, ":") > 0 {
 			continue
 		}
 
@@ -593,7 +593,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 			if v == nil {
 				mr.nquads = append(mr.nquads, &protos.NQuad{
 					Subject:     x.Star,
-					Predicate:   k,
+					Predicate:   pred,
 					ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
 				})
 				continue
@@ -603,7 +603,9 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 			}
 		}
 
-		prefix := fmt.Sprintf("%s:", k)
+		prefix := fmt.Sprintf("%s:", pred)
+		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
+		// to call parseFacets everytime.
 		fts, err := parseFacets(m, prefix)
 		if err != nil {
 			return mr, err
@@ -611,7 +613,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 
 		nq := protos.NQuad{
 			Subject:   mr.uid,
-			Predicate: k,
+			Predicate: pred,
 			Facets:    fts,
 		}
 
@@ -625,7 +627,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 
 		switch v.(type) {
 		case string, float64, bool:
-			if err := handleBasicType(k, v, op, &nq); err != nil {
+			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
 			}
 			mr.nquads = append(mr.nquads, &nq)
@@ -654,7 +656,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 				}
 			}
 
-			cr, err := mapToNquads(v.(map[string]interface{}), idx, op, k)
+			cr, err := mapToNquads(v.(map[string]interface{}), idx, op, pred)
 			if err != nil {
 				return mr, err
 			}
@@ -669,17 +671,17 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 			for _, item := range v.([]interface{}) {
 				nq := protos.NQuad{
 					Subject:   mr.uid,
-					Predicate: k,
+					Predicate: pred,
 				}
 
 				switch iv := item.(type) {
 				case string, float64:
-					if err := handleBasicType(k, iv, op, &nq); err != nil {
+					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
 					mr.nquads = append(mr.nquads, &nq)
 				case map[string]interface{}:
-					cr, err := mapToNquads(iv, idx, op, k)
+					cr, err := mapToNquads(iv, idx, op, pred)
 					if err != nil {
 						return mr, err
 					}
@@ -690,15 +692,15 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, k string) (mapRespo
 					mr.nquads = append(mr.nquads, cr.nquads...)
 				default:
 					return mr,
-						x.Errorf("Got unsupported type for list: %s", k)
+						x.Errorf("Got unsupported type for list: %s", pred)
 				}
 			}
 		default:
-			return mr, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
+			return mr, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", pred)
 		}
 	}
 
-	fts, err := parseFacets(m, k)
+	fts, err := parseFacets(m, fmt.Sprintf("%s:", k))
 	mr.fcts = fts
 	return mr, err
 }
