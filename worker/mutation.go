@@ -40,6 +40,7 @@ import (
 var (
 	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
 	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
+	errAborted         = x.Errorf("Transaction aborted")
 	allocator          x.EmbeddedUidAllocator
 )
 
@@ -519,8 +520,8 @@ func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) (uint64, erro
 	if err != nil {
 		return 0, err
 	}
-	if !tc.Aborted && tctx.Aborted {
-		return 0, posting.ErrConflict
+	if tctx.Aborted {
+		return 0, errAborted
 	}
 	return tctx.CommitTs, nil
 }
