@@ -142,7 +142,7 @@ func (s *suite) cleanup() {
 	_ = os.RemoveAll(rootDir)
 }
 
-func (s *suite) multiQuery(query, wantResult string) func(*testing.T) {
+func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
 		for _, cluster := range []*DgraphCluster{s.bulkCluster, s.liveCluster} {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)

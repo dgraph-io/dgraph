@@ -16,7 +16,7 @@ func TestHelloWorld(t *testing.T) {
 	`)
 	defer s.cleanup()
 
-	t.Run("Pan and Jackson", s.multiQuery(`
+	t.Run("Pan and Jackson", s.testCase(`
 		{q(func: anyofterms(name, "Peter")) {
 			name
 		}}
@@ -27,7 +27,7 @@ func TestHelloWorld(t *testing.T) {
 		]}
 	`))
 
-	t.Run("Pan only", s.multiQuery(`
+	t.Run("Pan only", s.testCase(`
 		{q(func: anyofterms(name, "Pan")) {
 			name
 		}}
@@ -37,7 +37,7 @@ func TestHelloWorld(t *testing.T) {
 		]}
 	`))
 
-	t.Run("Jackson only", s.multiQuery(`
+	t.Run("Jackson only", s.testCase(`
 		{q(func: anyofterms(name, "Jackson")) {
 			name
 		}}
@@ -59,7 +59,7 @@ func TestFacets(t *testing.T) {
 	`)
 	defer s.cleanup()
 
-	t.Run("facet on terminal edge", s.multiQuery(`
+	t.Run("facet on terminal edge", s.testCase(`
 		{q(func: eq(name, "Alice")) {
 			name @facets(middle_initial)
 		}}
@@ -74,7 +74,7 @@ func TestFacets(t *testing.T) {
 		} ]}
 	`))
 
-	t.Run("facets on fwd uid edge", s.multiQuery(`
+	t.Run("facets on fwd uid edge", s.testCase(`
 		{q(func: eq(name, "Bob")) {
 			boss @facets(since)
 		}}
@@ -90,7 +90,7 @@ func TestFacets(t *testing.T) {
 		} ]}
 	`))
 
-	t.Run("facets on rev uid edge", s.multiQuery(`
+	t.Run("facets on rev uid edge", s.testCase(`
 		{q(func: eq(name, "Alice")) {
 			~boss @facets(since)
 		}}
@@ -144,7 +144,7 @@ func TestCountIndex(t *testing.T) {
 	`)
 	defer s.cleanup()
 
-	t.Run("All queries", s.multiQuery(`
+	t.Run("All queries", s.testCase(`
 	{
 		alice_friend_count(func: eq(name, "Alice")) {
 			count(friend),
@@ -272,7 +272,7 @@ func TestGoldenData(t *testing.T) {
 	)
 	defer s.cleanup()
 
-	t.Run("basic", s.multiQuery(`
+	t.Run("basic", s.testCase(`
 		{pj_films(func:allofterms(name@en,"Peter Jackson")) {
 			director.film (orderasc: name@en, first: 10) {
 				name@en
