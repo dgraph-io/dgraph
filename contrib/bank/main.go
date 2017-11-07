@@ -54,6 +54,7 @@ func (s *State) createAccounts() {
 	x.Check(err)
 
 	txn := s.dg.NewTxn()
+	defer txn.Discard(context.Background())
 	var mu protos.Mutation
 	mu.SetJson = data
 	assigned, err := txn.Mutate(context.Background(), &mu)
@@ -113,6 +114,8 @@ func (s *State) runTransaction() error {
 	}
 
 	txn := s.dg.NewTxn()
+	defer txn.Discard(ctx)
+
 	fq := fmt.Sprintf(`{me(func: uid(%s, %s)) { _uid_, bal }}`, from, to)
 	resp, err := txn.Query(ctx, fq, nil)
 	if err != nil {

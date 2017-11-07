@@ -123,6 +123,7 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 	ctx := context.Background()
 
 	txn := c.NewTxn()
+	defer txn.Discard(ctx)
 	q := fmt.Sprintf(`
 		{
 			get(func: eq(first, %q)) @filter(eq(last, %q) AND eq(age, %d)) {
@@ -156,7 +157,6 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 		mu := &protos.Mutation{SetNquads: []byte(nqs)}
 		assigned, err := txn.Mutate(ctx, mu)
 		if err != nil {
-			txn.Abort(ctx)
 			return err
 		}
 		uid = assigned.GetUids()["acct"]
@@ -171,7 +171,6 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 	)
 	mu := &protos.Mutation{SetNquads: []byte(nq)}
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		txn.Abort(ctx)
 		return err
 	}
 
