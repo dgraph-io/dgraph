@@ -122,7 +122,6 @@ func (txn *Txn) Commit(ctx context.Context) error {
 		return ErrDiscarded
 	}
 	txn.discarded = true
-
 	if txn.context == nil {
 		// If there were no mutations
 		return nil
@@ -137,7 +136,13 @@ func (txn *Txn) Commit(ctx context.Context) error {
 	return nil
 }
 
-// Discard aborts a transaction if it hasn't been committed or aborted yet.
+// Discard aborts a transaction if an attempt to commit or abort hasn't been
+// made yet. This cleans up server side resources associated with the
+// transaction. It's safe to call after a commit, so can be deferred
+// immediately after the transaction is created.
+//
+// In some cases, the transaction can't be discarded, e.g. the grpc connection
+// is unavailable. In these cases, the server will do the transaction clean up.
 func (txn *Txn) Discard(ctx context.Context) error {
 	if txn.discarded {
 		return nil
