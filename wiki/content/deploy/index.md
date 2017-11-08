@@ -677,3 +677,46 @@ On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `-
 ## See Also
 
 * [Product Roadmap to v1.0](https://github.com/dgraph-io/dgraph/issues/1)
+
+## TODO: Integrate these here.
+
+Run `dgraph zero --help` to see the full list of flags and their default values.
+Unless you want high availability, running just one `zero` process for the
+entire Dgraph cluster is sufficient.
+
+If Dgraph
+data server is running on a different machine than Dgraph Zero, then you'd also
+want to set `--my` and `--zero` flags, so the two processes can talk to each
+other.
+
+If you want to shard your data for horizontal scability, run more Dgraph data
+servers, like above. Typically, the number of shards would be equal to the
+number of Dgraph data servers divided by value of `--replicas` flag in Zero.
+
+Run `dgraph server --help` to see the full list of available flags and their
+default values.
+
+#### High availability setup [optional]
+
+If you want to maintain high availability, you could run multiple Dgraph Zero
+processes, and have them talk to each other by providing `--peer` flag.
+
+By default, Dgraph Zero would set each data shard to be served by exactly one
+Dgraph server. If you want to have the shards be replicated, you could set the
+`--replicas` flag to a value greater than 1.
+
+Note that to form a valid consensus, the number of Zero servers should be odd.
+So, that means, having 1, 3 or 5 Zero servers is ideal.
+
+Similarly, to form consensus among Dgraph replicas, you'd want to set the
+`--replicas` flag to 1, 3, or 5, which would replicate the data corresponding
+number of times.
+
+#### Map to custom port
+```sh
+mkdir -p ~/dgraph
+# Mapping port 8080 from within the container to 18080 of the instance, likewise with the gRPC port 9080.
+docker run -it -p 18080:8080 -p 19090:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -w zw
+docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
+```
+

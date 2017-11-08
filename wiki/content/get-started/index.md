@@ -31,6 +31,9 @@ vim /tmp/get.sh  # Inspect the script
 sh /tmp/get.sh   # Execute the script
 ```
 
+You can check that Dgraph binary installed correctly by running `dgraph` and
+looking at its output, which includes the version number.
+
 ### From Docker Image
 
 Pull the Dgraph Docker images [from here](https://hub.docker.com/r/dgraph/dgraph/). From a terminal:
@@ -47,13 +50,13 @@ If you wish to install the binaries on Windows, you can get them from the [Githu
 all the binaries.
 
 If you wish to run the UI for Dgraph you should also download the `assets.tar.gz` and extract them into a folder called assets.
+
 ```sh
 mkdir assets && tar -xzvf assets.tar.gz -C assets
 ```
 
-
 ## Step 2: Run Dgraph
-{{% notice "note" %}}You need to set the estimated memory dgraph can take through `memory_mb` flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
+{{% notice "note" %}} This is a set up involving just one machine. For multi-server setup, go to [Deploy]({{< relref "deploy/index.md" >}}). {{% /notice %}}
 
 ### From Installed Binary
 
@@ -64,13 +67,7 @@ maintaining membership information, shard assignment and shard movement, etc.
 
 ```sh
 dgraph zero
-
-# dgraph zero --my "IP:PORT"
 ```
-
-Run `dgraph zero --help` to see the full list of flags and their default values.
-Unless you want high availability, running just one `zero` process for the
-entire Dgraph cluster is sufficient.
 
 **Run Dgraph data server**
 
@@ -78,38 +75,9 @@ Run `dgraph server` with `--memory_mb` flag to start Dgraph server.
 
 ```sh
 dgraph server --memory_mb 2048
-
-# dgraph server --memory_mb 2048 --my "IP:PORT" --zero "IP:PORT"
 ```
 
-If Dgraph
-data server is running on a different machine than Dgraph Zero, then you'd also
-want to set `--my` and `--zero` flags, so the two processes can talk to each
-other.
-
-If you want to shard your data for horizontal scability, run more Dgraph data
-servers, like above. Typically, the number of shards would be equal to the
-number of Dgraph data servers divided by value of `--replicas` flag in Zero.
-
-Run `dgraph server --help` to see the full list of available flags and their
-default values.
-
-#### High availability setup [optional]
-
-If you want to maintain high availability, you could run multiple Dgraph Zero
-processes, and have them talk to each other by providing `--peer` flag.
-
-By default, Dgraph Zero would set each data shard to be served by exactly one
-Dgraph server. If you want to have the shards be replicated, you could set the
-`--replicas` flag to a value greater than 1.
-
-Note that to form a valid consensus, the number of Zero servers should be odd.
-So, that means, having 1, 3 or 5 Zero servers is ideal.
-
-Similarly, to form consensus among Dgraph replicas, you'd want to set the
-`--replicas` flag to 1, 3, or 5, which would replicate the data corresponding
-number of times.
-
+{{% notice "tip" %}}You need to set the estimated memory dgraph can take through `memory_mb` flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
 
 #### Windows
 To run dgraph with the UI on Windows, you also have to supply the path to the assets using the (`--ui` option).
@@ -117,46 +85,35 @@ To run dgraph with the UI on Windows, you also have to supply the path to the as
 ./dgraph.exe --memory_mb 2048 --zero 127.0.0.1:8888 -ui path-to-assets-folder
 ```
 
-### Using Docker
+### Docker on Linux
 
-The `-v` flag lets Docker mount a directory so that dgraph can persist data to disk and access files for loading data.
-
-#### Map to default ports (8080 and 9080)
-
-Run `dgraphzero`
 ```sh
-mkdir -p ~/dgraph
-docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -w zw
+# Directory to store data in. This would be passed to `-v` flag.
+mkdir -p /tmp/data
+
+# Run Dgraph Zero
+docker run -itP -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
+
+# Run Dgraph Server
+docker exec -it diggy dgraph server --bindall=true --memory_mb 2048
 ```
 
-Run `dgraph`
-```sh
-docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
-```
+The dgraph server listens on ports 8080 and 9080 (unless mapped to another port) with log output to the terminal.
 
-#### Map to custom port
-```sh
-mkdir -p ~/dgraph
-# Mapping port 8080 from within the container to 18080 of the instance, likewise with the gRPC port 9080.
-docker run -it -p 18080:8080 -p 19090:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -w zw
-docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
-```
-
-{{% notice "note" %}}The dgraph server listens on ports 8080 and 9080 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
-
-{{% notice "note" %}}If you are using docker on non-linux distribution, please use docker data volumes.{{% /notice %}}
-### On Non Linux Distributions.
+### Docker on Non Linux Distributions.
 File access in mounted filesystems is slower when using docker. Try running the command `time dd if=/dev/zero of=test.dat bs=1024 count=100000` on mounted volume and you will notice that it's horribly slow when using mounted volumes. We recommend users to use docker data volumes. The only downside of using data volumes is that you can't access the files from the host, you have to launch a container for accessing it.
+
+{{% notice "tip" %}}If you are using docker on non-linux distribution, please use docker data volumes.{{% /notice %}}
 
 Create a docker data container named datacontainer with dgraph/dgraph image.
 ```sh
-docker create -v /dgraph --name datacontainer dgraph/dgraph
+docker create -v /dgraph --name data dgraph/dgraph
 ```
 
 Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
-docker run -it -p 18080:8080 -p 19090:9080 --volumes-from datacontainer --name dgraph dgraph/dgraph dgraphzero -w zw
-docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 --p /dgraph/p --w /dgraph/w -peer 127.0.0.1:8888
+docker run -itP --volumes-from data --name diggy dgraph/dgraph dgraph zero
+docker exec -it diggy dgraph server --bindall=true --memory_mb 2048
 ```
 
 ## Step 3: Run Queries

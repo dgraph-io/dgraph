@@ -49,7 +49,6 @@ type options struct {
 	numReplicas int
 	peer        string
 	w           string
-	lease       int64
 }
 
 var opts options
@@ -65,9 +64,7 @@ func init() {
 	flag.IntVar(&opts.numReplicas, "replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
 	flag.StringVar(&opts.peer, "peer", "", "Address of another dgraphzero server.")
-	flag.StringVar(&opts.w, "w", "w", "Directory storing WAL.")
-	flag.Int64Var(&opts.lease, "lease", 0,
-		"Sets a new lease. Ignored if less than the existing lease.")
+	flag.StringVarP(&opts.w, "wal", "w", "zw", "Directory storing WAL.")
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
@@ -198,12 +195,6 @@ func run() {
 
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-
-	if opts.lease != 0 {
-		x.Check(st.node.proposeAndWait(context.Background(), &protos.ZeroProposal{
-			MaxLeaseId: uint64(opts.lease),
-		}))
-	}
 
 	go func() {
 		defer wg.Done()
