@@ -69,9 +69,9 @@ func init() {
 	flag.StringVarP(&opt.dgraph, "dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	flag.StringVarP(&opt.zero, "zero", "z", "127.0.0.1:8888", "Dgraphzero gRPC server address")
 	flag.StringVarP(&opt.clientDir, "xidmap", "x", "x", "Directory to store xid to uid mapping")
-	flag.IntVarP(&opt.concurrent, "conc", "c", 100,
+	flag.IntVarP(&opt.concurrent, "conc", "c", 1,
 		"Number of concurrent requests to make to Dgraph")
-	flag.IntVarP(&opt.numRdf, "batch", "b", 100,
+	flag.IntVarP(&opt.numRdf, "batch", "b", 10000,
 		"Number of RDF N-Quads to send as part of a mutation.")
 
 	// TLS configuration
