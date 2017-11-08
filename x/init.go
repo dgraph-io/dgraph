@@ -53,8 +53,6 @@ func AddInit(f func()) {
 // Init initializes flags and run all functions in initFunc.
 func Init(debug bool) {
 	Config.DebugMode = debug
-	// Lets print the details of the current build on startup.
-	fmt.Println(BuildDetails())
 
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {

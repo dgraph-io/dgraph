@@ -9,7 +9,7 @@ This is a quick-start guide to running Dgraph. For an interactive walk through, 
 You can see the accompanying [video here](https://www.youtube.com/watch?v=QIIdSp2zLcs).
 ## Step 1: Install Dgraph
 
-Dgraph can be installed from the install scripts, or deployed in Docker.
+Dgraph can be installed from the install scripts, or run via Docker.
 
 {{% notice "note" %}}These instructions will install the latest release version.  To instead install our nightly build see [these instructions]({{< relref "deploy/index.md#nightly" >}}).{{% /notice %}}
 
@@ -53,29 +53,68 @@ mkdir assets && tar -xzvf assets.tar.gz -C assets
 
 
 ## Step 2: Run Dgraph
-{{% notice "note" %}}You need to set the estimated memory dgraph can take through memory_mb flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
+{{% notice "note" %}}You need to set the estimated memory dgraph can take through `memory_mb` flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
 
 ### From Installed Binary
-Run `dgraphzero` binary which controls the Dgraph cluster. It moves data between different
-dgraph instances based on the size of the data served by each instance.
+
+**Run Dgraph zero**
+
+Run `dgraph zero` to start Dgraph zero. This process controls Dgraph cluster,
+maintaining membership information, shard assignment and shard movement, etc.
 
 ```sh
-dgraphzero -w zw
+dgraph zero
+
+# dgraph zero --my "IP:PORT"
 ```
 
-If Dgraph was installed with the install script, run Dgraph with:
+Run `dgraph zero --help` to see the full list of flags and their default values.
+Unless you want high availability, running just one `zero` process for the
+entire Dgraph cluster is sufficient.
+
+**Run Dgraph data server**
+
+Run `dgraph server` with `--memory_mb` flag to start Dgraph server.
 
 ```sh
-dgraph --memory_mb 2048 --peer 127.0.0.1:8888
+dgraph server --memory_mb 2048
+
+# dgraph server --memory_mb 2048 --my "IP:PORT" --zero "IP:PORT"
 ```
 
-`-peer` flag contains the address of a `dgraphzero` node which by default starts on port `8888`.
+If Dgraph
+data server is running on a different machine than Dgraph Zero, then you'd also
+want to set `--my` and `--zero` flags, so the two processes can talk to each
+other.
+
+If you want to shard your data for horizontal scability, run more Dgraph data
+servers, like above. Typically, the number of shards would be equal to the
+number of Dgraph data servers divided by value of `--replicas` flag in Zero.
+
+Run `dgraph server --help` to see the full list of available flags and their
+default values.
+
+#### High availability setup [optional]
+
+If you want to maintain high availability, you could run multiple Dgraph Zero
+processes, and have them talk to each other by providing `--peer` flag.
+
+By default, Dgraph Zero would set each data shard to be served by exactly one
+Dgraph server. If you want to have the shards be replicated, you could set the
+`--replicas` flag to a value greater than 1.
+
+Note that to form a valid consensus, the number of Zero servers should be odd.
+So, that means, having 1, 3 or 5 Zero servers is ideal.
+
+Similarly, to form consensus among Dgraph replicas, you'd want to set the
+`--replicas` flag to 1, 3, or 5, which would replicate the data corresponding
+number of times.
 
 
 #### Windows
 To run dgraph with the UI on Windows, you also have to supply the path to the assets using the (`--ui` option).
 ```sh
-./dgraph.exe --memory_mb 2048 --peer 127.0.0.1:8888 -ui path-to-assets-folder
+./dgraph.exe --memory_mb 2048 --zero 127.0.0.1:8888 -ui path-to-assets-folder
 ```
 
 ### Using Docker
@@ -130,8 +169,8 @@ Changing the data or schema stored in Dgraph is a mutation.  The following mutat
 
 
 ```sh
-curl localhost:8080/query -XPOST -d $'
-mutation {
+curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+{
   set {
    _:luke <name> "Luke Skywalker" .
    _:leia <name> "Princess Leia" .
@@ -179,14 +218,13 @@ mutation {
 Running this next mutation adds a schema and indexes some of the data so queries can use term matching, filtering and sorting.
 
 ```sh
-curl localhost:8080/query -XPOST -d $'
-mutation {
-  schema {
+curl localhost:8080/alter -XPOST -d $'
+{
+  "schema": "
     name: string @index(term) .
     release_date: datetime @index(year) .
     revenue: float .
-    running_time: int .
-  }
+    running_time: int ."
 }
 ' | python -m json.tool | less
 ```
@@ -268,184 +306,11 @@ Output
 }
 ```
 
-
-
-
-## (Optional) Step 4: Load a bigger dataset
-
-Step 3 showed how to add data with a small mutation.  Bigger datasets can be loaded with
-
-* dgraph-live-loader if you already have some data or
-* using the [dgraph-bulk-loader]({{< ref "deploy/index.md#dgraph-bulk-loader" >}}) which is significantly faster than
-  dgraph-live-loader but can only be used for initial seeding of data into Dgraph.
-
-We will use `dgraph-live-loader` below.
-
-### Download dataset
-Download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Put it directory`~/dgraph`, creating the directory if necessary using `mkdir ~/dgraph`.
-
-```sh
-mkdir -p ~/dgraph
-cd ~/dgraph
-wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true" -O goldendata.rdf.gz -q
-```
-
-### Update schema
-
-The schema needs updating to index new predicates in the dataset.  The new dataset also contains a `name` predicate, but it is already indexed from the previous step.
-
-```sh
-curl localhost:8080/query -XPOST -d '
-mutation {
-  schema {
-    initial_release_date: datetime @index(year) .
-  }
-}
-'| python -m json.tool | less
-```
-
-### Load data with dgraph-live-loader
-
-Load the downloaded dataset by running the following in a terminal.
-
-```sh
-cd ~/dgraph # The directory where you downloaded the rdf.gz file.
-dgraph-live-loader -r goldendata.rdf.gz
-```
-
-### Load data with Docker
-
-If Dgraph was started in Docker, then load the dataset with the following.
-
-```sh
-docker exec -it dgraph dgraph-live-loader -r goldendata.rdf.gz
-```
-
-### Result
-
-Output
-
-```sh
-Processing goldendata.rdf.gz
-Number of mutations run   : 1121
-Number of RDFs processed  : 1120879
-Time spent                : MMmSS.FFFFFFFFs
-RDFs processed per second : XXXXX
-```
-
-Your counts should be the same, but your statistics will vary.
-
-## (Optional) Step 5: Query Dataset
-
-{{% notice "note" %}} By default, so anyone can run them, these queries run at http://play.dgraph.io, but, if you have followed the above instructions, then the queries can be run and visualized locally by copying to [`http://localhost:8080`](http://localhost:8080).{{% /notice %}}
-
-### Movies by Steven Spielberg
-
-This query finds director "Steven Spielberg" and the movies directed by him.  The movies are sorted by release date in descending order.  A visualization of the graph won't show the order, but the JSON result shows it.
-
-{{< runnable >}}
-{
-  director(func:allofterms(name@en, "steven spielberg")) @cascade {
-    name@en
-    director.film (orderdesc: initial_release_date) {
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-
-
-### Released after August 1984
-
-This query filters out some of the results from the previous query.  It still searches for movies by Steven Spielberg, but only those released after August 1984 and ordered by ascending date.
-
-We'll sort in increasing order this time by using `orderasc`, instead of `orderdesc`.
-
-{{< runnable >}}
-{
-  director(func:allofterms(name@en, "steven spielberg")) @cascade {
-    name@en
-    director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1984-08")) {
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-
-### Released in the 1990s
-
-Using `AND` two filters can be joined.
-
-{{< runnable >}}
-{
-  director(func:allofterms(name@en, "steven spielberg")) {
-    name@en
-    director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1990") AND le(initial_release_date, "2000")) {
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-
-
-### Released since 2016
-
-For the queries so far, the search has started with the name of a director.  But Dgraph can search in many ways.  This query finds films in the dataset released since 2016 and changes the name `initial_release_date` to `released` in the output.
-
-{{< runnable >}}{
-  films(func:ge(initial_release_date, "2016")) {
-    name@en
-    released: initial_release_date
-    directed_by {
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-These queries should give an idea of some of the things Dgraph is capable of.
+## Where to go from here
 
 Take the [tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
 
 A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
-
-
-
-## Other Datasets
-
-The examples in the [Query Language]({{< relref "query-language/index.md" >}}) reference manual use the following datasets.
-
-* A dataset of movies and actors - 21million.rdf.gz [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz), and
-* A tourism dataset for geo-location queries - sf.tourism.gz [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz).
-
-To load this data into a local instance of Dgraph.  First, get the data:
-```
-cd ~/dgraph
-wget "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true" -O 21million.rdf.gz -q
-wget "https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz?raw=true" -O sf.tourism.gz -q
-```
-
-Then, using the same process as [schema updating]({{< relref "#update-schema" >}}) and [data loading]({{< relref "#load-data-with-dgraph-live-loader" >}}) (or [with Docker]({{< relref "#load-data-with-docker" >}})) from Step 4 above, mutate the schema and load the data files.  The required schema is as follows.
-
-```
-mutation {
-  schema {
-    director.film: uid @reverse .
-    genre: uid @reverse .
-    initial_release_date: datetime @index(year) .
-    rating: uid @reverse .
-    country: uid @reverse .
-    loc: geo @index(geo) .
-    name: string @index(term) .
-  }
-}
-```
-
-Depending on the machine used, it can take a few minutes to load the 21 million triples.
-
 
 ## Need Help
 
