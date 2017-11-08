@@ -200,7 +200,7 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 			sentence
 		}
 	}
-	`, node1, node2), nil)
+	`, node1, node2))
 	x.Check(err)
 
 	decode := struct {
@@ -278,7 +278,7 @@ func checkInvariants(c *client.Dgraph, uids []string, sentences []string) error 
 			uid
 		}
 	}
-	`, uidList), nil)
+	`, uidList))
 	if err != nil {
 		return err
 	}
@@ -320,7 +320,7 @@ func checkInvariants(c *client.Dgraph, uids []string, sentences []string) error 
 		}
 		`, word)
 
-		resp, err := txn.Query(ctx, q, nil)
+		resp, err := txn.Query(ctx, q)
 		if err != nil {
 			return err
 		}

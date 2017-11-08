@@ -1,3 +1,5 @@
+# Used to install initial set of packages on Travis CI server.
+
 #!/bin/bash
 
 set -e

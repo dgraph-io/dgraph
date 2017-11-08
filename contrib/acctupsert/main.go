@@ -112,7 +112,7 @@ func upsert(c *client.Dgraph, acc account) {
 			atomic.AddUint64(&successCount, 1)
 			return
 		}
-		if !strings.Contains(strings.ToLower(err.Error()), "conflict") {
+		if !strings.Contains(strings.ToLower(err.Error()), "aborted") {
 			x.Check(err)
 		}
 		atomic.AddUint64(&retryCount, 1)
@@ -131,7 +131,7 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 			}
 		}
 	`, acc.first, acc.last, acc.age)
-	resp, err := txn.Query(ctx, q, nil)
+	resp, err := txn.Query(ctx, q)
 	x.Check(err)
 
 	decode := struct {
@@ -189,7 +189,7 @@ func checkIntegrity(c *client.Dgraph) {
 			}
 		}
 	`, strings.Join(firsts, " "))
-	resp, err := c.NewTxn().Query(ctx, q, nil)
+	resp, err := c.NewTxn().Query(ctx, q)
 	x.Check(err)
 
 	decode := struct {
