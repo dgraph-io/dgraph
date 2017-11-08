@@ -64,7 +64,8 @@ func (txn *Txn) QueryWithVars(ctx context.Context, q string,
 		StartTs: txn.context.StartTs,
 		LinRead: txn.context.LinRead,
 	}
-	resp, err := txn.dg.query(ctx, req)
+	dc := txn.dg.anyClient()
+	resp, err := dc.Query(ctx, req)
 	if err == nil {
 		if err := txn.mergeContext(resp.GetTxn()); err != nil {
 			return nil, err
@@ -97,7 +98,8 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 	}
 
 	mu.StartTs = txn.context.StartTs
-	ag, err := txn.dg.mutate(ctx, mu)
+	dc := txn.dg.anyClient()
+	ag, err := dc.Mutate(ctx, mu)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +123,8 @@ func (txn *Txn) Commit(ctx context.Context) error {
 	if !txn.mutated {
 		return nil
 	}
-	tctx, err := txn.dg.commitOrAbort(ctx, txn.context)
+	dc := txn.dg.anyClient()
+	tctx, err := dc.CommitOrAbort(ctx, txn.context)
 	if err != nil {
 		return err
 	}
@@ -150,6 +153,7 @@ func (txn *Txn) Discard(ctx context.Context) error {
 		return nil
 	}
 	txn.context.Aborted = true
-	_, err := txn.dg.commitOrAbort(ctx, txn.context)
+	dc := txn.dg.anyClient()
+	_, err := dc.CommitOrAbort(ctx, txn.context)
 	return err
 }

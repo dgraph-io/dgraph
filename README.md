@@ -7,8 +7,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
-Dgraph is a distributed graph database. It's built from ground up to perform, for
-a rich set of queries. It's a native graph database, which tightly controls how the
+Dgraph is an open source, horizontally scalable and distributed graph database, providing ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
+a rich set of queries. Being a native graph database, it tightly controls how the
 data is arranged on disk to optimize for query performance and throughput,
 reducing disk seeks and network calls in a cluster.
 
@@ -53,7 +53,7 @@ makes it easy to build applications with it.
 | -------- | ------ | ----- | ----------- |
 | Architecture | Distributed | Single server | Layer on top of other distributed DBs |
 | Replication | Consistent | None (only available in Enterprise) | Via underlying DB |
-| Data movement for shard rebalancing | Automatic | Not applicable (all data lies on one server) | Via underlying DB |
+| Data movement for shard rebalancing | Automatic | Not applicable (all data lies on each server) | Via underlying DB |
 | Language | GraphQL inspired | Cypher, Gremlin | Gremlin |
 | Protocols | Grpc / HTTP + JSON / RDF | Bolt + Cypher | Websocket / HTTP |
 | Transactions | Distributed ACID transactions | Single server ACID transactions | Not typically ACID

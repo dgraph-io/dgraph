@@ -1,9 +1,0 @@
-{
-	all(func: allofterms(name, "Peter")) {
-		name
-	},
-
-	any(func: anyofterms(name, "Peter")) {
-		name
-	}
-}
