@@ -90,8 +90,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Query = string(q)
 
-	// TODO - Check if debug still works.
-	resp, err := (&edgraph.Server{}).Query(context.Background(), &req)
+	d := r.URL.Query().Get("debug")
+	ctx := context.WithValue(context.Background(), "debug", d)
+	resp, err := (&edgraph.Server{}).Query(ctx, &req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -99,7 +100,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := map[string]interface{}{}
 	addLatency, _ := strconv.ParseBool(r.URL.Query().Get("latency"))
-	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
+	debug, _ := strconv.ParseBool(d)
 	addLatency = addLatency || debug
 
 	e := query.Extensions{
