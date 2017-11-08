@@ -27,10 +27,8 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/server"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var profileMode string
@@ -48,7 +46,7 @@ It's built from ground up to perform for a rich set of queries.  Being a native
 graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.
-`,
+` + x.BuildDetails(),
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -76,52 +74,15 @@ func Execute() {
 	}
 }
 
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Show Dgraph version",
-	Run: func(cmd *cobra.Command, args []string) {
-		x.PrintVersionOnly()
-	},
-}
-
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize()
 	RootCmd.AddCommand(bulk.BulkCmd)
 	RootCmd.AddCommand(live.LiveCmd)
 	RootCmd.AddCommand(server.ServerCmd)
 	RootCmd.AddCommand(zero.ZeroCmd)
-	RootCmd.AddCommand(versionCmd)
 
 	RootCmd.PersistentFlags().StringVar(&profileMode, "profile.mode", "",
 		"Enable profiling mode, one of [cpu, mem, mutex, block]")
 	RootCmd.PersistentFlags().IntVar(&blockRate, "block.rate", 0,
 		"Block profiling rate. Must be used along with block profile.mode")
-}
-
-var cfgFile string // TODO: What is the use of this?
-
-// initConfig reads in config file and ENV variables if set.
-func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		// Search config in home directory with name ".dgraph" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".dgraph")
-	}
-
-	viper.AutomaticEnv() // read in environment variables that match
-
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	}
 }
