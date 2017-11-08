@@ -184,6 +184,12 @@ func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
 	}
 }
 
+func (o *Oracle) commitTs(startTs uint64) uint64 {
+	o.RLock()
+	defer o.RUnlock()
+	return o.commits[startTs]
+}
+
 func (o *Oracle) storePending(ids *protos.AssignedIds) {
 	// Wait to finish up processing everything before start id.
 	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
@@ -280,15 +286,18 @@ func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer)
 	return nil
 }
 
-func (s *Server) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.Payload, error) {
-	for _, startTs := range txns.StartTs {
+func (s *Server) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.TxnTimestamps, error) {
+	commitTimestamps := new(protos.TxnTimestamps)
+	for _, startTs := range txns.Ts {
 		// Do via proposals to avoid race
 		tctx := &protos.TxnContext{StartTs: startTs, Aborted: true}
 		if err := s.proposeTxn(ctx, tctx); err != nil {
-			return &protos.Payload{}, err
+			return commitTimestamps, err
 		}
+		// Txn should be aborted if not already committed.
+		commitTimestamps.Ts = append(commitTimestamps.Ts, s.orc.commitTs(startTs))
 	}
-	return &protos.Payload{}, nil
+	return commitTimestamps, nil
 }
 
 // Timestamps is used to assign startTs for a new transaction

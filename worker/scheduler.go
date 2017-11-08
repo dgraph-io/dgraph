@@ -94,6 +94,17 @@ func (s *scheduler) register(t *task) bool {
 	}
 }
 
+func (s *scheduler) waitForConflictResolution(attr string) {
+	tctxs := posting.Txns().Iterate(func(key []byte) bool {
+		pk := x.Parse(key)
+		return pk.Attr == attr
+	})
+	if len(tctxs) == 0 {
+		return
+	}
+	tryAbortTransactions(tctxs)
+}
+
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
@@ -103,12 +114,13 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 	}()
 
 	if proposal.Mutations.DropAll {
+		// Ensures nothing get written to disk due to commit proposals.
+		posting.Txns().Reset()
 		if err = s.n.Applied.WaitForMark(s.n.ctx, index-1); err != nil {
 			return err
 		}
 		schema.State().DeleteAll()
 		err = posting.DeleteAll()
-		posting.Txns().Reset()
 		posting.TxnMarks().Done(index)
 		return
 	}
@@ -133,18 +145,8 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 				err = errPredicateMoving
 				break
 			}
-			tctxs := posting.Txns().Iterate(func(key []byte) bool {
-				pk := x.Parse(key)
-				return pk.Attr == supdate.Predicate
-			})
-			if len(tctxs) > 0 {
-				if s.n.AmLeader() {
-					go tryAbortTransactions(tctxs)
-				}
-				err = posting.ErrConflict
-			} else {
-				err = s.n.processSchemaMutations(proposal.Id, index, startTs, supdate)
-			}
+			s.waitForConflictResolution(supdate.Predicate)
+			err = s.n.processSchemaMutations(proposal.Id, index, startTs, supdate)
 			if err != nil {
 				break
 			}
@@ -173,18 +175,8 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 			if err = s.n.Applied.WaitForMark(ctx, index-1); err != nil {
 				return
 			}
-			tctxs := posting.Txns().Iterate(func(key []byte) bool {
-				pk := x.Parse(key)
-				return pk.Attr == edge.Attr
-			})
-			if len(tctxs) > 0 {
-				if s.n.AmLeader() {
-					go tryAbortTransactions(tctxs)
-				}
-				err = posting.ErrConflict
-			} else {
-				err = posting.DeletePredicate(ctx, edge.Attr)
-			}
+			s.waitForConflictResolution(edge.Attr)
+			err = posting.DeletePredicate(ctx, edge.Attr)
 			posting.TxnMarks().Done(index)
 			return
 		}

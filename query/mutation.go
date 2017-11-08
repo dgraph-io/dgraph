@@ -61,6 +61,7 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 
 				sg := &SubGraph{}
 				sg.DestUIDs = &protos.List{[]uint64{mu.GetEntity()}}
+				sg.ReadTs = m.StartTs
 				valMatrix, err := getNodePredicates(ctx, sg)
 				if err != nil {
 					return err

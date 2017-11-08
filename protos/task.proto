@@ -390,7 +390,7 @@ message OracleDelta {
 }
 
 message TxnTimestamps {
-  repeated uint64 start_ts = 1;
+  repeated uint64 ts = 1;
 }
 
 service Raft {
@@ -407,7 +407,7 @@ service Zero {
 	rpc AssignUids (Num)      returns (AssignedIds) {}
   rpc Timestamps (Num)      returns (AssignedIds) {}
   rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
-	rpc TryAbort (TxnTimestamps) returns (Payload) {}
+	rpc TryAbort (TxnTimestamps) returns (TxnTimestamps) {}
 }
 
 service Worker {

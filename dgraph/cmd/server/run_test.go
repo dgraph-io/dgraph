@@ -24,19 +24,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	context "golang.org/x/net/context"
-	"google.golang.org/grpc"
 
 	"github.com/stretchr/testify/require"
 
@@ -83,108 +80,13 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*
 	return &protos.Payload{}, nil
 }
 
-// For now same as in query_test but would change the implementation here later for integration tests
-type zeroServer struct {
-	sync.Mutex
-	nextLeaseId uint64
-}
-
-func (z *zeroServer) AssignUids(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
-	a := &protos.AssignedIds{}
-	z.Lock()
-	defer z.Unlock()
-	a.StartId = z.nextLeaseId
-	z.nextLeaseId += n.Val
-	a.EndId = z.nextLeaseId - 1
-	return a, nil
-}
-
-func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.ConnectionState, error) {
-	m := &protos.MembershipState{}
-	m.Zeros = make(map[uint64]*protos.Member)
-	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
-	m.Groups = make(map[uint32]*protos.Group)
-	g := &protos.Group{}
-	g.Members = make(map[uint64]*protos.Member)
-	g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
-	m.Groups[1] = g
-
-	c := &protos.ConnectionState{
-		Member: in,
-		State:  m,
-	}
-	return c, nil
-}
-
-// Used by sync membership
-// TODO: For now same as in query_test.go, change it later to have integration tests.
-func (z *zeroServer) Update(stream protos.Zero_UpdateServer) error {
-	for {
-		_, err := stream.Recv()
-		if err != nil {
-			return err
-		}
-		m := &protos.MembershipState{}
-		m.Zeros = make(map[uint64]*protos.Member)
-		m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12341"}
-		m.Groups = make(map[uint32]*protos.Group)
-		g := &protos.Group{}
-		g.Members = make(map[uint64]*protos.Member)
-		g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
-		m.Groups[1] = g
-		stream.Send(m)
-	}
-}
-
-var odch chan *protos.OracleDelta
-
-func (s *zeroServer) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.Payload, error) {
-	return &protos.Payload{}, nil
-}
-
-func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) error {
-	for delta := range odch {
-		if err := server.Send(delta); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*protos.Tablet, error) {
-	in.GroupId = 1
-	return in, nil
-}
-
-func (z *zeroServer) Timestamps(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
-	return &protos.AssignedIds{}, nil
-}
-
-func (z *zeroServer) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*protos.TxnContext, error) {
-	return &protos.TxnContext{}, nil
-}
-
-func StartDummyZero() *grpc.Server {
-	ln, err := net.Listen("tcp", "localhost:12341")
-	x.Check(err)
-	x.Printf("zero listening at address: %v", ln.Addr())
-
-	s := grpc.NewServer()
-	z := &zeroServer{}
-	// some uids are used in queries so setting some high value which is not used.
-	z.nextLeaseId = 10000
-	protos.RegisterZeroServer(s, z)
-	protos.RegisterRaftServer(s, &raftServer{})
-	go s.Serve(ln)
-	return s
-}
-
 func prepare() (dir1, dir2 string, rerr error) {
 	// TODO - Stop at end and clear dir.
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"),
 		"-w=wz",
 		"-port", "12341",
 	)
+	zero.Stdout = os.Stdout
 	if err := zero.Start(); err != nil {
 		return "", "", err
 	}
@@ -325,52 +227,49 @@ func alterSchema(s string) error {
 }
 
 func alterSchemaWithRetry(s string) error {
-	attempts := 0
-	for {
-		if attempts > 10 {
-			return errors.New("Couldn't alter schema " + s)
-		}
-		attempts++
-		err := alterSchema(s)
-		if (err) == nil {
-			return nil
-		} else {
-			fmt.Println("Got error while trying to delete predicate", err)
-			time.Sleep(1 * time.Second)
-		}
+	return alterSchema(s)
+}
+
+func dropAll() error {
+	op := `{"drop_all": true}`
+	req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(op))
+	if err != nil {
+		return err
 	}
-	return nil
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(alterHandler)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		return fmt.Errorf("Unexpected status code: %v", status)
+	}
+	var qr x.QueryResWithData
+	json.Unmarshal(rr.Body.Bytes(), &qr)
+	if len(qr.Errors) == 0 {
+		return nil
+	}
+	return x.Errorf("Got error while trying to drop all", qr.Errors)
 }
 
 func deletePredicate(pred string) error {
-	attempts := 0
-	var qr x.QueryResWithData
-	for {
-		if attempts > 10 {
-			return errors.New("Couldn't delete predicate " + pred)
-		}
-		attempts++
-		op := `{"drop_attr": "` + pred + `"}`
-		req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(op))
-		if err != nil {
-			return err
-		}
-		rr := httptest.NewRecorder()
-		handler := http.HandlerFunc(alterHandler)
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusOK {
-			return fmt.Errorf("Unexpected status code: %v", status)
-		}
-		json.Unmarshal(rr.Body.Bytes(), &qr)
-		if len(qr.Errors) == 0 {
-			return nil
-		} else {
-			fmt.Println("Got error while trying to delete predicate", qr.Errors)
-			time.Sleep(1 * time.Second)
-		}
+	op := `{"drop_attr": "` + pred + `"}`
+	req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(op))
+	if err != nil {
+		return err
 	}
-	return nil
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(alterHandler)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		return fmt.Errorf("Unexpected status code: %v", status)
+	}
+	var qr x.QueryResWithData
+	json.Unmarshal(rr.Body.Bytes(), &qr)
+	if len(qr.Errors) == 0 {
+		return nil
+	}
+	return x.Errorf("Got error while trying to delete predicate", qr.Errors)
 }
 
 func TestDeletePredicate(t *testing.T) {
@@ -916,7 +815,8 @@ var q5 = `
 func TestSchemaValidationError(t *testing.T) {
 	_, err := gql.Parse(gql.Request{Str: m5, Http: true})
 	require.Error(t, err)
-	output := processToFastJSON(strings.Replace(q5, "<id>", "0x8", -1))
+	output, err := runQuery(strings.Replace(q5, "<id>", "0x8", -1))
+	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user": []}}`, output)
 }
 
@@ -1061,7 +961,7 @@ func TestListPred(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"listpred":[{"_predicate_":["name","age","friend"]}]}}`,
+	require.JSONEq(t, `{"data": {"listpred":[{"_predicate_":["name","age","friend"]}]}}`,
 		output)
 }
 
@@ -1249,7 +1149,7 @@ func TestMultipleValues(t *testing.T) {
 		}`
 	res, err := runQuery(q)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
+	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 }
 
 func TestListTypeSchemaChange(t *testing.T) {
@@ -1325,25 +1225,26 @@ func TestListTypeSchemaChange(t *testing.T) {
 
 func TestDeleteAllSP2(t *testing.T) {
 	var m = `
-	mutation {
+	{
 	  set {
-	    _:day1 <nodeType> "TRACKED_DAY" .
-	    _:day1 <name> "July 3 2017" .
-	    _:day1 <date> "2017-07-03T03:49:03+00:00" .
-	    _:day1 <weight> "262.3" .
-	    _:day1 <weightUnit> "pound" .
-	    _:day1 <lifeLoad> "5" .
-	    _:day1 <stressLevel> "3" .
-	    _:day1 <plan> "modest day" .
-	    _:day1 <postMortem> "win!" .
+	    <0x12345> <nodeType> "TRACKED_DAY" .
+	    <0x12345> <name> "July 3 2017" .
+	    <0x12345> <date> "2017-07-03T03:49:03+00:00" .
+	    <0x12345> <weight> "262.3" .
+	    <0x12345> <weightUnit> "pound" .
+	    <0x12345> <lifeLoad> "5" .
+	    <0x12345> <stressLevel> "3" .
+	    <0x12345> <plan> "modest day" .
+	    <0x12345> <postMortem> "win!" .
 	  }
 	}
 	`
-	output, err := runQuery(m)
+	s := `_predicate_: [string] .`
+	err := alterSchemaWithRetry(s)
 	require.NoError(t, err)
-	out := make(map[string]interface{})
-	require.NoError(t, json.Unmarshal([]byte(output), &out))
-	uid := out["data"].(map[string]interface{})["uids"].(map[string]interface{})["day1"].(string)
+
+	err = runMutation(m)
+	require.NoError(t, err)
 
 	q := fmt.Sprintf(`
 	{
@@ -1355,43 +1256,50 @@ func TestDeleteAllSP2(t *testing.T) {
 	    lifeLoad
 	    stressLevel
 	  }
-	}`, uid)
+	}`, "0x12345")
 
-	output, err = runQuery(q)
+	output, err := runQuery(q)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"me":[{"_predicate_":["name","date","weightUnit","postMortem","lifeLoad","weight","stressLevel","nodeType","plan"],"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
+	require.JSONEq(t, `{"data": {"me":[{"_predicate_":["name","date","weightUnit","postMortem","lifeLoad","weight","stressLevel","nodeType","plan"],"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
 
 	m = fmt.Sprintf(`
-		mutation {
+		{
 			delete {
 				<%s> * * .
 			}
-		}`, uid)
+		}`, "0x12345")
 
-	output, err = runQuery(m)
+	err = runMutation(m)
 	require.NoError(t, err)
 
 	output, err = runQuery(q)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"me":[]}}`, output)
+	require.JSONEq(t, `{"data": {"me":[]}}`, output)
 }
 
 func TestDropAll(t *testing.T) {
-	var q1 = `
-	mutation{
-		schema{
-			name: string @index(term) .
-		}
+	var m1 = `
+	{
 		set{
 			_:foo <name> "Foo" .
 		}
-	}
+	}`
+	var q1 = `
 	{
 		q(func: allofterms(name, "Foo")) {
 			uid
 			name
 		}
 	}`
+	// TODO: Check why _predicate_ is being removed.
+	s := `name: string @index(term) .
+	_predicate_: [string] .`
+	err := alterSchemaWithRetry(s)
+	require.NoError(t, err)
+
+	err = runMutation(m1)
+	require.NoError(t, err)
+
 	output, err := runQuery(q1)
 	require.NoError(t, err)
 	q1Result := map[string]interface{}{}
@@ -1400,8 +1308,7 @@ func TestDropAll(t *testing.T) {
 	name := queryResults[0].(map[string]interface{})["name"].(string)
 	require.Equal(t, "Foo", name)
 
-	q2 := "mutation{ dropall {} }"
-	_, err = runQuery(q2)
+	err = dropAll()
 	require.NoError(t, err)
 
 	q3 := "schema{}"
@@ -1411,13 +1318,7 @@ func TestDropAll(t *testing.T) {
 		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true}]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
-	q4 := `
-	mutation {
-		schema{
-			name: string @index(term) .
-		}
-	}`
-	_, err = runQuery(q4)
+	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
 	q5 := `
@@ -1429,7 +1330,7 @@ func TestDropAll(t *testing.T) {
 	}`
 	output, err = runQuery(q5)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"q":[]}}`, output)
+	require.JSONEq(t, `{"data": {"q":[]}}`, output)
 }
 
 func TestRecurseExpandAll(t *testing.T) {
@@ -1452,7 +1353,8 @@ func TestRecurseExpandAll(t *testing.T) {
 	}
 	`
 
-	var s = `name:string @index(term) .`
+	var s = `name:string @index(term) .
+	_predicate_: [string] .`
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
