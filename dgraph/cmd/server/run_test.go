@@ -1239,11 +1239,7 @@ func TestDeleteAllSP2(t *testing.T) {
 	  }
 	}
 	`
-	s := `_predicate_: [string] .`
-	err := alterSchemaWithRetry(s)
-	require.NoError(t, err)
-
-	err = runMutation(m)
+	err := runMutation(m)
 	require.NoError(t, err)
 
 	q := fmt.Sprintf(`
@@ -1291,9 +1287,8 @@ func TestDropAll(t *testing.T) {
 			name
 		}
 	}`
-	// TODO: Check why _predicate_ is being removed.
-	s := `name: string @index(term) .
-	_predicate_: [string] .`
+
+	s := `name: string @index(term) .`
 	err := alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
@@ -1353,8 +1348,7 @@ func TestRecurseExpandAll(t *testing.T) {
 	}
 	`
 
-	var s = `name:string @index(term) .
-	_predicate_: [string] .`
+	var s = `name:string @index(term) .`
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)

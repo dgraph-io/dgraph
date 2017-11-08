@@ -54,6 +54,16 @@ func TestConvertEdgeType(t *testing.T) {
 		},
 		{
 			input: &protos.DirectedEdge{
+				Value: []byte("set edge"),
+				Label: "test-mutation",
+				Attr:  "name",
+				Op:    protos.DirectedEdge_DEL,
+			},
+			to:        types.StringID,
+			expectErr: true,
+		},
+		{
+			input: &protos.DirectedEdge{
 				ValueId: 123,
 				Label:   "test-mutation",
 				Attr:    "name",

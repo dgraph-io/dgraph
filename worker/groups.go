@@ -219,6 +219,13 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 	return tablets
 }
 
+func MaxLeaseId() uint64 {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	return g.state.MaxLeaseId
+}
+
 func (g *groupi) applyState(state *protos.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()

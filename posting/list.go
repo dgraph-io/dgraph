@@ -539,15 +539,14 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 	l.AssertRLock()
 	midx := 0
 	var deleteTs uint64
-	if l.markdeleteAll > 0 {
+	if l.markdeleteAll == 0 {
+	} else if l.markdeleteAll == readTs {
 		// Check if there is uncommitted sp* at current readTs.
-		if l.markdeleteAll == readTs {
-			return nil
-		} else if l.markdeleteAll < readTs {
-			// Ignore all reads before this.
-			// Fixing the pl is difficult with locks.
-			deleteTs = Oracle().CommitTs(l.markdeleteAll)
-		}
+		return nil
+	} else if l.markdeleteAll < readTs {
+		// Ignore all reads before this.
+		// Fixing the pl is difficult with locks.
+		deleteTs = Oracle().CommitTs(l.markdeleteAll)
 	}
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)

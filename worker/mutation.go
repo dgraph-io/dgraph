@@ -295,6 +295,13 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 		}
 		return nil
 	}
+	// <s> <p> <o> Del on non list scalar type.
+	if len(edge.Value) > 0 && !bytes.Equal(edge.Value, []byte(x.Star)) &&
+		edge.Op == protos.DirectedEdge_DEL {
+		if !schema.State().IsList(edge.Attr) {
+			return x.Errorf("Please use * with delete operation for non-list type")
+		}
+	}
 
 	storageType := posting.TypeID(edge)
 	if !schemaType.IsScalar() && !storageType.IsScalar() {
@@ -575,7 +582,7 @@ func tryAbortTransactions(startTimestamps []uint64) {
 		resp, err = zc.TryAbort(context.Background(), req)
 	}
 	commitTimestamps := resp.Ts
-	x.AssertTruef(len(startTimestamps) == len(commitTimestamps), "%+v %+v\n", startTimestamps, commitTimestamps)
+	x.AssertTrue(len(startTimestamps) == len(commitTimestamps))
 
 	for i, startTs := range startTimestamps {
 		tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTimestamps[i]}
