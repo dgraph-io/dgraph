@@ -568,5 +568,21 @@ func tryAbortTransactions(startTimestamps []uint64) {
 		return
 	}
 	zc := protos.NewZeroClient(pl.Get())
-	zc.TryAbort(context.Background(), &protos.TxnTimestamps{StartTs: startTimestamps})
+	// Aborts if not already committed.
+	req := &protos.TxnTimestamps{Ts: startTimestamps}
+	resp, err := zc.TryAbort(context.Background(), req)
+	for err != nil {
+		resp, err = zc.TryAbort(context.Background(), req)
+	}
+	commitTimestamps := resp.Ts
+	x.AssertTruef(len(startTimestamps) == len(commitTimestamps), "%+v %+v\n", startTimestamps, commitTimestamps)
+
+	for i, startTs := range startTimestamps {
+		tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTimestamps[i]}
+		_, err := commitOrAbort(context.Background(), tctx)
+		for err != nil {
+			// This will fail only due to badger error.
+			_, err = commitOrAbort(context.Background(), tctx)
+		}
+	}
 }

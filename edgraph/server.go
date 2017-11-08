@@ -281,10 +281,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		tr.LazyPrintf("Prewrites err: %v. Attempting to commit/abort immediately.", err)
 	}
 	ctxn := resp.Context
-	if err == nil {
-		ctxn.CommitTs = ctxn.StartTs
-	}
-	// If CommitTs is zero, this would abort.
+	// zero would assign the CommitTs
 	cts, aerr := worker.CommitOverNetwork(ctx, ctxn)
 	if ok {
 		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, aerr)

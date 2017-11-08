@@ -5676,8 +5676,8 @@ func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) 
 	return nil
 }
 
-func (s *zeroServer) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.Payload, error) {
-	return &protos.Payload{}, nil
+func (s *zeroServer) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.TxnTimestamps, error) {
+	return &protos.TxnTimestamps{}, nil
 }
 
 func StartDummyZero() *grpc.Server {

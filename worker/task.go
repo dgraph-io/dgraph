@@ -1502,6 +1502,7 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	}
 	countPrefix := pk.CountPrefix(cp.reverse)
 
+	// TODO: Wait for txn watermarks to catch up.
 	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
 		key := it.Item().Key()
 		nk := make([]byte, len(key))
