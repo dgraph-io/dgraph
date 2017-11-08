@@ -54,7 +54,7 @@ func AddInit(f func()) {
 func Init(debug bool) {
 	Config.DebugMode = debug
 	// Lets print the details of the current build on startup.
-	printBuildDetails()
+	fmt.Println(BuildDetails())
 
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
@@ -77,29 +77,26 @@ func LoadConfigFromYAML(file string) {
 	}
 }
 
-func printBuildDetails() {
-	if dgraphVersion == "" {
-		return
-	}
-
-	fmt.Printf(fmt.Sprintf(`
+func BuildDetails() string {
+	return fmt.Sprintf(`
 Dgraph version   : %v
 Commit SHA-1     : %v
 Commit timestamp : %v
-Branch           : %v`,
-		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch) + "\n\n")
+Branch           : %v
+
+For Dgraph official documentation, visit https://docs.dgraph.io.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+To say hi to the community       , visit https://dgraph.slack.com.
+
+Licensed under AGPLv3. Copyright 2017 Dgraph Labs, Inc.
+
+`,
+		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch)
 }
 
 // PrintVersionOnly prints version and other helpful information if --version.
 func PrintVersionOnly() {
-	printBuildDetails()
-	fmt.Println("Copyright 2017 Dgraph Labs, Inc.")
-	fmt.Println(`
-Licensed under AGPLv3.
-For Dgraph official documentation, visit https://docs.dgraph.io.
-For discussions about Dgraph     , visit https://discuss.dgraph.io.
-To say hi to the community       , visit https://dgraph.slack.com.
-`)
+	fmt.Println(BuildDetails())
 	os.Exit(0)
 }
 
