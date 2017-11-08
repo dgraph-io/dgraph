@@ -1,0 +1,6 @@
+date:dateTime @index
+age: int @index
+health: float @index
+name: string @index
+loc: geo @index
+

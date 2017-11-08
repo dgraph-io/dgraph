@@ -202,7 +202,7 @@ func ToInternal(gmu *gql.Mutation,
 	}
 	for _, nq := range gmu.Del {
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return edges, errors.New("Predicate deletion should not be called via Mutate.")
+			return edges, errors.New("Predicate deletion should not be called via alter.")
 		}
 		if err := parse(nq, protos.DirectedEdge_DEL); err != nil {
 			return edges, err

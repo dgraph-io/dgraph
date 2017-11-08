@@ -127,9 +127,7 @@ func BlockingStop() {
 	if workerServer != nil { // possible if Config.InMemoryComm == true
 		workerServer.GracefulStop() // blocking stop server
 	}
+	groups().Node.applyAllMarks(ctx)
 	posting.StopLRUEviction()
-	posting.CommitLists(func(key []byte) bool {
-		return true
-	})
 	groups().Node.snapshot(0)
 }

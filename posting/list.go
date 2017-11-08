@@ -67,13 +67,14 @@ const (
 
 type List struct {
 	x.SafeMutex
-	key           []byte
-	plist         *protos.PostingList
-	mlayer        []*protos.Posting // committed mutations, sorted by uid,ts
-	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
-	commitTs      uint64            // last commitTs of this pl
-	activeTxns    map[uint64]struct{}
-	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
+	key        []byte
+	plist      *protos.PostingList
+	mlayer     []*protos.Posting // committed mutations, sorted by uid,ts
+	minTs      uint64            // commit timestamp of immutable layer, reject reads before this ts.
+	commitTs   uint64            // last commitTs of this pl
+	activeTxns map[uint64]struct{}
+	deleteMe   int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
+	// TODO: Ensure delete works properly
 	markdeleteAll int32
 	estimatedSize int32
 	numCommits    int
@@ -416,24 +417,31 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 	return nil
 }
 
-func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) (bool, error) {
+func (l *List) AlreadyCommitted(startTs uint64) bool {
+	l.RLock()
+	defer l.RUnlock()
+	_, ok := l.activeTxns[startTs]
+	return !ok
+}
+
+func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) error {
 	l.Lock()
 	defer l.Unlock()
 	return l.commitMutation(ctx, startTs, commitTs)
 }
 
-func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) (bool, error) {
+func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
 		}
-		return false, ErrRetry
+		return ErrRetry
 	}
 
 	l.AssertLock()
 	if _, ok := l.activeTxns[startTs]; !ok {
 		// It was already committed, might be happening due to replay.
-		return false, nil
+		return nil
 	}
 	if l.markdeleteAll == 1 {
 		l.deleteHelper(ctx)
@@ -459,7 +467,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) (bo
 	if l.numCommits > numUids {
 		l.syncIfDirty(false)
 	}
-	return true, nil
+	return nil
 }
 
 func (l *List) deleteHelper(ctx context.Context) error {
@@ -684,7 +692,6 @@ func (l *List) rollup() error {
 		// TODO: Add bytes method
 		bp.WriteTo(final.Uids)
 	}
-	// TODO: May be have different iterator later.
 	midx := 0
 	for _, mpost := range l.mlayer {
 		if mpost.CommitTs == 0 || mpost.CommitTs > l.commitTs {
@@ -759,6 +766,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
 			lcache.delete(l.key)
 		}
+		pstore.PurgeVersionsBelow(l.key, l.minTs)
 	}
 
 	doAsyncWrite(l.minTs, l.key, data, meta, f)
