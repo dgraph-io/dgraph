@@ -82,7 +82,7 @@ func ExampleTxn_Query_variables() {
 		}
 	}`
 
-	resp, err := dg.NewTxn().Query(ctx, q, variables)
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func ExampleTxn_Mutate() {
 		}
 	}`, puid)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func ExampleTxn_Mutate_bytes() {
 	}
 }`
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -404,7 +404,7 @@ func ExampleTxn_Query_unmarshal() {
 		}
 	}`, puid)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -504,7 +504,7 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
         }
     }`, auid)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -577,7 +577,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	}
 	`, uid)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -701,7 +701,7 @@ func ExampleTxn_Mutate_delete() {
 		}
 	}`)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -727,7 +727,7 @@ func ExampleTxn_Mutate_delete() {
 		log.Fatal(err)
 	}
 
-	resp, err = dg.NewTxn().Query(ctx, q, nil)
+	resp, err = dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -833,7 +833,7 @@ func ExampleTxn_Mutate_deleteNode() {
 		}
 	}`)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -868,7 +868,7 @@ func ExampleTxn_Mutate_deleteNode() {
 		log.Fatal(err)
 	}
 
-	resp, err = dg.NewTxn().Query(ctx, q, nil)
+	resp, err = dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -952,7 +952,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 		}
 	}`)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -982,7 +982,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 	}
 
 	// Also lets run the query again to verify that predicate data was deleted.
-	resp, err = dg.NewTxn().Query(ctx, q, nil)
+	resp, err = dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}

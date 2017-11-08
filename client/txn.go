@@ -49,7 +49,11 @@ func (d *Dgraph) NewTxn() *Txn {
 	return txn
 }
 
-func (txn *Txn) Query(ctx context.Context, q string,
+func (txn *Txn) Query(ctx context.Context, q string) (*protos.Response, error) {
+	return txn.QueryWithVars(ctx, q, nil)
+}
+
+func (txn *Txn) QueryWithVars(ctx context.Context, q string,
 	vars map[string]string) (*protos.Response, error) {
 	if txn.finished {
 		return nil, ErrFinished
