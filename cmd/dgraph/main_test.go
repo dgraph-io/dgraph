@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -178,7 +180,17 @@ func StartDummyZero() *grpc.Server {
 }
 
 func prepare() (dir1, dir2 string, rerr error) {
-	StartDummyZero()
+	// TODO - Stop at end and clear dir.
+	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"),
+		"-w=wz",
+		"-port", "12341",
+	)
+	if err := zero.Start(); err != nil {
+		return "", "", err
+	}
+	time.Sleep(4 * time.Second)
+
+	// StartDummyZero()
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -276,8 +288,9 @@ func runMutation(m string) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set("X-Dgraph-CommitNow", "true")
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(queryHandler)
+	handler := http.HandlerFunc(mutationHandler)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
@@ -291,17 +304,76 @@ func runMutation(m string) error {
 	return nil
 }
 
-func TestDeletePredicate(t *testing.T) {
-	var m2 = `
-	mutation {
-		delete {
-			* <friend> * .
-			* <name> * .
-			* <salary> * .
+func alterSchema(s string) error {
+	req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(s))
+	if err != nil {
+		return err
+	}
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(alterHandler)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		return fmt.Errorf("Unexpected status code: %v", status)
+	}
+	var qr x.QueryResWithData
+	json.Unmarshal(rr.Body.Bytes(), &qr)
+	if len(qr.Errors) == 0 {
+		return nil
+	}
+	return errors.New(qr.Errors[0].Message)
+}
+
+func alterSchemaWithRetry(s string) error {
+	attempts := 0
+	for {
+		if attempts > 10 {
+			return errors.New("Couldn't alter schema " + s)
+		}
+		attempts++
+		err := alterSchema(s)
+		if (err) == nil {
+			return nil
+		} else {
+			fmt.Println("Got error while trying to delete predicate", err)
+			time.Sleep(1 * time.Second)
 		}
 	}
-	`
+	return nil
+}
 
+func deletePredicate(pred string) error {
+	attempts := 0
+	var qr x.QueryResWithData
+	for {
+		if attempts > 10 {
+			return errors.New("Couldn't delete predicate " + pred)
+		}
+		attempts++
+		op := `{"drop_attr": "` + pred + `"}`
+		req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(op))
+		if err != nil {
+			return err
+		}
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(alterHandler)
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusOK {
+			return fmt.Errorf("Unexpected status code: %v", status)
+		}
+		json.Unmarshal(rr.Body.Bytes(), &qr)
+		if len(qr.Errors) == 0 {
+			return nil
+		} else {
+			fmt.Println("Got error while trying to delete predicate", qr.Errors)
+			time.Sleep(1 * time.Second)
+		}
+	}
+	return nil
+}
+
+func TestDeletePredicate(t *testing.T) {
 	var m1 = `
 	{
 		set {
@@ -363,25 +435,17 @@ func TestDeletePredicate(t *testing.T) {
 		`
 
 	var s1 = `
-	mutation {
-		schema {
-			friend: uid @reverse .
-			name: string @index(term) .
-		}
-	}
+	friend: uid @reverse .
+	name: string @index(term) .
 	`
 
 	var s2 = `
-		mutation {
-			schema {
-				friend: string @index(term) .
-				name: uid @reverse .
-			}
-		}
+	friend: string @index(term) .
+	name: uid @reverse .
 		`
 
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(s1)
+	err := alterSchemaWithRetry(s1)
 	require.NoError(t, err)
 
 	err = runMutation(m1)
@@ -408,7 +472,11 @@ func TestDeletePredicate(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
 
-	err = runMutation(m2)
+	err = deletePredicate("friend")
+	require.NoError(t, err)
+	err = deletePredicate("name")
+	require.NoError(t, err)
+	err = deletePredicate("salary")
 	require.NoError(t, err)
 
 	output, err = runQuery(`schema{}`)
@@ -431,14 +499,12 @@ func TestDeletePredicate(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
 
 	// Lets try to change the type of predicates now.
-	err = runMutation(s2)
+	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 }
 
 func TestSchemaMutation(t *testing.T) {
 	var m = `
-	mutation {
-		schema {
 			name:string @index(term, exact) .
 			alias:string @index(exact, term) .
 			dob:dateTime @index(year) .
@@ -451,8 +517,6 @@ func TestSchemaMutation(t *testing.T) {
 			shadow_deep   : int .
 			friend:uid @reverse .
 			geometry:geo @index(geo) .
-		}
-	}
 
 ` // reset schema
 	schema.ParseBytes([]byte(""), 1)
@@ -460,12 +524,12 @@ func TestSchemaMutation(t *testing.T) {
 		"name": {
 			Predicate: "name",
 			Tokenizer: []string{"term", "exact"},
-			ValueType: protos.Posting_STRING,
+			ValueType: protos.Posting_ValType(types.StringID),
 			Directive: protos.SchemaUpdate_INDEX,
 			Explicit:  true},
 	}
 
-	err := runMutation(m)
+	err := alterSchemaWithRetry(m)
 	require.NoError(t, err)
 	for k, v := range expected {
 		s, ok := schema.State().Get(k)
@@ -476,7 +540,7 @@ func TestSchemaMutation(t *testing.T) {
 
 func TestSchemaMutation1(t *testing.T) {
 	var m = `
-	mutation {
+	{
 		set {
 			<0x1234> <pred1> "12345"^^<xs:string> .
 			<0x1234> <pred2> "12345" .
@@ -486,8 +550,10 @@ func TestSchemaMutation1(t *testing.T) {
 ` // reset schema
 	schema.ParseBytes([]byte(""), 1)
 	expected := map[string]*protos.SchemaUpdate{
-		"pred1": {ValueType: protos.Posting_STRING},
-		"pred2": {ValueType: protos.Posting_DEFAULT},
+		"pred1": {
+			ValueType: protos.Posting_ValType(types.StringID)},
+		"pred2": {
+			ValueType: protos.Posting_ValType(types.DefaultID)},
 	}
 
 	err := runMutation(m)
@@ -502,36 +568,28 @@ func TestSchemaMutation1(t *testing.T) {
 // reverse on scalar type
 func TestSchemaMutation2Error(t *testing.T) {
 	var m = `
-	mutation {
-		schema {
             age:string @reverse .
-		}
-	}
 	`
 
-	err := runMutation(m)
+	err := alterSchema(m)
 	require.Error(t, err)
 }
 
 // index on uid type
 func TestSchemaMutation3Error(t *testing.T) {
 	var m = `
-	mutation {
-		schema {
             age:uid @index .
-		}
-	}
 	`
-	err := runMutation(m)
+	err := alterSchema(m)
 	require.Error(t, err)
 }
 
-// index on uid type
 func TestMutation4Error(t *testing.T) {
+	t.Skip()
 	var m = `
-	mutation {
+	{
 		set {
-      <1> <_age_> "5" .
+      			<1> <_age_> "5" .
 		}
 	}
 	`
@@ -549,7 +607,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	}
 	`
 	var m = `
-	mutation {
+	{
 		set {
                         # comment line should be ignored
 			<0x1> <name> "Alice" .
@@ -558,11 +616,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	`
 
 	var s = `
-	mutation {
-		schema {
             name:string @index(term) .
-		}
-	}
 	`
 
 	// reset Schema
@@ -571,7 +625,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -590,7 +644,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	}
 	`
 	var m = `
-	mutation {
+	{
 		set {
                         # comment line should be ignored
 			<0x1> <name> "Alice" .
@@ -599,24 +653,16 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	`
 
 	var s1 = `
-	mutation {
-		schema {
             name:string @index(term) .
-		}
-	}
 	`
 	var s2 = `
-	mutation {
-		schema {
             name:string .
-		}
-	}
 	`
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
 	// add index to name
-	err := runMutation(s1)
+	err := alterSchemaWithRetry(s1)
 	require.NoError(t, err)
 
 	err = runMutation(m)
@@ -627,7 +673,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
 
 	// remove index
-	err = runMutation(s2)
+	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
@@ -646,7 +692,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	}
 	`
 	var m = `
-	mutation {
+	{
 		set {
                         # comment line should be ignored
 			<0x1> <friend> <0x3> .
@@ -655,13 +701,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	}
 	`
 
-	var s = `
-	mutation {
-		schema {
-            friend:uid @reverse .
-		}
-	}
-	`
+	var s = `friend:uid @reverse .`
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
@@ -669,7 +709,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -690,7 +730,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	}
 	`
 	var m = `
-	mutation {
+	{
 		set {
                         # comment line should be ignored
 			<0x1> <friend> <0x3> .
@@ -700,19 +740,11 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	`
 
 	var s1 = `
-	mutation {
-		schema {
             friend:uid @reverse .
-		}
-	}
 	`
 
 	var s2 = `
-	mutation {
-		schema {
             friend:uid .
-		}
-	}
 	`
 
 	// reset Schema
@@ -721,15 +753,16 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	require.NoError(t, err)
 
 	// add reverse edge to name
-	err = runMutation(s1)
+	err = alterSchemaWithRetry(s1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
+	fmt.Println("output", output)
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	// remove reverse edge
-	err = runMutation(s2)
+	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
@@ -746,7 +779,7 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	}
 	`
 	var m = `
-	mutation {
+	{
 		set {
                         # comment line should be ignored
 			<0x1> <name> "Alice" .
@@ -759,11 +792,7 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	`
 
 	var s = `
-	mutation {
-		schema {
 			friend:uid @count .
-		}
-	}
 	`
 
 	// reset Schema
@@ -772,7 +801,7 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
 	time.Sleep(10 * time.Millisecond)
@@ -803,7 +832,7 @@ func TestDeleteAll(t *testing.T) {
 	`
 
 	var m2 = `
-	mutation{
+	{
 		delete{
 			<0x1> <friend> * .
 			<0x1> <name> * .
@@ -811,7 +840,7 @@ func TestDeleteAll(t *testing.T) {
 	}
 	`
 	var m1 = `
-	mutation {
+	{
 		set {
 			<0x1> <friend> <0x2> .
 			<0x1> <friend> <0x3> .
@@ -823,15 +852,11 @@ func TestDeleteAll(t *testing.T) {
 	`
 
 	var s1 = `
-	mutation {
-		schema {
-      friend:uid @reverse .
-			name: string @index(term) .
-		}
-	}
+      		friend:uid @reverse .
+		name: string @index(term) .
 	`
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(s1)
+	err := alterSchemaWithRetry(s1)
 	require.NoError(t, err)
 
 	err = runMutation(m1)
@@ -856,132 +881,11 @@ func TestDeleteAll(t *testing.T) {
 	output, err = runQuery(q2)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user": []}}`, output)
-}
-
-func TestDeleteAllSP(t *testing.T) {
-	var q1 = `
-	{
-		user(func: uid(0x3)) {
-			~friend {
-				name
-			}
-		}
-	}
-	`
-	var q2 = `
-	{
-		user(func: anyofterms(name, "alice")) {
-			friend {
-				name
-			}
-		}
-	}
-	`
-	var q3 = `
-	{
-		user(func: uid( 0x1)) {
-			_predicate_
-		}
-	}
-	`
-	var q4 = `
-	{
-		user(func: uid( 0x1)) {
-			count(_predicate_)
-		}
-	}
-	`
-	var q5 = `
-	{
-		user(func: uid( 0x1)) {
-			pred_count: count(_predicate_)
-		}
-	}
-	`
-
-	var m2 = `
-	mutation{
-		delete{
-			uid(a) * * .
-		}
-	}
-
-	{
-		a as var(func: uid(1))
-	}
-	`
-	var m1 = `
-	mutation {
-		set {
-			<0x1> <friend> <0x2> .
-			<0x1> <friend> <0x3> .
-			<0x1> <name> "Alice" .
-			<0x2> <name> "Alice1" .
-			<0x3> <name> "Alice2" .
-		}
-	}
-	`
-
-	var s1 = `
-	mutation {
-		schema {
-			friend:uid @reverse .
-			name: string @index(term) .
-		}
-	}
-	`
-
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(s1)
-	require.NoError(t, err)
-
-	err = runMutation(m1)
-	require.NoError(t, err)
-
-	output, err := runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
-
-	output, err = runQuery(q2)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}}`,
-		output)
-
-	output, err = runQuery(q3)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","friend"]}]}}`,
-		output)
-
-	output, err = runQuery(q4)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"count(_predicate_)":2}]}}`,
-		output)
-
-	output, err = runQuery(q5)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"pred_count":2}]}}`,
-		output)
-
-	err = runMutation(m2)
-	require.NoError(t, err)
-
-	output, err = runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user": []}}`, output)
-
-	output, err = runQuery(q2)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user": []}}`, output)
-
-	output, err = runQuery(q3)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user": []}}`,
-		output)
 }
 
 func TestDeleteAllSP1(t *testing.T) {
 	var m = `
-	mutation{
+	{
 		delete{
 			<2000> * * .
 		}
@@ -992,7 +896,7 @@ func TestDeleteAllSP1(t *testing.T) {
 }
 
 var m5 = `
-	mutation {
+	{
 		set {
                         # comment line should be ignored
 			<ram> <name> "1"^^<xs:int> .
@@ -1017,7 +921,7 @@ func TestSchemaValidationError(t *testing.T) {
 }
 
 var m6 = `
-	mutation {
+	{
 		set {
                         # comment line should be ignored
 			<0x5> <name2> "1"^^<xs:int> .
@@ -1055,7 +959,7 @@ var q6 = `
 //}
 
 var qErr = `
- 	mutation {
+ 	{
  		set {
  			<0x0> <name> "Alice" .
  		}
@@ -1068,7 +972,7 @@ func TestMutationError(t *testing.T) {
 }
 
 var qm = `
-	mutation {
+	{
 		set {
 			<0x0a> <pred.rel> _:x .
 			_:x <pred.val> "value" .
@@ -1134,7 +1038,7 @@ func TestListPred(t *testing.T) {
 	}
 	`
 	var m = `
-	mutation {
+	{
 		set {
 			<0x1> <name> "Alice" .
 			<0x1> <age> "13" .
@@ -1143,11 +1047,7 @@ func TestListPred(t *testing.T) {
 	}
 	`
 	var s = `
-	mutation {
-		schema {
 			name:string @index(term) .
-		}
-	}
 	`
 
 	// reset Schema
@@ -1156,7 +1056,7 @@ func TestListPred(t *testing.T) {
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -1176,7 +1076,7 @@ func TestExpandPredError(t *testing.T) {
 	}
 	`
 	var m = `
-	mutation {
+	{
 		set {
 			<0x1> <name> "Alice" .
 			<0x1> <age> "13" .
@@ -1187,11 +1087,7 @@ func TestExpandPredError(t *testing.T) {
 	}
 	`
 	var s = `
-	mutation {
-		schema {
 			name:string @index(term) .
-		}
-	}
 	`
 
 	// reset Schema
@@ -1200,7 +1096,7 @@ func TestExpandPredError(t *testing.T) {
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
 	_, err = runQuery(q1)
@@ -1219,7 +1115,7 @@ func TestExpandPred(t *testing.T) {
 	}
 	`
 	var m = `
-	mutation {
+	{
 		set {
 			<0x11> <name> "Alice" .
 			<0x11> <age> "13" .
@@ -1230,11 +1126,7 @@ func TestExpandPred(t *testing.T) {
 	}
 	`
 	var s = `
-	mutation {
-		schema {
 			name:string @index(term) .
-		}
-	}
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
@@ -1242,7 +1134,7 @@ func TestExpandPred(t *testing.T) {
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -1274,19 +1166,15 @@ var threeNiceFriends = `{
 // change from uid to scalar or vice versa
 func TestSchemaMutation4Error(t *testing.T) {
 	var m = `
-	mutation {
-		schema {
             age:int .
-		}
-	}
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err := alterSchemaWithRetry(m)
 	require.NoError(t, err)
 
 	m = `
-	mutation {
+	{
 		set {
 			<0x9> <age> "13" .
 		}
@@ -1302,26 +1190,22 @@ func TestSchemaMutation4Error(t *testing.T) {
 		}
 	}
 	`
-	err = runMutation(m)
+	err = alterSchema(m)
 	require.Error(t, err)
 }
 
 // change from uid to scalar or vice versa
 func TestSchemaMutation5Error(t *testing.T) {
 	var m = `
-	mutation {
-		schema {
             friends:uid .
-		}
-	}
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err := alterSchemaWithRetry(m)
 	require.NoError(t, err)
 
 	m = `
-	mutation {
+	{
 		set {
 			<0x8> <friends> <0x5> .
 		}
@@ -1331,13 +1215,9 @@ func TestSchemaMutation5Error(t *testing.T) {
 	require.NoError(t, err)
 
 	m = `
-	mutation {
-		schema {
             friends:string .
-		}
-	}
 	`
-	err = runMutation(m)
+	err = alterSchema(m)
 	require.Error(t, err)
 }
 
@@ -1345,17 +1225,13 @@ func TestSchemaMutation5Error(t *testing.T) {
 func TestMultipleValues(t *testing.T) {
 	schema.ParseBytes([]byte(""), 1)
 	m := `
-	mutation {
-		schema {
 			occupations: [string] .
-		}
-	}`
-
-	err := runMutation(m)
+`
+	err := alterSchemaWithRetry(m)
 	require.NoError(t, err)
 
 	m = `
-		mutation {
+		{
 			set {
 				<0x88> <occupations> "Pianist" .
 				<0x88> <occupations> "Software Engineer" .
@@ -1379,17 +1255,14 @@ func TestMultipleValues(t *testing.T) {
 func TestListTypeSchemaChange(t *testing.T) {
 	schema.ParseBytes([]byte(""), 1)
 	m := `
-	mutation {
-		schema {
 			occupations: [string] @index(term) .
-		}
-	}`
+	`
 
-	err := runMutation(m)
+	err := alterSchemaWithRetry(m)
 	require.NoError(t, err)
 
 	m = `
-		mutation {
+		{
 			set {
 				<0x88> <occupations> "Pianist" .
 				<0x88> <occupations> "Software Engineer" .
@@ -1430,126 +1303,24 @@ func TestListTypeSchemaChange(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 
 	m = `
-		mutation {
-			schema {
 				occupations: string .
-			}
-		}
 	`
 
 	// Cant change from list-type to non-list till we have data.
-	err = runMutation(m)
+	err = alterSchema(m)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Schema change not allowed from [string] => string")
 
-	sm := `
-		mutation {
-			delete {
-				* <occupations> * .
-			}
-		}
-	`
-	err = runMutation(sm)
+	err = deletePredicate("occupations")
 	require.NoError(t, err)
 
-	require.NoError(t, runMutation(m))
+	require.NoError(t, alterSchemaWithRetry(m))
 
 	q = `schema{}`
 	res, err = runQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"occupations","type":"string"}]}}`, res)
 
-}
-
-func TestUpsertError(t *testing.T) {
-	query := `
-	mutation {
-		schema {
-			name: string .
-		}
-	}
-
-	{
-		me(func: eq(name, "XYZ")) @upsert
-	}`
-
-	_, err := runQuery(query)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Attribute name is not indexed.")
-}
-
-func TestUpsert(t *testing.T) {
-	query := `
-	mutation {
-		schema {
-			name: string @index(exact) .
-		}
-	}
-
-	{
-		me(func: eq(name, "XYZ")) @upsert {
-			name
-		}
-	}
-	`
-
-	res, err := runQuery(query)
-	require.NoError(t, err)
-	require.Equal(t, `{"data": {"me":[{"name":"XYZ"}],"uids":{"me":"0x2718"}}}`, res)
-}
-
-func TestUpsert2(t *testing.T) {
-	query := `
-	{
-		a as var(func: eq(name, "person")) @upsert
-		b as var(func: eq(age, 20)) @upsert
-	}
-
-	mutation {
-		schema {
-			name: string @index(term) .
-			age: int @index(int) .
-		}
-		set {
-			uid(a) <age> "13" .
-			uid(a) <friend> <100> .
-			<100> <name> "Friend1" .
-			uid(b) <name> "person2" .
-		}
-	}
-
-	`
-
-	res, err := runQuery(query)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"uids":{"b":"0x271a","a":"0x2719"}}}`, res)
-
-	m := make(map[string]interface{})
-	require.NoError(t, json.Unmarshal([]byte(res), &m))
-	uids := m["data"].(map[string]interface{})["uids"].(map[string]interface{})
-	require.Equal(t, 2, len(uids))
-
-	// Upsert shouldn't assign a new uid now.
-	query = `
-	{
-		me(func: eq(name, "person")) @upsert {
-			name
-			age
-			friend {
-				name
-			}
-		}
-
-		me(func: eq(age, 20)) {
-			name
-			age
-		}
-	}
-	`
-	res, err = runQuery(query)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"name":"person","age":13,"friend":[{"name":"Friend1"}]},{"name":"person2","age":20}]}}`,
-		res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1603,63 +1374,6 @@ func TestDeleteAllSP2(t *testing.T) {
 	output, err = runQuery(q)
 	require.NoError(t, err)
 	require.Equal(t, `{"data": {"me":[]}}`, output)
-}
-
-func TestUpsertRace(t *testing.T) {
-	s := `
-	mutation {
-		schema {
-			xid: string @index(exact) .
-		}
-	}
-	`
-	_, err := runQuery(s)
-	require.NoError(t, err)
-
-	q := `
-{
-  email as var(func: eq(xid, "<2519643.1075860072192.JavaMail.evans@thyme>")) @upsert
-  human as var(func: eq(xid, "mark.taylor@enron.com")) @upsert
-  human_to_0 as var(func: eq(xid, "leonardo.pacheco@enron.com")) @upsert
-  human_cc_0 as var(func: eq(xid, "jay.hawthorn@enron.com")) @upsert
-  human_cc_1 as var(func: eq(xid, "cynthia.harkness@enron.com")) @upsert
-  human_cc_2 as var(func: eq(xid, "jean.mrha@enron.com")) @upsert
-  human_cc_3 as var(func: eq(xid, "david.forster@enron.com")) @upsert
-  human_cc_4 as var(func: eq(xid, "julie.ferrara@enron.com")) @upsert
-  human_cc_5 as var(func: eq(xid, "kal.shah@enron.com")) @upsert
-  human_bcc_0 as var(func: eq(xid, "jay.hawthorn@enron.com")) @upsert
-  human_bcc_1 as var(func: eq(xid, "cynthia.harkness@enron.com")) @upsert
-  human_bcc_2 as var(func: eq(xid, "jean.mrha@enron.com")) @upsert
-  human_bcc_3 as var(func: eq(xid, "david.forster@enron.com")) @upsert
-  human_bcc_4 as var(func: eq(xid, "julie.ferrara@enron.com")) @upsert
-  human_bcc_5 as var(func: eq(xid, "kal.shah@enron.com")) @upsert
-}
-mutation {
-  set {
-   uid(email) <xid> "<2519643.1075860072192.JavaMail.evans@thyme>" .
-   uid(email) <filename> "data/maildir/taylor-m/sent/1018." .
-   uid(email) <date> "2000-05-01 01:31:00 -0700 PDT" .
-   uid(human) <sent> uid(email) .
-   uid(email) <from> "mark.taylor@enron.com" .
-   uid(email) <subject> "Re: Bandwidth Launch on EOL Website Ticker Text" .
-   uid(human_to_0) <xid> "leonardo.pacheco@enron.com" .
-   uid(human_cc_0) <xid> "jay.hawthorn@enron.com" .
-   uid(human_cc_1) <xid> "cynthia.harkness@enron.com" .
-   uid(human_cc_2) <xid> "jean.mrha@enron.com" .
-   uid(human_cc_3) <xid> "david.forster@enron.com" .
-   uid(human_cc_4) <xid> "julie.ferrara@enron.com" .
-   uid(human_cc_5) <xid> "kal.shah@enron.com" .
-   uid(human_bcc_0) <xid> "jay.hawthorn@enron.com" .
-   uid(human_bcc_1) <xid> "cynthia.harkness@enron.com" .
-   uid(human_bcc_2) <xid> "jean.mrha@enron.com" .
-   uid(human_bcc_3) <xid> "david.forster@enron.com" .
-   uid(human_bcc_4) <xid> "julie.ferrara@enron.com" .
-   uid(human_bcc_5) <xid> "kal.shah@enron.com" .
-  }
-}
-	`
-	_, err = runQuery(q)
-	require.NoError(t, err)
 }
 
 func TestDropAll(t *testing.T) {
@@ -1727,7 +1441,7 @@ func TestRecurseExpandAll(t *testing.T) {
 	}
 	`
 	var m = `
-	mutation {
+	{
 		set {
 			<0x1> <name> "Alica" .
 			<0x1> <age> "13" .
@@ -1738,20 +1452,14 @@ func TestRecurseExpandAll(t *testing.T) {
 	}
 	`
 
-	var s = `
-	mutation {
-		schema {
-			name:string @index(term) .
-		}
-	}
-	`
+	var s = `name:string @index(term) .`
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(m)
 	require.NoError(t, err)
 
-	err = runMutation(s)
+	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -1760,12 +1468,10 @@ func TestRecurseExpandAll(t *testing.T) {
 }
 
 func TestIllegalCountInQueryFn(t *testing.T) {
+	s := `friend: uid @count .`
+	require.NoError(t, alterSchemaWithRetry(s))
+
 	q := `
-	mutation{
-		schema{
-			friend: uid @count .
-		}
-	}
 	{
 		q(func: eq(count(friend), 0)) {
 			count
