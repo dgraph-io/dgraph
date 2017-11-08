@@ -3,7 +3,7 @@
 set -e
 
 function finish {
-	killall dgraph dgraphzero
+	killall dgraph
 	rm -rf $1
 }
 

@@ -16,16 +16,14 @@ pushd $BUILD &> /dev/null
 benchmark=$(pwd)/benchmarks/data
 popd &> /dev/null
 
-pushd cmd/dgraphzero &> /dev/null
+pushd dgraph &> /dev/null
 echo -e "\nBuilding and running Dgraph Zero."
 go build .
 
-./dgraphzero -w $BUILD/wz0 -port 12340 -idx 3 &
-popd &> /dev/null
+./dgraph zero --w $BUILD/wz0 --port 12340 --idx 3 &
 
-pushd cmd/dgraph &> /dev/null
-go build .
-./dgraph --p $BUILD/p0 --w $BUILD/w0 --memory_mb 4000 --zero "localhost:12340" &
+./dgraph server --postings $BUILD/p0 --wal $BUILD/w0 --memory_mb 4000 --zero "localhost:12340" &
+popd &> /dev/null
 
 # Wait for server to start in the background.
 until nc -z 127.0.0.1 8080;
@@ -34,8 +32,7 @@ do
 done
 sleep 5
 
-go test ../../contrib/freebase/share_test.go
-go test ../../contrib/freebase/simple_test.go
+go test ./contrib/freebase/share_test.go
+go test ./contrib/freebase/simple_test.go
 
-killall -9 dgraph dgraphzero
-popd &> /dev/null
+killall -9 dgraph

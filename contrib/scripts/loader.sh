@@ -27,18 +27,6 @@ popd &> /dev/null
 
 startZero
 
-pushd cmd/dgraph &> /dev/null
-echo -e "\nBuilding and running Dgraph."
-go build .
-
-./dgraph --version
-if [ $? -eq 0 ]; then
-  echo -e "dgraph --version succeeded.\n"
-else
-  echo "dgraph --version command failed."
-fi
-popd &> /dev/null
-
 # Start Dgraph
 start
 
@@ -60,11 +48,12 @@ else
   echo "Schema comparison successful."
 fi
 
-echo -e "\nBuilding and running dgraph-live-loader."
-pushd cmd/dgraph-live-loader &> /dev/null
+echo -e "\nRunning dgraph live."
 # Delete client directory to clear checkpoints.
 rm -rf c
-go build . && ./dgraph-live-loader -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9080,127.0.0.1:9082" -z "127.0.0.1:12340" -c 1 -m 10000
+
+pushd dgraph &> /dev/null
+./dgraph live -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9080,127.0.0.1:9082" -z "127.0.0.1:12340" -c 1 -b 10000
 popd &> /dev/null
 
 # Restart Dgraph so that we are sure that index keys are persisted.
