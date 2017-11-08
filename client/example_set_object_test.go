@@ -118,7 +118,7 @@ func Example_setObject() {
 		}
 	}`, puid)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
