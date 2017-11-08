@@ -331,12 +331,6 @@ func main() {
 	}
 	dgraphClient := client.NewDgraphClient(clients...)
 
-	{
-		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)
-		dgraphClient.CheckVersion(ctxTimeout)
-		cancelTimeout()
-	}
-
 	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
 
