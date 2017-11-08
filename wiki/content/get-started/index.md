@@ -306,11 +306,15 @@ Output
 }
 ```
 
+That's it! In these three steps, we set up Dgraph, added some data, set a schema
+and queried that data back.
+
 ## Where to go from here
 
-Take the [tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-
-A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
+- Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
+with Dgraph from your application.
+- Take the [tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
+- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
 
 ## Need Help
 
@@ -327,7 +331,7 @@ One of the things to try would be to open bash in the container and try to run D
 ```sh
 docker run -it dgraph/dgraph bash
 # Now that you are within the container, run Dgraph.
-dgraph --memory_mb 2048
+dgraph server --memory_mb 2048
 ```
 
 If Dgraph runs for you that indicates there could be something wrong with mounting volumes.
