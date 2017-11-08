@@ -102,14 +102,13 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
 	addLatency = addLatency || debug
 
-	if addLatency {
-		e := query.Extensions{
-			Latency: resp.Latency,
-			Txn:     resp.Txn,
-		}
-
-		response["extensions"] = e
+	e := query.Extensions{
+		Txn: resp.Txn,
 	}
+	if addLatency {
+		e.Latency = resp.Latency
+	}
+	response["extensions"] = e
 
 	// User can either ask for schema or have a query.
 	if len(resp.Schema) > 0 {

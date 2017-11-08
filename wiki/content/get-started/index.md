@@ -219,13 +219,10 @@ Running this next mutation adds a schema and indexes some of the data so queries
 
 ```sh
 curl localhost:8080/alter -XPOST -d $'
-{
-  "schema": "
-    name: string @index(term) .
-    release_date: datetime @index(year) .
-    revenue: float .
-    running_time: int ."
-}
+  name: string @index(term) .
+  release_date: datetime @index(year) .
+  revenue: float .
+  running_time: int .
 ' | python -m json.tool | less
 ```
 
