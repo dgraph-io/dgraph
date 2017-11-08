@@ -691,17 +691,13 @@ Note that for geo queries, any polygon with holes is replace with the outer loop
 
 To make use of the geo functions you would need an index on your predicate.
 ```
-mutation {
-  schema {
-    loc: geo @index(geo) .
-  }
-}
+loc: geo @index(geo) .
 ```
 
 Here is how you would add a `Point`.
 
 ```
-mutation {
+{
   set {
     <_:0xeb1dde9c> <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
     <_:0xf15448e2> <name> "Hamon Tower" .
@@ -712,7 +708,7 @@ mutation {
 Here is how you would associate a `Polygon` with a node. Adding a `MultiPolygon` is also similar.
 
 ```
-mutation {
+{
   set {
     <_:0xf76c276b> <loc> "{'type':'Polygon','coordinates':[[[-122.409869,37.7785442],[-122.4097444,37.7786443],[-122.4097544,37.7786521],[-122.4096334,37.7787494],[-122.4096233,37.7787416],[-122.4094004,37.7789207],[-122.4095818,37.7790617],[-122.4097883,37.7792189],[-122.4102599,37.7788413],[-122.409869,37.7785442]],[[-122.4097357,37.7787848],[-122.4098499,37.778693],[-122.4099025,37.7787339],[-122.4097882,37.7788257],[-122.4097357,37.7787848]]]}"^^<geo:geojson> .
     <_:0xf76c276b> <name> "Best Western Americana Hotel" .
@@ -1782,36 +1778,6 @@ Query Example: Predicates saved to a variable and queried with `expand()`.
 
 `_predicate_` returns string valued predicates as a name without language tag.  If the predicate has no string without a language tag, `expand()` won't expand it (see [language preference]({{< relref "#language-support" >}})).  For example, above `name` generally doesn't have strings without tags in the dataset, so `name@.` is required.
 
-## Upsert
-
-Syntax Example: `me(func: eq(predicate, "value")) @upsert`
-
-With the `@upsert` directive, nodes can be upserted i.e. they would be created if they don't already
-exist. This is useful when you want to search for nodes using a predicate value and create a new one if
-one doesn't already exist.
-
-Query Example: Search for a node with name `Steven Spielberg` and create it if one doesn't exist
-already.
-
-```
-{
-  a as var(func: eq(name@en, "Steven Spielberg")) @upsert
-}
-
-mutation {
-  set {
-    uid(a) <age> "70" .
-  }
-}
-```
-
-The above query would check if a node with a name `Steven Spielberg` exists. If it does then it
-would return the `uid` of the node which can be used later. If it doesn't exist then it will create
-a new node and do a mutation for the `name` and then return the `uid`. You can also assign the
-returned uid in a variable and use it later for doing other mutations.
-
-{{% notice "note" %}} You need to have the appropriate index for using the [eq]({{<ref "#inequality">}}) function. {{% /notice %}}
-
 ## Cascade Directive
 
 With the `@cascade` directive, nodes that don't have all predicates specified in the query are removed. This can be useful in cases where some filter was applied or if nodes might not have all listed predicates.
@@ -1987,7 +1953,7 @@ If a predicate has a schema type and a mutation has an RDF type with a different
 
 For example, if no schema is set for the `age` predicate.  Given the mutation
 ```
-mutation {
+{
  set {
   _:a <age> "15"^^<xs:int> .
   _:b <age> "13" .
@@ -2012,12 +1978,13 @@ The following types are also accepted.
 
 A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkpwd` function.
 
-For example: to set a password:
+For example: to set a password, first set schema, then the password:
 ```
-mutation {
-  schema {
-    pass: password .
-  }
+pass: password .
+```
+
+```
+{
   set {
     <0x123> <name> "Password Example"
     <0x123> <pass> "ThePassword" .
@@ -2135,16 +2102,12 @@ An index is specified with `@index`, with arguments to specify the tokenizer. Wh
 index for a predicate it is mandatory to specify the type of the index. For example:
 
 ```
-mutation {
-  schema {
-    name: string @index(exact, fulltext) @count .
-    age: int @index(int) .
-    friend: uid @count .
-    dob: dateTime .
-    location: geo @index(geo) .
-    occupations: [string] @index(term) .
-  }
-}
+name: string @index(exact, fulltext) @count .
+age: int @index(int) .
+friend: uid @count .
+dob: dateTime .
+location: geo @index(geo) .
+occupations: [string] @index(term) .
 ```
 
 If no data has been stored for the predicates, a schema mutation sets up an empty schema ready to receive triples.
@@ -2162,12 +2125,8 @@ type needs to be enclosed within `[]` to indicate that its a list type. These li
 unordered set.
 
 ```
-mutation {
-  schema {
-    occupations: [string] .
-    score: [int] .
-  }
-}
+occupations: [string] .
+score: [int] .
 ```
 
 * A set operation adds to the list of values. The order of the stored values is non-deterministic.
@@ -2222,7 +2181,7 @@ Adding or removing data in Dgraph is called a mutation.
 
 A mutation that adds triples, does so with the `set` keyword.
 ```
-mutation {
+{
   set {
     # triples in here
   }
@@ -2257,7 +2216,7 @@ Dgraph creates a unique 64 bit identifier for every node in the graph - the node
 Blank nodes in mutations, written `_:identifier`, identify nodes within a mutation.  Dgraph creates a UID identifying each blank node and returns the created UIDs as the mutation result.  For example, mutation:
 
 ```
-mutation {
+{
  set {
     _:class <student> _:x .
     _:class <student> _:y .
@@ -2297,7 +2256,7 @@ The blank node labels `_:class`, `_:x` and `_:y` do not identify the nodes after
 
 A later mutation can update the data for existing UIDs.  For example, the following to add a new student to the class.
 ```
-mutation {
+{
  set {
     <0x6bc818dc89e78754> <student> _:x .
     _:x <name> "Chris" .
@@ -2348,12 +2307,8 @@ While Robin Wright might get UID `0x321` and triples
 
 An appropriate schema might be as follows.
 ```
-mutation {
-  schema {
-    xid: string @index(exact) .
-    <http://schema.org/type>: uid @reverse .
-  }
-}
+xid: string @index(exact) .
+<http://schema.org/type>: uid @reverse .
 ```
 
 Query Example: All people.
@@ -2449,7 +2404,7 @@ For example, if the store contained
 Then delete mutation
 
 ```
-mutation {
+{
   delete {
      <0xf11168064b01135b> <died> "1998" .
   }
@@ -2461,7 +2416,7 @@ Deletes the erroneous data and removes it from indexes if present.
 For a particular node `N`, all data for predicate `P` (and corresponding indexing) is removed with the pattern `S P *`.
 
 ```
-mutation {
+{
   delete {
      <0xf11168064b01135b> <author.of> * .
   }
@@ -2470,7 +2425,7 @@ mutation {
 
 The pattern `S * *` deletes all edges out of a node (the node itself may remain as the target of edges), any reverse edges corresponding to the removed edges and any indexing for the removed data.
 ```
-mutation {
+{
   delete {
      <0xf11168064b01135b> * * .
   }
@@ -2480,7 +2435,7 @@ mutation {
 The pattern `* P *` removes all data for predicate `P`, data for the reverse edge if present and deletes any indexes created on `P`.
 
 ```
-mutation {
+{
   delete {
      * <author.of> * .
   }
@@ -2490,39 +2445,6 @@ mutation {
 After such a delete mutation, the schema of the predicate may be changed --- even from UID to scalar, or scalar to UID; such a change is allowed only after all data is deleted.
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
-
-### Variables in mutations
-
-A mutation may depend on a query through query variables.
-
-For example, in a graph with people and ages, the following updates all people 18 and over as adults.
-
-```
-{
-  adults as var(func: ge(age, 18))
-}
-mutation {
-  set {
-    uid(adults) <isadult> "true"^^<xs:boolean> .
-  }
-}
-```
-
-Variables are also allowed in delete mutations.  The following removes any data about electoral role for minors.
-
-```
-{
-  minors as var(func: lt(age, 18))
-}
-mutation {
-  delete {
-    uid(minors) <electoral_registration> * .
-  }
-}
-```
-
-Internally, such mutations are are expanded to a triple per UID in the variable.  Hence mutations with variables on both sides of the predicate `uid(variable1) <edge> uid(variable2)` are expanded to the cross product.
-
 
 ## Facets : Edge attributes
 
