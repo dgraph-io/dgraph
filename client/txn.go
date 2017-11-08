@@ -50,21 +50,7 @@ func (d *Dgraph) NewTxn() *Txn {
 }
 
 func (txn *Txn) Query(ctx context.Context, q string) (*protos.Response, error) {
-	if txn.finished {
-		return nil, ErrFinished
-	}
-	req := &protos.Request{
-		Query:   q,
-		StartTs: txn.context.StartTs,
-		LinRead: txn.context.LinRead,
-	}
-	resp, err := txn.dg.query(ctx, req)
-	if err == nil {
-		if err := txn.mergeContext(resp.GetTxn()); err != nil {
-			return nil, err
-		}
-	}
-	return resp, err
+	return txn.QueryWithVars(ctx, q, nil)
 }
 
 func (txn *Txn) QueryWithVars(ctx context.Context, q string,

@@ -39,15 +39,11 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"),
-		"-w=wz",
-	)
-	//	zero.Stdout = os.Stdout
-	//	zero.Stderr = os.Stdout
+	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"), "-w=wz")
 	if err := zero.Start(); err != nil {
 		log.Fatal(err)
 	}
-
+	zero.Stdout = os.Stdout
 	s.Dirs = append(s.Dirs, "wz")
 	s.Commands = append(s.Commands, zero)
 
@@ -56,9 +52,8 @@ func TestMain(m *testing.M) {
 		"-memory_mb=2048",
 		"-zero=127.0.0.1:8888",
 	)
+	dgraph.Stdout = os.Stdout
 
-	//	dgraph.Stdout = os.Stdout
-	//	dgraph.Stderr = os.Stdout
 	if err := dgraph.Start(); err != nil {
 		log.Fatal(err)
 	}
