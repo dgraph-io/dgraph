@@ -2511,105 +2511,43 @@ mutation {
 
 Querying `name`, `mobile` and `car` of Alice gives the same result as without facets.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
      name
      mobile
      car
   }
-}' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "mobile": "040123456",
-        "car": "MA0123"
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
 
 The syntax `@facets(facet-name)` is used to query facet data. For Alice the `since` facet for `mobile` and `car` are queried as follows.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
      name
      mobile @facets(since)
      car @facets(since)
   }
-}' | python -m json.tool | less
-```
-
-Facets are retuned at the same level as the corresponding edge and have keys of edge and then facet name.  The response from the query above is:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "mobile": "040123456",
-        "car": "MA0123",
-        "@facets": {
-          "mobile": {
-            "since": "2006-01-02T15:04:05Z"
-          },
-          "car": {
-            "since": "2006-02-02T13:01:09Z"
-          }
-        }
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
+
+Facets are retuned at the same level as the corresponding edge and have keys like edge:facet.
 
 All facets on an edge are queried with `@facets`.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
      name
      mobile @facets
      car @facets
   }
-}' | python -m json.tool | less
-```
-
-Ouput:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "mobile": "040123456",
-        "car": "MA0123",
-        "@facets": {
-          "mobile": {
-            "since": "2006-01-02T15:04:05Z"
-          },
-          "car": {
-            "first": true,
-            "since": "2006-02-02T13:01:09Z"
-          }
-        }
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
 
 ### Facets on UID predicates
@@ -2621,8 +2559,8 @@ It was set to true for friendship between Alice and Bob
 and false for friendship between Alice and Charlie.
 
 A query for friends of Alice.
-```
-curl localhost:8080/query -XPOST -d $'
+
+{{< runnable >}}
 {
   data(func: eq(name, "Alice")) {
     name
@@ -2630,93 +2568,29 @@ curl localhost:8080/query -XPOST -d $'
       name
     }
   }
-}' | python -m json.tool | less
-```
-
-Output :
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "friend": [
-          {
-            "name": "Dave"
-          },
-          {
-            "name": "Bob"
-          },
-          {
-            "name": "Charlie"
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
 A query for friends and the facet `close` with `@facets(close)`.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
    data(func: eq(name, "Alice")) {
      name
      friend @facets(close) {
        name
      }
    }
-}' | python -m json.tool | less
-```
-
-As with facets on value edges, the result contains key `@facets` in each child of `friend`.
-This keeps the relationship between which facet of `close` belongs of which child.
-Since these facets come from parent, Dgraph uses key `_` to distinguish them from other
-`facets` at child level.
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "friend": [
-          {
-            "name": "Dave",
-            "@facets": {
-              "_": {
-                "close": true
-              }
-            }
-          },
-          {
-            "name": "Bob",
-            "@facets": {
-              "_": {
-                "close": true
-              }
-            }
-          },
-          {
-            "name": "Charlie",
-            "@facets": {
-              "_": {
-                "close": false
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
-For uid edges like `friend`, facets go to the corresponding child's `@facets` under key `_`.  Hence, the facets can be distinguished when the output contains both facets on uid-edges (like `friend`) and value-edges (like `car`).
 
-```
-curl localhost:8080/query -XPOST -d $'{
+For uid edges like `friend`, facets go to the corresponding child under the key edge:facet. In the above
+example you can see that the `close` facet on the edge between Alice and Bob appears with the key `friend:close`
+along with Bob's results.
+
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     name
     friend @facets {
@@ -2724,57 +2598,11 @@ curl localhost:8080/query -XPOST -d $'{
       car @facets
     }
   }
-}' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "friend": [
-          {
-            "name": "Dave",
-            "@facets": {
-              "_": {
-                "close": true,
-                "relative": true
-              }
-            }
-          },
-          {
-            "name": "Bob",
-            "car": "MA0134",
-            "@facets": {
-              "car": {
-                "since": "2006-02-02T13:01:09Z"
-              },
-              "_": {
-                "close": true,
-                "relative": false
-              }
-            }
-          },
-          {
-            "name": "Charlie",
-            "@facets": {
-              "_": {
-                "close": false,
-                "relative": true
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
-Bob has a `car` and it has a facet `since`, which, in the results, is part of the same object as Bob.
+Bob has a `car` and it has a facet `since`, which, in the results, is part of the same object as Bob
+under the key car:since.
 Also, the `close` relationship between Bob and Alice is part of Bob's output object.
 Charlie does not have `car` edge and thus only UID facets.
 
@@ -2785,223 +2613,59 @@ Filtering works similarly to how it works on edges without facets and has the sa
 
 
 Find Alice's close friends
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     friend @facets(eq(close, true)) {
       name
     }
   }
-}' | python -m json.tool | less
-```
-
-
-Output :
-```
-{
-  "data": {
-    "data": [
-      {
-        "friend": [
-          {
-            "name": "Dave"
-          },
-          {
-            "name": "Bob"
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 To return facets as well as filter, add another `@facets(<facetname>)` to the query.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     friend @facets(eq(close, true)) @facets(relative) { # filter close friends and give relative status
       name
     }
   }
-}' | python -m json.tool | less
-```
-Output :
-```
-{
-  "data": {
-    "data": [
-      {
-        "friend": [
-          {
-            "name": "Dave",
-            "@facets": {
-              "_": {
-                "relative": true
-              }
-            }
-          },
-          {
-            "name": "Bob",
-            "@facets": {
-              "_": {
-                "relative": false
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 Facet queries can be composed with `AND`, `OR` and `NOT`.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     friend @facets(eq(close, true) AND eq(relative, true)) @facets(relative) { # filter close friends in my relation
       name
     }
   }
-}' | python -m json.tool | less
-```
-Output :
-```
-{
-  "data": {
-    "data": [
-      {
-        "friend": [
-          {
-            "name": "Dave",
-            "@facets": {
-              "_": {
-                "relative": true
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 ### Sorting using facets
 
 Sorting is possible for a facet on a uid edge. Here we sort the movies rated by Alice, Bob and
 Charlie by their `rating` which is a facet.
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   me(func: anyofterms(name, "Alice Bob Charlie")) {
     name
     rated @facets(orderdesc: rating) {
       name
     }
   }
-
-}' | python -m json.tool | less
-```
-
-Output:
-```
-{
-  "data": {
-    "me": [
-      {
-        "name": "Alice",
-        "rated": [
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 3
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 2
-              }
-            }
-          }
-        ]
-      },
-      {
-        "name": "Bob",
-        "rated": [
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          }
-        ]
-      },
-      {
-        "name": "Charlie",
-        "rated": [
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 2
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 1
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 
 ### Assigning Facet values to a variable
@@ -3009,8 +2673,8 @@ Output:
 Facets on UID edges can be stored in [value variables]({{< relref "#value-variables" >}}).  The variable is a map from the edge target to the facet value.
 
 Alice's friends reported by variables for `close` and `relative`.
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   var(func: eq(name, "Alice")) {
     friend @facets(a as close, b as relative)
   }
@@ -3024,43 +2688,9 @@ curl localhost:8080/query -XPOST -d $'{
     name
     val(b)
   }
-}' | python -m json.tool | less
-```
-Output:
-```
-{
-  "data": {
-    "friend": [
-      {
-        "name": "Dave",
-        "val(a)": true
-      },
-      {
-        "name": "Bob",
-        "val(a)": true
-      },
-      {
-        "name": "Charlie",
-        "val(a)": false
-      }
-    ],
-    "relative": [
-      {
-        "name": "Dave",
-        "val(b)": true
-      },
-      {
-        "name": "Bob",
-        "val(b)": false
-      },
-      {
-        "name": "Charlie",
-        "val(b)": true
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 ### Facets and Variable Propagation
 
@@ -3069,8 +2699,8 @@ Facet values of `int` and `float` can be assigned to variables and thus the [val
 
 Alice, Bob and Charlie each rated every movie.  A value variable on facet `rating` maps movies to ratings.  A query that reaches a movie through multiple paths sums the ratings on each path.  The following sums Alice, Bob and Charlie's ratings for the three movies.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{<runnable >}}
+{
   var(func: anyofterms(name, "Alice Bob Charlie")) {
     num_raters as math(1)
     rated @facets(r as rating) {
@@ -3084,41 +2714,17 @@ curl localhost:8080/query -XPOST -d $'{
     val(average_rating)
   }
 
-}' | python -m json.tool | less
-```
-
-Output
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Movie 1",
-        "val(total_rating)": 10,
-        "val(average_rating)": 3.333333
-      },
-      {
-        "name": "Movie 2",
-        "val(total_rating)": 12,
-        "val(average_rating)": 4
-      },
-      {
-        "name": "Movie 3",
-        "val(total_rating)": 11,
-        "val(average_rating)": 3.666667
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 
 ### Facets and Aggregation
 
 Facet values assigned to value variables can be aggregated.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     name
     rated @facets(r as rating) {
@@ -3126,53 +2732,15 @@ curl localhost:8080/query -XPOST -d $'{
     }
     avg(val(r))
   }
-}' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "rated": [
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 3
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 2
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          }
-        ],
-        "avg(val(r))": 3.333333
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 Note though that `r` is a map from movies to the sum of ratings on edges in the query reaching the movie.  Hence, the following does not correctly calculate the average ratings for Alice and Bob individually --- it calculates 2 times the average of both Alice and Bob's ratings.
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+
+{
   data(func: anyofterms(name, "Alice Bob")) {
     name
     rated @facets(r as rating) {
@@ -3180,83 +2748,15 @@ curl localhost:8080/query -XPOST -d $'{
     }
     avg(val(r))
   }
-}' | python -m json.tool | less
-```
-
-Output:
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "rated": [
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 3
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 2
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          }
-        ],
-        "avg(val(r))": 8.333333
-      },
-      {
-        "name": "Bob",
-        "rated": [
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          }
-        ],
-        "avg(val(r))": 8.333333
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 Calculating the average ratings of users requires a variable that maps users to the sum of their ratings.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+
+{
   var(func: has(~rated)) {
     num_rated as math(1)
     ~rated @facets(r as rating) {
@@ -3268,30 +2768,9 @@ curl localhost:8080/query -XPOST -d $'{
     name
     val(avg_rating)
   }
-}' | python -m json.tool | less
-```
-
-Output:
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "val(avg_rating)": 3.333333
-      },
-      {
-        "name": "Bob",
-        "val(avg_rating)": 5
-      },
-      {
-        "name": "Charlie",
-        "val(avg_rating)": 2.666667
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 ## K-Shortest Path Queries
 
