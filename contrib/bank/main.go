@@ -81,7 +81,7 @@ func (s *State) runTotal() error {
 		}
 	`, strings.Join(s.uids, ","))
 	txn := s.dg.NewTxn()
-	resp, err := txn.Query(context.Background(), q, nil)
+	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func (s *State) runTransaction() error {
 	defer txn.Discard(ctx)
 
 	fq := fmt.Sprintf(`{me(func: uid(%s, %s)) { uid, bal }}`, from, to)
-	resp, err := txn.Query(ctx, fq, nil)
+	resp, err := txn.Query(ctx, fq)
 	if err != nil {
 		return err
 	}

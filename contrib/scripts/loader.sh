@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ./contrib/functions.sh
+source ./contrib/scripts/functions.sh
 
 SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 
@@ -25,12 +25,7 @@ ls -la goldendata.rdf.gz
 benchmark=$(pwd)
 popd &> /dev/null
 
-pushd cmd/dgraphzero &> /dev/null
-echo -e "\nBuilding and running Dgraph Zero."
-go build .
-
 startZero
-popd &> /dev/null
 
 pushd cmd/dgraph &> /dev/null
 echo -e "\nBuilding and running Dgraph."
@@ -42,10 +37,10 @@ if [ $? -eq 0 ]; then
 else
   echo "dgraph --version command failed."
 fi
+popd &> /dev/null
 
 # Start Dgraph
 start
-popd &> /dev/null
 
 #Set Schema
 curl -X PUT  -d '
@@ -72,36 +67,29 @@ rm -rf c
 go build . && ./dgraph-live-loader -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9080,127.0.0.1:9082" -z "127.0.0.1:12340" -c 1 -m 10000
 popd &> /dev/null
 
-
 # Restart Dgraph so that we are sure that index keys are persisted.
 quit 0
 # Wait for a clean shutdown.
 echo -e "\nClean Shutdown Done"
-pushd cmd/dgraphzero &> /dev/null
 startZero
-popd &> /dev/null
 
-pushd cmd/dgraph &> /dev/null
 start
-popd &> /dev/null
 
-./contrib/goldendata-queries.sh
+./contrib/scripts/goldendata-queries.sh
 
 echo -e "\nShutting down Dgraph"
 quit 0
 
 echo -e "\nTrying to restart Dgraph and match export count"
-pushd cmd/dgraphzero &> /dev/null
 startZero
-popd &> /dev/null
 
-pushd cmd/dgraph &> /dev/null
 start
 echo -e "\nTrying to export data."
 rm -rf export/*
 curl http://localhost:8080/admin/export
 echo -e "\nExport done."
 
+pushd cmd/dgraph &> /dev/null
 # This is count of RDF's in goldendata.rdf.gz + xids because we ran dgraph-live-loader with -xid flag.
 dataCount="1120879"
 # Concat exported files to get total count.
@@ -111,6 +99,9 @@ if [[ $TRAVIS_OS_NAME == "osx" ]]; then
 else
   exportCount=$(zcat export/dgraph-export.rdf.gz | wc -l)
 fi
+
+popd &> /dev/null
+
 
 
 if [[ ! "$exportCount" -eq "$dataCount" ]]; then
