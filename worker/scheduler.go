@@ -135,10 +135,12 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 			}
 			tctxs := posting.Txns().Iterate(func(key []byte) bool {
 				pk := x.Parse(key)
-				return pk.Attr == supdate.Predicate && (pk.IsIndex() || pk.IsCount() || pk.IsReverse())
+				return pk.Attr == supdate.Predicate
 			})
 			if len(tctxs) > 0 {
-				go tryAbortTransactions(tctxs)
+				if s.n.AmLeader() {
+					go tryAbortTransactions(tctxs)
+				}
 				err = posting.ErrConflict
 			} else {
 				err = s.n.processSchemaMutations(proposal.Id, index, startTs, supdate)
@@ -176,7 +178,9 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 				return pk.Attr == edge.Attr
 			})
 			if len(tctxs) > 0 {
-				go tryAbortTransactions(tctxs)
+				if s.n.AmLeader() {
+					go tryAbortTransactions(tctxs)
+				}
 				err = posting.ErrConflict
 			} else {
 				err = posting.DeletePredicate(ctx, edge.Attr)

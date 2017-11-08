@@ -189,7 +189,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		return ErrInvalidTxn
 	}
 
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
+	txn := pstore.NewTransactionAt(commitTs, true)
 	defer txn.Discard()
 	// Sort by keys so that we have all postings for same pl side by side.
 	sort.Slice(tx.deltas, func(i, j int) bool {
@@ -201,19 +201,11 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	for i < len(tx.deltas) {
 		d := tx.deltas[i]
 		if !bytes.Equal(prevKey, d.key) {
-			// First check the lru to ensure that we don't write delta if it's already committed.
 			plist := Get(d.key)
-			changed, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
-			for err == ErrRetry {
-				time.Sleep(5 * time.Millisecond)
-				plist = Get(d.key)
-				changed, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
-			}
-			if err != nil {
-				return err
-			}
-			// Skip all deltas for the key if it was already comitted.
-			if !changed {
+			if plist.AlreadyCommitted(tx.StartTs) {
+				// Delta already exists, so skip the key
+				// There won't be any race from lru eviction, because we don't
+				// commit in memory unless we write delta to disk.
 				i++
 				for i < len(tx.deltas) && bytes.Equal(tx.deltas[i].key, d.key) {
 					i++
@@ -252,7 +244,10 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		}
 		i++
 	}
-	return txn.CommitAt(commitTs, nil)
+	if err := txn.CommitAt(commitTs, nil); err != nil {
+		return err
+	}
+	return tx.commitMutationsMemory(ctx, commitTs)
 }
 
 func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error {
@@ -264,11 +259,11 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
 	for _, d := range tx.deltas {
 		plist := Get(d.key)
-		_, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
+		err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		for err == ErrRetry {
 			time.Sleep(5 * time.Millisecond)
 			plist = Get(d.key)
-			_, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
+			err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		}
 		if err != nil {
 			return err
@@ -403,6 +398,5 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	l.Unlock()
 	x.BytesRead.Add(int64(size))
 	atomic.StoreInt32(&l.estimatedSize, size)
-	go pstore.PurgeVersionsBelow(l.key, l.minTs)
 	return l, err
 }
