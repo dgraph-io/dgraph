@@ -37,6 +37,10 @@ const (
 	startTsHeader = "X-Dgraph-StartTs"
 )
 
+func allowed(method string) bool {
+	return method == http.MethodPost || method == http.MethodPut
+}
+
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
 // It can then encode the response as appropriate before sending it back to the user.
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +51,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != "POST" {
+	if !allowed(r.Method) {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
@@ -139,7 +143,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != "POST" {
+	if !allowed(r.Method) {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
@@ -214,7 +218,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != "POST" {
+	if !allowed(r.Method) {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
@@ -288,7 +292,7 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != "PUT" {
+	if !allowed(r.Method) {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
@@ -340,7 +344,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != "PUT" {
+	if !allowed(r.Method) {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
