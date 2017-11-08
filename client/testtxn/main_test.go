@@ -102,6 +102,7 @@ func TestMain(m *testing.M) {
 	os.Exit(r)
 }
 
+// TODO - Cleanup this file so that it is more in sync with how other tests are written.
 // readTs == startTs
 func TestTxnRead1(t *testing.T) {
 	fmt.Println("TestTxnRead1")
