@@ -94,8 +94,9 @@ func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token,"+
-			"X-Auth-Token, Cache-Control, X-Requested-With, X-Dgraph-CommitNow")
+		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, "+
+			"Cache-Control, X-Requested-With, X-Dgraph-CommitNow, X-Dgraph-LinRead, "+
+			"X-Dgraph-Keys, X-Dgraph-StartTs")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
