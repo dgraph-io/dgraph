@@ -111,7 +111,7 @@ func init() {
 
 	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
 	flag.IntVar(&baseGrpcPort, "grpc_port", 9080, "Port to run gRPC service on.")
-	flag.BoolVar(&bindall, "bindall", false,
+	flag.BoolVar(&bindall, "bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.BoolVar(&exposeTrace, "expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")

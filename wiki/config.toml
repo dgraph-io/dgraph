@@ -16,11 +16,6 @@ title = "Dgraph Documentation"
   identifier = "get-started"
   weight = 1
 [[menu.main]]
-  name = "Guides"
-  url = "/guides/"
-  identifier = "guides"
-  weight = 2
-[[menu.main]]
   name = "Query Language"
   url = "/query-language/"
   identifier = "query-language"

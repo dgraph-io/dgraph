@@ -90,8 +90,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Query = string(q)
 
-	// TODO - Check if debug still works.
-	resp, err := (&edgraph.Server{}).Query(context.Background(), &req)
+	d := r.URL.Query().Get("debug")
+	ctx := context.WithValue(context.Background(), "debug", d)
+	resp, err := (&edgraph.Server{}).Query(ctx, &req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -99,17 +100,16 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := map[string]interface{}{}
 	addLatency, _ := strconv.ParseBool(r.URL.Query().Get("latency"))
-	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
+	debug, _ := strconv.ParseBool(d)
 	addLatency = addLatency || debug
 
-	if addLatency {
-		e := query.Extensions{
-			Latency: resp.Latency,
-			Txn:     resp.Txn,
-		}
-
-		response["extensions"] = e
+	e := query.Extensions{
+		Txn: resp.Txn,
 	}
+	if addLatency {
+		e.Latency = resp.Latency
+	}
+	response["extensions"] = e
 
 	// User can either ask for schema or have a query.
 	if len(resp.Schema) > 0 {

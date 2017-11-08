@@ -65,7 +65,7 @@ var DefaultConfig = Options{
 	NumPendingProposals: 2000,
 	Tracing:             0.0,
 	MyAddr:              "",
-	ZeroAddr:            "",
+	ZeroAddr:            "localhost:8888",
 	MaxPendingCount:     1000,
 	ExpandEdge:          true,
 	InMemoryComm:        false,
