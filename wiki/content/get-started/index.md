@@ -82,7 +82,7 @@ dgraph server --memory_mb 2048
 #### Windows
 To run dgraph with the UI on Windows, you also have to supply the path to the assets using the (`--ui` option).
 ```sh
-./dgraph.exe --memory_mb 2048 --zero 127.0.0.1:8888 -ui path-to-assets-folder
+./dgraph.exe --memory_mb 2048 -ui path-to-assets-folder
 ```
 
 ### Docker on Linux
@@ -95,7 +95,7 @@ mkdir -p /tmp/data
 docker run -itP -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
 
 # Run Dgraph Server
-docker exec -it diggy dgraph server --bindall=true --memory_mb 2048
+docker exec -it diggy dgraph server --memory_mb 2048
 ```
 
 The dgraph server listens on ports 8080 and 9080 (unless mapped to another port) with log output to the terminal.
@@ -113,7 +113,7 @@ docker create -v /dgraph --name data dgraph/dgraph
 Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
 docker run -itP --volumes-from data --name diggy dgraph/dgraph dgraph zero
-docker exec -it diggy dgraph server --bindall=true --memory_mb 2048
+docker exec -it diggy dgraph server --memory_mb 2048
 ```
 
 ## Step 3: Run Queries
