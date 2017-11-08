@@ -308,7 +308,7 @@ func TestTxnRead5(t *testing.T) {
 	x.AssertTrue(bytes.Equal(resp.Json, []byte(`{"me":[{"name":"Manish2"}]}`)))
 }
 
-func Tesonflict(t *testing.T) {
+func TestConflict(t *testing.T) {
 	fmt.Println("TestConflict")
 	op := &protos.Operation{}
 	op.DropAll = true
