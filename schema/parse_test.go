@@ -171,7 +171,6 @@ var schemaIndexVal5 = `
 age     : int @index(int) .
 name    : string @index(exact) @count .
 address : string @index(term) .
-id      : id @index(exact, term) .
 friend  : uid @reverse @count .
 `
 
@@ -204,13 +203,6 @@ func TestSchemaIndexCustom(t *testing.T) {
 			Directive: protos.SchemaUpdate_INDEX,
 			Explicit:  true,
 		}},
-		{"id", &protos.SchemaUpdate{
-			Predicate: "id",
-			ValueType: protos.Posting_STRING,
-			Tokenizer: []string{"exact", "term"},
-			Directive: protos.SchemaUpdate_INDEX,
-			Explicit:  true,
-		}},
 		{"friend", &protos.SchemaUpdate{
 			ValueType: protos.Posting_UID,
 			Predicate: "friend",
@@ -222,7 +214,7 @@ func TestSchemaIndexCustom(t *testing.T) {
 	require.True(t, State().IsIndexed("name"))
 	require.False(t, State().IsReversed("name"))
 	require.Equal(t, "int", State().Tokenizer("age")[0].Name())
-	require.Equal(t, 4, len(State().IndexedFields()))
+	require.Equal(t, 3, len(State().IndexedFields()))
 }
 
 func TestParse(t *testing.T) {

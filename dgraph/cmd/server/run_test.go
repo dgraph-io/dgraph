@@ -182,7 +182,13 @@ func runQuery(q string) (string, error) {
 	if len(qr.Errors) > 0 {
 		return "", errors.New(qr.Errors[0].Message)
 	}
-	return rr.Body.String(), nil
+
+	// Remove the extensions.
+	mp := make(map[string]interface{})
+	json.Unmarshal(rr.Body.Bytes(), &mp)
+	delete(mp, "extensions")
+	output, err := json.Marshal(mp)
+	return string(output), err
 }
 
 func runMutation(m string) error {
@@ -1309,7 +1315,7 @@ func TestDropAll(t *testing.T) {
 	q3 := "schema{}"
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.Equal(t,
+	require.JSONEq(t,
 		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true}]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
