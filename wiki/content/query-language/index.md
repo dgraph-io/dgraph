@@ -2432,17 +2432,6 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 }
 ```
 
-The pattern `* P *` removes all data for predicate `P`, data for the reverse edge if present and deletes any indexes created on `P`.
-
-```
-{
-  delete {
-     * <author.of> * .
-  }
-}
-```
-
-After such a delete mutation, the schema of the predicate may be changed --- even from UID to scalar, or scalar to UID; such a change is allowed only after all data is deleted.
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
 
