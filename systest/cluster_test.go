@@ -32,10 +32,11 @@ func NewDgraphCluster(dir string) *DgraphCluster {
 }
 
 func (d *DgraphCluster) StartZeroOnly() error {
-	d.zero = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"),
+	d.zero = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"zero",
 		"-w=wz",
-		"-idx=1",
-		"-port", d.zeroPort,
+		"--idx=1",
+		"--port", d.zeroPort,
 	)
 	d.zero.Dir = d.dir
 	d.zero.Stdout = os.Stdout
@@ -56,12 +57,13 @@ func (d *DgraphCluster) Start() error {
 	}
 
 	d.dgraph = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"-memory_mb=1024",
-		"-zero", ":"+d.zeroPort,
-		"-port", freePort(),
-		"-grpc_port", d.dgraphPort,
-		"-workerport", freePort(),
-		"-custom_tokenizers", d.TokenizerPluginsArg,
+		"server",
+		"--memory_mb=1024",
+		"--zero", ":"+d.zeroPort,
+		"--port", freePort(),
+		"--grpc_port", d.dgraphPort,
+		"--workerport", freePort(),
+		"--custom_tokenizers", d.TokenizerPluginsArg,
 	)
 	d.dgraph.Dir = d.dir
 	d.dgraph.Stdout = os.Stdout
@@ -88,10 +90,10 @@ func (d *DgraphCluster) Start() error {
 
 func (d *DgraphCluster) Close() {
 	// Ignore errors
-	if d.zero != nil {
+	if d.zero != nil && d.zero.Process != nil {
 		d.zero.Process.Kill()
 	}
-	if d.dgraph != nil {
+	if d.dgraph != nil && d.dgraph.Process != nil {
 		d.dgraph.Process.Kill()
 	}
 }

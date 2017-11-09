@@ -71,7 +71,7 @@ func TestPlugins(t *testing.T) {
 
 		for _, test := range cases {
 			txn := cluster.client.NewTxn()
-			reply, err := txn.Query(ctx, test.query, nil)
+			reply, err := txn.Query(ctx, test.query)
 			check(t, err)
 			CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
