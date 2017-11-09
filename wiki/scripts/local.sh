@@ -1,12 +1,9 @@
 #!/bin/bash
 
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 VERSIONS_ARRAY=(
-  'v0.7.7'
-  'v0.7.6'
+  'v0.9.0'
   'master'
-  'v0.7.5'
-  'v0.7.4'
+  'v0.8.3'
 )
 
 joinVersions() {
@@ -24,7 +21,7 @@ run() {
 
   HUGO_TITLE="Dgraph Doc - local" \
   VERSIONS=${VERSION_STRING} \
-  CURRENT_BRANCH=${CURRENT_BRANCH} \
+  CURRENT_BRANCH="master" \
   CURRENT_VERSION=${CURRENT_VERSION} hugo server -w
 }
 
