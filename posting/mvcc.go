@@ -140,18 +140,17 @@ func (t *Txn) Index() uint64 {
 	return 0
 }
 
-func (t *transactions) PutOrMergeIndex(txn *Txn) *Txn {
+func (t *transactions) PutOrMergeIndex(src *Txn) *Txn {
 	t.Lock()
 	defer t.Unlock()
-	tx := t.m[txn.StartTs]
-	if tx == nil {
-		t.m[txn.StartTs] = txn
-		return txn
+	dst := t.m[src.StartTs]
+	if dst == nil {
+		t.m[src.StartTs] = src
+		return src
 	}
-	x.AssertTrue(tx.StartTs == txn.StartTs)
-	tx.Indices = append(tx.Indices, txn.Indices...)
-	t.m[txn.StartTs] = tx
-	return txn
+	x.AssertTrue(src.StartTs == dst.StartTs)
+	dst.Indices = append(dst.Indices, src.Indices...)
+	return dst
 }
 
 func (t *Txn) SetAbort() {
