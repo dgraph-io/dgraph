@@ -1,6 +1,7 @@
 #!/bin/bash
 
-source ./contrib/scripts/functions.sh
+contrib=$GOPATH/src/github.com/dgraph-io/dgraph/contrib
+source $contrib/scripts/functions.sh
 
 SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 
@@ -59,7 +60,7 @@ quit 0
 startZero
 start
 
-./contrib/scripts/goldendata-queries.sh
+$contrib/scripts/goldendata-queries.sh
 
 quit 0
 
