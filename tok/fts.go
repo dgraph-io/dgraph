@@ -21,6 +21,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/blevesearch/bleve/analysis/analyzer/custom"
+	"github.com/blevesearch/bleve/analysis/lang/cjk"
 	"github.com/blevesearch/bleve/analysis/token/lowercase"
 	"github.com/blevesearch/bleve/analysis/token/porter"
 	"github.com/blevesearch/bleve/analysis/token/stop"
@@ -60,6 +61,11 @@ func initFullTextTokenizers() {
 		defineStemmer(lang)
 		defineStopWordsList(lang)
 		defineAnalyzer(lang)
+		registerTokenizer(&FullTextTokenizer{Lang: countryCode(lang)})
+	}
+
+	for _, lang := range [...]string{"chinese", "japanese", "korean"} {
+		defineCJKAnalyzer(lang)
 		registerTokenizer(&FullTextTokenizer{Lang: countryCode(lang)})
 	}
 
@@ -136,6 +142,19 @@ func defineAnalyzer(lang string) {
 			normalizerName,
 			stopWordsListName(ln),
 			stemmerName(ln),
+		},
+	})
+	x.Check(err)
+}
+
+func defineCJKAnalyzer(lang string) {
+	ln := countryCode(lang)
+	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(ln), map[string]interface{}{
+		"type":      custom.Name,
+		"tokenizer": unicode.Name,
+		"token_filters": []string{
+			normalizerName,
+			cjk.BigramName,
 		},
 	})
 	x.Check(err)

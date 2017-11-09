@@ -206,3 +206,97 @@ func TestGetTextTokensInvalidLang(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, tokens)
 }
+
+// NOTE: The Chinese/Japanese/Korean tests were are based on assuming that the
+// output is correct (and adding it to the test), with some verification using
+// Google translate.
+
+func TestFullTextTokenizerChinese(t *testing.T) {
+	tokenizer, has := GetTokenizer(FtsTokenizerName("zh"))
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	got, err := BuildTokens("他是一个薪水很高的商人", tokenizer)
+	require.NoError(t, err)
+
+	id := tokenizer.Identifier()
+	wantToks := []string{
+		encodeToken("一个", id),
+		encodeToken("个薪", id),
+		encodeToken("他是", id),
+		encodeToken("商人", id),
+		encodeToken("很高", id),
+		encodeToken("是一", id),
+		encodeToken("水很", id),
+		encodeToken("的商", id),
+		encodeToken("薪水", id),
+		encodeToken("高的", id),
+	}
+	require.Equal(t, wantToks, got)
+	checkSortedAndUnique(t, got)
+}
+
+func TestFullTextTokenizerKorean(t *testing.T) {
+	tokenizer, has := GetTokenizer(FtsTokenizerName("ko"))
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	got, err := BuildTokens("그는 큰 급여를 가진 사업가입니다.", tokenizer)
+	require.NoError(t, err)
+
+	id := tokenizer.Identifier()
+	wantToks := []string{
+		encodeToken("가진", id),
+		encodeToken("그는", id),
+		encodeToken("급여를", id),
+		encodeToken("사업가입니다", id),
+		encodeToken("큰", id),
+	}
+	require.Equal(t, wantToks, got)
+	checkSortedAndUnique(t, got)
+}
+
+func TestFullTextTokenizerJapanese(t *testing.T) {
+	tokenizer, has := GetTokenizer(FtsTokenizerName("ja"))
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	got, err := BuildTokens("彼は大きな給与を持つ実業家です", tokenizer)
+	require.NoError(t, err)
+	t.Log(got)
+
+	id := tokenizer.Identifier()
+	wantToks := []string{
+		encodeToken("きな", id),
+		encodeToken("つ実", id),
+		encodeToken("です", id),
+		encodeToken("な給", id),
+		encodeToken("は大", id),
+		encodeToken("を持", id),
+		encodeToken("与を", id),
+		encodeToken("大き", id),
+		encodeToken("実業", id),
+		encodeToken("家で", id),
+		encodeToken("彼は", id),
+		encodeToken("持つ", id),
+		encodeToken("業家", id),
+		encodeToken("給与", id),
+	}
+	require.Equal(t, wantToks, got)
+	checkSortedAndUnique(t, got)
+}
+
+func checkSortedAndUnique(t *testing.T, tokens []string) {
+	if !sort.StringsAreSorted(tokens) {
+		t.Error("tokens were not sorted")
+	}
+	set := make(map[string]struct{})
+	for _, tok := range tokens {
+		if _, ok := set[tok]; ok {
+			if ok {
+				t.Error("tokens are not unique")
+			}
+		}
+		set[tok] = struct{}{}
+	}
+}
