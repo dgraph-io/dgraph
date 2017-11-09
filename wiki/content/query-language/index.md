@@ -1943,6 +1943,33 @@ The `uid` type denotes a node-node edge; internally each node is represented as 
 |  `uid`      | uint64  |
 
 
+### Adding or Modifying Schema
+
+Schema mutations add or modify schema.
+
+Multiple scalar values can also be added for a `S P` by specifying the schema to be of
+list type. Occupations in the example below can store a list of strings for each `S P`.
+
+An index is specified with `@index`, with arguments to specify the tokenizer. When specifying an
+index for a predicate it is mandatory to specify the type of the index. For example:
+
+```
+name: string @index(exact, fulltext) @count .
+age: int @index(int) .
+friend: uid @count .
+dob: dateTime .
+location: geo @index(geo) .
+occupations: [string] @index(term) .
+```
+
+If no data has been stored for the predicates, a schema mutation sets up an empty schema ready to receive triples.
+
+If data is already stored before the mutation, existing values are not checked to conform to the new schema.  On query, Dgraph tries to convert existing values to the new schema types, ignoring any that fail conversion.
+
+If data exists and new indices are specified in a schema mutation, any index not in the updated list is dropped and a new index is created for every new tokenizer specified.
+
+Reverse edges are also computed if specified by a schema mutation.
+
 ### RDF Types
 
 Dgraph supports a number of [RDF types in mutations]({{< relref "#language-and-rdf-types" >}}).
@@ -2090,33 +2117,6 @@ For predicates with the `@count` Dgraph indexes the number of edges out of each 
   }
 }
 ```
-
-### Adding or Modifying Schema
-
-Schema mutations add or modify schema.
-
-Multiple scalar values can also be added for a `S P` by specifying the schema to be of
-list type. Occupations in the example below can store a list of strings for each `S P`.
-
-An index is specified with `@index`, with arguments to specify the tokenizer. When specifying an
-index for a predicate it is mandatory to specify the type of the index. For example:
-
-```
-name: string @index(exact, fulltext) @count .
-age: int @index(int) .
-friend: uid @count .
-dob: dateTime .
-location: geo @index(geo) .
-occupations: [string] @index(term) .
-```
-
-If no data has been stored for the predicates, a schema mutation sets up an empty schema ready to receive triples.
-
-If data is already stored before the mutation, existing values are not checked to conform to the new schema.  On query, Dgraph tries to convert existing values to the new schema types, ignoring any that fail conversion.
-
-If data exists and new indices are specified in a schema mutation, any index not in the updated list is dropped and a new index is created for every new tokenizer specified.
-
-Reverse edges are also computed if specified by a schema mutation.
 
 ### List Type
 
@@ -2459,13 +2459,18 @@ For `int` and `float`, only decimal integers upto 32 signed bits, and 64 bit flo
 
 The following mutation is used throughout this section on facets.  The mutation adds data for some peoples and, for example, records a `since` facet in `mobile` and `car` to record when Alice bought the car and started using the mobile number.
 
-```
-curl localhost:8080/query -XPOST -d $'
-mutation {
-  schema {
+First we add some schema.
+```sh
+curl localhost:8080/alter -XPOST -d $'
     name: string @index(exact, term) .
     rated: uid @reverse @count .
-  }
+' | python -m json.tool | less
+
+```
+
+```sh
+curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+{
   set {
 
     # -- Facets on scalar predicates
@@ -2781,13 +2786,15 @@ By default the shortest path is returned, with `numpaths: k`, the k-shortest pat
 {{% notice "note" %}}If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.{{% /notice %}}
 
 For example:
-```
-curl localhost:8080/query -XPOST -d $'
-mutation{
-  schema {
+```sh
+curl localhost:8080/alter -XPOST -d $'
     name: string @index(exact) .
-  }
+' | python -m json.tool | less
+```
 
+```sh
+curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+{
   set {
     _:a <friend> _:b (weight=0.1) .
     _:b <friend> _:c (weight=0.2) .
@@ -3220,10 +3227,12 @@ return values.
 
 Setting up the indexing and adding data:
 ```
-mutation{
-  schema{
-    name: string @index(rune) .
-  }
+name: string @index(rune) .
+```
+
+
+```
+{
   set{
     _:ad <name> "Adam" .
     _:aa <name> "Aaron" .
@@ -3353,11 +3362,15 @@ func (t CIDRTokenizer) Tokens(value interface{}) ([]string, error) {
 }
 ```
 An example of using the tokenizer:
+
+Setting up the indexing and adding data:
 ```
-mutation{
-  schema{
-    ip: string @index(cidr) .
-  }
+ip: string @index(cidr) .
+
+```
+
+```
+{
   set{
     _:a <ip> "100.55.22.11/32" .
     _:b <ip> "100.33.81.19/32" .
@@ -3428,11 +3441,14 @@ func (t AnagramTokenizer) Tokens(value interface{}) ([]string, error) {
 }
 ```
 In action:
+
+Setting up the indexing and adding data:
 ```
-mutation{
-  schema{
-    word: string @index(anagram) .
-  }
+word: string @index(anagram) .
+```
+
+```
+{
   set{
     _:1 <word> "airmen" .
     _:2 <word> "marine" .
@@ -3521,11 +3537,14 @@ factors with a particular number.
 
 In particular, we search for numbers that contain any of the prime factors of
 15, i.e. any numbers that are divisible by either 3 or 5.
+
+Setting up the indexing and adding data:
 ```
-mutation{
-  schema{
-    num: int @index(factor) .
-  }
+num: int @index(factor) .
+```
+
+```
+{
   set{
     _:2 <num> "2"^^<xs:int> .
     _:3 <num> "3"^^<xs:int> .
