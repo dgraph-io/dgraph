@@ -28,31 +28,29 @@ var s state
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	for _, name := range []string{
-		"dgraph",
-		"dgraphzero",
-	} {
-		cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/cmd/"+name)
-		cmd.Env = os.Environ()
-		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
-		}
+	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
+	cmd.Env = os.Environ()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
 	}
 
-	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"), "-w=wz")
+	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "zero", "-w=wz")
+	zero.Stdout = os.Stdout
+	zero.Stderr = os.Stderr
 	if err := zero.Start(); err != nil {
 		log.Fatal(err)
 	}
-	zero.Stdout = os.Stdout
 	s.Dirs = append(s.Dirs, "wz")
 	s.Commands = append(s.Commands, zero)
 
 	time.Sleep(5 * time.Second)
 	dgraph := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"-memory_mb=2048",
-		"-zero=127.0.0.1:8888",
+		"server",
+		"--memory_mb=2048",
+		"--zero=127.0.0.1:8888",
 	)
 	dgraph.Stdout = os.Stdout
+	dgraph.Stderr = os.Stderr
 
 	if err := dgraph.Start(); err != nil {
 		log.Fatal(err)
