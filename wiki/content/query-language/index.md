@@ -1963,7 +1963,6 @@ For all triples with a predicate of scalar types the object is a literal.
 |  `float`    | float   |
 |  `string`   | string  |
 |  `bool`     | bool    |
-|  `id`       | string  |
 |  `dateTime` | time.Time (RFC3339 format [Optional timezone] eg: 2006-01-02T15:04:05.999999999+10:00 or 2006-01-02T15:04:05.999999999)    |
 |  `geo`      | [go-geom](https://github.com/twpayne/go-geom)    |
 |  `password` | string (encrypted) |
