@@ -263,7 +263,6 @@ func TestFullTextTokenizerJapanese(t *testing.T) {
 
 	got, err := BuildTokens("彼は大きな給与を持つ実業家です", tokenizer)
 	require.NoError(t, err)
-	t.Log(got)
 
 	id := tokenizer.Identifier()
 	wantToks := []string{
