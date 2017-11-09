@@ -641,7 +641,7 @@ START:
 	go func() {
 		// In the event where there in no leader for a group, commit/abort won't get proposed.
 		// So periodically check oracle and propose
-		ticker := time.NewTicker(time.Second * 2)
+		ticker := time.NewTicker(time.Minute)
 		for {
 			<-ticker.C
 			if g.Node.AmLeader() {
@@ -657,6 +657,8 @@ START:
 			break
 		}
 		posting.Oracle().ProcessOracleDelta(oracleDelta)
+		// Do Immediately so that index keys are written.
+		g.proposeDelta(oracleDelta)
 	}
 	goto START
 }

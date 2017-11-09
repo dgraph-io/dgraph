@@ -192,7 +192,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	txn := pstore.NewTransactionAt(commitTs, true)
 	defer txn.Discard()
 	// Sort by keys so that we have all postings for same pl side by side.
-	sort.Slice(tx.deltas, func(i, j int) bool {
+	sort.SliceStable(tx.deltas, func(i, j int) bool {
 		return bytes.Compare(tx.deltas[i].key, tx.deltas[j].key) < 0
 	})
 	var prevKey []byte
