@@ -1,13 +1,54 @@
 {{ $currentBranch := getenv "CURRENT_BRANCH" }}
 
-{{/*
-  Display different import paths depending on the version of Dgraph.
 
-  If the branch is `master` or not in a format of `release/vx.x.x`, use default.
-  (to check for `release/vx.x.x`, here we just check if the branch name is of
-  length 14 - FIXME if better solution emerges)
-*/}}
+{{ $majorVersion := 0 }}
+{{ $minorVersion := 0 }}
+{{ $patchVersion := 0 }}
 
+{{ if (ne $currentBranch "master") }}
+  {{ $version := slicestr $currentBranch 9 }}
+  {{ $majorVersion := int (slicestr $version 0 1) }}
+  {{ $minorVersion := int (slicestr $version 2 3) }}
+  {{ $patchVersion := int (slicestr $version 4 5) }}
+{{ end }}
+
+
+{{ if or (eq $currentBranch "master") (ge $majorVersion 1) (ge $minorVersion 9) }}
+<pre><code class="no-copy" tabindex="-1">package main
+
+import (
+  "context"
+  "flag"
+  "fmt"
+  "log"
+
+  "github.com/dgraph-io/dgraph/client"
+  "github.com/dgraph-io/dgraph/protos"
+  "google.golang.org/grpc"
+)
+
+var (
+  dgraph = flag.String("d", "127.0.0.1:9080", "Dgraph server address")
+)
+
+func main() {
+  flag.Parse()
+  conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
+  if err != nil {
+    log.Fatal(err)
+  }
+  defer conn.Close()
+
+  dg := client.NewDgraphClient(protos.NewDgraphClient(conn))
+
+  resp, err := dg.NewTxn().Query(context.Background(),
+    `<span class="query-content">{{ .Code }}</span>`, nil)
+  if err != nil {
+    log.Fatal(err)
+  }
+  fmt.Printf("Response: %s\n", resp.Json)
+}</code></pre>
+{{ else }}
 <pre><code class="no-copy" tabindex="-1">package main
 
 import (
@@ -54,3 +95,6 @@ func main() {
   }
   fmt.Printf("Response %+v\n", proto.MarshalTextString(resp))
 }</code></pre>
+
+{{ end }}
+

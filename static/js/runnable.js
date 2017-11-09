@@ -223,11 +223,11 @@ function eraseCookie(name) {
   function getLatencyTooltipHTML(serverLatencyInfo, networkLatency) {
     var contentHTML =
       '<div class="measurement-row"><div class="measurement-key">JSON:</div><div class="measurement-val">' +
-      serverLatencyInfo.json +
+      prettifyLatency(serverLatencyInfo.encoding_ns) +
       '</div></div><div class="measurement-row"><div class="measurement-key">Parsing:</div><div class="measurement-val">' +
-      serverLatencyInfo.parsing +
+      prettifyLatency(serverLatencyInfo.parsing_ns) +
       '</div></div><div class="measurement-row"><div class="measurement-key">Processing:</div><div class="measurement-val">' +
-      serverLatencyInfo.processing +
+      prettifyLatency(serverLatencyInfo.processing_ns) +
       '</div></div><div class="divider"></div><div class="measurement-row"><div class="measurement-key total">Total:</div><div class="measurement-val">' +
       serverLatencyInfo.total +
       "</div></div>";
@@ -238,17 +238,28 @@ function eraseCookie(name) {
   }
 
   function getTotalServerLatencyInMS(serverLatencyInfo) {
-    var totalServerLatency = serverLatencyInfo.total;
-
-    var unit = totalServerLatency.slice(-2);
-    var val = totalServerLatency.slice(0, -2);
-
-    if (unit === "µs") {
-      return val / 1000;
+    var totalLatency = 0;
+    // Server returns parsing, processing and encoding latencies in ns separately.
+    for (var latency in serverLatencyInfo) {
+      totalLatency += parseFloat(serverLatencyInfo[latency]);
     }
 
-    // else assume 'ms'
-    return val;
+    return totalLatency;
+  }
+
+  function prettifyLatency(latency) {
+    // Convert from ns to ms
+    latency = latency / Math.pow(10, 6);
+    var serverLatency;
+    if (latency < 1) {
+      serverLatency = Math.round(latency * 1000) + "μs";
+    } else if (latency > 1000) {
+      serverLatency = Math.round(latency / 1000) + "s";
+    } else {
+      serverLatency = Math.round(latency) + "ms";
+    }
+
+    return serverLatency;
   }
 
   /**
@@ -267,10 +278,15 @@ function eraseCookie(name) {
     var isModal = $runnable.parents("#runnable-modal").length > 0;
 
     var totalServerLatency = getTotalServerLatencyInMS(serverLatencyInfo);
-    var networkOnlyLatency = Math.round(networkLatency - totalServerLatency);
+    var networkOnlyLatency = Math.round(
+      networkLatency - totalServerLatency / Math.pow(10, 6)
+    );
+
+    serverLatency = prettifyLatency(totalServerLatency);
+    serverLatencyInfo.total = serverLatency;
 
     $runnable.find(".latency-info").removeClass("hidden");
-    $runnable.find(".server-latency .number").text(serverLatencyInfo.total);
+    $runnable.find(".server-latency .number").text(serverLatency);
     $runnable.find(".network-latency .number").text(networkOnlyLatency + "ms");
 
     var tooltipHTML = getLatencyTooltipHTML(
