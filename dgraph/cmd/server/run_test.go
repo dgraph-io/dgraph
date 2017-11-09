@@ -1397,5 +1397,6 @@ func TestMain(m *testing.M) {
 	// Parse GQL into internal query representation.
 	r := m.Run()
 	closeAll(dir1, dir2)
+	exec.Command("killall", "-9", "dgraph").Run()
 	os.Exit(r)
 }
