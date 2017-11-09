@@ -2336,7 +2336,7 @@ Query Example: Robin Wright by external ID.
 
 ```
 
-{{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary.  `dgraph-live-loader` adds `xid` edges for bulk uploads with `-x`, see [Bulk Data Loading]({{< relref "deploy/index.md#bulk-data-loading" >}}).  Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
+{{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary. Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
 
 
@@ -2382,9 +2382,9 @@ See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand
 
 ### Batch mutations
 
-Each mutation may contain multiple RDF triples.  For large data uploads many such mutations can be batched in parallel.  The tool `dgraph-live-loader` does just this; by default batching 1000 RDF lines into a query, while running 100 such queries in parallel.
+Each mutation may contain multiple RDF triples. For large data uploads many such mutations can be batched in parallel.  The tool `dgraph-live-loader` does just this; by default batching 1000 RDF lines into a query, while running 100 such queries in parallel.
 
-Dgraphloader takes as input gzipped N-Quad files (that is triple lists without `mutation { set {`) and batches mutations for all triples in the input.  The tool has documentation of options.
+Dgraphloader takes as input gzipped N-Quad files (that is triple lists without `{ set {`) and batches mutations for all triples in the input.  The tool has documentation of options.
 
 ```
 dgraph-live-loader --help
