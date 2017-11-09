@@ -3546,7 +3546,7 @@ curl localhost:8080/query -XPOST -d $'{
 To get 10 movies from a genre that has more than 30000 films and then get two actors for those movies we'd do something as follows:
 {{< runnable >}}
 {
-	recurse(func: gt(count(~genre), 30000), first: 1){
+	me(func: gt(count(~genre), 30000), first: 1) @recurse {
 		name@en
 		~genre (first:10) @filter(gt(count(starring), 2))
 		starring (first: 2)
@@ -3563,7 +3563,7 @@ Some points to keep in mind while using recurse queries are:
 
 {{< runnable >}}
 {
-	recurse(func: gt(count(~genre), 30000), depth: 2){
+	me(func: gt(count(~genre), 30000), depth: 2) @recurse {
 		name@en
 		~genre (first:2) @filter(gt(count(starring), 2))
 		starring (first: 2)
