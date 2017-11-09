@@ -16,6 +16,7 @@ echo "Running transaction tests."
 contrib=$GOPATH/src/github.com/dgraph-io/dgraph/contrib
 source $contrib/scripts/functions.sh
 
+rm -rf $BUILD/p* $BUILD/w*
 startZero
 
 start
