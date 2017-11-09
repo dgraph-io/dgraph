@@ -121,6 +121,7 @@ type params struct {
 
 	// directives.
 	Normalize    bool
+	Recurse      bool
 	Cascade      bool
 	IgnoreReflex bool
 
@@ -139,7 +140,6 @@ type params struct {
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
-	upsert         bool
 }
 
 // Function holds the information about gql functions.
@@ -761,7 +761,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.AfterUID = uint64(after)
 	}
-	if v, ok := gq.Args["depth"]; ok && (args.Alias == "recurse" ||
+	if v, ok := gq.Args["depth"]; ok && (gq.Recurse ||
 		args.Alias == "shortest") {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
@@ -854,7 +854,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		IgnoreReflex: gq.IgnoreReflex,
 		IsEmpty:      gq.IsEmpty,
 		Order:        gq.Order,
-		upsert:       gq.Upsert,
+		Recurse:      gq.Recurse,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -2395,7 +2395,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 					shortestSg, err = ShortestPath(ctx, sg)
 					errChan <- err
 				}()
-			} else if sg.Params.Alias == "recurse" {
+			} else if sg.Params.Recurse {
 				go func() {
 					errChan <- Recurse(ctx, sg)
 				}()

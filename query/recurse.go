@@ -170,8 +170,8 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 }
 
 func Recurse(ctx context.Context, sg *SubGraph) error {
-	if sg.Params.Alias != "recurse" {
-		return x.Errorf("Invalid shortest path query")
+	if !sg.Params.Recurse {
+		return x.Errorf("Invalid recurse path query")
 	}
 
 	depth := sg.Params.ExploreDepth

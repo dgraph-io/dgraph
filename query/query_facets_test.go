@@ -857,7 +857,7 @@ func TestRecurseFacetOrder(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
     {
-		recurse(func: uid(1), depth: 2) {
+		me(func: uid(1), depth: 2) @recurse {
 			friend @facets(orderdesc: since)
 			uid
 			name
@@ -865,11 +865,11 @@ func TestRecurseFacetOrder(t *testing.T) {
 	}
   `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data":{"recurse":[{"friend":[{"uid":"0x19","name":"Daryl Dixon","friend:since":"2007-05-02T15:04:05Z"},{"friend":[{"friend:since":"2006-01-02T15:04:05Z"}],"uid":"0x17","name":"Rick Grimes","friend:since":"2006-01-02T15:04:05Z"},{"uid":"0x1f","name":"Andrea","friend:since":"2006-01-02T15:04:05Z"},{"uid":"0x65","friend:since":"2005-05-02T15:04:05Z"},{"uid":"0x18","name":"Glenn Rhee","friend:since":"2004-05-02T15:04:05Z"}],"uid":"0x1","name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"friend":[{"uid":"0x19","name":"Daryl Dixon","friend:since":"2007-05-02T15:04:05Z"},{"friend":[{"friend:since":"2006-01-02T15:04:05Z"}],"uid":"0x17","name":"Rick Grimes","friend:since":"2006-01-02T15:04:05Z"},{"uid":"0x1f","name":"Andrea","friend:since":"2006-01-02T15:04:05Z"},{"uid":"0x65","friend:since":"2005-05-02T15:04:05Z"},{"uid":"0x18","name":"Glenn Rhee","friend:since":"2004-05-02T15:04:05Z"}],"uid":"0x1","name":"Michonne"}]}}`, js)
 
 	query = `
     {
-		recurse(func: uid(1), depth: 2) {
+		me(func: uid(1), depth: 2) @recurse {
 			friend @facets(orderasc: since)
 			uid
 			name
@@ -877,5 +877,5 @@ func TestRecurseFacetOrder(t *testing.T) {
 	}
   `
 	js = processToFastJSON(t, query)
-	require.JSONEq(t, `{"data":{"recurse":[{"friend":[{"uid":"0x18","name":"Glenn Rhee","friend:since":"2004-05-02T15:04:05Z"},{"uid":"0x65","friend:since":"2005-05-02T15:04:05Z"},{"friend":[{"friend:since":"2006-01-02T15:04:05Z"}],"uid":"0x17","name":"Rick Grimes","friend:since":"2006-01-02T15:04:05Z"},{"uid":"0x1f","name":"Andrea","friend:since":"2006-01-02T15:04:05Z"},{"uid":"0x19","name":"Daryl Dixon","friend:since":"2007-05-02T15:04:05Z"}],"uid":"0x1","name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee","friend:since":"2004-05-02T15:04:05Z"},{"uid":"0x65","friend:since":"2005-05-02T15:04:05Z"},{"friend":[{"friend:since":"2006-01-02T15:04:05Z"}],"uid":"0x17","name":"Rick Grimes","friend:since":"2006-01-02T15:04:05Z"},{"uid":"0x1f","name":"Andrea","friend:since":"2006-01-02T15:04:05Z"},{"uid":"0x19","name":"Daryl Dixon","friend:since":"2007-05-02T15:04:05Z"}],"uid":"0x1","name":"Michonne"}]}}`, js)
 }
