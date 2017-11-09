@@ -17,7 +17,6 @@ rm -f $OUT
 
 set -e
 
-pushd $SRC &> /dev/null
 
 # create coverage output
 echo 'mode: atomic' > $OUT
@@ -35,5 +34,3 @@ done
 if [ ! -z "$DISPLAY" ]; then
   go tool cover -html=$OUT
 fi
-
-popd &> /dev/null

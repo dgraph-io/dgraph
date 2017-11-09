@@ -42,11 +42,11 @@ import (
 	"golang.org/x/net/trace"
 )
 
-const numExportRoutines = 10
+const numExportRoutines = 100
 
 type kv struct {
 	prefix string
-	list   *posting.List
+	key    []byte
 }
 
 type skv struct {
@@ -69,7 +69,8 @@ var rdfTypeMap = map[types.TypeID]string{
 }
 
 func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
-	err := item.list.Iterate(readTs, 0, func(p *protos.Posting) bool {
+	l := posting.GetNoStore(item.key)
+	err := l.Iterate(readTs, 0, func(p *protos.Posting) bool {
 		buf.WriteString(item.prefix)
 		if !bytes.Equal(p.Value, nil) {
 			// Value posting
@@ -330,10 +331,9 @@ func export(bdir string, readTs uint64) error {
 		prefix.WriteString("> ")
 		nkey := make([]byte, len(key))
 		copy(nkey, key)
-		l := posting.GetNoStore(nkey)
 		chkv <- kv{
 			prefix: prefix.String(),
-			list:   l,
+			key:    nkey,
 		}
 		prefix.Reset()
 		it.Next()

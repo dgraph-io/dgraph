@@ -20,3 +20,5 @@ start
 go test ./contrib/freebase/share_test.go
 
 quit 0
+# This is so that count for export which runs later on goldendata matches.
+rm -rf $BUILD/w $BUILD/w2 $BUILD/p $BUILD/p2 $BUILD/zw

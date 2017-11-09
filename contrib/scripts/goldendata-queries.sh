@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/scripts/functions.sh
+
 pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
 
 function run_index_test {
@@ -40,7 +42,7 @@ function run_index_test {
   fi
 }
 
-echo -e "\nRunning some queries and checking count of results returned."
+echo -e "Running some queries and checking count of results returned."
 run_index_test basic name 138676
 run_index_test allof_the name 25431
 run_index_test allof_the_a name 367

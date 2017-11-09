@@ -2,8 +2,10 @@
 
 set -e
 
+source contrib/scripts/functions.sh
+
 function finish {
-	killall dgraph
+	quit 0
 	rm -rf $1
 }
 
@@ -15,4 +17,4 @@ bash contrib/scripts/simple-e2e.sh $1
 bash contrib/scripts/loader.sh $1
 bash contrib/scripts/queries.sh $1
 
-bash contrib/scripts/transaction.sh $1
+bash contrib/scripts/transactions.sh $1

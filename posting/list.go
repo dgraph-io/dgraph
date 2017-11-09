@@ -522,17 +522,15 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	return conflicts
 }
 
-// Don't modify mpost, Rlock
 func (l *List) inSnapshot(mpost *protos.Posting, readTs, deleteTs uint64) bool {
 	l.AssertRLock()
-	commitTs := mpost.CommitTs
-	if commitTs == 0 {
-		commitTs = Oracle().CommitTs(mpost.StartTs)
+	if mpost.CommitTs == 0 {
+		mpost.CommitTs = Oracle().CommitTs(mpost.StartTs)
 	}
-	if commitTs == 0 {
+	if mpost.CommitTs == 0 {
 		return mpost.StartTs == readTs
 	}
-	return commitTs <= readTs && commitTs >= deleteTs
+	return mpost.CommitTs <= readTs && mpost.CommitTs >= deleteTs
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
