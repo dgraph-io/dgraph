@@ -56,7 +56,7 @@ func TestNQuadMutation(t *testing.T) {
 	}`
 
 	txn = cluster.client.NewTxn()
-	resp, err := txn.Query(ctx, breakfastQuery, nil)
+	resp, err := txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
 	CompareJSON(t, `{ "q": [ {
 		"fruit": [
@@ -80,7 +80,7 @@ func TestNQuadMutation(t *testing.T) {
 	require.NoError(t, txn.Commit(ctx))
 
 	txn = cluster.client.NewTxn()
-	resp, err = txn.Query(ctx, breakfastQuery, nil)
+	resp, err = txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
 	CompareJSON(t, `{ "q": [ {
 		"fruit": [
