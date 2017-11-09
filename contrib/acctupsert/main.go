@@ -112,7 +112,8 @@ func upsert(c *client.Dgraph, acc account) {
 			atomic.AddUint64(&successCount, 1)
 			return
 		}
-		if !strings.Contains(strings.ToLower(err.Error()), "conflict") {
+		if !strings.Contains(strings.ToLower(err.Error()), "conflict") &&
+			!strings.Contains(strings.ToLower(err.Error()), "aborted") {
 			x.Check(err)
 		}
 		atomic.AddUint64(&retryCount, 1)

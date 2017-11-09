@@ -82,9 +82,10 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*
 
 func prepare() (dir1, dir2 string, rerr error) {
 	// TODO - Stop at end and clear dir.
-	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"),
+	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"zero",
 		"-w=wz",
-		"-port", "12341",
+		"--port", "12341",
 	)
 	zero.Stdout = os.Stdout
 	if err := zero.Start(); err != nil {
@@ -92,7 +93,6 @@ func prepare() (dir1, dir2 string, rerr error) {
 	}
 	time.Sleep(4 * time.Second)
 
-	// StartDummyZero()
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
