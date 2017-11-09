@@ -39,7 +39,7 @@ us](mailto:manish@dgraph.io).
 - Do you have sparse data, which doesn't correctly fit into SQL tables?
 - Do you want a simple and flexible schema, which is readable and maintainable
   over time?
-- Do you care about horizontal scalability?
+- Do you care about speed and performance at scale?
 
 If the answers to the above are YES, then Dgraph would be a great fit for your
 application. Dgraph provides NoSQL like scalability while providing SQL like
