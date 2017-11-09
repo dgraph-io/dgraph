@@ -24,7 +24,7 @@ echo "bank tests"
 go run $contrib/bank/main.go
 
 echo "account upsert tests"
-# go run $GOPATH/src/github.com/dgraph-io/dgraph/contrib/acctupsert/main.go
+go run $GOPATH/src/github.com/dgraph-io/dgraph/contrib/acctupsert/main.go
 
 echo "Running sentence swap tests"
 go run $contrib/sentenceswap/main.go $contrib/sentenceswap/words.go

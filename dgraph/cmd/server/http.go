@@ -99,15 +99,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{}
-	addLatency, _ := strconv.ParseBool(r.URL.Query().Get("latency"))
-	debug, _ := strconv.ParseBool(d)
-	addLatency = addLatency || debug
 
 	e := query.Extensions{
-		Txn: resp.Txn,
-	}
-	if addLatency {
-		e.Latency = resp.Latency
+		Txn:     resp.Txn,
+		Latency: resp.Latency,
 	}
 	response["extensions"] = e
 
