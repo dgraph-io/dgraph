@@ -21,17 +21,10 @@ func init() {
 	if testing.Short() {
 		return
 	}
-	for _, name := range []string{
-		"dgraph-bulk-loader",
-		"dgraph-live-loader",
-		"dgraph",
-		"dgraphzero",
-	} {
-		cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/cmd/"+name)
-		cmd.Env = os.Environ()
-		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
-		}
+	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
+	cmd.Env = os.Environ()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
 	}
 }
 
@@ -80,12 +73,13 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	s.bulkCluster = NewDgraphCluster(bulkDir)
 	s.checkFatal(s.bulkCluster.StartZeroOnly())
 
-	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-bulk-loader"),
-		"-r", rdfFile,
-		"-s", schemaFile,
-		"-http", ":"+freePort(),
-		"-z", ":"+s.bulkCluster.zeroPort,
-		"-j=1", "-x=true",
+	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
+		"--r", rdfFile,
+		"--s", schemaFile,
+		"--http", ":"+freePort(),
+		"--z", ":"+s.bulkCluster.zeroPort,
+		"--j=1",
+		"--x=true",
 	)
 	bulkCmd.Stdout = os.Stdout
 	bulkCmd.Stderr = os.Stdout
@@ -105,13 +99,13 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	s.checkFatal(s.liveCluster.Start())
 	s.checkFatal(s.bulkCluster.Start())
 
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph-live-loader"),
-		"-r", rdfFile,
-		"-s", schemaFile,
-		"-d", ":"+s.liveCluster.dgraphPort,
-		"-z", ":"+s.liveCluster.zeroPort,
-		"-c=1", // use only 1 concurrent transaction to avoid txn conflicts
-		"-m=10000",
+	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		"--rdfs", rdfFile,
+		"--schema", schemaFile,
+		"--dgraph", ":"+s.liveCluster.dgraphPort,
+		"--zero", ":"+s.liveCluster.zeroPort,
+		"--conc=1", // use only 1 concurrent transaction to avoid txn conflicts
+		"--batch=10000",
 	)
 	liveCmd.Dir = liveDir
 	liveCmd.Stdout = os.Stdout
@@ -148,7 +142,7 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			txn := cluster.client.NewTxn()
-			resp, err := txn.Query(ctx, query, nil)
+			resp, err := txn.Query(ctx, query)
 			if err != nil {
 				t.Fatalf("Could not query: %v", err)
 			}
