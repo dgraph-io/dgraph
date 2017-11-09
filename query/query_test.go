@@ -1723,7 +1723,7 @@ func TestRecurseVariable(t *testing.T) {
 	populateGraph(t)
 	query := `
 			{
-				me1(func: uid(0x01)) @recurse {
+				var(func: uid(0x01)) @recurse {
 					a as friend
 				}
 
@@ -1734,7 +1734,7 @@ func TestRecurseVariable(t *testing.T) {
 		`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me1":[],"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
 
 func TestRecurseVariable2(t *testing.T) {
@@ -1743,7 +1743,7 @@ func TestRecurseVariable2(t *testing.T) {
 	query := `
 			{
 
-				rec(func: uid(0x1)) @recurse {
+				var(func: uid(0x1)) @recurse {
 					f2 as friend
 					f as follow
 				}
@@ -1758,7 +1758,7 @@ func TestRecurseVariable2(t *testing.T) {
 			}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"rec":[],"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
