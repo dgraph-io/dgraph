@@ -46,7 +46,7 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *protos.K
 		if len(i.Val) == 0 {
 			pstore.PurgeVersionsBelow(i.Key, math.MaxUint64)
 		} else {
-			txn.Set(i.Key, i.Val, i.UserMeta[0])
+			txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0])
 			txn.CommitAt(i.Version, func(err error) {
 				// We don't care about exact error
 				x.Printf("Error while committing kv to badger %v\n", err)

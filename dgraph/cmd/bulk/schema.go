@@ -102,7 +102,7 @@ func (s *schemaStore) write(db *badger.ManagedDB) {
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
-		x.Check(txn.Set(k, v, posting.BitCompletePosting))
+		x.Check(txn.SetWithMeta(k, v, posting.BitCompletePosting))
 	}
 	x.Check(txn.CommitAt(s.state.writeTs, nil))
 }

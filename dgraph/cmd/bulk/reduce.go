@@ -67,12 +67,12 @@ func (r *reducer) reduce(job shuffleOutput) {
 		meta := posting.BitCompletePosting
 		if len(pl.Postings) == 0 {
 			meta |= posting.BitUidPosting
-			txn.Set(currentKey, bp128.DeltaPack(uids), meta)
+			txn.SetWithMeta(currentKey, bp128.DeltaPack(uids), meta)
 		} else {
 			pl.Uids = bp128.DeltaPack(uids)
 			val, err := pl.Marshal()
 			x.Check(err)
-			txn.Set(currentKey, val, meta)
+			txn.SetWithMeta(currentKey, val, meta)
 		}
 
 		uids = uids[:0]

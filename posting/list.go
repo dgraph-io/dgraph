@@ -630,7 +630,7 @@ func (l *List) Length(readTs, afterUid uint64) int {
 func doAsyncWrite(commitTs uint64, key []byte, data []byte, meta byte, f func(error)) {
 	txn := pstore.NewTransactionAt(commitTs, true)
 	defer txn.Discard()
-	if err := txn.Set(key, data, meta); err != nil {
+	if err := txn.SetWithMeta(key, data, meta); err != nil {
 		f(err)
 	}
 	if err := txn.CommitAt(commitTs, f); err != nil {

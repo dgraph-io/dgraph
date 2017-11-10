@@ -97,8 +97,6 @@ func (lf *logFile) mmap(size int64) (err error) {
 	return err
 }
 
-var errTooFewBytes = errors.New("Too few bytes read")
-
 // Acquire lock on mmap if you are calling this
 func (lf *logFile) read(p valuePointer) (buf []byte, err error) {
 	var nbr int64
@@ -212,8 +210,6 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) error {
 			}
 			return err
 		}
-		e.Meta = h.meta
-		e.UserMeta = h.userMeta
 		if _, err = io.ReadFull(tee, e.Value); err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				truncate = true
@@ -235,9 +231,11 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) error {
 			truncate = true
 			break
 		}
+		e.meta = h.meta
+		e.UserMeta = h.userMeta
+		e.ExpiresAt = h.expiresAt
 
 		var vp valuePointer
-
 		vp.Len = headerBufSize + h.klen + h.vlen + uint32(len(crcBuf))
 		recordOffset += vp.Len
 
@@ -305,14 +303,14 @@ func (vlog *valueLog) rewrite(f *logFile) error {
 		if vp.Fid == f.fid && vp.Offset == e.offset {
 			// This new entry only contains the key, and a pointer to the value.
 			ne := new(entry)
-			ne.Meta = 0 // Remove all bits.
+			ne.meta = 0 // Remove all bits.
 			ne.UserMeta = e.UserMeta
 			ne.Key = make([]byte, len(e.Key))
 			copy(ne.Key, e.Key)
 			ne.Value = make([]byte, len(e.Value))
 			copy(ne.Value, e.Value)
 			wb = append(wb, ne)
-			size += int64(vlog.opt.estimateSize(ne))
+			size += int64(e.estimateSize(vlog.opt.ValueThreshold))
 			if size >= 64*mi {
 				elog.Printf("request has %d entries, size %d", len(wb), size)
 				if err := vlog.kv.batchSet(wb); err != nil {
@@ -773,12 +771,7 @@ func (vlog *valueLog) Read(vp valuePointer) ([]byte, func(), error) {
 	}
 	var h header
 	h.Decode(buf)
-	if (h.meta & bitDelete) != 0 {
-		// Tombstone key
-		return nil, cb, nil
-	}
-	n := uint32(headerBufSize)
-	n += h.klen
+	n := uint32(headerBufSize) + h.klen
 	return buf[n : n+h.vlen], cb, nil
 }
 
@@ -800,7 +793,7 @@ func valueBytesToEntry(buf []byte) (e entry) {
 
 	e.Key = buf[n : n+h.klen]
 	n += h.klen
-	e.Meta = h.meta
+	e.meta = h.meta
 	e.UserMeta = h.userMeta
 	e.Value = buf[n : n+h.vlen]
 	return
@@ -853,8 +846,7 @@ func discardEntry(e entry, vs y.ValueStruct) bool {
 		// Version not found. Discard.
 		return true
 	}
-	if (vs.Meta & bitDelete) > 0 {
-		// Key deleted. Discard.
+	if isDeletedOrExpired(vs) {
 		return true
 	}
 	if (vs.Meta & bitValuePointer) == 0 {

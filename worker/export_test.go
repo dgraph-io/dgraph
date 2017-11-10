@@ -93,7 +93,7 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.ManagedDB) 
 	require.NoError(t, err)
 
 	txn := db.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.SchemaKey("friend"), val, 0x00)
+	txn.Set(x.SchemaKey("friend"), val)
 	// Schema is always written at timestamp 1
 	txn.CommitAt(1, nil)
 	txn.Discard()
@@ -103,9 +103,9 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.ManagedDB) 
 	require.NoError(t, err)
 
 	txn = db.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val, 0x00)
+	txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	require.NoError(t, err)
-	txn.Set(x.SchemaKey("friend_not_served"), val, 0x00)
+	txn.Set(x.SchemaKey("friend_not_served"), val)
 	txn.CommitAt(1, nil)
 	txn.Discard()
 

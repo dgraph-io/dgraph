@@ -21,7 +21,6 @@ import (
 	"math/rand"
 	"os"
 	"sort"
-	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -40,9 +39,6 @@ type levelsController struct {
 	kv     *DB
 
 	nextFileID uint64 // Atomic
-
-	// For ending compactions.
-	compactWorkersWg sync.WaitGroup
 
 	cstatus compactStatus
 }

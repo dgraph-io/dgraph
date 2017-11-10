@@ -75,7 +75,7 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 	txn := c.db.NewTransactionAt(c.state.writeTs, true)
 	for count, uids := range counts {
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-		x.Check(txn.Set(
+		x.Check(txn.SetWithMeta(
 			x.CountKey(pred, uint32(count), rev),
 			bp128.DeltaPack(uids),
 			posting.BitCompletePosting|posting.BitUidPosting,
