@@ -2,7 +2,7 @@
 
 source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/scripts/functions.sh
 
-pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
+pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/scripts/queries &> /dev/null
 
 function run_index_test {
   local max_attempts=${ATTEMPTS-5}

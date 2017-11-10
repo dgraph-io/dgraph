@@ -691,17 +691,13 @@ Note that for geo queries, any polygon with holes is replace with the outer loop
 
 To make use of the geo functions you would need an index on your predicate.
 ```
-mutation {
-  schema {
-    loc: geo @index(geo) .
-  }
-}
+loc: geo @index(geo) .
 ```
 
 Here is how you would add a `Point`.
 
 ```
-mutation {
+{
   set {
     <_:0xeb1dde9c> <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
     <_:0xf15448e2> <name> "Hamon Tower" .
@@ -712,7 +708,7 @@ mutation {
 Here is how you would associate a `Polygon` with a node. Adding a `MultiPolygon` is also similar.
 
 ```
-mutation {
+{
   set {
     <_:0xf76c276b> <loc> "{'type':'Polygon','coordinates':[[[-122.409869,37.7785442],[-122.4097444,37.7786443],[-122.4097544,37.7786521],[-122.4096334,37.7787494],[-122.4096233,37.7787416],[-122.4094004,37.7789207],[-122.4095818,37.7790617],[-122.4097883,37.7792189],[-122.4102599,37.7788413],[-122.409869,37.7785442]],[[-122.4097357,37.7787848],[-122.4098499,37.778693],[-122.4099025,37.7787339],[-122.4097882,37.7788257],[-122.4097357,37.7787848]]]}"^^<geo:geojson> .
     <_:0xf76c276b> <name> "Best Western Americana Hotel" .
@@ -1782,36 +1778,6 @@ Query Example: Predicates saved to a variable and queried with `expand()`.
 
 `_predicate_` returns string valued predicates as a name without language tag.  If the predicate has no string without a language tag, `expand()` won't expand it (see [language preference]({{< relref "#language-support" >}})).  For example, above `name` generally doesn't have strings without tags in the dataset, so `name@.` is required.
 
-## Upsert
-
-Syntax Example: `me(func: eq(predicate, "value")) @upsert`
-
-With the `@upsert` directive, nodes can be upserted i.e. they would be created if they don't already
-exist. This is useful when you want to search for nodes using a predicate value and create a new one if
-one doesn't already exist.
-
-Query Example: Search for a node with name `Steven Spielberg` and create it if one doesn't exist
-already.
-
-```
-{
-  a as var(func: eq(name@en, "Steven Spielberg")) @upsert
-}
-
-mutation {
-  set {
-    uid(a) <age> "70" .
-  }
-}
-```
-
-The above query would check if a node with a name `Steven Spielberg` exists. If it does then it
-would return the `uid` of the node which can be used later. If it doesn't exist then it will create
-a new node and do a mutation for the `name` and then return the `uid`. You can also assign the
-returned uid in a variable and use it later for doing other mutations.
-
-{{% notice "note" %}} You need to have the appropriate index for using the [eq]({{<ref "#inequality">}}) function. {{% /notice %}}
-
 ## Cascade Directive
 
 With the `@cascade` directive, nodes that don't have all predicates specified in the query are removed. This can be useful in cases where some filter was applied or if nodes might not have all listed predicates.
@@ -1976,6 +1942,33 @@ The `uid` type denotes a node-node edge; internally each node is represented as 
 |  `uid`      | uint64  |
 
 
+### Adding or Modifying Schema
+
+Schema mutations add or modify schema.
+
+Multiple scalar values can also be added for a `S P` by specifying the schema to be of
+list type. Occupations in the example below can store a list of strings for each `S P`.
+
+An index is specified with `@index`, with arguments to specify the tokenizer. When specifying an
+index for a predicate it is mandatory to specify the type of the index. For example:
+
+```
+name: string @index(exact, fulltext) @count .
+age: int @index(int) .
+friend: uid @count .
+dob: dateTime .
+location: geo @index(geo) .
+occupations: [string] @index(term) .
+```
+
+If no data has been stored for the predicates, a schema mutation sets up an empty schema ready to receive triples.
+
+If data is already stored before the mutation, existing values are not checked to conform to the new schema.  On query, Dgraph tries to convert existing values to the new schema types, ignoring any that fail conversion.
+
+If data exists and new indices are specified in a schema mutation, any index not in the updated list is dropped and a new index is created for every new tokenizer specified.
+
+Reverse edges are also computed if specified by a schema mutation.
+
 ### RDF Types
 
 Dgraph supports a number of [RDF types in mutations]({{< relref "#language-and-rdf-types" >}}).
@@ -1986,7 +1979,7 @@ If a predicate has a schema type and a mutation has an RDF type with a different
 
 For example, if no schema is set for the `age` predicate.  Given the mutation
 ```
-mutation {
+{
  set {
   _:a <age> "15"^^<xs:int> .
   _:b <age> "13" .
@@ -2011,12 +2004,13 @@ The following types are also accepted.
 
 A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkpwd` function.
 
-For example: to set a password:
+For example: to set a password, first set schema, then the password:
 ```
-mutation {
-  schema {
-    pass: password .
-  }
+pass: password .
+```
+
+```
+{
   set {
     <0x123> <name> "Password Example"
     <0x123> <pass> "ThePassword" .
@@ -2123,37 +2117,6 @@ For predicates with the `@count` Dgraph indexes the number of edges out of each 
 }
 ```
 
-### Adding or Modifying Schema
-
-Schema mutations add or modify schema.
-
-Multiple scalar values can also be added for a `S P` by specifying the schema to be of
-list type. Occupations in the example below can store a list of strings for each `S P`.
-
-An index is specified with `@index`, with arguments to specify the tokenizer. When specifying an
-index for a predicate it is mandatory to specify the type of the index. For example:
-
-```
-mutation {
-  schema {
-    name: string @index(exact, fulltext) @count .
-    age: int @index(int) .
-    friend: uid @count .
-    dob: dateTime .
-    location: geo @index(geo) .
-    occupations: [string] @index(term) .
-  }
-}
-```
-
-If no data has been stored for the predicates, a schema mutation sets up an empty schema ready to receive triples.
-
-If data is already stored before the mutation, existing values are not checked to conform to the new schema.  On query, Dgraph tries to convert existing values to the new schema types, ignoring any that fail conversion.
-
-If data exists and new indices are specified in a schema mutation, any index not in the updated list is dropped and a new index is created for every new tokenizer specified.
-
-Reverse edges are also computed if specified by a schema mutation.
-
 ### List Type
 
 Predicate with scalar types can also store a list of values if specified in the schema. The scalar
@@ -2161,12 +2124,8 @@ type needs to be enclosed within `[]` to indicate that its a list type. These li
 unordered set.
 
 ```
-mutation {
-  schema {
-    occupations: [string] .
-    score: [int] .
-  }
-}
+occupations: [string] .
+score: [int] .
 ```
 
 * A set operation adds to the list of values. The order of the stored values is non-deterministic.
@@ -2221,7 +2180,7 @@ Adding or removing data in Dgraph is called a mutation.
 
 A mutation that adds triples, does so with the `set` keyword.
 ```
-mutation {
+{
   set {
     # triples in here
   }
@@ -2256,7 +2215,7 @@ Dgraph creates a unique 64 bit identifier for every node in the graph - the node
 Blank nodes in mutations, written `_:identifier`, identify nodes within a mutation.  Dgraph creates a UID identifying each blank node and returns the created UIDs as the mutation result.  For example, mutation:
 
 ```
-mutation {
+{
  set {
     _:class <student> _:x .
     _:class <student> _:y .
@@ -2296,7 +2255,7 @@ The blank node labels `_:class`, `_:x` and `_:y` do not identify the nodes after
 
 A later mutation can update the data for existing UIDs.  For example, the following to add a new student to the class.
 ```
-mutation {
+{
  set {
     <0x6bc818dc89e78754> <student> _:x .
     _:x <name> "Chris" .
@@ -2347,12 +2306,8 @@ While Robin Wright might get UID `0x321` and triples
 
 An appropriate schema might be as follows.
 ```
-mutation {
-  schema {
-    xid: string @index(exact) .
-    <http://schema.org/type>: uid @reverse .
-  }
-}
+xid: string @index(exact) .
+<http://schema.org/type>: uid @reverse .
 ```
 
 Query Example: All people.
@@ -2380,7 +2335,7 @@ Query Example: Robin Wright by external ID.
 
 ```
 
-{{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary.  `dgraph-live-loader` adds `xid` edges for bulk uploads with `-x`, see [Bulk Data Loading]({{< relref "deploy/index.md#bulk-data-loading" >}}).  Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
+{{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary. Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
 
 
@@ -2426,9 +2381,9 @@ See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand
 
 ### Batch mutations
 
-Each mutation may contain multiple RDF triples.  For large data uploads many such mutations can be batched in parallel.  The tool `dgraph-live-loader` does just this; by default batching 1000 RDF lines into a query, while running 100 such queries in parallel.
+Each mutation may contain multiple RDF triples. For large data uploads many such mutations can be batched in parallel.  The tool `dgraph-live-loader` does just this; by default batching 1000 RDF lines into a query, while running 100 such queries in parallel.
 
-Dgraphloader takes as input gzipped N-Quad files (that is triple lists without `mutation { set {`) and batches mutations for all triples in the input.  The tool has documentation of options.
+Dgraphloader takes as input gzipped N-Quad files (that is triple lists without `{ set {`) and batches mutations for all triples in the input.  The tool has documentation of options.
 
 ```
 dgraph-live-loader --help
@@ -2448,7 +2403,7 @@ For example, if the store contained
 Then delete mutation
 
 ```
-mutation {
+{
   delete {
      <0xf11168064b01135b> <died> "1998" .
   }
@@ -2460,7 +2415,7 @@ Deletes the erroneous data and removes it from indexes if present.
 For a particular node `N`, all data for predicate `P` (and corresponding indexing) is removed with the pattern `S P *`.
 
 ```
-mutation {
+{
   delete {
      <0xf11168064b01135b> <author.of> * .
   }
@@ -2469,59 +2424,15 @@ mutation {
 
 The pattern `S * *` deletes all edges out of a node (the node itself may remain as the target of edges), any reverse edges corresponding to the removed edges and any indexing for the removed data.
 ```
-mutation {
+{
   delete {
      <0xf11168064b01135b> * * .
   }
 }
 ```
 
-The pattern `* P *` removes all data for predicate `P`, data for the reverse edge if present and deletes any indexes created on `P`.
-
-```
-mutation {
-  delete {
-     * <author.of> * .
-  }
-}
-```
-
-After such a delete mutation, the schema of the predicate may be changed --- even from UID to scalar, or scalar to UID; such a change is allowed only after all data is deleted.
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
-
-### Variables in mutations
-
-A mutation may depend on a query through query variables.
-
-For example, in a graph with people and ages, the following updates all people 18 and over as adults.
-
-```
-{
-  adults as var(func: ge(age, 18))
-}
-mutation {
-  set {
-    uid(adults) <isadult> "true"^^<xs:boolean> .
-  }
-}
-```
-
-Variables are also allowed in delete mutations.  The following removes any data about electoral role for minors.
-
-```
-{
-  minors as var(func: lt(age, 18))
-}
-mutation {
-  delete {
-    uid(minors) <electoral_registration> * .
-  }
-}
-```
-
-Internally, such mutations are are expanded to a triple per UID in the variable.  Hence mutations with variables on both sides of the predicate `uid(variable1) <edge> uid(variable2)` are expanded to the cross product.
-
 
 ## Facets : Edge attributes
 
@@ -2536,13 +2447,18 @@ For `int` and `float`, only decimal integers upto 32 signed bits, and 64 bit flo
 
 The following mutation is used throughout this section on facets.  The mutation adds data for some peoples and, for example, records a `since` facet in `mobile` and `car` to record when Alice bought the car and started using the mobile number.
 
-```
-curl localhost:8080/query -XPOST -d $'
-mutation {
-  schema {
+First we add some schema.
+```sh
+curl localhost:8080/alter -XPOST -d $'
     name: string @index(exact, term) .
     rated: uid @reverse @count .
-  }
+' | python -m json.tool | less
+
+```
+
+```sh
+curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+{
   set {
 
     # -- Facets on scalar predicates
@@ -2588,105 +2504,43 @@ mutation {
 
 Querying `name`, `mobile` and `car` of Alice gives the same result as without facets.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
      name
      mobile
      car
   }
-}' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "mobile": "040123456",
-        "car": "MA0123"
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
 
 The syntax `@facets(facet-name)` is used to query facet data. For Alice the `since` facet for `mobile` and `car` are queried as follows.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
      name
      mobile @facets(since)
      car @facets(since)
   }
-}' | python -m json.tool | less
-```
-
-Facets are retuned at the same level as the corresponding edge and have keys of edge and then facet name.  The response from the query above is:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "mobile": "040123456",
-        "car": "MA0123",
-        "@facets": {
-          "mobile": {
-            "since": "2006-01-02T15:04:05Z"
-          },
-          "car": {
-            "since": "2006-02-02T13:01:09Z"
-          }
-        }
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
+
+Facets are retuned at the same level as the corresponding edge and have keys like edge:facet.
 
 All facets on an edge are queried with `@facets`.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
      name
      mobile @facets
      car @facets
   }
-}' | python -m json.tool | less
-```
-
-Ouput:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "mobile": "040123456",
-        "car": "MA0123",
-        "@facets": {
-          "mobile": {
-            "since": "2006-01-02T15:04:05Z"
-          },
-          "car": {
-            "first": true,
-            "since": "2006-02-02T13:01:09Z"
-          }
-        }
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
 
 ### Facets on UID predicates
@@ -2698,8 +2552,8 @@ It was set to true for friendship between Alice and Bob
 and false for friendship between Alice and Charlie.
 
 A query for friends of Alice.
-```
-curl localhost:8080/query -XPOST -d $'
+
+{{< runnable >}}
 {
   data(func: eq(name, "Alice")) {
     name
@@ -2707,93 +2561,29 @@ curl localhost:8080/query -XPOST -d $'
       name
     }
   }
-}' | python -m json.tool | less
-```
-
-Output :
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "friend": [
-          {
-            "name": "Dave"
-          },
-          {
-            "name": "Bob"
-          },
-          {
-            "name": "Charlie"
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
 A query for friends and the facet `close` with `@facets(close)`.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
    data(func: eq(name, "Alice")) {
      name
      friend @facets(close) {
        name
      }
    }
-}' | python -m json.tool | less
-```
-
-As with facets on value edges, the result contains key `@facets` in each child of `friend`.
-This keeps the relationship between which facet of `close` belongs of which child.
-Since these facets come from parent, Dgraph uses key `_` to distinguish them from other
-`facets` at child level.
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "friend": [
-          {
-            "name": "Dave",
-            "@facets": {
-              "_": {
-                "close": true
-              }
-            }
-          },
-          {
-            "name": "Bob",
-            "@facets": {
-              "_": {
-                "close": true
-              }
-            }
-          },
-          {
-            "name": "Charlie",
-            "@facets": {
-              "_": {
-                "close": false
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
-For uid edges like `friend`, facets go to the corresponding child's `@facets` under key `_`.  Hence, the facets can be distinguished when the output contains both facets on uid-edges (like `friend`) and value-edges (like `car`).
 
-```
-curl localhost:8080/query -XPOST -d $'{
+For uid edges like `friend`, facets go to the corresponding child under the key edge:facet. In the above
+example you can see that the `close` facet on the edge between Alice and Bob appears with the key `friend:close`
+along with Bob's results.
+
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     name
     friend @facets {
@@ -2801,57 +2591,11 @@ curl localhost:8080/query -XPOST -d $'{
       car @facets
     }
   }
-}' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "friend": [
-          {
-            "name": "Dave",
-            "@facets": {
-              "_": {
-                "close": true,
-                "relative": true
-              }
-            }
-          },
-          {
-            "name": "Bob",
-            "car": "MA0134",
-            "@facets": {
-              "car": {
-                "since": "2006-02-02T13:01:09Z"
-              },
-              "_": {
-                "close": true,
-                "relative": false
-              }
-            }
-          },
-          {
-            "name": "Charlie",
-            "@facets": {
-              "_": {
-                "close": false,
-                "relative": true
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
 
-Bob has a `car` and it has a facet `since`, which, in the results, is part of the same object as Bob.
+Bob has a `car` and it has a facet `since`, which, in the results, is part of the same object as Bob
+under the key car:since.
 Also, the `close` relationship between Bob and Alice is part of Bob's output object.
 Charlie does not have `car` edge and thus only UID facets.
 
@@ -2862,223 +2606,59 @@ Filtering works similarly to how it works on edges without facets and has the sa
 
 
 Find Alice's close friends
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     friend @facets(eq(close, true)) {
       name
     }
   }
-}' | python -m json.tool | less
-```
-
-
-Output :
-```
-{
-  "data": {
-    "data": [
-      {
-        "friend": [
-          {
-            "name": "Dave"
-          },
-          {
-            "name": "Bob"
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 To return facets as well as filter, add another `@facets(<facetname>)` to the query.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     friend @facets(eq(close, true)) @facets(relative) { # filter close friends and give relative status
       name
     }
   }
-}' | python -m json.tool | less
-```
-Output :
-```
-{
-  "data": {
-    "data": [
-      {
-        "friend": [
-          {
-            "name": "Dave",
-            "@facets": {
-              "_": {
-                "relative": true
-              }
-            }
-          },
-          {
-            "name": "Bob",
-            "@facets": {
-              "_": {
-                "relative": false
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 Facet queries can be composed with `AND`, `OR` and `NOT`.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     friend @facets(eq(close, true) AND eq(relative, true)) @facets(relative) { # filter close friends in my relation
       name
     }
   }
-}' | python -m json.tool | less
-```
-Output :
-```
-{
-  "data": {
-    "data": [
-      {
-        "friend": [
-          {
-            "name": "Dave",
-            "@facets": {
-              "_": {
-                "relative": true
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 ### Sorting using facets
 
 Sorting is possible for a facet on a uid edge. Here we sort the movies rated by Alice, Bob and
 Charlie by their `rating` which is a facet.
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   me(func: anyofterms(name, "Alice Bob Charlie")) {
     name
     rated @facets(orderdesc: rating) {
       name
     }
   }
-
-}' | python -m json.tool | less
-```
-
-Output:
-```
-{
-  "data": {
-    "me": [
-      {
-        "name": "Alice",
-        "rated": [
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 3
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 2
-              }
-            }
-          }
-        ]
-      },
-      {
-        "name": "Bob",
-        "rated": [
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          }
-        ]
-      },
-      {
-        "name": "Charlie",
-        "rated": [
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 2
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 1
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 
 ### Assigning Facet values to a variable
@@ -3086,8 +2666,8 @@ Output:
 Facets on UID edges can be stored in [value variables]({{< relref "#value-variables" >}}).  The variable is a map from the edge target to the facet value.
 
 Alice's friends reported by variables for `close` and `relative`.
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   var(func: eq(name, "Alice")) {
     friend @facets(a as close, b as relative)
   }
@@ -3101,43 +2681,9 @@ curl localhost:8080/query -XPOST -d $'{
     name
     val(b)
   }
-}' | python -m json.tool | less
-```
-Output:
-```
-{
-  "data": {
-    "friend": [
-      {
-        "name": "Dave",
-        "val(a)": true
-      },
-      {
-        "name": "Bob",
-        "val(a)": true
-      },
-      {
-        "name": "Charlie",
-        "val(a)": false
-      }
-    ],
-    "relative": [
-      {
-        "name": "Dave",
-        "val(b)": true
-      },
-      {
-        "name": "Bob",
-        "val(b)": false
-      },
-      {
-        "name": "Charlie",
-        "val(b)": true
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 ### Facets and Variable Propagation
 
@@ -3146,8 +2692,8 @@ Facet values of `int` and `float` can be assigned to variables and thus the [val
 
 Alice, Bob and Charlie each rated every movie.  A value variable on facet `rating` maps movies to ratings.  A query that reaches a movie through multiple paths sums the ratings on each path.  The following sums Alice, Bob and Charlie's ratings for the three movies.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{<runnable >}}
+{
   var(func: anyofterms(name, "Alice Bob Charlie")) {
     num_raters as math(1)
     rated @facets(r as rating) {
@@ -3161,41 +2707,17 @@ curl localhost:8080/query -XPOST -d $'{
     val(average_rating)
   }
 
-}' | python -m json.tool | less
-```
-
-Output
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Movie 1",
-        "val(total_rating)": 10,
-        "val(average_rating)": 3.333333
-      },
-      {
-        "name": "Movie 2",
-        "val(total_rating)": 12,
-        "val(average_rating)": 4
-      },
-      {
-        "name": "Movie 3",
-        "val(total_rating)": 11,
-        "val(average_rating)": 3.666667
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 
 ### Facets and Aggregation
 
 Facet values assigned to value variables can be aggregated.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   data(func: eq(name, "Alice")) {
     name
     rated @facets(r as rating) {
@@ -3203,53 +2725,15 @@ curl localhost:8080/query -XPOST -d $'{
     }
     avg(val(r))
   }
-}' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "rated": [
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 3
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 2
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          }
-        ],
-        "avg(val(r))": 3.333333
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 Note though that `r` is a map from movies to the sum of ratings on edges in the query reaching the movie.  Hence, the following does not correctly calculate the average ratings for Alice and Bob individually --- it calculates 2 times the average of both Alice and Bob's ratings.
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+
+{
   data(func: anyofterms(name, "Alice Bob")) {
     name
     rated @facets(r as rating) {
@@ -3257,83 +2741,15 @@ curl localhost:8080/query -XPOST -d $'{
     }
     avg(val(r))
   }
-}' | python -m json.tool | less
-```
-
-Output:
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "rated": [
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 3
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 2
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          }
-        ],
-        "avg(val(r))": 8.333333
-      },
-      {
-        "name": "Bob",
-        "rated": [
-          {
-            "name": "Movie 1",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 2",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          },
-          {
-            "name": "Movie 3",
-            "@facets": {
-              "_": {
-                "rating": 5
-              }
-            }
-          }
-        ],
-        "avg(val(r))": 8.333333
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 Calculating the average ratings of users requires a variable that maps users to the sum of their ratings.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+
+{
   var(func: has(~rated)) {
     num_rated as math(1)
     ~rated @facets(r as rating) {
@@ -3345,30 +2761,9 @@ curl localhost:8080/query -XPOST -d $'{
     name
     val(avg_rating)
   }
-}' | python -m json.tool | less
-```
-
-Output:
-```
-{
-  "data": {
-    "data": [
-      {
-        "name": "Alice",
-        "val(avg_rating)": 3.333333
-      },
-      {
-        "name": "Bob",
-        "val(avg_rating)": 5
-      },
-      {
-        "name": "Charlie",
-        "val(avg_rating)": 2.666667
-      }
-    ]
-  }
 }
-```
+{{</ runnable >}}
+
 
 ## K-Shortest Path Queries
 
@@ -3379,13 +2774,15 @@ By default the shortest path is returned, with `numpaths: k`, the k-shortest pat
 {{% notice "note" %}}If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.{{% /notice %}}
 
 For example:
-```
-curl localhost:8080/query -XPOST -d $'
-mutation{
-  schema {
+```sh
+curl localhost:8080/alter -XPOST -d $'
     name: string @index(exact) .
-  }
+' | python -m json.tool | less
+```
 
+```sh
+curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+{
   set {
     _:a <friend> _:b (weight=0.1) .
     _:b <friend> _:c (weight=0.2) .
@@ -3818,10 +3215,12 @@ return values.
 
 Setting up the indexing and adding data:
 ```
-mutation{
-  schema{
-    name: string @index(rune) .
-  }
+name: string @index(rune) .
+```
+
+
+```
+{
   set{
     _:ad <name> "Adam" .
     _:aa <name> "Aaron" .
@@ -3951,11 +3350,15 @@ func (t CIDRTokenizer) Tokens(value interface{}) ([]string, error) {
 }
 ```
 An example of using the tokenizer:
+
+Setting up the indexing and adding data:
 ```
-mutation{
-  schema{
-    ip: string @index(cidr) .
-  }
+ip: string @index(cidr) .
+
+```
+
+```
+{
   set{
     _:a <ip> "100.55.22.11/32" .
     _:b <ip> "100.33.81.19/32" .
@@ -4026,11 +3429,14 @@ func (t AnagramTokenizer) Tokens(value interface{}) ([]string, error) {
 }
 ```
 In action:
+
+Setting up the indexing and adding data:
 ```
-mutation{
-  schema{
-    word: string @index(anagram) .
-  }
+word: string @index(anagram) .
+```
+
+```
+{
   set{
     _:1 <word> "airmen" .
     _:2 <word> "marine" .
@@ -4119,11 +3525,14 @@ factors with a particular number.
 
 In particular, we search for numbers that contain any of the prime factors of
 15, i.e. any numbers that are divisible by either 3 or 5.
+
+Setting up the indexing and adding data:
 ```
-mutation{
-  schema{
-    num: int @index(factor) .
-  }
+num: int @index(factor) .
+```
+
+```
+{
   set{
     _:2 <num> "2"^^<xs:int> .
     _:3 <num> "3"^^<xs:int> .

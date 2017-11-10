@@ -82,9 +82,10 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*
 
 func prepare() (dir1, dir2 string, rerr error) {
 	// TODO - Stop at end and clear dir.
-	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraphzero"),
+	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"zero",
 		"-w=wz",
-		"-port", "12341",
+		"--port", "12341",
 	)
 	zero.Stdout = os.Stdout
 	if err := zero.Start(); err != nil {
@@ -92,7 +93,6 @@ func prepare() (dir1, dir2 string, rerr error) {
 	}
 	time.Sleep(4 * time.Second)
 
-	// StartDummyZero()
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -112,7 +112,6 @@ func prepare() (dir1, dir2 string, rerr error) {
 	posting.Init(edgraph.State.Pstore)
 	schema.Init(edgraph.State.Pstore)
 	worker.Init(edgraph.State.Pstore)
-	worker.Config.MyAddr = "localhost:12345"
 	worker.Config.ZeroAddr = "localhost:12341"
 	worker.Config.RaftId = 1
 	worker.StartRaftNodes(edgraph.State.WALstore, false)
@@ -1397,5 +1396,6 @@ func TestMain(m *testing.M) {
 	// Parse GQL into internal query representation.
 	r := m.Run()
 	closeAll(dir1, dir2)
+	exec.Command("killall", "-9", "dgraph").Run()
 	os.Exit(r)
 }

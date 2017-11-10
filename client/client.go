@@ -60,7 +60,10 @@ func (d *Dgraph) getLinRead() *protos.LinRead {
 	return proto.Clone(d.linRead).(*protos.LinRead)
 }
 
-// DropAll deletes all edges and schema from Dgraph.
+// Alter can be used to do the following.
+// 1. Modify the schema.
+// 2. Drop a predicate.
+// 3. Drop the database.
 func (d *Dgraph) Alter(ctx context.Context, op *protos.Operation) error {
 	dc := d.anyClient()
 	_, err := dc.Alter(ctx, op)
