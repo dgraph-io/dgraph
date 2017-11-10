@@ -54,7 +54,7 @@ func populateKeyValues(ctx context.Context, kvs []*protos.KV) error {
 	wg.Add(len(kvs))
 	for _, kv := range kvs {
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		txn.Set(kv.Key, kv.Val, kv.UserMeta[0])
+		txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0])
 		txn.CommitAt(kv.Version, func(err error) {
 			if err != nil {
 				atomic.StoreUint32(&hasError, 1)

@@ -78,7 +78,7 @@ func (w *Wal) StoreRaftId(id uint64) error {
 	defer txn.Discard()
 	var b [8]byte
 	binary.BigEndian.PutUint64(b[:], id)
-	if err := txn.Set(idKey, b[:], 0); err != nil {
+	if err := txn.Set(idKey, b[:]); err != nil {
 		return err
 	}
 	return txn.CommitAt(1, nil)
@@ -112,7 +112,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal snapshot")
 	}
-	if err := txn.Set(w.snapshotKey(gid), data, 0x00); err != nil {
+	if err := txn.Set(w.snapshotKey(gid), data); err != nil {
 		return err
 	}
 	x.Printf("Writing snapshot to WAL, metadata: %+v, len(data): %d\n", s.Metadata, len(s.Data))
@@ -158,7 +158,7 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 			return x.Wrapf(err, "wal.Store: While marshal entry")
 		}
 		k := w.entryKey(gid, e.Term, e.Index)
-		if err := txn.Set(k, data, 0); err != nil {
+		if err := txn.Set(k, data); err != nil {
 			return err
 		}
 	}
@@ -168,7 +168,7 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 		if err != nil {
 			return x.Wrapf(err, "wal.Store: While marshal hardstate")
 		}
-		if err := txn.Set(w.hardStateKey(gid), data, 0); err != nil {
+		if err := txn.Set(w.hardStateKey(gid), data); err != nil {
 			return err
 		}
 	}

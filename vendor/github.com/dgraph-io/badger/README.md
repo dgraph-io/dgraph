@@ -7,13 +7,16 @@ written in pure Go. It's meant to be a performant alternative to non-Go-based
 key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
 
 ## Project Status
-We are currently gearing up for a [v1.0 release][v1-milestone]. We recently introduced
-transactions which involved a major API change.To use the previous version of
-the APIs, please use [tag v0.8][v0.8]. This tag can be specified via the
-Go dependency tool you're using.
+Badger v1.0 was released in Nov 2017. The latest release is [v1.0.1]
 
-[v1-milestone]: https://github.com/dgraph-io/badger/issues?q=is%3Aopen+is%3Aissue+milestone%3Av1.0
-[v0.8]: /tree/v0.8
+We introduced transactions in [v0.9.0] which involved a major API change. If you have a Badger 
+datastore prior to that, please use [v0.8.1], but we strongly urge you to upgrade. Upgrading from
+both v0.8 and v0.9 will require you to [take backups](#database-backup) and restore using the new
+version.
+
+[v1.0.1]: //github.com/dgraph-io/badger/tree/v1.0.1
+[v0.8.1]: //github.com/dgraph-io/badger/tree/v0.8.1
+[v0.9.0]: //github.com/dgraph-io/badger/tree/v0.9.0
 
 ## Table of Contents
  * [Getting Started](#getting-started)
@@ -24,11 +27,12 @@ Go dependency tool you're using.
       - [Read-write transactions](#read-write-transactions)
       - [Managing transactions manually](#managing-transactions-manually)
     + [Using key/value pairs](#using-keyvalue-pairs)
+    + [Setting Time To Live(TTL) and User Metadata on Keys](#setting-time-to-livettl-and-user-metadata-on-keys)
     + [Iterating over keys](#iterating-over-keys)
       - [Prefix scans](#prefix-scans)
       - [Key-only iteration](#key-only-iteration)
     + [Garbage Collection](#garbage-collection)
-    + [Database backups](#database-backups)
+    + [Database backup](#database-backup)
     + [Statistics](#statistics)
   * [Resources](#resources)
     + [Blog Posts](#blog-posts)
@@ -148,7 +152,7 @@ if err != nil {
 defer txn.Discard()
 
 // Use the transaction...
-err := txn.Set([]byte("answer"), []byte("42"), 0)
+err := txn.Set([]byte("answer"), []byte("42"))
 if err != nil {
     return err
 }
@@ -176,7 +180,7 @@ To save a key/value pair, use the `Txn.Set()` method:
 
 ```go
 err := db.Update(func(txn *badger.Txn) error {
-  err := txn.Set([]byte("answer"), []byte("42"), 0)
+  err := txn.Set([]byte("answer"), []byte("42"))
   return err
 })
 ```
@@ -207,14 +211,25 @@ then you must use `copy()` to copy it to another byte slice.
 
 Use the `Txn.Delete()` method to delete a key.
 
+### Setting Time To Live(TTL) and User Metadata on Keys
+Badger allows setting an optional Time to Live (TTL) value on keys. Once the TTL has
+elapsed, the key will no longer be retrievable and will be eligible for garbage
+collection. A TTL can be set as a `time.Duration` value using the `Txn.SetWithTTL()`
+API method.
+
+An optional user metadata value can be set on each key. A user metadata value
+is represented by a single byte. It can be used to set certain bits along
+with the key to aid in interpreting or decoding the key-value pair. User
+metadata can be set using the `Txn.SetWithMeta()` API method.
+
 ### Iterating over keys
 To iterate over keys, we can use an `Iterator`, which can be obtained using the
 `Txn.NewIterator()` method.
 
 
 ```go
-err := db.View(func(txn *.Tx) error {
-  opts := DefaultIteratorOptions
+err := db.View(func(txn *badger.Txn) error {
+  opts := badger.DefaultIteratorOptions
   opts.PrefetchSize = 10
   it := txn.NewIterator(opts)
   for it.Rewind(); it.Valid(); it.Next() {
@@ -269,7 +284,7 @@ during an iteration, by calling `item.Value()` only when required.
 
 ```go
 err := db.View(func(txn *badger.Txn) error {
-  opts := DefaultIteratorOptions
+  opts := badger.DefaultIteratorOptions
   opts.PrefetchValues = false
   it := txn.NewIterator(opts)
   for it.Rewind(); it.Valid(); it.Next() {
@@ -308,9 +323,34 @@ before invoking this method.
 
 
 ### Database backup
-Database backup is an [open issue][bak-issue] for v1.0 and will be coming soon.
+There are two public API methods `DB.Backup()` and `DB.Load()` which can be
+used to do online backups and restores. Badger v0.9 provides a CLI tool
+`badger`, which can do offline backup/restore. Make sure you have `$GOPATH/bin`
+in your PATH to use this tool.
 
-[bak-issue]: https://github.com/dgraph-io/badger/issues/135
+The command below will create a version-agnostic backup of the database, to a
+file `badger.bak` in the current working directory
+
+```
+badger backup --dir <path/to/badgerdb>
+```
+
+To restore `badger.bak` in the current working directory to a new database:
+
+```
+badger restore --dir <path/to/badgerdb>
+```
+
+See `badger --help` for more details.
+
+If you have a Badger database that was created using v0.8 (or below), you can
+use the `badger_backup` tool provided in v0.8.1, and then restore it using the
+command above to upgrade your database to work with the latest version.
+
+```
+badger_backup --dir <path/to/badgerdb> --backup-file badger.bak
+```
+
 
 ### Statistics
 Badger records metrics using the [expvar] package, which is included in the Go
@@ -359,6 +399,7 @@ Values in SSD-conscious Storage][wisckey]_.
 | Pure Go (no Cgo)    | Yes                                          | No                            | Yes       |
 | Transactions        | Yes, ACID, concurrent with SSI<sup>3</sup> | Yes (but non-ACID)            | Yes, ACID |
 | Snapshots           | Yes                                           | Yes                           | Yes       |
+| TTL support         | Yes                                           | Yes                           | No       |
 
 <sup>1</sup> The [WISCKEY paper][wisckey] (on which Badger is based) saw big
 wins with separating values from keys, significantly reducing the write

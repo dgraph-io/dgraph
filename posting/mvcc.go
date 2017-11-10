@@ -239,7 +239,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 
 		val, err := pl.Marshal()
 		x.Check(err)
-		if err = txn.Set([]byte(d.key), val, meta); err != nil {
+		if err = txn.SetWithMeta([]byte(d.key), val, meta); err != nil {
 			return err
 		}
 		i++

@@ -144,11 +144,7 @@ func (b *Builder) addHelper(key []byte, v y.ValueStruct) {
 	b.buf.Write(hbuf[:])
 	b.buf.Write(diffKey) // We only need to store the key difference.
 
-	// This should be kept in sync with ValueStruct encode function.
-	b.buf.WriteByte(v.Meta) // Meta byte precedes actual value.
-	b.buf.WriteByte(v.UserMeta)
-	b.buf.Write(v.Value)
-
+	v.EncodeTo(b.buf)
 	b.counter++ // Increment number of keys added for this current block.
 }
 
