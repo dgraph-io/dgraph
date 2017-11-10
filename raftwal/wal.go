@@ -132,7 +132,15 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 		}
 		newk := make([]byte, len(key))
 		copy(newk, key)
-		if err := txn.Delete(newk); err != nil {
+		if err := txn.Delete(newk); err == badger.ErrTxnTooBig {
+			if err := txn.CommitAt(1, nil); err != nil {
+				return err
+			}
+			txn = w.wals.NewTransactionAt(1, true)
+			if err := txn.Delete(newk); err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 	}
