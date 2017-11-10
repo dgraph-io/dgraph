@@ -1704,6 +1704,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if err != nil {
 				return out, err
 			}
+			// Expand the untagged string, or any language if the untagged
+			// version doesn't exist.
 			child.Params.Langs = []string{"."}
 		}
 
