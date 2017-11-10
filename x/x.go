@@ -52,6 +52,10 @@ const (
 	GrpcMaxSize             = 256 << 20
 	// The attr used to store list of predicates for a node.
 	PredicateListAttr = "_predicate_"
+
+	PortInternal = 7080
+	PortHTTP     = 8080
+	PortGrpc     = 9080
 )
 
 var (

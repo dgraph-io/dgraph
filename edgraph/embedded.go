@@ -27,7 +27,6 @@ import (
 func GetDefaultEmbeddedConfig() Options {
 	config := DefaultConfig
 	config.InMemoryComm = true
-	config.BaseWorkerPort = 0
 	config.MyAddr = ""
 	config.ZeroAddr = ""
 

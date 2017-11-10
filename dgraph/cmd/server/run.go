@@ -50,12 +50,8 @@ import (
 )
 
 var (
-	baseHttpPort int
-	baseGrpcPort int
-	bindall      bool
-
-	exposeTrace bool
-
+	bindall          bool
+	exposeTrace      bool
 	customTokenizers string
 )
 
@@ -76,8 +72,6 @@ func init() {
 	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
 		"Don't allow mutations on this server.")
 
-	flag.IntVar(&config.BaseWorkerPort, "workerport", defaults.BaseWorkerPort,
-		"Port used by worker for internal communication.")
 	flag.StringVar(&config.ExportPath, "export", defaults.ExportPath,
 		"Folder in which to store exports.")
 	flag.IntVar(&config.NumPendingProposals, "pending_proposals", defaults.NumPendingProposals,
@@ -106,11 +100,9 @@ func init() {
 		"enable debug mode for more debug information")
 
 	// Useful for running multiple servers on the same machine.
-	flag.IntVar(&x.Config.PortOffset, "port_offset", 0,
-		"Value added to all listening port numbers.")
+	flag.IntVarP(&x.Config.PortOffset, "port_offset", "o", 0,
+		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
-	flag.IntVar(&baseGrpcPort, "grpc_port", 9080, "Port to run gRPC service on.")
 	flag.BoolVar(&bindall, "bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.BoolVar(&exposeTrace, "expose_trace", false,
@@ -153,11 +145,11 @@ func setupCustomTokenizers() {
 }
 
 func httpPort() int {
-	return x.Config.PortOffset + baseHttpPort
+	return x.Config.PortOffset + x.PortHTTP
 }
 
 func grpcPort() int {
-	return x.Config.PortOffset + baseGrpcPort
+	return x.Config.PortOffset + x.PortGrpc
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
