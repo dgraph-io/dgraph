@@ -434,7 +434,6 @@ export function processGraph(
 
         if (facetPred === obj.src.pred) {
           edgeAttributes["facets"][facetKey] = val;
-          console.log(edgeAttributes);
         } else {
           properties["facets"][`${facetPred}[${facetKey}]`] = val;
         }
@@ -550,7 +549,6 @@ export function processGraph(
         arrows: "to"
       };
 
-      console.log("edge", e);
       edges.push(e);
     }
   }
