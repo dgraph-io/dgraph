@@ -66,7 +66,7 @@ func TestFacets(t *testing.T) {
 	`, `
 		{"q": [ {
 			"name": "Alice",
-			"name:middle_initial": "J"
+			"name|middle_initial": "J"
 		} ]}
 	`))
 
@@ -77,7 +77,7 @@ func TestFacets(t *testing.T) {
 	`, `
 		{"q": [ {
 			"boss": [ {
-				"boss:since": "2017-04-26T00:00:00Z"
+				"boss|since": "2017-04-26T00:00:00Z"
 			} ]
 		} ]}
 	`))
@@ -89,7 +89,7 @@ func TestFacets(t *testing.T) {
 	`, `
 		{"q": [ {
 			"~boss": [ {
-				"~boss:since": "2017-04-26T00:00:00Z"
+				"~boss|since": "2017-04-26T00:00:00Z"
 			} ]
 		} ]}
 	`))
