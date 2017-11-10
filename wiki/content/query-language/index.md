@@ -367,23 +367,26 @@ Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text sear
 
 Following table contains all supported languages and corresponding country-codes.
 
-| Language    | Country Code |
-|:-----------:|:------------:|
-| Danish      | da           |
-| Dutch       | nl           |
-| English     | en           |
-| Finnish     | fi           |
-| French      | fr           |
-| German      | de           |
-| Hungarian   | hu           |
-| Italian     | it           |
-| Norwegian   | no           |
-| Portuguese  | pt           |
-| Romanian    | ro           |
-| Russian     | ru           |
-| Spanish     | es           |
-| Swedish     | sv           |
-| Turkish     | tr           |
+| Language      | Country Code   |
+| :-----------: | :------------: |
+| Danish        | da             |
+| Dutch         | nl             |
+| English       | en             |
+| Finnish       | fi             |
+| French        | fr             |
+| German        | de             |
+| Hungarian     | hu             |
+| Italian       | it             |
+| Norwegian     | no             |
+| Portuguese    | pt             |
+| Romanian      | ro             |
+| Russian       | ru             |
+| Spanish       | es             |
+| Swedish       | sv             |
+| Turkish       | tr             |
+| Chinese       | zh             |
+| Japanese      | ja             |
+| Korean        | ko             |
 
 
 Query Example: All names that have `run`, `running`, etc and `man`.  Stop word removal eliminates `the` and `maybe`
