@@ -437,14 +437,14 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 
 	type Person struct {
 		Name       string   `json:"name,omitempty"`
-		NameOrigin string   `json:"name:origin,omitempty"`
+		NameOrigin string   `json:"name|origin,omitempty"`
 		Friends    []Person `json:"friend,omitempty"`
 
 		// These are facets on the friend edge.
-		Since  time.Time `json:"friend:since,omitempty"`
-		Family string    `json:"friend:family,omitempty"`
-		Age    float64   `json:"friend:age,omitempty"`
-		Close  bool      `json:"friend:close,omitempty"`
+		Since  time.Time `json:"friend|since,omitempty"`
+		Family string    `json:"friend|family,omitempty"`
+		Age    float64   `json:"friend|age,omitempty"`
+		Close  bool      `json:"friend|close,omitempty"`
 
 		School []School `json:"school,omitempty"`
 	}

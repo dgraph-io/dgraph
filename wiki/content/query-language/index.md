@@ -2531,7 +2531,7 @@ The syntax `@facets(facet-name)` is used to query facet data. For Alice the `sin
 {{</ runnable >}}
 
 
-Facets are retuned at the same level as the corresponding edge and have keys like edge:facet.
+Facets are retuned at the same level as the corresponding edge and have keys like edge|facet.
 
 All facets on an edge are queried with `@facets`.
 
@@ -2581,8 +2581,8 @@ A query for friends and the facet `close` with `@facets(close)`.
 {{</ runnable >}}
 
 
-For uid edges like `friend`, facets go to the corresponding child under the key edge:facet. In the above
-example you can see that the `close` facet on the edge between Alice and Bob appears with the key `friend:close`
+For uid edges like `friend`, facets go to the corresponding child under the key edge|facet. In the above
+example you can see that the `close` facet on the edge between Alice and Bob appears with the key `friend|close`
 along with Bob's results.
 
 {{< runnable >}}
@@ -2598,7 +2598,7 @@ along with Bob's results.
 {{</ runnable >}}
 
 Bob has a `car` and it has a facet `since`, which, in the results, is part of the same object as Bob
-under the key car:since.
+under the key car|since.
 Also, the `close` relationship between Bob and Alice is part of Bob's output object.
 Charlie does not have `car` edge and thus only UID facets.
 
