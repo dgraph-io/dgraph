@@ -147,9 +147,9 @@ func defineAnalyzer(lang string) {
 	x.Check(err)
 }
 
-// full text search analyzer - does Chinese/Japanese/Korean style bigram
-// tokenization. It's language agnostic though, so doesn't do stemming or stop
-// words.
+// Full text search analyzer - does Chinese/Japanese/Korean style bigram
+// tokenization. It's language unaware (so doesn't do stemming or stop
+// words), but works OK in some contexts.
 func defineCJKAnalyzer(lang string) {
 	ln := countryCode(lang)
 	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(ln), map[string]interface{}{
