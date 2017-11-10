@@ -41,6 +41,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	FacetDelimeter = "|"
+)
+
 /*
  * QUERY:
  * Let's take this query from GraphQL as example:
@@ -435,7 +439,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
 					for _, f := range fs.Facets {
-						uc.AddValue(fmt.Sprintf("%s:%s", fieldName, f.Key),
+						uc.AddValue(fieldName+FacetDelimeter+f.Key,
 							facets.ValFor(f))
 					}
 				}
@@ -469,7 +473,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					dst.AddValue(fmt.Sprintf("%s:%s", fieldName, f.Key),
+					dst.AddValue(fieldName+FacetDelimeter+f.Key,
 						facets.ValFor(f))
 				}
 			}
