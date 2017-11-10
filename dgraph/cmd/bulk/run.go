@@ -46,7 +46,7 @@ func init() {
 	flag.StringVar(&opt.TmpDir, "tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
-	flag.IntVar(&opt.NumGoroutines, "j", runtime.NumCPU(),
+	flag.IntVarP(&opt.NumGoroutines, "num_go_routines", "j", runtime.NumCPU(),
 		"Number of worker threads to use (defaults to the number of logical CPUs)")
 	flag.Int64Var(&opt.MapBufSize, "mapoutput_mb", 64,
 		"The estimated size of each map file output. Increasing this increases memory usage.")
@@ -73,8 +73,8 @@ func init() {
 			"cluster. Increasing this potentially decreases the reduce stage runtime by using "+
 			"more parallelism, but increases memory usage.")
 	flag.BoolVar(&opt.Version, "version", false, "Prints the version of dgraph-bulk-loader.")
-	flag.BoolVar(&opt.StoreXids, "x", false, "Generate an xid edge for each node.")
-	flag.StringVar(&opt.ZeroAddr, "z", "localhost:8888", "gRPC address for dgraphzero")
+	flag.BoolVarP(&opt.StoreXids, "store_xids", "x", false, "Generate an xid edge for each node.")
+	flag.StringVarP(&opt.ZeroAddr, "zero_addr", "z", "localhost:8888", "gRPC address for dgraphzero")
 }
 
 var BulkCmd = &cobra.Command{

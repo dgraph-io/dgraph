@@ -74,12 +74,12 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	s.checkFatal(s.bulkCluster.StartZeroOnly())
 
 	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
-		"--r", rdfFile,
-		"--s", schemaFile,
+		"-r", rdfFile,
+		"-s", schemaFile,
 		"--http", ":"+freePort(),
-		"--z", ":"+s.bulkCluster.zeroPort,
-		"--j=1",
-		"--x=true",
+		"-z", ":"+s.bulkCluster.zeroPort,
+		"-j=1",
+		"-x=true",
 	)
 	bulkCmd.Stdout = os.Stdout
 	bulkCmd.Stderr = os.Stdout

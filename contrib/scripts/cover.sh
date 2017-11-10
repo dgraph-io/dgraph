@@ -25,7 +25,7 @@ for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki|customtok'); do
   # if [ $TRAVIS_BRANCH =~ master|release\/ ]; then
   #  go test -race -covermode=atomic -coverprofile=$TMP $PKG
  # else
-    go test -covermode=atomic -coverprofile=$TMP $PKG
+    go test -v -covermode=atomic -coverprofile=$TMP $PKG
  # fi
   tail -n +2 $TMP >> $OUT
 done
