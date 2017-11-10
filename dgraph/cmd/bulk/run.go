@@ -37,9 +37,9 @@ var opt options
 
 func init() {
 	flag := BulkCmd.Flags()
-	flag.StringVar(&opt.RDFDir, "r", "",
+	flag.StringVarP(&opt.RDFDir, "rdfs", "r", "",
 		"Directory containing *.rdf or *.rdf.gz files to load.")
-	flag.StringVar(&opt.SchemaFile, "s", "",
+	flag.StringVarP(&opt.SchemaFile, "schema_file", "s", "",
 		"Location of schema file to load.")
 	flag.StringVar(&opt.DgraphsDir, "out", "out",
 		"Location to write the final dgraph data directories.")

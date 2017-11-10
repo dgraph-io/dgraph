@@ -626,17 +626,11 @@ func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.
 
 	typ, err := schema.State().TypeOf(attr)
 	if err != nil {
-		if q.UidList == nil {
-			return out, nil
-		}
-		// Schema not defined, so lets add dummy values and return.
-		// Adding dummy values is important because the code assumes that len(SrcUids) equals
-		// len(uidMatrix)
-		for i := 0; i < len(q.UidList.Uids); i++ {
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
-		}
-		return out, nil
+		// All schema checks are done before this, this type is only used to
+		// convert it to schema type before returning.
+		// Schema type won't be present only if there is no data for that predicate
+		// or if we load through bulk loader.
+		typ = types.DefaultID
 	}
 	srcFn.atype = typ
 
