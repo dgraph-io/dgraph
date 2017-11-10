@@ -163,7 +163,6 @@ type SubGraph struct {
 	uidMatrix    []*protos.List
 	facetsMatrix []*protos.FacetsList
 	ExpandPreds  []*protos.ValueList
-	expandedAll  bool
 	GroupbyRes   *groupResults
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
@@ -976,12 +975,6 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
 	}
-	if sg.expandedAll {
-		x.AssertTrue(len(sg.Params.Langs) == 0) // TODO: Is this assertion valid?
-		// Since expand(_all_) was used, we want to expand at least 1 lang of
-		// the predicate.
-		out.Langs = []string{"."}
-	}
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
 	}
@@ -1711,7 +1704,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if err != nil {
 				return out, err
 			}
-			child.expandedAll = true
+			child.Params.Langs = []string{"."}
 		}
 
 		up := uniquePreds(child.ExpandPreds)
