@@ -113,7 +113,7 @@ func writeToBadger(t *testing.T, pred string, startIdx int, count int, ps *badge
 			t.Errorf("Error while marshing pl")
 		}
 		err = ps.Update(func(txn *badger.Txn) error {
-			return txn.Set(k, data, 0x00)
+			return txn.Set(k, data)
 		})
 
 		if err != nil {

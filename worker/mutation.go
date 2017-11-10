@@ -205,7 +205,7 @@ func updateSchema(attr string, s protos.SchemaUpdate, index uint64) error {
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
-	if err := txn.Set(x.SchemaKey(attr), data, 0x00); err != nil {
+	if err := txn.Set(x.SchemaKey(attr), data); err != nil {
 		return err
 	}
 	return txn.CommitAt(1, nil)

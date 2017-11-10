@@ -90,7 +90,7 @@ func (e *EmbeddedUidAllocator) AssignUids(ctx context.Context,
 		n := binary.PutUvarint(val, e.maxLeaseId)
 		txn := e.pstore.NewTransactionAt(1, true)
 		defer txn.Discard()
-		err := txn.Set([]byte("uid_lease"), val[:n], 0x01)
+		err := txn.SetWithMeta([]byte("uid_lease"), val[:n], 0x01)
 		if err == nil {
 			err = txn.CommitAt(1, nil)
 		}

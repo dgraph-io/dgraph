@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger/y"
 	farm "github.com/dgryski/go-farm"
@@ -183,38 +184,72 @@ type Txn struct {
 	db        *DB
 	callbacks []func()
 	discarded bool
+
+	size  int64
+	count int64
 }
 
-// Set sets the provided value for a given key. If key is not present, it is created.
+func (txn *Txn) checkSize(e *entry) error {
+	count := txn.count + 1
+	// Extra bytes for version in key.
+	size := txn.size + int64(e.estimateSize(txn.db.opt.ValueThreshold)) + 10 
+	if count >= txn.db.opt.maxBatchCount || size >= txn.db.opt.maxBatchSize {
+		return ErrTxnTooBig
+	}
+	txn.count, txn.size = count, size
+	return nil
+}
+
+// Set adds a key-value pair to the database.
 //
-// Along with key and value, Set can also take an optional userMeta byte. This byte is stored
-// alongside the key, and can be used as an aid to interpret the value or store other contextual
-// bits corresponding to the key-value pair.
-//
-// This would fail with ErrReadOnlyTxn if update flag was set to false when creating the
+// It will return ErrReadOnlyTxn if update flag was set to false when creating the
 // transaction.
-func (txn *Txn) Set(key, val []byte, userMeta byte) error {
-	if !txn.update {
-		return ErrReadOnlyTxn
-	} else if txn.discarded {
-		return ErrDiscardedTxn
-	} else if len(key) == 0 {
-		return ErrEmptyKey
-	} else if len(key) > maxKeySize {
-		return exceedsMaxKeySizeError(key)
-	} else if int64(len(val)) > txn.db.opt.ValueLogFileSize {
-		return exceedsMaxValueSizeError(val, txn.db.opt.ValueLogFileSize)
-	}
-
-	fp := farm.Fingerprint64(key) // Avoid dealing with byte arrays.
-	txn.writes = append(txn.writes, fp)
-
+func (txn *Txn) Set(key, val []byte) error {
 	e := &entry{
-		Key:      key,
-		Value:    val,
-		UserMeta: userMeta,
+		Key:   key,
+		Value: val,
 	}
-	txn.pendingWrites[string(key)] = e
+	return txn.setEntry(e)
+}
+
+// SetWithMeta adds a key-value pair to the database, along with a metadata
+// byte. This byte is stored alongside the key, and can be used as an aid to
+// interpret the value or store other contextual bits corresponding to the
+// key-value pair.
+func (txn *Txn) SetWithMeta(key, val []byte, meta byte) error {
+	e := &entry{Key: key, Value: val, UserMeta: meta}
+	return txn.setEntry(e)
+}
+
+// SetWithTTL adds a key-value pair to the database, along with a time-to-live
+// (TTL) setting. A key stored with with a TTL would automatically expire after
+// the time has elapsed , and be eligible for garbage collection.
+func (txn *Txn) SetWithTTL(key, val []byte, dur time.Duration) error {
+	expire := time.Now().Add(dur).Unix()
+	e := &entry{Key: key, Value: val, ExpiresAt: uint64(expire)}
+	return txn.setEntry(e)
+}
+
+func (txn *Txn) setEntry(e *entry) error {
+	switch {
+	case !txn.update:
+		return ErrReadOnlyTxn
+	case txn.discarded:
+		return ErrDiscardedTxn
+	case len(e.Key) == 0:
+		return ErrEmptyKey
+	case len(e.Key) > maxKeySize:
+		return exceedsMaxKeySizeError(e.Key)
+	case int64(len(e.Value)) > txn.db.opt.ValueLogFileSize:
+		return exceedsMaxValueSizeError(e.Value, txn.db.opt.ValueLogFileSize)
+	}
+	if err := txn.checkSize(e); err != nil {
+		return err
+	}
+
+	fp := farm.Fingerprint64(e.Key) // Avoid dealing with byte arrays.
+	txn.writes = append(txn.writes, fp)
+	txn.pendingWrites[string(e.Key)] = e
 	return nil
 }
 
@@ -232,13 +267,17 @@ func (txn *Txn) Delete(key []byte) error {
 		return exceedsMaxKeySizeError(key)
 	}
 
+	e := &entry{
+		Key:  key,
+		meta: bitDelete,
+	}
+	if err := txn.checkSize(e); err != nil {
+		return err
+	}
+
 	fp := farm.Fingerprint64(key) // Avoid dealing with byte arrays.
 	txn.writes = append(txn.writes, fp)
 
-	e := &entry{
-		Key:  key,
-		Meta: bitDelete,
-	}
 	txn.pendingWrites[string(key)] = e
 	return nil
 }
@@ -256,7 +295,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 	if txn.update {
 		if e, has := txn.pendingWrites[string(key)]; has && bytes.Equal(key, e.Key) {
 			// Fulfill from cache.
-			item.meta = e.Meta
+			item.meta = e.meta
 			item.val = e.Value
 			item.userMeta = e.UserMeta
 			item.key = key
@@ -279,7 +318,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 	if vs.Value == nil && vs.Meta == 0 {
 		return nil, ErrKeyNotFound
 	}
-	if (vs.Meta & bitDelete) != 0 {
+	if isDeletedOrExpired(vs) {
 		return nil, ErrKeyNotFound
 	}
 
@@ -354,13 +393,13 @@ func (txn *Txn) Commit(callback func(error)) error {
 		// Suffix the keys with commit ts, so the key versions are sorted in
 		// descending order of commit timestamp.
 		e.Key = y.KeyWithTs(e.Key, commitTs)
-		e.Meta |= bitTxn
+		e.meta |= bitTxn
 		entries = append(entries, e)
 	}
 	e := &entry{
 		Key:   y.KeyWithTs(txnKey, commitTs),
 		Value: []byte(strconv.FormatUint(commitTs, 10)),
-		Meta:  bitFinTxn,
+		meta:  bitFinTxn,
 	}
 	entries = append(entries, e)
 
@@ -399,6 +438,8 @@ func (db *DB) NewTransaction(update bool) *Txn {
 		update: update,
 		db:     db,
 		readTs: db.orc.readTs(),
+		count:  1,                       // One extra entry for BitFin.
+		size:   int64(len(txnKey) + 10), // Some buffer for the extra entry.
 	}
 	if update {
 		txn.pendingWrites = make(map[string]*entry)

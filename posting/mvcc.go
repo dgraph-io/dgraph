@@ -239,7 +239,15 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 
 		val, err := pl.Marshal()
 		x.Check(err)
-		if err = txn.Set([]byte(d.key), val, meta); err != nil {
+		if err = txn.SetWithMeta([]byte(d.key), val, meta); err == badger.ErrTxnTooBig {
+			if err := txn.CommitAt(commitTs, nil); err != nil {
+				return err
+			}
+			txn = pstore.NewTransactionAt(commitTs, true)
+			if err := txn.SetWithMeta([]byte(d.key), val, meta); err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 		i++

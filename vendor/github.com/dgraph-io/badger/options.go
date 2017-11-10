@@ -106,7 +106,3 @@ var DefaultOptions = Options{
 	ValueLogFileSize: 1 << 30,
 	ValueThreshold:   20,
 }
-
-func (opt *Options) estimateSize(e *entry) int {
-	return e.estimateSize(opt.ValueThreshold)
-}

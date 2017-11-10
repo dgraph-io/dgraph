@@ -78,7 +78,6 @@ GZIP=-n tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashbo
 checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
 echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
 
-# We're in /tmp directory.
-docker build -t dgraph/dgraph:nightly .
+docker build -t dgraph/dgraph:nightly -f $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/Dockerfile .
 
 rm -Rf dgraph-build

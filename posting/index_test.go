@@ -248,8 +248,8 @@ func TestRebuildIndex(t *testing.T) {
 
 	{
 		txn := ps.NewTransactionAt(1, true)
-		require.NoError(t, txn.Set(x.IndexKey("name2", "wrongname21"), []byte("nothing"), 0x00))
-		require.NoError(t, txn.Set(x.IndexKey("name2", "wrongname22"), []byte("nothing"), 0x00))
+		require.NoError(t, txn.Set(x.IndexKey("name2", "wrongname21"), []byte("nothing")))
+		require.NoError(t, txn.Set(x.IndexKey("name2", "wrongname22"), []byte("nothing")))
 		require.NoError(t, txn.CommitAt(1, nil))
 	}
 
