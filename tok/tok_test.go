@@ -211,7 +211,7 @@ func TestGetTextTokensInvalidLang(t *testing.T) {
 // output is correct (and adding it to the test), with some verification using
 // Google translate.
 
-func TestFullTextTokenizerChinese(t *testing.T) {
+func TestFullTextTokenizerCJKChinese(t *testing.T) {
 	tokenizer, has := GetTokenizer(FtsTokenizerName("zh"))
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
@@ -236,7 +236,7 @@ func TestFullTextTokenizerChinese(t *testing.T) {
 	checkSortedAndUnique(t, got)
 }
 
-func TestFullTextTokenizerKorean(t *testing.T) {
+func TestFullTextTokenizerCJKKorean(t *testing.T) {
 	tokenizer, has := GetTokenizer(FtsTokenizerName("ko"))
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
@@ -256,7 +256,7 @@ func TestFullTextTokenizerKorean(t *testing.T) {
 	checkSortedAndUnique(t, got)
 }
 
-func TestFullTextTokenizerJapanese(t *testing.T) {
+func TestFullTextTokenizerCJKJapanese(t *testing.T) {
 	tokenizer, has := GetTokenizer(FtsTokenizerName("ja"))
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
