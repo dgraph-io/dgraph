@@ -131,6 +131,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "name", 1001, "Bob", nil)
 	addEdgeToValue(t, "name", 1002, "Matt", nil)
 	addEdgeToValue(t, "name", 1003, "John", nil)
+	addEdgeToValue(t, "nick_name", 5010, "Two Terms", nil)
 
 	addEdgeToValue(t, "alias", 23, "Zambo Alice", nil)
 	addEdgeToValue(t, "alias", 24, "John Alice", nil)
@@ -5338,6 +5339,21 @@ func TestLangFilterMismatch6(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
+func TestEqWithTerm(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func:eq(nick_name, "Two Terms")) {
+				uid
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x1392"}]}}`,
+		js)
+}
+
 func TestLangLossyIndex1(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -5480,6 +5496,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
+		{Predicate: "nick_name", Type: "string"},
 		{Predicate: "royal_title", Type: "string"},
 		{Predicate: "noindex_name", Type: "string"},
 		{Predicate: "lossy", Type: "string"},
@@ -5584,6 +5601,7 @@ friend                         : uid @reverse @count .
 geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
+nick_name                      : string @index(term) .
 royal_title                    : string @index(hash, term, fulltext) .
 noindex_name                   : string .
 school                         : uid @count .
