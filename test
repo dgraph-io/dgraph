@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function run {
-  go test -v -short=true $@ |\
+  go test -short=true $@ |\
 		GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' |\
 		GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' |\
 		GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
@@ -12,7 +12,7 @@ function run {
 set -o pipefail
 echo
 echo "Running tests. Ignoring vendor folder."
-run "$(go list ./... | grep -v -E 'vendor|cmd|contrib|wiki|customtok')"
+run "$(go list ./... | grep -v -E 'cmd|contrib|wiki|customtok')"
 # Exit if the previous command failed.
 if [ $? != 0 ]; then
     exit 1
@@ -20,4 +20,4 @@ fi
 
 echo
 echo "Running tests in cmd directory."
-run "$(go list ./... | grep -v -E 'vendor|contrib' | grep cmd)"
+run "$(go list ./... | grep -v -E 'contrib' | grep cmd)"

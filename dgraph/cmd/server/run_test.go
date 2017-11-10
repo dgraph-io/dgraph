@@ -1336,7 +1336,7 @@ func TestDropAll(t *testing.T) {
 func TestRecurseExpandAll(t *testing.T) {
 	var q1 = `
 	{
-		recurse(func:anyofterms(name, "Alica")) {
+		me(func:anyofterms(name, "Alica")) @recurse {
   			expand(_all_)
 		}
 	}
@@ -1365,7 +1365,7 @@ func TestRecurseExpandAll(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"recurse":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
 }
 
 func TestIllegalCountInQueryFn(t *testing.T) {
