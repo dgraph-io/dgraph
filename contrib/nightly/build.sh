@@ -80,7 +80,7 @@ echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
 
 # docker command doesn't work on osx
 if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-  docker build -t dgraph/dgraph:nightly -f $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/Dockerfile .
+  docker build -t dgraph/dgraph:master -f $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/Dockerfile .
 fi
 
 rm -Rf dgraph-build

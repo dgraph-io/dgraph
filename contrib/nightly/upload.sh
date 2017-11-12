@@ -108,8 +108,8 @@ else
 fi
 
 DGRAPH=$GOPATH/src/github.com/dgraph-io/dgraph
-BUILD_DIR=$DGRAPH/contrib
-source ${BUILD_DIR}/nightly/github.sh
+BUILD_DIR=$DGRAPH/contrib/nightly
+source ${BUILD_DIR}/github.sh
 
 DGRAPH_REPO="dgraph-io/dgraph"
 DGRAPH_VERSION=$(get_version)
@@ -259,9 +259,9 @@ upload_docker_image() {
 }
 
 pushd $DGRAPH > /dev/null
-contrib/releases/build.sh $ASSET_SUFFIX
+$contrib/build.sh $ASSET_SUFFIX
 if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-	contrib/releases/build-windows.sh $ASSET_SUFFIX
+	$contrib/build-windows.sh $ASSET_SUFFIX
 fi
 
 if [[ $DOCKER_TAG == "" ]]; then
