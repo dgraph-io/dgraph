@@ -2,12 +2,16 @@ package xidmap
 
 import (
 	"container/list"
+	"context"
 	"encoding/binary"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"google.golang.org/grpc"
 )
 
 // Options controls the performance characteristics of the XidMap.
@@ -25,10 +29,10 @@ type Options struct {
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
-	shards []shard
-	kv     *badger.DB
-	up     UidProvider
-	opt    Options
+	shards    []shard
+	kv        *badger.DB
+	opt       Options
+	newRanges chan rangeResponse
 
 	noMapMu sync.Mutex
 	noMap   block // block for allocating uids without an xid to uid mapping
@@ -55,49 +59,65 @@ type block struct {
 	start, end uint64
 }
 
-func (b *block) assign(up UidProvider) (uint64, error) {
+func (b *block) assign(ch <-chan rangeResponse) uint64 {
 	if b.end == 0 || b.start > b.end {
-		start, end, err := up.ReserveUidRange()
-		if err != nil {
-			return 0, err
-		}
-		b.start, b.end = start, end
+		newRange := <-ch
+		b.start, b.end = newRange.start, newRange.end
 	}
 	x.AssertTrue(b.start <= b.end)
 	uid := b.start
 	b.start++
-	return uid, nil
+	return uid
 }
 
-// UidProvider allows the XidMap to obtain ranges of uids that it can then
-// allocate freely. Implementations should expect to be called concurrently.
-type UidProvider interface {
-	// ReserveUidRange should give a range of new uids from start to end
-	// (start and end are both inclusive).
-	ReserveUidRange() (start, end uint64, err error)
+type rangeResponse struct {
+	start uint64
+	end   uint64
 }
 
 // New creates an XidMap with given badger and uid provider.
-func New(kv *badger.DB, up UidProvider, opt Options) *XidMap {
+func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 	x.AssertTrue(opt.LRUSize != 0)
 	x.AssertTrue(opt.NumShards != 0)
 	xm := &XidMap{
-		shards: make([]shard, opt.NumShards),
-		kv:     kv,
-		up:     up,
-		opt:    opt,
+		shards:    make([]shard, opt.NumShards),
+		kv:        kv,
+		opt:       opt,
+		newRanges: make(chan rangeResponse),
 	}
 	for i := range xm.shards {
 		xm.shards[i].elems = make(map[string]*list.Element)
 		xm.shards[i].queue = list.New()
 		xm.shards[i].xm = xm
 	}
+	go func() {
+		zc := protos.NewZeroClient(zero)
+		const initBackoff = 10 * time.Millisecond
+		const maxBackoff = 30 * time.Second
+		backoff := initBackoff
+		for {
+			assigned, err := zc.AssignUids(context.Background(), &protos.Num{Val: 10000})
+			if err != nil {
+				x.Printf("Error while getting lease: %v\n", err)
+				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+				time.Sleep(backoff)
+			} else {
+				backoff = initBackoff
+				xm.newRanges <- rangeResponse{
+					start: assigned.GetStartId(),
+					end:   assigned.GetEndId(),
+				}
+			}
+		}
+	}()
 	return xm
 }
 
-// AssignUid creates new or looks up existing XID to UID mappings. Any errors
-// returned originate from the UidProvider.
-func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
+// AssignUid creates new or looks up existing XID to UID mappings.
+func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool) {
 	fp := farm.Fingerprint64([]byte(xid))
 	idx := fp % uint64(m.opt.NumShards)
 	sh := &m.shards[idx]
@@ -108,7 +128,7 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	var ok bool
 	uid, ok = sh.lookup(xid)
 	if ok {
-		return uid, false, nil
+		return uid, false
 	}
 
 	x.Check(m.kv.View(func(txn *badger.Txn) error {
@@ -128,19 +148,19 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool, err error) {
 	}))
 	if ok {
 		sh.add(xid, uid, true)
-		return uid, false, nil
+		return uid, false
 	}
 
-	uid, err = sh.assign(sh.xm.up)
+	uid = sh.assign(m.newRanges)
 	sh.add(xid, uid, false)
-	return uid, true, err
+	return uid, true
 }
 
 // AllocateUid gives a single uid without creating an xid to uid mapping.
-func (m *XidMap) AllocateUid() (uint64, error) {
+func (m *XidMap) AllocateUid() uint64 {
 	m.noMapMu.Lock()
 	defer m.noMapMu.Unlock()
-	return m.noMap.assign(m.up)
+	return m.noMap.assign(m.newRanges)
 }
 
 func (s *shard) lookup(xid string) (uint64, bool) {

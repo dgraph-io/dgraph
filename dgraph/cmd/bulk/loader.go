@@ -66,7 +66,6 @@ type state struct {
 	opt        options
 	prog       *progress
 	xids       *xidmap.XidMap
-	uidFetcher *zeroUidFetcher
 	schema     *schemaStore
 	shards     *shardMap
 	rdfChunkCh chan *bytes.Buffer
@@ -86,15 +85,13 @@ func newLoader(opt options) *loader {
 	x.Check(err)
 	zero := protos.NewZeroClient(zeroConn)
 	st := &state{
-		opt:        opt,
-		prog:       newProgress(),
-		uidFetcher: &zeroUidFetcher{client: zero, ch: make(chan uidRangeResponse)},
-		shards:     newShardMap(opt.MapShards),
+		opt:    opt,
+		prog:   newProgress(),
+		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:    getWriteTimestamp(zero),
 	}
-	go st.uidFetcher.fetchUids()
 	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
 		state:   st,
@@ -184,33 +181,6 @@ type uidRangeResponse struct {
 	err  error
 }
 
-type zeroUidFetcher struct {
-	client protos.ZeroClient
-	ch     chan uidRangeResponse
-}
-
-func (z *zeroUidFetcher) fetchUids() {
-	for {
-		// Use a very long timeout since a failed request is fatal.
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		// Assuming a loading rate of 1M RDFs/sec, an upper bound on the number
-		// of UIDs we need to assign is 1M/sec. 100k uids per request results
-		// in an average 10 requests/sec to dgraphzero.
-		const uidChunk = 1e5
-		uids, err := z.client.AssignUids(ctx, &protos.Num{Val: uidChunk})
-		cancel()
-		z.ch <- uidRangeResponse{
-			uids: uids,
-			err:  x.Wrapf(err, "error communicating with dgraphzero, is it running?"),
-		}
-	}
-}
-
-func (z *zeroUidFetcher) ReserveUidRange() (start, end uint64, err error) {
-	response := <-z.ch
-	return response.uids.GetStartId(), response.uids.GetEndId(), response.err
-}
-
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
 
@@ -224,7 +194,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, ld.uidFetcher, xidmap.Options{
+	ld.xids = xidmap.New(ld.xidDB, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})

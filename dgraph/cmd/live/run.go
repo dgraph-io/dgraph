@@ -123,9 +123,9 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	return dgraphClient.Alter(ctx, op)
 }
 
-func (l *loader) uid(val string) (string, error) {
-	uid, _, err := l.alloc.AssignUid(val)
-	return fmt.Sprintf("%#x", uint64(uid)), err
+func (l *loader) uid(val string) string {
+	uid, _ := l.alloc.AssignUid(val)
+	return fmt.Sprintf("%#x", uint64(uid))
 }
 
 func fileReader(file string) (io.Reader, *os.File) {
@@ -178,13 +178,9 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 		batchSize++
 		buf.Reset()
 
-		if nq.Subject, err = l.uid(nq.Subject); err != nil {
-			return err
-		}
+		nq.Subject = l.uid(nq.Subject)
 		if len(nq.ObjectId) > 0 {
-			if nq.ObjectId, err = l.uid(nq.ObjectId); err != nil {
-				return err
-			}
+			nq.ObjectId = l.uid(nq.ObjectId)
 		}
 		mu.Set = append(mu.Set, &nq)
 
@@ -247,11 +243,9 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	connzero, err := setupConnection(opt.zero, true)
 	x.Checkf(err, "While trying to dial gRPC")
 
-	alloc := xidmap.New(kv,
-		&uidProvider{
-			zero: protos.NewZeroClient(connzero),
-			ctx:  opts.Ctx,
-		},
+	alloc := xidmap.New(
+		kv,
+		connzero,
 		xidmap.Options{
 			NumShards: 100,
 			LRUSize:   1e5,
