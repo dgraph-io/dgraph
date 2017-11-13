@@ -1440,16 +1440,11 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		doneVars[sg.Params.Var] = v
 		// This implies it is a value variable.
 	} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
-		// We reach here, if a uid variable was already set and now a uid edge has no dest uids.
-		// We don't want to set the variable as empty in this case.
-		if _, ok := doneVars[sg.Params.Var]; ok {
-			return nil
+		if v, ok = doneVars[sg.Params.Var]; !ok {
+			v.Vals = make(map[uint64]types.Val)
+			v.path = sgPath
 		}
 
-		doneVars[sg.Params.Var] = varValue{
-			Vals: make(map[uint64]types.Val),
-			path: sgPath,
-		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			if len(sg.valueMatrix[idx].Values) > 1 {
 				return x.Errorf("Value variables not supported for predicate with list type.")
@@ -1459,8 +1454,9 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			if err != nil {
 				continue
 			}
-			doneVars[sg.Params.Var].Vals[uid] = val
+			v.Vals[uid] = val
 		}
+		doneVars[sg.Params.Var] = v
 	} else {
 		// If the variable already existed and now we see it again without any DestUIDs or
 		// ValueMatrix then lets just return.
