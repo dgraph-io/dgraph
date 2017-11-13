@@ -55,7 +55,7 @@ var opts options
 
 func init() {
 	flag := ZeroCmd.Flags()
-	flag.BoolVar(&opts.bindall, "bindall", false,
+	flag.BoolVar(&opts.bindall, "bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.StringVar(&opts.myAddr, "my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
