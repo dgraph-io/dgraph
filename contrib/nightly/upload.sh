@@ -14,6 +14,7 @@ set -e
 run_upload_script() {
   # So that script can run locally too.
   if [[ "$TRAVIS" != true ]]; then
+    TRAVIS_BRANCH="master"
     return 0
   fi
 
@@ -75,23 +76,13 @@ get_tag() {
 	echo "nightly"
 }
 
+# Can either be of the type v0.x.y or be nightly.
 BUILD_TAG=$(get_tag)
 ASSET_SUFFIX=""
 
 if [[ $BUILD_TAG == "nightly" ]]; then
 	ASSET_SUFFIX="-dev"
 fi
-
-get_version() {
-	# For nightly release, we find latest git tag.
-	if [[ $BUILD_TAG == "nightly" ]]; then
-		echo $(git describe --abbrev=0)
-		return
-	else
-		# For an actual release, we get the version from the tag or the release branch.
-		echo $BUILD_TAG
-	fi
-}
 
 TRAVIS_EVENT_TYPE=${TRAVIS_EVENT_TYPE:-cron}
 if ! run_upload_script; then
@@ -108,11 +99,11 @@ else
 fi
 
 DGRAPH=$GOPATH/src/github.com/dgraph-io/dgraph
-BUILD_DIR=$DGRAPH/contrib
-source ${BUILD_DIR}/nightly/github.sh
+BUILD_DIR=$DGRAPH/contrib/nightly
+source ${BUILD_DIR}/github.sh
 
 DGRAPH_REPO="dgraph-io/dgraph"
-DGRAPH_VERSION=$(get_version)
+DGRAPH_VERSION=$(git describe --abbrev=0)
 LATEST_TAG=$(curl -s https://api.github.com/repos/dgraph-io/dgraph/releases/latest \
  | grep "tag_name" | awk '{print $2}' | tr -dc '[:alnum:]-.\n\r' | head -n1)
 DGRAPH_COMMIT=$(git rev-parse HEAD)
@@ -226,12 +217,13 @@ build_docker_image() {
 		return 0
 	fi
 
-	pushd ${GOPATH}/src/github.com/dgraph-io/dgraph/contrib/nightly > /dev/null
-	# Extract dgraph folder from the tar as its required by the Dockerfile.
-	tar -xzf ${NIGHTLY_FILE}
+	pushd $DGRAPH/contrib/nightly > /dev/null
+	# Extract dgraph binary from the tar into dgraph-build folder.
+	mkdir dgraph-build
+	tar -xzf ${NIGHTLY_FILE} -C dgraph-build
 	cp ${ASSETS_FILE} .
 	echo -e "Building the docker image with tag: $DOCKER_TAG."
-	docker build -t dgraph/dgraph:$DOCKER_TAG .
+	docker build -t dgraph/dgraph:$DOCKER_TAG -f $DGRAPH/contrib/nightly/Dockerfile .
 	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
 		echo "Tagging docker image with latest tag"
 		docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest
@@ -259,9 +251,9 @@ upload_docker_image() {
 }
 
 pushd $DGRAPH > /dev/null
-contrib/releases/build.sh $ASSET_SUFFIX
+$BUILD_DIR/build.sh $ASSET_SUFFIX
 if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-	contrib/releases/build-windows.sh $ASSET_SUFFIX
+	$BUILD_DIR/build-windows.sh $ASSET_SUFFIX
 fi
 
 if [[ $DOCKER_TAG == "" ]]; then
@@ -281,7 +273,6 @@ if [ "$DGRAPH" != "$CURRENT_DIR" ]; then
 fi
 
 # Lets rename the binaries before they are uploaded to S3.
-mv $TRAVIS_BUILD_DIR/cmd/dgraph/dgraph $TRAVIS_BUILD_DIR/cmd/dgraph/dgraph-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
-mv $TRAVIS_BUILD_DIR/cmd/dgraph-live-loader/dgraph-live-loader $TRAVIS_BUILD_DIR/cmd/dgraph-live-loader/dgraph-live-loader-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
+mv $TRAVIS_BUILD_DIR/dgraph/dgraph $TRAVIS_BUILD_DIR/dgraph/dgraph-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
 
 popd > /dev/null
