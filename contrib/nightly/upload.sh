@@ -218,8 +218,9 @@ build_docker_image() {
 	fi
 
 	pushd $DGRAPH/contrib/nightly > /dev/null
-	# Extract dgraph folder from the tar as its required by the Dockerfile.
-	tar -xzf ${NIGHTLY_FILE}
+	# Extract dgraph binary from the tar into dgraph-build folder.
+	mkdir dgraph-build
+	tar -xzf ${NIGHTLY_FILE} -C dgraph-build
 	cp ${ASSETS_FILE} .
 	echo -e "Building the docker image with tag: $DOCKER_TAG."
 	docker build -t dgraph/dgraph:$DOCKER_TAG -f $DGRAPH/contrib/nightly/Dockerfile .
