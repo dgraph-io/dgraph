@@ -98,7 +98,7 @@ docker run -itP -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
 docker exec -it diggy dgraph server --memory_mb 2048
 ```
 
-The dgraph server listens on ports 8080 and 9080 (unless mapped to another port) with log output to the terminal.
+The dgraph server listens on ports 8080 and 9080  with log output to the terminal.
 
 ### Docker on Non Linux Distributions.
 File access in mounted filesystems is slower when using docker. Try running the command `time dd if=/dev/zero of=test.dat bs=1024 count=100000` on mounted volume and you will notice that it's horribly slow when using mounted volumes. We recommend users to use docker data volumes. The only downside of using data volumes is that you can't access the files from the host, you have to launch a container for accessing it.
@@ -267,8 +267,10 @@ and queried that data back.
 
 - Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
 with Dgraph from your application.
-- Take the [tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
+- Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
 - A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
+- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
+  in a cluster.
 
 ## Need Help
 

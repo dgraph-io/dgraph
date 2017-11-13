@@ -50,7 +50,7 @@ var (
 )
 
 func workerPort() int {
-	return x.Config.PortOffset + Config.BaseWorkerPort
+	return x.Config.PortOffset + x.PortInternal
 }
 
 func Init(ps *badger.ManagedDB) {

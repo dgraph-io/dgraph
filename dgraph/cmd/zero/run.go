@@ -44,7 +44,7 @@ import (
 type options struct {
 	bindall     bool
 	myAddr      string
-	port        int
+	portOffset  int
 	nodeId      uint64
 	numReplicas int
 	peer        string
@@ -55,11 +55,12 @@ var opts options
 
 func init() {
 	flag := ZeroCmd.Flags()
-	flag.BoolVar(&opts.bindall, "bindall", false,
+	flag.BoolVar(&opts.bindall, "bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.StringVar(&opts.myAddr, "my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	flag.IntVar(&opts.port, "port", 8888, "Port to run Dgraph zero on.")
+	flag.IntVarP(&opts.portOffset, "port_offset", "o", 0,
+		"Value added to all listening port numbers. [Grpc=7080, HTTP=8080]")
 	flag.Uint64Var(&opts.nodeId, "idx", 1, "Unique node index for this server.")
 	flag.IntVar(&opts.numReplicas, "replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
@@ -85,9 +86,6 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
 
-	if len(opts.myAddr) == 0 {
-		opts.myAddr = fmt.Sprintf("localhost:%d", opts.port)
-	}
 	rc := protos.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
 	m := conn.NewNode(&rc)
 	st.rs = &conn.RaftServer{Node: m}
@@ -149,6 +147,11 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 var ZeroCmd = &cobra.Command{
 	Use:   "zero",
 	Short: "Run Dgraph zero server",
+	Long: `
+A Dgraph zero instance manages the Dgraph cluster.  Typically, a single Zero
+instance is sufficient for the cluster; however, one can run multiple Zero
+instances to achieve high-availability.
+`,
 	Run: func(cmd *cobra.Command, args []string) {
 		run()
 	},
@@ -161,12 +164,14 @@ func run() {
 	if opts.bindall {
 		addr = "0.0.0.0"
 	}
-
-	grpcListener, err := setupListener(addr, opts.port)
+	if len(opts.myAddr) == 0 {
+		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortInternal+opts.portOffset)
+	}
+	grpcListener, err := setupListener(addr, x.PortInternal+opts.portOffset)
 	if err != nil {
 		log.Fatal(err)
 	}
-	httpListener, err := setupListener(addr, opts.port+1)
+	httpListener, err := setupListener(addr, x.PortHTTP+opts.portOffset)
 	if err != nil {
 		log.Fatal(err)
 	}
