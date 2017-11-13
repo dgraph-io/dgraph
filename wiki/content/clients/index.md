@@ -40,8 +40,6 @@ go get -u -v github.com/dgraph-io/dgraph/client
 
 The client [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client) has specifications of all functions and examples.
 
-Larger examples can be found [here](https://github.com/dgraph-io/dgraph/tree/master/wiki/resources/examples/goclient).
-
 The [dgraph live
 loader](https://github.com/dgraph-io/dgraph/tree/master/dgraph/cmd/live/) uses
 the client interface to batch concurrent mutations.
