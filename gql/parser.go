@@ -1987,7 +1987,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		switch item.Val {
 		case "filter":
 			if curp.Filter != nil {
-				return x.Errorf("Only one filter directive allowed.")
+				return x.Errorf("Use AND, OR and round brackets instead of multiple filter directives.")
 			}
 			filter, err := parseFilter(it)
 			if err != nil {
