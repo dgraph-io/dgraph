@@ -7139,7 +7139,7 @@ func TestAppendDummyValuesPanic(t *testing.T) {
 	query := `
 	{
 		n(func:ge(uid, 0)) {
-			count()
+			count(uid)
 		}
 	}`
 	_, err := processToFastJsonReq(t, query)
