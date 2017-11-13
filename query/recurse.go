@@ -19,7 +19,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"math"
 
 	"golang.org/x/net/trace"
@@ -30,7 +29,6 @@ import (
 
 func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error {
 	// Note: Key format is - "attr|fromUID|toUID"
-	reachMap := make(map[string]struct{})
 	var numEdges int
 	var exec []*SubGraph
 	var err error
@@ -117,21 +115,6 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			if len(sg.Filters) > 0 {
 				// We need to do this in case we had some filters.
 				sg.updateUidMatrix()
-			}
-			for mIdx, fromUID := range sg.SrcUIDs.Uids {
-				// This is for avoiding loops in graph.
-				algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
-					key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, uid)
-					_, seen := reachMap[key] // Combine fromUID here.
-					if seen {
-						return false
-					} else {
-						// Mark this edge as taken. We'd disallow this edge later.
-						reachMap[key] = struct{}{}
-						numEdges++
-						return true
-					}
-				})
 			}
 			if len(sg.Params.Order) > 0 || len(sg.Params.FacetOrder) > 0 {
 				// Can't use merge sort if the UIDs are not sorted.

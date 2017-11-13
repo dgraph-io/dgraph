@@ -1663,7 +1663,7 @@ func TestRecurseQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01)) @recurse {
+			me(func: uid(0x01), depth: 3) @recurse {
 				nonexistent_pred
 				friend
 				name
@@ -1678,7 +1678,7 @@ func TestRecurseQueryOrder(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01)) @recurse {
+			me(func: uid(0x01), depth: 3) @recurse {
 				friend(orderdesc: dob)
 				dob
 				name
@@ -1724,7 +1724,7 @@ func TestRecurseVariable(t *testing.T) {
 	populateGraph(t)
 	query := `
 			{
-				var(func: uid(0x01)) @recurse {
+				var(func: uid(0x01), depth: 3) @recurse {
 					a as friend
 				}
 
@@ -1744,7 +1744,7 @@ func TestRecurseVariable2(t *testing.T) {
 	query := `
 			{
 
-				var(func: uid(0x1)) @recurse {
+				var(func: uid(0x1), depth: 4) @recurse {
 					f2 as friend
 					f as follow
 				}
