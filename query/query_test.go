@@ -6188,7 +6188,7 @@ func TestCountAtRoot(t *testing.T) {
 	query := `
         {
             me(func: gt(count(friend), 0)) {
-				count()
+				count(uid)
 			}
         }
         `
@@ -6201,7 +6201,7 @@ func TestCountAtRoot2(t *testing.T) {
 	query := `
         {
                 me(func: anyofterms(name, "Michonne Rick Andrea")) {
-			count()
+			count(uid)
 		}
         }
         `
@@ -6215,11 +6215,11 @@ func TestCountAtRoot3(t *testing.T) {
         {
 		me(func:anyofterms(name, "Michonne Rick Daryl")) {
 			name
-			count()
+			count(uid)
 			count(friend)
 			friend {
 				name
-				count()
+				count(uid)
 			}
 		}
         }
@@ -6233,7 +6233,7 @@ func TestCountAtRootWithAlias4(t *testing.T) {
 	query := `
 	{
                 me(func:anyofterms(name, "Michonne Rick Daryl")) @filter(le(count(friend), 2)) {
-			personCount: count()
+			personCount: count(uid)
 		}
         }
         `
@@ -6251,7 +6251,7 @@ func TestCountAtRoot5(t *testing.T) {
 			}
 		}
 		MichonneFriends(func: uid(f)) {
-			count()
+			count(uid)
 		}
 	}
 
@@ -6268,7 +6268,7 @@ func TestHasFuncAtRoot(t *testing.T) {
 		me(func: has(friend)) {
 			name
 			friend {
-				count()
+				count(uid)
 			}
 		}
 	}
@@ -6285,7 +6285,7 @@ func TestHasFuncAtRootFilter(t *testing.T) {
 		me(func: anyofterms(name, "Michonne Rick Daryl")) @filter(has(friend)) {
 			name
 			friend {
-				count()
+				count(uid)
 			}
 		}
 	}
