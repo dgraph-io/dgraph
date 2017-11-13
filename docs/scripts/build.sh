@@ -1,6 +1,6 @@
 #!/bin/bash
 # This script runs in a loop, checks for updates to the Hugo docs theme or
-# to the wiki docs on certain branches and rebuilds the public folder for them.
+# to the docs on certain branches and rebuilds the public folder for them.
 # It has be made more generalized, so that we don't have to hardcode versions.
 
 # Warning - Changes should not be made on the server on which this script is running
@@ -107,8 +107,8 @@ checkAndUpdate()
 }
 
 while true; do
-	# Lets move to the Wiki directory.
-	pushd /home/ubuntu/dgraph/wiki > /dev/null
+	# Lets move to the docs directory.
+	pushd /home/ubuntu/dgraph/docs > /dev/null
 
 	currentBranch=$(git rev-parse --abbrev-ref HEAD)
 
