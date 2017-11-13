@@ -177,11 +177,40 @@ recommend not using it.
 
 In a high-availability setup, we need to run 3 or 5 replicas for Zero, and
 similarly, 3 or 5 replicas for the server.
+{{% notice "note" %}}
+If number of replicas is 2K + 1, up to **K servers** can be down without any
+impact on reads or writes.
 
-Run 3 Zero instances, assigning a unique ID to each via `--idx` flag, and
+Avoid keeping replicas to 2K (even number). If K servers go down, this would
+block reads and writes, due to lack of consensus.
+{{% /notice %}}
+
+**Dgraph Zero**
+Run three Zero instances, assigning a unique ID to each via `--idx` flag, and
 passing the address of any healthy Zero instance via `--peer` flag.
 
-To run 3 replicas for server, set `--replicas=3`.
+To run three replicas for server, set `--replicas=3`. Every time a new Dgraph
+server is added, Zero would check the existing groups and assign them to one,
+which doesn't have three replicas.
+
+**Dgraph Server**
+Run as many Dgraph servers as you want. You can manually set `--idx` flag, or
+you can leave that flag empty, and Zero would auto-assign an id to the server.
+This id would get persisted in the write-ahead log, so be careful not to delete
+it.
+
+The new servers will automatically detect each other by communicating with
+dgraphzero and establish connections to each other.
+
+Typically, Zero would first attempt to replicate a group, by assigning a new
+Dgraph server to run the same group as assigned to another. Once the group has
+been replicated as per the `--replicas` flag, Zero would create a new group.
+
+Over time, the data would be evenly split across all the groups. So, it's
+important to ensure that the number of Dgraph servers is a factor of the
+replication setting. For e.g., if you set `--replicas=3` in Zero, then run three
+Dgraph servers for no sharding, but 3x replication. Run six Dgraph servers, for
+sharding the data into two groups, with 3x replication.
 
 ## Building from Source
 
@@ -189,16 +218,16 @@ Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
 
 After installing Go, run
 ```sh
-# This should install the following binaries in your $GOPATH/bin: dgraph, dgraph-live-loader, and dgraph-bulk-loader.
-go get -u github.com/dgraph-io/dgraph/...
+# This should install dgraph binary in your $GOPATH/bin.
+
+go get -u -v github.com/dgraph-io/dgraph/dgraph
 ```
 
-The binaries are located in `cmd/dgraph`, `cmd/dgraphzero`, `cmd/dgraph-live-loader`, and
-`cmd/dgraph-bulk-loader`. If you get errors related to `grpc` while building them, your
+If you get errors related to `grpc` while building them, your
 `go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it
 causes issues while using the Go client). Update your `go-grpc` by running.
 ```sh
-go get -u google.golang.org/grpc
+go get -u -v google.golang.org/grpc
 ```
 
 ## More about Dgraph
@@ -221,24 +250,28 @@ By default the server listens on `localhost` (the loopback address only accessib
 
 ## More about Dgraph Zero
 
-Dgraphzero is a binary which controls the Dgraph cluster. It automatically moves data between
+Dgraph Zero controls the Dgraph cluster. It automatically moves data between
 different dgraph instances based on the size of the data served by each instance.
 
-It is mandatory to run atleast one `dgraphzero` node before running any whether `dgraph`.
-Options present for `dgraphzero` can be seen by running `dgraphzero --help`.
+It is mandatory to run atleast one `dgraph zero` node before running any `dgraph server`.
+Options present for `dgraph zero` can be seen by running `dgraph zero --help`.
 
-* dgraphzero stores information about the cluster.
+* Zero stores information about the cluster.
 * `--replicas` is the option that controls the replication factor. (i.e. number of replicas per data shard, including the original shard)
 * Whenever a new machine is brought up it is assigned a group based on replication factor. If replication factor is 1 then each node will serve different group. If replication factor is 2 and you launch 4 machines then first two machines would server group 1 and next two machines would server group 2.
-* dgraphzero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
+* Zero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
 
-Dgraphzero also exposes HTTP on 8080 (+ any `--port_offset`). You can query it
+Like Dgraph, Zero also exposes HTTP on 8080 (+ any `--port_offset`). You can query it
 to see useful information, like the following:
 
 * `/state` Information about the nodes that are part of the cluster. Also contains information about
   size of predicates and groups they belong to.
 
 ## Config
+{{% notice "note" %}}
+Currently only valid for Dgraph server.
+{{% /notice %}}
+
 The command-line flags can be stored in a YAML file and provided via the `--config` flag.  For example:
 
 ```sh
@@ -351,190 +384,73 @@ tls.min_version string
 ```
 
 
-## Multiple instances
-
-### Data sharding
-
-* dgraphzero assigns predicates to group. At this point dgraphzero doesn't know what might be the growth rate of the data so the predicate is assigned to the group which asks first.
-* Data for reverse edges and index are always stored along with the predicate.
-* dgraphzero tries to rebalance the cluster based on the disk usage in each group. If dgraphzero detects an imbalance then dgraphzero would try to move a predicate along with index and reverse edges to a node which has less disk usage.
-
-
-### Running the Cluster
-
-Each machine in the cluster must be started with a unique ID (option `--idx`) and address of dgraphzero server. Each machine must also satisfy the data directory and port requirements for a [single instance]({{< relref "#running-dgraph">}}).
-
-
-To run a cluster, begin by bringing up [dgraphzero](#dgraphzero-1) nodes.
-
-**We recommend running three instances of dgraphzero for high availability.**
-
-```sh
-
-# dgraphzero instance 1 using the default 8888 for grpc and 8889 for http.
-$ dgraphzero -w wz --bindall=true --my "ip-address-others-should-access-me-at"
-
-# dgraphzero instance 2 using the default 8890 for grpc and 8891 for http.
-$ dgraphzero -w wz1 --peer "ip-address:8888" --port 8890 --bindall=true -idx 2
-
-# dgraphzero instance 3
-$ dgraphzero -w wz1 --peer "ip-address:8888" --port 8892 --bindall=true -idx 3
-```
-
-Now bring up `dgraph` nodes and supply `peer` as the address of any `dgraphzero` node.
-
-```sh
-# specify dgraphzero's grpc port's address as peer address.
-$ dgraph --idx 1 --peer "ip-address:8888" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
-$ dgraph --idx 2 --peer "ip-address:8888" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
-$ dgraph --idx 3 --peer "ip-address:8888" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
-```
-
-**The new servers will automatically detect each other by communicating with dgraphzero and establish connections to each other**.
-
-{{% notice "note" %}} The `--bindall=true` option is required when running on multiple machines, otherwise the node's port and workerport will be bound to localhost and not be accessible over a network. {{% /notice %}}
-
-Bring up dgraph nodes.
-{{% notice "note" %}}To have RAFT consensus work correctly, each group must be served by an odd number of Dgraph instances.{{% /notice %}}
-
-You could start loading all the data into one of the dgraph nodes and dgraphzero would automatically rebalance the data for you.
-
-### Cluster Checklist
+## Cluster Checklist
 
 In setting up a cluster be sure the check the following.
 
 * Is atleast one dgraphzero node running?
 * Is each dgraph instance in the cluster [set up correctly]({{< relref "#running-dgraph">}})?
-* Will each instance be accessible to all peers on `workerport`?
+* Will each instance be accessible to all peers on 7080 (+ any port offset)?
 * Does each node have a unique ID on startup?
 * Has `--bindall=true` been set for networked communication?
 
-<!---
-### In EC2
-
-To make provisioning an EC2 Dgraph cluster quick, the following script installs and starts a Dgraph node, opens ports on the host machine and enters Dgraph into systemd so that the node will restart if the machine is rebooted.
-
-We recommend an Ubuntu 16.04 AMI on a machine with at least 16GB of memory.
-
-The i3 instances with SSD drives have the right hardware set up to run Dgraph (and its underlying key value store Badger) for performance environments.
-
-After provisioning an Ubuntu machine the following scripts installs and brings up Dgraph.
-
-
-
-## Docker
---->
-
-# Bulk Data Loading
+## Fast Data Loading
 
 There are two different tools that can be used for bulk data loading:
 
-- `dgraph-live-loader`
-- `dgraph-bulk-loader` (will be available in v0.8.3)
+- `dgraph live`
+- `dgraph bulk`
 
-{{% notice "note" %}} both tools only accepts gzipped, RDF NQuad/Triple data.
+{{% notice "note" %}} Both tools only accepts gzipped, RDF NQuad/Triple data.
 Data in other formats must be converted [to
 this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
 
-## `dgraph-live-loader`
+### Live Loader
 
-The `dgraph-live-loader` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph. It's not the only way to run mutations.  Mutations could also be run from the command line, e.g. with `curl`, from the UI, by sending to `/query` or by a program using a [Dgraph client]({{< relref "clients/index.md" >}}).
+The `dgraph live` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph.
 
-`dgraph-live-loader` correctly handles splitting blank nodes across multiple batches and creating `xid` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
-
-`dgraph-live-loader` checkpoints the loaded rdfs in the c directory by default. On restart it would automatically resume from the last checkpoint. If you want to load the whole data again, you need to delete the checkpoint directory.
+Live loader correctly handles assigning unique IDs to blank nodes across multiple files, and persists them to disk to save memory and in case the loader was re-run.
 
 ```sh
-$ dgraph-live-loader --help # To see the available flags.
+$ dgraph live --help # To see the available flags.
 
 # Read RDFs from the passed file, and send them to Dgraph on localhost:9080.
-$ dgraph-live-loader -r <path-to-rdf-gzipped-file>
+$ dgraph live -r <path-to-rdf-gzipped-file>
 
-# Read RDFs and a schema file and send do Dgraph running at given address
-$ dgraph-live-loader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
-
-# For example to load goldendata with the corresponding schema and convert URI to xid.
-$ dgraph-live-loader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema -x
+# Read RDFs and a schema file and send to Dgraph running at given address
+$ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
 ```
 
-## `dgraph-bulk-loader`
+## Bulk Loader
 
-`dgraph-bulk-loader` serves a similar purpose to `dgraph-live-loader`, but can only be used
+Bulk loader serves a similar purpose to the live loader, but can only be used
 while dgraph is offline for the initial population. It cannot run on an
 existing dgraph instance.
 
-`dgraph-bulk-loader` is *considerably faster* than `dgraph-live-loader`, and is the recommended
+{{% notice "warning" %}}
+Don't use bulk loader once Dgraph is up and running. Use it to import your
+existing data into a new instance of Dgraph server.
+{{% /notice %}}
+
+Bulk loader is **considerably faster** than the live loader, and is the recommended
 way to perform the initial import of large datasets into dgraph.
 
 You can [read some technical details](https://blog.dgraph.io/post/bulkloader/)
-about the bulkloader on the blog.
+about the bulk loader on the blog.
 
 Flags can be used to control the behaviour and performance characteristics of
-the bulk loader. The following are from the output of `dgraph-bulk-loader
---help`:
+the bulk loader. You can see the full list by running `dgraph bulk --help`.
 
-```sh
-Usage of dgraph-bulk-loader:
-  -block int
-        Block profiling rate.
-  -cleanup_tmp
-        Clean up the tmp directory after the loader finishes. Setting this to false allows the bulk loader can be re-run while skipping the map phase. (default true)
-  -expand_edges
-        Generate edges that allow nodes to be expanded using _predicate_ or expand(...). Disable to increase loading speed. (default true)
-  -http string
-        Address to serve http (pprof). (default "localhost:8080")
-  -j int
-        Number of worker threads to use (defaults to the number of logical CPUs) (default 4)
-  -l string
-        Location to write the lease file. (default "LEASE")
-  -map_shards int
-        Number of map output shards. Must be greater than or equal to the number of reduce shards. Increasing allows more evenly sized reduce shards, at the expense of increased memory usage. (default 1)
-  -mapoutput_mb int
-        The estimated size of each map file output. Increasing this increases memory usage. (default 64)
-  -out string
-        Location to write the final dgraph data directories. (default "out")
-  -r string
-        Directory containing *.rdf or *.rdf.gz files to load.
-  -reduce_shards int
-        Number of reduce shards. This determines the number of dgraph instances in the final cluster. Increasing this potentially decreases the reduce stage runtime by using more parallelism, but increases memory usage. (default 1)
-  -s string
-        Location of schema file to load.
-  -shufflers int
-        Number of shufflers to run concurrently. Increasing this can improve performance, and must be less than or equal to the number of reduce shards. (default 1)
-  -skip_map_phase
-        Skip the map phase (assumes that map output files already exist).
-  -tmp string
-        Temp directory used to use for on-disk scratch space. Requires free space proportional to the size of the RDF file and the amount of indexing used. (default "tmp")
-  -version
-        Prints the version of dgraph-bulk-loader.
-```
-
-We'll run through a complete example of loading a data set from start to
-finish, using the *golden data* set from dgraph's
-[benchmarks](https://github.com/dgraph-io/benchmarks).
-
-Start with a fresh directory, then obtain the RDFs and schema.
-
-```sh
-$ wget https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true -O goldendata.rdf.gz
-$ wget https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/goldendata.schema
-```
-{{% notice "note" %}}
 For bigger datasets and machines with many cores, gzip
 decoding can be a bottleneck. Performance improvements can be obtained by
 first splitting the RDFs up into many `.rdf.gz` files (e.g. 256MB each).
-{{% /notice %}}
 
-The next step is to run the bulk loader. First, you need to determine the
+You need to determine the
 number of dgraph instances you want in your cluster. You should set the number
 of reduce shards to this number. You will also need to set the number of map
 shards to at least this number (a higher number helps the bulk loader evenly
-distribute predicates between the reduce shards). For this example, we'll use
+distribute predicates between the reduce shards). For this example, you could use
 2 reduce shards and 4 map shards.
-
-There are many different options,
-look at the `--help` flag for details. For this tutorial, we only care about a
-few options.
 
 ```sh
 $ dgraph-bulk-loader -r=goldendata.rdf.gz -s=goldendata.schema -map_shards=4 -reduce_shards=2
@@ -570,98 +486,13 @@ REDUCE 11s [100.00%] edge_count:3.695M edge_speed:1.182M/sec plist_count:1.778M 
 Total: 11s
 ```
 
-You will now have some additional data in your directory.
-
-The `LEASE` file indicates the UID lease that should be given to the new
-dgraph cluster. The `p` directories are the posting list directories the
-dgraph instances in the cluster will use. They contain all of the edges
-required to run the dgraph cluster.
+Once the data is generated, you can start the Dgraph servers by pointing their
+`--p` directory to the output. If running multiple Dgraph servers, you'd need to
+copy over the output shards into different servers.
 
 ```sh
-$ ls -l
-total 11960
--rw-r--r-- 1 petsta petsta 12222898 Oct  4 16:41 goldendata.rdf.gz
--rw-r--r-- 1 petsta petsta       74 Oct  4 16:36 goldendata.schema
--rw-r--r-- 1 petsta petsta       10 Oct  4 16:42 LEASE
-drwx------ 4 petsta petsta     4096 Oct  4 16:42 out
-$ tree out
-out
-├── 0
-│   └── p
-│       ├── 000000.vlog
-│       ├── 000001.sst
-│       ├── 000002.sst
-│       └── MANIFEST
-└── 1
-    └── p
-        ├── 000000.vlog
-        ├── 000001.sst
-        └── MANIFEST
-
-4 directories, 7 files
-```
-
-Now it's time to bring up `dgraphzero`. We need to give it an `id` and the
-UID lease as given by the bulk loader.
-```sh
-$ mkdir zero
-$ cd zero
-$ dgraphzero -idx 1 -lease $(cat ../LEASE)
-```
-`dgraphzero` will stay in the foreground, so you'll need to open new
-terminals for the next steps.
-
-Now to start the dgraph instances. We'll start two, one for each output
-directory from the bulk loader. We need to specify several things. First, they
-need to know how to communicate with another peer. We can just use dgraphzero,
-which listens on `localhost:8888`. Each dgraph instance also need to be assigned a
-unique index. We also need to specify how much memory each dgraph instance
-should use (this flag is required - but for a small data set such as *golden
-data* we don't really care, so just use the minimum value of 1024 MB).
-```sh
-$ cd out/0
-$ dgraph -peer=localhost:8888 -memory_mb=1024 -idx=10
-```
-For the second dgraph instance, the `-port_offset` flag prevents port conflicts
-(since the default ports are used here).
-```sh
-$ cd out/1
-$ dgraph -peer=localhost:8888 -memory_mb=1024 -idx=11 -port_offset=2000
-```
-Dgraphzero and the two dgraph instances should all now be running in the
-foreground in separate terminals. Now you can connect to dgraph as normal and
-do all of your usual queries and mutations. With multiple dgraph instances,
-queries can be sent to any instance (in this case to either `localhost:8080` or
-`localhost:10080`).
-```sh
-$ curl localhost:8080/query -XPOST -d '{
-    pj_films(func:allofterms(name@en,"Peter Jackson")) {
-        director.film (orderasc: name@en, first: 10) {
-            name@en
-        }
-    }
-}' | jq
-```
-```sh
-{
-  "data": {
-    "pj_films": [
-      {
-        "director.film": [
-          {
-            "name@en": "The Lord of the Rings: The Return of the King"
-          },
-          {
-            "name@en": "The Lovely Bones"
-          },
-          {
-            "name@en": "Meet the Feebles"
-          }
-        ]
-      }
-    ]
-  }
-}
+$ cd out/i # i = shard number.
+$ dgraph -zero=localhost:8888 -memory_mb=1024
 ```
 
 # Export
@@ -671,7 +502,8 @@ An export of all nodes is started by locally accessing the export endpoint of an
 ```sh
 $ curl localhost:8080/admin/export
 ```
-{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.  Ensure that the port is set to the port given by `--port` on startup. {{% /notice %}}
+{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.
+{{% /notice %}}
 
 This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph instance is running.
 
@@ -682,11 +514,12 @@ This triggers a export of all the groups spread across the entire cluster. Each 
 # Shutdown
 
 A clean exit of a single dgraph node is initiated by running the following command on that node.
+{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.
+{{% /notice %}}
 
 ```sh
 $ curl localhost:8080/admin/shutdown
 ```
-{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.  Ensure that the port is set to the port given by `--port` on startup.{{% /notice %}}
 
 This stops the server on which the command is executed and not the entire cluster.
 
@@ -694,7 +527,9 @@ This stops the server on which the command is executed and not the entire cluste
 
 Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).
 
-To drop all data and start from a clean database:
+To drop all data, you could send a `DropAll` request via `/alter` endpoint.
+
+Alternatively, you could:
 
 * [stop Dgraph]({{< relref "#shutdown" >}}) and wait for all writes to complete,
 * delete (maybe do an export first) the `p` and `w` directories, then
@@ -702,7 +537,6 @@ To drop all data and start from a clean database:
 
 # Upgrade Dgraph
 
-<!--{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraph-live-loader using the `-s` flag while reloading your data.{{% /notice %}}-->
 {{% notice "note" %}}If you are upgrading from v0.7 please check whether you have the export api or get the latest binary for version v0.7.7 and use the export api. {{% /notice %}}
 
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
@@ -711,7 +545,7 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 - Ensure it's successful
 - Bring down the cluster
 - Run Dgraph using new data directories.
-- Reload the data via [bulk data loading]({{< relref "#bulk-data-loading" >}}).
+- Reload the data via [bulk loader]({{< relref "#Bulk Loader" >}}).
 - If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
@@ -752,46 +586,3 @@ On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `-
 # See Also
 
 * [Product Roadmap to v1.0](https://github.com/dgraph-io/dgraph/issues/1)
-
-## TODO: Integrate these here.
-
-Run `dgraph zero --help` to see the full list of flags and their default values.
-Unless you want high availability, running just one `zero` process for the
-entire Dgraph cluster is sufficient.
-
-If Dgraph
-data server is running on a different machine than Dgraph Zero, then you'd also
-want to set `--my` and `--zero` flags, so the two processes can talk to each
-other.
-
-If you want to shard your data for horizontal scability, run more Dgraph data
-servers, like above. Typically, the number of shards would be equal to the
-number of Dgraph data servers divided by value of `--replicas` flag in Zero.
-
-Run `dgraph server --help` to see the full list of available flags and their
-default values.
-
-#### High availability setup [optional]
-
-If you want to maintain high availability, you could run multiple Dgraph Zero
-processes, and have them talk to each other by providing `--peer` flag.
-
-By default, Dgraph Zero would set each data shard to be served by exactly one
-Dgraph server. If you want to have the shards be replicated, you could set the
-`--replicas` flag to a value greater than 1.
-
-Note that to form a valid consensus, the number of Zero servers should be odd.
-So, that means, having 1, 3 or 5 Zero servers is ideal.
-
-Similarly, to form consensus among Dgraph replicas, you'd want to set the
-`--replicas` flag to 1, 3, or 5, which would replicate the data corresponding
-number of times.
-
-#### Map to custom port
-```sh
-mkdir -p ~/dgraph
-# Mapping port 8080 from within the container to 18080 of the instance, likewise with the gRPC port 9080.
-docker run -it -p 18080:8080 -p 19090:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraphzero -w zw
-docker exec -it dgraph dgraph --bindall=true --memory_mb 2048 -peer 127.0.0.1:8888
-```
-
