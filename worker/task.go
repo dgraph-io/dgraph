@@ -358,7 +358,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		var err error
 		var vals []types.Val
 		// Even if its a list type and value is asked in a language we return that.
-		if listType && len(q.Langs) == 0 {
+		if (listType && len(q.Langs) == 0) || q.AllLangs { // TODO: Could instead use listType || q.AllLangs ?
 			vals, err = pl.AllValues(args.q.ReadTs)
 		} else {
 			var val types.Val
@@ -377,11 +377,18 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			continue
 		}
 
+		if q.AllLangs {
+			out.Langs, err = pl.AllLangs(args.q.ReadTs)
+			if err != nil {
+				continue // No error handling for errors related to PL reads?
+			}
+		}
+
 		valTid := vals[0].Tid
 		newValue := &protos.TaskValue{ValType: int32(valTid), Val: x.Nilbyte}
 		uidList := new(protos.List)
 		var vl protos.ValueList
-		for _, val := range vals {
+		for i, val := range vals {
 			newValue, err = convertToType(val, srcFn.atype)
 			if err != nil {
 				return err

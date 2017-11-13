@@ -60,6 +60,8 @@ message Query {
 
 	uint64 read_ts = 13;
   LinRead lin_read = 14;
+
+	bool AllLangs = 15;
 }
 
 message ValueList {
@@ -72,6 +74,7 @@ message Result {
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
 	repeated FacetsList facet_matrix = 5;
+	repeated string langs = 6;
 
   LinRead lin_read = 14;
 }

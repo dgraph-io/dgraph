@@ -871,6 +871,22 @@ func (l *List) AllValues(readTs uint64) (vals []types.Val, rerr error) {
 	return
 }
 
+func (l *List) AllLangs(readTs uint64) ([]string, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	var langs []string
+	err := l.iterate(readTs, 0, func(p *protos.Posting) bool {
+		// TODO: Lookup language. Just give fingerprint for now.
+		lang := fmt.Sprintf("%#v", p.GetUid())
+		langs = append(langs, lang)
+		return true
+	})
+	return langs, err
+}
+
+//pl.AllLangs(args.q.ReadTs)
+
 // Returns Value from posting list.
 // This function looks only for "default" value (one without language).
 func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {

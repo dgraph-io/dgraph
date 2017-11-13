@@ -978,6 +978,7 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
+		AllLangs:     sg.Params.Expand == "_all_",
 	}
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
@@ -1708,9 +1709,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if err != nil {
 				return out, err
 			}
-			// Expand the untagged string, or any language if the untagged
-			// version doesn't exist.
-			child.Params.Langs = []string{"."}
 		}
 
 		up := uniquePreds(child.ExpandPreds)
@@ -1720,7 +1718,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			temp.ReadTs = sg.ReadTs
 			temp.LinRead = sg.LinRead
 			temp.Params.isInternal = false
-			temp.Params.Expand = ""
 			temp.Attr = k
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
