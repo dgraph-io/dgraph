@@ -1937,11 +1937,21 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 }
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
-	if curp == nil {
-		return x.Errorf("Invalid use of directive.")
+	valid := true
+	it.Prev()
+	item := it.Item()
+	if item.Typ == itemLeftCurl {
+		// Ideally we should check that curp was created at current depth.
+		valid = false
 	}
 	it.Next()
-	item := it.Item()
+	// No directive is allowed on internal subgraph like expand all, value variables.
+	if !valid || curp == nil || curp.IsInternal {
+		return x.Errorf("Invalid use of directive.")
+	}
+
+	it.Next()
+	item = it.Item()
 	peek, err := it.Peek(1)
 	if err != nil || item.Typ != itemName {
 		return x.Errorf("Expected directive or language list")
@@ -1976,12 +1986,18 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		// this is directive
 		switch item.Val {
 		case "filter":
+			if curp.Filter != nil {
+				return x.Errorf("Use AND, OR and round brackets instead of multiple filter directives.")
+			}
 			filter, err := parseFilter(it)
 			if err != nil {
 				return err
 			}
 			curp.Filter = filter
 		case "groupby":
+			if curp.IsGroupby {
+				return x.Errorf("Only one group by directive allowed.")
+			}
 			curp.IsGroupby = true
 			parseGroupby(it, curp)
 		default:

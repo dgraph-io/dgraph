@@ -2679,7 +2679,7 @@ func TestLangsInvalid2(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected directive or language list, got @en")
+	require.Contains(t, err.Error(), "Invalid use of directive.")
 }
 
 func TestLangsInvalid3(t *testing.T) {
@@ -3827,6 +3827,54 @@ func TestParseEqArg2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
 	require.Equal(t, 2, len(gql.Query[0].Func.Args))
+}
+
+func TestFilterError(t *testing.T) {
+	query := `
+	{
+		me(func: uid(1, 3 , 5, 7)) { @filter(uid(3, 7))
+			name
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestFilterError2(t *testing.T) {
+	query := `
+	{
+		me(func: uid(1, 3 , 5, 7)) {
+			name @filter(eq(name, 	"abc")) @filter(eq(name2, 	"abc"))
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestDoubleGroupByError(t *testing.T) {
+	query := `
+	{
+		me(func: uid(1, 3 , 5, 7)) {
+			name @groupby(abc) @groupby(bcd)
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestFilterError3(t *testing.T) {
+	query := `
+	{
+		me(func: uid(1, 3 , 5, 7)) {
+			expand(_all_) @filter(eq(name, "abc"))
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
 }
 
 func TestFilterUid(t *testing.T) {
