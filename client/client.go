@@ -26,6 +26,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
+// Dgraph is a transaction aware client to a set of dgraph server instances.
 type Dgraph struct {
 	dc []protos.DgraphClient
 
@@ -60,9 +61,13 @@ func (d *Dgraph) getLinRead() *protos.LinRead {
 	return proto.Clone(d.linRead).(*protos.LinRead)
 }
 
-// Alter can be used to do the following.
+// By setting various fields of protos.Operation, Alter can be used to do the
+// following:
+//
 // 1. Modify the schema.
+//
 // 2. Drop a predicate.
+//
 // 3. Drop the database.
 func (d *Dgraph) Alter(ctx context.Context, op *protos.Operation) error {
 	dc := d.anyClient()
