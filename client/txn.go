@@ -144,8 +144,8 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 //
 // Errors could be returned for various reasons. Notably, ErrAborted could be
 // returned if transactions that modify the same data are being run
-// concurrently. It's up to the user to decide if they wish to retry. In this,
-// the user should create a new transaction.
+// concurrently. It's up to the user to decide if they wish to retry. In this
+// case, the user should create a new transaction.
 func (txn *Txn) Commit(ctx context.Context) error {
 	if txn.finished {
 		return ErrFinished
