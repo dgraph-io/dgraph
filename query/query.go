@@ -1369,10 +1369,11 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	sg.DestUIDs = &protos.List{out}
 
 AssignStep:
-	return sg.assignVars(doneVars, sgPath)
+	return sg.updateVars(doneVars, sgPath)
 }
 
-func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
+// Updates the doneVars map by picking up uid/values from the current Subgraph
+func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
 		return nil
 	}
@@ -1412,34 +1413,33 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			}
 			doneVars[sg.Params.Var].Vals[uid] = val
 		}
-	} else if len(sg.DestUIDs.Uids) != 0 {
+	} else if len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil) {
+		// Uid variable could be defined using uid or a predicate.
+		var uids *protos.List
+		if sg.Attr == "uid" {
+			uids = sg.SrcUIDs
+		} else {
+			uids = sg.DestUIDs
+		}
+
 		// This implies it is a entity variable.
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
-				Uids: sg.DestUIDs,
+				Uids: uids,
 				path: sgPath,
 			}
 			return nil
 		}
+
 		// For a recurse query this can happen. We don't allow using the same variable more than
 		// once otherwise.
-		uids := v.Uids
+		oldUids := v.Uids
 		lists := make([]*protos.List, 0, 2)
-		lists = append(lists, uids, sg.DestUIDs)
+		lists = append(lists, oldUids, uids)
 		v.Uids = algo.MergeSorted(lists)
 		doneVars[sg.Params.Var] = v
-
 		// This implies it is a value variable.
 	} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
-		if sg.Attr == "uid" {
-			// Its still an entity variable if its uid.
-			doneVars[sg.Params.Var] = varValue{
-				Uids: sg.SrcUIDs,
-				path: sgPath,
-			}
-			return nil
-		}
-
 		// We reach here, if a uid variable was already set and now a uid edge has no dest uids.
 		// We don't want to set the variable as empty in this case.
 		if _, ok := doneVars[sg.Params.Var]; ok {
@@ -1934,7 +1934,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	// We store any variable defined by this node in the map and pass it on
 	// to the children which might depend on it.
-	if err = sg.assignVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
+	if err = sg.updateVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
 		rch <- err
 		return
 	}
