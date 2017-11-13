@@ -112,7 +112,7 @@ overall health of that group.
 **Run dgraph zero**
 
 ```sh
-dgraph zero --bindall=true --my=IPADDR:7080 --wal zw
+dgraph zero --my=IPADDR:7080 --wal zw
 ```
 
 The default Zero ports are 7080 for internal (Grpc) communication to other Dgraph
@@ -127,12 +127,12 @@ For all the various flags available, run `dgraph zero --help`.
 **Run dgraph server**
 
 ```sh
-dgraph server --idx=<unique id> --memory_mb=<typically half the RAM>
---my=IPADDR:7080 --zero="ZERO.IPADDR:PORT"
+dgraph server --idx=2 --memory_mb=<typically half the RAM>
+--my=IPADDR:7081 --zero=localhost:7080 --port_offset=1
 ```
 
-Dgraph server listens on port 7080 for internal, port 8080 for external HTTP and
-port 9080 for external Grpc communication by default. You can change that via
+**Dgraph server listens on port 7080 for internal, port 8080 for external HTTP and
+port 9080 for external Grpc communication by default.** You can change that via
 `--port_offset` flag.
 
 Note that the `--idx` flag can be ommitted. Zero would then automatically assign
