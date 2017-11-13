@@ -253,8 +253,8 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	tc.Keys = k
 
-	cts, aerr := worker.CommitOverNetwork(context.Background(), tc)
-	if aerr != nil {
+	cts, err := worker.CommitOverNetwork(context.Background(), tc)
+	if err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
