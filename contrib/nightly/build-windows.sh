@@ -29,38 +29,26 @@ fi
 
 mkdir $tmp_dir;
 
-source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/releases/constants.sh
+source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/constants.sh
+
+pushd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph > /dev/null
 
 xgo_target="windows/amd64"
-
 echo -e "\n\n\033[1;33mBuilding binaries for $platform\033[0m"
-for d in $dgraph_cmd/*; do
-  n=$(basename "${d}")
-  echo -e "\033[1;34m$n\033[0m"
-  cd $d
-  if [ "$n" = "dgraph" ];then
-    xgo --go 1.8.3 --targets $xgo_target -ldflags \
-      "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
-  else
-    xgo --go 1.8.3 --targets $xgo_target -ldflags \
-    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
-  fi
-done
+xgo --go 1.8.3 --targets $xgo_target -ldflags \
+  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
+
+cp dgraph-windows-4.0-amd64.exe dgraph.exe
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
-cd $tmp_dir;
+pushd $tmp_dir > /dev/null
 mkdir dgraph && pushd &> /dev/null dgraph;
-# Stripping the binaries.
-for d in $dgraph_cmd/*; do
-  n=$(basename "${d}")
-  cp $d/"$n-windows-4.0-amd64".exe "$n".exe
-done
-
+cp $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dgraph.exe .
 echo -e "\n\033[1;34mSize of files: $(du -sh)\033[0m"
+popd &> /dev/null
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
 tar_file=dgraph-"$platform"-amd64-$release_version
-popd &> /dev/null
 # Create a tar file with the contents of the dgraph folder (i.e the binaries)
 GZIP=-n tar -zcf $tar_file.tar.gz dgraph;
 echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file.tar.gz)\033[0m"
