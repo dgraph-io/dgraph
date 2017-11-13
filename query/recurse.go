@@ -116,6 +116,11 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 				// We need to do this in case we had some filters.
 				sg.updateUidMatrix()
 			}
+			for _, ul := range sg.uidMatrix {
+				for range ul.Uids {
+					numEdges++
+				}
+			}
 			if len(sg.Params.Order) > 0 || len(sg.Params.FacetOrder) > 0 {
 				// Can't use merge sort if the UIDs are not sorted.
 				sg.updateDestUids()
