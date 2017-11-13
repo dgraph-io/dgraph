@@ -132,6 +132,26 @@ export function humanizeTime(time) {
   return time.toFixed(0) + "ms";
 }
 
+export function serverLatency(latencyObj) {
+  var totalLatency = 0;
+  // Server returns parsing, processing and encoding latencies in ns separately.
+  for (var latency in latencyObj) {
+    totalLatency += parseFloat(latencyObj[latency]);
+  }
+
+  totalLatency = totalLatency / Math.pow(10, 6);
+
+  var lat;
+  if (totalLatency < 1) {
+    lat = Math.round(totalLatency * 1000) + "μs";
+  } else if (totalLatency > 1000) {
+    lat = Math.round(totalLatency / 1000) + "s";
+  } else {
+    lat = Math.round(totalLatency) + "ms";
+  }
+  return lat;
+}
+
 // childNodes returns nodes that given edges point to
 export function childNodes(edges) {
   return edges.map(function(edge) {

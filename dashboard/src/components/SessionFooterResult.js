@@ -1,7 +1,7 @@
 import React from "react";
 import pluralize from "pluralize";
 
-import { humanizeTime } from "../lib/helpers";
+import { humanizeTime, serverLatency } from "../lib/helpers";
 
 const SessionFooterResult = ({
   graphRenderTime,
@@ -36,7 +36,7 @@ const SessionFooterResult = ({
             <div className="stat">
               Server latency:{" "}
               <span className="value">
-                {response.data.extensions.server_latency.total}
+                {serverLatency(response.data.extensions.server_latency)}
               </span>
             </div>
           ) : null}

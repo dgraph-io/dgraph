@@ -579,7 +579,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if pred == "uid" || strings.Index(pred, ":") > 0 {
+		if pred == "uid" || strings.Index(pred, query.FacetDelimeter) > 0 {
 			continue
 		}
 
@@ -598,7 +598,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			}
 		}
 
-		prefix := pred + ":"
+		prefix := pred + query.FacetDelimeter
 		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
 		// to call parseFacets everytime.
 		fts, err := parseFacets(m, prefix)
@@ -695,7 +695,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		}
 	}
 
-	fts, err := parseFacets(m, parentPred+":")
+	fts, err := parseFacets(m, parentPred+query.FacetDelimeter)
 	mr.fcts = fts
 	return mr, err
 }

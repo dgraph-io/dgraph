@@ -74,9 +74,7 @@ class SessionFooterProperties extends React.Component {
             this._properties = el;
           }}
         >
-          <span className="label label-info">
-            {isNode ? "Node" : "Edge"}
-          </span>
+          <span className="label label-info">{isNode ? "Node" : "Edge"}</span>
 
           {isNode && attrs
             ? Object.keys(attrs).map(function(key, idx) {
@@ -85,46 +83,42 @@ class SessionFooterProperties extends React.Component {
                     <span className="property-key">
                       <span className="key-content">{key}</span>:
                     </span>
-                    <span className="property-val">
-                      {String(attrs[key])}
-                    </span>
+                    <span className="property-val">{String(attrs[key])}</span>
                   </span>
                 );
               })
             : null}
 
-          {isNode && facetKeys.length > 0
-            ? <span>
-                <span className="label label-default">
-                  Facets
-                </span>
-                {Object.keys(facets).map(function(key, idx) {
-                  return (
-                    <span className="property-pair" key={idx}>
-                      <span className="property-key">
-                        <span className="key-content">{key}</span>:
-                      </span>
-                      <span className="property-val">
-                        {String(facets[key])}
-                      </span>
+          {facetKeys.length > 0 ? (
+            <span>
+              <span className="label label-default">Facets</span>
+              {Object.keys(facets).map(function(key, idx) {
+                return (
+                  <span className="property-pair" key={idx}>
+                    <span className="property-key">
+                      <span className="key-content">{key}</span>:
                     </span>
-                  );
-                })}
-              </span>
-            : null}
+                    <span className="property-val">{String(facets[key])}</span>
+                  </span>
+                );
+              })}
+            </span>
+          ) : null}
         </div>
 
-        {canExpand
-          ? <a
-              href="#toggle-expand"
-              onClick={this.handleToggleExpand}
-              className="toggle-expand-btn"
-            >
-              {isExpanded
-                ? <i className="fa fa-caret-up" />
-                : <i className="fa fa-caret-down" />}
-            </a>
-          : null}
+        {canExpand ? (
+          <a
+            href="#toggle-expand"
+            onClick={this.handleToggleExpand}
+            className="toggle-expand-btn"
+          >
+            {isExpanded ? (
+              <i className="fa fa-caret-up" />
+            ) : (
+              <i className="fa fa-caret-down" />
+            )}
+          </a>
+        ) : null}
       </div>
     );
   }

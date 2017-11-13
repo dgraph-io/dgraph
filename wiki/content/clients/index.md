@@ -5,12 +5,22 @@ title = "Clients"
 
 ## Implementation
 
-All clients can communicate with the server via the HTTP endpoint (set with option `--port` when starting Dgraph).  Queries and mutations can be submitted and JSON is returned.
+Clients can communicate with the server in two different ways:
 
-Go clients can use the clients package and communicate with the server over [gRPC](http://www.grpc.io/).  Internally this uses [Protocol Buffers](https://developers.google.com/protocol-buffers) and the proto file used by Dgraph is located at [graphresponse.proto](https://github.com/dgraph-io/dgraph/blob/master/protos/graphresponse.proto).
+- **Via [gRPC](http://www.grpc.io/).** Internally this uses [Protocol
+  Buffers](https://developers.google.com/protocol-buffers) (the proto file
+used by Dgraph is located at
+[task.proto](https://github.com/dgraph-io/dgraph/blob/master/protos/task.proto)).
+
+- **Via HTTP.** There are various endpoints, each accepting and returning JSON.
+  There is a one to one correspondence between the HTTP endpoints and the gRPC
+service methods.
 
 
-## Languages
+## Client Libraries
+
+It's possible to interface with dgraph directly via gRPC or HTTP. However, if a
+client library exists for you language, this will be an easier option.
 
 ### Go
 
@@ -30,186 +40,279 @@ go get -u -v github.com/dgraph-io/dgraph/client
 
 The client [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client) has specifications of all functions and examples.
 
-Larger examples can be found [here](https://github.com/dgraph-io/dgraph/tree/master/wiki/resources/examples/goclient).  And [this](https://open.dgraph.io/post/client0.8.0) blog post explores the examples further.
-
-The app [dgraph-live-loader](https://github.com/dgraph-io/dgraph/tree/master/cmd/dgraph-live-loader) uses the client interface to batch concurrent mutations.
-
-{{% notice "note" %}}As with mutations through a mutation block, [schema type]({{< relref "query-language/index.md#schema" >}}) needs to be set for the edges, or schema is derived based on first mutation received by the server. {{% /notice %}}
-
-### Python
-{{% notice "incomplete" %}}A lot of development has gone into the Go client and the Python client is not up to date with it. We are looking for help from contributors to bring it up to date.{{% /notice %}}
-
-#### Installation
-
-##### Via pip
-
-```
-pip install -U pydgraph
-```
-
-##### By Source
-* Clone the git repository for python client from github.
-
-```
-git clone https://github.com/dgraph-io/pydgraph
-cd pydgraph
-
-# Optional: If you have the dgraph server running on localhost:8080 and localhost:9080 you can run tests.
-python setup.py test
-
-# Install the python package.
-python setup.py install
-```
-
-#### Example
-```
-In [1]: from pydgraph.client import DgraphClient
-In [2]: dg_client = DgraphClient('localhost', 8080)
-In [3]: response = dg_client.query("""
-        mutation
-        {
-            set
-            {
-                <alice> <name> \"Alice\" .
-                <greg> <name> \"Greg\" .
-                <alice> <follows> <greg> .
-            }
-        }
-
-        query
-        {
-            me(_xid_: alice)
-            {
-                follows
-                {
-                    name _xid_
-                }
-            }
-        }
-        """)
-In [4]: print response
-n {
-  uid: 10125359828081617157
-  attribute: "_root_"
-  children {
-    uid: 6454194656439714227
-    xid: "greg"
-    attribute: "follows"
-    properties {
-      prop: "name"
-      val: "Greg"
-    }
-  }
-}
-l {
-  parsing: "8.64014ms"
-  processing: "302.099\302\265s"
-  pb: "10.422\302\265s"
-}
-```
+The [dgraph live
+loader](https://github.com/dgraph-io/dgraph/tree/master/dgraph/cmd/live/) uses
+the client interface to batch concurrent mutations.
 
 ### Java
-{{% notice "incomplete" %}}A lot of development has gone into the Go client and the Java client is not up to date with it. We are looking for help from contributors to bring it up to date.{{% /notice %}}
 
-#### Installation
+The Java client is a new and fully supported client for v0.9.0.
 
-Currently, given that this is the first version, the distribution is done via a `fatJar`
-built locally. The procedure to build it is:
+The client can be found [here](https://github.com/dgraph-io/dgraph4j).
+
+### Javascript
+
+{{% notice "note" %}}
+A Javascript client doesn't exist yet. But due to popular demand, a Javascript
+client will be created to work with dgraph v0.9.0. Watch this space!
+{{% /notice %}}
+
+### Python
+{{% notice "incomplete" %}}
+A lot of development has gone into the Go client and the Python client is not up to date with it.
+The Python client is not compatible with dgraph v0.9.0 and onwards.
+We are looking for help from contributors to bring it up to date.
+{{% /notice %}}
+
+The Python client can be found [here](https://github.com/dgraph-io/pydgraph).
+
+## Raw HTTP
+
+It's also possible to interact with dgraph directly from the command line via
+its HTTP endpoints.
+
+To do this, regular command line tools such as `curl` can be used.
+
+### Example
+
+The example here uses a simple banking system, where each account has a name
+and balance. The operations performed are displaying all balances and
+transferring money between accounts.
+
+The following commands assume that dgraph is running locally and is listening
+for HTTP on port 8080 (this is the default port to listen on, but can be
+changed using the (`--port` flag).
+
+See [Getting Started](http://localhost:1313/get-started/) for instructions on
+how to start up a dgraph instance.
+
+#### Setting the schema
+
+The `/alter` endpoint is used to create the schema. Here, the predicate `name`
+is the name of an account. It's indexed so that we can look up accounts based
+on their name.
+
+```sh
+curl -X POST localhost:8080/alter -d 'name: string @index(term) .'
+```
+
+If all goes well, the response should be `{"code":"Success","message":"Done"}`.
+
+#### Adding initial data
+
+Next we want to add some accounts and an initial balance. To modify or add
+data, the `/mutate` endpoint can be used.
+
+{{% notice "note" %}}
+The `$'...'` is used to preserve newlines in the body. This is important to do
+for the mutate endpoint, since newlines are part of the RDF syntax.
+{{% /notice %}}
+
+The `X-Dgraph-CommitNow` header tells dgraph that the mutation is to be
+committed immediately as a stand-alone unit. It's not part of a larger
+transaction.
+
+```sh
+curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
+{
+  set {
+    _:alice <name> "Alice" .
+    _:alice <balance> "100" .
+    _:bob <name> "Bob" .
+    _:bob <balance> "70" .
+  }
+}
+'
+```
+
+If all goes well, the response will include `"code": "Success"`, and look something like:
 
 ```
-# Get code from Github
-git clone git@github.com:dgraph-io/dgraph4j.git
-cd dgraph4j
-
-# Build fatJar, from the repository
-./gradlew fatJar
-
-# Copy fatJar to your CLASSPATH were it will be included
-cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar $CLASSPATH
-```
-
-#### Example
-You just need to include the `fatJar` into the `classpath`, the following is a simple
-example of how to use it:
-
-* Write `DgraphMain.java` (assuming Dgraph contains the data required for the query):
-
-```
-import io.dgraph.client.DgraphClient;
-import io.dgraph.client.GrpcDgraphClient;
-import io.dgraph.client.DgraphResult;
-
-public class DgraphMain {
-    public static void main(final String[] args) {
-        final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 9080);
-        final DgraphResult result = dgraphClient.query("{me(_xid_: alice) { name _xid_ follows { name _xid_ follows {name _xid_ } } }}");
-        System.out.println(result.toJsonObject().toString());
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "alice": "0x3",
+      "bob": "0x4"
     }
+  },
+  "extensions": {
+    "txn": {
+      "start_ts": 9,
+      "keys": [
+        "\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0004",
+        "\u0000\u0000\u0004name\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0004",
+        "\u0000\u0000\u0004name\u0002\u0002Bob",
+        "\u0000\u0000\u0004name\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003",
+        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0004",
+        "\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003",
+        "\u0000\u0000\u0004name\u0002\u0002Alice",
+        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003",
+        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0004",
+        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003"
+      ],
+      "lin_read": {
+        "ids": {
+          "1": 18
+        }
+      }
+    }
+  }
 }
 ```
 
-* Compile:
-```
-javac -cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar DgraphMain.java
-```
+#### Performing Queries
 
-* Run:
-```
-java -cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar:. DgraphMain
-Jun 29, 2016 12:28:03 AM io.grpc.internal.ManagedChannelImpl <init>
-INFO: [ManagedChannelImpl@5d3411d] Created with target localhost:9080
-{"_root_":[{"uid":"0x8c84811dffd0a905","_xid_":"alice","name":"Alice","follows":[{"uid":"0xdd77c65008e3c71","_xid_":"bob","name":"Bob"},{"uid":"0x5991e7d8205041b3","_xid_":"greg","name":"Greg"}]}],"server_latency":{"pb":"11.487µs","parsing":"85.504µs","processing":"270.597µs"}}
-```
+To query the database, the `/query` endpoint is used. To get the balances for
+both accounts:
 
-### Shell
-
-This client requires commands which are often already installed on a Dgraph server or a client machine.
-
-Verify that your installation has the required commands.
-```
-curl   -V 2>/dev/null || wget    -V
-python -V 2>/dev/null || python3 -V
-less   -V 2>/dev/null || more    -V
-```
-
-Your first choices are `curl`, `python` and `less`, however you can substitute the alternatives:
-`wget` for `curl`,
-`python3` for `python`,
-and `more` for `less`.
-
-If you are missing both of a pair of alternates, you will need to install one of them. If both are available, you may use either.
-
-Notice that we wrap the query text in `$'…'`. This preserves newlines in the quoted text.
-This is not strictly necessary for queries, but is required by the RDF format used with mutates.
-
-The `json.tool` module is part of the standard release package for python and python3.
-
-#### Example
-
-This example, from [Get Started]({{< relref "get-started/index.md" >}}), [Movies by Steven Spielberg]({{< relref "get-started/index.md#movies-by-steven-spielberg" >}}), uses commands commonly available on a Dgraph server to query the local Dgraph server.
-
-```
-curl localhost:8080/query -sS -XPOST -d $'{
-  director(allofterms("name", "steven spielberg")) {
-    name@en
-    director.film (orderdesc: initial_release_date) {
-      name@en
-      initial_release_date
-    }
+```sh
+curl -X POST localhost:8080/query -d $'
+{
+  balances(func: anyofterms(name, "Alice Bob")) {
+    uid
+    name
+    balance
   }
-}' | python -m json.tool | less
+}
+'
 ```
-And here using all alternatives.
+
+The result should look like this:
 
 ```
-wget localhost:8080/query -q -O- --post-data=$'{
-  director(allofterms("name", "steven spielberg")) {
-    name@en
-    director.film (orderdesc: initial_release_date) {
-      name@en
-      initial_release_date
+{
+  "data": {
+    "balances": [
+      {
+        "uid": "0x1",
+        "name": "Alice",
+        "balance": "100"
+      },
+      {
+        "uid": "0x2",
+        "name": "Bob",
+        "balance": "70"
+      }
+    ]
+  },
+  "extensions": {
+    "server_latency": {
+      "parsing_ns": 12235,
+      "processing_ns": 156547,
+      "encoding_ns": 404217
+    },
+    "txn": {
+      "start_ts": 4,
+      "lin_read": {
+        "ids": {
+          "1": 12
+        }
+      }
     }
   }
 }
-' | python3 -m json.tool | more
+```
+
+#### Transactions
+
+Any transfer of funds should be done as a transaction, to avoid problems such
+as [double spending](https://en.wikipedia.org/wiki/Double-spending) (among
+others).
+
+First, the account balances of the relevant accounts must be queried. Then then
+mutations must be submitted based on the query results. All of this must occur
+within a single transaction.
+
+The query response from the previous query can be used. In particular, we
+need the `"start_ts"` field and the uids of Alice and Bob.
+
+Say we wish to transfer $10 from Bob to Alice. Based on the result of the
+previous query, Alice's balance should become $110 and Bob's balance should
+become $60.
+
+The `X-Dgraph-StartTs` header should match the `"read_ts"` returned from the
+first query in the transaction.
+
+The `X-Dgraph-CommitNow` header isn't needed since the mutation is part of a
+larger transaction.
+
+```
+curl -X POST -H 'X-Dgraph-StartTs: 4' localhost:8080/mutate -d $'
+{
+  set {
+    <0x1> <balance> "110" .
+    <0x2> <balance> "60" .
+  }
+}
+'
+```
+
+The result should look like:
+
+```
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {
+    "txn": {
+      "start_ts": 4,
+      "keys": [
+        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0002",
+        "\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001",
+        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001",
+        "\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0002"
+      ],
+      "lin_read": {
+        "ids": {
+          "1": 15
+        }
+      }
+    }
+  }
+}
+```
+
+To finally commit the transaction, the `/commit` endpoint is used. The
+`start_ts` from the original query, along with the keys from all mutations (in
+this case, just one mutation) must be supplied.
+
+```sh
+curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0002","\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001","\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001","\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0002"]' localhost:8080/commit 
+```
+
+If the commit is successful (which it should be in this example), the result
+will be:
+
+```
+{
+  "data": {
+    "code": "Success",
+    "message" :"Done",
+  },
+  "extensions": {
+    "txn": {
+      "start_ts": 4
+      "commit_ts": 5,
+    }
+  }
+}
+```
+
+If there were any mutations effecting any relevant keys after `start_ts` but
+before the completion of the transaction, the commit will fail. For example:
+
+```
+{
+  "errors": [
+    {
+      "code": "Error",
+      "message": "Transaction aborted"
+    }
+  ]
+}
 ```

@@ -57,6 +57,7 @@ type GraphQuery struct {
 	Filter       *FilterTree
 	MathExp      *MathTree
 	Normalize    bool
+	Recurse      bool
 	Cascade      bool
 	IgnoreReflex bool
 	Facets       *Facets
@@ -77,7 +78,6 @@ type GraphQuery struct {
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
-	Upsert  bool // Whether we should add the edge in case it doesn't exist.
 }
 
 type AttrLang struct {
@@ -767,14 +767,8 @@ L:
 				parseGroupby(it, gq)
 			case "ignorereflex":
 				gq.IgnoreReflex = true
-			case "upsert":
-				if gq.Func == nil || gq.Func.Name != "eq" {
-					return nil, x.Errorf("Upsert query can only be done with eq function.")
-				}
-				if len(gq.Func.Args) != 1 {
-					return nil, x.Errorf("Upsert query can only have one argument.")
-				}
-				gq.Upsert = true
+			case "recurse":
+				gq.Recurse = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -2474,8 +2468,17 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if peekIt[0].Typ == itemRightRound {
-					// We encountered a count(), lets reset count to notSeen
-					// and set UidCount on parent.
+					return x.Errorf("Cannot use count(), please use count(uid)")
+				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
+					if gq.IsGroupby {
+						// count(uid) case which occurs inside @groupby
+						val = uid
+						// Skip uid)
+						it.Next()
+						it.Next()
+						goto Fall
+					}
+
 					if varName != "" {
 						return x.Errorf("Cannot assign variable to count()")
 					}
@@ -2485,13 +2488,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						gq.UidCount = alias
 					}
 					it.Next()
-				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
-					// count(uid) case which occurs inside @groupby
-					val = uid
-					// Skip uid)
 					it.Next()
-					it.Next()
-					goto Fall
 				}
 				continue
 			} else if valLower == value {

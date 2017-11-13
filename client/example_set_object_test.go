@@ -75,6 +75,7 @@ func Example_setObject() {
 	op.Schema = `
 		age: int .
 		married: bool .
+		loc: geo .
 	`
 
 	ctx := context.Background()

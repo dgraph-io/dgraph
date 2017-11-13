@@ -20,9 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
 	"testing"
 	"time"
 
@@ -104,10 +102,6 @@ func ExampleDgraph_Alter_dropAll() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Checkf(err, "While creating temp dir")
-	defer os.RemoveAll(clientDir)
-
 	dc := protos.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
@@ -136,7 +130,7 @@ func ExampleTxn_Mutate() {
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
-		Raw      []byte   `json:"raw_bytes",omitempty`
+		Raw      []byte   `json:"raw_bytes,omitempty"`
 		Friends  []Person `json:"friend,omitempty"`
 		Location loc      `json:"loc,omitempty"`
 		School   []School `json:"school,omitempty"`
@@ -321,7 +315,7 @@ func ExampleTxn_Query_unmarshal() {
 		Name    string   `json:"name,omitempty"`
 		Age     int      `json:"age,omitempty"`
 		Married bool     `json:"married,omitempty"`
-		Raw     []byte   `json:"raw_bytes",omitempty`
+		Raw     []byte   `json:"raw_bytes,omitempty"`
 		Friends []Person `json:"friend,omitempty"`
 		School  []School `json:"school,omitempty"`
 	}
@@ -437,14 +431,14 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 
 	type Person struct {
 		Name       string   `json:"name,omitempty"`
-		NameOrigin string   `json:"name:origin,omitempty"`
+		NameOrigin string   `json:"name|origin,omitempty"`
 		Friends    []Person `json:"friend,omitempty"`
 
 		// These are facets on the friend edge.
-		Since  time.Time `json:"friend:since,omitempty"`
-		Family string    `json:"friend:family,omitempty"`
-		Age    float64   `json:"friend:age,omitempty"`
-		Close  bool      `json:"friend:close,omitempty"`
+		Since  time.Time `json:"friend|since,omitempty"`
+		Family string    `json:"friend|family,omitempty"`
+		Age    float64   `json:"friend|age,omitempty"`
+		Close  bool      `json:"friend|close,omitempty"`
 
 		School []School `json:"school,omitempty"`
 	}
@@ -748,10 +742,6 @@ func ExampleTxn_Mutate_deleteNode() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
-
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Check(err)
-	defer os.RemoveAll(clientDir)
 
 	dc := protos.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)

@@ -41,6 +41,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	FacetDelimeter = "|"
+)
+
 /*
  * QUERY:
  * Let's take this query from GraphQL as example:
@@ -121,6 +125,7 @@ type params struct {
 
 	// directives.
 	Normalize    bool
+	Recurse      bool
 	Cascade      bool
 	IgnoreReflex bool
 
@@ -139,7 +144,6 @@ type params struct {
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
-	upsert         bool
 }
 
 // Function holds the information about gql functions.
@@ -435,7 +439,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
 					for _, f := range fs.Facets {
-						uc.AddValue(fmt.Sprintf("%s:%s", fieldName, f.Key),
+						uc.AddValue(fieldName+FacetDelimeter+f.Key,
 							facets.ValFor(f))
 					}
 				}
@@ -469,7 +473,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					dst.AddValue(fmt.Sprintf("%s:%s", fieldName, f.Key),
+					dst.AddValue(fieldName+FacetDelimeter+f.Key,
 						facets.ValFor(f))
 				}
 			}
@@ -761,7 +765,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.AfterUID = uint64(after)
 	}
-	if v, ok := gq.Args["depth"]; ok && (args.Alias == "recurse" ||
+	if v, ok := gq.Args["depth"]; ok && (gq.Recurse ||
 		args.Alias == "shortest") {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
@@ -854,7 +858,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		IgnoreReflex: gq.IgnoreReflex,
 		IsEmpty:      gq.IsEmpty,
 		Order:        gq.Order,
-		upsert:       gq.Upsert,
+		Recurse:      gq.Recurse,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -2398,7 +2402,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 					shortestSg, err = ShortestPath(ctx, sg)
 					errChan <- err
 				}()
-			} else if sg.Params.Alias == "recurse" {
+			} else if sg.Params.Recurse {
 				go func() {
 					errChan <- Recurse(ctx, sg)
 				}()
