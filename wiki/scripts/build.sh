@@ -108,7 +108,7 @@ checkAndUpdate()
 
 while true; do
 	# Lets move to the docs directory.
-	pushd /home/ubuntu/dgraph/docs > /dev/null
+	pushd /home/ubuntu/dgraph/wiki > /dev/null
 
 	currentBranch=$(git rev-parse --abbrev-ref HEAD)
 
