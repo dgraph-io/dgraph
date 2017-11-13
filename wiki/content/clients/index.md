@@ -17,47 +17,48 @@ used by Dgraph is located at
 service methods.
 
 
-## Client Libraries
-
 It's possible to interface with dgraph directly via gRPC or HTTP. However, if a
 client library exists for you language, this will be an easier option.
 
-### Go
+## Go
 
 [![GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client?status.svg)](https://godoc.org/github.com/dgraph-io/dgraph/client)
 
 The go client communicates with the server on the grpc port (set with option `--grpc_port` when starting Dgraph).
 
+The client can be obtained in the usual way via `go get`:
 
-#### Installation
-
-Go get the client:
-```
+```sh
 go get -u -v github.com/dgraph-io/dgraph/client
 ```
 
-#### Examples
+A simple end-to-end example is given here to show some of the main operations
+that can be performed with the client. The full
+[GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client) also contains
+documentation for the client API as well as some more examples.
 
-The client [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client) has specifications of all functions and examples.
+### Setting the schema
 
-The [dgraph live
-loader](https://github.com/dgraph-io/dgraph/tree/master/dgraph/cmd/live/) uses
-the client interface to batch concurrent mutations.
+### Adding Initial Data
 
-### Java
+### Performing Queries
+
+### Transactions
+
+## Java
 
 The Java client is a new and fully supported client for v0.9.0.
 
 The client can be found [here](https://github.com/dgraph-io/dgraph4j).
 
-### Javascript
+## Javascript
 
 {{% notice "note" %}}
 A Javascript client doesn't exist yet. But due to popular demand, a Javascript
 client will be created to work with dgraph v0.9.0. Watch this space!
 {{% /notice %}}
 
-### Python
+## Python
 {{% notice "incomplete" %}}
 A lot of development has gone into the Go client and the Python client is not up to date with it.
 The Python client is not compatible with dgraph v0.9.0 and onwards.
@@ -73,8 +74,6 @@ its HTTP endpoints.
 
 To do this, regular command line tools such as `curl` can be used.
 
-### Example
-
 The example here uses a simple banking system, where each account has a name
 and balance. The operations performed are displaying all balances and
 transferring money between accounts.
@@ -86,7 +85,7 @@ changed using the (`--port` flag).
 See [Getting Started](http://localhost:1313/get-started/) for instructions on
 how to start up a dgraph instance.
 
-#### Setting the schema
+### Setting the schema
 
 The `/alter` endpoint is used to create the schema. Here, the predicate `name`
 is the name of an account. It's indexed so that we can look up accounts based
@@ -98,7 +97,7 @@ curl -X POST localhost:8080/alter -d 'name: string @index(term) .'
 
 If all goes well, the response should be `{"code":"Success","message":"Done"}`.
 
-#### Adding initial data
+### Adding initial data
 
 Next we want to add some accounts and an initial balance. To modify or add
 data, the `/mutate` endpoint can be used.
@@ -162,7 +161,7 @@ If all goes well, the response will include `"code": "Success"`, and look someth
 }
 ```
 
-#### Performing Queries
+### Performing Queries
 
 To query the database, the `/query` endpoint is used. To get the balances for
 both accounts:
@@ -215,7 +214,7 @@ The result should look like this:
 }
 ```
 
-#### Transactions
+### Transactions
 
 Any transfer of funds should be done as a transaction, to avoid problems such
 as [double spending](https://en.wikipedia.org/wiki/Double-spending) (among
