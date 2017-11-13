@@ -1,20 +1,23 @@
 @charset "UTF-8";
 html body {
-    font-family: "Lato", sans-serif;
-    font-size: 15px;
-    line-height: 1.6;
-    background-color: #fff;
-    color: #4a4a4a;
-    margin: 0;
+  font-family: "Lato", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  background-color: #fff;
+  color: #4a4a4a;
+  margin: 0;
 }
 a {
-    color: #00bdf3;
+  color: #00bdf3;
 }
 a:hover {
-    color: #0082a7;
+  color: #0082a7;
 }
-b, strong, label, th {
-    font-weight: 600;
+b,
+strong,
+label,
+th {
+  font-weight: 600;
 }
 /*code {
     border-radius: 2px;
@@ -25,20 +28,20 @@ b, strong, label, th {
     padding: 0px 2px;
 }*/
 hr {
-    border-bottom: 4px solid #F0F2F4;
+  border-bottom: 4px solid #f0f2f4;
 }
 
 table {
-    border: 1px solid #eaeaea;
-    table-layout: auto;
+  border: 1px solid #eaeaea;
+  table-layout: auto;
 }
 th {
-    background: #f7f7f7;
-    padding: 0.5rem;
+  background: #f7f7f7;
+  padding: 0.5rem;
 }
 td {
-    padding: 0.5rem;
-    border: 1px solid #eaeaea;
+  padding: 0.5rem;
+  border: 1px solid #eaeaea;
 }
 
 .notices {
@@ -89,7 +92,12 @@ td {
 }
 
 /* headers */
-html h1, html h2, html h3, html h4, html h5, html h6 {
+html h1,
+html h2,
+html h3,
+html h4,
+html h5,
+html h6 {
   font-family: "Lato", sans-serif;
   font-weight: 700;
   color: #232323;
@@ -127,7 +135,7 @@ html p {
   padding: 21px 43px 67px;
 }
 
-@media screen and (max-width:480px) {
+@media screen and (max-width: 480px) {
   .content-wrapper .content {
     padding: 23px 22px;
   }
@@ -147,9 +155,9 @@ body.sidebar-visible .content-wrapper {
 
 html pre {
   position: relative;
-  padding: 1rem;
+  padding: 10px 19px;
   transition: all 300ms cubic-bezier(0.175, 0.885, 0.335, 1.05);
-  margin: 2rem 0;
+  margin: 10px 0;
   background: #f9f9f9;
   border: 0;
   border-radius: 2px;
@@ -183,11 +191,19 @@ pre.collapsed .showmore {
   padding-bottom: 5px;
   padding-top: 26px;
   cursor: pointer;
-  background: linear-gradient(180deg, hsla(0, 0%, 100%, 0.1), rgba(226, 226, 226, 0.72));
+  background: linear-gradient(
+    180deg,
+    hsla(0, 0%, 100%, 0.1),
+    rgba(226, 226, 226, 0.72)
+  );
   color: #5a5a5a;
 }
 pre.collapsed .showmore:hover {
-  background: linear-gradient(180deg, hsla(0, 0%, 100%, 0.1), rgba(226, 226, 226, 0.91));
+  background: linear-gradient(
+    180deg,
+    hsla(0, 0%, 100%, 0.1),
+    rgba(226, 226, 226, 0.91)
+  );
   font-weight: 600;
 }
 pre.collapsed .showmore span {
@@ -220,7 +236,7 @@ pre.collapsed .showmore span {
   cursor: pointer;
 }
 .copy-btn:not(.copied):hover {
-    background-color: #fdfdfd;
+  background-color: #fdfdfd;
 }
 .copy-btn.copied {
   cursor: default;
@@ -229,7 +245,7 @@ pre.collapsed .showmore span {
 #header {
   height: 64px;
   position: fixed;
-  border-bottom: 1px solid #EEE;
+  border-bottom: 1px solid #eee;
   padding: 0 31px;
   z-index: 2;
   top: 0;
@@ -403,10 +419,13 @@ pre.collapsed .showmore span {
   font-weight: 600;
 }
 
-h2, h3 {
+h2,
+h3 {
   position: relative;
 }
-h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
+h1:hover .anchor i,
+h2:hover .anchor i,
+h3:hover .anchor i {
   visibility: visible;
 }
 .anchor {
