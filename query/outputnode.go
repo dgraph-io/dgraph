@@ -371,6 +371,10 @@ type attrVal struct {
 }
 
 func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
+	// Don't add empty groupby
+	if len(sg.GroupbyRes.group) == 0 {
+		return
+	}
 	g := n.New(fname)
 	for _, grp := range sg.GroupbyRes.group {
 		uc := g.New("@groupby")
