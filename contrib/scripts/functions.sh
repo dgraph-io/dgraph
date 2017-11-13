@@ -2,8 +2,8 @@
 
 function quit {
   echo "Shutting down dgraph server and zero"
-  curl -s localhost:8080/admin/shutdown > /dev/null
-  curl -s localhost:8082/admin/shutdown > /dev/null
+  curl -s localhost:8081/admin/shutdown
+  curl -s localhost:8082/admin/shutdown
   # Kill Dgraphzero
   kill -9 $(pgrep -f "dgraph zero") > /dev/null
 
@@ -23,10 +23,10 @@ function quit {
 function start {
   pushd dgraph &> /dev/null
   echo -e "Starting first server."
-  ./dgraph server -p $BUILD/p -w $BUILD/w --memory_mb 4096 --idx 1 --my "127.0.0.1:12345" --zero "127.0.0.1:12340"> $BUILD/server.log 2>&1 &
+  ./dgraph server -p $BUILD/p -w $BUILD/w --memory_mb 4096 -o 1 > $BUILD/server.log 2>&1 &
   sleep 5
   echo -e "Starting second server.\n"
-  ./dgraph server -p $BUILD/p2 -w $BUILD/w2 --memory_mb 4096 --idx 2 --my "127.0.0.1:12346" --zero "127.0.0.1:12340" --port 8082 --grpc_port 9082 --workerport 12346 > $BUILD/server2.log 2>&1 &
+  ./dgraph server -p $BUILD/p2 -w $BUILD/w2 --memory_mb 4096 -o 2  > $BUILD/server2.log 2>&1 &
   # Wait for membership sync to happen.
 	# TODO: Change this to wait for health check.
   sleep 5
@@ -39,7 +39,7 @@ function startZero {
   echo -e "\nBuilding Dgraph."
   go build .
 	echo -e "Starting dgraph zero.\n"
-  ./dgraph zero -w $BUILD/wz --port 12340 > $BUILD/zero.log 2>&1 &
+  ./dgraph zero -w $BUILD/wz > $BUILD/zero.log 2>&1 &
   # To ensure dgraph doesn't start before dgraphzero.
 	sleep 5
   popd &> /dev/null

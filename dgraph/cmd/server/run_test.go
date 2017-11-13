@@ -85,7 +85,6 @@ func prepare() (dir1, dir2 string, rerr error) {
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"-w=wz",
-		"--port", "12341",
 	)
 	zero.Stdout = os.Stdout
 	if err := zero.Start(); err != nil {
@@ -112,7 +111,8 @@ func prepare() (dir1, dir2 string, rerr error) {
 	posting.Init(edgraph.State.Pstore)
 	schema.Init(edgraph.State.Pstore)
 	worker.Init(edgraph.State.Pstore)
-	worker.Config.ZeroAddr = "localhost:12341"
+	worker.Config.ZeroAddr = "localhost:7080"
+	worker.Config.MyAddr = "localhost:7081"
 	worker.Config.RaftId = 1
 	worker.StartRaftNodes(edgraph.State.WALstore, false)
 	return dir1, dir2, nil

@@ -47,7 +47,8 @@ func TestMain(m *testing.M) {
 	dgraph := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"server",
 		"--memory_mb=2048",
-		"--zero=127.0.0.1:8888",
+		"--zero=127.0.0.1:7080",
+		"-o=1",
 	)
 	dgraph.Stdout = os.Stdout
 	dgraph.Stderr = os.Stderr
@@ -60,7 +61,7 @@ func TestMain(m *testing.M) {
 	s.Commands = append(s.Commands, dgraph)
 	s.Dirs = append(s.Dirs, "p", "w")
 
-	conn, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:9081", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -271,7 +272,7 @@ func TestTxnRead5(t *testing.T) {
 		Query: q,
 	}
 
-	conn, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:9081", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}

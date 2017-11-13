@@ -48,7 +48,7 @@ type Res3 struct {
 }
 
 func TestShare(t *testing.T) {
-	dgraphServer := "http://localhost:8080/share?debug=true"
+	dgraphServer := "http://localhost:8081/share?debug=true"
 	client := new(http.Client)
 	q := `%7B%0A%20%20me(func:%20eq(name,%20%22Steven%20Spielberg%22))%20%7B%0A%09%09name%0A%09%09director.film%20%7B%0A%09%09%09name%0A%09%09%7D%0A%20%20%7D%0A%7D`
 	req, err := http.NewRequest("POST", dgraphServer, strings.NewReader(q))
@@ -71,7 +71,7 @@ func TestShare(t *testing.T) {
 	}
 	`, r.Uids["share"])
 
-	dgraphServer = "http://localhost:8080/query"
+	dgraphServer = "http://localhost:8081/query"
 	req, err = http.NewRequest("POST", dgraphServer, strings.NewReader(q2))
 	require.NoError(t, err)
 	resp, err = client.Do(req)
