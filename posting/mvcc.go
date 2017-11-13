@@ -75,6 +75,18 @@ type transactions struct {
 	m map[uint64]*Txn
 }
 
+func (t *transactions) MinTs() uint64 {
+	t.Lock()
+	defer t.Unlock()
+	var minTs uint64
+	for ts := range t.m {
+		if ts < minTs || minTs == 0 {
+			minTs = ts
+		}
+	}
+	return minTs
+}
+
 func (t *transactions) Reset() {
 	t.Lock()
 	defer t.Unlock()

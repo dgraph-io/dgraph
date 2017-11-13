@@ -542,6 +542,13 @@ func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (
 	return &protos.Payload{}, err
 }
 
+func (w *grpcWorker) MinTransactionTimestamp(ctx context.Context,
+	payload *protos.Payload) (*protos.Num, error) {
+	n := &protos.Num{}
+	n.Val = posting.Txns().MinTs()
+	return n, nil
+}
+
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
 	txnCtx := &protos.TxnContext{}

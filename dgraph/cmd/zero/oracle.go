@@ -20,6 +20,7 @@ package zero
 import (
 	"errors"
 	"math/rand"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -31,7 +32,6 @@ type Oracle struct {
 	commits    map[uint64]uint64 // start -> commit
 	rowCommit  map[string]uint64 // fp(key) -> commit
 	aborts     map[uint64]struct{}
-	pending    map[uint64]struct{} // TODO: Do we need this?
 	maxPending uint64
 	// Implement Tmax.
 	subscribers map[int]chan *protos.OracleDelta
@@ -43,7 +43,6 @@ func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	o.rowCommit = make(map[string]uint64)
 	o.aborts = make(map[uint64]struct{})
-	o.pending = make(map[uint64]struct{})
 	o.subscribers = make(map[int]chan *protos.OracleDelta)
 	o.updates = make(chan *protos.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init()
@@ -57,6 +56,23 @@ func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
 		}
 	}
 	return false
+}
+
+func (o *Oracle) purgeBelow(minTs uint64) {
+	o.Lock()
+	defer o.Unlock()
+
+	// Dropping would be cheaper if abort/commits map is sharded
+	for ts := range o.commits {
+		if ts < minTs {
+			delete(o.commits, ts)
+		}
+	}
+	for ts := range o.aborts {
+		if ts < minTs {
+			delete(o.aborts, ts)
+		}
+	}
 }
 
 func (o *Oracle) commit(src *protos.TxnContext) error {
@@ -156,13 +172,14 @@ func (o *Oracle) sendDeltasToSubscribers() {
 }
 
 func (o *Oracle) updateCommitStatusHelper(src *protos.TxnContext) bool {
-	// TODO: Have a way to clear out the commits and aborts.
 	o.Lock()
 	defer o.Unlock()
-	if _, ok := o.pending[src.StartTs]; !ok {
+	if _, ok := o.commits[src.StartTs]; ok {
 		return false
 	}
-	delete(o.pending, src.StartTs)
+	if _, ok := o.aborts[src.StartTs]; ok {
+		return false
+	}
 	if src.Aborted {
 		o.aborts[src.StartTs] = struct{}{}
 	} else {
@@ -201,9 +218,6 @@ func (o *Oracle) storePending(ids *protos.AssignedIds) {
 	if o.maxPending < max {
 		o.maxPending = max
 	}
-	for id := ids.StartId; id <= ids.EndId; id++ {
-		o.pending[id] = struct{}{}
-	}
 }
 
 var errConflict = errors.New("Transaction conflict")
@@ -232,7 +246,6 @@ func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
 		return s.proposeTxn(ctx, src)
 	}
 
-	// TODO: Consider Tmax here.
 	var num protos.Num
 	num.Val = 1
 	assigned, err := s.lease(ctx, &num, true)
@@ -284,6 +297,40 @@ func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer)
 		}
 	}
 	return nil
+}
+
+func (s *Server) purgeOracle() {
+	ticker := time.NewTicker(time.Second * 10)
+	defer ticker.Stop()
+
+	var lastPurgeTs uint64
+OUTER:
+	for {
+		<-ticker.C
+		groups := s.KnownGroups()
+		var minTs uint64
+		for _, group := range groups {
+			pl := s.Leader(group)
+			if pl == nil {
+				x.Printf("No healthy connection found to leader of group %d\n", group)
+				goto OUTER
+			}
+			c := protos.NewWorkerClient(pl.Get())
+			num, err := c.MinTransactionTimestamp(context.Background(), &protos.Payload{})
+			if err != nil {
+				x.Printf("Error while fetching minTs from group %d, err: %v\n", group, err)
+				goto OUTER
+			}
+			if minTs == 0 || num.Val < minTs {
+				minTs = num.Val
+			}
+		}
+
+		if minTs > 0 && minTs != lastPurgeTs {
+			s.orc.purgeBelow(minTs)
+			lastPurgeTs = minTs
+		}
+	}
 }
 
 func (s *Server) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.TxnTimestamps, error) {

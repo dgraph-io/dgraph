@@ -419,6 +419,7 @@ service Worker {
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
 	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
+	rpc MinTransactionTimestamp (Payload)         returns (Num) {}
 
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
 	rpc ReceivePredicate(stream KV)         returns (Payload) {}
