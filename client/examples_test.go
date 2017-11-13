@@ -20,9 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
 	"testing"
 	"time"
 
@@ -103,10 +101,6 @@ func ExampleDgraph_Alter_dropAll() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
-
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Checkf(err, "While creating temp dir")
-	defer os.RemoveAll(clientDir)
 
 	dc := protos.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
@@ -748,10 +742,6 @@ func ExampleTxn_Mutate_deleteNode() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
-
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Check(err)
-	defer os.RemoveAll(clientDir)
 
 	dc := protos.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
