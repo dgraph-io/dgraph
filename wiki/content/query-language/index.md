@@ -2946,7 +2946,7 @@ curl localhost:8080/query -XPOST -d $'{
 To get 10 movies from a genre that has more than 30000 films and then get two actors for those movies we'd do something as follows:
 {{< runnable >}}
 {
-	me(func: gt(count(~genre), 30000), first: 1) @recurse {
+	me(func: gt(count(~genre), 30000), first: 1, depth: 5) @recurse {
 		name@en
 		~genre (first:10) @filter(gt(count(starring), 2))
 		starring (first: 2)
@@ -2956,23 +2956,9 @@ To get 10 movies from a genre that has more than 30000 films and then get two ac
 {{< /runnable >}}
 Some points to keep in mind while using recurse queries are:
 
-- Each edge would be traversed only once. Hence, cycles would be avoided.
 - You can specify only one level of predicates after root. These would be traversed recursively. Both scalar and entity-nodes are treated similarly.
 - Only one recurse block is advised per query.
 - Be careful as the result size could explode quickly and an error would be returned if the result set gets too large. In such cases use more filter, limit resutls using pagination, or provide a depth parameter at root as follows:
-
-{{< runnable >}}
-{
-	me(func: gt(count(~genre), 30000), depth: 2) @recurse {
-		name@en
-		~genre (first:2) @filter(gt(count(starring), 2))
-		starring (first: 2)
-		performance.actor
-	}
-}
-{{< /runnable >}}
-
-
 
 
 ## Fragments
