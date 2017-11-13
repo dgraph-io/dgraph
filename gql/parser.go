@@ -2468,8 +2468,17 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if peekIt[0].Typ == itemRightRound {
-					// We encountered a count(), lets reset count to notSeen
-					// and set UidCount on parent.
+					return x.Errorf("Cannot use count(), please use count(uid)")
+				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
+					if gq.IsGroupby {
+						// count(uid) case which occurs inside @groupby
+						val = uid
+						// Skip uid)
+						it.Next()
+						it.Next()
+						goto Fall
+					}
+
 					if varName != "" {
 						return x.Errorf("Cannot assign variable to count()")
 					}
@@ -2479,13 +2488,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						gq.UidCount = alias
 					}
 					it.Next()
-				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
-					// count(uid) case which occurs inside @groupby
-					val = uid
-					// Skip uid)
 					it.Next()
-					it.Next()
-					goto Fall
 				}
 				continue
 			} else if valLower == value {

@@ -1005,11 +1005,11 @@ The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `
 Syntax Examples:
 
 * `count(predicate)`
-* `count()`
+* `count(uid)`
 
 The form `count(predicate)` counts how many `predicate` edges lead out of a node.
 
-The form `count()` counts the number of UIDs matched in the enclosing block.
+The form `count(uid)` counts the number of UIDs matched in the enclosing block.
 
 Query Example: The number of films acted in by each actor with `Orlando` in their name.
 
@@ -1029,7 +1029,7 @@ Query Example: Count of directors who have directed more than five films.  When 
 {{< runnable >}}
 {
   directors(func: gt(count(director.film), 5)) {
-    totalDirectors : count()
+    totalDirectors : count(uid)
   }
 }
 {{< /runnable >}}
