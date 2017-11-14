@@ -66,15 +66,15 @@ Run `dgraph zero` to start Dgraph zero. This process controls Dgraph cluster,
 maintaining membership information, shard assignment and shard movement, etc.
 
 ```sh
-dgraph zero
+dgraph zero --port_offset -2000
 ```
 
 **Run Dgraph data server**
 
-Run `dgraph server` with `--memory_mb` flag to start Dgraph server.
+Run `dgraph server` to start Dgraph server.
 
 ```sh
-dgraph server --memory_mb 2048
+dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
 {{% notice "tip" %}}You need to set the estimated memory dgraph can take through `memory_mb` flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
@@ -82,7 +82,7 @@ dgraph server --memory_mb 2048
 #### Windows
 To run dgraph with the UI on Windows, you also have to supply the path to the assets using the (`--ui` option).
 ```sh
-./dgraph.exe --memory_mb 2048 -ui path-to-assets-folder
+./dgraph.exe --memory_mb 2048 --zero localhost:5080 --ui path-to-assets-folder
 ```
 
 ### Docker on Linux
@@ -92,10 +92,10 @@ To run dgraph with the UI on Windows, you also have to supply the path to the as
 mkdir -p /tmp/data
 
 # Run Dgraph Zero
-docker run -itP -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
+docker run -itP -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero --port_offset -2000
 
 # Run Dgraph Server
-docker exec -it diggy dgraph server --memory_mb 2048
+docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
 The dgraph server listens on ports 8080 and 9080  with log output to the terminal.
