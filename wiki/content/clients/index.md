@@ -33,52 +33,18 @@ go get -u -v github.com/dgraph-io/dgraph/client
 ```
 
 The full [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client) contains
-documentation for the client API as well as some more examples.
+documentation for the client API along with examples showing how to use it.
 
-A full example is shown here. In the example, dgraph stores some financial
-accounts, each with a name and a balance. The example works as follows:
+### Create the client
 
-1. Create a dgraph client.
-2. Set up a schema.
-3. Add some initial data into dgraph. There are two accounts, Alice has $100
-   and Bob has $70.
-4. Query the data to see the initial account balances.
-5. Perform a transaction on the data. $10 is transferred from Bob to Alice.
-6. View the account balances again (this will reflected the transfered amount).
-
-These steps correspond to each of the funciton calls from `func main()`.
-
-Here is the program:
+To create a client, dial a connection to Dgraph's external Grpc port (typically
+9080). The following code snippet shows just one connection. You can connect to multiple Dgraph serers to distribute the workload evenly.
 
 ```go
-package main
-
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"log"
-
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
-	"google.golang.org/grpc"
-)
-
-var ctx = context.Background()
-
-func main() {
-	c := newClient()
-	setup(c)
-	initData(c)
-	makeQuery(c)
-	doTxn(c)
-	makeQuery(c)
-}
-
 func newClient() *client.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
 	// setting up the dgraph cluster.
-	d, err := grpc.Dial("localhost:19080", grpc.WithInsecure())
+	d, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -87,87 +53,67 @@ func newClient() *client.Dgraph {
 		protos.NewDgraphClient(d),
 	)
 }
+```
 
+### Alter the database
+
+To set the schema, set it on a `protos.Operation` object, and pass it down to
+the `Alter` method.
+
+```go
 func setup(c *client.Dgraph) {
-	// Drop all data including schema from the dgraph instance. This is useful
-	// for small examples such as this, since it puts dgraph into a clean
-	// state.
-	if err := c.Alter(ctx, &protos.Operation{
-		DropAll: true,
-	}); err != nil {
-		log.Fatal(err)
-	}
-
 	// Install a schema into dgraph. Accounts have a `name` and a `balance`.
-	if err := c.Alter(ctx, &protos.Operation{
+	err := c.Alter(ctx, &protos.Operation{
 		Schema: `
 			name: string @index(term) .
 			balance: int .
 		`,
-	}); err != nil {
-		log.Fatal(err)
-	}
+	})
 }
+```
 
-func initData(c *client.Dgraph) {
-	// Set some initial data. We initially give Alice $100 and Bob $70.
-	txn := c.NewTxn()
-	defer txn.Discard(ctx)
-	if _, err := txn.Mutate(ctx, &protos.Mutation{
+`protos.Operation` contains other fields as well, including drop predicate and
+drop all. Drop all is useful if you wish to discard all the data, and start from
+a clean slate, without bringing the instance down.
 
-		// By setting CommitImmediately to true, we don't have to call
-		// txn.Commit for the data to be persisted.
-		CommitImmediately: true,
+```go
+	// Drop all data including schema from the dgraph instance. This is useful
+	// for small examples such as this, since it puts dgraph into a clean
+	// state.
+	err := c.Alter(ctx, &protos.Operation{DropAll: true})
+```
 
-		// We're using NQuads in this example, but JSON could also be used by
-		// setting the SetJson field in protos.Mutation.
-		SetNquads: []byte(`
-			_:alice <name> "Alice" .
-			_:alice <balance> "100" .
-			_:bob <name> "Bob" .
-			_:bob <balance> "70" .
-		`),
-	}); err != nil {
-		log.Fatal(err)
-	}
+### Create a transaction
+
+Dgraph v0.9 supports running distributed ACID transactions. To create a
+transaction, just call `c.NewTxn()`. This operation incurs no network call.
+Typically, you'd also want to call a `defer txn.Discard()` to let it
+automatically rollback in case of errors. Calling `Discard` after `Commit` would
+be a no-op.
+
+```go
+func runTxn(c *client.Dgraph) {
+  txn := c.NewTxn()
+  defer txn.Discard()
 }
+```
 
-func makeQuery(c *client.Dgraph) {
-	// Query the details for all accounts. The response is in JSON format.
-	resp, err := c.NewTxn().Query(context.Background(), `
-		{
-		  balances(func: anyofterms(name, "Alice Bob")) {
-			name
-			balance
-		  }
-		}
-	`)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(string(resp.GetJson()))
-}
+### Run a query
 
-func doTxn(c *client.Dgraph) {
-	// We wish to transfer $10 from Bob to Alice. This should occur in a
-	// transaction, since we don't want other users of dgraph to see an
-	// intermediate state.
+You can run a query by calling `txn.Query`. The response would contain a `JSON`
+field, which has the JSON encoded result. You can unmarshal it into Go struct
+via `json.Unmarshal`.
 
-	// First query the balance for Alice and Bob.
+```go
+	// Query the balance for Alice and Bob.
 	const q = `
 		{
-		  alice(func: anyofterms(name, "Alice")) {
-			uid
-			balance
-		  }
-		  bob(func: anyofterms(name, "Bob")) {
+		  all(func: anyofterms(name, "Alice Bob")) {
 			uid
 			balance
 		  }
 		}
 	`
-	txn := c.NewTxn()
-	defer txn.Discard(ctx)
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
 		log.Fatal(err)
@@ -176,11 +122,7 @@ func doTxn(c *client.Dgraph) {
 	// After we get the balances, we have to decode them into structs so that
 	// we can manipulate the data.
 	var decode struct {
-		Alice []struct {
-			Uid     string
-			Balance int
-		}
-		Bob []struct {
+		All []struct {
 			Uid     string
 			Balance int
 		}
@@ -188,58 +130,46 @@ func doTxn(c *client.Dgraph) {
 	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
 		log.Fatal(err)
 	}
+```
 
-	// Now we can create the new mutations with the adjusted account balances.
-	rdfs := fmt.Sprintf(`
-		<%s> <balance> "%d" .
-		<%s> <balance> "%d" .
-	`,
-		decode.Alice[0].Uid, decode.Alice[0].Balance+10,
-		decode.Bob[0].Uid, decode.Bob[0].Balance-10,
-	)
-	if _, err := txn.Mutate(ctx, &protos.Mutation{
-		SetNquads: []byte(rdfs)},
-	); err != nil {
-		log.Fatal(err)
-	}
+### Run a mutation
 
+`txn.Mutate` would run the mutation. It takes in a `protos.Mutation` object,
+which provides two main ways to set data: JSON and RDF N-Quad. You can choose
+whichever way is convenient.
+
+We're going to continue using JSON. You could modify the Go structs parsed from
+the query, and marshal them back into JSON.
+
+```go
+  // Move $5 between the two accounts.
+  decode.All[0].Bal += 5
+  decode.All[1].Bal -= 5
+
+  out, err := json.Marshal(decode.All)
+  if err != nil {
+    log.Fatal(err)
+  }
+
+  _, err := txn.Mutate(ctx, &protos.Mutation{SetJSON: out})
+```
+
+Sometimes, you only want to commit mutation, without querying anything further.
+In such cases, you can use a `CommitImmediately` field in `protos.Mutation` to
+indicate that the mutation must be immediately committed.
+
+### Commit the transaction
+
+Once all the queries and mutations are done, you can commit the transaction. It
+returns an error in case the transaction could not be committed.
+
+```go
 	// Finally, we can commit the transactions. An error will be returned if
 	// other transactions running concurrently modify the same data that was
 	// modified in this transaction. It is up to the library user to retry
 	// transactions when they fail.
-	if err := txn.Commit(ctx); err != nil {
-		log.Fatal(err)
-	}
-}
-```
 
-And its output:
-
-```
-{
-  "balances": [
-    {
-      "name": "Alice",
-      "balance": 100
-    },
-    {
-      "name": "Bob",
-      "balance": 70
-    }
-  ]
-}
-{
-  "balances": [
-    {
-      "name": "Alice",
-      "balance": 110
-    },
-    {
-      "name": "Bob",
-      "balance": 60
-    }
-  ]
-}
+  err := txn.Commit(ctx)
 ```
 
 ## Java

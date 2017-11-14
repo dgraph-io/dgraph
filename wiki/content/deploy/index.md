@@ -416,7 +416,7 @@ $ dgraph live -r <path-to-rdf-gzipped-file>
 $ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
 ```
 
-## Bulk Loader
+### Bulk Loader
 
 Bulk loader serves a similar purpose to the live loader, but can only be used
 while dgraph is offline for the initial population. It cannot run on an
@@ -435,6 +435,10 @@ about the bulk loader on the blog.
 
 Flags can be used to control the behaviour and performance characteristics of
 the bulk loader. You can see the full list by running `dgraph bulk --help`.
+
+{{% notice "tip" %}}
+We highly recommend [disabling swap space](https://askubuntu.com/questions/214805/how-do-i-disable-swap) when running Bulk Loader. It is better to fix the parameters to decrease memory usage, than to have swapping slow down the loader.
+{{% /notice %}}
 
 For bigger datasets and machines with many cores, gzip
 decoding can be a bottleneck. Performance improvements can be obtained by
