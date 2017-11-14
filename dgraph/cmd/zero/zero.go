@@ -83,6 +83,7 @@ func (s *Server) Init() {
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.shutDownCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
+	go s.purgeOracle()
 }
 
 func (s *Server) Leader(gid uint32) *conn.Pool {
@@ -105,6 +106,16 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 		}
 	}
 	return healthyPool
+}
+
+func (s *Server) KnownGroups() []uint32 {
+	var groups []uint32
+	s.RLock()
+	defer s.RUnlock()
+	for group := range s.state.Groups {
+		groups = append(groups, group)
+	}
+	return groups
 }
 
 func (s *Server) hasLeader(gid uint32) bool {

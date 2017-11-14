@@ -314,7 +314,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			p, state.MaxLeaseId, state.MaxTxnTs)
 	}
 	if p.Txn != nil {
-		n.server.orc.updateCommitStatus(p.Txn)
+		n.server.orc.updateCommitStatus(e.Index, p.Txn)
 	}
 
 	return p.Id, nil
@@ -395,12 +395,10 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 }
 
 func (n *node) trySnapshot() {
-	// TODO: FIx later
-	return
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 	si := existing.Metadata.Index
-	idx := n.Applied.DoneUntil()
+	idx := n.server.SyncedUntil()
 	if idx <= si+1000 {
 		return
 	}
@@ -429,6 +427,7 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
 
+	loop := 0
 	for {
 		select {
 		case <-ticker.C:
@@ -453,6 +452,7 @@ func (n *node) Run() {
 			}
 
 			for _, entry := range rd.CommittedEntries {
+				loop++
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
@@ -486,7 +486,9 @@ func (n *node) Run() {
 			if len(rd.CommittedEntries) > 0 {
 				n.triggerUpdates()
 			}
-			n.trySnapshot()
+			if loop%1000 == 0 {
+				n.trySnapshot()
+			}
 			n.Raft().Advance()
 		}
 	}

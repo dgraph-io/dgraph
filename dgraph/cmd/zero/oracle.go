@@ -20,30 +20,36 @@ package zero
 import (
 	"errors"
 	"math/rand"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 )
 
+type syncMark struct {
+	index uint64
+	ts    uint64
+}
+
 type Oracle struct {
 	x.SafeMutex
 	commits    map[uint64]uint64 // start -> commit
 	rowCommit  map[string]uint64 // fp(key) -> commit
 	aborts     map[uint64]struct{}
-	pending    map[uint64]struct{} // TODO: Do we need this?
 	maxPending uint64
-	// Implement Tmax.
+
+	tmax        uint64
 	subscribers map[int]chan *protos.OracleDelta
 	updates     chan *protos.OracleDelta
 	doneUntil   x.WaterMark
+	syncMarks   []syncMark
 }
 
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	o.rowCommit = make(map[string]uint64)
 	o.aborts = make(map[uint64]struct{})
-	o.pending = make(map[uint64]struct{})
 	o.subscribers = make(map[int]chan *protos.OracleDelta)
 	o.updates = make(chan *protos.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init()
@@ -57,6 +63,25 @@ func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
 		}
 	}
 	return false
+}
+
+func (o *Oracle) purgeBelow(minTs uint64) {
+	x.Printf("purging below %d %d %d\n", minTs, len(o.commits), len(o.aborts))
+	o.Lock()
+	defer o.Unlock()
+
+	// Dropping would be cheaper if abort/commits map is sharded
+	for ts := range o.commits {
+		if ts < minTs {
+			delete(o.commits, ts)
+		}
+	}
+	for ts := range o.aborts {
+		if ts < minTs {
+			delete(o.aborts, ts)
+		}
+	}
+	o.tmax = minTs
 }
 
 func (o *Oracle) commit(src *protos.TxnContext) error {
@@ -155,24 +180,29 @@ func (o *Oracle) sendDeltasToSubscribers() {
 	}
 }
 
-func (o *Oracle) updateCommitStatusHelper(src *protos.TxnContext) bool {
-	// TODO: Have a way to clear out the commits and aborts.
+func (o *Oracle) updateCommitStatusHelper(index uint64, src *protos.TxnContext) bool {
 	o.Lock()
 	defer o.Unlock()
-	if _, ok := o.pending[src.StartTs]; !ok {
+	if src.StartTs < o.tmax {
 		return false
 	}
-	delete(o.pending, src.StartTs)
+	if _, ok := o.commits[src.StartTs]; ok {
+		return false
+	}
+	if _, ok := o.aborts[src.StartTs]; ok {
+		return false
+	}
 	if src.Aborted {
 		o.aborts[src.StartTs] = struct{}{}
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
+	o.syncMarks = append(o.syncMarks, syncMark{index: index, ts: src.StartTs})
 	return true
 }
 
-func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
-	if o.updateCommitStatusHelper(src) {
+func (o *Oracle) updateCommitStatus(index uint64, src *protos.TxnContext) {
+	if o.updateCommitStatusHelper(index, src) {
 		delta := new(protos.OracleDelta)
 		if src.Aborted {
 			delta.Aborts = append(delta.Aborts, src.StartTs)
@@ -200,9 +230,6 @@ func (o *Oracle) storePending(ids *protos.AssignedIds) {
 	max := ids.EndId
 	if o.maxPending < max {
 		o.maxPending = max
-	}
-	for id := ids.StartId; id <= ids.EndId; id++ {
-		o.pending[id] = struct{}{}
 	}
 }
 
@@ -232,7 +259,6 @@ func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
 		return s.proposeTxn(ctx, src)
 	}
 
-	// TODO: Consider Tmax here.
 	var num protos.Num
 	num.Val = 1
 	assigned, err := s.lease(ctx, &num, true)
@@ -284,6 +310,59 @@ func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer)
 		}
 	}
 	return nil
+}
+
+func (s *Server) SyncedUntil() uint64 {
+	s.orc.Lock()
+	defer s.orc.Unlock()
+	// Find max index with timestamp less than tmax
+	var idx int
+	for i, sm := range s.orc.syncMarks {
+		idx = i
+		if sm.ts >= s.orc.tmax {
+			break
+		}
+	}
+	var syncUntil uint64
+	if idx > 0 {
+		syncUntil = s.orc.syncMarks[idx-1].index
+	}
+	s.orc.syncMarks = s.orc.syncMarks[idx:]
+	return syncUntil
+}
+
+func (s *Server) purgeOracle() {
+	ticker := time.NewTicker(time.Second * 10)
+	defer ticker.Stop()
+
+	var lastPurgeTs uint64
+OUTER:
+	for {
+		<-ticker.C
+		groups := s.KnownGroups()
+		var minTs uint64
+		for _, group := range groups {
+			pl := s.Leader(group)
+			if pl == nil {
+				x.Printf("No healthy connection found to leader of group %d\n", group)
+				goto OUTER
+			}
+			c := protos.NewWorkerClient(pl.Get())
+			num, err := c.MinTransactionTimestamp(context.Background(), &protos.Payload{})
+			if err != nil {
+				x.Printf("Error while fetching minTs from group %d, err: %v\n", group, err)
+				goto OUTER
+			}
+			if minTs == 0 || num.Val < minTs {
+				minTs = num.Val
+			}
+		}
+
+		if minTs > 0 && minTs != lastPurgeTs {
+			s.orc.purgeBelow(minTs)
+			lastPurgeTs = minTs
+		}
+	}
 }
 
 func (s *Server) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.TxnTimestamps, error) {
