@@ -59,7 +59,7 @@ func ExampleTxn_Query_variables() {
 	}
 
 	mu := &protos.Mutation{
-		CommitImmediately: true,
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -184,7 +184,7 @@ func ExampleTxn_Mutate() {
 	}
 
 	mu := &protos.Mutation{
-		CommitImmediately: true,
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -267,7 +267,7 @@ func ExampleTxn_Mutate_bytes() {
 	}
 
 	mu := &protos.Mutation{
-		CommitImmediately: true,
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -371,7 +371,7 @@ func ExampleTxn_Query_unmarshal() {
 	}
 
 	mu.SetJson = pb
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	assigned, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -475,7 +475,7 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	}
 
 	mu.SetJson = pb
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -553,7 +553,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	}
 
 	mu.SetJson = pb
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -653,7 +653,7 @@ func ExampleTxn_Mutate_delete() {
 	}
 
 	mu.SetJson = pb
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -715,7 +715,7 @@ func ExampleTxn_Mutate_delete() {
 	}
 
 	mu.DeleteJson = pb
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -784,7 +784,7 @@ func ExampleTxn_Mutate_deleteNode() {
 	}
 
 	mu := &protos.Mutation{
-		CommitImmediately: true,
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -845,7 +845,7 @@ func ExampleTxn_Mutate_deleteNode() {
 	}
 
 	mu = &protos.Mutation{
-		CommitImmediately: true,
+		CommitNow: true,
 	}
 	pb, err = json.Marshal(p2)
 	if err != nil {
@@ -915,7 +915,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 	}
 
 	mu := &protos.Mutation{
-		CommitImmediately: true,
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {

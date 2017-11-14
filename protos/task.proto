@@ -486,7 +486,7 @@ message Mutation {
   repeated NQuad set = 10;
   repeated NQuad del = 11;
   uint64 start_ts = 13;
-  bool commit_immediately = 14;
+  bool commit_now = 14;
 }
 
 message Operation {
