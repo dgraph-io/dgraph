@@ -358,11 +358,13 @@ three steps:
 
 3. Commit the transaction.
 
-To query the database, the `/query` endpoint is used. To get the balances for
-both accounts:
+To query the database, the `/query` endpoint is used. We need to provide the
+`lin_read` we received in our original mutation.
+
+To get the balances for both accounts:
 
 ```sh
-curl -X POST localhost:8080/query -d $'
+curl -X POST -H 'X-Dgraph-LinRead: {"1": 12}' localhost:8080/query -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
@@ -510,3 +512,53 @@ indicated in the response when the commit is attempted.
 
 In this case, it's up to the user of the client to decide if they wish to
 retry the transaction.
+
+Assuming that the transaction was successful, we can do one final query to show
+the new balances. We need to provide an updated `lin_read` map when we do the
+query, otherwise we might old data (this can happen if a replica is slightly
+behind). The last `lin_read` maps we have received so far are `{"1": 12}`,
+`{"1": 14}`, and `{"1": 17}`. They all have the same key, so merging them is
+easy. We just use the maximum value to give `{"1": 17}`.
+
+```sh
+curl -X POST -H 'X-Dgraph-LinRead: {"1": 17}' localhost:8080/query -d $'
+{
+  balances(func: anyofterms(name, "Alice Bob")) {
+    name
+    balance
+  }
+}' | jq
+```
+
+```json
+{
+  "data": {
+    "balances": [
+      {
+        "name": "Alice",
+        "balance": "110"
+      },
+      {
+        "name": "Bob",
+        "balance": "60"
+      }
+    ]
+  },
+  "extensions": {
+    "server_latency": {
+      "parsing_ns": 27038,
+      "processing_ns": 340099,
+      "encoding_ns": 941622
+    },
+    "txn": {
+      "start_ts": 6,
+      "lin_read": {
+        "ids": {
+          "1": 20
+        }
+      }
+    }
+  }
+}
+
+```
