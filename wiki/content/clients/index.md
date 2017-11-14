@@ -201,7 +201,7 @@ It's also possible to interact with dgraph directly from the command line via
 its HTTP endpoints.
 
 To do this, regular command line tools such as `curl` and
-`[jq](https://stedolan.github.io/jq/)` can be used.
+[`jq`](https://stedolan.github.io/jq/) can be used.
 
 Similar to the Go client example, we use a bank account transfer example.
 
@@ -240,7 +240,8 @@ the maximum of the new value and the existing value. The client's `lin_read`
 should be sent to dgraph along side all queries.
 
 The `keys` are the set of keys that have been read or written to in the
-transaction, and is used to check for conflicts with other transactions.
+transaction, and is used by dgraph to check for conflicts with other
+transactions.
 
 ### Adding initial data
 
@@ -254,9 +255,10 @@ for the mutate endpoint, since newlines are part of the RDF syntax.
 {{% /notice %}}
 
 {{% notice "note" %}}
-The 'X-Dgraph-CommitNow' header can be used with the `/mutate` endpoint to
+The `X-Dgraph-CommitNow` header can be used with the `/mutate` endpoint to
 force a mutation to commit immediately. This can be convenient if a single
-mutation with no queries is needed.
+mutation with no queries is needed. This approach isn't the normal approach, and
+isn't used in this example.
 {{% /notice %}}
 
 ```sh
@@ -367,8 +369,8 @@ curl -X POST localhost:8080/query -d $'
     name
     balance
   }
-} | jq
-'
+}' | jq
+
 ```
 
 The result should look like this:
@@ -407,28 +409,24 @@ The result should look like this:
 }
 ```
 
-### Transactions
+### Mutations based on queries
 
-Any transfer of funds should be done as a transaction, to avoid problems such
-as [double spending](https://en.wikipedia.org/wiki/Double-spending) (among
-others).
+Now that we have the current balances, we need to send a mutation to dgraph
+with the updated balances. If Bob transfers $10 to Alice, then the RDFs to send
+are:
 
-First, the account balances of the relevant accounts must be queried. Then then
-mutations must be submitted based on the query results. All of this must occur
-within a single transaction.
+```
+<0x1> <balance> "110" .
+<0x2> <balance> "60" .
 
-The query response from the previous query can be used. In particular, we
-need the `"start_ts"` field and the uids of Alice and Bob.
+```
+Note that to refer to the Alice and Bob nodes, we use the UIDs returned
+by the query.
 
-Say we wish to transfer $10 from Bob to Alice. Based on the result of the
-previous query, Alice's balance should become $110 and Bob's balance should
-become $60.
-
-The `X-Dgraph-StartTs` header should match the `"start_ts"` returned from the
-first query in the transaction.
-
-The `X-Dgraph-CommitNow` header isn't needed since the mutation is part of a
-larger transaction.
+We now send the mutations via the `/mutate` endpoint. We need to provide the
+transaction start timestamp via the header, so that dgraph knows which
+transaction the mutation should be part of. The `start_ts` from the query we
+just ran should be used.
 
 ```sh
 curl -X POST -H 'X-Dgraph-StartTs: 4' localhost:8080/mutate -d $'
@@ -438,10 +436,10 @@ curl -X POST -H 'X-Dgraph-StartTs: 4' localhost:8080/mutate -d $'
     <0x2> <balance> "60" .
   }
 }
-'
+' | jq
 ```
 
-The result should look like:
+The result:
 
 ```json
 {
@@ -454,14 +452,14 @@ The result should look like:
     "txn": {
       "start_ts": 4,
       "keys": [
-        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=",
         "AAAHYmFsYW5jZQAAAAAAAAAAAg==",
-        "AAAHYmFsYW5jZQAAAAAAAAAAAQ==",
-        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI="
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
+        "AAAHYmFsYW5jZQAAAAAAAAAAAQ=="
       ],
       "lin_read": {
         "ids": {
-          "1": 15
+          "1": 17
         }
       }
     }
@@ -469,34 +467,35 @@ The result should look like:
 }
 ```
 
-To finally commit the transaction, the `/commit` endpoint is used. The
-`start_ts` from the original query, along with the keys from all mutations (in
-this case, just one mutation) must be supplied.
+### Committing the transaction
+
+Finally, we can commit the transaction using the `/commit` endpoint. We need
+the `start_ts` we've been using for the transaction, and the affected `keys`.
+If we had performed multiple mutations in the transaction instead of the just
+the one, then the keys provided during the commit should be the union of all
+keys returned in the responses from the `/mutate` endpoint.
 
 ```sh
-curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=","AAAHYmFsYW5jZQAAAAAAAAAAAg==","AAAHYmFsYW5jZQAAAAAAAAAAAQ==","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI="]' localhost:8080/commit 
+curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=","AAAHYmFsYW5jZQAAAAAAAAAAAg==","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=","AAAHYmFsYW5jZQAAAAAAAAAAAQ=="]' localhost:8080/commit | jq
 ```
-
-If the commit is successful (which it should be in this example), the result
-will be:
 
 ```json
 {
   "data": {
     "code": "Success",
-    "message" :"Done",
+    "message": "Done"
   },
   "extensions": {
     "txn": {
-      "start_ts": 4
-      "commit_ts": 5,
+      "start_ts": 4,
+      "commit_ts": 5
     }
   }
 }
 ```
-
-If there were any mutations effecting any relevant keys after `start_ts` but
-before the completion of the transaction, the commit will fail. For example:
+If other clients are performing transactions concurrently that affect the same
+keys, then it's possible that the transaction will *not* be successful. This is
+indicated in the response when the commit is attempted.
 
 ```json
 {
@@ -508,3 +507,6 @@ before the completion of the transaction, the commit will fail. For example:
   ]
 }
 ```
+
+In this case, it's up to the user of the client to decide if they wish to
+retry the transaction.
