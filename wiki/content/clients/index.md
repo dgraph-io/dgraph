@@ -93,8 +93,9 @@ be a no-op.
 
 ```go
 func runTxn(c *client.Dgraph) {
-  txn := c.NewTxn()
-  defer txn.Discard()
+	txn := c.NewTxn()
+	defer txn.Discard()
+	...
 }
 ```
 
@@ -108,10 +109,10 @@ via `json.Unmarshal`.
 	// Query the balance for Alice and Bob.
 	const q = `
 		{
-		  all(func: anyofterms(name, "Alice Bob")) {
-			uid
-			balance
-		  }
+			all(func: anyofterms(name, "Alice Bob")) {
+				uid
+				balance
+			}
 		}
 	`
 	resp, err := txn.Query(context.Background(), q)
@@ -142,16 +143,16 @@ We're going to continue using JSON. You could modify the Go structs parsed from
 the query, and marshal them back into JSON.
 
 ```go
-  // Move $5 between the two accounts.
-  decode.All[0].Bal += 5
-  decode.All[1].Bal -= 5
+	// Move $5 between the two accounts.
+	decode.All[0].Bal += 5
+	decode.All[1].Bal -= 5
 
-  out, err := json.Marshal(decode.All)
-  if err != nil {
-    log.Fatal(err)
-  }
+	out, err := json.Marshal(decode.All)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-  _, err := txn.Mutate(ctx, &protos.Mutation{SetJSON: out})
+	_, err := txn.Mutate(ctx, &protos.Mutation{SetJSON: out})
 ```
 
 Sometimes, you only want to commit mutation, without querying anything further.
@@ -169,7 +170,7 @@ returns an error in case the transaction could not be committed.
 	// modified in this transaction. It is up to the library user to retry
 	// transactions when they fail.
 
-  err := txn.Commit(ctx)
+	err := txn.Commit(ctx)
 ```
 
 ## Java
@@ -199,24 +200,20 @@ The Python client can be found [here](https://github.com/dgraph-io/pydgraph).
 It's also possible to interact with dgraph directly from the command line via
 its HTTP endpoints.
 
-To do this, regular command line tools such as `curl` can be used.
+To do this, regular command line tools such as `curl` and
+`[jq](https://stedolan.github.io/jq/)` can be used.
 
-The example here uses a simple banking system, where each account has a name
-and balance. The operations performed are displaying all balances and
-transferring money between accounts.
+Similar to the Go client example, we use a bank account transfer example.
 
 The following commands assume that dgraph is running locally and is listening
 for HTTP on port 8080 (this is the default port to listen on, but can be
 changed using the (`--port_offset` flag).
 
-See [Getting Started]({{< relref "get-started/index.md" >}}) for instructions on
-how to start up a dgraph instance.
+### Alter the database
 
-### Setting the schema
-
-The `/alter` endpoint is used to create the schema. Here, the predicate `name`
-is the name of an account. It's indexed so that we can look up accounts based
-on their name.
+The `/alter` endpoint is used to create or change the schema. Here, the
+predicate `name` is the name of an account. It's indexed so that we can look up
+accounts based on their name.
 
 ```sh
 curl -X POST localhost:8080/alter -d 'name: string @index(term) .'
@@ -224,22 +221,46 @@ curl -X POST localhost:8080/alter -d 'name: string @index(term) .'
 
 If all goes well, the response should be `{"code":"Success","message":"Done"}`.
 
+### Start a transaction
+
+The state associated with a transaction consists of a start time stamp
+(`start_ts`), a linearized read map (`lin_map`), and a set of keys affected by
+the transaction (`keys`). The client (or user for raw HTTP) needs to keep track of this
+state themselves.
+
+The `start_ts` is the start time of the transaction, as provided by dgraph
+zero. It acts to uniquely identify a transaction, and doesn't change over the
+transaction lifetime.
+
+The `lin_read` is a map from dgraph group to proposal id. A new `lin_read` is
+returned by all interactions with dgraph. Whenever a new `lin_read` is
+received, it should be merged with the existing `lin_read` map. The merge
+operation should add new keys when they don't already exist or otherwise take
+the maximum of the new value and the existing value. The client's `lin_read`
+should be sent to dgraph along side all queries.
+
+The `keys` are the set of keys that have been read or written to in the
+transaction, and is used to check for conflicts with other transactions.
+
 ### Adding initial data
 
-Next we want to add some accounts and an initial balance. To modify or add
-data, the `/mutate` endpoint can be used.
+The first transaction to perform is to add two accounts with initial balances.
+To do this, we use the `/mutate` endpoint. The endpoint accepts mutations in
+RDF format.
 
 {{% notice "note" %}}
 The `$'...'` is used to preserve newlines in the body. This is important to do
 for the mutate endpoint, since newlines are part of the RDF syntax.
 {{% /notice %}}
 
-The `X-Dgraph-CommitNow` header tells dgraph that the mutation is to be
-committed immediately as a stand-alone unit. It's not part of a larger
-transaction.
+{{% notice "note" %}}
+The 'X-Dgraph-CommitNow' header can be used with the `/mutate` endpoint to
+force a mutation to commit immediately. This can be convenient if a single
+mutation with no queries is needed.
+{{% /notice %}}
 
 ```sh
-curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
+curl -X POST localhost:8080/mutate -d $'
 {
   set {
     _:alice <name> "Alice" .
@@ -248,10 +269,10 @@ curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
     _:bob <balance> "70" .
   }
 }
-'
+' | jq
 ```
 
-If all goes well, the response will include `"code": "Success"`, and look something like:
+If all goes well, the response will include `"code": "Success"`.
 
 ```json
 {
@@ -259,16 +280,28 @@ If all goes well, the response will include `"code": "Success"`, and look someth
     "code": "Success",
     "message": "Done",
     "uids": {
-      "alice": "0x3",
-      "bob": "0x4"
+      "alice": "0x2",
+      "bob": "0x1"
     }
   },
   "extensions": {
     "txn": {
-      "start_ts": 9,
+      "start_ts": 2,
+      "keys": [
+        "AAAHYmFsYW5jZQAAAAAAAAAAAQ==",
+        "AAAEbmFtZQAAAAAAAAAAAQ==",
+        "AAAHYmFsYW5jZQAAAAAAAAAAAg==",
+        "AAAEbmFtZQAAAAAAAAAAAg==",
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=",
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=",
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
+        "AAAEbmFtZQIBYm9i",
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
+        "AAAEbmFtZQIBYWxpY2U="
+      ],
       "lin_read": {
         "ids": {
-          "1": 18
+          "1": 12
         }
       }
     }
@@ -276,7 +309,52 @@ If all goes well, the response will include `"code": "Success"`, and look someth
 }
 ```
 
-### Performing Queries
+The important fields to look at are `start_ts`, `keys`, and `lin_read`.
+`start_ts` will be needed for any further interactions with the transaction,
+`keys` will be needed when the transaction is committed, and `lin_read` will be
+needed when doing any queries in the transaction.
+
+We now want to commit the transaction, so we need `start_ts` and `keys`. To do
+this, we can use the `/commit` endpoint. The `X-Dgraph-StartTs` and
+`X-Dgraph-Keys` headers are based on the response above (and could differ when
+you run the example).
+
+```sh
+curl -X POST -H 'X-Dgraph-StartTs: 2' -H 'X-Dgraph-Keys: ["AAAHYmFsYW5jZQAAAAAAAAAAAQ==","AAAEbmFtZQAAAAAAAAAAAQ==","AAAHYmFsYW5jZQAAAAAAAAAAAg==","AAAEbmFtZQAAAAAAAAAAAg==","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=","AAAEbmFtZQIBYm9i","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=","AAAEbmFtZQIBYWxpY2U="]' localhost:8080/commit | jq
+```
+
+If the commit is successful, the result should be:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done"
+  },
+  "extensions": {
+    "txn": {
+      "start_ts": 2,
+      "commit_ts": 3
+    }
+  }
+}
+```
+
+Note that a `commit_ts` is included in the response. This indicates that the
+transaction is now finished (in previous responses from dgraph, this field has
+been absent).
+
+### Performing queries
+
+We now want to transfer money from one account to the other. This is done in
+three steps:
+
+1. Run a query to determine the current balances. This is the start of the
+   transaction.
+
+2. Perform a mutation to update the balances.
+
+3. Commit the transaction.
 
 To query the database, the `/query` endpoint is used. To get the balances for
 both accounts:
@@ -289,7 +367,7 @@ curl -X POST localhost:8080/query -d $'
     name
     balance
   }
-}
+} | jq
 '
 ```
 
@@ -313,15 +391,15 @@ The result should look like this:
   },
   "extensions": {
     "server_latency": {
-      "parsing_ns": 12235,
-      "processing_ns": 156547,
-      "encoding_ns": 404217
+      "parsing_ns": 70494,
+      "processing_ns": 697140,
+      "encoding_ns": 1560151
     },
     "txn": {
       "start_ts": 4,
       "lin_read": {
         "ids": {
-          "1": 12
+          "1": 14
         }
       }
     }
