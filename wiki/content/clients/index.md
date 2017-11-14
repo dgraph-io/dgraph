@@ -38,7 +38,7 @@ documentation for the client API along with examples showing how to use it.
 ### Create the client
 
 To create a client, dial a connection to Dgraph's external Grpc port (typically
-9080). The following code snippet shows just one connection. You can connect to multiple Dgraph serers to distribute the workload evenly.
+9080). The following code snippet shows just one connection. You can connect to multiple Dgraph servers to distribute the workload evenly.
 
 ```go
 func newClient() *client.Dgraph {
@@ -93,8 +93,9 @@ be a no-op.
 
 ```go
 func runTxn(c *client.Dgraph) {
-  txn := c.NewTxn()
-  defer txn.Discard()
+	txn := c.NewTxn()
+	defer txn.Discard()
+	...
 }
 ```
 
@@ -108,10 +109,10 @@ via `json.Unmarshal`.
 	// Query the balance for Alice and Bob.
 	const q = `
 		{
-		  all(func: anyofterms(name, "Alice Bob")) {
-			uid
-			balance
-		  }
+			all(func: anyofterms(name, "Alice Bob")) {
+				uid
+				balance
+			}
 		}
 	`
 	resp, err := txn.Query(context.Background(), q)
@@ -142,16 +143,16 @@ We're going to continue using JSON. You could modify the Go structs parsed from
 the query, and marshal them back into JSON.
 
 ```go
-  // Move $5 between the two accounts.
-  decode.All[0].Bal += 5
-  decode.All[1].Bal -= 5
+	// Move $5 between the two accounts.
+	decode.All[0].Bal += 5
+	decode.All[1].Bal -= 5
 
-  out, err := json.Marshal(decode.All)
-  if err != nil {
-    log.Fatal(err)
-  }
+	out, err := json.Marshal(decode.All)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-  _, err := txn.Mutate(ctx, &protos.Mutation{SetJSON: out})
+	_, err := txn.Mutate(ctx, &protos.Mutation{SetJSON: out})
 ```
 
 Sometimes, you only want to commit mutation, without querying anything further.
@@ -169,7 +170,7 @@ returns an error in case the transaction could not be committed.
 	// modified in this transaction. It is up to the library user to retry
 	// transactions when they fail.
 
-  err := txn.Commit(ctx)
+	err := txn.Commit(ctx)
 ```
 
 ## Java
@@ -196,27 +197,48 @@ The Python client can be found [here](https://github.com/dgraph-io/pydgraph).
 
 ## Raw HTTP
 
-It's also possible to interact with dgraph directly from the command line via
-its HTTP endpoints.
+It's also possible to interact with dgraph directly via its HTTP endpoints.
+This this allows clients to be built for languages that don't have access to a
+working gRPC implementation.
 
-To do this, regular command line tools such as `curl` can be used.
+In the examples shown here, regular command line tools such as `curl` and
+[`jq`](https://stedolan.github.io/jq/) are used. However, the real intention
+here is to show other programmers how they could implement a client in their
+language on top of the HTTP API.
 
-The example here uses a simple banking system, where each account has a name
-and balance. The operations performed are displaying all balances and
-transferring money between accounts.
+Similar to the Go client example, we use a bank account transfer example.
 
-The following commands assume that dgraph is running locally and is listening
-for HTTP on port 8080 (this is the default port to listen on, but can be
-changed using the (`--port_offset` flag).
+### Create the Client
 
-See [Getting Started]({{< relref "get-started/index.md" >}}) for instructions on
-how to start up a dgraph instance.
+A client build on top of the HTTP API will need to track state at two different
+levels:
 
-### Setting the schema
+1. Per client. Each client will need to keep a linearized reads (`lin_read`)
+   map. This is a map from dgraph group id to proposal id. This will be needed
+for the system as a whole (client + server) to have
+[linearizability](https://en.wikipedia.org/wiki/Linearizability). Whenever a
+`lin_read` map is received, the client should update its version of the map by
+merging the two maps together. The merge operation is simple - the new map gets
+all key/value pairs from the parent maps. Where a key exists in both maps, the
+max value is taken.
 
-The `/alter` endpoint is used to create the schema. Here, the predicate `name`
-is the name of an account. It's indexed so that we can look up accounts based
-on their name.
+2. Per transaction. There are three pieces of state that need to be maintained
+   for each transaction.
+
+    1. Each transaction needs its own `lin_read` (updated independently of the
+       client level `lin_read`).
+  
+    2. A start timestamp (`start_ts`). This uniquely identifies a transaction,
+       and doesn't change over the transaction lifecycle.
+  
+    3. The set of keys modified by the transaction (`keys`). This aids in
+       transaction conflict detection.
+
+### Alter the database
+
+The `/alter` endpoint is used to create or change the schema. Here, the
+predicate `name` is the name of an account. It's indexed so that we can look up
+accounts based on their name.
 
 ```sh
 curl -X POST localhost:8080/alter -d 'name: string @index(term) .'
@@ -224,73 +246,53 @@ curl -X POST localhost:8080/alter -d 'name: string @index(term) .'
 
 If all goes well, the response should be `{"code":"Success","message":"Done"}`.
 
-### Adding initial data
+Other operations can be performed via the `/alter` endpoint as well. A specific
+predicate or the entire database can be dropped.
 
-Next we want to add some accounts and an initial balance. To modify or add
-data, the `/mutate` endpoint can be used.
-
-{{% notice "note" %}}
-The `$'...'` is used to preserve newlines in the body. This is important to do
-for the mutate endpoint, since newlines are part of the RDF syntax.
-{{% /notice %}}
-
-The `X-Dgraph-CommitNow` header tells dgraph that the mutation is to be
-committed immediately as a stand-alone unit. It's not part of a larger
-transaction.
-
+E.g. to drop the predicate `name`:
 ```sh
-curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
-{
-  set {
-    _:alice <name> "Alice" .
-    _:alice <balance> "100" .
-    _:bob <name> "Bob" .
-    _:bob <balance> "70" .
-  }
-}
-'
+curl -X POST localhost:8080/alter -d '{"drop_attr": "name"}'
+```
+To drop all data and schema:
+```sh
+curl -X POST localhost:8080/alter -d '{"drop_all": true}'
 ```
 
-If all goes well, the response will include `"code": "Success"`, and look something like:
+### Start a transaction
 
-```json
-{
-  "data": {
-    "code": "Success",
-    "message": "Done",
-    "uids": {
-      "alice": "0x3",
-      "bob": "0x4"
-    }
-  },
-  "extensions": {
-    "txn": {
-      "start_ts": 9,
-      "lin_read": {
-        "ids": {
-          "1": 18
-        }
-      }
-    }
-  }
-}
-```
+Assume some initial accounts with balances have been populated. We now want to
+transfer money from one account to the other. This is done in four steps:
 
-### Performing Queries
+1. Create a new transaction.
 
-To query the database, the `/query` endpoint is used. To get the balances for
-both accounts:
+1. Inside the transaction, run a query to determine the current balances.
+
+2. Perform a mutation to update the balances.
+
+3. Commit the transaction.
+
+Starting a transaction doesn't require any interaction with dgraph itself.
+Some state needs to be set up for the transaction to use. `lin_read` is
+initialized by *copying* the client's `lin_read`. The `start_ts` can initially
+be set to 0. `keys` can start as an empty set.
+
+### Run a query
+
+To query the database, the `/query` endpoint is used. We need to use the
+transaction scoped `lin_read`. Assume that `lin_read` is `{"1": 12}`.
+
+To get the balances for both accounts:
 
 ```sh
-curl -X POST localhost:8080/query -d $'
+curl -X POST -H 'X-Dgraph-LinRead: {"1": 12}' localhost:8080/query -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
     name
     balance
   }
-}
-'
+}' | jq
+
 ```
 
 The result should look like this:
@@ -313,15 +315,15 @@ The result should look like this:
   },
   "extensions": {
     "server_latency": {
-      "parsing_ns": 12235,
-      "processing_ns": 156547,
-      "encoding_ns": 404217
+      "parsing_ns": 70494,
+      "processing_ns": 697140,
+      "encoding_ns": 1560151
     },
     "txn": {
       "start_ts": 4,
       "lin_read": {
         "ids": {
-          "1": 12
+          "1": 14
         }
       }
     }
@@ -329,28 +331,36 @@ The result should look like this:
 }
 ```
 
-### Transactions
+Notice that along with the query result under the `data` field, there is some
+additional data in the `extensions -> txn` field. This data will have to be
+tracked by the client.
 
-Any transfer of funds should be done as a transaction, to avoid problems such
-as [double spending](https://en.wikipedia.org/wiki/Double-spending) (among
-others).
+First, there is a `start_ts` in the response. This `start_ts` will need to be
+used in all subsequent interactions with dgraph for this transaction, and so
+should become part of the transaction state.
 
-First, the account balances of the relevant accounts must be queried. Then then
-mutations must be submitted based on the query results. All of this must occur
-within a single transaction.
+Second, there is a new `lin_read` map. The `lin_read` map should be merged with
+both the client scoped and transaction scoped `lin_read` maps. Recall that both
+the transaction scoped and client scoped `lin_read` maps are `{"1": 12}`. The
+`lin_read` in the response is `{"1": 14}`. The merged result is `{"1": 14}`,
+since we take the max all of the keys.
 
-The query response from the previous query can be used. In particular, we
-need the `"start_ts"` field and the uids of Alice and Bob.
+### Run a Mutation
 
-Say we wish to transfer $10 from Bob to Alice. Based on the result of the
-previous query, Alice's balance should become $110 and Bob's balance should
-become $60.
+Now that we have the current balances, we need to send a mutation to dgraph
+with the updated balances. If Bob transfers $10 to Alice, then the RDFs to send
+are:
 
-The `X-Dgraph-StartTs` header should match the `"start_ts"` returned from the
-first query in the transaction.
+```
+<0x1> <balance> "110" .
+<0x2> <balance> "60" .
+```
+Note that we have to to refer to the Alice and Bob nodes by UID in the RDF
+format.
 
-The `X-Dgraph-CommitNow` header isn't needed since the mutation is part of a
-larger transaction.
+We now send the mutations via the `/mutate` endpoint. We need to provide our
+transaction start timestamp via the header, so that dgraph knows which
+transaction the mutation should be part of.
 
 ```sh
 curl -X POST -H 'X-Dgraph-StartTs: 4' localhost:8080/mutate -d $'
@@ -360,10 +370,10 @@ curl -X POST -H 'X-Dgraph-StartTs: 4' localhost:8080/mutate -d $'
     <0x2> <balance> "60" .
   }
 }
-'
+' | jq
 ```
 
-The result should look like:
+The result:
 
 ```json
 {
@@ -376,14 +386,14 @@ The result should look like:
     "txn": {
       "start_ts": 4,
       "keys": [
-        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=",
         "AAAHYmFsYW5jZQAAAAAAAAAAAg==",
-        "AAAHYmFsYW5jZQAAAAAAAAAAAQ==",
-        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI="
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
+        "AAAHYmFsYW5jZQAAAAAAAAAAAQ=="
       ],
       "lin_read": {
         "ids": {
-          "1": 15
+          "1": 17
         }
       }
     }
@@ -391,34 +401,44 @@ The result should look like:
 }
 ```
 
-To finally commit the transaction, the `/commit` endpoint is used. The
-`start_ts` from the original query, along with the keys from all mutations (in
-this case, just one mutation) must be supplied.
+We get another `lin_read` map, which needs to be merged (the new `lin_read` map
+for **both the client and transaction** becomes `{"1": 17}`). We also get some
+`keys`. These should be added to the set of `keys` stored in the transaction
+state.
+
+### Committing the transaction
+
+Finally, we can commit the transaction using the `/commit` endpoint. We need
+the `start_ts` we've been using for the transaction along with the `keys`.
+If we had performed multiple mutations in the transaction instead of the just
+the one, then the keys provided during the commit would be the union of all
+keys returned in the responses from the `/mutate` endpoint.
 
 ```sh
-curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=","AAAHYmFsYW5jZQAAAAAAAAAAAg==","AAAHYmFsYW5jZQAAAAAAAAAAAQ==","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI="]' localhost:8080/commit 
+curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=","AAAHYmFsYW5jZQAAAAAAAAAAAg==","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=","AAAHYmFsYW5jZQAAAAAAAAAAAQ=="]' localhost:8080/commit | jq
 ```
-
-If the commit is successful (which it should be in this example), the result
-will be:
 
 ```json
 {
   "data": {
     "code": "Success",
-    "message" :"Done",
+    "message": "Done"
   },
   "extensions": {
     "txn": {
-      "start_ts": 4
-      "commit_ts": 5,
+      "start_ts": 4,
+      "commit_ts": 5
     }
   }
 }
 ```
 
-If there were any mutations effecting any relevant keys after `start_ts` but
-before the completion of the transaction, the commit will fail. For example:
+Notice that we receive a `commit_ts` in the response (this field was previously
+absent). The transaction is now complete.
+
+If another client were to perform another transaction concurrently affecting
+the same keys, then it's possible that the transaction would *not* be
+successful.  This is indicated in the response when the commit is attempted.
 
 ```json
 {
@@ -430,3 +450,6 @@ before the completion of the transaction, the commit will fail. For example:
   ]
 }
 ```
+
+In this case, it should be up to the user of the client to decide if they wish
+to retry the transaction.
