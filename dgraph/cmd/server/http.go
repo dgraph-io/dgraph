@@ -19,6 +19,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -185,10 +186,20 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO - Don't send keys array which is part of txn context if its commit immediately.
 	e := query.Extensions{
 		Txn: resp.Context,
 	}
+
+	// Don't send keys array which is part of txn context if its commit immediately.
+	if mu.CommitImmediately {
+		e.Txn.Keys = e.Txn.Keys[:0]
+	}
+
+	// base64 encode the keys
+	for i, k := range e.Txn.Keys {
+		e.Txn.Keys[i] = base64.StdEncoding.EncodeToString([]byte(k))
+	}
+
 	response := map[string]interface{}{}
 	response["extensions"] = e
 	mp := map[string]interface{}{}
@@ -245,13 +256,18 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var k []string
-	if err := json.Unmarshal([]byte(keys), &k); err != nil {
+	var encodedKeys []string
+	if err := json.Unmarshal([]byte(keys), &encodedKeys); err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest,
 			"Error while unmarshalling keys header into array")
 		return
 	}
-	tc.Keys = k
+
+	// base64 decode keys
+	for i, k := range encodedKeys {
+		encodedKeys[i] = string(base64.StdEncoding.DecodeString(k))
+	}
+	tc.Keys = encodedKeys
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {
