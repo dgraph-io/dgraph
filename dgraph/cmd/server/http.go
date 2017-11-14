@@ -157,7 +157,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Maybe rename it so that default is CommitImmediately.
+	// Maybe rename it so that default is CommitNow.
 	commit := r.Header.Get("X-Dgraph-CommitNow")
 	if commit != "" {
 		c, err := strconv.ParseBool(commit)
@@ -166,7 +166,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 				"Error while parsing Commit header as bool")
 			return
 		}
-		mu.CommitImmediately = c
+		mu.CommitNow = c
 	}
 
 	startTs := r.Header.Get(startTsHeader)
@@ -191,7 +191,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Don't send keys array which is part of txn context if its commit immediately.
-	if mu.CommitImmediately {
+	if mu.CommitNow {
 		e.Txn.Keys = e.Txn.Keys[:0]
 	}
 

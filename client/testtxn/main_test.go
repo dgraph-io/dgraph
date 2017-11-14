@@ -289,7 +289,7 @@ func TestTxnRead5(t *testing.T) {
 	mu = &protos.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": \"%s\", \"name\": \"Manish2\"}", uid))
 
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	res, err := dc.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)

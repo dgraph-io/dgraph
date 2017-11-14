@@ -139,7 +139,7 @@ func (s *suite) cleanup() {
 func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
 		for _, cluster := range []*DgraphCluster{s.bulkCluster, s.liveCluster} {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 			txn := cluster.client.NewTxn()
 			resp, err := txn.Query(ctx, query)

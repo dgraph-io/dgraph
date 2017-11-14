@@ -267,7 +267,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 
 	m := &protos.Mutations{Edges: edges, StartTs: mu.StartTs}
 	resp.Context, err = query.ApplyMutations(ctx, m)
-	if !mu.CommitImmediately {
+	if !mu.CommitNow {
 		if err != nil {
 			// TODO: Investigate if this is really necessary.
 			resp.Error = err.Error()

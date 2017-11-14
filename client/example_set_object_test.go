@@ -85,7 +85,7 @@ func Example_setObject() {
 	}
 
 	mu := &protos.Mutation{
-		CommitImmediately: true,
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {

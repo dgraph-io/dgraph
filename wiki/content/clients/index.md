@@ -155,7 +155,7 @@ the query, and marshal them back into JSON.
 ```
 
 Sometimes, you only want to commit mutation, without querying anything further.
-In such cases, you can use a `CommitImmediately` field in `protos.Mutation` to
+In such cases, you can use a `CommitNow` field in `protos.Mutation` to
 indicate that the mutation must be immediately committed.
 
 ### Commit the transaction

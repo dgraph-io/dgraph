@@ -114,7 +114,7 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 // protos.Mutation come in pairs, set and delete. Mutations can either be
 // encoded as JSON or as RDFs.
 //
-// If CommitImmediately is set, then this call will result in the transaction
+// If CommitNow is set, then this call will result in the transaction
 // being committed. In this case, an explicit call to Commit doesn't need to
 // subsequently be made.
 func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
