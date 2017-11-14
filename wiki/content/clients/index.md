@@ -24,7 +24,7 @@ client library exists for you language, this will be an easier option.
 
 [![GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client?status.svg)](https://godoc.org/github.com/dgraph-io/dgraph/client)
 
-The go client communicates with the server on the grpc port (set with option `--grpc_port` when starting Dgraph).
+The go client communicates with the server on the grpc port (default value 9080).
 
 The client can be obtained in the usual way via `go get`:
 

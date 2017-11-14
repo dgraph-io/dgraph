@@ -46,8 +46,7 @@ docker pull dgraph/dgraph
 
 {{% notice "note" %}}Binaries for Windows are available from `v0.8.3`.{{% /notice %}}
 
-If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v0.x.y.tar.gz` contains
-all the binaries.
+If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v0.x.y.tar.gz` contains the dgraph binary.
 
 If you wish to run the UI for Dgraph you should also download the `assets.tar.gz` and extract them into a folder called assets.
 
@@ -92,7 +91,7 @@ To run dgraph with the UI on Windows, you also have to supply the path to the as
 mkdir -p /tmp/data
 
 # Run Dgraph Zero
-docker run -it p 8080:8080 -p 9080:9080 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero --port_offset -2000
+docker run -it -p 8080:8080 -p 9080:9080 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero --port_offset -2000
 
 # Run Dgraph Server
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
@@ -112,7 +111,7 @@ docker create -v /dgraph --name data dgraph/dgraph
 
 Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
-docker run -it -p 8080:8080 9080:9080 --volumes-from data --name diggy dgraph/dgraph dgraph zero --port_offset -2000
+docker run -it -p 8080:8080 -p 9080:9080 --volumes-from data --name diggy dgraph/dgraph dgraph zero --port_offset -2000
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
