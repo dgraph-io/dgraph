@@ -234,18 +234,6 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	addMutationHelper(t, ol, edge, Set, txn)
 	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
 	checkValue(t, ol, "newcars", txn.StartTs)
-
-	// Do via txns
-	/*
-		// Del a value cars. This operation should be ignored.
-		edge = &protos.DirectedEdge{
-			Value: []byte("cars"),
-			Label: "jchiu",
-		}
-		addMutationHelper(t, ol, edge, Del, txn)
-		require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
-		checkValue(t, ol, "newcars", txn.StartTs)
-	*/
 }
 
 func TestAddMutation_jchiu2_Commit(t *testing.T) {
@@ -272,19 +260,6 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	ol.CommitMutation(context.Background(), 3, uint64(4))
 	require.EqualValues(t, 1, ol.Length(5, 0))
 	checkValue(t, ol, "newcars", 5)
-
-	/*
-		// Del a value cars. This operation should be ignored.
-		edge = &protos.DirectedEdge{
-			Value: []byte("cars"),
-			Label: "jchiu",
-		}
-		txn = &Txn{StartTs: 5}
-		addMutationHelper(t, ol, edge, Del, txn)
-		ol.CommitMutation(context.Background(), 5, uint64(6))
-		require.EqualValues(t, 1, ol.Length(txn.StartTs+1, 0))
-		checkValue(t, ol, "newcars", txn.StartTs+1)
-	*/
 }
 
 func TestAddMutation_jchiu3(t *testing.T) {
@@ -324,17 +299,6 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
 	checkValue(t, ol, "newcars", txn.StartTs)
 
-	/*
-		// Del a value othercars and but don't merge.
-		edge = &protos.DirectedEdge{
-			Value: []byte("othercars"),
-			Label: "jchiu",
-		}
-		addMutationHelper(t, ol, edge, Del, txn)
-		require.NotEqual(t, 0, ol.Length(txn.StartTs, 0))
-		checkValue(t, ol, "newcars", txn.StartTs)
-	*/
-
 	// Del a value newcars and but don't merge.
 	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
@@ -359,17 +323,6 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
-
-	/*
-		// Delete a non-existent value newcars. This should have no effect.
-		edge = &protos.DirectedEdge{
-			Value: []byte("newcars"),
-			Label: "jchiu",
-		}
-		txn = &Txn{StartTs: 3}
-		addMutationHelper(t, ol, edge, Del, txn)
-		checkValue(t, ol, "cars", txn.StartTs)
-	*/
 
 	// Delete the previously committed value cars. But don't merge.
 	txn = &Txn{StartTs: 2}

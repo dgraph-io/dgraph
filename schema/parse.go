@@ -34,7 +34,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	if pstate == nil {
 		reset()
 	}
-	pstate.predicate = make(map[string]*protos.SchemaUpdate)
+	pstate.DeleteAll()
 	updates, err := Parse(string(s))
 	if err != nil {
 		return err

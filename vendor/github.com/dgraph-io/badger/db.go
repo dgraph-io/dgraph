@@ -71,10 +71,6 @@ type DB struct {
 	writeCh   chan *request
 	flushChan chan flushTask // For flushing memtables.
 
-	// Incremented in the non-concurrently accessed write loop.  But also accessed outside. So
-	// we use an atomic op.
-	lastUsedCommitTs uint64
-
 	orc *oracle
 }
 
@@ -113,7 +109,7 @@ func replayFunction(out *DB) func(entry, valuePointer) error {
 		nk := make([]byte, len(e.Key))
 		copy(nk, e.Key)
 		var nv []byte
-		meta := e.Meta
+		meta := e.meta
 		if out.shouldWriteValueToLSM(e) {
 			nv = make([]byte, len(e.Value))
 			copy(nv, e.Value)
@@ -129,7 +125,7 @@ func replayFunction(out *DB) func(entry, valuePointer) error {
 			UserMeta: e.UserMeta,
 		}
 
-		if e.Meta&bitFinTxn > 0 {
+		if e.meta&bitFinTxn > 0 {
 			txnTs, err := strconv.ParseUint(string(e.Value), 10, 64)
 			if err != nil {
 				return errors.Wrapf(err, "Unable to parse txn fin: %q", e.Value)
@@ -143,7 +139,7 @@ func replayFunction(out *DB) func(entry, valuePointer) error {
 			txn = txn[:0]
 			lastCommit = 0
 
-		} else if e.Meta&bitTxn == 0 {
+		} else if e.meta&bitTxn == 0 {
 			// This entry is from a rewrite.
 			toLSM(nk, v)
 
@@ -492,23 +488,25 @@ func (db *DB) writeToLSM(b *request) error {
 	}
 
 	for i, entry := range b.Entries {
-		if entry.Meta&bitFinTxn != 0 {
+		if entry.meta&bitFinTxn != 0 {
 			continue
 		}
 		if db.shouldWriteValueToLSM(*entry) { // Will include deletion / tombstone case.
 			db.mt.Put(entry.Key,
 				y.ValueStruct{
-					Value:    entry.Value,
-					Meta:     entry.Meta,
-					UserMeta: entry.UserMeta,
+					Value:     entry.Value,
+					Meta:      entry.meta,
+					UserMeta:  entry.UserMeta,
+					ExpiresAt: entry.ExpiresAt,
 				})
 		} else {
 			var offsetBuf [vptrSize]byte
 			db.mt.Put(entry.Key,
 				y.ValueStruct{
-					Value:    b.Ptrs[i].Encode(offsetBuf[:]),
-					Meta:     entry.Meta | bitValuePointer,
-					UserMeta: entry.UserMeta,
+					Value:     b.Ptrs[i].Encode(offsetBuf[:]),
+					Meta:      entry.meta | bitValuePointer,
+					UserMeta:  entry.UserMeta,
+					ExpiresAt: entry.ExpiresAt,
 				})
 		}
 	}
@@ -563,6 +561,28 @@ func (db *DB) writeRequests(reqs []*request) error {
 	done(nil)
 	db.elog.Printf("%d entries written", count)
 	return nil
+}
+
+func (db *DB) sendToWriteCh(entries []*entry) (*request, error) {
+	var count, size int64
+	for _, e := range entries {
+		size += int64(e.estimateSize(db.opt.ValueThreshold))
+		count++
+	}
+	if count >= db.opt.maxBatchCount || size >= db.opt.maxBatchSize {
+		return nil, ErrTxnTooBig
+	}
+
+	// We can only service one request because we need each txn to be stored in a contigous section.
+	// Txns should not interleave among other txns or rewrites.
+	req := requestPool.Get().(*request)
+	req.Entries = entries
+	req.Wg = sync.WaitGroup{}
+	req.Wg.Add(1)
+	db.writeCh <- req // Handled in doWrites.
+	y.NumPuts.Add(int64(len(entries)))
+
+	return req, nil
 }
 
 func (db *DB) doWrites(lc *y.Closer) {
@@ -623,28 +643,6 @@ func (db *DB) doWrites(lc *y.Closer) {
 		reqs = make([]*request, 0, 10)
 		reqLen.Set(0)
 	}
-}
-
-func (db *DB) sendToWriteCh(entries []*entry) (*request, error) {
-	var count, size int64
-	for _, e := range entries {
-		size += int64(db.opt.estimateSize(e))
-		count++
-	}
-	if count >= db.opt.maxBatchCount || size >= db.opt.maxBatchSize {
-		return nil, ErrTxnTooBig
-	}
-
-	// We can only service one request because we need each txn to be stored in a contigous section.
-	// Txns should not interleave among other txns or rewrites.
-	req := requestPool.Get().(*request)
-	req.Entries = entries
-	req.Wg = sync.WaitGroup{}
-	req.Wg.Add(1)
-	db.writeCh <- req
-	y.NumPuts.Add(int64(len(entries)))
-
-	return req, nil
 }
 
 // batchSet applies a list of badger.Entry. If a request level error occurs it
@@ -891,7 +889,7 @@ func (db *DB) purgeVersionsBelow(txn *Txn, key []byte, ts uint64) error {
 		entries = append(entries,
 			&entry{
 				Key:  y.KeyWithTs(key, item.version),
-				Meta: bitDelete,
+				meta: bitDelete,
 			})
 		db.vlog.updateGCStats(item)
 	}
@@ -946,7 +944,7 @@ func (db *DB) PurgeOlderVersions() error {
 			entries = append(entries,
 				&entry{
 					Key:  y.KeyWithTs(lastKey, item.version),
-					Meta: bitDelete,
+					meta: bitDelete,
 				})
 			db.vlog.updateGCStats(item)
 			count++

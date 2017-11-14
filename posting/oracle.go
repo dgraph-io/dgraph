@@ -58,7 +58,7 @@ func (o *oracle) Done(startTs uint64) {
 	delete(o.aborts, startTs)
 }
 
-func (o *oracle) commitTs(startTs uint64) uint64 {
+func (o *oracle) CommitTs(startTs uint64) uint64 {
 	o.RLock()
 	defer o.RUnlock()
 	return o.commits[startTs]

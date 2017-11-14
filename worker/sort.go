@@ -605,12 +605,14 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 			return multiSortVals, ctx.Err()
 		default:
 			uid := ul.Uids[i]
+			uids = append(uids, uid)
 			val, err := fetchValue(uid, order.Attr, order.Langs, typ, ts.ReadTs)
 			if err != nil {
-				// If a value is missing, skip that UID in the result.
-				continue
+				// Value couldn't be found or couldn't be converted to the sort
+				// type.  By using a nil Value, it will appear at the
+				// end (start) for orderasc (orderdesc).
+				val.Value = nil
 			}
-			uids = append(uids, uid)
 			values = append(values, []types.Val{val})
 		}
 	}

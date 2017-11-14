@@ -113,7 +113,7 @@ var (
 // Dgraph will unpack queries into these structures with client.Unmarshal(), we just need to say
 // what goes where.
 type namedNode struct { // see also query directorByNameTemplate and readDirectors where the query is unmarshalled into this struct
-	ID   uint64 `json:"_uid_"`   // Use `json:"edgename"` to tell client.Unmarshal() where to put which edge in your struct.
+	ID   uint64 `json:"uid"`   // Use `json:"edgename"` to tell client.Unmarshal() where to put which edge in your struct.
 	Name string `json:"name@en"` // Struct fields must be exported (have an intial capital letter) to be accesible to client.Unmarshal().
 }
 
@@ -124,7 +124,7 @@ type character namedNode
 
 type movie struct { // see also query directorsMoviesTemplate and visitDirector where the query is unmarshalled into this struct
 	ReleaseDate time.Time      `json:"initial_release_date"` // Often just use the edge name and a reasonable type.
-	ID          uint64         `json:"_uid_"`                // _uid_ is extracted to uint64 just like any other edge.
+	ID          uint64         `json:"uid"`                // uid is extracted to uint64 just like any other edge.
 	Name        string         `json:"EnglishName"`          // If there is an alias on the edge, use the alias.
 	NameDE      string         `json:"GermanName"`
 	NameIT      string         `json:"ItalianName"`
@@ -140,7 +140,7 @@ type performance struct {
 
 // Types directQuery and movieQuery help unpack query results with client.Unmarshal().
 // The Unmarshal function needs the tags to know how to unpack query results.
-// With type director, Unmarshal could unpack a _uid_ and name@en, with directQuery,
+// With type director, Unmarshal could unpack a uid and name@en, with directQuery,
 // Unmarshal can unpack the whole director, or for movieQuery a slice of movie types
 // from a query that returns many results.
 type directQuery struct {
@@ -176,7 +176,7 @@ var (
 	// map changed.  Used in readDirectors() and visitDirector().
 	directorByNameTemplate = `{
 	director(func: eq(name@en, $a)) @filter(has(director.film)) {
-		_uid_
+		uid
 		name@en
 	}
 }`
@@ -185,26 +185,26 @@ var (
 	directorsMoviesTemplate = `{
 	movies(func: uid($a)) {
 		movie: director.film {
-			_uid_
+			uid
 			EnglishName: name@en
 			GermanName: name@de
 			ItalianName: name@it
       		starring {
         		performance.actor {
-					_uid_
+					uid
           			name@en
           		}
 				performance.character {
-					_uid_
+					uid
 					name@en
 				}
 			}
 			genre {
-				_uid_
+				uid
 				name@en
 			}
 			~director.film {
-				_uid_
+				uid
 				name@en
 			}
 			initial_release_date
@@ -221,7 +221,7 @@ var (
 		actor.film {
 			performance.film {
 				~director.film {
-					_uid_
+					uid
 					name@en
 				}
 			 }
@@ -490,12 +490,12 @@ func visitActor(a *actor, dgraphClient *client.Dgraph) {
 
 					for _, dir := range actorPerformance.Children {
 
-						// At a director, with a _uid_ and a name
+						// At a director, with a uid and a name
 						var uid uint64
 						var name string
 						for _, prop := range dir.Properties {
 							switch prop.Prop {
-							case "_uid_":
+							case "uid":
 								uid = prop.GetValue().GetUidVal()
 							case "name@en":
 								name = prop.GetValue().GetStrVal()

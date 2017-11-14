@@ -626,17 +626,11 @@ func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.
 
 	typ, err := schema.State().TypeOf(attr)
 	if err != nil {
-		if q.UidList == nil {
-			return out, nil
-		}
-		// Schema not defined, so lets add dummy values and return.
-		// Adding dummy values is important because the code assumes that len(SrcUids) equals
-		// len(uidMatrix)
-		for i := 0; i < len(q.UidList.Uids); i++ {
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
-		}
-		return out, nil
+		// All schema checks are done before this, this type is only used to
+		// convert it to schema type before returning.
+		// Schema type won't be present only if there is no data for that predicate
+		// or if we load through bulk loader.
+		typ = types.DefaultID
 	}
 	srcFn.atype = typ
 
@@ -665,7 +659,7 @@ func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
-		if err := handleHasFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := handleHasFunction(ctx, q, out); err != nil {
 			return nil, err
 		}
 	}
@@ -710,24 +704,6 @@ func needsStringFiltering(srcFn *functionContext, langs []string) bool {
 	return srcFn.isStringFn && langForFunc(langs) != "." &&
 		(srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
 			srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn)
-}
-
-func handleHasFunction(arg funcArgs) error {
-	attr := arg.q.Attr
-	if ok := schema.State().HasCount(attr); !ok {
-		return x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root.",
-			attr, arg.srcFn.fname)
-	}
-	cp := countParams{
-		readTs:  arg.q.ReadTs,
-		count:   0,
-		fn:      "gt",
-		attr:    attr,
-		gid:     arg.gid,
-		reverse: arg.q.Reverse,
-	}
-	cp.evaluate(arg.out)
-	return nil
 }
 
 func handleCompareScalarFunction(arg funcArgs) error {
@@ -1502,6 +1478,7 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 	}
 	countPrefix := pk.CountPrefix(cp.reverse)
 
+	// TODO: Wait for txn watermarks to catch up.
 	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
 		key := it.Item().Key()
 		nk := make([]byte, len(key))
@@ -1513,5 +1490,50 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 		}
 		out.UidMatrix = append(out.UidMatrix, uids)
 	}
+	return nil
+}
+
+// TODO - Check meta for empty PL and skip it.
+func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result) error {
+	tlist := &protos.List{}
+
+	txn := pstore.NewTransactionAt(q.ReadTs, false)
+	defer txn.Discard()
+
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.PrefetchValues = false
+	it := txn.NewIterator(itOpt)
+	defer it.Close()
+
+	pk := x.ParsedKey{
+		Attr: q.Attr,
+	}
+	startKey := x.DataKey(q.Attr, 0)
+	prefix := pk.DataPrefix()
+	if q.Reverse {
+		startKey = x.ReverseKey(q.Attr, 0)
+		prefix = pk.ReversePrefix()
+	}
+
+	w := 0
+	for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
+		pk := x.Parse(it.Item().Key())
+
+		if w%1000 == 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("handleHasFunction:"+
+						" key: %v:%v", pk.Attr, pk.Uid)
+				}
+			}
+		}
+		w++
+		tlist.Uids = append(tlist.Uids, pk.Uid)
+	}
+
+	out.UidMatrix = append(out.UidMatrix, tlist)
 	return nil
 }

@@ -50,7 +50,7 @@ var (
 )
 
 func workerPort() int {
-	return x.Config.PortOffset + Config.BaseWorkerPort
+	return x.Config.PortOffset + x.PortInternal
 }
 
 func Init(ps *badger.ManagedDB) {
@@ -117,9 +117,7 @@ func BlockingStop() {
 	groups().Node.waitForTxnMarks(ctx)
 	groups().Node.Stop()        // blocking stop raft node.
 	workerServer.GracefulStop() // blocking stop server
+	groups().Node.applyAllMarks(ctx)
 	posting.StopLRUEviction()
-	posting.CommitLists(func(key []byte) bool {
-		return true
-	})
 	groups().Node.snapshot(0)
 }

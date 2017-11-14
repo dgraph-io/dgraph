@@ -47,40 +47,42 @@ func (p *valuePointer) Decode(b []byte) {
 
 // header is used in value log as a header before Entry.
 type header struct {
-	klen     uint32
-	vlen     uint32
-	meta     byte
-	userMeta byte
+	klen      uint32
+	vlen      uint32
+	expiresAt uint64
+	meta      byte
+	userMeta  byte
 }
 
 const (
-	headerBufSize = 10
+	headerBufSize = 18
 )
 
 func (h header) Encode(out []byte) {
 	y.AssertTrue(len(out) >= headerBufSize)
 	binary.BigEndian.PutUint32(out[0:4], h.klen)
 	binary.BigEndian.PutUint32(out[4:8], h.vlen)
-	out[8] = h.meta
-	out[9] = h.userMeta
+	binary.BigEndian.PutUint64(out[8:16], h.expiresAt)
+	out[16] = h.meta
+	out[17] = h.userMeta
 }
 
 // Decodes h from buf.
 func (h *header) Decode(buf []byte) {
 	h.klen = binary.BigEndian.Uint32(buf[0:4])
 	h.vlen = binary.BigEndian.Uint32(buf[4:8])
-	h.meta = buf[8]
-	h.userMeta = buf[9]
+	h.expiresAt = binary.BigEndian.Uint64(buf[8:16])
+	h.meta = buf[16]
+	h.userMeta = buf[17]
 }
 
-// entry provides Key, Value and if required, CASCounterCheck to kv.BatchSet() API.
-// If CASCounterCheck is provided, it would be compared against the current casCounter
-// assigned to this key-value. Set be done on this key only if the counters match.
+// entry provides Key, Value, UserMeta and ExpiresAt. This struct can be used by the user to set data.
 type entry struct {
-	Key      []byte
-	Value    []byte
-	Meta     byte
-	UserMeta byte
+	Key       []byte
+	Value     []byte
+	UserMeta  byte
+	ExpiresAt uint64 // time.Unix
+	meta      byte
 
 	// Fields maintained internally.
 	offset uint32
@@ -95,11 +97,13 @@ func (e *entry) estimateSize(threshold int) int {
 
 // Encodes e to buf. Returns number of bytes written.
 func encodeEntry(e *entry, buf *bytes.Buffer) (int, error) {
-	var h header
-	h.klen = uint32(len(e.Key))
-	h.vlen = uint32(len(e.Value))
-	h.meta = e.Meta
-	h.userMeta = e.UserMeta
+	h := header{
+		klen:      uint32(len(e.Key)),
+		vlen:      uint32(len(e.Value)),
+		expiresAt: e.ExpiresAt,
+		meta:      e.meta,
+		userMeta:  e.UserMeta,
+	}
 
 	var headerEnc [headerBufSize]byte
 	h.Encode(headerEnc[:])
@@ -124,5 +128,5 @@ func encodeEntry(e *entry, buf *bytes.Buffer) (int, error) {
 
 func (e entry) print(prefix string) {
 	fmt.Printf("%s Key: %s Meta: %d UserMeta: %d Offset: %d len(val)=%d",
-		prefix, e.Key, e.Meta, e.UserMeta, e.offset, len(e.Value))
+		prefix, e.Key, e.meta, e.UserMeta, e.offset, len(e.Value))
 }

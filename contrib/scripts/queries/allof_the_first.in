@@ -1,0 +1,12 @@
+{
+ me(func:eq(name@en,"Chi Chi LaRue")) {
+  director.film {
+   directed_by {
+    director.film(first: 10) @filter(allofterms(name@en, "the")) {
+     uid
+     name@en
+    }
+   }
+  }
+ }
+}

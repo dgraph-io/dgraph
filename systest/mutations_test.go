@@ -56,9 +56,9 @@ func TestNQuadMutation(t *testing.T) {
 	}`
 
 	txn = cluster.client.NewTxn()
-	resp, err := txn.Query(ctx, breakfastQuery, nil)
+	resp, err := txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
-	CompareJSON(t, `{ "data": { "q": [ {
+	CompareJSON(t, `{ "q": [ {
 		"fruit": [
 			{ "xid": "apple" },
 			{ "xid": "banana" }
@@ -66,13 +66,13 @@ func TestNQuadMutation(t *testing.T) {
 		"cereal": [
 			{ "xid": "weetbix" }
 		]
-	}]}}`, string(resp.Json))
+	}]}`, string(resp.Json))
 
 	txn = cluster.client.NewTxn()
 	_, err = txn.Mutate(ctx, &protos.Mutation{
 		DelNquads: []byte(fmt.Sprintf(`
-			<%#x> <fruit> <%#x> .
-			<%#x> <cereal> <%#x> .`,
+			<%s> <fruit>  <%s> .
+			<%s> <cereal> <%s> .`,
 			assigned.Uids["breakfast"], assigned.Uids["banana"],
 			assigned.Uids["breakfast"], assigned.Uids["weetbix"])),
 	})
@@ -80,11 +80,11 @@ func TestNQuadMutation(t *testing.T) {
 	require.NoError(t, txn.Commit(ctx))
 
 	txn = cluster.client.NewTxn()
-	resp, err = txn.Query(ctx, breakfastQuery, nil)
+	resp, err = txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
-	CompareJSON(t, `{ "data": { "q": [ {
+	CompareJSON(t, `{ "q": [ {
 		"fruit": [
 			{ "xid": "apple" }
 		]
-	}]}}`, string(resp.Json))
+	}]}`, string(resp.Json))
 }

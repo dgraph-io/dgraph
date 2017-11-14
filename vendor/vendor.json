@@ -33,6 +33,12 @@
 			"revisionTime": "2017-02-24T21:36:31Z"
 		},
 		{
+			"checksumSHA1": "2ZR85MHR4uVpV/zOpUdyZsMzmto=",
+			"path": "github.com/blevesearch/bleve/analysis/lang/cjk",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
 			"checksumSHA1": "3VIPkl12t1ko4y6DkbPcz+MtQjY=",
 			"path": "github.com/blevesearch/bleve/analysis/token/lowercase",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
@@ -157,40 +163,40 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "d40uNgcvA6soI03HQ2xirDzdiwU=",
+			"checksumSHA1": "fIu/ZimZwt+pNlOrAhKs1mWdYQ8=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "d3634b7b071896c411f3111cf6cf291fa7543618",
-			"revisionTime": "2017-10-26T08:24:19Z"
+			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
+			"revisionTime": "2017-11-08T03:32:58Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "d3634b7b071896c411f3111cf6cf291fa7543618",
-			"revisionTime": "2017-10-26T08:24:19Z"
+			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
+			"revisionTime": "2017-11-08T03:32:58Z"
 		},
 		{
-			"checksumSHA1": "FB7rDZgiLfpIGi9RqWbgxjZ0Vjg=",
+			"checksumSHA1": "gGTDnTVVw5kcT2P5NXZV1YSckOU=",
 			"path": "github.com/dgraph-io/badger/protos",
-			"revision": "d3634b7b071896c411f3111cf6cf291fa7543618",
-			"revisionTime": "2017-10-26T08:24:19Z"
+			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
+			"revisionTime": "2017-11-08T03:32:58Z"
 		},
 		{
 			"checksumSHA1": "PbfYA5nvlgi/zvRHlKJQRDb149s=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "d3634b7b071896c411f3111cf6cf291fa7543618",
-			"revisionTime": "2017-10-26T08:24:19Z"
+			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
+			"revisionTime": "2017-11-08T03:32:58Z"
 		},
 		{
-			"checksumSHA1": "BzVv53FxzPfogVEHIBwf8BGxiRQ=",
+			"checksumSHA1": "hYJDo6Fzh2zJgzZsxNsCRcMKOUY=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "d3634b7b071896c411f3111cf6cf291fa7543618",
-			"revisionTime": "2017-10-26T08:24:19Z"
+			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
+			"revisionTime": "2017-11-08T03:32:58Z"
 		},
 		{
-			"checksumSHA1": "wfXCTe4hMkTrrMPtU8N1SxTFR08=",
+			"checksumSHA1": "+gorc2jnHxrO1XkOpkBPpi8WI0s=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "d3634b7b071896c411f3111cf6cf291fa7543618",
-			"revisionTime": "2017-10-26T08:24:19Z"
+			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
+			"revisionTime": "2017-11-08T03:32:58Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
@@ -335,6 +341,18 @@
 			"path": "github.com/prometheus/procfs/xfs",
 			"revision": "e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2",
 			"revisionTime": "2017-07-03T10:12:42Z"
+		},
+		{
+			"checksumSHA1": "Egby8wsHgh+rW7DphTy/b1dN2cs=",
+			"path": "github.com/spf13/cobra",
+			"revision": "b3426bbac13d7110c4d8fce456ea0012f79f3b8b",
+			"revisionTime": "2017-10-29T21:09:45Z"
+		},
+		{
+			"checksumSHA1": "fKq6NiaqP3DFxnCRF5mmpJWTSUA=",
+			"path": "github.com/spf13/pflag",
+			"revision": "4c012f6dcd9546820e378d0bdda4d8fc772cdfea",
+			"revisionTime": "2017-11-06T14:28:49Z"
 		},
 		{
 			"checksumSHA1": "Q2V7Zs3diLmLfmfbiuLpSxETSuY=",

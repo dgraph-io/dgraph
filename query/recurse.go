@@ -19,7 +19,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"math"
 
 	"golang.org/x/net/trace"
@@ -30,7 +29,6 @@ import (
 
 func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error {
 	// Note: Key format is - "attr|fromUID|toUID"
-	reachMap := make(map[string]struct{})
 	var numEdges int
 	var exec []*SubGraph
 	var err error
@@ -118,20 +116,10 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 				// We need to do this in case we had some filters.
 				sg.updateUidMatrix()
 			}
-			for mIdx, fromUID := range sg.SrcUIDs.Uids {
-				// This is for avoiding loops in graph.
-				algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
-					key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, uid)
-					_, seen := reachMap[key] // Combine fromUID here.
-					if seen {
-						return false
-					} else {
-						// Mark this edge as taken. We'd disallow this edge later.
-						reachMap[key] = struct{}{}
-						numEdges++
-						return true
-					}
-				})
+			for _, ul := range sg.uidMatrix {
+				for range ul.Uids {
+					numEdges++
+				}
 			}
 			if len(sg.Params.Order) > 0 || len(sg.Params.FacetOrder) > 0 {
 				// Can't use merge sort if the UIDs are not sorted.
@@ -170,8 +158,8 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 }
 
 func Recurse(ctx context.Context, sg *SubGraph) error {
-	if sg.Params.Alias != "recurse" {
-		return x.Errorf("Invalid shortest path query")
+	if !sg.Params.Recurse {
+		return x.Errorf("Invalid recurse path query")
 	}
 
 	depth := sg.Params.ExploreDepth

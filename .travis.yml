@@ -7,7 +7,7 @@ matrix:
       language: go
       go: 1.9.x
 
-install: contrib/install.sh
+install: contrib/scripts/install.sh
 git:
   depth: 1000
 dist: trusty
@@ -26,8 +26,7 @@ addons:
   artifacts:
     debug: true
     paths:
-      - $TRAVIS_BUILD_DIR/cmd/dgraph/dgraph-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
-      - $TRAVIS_BUILD_DIR/cmd/dgraph-live-loader/dgraph-live-loader-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
+      - $TRAVIS_BUILD_DIR/dgraph/dgraph-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
 env:
   global:
   - secure: VkBvETNHIhgegl3tLYI3fqDKD8CdZiYMgDCT1vetInyFjB2OQElOLD9TUwtTdWPoo9Oc/GiLJsx29yWAEVbw4nToyULDv8IbNV2IVA2FiQPijhLlwaiQxE3cbgo6e572C/SO+w2DVdBsBO+wFDhm8lj0/P9C+eBbRvEp0oBBKjDfR7yb3/YKi1S8WxGCHK4lMMlYKPc2s8RTIdGh+5ChQmQVp3ve0zEdmq5rCLwS5BbzNw21iw3Cw1/AyaBeKyNH8wNVg7QqxX56LIWFtcu03uz+l7PQDfFsaZo4Gsu1iYBO7aZcwlBwVxQr6L0dHzQy4KSpk6tHOQycDEDM+gMPe7RMJxEqwtRCa8ffNn2uXWp1MyXTUhSgqzQ1TWcZaFn/7V+KXNZJYNA2OT1TPodNblunMKwzth8XxyCGMhSeXb2ZsTxotzZ9GEBwwa9YA/5dHYfY+zKDhcMlLUFipqq3e9sfY3eMX1kg6rhYk0snBFYrf2X6d7Ug0+EF9pYsRHs9IqY8uQTyMHDNSzKzRrJjLyVX3/XORQHDjiVGrxXkf+3lWj3Dz76NfD8ZJwnx2ecYG81jgdB/Jt5Rsn5UrIw2Q95c0AqqZX17p1/Ws+g4A8rPyJlaSIsrnICRnXIrxHdVrgqNFxS/24SvaWLCjycdz2nM1RlssIaTu/J99G/WpJI=
@@ -36,8 +35,8 @@ env:
 before_script:
 - go get github.com/mattn/goveralls
 script:
-- bash contrib/cover.sh $HOME/build coverage.out || travis_terminate 1
+- bash contrib/scripts/cover.sh $HOME/build coverage.out || travis_terminate 1
 - goveralls -service=travis-ci -coverprofile=coverage.out || true
-- bash contrib/load-test.sh $HOME/build || travis_terminate 1
+- bash contrib/scripts/load-test.sh $HOME/build || travis_terminate 1
 - contrib/tlstest/run.sh
-- contrib/nightly/build.sh
+- contrib/nightly/upload.sh

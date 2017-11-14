@@ -203,7 +203,7 @@ func updateSchema(attr string, s protos.SchemaUpdate, index uint64) error {
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
-	if err := txn.Set(x.SchemaKey(attr), data, 0x00); err != nil {
+	if err := txn.Set(x.SchemaKey(attr), data); err != nil {
 		return err
 	}
 	return txn.CommitAt(1, nil)
@@ -292,6 +292,13 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 			return x.Errorf("* allowed only with delete operation")
 		}
 		return nil
+	}
+	// <s> <p> <o> Del on non list scalar type.
+	if len(edge.Value) > 0 && !bytes.Equal(edge.Value, []byte(x.Star)) &&
+		edge.Op == protos.DirectedEdge_DEL {
+		if !schema.State().IsList(edge.Attr) {
+			return x.Errorf("Please use * with delete operation for non-list type")
+		}
 	}
 
 	storageType := posting.TypeID(edge)
@@ -559,5 +566,21 @@ func tryAbortTransactions(startTimestamps []uint64) {
 		return
 	}
 	zc := protos.NewZeroClient(pl.Get())
-	zc.TryAbort(context.Background(), &protos.TxnTimestamps{StartTs: startTimestamps})
+	// Aborts if not already committed.
+	req := &protos.TxnTimestamps{Ts: startTimestamps}
+	resp, err := zc.TryAbort(context.Background(), req)
+	for err != nil {
+		resp, err = zc.TryAbort(context.Background(), req)
+	}
+	commitTimestamps := resp.Ts
+	x.AssertTrue(len(startTimestamps) == len(commitTimestamps))
+
+	for i, startTs := range startTimestamps {
+		tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTimestamps[i]}
+		_, err := commitOrAbort(context.Background(), tctx)
+		for err != nil {
+			// This will fail only due to badger error.
+			_, err = commitOrAbort(context.Background(), tctx)
+		}
+	}
 }

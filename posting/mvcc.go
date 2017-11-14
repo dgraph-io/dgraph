@@ -140,18 +140,17 @@ func (t *Txn) Index() uint64 {
 	return 0
 }
 
-func (t *transactions) PutOrMergeIndex(txn *Txn) *Txn {
+func (t *transactions) PutOrMergeIndex(src *Txn) *Txn {
 	t.Lock()
 	defer t.Unlock()
-	tx := t.m[txn.StartTs]
-	if tx == nil {
-		t.m[txn.StartTs] = txn
-		return txn
+	dst := t.m[src.StartTs]
+	if dst == nil {
+		t.m[src.StartTs] = src
+		return src
 	}
-	x.AssertTrue(tx.StartTs == txn.StartTs)
-	tx.Indices = append(tx.Indices, txn.Indices...)
-	t.m[txn.StartTs] = tx
-	return txn
+	x.AssertTrue(src.StartTs == dst.StartTs)
+	dst.Indices = append(dst.Indices, src.Indices...)
+	return dst
 }
 
 func (t *Txn) SetAbort() {
@@ -189,10 +188,10 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		return ErrInvalidTxn
 	}
 
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
+	txn := pstore.NewTransactionAt(commitTs, true)
 	defer txn.Discard()
 	// Sort by keys so that we have all postings for same pl side by side.
-	sort.Slice(tx.deltas, func(i, j int) bool {
+	sort.SliceStable(tx.deltas, func(i, j int) bool {
 		return bytes.Compare(tx.deltas[i].key, tx.deltas[j].key) < 0
 	})
 	var prevKey []byte
@@ -201,19 +200,11 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	for i < len(tx.deltas) {
 		d := tx.deltas[i]
 		if !bytes.Equal(prevKey, d.key) {
-			// First check the lru to ensure that we don't write delta if it's already committed.
 			plist := Get(d.key)
-			changed, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
-			for err == ErrRetry {
-				time.Sleep(5 * time.Millisecond)
-				plist = Get(d.key)
-				changed, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
-			}
-			if err != nil {
-				return err
-			}
-			// Skip all deltas for the key if it was already comitted.
-			if !changed {
+			if plist.AlreadyCommitted(tx.StartTs) {
+				// Delta already exists, so skip the key
+				// There won't be any race from lru eviction, because we don't
+				// commit in memory unless we write delta to disk.
 				i++
 				for i < len(tx.deltas) && bytes.Equal(tx.deltas[i].key, d.key) {
 					i++
@@ -224,6 +215,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		}
 		prevKey = d.key
 		var meta byte
+		d.posting.CommitTs = commitTs
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
 			pl.Postings = pl.Postings[:0]
 			meta = BitCompletePosting // Indicates that this is the full posting list.
@@ -247,12 +239,23 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 
 		val, err := pl.Marshal()
 		x.Check(err)
-		if err = txn.Set([]byte(d.key), val, meta); err != nil {
+		if err = txn.SetWithMeta([]byte(d.key), val, meta); err == badger.ErrTxnTooBig {
+			if err := txn.CommitAt(commitTs, nil); err != nil {
+				return err
+			}
+			txn = pstore.NewTransactionAt(commitTs, true)
+			if err := txn.SetWithMeta([]byte(d.key), val, meta); err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 		i++
 	}
-	return txn.CommitAt(commitTs, nil)
+	if err := txn.CommitAt(commitTs, nil); err != nil {
+		return err
+	}
+	return tx.commitMutationsMemory(ctx, commitTs)
 }
 
 func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error {
@@ -264,11 +267,11 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
 	for _, d := range tx.deltas {
 		plist := Get(d.key)
-		_, err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
+		err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		for err == ErrRetry {
 			time.Sleep(5 * time.Millisecond)
 			plist = Get(d.key)
-			_, err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
+			err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		}
 		if err != nil {
 			return err
@@ -403,6 +406,5 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	l.Unlock()
 	x.BytesRead.Add(int64(size))
 	atomic.StoreInt32(&l.estimatedSize, size)
-	go pstore.PurgeVersionsBelow(l.key, l.minTs)
 	return l, err
 }

@@ -19,7 +19,8 @@ syntax = "proto3";
 
 package protos;
 
-option java_package = "io.dgraph.proto";
+option java_package = "io.dgraph";
+option java_outer_classname = "DgraphProto";
 
 message List {
 	repeated fixed64 uids = 1;
@@ -390,7 +391,7 @@ message OracleDelta {
 }
 
 message TxnTimestamps {
-  repeated uint64 start_ts = 1;
+  repeated uint64 ts = 1;
 }
 
 service Raft {
@@ -407,7 +408,7 @@ service Zero {
 	rpc AssignUids (Num)      returns (AssignedIds) {}
   rpc Timestamps (Num)      returns (AssignedIds) {}
   rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
-	rpc TryAbort (TxnTimestamps) returns (Payload) {}
+	rpc TryAbort (TxnTimestamps) returns (TxnTimestamps) {}
 }
 
 service Worker {

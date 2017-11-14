@@ -1,0 +1,12 @@
+{
+ me(func:eq(name@en,"Chi Chi LaRue")) {
+  director.film {
+   directed_by {
+    director.film(orderasc: initial_release_date) {
+     uid
+     initial_release_date
+    }
+   }
+  }
+ }
+}

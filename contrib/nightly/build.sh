@@ -1,282 +1,86 @@
 #!/bin/bash
+
+# This script is used to compile and tar gzip the release binaries so that they
+# can be uploaded to Github. It would typically only be used by Dgraph developers
+# while doing a new release. If you are looking to build Dgraph, you should run a
+# go build from inside $GOPATH/src/github.com/dgraph-io/dgraph/cmd/dgraph
+
+# Exit script in case an error is encountered.
 set -e
 
-# TODO (pawan) - This file declares a lot of redundant variables. Simplify it.
-# This script is run when
-# 1. A cronjob is run on master which happens everyday and updates the nightly tag.
-# 2. A new tag is pushed i.e. when we make a new release.
-# 3. A release is updated.
-run_upload_script() {
-  # So that script can run locally too.
-  if [[ "$TRAVIS" != true ]]; then
-    return 0
-  fi
+asset_suffix=$1
+cur_dir=$(pwd);
+tmp_dir=/tmp/dgraph-build;
+release_version=$(git describe --abbrev=0);
+if [[ -n $asset_suffix ]]; then
+  release_version="$release_version${asset_suffix}"
+fi
+platform="$(uname | tr '[:upper:]' '[:lower:]')"
+# If temporary directory already exists delete it.
+if [ -d "$tmp_dir" ]; then
+  rm -rf $tmp_dir
+fi
+mkdir $tmp_dir;
 
-  if [[ $TRAVIS_TAG == "nightly" ]]; then
-		# We create nightly tag using the script so we don't want to run this script
-		# when the nightly build is triggered on updating where the commit points too.
-		echo "Nightly tag. Skipping script"
-		return 1
-	fi
-
-	# We run a cron job daily on Travis which will update the nightly binaries.
-	if [ $TRAVIS_EVENT_TYPE == "cron" ]; then
-		if [ "$TRAVIS_BRANCH"  != "master" ];then
-			echo "Cron job can only be run on master branch"
-			return 1
-		fi
-		echo "Running nightly script for cron job."
-		return 0
-	fi
-
-	branch=$TRAVIS_BRANCH
-	release_reg="^release/(v.+)"
-	if [[ $branch =~ $release_reg ]]; then
-		tag=${BASH_REMATCH[1]}
-		# If its the release branch and the tag already exists, then we want to update
-		# the assets.
-		echo $tag
-		if git rev-parse $tag >/dev/null 2>&1
-		then
-			return 0
-		else
-			echo "On release branch, but tag doesn't exist. Skipping"
-			return 1
-		fi
-	fi
-
-	if [[ $TRAVIS_TAG =~ v.+ ]]; then
-		echo "A new tag was pushed, running nightly script"
-		return 0
-	fi
-
-	return 1
-}
-
-get_tag() {
-	branch=$TRAVIS_BRANCH
-	release_reg="^release/(v.+)"
-	if [[ $branch =~ $release_reg ]]; then
-		echo ${BASH_REMATCH[1]}
-		return
-	fi
-
-	version="^v.+"
-	if [[ $TRAVIS_TAG =~ $version ]]; then
-		echo $TRAVIS_TAG
-		return
-	fi
-
-	echo "nightly"
-}
-
-BUILD_TAG=$(get_tag)
-ASSET_SUFFIX=""
-
-if [[ $BUILD_TAG == "nightly" ]]; then
-	ASSET_SUFFIX="-dev"
+if ! type strip > /dev/null; then
+  echo -e "\033[0;31mYou don't have strip command line tool available. Install it and try again.\033[0m"
+  exit 1
 fi
 
-get_version() {
-	# For nightly release, we find latest git tag.
-	if [[ $BUILD_TAG == "nightly" ]]; then
-		echo $(git describe --abbrev=0)
-		return
-	else
-		# For an actual release, we get the version from the tag or the release branch.
-		echo $BUILD_TAG
-	fi
-}
+source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/constants.sh
+pushd $dgraph_cmd
+echo -e "\033[1;33mBuilding dgraph binary for $platform\033[0m"
+go build -ldflags \
+  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
 
-TRAVIS_EVENT_TYPE=${TRAVIS_EVENT_TYPE:-cron}
-if ! run_upload_script; then
-	echo "Skipping running the nightly script"
-	exit 0
+echo -e "\n\033[1;34mSize of files before strip: $(du -sh dgraph)\033[0m"
+
+strip -x dgraph
+echo -e "\n\033[1;34mSize of files after  strip: $(du -sh dgraph)\033[0m"
+
+digest_cmd=""
+if hash shasum 2>/dev/null; then
+  digest_cmd="shasum -a 256"
 else
-	echo "Running nightly script"
+  echo -e "\033[0;31mYou don't have shasum command line tool available. Install it and try again.\033[0m"
+  exit 1
 fi
 
-if [[ $TRAVIS_OS_NAME == "osx" ]]; then
-	OS="darwin"
-else
-	OS="linux"
+# Create the checksum file for dgraph binary.
+checksum_file=$cur_dir/"dgraph-checksum-$platform-amd64-$release_version".sha256
+if [ -f "$checksum_file" ]; then
+	rm $checksum_file
 fi
 
-DGRAPH=$GOPATH/src/github.com/dgraph-io/dgraph
-BUILD_DIR=$DGRAPH/contrib
-source ${BUILD_DIR}/nightly/github.sh
+checksum=$($digest_cmd dgraph | awk '{print $1}')
+echo "$checksum /usr/local/bin/dgraph" >> $checksum_file
 
-DGRAPH_REPO="dgraph-io/dgraph"
-DGRAPH_VERSION=$(get_version)
-LATEST_TAG=$(curl -s https://api.github.com/repos/dgraph-io/dgraph/releases/latest \
- | grep "tag_name" | awk '{print $2}' | tr -dc '[:alnum:]-.\n\r' | head -n1)
-DGRAPH_COMMIT=$(git rev-parse HEAD)
-TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
-NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
-SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
-SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
-ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
-CURRENT_BRANCH=$TRAVIS_BRANCH
-CURRENT_DIR=$(pwd)
+# Move dgraph to tmp directory.
+mv dgraph $tmp_dir
 
-WINDOWS_TAR_NAME="dgraph-windows-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
-NIGHTLY_WINDOWS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/$WINDOWS_TAR_NAME"
+echo -e "\n\033[1;33mCreating tar file\033[0m"
+tar_file=dgraph-"$platform"-amd64-$release_version
+#popd &> /dev/null
+popd
 
-update_or_create_asset() {
-	local release_id=$1
-	local asset=$2
-	local asset_file=$3
-	local asset_id=$(send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
-		| jq -r -c ".[] | select(.name == \"${asset}\").id")
+pushd $tmp_dir
+# Create a tar file with the contents of the dgraph folder (i.e the binaries)
+GZIP=-n tar -zcf $tar_file.tar.gz dgraph;
+echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file.tar.gz)\033[0m"
 
-	if [[ -n "${asset_id}" ]]; then
-		echo "Found asset file for ${asset}. Deleting"
-		send_gh_api_request repos/${DGRAPH_REPO}/releases/assets/${asset_id} \
-			DELETE
-	fi
-	echo "Uplading asset ${asset}, loc: ${asset_file}"
-	upload_release_asset ${asset_file} "$asset" \
-		${DGRAPH_REPO} ${release_id} \
-		> /dev/null
-}
+echo -e "\n\033[1;33mMoving tarfile to original directory\033[0m"
+mv $tar_file.tar.gz $cur_dir
 
-get_nightly_release_body() {
-	echo '
-	Dgraph development (pre-release) build which is updated every night.
-	You can automatically install the nightly binaries along with the assets by running
-	`curl https://nightly.dgraph.io -sSf | bash`.
-	'
-}
+echo -e "Calculating and storing checksum for tar gzipped assets."
+popd
+mv $tmp_dir ./
+GZIP=-n tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
+checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
+echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
 
-upload_assets() {
-	local release_id
-	# We check if a release with tag nightly already exists, else we create it.
-	read release_id < <( \
-		send_gh_api_request repos/${DGRAPH_REPO}/releases \
-		| jq -r -c "(.[] | select(.tag_name == \"${BUILD_TAG}\").id), \"\"") \
-		|| exit
-
-	if [[ -z "${release_id}" ]]; then
-		echo "Creating release for tag ${BUILD_TAG}."
-		# For actual releases add draft true and for nightly release prerelease true.
-		if [[ $BUILD_TAG == "nightly" ]]; then
-			read release_id < <( \
-				send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
-				"{ \"name\": \"Dgraph ${DGRAPH_VERSION}${ASSET_SUFFIX}\", \"tag_name\": \"${BUILD_TAG}\", \
-				\"prerelease\": true }" \
-				| jq -r -c '.id') \
-				|| exit
-		else
-			read release_id < <( \
-				send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
-				"{ \"name\": \"Dgraph ${DGRAPH_VERSION} Release\", \"tag_name\": \"${BUILD_TAG}\", \
-				\"draft\": true }" \
-				| jq -r -c '.id') \
-				|| exit
-		fi
-	fi
-
-	# We upload the tar binary.
-	local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
-	update_or_create_asset $release_id $name ${NIGHTLY_FILE}
-
-	local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
-	update_or_create_asset $release_id $sha_name ${SHA_FILE}
-
-	if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-		# As asset would be the same on both platforms, we only upload it from linux.
-		update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
-		update_or_create_asset $release_id $WINDOWS_TAR_NAME ${NIGHTLY_WINDOWS_FILE}
-
-		# We dont want to update description programatically for version releases and commit apart from
-		# nightly.
-		if [[ $BUILD_TAG == "nightly" ]]; then
-			echo 'Updating release description.'
-			# TODO(pawan) - This fails, investigate and fix.
-			# 			send_gh_api_data_request repos/${DGRAPH_REPO}/releases/${release_id} PATCH \
-			# 				"{ \"force\": true, \"body\": $(get_nightly_release_body) | jq -s -c -R '.') }" \
-			# 				> /dev/null
-			#
-			echo "Updating ${BUILD_TAG} tag to point to ${DGRAPH_COMMIT}."
-			send_gh_api_data_request repos/${DGRAPH_REPO}/git/refs/tags/${BUILD_TAG} PATCH \
-				"{ \"force\": true, \"sha\": \"${DGRAPH_COMMIT}\" }" \
-				> /dev/null
-		fi
-	fi
-}
-
-DOCKER_TAG=""
-docker_tag() {
-	if [[ $BUILD_TAG == "nightly" ]]; then
-		DOCKER_TAG="master"
-	else
-		DOCKER_TAG=$DGRAPH_VERSION
-	fi
-}
-
-docker_tag
-
-build_docker_image() {
-	if [[ $TRAVIS_OS_NAME == "osx" ]]; then
-		return 0
-	fi
-
-	pushd ${GOPATH}/src/github.com/dgraph-io/dgraph/contrib/nightly > /dev/null
-	# Extract dgraph folder from the tar as its required by the Dockerfile.
-	tar -xzf ${NIGHTLY_FILE}
-	cp ${ASSETS_FILE} .
-	echo -e "Building the docker image with tag: $DOCKER_TAG."
-	docker build -t dgraph/dgraph:$DOCKER_TAG .
-	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
-		echo "Tagging docker image with latest tag"
-		docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest
-	fi
-	# Lets remove the dgraph folder now.
-	rm -rf dgraph
-	rm assets.tar.gz
-}
-
-upload_docker_image() {
-	if [[ $TRAVIS_OS_NAME == "osx" ]]; then
-		return 0
-	fi
-
-	echo "Logging into Docker."
-	docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
-	echo "Pushing the image"
-	echo -e "Pushing image with tag $DOCKER_TAG"
-	docker push dgraph/dgraph:$DOCKER_TAG
-	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
-		echo -e "Pushing latest image"
-		docker push dgraph/dgraph:latest
-	fi
-	popd > /dev/null
-}
-
-pushd $DGRAPH > /dev/null
-contrib/releases/build.sh $ASSET_SUFFIX
-if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-	contrib/releases/build-windows.sh $ASSET_SUFFIX
+# Only run this locally.
+if [[ $TRAVIS != true ]]; then
+  docker build -t dgraph/dgraph:master -f $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/Dockerfile .
 fi
 
-if [[ $DOCKER_TAG == "" ]]; then
-  echo -e "No docker tag found. Exiting the script"
-  exit 0
-fi
-
-build_docker_image
-
-if [ "$TRAVIS" = true ]; then
-	upload_assets
-	upload_docker_image
-fi
-
-if [ "$DGRAPH" != "$CURRENT_DIR" ]; then
-	mv $ASSETS_FILE $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
-fi
-
-# Lets rename the binaries before they are uploaded to S3.
-mv $TRAVIS_BUILD_DIR/cmd/dgraph/dgraph $TRAVIS_BUILD_DIR/cmd/dgraph/dgraph-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
-mv $TRAVIS_BUILD_DIR/cmd/dgraph-live-loader/dgraph-live-loader $TRAVIS_BUILD_DIR/cmd/dgraph-live-loader/dgraph-live-loader-$TRAVIS_OS_NAME-${TRAVIS_COMMIT:0:7}
-
-popd > /dev/null
+rm -Rf dgraph-build

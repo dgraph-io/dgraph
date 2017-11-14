@@ -95,17 +95,17 @@ func TestNormalizeJSONUid1(t *testing.T) {
 	n := (&fastJsonNode{}).New("root")
 	require.NotNil(t, n)
 	child1 := n.New("child1")
-	child1.SetUID(uint64(1), "_uid_")
+	child1.SetUID(uint64(1), "uid")
 	child1.AddValue("attr1", types.ValueForType(types.StringID))
 	n.AddListChild("child1", child1)
 
 	child2 := n.New("child2")
-	child2.SetUID(uint64(2), "_uid_")
+	child2.SetUID(uint64(2), "uid")
 	child2.AddValue("attr2", types.ValueForType(types.StringID))
 	child1.AddListChild("child2", child2)
 
 	child3 := n.New("child3")
-	child3.SetUID(uint64(3), "_uid_")
+	child3.SetUID(uint64(3), "uid")
 	child3.AddValue("attr3", types.ValueForType(types.StringID))
 	child2.AddListChild("child3", child3)
 
@@ -119,24 +119,24 @@ func TestNormalizeJSONUid1(t *testing.T) {
 
 	var b bytes.Buffer
 	nn.(*fastJsonNode).encode(&b)
-	require.Equal(t, `{"alias":[{"_uid_":"0x3","attr1":"","attr2":"","attr3":""}]}`, b.String())
+	require.JSONEq(t, `{"alias":[{"uid":"0x3","attr1":"","attr2":"","attr3":""}]}`, b.String())
 }
 
 func TestNormalizeJSONUid2(t *testing.T) {
 	n := (&fastJsonNode{}).New("root")
 	require.NotNil(t, n)
 	child1 := n.New("child1")
-	child1.SetUID(uint64(1), "_uid_")
+	child1.SetUID(uint64(1), "uid")
 	child1.AddValue("___attr1", types.ValueForType(types.StringID))
 	n.AddListChild("child1", child1)
 
 	child2 := n.New("child2")
-	child2.SetUID(uint64(2), "_uid_")
+	child2.SetUID(uint64(2), "uid")
 	child2.AddValue("___attr2", types.ValueForType(types.StringID))
 	child1.AddListChild("child2", child2)
 
 	child3 := n.New("child3")
-	child3.SetUID(uint64(3), "_uid_")
+	child3.SetUID(uint64(3), "uid")
 	child3.AddValue(fmt.Sprintf("attr3"), types.ValueForType(types.StringID))
 	child2.AddListChild("child3", child3)
 
@@ -150,5 +150,5 @@ func TestNormalizeJSONUid2(t *testing.T) {
 
 	var b bytes.Buffer
 	nn.(*fastJsonNode).encode(&b)
-	require.Equal(t, `{"alias":[{"___attr1":"","___attr2":"","_uid_":"0x3","attr3":""}]}`, b.String())
+	require.JSONEq(t, `{"alias":[{"___attr1":"","___attr2":"","uid":"0x3","attr3":""}]}`, b.String())
 }

@@ -20,9 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
 	"testing"
 	"time"
 
@@ -41,7 +39,7 @@ func ExampleTxn_Query_variables() {
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
-		Uid  string `json:"_uid_,omitempty"`
+		Uid  string `json:"uid,omitempty"`
 		Name string `json:"name,omitempty"`
 	}
 
@@ -82,7 +80,7 @@ func ExampleTxn_Query_variables() {
 		}
 	}`
 
-	resp, err := dg.NewTxn().Query(ctx, q, variables)
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -103,10 +101,6 @@ func ExampleDgraph_Alter_dropAll() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
-
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Checkf(err, "While creating temp dir")
-	defer os.RemoveAll(clientDir)
 
 	dc := protos.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
@@ -132,11 +126,11 @@ func ExampleTxn_Mutate() {
 	// for bool) would be created for values not specified explicitly.
 
 	type Person struct {
-		Uid      string   `json:"_uid_,omitempty"`
+		Uid      string   `json:"uid,omitempty"`
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
-		Raw      []byte   `json:"raw_bytes",omitempty`
+		Raw      []byte   `json:"raw_bytes,omitempty"`
 		Friends  []Person `json:"friend,omitempty"`
 		Location loc      `json:"loc,omitempty"`
 		School   []School `json:"school,omitempty"`
@@ -207,14 +201,14 @@ func ExampleTxn_Mutate() {
 	puid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
 		me(func: uid(%s)) {
-			_uid_
+			uid
 			name
 			age
 			loc
 			raw_bytes
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
@@ -224,7 +218,7 @@ func ExampleTxn_Mutate() {
 		}
 	}`, puid)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -251,7 +245,7 @@ func ExampleTxn_Mutate_bytes() {
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
-		Uid   string `json:"_uid_,omitempty"`
+		Uid   string `json:"uid,omitempty"`
 		Name  string `json:"name,omitempty"`
 		Bytes []byte `json:"bytes,omitempty"`
 	}
@@ -288,13 +282,13 @@ func ExampleTxn_Mutate_bytes() {
 
 	q := `{
 	q(func: eq(name, "Alice")) {
-		_uid_
+		uid
 		name
 		bytes
 	}
 }`
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -303,7 +297,6 @@ func ExampleTxn_Mutate_bytes() {
 		Me []Person `json:"q"`
 	}
 
-	fmt.Println(string(resp.Json))
 	var r Root
 	err = json.Unmarshal(resp.Json, &r)
 	if err != nil {
@@ -318,11 +311,11 @@ func ExampleTxn_Query_unmarshal() {
 	}
 
 	type Person struct {
-		Uid     string   `json:"_uid_,omitempty"`
+		Uid     string   `json:"uid,omitempty"`
 		Name    string   `json:"name,omitempty"`
 		Age     int      `json:"age,omitempty"`
 		Married bool     `json:"married,omitempty"`
-		Raw     []byte   `json:"raw_bytes",omitempty`
+		Raw     []byte   `json:"raw_bytes,omitempty"`
 		Friends []Person `json:"friend,omitempty"`
 		School  []School `json:"school,omitempty"`
 	}
@@ -388,14 +381,14 @@ func ExampleTxn_Query_unmarshal() {
 	puid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
 		me(func: uid(%s)) {
-			_uid_
+			uid
 			name
 			age
 			loc
 			raw_bytes
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
@@ -405,7 +398,7 @@ func ExampleTxn_Query_unmarshal() {
 		}
 	}`, puid)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -431,64 +424,47 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	dg := client.NewDgraphClient(dc)
 
 	// This example shows example for SetObject using facets.
-	type friendFacet struct {
-		Since  time.Time `json:"since"`
-		Family string    `json:"family"`
-		Age    float64   `json:"age"`
-		Close  bool      `json:"close"`
-	}
-
-	type nameFacets struct {
-		Origin string `json:"origin"`
-	}
-
-	type schoolFacet struct {
-		Since time.Time `json:"since"`
-	}
-
 	type School struct {
-		Name   string      `json:"name"`
-		Facets schoolFacet `json:"@facets"`
+		Name  string    `json:"name,omitempty"`
+		Since time.Time `json:"school:since,omitempty"`
 	}
 
 	type Person struct {
-		Name       string      `json:"name"`
-		NameFacets nameFacets  `json:"name@facets"`
-		Facets     friendFacet `json:"@facets"`
-		Friends    []Person    `json:"friend"`
-		School     School      `json:"school"`
+		Name       string   `json:"name,omitempty"`
+		NameOrigin string   `json:"name|origin,omitempty"`
+		Friends    []Person `json:"friend,omitempty"`
+
+		// These are facets on the friend edge.
+		Since  time.Time `json:"friend|since,omitempty"`
+		Family string    `json:"friend|family,omitempty"`
+		Age    float64   `json:"friend|age,omitempty"`
+		Close  bool      `json:"friend|close,omitempty"`
+
+		School []School `json:"school,omitempty"`
 	}
 
 	ti := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 	p := Person{
-		Name: "Alice",
-		NameFacets: nameFacets{
-			Origin: "Indonesia",
-		},
+		Name:       "Alice",
+		NameOrigin: "Indonesia",
 		Friends: []Person{
 			Person{
-				Name: "Bob",
-				Facets: friendFacet{
-					Since:  ti,
-					Family: "yes",
-					Age:    13,
-					Close:  true,
-				},
+				Name:   "Bob",
+				Since:  ti,
+				Family: "yes",
+				Age:    13,
+				Close:  true,
 			},
 			Person{
-				Name: "Charlie",
-				Facets: friendFacet{
-					Family: "maybe",
-					Age:    16,
-				},
+				Name:   "Charlie",
+				Family: "maybe",
+				Age:    16,
 			},
 		},
-		School: School{
-			Name: "Wellington School",
-			Facets: schoolFacet{
-				Since: ti,
-			},
-		},
+		School: []School{School{
+			Name:  "Wellington School",
+			Since: ti,
+		}},
 	}
 
 	ctx := context.Background()
@@ -522,13 +498,13 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
         }
     }`, auid)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	type Root struct {
-		Me Person `json:"me"`
+		Me []Person `json:"me"`
 	}
 
 	var r Root
@@ -549,7 +525,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	dg := client.NewDgraphClient(dc)
 	// This example shows example for SetObject for predicates with list type.
 	type Person struct {
-		Uid         string   `json:"_uid_"`
+		Uid         string   `json:"uid"`
 		Address     []string `json:"address"`
 		PhoneNumber []int64  `json:"phone_number"`
 	}
@@ -588,14 +564,14 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	q := fmt.Sprintf(`
 	{
 		me(func: uid(%s)) {
-			_uid_
+			uid
 			address
 			phone_number
 		}
 	}
 	`, uid)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -622,12 +598,12 @@ func ExampleTxn_Mutate_delete() {
 	dg := client.NewDgraphClient(dc)
 
 	type School struct {
-		Uid  string `json:"_uid_"`
+		Uid  string `json:"uid"`
 		Name string `json:"name@en,omitempty"`
 	}
 
 	type Person struct {
-		Uid      string    `json:"_uid_,omitempty"`
+		Uid      string    `json:"uid,omitempty"`
 		Name     string    `json:"name,omitempty"`
 		Age      int       `json:"age,omitempty"`
 		Married  bool      `json:"married,omitempty"`
@@ -685,41 +661,41 @@ func ExampleTxn_Mutate_delete() {
 
 	q := fmt.Sprintf(`{
 		me(func: uid(1000)) {
-			_uid_
+			uid
 			name
 			age
 			loc
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
 			school {
-				_uid_
+				uid
 				name@en
 			}
 		}
 
 		me2(func: uid(1001)) {
-			_uid_
+			uid
 			name
 			age
 		}
 
 		me3(func: uid(1003)) {
-			_uid_
+			uid
 			name@en
 		}
 
 		me4(func: uid(1002)) {
-			_uid_
+			uid
 			name
 			age
 		}
 	}`)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -745,7 +721,7 @@ func ExampleTxn_Mutate_delete() {
 		log.Fatal(err)
 	}
 
-	resp, err = dg.NewTxn().Query(ctx, q, nil)
+	resp, err = dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -767,16 +743,12 @@ func ExampleTxn_Mutate_deleteNode() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Check(err)
-	defer os.RemoveAll(clientDir)
-
 	dc := protos.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// In this test we check S * * deletion.
 	type Person struct {
-		Uid     string    `json:"_uid_,omitempty"`
+		Uid     string    `json:"uid,omitempty"`
 		Name    string    `json:"name,omitempty"`
 		Age     int       `json:"age,omitempty"`
 		Married bool      `json:"married,omitempty"`
@@ -827,31 +799,31 @@ func ExampleTxn_Mutate_deleteNode() {
 
 	q := fmt.Sprintf(`{
 		me(func: uid(1000)) {
-			_uid_
+			uid
 			name
 			age
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
 		}
 
 		me2(func: uid(1001)) {
-			_uid_
+			uid
 			name
 			age
 		}
 
 		me3(func: uid(1002)) {
-			_uid_
+			uid
 			name
 			age
 		}
 	}`)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -886,7 +858,7 @@ func ExampleTxn_Mutate_deleteNode() {
 		log.Fatal(err)
 	}
 
-	resp, err = dg.NewTxn().Query(ctx, q, nil)
+	resp, err = dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -907,7 +879,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
-		Uid     string   `json:"_uid_,omitempty"`
+		Uid     string   `json:"uid,omitempty"`
 		Name    string   `json:"name,omitempty"`
 		Age     int      `json:"age,omitempty"`
 		Married bool     `json:"married,omitempty"`
@@ -958,19 +930,19 @@ func ExampleTxn_Mutate_deletePredicate() {
 
 	q := fmt.Sprintf(`{
 		me(func: uid(1000)) {
-			_uid_
+			uid
 			name
 			age
 			married
 			friend {
-				_uid_
+				uid
 				name
 				age
 			}
 		}
 	}`)
 
-	resp, err := dg.NewTxn().Query(ctx, q, nil)
+	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1000,7 +972,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 	}
 
 	// Also lets run the query again to verify that predicate data was deleted.
-	resp, err = dg.NewTxn().Query(ctx, q, nil)
+	resp, err = dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}

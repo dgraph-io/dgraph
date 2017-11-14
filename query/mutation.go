@@ -61,6 +61,7 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 
 				sg := &SubGraph{}
 				sg.DestUIDs = &protos.List{[]uint64{mu.GetEntity()}}
+				sg.ReadTs = m.StartTs
 				valMatrix, err := getNodePredicates(ctx, sg)
 				if err != nil {
 					return err
@@ -125,6 +126,7 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 	newUids := make(map[string]uint64)
 	num := &protos.Num{}
 	var err error
+	maxLeaseId := worker.MaxLeaseId()
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
@@ -134,7 +136,7 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 		if len(nq.Subject) > 0 {
 			if strings.HasPrefix(nq.Subject, "_:") {
 				newUids[nq.Subject] = 0
-			} else if _, err := gql.ParseUid(nq.Subject); err != nil {
+			} else if uid, err := gql.ParseUid(nq.Subject); err != nil || uid > maxLeaseId {
 				return newUids, err
 			}
 		}
@@ -142,7 +144,7 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
-			} else if _, err := gql.ParseUid(nq.ObjectId); err != nil {
+			} else if uid, err := gql.ParseUid(nq.ObjectId); err != nil || uid > maxLeaseId {
 				return newUids, err
 			}
 		}
@@ -202,7 +204,7 @@ func ToInternal(gmu *gql.Mutation,
 	}
 	for _, nq := range gmu.Del {
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return edges, errors.New("Predicate deletion should not be called via Mutate.")
+			return edges, errors.New("Predicate deletion should be called via alter.")
 		}
 		if err := parse(nq, protos.DirectedEdge_DEL); err != nil {
 			return edges, err

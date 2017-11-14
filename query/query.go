@@ -41,6 +41,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	FacetDelimeter = "|"
+)
+
 /*
  * QUERY:
  * Let's take this query from GraphQL as example:
@@ -121,6 +125,7 @@ type params struct {
 
 	// directives.
 	Normalize    bool
+	Recurse      bool
 	Cascade      bool
 	IgnoreReflex bool
 
@@ -139,7 +144,6 @@ type params struct {
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
-	upsert         bool
 }
 
 // Function holds the information about gql functions.
@@ -361,7 +365,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		// then we dont return the uids at this level so that UI doesn't render
 		// nodes without any other properties.
 		if sg.Params.uidCount == "" || len(sg.Children) != 0 {
-			dst.SetUID(uid, "_uid_")
+			dst.SetUID(uid, "uid")
 		}
 	}
 
@@ -434,14 +438,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
-					fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						fc.AddValue(f.Key, facets.ValFor(f))
-					}
-					if !fc.IsEmpty() {
-						fcParent := dst.New("_")
-						fcParent.AddMapChild("_", fc, false)
-						uc.AddMapChild("@facets", fcParent, true)
+						uc.AddValue(fieldName+FacetDelimeter+f.Key,
+							facets.ValFor(f))
 					}
 				}
 				if !uc.IsEmpty() {
@@ -461,7 +460,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
 
-			if pc.Attr == "_uid_" {
+			if pc.Attr == "uid" {
 				dst.SetUID(uid, pc.fieldName())
 				continue
 			}
@@ -472,16 +471,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
-				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					fc.AddValue(f.Key, facets.ValFor(f))
-				}
-				if !fc.IsEmpty() {
-					if facetsNode == nil {
-						facetsNode = dst.New("@facets")
-					}
-					facetsNode.AddMapChild(fieldName, fc, false)
+					dst.AddValue(fieldName+FacetDelimeter+f.Key,
+						facets.ValFor(f))
 				}
 			}
 
@@ -772,7 +765,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.AfterUID = uint64(after)
 	}
-	if v, ok := gq.Args["depth"]; ok && (args.Alias == "recurse" ||
+	if v, ok := gq.Args["depth"]; ok && (gq.Recurse ||
 		args.Alias == "shortest") {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
@@ -865,7 +858,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		IgnoreReflex: gq.IgnoreReflex,
 		IsEmpty:      gq.IsEmpty,
 		Order:        gq.Order,
-		upsert:       gq.Upsert,
+		Recurse:      gq.Recurse,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1350,9 +1343,9 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	for i, uid := range sg.DestUIDs.Uids {
 		var exclude bool
 		for _, child := range sg.Children {
-			// For _uid_ we dont actually populate the uidMatrix or values. So a node asking for
-			// _uid_ would always be excluded. Therefore we skip it.
-			if child.Attr == "_uid_" {
+			// For uid we dont actually populate the uidMatrix or values. So a node asking for
+			// uid would always be excluded. Therefore we skip it.
+			if child.Attr == "uid" {
 				continue
 			}
 
@@ -1376,10 +1369,11 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	sg.DestUIDs = &protos.List{out}
 
 AssignStep:
-	return sg.assignVars(doneVars, sgPath)
+	return sg.updateVars(doneVars, sgPath)
 }
 
-func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
+// Updates the doneVars map by picking up uid/values from the current Subgraph
+func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
 		return nil
 	}
@@ -1419,44 +1413,38 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			}
 			doneVars[sg.Params.Var].Vals[uid] = val
 		}
-	} else if len(sg.DestUIDs.Uids) != 0 {
+	} else if len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil) {
+		// Uid variable could be defined using uid or a predicate.
+		var uids *protos.List
+		if sg.Attr == "uid" {
+			uids = sg.SrcUIDs
+		} else {
+			uids = sg.DestUIDs
+		}
+
 		// This implies it is a entity variable.
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
-				Uids: sg.DestUIDs,
+				Uids: uids,
 				path: sgPath,
 			}
 			return nil
 		}
+
 		// For a recurse query this can happen. We don't allow using the same variable more than
 		// once otherwise.
-		uids := v.Uids
+		oldUids := v.Uids
 		lists := make([]*protos.List, 0, 2)
-		lists = append(lists, uids, sg.DestUIDs)
+		lists = append(lists, oldUids, uids)
 		v.Uids = algo.MergeSorted(lists)
 		doneVars[sg.Params.Var] = v
-
 		// This implies it is a value variable.
 	} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
-		if sg.Attr == "_uid_" {
-			// Its still an entity variable if its _uid_.
-			doneVars[sg.Params.Var] = varValue{
-				Uids: sg.SrcUIDs,
-				path: sgPath,
-			}
-			return nil
+		if v, ok = doneVars[sg.Params.Var]; !ok {
+			v.Vals = make(map[uint64]types.Val)
+			v.path = sgPath
 		}
 
-		// We reach here, if a uid variable was already set and now a uid edge has no dest uids.
-		// We don't want to set the variable as empty in this case.
-		if _, ok := doneVars[sg.Params.Var]; ok {
-			return nil
-		}
-
-		doneVars[sg.Params.Var] = varValue{
-			Vals: make(map[uint64]types.Val),
-			path: sgPath,
-		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			if len(sg.valueMatrix[idx].Values) > 1 {
 				return x.Errorf("Value variables not supported for predicate with list type.")
@@ -1466,8 +1454,9 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			if err != nil {
 				continue
 			}
-			doneVars[sg.Params.Var].Vals[uid] = val
+			v.Vals[uid] = val
 		}
+		doneVars[sg.Params.Var] = v
 	} else {
 		// If the variable already existed and now we see it again without any DestUIDs or
 		// ValueMatrix then lets just return.
@@ -1740,8 +1729,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
-	if sg.Attr == "_uid_" {
-		// We dont need to call ProcessGraph for _uid_, as we already have uids
+	if sg.Attr == "uid" {
+		// We dont need to call ProcessGraph for uid, as we already have uids
 		// populated from parent and there is nothing to process but uidMatrix
 		// and values need to have the right sizes so that preTraverse works.
 		sg.appendDummyValues()
@@ -1941,7 +1930,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	// We store any variable defined by this node in the map and pass it on
 	// to the children which might depend on it.
-	if err = sg.assignVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
+	if err = sg.updateVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
 		rch <- err
 		return
 	}
@@ -2406,7 +2395,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 					shortestSg, err = ShortestPath(ctx, sg)
 					errChan <- err
 				}()
-			} else if sg.Params.Alias == "recurse" {
+			} else if sg.Params.Recurse {
 				go func() {
 					errChan <- Recurse(ctx, sg)
 				}()

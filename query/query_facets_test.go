@@ -107,7 +107,7 @@ func TestRetrieveFacetsSimple(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"@facets":{"name":{"origin":"french"}},"gender":"female","name":"Michonne"}]}}`,
+		`{"data":{"me":[{"name|origin":"french","name":"Michonne","gender":"female"}]}}`,
 		js)
 }
 
@@ -127,7 +127,7 @@ func TestOrderFacets(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"@facets":{"_":{"since":"2004-05-02T15:04:05Z"}},"name":"Glenn Rhee"},{"@facets":{"_":{"since":"2005-05-02T15:04:05Z"}}},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Rick Grimes"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"since":"2007-05-02T15:04:05Z"}},"name":"Daryl Dixon"}]}]}}`,
+		`{"data":{"me":[{"friend":[{"name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"},{"friend|since":"2005-05-02T15:04:05Z"},{"name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"}]}]}}`,
 		js)
 }
 
@@ -147,7 +147,7 @@ func TestOrderdescFacets(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"@facets":{"_":{"since":"2007-05-02T15:04:05Z"}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Rick Grimes"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"since":"2005-05-02T15:04:05Z"}}},{"@facets":{"_":{"since":"2004-05-02T15:04:05Z"}},"name":"Glenn Rhee"}]}]}}`,
+		`{"data":{"me":[{"friend":[{"name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"},{"name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|since":"2005-05-02T15:04:05Z"},{"name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"}]}]}}`,
 		js)
 }
 
@@ -190,7 +190,7 @@ func TestRetrieveFacetsUidValues(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"},"name":{"origin":"french"}},"name":"Rick Grimes"},{"@facets":{"_":{"close":true,"family":true,"since":"2004-05-02T15:04:05Z","tag":"Domain3"},"name":{"origin":"french"}},"name":"Glenn Rhee"},{"@facets":{"_":{"close":false,"family":true,"since":"2007-05-02T15:04:05Z", "tag":34}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"age":33,"close":true,"family":false,"since":"2005-05-02T15:04:05Z"}}}]}]}}`,
+		`{"data":{"me":[{"friend":[{"name|origin":"french","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name|origin":"french","name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}]}]}}`,
 		js)
 }
 
@@ -212,7 +212,7 @@ func TestRetrieveFacetsAll(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"@facets":{"name":{"origin":"french"}},"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"},"name":{"origin":"french"}},"gender":"male","name":"Rick Grimes"},{"@facets":{"_":{"close":true,"family":true,"since":"2004-05-02T15:04:05Z","tag":"Domain3"},"name":{"origin":"french"}},"name":"Glenn Rhee"},{"@facets":{"_":{"close":false,"family":true,"since":"2007-05-02T15:04:05Z","tag":34}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"age":33,"close":true,"family":false,"since":"2005-05-02T15:04:05Z"}}}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data":{"me":[{"name|origin":"french","name":"Michonne","friend":[{"name|origin":"french","name":"Rick Grimes","gender":"male","friend|since":"2006-01-02T15:04:05Z"},{"name|origin":"french","name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}],"gender":"female"}]}}`,
 		js)
 }
 
@@ -275,7 +275,7 @@ func TestFetchingFewFacets(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"@facets":{"_":{"close":true}},"name":"Glenn Rhee"},{"@facets":{"_":{"close":false}},"name":"Daryl Dixon"},{"name":"Andrea"},{"@facets":{"_":{"close":true}}}],"name":"Michonne"}]}}`,
+		`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee","friend|close":true},{"name":"Daryl Dixon","friend|close":false},{"name":"Andrea"},{"friend|close":true}]}]}}`,
 		js)
 }
 
@@ -317,7 +317,7 @@ func TestFacetsSortOrder(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"@facets":{"_":{"close":true,"family":true}},"name":"Glenn Rhee"},{"@facets":{"_":{"close":false,"family":true}},"name":"Daryl Dixon"},{"name":"Andrea"},{"@facets":{"_":{"close":true,"family":false}}}],"name":"Michonne"}]}}`,
+		`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee","friend|close":true,"friend|family":true},{"name":"Daryl Dixon","friend|close":false,"friend|family":true},{"name":"Andrea"},{"friend|close":true,"friend|family":false}]}]}}`,
 		js)
 }
 
@@ -361,7 +361,7 @@ func TestFacetsMutation(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Rick Grimes"},{"@facets":{"_":{"close":false,"family":true,"since":"2007-05-02T15:04:05Z","tag":34}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"close":false,"family":false,"since":"2001-11-10T00:00:00Z"}}}],"name":"Michonne"}]}}`,
+		`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|close":false,"friend|family":false,"friend|since":"2001-11-10T00:00:00Z"}]}]}}`,
 		js)
 }
 
@@ -375,7 +375,7 @@ func TestFacetsFilterSimple(t *testing.T) {
 				name
 				friend @facets(eq(close, true)) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -384,7 +384,7 @@ func TestFacetsFilterSimple(t *testing.T) {
 	js := processToFastJSON(t, query)
 	// 0x65 does not have name.
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x65"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -398,7 +398,7 @@ func TestFacetsFilterSimple2(t *testing.T) {
 				name
 				friend @facets(eq(tag, "Domain3")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -406,7 +406,7 @@ func TestFacetsFilterSimple2(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -420,7 +420,7 @@ func TestFacetsFilterSimple3(t *testing.T) {
 				name
 				friend @facets(eq(tag, "34")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -428,7 +428,7 @@ func TestFacetsFilterSimple3(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x19","name":"Daryl Dixon"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x19","name":"Daryl Dixon"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -442,7 +442,7 @@ func TestFacetsFilterOr(t *testing.T) {
 				name
 				friend @facets(eq(close, true) OR eq(family, true)) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -451,7 +451,7 @@ func TestFacetsFilterOr(t *testing.T) {
 	js := processToFastJSON(t, query)
 	// 0x65 (101) does not have name.
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x65"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -465,7 +465,7 @@ func TestFacetsFilterAnd(t *testing.T) {
 				name
 				friend @facets(eq(close, true) AND eq(family, false)) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -473,7 +473,7 @@ func TestFacetsFilterAnd(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x65"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -487,7 +487,7 @@ func TestFacetsFilterle(t *testing.T) {
 				name
 				friend @facets(le(age, 35)) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -495,7 +495,7 @@ func TestFacetsFilterle(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x65"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -509,7 +509,7 @@ func TestFacetsFilterge(t *testing.T) {
 				name
 				friend @facets(ge(age, 33)) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -517,7 +517,7 @@ func TestFacetsFilterge(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x65"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -531,7 +531,7 @@ func TestFacetsFilterAndOrle(t *testing.T) {
 				name
 				friend @facets(eq(close, true) OR eq(family, true) AND le(since, "2007-01-10")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -540,7 +540,7 @@ func TestFacetsFilterAndOrle(t *testing.T) {
 	js := processToFastJSON(t, query)
 	// 0x65 (101) does not have name.
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x65"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -554,7 +554,7 @@ func TestFacetsFilterAndOrge2(t *testing.T) {
 				name
 				friend @facets(eq(close, false) OR eq(family, true) AND ge(since, "2007-01-10")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -562,7 +562,7 @@ func TestFacetsFilterAndOrge2(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x19","name":"Daryl Dixon"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x19","name":"Daryl Dixon"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -577,7 +577,7 @@ func TestFacetsFilterNotAndOrgeMutuallyExclusive(t *testing.T) {
 				name
 				friend @facets(not (eq(close, false) OR eq(family, true) AND ge(since, "2007-01-10"))) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -585,7 +585,7 @@ func TestFacetsFilterNotAndOrgeMutuallyExclusive(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -599,7 +599,7 @@ func TestFacetsFilterUnknownFacets(t *testing.T) {
 				name
 				friend @facets(ge(dob, "2007-01-10")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -621,7 +621,7 @@ func TestFacetsFilterUnknownOrKnown(t *testing.T) {
 				name
 				friend @facets(ge(dob, "2007-01-10") OR eq(family, true)) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -629,7 +629,7 @@ func TestFacetsFilterUnknownOrKnown(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -642,7 +642,7 @@ func TestFacetsFilterallofterms(t *testing.T) {
 				name
 				friend @facets(allofterms(games, "football chess tennis")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -650,7 +650,7 @@ func TestFacetsFilterallofterms(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"name":"Michonne","_uid_":"0x1"}],"name":"Andrea"}]}}`,
+		`{"data": {"me":[{"friend":[{"name":"Michonne","uid":"0x1"}],"name":"Andrea"}]}}`,
 		js)
 }
 
@@ -663,7 +663,7 @@ func TestFacetsFilterAllofMultiple(t *testing.T) {
 				name
 				friend @facets(allofterms(games, "football basketball")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -671,7 +671,7 @@ func TestFacetsFilterAllofMultiple(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"name":"Michonne","_uid_":"0x1"}, {"name":"Daryl Dixon","_uid_":"0x19"}],"name":"Andrea"}]}}`,
+		`{"data": {"me":[{"friend":[{"name":"Michonne","uid":"0x1"}, {"name":"Daryl Dixon","uid":"0x19"}],"name":"Andrea"}]}}`,
 		js)
 }
 
@@ -685,7 +685,7 @@ func TestFacetsFilterAllofNone(t *testing.T) {
 				name
 				friend @facets(allofterms(games, "football chess tennis cricket")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -706,7 +706,7 @@ func TestFacetsFilteranyofterms(t *testing.T) {
 				name
 				friend @facets(anyofterms(games, "tennis cricket")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -714,7 +714,7 @@ func TestFacetsFilteranyofterms(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x1","name":"Michonne"}],"name":"Andrea"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x1","name":"Michonne"}],"name":"Andrea"}]}}`,
 		js)
 }
 
@@ -727,7 +727,7 @@ func TestFacetsFilterAnyofNone(t *testing.T) {
 				name
 				friend @facets(anyofterms(games, "cricket")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -748,7 +748,7 @@ func TestFacetsFilterAllofanyofterms(t *testing.T) {
 				name
 				friend @facets(allofterms(games, "basketball hockey") OR anyofterms(games, "chess")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -756,7 +756,7 @@ func TestFacetsFilterAllofanyofterms(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x1","name":"Michonne"},{"_uid_":"0x19","name":"Daryl Dixon"}],"name":"Andrea"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x1","name":"Michonne"},{"uid":"0x19","name":"Daryl Dixon"}],"name":"Andrea"}]}}`,
 		js)
 }
 
@@ -769,7 +769,7 @@ func TestFacetsFilterAllofAndanyofterms(t *testing.T) {
 				name
 				friend @facets(allofterms(games, "hockey") AND anyofterms(games, "football basketball")) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -777,7 +777,7 @@ func TestFacetsFilterAllofAndanyofterms(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x19","name":"Daryl Dixon"}],"name":"Andrea"}]}}`,
+		`{"data": {"me":[{"friend":[{"uid":"0x19","name":"Daryl Dixon"}],"name":"Andrea"}]}}`,
 		js)
 }
 
@@ -809,7 +809,7 @@ func TestFacetsFilterAndRetrieval(t *testing.T) {
 				name
 				friend @facets(eq(close, true)) @facets(family) {
 					name
-					_uid_
+					uid
 				}
 			}
 		}
@@ -817,7 +817,7 @@ func TestFacetsFilterAndRetrieval(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"@facets":{"_":{"family":true}},"_uid_":"0x18","name":"Glenn Rhee"},{"@facets":{"_":{"family":false}},"_uid_":"0x65"}],"name":"Michonne"}]}}`,
+		`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Glenn Rhee","uid":"0x18","friend|family":true},{"uid":"0x65","friend|family":false}]}]}}`,
 		js)
 }
 
@@ -833,7 +833,7 @@ func TestFacetWithLang(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"@facets":{"name@en":{"type":"Test facet with lang"}},"name@en":"Test facet"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name@en|type":"Test facet with lang","name@en":"Test facet"}]}}`, js)
 }
 
 func TestFilterUidFacetMismatch(t *testing.T) {
@@ -849,7 +849,7 @@ func TestFilterUidFacetMismatch(t *testing.T) {
 	}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Glenn Rhee","@facets":{"_":{"close":true,"family":true,"since":"2004-05-02T15:04:05Z","tag":"Domain3"}}},{"@facets":{"_":{"age":33,"close":true,"family":false,"since":"2005-05-02T15:04:05Z"}}}]}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"friend":[{"name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}]}]}}`, js)
 }
 
 func TestRecurseFacetOrder(t *testing.T) {
@@ -857,25 +857,25 @@ func TestRecurseFacetOrder(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
     {
-		recurse(func: uid(1), depth: 2) {
+		me(func: uid(1), depth: 2) @recurse {
 			friend @facets(orderdesc: since)
-			_uid_
+			uid
 			name
 		}
 	}
   `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"recurse":[{"friend":[{"_uid_":"0x19","name":"Daryl Dixon","@facets":{"_":{"since":"2007-05-02T15:04:05Z"}}},{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}}],"_uid_":"0x17","name":"Rick Grimes","@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}},{"_uid_":"0x1f","name":"Andrea","@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}},{"_uid_":"0x65","@facets":{"_":{"since":"2005-05-02T15:04:05Z"}}},{"_uid_":"0x18","name":"Glenn Rhee","@facets":{"_":{"since":"2004-05-02T15:04:05Z"}}}],"_uid_":"0x1","name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"friend":[{"uid":"0x19","name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"},{"friend":[{"friend|since":"2006-01-02T15:04:05Z"}],"uid":"0x17","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x1f","name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x65","friend|since":"2005-05-02T15:04:05Z"},{"uid":"0x18","name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"}],"uid":"0x1","name":"Michonne"}]}}`, js)
 
 	query = `
     {
-		recurse(func: uid(1), depth: 2) {
+		me(func: uid(1), depth: 2) @recurse {
 			friend @facets(orderasc: since)
-			_uid_
+			uid
 			name
 		}
 	}
   `
 	js = processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"recurse":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee","@facets":{"_":{"since":"2004-05-02T15:04:05Z"}}},{"_uid_":"0x65","@facets":{"_":{"since":"2005-05-02T15:04:05Z"}}},{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}}],"_uid_":"0x17","name":"Rick Grimes","@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}},{"_uid_":"0x1f","name":"Andrea","@facets":{"_":{"since":"2006-01-02T15:04:05Z"}}},{"_uid_":"0x19","name":"Daryl Dixon","@facets":{"_":{"since":"2007-05-02T15:04:05Z"}}}],"_uid_":"0x1","name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"},{"uid":"0x65","friend|since":"2005-05-02T15:04:05Z"},{"friend":[{"friend|since":"2006-01-02T15:04:05Z"}],"uid":"0x17","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x1f","name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x19","name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"}],"uid":"0x1","name":"Michonne"}]}}`, js)
 }

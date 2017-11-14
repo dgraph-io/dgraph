@@ -150,7 +150,7 @@ func helpOpenOrCreateManifestFile(dir string, deletionsThreshold int) (ret *mani
 		return nil, Manifest{}, err
 	}
 
-	if _, err = fp.Seek(0, os.SEEK_END); err != nil {
+	if _, err = fp.Seek(0, io.SeekEnd); err != nil {
 		_ = fp.Close()
 		return nil, Manifest{}, err
 	}
@@ -211,7 +211,7 @@ func (mf *manifestFile) addChanges(changesParam []*protos.ManifestChange) error 
 var magicText = [4]byte{'B', 'd', 'g', 'r'}
 
 // The magic version number.
-const magicVersion = 2
+const magicVersion = 4
 
 func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	rewritePath := filepath.Join(dir, manifestRewriteFilename)
@@ -260,7 +260,7 @@ func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	if _, err := fp.Seek(0, os.SEEK_END); err != nil {
+	if _, err := fp.Seek(0, io.SeekEnd); err != nil {
 		fp.Close()
 		return nil, 0, err
 	}
@@ -333,9 +333,8 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 			fmt.Errorf("manifest has unsupported version: %d (we support %d)", version, magicVersion)
 	}
 
-	offset := r.count
-
 	build := createManifest()
+	var offset int64
 	for {
 		offset = r.count
 		var lenCrcBuf [8]byte

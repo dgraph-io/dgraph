@@ -203,6 +203,13 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 	return tablets
 }
 
+func MaxLeaseId() uint64 {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	return g.state.MaxLeaseId
+}
+
 func (g *groupi) applyState(state *protos.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
@@ -610,7 +617,9 @@ START:
 	go func() {
 		// In the event where there in no leader for a group, commit/abort won't get proposed.
 		// So periodically check oracle and propose
-		ticker := time.NewTicker(time.Second * 2)
+		// Ticker time should be long enough so that same startTs
+		// doesn't get proposed again and again.
+		ticker := time.NewTicker(time.Minute)
 		for {
 			<-ticker.C
 			if g.Node.AmLeader() {
@@ -626,6 +635,8 @@ START:
 			break
 		}
 		posting.Oracle().ProcessOracleDelta(oracleDelta)
+		// Do Immediately so that index keys are written.
+		g.proposeDelta(oracleDelta)
 	}
 	goto START
 }

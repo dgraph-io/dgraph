@@ -131,6 +131,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "name", 1001, "Bob", nil)
 	addEdgeToValue(t, "name", 1002, "Matt", nil)
 	addEdgeToValue(t, "name", 1003, "John", nil)
+	addEdgeToValue(t, "nick_name", 5010, "Two Terms", nil)
 
 	addEdgeToValue(t, "alias", 23, "Zambo Alice", nil)
 	addEdgeToValue(t, "alias", 24, "John Alice", nil)
@@ -389,11 +390,11 @@ func TestGetUID(t *testing.T) {
 		{
 			me(func: uid(0x01)) {
 				name
-				_uid_
+				uid
 				gender
 				alive
 				friend {
-					_uid_
+					uid
 					name
 				}
 			}
@@ -401,7 +402,7 @@ func TestGetUID(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"uid":"0x1","alive":true,"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
 }
 
@@ -411,11 +412,11 @@ func TestGetUIDInDebugMode(t *testing.T) {
 		{
 			me(func: uid(0x01)) {
 				name
-				_uid_
+				uid
 				gender
 				alive
 				friend {
-					_uid_
+					uid
 					name
 				}
 			}
@@ -426,7 +427,7 @@ func TestGetUIDInDebugMode(t *testing.T) {
 	js, err := processToFastJsonReqCtx(t, query, ctx)
 	require.NoError(t, err)
 	require.JSONEq(t,
-		`{"data": {"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"uid":"0x1","alive":true,"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
 
 }
@@ -437,11 +438,11 @@ func TestReturnUids(t *testing.T) {
 		{
 			me(func: uid(0x01)) {
 				name
-				_uid_
+				uid
 				gender
 				alive
 				friend {
-					_uid_
+					uid
 					name
 				}
 			}
@@ -450,7 +451,7 @@ func TestReturnUids(t *testing.T) {
 	js, err := processToFastJsonReq(t, query)
 	require.NoError(t, err)
 	require.JSONEq(t,
-		`{"data": {"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"uid":"0x1","alive":true,"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
 }
 
@@ -460,7 +461,7 @@ func TestGetUIDNotInChild(t *testing.T) {
 		{
 			me(func: uid(0x01)) {
 				name
-				_uid_
+				uid
 				gender
 				alive
 				friend {
@@ -471,7 +472,7 @@ func TestGetUIDNotInChild(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"_uid_":"0x1","alive":true,"gender":"female","name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`,
+		`{"data": {"me":[{"uid":"0x1","alive":true,"gender":"female","name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`,
 		js)
 }
 
@@ -511,7 +512,7 @@ func TestLevelBasedFacetVarAggSum(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}}},{"@facets":{"_":{"weight":0.700000}}}],"sumw":0.800000}]}}`,
+		`{"data":{"friend":[{"path":[{"path|weight":0.100000},{"path|weight":0.700000}],"sumw":0.800000}]}}`,
 		js)
 }
 
@@ -535,7 +536,7 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"count(follow)":1,"val(L4)":1.200000},{"@facets":{"_":{"weight":1.500000}},"count(follow)":1,"val(L4)":3.900000}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"count(follow)":1,"val(L4)":3.900000}]}]}],"sum":[{"name":"John","val(L4)":3.900000},{"name":"Matt","val(L4)":1.200000}]}}`,
+	require.JSONEq(t, `{"data":{"friend":[{"path":[{"path":[{"count(follow)":1,"val(L4)":1.200000,"path|weight":0.100000},{"count(follow)":1,"val(L4)":3.900000,"path|weight":1.500000}],"path|weight":0.100000},{"path":[{"count(follow)":1,"val(L4)":3.900000,"path|weight":0.600000}],"path|weight":0.700000}]}],"sum":[{"name":"John","val(L4)":3.900000},{"name":"Matt","val(L4)":1.200000}]}}`,
 		js)
 }
 
@@ -557,7 +558,7 @@ func TestLevelBasedSumMix1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"age":38,"path":[{"@facets":{"_":{"weight":0.200000}},"val(L2)":38.200000},{"@facets":{"_":{"weight":0.100000}},"val(L2)":38.100000}]}],"sum":[{"name":"Glenn Rhee","val(L2)":38.200000},{"name":"Andrea","val(L2)":38.100000}]}}`,
+		`{"data":{"friend":[{"age":38,"path":[{"val(L2)":38.200000,"path|weight":0.200000},{"val(L2)":38.100000,"path|weight":0.100000}]}],"sum":[{"name":"Glenn Rhee","val(L2)":38.200000},{"name":"Andrea","val(L2)":38.100000}]}}`,
 		js)
 }
 
@@ -581,7 +582,7 @@ func TestLevelBasedFacetVarSum1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"name":"Bob","path":[{"@facets":{"_":{"weight":0.100000}},"val(L3)":0.200000},{"@facets":{"_":{"weight":1.500000}},"val(L3)":2.900000}]},{"@facets":{"_":{"weight":0.700000}},"name":"Matt","path":[{"@facets":{"_":{"weight":0.600000}},"val(L3)":2.900000}]}]}],"sum":[{"name":"John","val(L3)":2.900000},{"name":"Matt","val(L3)":0.200000}]}}`,
+		`{"data":{"friend":[{"path":[{"name":"Bob","path":[{"val(L3)":0.200000,"path|weight":0.100000},{"val(L3)":2.900000,"path|weight":1.500000}],"path|weight":0.100000},{"name":"Matt","path":[{"val(L3)":2.900000,"path|weight":0.600000}],"path|weight":0.700000}]}],"sum":[{"name":"John","val(L3)":2.900000},{"name":"Matt","val(L3)":0.200000}]}}`,
 		js)
 }
 
@@ -606,7 +607,7 @@ func TestLevelBasedFacetVarSum2(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.600000}},"val(L4)":0.800000}]},{"@facets":{"_":{"weight":1.500000}},"path":[{"val(L4)":2.900000}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"path":[{"val(L4)":2.900000}]}]}]}],"sum":[{"name":"Bob","val(L4)":2.900000},{"name":"John","val(L4)":0.800000}]}}`,
+		`{"data":{"friend":[{"path":[{"path":[{"path":[{"val(L4)":0.800000,"path|weight":0.600000}],"path|weight":0.100000},{"path":[{"val(L4)":2.900000}],"path|weight":1.500000}],"path|weight":0.100000},{"path":[{"path":[{"val(L4)":2.900000}],"path|weight":0.600000}],"path|weight":0.700000}]}],"sum":[{"name":"Bob","val(L4)":2.900000},{"name":"John","val(L4)":0.800000}]}}`,
 		js)
 }
 
@@ -1126,7 +1127,7 @@ func TestGroupByRoot(t *testing.T) {
 	query := `
 	{
 		me(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
-				count(_uid_)
+				count(uid)
 		}
 	}
 	`
@@ -1141,7 +1142,7 @@ func TestGroupBy_RepeatAttr(t *testing.T) {
 	{
 		me(func: uid(1)) {
 			friend @groupby(age) {
-				count(_uid_)
+				count(uid)
 			}
 			friend {
 				name
@@ -1170,7 +1171,7 @@ func TestGroupBy(t *testing.T) {
 
 		me(func: uid(1)) {
 			friend @groupby(age) {
-				count(_uid_)
+				count(uid)
 			}
 			name
 		}
@@ -1188,7 +1189,7 @@ func TestGroupByCountval(t *testing.T) {
 		{
 			var(func: uid( 1)) {
 				friend @groupby(school) {
-					a as count(_uid_)
+					a as count(uid)
 				}
 			}
 
@@ -1254,7 +1255,7 @@ func TestGroupByMulti(t *testing.T) {
 		{
 			me(func: uid(1)) {
 				friend @groupby(friend,name) {
-					count(_uid_)
+					count(uid)
 				}
 			}
 		}
@@ -1367,7 +1368,7 @@ func TestFilterFacetval(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"@facets":{"_":{"weight":0.200000}},"name":"Glenn Rhee"},{"@facets":{"_":{"weight":0.100000}},"friend":[{"name":"Glenn Rhee","val(L)":0.200000}],"name":"Andrea"}]}]}}`,
+		`{"data":{"friend":[{"path":[{"name":"Glenn Rhee","path|weight":0.200000},{"name":"Andrea","friend":[{"name":"Glenn Rhee","val(L)":0.200000}],"path|weight":0.100000}]}]}}`,
 		js)
 }
 
@@ -1387,7 +1388,7 @@ func TestFilterFacetVar1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"friend":[{"path":[{"name":"Glenn Rhee"},{"@facets":{"_":{"weight1":0.200000}},"name":"Andrea"}]}]}}`,
+		`{"data":{"friend":[{"path":[{"name":"Glenn Rhee"},{"name":"Andrea","path|weight1":0.200000}]}]}}`,
 		js)
 }
 
@@ -1662,7 +1663,7 @@ func TestRecurseQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			recurse(func: uid(0x01)) {
+			me(func: uid(0x01), depth: 3) @recurse {
 				nonexistent_pred
 				friend
 				name
@@ -1670,14 +1671,14 @@ func TestRecurseQuery(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes", "friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea", "friend":[{"name":"Glenn Rhee"}]}]}]}}`, js)
+		`{"data": {"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes", "friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea", "friend":[{"name":"Glenn Rhee"}]}]}]}}`, js)
 }
 
 func TestRecurseQueryOrder(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			recurse(func: uid(0x01)) {
+			me(func: uid(0x01), depth: 3) @recurse {
 				friend(orderdesc: dob)
 				dob
 				name
@@ -1685,7 +1686,7 @@ func TestRecurseQueryOrder(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"recurse":[{"dob":"1910-01-01T00:00:00Z","friend":[{"dob":"1910-01-02T00:00:00Z","friend":[{"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","friend":[{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"dob":"1910-01-01T00:00:00Z","friend":[{"dob":"1910-01-02T00:00:00Z","friend":[{"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","friend":[{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -1693,22 +1694,22 @@ func TestRecurseQueryLimitDepth1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			recurse(func: uid(0x01), depth: 2) {
+			me(func: uid(0x01), depth: 2) @recurse {
 				friend
 				name
 			}
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
+		`{"data": {"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
 }
 
 func TestRecurseQueryLimitDepth2(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			recurse(func: uid(0x01), depth: 2) {
-				_uid_
+			me(func: uid(0x01), depth: 2) @recurse {
+				uid
 				non_existent
 				friend
 				name
@@ -1716,14 +1717,14 @@ func TestRecurseQueryLimitDepth2(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"recurse":[{"_uid_":"0x1","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"name":"Michonne"}]}}`, js)
+		`{"data": {"me":[{"uid":"0x1","friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"name":"Michonne"}]}}`, js)
 }
 
 func TestRecurseVariable(t *testing.T) {
 	populateGraph(t)
 	query := `
 			{
-				recurse(func: uid(0x01)) {
+				var(func: uid(0x01), depth: 3) @recurse {
 					a as friend
 				}
 
@@ -1734,7 +1735,46 @@ func TestRecurseVariable(t *testing.T) {
 		`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"recurse":[],"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+}
+
+func TestRecurseVariableUid(t *testing.T) {
+	populateGraph(t)
+	query := `
+			{
+				var(func: uid(0x01), depth: 3) @recurse {
+					friend
+					a as uid
+				}
+
+				me(func: uid(a)) {
+					name
+				}
+			}
+		`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+}
+
+func TestRecurseVariableVar(t *testing.T) {
+	populateGraph(t)
+	query := `
+			{
+				var(func: uid(0x01), depth: 3) @recurse {
+					friend
+					school
+					a as name
+				}
+
+				me(func: uid(a)) {
+					name
+				}
+			}
+		`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{"name":"School A"},{"name":"School B"}]}}`, js)
 }
 
 func TestRecurseVariable2(t *testing.T) {
@@ -1743,7 +1783,7 @@ func TestRecurseVariable2(t *testing.T) {
 	query := `
 			{
 
-				recurse(func: uid(0x1)) {
+				var(func: uid(0x1), depth: 4) @recurse {
 					f2 as friend
 					f as follow
 				}
@@ -1758,7 +1798,7 @@ func TestRecurseVariable2(t *testing.T) {
 			}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"recurse":[],"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Glenn Rhee"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"},{"name":"John"}],"me2":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
@@ -1824,7 +1864,7 @@ func TestKShortestPathWeighted(t *testing.T) {
 	// We only get one path in this case as the facet is present only in one path.
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9"}]}]}]}]}}`,
+		`{"data":{"_path_":[{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8","path":[{"uid":"0x3e9","path|weight":0.100000}],"path|weight":0.100000}],"path|weight":0.100000}]}]}}`,
 		js)
 }
 
@@ -1853,7 +1893,7 @@ func TestKShortestPathWeighted1(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.700000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":1.500000}},"_uid_":"0x3eb"}]}]}]}]}]}}`,
+		`{"data":{"_path_":[{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8","path":[{"uid":"0x3e9","path":[{"uid":"0x3ea","path":[{"uid":"0x3eb","path|weight":0.600000}],"path|weight":0.100000}],"path|weight":0.100000}],"path|weight":0.100000}],"path|weight":0.100000}]},{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8","path":[{"uid":"0x3ea","path":[{"uid":"0x3eb","path|weight":0.600000}],"path|weight":0.700000}],"path|weight":0.100000}],"path|weight":0.100000}]},{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8","path":[{"uid":"0x3e9","path":[{"uid":"0x3eb","path|weight":1.500000}],"path|weight":0.100000}],"path|weight":0.100000}],"path|weight":0.100000}]}]}}`,
 		js)
 }
 
@@ -1871,7 +1911,7 @@ func TestTwoShortestPath(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3ea"}]}]}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3ea"}]}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"}]}}`,
+		`{"data": {"_path_":[{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8","path":[{"uid":"0x3ea"}]}]}]},{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8","path":[{"uid":"0x3e9","path":[{"uid":"0x3ea"}]}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"}]}}`,
 		js)
 }
 
@@ -1889,7 +1929,7 @@ func TestShortestPath(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","friend":[{"_uid_":"0x1f"}]}],"me":[{"name":"Michonne"},{"name":"Andrea"}]}}`,
+		`{"data": {"_path_":[{"uid":"0x1","friend":[{"uid":"0x1f"}]}],"me":[{"name":"Michonne"},{"name":"Andrea"}]}}`,
 		js)
 }
 
@@ -1907,7 +1947,7 @@ func TestShortestPathRev(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x17","friend":[{"_uid_":"0x1"}]}],"me":[{"name":"Rick Grimes"},{"name":"Michonne"}]}}`,
+		`{"data": {"_path_":[{"uid":"0x17","friend":[{"uid":"0x1"}]}],"me":[{"name":"Rick Grimes"},{"name":"Michonne"}]}}`,
 		js)
 }
 
@@ -1980,7 +2020,7 @@ func TestShortestPathWeights(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3ea"}]}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"}]}}`,
+		`{"data":{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"}],"_path_":[{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8","path":[{"uid":"0x3e9","path":[{"uid":"0x3ea","path|weight":0.100000}],"path|weight":0.100000}],"path|weight":0.100000}],"path|weight":0.100000}]}]}}`,
 		js)
 }
 
@@ -1998,7 +2038,7 @@ func TestShortestPath2(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8"}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"}]}}
+		`{"data": {"_path_":[{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8"}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"}]}}
 `,
 		js)
 }
@@ -2018,7 +2058,7 @@ func TestShortestPath4(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","follow":[{"_uid_":"0x1f","follow":[{"_uid_":"0x3e9","follow":[{"_uid_":"0x3eb"}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Bob"},{"name":"John"}]}}`,
+		`{"data": {"_path_":[{"uid":"0x1","follow":[{"uid":"0x1f","follow":[{"uid":"0x3e9","follow":[{"uid":"0x3eb"}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Bob"},{"name":"John"}]}}`,
 		js)
 }
 
@@ -2037,7 +2077,7 @@ func TestShortestPath_filter(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"_path_":[{"_uid_":"0x1","follow":[{"_uid_":"0x1f","follow":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3ea"}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Bob"},{"name":"Matt"}]}}`,
+		`{"data": {"_path_":[{"uid":"0x1","follow":[{"uid":"0x1f","follow":[{"uid":"0x3e9","path":[{"uid":"0x3ea"}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Bob"},{"name":"Matt"}]}}`,
 		js)
 }
 
@@ -2152,7 +2192,7 @@ func TestGetUIDCount(t *testing.T) {
 		{
 			me(func: uid(0x01)) {
 				name
-				_uid_
+				uid
 				gender
 				alive
 				count(friend)
@@ -2161,7 +2201,7 @@ func TestGetUIDCount(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"_uid_":"0x1","alive":true,"count(friend)":5,"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"uid":"0x1","alive":true,"count(friend)":5,"gender":"female","name":"Michonne"}]}}`,
 		js)
 }
 
@@ -2188,7 +2228,7 @@ func TestDebug1(t *testing.T) {
 
 	data := mp["data"].(map[string]interface{})
 	resp := data["me"]
-	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
+	uid := resp.([]interface{})[0].(map[string]interface{})["uid"].(string)
 	require.EqualValues(t, "0x1", uid)
 }
 
@@ -2211,7 +2251,7 @@ func TestDebug2(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(js), &mp))
 
 	resp := mp["data"].(map[string]interface{})["me"]
-	uid, ok := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
+	uid, ok := resp.([]interface{})[0].(map[string]interface{})["uid"].(string)
 	require.False(t, ok, "No uid expected but got one %s", uid)
 }
 
@@ -2237,7 +2277,7 @@ func TestDebug3(t *testing.T) {
 	resp := mp["data"].(map[string]interface{})["me"]
 	require.NotNil(t, resp)
 	require.EqualValues(t, 1, len(resp.([]interface{})))
-	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
+	uid := resp.([]interface{})[0].(map[string]interface{})["uid"].(string)
 	require.EqualValues(t, "0x1", uid)
 }
 
@@ -3315,7 +3355,7 @@ func TestToFastJSONFilterUID(t *testing.T) {
 				name
 				gender
 				friend @filter(anyofterms(name, "Andrea")) {
-					_uid_
+					uid
 				}
 			}
 		}
@@ -3323,7 +3363,7 @@ func TestToFastJSONFilterUID(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Michonne","gender":"female","friend":[{"_uid_":"0x1f"}]}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","friend":[{"uid":"0x1f"}]}]}}`,
 		js)
 }
 
@@ -3335,7 +3375,7 @@ func TestToFastJSONFilterOrUID(t *testing.T) {
 				name
 				gender
 				friend @filter(anyofterms(name, "Andrea") or anyofterms(name, "Andrea Rhee")) {
-					_uid_
+					uid
 					name
 				}
 			}
@@ -3344,7 +3384,7 @@ func TestToFastJSONFilterOrUID(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Michonne","gender":"female","friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","name":"Andrea"}]}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x1f","name":"Andrea"}]}]}}`,
 		js)
 }
 
@@ -5338,6 +5378,21 @@ func TestLangFilterMismatch6(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
+func TestEqWithTerm(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func:eq(nick_name, "Two Terms")) {
+				uid
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x1392"}]}}`,
+		js)
+}
+
 func TestLangLossyIndex1(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -5480,6 +5535,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
+		{Predicate: "nick_name", Type: "string"},
 		{Predicate: "royal_title", Type: "string"},
 		{Predicate: "noindex_name", Type: "string"},
 		{Predicate: "lossy", Type: "string"},
@@ -5584,6 +5640,7 @@ friend                         : uid @reverse @count .
 geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
+nick_name                      : string @index(term) .
 royal_title                    : string @index(hash, term, fulltext) .
 noindex_name                   : string .
 school                         : uid @count .
@@ -5676,8 +5733,8 @@ func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) 
 	return nil
 }
 
-func (s *zeroServer) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.Payload, error) {
-	return &protos.Payload{}, nil
+func (s *zeroServer) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.TxnTimestamps, error) {
+	return &protos.TxnTimestamps{}, nil
 }
 
 func StartDummyZero() *grpc.Server {
@@ -5763,7 +5820,7 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 		{
 			me(func: uid(0x01)) {
 				friend @filter(le(survival_rate, 30)) {
-					_uid_
+					uid
 					name
 					age
 				}
@@ -6142,7 +6199,7 @@ func TestDebugUid(t *testing.T) {
 	resp := mp["data"].(map[string]interface{})["me"]
 	body, err := json.Marshal(resp)
 	require.NoError(t, err)
-	require.JSONEq(t, `[{"_uid_":"0x1","friend":[{"_uid_":"0x17","friend":[{"_uid_":"0x1"}]},{"_uid_":"0x18"},{"_uid_":"0x19"},{"_uid_":"0x1f","friend":[{"_uid_":"0x18"}]},{"_uid_":"0x65"}],"name":"Michonne"}]`, string(body))
+	require.JSONEq(t, `[{"uid":"0x1","friend":[{"uid":"0x17","friend":[{"uid":"0x1"}]},{"uid":"0x18"},{"uid":"0x19"},{"uid":"0x1f","friend":[{"uid":"0x18"}]},{"uid":"0x65"}],"name":"Michonne"}]`, string(body))
 }
 
 func TestUidAlias(t *testing.T) {
@@ -6150,10 +6207,10 @@ func TestUidAlias(t *testing.T) {
 	query := `
 		{
 			me(func: uid(0x1)) {
-				id: _uid_
+				id: uid
 				alive
 				friend {
-					uid: _uid_
+					uid: uid
 					name
 				}
 			}
@@ -6170,7 +6227,7 @@ func TestCountAtRoot(t *testing.T) {
 	query := `
         {
             me(func: gt(count(friend), 0)) {
-				count()
+				count(uid)
 			}
         }
         `
@@ -6183,7 +6240,7 @@ func TestCountAtRoot2(t *testing.T) {
 	query := `
         {
                 me(func: anyofterms(name, "Michonne Rick Andrea")) {
-			count()
+			count(uid)
 		}
         }
         `
@@ -6197,11 +6254,11 @@ func TestCountAtRoot3(t *testing.T) {
         {
 		me(func:anyofterms(name, "Michonne Rick Daryl")) {
 			name
-			count()
+			count(uid)
 			count(friend)
 			friend {
 				name
-				count()
+				count(uid)
 			}
 		}
         }
@@ -6215,7 +6272,7 @@ func TestCountAtRootWithAlias4(t *testing.T) {
 	query := `
 	{
                 me(func:anyofterms(name, "Michonne Rick Daryl")) @filter(le(count(friend), 2)) {
-			personCount: count()
+			personCount: count(uid)
 		}
         }
         `
@@ -6233,7 +6290,7 @@ func TestCountAtRoot5(t *testing.T) {
 			}
 		}
 		MichonneFriends(func: uid(f)) {
-			count()
+			count(uid)
 		}
 	}
 
@@ -6250,7 +6307,7 @@ func TestHasFuncAtRoot(t *testing.T) {
 		me(func: has(friend)) {
 			name
 			friend {
-				count()
+				count(uid)
 			}
 		}
 	}
@@ -6267,7 +6324,7 @@ func TestHasFuncAtRootFilter(t *testing.T) {
 		me(func: anyofterms(name, "Michonne Rick Daryl")) @filter(has(friend)) {
 			name
 			friend {
-				count()
+				count(uid)
 			}
 		}
 	}
@@ -6489,7 +6546,7 @@ func TestGetAllPredicatesGroupby(t *testing.T) {
 	{
 		me(func: uid(1)) {
 			friend @groupby(age) {
-				count(_uid_)
+				count(uid)
 			}
 			name
 		}
@@ -6501,7 +6558,7 @@ func TestGetAllPredicatesGroupby(t *testing.T) {
 	predicates := GetAllPredicates(subGraphs)
 	require.NotNil(t, predicates)
 	require.Equal(t, 4, len(predicates))
-	require.Contains(t, predicates, "_uid_")
+	require.Contains(t, predicates, "uid")
 	require.Contains(t, predicates, "name")
 	require.Contains(t, predicates, "age")
 	require.Contains(t, predicates, "friend")
@@ -6908,7 +6965,7 @@ func TestCascadeUid(t *testing.T) {
 				name
 				gender
 				friend {
-					_uid_
+					uid
 					name
 					friend{
 						name
@@ -6921,7 +6978,7 @@ func TestCascadeUid(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"friend":[{"_uid_":"0x17","friend":[{"age":38,"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"_uid_":"0x1f","friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"friend":[{"uid":"0x17","friend":[{"age":38,"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"uid":"0x1f","friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`, js)
 }
 
 func TestUseVariableBeforeDefinitionError(t *testing.T) {
@@ -7120,12 +7177,13 @@ func TestAppendDummyValuesPanic(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
-		n(func:ge(_uid_, 0)) {
-			count()
+		n(func:ge(uid, 0)) {
+			count(uid)
 		}
 	}`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"n": []}}`, js)
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `Argument cannot be "uid"`)
 }
 
 func TestMultipleValueFilter(t *testing.T) {
@@ -7210,7 +7268,7 @@ func TestMultipleValueGroupByError(t *testing.T) {
 	{
 		me(func: uid(1)) {
 			friend @groupby(name, graduation) {
-				count(_uid_)
+				count(uid)
 			}
 		}
 	}
@@ -7392,7 +7450,7 @@ func TestFilterRootOverride(t *testing.T) {
 		a as var(func: eq(name, "Michonne")) @filter(eq(name, "Rick Grimes"))
 
 		me(func: uid(a)) {
-			_uid_
+			uid
 			name
 		}
 	}
@@ -7406,7 +7464,7 @@ func TestFilterRoot(t *testing.T) {
 
 	query := `{
 		me(func: eq(name, "Michonne")) @filter(eq(name, "Rick Grimes")) {
-			_uid_
+			uid
 			name
 		}
 	}
@@ -7436,7 +7494,7 @@ func TestUidVariable(t *testing.T) {
 	query := `{
 		var(func:allofterms(name, "Michonne")) {
 			friend {
-				f as _uid_
+				f as uid
 			}
 		}
 
@@ -7511,7 +7569,7 @@ func TestGroupByGeoCrash(t *testing.T) {
 	query := `
 	{
 	  q(func: uid(1, 23, 24, 25, 31)) @groupby(loc) {
-	    count(_uid_)
+	    count(uid)
 	  }
 	}
 	`
@@ -7540,12 +7598,12 @@ func TestCountPanic(t *testing.T) {
 	query := `
 	{
 		q(func: uid(1, 300)) {
-			_uid_
+			uid
 			name
 			count(name)
 		}
 	}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"q":[{"_uid_":"0x1","name":"Michonne","count(name)":1},{"_uid_":"0x12c","count(name)":0}]}}`, js)
+	require.JSONEq(t, `{"data": {"q":[{"uid":"0x1","name":"Michonne","count(name)":1},{"uid":"0x12c","count(name)":0}]}}`, js)
 }

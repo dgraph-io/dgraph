@@ -129,8 +129,8 @@ func (fj *fastJsonNode) New(attr string) outputNode {
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
-	// if we're in debug mode, _uid_ may be added second time, skip this
-	if attr == "_uid_" {
+	// if we're in debug mode, uid may be added second time, skip this
+	if attr == "uid" {
 		for _, a := range fj.attrs {
 			if a.attr == attr {
 				return
@@ -346,7 +346,7 @@ func (n *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 		first := -1
 		last := 0
 		for i := range slice {
-			if slice[i].attr == "_uid_" {
+			if slice[i].attr == "uid" {
 				if first == -1 {
 					first = i
 				}
@@ -371,6 +371,10 @@ type attrVal struct {
 }
 
 func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
+	// Don't add empty groupby
+	if len(sg.GroupbyRes.group) == 0 {
+		return
+	}
 	g := n.New(fname)
 	for _, grp := range sg.GroupbyRes.group {
 		uc := g.New("@groupby")

@@ -7,33 +7,9 @@ import _ from "lodash";
 import uuid from "uuid";
 import randomColor from "randomcolor";
 
-function extractFacets(val, edgeAttributes, properties) {
-  // lets handle @facets between uids here.
-  for (let pred in val) {
-    if (!val.hasOwnProperty(pred)) {
-      continue;
-    }
-
-    // pred could either be _ or other predicates. If its a predicate it could have
-    // multiple k-v pairs.
-    if (pred === "_") {
-      edgeAttributes["facets"] = val["_"];
-    } else {
-      let predFacets = val[pred];
-      for (let f in predFacets) {
-        if (!predFacets.hasOwnProperty(f)) {
-          continue;
-        }
-
-        properties["facets"][`${pred}[${f}]`] = predFacets[f];
-      }
-    }
-  }
-}
-
 function findAndMerge(nodes, n) {
   let properties = JSON.parse(n.title),
-    uid = properties["attrs"]["_uid_"],
+    uid = properties["attrs"]["uid"],
     idx = nodes.findIndex(function(node) {
       return node.id === uid;
     });
@@ -372,7 +348,7 @@ export function processGraph(
       return;
     }
 
-    if (k === "extensions" || k === "uids") {
+    if (k === "extensions") {
       continue;
     }
     // For schema, we should should display all predicates, irrespective of
@@ -396,6 +372,8 @@ export function processGraph(
   // We push an empty node after all the children. This would help us know when
   // we have traversed all nodes at a level.
   nodesQueue.push(emptyNode);
+
+  var facetDelimeter = "|";
 
   while (nodesQueue.length > 0) {
     let obj = nodesQueue.shift();
@@ -431,8 +409,8 @@ export function processGraph(
       uid: string;
 
     // Some nodes like results of aggregation queries, max , min, count etc don't have a
-    // _uid_, so we need to assign thme one.
-    uid = obj.node["_uid_"] === undefined ? uuid() : obj.node["_uid_"];
+    // uid, so we need to assign thme one.
+    uid = obj.node["uid"] === undefined ? uuid() : obj.node["uid"];
     id = treeView
       ? // For tree view, the id is the join of ids of this node
         // with all its ancestors. That would make it unique.
@@ -448,7 +426,18 @@ export function processGraph(
       // We get back tokenizer as an array, we usually consider arrays as children. Though
       // in this case tokenizer is a property of the same node and not a child. So we handle
       // it in a special manner.
-      if (isSchema && prop === "tokenizer") {
+
+      var delimIdx = prop.indexOf(facetDelimeter);
+      if (delimIdx >= 0) {
+        var facetPred = prop.substr(0, delimIdx);
+        var facetKey = prop.substr(delimIdx + 1);
+
+        if (facetPred === obj.src.pred) {
+          edgeAttributes["facets"][facetKey] = val;
+        } else {
+          properties["facets"][`${facetPred}[${facetKey}]`] = val;
+        }
+      } else if (isSchema && prop === "tokenizer") {
         properties["attrs"][prop] = JSON.stringify(val);
         // Important to check for typeof below, since we now allow multiple scalar values which
         // would also be returned in an array.
@@ -471,10 +460,6 @@ export function processGraph(
               id: id
             }
           });
-        }
-      } else if (typeof val === "object" && !Array.isArray(val)) {
-        if (prop === "@facets") {
-          extractFacets(val, edgeAttributes, properties);
         }
       } else {
         properties["attrs"][prop] = val;
@@ -501,7 +486,7 @@ export function processGraph(
 
     let n: Node = {
       id: id,
-      uid: obj.node["_uid_"],
+      uid: obj.node["uid"],
       x: x,
       // For aggregation nodes, label is the actual value, for other nodes its
       // the value of name.
@@ -563,6 +548,7 @@ export function processGraph(
         color: props.color,
         arrows: "to"
       };
+
       edges.push(e);
     }
   }

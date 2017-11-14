@@ -57,6 +57,7 @@ type GraphQuery struct {
 	Filter       *FilterTree
 	MathExp      *MathTree
 	Normalize    bool
+	Recurse      bool
 	Cascade      bool
 	IgnoreReflex bool
 	Facets       *Facets
@@ -77,7 +78,6 @@ type GraphQuery struct {
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
-	Upsert  bool // Whether we should add the edge in case it doesn't exist.
 }
 
 type AttrLang struct {
@@ -767,14 +767,8 @@ L:
 				parseGroupby(it, gq)
 			case "ignorereflex":
 				gq.IgnoreReflex = true
-			case "upsert":
-				if gq.Func == nil || gq.Func.Name != "eq" {
-					return nil, x.Errorf("Upsert query can only be done with eq function.")
-				}
-				if len(gq.Func.Args) != 1 {
-					return nil, x.Errorf("Upsert query can only have one argument.")
-				}
-				gq.Upsert = true
+			case "recurse":
+				gq.Recurse = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -1943,11 +1937,21 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 }
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
-	if curp == nil {
-		return x.Errorf("Invalid use of directive.")
+	valid := true
+	it.Prev()
+	item := it.Item()
+	if item.Typ == itemLeftCurl {
+		// Ideally we should check that curp was created at current depth.
+		valid = false
 	}
 	it.Next()
-	item := it.Item()
+	// No directive is allowed on internal subgraph like expand all, value variables.
+	if !valid || curp == nil || curp.IsInternal {
+		return x.Errorf("Invalid use of directive.")
+	}
+
+	it.Next()
+	item = it.Item()
 	peek, err := it.Peek(1)
 	if err != nil || item.Typ != itemName {
 		return x.Errorf("Expected directive or language list")
@@ -1982,12 +1986,18 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		// this is directive
 		switch item.Val {
 		case "filter":
+			if curp.Filter != nil {
+				return x.Errorf("Use AND, OR and round brackets instead of multiple filter directives.")
+			}
 			filter, err := parseFilter(it)
 			if err != nil {
 				return err
 			}
 			curp.Filter = filter
 		case "groupby":
+			if curp.IsGroupby {
+				return x.Errorf("Only one group by directive allowed.")
+			}
 			curp.IsGroupby = true
 			parseGroupby(it, curp)
 		default:
@@ -2469,13 +2479,22 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					goto Fall
 				}
 
-				peekIt, err := it.Peek(1)
+				peekIt, err := it.Peek(2)
 				if err != nil {
 					return err
 				}
 				if peekIt[0].Typ == itemRightRound {
-					// We encountered a count(), lets reset count to notSeen
-					// and set UidCount on parent.
+					return x.Errorf("Cannot use count(), please use count(uid)")
+				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
+					if gq.IsGroupby {
+						// count(uid) case which occurs inside @groupby
+						val = uid
+						// Skip uid)
+						it.Next()
+						it.Next()
+						goto Fall
+					}
+
 					if varName != "" {
 						return x.Errorf("Cannot assign variable to count()")
 					}
@@ -2484,6 +2503,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					if alias != "" {
 						gq.UidCount = alias
 					}
+					it.Next()
 					it.Next()
 				}
 				continue
@@ -2522,9 +2542,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp = nil
 				continue
 			} else if valLower == uid {
-				if varName != "" {
-					return x.Errorf("Cannot assign a variable to uid()")
-				}
 				if count == seen {
 					return x.Errorf("count of a variable is not allowed")
 				}
