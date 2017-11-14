@@ -219,7 +219,9 @@ build_docker_image() {
 
 	pushd $DGRAPH/contrib/nightly > /dev/null
 	# Extract dgraph binary from the tar into dgraph-build folder.
-	mkdir dgraph-build
+	if [ ! -d dgraph-build ]; then
+    mkdir dgraph-build
+  fi
 	tar -xzf ${NIGHTLY_FILE} -C dgraph-build
 	cp ${ASSETS_FILE} .
 	echo -e "Building the docker image with tag: $DOCKER_TAG."
@@ -228,8 +230,7 @@ build_docker_image() {
 		echo "Tagging docker image with latest tag"
 		docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest
 	fi
-	# Lets remove the dgraph folder now.
-	rm -rf dgraph
+  rm -rf dgraph
 	rm assets.tar.gz
 }
 

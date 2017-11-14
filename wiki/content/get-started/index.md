@@ -92,7 +92,7 @@ To run dgraph with the UI on Windows, you also have to supply the path to the as
 mkdir -p /tmp/data
 
 # Run Dgraph Zero
-docker run -itP -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero --port_offset -2000
+docker run -it p 8080:8080 -p 9080:9080 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero --port_offset -2000
 
 # Run Dgraph Server
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
@@ -112,8 +112,8 @@ docker create -v /dgraph --name data dgraph/dgraph
 
 Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
-docker run -itP --volumes-from data --name diggy dgraph/dgraph dgraph zero
-docker exec -it diggy dgraph server --memory_mb 2048
+docker run -it -p 8080:8080 9080:9080 --volumes-from data --name diggy dgraph/dgraph dgraph zero --port_offset -2000
+docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
 ## Step 3: Run Queries

@@ -56,7 +56,7 @@ checksum=$($digest_cmd dgraph | awk '{print $1}')
 echo "$checksum /usr/local/bin/dgraph" >> $checksum_file
 
 # Move dgraph to tmp directory.
-mv dgraph $tmp_dir
+cp dgraph $tmp_dir
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
 tar_file=dgraph-"$platform"-amd64-$release_version

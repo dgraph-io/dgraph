@@ -42,7 +42,6 @@ cp dgraph-windows-4.0-amd64.exe dgraph.exe
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 pushd $tmp_dir > /dev/null
-mkdir dgraph && pushd &> /dev/null dgraph;
 cp $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dgraph.exe .
 echo -e "\n\033[1;34mSize of files: $(du -sh)\033[0m"
 popd &> /dev/null
@@ -50,9 +49,12 @@ popd &> /dev/null
 echo -e "\n\033[1;33mCreating tar file\033[0m"
 tar_file=dgraph-"$platform"-amd64-$release_version
 # Create a tar file with the contents of the dgraph folder (i.e the binaries)
-GZIP=-n tar -zcf $tar_file.tar.gz dgraph;
+pushd $tmp_dir > /dev/null
+tar -zcvf $tar_file.tar.gz dgraph.exe;
 echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file.tar.gz)\033[0m"
 
 echo -e "\n\033[1;33mMoving tarfile to original directory\033[0m"
 mv $tar_file.tar.gz $cur_dir
+popd > /dev/null
 rm -rf $tmp_dir
+

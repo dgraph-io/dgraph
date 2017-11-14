@@ -120,9 +120,12 @@ func init() {
 	// the user. In other cases, it should point to the build directory within the repository.
 	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
 	if uiDir == "" {
-		gopath, _ := bestEffortGopath()
-		uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
+		//	gopath, _ := bestEffortGopath()
+		//	uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
+		// TODO(pawan) - Fix later.
+		uiDir = "/usr/local/share/dgraph/assets"
 	}
+
 	// Read from config file before setting config.
 	if config.ConfigFile != "" {
 		x.Println("Loading configuration from file:", config.ConfigFile)

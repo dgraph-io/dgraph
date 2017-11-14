@@ -536,8 +536,6 @@ Alternatively, you could:
 
 # Upgrade Dgraph
 
-{{% notice "note" %}}If you are upgrading from v0.7 please check whether you have the export api or get the latest binary for version v0.7.7 and use the export api. {{% /notice %}}
-
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
 
 - Start an [export]({{< relref "#export">}})
