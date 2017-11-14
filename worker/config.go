@@ -27,7 +27,6 @@ type Options struct {
 	RaftId              uint64
 	MaxPendingCount     uint64
 	ExpandEdge          bool
-	InMemoryComm        bool
 }
 
 var Config Options

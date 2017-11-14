@@ -41,7 +41,6 @@ type Options struct {
 	RaftId              uint64
 	MaxPendingCount     uint64
 	ExpandEdge          bool
-	InMemoryComm        bool
 
 	ConfigFile string
 	DebugMode  bool
@@ -66,7 +65,6 @@ var DefaultConfig = Options{
 	ZeroAddr:            "localhost:7080",
 	MaxPendingCount:     1000,
 	ExpandEdge:          true,
-	InMemoryComm:        false,
 
 	ConfigFile: "",
 	DebugMode:  false,
@@ -131,7 +129,6 @@ func SetConfiguration(newConfig Options) {
 	worker.Config.RaftId = Config.RaftId
 	worker.Config.MaxPendingCount = Config.MaxPendingCount
 	worker.Config.ExpandEdge = Config.ExpandEdge
-	worker.Config.InMemoryComm = Config.InMemoryComm
 
 	x.Config.ConfigFile = Config.ConfigFile
 	x.Config.DebugMode = Config.DebugMode
