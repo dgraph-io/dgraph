@@ -27,16 +27,23 @@ import (
 	"golang.org/x/net/context"
 )
 
+type syncMark struct {
+	index uint64
+	ts    uint64
+}
+
 type Oracle struct {
 	x.SafeMutex
 	commits    map[uint64]uint64 // start -> commit
 	rowCommit  map[string]uint64 // fp(key) -> commit
 	aborts     map[uint64]struct{}
 	maxPending uint64
-	// Implement Tmax.
+
+	tmax        uint64
 	subscribers map[int]chan *protos.OracleDelta
 	updates     chan *protos.OracleDelta
 	doneUntil   x.WaterMark
+	syncMarks   []syncMark
 }
 
 func (o *Oracle) Init() {
@@ -59,6 +66,7 @@ func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
 }
 
 func (o *Oracle) purgeBelow(minTs uint64) {
+	x.Printf("purging below %d %d %d\n", minTs, len(o.commits), len(o.aborts))
 	o.Lock()
 	defer o.Unlock()
 
@@ -73,6 +81,7 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 			delete(o.aborts, ts)
 		}
 	}
+	o.tmax = minTs
 }
 
 func (o *Oracle) commit(src *protos.TxnContext) error {
@@ -171,9 +180,12 @@ func (o *Oracle) sendDeltasToSubscribers() {
 	}
 }
 
-func (o *Oracle) updateCommitStatusHelper(src *protos.TxnContext) bool {
+func (o *Oracle) updateCommitStatusHelper(index uint64, src *protos.TxnContext) bool {
 	o.Lock()
 	defer o.Unlock()
+	if src.StartTs < o.tmax {
+		return false
+	}
 	if _, ok := o.commits[src.StartTs]; ok {
 		return false
 	}
@@ -185,11 +197,12 @@ func (o *Oracle) updateCommitStatusHelper(src *protos.TxnContext) bool {
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
+	o.syncMarks = append(o.syncMarks, syncMark{index: index, ts: src.StartTs})
 	return true
 }
 
-func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
-	if o.updateCommitStatusHelper(src) {
+func (o *Oracle) updateCommitStatus(index uint64, src *protos.TxnContext) {
+	if o.updateCommitStatusHelper(index, src) {
 		delta := new(protos.OracleDelta)
 		if src.Aborted {
 			delta.Aborts = append(delta.Aborts, src.StartTs)
@@ -297,6 +310,25 @@ func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer)
 		}
 	}
 	return nil
+}
+
+func (s *Server) SyncedUntil() uint64 {
+	s.orc.Lock()
+	defer s.orc.Unlock()
+	// Find max index with timestamp less than tmax
+	var idx int
+	for i, sm := range s.orc.syncMarks {
+		idx = i
+		if sm.ts >= s.orc.tmax {
+			break
+		}
+	}
+	var syncUntil uint64
+	if idx > 0 {
+		syncUntil = s.orc.syncMarks[idx-1].index
+	}
+	s.orc.syncMarks = s.orc.syncMarks[idx:]
+	return syncUntil
 }
 
 func (s *Server) purgeOracle() {
