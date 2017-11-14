@@ -662,7 +662,6 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	fmt.Println("output", output)
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	// remove reverse edge
@@ -1382,6 +1381,9 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "count")
 	require.Contains(t, err.Error(), "zero")
+}
+
+func TestTransactionBasic(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {

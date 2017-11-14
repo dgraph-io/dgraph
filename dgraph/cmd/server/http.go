@@ -21,10 +21,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
@@ -34,12 +36,20 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	startTsHeader = "X-Dgraph-StartTs"
-)
-
 func allowed(method string) bool {
 	return method == http.MethodPost || method == http.MethodPut
+}
+
+func extractStartTs(urlPath string) (uint64, error) {
+	params := strings.Split(strings.TrimPrefix(urlPath, "/"), "/")
+	if len(params) == 2 {
+		ts, err := strconv.ParseUint(params[1], 0, 64)
+		if err != nil {
+			return 0, fmt.Errorf("Error while parsing StartTs path parameter as uint64")
+		}
+		return ts, nil
+	}
+	return 0, nil
 }
 
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
@@ -59,16 +69,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := protos.Request{}
-	startTs := r.Header.Get(startTsHeader)
-	if startTs != "" {
-		ts, err := strconv.ParseUint(startTs, 0, 64)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while parsing StartTs header as uint64")
-			return
-		}
-		req.StartTs = ts
+	ts, err := extractStartTs(r.URL.Path)
+	if err != nil {
+		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
+		return
 	}
+	req.StartTs = ts
 
 	linRead := r.Header.Get("X-Dgraph-LinRead")
 	if linRead != "" {
@@ -169,16 +175,12 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		mu.CommitNow = c
 	}
 
-	startTs := r.Header.Get(startTsHeader)
-	if startTs != "" {
-		ts, err := strconv.ParseUint(startTs, 0, 64)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while parsing StartTs header as uint64")
-			return
-		}
-		mu.StartTs = ts
+	ts, err := extractStartTs(r.URL.Path)
+	if err != nil {
+		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
+		return
 	}
+	mu.StartTs = ts
 
 	resp, err := (&edgraph.Server{}).Mutate(context.Background(), mu)
 	if err != nil {
@@ -234,25 +236,24 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	tc := &protos.TxnContext{}
 	resp.Context = tc
 
-	// Maybe pass start-ts and keys in body?
-	startTs := r.Header.Get(startTsHeader)
-	if startTs == "" {
+	ts, err := extractStartTs(r.URL.Path)
+	if err != nil {
+		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
+		return
+	}
+
+	if ts == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest,
 			"StartTs header is mandatory while trying to commit")
 		return
 	}
-	ts, err := strconv.ParseUint(startTs, 0, 64)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"Error while parsing StartTs header as uint64")
-		return
-	}
 	tc.StartTs = ts
 
-	keys := r.Header.Get("X-Dgraph-Keys")
-	if keys == "" {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"Keys header is mandatory while trying to commit")
+	// Keys are sent as an array in the body.
+	defer r.Body.Close()
+	keys, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 
@@ -318,17 +319,15 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 	tc := &protos.TxnContext{}
 	resp.Context = tc
 
-	// Maybe pass start-ts and keys in body?
-	startTs := r.Header.Get(startTsHeader)
-	if startTs == "" {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs header is mandatory while trying to abort")
+	ts, err := extractStartTs(r.URL.Path)
+	if err != nil {
+		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
 		return
 	}
-	ts, err := strconv.ParseUint(startTs, 0, 64)
-	if err != nil {
+
+	if ts == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest,
-			"Error while parsing StartTs header as uint64")
+			"StartTs header is mandatory while trying to commit")
 		return
 	}
 	tc.StartTs = ts
