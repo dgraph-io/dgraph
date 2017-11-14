@@ -265,7 +265,12 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	// base64 decode keys
 	for i, k := range encodedKeys {
-		encodedKeys[i] = string(base64.StdEncoding.DecodeString(k))
+		data, err := base64.StdEncoding.DecodeString(k)
+		if err != nil {
+			x.SetStatus(w, x.Error, "While base64 decoding keys header.")
+			return
+		}
+		encodedKeys[i] = string(data)
 	}
 	tc.Keys = encodedKeys
 
