@@ -277,9 +277,9 @@ transferring money between accounts.
 
 The following commands assume that dgraph is running locally and is listening
 for HTTP on port 8080 (this is the default port to listen on, but can be
-changed using the (`--port` flag).
+changed using the (`--port_offset` flag).
 
-See [Getting Started](http://localhost:1313/get-started/) for instructions on
+See [Getting Started]({{< relref "get-started/index.md" >}}) for instructions on
 how to start up a dgraph instance.
 
 ### Setting the schema
@@ -323,7 +323,7 @@ curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
 
 If all goes well, the response will include `"code": "Success"`, and look something like:
 
-```
+```json
 {
   "data": {
     "code": "Success",
@@ -336,18 +336,6 @@ If all goes well, the response will include `"code": "Success"`, and look someth
   "extensions": {
     "txn": {
       "start_ts": 9,
-      "keys": [
-        "\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0004",
-        "\u0000\u0000\u0004name\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0004",
-        "\u0000\u0000\u0004name\u0002\u0002Bob",
-        "\u0000\u0000\u0004name\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003",
-        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0004",
-        "\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003",
-        "\u0000\u0000\u0004name\u0002\u0002Alice",
-        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003",
-        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0004",
-        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0003"
-      ],
       "lin_read": {
         "ids": {
           "1": 18
@@ -377,7 +365,7 @@ curl -X POST localhost:8080/query -d $'
 
 The result should look like this:
 
-```
+```json
 {
   "data": {
     "balances": [
@@ -428,13 +416,13 @@ Say we wish to transfer $10 from Bob to Alice. Based on the result of the
 previous query, Alice's balance should become $110 and Bob's balance should
 become $60.
 
-The `X-Dgraph-StartTs` header should match the `"read_ts"` returned from the
+The `X-Dgraph-StartTs` header should match the `"start_ts"` returned from the
 first query in the transaction.
 
 The `X-Dgraph-CommitNow` header isn't needed since the mutation is part of a
 larger transaction.
 
-```
+```sh
 curl -X POST -H 'X-Dgraph-StartTs: 4' localhost:8080/mutate -d $'
 {
   set {
@@ -447,7 +435,7 @@ curl -X POST -H 'X-Dgraph-StartTs: 4' localhost:8080/mutate -d $'
 
 The result should look like:
 
-```
+```json
 {
   "data": {
     "code": "Success",
@@ -458,10 +446,10 @@ The result should look like:
     "txn": {
       "start_ts": 4,
       "keys": [
-        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0002",
-        "\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001",
-        "\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001",
-        "\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0002"
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
+        "AAAHYmFsYW5jZQAAAAAAAAAAAg==",
+        "AAAHYmFsYW5jZQAAAAAAAAAAAQ==",
+        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI="
       ],
       "lin_read": {
         "ids": {
@@ -478,13 +466,13 @@ To finally commit the transaction, the `/commit` endpoint is used. The
 this case, just one mutation) must be supplied.
 
 ```sh
-curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0002","\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001","\u0000\u0000\u000b_predicate_\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0001","\u0000\u0000\u0007balance\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0002"]' localhost:8080/commit 
+curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=","AAAHYmFsYW5jZQAAAAAAAAAAAg==","AAAHYmFsYW5jZQAAAAAAAAAAAQ==","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI="]' localhost:8080/commit 
 ```
 
 If the commit is successful (which it should be in this example), the result
 will be:
 
-```
+```json
 {
   "data": {
     "code": "Success",
@@ -502,7 +490,7 @@ will be:
 If there were any mutations effecting any relevant keys after `start_ts` but
 before the completion of the transaction, the commit will fail. For example:
 
-```
+```json
 {
   "errors": [
     {
