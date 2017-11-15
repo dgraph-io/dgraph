@@ -22,7 +22,9 @@ run() {
   HUGO_TITLE="Dgraph Doc - local" \
   VERSIONS=${VERSION_STRING} \
   CURRENT_BRANCH="master" \
+  pushd $GOPATH/src/github.com/dgraph-io/dgraph/wiki
   CURRENT_VERSION=${CURRENT_VERSION} hugo server -w
+  popd
 }
 
 run
