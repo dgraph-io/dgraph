@@ -45,7 +45,7 @@ func extractStartTs(urlPath string) (uint64, error) {
 
 	switch l := len(params); l {
 	case 1:
-		// When startTs is no supplied. /query or /mutate
+		// When startTs is not supplied. /query or /mutate
 		return 0, nil
 	case 2:
 		ts, err := strconv.ParseUint(params[1], 0, 64)
