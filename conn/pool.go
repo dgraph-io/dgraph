@@ -82,18 +82,15 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 }
 
 func (p *Pools) Remove(addr string) {
-	p.RLock()
+	p.Lock()
 	pool, ok := p.all[addr]
 	if !ok {
-		p.RUnlock()
+		p.Unlock()
 		return
 	}
-	p.RUnlock()
-
-	pool.close()
-	p.Lock()
-	defer p.Unlock()
 	delete(p.all, addr)
+	p.Unlock()
+	pool.close()
 }
 
 func (p *Pools) Connect(addr string) *Pool {
