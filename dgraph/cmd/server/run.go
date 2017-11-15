@@ -50,11 +50,10 @@ var (
 	bindall          bool
 	exposeTrace      bool
 	customTokenizers string
+	config           edgraph.Options
+	tlsConf          x.TLSHelperConfig
+	uiDir            string
 )
-
-var config edgraph.Options
-var tlsConf x.TLSHelperConfig
-var uiDir string
 
 func init() {
 	defaults := edgraph.DefaultConfig
