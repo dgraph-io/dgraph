@@ -81,11 +81,11 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*
 }
 
 func prepare() (dir1, dir2 string, rerr error) {
-	// TODO - Stop at end and clear dir.
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"-w=wz",
 	)
+	defer os.RemoveAll("wz")
 	zero.Stdout = os.Stdout
 	if err := zero.Start(); err != nil {
 		return "", "", err
