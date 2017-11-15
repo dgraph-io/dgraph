@@ -6,6 +6,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+## [0.9.1] - 2017-11-15
+
 ### Changed
 
 * Transaction HTTP API has been modified slightly. `start_ts` is now a path parameter instead of a header.
