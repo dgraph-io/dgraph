@@ -327,7 +327,7 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 
 	if ts == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs header is mandatory while trying to commit")
+			"StartTs header is mandatory while trying to abort.")
 		return
 	}
 	tc.StartTs = ts
