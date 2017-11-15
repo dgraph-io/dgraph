@@ -8,7 +8,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
 
@@ -37,7 +36,9 @@ type Person struct {
 
 func Example_setObject() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)

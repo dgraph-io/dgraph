@@ -26,13 +26,14 @@ import (
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
 
 func ExampleTxn_Query_variables() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
@@ -99,7 +100,9 @@ func ExampleTxn_Query_variables() {
 
 func ExampleDgraph_Alter_dropAll() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
@@ -109,7 +112,9 @@ func ExampleDgraph_Alter_dropAll() {
 		DropAll: true,
 	}
 	ctx := context.Background()
-	x.Check(dg.Alter(ctx, &op))
+	if err := dg.Alter(ctx, &op); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func ExampleTxn_Mutate() {
@@ -137,7 +142,9 @@ func ExampleTxn_Mutate() {
 	}
 
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
@@ -238,7 +245,9 @@ func ExampleTxn_Mutate() {
 
 func ExampleTxn_Mutate_bytes() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
@@ -321,7 +330,9 @@ func ExampleTxn_Query_unmarshal() {
 	}
 
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
@@ -417,7 +428,9 @@ func ExampleTxn_Query_unmarshal() {
 
 func ExampleTxn_Mutate_facets(t *testing.T) {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
@@ -518,7 +531,9 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 
 func ExampleTxn_Mutate_list(t *testing.T) {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
@@ -591,7 +606,9 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 
 func ExampleTxn_Mutate_delete() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
@@ -740,7 +757,9 @@ func ExampleTxn_Mutate_delete() {
 
 func ExampleTxn_Mutate_deleteNode() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
@@ -872,7 +891,9 @@ func ExampleTxn_Mutate_deleteNode() {
 
 func ExampleTxn_Mutate_deletePredicate() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
 	dc := protos.NewDgraphClient(conn)
