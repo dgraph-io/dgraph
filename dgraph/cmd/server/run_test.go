@@ -90,7 +90,6 @@ func prepare() (dir1, dir2 string, rerr error) {
 	if err := zero.Start(); err != nil {
 		return "", "", err
 	}
-	time.Sleep(4 * time.Second)
 
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
@@ -164,51 +163,13 @@ func processToFastJSON(q string) string {
 }
 
 func runQuery(q string) (string, error) {
-	req, err := http.NewRequest("POST", "/query", bytes.NewBufferString(q))
-	if err != nil {
-		return "", err
-	}
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(queryHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		return "", fmt.Errorf("Unexpected status code: %v", status)
-	}
-
-	var qr x.QueryResWithData
-	json.Unmarshal(rr.Body.Bytes(), &qr)
-	if len(qr.Errors) > 0 {
-		return "", errors.New(qr.Errors[0].Message)
-	}
-
-	// Remove the extensions.
-	mp := make(map[string]interface{})
-	json.Unmarshal(rr.Body.Bytes(), &mp)
-	delete(mp, "extensions")
-	output, err := json.Marshal(mp)
+	output, _, err := queryWithTs(q, 0)
 	return string(output), err
 }
 
 func runMutation(m string) error {
-	req, err := http.NewRequest("POST", "/mutate", bytes.NewBufferString(m))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("X-Dgraph-CommitNow", "true")
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(mutationHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		return fmt.Errorf("Unexpected status code: %v", status)
-	}
-	var qr x.QueryResWithData
-	json.Unmarshal(rr.Body.Bytes(), &qr)
-	if len(qr.Errors) > 0 {
-		return errors.New(qr.Errors[0].Message)
-	}
-	return nil
+	_, _, err := mutationWithTs(m, true, 0)
+	return err
 }
 
 func alterSchema(s string) error {
@@ -662,7 +623,6 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	fmt.Println("output", output)
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	// remove reverse edge
@@ -935,6 +895,7 @@ func BenchmarkQuery(b *testing.B) {
 }
 
 func TestListPred(t *testing.T) {
+	require.NoError(t, alterSchema(`{"drop_all": true}`))
 	var q1 = `
 	{
 		listpred(func:anyofterms(name, "Alice")) {

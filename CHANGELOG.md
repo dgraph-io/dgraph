@@ -6,6 +6,11 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Changed
+
+* Transaction HTTP API has been modified slightly. `start_ts` is now a path parameter instead of a header.
+For `/commit` API, keys are passed in the body.
+
 ## [0.9.0] - 2017-11-14
 
 **The latest release has a lot of breaking changes but also brings powerful features like Transactions, support for CJK and custom tokenization.**

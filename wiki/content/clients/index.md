@@ -178,6 +178,136 @@ returns an error in case the transaction could not be committed.
 	err := txn.Commit(ctx)
 ```
 
+### Complete Example
+
+This is an example from the [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client). It shows how to to create a Node with name Alice, while also creating his relationships with other nodes. Note `loc` predicate is of type `geo` and can be easily marshalled and unmarshalled into a Go struct. More such examples are present as part of the GoDoc.
+
+```go
+type School struct {
+	Name string `json:"name,omitempty"`
+}
+
+type loc struct {
+	Type   string    `json:"type,omitempty"`
+	Coords []float64 `json:"coordinates,omitempty"`
+}
+
+// If omitempty is not set, then edges with empty values (0 for int/float, "" for string, false
+// for bool) would be created for values not specified explicitly.
+
+type Person struct {
+	Uid      string   `json:"uid,omitempty"`
+	Name     string   `json:"name,omitempty"`
+	Age      int      `json:"age,omitempty"`
+	Married  bool     `json:"married,omitempty"`
+	Raw      []byte   `json:"raw_bytes",omitempty`
+	Friends  []Person `json:"friend,omitempty"`
+	Location loc      `json:"loc,omitempty"`
+	School   []School `json:"school,omitempty"`
+}
+
+
+conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+x.Checkf(err, "While trying to dial gRPC")
+defer conn.Close()
+
+dc := protos.NewDgraphClient(conn)
+dg := client.NewDgraphClient(dc)
+
+op := &protos.Operation{}
+op.Schema = `
+	age: int .
+	married: bool .
+	loc: geo .
+`
+
+ctx := context.Background()
+err = dg.Alter(ctx, op)
+if err != nil {
+	log.Fatal(err)
+}
+
+// While setting an object if a struct has a Uid then its properties in the graph are updated
+// else a new node is created.
+// In the example below new nodes for Alice, Bob, Charlie and school are created (since they dont
+// have a Uid).
+
+p := Person{
+	Name:    "Alice",
+	Age:     26,
+	Married: true,
+	Location: loc{
+		Type:   "Point",
+		Coords: []float64{1.1, 2},
+	},
+	Raw: []byte("raw_bytes"),
+	Friends: []Person{{
+		Name: "Bob",
+		Age:  24,
+	}, {
+		Name: "Charlie",
+		Age:  29,
+	}},
+	School: []School{{
+		Name: "Crown Public School",
+	}},
+}
+
+mu := &protos.Mutation{
+	CommitNow: true,
+}
+pb, err := json.Marshal(p)
+if err != nil {
+	log.Fatal(err)
+}
+
+mu.SetJson = pb
+assigned, err := dg.NewTxn().Mutate(ctx, mu)
+if err != nil {
+	log.Fatal(err)
+}
+
+// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
+puid := assigned.Uids["blank-0"]
+q := fmt.Sprintf(`{
+	me(func: uid(%s)) {
+		uid
+		name
+		age
+		loc
+		raw_bytes
+		married
+		friend {
+			uid
+			name
+			age
+		}
+		school {
+			name
+		}
+	}
+}`, puid)
+
+resp, err := dg.NewTxn().Query(ctx, q)
+if err != nil {
+	log.Fatal(err)
+}
+
+type Root struct {
+	Me []Person `json:"me"`
+}
+
+var r Root
+err = json.Unmarshal(resp.Json, &r)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Printf("Me: %+v\n", r.Me)
+// R.Me would be same as the person that we set above.
+
+```
+
+
 ## Java
 
 The Java client is a new and fully supported client for v0.9.0.
@@ -290,6 +420,9 @@ Some state needs to be set up for the transaction to use. The transaction's
 `lin_read` is initialized by *copying* the client's `lin_read`. The `start_ts`
 can initially be set to 0. `keys` can start as an empty set.
 
+**For both query and mutation if the `start_ts` is provided as a path parameter, then the operation
+is performed as part of the ongoing transaction else a new transaction is initiated.**
+
 ### Run a query
 
 To query the database, the `/query` endpoint is used. We need to use the
@@ -373,11 +506,11 @@ Note that we have to to refer to the Alice and Bob nodes by UID in the RDF
 format.
 
 We now send the mutations via the `/mutate` endpoint. We need to provide our
-transaction start timestamp via the header, so that dgraph knows which
+transaction start timestamp as a path parameter, so that dgraph knows which
 transaction the mutation should be part of.
 
 ```sh
-curl -X POST -H 'X-Dgraph-StartTs: 4' localhost:8080/mutate -d $'
+curl -X POST localhost:8080/mutate/4 -d $'
 {
   set {
     <0x1> <balance> "110" .
@@ -435,7 +568,13 @@ the one, then the keys provided during the commit would be the union of all
 keys returned in the responses from the `/mutate` endpoint.
 
 ```sh
-curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=","AAAHYmFsYW5jZQAAAAAAAAAAAg==","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=","AAAHYmFsYW5jZQAAAAAAAAAAAQ=="]' localhost:8080/commit | jq
+curl -X POST localhost:8080/commit/4 -d $'
+  [
+    "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=",
+    "AAAHYmFsYW5jZQAAAAAAAAAAAg==",
+    "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
+    "AAAHYmFsYW5jZQAAAAAAAAAAAQ=="
+  ]' | jq
 ```
 
 ```json
