@@ -114,7 +114,8 @@ func init() {
 		"Comma separated list of tokenizer plugins")
 
 	// UI assets dir
-	flag.StringVar(&uiDir, "ui", "/usr/local/share/dgraph/assets", "Directory which contains assets for the user interface")
+	flag.StringVar(&uiDir, "ui", "/usr/local/share/dgraph/assets",
+		"Directory which contains assets for the user interface")
 
 	// Read from config file before setting config.
 	if config.ConfigFile != "" {
