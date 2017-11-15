@@ -5,6 +5,11 @@ title = "Clients"
 
 ## Implementation
 
+{{% notice "note" %}}
+All mutations and queries run within the context of a transaction. This differs
+significantly from the interaction model pre v0.9.
+{{% /notice %}}
+
 Clients can communicate with the server in two different ways:
 
 - **Via [gRPC](http://www.grpc.io/).** Internally this uses [Protocol
@@ -210,29 +215,38 @@ Similar to the Go client example, we use a bank account transfer example.
 
 ### Create the Client
 
-A client build on top of the HTTP API will need to track state at two different
+A client built on top of the HTTP API will need to track state at two different
 levels:
 
 1. Per client. Each client will need to keep a linearized reads (`lin_read`)
    map. This is a map from dgraph group id to proposal id. This will be needed
 for the system as a whole (client + server) to have
 [linearizability](https://en.wikipedia.org/wiki/Linearizability). Whenever a
-`lin_read` map is received, the client should update its version of the map by
-merging the two maps together. The merge operation is simple - the new map gets
-all key/value pairs from the parent maps. Where a key exists in both maps, the
-max value is taken.
+`lin_read` map is received in a server response (*for any transaction*), the
+client should update its version of the map by merging the two maps together.
+The merge operation is simple - the new map gets all key/value pairs from the
+parent maps. Where a key exists in both maps, the max value is taken. The
+client's initial `lin_read` is should be an empty map.
 
 2. Per transaction. There are three pieces of state that need to be maintained
    for each transaction.
 
     1. Each transaction needs its own `lin_read` (updated independently of the
-       client level `lin_read`).
+       client level `lin_read`). Any `lin_read` maps received in server
+responses *associated with the transaction* should be merged into the
+transactions `lin_read` map.
   
     2. A start timestamp (`start_ts`). This uniquely identifies a transaction,
        and doesn't change over the transaction lifecycle.
   
     3. The set of keys modified by the transaction (`keys`). This aids in
        transaction conflict detection.
+
+{{% notice "note" %}}
+On a dgraph set up with no replication, there is no need to track `lin_read`.
+It can be ignored in responses received from dgraph and doesn't need to be sent
+in any requests.
+{{% /notice %}}
 
 ### Alter the database
 
@@ -272,9 +286,9 @@ transfer money from one account to the other. This is done in four steps:
 3. Commit the transaction.
 
 Starting a transaction doesn't require any interaction with dgraph itself.
-Some state needs to be set up for the transaction to use. `lin_read` is
-initialized by *copying* the client's `lin_read`. The `start_ts` can initially
-be set to 0. `keys` can start as an empty set.
+Some state needs to be set up for the transaction to use. The transaction's
+`lin_read` is initialized by *copying* the client's `lin_read`. The `start_ts`
+can initially be set to 0. `keys` can start as an empty set.
 
 ### Run a query
 
@@ -408,6 +422,12 @@ state.
 
 ### Committing the transaction
 
+{{% notice "note" %}}
+It's possible to commit immediately after a mutation is made (without requiring
+to use the `/commit` endpoint as explained in this section). To do this, add
+the `X-Dgraph-CommitNow: true` header to the final `/mutate` call.
+{{% /notice %}}
+
 Finally, we can commit the transaction using the `/commit` endpoint. We need
 the `start_ts` we've been using for the transaction along with the `keys`.
 If we had performed multiple mutations in the transaction instead of the just
@@ -432,9 +452,7 @@ curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["AAALX3ByZWRpY2F0ZV8AA
   }
 }
 ```
-
-Notice that we receive a `commit_ts` in the response (this field was previously
-absent). The transaction is now complete.
+The transaction is now complete.
 
 If another client were to perform another transaction concurrently affecting
 the same keys, then it's possible that the transaction would *not* be
