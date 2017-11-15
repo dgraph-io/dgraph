@@ -143,6 +143,7 @@ message MembershipState {
   uint64 maxLeaseId = 4;
   uint64 maxTxnTs = 5;
   uint64 maxRaftId = 6;
+  repeated Member removed = 7;
 }
 
 message ConnectionState {

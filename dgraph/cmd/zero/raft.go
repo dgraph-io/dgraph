@@ -262,7 +262,15 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			group = newGroup()
 			state.Groups[p.Member.GroupId] = group
 		}
-		_, has := group.Members[p.Member.Id]
+		m, has := group.Members[p.Member.Id]
+		if p.Member.AmDead {
+			if has {
+				delete(group.Members, p.Member.Id)
+				state.Removed = append(state.Removed, m)
+			}
+			// else already removed.
+			return p.Id, nil
+		}
 		if !has && len(group.Members) >= n.server.NumReplicas {
 			// We shouldn't allow more members than the number of replicas.
 			return p.Id, errInvalidProposal
@@ -324,7 +332,10 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)
 
-	if len(cc.Context) > 0 {
+	if cc.Type == raftpb.ConfChangeRemoveNode {
+		n.DeletePeer(cc.NodeID)
+		n.server.removeZero(cc.NodeID)
+	} else if len(cc.Context) > 0 {
 		var rc protos.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		n.Connect(rc.Id, rc.Addr)

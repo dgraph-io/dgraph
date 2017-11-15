@@ -239,6 +239,13 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 			go conn.Get().Connect(member.Addr)
 		}
 	}
+	for _, member := range g.state.Removed {
+		if member.GroupId == g.Node.gid && g.Node.AmLeader() {
+			g.Node.ProposePeerRemoval(context.Background(), member.Id)
+		}
+		// Each node should have different id and address.
+		conn.Get().Remove(member.Addr)
+	}
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {
