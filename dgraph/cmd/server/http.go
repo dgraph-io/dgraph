@@ -74,6 +74,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
 		return
 	}
+	fmt.Println("ts", ts)
 	req.StartTs = ts
 
 	linRead := r.Header.Get("X-Dgraph-LinRead")
