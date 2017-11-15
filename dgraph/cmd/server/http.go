@@ -42,13 +42,21 @@ func allowed(method string) bool {
 
 func extractStartTs(urlPath string) (uint64, error) {
 	params := strings.Split(strings.TrimPrefix(urlPath, "/"), "/")
-	if len(params) == 2 {
+
+	switch l := len(params); l {
+	case 1:
+		// When startTs is no supplied. /query or /mutate
+		return 0, nil
+	case 2:
 		ts, err := strconv.ParseUint(params[1], 0, 64)
 		if err != nil {
-			return 0, fmt.Errorf("Error while parsing StartTs path parameter as uint64")
+			return 0, fmt.Errorf("Error: %+v while parsing StartTs path parameter as uint64", err)
 		}
 		return ts, nil
+	default:
+		return 0, x.Errorf("Incorrect no. of path parameters. Expected 1 or 2. Got: %+v", l)
 	}
+
 	return 0, nil
 }
 
