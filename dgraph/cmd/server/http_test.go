@@ -142,7 +142,9 @@ func TestTransactionBasic(t *testing.T) {
 	m1 := `
     {
 	  set {
-	    <0x1> <balance> "110" .
+		<0x1> <name> "Alice" .
+		<0x1> <name> "Bob" .
+		<0x1> <balance> "110" .
 	    <0x2> <balance> "60" .
 	  }
 	}
@@ -151,16 +153,23 @@ func TestTransactionBasic(t *testing.T) {
 	keys, mts, err := mutationWithTs(m1, false, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	expected := []string{"AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=", "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=", "AAAHYmFsYW5jZQAAAAAAAAAAAg==", "AAAHYmFsYW5jZQAAAAAAAAAAAQ=="}
+	expected := []string{"AAAEbmFtZQAAAAAAAAAAAQ==", "AAAEbmFtZQAAAAAAAAAAAQ==", "AAAEbmFtZQIBYWxpY2U=", "AAAEbmFtZQIBYWxpY2U=", "AAAEbmFtZQIBYm9i", "AAAHYmFsYW5jZQAAAAAAAAAAAQ==", "AAAHYmFsYW5jZQAAAAAAAAAAAg==", "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=", "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=", "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=", "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI="}
 	sort.Strings(expected)
 	sort.Strings(keys)
 	require.Equal(t, expected, keys)
 
-	require.NoError(t, commitWithTs(keys, ts))
-
-	// Query with same timestamp.
 	data, _, err := queryWithTs(q1, 0)
 	require.NoError(t, err)
-	require.Equal(t, mts, ts)
-	fmt.Println(data)
+	require.Equal(t, `{"data":{"balances":[]}}`, data)
+
+	// Query with same timestamp.
+	data, _, err = queryWithTs(q1, ts)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"uid":"0x1","name":"Bob","balance":"110"}]}}`, data)
+
+	// Commit and query.
+	require.NoError(t, commitWithTs(keys, ts))
+	data, _, err = queryWithTs(q1, 0)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"uid":"0x1","name":"Bob","balance":"110"}]}}`, data)
 }
