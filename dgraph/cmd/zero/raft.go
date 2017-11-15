@@ -263,7 +263,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			state.Groups[p.Member.GroupId] = group
 		}
 		m, has := group.Members[p.Member.Id]
-		if p.Member.Remove {
+		if p.Member.AmDead {
 			if has {
 				delete(group.Members, p.Member.Id)
 				state.Removed = append(state.Removed, m)
@@ -333,7 +333,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	cc.Unmarshal(e.Data)
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
-		n.RemovePeer(cc.NodeID)
+		n.DeletePeer(cc.NodeID)
 		n.server.removeZero(cc.NodeID)
 	} else if len(cc.Context) > 0 {
 		var rc protos.RaftContext

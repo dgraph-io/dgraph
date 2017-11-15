@@ -114,7 +114,6 @@ message Member {
 	bool leader = 4;
 	bool am_dead = 5;
 	uint64 last_update = 6;
-	bool remove = 7;
 
   bool cluter_info_only = 13;
 }

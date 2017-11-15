@@ -341,7 +341,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 	n.peers[pid] = addr
 }
 
-func (n *Node) RemovePeer(pid uint64) {
+func (n *Node) DeletePeer(pid uint64) {
 	if pid == n.Id {
 		return
 	}
@@ -366,7 +366,7 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	})
 }
 
-func (n *Node) RemoveNode(ctx context.Context, id uint64) error {
+func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 	if n.Raft() == nil {
 		return errNoNode
 	}

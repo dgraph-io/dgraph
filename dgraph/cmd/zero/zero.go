@@ -225,8 +225,7 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 			return res, errUnknownMember
 		}
 		if srcMember.Addr != dstMember.Addr ||
-			srcMember.Leader != dstMember.Leader ||
-			srcMember.AmDead != dstMember.AmDead {
+			srcMember.Leader != dstMember.Leader {
 
 			proposal := &protos.ZeroProposal{
 				Member: dstMember,
@@ -265,10 +264,10 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 // Its users responsibility to ensure that node doesn't come back again before calling the api.
 func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) error {
 	if groupId == 0 {
-		return s.Node.RemoveNode(ctx, nodeId)
+		return s.Node.ProposePeerRemoval(ctx, nodeId)
 	}
 	zp := &protos.ZeroProposal{}
-	zp.Member = &protos.Member{Id: nodeId, GroupId: groupId, Remove: true}
+	zp.Member = &protos.Member{Id: nodeId, GroupId: groupId, AmDead: true}
 	if _, ok := s.state.Groups[groupId]; !ok {
 		return x.Errorf("No node with groupId %d found", groupId)
 	}
