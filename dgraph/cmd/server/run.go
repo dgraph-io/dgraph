@@ -19,7 +19,6 @@ package server
 
 import (
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -27,9 +26,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"path"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -57,6 +54,7 @@ var (
 
 var config edgraph.Options
 var tlsConf x.TLSHelperConfig
+var uiDir string
 
 func init() {
 	defaults := edgraph.DefaultConfig
@@ -115,16 +113,8 @@ func init() {
 	flag.StringVar(&customTokenizers, "custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
-	// uiDir can also be set through -ldflags while doing a release build. In that
-	// case it points to usr/local/share/dgraph/assets where we store assets for
-	// the user. In other cases, it should point to the build directory within the repository.
-	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
-	if uiDir == "" {
-		//	gopath, _ := bestEffortGopath()
-		//	uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
-		// TODO(pawan) - Fix later.
-		uiDir = "/usr/local/share/dgraph/assets"
-	}
+	// UI assets dir
+	flag.StringVar(&uiDir, "ui", "/usr/local/share/dgraph/assets", "Directory which contains assets for the user interface")
 
 	// Read from config file before setting config.
 	if config.ConfigFile != "" {
@@ -172,40 +162,6 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("<pre>"))
 	w.Write([]byte(worker.StoreStats()))
 	w.Write([]byte("</pre>"))
-}
-
-func bestEffortGopath() (string, bool) {
-	if path, ok := os.LookupEnv("GOPATH"); ok {
-		return path, true
-	}
-	var homevar string
-	switch runtime.GOOS {
-	case "windows":
-		// The Golang issue https://github.com/golang/go/issues/17262 says
-		// USERPROFILE, _not_ HOMEDRIVE + HOMEPATH is used.
-		homevar = "USERPROFILE"
-	case "plan9":
-		homevar = "home"
-	default:
-		homevar = "HOME"
-	}
-	if homepath, ok := os.LookupEnv(homevar); ok {
-		return path.Join(homepath, "go"), true
-	}
-	return "", false
-}
-
-var uiDir string
-
-func init() {
-	// uiDir can also be set through -ldflags while doing a release build. In that
-	// case it points to usr/local/share/dgraph/assets where we store assets for
-	// the user. In other cases, it should point to the build directory within the repository.
-	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
-	if uiDir == "" {
-		gopath, _ := bestEffortGopath()
-		uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
-	}
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
