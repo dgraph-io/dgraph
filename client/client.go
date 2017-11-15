@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 	"github.com/gogo/protobuf/proto"
 )
 
@@ -52,7 +52,7 @@ func NewDgraphClient(clients ...protos.DgraphClient) *Dgraph {
 func (d *Dgraph) mergeLinRead(src *protos.LinRead) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	x.MergeLinReads(d.linRead, src)
+	y.MergeLinReads(d.linRead, src)
 }
 
 func (d *Dgraph) getLinRead() *protos.LinRead {
