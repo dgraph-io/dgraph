@@ -244,7 +244,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	if ts == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs header is mandatory while trying to commit")
+			"StartTs path parameter is mandatory while trying to commit")
 		return
 	}
 	tc.StartTs = ts
@@ -327,7 +327,7 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 
 	if ts == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs header is mandatory while trying to abort.")
+			"StartTs path parameter is mandatory while trying to abort.")
 		return
 	}
 	tc.StartTs = ts
