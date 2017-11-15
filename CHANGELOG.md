@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Added
+
+* Support for removing dead node from quorum.
+
 ### Changed
 
 * Transaction HTTP API has been modified slightly. `start_ts` is now a path parameter instead of a header.

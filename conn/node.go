@@ -120,6 +120,7 @@ func (n *Node) Raft() raft.Node {
 func (n *Node) SetConfState(cs *raftpb.ConfState) {
 	n.Lock()
 	defer n.Unlock()
+	x.Printf("Setting conf state to %+v\n", cs)
 	n._confState = cs
 }
 
@@ -340,6 +341,13 @@ func (n *Node) Connect(pid uint64, addr string) {
 	n.peers[pid] = addr
 }
 
+func (n *Node) RemovePeer(pid uint64) {
+	if pid == n.Id {
+		return
+	}
+	delete(n.peers, pid)
+}
+
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr, ok := n.peers[pid]
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
@@ -355,6 +363,19 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
 		Context: rcBytes,
+	})
+}
+
+func (n *Node) RemoveNode(ctx context.Context, id uint64) error {
+	if n.Raft() == nil {
+		return errNoNode
+	}
+	if _, ok := n.peers[id]; !ok && id != n.RaftContext.Id {
+		return x.Errorf("Node %d not part of group", id)
+	}
+	return n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
+		Type:   raftpb.ConfChangeRemoveNode,
+		NodeID: id,
 	})
 }
 

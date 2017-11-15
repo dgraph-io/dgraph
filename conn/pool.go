@@ -49,6 +49,7 @@ type Pool struct {
 
 	lastEcho time.Time
 	Addr     string
+	ticker   *time.Ticker
 }
 
 type Pools struct {
@@ -78,6 +79,21 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 		return nil, ErrUnhealthyConnection
 	}
 	return pool, nil
+}
+
+func (p *Pools) Remove(addr string) {
+	p.RLock()
+	pool, ok := p.all[addr]
+	if !ok {
+		p.RUnlock()
+		return
+	}
+	p.RUnlock()
+
+	pool.close()
+	p.Lock()
+	defer p.Unlock()
+	delete(p.all, addr)
 }
 
 func (p *Pools) Connect(addr string) *Pool {
@@ -129,10 +145,15 @@ func (p *Pool) Get() *grpc.ClientConn {
 	return p.conn
 }
 
+func (p *Pool) close() {
+	p.ticker.Stop()
+	p.conn.Close()
+}
+
 // MonitorHealth monitors the health of the connection via Echo. This function blocks forever.
 func (p *Pool) MonitorHealth() {
-	ticker := time.NewTicker(echoDuration)
-	for range ticker.C {
+	p.ticker = time.NewTicker(echoDuration)
+	for range p.ticker.C {
 		conn := p.Get()
 
 		query := new(protos.Payload)

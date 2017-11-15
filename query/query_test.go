@@ -5668,6 +5668,10 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*
 	return &protos.Payload{}, nil
 }
 
+func (c *raftServer) RemoveNode(ctx context.Context, in *protos.Num) (*protos.Payload, error) {
+	return &protos.Payload{}, nil
+}
+
 type zeroServer struct {
 }
 
