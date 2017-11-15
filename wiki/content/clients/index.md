@@ -290,6 +290,9 @@ Some state needs to be set up for the transaction to use. The transaction's
 `lin_read` is initialized by *copying* the client's `lin_read`. The `start_ts`
 can initially be set to 0. `keys` can start as an empty set.
 
+**For both query and mutation if the `start_ts` is provided as a path parameter, then the operation
+is performed as part of the ongoing transaction else a new transaction is initiated.**
+
 ### Run a query
 
 To query the database, the `/query` endpoint is used. We need to use the
@@ -373,11 +376,11 @@ Note that we have to to refer to the Alice and Bob nodes by UID in the RDF
 format.
 
 We now send the mutations via the `/mutate` endpoint. We need to provide our
-transaction start timestamp via the header, so that dgraph knows which
+transaction start timestamp as a path parameter, so that dgraph knows which
 transaction the mutation should be part of.
 
 ```sh
-curl -X POST -H 'X-Dgraph-StartTs: 4' localhost:8080/mutate -d $'
+curl -X POST localhost:8080/mutate/4 -d $'
 {
   set {
     <0x1> <balance> "110" .
@@ -435,7 +438,13 @@ the one, then the keys provided during the commit would be the union of all
 keys returned in the responses from the `/mutate` endpoint.
 
 ```sh
-curl -X POST -H 'X-Dgraph-StartTs: 4' -H 'X-Dgraph-Keys: ["AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=","AAAHYmFsYW5jZQAAAAAAAAAAAg==","AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=","AAAHYmFsYW5jZQAAAAAAAAAAAQ=="]' localhost:8080/commit | jq
+curl -X POST localhost:8080/commit/4 -d $'
+  [
+    "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=",
+    "AAAHYmFsYW5jZQAAAAAAAAAAAg==",
+    "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
+    "AAAHYmFsYW5jZQAAAAAAAAAAAQ=="
+  ]' | jq
 ```
 
 ```json

@@ -14,7 +14,7 @@ joinVersions() {
 VERSION_STRING=$(joinVersions)
 
 run() {
-  export CURRENT_BRANCH=${CURRENT_BRANCH}
+  export CURRENT_BRANCH="master"
   export CURRENT_VERSION=${VERSIONS_ARRAY[0]}
   export VERSIONS=${VERSION_STRING}
 
