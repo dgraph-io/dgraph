@@ -91,7 +91,6 @@ func prepare() (dir1, dir2 string, rerr error) {
 	if err := zero.Start(); err != nil {
 		return "", "", err
 	}
-	time.Sleep(5 * time.Second)
 
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")

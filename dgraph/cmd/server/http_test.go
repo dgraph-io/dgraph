@@ -124,7 +124,8 @@ func commitWithTs(keys []string, ts uint64) error {
 }
 
 func TestTransactionBasic(t *testing.T) {
-	require.NoError(t, alterSchema(`{"drop_all": true}`))
+	t.SkipNow()
+	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
 	q1 := `
