@@ -66,7 +66,8 @@ func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
 }
 
 func (o *Oracle) purgeBelow(minTs uint64) {
-	x.Printf("purging below %d %d %d\n", minTs, len(o.commits), len(o.aborts))
+	x.Printf("purging below ts:%d, len(o.commits):%d, len(o.aborts):%d\n",
+		minTs, len(o.commits), len(o.aborts))
 	o.Lock()
 	defer o.Unlock()
 

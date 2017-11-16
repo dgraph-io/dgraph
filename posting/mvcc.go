@@ -87,6 +87,29 @@ func (t *transactions) MinTs() uint64 {
 	return minTs
 }
 
+// Returns startTs of all pending transactions started upto 10000 raft log
+// entries after last snapshot if the memory consumed by all raft log entries
+// is high.
+func (t *transactions) OldTxns() []uint64 {
+	lastSnapshotIdx := TxnMarks().DoneUntil()
+	var timestamps []uint64
+	t.Lock()
+	defer t.Unlock()
+	numKeys := 0
+	for _, txn := range t.m {
+		if txn.Indices[0]-lastSnapshotIdx <= 10000 {
+			timestamps = append(timestamps, txn.StartTs)
+		}
+		numKeys += txn.lenDelta()
+	}
+	// Users can do transactions which mutates few edges, numKeys gives us
+	// a good estimation of space consumed by raft log entries
+	if numKeys < 10<<20 { // 500MB considering average size of posting to be 50bytes.
+		return nil
+	}
+	return timestamps
+}
+
 func (t *transactions) Reset() {
 	t.Lock()
 	defer t.Unlock()
@@ -106,6 +129,12 @@ func (t *transactions) Iterate(ok func(key []byte) bool) []uint64 {
 		}
 	}
 	return timestamps
+}
+
+func (t *Txn) lenDelta() int {
+	t.Lock()
+	defer t.Unlock()
+	return len(t.deltas)
 }
 
 func (t *Txn) conflicts(ok func(key []byte) bool) bool {
