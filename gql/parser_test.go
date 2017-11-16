@@ -2976,7 +2976,6 @@ func TestParseGroupbyWithAlias(t *testing.T) {
 }
 
 func TestParseGroupbyWithAliasForKey(t *testing.T) {
-	t.Skip()
 	query := `
 	query {
 		me(func: uid(0x1)) {
