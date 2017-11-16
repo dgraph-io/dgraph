@@ -1315,7 +1315,7 @@ func TestGroupByMulti2(t *testing.T) {
 	query := `
 		{
 			me(func: uid(1)) {
-				friend @groupby(Friend: friend,Name: name) {
+				Friend: friend @groupby(Friend: friend,Name: name) {
 					Count: count(uid)
 				}
 			}
@@ -1323,7 +1323,7 @@ func TestGroupByMulti2(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data":{"me":[{"friend":[{"@groupby":[{"Friend":"0x1","Name":"Rick Grimes","Count":1},{"Friend":"0x18","Name":"Andrea","Count":1}]}]}]}}`,
+		`{"data":{"me":[{"Friend":[{"@groupby":[{"Friend":"0x1","Name":"Rick Grimes","Count":1},{"Friend":"0x18","Name":"Andrea","Count":1}]}]}]}}`,
 		js)
 }
 
