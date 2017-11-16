@@ -162,7 +162,7 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 		return x.Errorf("Invalid recurse path query")
 	}
 
-	depth := sg.Params.ExploreDepth
+	depth := sg.Params.RecurseArgs.Depth
 	if depth == 0 {
 		// If no depth is specified, expand till we reach all leaf nodes
 		// or we see reach too many nodes.

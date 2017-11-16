@@ -1663,7 +1663,7 @@ func TestRecurseQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01), depth: 3) @recurse {
+			me(func: uid(0x01)) @recurse(depth: 3) {
 				nonexistent_pred
 				friend
 				name
@@ -1678,7 +1678,7 @@ func TestRecurseQueryOrder(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01), depth: 3) @recurse {
+			me(func: uid(0x01)) @recurse(depth: 3) {
 				friend(orderdesc: dob)
 				dob
 				name
@@ -1694,7 +1694,7 @@ func TestRecurseQueryLimitDepth1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01), depth: 2) @recurse {
+			me(func: uid(0x01)) @recurse(depth: 2) {
 				friend
 				name
 			}
@@ -1708,7 +1708,7 @@ func TestRecurseQueryLimitDepth2(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01), depth: 2) @recurse {
+			me(func: uid(0x01)) @recurse(depth: 2) {
 				uid
 				non_existent
 				friend
@@ -1724,7 +1724,7 @@ func TestRecurseVariable(t *testing.T) {
 	populateGraph(t)
 	query := `
 			{
-				var(func: uid(0x01), depth: 3) @recurse {
+				var(func: uid(0x01)) @recurse(depth: 3) {
 					a as friend
 				}
 
@@ -1742,7 +1742,7 @@ func TestRecurseVariableUid(t *testing.T) {
 	populateGraph(t)
 	query := `
 			{
-				var(func: uid(0x01), depth: 3) @recurse {
+				var(func: uid(0x01)) @recurse(depth: 3) {
 					friend
 					a as uid
 				}
@@ -1761,7 +1761,7 @@ func TestRecurseVariableVar(t *testing.T) {
 	populateGraph(t)
 	query := `
 			{
-				var(func: uid(0x01), depth: 3) @recurse {
+				var(func: uid(0x01)) @recurse(depth: 3) {
 					friend
 					school
 					a as name
@@ -1783,7 +1783,7 @@ func TestRecurseVariable2(t *testing.T) {
 	query := `
 			{
 
-				var(func: uid(0x1), depth: 4) @recurse {
+				var(func: uid(0x1)) @recurse(depth: 4) {
 					f2 as friend
 					f as follow
 				}

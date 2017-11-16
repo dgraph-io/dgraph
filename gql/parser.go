@@ -58,6 +58,7 @@ type GraphQuery struct {
 	MathExp      *MathTree
 	Normalize    bool
 	Recurse      bool
+	RecurseArgs  RecurseArgs
 	Cascade      bool
 	IgnoreReflex bool
 	Facets       *Facets
@@ -78,6 +79,11 @@ type GraphQuery struct {
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
+}
+
+type RecurseArgs struct {
+	Depth     uint64
+	AvoidLoop bool
 }
 
 type AttrLang struct {
@@ -721,6 +727,55 @@ L2:
 	return gq, nil
 }
 
+func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
+	if ok := trySkipItemTyp(it, itemLeftRound); !ok {
+		// We don't have a (, we can return.
+		return nil
+	}
+
+	var key, val string
+	var item lex.Item
+	var ok bool
+	for it.Next() {
+		if it.Item().Typ == itemRightRound {
+			return nil
+		}
+
+		item = it.Item()
+		if item.Typ != itemName {
+			return fmt.Errorf("Expected key inside @recurse().")
+		}
+		key = item.Val
+
+		if ok := trySkipItemTyp(it, itemColon); !ok {
+			return fmt.Errorf("Expected colon(:) after %s")
+		}
+
+		if item, ok = tryParseItemType(it, itemName); !ok {
+			return fmt.Errorf("Expected value inside @recurse() for key: %s.", key)
+		}
+		val = item.Val
+
+		switch key {
+		case "depth":
+			depth, err := strconv.ParseUint(val, 0, 64)
+			if err != nil {
+				return err
+			}
+			gq.RecurseArgs.Depth = depth
+		case "avoidloop":
+			avoidloop, err := strconv.ParseBool(val)
+			if err != nil {
+				return err
+			}
+			gq.RecurseArgs.AvoidLoop = avoidloop
+		default:
+			return fmt.Errorf("Unexpected key: [%s] inside @recurse block", key)
+		}
+	}
+	return nil
+}
+
 // getQuery creates a GraphQuery object tree by calling getRoot
 // and goDeep functions by looking at '{'.
 func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
@@ -769,6 +824,9 @@ L:
 				gq.IgnoreReflex = true
 			case "recurse":
 				gq.Recurse = true
+				if err := parseRecurseArgs(it, gq); err != nil {
+					return nil, err
+				}
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -2050,8 +2108,8 @@ func validKeyAtRoot(k string) bool {
 	case "from", "to", "numpaths":
 		// Specific to shortest path
 		return true
-	case "depth":
-		return true
+		//	case "depth":
+		//		return true
 	}
 	return false
 }
