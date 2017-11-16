@@ -80,11 +80,6 @@ type GraphQuery struct {
 	IsEmpty bool
 }
 
-type RecurseArgs struct {
-	Depth     uint64
-	AvoidLoop bool
-}
-
 type GroupByAttr struct {
 	Attr  string
 	Alias string
@@ -1757,8 +1752,11 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 				return err
 			}
 			if peekIt[0].Typ == itemColon {
+				if alias != "" {
+					return x.Errorf("Expected predicate after %s:", alias)
+				}
 				alias = val
-				it.Next() // Consume the itemCollon
+				it.Next() // Consume the itemColon
 				continue
 			}
 

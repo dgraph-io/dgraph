@@ -202,8 +202,8 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 	var dedupMap dedup
 	var pathNode *SubGraph
 	for _, child := range sg.Children {
-		// Find a better name for ignoreResult. Aggregation children would be skipped because of
-		// this condition.
+		// Find a better name for ignoreResult.
+		// Aggregation children would be skipped because of this condition.
 		if !child.Params.ignoreResult {
 			continue
 		}
