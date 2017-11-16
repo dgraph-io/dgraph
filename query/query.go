@@ -1971,6 +1971,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				ReadTs:  sg.ReadTs,
 				LinRead: sg.LinRead,
 				Params: params{
+					Alias:        it.Alias,
 					ignoreResult: true,
 					Langs:        it.Langs,
 				},
