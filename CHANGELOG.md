@@ -14,6 +14,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 * Dgraph tries to abort long running/abandoned transactions.
 * Fix TLS flag parsing for Dgraph server and live loader.
+* Reduce dependencies for Go client.
 
 ## [0.9.1] - 2017-11-15
 

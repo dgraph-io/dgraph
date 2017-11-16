@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 )
 
 var (
@@ -503,7 +504,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 			}
 		}
 		if res.ctx != nil {
-			x.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
+			y.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
 			tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
 		}
 	}

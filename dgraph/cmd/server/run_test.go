@@ -81,12 +81,17 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*
 }
 
 func prepare() (dir1, dir2 string, rerr error) {
+	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
+	cmd.Env = os.Environ()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
+	}
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"-w=wz",
 	)
-	defer os.RemoveAll("wz")
 	zero.Stdout = os.Stdout
+	zero.Stderr = os.Stdout
 	if err := zero.Start(); err != nil {
 		return "", "", err
 	}
@@ -1351,12 +1356,16 @@ func TestMain(m *testing.M) {
 	edgraph.SetConfiguration(dc)
 	x.Init(true)
 
-	dir1, dir2, _ := prepare()
+	dir1, dir2, err := prepare()
+	if err != nil {
+		log.Fatal(err)
+	}
 	time.Sleep(10 * time.Millisecond)
 
 	// Parse GQL into internal query representation.
 	r := m.Run()
 	closeAll(dir1, dir2)
 	exec.Command("killall", "-9", "dgraph").Run()
+	os.RemoveAll("wz")
 	os.Exit(r)
 }

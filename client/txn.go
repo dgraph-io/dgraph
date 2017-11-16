@@ -21,13 +21,13 @@ import (
 	"fmt"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 	"github.com/pkg/errors"
 )
 
 var (
-	ErrAborted  = x.Errorf("Transaction has been aborted due to conflict")
-	ErrFinished = x.Errorf("Transaction has already been committed or discarded")
+	ErrAborted  = errors.New("Transaction has been aborted due to conflict")
+	ErrFinished = errors.New("Transaction has already been committed or discarded")
 )
 
 // Txn is a single atomic transaction.
@@ -97,14 +97,14 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 		return nil
 	}
 
-	x.MergeLinReads(txn.context.LinRead, src.LinRead)
+	y.MergeLinReads(txn.context.LinRead, src.LinRead)
 	txn.dg.mergeLinRead(src.LinRead) // Also merge it with client.
 
 	if txn.context.StartTs == 0 {
 		txn.context.StartTs = src.StartTs
 	}
 	if txn.context.StartTs != src.StartTs {
-		return x.Errorf("StartTs mismatch")
+		return errors.New("StartTs mismatch")
 	}
 	txn.context.Keys = append(txn.context.Keys, src.Keys...)
 	return nil

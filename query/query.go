@@ -39,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 )
 
 const (
@@ -2453,7 +2454,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 	dst := &protos.LinRead{}
 	for _, sg := range req.Subgraphs {
 		sg.recurse(func(s *SubGraph) {
-			x.MergeLinReads(dst, s.LinRead)
+			y.MergeLinReads(dst, s.LinRead)
 		})
 	}
 	req.LinRead = dst
