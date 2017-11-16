@@ -1355,7 +1355,10 @@ func TestMain(m *testing.M) {
 	edgraph.SetConfiguration(dc)
 	x.Init(true)
 
-	dir1, dir2, _ := prepare()
+	dir1, dir2, err := prepare()
+	if err != nil {
+		log.Fatal(err)
+	}
 	time.Sleep(10 * time.Millisecond)
 
 	// Parse GQL into internal query representation.
