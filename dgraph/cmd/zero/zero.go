@@ -86,6 +86,19 @@ func (s *Server) Init() {
 	go s.purgeOracle()
 }
 
+func (s *Server) triggerLeaderChange() {
+	s.Lock()
+	defer s.Unlock()
+	close(s.leaderChangeCh)
+	s.leaderChangeCh = make(chan struct{}, 1)
+}
+
+func (s *Server) leaderChangeChannel() chan struct{} {
+	s.RLock()
+	defer s.RUnlock()
+	return s.leaderChangeCh
+}
+
 func (s *Server) Leader(gid uint32) *conn.Pool {
 	s.RLock()
 	defer s.RUnlock()

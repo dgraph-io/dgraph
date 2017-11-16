@@ -40,7 +40,9 @@ type Oracle struct {
 	aborts     map[uint64]struct{}
 	maxPending uint64
 
-	tmax        uint64
+	tmax uint64
+	// timestamp at the time of start of server or when it became leader.
+	startTxnTs  uint64
 	subscribers map[int]chan *protos.OracleDelta
 	updates     chan *protos.OracleDelta
 	doneUntil   x.WaterMark
@@ -57,7 +59,17 @@ func (o *Oracle) Init() {
 	go o.sendDeltasToSubscribers()
 }
 
+func (o *Oracle) updateStartTxnTs(ts uint64) {
+	o.Lock()
+	defer o.Unlock()
+	o.startTxnTs = ts
+}
+
 func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
+	// This transaction was not started after i became leader.
+	if src.StartTs < o.startTxnTs {
+		return true
+	}
 	for _, k := range src.Keys {
 		if last := o.rowCommit[k]; last > src.StartTs {
 			return true
@@ -298,15 +310,18 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*pr
 }
 
 var errClosed = errors.New("Streaming closed by Oracle.")
+var errNotLeader = errors.New("Node is no longer leader.")
 
 func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer) error {
-	// TODO: Add leader check and test leader changes.
 	ch, id := s.orc.newSubscriber()
 	defer s.orc.removeSubscriber(id)
 
 	ctx := server.Context()
+	leaderChangeCh := s.leaderChangeChannel()
 	for {
 		select {
+		case <-leaderChangeCh:
+			return errNotLeader
 		case delta, open := <-ch:
 			if !open {
 				return errClosed
