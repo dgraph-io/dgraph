@@ -202,15 +202,8 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 	var dedupMap dedup
 	var pathNode *SubGraph
 	for _, child := range sg.Children {
-		// Find a better name for ignoreResult. Aggregation children would be skipped because of
-		// this condition.
 		if !child.Params.ignoreResult {
 			continue
-		}
-
-		attr := child.Params.Alias
-		if attr == "" {
-			attr = child.Attr
 		}
 		if len(child.DestUIDs.Uids) != 0 {
 			// It's a UID node.
@@ -218,7 +211,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 				srcUid := child.SrcUIDs.Uids[i]
 				ul := child.uidMatrix[i]
 				for _, uid := range ul.Uids {
-					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
+					dedupMap.addValue(child.Attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
 				}
 			}
 			pathNode = child
@@ -230,7 +223,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 				if err != nil {
 					continue
 				}
-				dedupMap.addValue(attr, val, srcUid)
+				dedupMap.addValue(child.Attr, val, srcUid)
 			}
 		}
 	}

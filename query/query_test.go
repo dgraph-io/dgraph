@@ -1154,13 +1154,13 @@ func TestGroupByRootAlias2(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
-		me(func: uid(1, 23, 24, 25, 31)) @groupby(Age: age) {
+		me(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
 			Count: count(uid)
 		}
 	}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"@groupby":[{"Age":17,"Count":1},{"Age":19,"Count":1},{"Age":38,"Count":1},{"Age":15,"Count":2}]}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"@groupby":[{"age":17,"Count":1},{"age":19,"Count":1},{"age":38,"Count":1},{"age":15,"Count":2}]}]}}`, js)
 }
 
 func TestGroupBy_RepeatAttr(t *testing.T) {
@@ -1298,7 +1298,7 @@ func TestGroupByMulti(t *testing.T) {
 	query := `
 		{
 			me(func: uid(1)) {
-				friend @groupby(FRIEND: friend,name) {
+				friend @groupby(friend,name) {
 					count(uid)
 				}
 			}
@@ -1306,24 +1306,7 @@ func TestGroupByMulti(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"@groupby":[{"count":1,"FRIEND":"0x1","name":"Rick Grimes"},{"count":1,"FRIEND":"0x18","name":"Andrea"}]}]}]}}`,
-		js)
-}
-
-func TestGroupByMulti2(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(func: uid(1)) {
-				friend @groupby(Friend: friend,Name: name) {
-					Count: count(uid)
-				}
-			}
-		}
-	`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data":{"me":[{"friend":[{"@groupby":[{"Friend":"0x1","Name":"Rick Grimes","Count":1},{"Friend":"0x18","Name":"Andrea","Count":1}]}]}]}}`,
+		`{"data": {"me":[{"friend":[{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}]}]}}`,
 		js)
 }
 
