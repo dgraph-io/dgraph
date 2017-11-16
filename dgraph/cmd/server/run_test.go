@@ -81,16 +81,17 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*
 }
 
 func prepare() (dir1, dir2 string, rerr error) {
-	// TODO - Stop at end and clear dir.
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"-w=wz",
 	)
 	zero.Stdout = os.Stdout
 	zero.Stderr = os.Stdout
+	fmt.Println("trying to start zero")
 	if err := zero.Start(); err != nil {
 		return "", "", err
 	}
+	fmt.Println("Command done")
 
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
@@ -108,6 +109,7 @@ func prepare() (dir1, dir2 string, rerr error) {
 	edgraph.Config.WALDir = dir2
 	edgraph.State = edgraph.NewServerState()
 
+	fmt.Println("here2")
 	posting.Init(edgraph.State.Pstore)
 	schema.Init(edgraph.State.Pstore)
 	worker.Init(edgraph.State.Pstore)
@@ -115,6 +117,7 @@ func prepare() (dir1, dir2 string, rerr error) {
 	worker.Config.MyAddr = "localhost:7081"
 	worker.Config.RaftId = 1
 	worker.StartRaftNodes(edgraph.State.WALstore, false)
+	fmt.Println("Start donee")
 	return dir1, dir2, nil
 }
 
