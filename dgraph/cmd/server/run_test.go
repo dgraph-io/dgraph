@@ -87,7 +87,7 @@ func prepare() (dir1, dir2 string, rerr error) {
 		"-w=wz",
 	)
 	zero.Stdout = os.Stdout
-	zero.Stderr = os.Stderr
+	zero.Stderr = os.Stdout
 	if err := zero.Start(); err != nil {
 		return "", "", err
 	}
