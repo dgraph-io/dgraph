@@ -13,6 +13,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Changed
 
 * Dgraph tries to abort long running/abandoned transactions.
+* Fix TLS flag parsing for Dgraph server and live loader.
 
 ## [0.9.1] - 2017-11-15
 

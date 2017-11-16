@@ -76,6 +76,9 @@ func init() {
 
 	// TLS configuration
 	x.SetTLSFlags(&tlsConf, flag)
+	flag.BoolVar(&tlsConf.Insecure, "tls.insecure", false, "Skip certificate validation (insecure)")
+	flag.StringVar(&tlsConf.RootCACerts, "tls.ca_certs", "", "CA Certs file path.")
+	flag.StringVar(&tlsConf.ServerName, "tls.server_name", "", "Server name.")
 }
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -212,6 +215,8 @@ func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
 			grpc.WithInsecure())
 	}
 
+	tlsConf.ConfigType = x.TLSClientConfig
+	tlsConf.CertRequired = false
 	tlsCfg, _, err := x.GenerateTLSConfig(tlsConf)
 	if err != nil {
 		return nil, err
