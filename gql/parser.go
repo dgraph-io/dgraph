@@ -63,7 +63,7 @@ type GraphQuery struct {
 	IgnoreReflex bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
-	GroupbyAttrs []GroupByAttr
+	GroupbyAttrs []AttrLang
 	FacetVar     map[string]string
 	FacetOrder   string
 	FacetDesc    bool
@@ -86,9 +86,8 @@ type RecurseArgs struct {
 	AvoidLoop bool
 }
 
-type GroupByAttr struct {
+type AttrLang struct {
 	Attr  string
-	Alias string
 	Langs []string
 }
 
@@ -1789,7 +1788,6 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	expectArg := true
 	it.Next()
 	item := it.Item()
-	alias := ""
 	if item.Typ != itemLeftRound {
 		return x.Errorf("Expected a left round after groupby")
 	}
@@ -1807,18 +1805,7 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 			if !expectArg {
 				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
-
-			val := collectName(it, item.Val)
-			peekIt, err := it.Peek(1)
-			if err != nil {
-				return err
-			}
-			if peekIt[0].Typ == itemColon {
-				alias = val
-				it.Next() // Consume the itemCollon
-				continue
-			}
-
+			attr := collectName(it, item.Val)
 			var langs []string
 			items, err := it.Peek(1)
 			if err == nil && items[0].Typ == itemAt {
@@ -1829,12 +1816,10 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 			}
-			attrLang := GroupByAttr{
-				Attr:  strings.ToLower(val),
-				Alias: alias,
+			attrLang := AttrLang{
+				Attr:  attr,
 				Langs: langs,
 			}
-			alias = ""
 			gq.GroupbyAttrs = append(gq.GroupbyAttrs, attrLang)
 			count++
 			expectArg = false
@@ -2403,17 +2388,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			val := collectName(it, item.Val)
 			valLower := strings.ToLower(val)
-
-			peekIt, err = it.Peek(1)
-			if err != nil {
-				return err
-			}
-			if peekIt[0].Typ == itemColon {
-				alias = val
-				it.Next() // Consume the itemCollon
-				continue
-			}
-
 			if gq.IsGroupby && (!isAggregator(val) && val != "count" && count != seen) {
 				// Only aggregator or count allowed inside the groupby block.
 				return x.Errorf("Only aggregator/count functions allowed inside @groupby. Got: %v", val)
@@ -2643,6 +2617,15 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return x.Errorf("Cannot do uid() of a variable")
 			}
 		Fall:
+			peekIt, err = it.Peek(1)
+			if err != nil {
+				return err
+			}
+			if peekIt[0].Typ == itemColon {
+				alias = val
+				it.Next() // Consume the itemCollon
+				continue
+			}
 			if count == seenWithPred {
 				return x.Errorf("Multiple predicates not allowed in single count.")
 			}

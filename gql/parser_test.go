@@ -2956,45 +2956,6 @@ func TestParseGroupby(t *testing.T) {
 	require.Equal(t, "en", res.Query[0].Children[0].GroupbyAttrs[0].Langs[0])
 }
 
-func TestParseGroupbyWithAlias(t *testing.T) {
-	query := `
-	query {
-		me(func: uid(0x1)) {
-			friends @groupby(name) {
-				GroupCount: count(uid)
-			}
-			hometown
-			age
-		}
-	}
-`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
-	require.Equal(t, "name", res.Query[0].Children[0].GroupbyAttrs[0].Attr)
-	require.Equal(t, "GroupCount", res.Query[0].Children[0].Children[0].Alias)
-}
-
-func TestParseGroupbyWithAliasForKey(t *testing.T) {
-	t.Skip()
-	query := `
-	query {
-		me(func: uid(0x1)) {
-			friends @groupby(name, school) {
-				count(uid)
-			}
-			hometown
-			age
-		}
-	}
-`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
-	require.Equal(t, "name", res.Query[0].Children[0].GroupbyAttrs[0].Attr)
-	require.Equal(t, "GroupCount", res.Query[0].Children[0].Children[0].Alias)
-}
-
 func TestParseGroupbyError(t *testing.T) {
 	// predicates not allowed inside groupby.
 	query := `

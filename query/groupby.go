@@ -29,9 +29,8 @@ import (
 )
 
 type groupPair struct {
-	key   types.Val
-	attr  string
-	alias string
+	key  types.Val
+	attr string
 }
 
 type groupResult struct {
@@ -41,16 +40,12 @@ type groupResult struct {
 }
 
 func (grp *groupResult) aggregateChild(child *SubGraph) error {
-	fieldName := child.Params.Alias
 	if child.Params.DoCount {
 		if child.Attr != "uid" {
 			return x.Errorf("Only uid predicate is allowed in count within groupby")
 		}
-		if fieldName == "" {
-			fieldName = "count"
-		}
 		grp.aggregates = append(grp.aggregates, groupPair{
-			attr: fieldName,
+			attr: "count",
 			key: types.Val{
 				Tid:   types.IntID,
 				Value: int64(len(grp.uids)),
@@ -59,9 +54,7 @@ func (grp *groupResult) aggregateChild(child *SubGraph) error {
 		return nil
 	}
 	if child.SrcFunc != nil && isAggregatorFn(child.SrcFunc.Name) {
-		if fieldName == "" {
-			fieldName = fmt.Sprintf("%s(%s)", child.SrcFunc.Name, child.Attr)
-		}
+		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc.Name, child.Attr)
 		finalVal, err := aggregateGroup(grp, child)
 		if err != nil {
 			return err
