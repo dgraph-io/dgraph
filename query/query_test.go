@@ -1136,6 +1136,33 @@ func TestGroupByRoot(t *testing.T) {
 		`{"data": {"me":[{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":38,"count":1},{"age":15,"count":2}]}]}}`,
 		js)
 }
+
+func TestGroupByRootAlias(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
+			Count: count(uid)
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"@groupby":[{"age":17,"Count":1},{"age":19,"Count":1},{"age":38,"Count":1},{"age":15,"Count":2}]}]}}`, js)
+}
+
+func TestGroupByRootAlias2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
+			Count: count(uid)
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"@groupby":[{"age":17,"Count":1},{"age":19,"Count":1},{"age":38,"Count":1},{"age":15,"Count":2}]}]}}`, js)
+}
+
 func TestGroupBy_RepeatAttr(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1230,6 +1257,23 @@ func TestGroupByAggval(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"orderMax":[{"name":"School B","val(a)":"Rick Grimes"},{"name":"School A","val(a)":"Glenn Rhee"}],"orderMin":[{"name":"School A","val(b)":"Daryl Dixon"},{"name":"School B","val(b)":"Andrea"}]}}`,
 		js)
+}
+
+func TestGroupByAlias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(1)) {
+				friend @groupby(school) {
+					MaxName: max(name)
+					MinName: min(name)
+					UidCount: count(uid)
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"friend":[{"@groupby":[{"school":"0x1388","MaxName":"Glenn Rhee","MinName":"Daryl Dixon","UidCount":2},{"school":"0x1389","MaxName":"Rick Grimes","MinName":"Andrea","UidCount":3}]}]}]}}`, js)
 }
 
 func TestGroupByAgg(t *testing.T) {
