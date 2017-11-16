@@ -97,10 +97,11 @@ func (t *transactions) OldTxns() []uint64 {
 	defer t.Unlock()
 	numKeys := 0
 	for _, txn := range t.m {
-		if txn.Indices[0]-lastSnapshotIdx <= 10000 {
+		lenDelta, index := txn.lenAndStartIdx()
+		if index-lastSnapshotIdx <= 10000 {
 			timestamps = append(timestamps, txn.StartTs)
 		}
-		numKeys += txn.lenDelta()
+		numKeys += lenDelta
 	}
 	// Users can do transactions which mutates few edges, numKeys gives us
 	// a good estimation of space consumed by raft log entries
@@ -131,10 +132,11 @@ func (t *transactions) Iterate(ok func(key []byte) bool) []uint64 {
 	return timestamps
 }
 
-func (t *Txn) lenDelta() int {
+func (t *Txn) lenAndStartIdx() (int, uint64) {
 	t.Lock()
 	defer t.Unlock()
-	return len(t.deltas)
+	x.AssertTrue(len(t.Indices) > 0)
+	return len(t.deltas), t.Indices[0]
 }
 
 func (t *Txn) conflicts(ok func(key []byte) bool) bool {
@@ -172,7 +174,9 @@ func (t *Txn) done() {
 	TxnMarks().DoneMany(t.Indices)
 }
 
-func (t *Txn) Index() uint64 {
+// LastIndex returns the index of last prewrite proposal associated with
+// the transaction.
+func (t *Txn) LastIndex() uint64 {
 	t.Lock()
 	defer t.Unlock()
 	if l := len(t.Indices); l > 0 {
