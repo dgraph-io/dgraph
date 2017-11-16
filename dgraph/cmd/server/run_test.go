@@ -1359,5 +1359,6 @@ func TestMain(m *testing.M) {
 	r := m.Run()
 	closeAll(dir1, dir2)
 	exec.Command("killall", "-9", "dgraph").Run()
+	os.RemoveAll("wz")
 	os.Exit(r)
 }
