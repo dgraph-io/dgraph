@@ -318,7 +318,7 @@ Follow the instructions in the README to get it up and running.
 We also have a [DgraphJavaSample] project, which contains an end-to-end
 working example of how to use the Java client.
 
-[DgraphJavaSample]:https://github.com/dgraph-io/DgraphJavaSample
+[DgraphJavaSample]:https://github.com/dgraph-io/dgraph4j/tree/master/samples/DgraphJavaSample
 
 ## Javascript
 
