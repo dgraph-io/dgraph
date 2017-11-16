@@ -2108,8 +2108,8 @@ func validKeyAtRoot(k string) bool {
 	case "from", "to", "numpaths":
 		// Specific to shortest path
 		return true
-		//	case "depth":
-		//		return true
+	case "depth":
+		return true
 	}
 	return false
 }

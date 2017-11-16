@@ -767,6 +767,14 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.AfterUID = uint64(after)
 	}
+
+	if v, ok := gq.Args["depth"]; ok && (args.Alias == "shortest") {
+		from, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.ExploreDepth = from
+	}
 	if v, ok := gq.Args["numpaths"]; ok && args.Alias == "shortest" {
 		numPaths, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
