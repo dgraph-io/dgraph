@@ -41,6 +41,7 @@ function startZero {
 	echo -e "Starting dgraph zero.\n"
   ./dgraph zero -w $BUILD/wz > $BUILD/zero.log 2>&1 &
   # To ensure dgraph doesn't start before dgraphzero.
-	sleep 5
+	# It takes time for zero to start on travis(mac).
+	sleep 30
   popd &> /dev/null
 }
