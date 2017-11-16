@@ -737,10 +737,6 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 	var item lex.Item
 	var ok bool
 	for it.Next() {
-		if it.Item().Typ == itemRightRound {
-			return nil
-		}
-
 		item = it.Item()
 		if item.Typ != itemName {
 			return fmt.Errorf("Expected key inside @recurse().")
@@ -771,6 +767,14 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 			gq.RecurseArgs.AvoidLoop = avoidloop
 		default:
 			return fmt.Errorf("Unexpected key: [%s] inside @recurse block", key)
+		}
+
+		if _, ok := tryParseItemType(it, itemRightRound); ok {
+			return nil
+		}
+
+		if _, ok := tryParseItemType(it, itemComma); !ok {
+			return fmt.Errorf("Expected comma after value: %s inside recurse block.", val)
 		}
 	}
 	return nil
