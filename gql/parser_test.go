@@ -2979,7 +2979,7 @@ func TestParseGroupbyWithAliasForKey(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x1)) {
-			friends @groupby(name, school) {
+			friends @groupby(Name: name, SchooL: school) {
 				count(uid)
 			}
 			hometown
@@ -2989,9 +2989,9 @@ func TestParseGroupbyWithAliasForKey(t *testing.T) {
 `
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
-	require.Equal(t, "name", res.Query[0].Children[0].GroupbyAttrs[0].Attr)
-	require.Equal(t, "GroupCount", res.Query[0].Children[0].Children[0].Alias)
+	require.Equal(t, 2, len(res.Query[0].Children[0].GroupbyAttrs))
+	require.Equal(t, "Name", res.Query[0].Children[0].GroupbyAttrs[0].Alias)
+	require.Equal(t, "SchooL", res.Query[0].Children[0].GroupbyAttrs[1].Alias)
 }
 
 func TestParseGroupbyError(t *testing.T) {
