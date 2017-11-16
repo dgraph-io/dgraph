@@ -90,7 +90,7 @@ func (t *transactions) MinTs() uint64 {
 // Returns startTs of all pending transactions started upto 10000 raft log
 // entries after last snapshot if the memory consumed by all raft log entries
 // is high.
-func (t *transactions) OldTxns() []uint64 {
+func (t *transactions) TxnsSinceSnapshot() []uint64 {
 	lastSnapshotIdx := TxnMarks().DoneUntil()
 	var timestamps []uint64
 	t.Lock()

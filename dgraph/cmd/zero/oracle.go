@@ -63,6 +63,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
 	o.startTxnTs = ts
+	o.rowCommit = make(map[string]uint64)
 }
 
 func (o *Oracle) hasConflict(src *protos.TxnContext) bool {

@@ -659,7 +659,7 @@ func (g *groupi) periodicAbortOldTxns() {
 		}
 		zc := protos.NewZeroClient(pl.Get())
 		// Aborts if not already committed.
-		startTimestamps := posting.Txns().OldTxns()
+		startTimestamps := posting.Txns().TxnsSinceSnapshot()
 		req := &protos.TxnTimestamps{Ts: startTimestamps}
 		zc.TryAbort(context.Background(), req)
 	}
