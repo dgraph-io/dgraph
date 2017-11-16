@@ -127,6 +127,7 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
 	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
+	go gr.periodicAbortOldTxns()
 	gr.proposeInitialSchema()
 }
 
@@ -646,4 +647,20 @@ START:
 		g.proposeDelta(oracleDelta)
 	}
 	goto START
+}
+
+func (g *groupi) periodicAbortOldTxns() {
+	ticker := time.NewTicker(time.Second * 10)
+	for {
+		<-ticker.C
+		pl := groups().Leader(0)
+		if pl == nil {
+			return
+		}
+		zc := protos.NewZeroClient(pl.Get())
+		// Aborts if not already committed.
+		startTimestamps := posting.Txns().TxnsSinceSnapshot()
+		req := &protos.TxnTimestamps{Ts: startTimestamps}
+		zc.TryAbort(context.Background(), req)
+	}
 }

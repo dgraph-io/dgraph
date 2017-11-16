@@ -54,9 +54,13 @@ This would trigger G1 to get latest state. Wait for it.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(time.Minute * 8)
 	var cancel context.CancelFunc
+	leaderChangeCh := s.leaderChangeChannel()
 	for {
 		select {
-		case <-s.leaderChangeCh:
+		case _, open := <-leaderChangeCh:
+			if !open {
+				leaderChangeCh = s.leaderChangeChannel()
+			}
 			// Cancel predicate moves when you step down as leader.
 			if !s.Node.AmLeader() {
 				if cancel != nil {

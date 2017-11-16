@@ -456,7 +456,7 @@ func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload,
 		return &protos.Payload{}, posting.ErrInvalidTxn
 	}
 	// Ensures that we wait till prewrite is applied
-	idx := txn.Index()
+	idx := txn.LastIndex()
 	groups().Node.Applied.WaitForMark(ctx, idx)
 	if tc.CommitTs == 0 {
 		err := txn.AbortMutations(ctx)

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 // TODO: This test was used just to make sure some really basic examples work.
@@ -132,6 +133,8 @@ func TestCountIndex(t *testing.T) {
 	`)
 	defer s.cleanup()
 
+	// Ensures that the index keys are written to disk after commit.
+	time.Sleep(time.Second)
 	t.Run("All queries", s.testCase(`
 	{
 		alice_friend_count(func: eq(name, "Alice")) {

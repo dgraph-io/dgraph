@@ -350,11 +350,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 }
 
 func (n *node) triggerLeaderChange() {
-	select {
-	case n.server.leaderChangeCh <- struct{}{}:
-	default:
-		// Ok to ingore
-	}
+	n.server.triggerLeaderChange()
 	m := &protos.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
 	go n.proposeAndWait(context.Background(), &protos.ZeroProposal{Member: m})
 }
