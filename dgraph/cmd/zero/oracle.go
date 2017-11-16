@@ -34,7 +34,8 @@ type syncMark struct {
 
 type Oracle struct {
 	x.SafeMutex
-	commits    map[uint64]uint64 // start -> commit
+	commits map[uint64]uint64 // start -> commit
+	// TODO: Check if we need LRU.
 	rowCommit  map[string]uint64 // fp(key) -> commit
 	aborts     map[uint64]struct{}
 	maxPending uint64
@@ -80,6 +81,13 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	for ts := range o.aborts {
 		if ts < minTs {
 			delete(o.aborts, ts)
+		}
+	}
+	// There is no transaction running with startTs less than minTs
+	// So we can delete everything from rowCommit whose commitTs < minTs
+	for key, ts := range o.rowCommit {
+		if ts < minTs {
+			delete(o.rowCommit, key)
 		}
 	}
 	o.tmax = minTs

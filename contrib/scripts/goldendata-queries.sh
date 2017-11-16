@@ -35,7 +35,7 @@ function run_index_test {
 
   NUM=$(echo $N | python -m json.tool | grep $GREPFOR | wc -l)
   if [[ ! "$NUM" -eq "$ANS" ]]; then
-    echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM"
+    echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM, Resp: $N"
     quit 1
   else
     echo -e "Index test passed: ${X}\n"
