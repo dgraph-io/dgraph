@@ -745,7 +745,7 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 		if item.Typ != itemName {
 			return fmt.Errorf("Expected key inside @recurse().")
 		}
-		key = item.Val
+		key = strings.ToLower(item.Val)
 
 		if ok := trySkipItemTyp(it, itemColon); !ok {
 			return fmt.Errorf("Expected colon(:) after %s")
