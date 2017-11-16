@@ -141,7 +141,7 @@ type params struct {
 	ignoreResult   bool   // Node results are ignored.
 	Expand         string // Value is either _all_/variable-name or empty.
 	isGroupBy      bool
-	groupbyAttrs   []gql.AttrLang
+	groupbyAttrs   []gql.GroupByAttr
 	uidCount       string
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
@@ -379,7 +379,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 		if pc.Params.isGroupBy {
-			dst.addGroupby(pc, pc.Attr)
+			dst.addGroupby(pc, pc.fieldName())
 			continue
 		}
 		if pc.IsInternal() {
