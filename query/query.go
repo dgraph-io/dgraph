@@ -396,9 +396,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 
-		fmt.Println(pc.SrcUIDs, "uid", uid)
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
-		fmt.Println("idx", idx)
 		if idx < 0 {
 			continue
 		}
@@ -2017,7 +2015,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				tr.LazyPrintf("Error while processing child task: %+v", err)
 			}
 		}
-		fmt.Println("Got result for child:", child.Attr, "sg: ", sg.Attr, "alias", sg.Params.Alias, "len", len(sg.Children))
 	}
 	rch <- childErr
 }
