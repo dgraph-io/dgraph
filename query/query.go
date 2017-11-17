@@ -1680,6 +1680,11 @@ func uniquePreds(vl []*protos.ValueList) map[string]struct{} {
 func recursiveCopy(dst *SubGraph, src *SubGraph) {
 	dst.Attr = src.Attr
 	dst.Params = src.Params
+	dst.Params.ParentVars = make(map[string]varValue)
+	for k, v := range src.Params.ParentVars {
+		dst.Params.ParentVars[k] = v
+	}
+
 	dst.copyFiltersRecurse(src)
 	dst.ReadTs = src.ReadTs
 	dst.LinRead = src.LinRead
