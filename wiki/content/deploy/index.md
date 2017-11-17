@@ -443,10 +443,19 @@ You can [read some technical details](https://blog.dgraph.io/post/bulkloader/)
 about the bulk loader on the blog.
 
 Flags can be used to control the behaviour and performance characteristics of
-the bulk loader. You can see the full list by running `dgraph bulk --help`.
+the bulk loader. You can see the full list by running `dgraph bulk --help`. In
+particular, **the flags should be tuned so that the bulk loader doesn't use more
+memory than is available as RAM**. If it starts swapping, it will become
+incredibly slow. The `-j` flag controls the number of worker threads, and can
+be lowered to reduce memory consumption. The `--mapoutput_mb` flag controls the
+size of the map output files, and can also be lowered to reduce memory
+consumption.
 
 {{% notice "tip" %}}
-We highly recommend [disabling swap space](https://askubuntu.com/questions/214805/how-do-i-disable-swap) when running Bulk Loader. It is better to fix the parameters to decrease memory usage, than to have swapping slow down the loader.
+We highly recommend [disabling swap
+space](https://askubuntu.com/questions/214805/how-do-i-disable-swap) when
+running Bulk Loader. It is better to fix the parameters to decrease memory
+usage, than to have swapping grind the loader down to a halt.
 {{% /notice %}}
 
 For bigger datasets and machines with many cores, gzip
