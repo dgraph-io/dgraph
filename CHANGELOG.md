@@ -9,12 +9,14 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Added
 
 * Support for removing dead node from quorum.
+* Support for alias in groupby queries.
 
 ### Changed
 
 * Dgraph tries to abort long running/abandoned transactions.
 * Fix TLS flag parsing for Dgraph server and live loader.
 * Reduce dependencies for Go client.
+* `depth` and `loop` arguments should be inside @recurse().
 
 ## [0.9.1] - 2017-11-15
 
