@@ -36,6 +36,11 @@ title = "Dgraph Documentation"
   identifier = "faq"
   weight = 6
 [[menu.main]]
+  name = "How To Guide"
+  url = "/howto/"
+  identifier = "how-to-guide"
+  weight = 7
+[[menu.main]]
   name = "Design Concepts"
   url = "/design-concepts/"
   identifier = "design-concepts"
