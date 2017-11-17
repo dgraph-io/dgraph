@@ -358,7 +358,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		var err error
 		var vals []types.Val
 		// Even if its a list type and value is asked in a language we return that.
-		if (listType && len(q.Langs) == 0) || q.AllLangs { // TODO: Could instead use listType || q.AllLangs ?
+		if (listType && len(q.Langs) == 0) || q.ExpandAll {
 			vals, err = pl.AllValues(args.q.ReadTs)
 		} else {
 			var val types.Val
@@ -377,10 +377,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			continue
 		}
 
-		if q.AllLangs && !listType {
-			out.Langs, err = pl.AllLangs(args.q.ReadTs)
+		if q.ExpandAll && !listType {
+			out.LangTags, err = pl.GetLangTags(args.q.ReadTs)
 			if err != nil {
-				continue // No error handling for errors related to PL reads?
+				return err
 			}
 		}
 

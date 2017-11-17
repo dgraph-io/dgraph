@@ -871,41 +871,42 @@ func (l *List) AllValues(readTs uint64) (vals []types.Val, rerr error) {
 	return
 }
 
-var tags map[uint64]string
+var tagMap map[uint64]string
 
 func init() {
 	// Maps all lowercase 2 letter language tags. If we need more languages, we can add later.
-	tags = make(map[uint64]string)
+	tagMap = make(map[uint64]string)
 	const a = byte('a')
 	const z = byte('z')
 	tag := []byte{0, 0}
 	for tag[0] = a; tag[0] <= z; tag[0]++ {
 		for tag[1] = a; tag[1] <= z; tag[1]++ {
-			tags[farm.Fingerprint64(tag)] = string(tag)
+			tagMap[farm.Fingerprint64(tag)] = string(tag)
 		}
 	}
 }
 
-func (l *List) AllLangs(readTs uint64) ([]string, error) {
+// GetLangTags finds the language tags of each posting in the list.
+func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 	l.RLock()
 	defer l.RUnlock()
 
-	var langs []string
+	var tags []string
 	err := l.iterate(readTs, 0, func(p *protos.Posting) bool {
-		var lang string
+		var tag string
 		if uid := p.GetUid(); uid != math.MaxUint64 {
 			var ok bool
-			lang, ok = tags[uid]
+			tag, ok = tagMap[uid]
 			if !ok {
 				// We don't have a mapping, but still want to show something
 				// unique. Just show the raw number.
-				lang = fmt.Sprintf("%x", uid)
+				tag = fmt.Sprintf("%x", uid)
 			}
 		}
-		langs = append(langs, lang)
+		tags = append(tags, tag)
 		return true
 	})
-	return langs, err
+	return tags, err
 }
 
 // Returns Value from posting list.

@@ -58,10 +58,10 @@ message Query {
 	Param facet_param = 8; // which facets to fetch
 	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
 
+	bool ExpandAll = 10;
+
 	uint64 read_ts = 13;
   LinRead lin_read = 14;
-
-	bool AllLangs = 15;
 }
 
 message ValueList {
@@ -74,7 +74,7 @@ message Result {
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
 	repeated FacetsList facet_matrix = 5;
-	repeated string langs = 6;
+	repeated string lang_tags = 6;
 
   LinRead lin_read = 14;
 }

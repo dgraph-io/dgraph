@@ -169,7 +169,7 @@ type SubGraph struct {
 	facetsMatrix []*protos.FacetsList
 	ExpandPreds  []*protos.ValueList
 	GroupbyRes   *groupResults
-	Langs        []string
+	LangTags     []string
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -493,11 +493,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					sv.Value.(string) == "_nil_" {
 					sv.Value = ""
 				}
-				if len(pc.Langs) > 0 {
-					x.AssertTrue(i < len(pc.Langs)) // All langs are either present or absent.
+				if len(pc.LangTags) != 0 {
+					x.AssertTrue(i < len(pc.LangTags)) // All langs are either present or absent.
 					fieldNameWithTag := fieldName
-					if pc.Langs[i] != "" {
-						fieldNameWithTag += "@" + pc.Langs[i]
+					if pc.LangTags[i] != "" {
+						fieldNameWithTag += "@" + pc.LangTags[i]
 					}
 					dst.AddValue(fieldNameWithTag, sv)
 					continue
@@ -989,7 +989,7 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
-		AllLangs:     sg.Params.Expand == "_all_",
+		ExpandAll:    sg.Params.Expand == "_all_",
 	}
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
@@ -1817,7 +1817,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.facetsMatrix = result.FacetMatrix
 			sg.counts = result.Counts
 			sg.LinRead = result.LinRead
-			sg.Langs = result.Langs
+			sg.LangTags = result.LangTags
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
