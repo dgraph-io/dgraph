@@ -169,6 +169,7 @@ type SubGraph struct {
 	facetsMatrix []*protos.FacetsList
 	ExpandPreds  []*protos.ValueList
 	GroupbyRes   *groupResults
+	Langs        []string
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -479,7 +480,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 			}
 
-			for _, tv := range pc.valueMatrix[idx].Values {
+			for i, tv := range pc.valueMatrix[idx].Values {
 				// if conversion not possible, we ignore it in the result.
 				sv, convErr := convertWithBestEffort(tv, pc.Attr)
 				if convErr == ErrEmptyVal {
@@ -491,6 +492,15 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if (sv.Tid == types.StringID || sv.Tid == types.DefaultID) &&
 					sv.Value.(string) == "_nil_" {
 					sv.Value = ""
+				}
+				if len(pc.Langs) > 0 {
+					x.AssertTrue(i < len(pc.Langs)) // All langs are either present or absent.
+					fieldNameWithTag := fieldName
+					if pc.Langs[i] != "" {
+						fieldNameWithTag += "@" + pc.Langs[i]
+					}
+					dst.AddValue(fieldNameWithTag, sv)
+					continue
 				}
 				if !pc.Params.Normalize {
 					dst.AddValue(fieldName, sv)
@@ -1807,6 +1817,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.facetsMatrix = result.FacetMatrix
 			sg.counts = result.Counts
 			sg.LinRead = result.LinRead
+			sg.Langs = result.Langs
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
