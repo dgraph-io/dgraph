@@ -312,7 +312,7 @@ fmt.Printf("Me: %+v\n", r.Me)
 
 The Java client is a new and fully supported client for v0.9.0.
 
-The client can be found [here](https://github.com/dgraph-io/dgraph4j).
+The client [can be found here](https://github.com/dgraph-io/dgraph4j).
 Follow the instructions in the README to get it up and running.
 
 We also have a [DgraphJavaSample] project, which contains an end-to-end
@@ -327,6 +327,13 @@ A Javascript client doesn't exist yet. But due to popular demand, a Javascript
 client will be created to work with dgraph v0.9.0. Watch this space!
 {{% /notice %}}
 
+Please see the new javascript client written by Cal Moore, which supports
+transactions via Grpc.
+
+https://github.com/calummoore/dgraph-node
+
+This replaces [another client](https://github.com/reicheltp/dgraph-client) built by Paul Reichelt, which works pre v0.9.
+
 ## Python
 {{% notice "incomplete" %}}
 A lot of development has gone into the Go client and the Python client is not up to date with it.
@@ -337,6 +344,11 @@ We are looking for help from contributors to bring it up to date.
 The Python client can be found [here](https://github.com/dgraph-io/pydgraph).
 
 ## Raw HTTP
+
+{{% notice "warning" %}}
+Raw HTTP needs more chops to use than our language clients. We wrote this to be a
+guide to help you build Dgraph client in a new language.
+{{% /notice %}}
 
 It's also possible to interact with dgraph directly via its HTTP endpoints.
 This this allows clients to be built for languages that don't have access to a
