@@ -427,6 +427,11 @@ $ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-
 
 ### Bulk Loader
 
+{{% notice "note" %}}
+It's crucial to tune the bulk loaders flags to get good performance. See the
+section below for details.
+{{% /notice %}}
+
 Bulk loader serves a similar purpose to the live loader, but can only be used
 while dgraph is offline for the initial population. It cannot run on an
 existing dgraph instance.
@@ -441,26 +446,6 @@ way to perform the initial import of large datasets into dgraph.
 
 You can [read some technical details](https://blog.dgraph.io/post/bulkloader/)
 about the bulk loader on the blog.
-
-Flags can be used to control the behaviour and performance characteristics of
-the bulk loader. You can see the full list by running `dgraph bulk --help`. In
-particular, **the flags should be tuned so that the bulk loader doesn't use more
-memory than is available as RAM**. If it starts swapping, it will become
-incredibly slow. The `-j` flag controls the number of worker threads, and can
-be lowered to reduce memory consumption. The `--mapoutput_mb` flag controls the
-size of the map output files, and can also be lowered to reduce memory
-consumption.
-
-{{% notice "tip" %}}
-We highly recommend [disabling swap
-space](https://askubuntu.com/questions/214805/how-do-i-disable-swap) when
-running Bulk Loader. It is better to fix the parameters to decrease memory
-usage, than to have swapping grind the loader down to a halt.
-{{% /notice %}}
-
-For bigger datasets and machines with many cores, gzip
-decoding can be a bottleneck. Performance improvements can be obtained by
-first splitting the RDFs up into many `.rdf.gz` files (e.g. 256MB each).
 
 You need to determine the
 number of dgraph instances you want in your cluster. You should set the number
@@ -511,6 +496,49 @@ copy over the output shards into different servers.
 $ cd out/i # i = shard number.
 $ dgraph server -zero=localhost:7080 -memory_mb=1024
 ```
+
+#### Performance Tuning
+
+{{% notice "tip" %}}
+We highly recommend [disabling swap
+space](https://askubuntu.com/questions/214805/how-do-i-disable-swap) when
+running Bulk Loader. It is better to fix the parameters to decrease memory
+usage, than to have swapping grind the loader down to a halt.
+{{% /notice %}}
+
+Flags can be used to control the behaviour and performance characteristics of
+the bulk loader. You can see the full list by running `dgraph bulk --help`. In
+particular, **the flags should be tuned so that the bulk loader doesn't use more
+memory than is available as RAM**. If it starts swapping, it will become
+incredibly slow.
+
+**In the map phase**, tweaking the following flags can reduce memory usage:
+
+- The `--num_go_routines` flag controls the number of worker threads. Lowering reduces memory
+  consumption.
+
+- The `--mapoutput_mb` flag controls the size of the map output files. Lowering
+  reduces memory consumption.
+
+For bigger datasets and machines with many cores, gzip decoding can be a
+bottleneck during the map phase. Performance improvements can be obtained by
+first splitting the RDFs up into many `.rdf.gz` files (e.g. 256MB each). This
+has a negligible impact on memory usage.
+
+**The reduce phase** is less memory heavy than the map phase, although can still
+use a lot.  Some flags may be increased to improve performance, *but only if
+you have large amounts of RAM*:
+
+- The `--reduce_shards` flag controls the number of resultant dgraph instances.
+  Increasing this increases memory consumption, but in exchange allows for
+higher CPU utilization.
+
+- The `--map_shards` flag controls the number of separate map output shards.
+  Increasing this increases memory consumption but balances the resultant
+dgraph instances more evenly.
+
+- The `--shufflers` controls the level of parallelism in the shuffle/reduce
+  stage. Increasing this increases memory consumption.
 
 # Export
 
