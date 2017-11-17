@@ -127,6 +127,7 @@ type params struct {
 	// directives.
 	Normalize    bool
 	Recurse      bool
+	RecurseArgs  gql.RecurseArgs
 	Cascade      bool
 	IgnoreReflex bool
 
@@ -766,8 +767,8 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.AfterUID = uint64(after)
 	}
-	if v, ok := gq.Args["depth"]; ok && (gq.Recurse ||
-		args.Alias == "shortest") {
+
+	if v, ok := gq.Args["depth"]; ok && (args.Alias == "shortest") {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			return err
@@ -860,6 +861,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		IsEmpty:      gq.IsEmpty,
 		Order:        gq.Order,
 		Recurse:      gq.Recurse,
+		RecurseArgs:  gq.RecurseArgs,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
