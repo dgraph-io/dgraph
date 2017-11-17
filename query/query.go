@@ -373,7 +373,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	var invalidUids map[uint64]bool
 	var facetsNode outputNode
 	// We go through all predicate children of the subprotos.
-	fmt.Println(sg.Attr, "numC", len(sg.Children))
 	for _, pc := range sg.Children {
 		if pc.Params.ignoreResult {
 			continue
@@ -1711,18 +1710,20 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		up := uniquePreds(child.ExpandPreds)
-		fmt.Println("child", child.Attr, "up", up)
 		for k, _ := range up {
-			temp := &SubGraph{}
-			for _, c := range child.Children {
-				cc := new(SubGraph)
-				cc.Attr = c.Attr
-				cc.ReadTs = sg.ReadTs
-				cc.LinRead = c.LinRead
-
-				fmt.Printf("cc: %+v\n", cc)
-				temp.Children = append(temp.Children, cc)
+			temp := new(SubGraph)
+			for _, tc := range child.Children {
+				s := new(SubGraph)
+				s.Attr = tc.Attr
+				s.Params = params{
+					Alias: tc.Params.Alias,
+					Langs: tc.Params.Langs,
+				}
+				s.ReadTs = tc.ReadTs
+				s.LinRead = tc.LinRead
+				temp.Children = append(temp.Children, s)
 			}
+
 			temp.ReadTs = sg.ReadTs
 			temp.LinRead = sg.LinRead
 			temp.Params.isInternal = false
