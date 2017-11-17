@@ -373,6 +373,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	var invalidUids map[uint64]bool
 	var facetsNode outputNode
 	// We go through all predicate children of the subprotos.
+	fmt.Println(sg.Attr, "numC", len(sg.Children))
 	for _, pc := range sg.Children {
 		if pc.Params.ignoreResult {
 			continue
@@ -396,7 +397,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 
+		fmt.Println(pc.SrcUIDs, "uid", uid)
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
+		fmt.Println("idx", idx)
 		if idx < 0 {
 			continue
 		}
@@ -1708,9 +1711,18 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		up := uniquePreds(child.ExpandPreds)
+		fmt.Println("child", child.Attr, "up", up)
 		for k, _ := range up {
-			temp := new(SubGraph)
-			*temp = *child
+			temp := &SubGraph{}
+			for _, c := range child.Children {
+				cc := new(SubGraph)
+				cc.Attr = c.Attr
+				cc.ReadTs = sg.ReadTs
+				cc.LinRead = c.LinRead
+
+				fmt.Printf("cc: %+v\n", cc)
+				temp.Children = append(temp.Children, cc)
+			}
 			temp.ReadTs = sg.ReadTs
 			temp.LinRead = sg.LinRead
 			temp.Params.isInternal = false
@@ -1838,14 +1850,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
 		}
-		out := sg.Children[:0]
-		for _, child := range sg.Children {
-			if child.IsInternal() && child.Attr == "expand" {
-				continue
-			}
-			out = append(out, child)
-		}
-		sg.Children = out // Remove any expand nodes we might have added.
+		//	out := sg.Children[:0]
+		//	for _, child := range sg.Children {
+		//		if child.IsInternal() && child.Attr == "expand" {
+		//			continue
+		//		}
+		//		out = append(out, child)
+		//	}
+		//	sg.Children = out // Remove any expand nodes we might have added.
 		rch <- nil
 		return
 	}
@@ -2004,6 +2016,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				tr.LazyPrintf("Error while processing child task: %+v", err)
 			}
 		}
+		fmt.Println("Got result for child:", child.Attr, "sg: ", sg.Attr, "alias", sg.Params.Alias, "len", len(sg.Children))
 	}
 	rch <- childErr
 }

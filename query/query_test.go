@@ -7607,3 +7607,18 @@ func TestCountPanic(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"q":[{"uid":"0x1","name":"Michonne","count(name)":1},{"uid":"0x12c","count(name)":0}]}}`, js)
 }
+
+func TestExpandAll(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1)) {
+			expand(_all_) {
+				name
+			}
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
+}
