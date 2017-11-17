@@ -857,7 +857,7 @@ func TestRecurseFacetOrder(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
     {
-		me(func: uid(1), depth: 2) @recurse {
+		me(func: uid(1)) @recurse(depth: 2) {
 			friend @facets(orderdesc: since)
 			uid
 			name
@@ -869,7 +869,7 @@ func TestRecurseFacetOrder(t *testing.T) {
 
 	query = `
     {
-		me(func: uid(1), depth: 2) @recurse {
+		me(func: uid(1)) @recurse(depth: 2) {
 			friend @facets(orderasc: since)
 			uid
 			name

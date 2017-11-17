@@ -28,8 +28,7 @@ function start {
   echo -e "Starting second server.\n"
   ./dgraph server -p $BUILD/p2 -w $BUILD/w2 --memory_mb 4096 -o 2  > $BUILD/server2.log 2>&1 &
   # Wait for membership sync to happen.
-	# TODO: Change this to wait for health check.
-  sleep 5
+  sleep 30
   popd &> /dev/null
   return 0
 }
