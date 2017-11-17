@@ -83,7 +83,7 @@ type GraphQuery struct {
 
 type RecurseArgs struct {
 	Depth     uint64
-	AvoidLoop bool
+	AllowLoop bool
 }
 
 type AttrLang struct {
@@ -759,12 +759,12 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 				return err
 			}
 			gq.RecurseArgs.Depth = depth
-		case "avoidloop":
-			avoidloop, err := strconv.ParseBool(val)
+		case "loop":
+			allowLoop, err := strconv.ParseBool(val)
 			if err != nil {
 				return err
 			}
-			gq.RecurseArgs.AvoidLoop = avoidloop
+			gq.RecurseArgs.AllowLoop = allowLoop
 		default:
 			return fmt.Errorf("Unexpected key: [%s] inside @recurse block", key)
 		}

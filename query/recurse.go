@@ -31,7 +31,7 @@ import (
 func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error {
 	// Note: Key format is - "attr|fromUID|toUID"
 	reachMap := make(map[string]struct{})
-	avoidLoops := start.Params.RecurseArgs.AvoidLoop
+	allowLoop := start.Params.RecurseArgs.AllowLoop
 	var numEdges int
 	var exec []*SubGraph
 	var err error
@@ -121,7 +121,11 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			}
 
 			for mIdx, fromUID := range sg.SrcUIDs.Uids {
-				if avoidLoops {
+				if allowLoop {
+					for _, ul := range sg.uidMatrix {
+						numEdges = numEdges + len(ul.Uids)
+					}
+				} else {
 					algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
 						key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, uid)
 						_, seen := reachMap[key] // Combine fromUID here.
@@ -134,10 +138,6 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 							return true
 						}
 					})
-				} else {
-					for _, ul := range sg.uidMatrix {
-						numEdges = numEdges + len(ul.Uids)
-					}
 				}
 			}
 			if len(sg.Params.Order) > 0 || len(sg.Params.FacetOrder) > 0 {
@@ -183,6 +183,9 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 
 	depth := sg.Params.RecurseArgs.Depth
 	if depth == 0 {
+		if sg.Params.RecurseArgs.AllowLoop {
+			return x.Errorf("depth must be > 0 when loop is true for recurse query.")
+		}
 		// If no depth is specified, expand till we reach all leaf nodes
 		// or we see reach too many nodes.
 		depth = math.MaxUint64

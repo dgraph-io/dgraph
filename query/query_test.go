@@ -1659,11 +1659,28 @@ func TestNestedFuncRoot4(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes"},{"name":"Andrea"}]}}`, js)
 }
 
+func TestRecurseError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(0x01)) @recurse(loop: true) {
+				nonexistent_pred
+				friend
+				name
+			}
+		}`
+
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "depth must be > 0 when loop is true for recurse query.")
+}
+
 func TestRecurseQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01)) @recurse(depth: 3) {
+			me(func: uid(0x01)) @recurse {
 				nonexistent_pred
 				friend
 				name
@@ -1678,7 +1695,7 @@ func TestRecurseQueryOrder(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01)) @recurse(depth: 3) {
+			me(func: uid(0x01)) @recurse {
 				friend(orderdesc: dob)
 				dob
 				name
@@ -1690,11 +1707,11 @@ func TestRecurseQueryOrder(t *testing.T) {
 		js)
 }
 
-func TestRecurseQueryAvoidLoop(t *testing.T) {
+func TestRecurseQueryAllowLoop(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01)) @recurse(AVOIDLOOP: true) {
+			me(func: uid(0x01)) @recurse {
 				friend
 				dob
 				name
@@ -1704,18 +1721,18 @@ func TestRecurseQueryAvoidLoop(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"friend":[{"friend":[{"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"friend":[{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"dob":"1910-01-01T00:00:00Z","name":"Michonne"}]}}`, js)
 }
 
-func TestRecurseQueryAvoidLoop2(t *testing.T) {
+func TestRecurseQueryAllowLoop2(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid(0x01)) @recurse(depth: 3,AVOIDLOOP: true) {
+			me(func: uid(0x01)) @recurse(depth: 4,loop: true) {
 				friend
 				dob
 				name
 			}
 		}`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"friend":[{"friend":[{"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"friend":[{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"dob":"1910-01-01T00:00:00Z","name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"friend":[{"friend":[{"friend":[{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"friend":[{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"dob":"1910-01-01T00:00:00Z","name":"Michonne"}]}}`, js)
 }
 
 func TestRecurseQueryLimitDepth1(t *testing.T) {
@@ -1752,7 +1769,7 @@ func TestRecurseVariable(t *testing.T) {
 	populateGraph(t)
 	query := `
 			{
-				var(func: uid(0x01)) @recurse(depth: 3) {
+				var(func: uid(0x01)) @recurse {
 					a as friend
 				}
 
@@ -1770,7 +1787,7 @@ func TestRecurseVariableUid(t *testing.T) {
 	populateGraph(t)
 	query := `
 			{
-				var(func: uid(0x01)) @recurse(depth: 3) {
+				var(func: uid(0x01)) @recurse {
 					friend
 					a as uid
 				}
@@ -1789,7 +1806,7 @@ func TestRecurseVariableVar(t *testing.T) {
 	populateGraph(t)
 	query := `
 			{
-				var(func: uid(0x01)) @recurse(depth: 3) {
+				var(func: uid(0x01)) @recurse {
 					friend
 					school
 					a as name
@@ -1811,7 +1828,7 @@ func TestRecurseVariable2(t *testing.T) {
 	query := `
 			{
 
-				var(func: uid(0x1)) @recurse(depth: 4) {
+				var(func: uid(0x1)) @recurse {
 					f2 as friend
 					f as follow
 				}

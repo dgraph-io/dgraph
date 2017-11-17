@@ -15,7 +15,7 @@
  */
 
 // Package y contains the code shared by the Go client and Dgraph server. It should have
-// minimum dependencies in order to keep the client lite.
+// minimum dependencies in order to keep the client light.
 package y
 
 import "github.com/dgraph-io/dgraph/protos"
