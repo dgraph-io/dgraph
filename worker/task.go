@@ -377,7 +377,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			continue
 		}
 
-		if q.AllLangs {
+		if q.AllLangs && !listType {
 			out.Langs, err = pl.AllLangs(args.q.ReadTs)
 			if err != nil {
 				continue // No error handling for errors related to PL reads?
