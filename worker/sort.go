@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 )
 
 var emptySortResult protos.SortResult
@@ -339,7 +340,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 			}
 			sortVals[i][or.idx] = sv
 		}
-		x.MergeLinReads(r.reply.LinRead, result.LinRead)
+		y.MergeLinReads(r.reply.LinRead, result.LinRead)
 	}
 
 	if oerr != nil {

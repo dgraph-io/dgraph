@@ -92,6 +92,10 @@ class EditorPanel extends React.Component {
           query={query}
           saveCodeMirrorInstance={saveCodeMirrorInstance}
         />
+        <div className="editor-radio">
+          Read-only queries. Mutations and schema changes can be done via cURL
+          or Grpc client.
+        </div>
       </div>
     );
   }

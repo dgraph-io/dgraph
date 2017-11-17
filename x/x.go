@@ -30,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos"
 	"golang.org/x/net/trace"
 )
 
@@ -52,6 +51,10 @@ const (
 	GrpcMaxSize             = 256 << 20
 	// The attr used to store list of predicates for a node.
 	PredicateListAttr = "_predicate_"
+
+	PortInternal = 7080
+	PortHTTP     = 8080
+	PortGrpc     = 9080
 )
 
 var (
@@ -95,8 +98,7 @@ func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers",
 		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, "+
-			"Cache-Control, X-Requested-With, X-Dgraph-CommitNow, X-Dgraph-LinRead, "+
-			"X-Dgraph-Keys, X-Dgraph-StartTs")
+			"Cache-Control, X-Requested-With, X-Dgraph-CommitNow, X-Dgraph-LinRead")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
@@ -322,20 +324,4 @@ func (b *BytesBuffer) TruncateBy(n int) {
 	b.off -= n
 	b.sz -= n
 	AssertTrue(b.off >= 0 && b.sz >= 0)
-}
-
-func MergeLinReads(dst *protos.LinRead, src *protos.LinRead) {
-	if src == nil || src.Ids == nil {
-		return
-	}
-	if dst.Ids == nil {
-		dst.Ids = make(map[uint32]uint64)
-	}
-	for gid, sid := range src.Ids {
-		if did, has := dst.Ids[gid]; has && did >= sid {
-			// do nothing.
-		} else {
-			dst.Ids[gid] = sid
-		}
-	}
 }

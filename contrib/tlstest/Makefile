@@ -24,7 +24,7 @@ test: all
 all: ca $(KEYS) $(CERTS)
 
 clean:
-	rm -rf newcerts index.* serial *.old *.key *.csr *.crt p w zw
+	git clean -d -f
 
 ca:
 	@mkdir -p newcerts

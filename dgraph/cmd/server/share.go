@@ -66,8 +66,8 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mu := &protos.Mutation{
-		Set:               NewSharedQueryNQuads(rawQuery),
-		CommitImmediately: true,
+		Set:       NewSharedQueryNQuads(rawQuery),
+		CommitNow: true,
 	}
 	resp, err := (&edgraph.Server{}).Mutate(context.Background(), mu)
 	if err != nil {

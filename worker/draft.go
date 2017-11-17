@@ -298,7 +298,9 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)
 
-	if len(cc.Context) > 0 {
+	if cc.Type == raftpb.ConfChangeRemoveNode {
+		n.DeletePeer(cc.NodeID)
+	} else if len(cc.Context) > 0 {
 		var rc protos.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		n.Connect(rc.Id, rc.Addr)

@@ -20,7 +20,6 @@ package worker
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -35,13 +34,13 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 )
 
 var (
 	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
 	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
 	errAborted         = x.Errorf("Transaction aborted")
-	allocator          x.EmbeddedUidAllocator
 )
 
 func deletePredicateEdge(edge *protos.DirectedEdge) bool {
@@ -344,9 +343,6 @@ func ValidateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 }
 
 func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if Config.InMemoryComm {
-		return allocator.AssignUids(ctx, num)
-	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
@@ -358,10 +354,6 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 }
 
 func Timestamps(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if Config.InMemoryComm {
-		// TODO - Handle
-		return nil, fmt.Errorf("Couldn't get TS")
-	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
@@ -465,7 +457,7 @@ func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload,
 		return &protos.Payload{}, posting.ErrInvalidTxn
 	}
 	// Ensures that we wait till prewrite is applied
-	idx := txn.Index()
+	idx := txn.LastIndex()
 	groups().Node.Applied.WaitForMark(ctx, idx)
 	if tc.CommitTs == 0 {
 		err := txn.AbortMutations(ctx)
@@ -512,7 +504,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnCon
 			}
 		}
 		if res.ctx != nil {
-			x.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
+			y.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
 			tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
 		}
 	}
@@ -540,6 +532,13 @@ func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (
 	node := groups().Node
 	err := node.ProposeAndWait(ctx, &protos.Proposal{TxnContext: tc})
 	return &protos.Payload{}, err
+}
+
+func (w *grpcWorker) MinTxnTs(ctx context.Context,
+	payload *protos.Payload) (*protos.Num, error) {
+	n := &protos.Num{}
+	n.Val = posting.Txns().MinTs()
+	return n, nil
 }
 
 // Mutate is used to apply mutations over the network on other instances.

@@ -21,7 +21,7 @@ func TestNQuadMutation(t *testing.T) {
 	require.NoError(t, cluster.Start())
 	defer cluster.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	require.NoError(t, cluster.client.Alter(ctx, &protos.Operation{

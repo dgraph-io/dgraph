@@ -33,7 +33,6 @@ type Options struct {
 
 	AllottedMemory float64
 
-	BaseWorkerPort      int
 	ExportPath          string
 	NumPendingProposals int
 	Tracing             float64
@@ -42,7 +41,6 @@ type Options struct {
 	RaftId              uint64
 	MaxPendingCount     uint64
 	ExpandEdge          bool
-	InMemoryComm        bool
 
 	ConfigFile string
 	DebugMode  bool
@@ -60,15 +58,13 @@ var DefaultConfig = Options{
 	// User must specify this.
 	AllottedMemory: -1.0,
 
-	BaseWorkerPort:      12345,
 	ExportPath:          "export",
 	NumPendingProposals: 2000,
 	Tracing:             0.0,
 	MyAddr:              "",
-	ZeroAddr:            "localhost:8888",
+	ZeroAddr:            "localhost:7080",
 	MaxPendingCount:     1000,
 	ExpandEdge:          true,
-	InMemoryComm:        false,
 
 	ConfigFile: "",
 	DebugMode:  false,
@@ -125,7 +121,6 @@ func SetConfiguration(newConfig Options) {
 	posting.Config.AllottedMemory = Config.AllottedMemory
 	posting.Config.Mu.Unlock()
 
-	worker.Config.BaseWorkerPort = Config.BaseWorkerPort
 	worker.Config.ExportPath = Config.ExportPath
 	worker.Config.NumPendingProposals = Config.NumPendingProposals
 	worker.Config.Tracing = Config.Tracing
@@ -134,7 +129,6 @@ func SetConfiguration(newConfig Options) {
 	worker.Config.RaftId = Config.RaftId
 	worker.Config.MaxPendingCount = Config.MaxPendingCount
 	worker.Config.ExpandEdge = Config.ExpandEdge
-	worker.Config.InMemoryComm = Config.InMemoryComm
 
 	x.Config.ConfigFile = Config.ConfigFile
 	x.Config.DebugMode = Config.DebugMode

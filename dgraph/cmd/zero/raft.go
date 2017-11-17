@@ -262,7 +262,15 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			group = newGroup()
 			state.Groups[p.Member.GroupId] = group
 		}
-		_, has := group.Members[p.Member.Id]
+		m, has := group.Members[p.Member.Id]
+		if p.Member.AmDead {
+			if has {
+				delete(group.Members, p.Member.Id)
+				state.Removed = append(state.Removed, m)
+			}
+			// else already removed.
+			return p.Id, nil
+		}
 		if !has && len(group.Members) >= n.server.NumReplicas {
 			// We shouldn't allow more members than the number of replicas.
 			return p.Id, errInvalidProposal
@@ -314,7 +322,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			p, state.MaxLeaseId, state.MaxTxnTs)
 	}
 	if p.Txn != nil {
-		n.server.orc.updateCommitStatus(p.Txn)
+		n.server.orc.updateCommitStatus(e.Index, p.Txn)
 	}
 
 	return p.Id, nil
@@ -324,7 +332,10 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)
 
-	if len(cc.Context) > 0 {
+	if cc.Type == raftpb.ConfChangeRemoveNode {
+		n.DeletePeer(cc.NodeID)
+		n.server.removeZero(cc.NodeID)
+	} else if len(cc.Context) > 0 {
 		var rc protos.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		n.Connect(rc.Id, rc.Addr)
@@ -339,11 +350,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 }
 
 func (n *node) triggerLeaderChange() {
-	select {
-	case n.server.leaderChangeCh <- struct{}{}:
-	default:
-		// Ok to ingore
-	}
+	n.server.triggerLeaderChange()
 	m := &protos.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
 	go n.proposeAndWait(context.Background(), &protos.ZeroProposal{Member: m})
 }
@@ -395,12 +402,10 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 }
 
 func (n *node) trySnapshot() {
-	// TODO: FIx later
-	return
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 	si := existing.Metadata.Index
-	idx := n.Applied.DoneUntil()
+	idx := n.server.SyncedUntil()
 	if idx <= si+1000 {
 		return
 	}
@@ -429,6 +434,7 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
 
+	loop := 0
 	for {
 		select {
 		case <-ticker.C:
@@ -453,6 +459,7 @@ func (n *node) Run() {
 			}
 
 			for _, entry := range rd.CommittedEntries {
+				loop++
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
@@ -486,7 +493,9 @@ func (n *node) Run() {
 			if len(rd.CommittedEntries) > 0 {
 				n.triggerUpdates()
 			}
-			n.trySnapshot()
+			if loop%1000 == 0 {
+				n.trySnapshot()
+			}
 			n.Raft().Advance()
 		}
 	}

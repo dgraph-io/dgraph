@@ -168,7 +168,7 @@ func (s *State) loop(wg *sync.WaitGroup) {
 func main() {
 	flag.Parse()
 
-	conn, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:9081", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}

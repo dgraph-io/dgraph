@@ -146,6 +146,7 @@ message MembershipState {
   uint64 maxLeaseId = 4;
   uint64 maxTxnTs = 5;
   uint64 maxRaftId = 6;
+  repeated Member removed = 7;
 }
 
 message ConnectionState {
@@ -422,6 +423,7 @@ service Worker {
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
 	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
+	rpc MinTxnTs (Payload)         returns (Num) {}
 
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
 	rpc ReceivePredicate(stream KV)         returns (Payload) {}
@@ -489,7 +491,7 @@ message Mutation {
   repeated NQuad set = 10;
   repeated NQuad del = 11;
   uint64 start_ts = 13;
-  bool commit_immediately = 14;
+  bool commit_now = 14;
 }
 
 message Operation {

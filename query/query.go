@@ -39,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 )
 
 const (
@@ -139,7 +140,7 @@ type params struct {
 	ignoreResult   bool   // Node results are ignored.
 	Expand         string // Value is either _all_/variable-name or empty.
 	isGroupBy      bool
-	groupbyAttrs   []gql.AttrLang
+	groupbyAttrs   []gql.GroupByAttr
 	uidCount       string
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
@@ -377,7 +378,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 		if pc.Params.isGroupBy {
-			dst.addGroupby(pc, pc.Attr)
+			dst.addGroupby(pc, pc.fieldName())
 			continue
 		}
 		if pc.IsInternal() {
@@ -1370,10 +1371,11 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	sg.DestUIDs = &protos.List{out}
 
 AssignStep:
-	return sg.assignVars(doneVars, sgPath)
+	return sg.updateVars(doneVars, sgPath)
 }
 
-func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
+// Updates the doneVars map by picking up uid/values from the current Subgraph
+func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
 		return nil
 	}
@@ -1413,44 +1415,38 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			}
 			doneVars[sg.Params.Var].Vals[uid] = val
 		}
-	} else if len(sg.DestUIDs.Uids) != 0 {
+	} else if len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil) {
+		// Uid variable could be defined using uid or a predicate.
+		var uids *protos.List
+		if sg.Attr == "uid" {
+			uids = sg.SrcUIDs
+		} else {
+			uids = sg.DestUIDs
+		}
+
 		// This implies it is a entity variable.
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
-				Uids: sg.DestUIDs,
+				Uids: uids,
 				path: sgPath,
 			}
 			return nil
 		}
+
 		// For a recurse query this can happen. We don't allow using the same variable more than
 		// once otherwise.
-		uids := v.Uids
+		oldUids := v.Uids
 		lists := make([]*protos.List, 0, 2)
-		lists = append(lists, uids, sg.DestUIDs)
+		lists = append(lists, oldUids, uids)
 		v.Uids = algo.MergeSorted(lists)
 		doneVars[sg.Params.Var] = v
-
 		// This implies it is a value variable.
 	} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
-		if sg.Attr == "uid" {
-			// Its still an entity variable if its uid.
-			doneVars[sg.Params.Var] = varValue{
-				Uids: sg.SrcUIDs,
-				path: sgPath,
-			}
-			return nil
+		if v, ok = doneVars[sg.Params.Var]; !ok {
+			v.Vals = make(map[uint64]types.Val)
+			v.path = sgPath
 		}
 
-		// We reach here, if a uid variable was already set and now a uid edge has no dest uids.
-		// We don't want to set the variable as empty in this case.
-		if _, ok := doneVars[sg.Params.Var]; ok {
-			return nil
-		}
-
-		doneVars[sg.Params.Var] = varValue{
-			Vals: make(map[uint64]types.Val),
-			path: sgPath,
-		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			if len(sg.valueMatrix[idx].Values) > 1 {
 				return x.Errorf("Value variables not supported for predicate with list type.")
@@ -1460,8 +1456,9 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			if err != nil {
 				continue
 			}
-			doneVars[sg.Params.Var].Vals[uid] = val
+			v.Vals[uid] = val
 		}
+		doneVars[sg.Params.Var] = v
 	} else {
 		// If the variable already existed and now we see it again without any DestUIDs or
 		// ValueMatrix then lets just return.
@@ -1934,7 +1931,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	// We store any variable defined by this node in the map and pass it on
 	// to the children which might depend on it.
-	if err = sg.assignVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
+	if err = sg.updateVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
 		rch <- err
 		return
 	}
@@ -1972,6 +1969,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				ReadTs:  sg.ReadTs,
 				LinRead: sg.LinRead,
 				Params: params{
+					Alias:        it.Alias,
 					ignoreResult: true,
 					Langs:        it.Langs,
 				},
@@ -2457,7 +2455,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 	dst := &protos.LinRead{}
 	for _, sg := range req.Subgraphs {
 		sg.recurse(func(s *SubGraph) {
-			x.MergeLinReads(dst, s.LinRead)
+			y.MergeLinReads(dst, s.LinRead)
 		})
 	}
 	req.LinRead = dst

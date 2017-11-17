@@ -124,7 +124,7 @@ func (l *loader) infinitelyRetry(req protos.Mutation) {
 	defer l.wg.Done()
 	for {
 		txn := l.dc.NewTxn()
-		req.CommitImmediately = true
+		req.CommitNow = true
 		_, err := txn.Mutate(l.opts.Ctx, &req)
 		if err == nil {
 			atomic.AddUint64(&l.txns, 1)
@@ -137,7 +137,7 @@ func (l *loader) infinitelyRetry(req protos.Mutation) {
 
 func (l *loader) request(req protos.Mutation) {
 	txn := l.dc.NewTxn()
-	req.CommitImmediately = true
+	req.CommitNow = true
 	_, err := txn.Mutate(l.opts.Ctx, &req)
 
 	if err == nil {

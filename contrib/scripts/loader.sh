@@ -32,7 +32,7 @@ start
 curl -X PUT  -d '
     name: string @index(term, exact) .
     initial_release_date: datetime @index(year) .
-' "http://localhost:8080/alter"
+' "http://localhost:8081/alter"
 
 # Server returns extensions key now. Take that into account while comparing.
 # res=$(curl -X POST  -d 'schema {}' "http://localhost:8080/query")
@@ -51,7 +51,7 @@ echo -e "\nRunning dgraph live."
 
 rm -rf $BUILD/xiddir
 pushd dgraph &> /dev/null
-./dgraph live -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9080,127.0.0.1:9082" -z "127.0.0.1:12340" -c 1 -b 10000 -x $BUILD/xiddir
+./dgraph live -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9081,127.0.0.1:9082" -z "127.0.0.1:7080" -c 1 -b 10000 -x $BUILD/xiddir
 popd &> /dev/null
 
 # Restart Dgraph so that we are sure that index keys are persisted.
@@ -70,7 +70,7 @@ start
 
 echo -e "Trying to export data."
 rm -rf export/*
-curl http://localhost:8080/admin/export
+curl http://localhost:8081/admin/export
 echo -e "\nExport done."
 
 pushd dgraph &> /dev/null

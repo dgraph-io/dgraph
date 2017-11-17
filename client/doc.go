@@ -15,18 +15,9 @@
  */
 
 /*
-Package client is used to interact with a Dgraph server.  Queries and
-mutations can be run from the client.
 
-- Request based interaction mode where the user program builds requests
-and receives responses immediately after running, and
+Package client is used to interact with a Dgraph server. Queries, mutations,
+and most other types of admin tasks can be run from the client.
 
-Request Mode: User programs create a NewDgraphClient, create a request
-with req := client.Req{} and then add edges, deletion, schema and queries
-to the request with SetObject/DeleteObject, AddSchema/SetSchema and SetQuery/SetQueryWithVariables.
-Once the request is built, it is run with Run. This is the mode that would be suitable for most
-real-time applications. Below is an example on how to use SetObject to add some data to Dgraph.
-
-For more details checkout https://docs.dgraph.io/clients/#go.
 */
 package client

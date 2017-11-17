@@ -67,7 +67,7 @@ func init() {
 	flag.StringVarP(&opt.files, "rdfs", "r", "", "Location of rdf files to load")
 	flag.StringVarP(&opt.schemaFile, "schema", "s", "", "Location of schema file")
 	flag.StringVarP(&opt.dgraph, "dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	flag.StringVarP(&opt.zero, "zero", "z", "127.0.0.1:8888", "Dgraphzero gRPC server address")
+	flag.StringVarP(&opt.zero, "zero", "z", "127.0.0.1:7080", "Dgraphzero gRPC server address")
 	flag.StringVarP(&opt.clientDir, "xidmap", "x", "x", "Directory to store xid to uid mapping")
 	flag.IntVarP(&opt.concurrent, "conc", "c", 1,
 		"Number of concurrent requests to make to Dgraph")
@@ -76,6 +76,9 @@ func init() {
 
 	// TLS configuration
 	x.SetTLSFlags(&tlsConf, flag)
+	flag.BoolVar(&tlsConf.Insecure, "tls.insecure", false, "Skip certificate validation (insecure)")
+	flag.StringVar(&tlsConf.RootCACerts, "tls.ca_certs", "", "CA Certs file path.")
+	flag.StringVar(&tlsConf.ServerName, "tls.server_name", "", "Server name.")
 }
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -212,6 +215,8 @@ func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
 			grpc.WithInsecure())
 	}
 
+	tlsConf.ConfigType = x.TLSClientConfig
+	tlsConf.CertRequired = false
 	tlsCfg, _, err := x.GenerateTLSConfig(tlsConf)
 	if err != nil {
 		return nil, err

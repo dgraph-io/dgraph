@@ -62,7 +62,7 @@ type GraphQuery struct {
 	IgnoreReflex bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
-	GroupbyAttrs []AttrLang
+	GroupbyAttrs []GroupByAttr
 	FacetVar     map[string]string
 	FacetOrder   string
 	FacetDesc    bool
@@ -80,8 +80,9 @@ type GraphQuery struct {
 	IsEmpty bool
 }
 
-type AttrLang struct {
+type GroupByAttr struct {
 	Attr  string
+	Alias string
 	Langs []string
 }
 
@@ -1726,6 +1727,7 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	expectArg := true
 	it.Next()
 	item := it.Item()
+	alias := ""
 	if item.Typ != itemLeftRound {
 		return x.Errorf("Expected a left round after groupby")
 	}
@@ -1743,7 +1745,21 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 			if !expectArg {
 				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
-			attr := collectName(it, item.Val)
+
+			val := collectName(it, item.Val)
+			peekIt, err := it.Peek(1)
+			if err != nil {
+				return err
+			}
+			if peekIt[0].Typ == itemColon {
+				if alias != "" {
+					return x.Errorf("Expected predicate after %s:", alias)
+				}
+				alias = val
+				it.Next() // Consume the itemColon
+				continue
+			}
+
 			var langs []string
 			items, err := it.Peek(1)
 			if err == nil && items[0].Typ == itemAt {
@@ -1754,10 +1770,12 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 			}
-			attrLang := AttrLang{
-				Attr:  attr,
+			attrLang := GroupByAttr{
+				Attr:  strings.ToLower(val),
+				Alias: alias,
 				Langs: langs,
 			}
+			alias = ""
 			gq.GroupbyAttrs = append(gq.GroupbyAttrs, attrLang)
 			count++
 			expectArg = false
@@ -1937,11 +1955,21 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 }
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
-	if curp == nil {
-		return x.Errorf("Invalid use of directive.")
+	valid := true
+	it.Prev()
+	item := it.Item()
+	if item.Typ == itemLeftCurl {
+		// Ideally we should check that curp was created at current depth.
+		valid = false
 	}
 	it.Next()
-	item := it.Item()
+	// No directive is allowed on internal subgraph like expand all, value variables.
+	if !valid || curp == nil || curp.IsInternal {
+		return x.Errorf("Invalid use of directive.")
+	}
+
+	it.Next()
+	item = it.Item()
 	peek, err := it.Peek(1)
 	if err != nil || item.Typ != itemName {
 		return x.Errorf("Expected directive or language list")
@@ -1976,12 +2004,18 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		// this is directive
 		switch item.Val {
 		case "filter":
+			if curp.Filter != nil {
+				return x.Errorf("Use AND, OR and round brackets instead of multiple filter directives.")
+			}
 			filter, err := parseFilter(it)
 			if err != nil {
 				return err
 			}
 			curp.Filter = filter
 		case "groupby":
+			if curp.IsGroupby {
+				return x.Errorf("Only one group by directive allowed.")
+			}
 			curp.IsGroupby = true
 			parseGroupby(it, curp)
 		default:
@@ -2310,6 +2344,17 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			val := collectName(it, item.Val)
 			valLower := strings.ToLower(val)
+
+			peekIt, err = it.Peek(1)
+			if err != nil {
+				return err
+			}
+			if peekIt[0].Typ == itemColon {
+				alias = val
+				it.Next() // Consume the itemCollon
+				continue
+			}
+
 			if gq.IsGroupby && (!isAggregator(val) && val != "count" && count != seen) {
 				// Only aggregator or count allowed inside the groupby block.
 				return x.Errorf("Only aggregator/count functions allowed inside @groupby. Got: %v", val)
@@ -2539,15 +2584,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return x.Errorf("Cannot do uid() of a variable")
 			}
 		Fall:
-			peekIt, err = it.Peek(1)
-			if err != nil {
-				return err
-			}
-			if peekIt[0].Typ == itemColon {
-				alias = val
-				it.Next() // Consume the itemCollon
-				continue
-			}
 			if count == seenWithPred {
 				return x.Errorf("Multiple predicates not allowed in single count.")
 			}

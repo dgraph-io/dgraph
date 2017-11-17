@@ -19,7 +19,6 @@ package server
 
 import (
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -27,9 +26,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"path"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -50,17 +47,13 @@ import (
 )
 
 var (
-	baseHttpPort int
-	baseGrpcPort int
-	bindall      bool
-
-	exposeTrace bool
-
+	bindall          bool
+	exposeTrace      bool
 	customTokenizers string
+	config           edgraph.Options
+	tlsConf          x.TLSHelperConfig
+	uiDir            string
 )
-
-var config edgraph.Options
-var tlsConf x.TLSHelperConfig
 
 func init() {
 	defaults := edgraph.DefaultConfig
@@ -76,8 +69,6 @@ func init() {
 	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
 		"Don't allow mutations on this server.")
 
-	flag.IntVar(&config.BaseWorkerPort, "workerport", defaults.BaseWorkerPort,
-		"Port used by worker for internal communication.")
 	flag.StringVar(&config.ExportPath, "export", defaults.ExportPath,
 		"Folder in which to store exports.")
 	flag.IntVar(&config.NumPendingProposals, "pending_proposals", defaults.NumPendingProposals,
@@ -106,11 +97,9 @@ func init() {
 		"enable debug mode for more debug information")
 
 	// Useful for running multiple servers on the same machine.
-	flag.IntVar(&x.Config.PortOffset, "port_offset", 0,
-		"Value added to all listening port numbers.")
+	flag.IntVarP(&x.Config.PortOffset, "port_offset", "o", 0,
+		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
-	flag.IntVar(&baseGrpcPort, "grpc_port", 9080, "Port to run gRPC service on.")
 	flag.BoolVar(&bindall, "bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.BoolVar(&exposeTrace, "expose_trace", false,
@@ -118,19 +107,18 @@ func init() {
 
 	// TLS configurations
 	x.SetTLSFlags(&tlsConf, flag)
+	flag.StringVar(&tlsConf.ClientAuth, "tls.client_auth", "", "Enable TLS client authentication")
+	flag.StringVar(&tlsConf.ClientCACerts, "tls.ca_certs", "", "CA Certs file path.")
+	tlsConf.ConfigType = x.TLSServerConfig
 
 	//Custom plugins.
 	flag.StringVar(&customTokenizers, "custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
-	// uiDir can also be set through -ldflags while doing a release build. In that
-	// case it points to usr/local/share/dgraph/assets where we store assets for
-	// the user. In other cases, it should point to the build directory within the repository.
-	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
-	if uiDir == "" {
-		gopath, _ := bestEffortGopath()
-		uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
-	}
+	// UI assets dir
+	flag.StringVar(&uiDir, "ui", "/usr/local/share/dgraph/assets",
+		"Directory which contains assets for the user interface")
+
 	// Read from config file before setting config.
 	if config.ConfigFile != "" {
 		x.Println("Loading configuration from file:", config.ConfigFile)
@@ -153,11 +141,11 @@ func setupCustomTokenizers() {
 }
 
 func httpPort() int {
-	return x.Config.PortOffset + baseHttpPort
+	return x.Config.PortOffset + x.PortHTTP
 }
 
 func grpcPort() int {
-	return x.Config.PortOffset + baseGrpcPort
+	return x.Config.PortOffset + x.PortGrpc
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
@@ -177,40 +165,6 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("<pre>"))
 	w.Write([]byte(worker.StoreStats()))
 	w.Write([]byte("</pre>"))
-}
-
-func bestEffortGopath() (string, bool) {
-	if path, ok := os.LookupEnv("GOPATH"); ok {
-		return path, true
-	}
-	var homevar string
-	switch runtime.GOOS {
-	case "windows":
-		// The Golang issue https://github.com/golang/go/issues/17262 says
-		// USERPROFILE, _not_ HOMEDRIVE + HOMEPATH is used.
-		homevar = "USERPROFILE"
-	case "plan9":
-		homevar = "home"
-	default:
-		homevar = "HOME"
-	}
-	if homepath, ok := os.LookupEnv(homevar); ok {
-		return path.Join(homepath, "go"), true
-	}
-	return "", false
-}
-
-var uiDir string
-
-func init() {
-	// uiDir can also be set through -ldflags while doing a release build. In that
-	// case it points to usr/local/share/dgraph/assets where we store assets for
-	// the user. In other cases, it should point to the build directory within the repository.
-	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
-	if uiDir == "" {
-		gopath, _ := bestEffortGopath()
-		uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
-	}
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
@@ -291,9 +245,11 @@ func setupServer() {
 	}
 
 	http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/query/", queryHandler)
 	http.HandleFunc("/mutate", mutationHandler)
-	http.HandleFunc("/commit", commitHandler)
-	http.HandleFunc("/abort", abortHandler)
+	http.HandleFunc("/mutate/", mutationHandler)
+	http.HandleFunc("/commit/", commitHandler)
+	http.HandleFunc("/abort/", abortHandler)
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/share", shareHandler)
@@ -359,7 +315,6 @@ func run() {
 	// schema before calling posting.Init().
 	schema.Init(edgraph.State.Pstore)
 	posting.Init(edgraph.State.Pstore)
-	worker.Config.InMemoryComm = false
 	worker.Init(edgraph.State.Pstore)
 
 	// setup shutdown os signal handler

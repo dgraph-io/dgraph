@@ -83,6 +83,20 @@ func (s *Server) Init() {
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.shutDownCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
+	go s.purgeOracle()
+}
+
+func (s *Server) triggerLeaderChange() {
+	s.Lock()
+	defer s.Unlock()
+	close(s.leaderChangeCh)
+	s.leaderChangeCh = make(chan struct{}, 1)
+}
+
+func (s *Server) leaderChangeChannel() chan struct{} {
+	s.RLock()
+	defer s.RUnlock()
+	return s.leaderChangeCh
 }
 
 func (s *Server) Leader(gid uint32) *conn.Pool {
@@ -105,6 +119,16 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 		}
 	}
 	return healthyPool
+}
+
+func (s *Server) KnownGroups() []uint32 {
+	var groups []uint32
+	s.RLock()
+	defer s.RUnlock()
+	for group := range s.state.Groups {
+		groups = append(groups, group)
+	}
+	return groups
 }
 
 func (s *Server) hasLeader(gid uint32) bool {
@@ -156,6 +180,18 @@ func (s *Server) storeZero(m *protos.Member) {
 	s.state.Zeros[m.Id] = m
 }
 
+func (s *Server) removeZero(nodeId uint64) {
+	s.Lock()
+	defer s.Unlock()
+	m, has := s.state.Zeros[nodeId]
+	if !has {
+		return
+	}
+	delete(s.state.Zeros, nodeId)
+	conn.Get().Remove(m.Addr)
+	s.state.Removed = append(s.state.Removed, m)
+}
+
 func (s *Server) ServingTablet(dst string) *protos.Tablet {
 	s.RLock()
 	defer s.RUnlock()
@@ -202,8 +238,7 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 			return res, errUnknownMember
 		}
 		if srcMember.Addr != dstMember.Addr ||
-			srcMember.Leader != dstMember.Leader ||
-			srcMember.AmDead != dstMember.AmDead {
+			srcMember.Leader != dstMember.Leader {
 
 			proposal := &protos.ZeroProposal{
 				Member: dstMember,
@@ -237,6 +272,19 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 		}
 	}
 	return res, nil
+}
+
+// Its users responsibility to ensure that node doesn't come back again before calling the api.
+func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) error {
+	if groupId == 0 {
+		return s.Node.ProposePeerRemoval(ctx, nodeId)
+	}
+	zp := &protos.ZeroProposal{}
+	zp.Member = &protos.Member{Id: nodeId, GroupId: groupId, AmDead: true}
+	if _, ok := s.state.Groups[groupId]; !ok {
+		return x.Errorf("No node with groupId %d found", groupId)
+	}
+	return s.Node.proposeAndWait(ctx, zp)
 }
 
 // Connect is used to connect the very first time with group zero.

@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -56,6 +57,8 @@ func taskValues(t *testing.T, v []*protos.ValueList) []string {
 	return out
 }
 
+var index uint64
+
 func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 	// Mutations don't go through normal flow, so default schema for predicate won't be present.
 	// Lets add it.
@@ -69,6 +72,7 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 	startTs := timestamp()
 	txn := &posting.Txn{
 		StartTs: startTs,
+		Indices: []uint64{atomic.AddUint64(&index, 1)},
 	}
 	txn = posting.Txns().PutOrMergeIndex(txn)
 	require.NoError(t,

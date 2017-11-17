@@ -36,10 +36,13 @@ const (
 )
 
 func (s *Server) updateLeases() {
+	var startTs uint64
 	s.Lock()
-	defer s.Unlock()
 	s.nextLeaseId = s.state.MaxLeaseId + 1
 	s.nextTxnTs = s.state.MaxTxnTs + 1
+	startTs = s.nextTxnTs
+	s.Unlock()
+	s.orc.updateStartTxnTs(startTs)
 }
 
 func (s *Server) maxLeaseId() uint64 {

@@ -73,7 +73,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
             </a>
           </div>
           <p class="section-desc">
-            Deploying Dgraph to production
+            Running Dgraph cluster in production
           </p>
         </div>
       </div>

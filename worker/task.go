@@ -142,7 +142,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return &protos.Result{}, errUnservedTablet
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("attr: %v groupId: %v", attr, gid)
+		tr.LazyPrintf("attr: %v groupId: %v, readTs: %d", attr, gid, q.ReadTs)
 	}
 
 	if groups().ServesGroup(gid) {

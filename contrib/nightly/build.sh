@@ -56,7 +56,7 @@ checksum=$($digest_cmd dgraph | awk '{print $1}')
 echo "$checksum /usr/local/bin/dgraph" >> $checksum_file
 
 # Move dgraph to tmp directory.
-mv dgraph $tmp_dir
+cp dgraph $tmp_dir
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
 tar_file=dgraph-"$platform"-amd64-$release_version
@@ -78,9 +78,9 @@ GZIP=-n tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashbo
 checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
 echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
 
-# docker command doesn't work on osx
-if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-  docker build -t dgraph/dgraph:nightly -f $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/Dockerfile .
+# Only run this locally.
+if [[ $TRAVIS != true ]]; then
+  docker build -t dgraph/dgraph:master -f $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/Dockerfile .
 fi
 
 rm -Rf dgraph-build

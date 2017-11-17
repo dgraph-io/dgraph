@@ -19,11 +19,14 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
@@ -33,12 +36,28 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	startTsHeader = "X-Dgraph-StartTs"
-)
-
 func allowed(method string) bool {
 	return method == http.MethodPost || method == http.MethodPut
+}
+
+func extractStartTs(urlPath string) (uint64, error) {
+	params := strings.Split(strings.TrimPrefix(urlPath, "/"), "/")
+
+	switch l := len(params); l {
+	case 1:
+		// When startTs is not supplied. /query or /mutate
+		return 0, nil
+	case 2:
+		ts, err := strconv.ParseUint(params[1], 0, 64)
+		if err != nil {
+			return 0, fmt.Errorf("Error: %+v while parsing StartTs path parameter as uint64", err)
+		}
+		return ts, nil
+	default:
+		return 0, x.Errorf("Incorrect no. of path parameters. Expected 1 or 2. Got: %+v", l)
+	}
+
+	return 0, nil
 }
 
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
@@ -58,16 +77,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := protos.Request{}
-	startTs := r.Header.Get(startTsHeader)
-	if startTs != "" {
-		ts, err := strconv.ParseUint(startTs, 0, 64)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while parsing StartTs header as uint64")
-			return
-		}
-		req.StartTs = ts
+	ts, err := extractStartTs(r.URL.Path)
+	if err != nil {
+		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
+		return
 	}
+	req.StartTs = ts
 
 	linRead := r.Header.Get("X-Dgraph-LinRead")
 	if linRead != "" {
@@ -156,7 +171,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Maybe rename it so that default is CommitImmediately.
+	// Maybe rename it so that default is CommitNow.
 	commit := r.Header.Get("X-Dgraph-CommitNow")
 	if commit != "" {
 		c, err := strconv.ParseBool(commit)
@@ -165,19 +180,15 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 				"Error while parsing Commit header as bool")
 			return
 		}
-		mu.CommitImmediately = c
+		mu.CommitNow = c
 	}
 
-	startTs := r.Header.Get(startTsHeader)
-	if startTs != "" {
-		ts, err := strconv.ParseUint(startTs, 0, 64)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while parsing StartTs header as uint64")
-			return
-		}
-		mu.StartTs = ts
+	ts, err := extractStartTs(r.URL.Path)
+	if err != nil {
+		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
+		return
 	}
+	mu.StartTs = ts
 
 	resp, err := (&edgraph.Server{}).Mutate(context.Background(), mu)
 	if err != nil {
@@ -185,10 +196,20 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO - Don't send keys array which is part of txn context if its commit immediately.
 	e := query.Extensions{
 		Txn: resp.Context,
 	}
+
+	// Don't send keys array which is part of txn context if its commit immediately.
+	if mu.CommitNow {
+		e.Txn.Keys = e.Txn.Keys[:0]
+	}
+
+	// base64 encode the keys
+	for i, k := range e.Txn.Keys {
+		e.Txn.Keys[i] = base64.StdEncoding.EncodeToString([]byte(k))
+	}
+
 	response := map[string]interface{}{}
 	response["extensions"] = e
 	mp := map[string]interface{}{}
@@ -223,35 +244,44 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	tc := &protos.TxnContext{}
 	resp.Context = tc
 
-	// Maybe pass start-ts and keys in body?
-	startTs := r.Header.Get(startTsHeader)
-	if startTs == "" {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs header is mandatory while trying to commit")
+	ts, err := extractStartTs(r.URL.Path)
+	if err != nil {
+		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
 		return
 	}
-	ts, err := strconv.ParseUint(startTs, 0, 64)
-	if err != nil {
+
+	if ts == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest,
-			"Error while parsing StartTs header as uint64")
+			"StartTs path parameter is mandatory while trying to commit")
 		return
 	}
 	tc.StartTs = ts
 
-	keys := r.Header.Get("X-Dgraph-Keys")
-	if keys == "" {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"Keys header is mandatory while trying to commit")
+	// Keys are sent as an array in the body.
+	defer r.Body.Close()
+	keys, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 
-	var k []string
-	if err := json.Unmarshal([]byte(keys), &k); err != nil {
+	var encodedKeys []string
+	if err := json.Unmarshal([]byte(keys), &encodedKeys); err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest,
 			"Error while unmarshalling keys header into array")
 		return
 	}
-	tc.Keys = k
+
+	// base64 decode keys
+	for i, k := range encodedKeys {
+		data, err := base64.StdEncoding.DecodeString(k)
+		if err != nil {
+			x.SetStatus(w, x.Error, "While base64 decoding keys header.")
+			return
+		}
+		encodedKeys[i] = string(data)
+	}
+	tc.Keys = encodedKeys
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {
@@ -297,17 +327,15 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 	tc := &protos.TxnContext{}
 	resp.Context = tc
 
-	// Maybe pass start-ts and keys in body?
-	startTs := r.Header.Get(startTsHeader)
-	if startTs == "" {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs header is mandatory while trying to abort")
+	ts, err := extractStartTs(r.URL.Path)
+	if err != nil {
+		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
 		return
 	}
-	ts, err := strconv.ParseUint(startTs, 0, 64)
-	if err != nil {
+
+	if ts == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest,
-			"Error while parsing StartTs header as uint64")
+			"StartTs path parameter is mandatory while trying to abort.")
 		return
 	}
 	tc.StartTs = ts

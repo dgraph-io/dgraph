@@ -81,17 +81,20 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*
 }
 
 func prepare() (dir1, dir2 string, rerr error) {
-	// TODO - Stop at end and clear dir.
+	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
+	cmd.Env = os.Environ()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
+	}
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"-w=wz",
-		"--port", "12341",
 	)
 	zero.Stdout = os.Stdout
+	zero.Stderr = os.Stdout
 	if err := zero.Start(); err != nil {
 		return "", "", err
 	}
-	time.Sleep(4 * time.Second)
 
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
@@ -112,7 +115,8 @@ func prepare() (dir1, dir2 string, rerr error) {
 	posting.Init(edgraph.State.Pstore)
 	schema.Init(edgraph.State.Pstore)
 	worker.Init(edgraph.State.Pstore)
-	worker.Config.ZeroAddr = "localhost:12341"
+	worker.Config.ZeroAddr = "localhost:7080"
+	worker.Config.MyAddr = "localhost:7081"
 	worker.Config.RaftId = 1
 	worker.StartRaftNodes(edgraph.State.WALstore, false)
 	return dir1, dir2, nil
@@ -164,51 +168,13 @@ func processToFastJSON(q string) string {
 }
 
 func runQuery(q string) (string, error) {
-	req, err := http.NewRequest("POST", "/query", bytes.NewBufferString(q))
-	if err != nil {
-		return "", err
-	}
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(queryHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		return "", fmt.Errorf("Unexpected status code: %v", status)
-	}
-
-	var qr x.QueryResWithData
-	json.Unmarshal(rr.Body.Bytes(), &qr)
-	if len(qr.Errors) > 0 {
-		return "", errors.New(qr.Errors[0].Message)
-	}
-
-	// Remove the extensions.
-	mp := make(map[string]interface{})
-	json.Unmarshal(rr.Body.Bytes(), &mp)
-	delete(mp, "extensions")
-	output, err := json.Marshal(mp)
+	output, _, err := queryWithTs(q, 0)
 	return string(output), err
 }
 
 func runMutation(m string) error {
-	req, err := http.NewRequest("POST", "/mutate", bytes.NewBufferString(m))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("X-Dgraph-CommitNow", "true")
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(mutationHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		return fmt.Errorf("Unexpected status code: %v", status)
-	}
-	var qr x.QueryResWithData
-	json.Unmarshal(rr.Body.Bytes(), &qr)
-	if len(qr.Errors) > 0 {
-		return errors.New(qr.Errors[0].Message)
-	}
-	return nil
+	_, _, err := mutationWithTs(m, true, 0)
+	return err
 }
 
 func alterSchema(s string) error {
@@ -662,7 +628,6 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	fmt.Println("output", output)
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	// remove reverse edge
@@ -935,6 +900,7 @@ func BenchmarkQuery(b *testing.B) {
 }
 
 func TestListPred(t *testing.T) {
+	require.NoError(t, alterSchema(`{"drop_all": true}`))
 	var q1 = `
 	{
 		listpred(func:anyofterms(name, "Alice")) {
@@ -1390,12 +1356,16 @@ func TestMain(m *testing.M) {
 	edgraph.SetConfiguration(dc)
 	x.Init(true)
 
-	dir1, dir2, _ := prepare()
+	dir1, dir2, err := prepare()
+	if err != nil {
+		log.Fatal(err)
+	}
 	time.Sleep(10 * time.Millisecond)
 
 	// Parse GQL into internal query representation.
 	r := m.Run()
 	closeAll(dir1, dir2)
 	exec.Command("killall", "-9", "dgraph").Run()
+	os.RemoveAll("wz")
 	os.Exit(r)
 }

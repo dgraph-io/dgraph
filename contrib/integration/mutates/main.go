@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-const targetAddr = "localhost:9080"
+const targetAddr = "localhost:9081"
 
 var insert = flag.Bool("add", false, "Insert")
 

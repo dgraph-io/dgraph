@@ -54,7 +54,7 @@ func TestPlugins(t *testing.T) {
 		wantResult string
 	}
 	suite := func(initialSchema string, setJSON string, cases []testCase) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
 		check(t, cluster.client.Alter(ctx, &protos.Operation{

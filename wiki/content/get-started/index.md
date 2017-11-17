@@ -46,8 +46,7 @@ docker pull dgraph/dgraph
 
 {{% notice "note" %}}Binaries for Windows are available from `v0.8.3`.{{% /notice %}}
 
-If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v0.x.y.tar.gz` contains
-all the binaries.
+If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v0.x.y.tar.gz` contains the dgraph binary.
 
 If you wish to run the UI for Dgraph you should also download the `assets.tar.gz` and extract them into a folder called assets.
 
@@ -66,15 +65,15 @@ Run `dgraph zero` to start Dgraph zero. This process controls Dgraph cluster,
 maintaining membership information, shard assignment and shard movement, etc.
 
 ```sh
-dgraph zero
+dgraph zero --port_offset -2000
 ```
 
 **Run Dgraph data server**
 
-Run `dgraph server` with `--memory_mb` flag to start Dgraph server.
+Run `dgraph server` to start Dgraph server.
 
 ```sh
-dgraph server --memory_mb 2048
+dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
 {{% notice "tip" %}}You need to set the estimated memory dgraph can take through `memory_mb` flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
@@ -82,7 +81,7 @@ dgraph server --memory_mb 2048
 #### Windows
 To run dgraph with the UI on Windows, you also have to supply the path to the assets using the (`--ui` option).
 ```sh
-./dgraph.exe --memory_mb 2048 -ui path-to-assets-folder
+./dgraph.exe --memory_mb 2048 --zero localhost:5080 --ui path-to-assets-folder
 ```
 
 ### Docker on Linux
@@ -92,13 +91,13 @@ To run dgraph with the UI on Windows, you also have to supply the path to the as
 mkdir -p /tmp/data
 
 # Run Dgraph Zero
-docker run -itP -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
+docker run -it -p 8080:8080 -p 9080:9080 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero --port_offset -2000
 
 # Run Dgraph Server
-docker exec -it diggy dgraph server --memory_mb 2048
+docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
-The dgraph server listens on ports 8080 and 9080 (unless mapped to another port) with log output to the terminal.
+The dgraph server listens on ports 8080 and 9080  with log output to the terminal.
 
 ### Docker on Non Linux Distributions.
 File access in mounted filesystems is slower when using docker. Try running the command `time dd if=/dev/zero of=test.dat bs=1024 count=100000` on mounted volume and you will notice that it's horribly slow when using mounted volumes. We recommend users to use docker data volumes. The only downside of using data volumes is that you can't access the files from the host, you have to launch a container for accessing it.
@@ -112,8 +111,8 @@ docker create -v /dgraph --name data dgraph/dgraph
 
 Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
-docker run -itP --volumes-from data --name diggy dgraph/dgraph dgraph zero
-docker exec -it diggy dgraph server --memory_mb 2048
+docker run -it -p 8080:8080 -p 9080:9080 --volumes-from data --name diggy dgraph/dgraph dgraph zero --port_offset -2000
+docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
 ## Step 3: Run Queries
@@ -267,8 +266,10 @@ and queried that data back.
 
 - Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
 with Dgraph from your application.
-- Take the [tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
+- Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
 - A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
+- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
+  in a cluster.
 
 ## Need Help
 
