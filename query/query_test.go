@@ -7668,3 +7668,18 @@ func TestCountPanic(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"q":[{"uid":"0x1","name":"Michonne","count(name)":1},{"uid":"0x12c","count(name)":0}]}}`, js)
 }
+
+func TestExpandAll(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1)) {
+			expand(_all_) {
+				name
+			}
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"q":[{"survival_rate":98.990000,"_xid_":"mich","graduation":"1932-01-01T00:00:00Z","path":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"sword_present":"true","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"full_name":"Michonne's large name for hashing","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"power":13.250000,"loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","bin_data":"YmluLWRhdGE=","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","son":[{"name":"Andre"},{"name":"Helmut"}],"age":38,"school":[{"name":"School A"}],"alive":true,"gender":"female","noindex_name":"Michonne's name not indexed","address":"31, 32 street, Jupiter"}]}}`, js)
+}

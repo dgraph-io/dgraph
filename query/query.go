@@ -1677,6 +1677,25 @@ func uniquePreds(vl []*protos.ValueList) map[string]struct{} {
 	return preds
 }
 
+func recursiveCopy(dst *SubGraph, src *SubGraph) {
+	dst.Attr = src.Attr
+	dst.Params = src.Params
+	dst.Params.ParentVars = make(map[string]varValue)
+	for k, v := range src.Params.ParentVars {
+		dst.Params.ParentVars[k] = v
+	}
+
+	dst.copyFiltersRecurse(src)
+	dst.ReadTs = src.ReadTs
+	dst.LinRead = src.LinRead
+
+	for _, c := range src.Children {
+		copyChild := new(SubGraph)
+		recursiveCopy(copyChild, c)
+		dst.Children = append(dst.Children, copyChild)
+	}
+}
+
 func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	out := make([]*SubGraph, 0, len(sg.Children))
 	var err error
@@ -1698,9 +1717,10 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
 		}
 
+		// It could be expand(_all_) or expand(val(x)).
 		if child.Params.Expand == "_all_" {
 			// Get the predicate list for expansion. Otherwise we already
-			// have the list populated.
+			// have the list populated from the var.
 			child.ExpandPreds, err = getNodePredicates(ctx, sg)
 			if err != nil {
 				return out, err
@@ -1708,14 +1728,20 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		up := uniquePreds(child.ExpandPreds)
-		for k, _ := range up {
-			temp := new(SubGraph)
-			*temp = *child
-			temp.ReadTs = sg.ReadTs
-			temp.LinRead = sg.LinRead
-			temp.Params.isInternal = false
-			temp.Params.Expand = ""
-			temp.Attr = k
+		for pred, _ := range up {
+			temp := &SubGraph{
+				ReadTs:  sg.ReadTs,
+				LinRead: sg.LinRead,
+				Attr:    pred,
+			}
+
+			// Go through each child, create a copy and attach to temp.Children.
+			for _, cc := range child.Children {
+				s := new(SubGraph)
+				recursiveCopy(s, cc)
+				temp.Children = append(temp.Children, s)
+			}
+
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
 					return out, x.Errorf("Repeated subgraph: [%s] while using expand()", ch.Attr)

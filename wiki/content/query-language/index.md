@@ -666,10 +666,7 @@ Syntax Examples: `has(predicate)`
 
 Schema Types: all
 
-Index Required: `count` (when used at query root)
-
 Determines if a node has a particular predicate.
-
 
 Query Example: First five directors and all their movies that have a release date recorded.  Directors have directed at least one film --- equivalent semantics to `gt(count(director.film), 0)`.
 {{< runnable >}}
