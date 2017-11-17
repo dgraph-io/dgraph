@@ -908,8 +908,6 @@ func (l *List) AllLangs(readTs uint64) ([]string, error) {
 	return langs, err
 }
 
-//pl.AllLangs(args.q.ReadTs)
-
 // Returns Value from posting list.
 // This function looks only for "default" value (one without language).
 func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
