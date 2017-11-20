@@ -1747,6 +1747,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				LinRead: sg.LinRead,
 				Attr:    pred,
 			}
+			temp.Params.Expand = child.Params.Expand
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
