@@ -357,9 +357,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		pl := posting.Get(key)
 		var err error
 		var vals []types.Val
-		// Even if its a list type and value is asked in a language we return that.
-		if (listType && len(q.Langs) == 0) || q.ExpandAll {
+		if q.ExpandAll {
 			vals, err = pl.AllValues(args.q.ReadTs)
+		} else if listType && len(q.Langs) == 0 {
+			vals, err = pl.AllUntaggedValues(args.q.ReadTs)
 		} else {
 			var val types.Val
 			val, err = pl.ValueFor(args.q.ReadTs, q.Langs)

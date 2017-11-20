@@ -855,18 +855,36 @@ func (l *List) Postings(opt ListOptions, postFn func(*protos.Posting) bool) erro
 	})
 }
 
-func (l *List) AllValues(readTs uint64) (vals []types.Val, rerr error) {
+func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	l.RLock()
 	defer l.RUnlock()
 
-	rerr = l.iterate(readTs, 0, func(p *protos.Posting) bool {
+	var vals []types.Val
+	err := l.iterate(readTs, 0, func(p *protos.Posting) bool {
+		if len(p.LangTag) == 0 {
+			vals = append(vals, types.Val{
+				Tid:   types.TypeID(p.ValType),
+				Value: p.Value,
+			})
+		}
+		return true
+	})
+	return vals, err
+}
+
+func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	var vals []types.Val
+	err := l.iterate(readTs, 0, func(p *protos.Posting) bool {
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValType),
 			Value: p.Value,
 		})
 		return true
 	})
-	return
+	return vals, err
 }
 
 // GetLangTags finds the language tags of each posting in the list.

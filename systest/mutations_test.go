@@ -31,6 +31,7 @@ func TestSystem(t *testing.T) {
 
 	t.Run("n-quad mutation", wrap(NQuadMutationTest))
 	t.Run("expand all lang test", wrap(ExpandAllLangTest))
+	t.Run("list with languages", wrap(ListWithLanguagesTest))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -45,45 +46,104 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 	_, err := txn.Mutate(ctx, &protos.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
-        <0x1> <name> "abc" .
-        <0x1> <name> "abc_en"@en .
-        <0x1> <name> "abc_nl"@nl .
-        <0x1> <number> "99"^^<xs:int> .
+			<0x1> <name> "abc" .
+			<0x1> <name> "abc_en"@en .
+			<0x1> <name> "abc_nl"@nl .
+			<0x1> <number> "99"^^<xs:int> .
 
-        <0x1> <list> "first" .
-        <0x1> <list> "first_en"@en .
-        <0x1> <list> "first_it"@it .
-        <0x1> <list> "second" .
-    `),
+			<0x1> <list> "first" .
+			<0x1> <list> "first_en"@en .
+			<0x1> <list> "first_it"@it .
+			<0x1> <list> "second" .
+		`),
 	})
 	check(t, err)
 
 	resp, err := c.NewTxn().Query(context.Background(), `
-		{
-			q(func: uid(0x1)) {
-				expand(_all_)
-			}
+	{
+		q(func: uid(0x1)) {
+			expand(_all_)
 		}
+	}
 	`)
 	check(t, err)
 
 	CompareJSON(t, `
-		{
-		  "q": [
+	{
+		"q": [
 			{
-			  "name@en": "abc_en",
-			  "name@nl": "abc_nl",
-			  "name": "abc",
-			  "number": 99,
-			  "list": [
-				"second",
-				"first"
-			  ],
-			  "list@en": "first_en",
-			  "list@it": "first_it"
+				"name@en": "abc_en",
+				"name@nl": "abc_nl",
+				"name": "abc",
+				"number": 99,
+				"list": [
+					"second",
+					"first"
+				],
+				"list@en": "first_en",
+				"list@it": "first_it"
 			}
-		  ]
+		]
+	}
+	`, string(resp.GetJson()))
+}
+
+func ListWithLanguagesTest(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	check(t, (c.Alter(ctx, &protos.Operation{
+		Schema: `pred: [string] .`,
+	})))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			<0x1> <pred> "first" .
+			<0x1> <pred> "second" .
+			<0x1> <pred> "dutch"@nl .
+		`),
+	})
+	check(t, err)
+
+	resp, err := c.NewTxn().Query(context.Background(), `
+	{
+		q(func: uid(0x1)) {
+			pred
 		}
+	}
+	`)
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"pred": [
+					"first",
+					"second"
+				]
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
+	resp, err = c.NewTxn().Query(context.Background(), `
+	{
+		q(func: uid(0x1)) {
+			pred@nl
+		}
+	}
+	`)
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"pred@nl": "dutch"
+			}
+		]
+	}
 	`, string(resp.GetJson()))
 }
 
