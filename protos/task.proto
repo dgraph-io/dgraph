@@ -241,7 +241,7 @@ message Posting {
         // VALUE_TIMESERIES=3; // value from timeseries, with specified timestamp
 	}
 	PostingType posting_type = 4;
-	bytes metadata = 5; // for VALUE_LANG: Language, for VALUE_TIMESERIES: timestamp, etc..
+	bytes lang_tag = 5; // Only set for VALUE_LANG
 	string label = 6;
 	repeated Facet facets = 9;
 

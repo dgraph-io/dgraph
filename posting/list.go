@@ -174,7 +174,7 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 	if oldp.PostingType != newp.PostingType {
 		return false
 	}
-	if bytes.Compare(oldp.Metadata, newp.Metadata) != 0 {
+	if bytes.Compare(oldp.LangTag, newp.LangTag) != 0 {
 		return false
 	}
 
@@ -202,10 +202,8 @@ func NewPosting(t *protos.DirectedEdge) *protos.Posting {
 	}
 
 	var postingType protos.Posting_PostingType
-	var metadata []byte
 	if len(t.Lang) > 0 {
 		postingType = protos.Posting_VALUE_LANG
-		metadata = []byte(t.Lang)
 	} else if len(t.Value) == 0 {
 		postingType = protos.Posting_REF
 	} else if len(t.Value) > 0 {
@@ -217,7 +215,7 @@ func NewPosting(t *protos.DirectedEdge) *protos.Posting {
 		Value:       t.Value,
 		ValType:     protos.Posting_ValType(t.ValueType),
 		PostingType: postingType,
-		Metadata:    metadata,
+		LangTag:     []byte(t.Lang),
 		Label:       t.Label,
 		Op:          op,
 		Facets:      t.Facets,
@@ -694,7 +692,7 @@ func (l *List) rollup() error {
 			buf = buf[:0]
 		}
 
-		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || len(p.Label) != 0 {
+		if p.Facets != nil || p.Value != nil || len(p.LangTag) != 0 || len(p.Label) != 0 {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
