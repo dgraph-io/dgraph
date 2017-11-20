@@ -142,7 +142,8 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 				return newUids, err
 			}
 			if uid > maxLeaseId {
-				return newUids, fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, maxLeaseId)
+				return newUids, fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid,
+					maxLeaseId)
 			}
 		}
 
@@ -154,7 +155,8 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 				return newUids, err
 			}
 			if uid > maxLeaseId {
-				return newUids, fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, maxLeaseId)
+				return newUids, fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid,
+					maxLeaseId)
 			}
 		}
 	}

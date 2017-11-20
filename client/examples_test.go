@@ -697,12 +697,11 @@ func ExampleTxn_Mutate_delete() {
 		log.Fatal(err)
 	}
 
+	fmt.Println(string(resp.Json))
+
 	// Now lets delete the friend and location edge from Alice
 	mu = &protos.Mutation{}
-	mu.DeleteJson, err = dg.DeleteEdges(uid, "friend", "loc")
-	if err != nil {
-		log.Fatal(err)
-	}
+	client.DeleteEdges(mu, uid, "friend", "loc")
 
 	mu.CommitNow = true
 	_, err = dg.NewTxn().Mutate(ctx, mu)

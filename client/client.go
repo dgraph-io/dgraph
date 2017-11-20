@@ -18,7 +18,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"math/rand"
 	"sync"
 
@@ -80,11 +79,13 @@ func (d *Dgraph) anyClient() protos.DgraphClient {
 	return d.dc[rand.Intn(len(d.dc))]
 }
 
-func (d *Dgraph) DeleteEdges(uid string, preds ...string) ([]byte, error) {
-	m := map[string]interface{}{"uid": uid}
+func DeleteEdges(mu *protos.Mutation, uid string, preds ...string) {
 	for _, pred := range preds {
-		m[pred] = nil
+		mu.Del = append(mu.Del, &protos.NQuad{
+			Subject:   uid,
+			Predicate: pred,
+			// _STAR_ALL is defined as x.Star in x package.
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"_STAR_ALL"}},
+		})
 	}
-
-	return json.Marshal(m)
 }
