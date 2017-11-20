@@ -874,16 +874,10 @@ func (l *List) AllValues(readTs uint64) (vals []types.Val, rerr error) {
 var tagMap map[uint64]string
 
 func init() {
-	// Maps all lowercase 2 letter language tags. If we need more languages, we can add later.
-	tagMap = make(map[uint64]string)
-	const a = byte('a')
-	const z = byte('z')
-	tag := []byte{0, 0}
-	for tag[0] = a; tag[0] <= z; tag[0]++ {
-		for tag[1] = a; tag[1] <= z; tag[1]++ {
-			tagMap[farm.Fingerprint64(tag)] = string(tag)
-		}
+	for _, tag := range x.Languages {
+		tagMap[farm.Fingerprint64([]byte(tag))] = tag
 	}
+	x.AssertTruef(len(tagMap) == len(x.Languages), "tag conflict")
 }
 
 // GetLangTags finds the language tags of each posting in the list.
