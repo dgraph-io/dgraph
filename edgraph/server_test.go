@@ -158,6 +158,13 @@ func TestNquadsFromJson4(t *testing.T) {
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 }
 
+func TestNquadsDeleteEdges(t *testing.T) {
+	json := `[{"uid": "0x1","name":null,"mobile":null,"car":null}]`
+	nq, err := nquadsFromJson([]byte(json), delete)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+}
+
 func checkCount(t *testing.T, nq []*protos.NQuad, pred string, count int) {
 	for _, n := range nq {
 		if n.Predicate == pred {
@@ -200,7 +207,7 @@ func TestNquadsFromJsonError1(t *testing.T) {
 
 	_, err = nquadsFromJson(b, delete)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "uid must be present and non-zero.")
+	require.Contains(t, err.Error(), "uid must be present and non-zero while deleting edges.")
 }
 
 func TestNquadsFromJsonList(t *testing.T) {

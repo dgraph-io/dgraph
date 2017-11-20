@@ -6,10 +6,13 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+## [0.9.2] - 2017-11-20
+
 ### Added
 
 * Support for removing dead node from quorum.
 * Support for alias in groupby queries.
+* Add DeleteEdges helper function for Go client.
 
 ### Changed
 
@@ -17,6 +20,9 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Fix TLS flag parsing for Dgraph server and live loader.
 * Reduce dependencies for Go client.
 * `depth` and `loop` arguments should be inside @recurse().
+* Base36 encode keys that are part of TxnContext and are sent to the client.
+* Fix race condition in expand(_all_) queries.
+* Fix (--ui) flag not being parsed properly.
 
 ## [0.9.1] - 2017-11-15
 

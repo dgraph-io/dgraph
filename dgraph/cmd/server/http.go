@@ -19,7 +19,6 @@ package server
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -205,11 +204,6 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		e.Txn.Keys = e.Txn.Keys[:0]
 	}
 
-	// base64 encode the keys
-	for i, k := range e.Txn.Keys {
-		e.Txn.Keys[i] = base64.StdEncoding.EncodeToString([]byte(k))
-	}
-
 	response := map[string]interface{}{}
 	response["extensions"] = e
 	mp := map[string]interface{}{}
@@ -272,15 +266,6 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// base64 decode keys
-	for i, k := range encodedKeys {
-		data, err := base64.StdEncoding.DecodeString(k)
-		if err != nil {
-			x.SetStatus(w, x.Error, "While base64 decoding keys header.")
-			return
-		}
-		encodedKeys[i] = string(data)
-	}
 	tc.Keys = encodedKeys
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)

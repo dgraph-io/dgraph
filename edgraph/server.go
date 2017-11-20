@@ -194,6 +194,13 @@ func (s *ServerState) getTimestamp() uint64 {
 
 func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Payload, error) {
 	empty := &protos.Payload{}
+	if err := x.HealthCheck(); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Request rejected %v", err)
+		}
+		return empty, err
+	}
+
 	if op.DropAll {
 		m := protos.Mutations{DropAll: true}
 		_, err := query.ApplyMutations(ctx, &m)
@@ -234,6 +241,13 @@ func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Paylo
 
 func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.Assigned, err error) {
 	resp = &protos.Assigned{}
+	if err := x.HealthCheck(); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Request rejected %v", err)
+		}
+		return resp, err
+	}
+
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed.")
 	}
@@ -297,7 +311,6 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.Response, err error) {
-	// we need membership information
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
@@ -389,6 +402,13 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 
 func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.TxnContext,
 	error) {
+	if err := x.HealthCheck(); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Request rejected %v", err)
+		}
+		return &protos.TxnContext{}, err
+	}
+
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	return &protos.TxnContext{
 		CommitTs: commitTs,
@@ -565,12 +585,19 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				uid = uint64(u)
 			}
 		}
+
 		if uid > 0 {
 			mr.uid = fmt.Sprintf("%d", uid)
 		}
+
 	}
 
-	if len(mr.uid) == 0 && op != delete {
+	if len(mr.uid) == 0 {
+		if op == delete {
+			// Delete operations with a non-nil value must have a uid specified.
+			return mr, x.Errorf("uid must be present and non-zero while deleting edges.")
+		}
+
 		mr.uid = fmt.Sprintf("_:blank-%d", *idx)
 		*idx++
 	}
@@ -585,17 +612,14 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		}
 
 		if op == delete {
-			// This corresponds to predicate deletion.
+			// This corresponds to edge deletion.
 			if v == nil {
 				mr.nquads = append(mr.nquads, &protos.NQuad{
-					Subject:     x.Star,
+					Subject:     mr.uid,
 					Predicate:   pred,
 					ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
 				})
 				continue
-			} else if len(mr.uid) == 0 {
-				// Delete operations with a non-nil value must have a uid specified.
-				return mr, x.Errorf("uid must be present and non-zero. Got: %+v", m)
 			}
 		}
 
