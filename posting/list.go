@@ -874,6 +874,7 @@ func (l *List) AllValues(readTs uint64) (vals []types.Val, rerr error) {
 var tagMap map[uint64]string
 
 func init() {
+	tagMap = make(map[uint64]string)
 	for _, tag := range x.Languages {
 		tagMap[farm.Fingerprint64([]byte(tag))] = tag
 	}
