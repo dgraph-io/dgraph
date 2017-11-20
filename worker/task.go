@@ -377,7 +377,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			continue
 		}
 
-		if q.ExpandAll && !listType {
+		if q.ExpandAll {
 			out.LangTags, err = pl.GetLangTags(args.q.ReadTs)
 			if err != nil {
 				return err

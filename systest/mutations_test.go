@@ -51,6 +51,8 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
         <0x1> <number> "99"^^<xs:int> .
 
         <0x1> <list> "first" .
+        <0x1> <list> "first_en"@en .
+        <0x1> <list> "first_it"@it .
         <0x1> <list> "second" .
     `),
 	})
@@ -76,7 +78,9 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 			  "list": [
 				"second",
 				"first"
-			  ]
+			  ],
+			  "list@en": "first_en",
+			  "list@it": "first_it"
 			}
 		  ]
 		}
