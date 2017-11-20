@@ -55,22 +55,22 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 			<0x1> <list> "first_en"@en .
 			<0x1> <list> "first_it"@it .
 			<0x1> <list> "second" .
-			`),
+		`),
 	})
 	check(t, err)
 
 	resp, err := c.NewTxn().Query(context.Background(), `
-		{
-			q(func: uid(0x1)) {
-				expand(_all_)
-			}
+	{
+		q(func: uid(0x1)) {
+			expand(_all_)
 		}
-		`)
+	}
+	`)
 	check(t, err)
 
 	CompareJSON(t, `
-		{
-			"q": [
+	{
+		"q": [
 			{
 				"name@en": "abc_en",
 				"name@nl": "abc_nl",
@@ -83,9 +83,9 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 				"list@en": "first_en",
 				"list@it": "first_it"
 			}
-			]
-		}
-		`, string(resp.GetJson()))
+		]
+	}
+	`, string(resp.GetJson()))
 }
 
 func ListWithLanguagesTest(t *testing.T, c *client.Dgraph) {
@@ -103,47 +103,47 @@ func ListWithLanguagesTest(t *testing.T, c *client.Dgraph) {
 			<0x1> <pred> "first" .
 			<0x1> <pred> "second" .
 			<0x1> <pred> "dutch"@nl .
-			`),
+		`),
 	})
 	check(t, err)
 
 	resp, err := c.NewTxn().Query(context.Background(), `
-		{
-			q(func: uid(0x1)) {
-				pred
-			}
+	{
+		q(func: uid(0x1)) {
+			pred
 		}
+	}
 	`)
 	check(t, err)
 	CompareJSON(t, `
-		{
-			"q": [
-				{
-					"pred": [
-						"first",
-						"second"
-					]
-				}
-			]
-		}
+	{
+		"q": [
+			{
+				"pred": [
+					"first",
+					"second"
+				]
+			}
+		]
+	}
 	`, string(resp.GetJson()))
 
 	resp, err = c.NewTxn().Query(context.Background(), `
-		{
-			q(func: uid(0x1)) {
-				pred@nl
-			}
+	{
+		q(func: uid(0x1)) {
+			pred@nl
 		}
+	}
 	`)
 	check(t, err)
 	CompareJSON(t, `
-		{
-			"q": [
-				{
-					"pred@nl": "dutch"
-				}
-			]
-		}
+	{
+		"q": [
+			{
+				"pred@nl": "dutch"
+			}
+		]
+	}
 	`, string(resp.GetJson()))
 }
 
