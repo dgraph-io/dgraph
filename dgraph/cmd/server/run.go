@@ -300,7 +300,7 @@ func run() {
 	setupCustomTokenizers()
 	x.Init(edgraph.Config.DebugMode)
 
-	edgraph.State = edgraph.NewServerState()
+	edgraph.InitServerState()
 	defer func() {
 		x.Check(edgraph.State.Dispose())
 	}()
