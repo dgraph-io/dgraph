@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
@@ -130,7 +131,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				var g geom.T
 				text := bytes.Replace([]byte(vc), []byte("'"), []byte("\""), -1)
 				if err := geojson.Unmarshal(text, &g); err != nil {
-					return to, err
+					return to, errors.Wrapf(err, "Error while unmarshalling: [%s] as geojson",
+						vc)
 				}
 				*res = g
 			case PasswordID:

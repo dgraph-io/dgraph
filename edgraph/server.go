@@ -584,12 +584,19 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				uid = uint64(u)
 			}
 		}
+
 		if uid > 0 {
 			mr.uid = fmt.Sprintf("%d", uid)
 		}
+
 	}
 
-	if len(mr.uid) == 0 && op != delete {
+	if len(mr.uid) == 0 {
+		if op == delete {
+			// Delete operations with a non-nil value must have a uid specified.
+			return mr, x.Errorf("uid must be present and non-zero while deleting edges.")
+		}
+
 		mr.uid = fmt.Sprintf("_:blank-%d", *idx)
 		*idx++
 	}
@@ -604,17 +611,14 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		}
 
 		if op == delete {
-			// This corresponds to predicate deletion.
+			// This corresponds to edge deletion.
 			if v == nil {
 				mr.nquads = append(mr.nquads, &protos.NQuad{
-					Subject:     x.Star,
+					Subject:     mr.uid,
 					Predicate:   pred,
 					ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
 				})
 				continue
-			} else if len(mr.uid) == 0 {
-				// Delete operations with a non-nil value must have a uid specified.
-				return mr, x.Errorf("uid must be present and non-zero. Got: %+v", m)
 			}
 		}
 
