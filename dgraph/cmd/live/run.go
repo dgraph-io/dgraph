@@ -252,7 +252,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	x.Checkf(err, "Error while creating badger KV posting store")
 
 	connzero, err := setupConnection(opt.zero, true)
-	x.Checkf(err, "While trying to dial gRPC")
+	x.Checkf(err, "While trying to setup connection to Zero")
 
 	alloc := xidmap.New(kv,
 		&uidProvider{
@@ -310,7 +310,7 @@ func run() {
 	var clients []protos.DgraphClient
 	for _, d := range ds {
 		conn, err := setupConnection(d, !tlsConf.CertRequired)
-		x.Checkf(err, "While trying to dial gRPC")
+		x.Checkf(err, "While trying to setup connection to Dgraph server.")
 		defer conn.Close()
 
 		dc := protos.NewDgraphClient(conn)
