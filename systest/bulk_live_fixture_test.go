@@ -18,9 +18,6 @@ import (
 )
 
 func init() {
-	if testing.Short() {
-		return
-	}
 	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
 	cmd.Env = os.Environ()
 	if out, err := cmd.CombinedOutput(); err != nil {

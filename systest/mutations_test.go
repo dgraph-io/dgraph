@@ -6,13 +6,13 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-	"time"
 
+	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNQuadMutation(t *testing.T) {
+func TestSystem(t *testing.T) {
 	dir, err := ioutil.TempDir("", "")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -21,14 +21,80 @@ func TestNQuadMutation(t *testing.T) {
 	require.NoError(t, cluster.Start())
 	defer cluster.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
+	wrap := func(fn func(*testing.T, *client.Dgraph)) func(*testing.T) {
+		return func(t *testing.T) {
+			require.NoError(t, cluster.client.Alter(
+				context.Background(), &protos.Operation{DropAll: true}))
+			fn(t, cluster.client)
+		}
+	}
 
-	require.NoError(t, cluster.client.Alter(ctx, &protos.Operation{
+	t.Run("n-quad mutation", wrap(NQuadMutationTest))
+	t.Run("expand all lang test", wrap(ExpandAllLangTest))
+}
+
+func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	check(t, (c.Alter(ctx, &protos.Operation{
+		Schema: `list: [string] .`,
+	})))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+        <0x1> <name> "abc" .
+        <0x1> <name> "abc_en"@en .
+        <0x1> <name> "abc_nl"@nl .
+        <0x1> <number> "99"^^<xs:int> .
+
+        <0x1> <list> "first" .
+        <0x1> <list> "first_en"@en .
+        <0x1> <list> "first_it"@it .
+        <0x1> <list> "second" .
+    `),
+	})
+	check(t, err)
+
+	resp, err := c.NewTxn().Query(context.Background(), `
+		{
+			q(func: uid(0x1)) {
+				expand(_all_)
+			}
+		}
+	`)
+	check(t, err)
+
+	CompareJSON(t, `
+		{
+		  "q": [
+			{
+			  "name@en": "abc_en",
+			  "name@nl": "abc_nl",
+			  "name": "abc",
+			  "number": 99,
+			  "list": [
+				"second",
+				"first"
+			  ],
+			  "list@en": "first_en",
+			  "list@it": "first_it"
+			}
+		  ]
+		}
+	`, string(resp.GetJson()))
+}
+
+func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &protos.Operation{
 		Schema: `xid: string @index(exact) .`,
 	}))
 
-	txn := cluster.client.NewTxn()
+	txn := c.NewTxn()
 	assigned, err := txn.Mutate(ctx, &protos.Mutation{
 		SetNquads: []byte(`
 			_:breakfast <xid> "breakfast" .
@@ -55,7 +121,7 @@ func TestNQuadMutation(t *testing.T) {
 		}
 	}`
 
-	txn = cluster.client.NewTxn()
+	txn = c.NewTxn()
 	resp, err := txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
 	CompareJSON(t, `{ "q": [ {
@@ -68,7 +134,7 @@ func TestNQuadMutation(t *testing.T) {
 		]
 	}]}`, string(resp.Json))
 
-	txn = cluster.client.NewTxn()
+	txn = c.NewTxn()
 	_, err = txn.Mutate(ctx, &protos.Mutation{
 		DelNquads: []byte(fmt.Sprintf(`
 			<%s> <fruit>  <%s> .
@@ -79,7 +145,7 @@ func TestNQuadMutation(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	txn = cluster.client.NewTxn()
+	txn = c.NewTxn()
 	resp, err = txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
 	CompareJSON(t, `{ "q": [ {

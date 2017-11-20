@@ -58,6 +58,8 @@ message Query {
 	Param facet_param = 8; // which facets to fetch
 	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
 
+	bool expand_all = 10; // expand all language variants.
+
 	uint64 read_ts = 13;
   LinRead lin_read = 14;
 }
@@ -72,6 +74,7 @@ message Result {
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
 	repeated FacetsList facet_matrix = 5;
+	repeated string lang_tags = 6;
 
   LinRead lin_read = 14;
 }
@@ -238,7 +241,7 @@ message Posting {
         // VALUE_TIMESERIES=3; // value from timeseries, with specified timestamp
 	}
 	PostingType posting_type = 4;
-	bytes metadata = 5; // for VALUE_LANG: Language, for VALUE_TIMESERIES: timestamp, etc..
+	bytes lang_tag = 5; // Only set for VALUE_LANG
 	string label = 6;
 	repeated Facet facets = 9;
 

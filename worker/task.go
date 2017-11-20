@@ -358,7 +358,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		var err error
 		var vals []types.Val
 		// Even if its a list type and value is asked in a language we return that.
-		if listType && len(q.Langs) == 0 {
+		if (listType && len(q.Langs) == 0) || q.ExpandAll {
 			vals, err = pl.AllValues(args.q.ReadTs)
 		} else {
 			var val types.Val
@@ -375,6 +375,13 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{})
 			}
 			continue
+		}
+
+		if q.ExpandAll {
+			out.LangTags, err = pl.GetLangTags(args.q.ReadTs)
+			if err != nil {
+				return err
+			}
 		}
 
 		valTid := vals[0].Tid

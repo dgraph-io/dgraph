@@ -86,7 +86,7 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 			buf.WriteString(strconv.Quote(str.Value.(string)))
 			if p.PostingType == protos.Posting_VALUE_LANG {
 				buf.WriteByte('@')
-				buf.WriteString(string(p.Metadata))
+				buf.WriteString(string(p.LangTag))
 			} else if vID != types.DefaultID {
 				rdfType, ok := rdfTypeMap[vID]
 				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())

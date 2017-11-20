@@ -146,6 +146,7 @@ type params struct {
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
+	expandAll      bool     // expand all languages
 }
 
 // Function holds the information about gql functions.
@@ -170,6 +171,7 @@ type SubGraph struct {
 	facetsMatrix []*protos.FacetsList
 	ExpandPreds  []*protos.ValueList
 	GroupbyRes   *groupResults
+	LangTags     []string
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -480,7 +482,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 			}
 
-			for _, tv := range pc.valueMatrix[idx].Values {
+			for i, tv := range pc.valueMatrix[idx].Values {
 				// if conversion not possible, we ignore it in the result.
 				sv, convErr := convertWithBestEffort(tv, pc.Attr)
 				if convErr == ErrEmptyVal {
@@ -492,6 +494,18 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if (sv.Tid == types.StringID || sv.Tid == types.DefaultID) &&
 					sv.Value.(string) == "_nil_" {
 					sv.Value = ""
+				}
+				if len(pc.LangTags) != 0 {
+					if i >= len(pc.LangTags) {
+						return x.Errorf(
+							"internal error: all lang tags should be either present or absent")
+					}
+					fieldNameWithTag := fieldName
+					if pc.LangTags[i] != "" {
+						fieldNameWithTag += "@" + pc.LangTags[i]
+					}
+					dst.AddValue(fieldNameWithTag, sv)
+					continue
 				}
 				if !pc.Params.Normalize {
 					dst.AddValue(fieldName, sv)
@@ -981,6 +995,7 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
+		ExpandAll:    sg.Params.expandAll,
 	}
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
@@ -1736,6 +1751,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				LinRead: sg.LinRead,
 				Attr:    pred,
 			}
+			temp.Params.expandAll = child.Params.Expand == "_all_"
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
@@ -1835,6 +1851,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.facetsMatrix = result.FacetMatrix
 			sg.counts = result.Counts
 			sg.LinRead = result.LinRead
+			sg.LangTags = result.LangTags
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
