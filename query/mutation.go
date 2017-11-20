@@ -128,7 +128,6 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 	num := &protos.Num{}
 	var err error
 	maxLeaseId := worker.MaxLeaseId()
-	var uid uint64
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
@@ -136,6 +135,7 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 		}
 
 		if len(nq.Subject) > 0 {
+			var uid uint64
 			if strings.HasPrefix(nq.Subject, "_:") {
 				newUids[nq.Subject] = 0
 			} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
@@ -147,6 +147,7 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 		}
 
 		if len(nq.ObjectId) > 0 {
+			var uid uint64
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
 			} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {

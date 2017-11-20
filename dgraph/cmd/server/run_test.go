@@ -1362,6 +1362,11 @@ func TestMain(m *testing.M) {
 	}
 	time.Sleep(10 * time.Millisecond)
 
+	// Increment lease, so that mutations work.
+	_, err = worker.AssignUidsOverNetwork(context.Background(), &protos.Num{Val: 10e6})
+	if err != nil {
+		log.Fatal(err)
+	}
 	// Parse GQL into internal query representation.
 	r := m.Run()
 	closeAll(dir1, dir2)
