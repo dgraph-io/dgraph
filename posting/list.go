@@ -869,16 +869,6 @@ func (l *List) AllValues(readTs uint64) (vals []types.Val, rerr error) {
 	return
 }
 
-var tagMap map[uint64]string
-
-func init() {
-	tagMap = make(map[uint64]string)
-	for _, tag := range x.Languages {
-		tagMap[farm.Fingerprint64([]byte(tag))] = tag
-	}
-	x.AssertTruef(len(tagMap) == len(x.Languages), "tag conflict")
-}
-
 // GetLangTags finds the language tags of each posting in the list.
 func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 	l.RLock()
@@ -886,17 +876,7 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 
 	var tags []string
 	err := l.iterate(readTs, 0, func(p *protos.Posting) bool {
-		var tag string
-		if uid := p.GetUid(); uid != math.MaxUint64 {
-			var ok bool
-			tag, ok = tagMap[uid]
-			if !ok {
-				// We don't have a mapping, but still want to show something
-				// unique. Just show the raw number.
-				tag = fmt.Sprintf("%x", uid)
-			}
-		}
-		tags = append(tags, tag)
+		tags = append(tags, string(p.LangTag))
 		return true
 	})
 	return tags, err
