@@ -495,7 +495,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					sv.Value = ""
 				}
 				if len(pc.LangTags) != 0 {
-					x.AssertTrue(i < len(pc.LangTags)) // All langs are either present or absent.
+					if i >= len(pc.LangTags) {
+						return x.Errorf(
+							"internal error: all lang tags should be either present or absent")
+					}
 					fieldNameWithTag := fieldName
 					if pc.LangTags[i] != "" {
 						fieldNameWithTag += "@" + pc.LangTags[i]
