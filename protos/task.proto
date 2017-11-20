@@ -58,7 +58,7 @@ message Query {
 	Param facet_param = 8; // which facets to fetch
 	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
 
-	bool ExpandAll = 10;
+	bool expand_all = 10; // expand all language variants.
 
 	uint64 read_ts = 13;
   LinRead lin_read = 14;
