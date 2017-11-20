@@ -604,7 +604,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	fmt.Printf("Me: %+v\n", r.Me)
 }
 
-func ExampleTxn_Mutate_delete() {
+func ExampleDeleteEdges() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal("While trying to dial gRPC")
