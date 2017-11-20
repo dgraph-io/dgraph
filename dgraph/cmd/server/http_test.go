@@ -153,7 +153,7 @@ func TestTransactionBasic(t *testing.T) {
 	keys, mts, err := mutationWithTs(m1, false, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	expected := []string{"AAAEbmFtZQAAAAAAAAAAAQ==", "AAAEbmFtZQAAAAAAAAAAAQ==", "AAAEbmFtZQIBYWxpY2U=", "AAAEbmFtZQIBYWxpY2U=", "AAAEbmFtZQIBYm9i", "AAAHYmFsYW5jZQAAAAAAAAAAAQ==", "AAAHYmFsYW5jZQAAAAAAAAAAAg==", "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=", "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=", "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=", "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI="}
+	expected := []string{"16zy665614irg", "1ep5ewu298spd", "2oz0ld779a6yh", "2oz0ld779a6yh", "321112eei4n9g", "321112eei4n9g", "3fk4wxiwz6h3r", "3mlibw7eeno0x", "u5ausuvjgdwg", "u5ausuvjgdwg", "u5ausuvjgdwg"}
 	sort.Strings(expected)
 	sort.Strings(keys)
 	require.Equal(t, expected, keys)

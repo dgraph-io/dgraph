@@ -17,6 +17,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Fix TLS flag parsing for Dgraph server and live loader.
 * Reduce dependencies for Go client.
 * `depth` and `loop` arguments should be inside @recurse().
+* Base36 encode keys that are part of TxnContext and are sent to the client.
 
 ## [0.9.1] - 2017-11-15
 
