@@ -79,9 +79,18 @@ dgraph server --memory_mb 2048 --zero localhost:5080
 {{% notice "tip" %}}You need to set the estimated memory dgraph can take through `memory_mb` flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
 
 #### Windows
+
+
+**Run Dgraph zero**
+```sh
+./dgraph.exe zero --port_offset -2000
+```
+
+**Run Dgraph data server**
+
 To run dgraph with the UI on Windows, you also have to supply the path to the assets using the (`--ui` option).
 ```sh
-./dgraph.exe --memory_mb 2048 --zero localhost:5080 --ui path-to-assets-folder
+./dgraph.exe server --memory_mb 2048 --zero localhost:5080 --ui path-to-assets-folder
 ```
 
 ### Docker on Linux
