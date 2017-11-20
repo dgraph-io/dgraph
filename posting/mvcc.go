@@ -22,6 +22,7 @@ import (
 	"context"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 )
 
 var (
@@ -221,7 +223,8 @@ func (t *Txn) Fill(ctx *protos.TxnContext) {
 func (t *Txn) fill(ctx *protos.TxnContext) {
 	ctx.StartTs = t.StartTs
 	for _, d := range t.deltas {
-		ctx.Keys = append(ctx.Keys, string(d.key))
+		fp := farm.Fingerprint64(d.key)
+		ctx.Keys = append(ctx.Keys, strconv.FormatUint(fp, 36))
 	}
 }
 
