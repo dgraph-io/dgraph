@@ -604,7 +604,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	fmt.Printf("Me: %+v\n", r.Me)
 }
 
-func ExampleTxn_Mutate_delete() {
+func ExampleDeleteEdges() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal("While trying to dial gRPC")
@@ -631,22 +631,18 @@ func ExampleTxn_Mutate_delete() {
 
 	// Lets add some data first.
 	p := Person{
-		Uid:      "1000",
 		Name:     "Alice",
 		Age:      26,
 		Married:  true,
 		Location: "Riley Street",
 		Friends: []Person{{
-			Uid:  "1001",
 			Name: "Bob",
 			Age:  24,
 		}, {
-			Uid:  "1002",
 			Name: "Charlie",
 			Age:  29,
 		}},
 		School: []*School{&School{
-			Uid:  "1003",
 			Name: "Crown Public School",
 		}},
 	}
@@ -671,13 +667,14 @@ func ExampleTxn_Mutate_delete() {
 
 	mu.SetJson = pb
 	mu.CommitNow = true
-	_, err = dg.NewTxn().Mutate(ctx, mu)
+	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	uid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
-		me(func: uid(1000)) {
+		me(func: uid(%s)) {
 			uid
 			name
 			age
@@ -693,45 +690,19 @@ func ExampleTxn_Mutate_delete() {
 				name@en
 			}
 		}
-
-		me2(func: uid(1001)) {
-			uid
-			name
-			age
-		}
-
-		me3(func: uid(1003)) {
-			uid
-			name@en
-		}
-
-		me4(func: uid(1002)) {
-			uid
-			name
-			age
-		}
-	}`)
+	}`, uid)
 
 	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Now lets delete the edge between Alice and Bob.
-	// Also lets delete the location for Alice.
-	p2 := Person{
-		Uid:      "1000",
-		Location: "",
-		Friends:  []Person{Person{Uid: "1001"}},
-	}
+	fmt.Println(string(resp.Json))
 
+	// Now lets delete the friend and location edge from Alice
 	mu = &protos.Mutation{}
-	pb, err = json.Marshal(p2)
-	if err != nil {
-		log.Fatal(err)
-	}
+	client.DeleteEdges(mu, uid, "friend", "loc")
 
-	mu.DeleteJson = pb
 	mu.CommitNow = true
 	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
@@ -744,10 +715,7 @@ func ExampleTxn_Mutate_delete() {
 	}
 
 	type Root struct {
-		Me  []Person `json:"me"`
-		Me2 []Person `json:"me2"`
-		Me3 []School `json:"me3"`
-		Me4 []Person `json:"me4"`
+		Me []Person `json:"me"`
 	}
 
 	var r Root

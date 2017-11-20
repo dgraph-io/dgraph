@@ -462,8 +462,6 @@ message NQuad {
     string label = 5;
     string lang = 6;
     repeated Facet facets = 7;
-    string subject_var = 8;
-    string object_var = 9;
 }
 
 message Value {

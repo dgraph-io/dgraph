@@ -78,3 +78,18 @@ func (d *Dgraph) Alter(ctx context.Context, op *protos.Operation) error {
 func (d *Dgraph) anyClient() protos.DgraphClient {
 	return d.dc[rand.Intn(len(d.dc))]
 }
+
+// DeleteEdges sets the edges corresponding to predicates on the node with the given uid
+// for deletion.
+// This helper function doesn't run the mutation on the server. It must be done by the user
+// after the function returns.
+func DeleteEdges(mu *protos.Mutation, uid string, predicates ...string) {
+	for _, predicate := range predicates {
+		mu.Del = append(mu.Del, &protos.NQuad{
+			Subject:   uid,
+			Predicate: predicate,
+			// _STAR_ALL is defined as x.Star in x package.
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"_STAR_ALL"}},
+		})
+	}
+}

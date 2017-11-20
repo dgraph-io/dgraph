@@ -47,8 +47,9 @@ const (
 	ErrorInvalidMutation    = "ErrorInvalidMutation"
 	ErrorServiceUnavailable = "ErrorServiceUnavailable"
 	ValidHostnameRegex      = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
-	Star                    = "_STAR_ALL"
-	GrpcMaxSize             = 256 << 20
+	// When changing this value also remember to change in in client/client.go:DeleteEdges.
+	Star        = "_STAR_ALL"
+	GrpcMaxSize = 256 << 20
 	// The attr used to store list of predicates for a node.
 	PredicateListAttr = "_predicate_"
 
