@@ -388,7 +388,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		newValue := &protos.TaskValue{ValType: int32(valTid), Val: x.Nilbyte}
 		uidList := new(protos.List)
 		var vl protos.ValueList
-		for i, val := range vals {
+		for _, val := range vals {
 			newValue, err = convertToType(val, srcFn.atype)
 			if err != nil {
 				return err
