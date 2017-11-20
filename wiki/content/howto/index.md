@@ -56,9 +56,17 @@ writing to the `type` index.
 
 ### A Simple Login System
 
-{{% notice "note" %}} This example was token from the [transactions in
+{{% notice "note" %}}
+This example is based on part of the [transactions in
 v0.9](https://blog.dgraph.io/post/v0.9/) blogpost. Error checking has been
-omitted for brevity. {{% /notice %}}
+omitted for brevity.
+{{% /notice %}}
+
+Schema is assumed to be:
+```
+email: string @index(exact) . # @index(hash) would also work
+pass: password .
+```
 
 ```
 // Create a new transaction. The deferred call to Discard
