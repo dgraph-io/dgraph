@@ -146,6 +146,7 @@ type params struct {
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
+	expandAll      bool     // expand all languages
 }
 
 // Function holds the information about gql functions.
@@ -994,7 +995,7 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
-		ExpandAll:    sg.Params.Expand == "_all_",
+		ExpandAll:    sg.Params.expandAll,
 	}
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
@@ -1750,7 +1751,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				LinRead: sg.LinRead,
 				Attr:    pred,
 			}
-			temp.Params.Expand = child.Params.Expand
+			temp.Params.expandAll = child.Params.Expand == "_all_"
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
