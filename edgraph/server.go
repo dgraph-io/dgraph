@@ -62,19 +62,20 @@ type ServerState struct {
 }
 
 // TODO(tzdybal) - remove global
-var State ServerState
+var State *ServerState
 
-func NewServerState() (state ServerState) {
+func NewServerState() *ServerState {
 	Config.validate()
 
-	State.FinishCh = make(chan struct{})
-	State.ShutdownCh = make(chan struct{})
-	State.notify = make(chan struct{}, 1)
+	state := new(ServerState)
+	state.FinishCh = make(chan struct{})
+	state.ShutdownCh = make(chan struct{})
+	state.notify = make(chan struct{}, 1)
 
-	State.initStorage()
+	state.initStorage()
 
-	go State.fillTimestampRequests()
-	return State
+	go state.fillTimestampRequests()
+	return state
 }
 
 func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
