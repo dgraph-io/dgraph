@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Fixed
+
+* `expand(_all_)` now correctly gives all language variants of a string.
+
 ## [0.9.2] - 2017-11-20
 
 ### Added
