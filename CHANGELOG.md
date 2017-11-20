@@ -10,6 +10,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 * `expand(_all_)` now correctly gives all language variants of a string.
 
+### Changed
+
+* When showing a predicate with list type, only values without a language tag are shown. To get the values of the predicate that are tagged with a language, query the predicate with that language explicitly.
+
 ## [0.9.2] - 2017-11-20
 
 ### Added
