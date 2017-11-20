@@ -123,11 +123,20 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 	return nil
 }
 
+func verifyUid(uid uint64) error {
+	maxLeaseId := worker.MaxLeaseId()
+	// 10000 is margin for error. maxLeaseId is updated by Zero over stream so there might be some
+	// delay.
+	if uid > (maxLeaseId + 10000) {
+		return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, maxLeaseId)
+	}
+	return nil
+}
+
 func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
 	num := &protos.Num{}
 	var err error
-	maxLeaseId := worker.MaxLeaseId()
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
@@ -141,9 +150,8 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 			} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
 				return newUids, err
 			}
-			if uid > maxLeaseId {
-				return newUids, fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid,
-					maxLeaseId)
+			if err = verifyUid(uid); err != nil {
+				return newUids, err
 			}
 		}
 
@@ -154,9 +162,8 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 			} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
 				return newUids, err
 			}
-			if uid > maxLeaseId {
-				return newUids, fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid,
-					maxLeaseId)
+			if err = verifyUid(uid); err != nil {
+				return newUids, err
 			}
 		}
 	}
