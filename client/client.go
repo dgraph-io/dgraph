@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"math/rand"
 	"sync"
 
@@ -77,4 +78,13 @@ func (d *Dgraph) Alter(ctx context.Context, op *protos.Operation) error {
 
 func (d *Dgraph) anyClient() protos.DgraphClient {
 	return d.dc[rand.Intn(len(d.dc))]
+}
+
+func (d *Dgraph) DeleteEdges(uid string, preds ...string) ([]byte, error) {
+	m := map[string]interface{}{"uid": uid}
+	for _, pred := range preds {
+		m[pred] = nil
+	}
+
+	return json.Marshal(m)
 }

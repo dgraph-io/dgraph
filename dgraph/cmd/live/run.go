@@ -67,7 +67,7 @@ func init() {
 	flag.StringVarP(&opt.files, "rdfs", "r", "", "Location of rdf files to load")
 	flag.StringVarP(&opt.schemaFile, "schema", "s", "", "Location of schema file")
 	flag.StringVarP(&opt.dgraph, "dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	flag.StringVarP(&opt.zero, "zero", "z", "127.0.0.1:7080", "Dgraphzero gRPC server address")
+	flag.StringVarP(&opt.zero, "zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
 	flag.StringVarP(&opt.clientDir, "xidmap", "x", "x", "Directory to store xid to uid mapping")
 	flag.IntVarP(&opt.concurrent, "conc", "c", 1,
 		"Number of concurrent requests to make to Dgraph")
@@ -212,7 +212,9 @@ func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
 			grpc.WithDefaultCallOptions(
 				grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 				grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-			grpc.WithInsecure())
+			grpc.WithInsecure(),
+			grpc.WithBlock(),
+			grpc.WithTimeout(5*time.Second))
 	}
 
 	tlsConf.ConfigType = x.TLSClientConfig

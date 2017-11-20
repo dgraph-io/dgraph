@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
@@ -24,14 +25,15 @@ type loc struct {
 // for bool) would be created for values not specified explicitly.
 
 type Person struct {
-	Uid      string   `json:"uid,omitempty"`
-	Name     string   `json:"name,omitempty"`
-	Age      int      `json:"age,omitempty"`
-	Married  bool     `json:"married,omitempty"`
-	Raw      []byte   `json:"raw_bytes",omitempty`
-	Friends  []Person `json:"friend,omitempty"`
-	Location loc      `json:"loc,omitempty"`
-	School   []School `json:"school,omitempty"`
+	Uid      string     `json:"uid,omitempty"`
+	Name     string     `json:"name,omitempty"`
+	Age      int        `json:"age,omitempty"`
+	Dob      *time.Time `json:"dob,omitempty"`
+	Married  bool       `json:"married,omitempty"`
+	Raw      []byte     `json:"raw_bytes",omitempty`
+	Friends  []Person   `json:"friend,omitempty"`
+	Location loc        `json:"loc,omitempty"`
+	School   []School   `json:"school,omitempty"`
 }
 
 func Example_setObject() {
@@ -50,6 +52,7 @@ func Example_setObject() {
 	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
 	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
 
+	dob := time.Date(1980, 01, 01, 23, 0, 0, 0, time.UTC)
 	p := Person{
 		Name:    "Alice",
 		Age:     26,
@@ -58,6 +61,7 @@ func Example_setObject() {
 			Type:   "Point",
 			Coords: []float64{1.1, 2},
 		},
+		Dob: &dob,
 		Raw: []byte("raw_bytes"),
 		Friends: []Person{{
 			Uid:  "1000",
@@ -77,6 +81,7 @@ func Example_setObject() {
 		age: int .
 		married: bool .
 		loc: geo .
+		dob: datetime .
 	`
 
 	ctx := context.Background()
@@ -105,6 +110,7 @@ func Example_setObject() {
 		me(func: uid(%s)) {
 			uid
 			name
+			dob
 			age
 			loc
 			raw_bytes

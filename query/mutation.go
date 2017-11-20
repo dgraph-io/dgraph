@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"golang.org/x/net/trace"
@@ -127,6 +128,7 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 	num := &protos.Num{}
 	var err error
 	maxLeaseId := worker.MaxLeaseId()
+	var uid uint64
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
@@ -136,16 +138,22 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 		if len(nq.Subject) > 0 {
 			if strings.HasPrefix(nq.Subject, "_:") {
 				newUids[nq.Subject] = 0
-			} else if uid, err := gql.ParseUid(nq.Subject); err != nil || uid > maxLeaseId {
+			} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
 				return newUids, err
+			}
+			if uid > maxLeaseId {
+				return newUids, fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, maxLeaseId)
 			}
 		}
 
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
-			} else if uid, err := gql.ParseUid(nq.ObjectId); err != nil || uid > maxLeaseId {
+			} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
 				return newUids, err
+			}
+			if uid > maxLeaseId {
+				return newUids, fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, maxLeaseId)
 			}
 		}
 	}

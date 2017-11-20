@@ -193,6 +193,13 @@ func (s *ServerState) getTimestamp() uint64 {
 
 func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Payload, error) {
 	empty := &protos.Payload{}
+	if err := x.HealthCheck(); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Request rejected %v", err)
+		}
+		return empty, err
+	}
+
 	if op.DropAll {
 		m := protos.Mutations{DropAll: true}
 		_, err := query.ApplyMutations(ctx, &m)
@@ -233,6 +240,13 @@ func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Paylo
 
 func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.Assigned, err error) {
 	resp = &protos.Assigned{}
+	if err := x.HealthCheck(); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Request rejected %v", err)
+		}
+		return resp, err
+	}
+
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed.")
 	}
@@ -296,7 +310,6 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.Response, err error) {
-	// we need membership information
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
@@ -388,6 +401,13 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 
 func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.TxnContext,
 	error) {
+	if err := x.HealthCheck(); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Request rejected %v", err)
+		}
+		return &protos.TxnContext{}, err
+	}
+
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	return &protos.TxnContext{
 		CommitTs: commitTs,
