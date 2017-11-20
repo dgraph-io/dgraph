@@ -77,8 +77,8 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 				"name": "abc",
 				"number": 99,
 				"list": [
-				"second",
-				"first"
+					"second",
+					"first"
 				],
 				"list@en": "first_en",
 				"list@it": "first_it"
