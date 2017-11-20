@@ -10,6 +10,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 * Support for removing dead node from quorum.
 * Support for alias in groupby queries.
+* Add DeleteEdges helper function for Go client.
 
 ### Changed
 
