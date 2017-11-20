@@ -45,16 +45,16 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 	_, err := txn.Mutate(ctx, &protos.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
-        <0x1> <name> "abc" .
-        <0x1> <name> "abc_en"@en .
-        <0x1> <name> "abc_nl"@nl .
-        <0x1> <number> "99"^^<xs:int> .
+			<0x1> <name> "abc" .
+			<0x1> <name> "abc_en"@en .
+			<0x1> <name> "abc_nl"@nl .
+			<0x1> <number> "99"^^<xs:int> .
 
-        <0x1> <list> "first" .
-        <0x1> <list> "first_en"@en .
-        <0x1> <list> "first_it"@it .
-        <0x1> <list> "second" .
-    `),
+			<0x1> <list> "first" .
+			<0x1> <list> "first_en"@en .
+			<0x1> <list> "first_it"@it .
+			<0x1> <list> "second" .
+		`),
 	})
 	check(t, err)
 
@@ -81,6 +81,65 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 			  ],
 			  "list@en": "first_en",
 			  "list@it": "first_it"
+			}
+		  ]
+		}
+	`, string(resp.GetJson()))
+}
+
+func ListWithLanguages(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	check(t, (c.Alter(ctx, &protos.Operation{
+		Schema: `pred: [string] .`,
+	})))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			<0x1> <pred> "first" .
+			<0x1> <pred> "second" .
+			<0x1> <pred> "dutch"@nl .
+		`),
+	})
+	check(t, err)
+
+	resp, err := c.NewTxn().Query(context.Background(), `
+		{
+			q(func: uid(0x1)) {
+				pred
+			}
+		}
+	`)
+	check(t, err)
+	CompareJSON(t, `
+		{
+		  "q": [
+			{
+			  "pred": [
+				"first",
+				"second"
+			  ]
+			}
+		  ]
+		}
+	`, string(resp.GetJson()))
+
+	resp, err = c.NewTxn().Query(context.Background(), `
+		{
+			q(func: uid(0x1)) {
+				pred@nl
+			}
+		}
+	`)
+	check(t, err)
+	CompareJSON(t, `
+		{
+		  "q": [
+			{
+			  "pred@nl": "dutch"
 			}
 		  ]
 		}
