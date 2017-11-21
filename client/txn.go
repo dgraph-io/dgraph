@@ -18,7 +18,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/y"
@@ -128,11 +127,8 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 		return nil, err
 	}
 	txn.mutated = true
-	if err := txn.mergeContext(ag.Context); err != nil {
-		fmt.Printf("error while merging context: %v\n", err)
-		return nil, err
-	}
-	return ag, nil
+	err = txn.mergeContext(ag.Context)
+	return ag, err
 }
 
 // Commit commits any mutations that have been made in the transaction. Once
