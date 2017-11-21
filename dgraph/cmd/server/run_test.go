@@ -340,7 +340,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","~friend","age"]}]}}`, output)
 
 	err = deletePredicate("friend")
 	require.NoError(t, err)
