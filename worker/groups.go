@@ -106,6 +106,7 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 			break
 		}
 		x.Printf("Error while connecting with group zero: %v", err)
+		time.Sleep(50 * time.Millisecond)
 	}
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
