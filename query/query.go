@@ -1752,6 +1752,13 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				Attr:    pred,
 			}
 			temp.Params.expandAll = child.Params.Expand == "_all_"
+			temp.Params = child.Params
+			temp.Params.ParentVars = make(map[string]varValue)
+			for k, v := range child.Params.ParentVars {
+				temp.Params.ParentVars[k] = v
+			}
+			temp.Params.isInternal = false
+			temp.Params.Expand = ""
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
