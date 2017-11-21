@@ -79,18 +79,6 @@ func generateInternalEdges(ctx context.Context,
 		}
 
 		for _, pred := range preds {
-
-			if string(mu.Value) == x.Star {
-				x.AssertTrue(mu.Op == protos.DirectedEdge_DEL)
-				edge := &protos.DirectedEdge{
-					Op:     mu.Op,
-					Entity: mu.Entity,
-					Attr:   pred,
-					Value:  mu.Value,
-				}
-				newEdges = append(newEdges, edge)
-			}
-
 			edge := &protos.DirectedEdge{
 				Op:     mu.Op,
 				Entity: mu.GetEntity(),
