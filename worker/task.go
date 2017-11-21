@@ -374,15 +374,20 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			} else {
 				out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
 				out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{})
+				if q.ExpandAll {
+					// To keep the cardinality same as that of ValueMatrix.
+					out.LangMatrix = append(out.LangMatrix, &protos.LangList{})
+				}
 			}
 			continue
 		}
 
 		if q.ExpandAll {
-			out.LangTags, err = pl.GetLangTags(args.q.ReadTs)
+			langTags, err := pl.GetLangTags(args.q.ReadTs)
 			if err != nil {
 				return err
 			}
+			out.LangMatrix = append(out.LangMatrix, &protos.LangList{langTags})
 		}
 
 		valTid := vals[0].Tid

@@ -68,7 +68,7 @@ the `Alter` method.
 ```go
 func setup(c *client.Dgraph) {
 	// Install a schema into dgraph. Accounts have a `name` and a `balance`.
-	err := c.Alter(ctx, &protos.Operation{
+	err := c.Alter(context.Background(), &protos.Operation{
 		Schema: `
 			name: string @index(term) .
 			balance: int .
@@ -85,7 +85,7 @@ a clean slate, without bringing the instance down.
 	// Drop all data including schema from the dgraph instance. This is useful
 	// for small examples such as this, since it puts dgraph into a clean
 	// state.
-	err := c.Alter(ctx, &protos.Operation{DropAll: true})
+	err := c.Alter(context.Background(), &protos.Operation{DropAll: true})
 ```
 
 ### Create a transaction
@@ -157,7 +157,7 @@ the query, and marshal them back into JSON.
 		log.Fatal(err)
 	}
 
-	_, err := txn.Mutate(ctx, &protos.Mutation{SetJSON: out})
+	_, err := txn.Mutate(context.Background(), &protos.Mutation{SetJSON: out})
 ```
 
 Sometimes, you only want to commit mutation, without querying anything further.
@@ -175,7 +175,7 @@ returns an error in case the transaction could not be committed.
 	// modified in this transaction. It is up to the library user to retry
 	// transactions when they fail.
 
-	err := txn.Commit(ctx)
+	err := txn.Commit(context.Background())
 ```
 
 ### Complete Example

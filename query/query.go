@@ -171,7 +171,7 @@ type SubGraph struct {
 	facetsMatrix []*protos.FacetsList
 	ExpandPreds  []*protos.ValueList
 	GroupbyRes   *groupResults
-	LangTags     []string
+	LangTags     []*protos.LangList
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -495,14 +495,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					sv.Value.(string) == "_nil_" {
 					sv.Value = ""
 				}
-				if len(pc.LangTags) != 0 {
-					if i >= len(pc.LangTags) {
+				if pc.Params.expandAll && len(pc.LangTags[idx].Lang) != 0 {
+					if i >= len(pc.LangTags[idx].Lang) {
 						return x.Errorf(
 							"internal error: all lang tags should be either present or absent")
 					}
 					fieldNameWithTag := fieldName
-					if pc.LangTags[i] != "" {
-						fieldNameWithTag += "@" + pc.LangTags[i]
+					if pc.LangTags[idx].Lang[i] != "" {
+						fieldNameWithTag += "@" + pc.LangTags[idx].Lang[i]
 					}
 					dst.AddValue(fieldNameWithTag, sv)
 					continue
@@ -1751,7 +1751,14 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				LinRead: sg.LinRead,
 				Attr:    pred,
 			}
+			temp.Params = child.Params
 			temp.Params.expandAll = child.Params.Expand == "_all_"
+			temp.Params.ParentVars = make(map[string]varValue)
+			for k, v := range child.Params.ParentVars {
+				temp.Params.ParentVars[k] = v
+			}
+			temp.Params.isInternal = false
+			temp.Params.Expand = ""
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
@@ -1851,7 +1858,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.facetsMatrix = result.FacetMatrix
 			sg.counts = result.Counts
 			sg.LinRead = result.LinRead
-			sg.LangTags = result.LangTags
+			sg.LangTags = result.LangMatrix
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
