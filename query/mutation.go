@@ -72,7 +72,9 @@ func generateInternalEdges(ctx context.Context,
 					mu.GetEntity())
 			}
 			for _, tv := range valMatrix[0].Values {
-				preds = append(preds, string(tv.GetVal()))
+				if len(tv.Val) > 0 {
+					preds = append(preds, string(tv.Val))
+				}
 			}
 		}
 
