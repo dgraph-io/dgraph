@@ -20,10 +20,11 @@ import (
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
 	if worker.Config.ExpandEdge {
-		err := handleInternalEdge(ctx, m)
+		edges, err := generateInternalEdges(ctx, m)
 		if err != nil {
 			return nil, x.Wrapf(err, "While adding internal edges")
 		}
+		m.Edges = append(m.Edges, edges...)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Added Internal edges")
 		}
@@ -44,10 +45,17 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContex
 	return tctx, err
 }
 
-func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
+func generateInternalEdges(ctx context.Context,
+	m *protos.Mutations) ([]*protos.DirectedEdge, error) {
 	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
 		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
+
+		if mu.Op == protos.DirectedEdge_DEL && mu.Entity == 0 && string(mu.GetValue()) == x.Star {
+			// * P * case. Not allowed via mutations. [Checked later?]
+			continue
+		}
+
 		if mu.Op == protos.DirectedEdge_SET {
 			edge := &protos.DirectedEdge{
 				Op:     protos.DirectedEdge_SET,
@@ -55,7 +63,6 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 				Attr:   "_predicate_",
 				Value:  []byte(mu.GetAttr()),
 			}
-			newEdges = append(newEdges, mu)
 			newEdges = append(newEdges, edge)
 			if schema.State().IsReversed(mu.Attr) {
 				edge = &protos.DirectedEdge{
@@ -76,14 +83,14 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 				sg.ReadTs = m.StartTs
 				valMatrix, err := getNodePredicates(ctx, sg)
 				if err != nil {
-					return err
+					return nil, err
 				}
 
 				// _predicate_ is of list type. So we will get all the predicates in the first list
 				// of the value matrix.
 				val := mu.GetValue()
 				if len(valMatrix) != 1 {
-					return x.Errorf("Expected only one list in value matrix while deleting: %v",
+					return nil, x.Errorf("Expected only one list in value matrix while deleting: %v",
 						mu.GetEntity())
 				}
 				preds := valMatrix[0].Values
@@ -106,7 +113,7 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 						froms = append(froms, p.GetUid())
 						return true
 					}); err != nil {
-						return err
+						return nil, err
 					}
 					for _, from := range froms {
 						edge = &protos.DirectedEdge{
@@ -129,12 +136,6 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 				newEdges = append(newEdges, edge)
 
 			} else {
-				newEdges = append(newEdges, mu)
-				if mu.Entity == 0 && string(mu.GetValue()) == x.Star {
-					// * P * case. Not allowed via mutations. Checked later?
-					continue
-				}
-
 				// S P * case.
 				if string(mu.GetValue()) == x.Star {
 					// Delete the given predicate from _predicate_.
@@ -153,7 +154,7 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 						froms = append(froms, p.GetUid())
 						return true
 					}); err != nil {
-						return err
+						return nil, err
 					}
 					for _, from := range froms {
 						edge = &protos.DirectedEdge{
@@ -168,8 +169,7 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			}
 		}
 	}
-	m.Edges = newEdges
-	return nil
+	return newEdges, nil
 }
 
 func verifyUid(uid uint64) error {
