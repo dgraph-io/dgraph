@@ -49,6 +49,10 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 			<0x1> <name> "abc" .
 			<0x1> <name> "abc_en"@en .
 			<0x1> <name> "abc_nl"@nl .
+			<0x2> <name> "abc_hi"@hi .
+			<0x2> <name> "abc_ci"@ci .
+			<0x2> <name> "abc_ja"@ja .
+			<0x3> <name> "abcd" .
 			<0x1> <number> "99"^^<xs:int> .
 
 			<0x1> <list> "first" .
@@ -61,7 +65,7 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 
 	resp, err := c.NewTxn().Query(context.Background(), `
 	{
-		q(func: uid(0x1)) {
+		q(func: uid(0x1,0x2,0x3)) {
 			expand(_all_)
 		}
 	}
@@ -71,6 +75,14 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 	CompareJSON(t, `
 	{
 		"q": [
+			{
+				"name": "abcd"
+			},
+			{
+			    "name@ci": "abc_ci",
+			    "name@hi": "abc_hi",
+			    "name@ja": "abc_ja"
+			},
 			{
 				"name@en": "abc_en",
 				"name@nl": "abc_nl",

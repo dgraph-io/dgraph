@@ -68,13 +68,17 @@ message ValueList {
 	repeated TaskValue values = 1;
 }
 
+message LangList {
+	repeated string lang = 1;
+}
+
 message Result {
 	repeated List uid_matrix = 1;
 	repeated ValueList value_matrix = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
 	repeated FacetsList facet_matrix = 5;
-	repeated string lang_tags = 6;
+	repeated LangList lang_matrix = 6;
 
   LinRead lin_read = 14;
 }
