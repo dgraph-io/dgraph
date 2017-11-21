@@ -51,6 +51,7 @@ func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEd
 
 		if mu.Op == protos.DirectedEdge_DEL && mu.Entity == 0 && string(mu.GetValue()) == x.Star {
 			// * P * case. Not allowed via mutations. [Checked later?]
+			edges = append(edges, mu)
 			continue
 		}
 
