@@ -18,7 +18,15 @@
 // minimum dependencies in order to keep the client light.
 package y
 
-import "github.com/dgraph-io/dgraph/protos"
+import (
+	"errors"
+
+	"github.com/dgraph-io/dgraph/protos"
+)
+
+var (
+	ErrAborted = errors.New("Transaction has been aborted due to conflict")
+)
 
 func MergeLinReads(dst *protos.LinRead, src *protos.LinRead) {
 	if src == nil || src.Ids == nil {
