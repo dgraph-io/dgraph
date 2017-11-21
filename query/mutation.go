@@ -89,12 +89,12 @@ func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEd
 				Attr:   "_predicate_",
 				Value:  []byte(pred),
 			}
-			// TODO: Should just be able to delete <x> _predicate * rather than needing a mutation for each.
 			edges = append(edges, edge)
 
 			if !schema.State().IsReversed(pred) {
 				continue
 			}
+
 			var objs []uint64
 			if string(mu.GetValue()) != x.Star {
 				objs = []uint64{mu.GetValueId()}
