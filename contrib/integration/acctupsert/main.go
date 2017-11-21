@@ -114,7 +114,7 @@ func upsert(c *client.Dgraph, acc account) {
 			atomic.AddUint64(&successCount, 1)
 			return
 		}
-		if s, ok := status.FromError(err); ok && s.Err() != y.ErrAborted {
+		if s, ok := status.FromError(err); ok && s.Message() != y.ErrAborted.Error() {
 			x.Check(err)
 		}
 		atomic.AddUint64(&retryCount, 1)
