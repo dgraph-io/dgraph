@@ -19,11 +19,11 @@ import (
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
 	if worker.Config.ExpandEdge {
-		edges, err := generateInternalEdges(ctx, m)
+		edges, err := expandEdges(ctx, m)
 		if err != nil {
 			return nil, x.Wrapf(err, "While adding internal edges")
 		}
-		m.Edges = append(m.Edges, edges...)
+		m.Edges = edges
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Added Internal edges")
 		}
@@ -44,9 +44,8 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContex
 	return tctx, err
 }
 
-func generateInternalEdges(ctx context.Context,
-	m *protos.Mutations) ([]*protos.DirectedEdge, error) {
-	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
+func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEdge, error) {
+	edges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
 		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
 
@@ -79,13 +78,18 @@ func generateInternalEdges(ctx context.Context,
 		}
 
 		for _, pred := range preds {
+			muCopy := *mu
+			muCopy.Attr = pred
+			edges = append(edges, &muCopy)
+
 			edge := &protos.DirectedEdge{
 				Op:     mu.Op,
 				Entity: mu.GetEntity(),
 				Attr:   "_predicate_",
 				Value:  []byte(pred),
 			}
-			newEdges = append(newEdges, edge)
+			// TODO: Should just be able to delete <x> _predicate * rather than needing a mutation for each.
+			edges = append(edges, edge)
 
 			if !schema.State().IsReversed(pred) {
 				continue
@@ -110,11 +114,11 @@ func generateInternalEdges(ctx context.Context,
 					Attr:   "_predicate_",
 					Value:  []byte("~" + pred),
 				}
-				newEdges = append(newEdges, edge)
+				edges = append(edges, edge)
 			}
 		}
 	}
-	return newEdges, nil
+	return edges, nil
 }
 
 func verifyUid(uid uint64) error {
