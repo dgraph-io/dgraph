@@ -40,7 +40,6 @@ import (
 var (
 	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
 	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
-	errAborted         = x.Errorf("Transaction aborted")
 )
 
 func deletePredicateEdge(edge *protos.DirectedEdge) bool {
@@ -523,7 +522,7 @@ func CommitOverNetwork(ctx context.Context, tc *protos.TxnContext) (uint64, erro
 		return 0, err
 	}
 	if tctx.Aborted {
-		return 0, errAborted
+		return 0, y.ErrAborted
 	}
 	return tctx.CommitTs, nil
 }

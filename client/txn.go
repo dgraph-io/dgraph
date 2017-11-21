@@ -26,7 +26,6 @@ import (
 )
 
 var (
-	ErrAborted  = errors.New("Transaction has been aborted due to conflict")
 	ErrFinished = errors.New("Transaction has already been committed or discarded")
 )
 
@@ -133,9 +132,6 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 		fmt.Printf("error while merging context: %v\n", err)
 		return nil, err
 	}
-	if len(ag.Error) > 0 {
-		return nil, errors.New(ag.Error)
-	}
 	return ag, nil
 }
 
@@ -156,14 +152,8 @@ func (txn *Txn) Commit(ctx context.Context) error {
 		return nil
 	}
 	dc := txn.dg.anyClient()
-	tctx, err := dc.CommitOrAbort(ctx, txn.context)
-	if err != nil {
-		return err
-	}
-	if tctx.Aborted {
-		return ErrAborted
-	}
-	return nil
+	_, err := dc.CommitOrAbort(ctx, txn.context)
+	return err
 }
 
 // Discard cleans up the resources associated with an uncommitted transaction
