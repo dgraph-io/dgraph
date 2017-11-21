@@ -1,5 +1,11 @@
 #!/bin/bash
 
+
+sleepTime=5
+if [[ "$TRAVIS" == true ]]; then
+  sleepTime=30
+fi
+
 function quit {
   echo "Shutting down dgraph server and zero"
   curl -s localhost:8081/admin/shutdown
@@ -28,7 +34,7 @@ function start {
   echo -e "Starting second server.\n"
   ./dgraph server -p $BUILD/p2 -w $BUILD/w2 --memory_mb 4096 -o 2  > $BUILD/server2.log 2>&1 &
   # Wait for membership sync to happen.
-  sleep 30
+  sleep $sleepTime
   popd &> /dev/null
   return 0
 }
@@ -41,6 +47,6 @@ function startZero {
   ./dgraph zero -w $BUILD/wz > $BUILD/zero.log 2>&1 &
   # To ensure dgraph doesn't start before dgraphzero.
 	# It takes time for zero to start on travis(mac).
-	sleep 30
+	sleep $sleepTime
   popd &> /dev/null
 }

@@ -28,8 +28,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -301,7 +301,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	}
 	if err != nil {
 		if err == y.ErrAborted {
-			err = grpc.Errorf(codes.Aborted, err.Error())
+			err = status.Errorf(codes.Aborted, err.Error())
 		}
 		return resp, err
 	}
@@ -412,7 +412,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*pro
 
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == y.ErrAborted {
-		err = grpc.Errorf(codes.Aborted, err.Error())
+		err = status.Errorf(codes.Aborted, err.Error())
 	}
 
 	return &protos.TxnContext{
