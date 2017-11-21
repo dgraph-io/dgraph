@@ -86,7 +86,7 @@ func (d *DgraphCluster) Start() error {
 	// programmatically by hitting the query port. This would be quicker than
 	// just waiting 4 seconds (which seems to be the smallest amount of time to
 	// reliably wait).
-	time.Sleep(time.Second * 4)
+	time.Sleep(time.Second * 5)
 
 	d.client = client.NewDgraphClient(protos.NewDgraphClient(dgConn))
 
