@@ -10,7 +10,9 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -55,6 +57,15 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			}
 			newEdges = append(newEdges, mu)
 			newEdges = append(newEdges, edge)
+			if schema.State().IsReversed(mu.Attr) {
+				edge = &protos.DirectedEdge{
+					Entity: mu.GetValueId(),
+					Attr:   "_predicate_",
+					Value:  []byte("~" + mu.GetAttr()),
+					Op:     protos.DirectedEdge_SET,
+				}
+				newEdges = append(newEdges, edge)
+			}
 		} else if mu.Op == protos.DirectedEdge_DEL {
 			// S * * case
 			if mu.Attr == x.Star {
@@ -87,6 +98,25 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 						Value:  val,
 					}
 					newEdges = append(newEdges, edge)
+
+					// Also delete from other direction.
+					var froms []uint64
+					plist := posting.Get(x.DataKey(string(pred.Val), mu.GetEntity()))
+					if err := plist.Iterate(m.StartTs, 0, func(p *protos.Posting) bool {
+						froms = append(froms, p.GetUid())
+						return true
+					}); err != nil {
+						return err
+					}
+					for _, from := range froms {
+						edge = &protos.DirectedEdge{
+							Op:     protos.DirectedEdge_DEL,
+							Entity: from,
+							Attr:   "_predicate_",
+							Value:  []byte("~" + string(pred.Val)),
+						}
+						newEdges = append(newEdges, edge)
+					}
 				}
 				edge := &protos.DirectedEdge{
 					Op:     protos.DirectedEdge_DEL,
@@ -101,7 +131,7 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			} else {
 				newEdges = append(newEdges, mu)
 				if mu.Entity == 0 && string(mu.GetValue()) == x.Star {
-					// * P * case.
+					// * P * case. Not allowed via mutations. Checked later?
 					continue
 				}
 
@@ -115,6 +145,25 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 						Value:  []byte(mu.GetAttr()),
 					}
 					newEdges = append(newEdges, edge)
+
+					// Also delete from the other direction.
+					var froms []uint64
+					plist := posting.Get(x.DataKey(mu.Attr, mu.GetEntity()))
+					if err := plist.Iterate(m.StartTs, 0, func(p *protos.Posting) bool {
+						froms = append(froms, p.GetUid())
+						return true
+					}); err != nil {
+						return err
+					}
+					for _, from := range froms {
+						edge = &protos.DirectedEdge{
+							Op:     protos.DirectedEdge_DEL,
+							Entity: from,
+							Attr:   "_predicate_",
+							Value:  []byte("~" + mu.GetAttr()),
+						}
+						newEdges = append(newEdges, edge)
+					}
 				}
 			}
 		}

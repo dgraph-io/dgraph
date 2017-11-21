@@ -206,6 +206,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *protos.DirectedEdge) 
 	}
 	return nil
 }
+
 func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge,
 	txn *Txn) error {
 	isReversed := schema.State().IsReversed(t.Attr)
