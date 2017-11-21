@@ -1,7 +1,6 @@
 package query
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -56,116 +55,60 @@ func generateInternalEdges(ctx context.Context,
 			continue
 		}
 
-		if mu.Op == protos.DirectedEdge_SET {
+		var preds []string
+		if mu.Attr != x.Star {
+			preds = []string{mu.Attr}
+		} else {
+			x.AssertTrue(mu.Op == protos.DirectedEdge_DEL)
+			sg := &SubGraph{}
+			sg.DestUIDs = &protos.List{[]uint64{mu.GetEntity()}}
+			sg.ReadTs = m.StartTs
+			valMatrix, err := getNodePredicates(ctx, sg)
+			if err != nil {
+				return nil, err
+			}
+			if len(valMatrix) != 1 {
+				return nil, x.Errorf("Expected only one list in value matrix while deleting: %v",
+					mu.GetEntity())
+			}
+			for _, tv := range valMatrix[0].Values {
+				preds = append(preds, string(tv.GetVal()))
+			}
+		}
+
+		for _, pred := range preds {
 			edge := &protos.DirectedEdge{
-				Op:     protos.DirectedEdge_SET,
+				Op:     mu.Op,
 				Entity: mu.GetEntity(),
 				Attr:   "_predicate_",
-				Value:  []byte(mu.GetAttr()),
+				Value:  []byte(pred),
 			}
 			newEdges = append(newEdges, edge)
-			if schema.State().IsReversed(mu.Attr) {
-				edge = &protos.DirectedEdge{
-					Entity: mu.GetValueId(),
-					Attr:   "_predicate_",
-					Value:  []byte("~" + mu.GetAttr()),
-					Op:     protos.DirectedEdge_SET,
-				}
-				newEdges = append(newEdges, edge)
-			}
-		} else if mu.Op == protos.DirectedEdge_DEL {
-			// S * * case
-			if mu.Attr == x.Star {
-				// Fetch all the predicates and replace them
 
-				sg := &SubGraph{}
-				sg.DestUIDs = &protos.List{[]uint64{mu.GetEntity()}}
-				sg.ReadTs = m.StartTs
-				valMatrix, err := getNodePredicates(ctx, sg)
-				if err != nil {
+			if !schema.State().IsReversed(pred) {
+				continue
+			}
+			var objs []uint64
+			if string(mu.GetValue()) != x.Star {
+				objs = []uint64{mu.GetValueId()}
+			} else {
+				x.AssertTrue(mu.Op == protos.DirectedEdge_DEL)
+				plist := posting.Get(x.DataKey(pred, mu.GetEntity()))
+				if err := plist.Iterate(m.StartTs, 0, func(p *protos.Posting) bool {
+					objs = append(objs, p.GetUid())
+					return true
+				}); err != nil {
 					return nil, err
 				}
-
-				// _predicate_ is of list type. So we will get all the predicates in the first list
-				// of the value matrix.
-				val := mu.GetValue()
-				if len(valMatrix) != 1 {
-					return nil, x.Errorf("Expected only one list in value matrix while deleting: %v",
-						mu.GetEntity())
-				}
-				preds := valMatrix[0].Values
-				for _, pred := range preds {
-					if bytes.Equal(pred.Val, x.Nilbyte) {
-						continue
-					}
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   string(pred.Val),
-						Value:  val,
-					}
-					newEdges = append(newEdges, edge)
-
-					// Also delete from other direction.
-					var froms []uint64
-					plist := posting.Get(x.DataKey(string(pred.Val), mu.GetEntity()))
-					if err := plist.Iterate(m.StartTs, 0, func(p *protos.Posting) bool {
-						froms = append(froms, p.GetUid())
-						return true
-					}); err != nil {
-						return nil, err
-					}
-					for _, from := range froms {
-						edge = &protos.DirectedEdge{
-							Op:     protos.DirectedEdge_DEL,
-							Entity: from,
-							Attr:   "_predicate_",
-							Value:  []byte("~" + string(pred.Val)),
-						}
-						newEdges = append(newEdges, edge)
-					}
-				}
-				edge := &protos.DirectedEdge{
-					Op:     protos.DirectedEdge_DEL,
-					Entity: mu.GetEntity(),
+			}
+			for _, obj := range objs {
+				edge = &protos.DirectedEdge{
+					Op:     mu.Op,
+					Entity: obj,
 					Attr:   "_predicate_",
-					Value:  val,
+					Value:  []byte("~" + pred),
 				}
-				// Delete all the _predicate_ values
-				edge.Attr = "_predicate_"
 				newEdges = append(newEdges, edge)
-
-			} else {
-				// S P * case.
-				if string(mu.GetValue()) == x.Star {
-					// Delete the given predicate from _predicate_.
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   "_predicate_",
-						Value:  []byte(mu.GetAttr()),
-					}
-					newEdges = append(newEdges, edge)
-
-					// Also delete from the other direction.
-					var froms []uint64
-					plist := posting.Get(x.DataKey(mu.Attr, mu.GetEntity()))
-					if err := plist.Iterate(m.StartTs, 0, func(p *protos.Posting) bool {
-						froms = append(froms, p.GetUid())
-						return true
-					}); err != nil {
-						return nil, err
-					}
-					for _, from := range froms {
-						edge = &protos.DirectedEdge{
-							Op:     protos.DirectedEdge_DEL,
-							Entity: from,
-							Attr:   "_predicate_",
-							Value:  []byte("~" + mu.GetAttr()),
-						}
-						newEdges = append(newEdges, edge)
-					}
-				}
 			}
 		}
 	}
