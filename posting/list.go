@@ -39,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 )
 
 var (
@@ -341,14 +342,14 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 	}
 
 	if txn.ShouldAbort() {
-		return false, ErrConflict
+		return false, y.ErrAborted
 	}
 	// We can have atmax one pending <s> <p> * mutation.
 	hasPendingDelete := l.markdeleteAll > 0 && t.Op == protos.DirectedEdge_DEL &&
 		bytes.Equal(t.Value, []byte(x.Star))
 	if hasPendingDelete || txn.StartTs < l.commitTs {
 		txn.SetAbort()
-		return false, ErrConflict
+		return false, y.ErrAborted
 	}
 
 	// All edges with a value without LANGTAG, have the same uid. In other words,

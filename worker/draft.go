@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	dy "github.com/dgraph-io/dgraph/y"
 )
 
 type proposalCtx struct {
@@ -267,7 +268,7 @@ func (n *node) processMutation(task *task) error {
 
 	ctx, txn := n.props.CtxAndTxn(pid)
 	if txn.ShouldAbort() {
-		return posting.ErrConflict
+		return dy.ErrAborted
 	}
 	rv := x.RaftValue{Group: n.gid, Index: ridx}
 	ctx = context.WithValue(ctx, "raft", rv)
