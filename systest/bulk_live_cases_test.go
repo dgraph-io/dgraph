@@ -306,10 +306,11 @@ func TestExpandAllReverse(t *testing.T) {
 
 	t.Run("expand all should show reverse edges", s.testCase(`
 		{q(func: eq(name, "b")) {
-			~link { name }
+			expand(_all_) { name }
 		}}
 	`, `
 		{"q": [ {
+			"name": "b",
 			"~link": [{ "name": "a" }]
 		} ]}
 	`))

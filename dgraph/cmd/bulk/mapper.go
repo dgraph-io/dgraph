@@ -209,6 +209,14 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 		key = x.DataKey("_predicate_", sid)
 		pp := m.createPredicatePosting(nq.Predicate)
 		m.addMapEntry(key, pp, shard)
+		if sch := m.schema.getSchema(nq.Predicate); sch.Directive == protos.SchemaUpdate_REVERSE {
+			x.AssertTrue(oid != 0) // schema has @reverse, so there must be an object id
+			key = x.DataKey("_predicate_", oid)
+			rpred := "~" + nq.Predicate
+			pp = m.createPredicatePosting(rpred)
+			shard = m.state.shards.shardFor(rpred)
+			m.addMapEntry(key, pp, shard)
+		}
 	}
 
 	m.addIndexMapEntries(nq, de)

@@ -111,7 +111,6 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		s.cleanup()
 		s.t.Fatalf("Live Loader didn't run: %v\n", err)
 	}
-
 }
 
 func makeDirEmpty(dir string) error {
