@@ -624,9 +624,9 @@ func ExampleDeleteEdges() {
 		Name     string    `json:"name,omitempty"`
 		Age      int       `json:"age,omitempty"`
 		Married  bool      `json:"married,omitempty"`
-		Friends  []Person  `json:"friend,omitempty"`
+		Friends  []Person  `json:"friends,omitempty"`
 		Location string    `json:"loc,omitempty"`
-		School   []*School `json:"school,omitempty"`
+		Schools  []*School `json:"schools,omitempty"`
 	}
 
 	// Lets add some data first.
@@ -642,7 +642,7 @@ func ExampleDeleteEdges() {
 			Name: "Charlie",
 			Age:  29,
 		}},
-		School: []*School{&School{
+		Schools: []*School{&School{
 			Name: "Crown Public School",
 		}},
 	}
@@ -680,12 +680,12 @@ func ExampleDeleteEdges() {
 			age
 			loc
 			married
-			friend {
+			friends {
 				uid
 				name
 				age
 			}
-			school {
+			schools {
 				uid
 				name@en
 			}
@@ -701,7 +701,7 @@ func ExampleDeleteEdges() {
 
 	// Now lets delete the friend and location edge from Alice
 	mu = &protos.Mutation{}
-	client.DeleteEdges(mu, uid, "friend", "loc")
+	client.DeleteEdges(mu, uid, "friends", "loc")
 
 	mu.CommitNow = true
 	_, err = dg.NewTxn().Mutate(ctx, mu)
