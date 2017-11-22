@@ -17,7 +17,7 @@ RUN mkdir -p /usr/local/share/dgraph/assets
 ADD assets.tar.gz /usr/local/share/dgraph/assets
 
 EXPOSE 8080
-EXPOSE 9090
+EXPOSE 9080
 WORKDIR /dgraph
 
 CMD ["dgraph"] # Shows the dgraph version and commands available.

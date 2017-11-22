@@ -99,13 +99,16 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	zc := protos.NewZeroClient(p.Get())
 	var connState *protos.ConnectionState
 	m := &protos.Member{Id: Config.RaftId, Addr: Config.MyAddr}
-	for i := 0; i < 100; i++ { // Generous number of attempts.
+	delay := 100 * time.Millisecond
+	for i := 0; i < 9; i++ { // Generous number of attempts.
 		var err error
 		connState, err = zc.Connect(gr.ctx, m)
 		if err == nil {
 			break
 		}
 		x.Printf("Error while connecting with group zero: %v", err)
+		time.Sleep(delay)
+		delay *= 2
 	}
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
