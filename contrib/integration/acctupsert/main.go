@@ -15,7 +15,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/y"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
 )
 
 var (
@@ -114,7 +113,7 @@ func upsert(c *client.Dgraph, acc account) {
 			atomic.AddUint64(&successCount, 1)
 			return
 		}
-		if s, ok := status.FromError(err); ok && s.Message() != y.ErrAborted.Error() {
+		if err != y.ErrAborted {
 			x.Check(err)
 		}
 		atomic.AddUint64(&retryCount, 1)

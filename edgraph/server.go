@@ -302,6 +302,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	if err != nil {
 		if err == y.ErrAborted {
 			err = status.Errorf(codes.Aborted, err.Error())
+			resp.Context.Aborted = true
 		}
 		return resp, err
 	}
@@ -410,14 +411,15 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*pro
 		return &protos.TxnContext{}, err
 	}
 
+	tctx := &protos.TxnContext{}
+
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == y.ErrAborted {
-		err = status.Errorf(codes.Aborted, err.Error())
+		tctx.Aborted = true
+		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
-
-	return &protos.TxnContext{
-		CommitTs: commitTs,
-	}, err
+	tctx.CommitTs = commitTs
+	return tctx, err
 }
 
 func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {

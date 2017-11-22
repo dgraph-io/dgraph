@@ -19,6 +19,8 @@ package client
 import (
 	"context"
 
+	"google.golang.org/grpc/status"
+
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/y"
 	"github.com/pkg/errors"
@@ -123,10 +125,13 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 	mu.StartTs = txn.context.StartTs
 	dc := txn.dg.anyClient()
 	ag, err := dc.Mutate(ctx, mu)
+	txn.mutated = true
 	if err != nil {
+		if s, ok := status.FromError(err); ok && s.Message() == y.ErrAborted.Error() {
+			return nil, y.ErrAborted
+		}
 		return nil, err
 	}
-	txn.mutated = true
 	err = txn.mergeContext(ag.Context)
 	return ag, err
 }
@@ -149,6 +154,9 @@ func (txn *Txn) Commit(ctx context.Context) error {
 	}
 	dc := txn.dg.anyClient()
 	_, err := dc.CommitOrAbort(ctx, txn.context)
+	if s, ok := status.FromError(err); ok && s.Message() == y.ErrAborted.Error() {
+		return y.ErrAborted
+	}
 	return err
 }
 
