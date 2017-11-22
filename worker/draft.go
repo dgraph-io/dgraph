@@ -29,7 +29,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -454,25 +453,12 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	// This chan could have capacity zero, because runReadIndexLoop never blocks without selecting
-	// on readStateCh.  It's 2 so that sending rarely blocks (so the Go runtime doesn't have to
-	// switch threads as much.)
-	readStateCh := make(chan raft.ReadState, 2)
-	closer := y.NewCloser(1)
-	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
-	// That way we know sending to readStateCh will not deadlock.
-	defer closer.SignalAndWait()
-
 	for {
 		select {
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			for _, rs := range rd.ReadStates {
-				readStateCh <- rs
-			}
-
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
 				leader = rd.RaftState == raft.StateLeader
