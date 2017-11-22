@@ -99,8 +99,8 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	zc := protos.NewZeroClient(p.Get())
 	var connState *protos.ConnectionState
 	m := &protos.Member{Id: Config.RaftId, Addr: Config.MyAddr}
-	delay := time.Second
-	for i := 0; i < 6; i++ { // Generous number of attempts.
+	delay := 100 * time.Millisecond
+	for i := 0; i < 9; i++ { // Generous number of attempts.
 		var err error
 		connState, err = zc.Connect(gr.ctx, m)
 		if err == nil {
