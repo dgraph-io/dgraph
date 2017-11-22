@@ -14,11 +14,11 @@ go get -d golang.org/x/net/context
 go get -d google.golang.org/grpc/...
 
 expected="context
-fmt
 github.com/dgraph-io/dgraph/protos
 github.com/dgraph-io/dgraph/y
 github.com/dgraph-io/dgraph/vendor/github.com/gogo/protobuf/proto
 github.com/dgraph-io/dgraph/vendor/github.com/pkg/errors
+google.golang.org/grpc/status
 math/rand
 sync"
 

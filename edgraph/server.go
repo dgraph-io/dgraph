@@ -28,6 +28,9 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -42,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -281,11 +285,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	m := &protos.Mutations{Edges: edges, StartTs: mu.StartTs}
 	resp.Context, err = query.ApplyMutations(ctx, m)
 	if !mu.CommitNow {
-		if err != nil {
-			// TODO: Investigate if this is really necessary.
-			resp.Error = err.Error()
-		}
-		return resp, nil
+		return resp, err
 	}
 
 	// The following logic is for committing immediately.
@@ -295,15 +295,19 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	}
 	ctxn := resp.Context
 	// zero would assign the CommitTs
-	cts, aerr := worker.CommitOverNetwork(ctx, ctxn)
+	cts, err := worker.CommitOverNetwork(ctx, ctxn)
 	if ok {
-		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, aerr)
+		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, err)
 	}
 	if err != nil {
+		if err == y.ErrAborted {
+			err = status.Errorf(codes.Aborted, err.Error())
+			resp.Context.Aborted = true
+		}
 		return resp, err
 	}
 	resp.Context.CommitTs = cts
-	return resp, aerr
+	return resp, nil
 }
 
 // This method is used to execute the query and return the response to the
@@ -407,10 +411,15 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*pro
 		return &protos.TxnContext{}, err
 	}
 
+	tctx := &protos.TxnContext{}
+
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
-	return &protos.TxnContext{
-		CommitTs: commitTs,
-	}, err
+	if err == y.ErrAborted {
+		tctx.Aborted = true
+		return tctx, status.Errorf(codes.Aborted, err.Error())
+	}
+	tctx.CommitTs = commitTs
+	return tctx, err
 }
 
 func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {
