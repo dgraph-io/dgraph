@@ -46,22 +46,22 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContex
 
 func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEdge, error) {
 	edges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
-	for _, mu := range m.Edges {
-		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
+	for _, edge := range m.Edges {
+		x.AssertTrue(edge.Op == protos.DirectedEdge_DEL || edge.Op == protos.DirectedEdge_SET)
 
-		if mu.Op == protos.DirectedEdge_DEL && mu.Entity == 0 && string(mu.GetValue()) == x.Star {
+		if edge.Op == protos.DirectedEdge_DEL && edge.Entity == 0 && string(edge.GetValue()) == x.Star {
 			// * P * case. Not allowed via mutations. This is rejected later,
 			// so just pass it on for now.
-			edges = append(edges, mu)
+			edges = append(edges, edge)
 			continue
 		}
 
 		var preds []string
-		if mu.Attr != x.Star {
-			preds = []string{mu.Attr}
+		if edge.Attr != x.Star {
+			preds = []string{edge.Attr}
 		} else {
 			sg := &SubGraph{}
-			sg.DestUIDs = &protos.List{[]uint64{mu.GetEntity()}}
+			sg.DestUIDs = &protos.List{[]uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
 			valMatrix, err := getNodePredicates(ctx, sg)
 			if err != nil {
@@ -69,7 +69,7 @@ func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEd
 			}
 			if len(valMatrix) != 1 {
 				return nil, x.Errorf("Expected only one list in value matrix while deleting: %v",
-					mu.GetEntity())
+					edge.GetEntity())
 			}
 			for _, tv := range valMatrix[0].Values {
 				if len(tv.Val) > 0 {
@@ -79,42 +79,41 @@ func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEd
 		}
 
 		for _, pred := range preds {
-			muCopy := *mu
-			muCopy.Attr = pred
-			edges = append(edges, &muCopy)
+			edgeCopy := *edge
+			edgeCopy.Attr = pred
+			edges = append(edges, &edgeCopy)
 
-			edge := &protos.DirectedEdge{
-				Op:     mu.Op,
-				Entity: mu.GetEntity(),
+			e := &protos.DirectedEdge{
+				Op:     edge.Op,
+				Entity: edge.GetEntity(),
 				Attr:   "_predicate_",
 				Value:  []byte(pred),
 			}
-			edges = append(edges, edge)
+			edges = append(edges, e)
 
 			if !schema.State().IsReversed(pred) {
 				continue
 			}
 
 			var objs []uint64
-			if string(mu.GetValue()) != x.Star {
-				objs = []uint64{mu.GetValueId()}
+			if string(edge.GetValue()) != x.Star {
+				objs = []uint64{edge.GetValueId()}
 			} else {
-				plist := posting.Get(x.DataKey(pred, mu.GetEntity()))
-				if err := plist.Iterate(m.StartTs, 0, func(p *protos.Posting) bool {
-					objs = append(objs, p.GetUid())
-					return true
-				}); err != nil {
+				plist := posting.Get(x.DataKey(pred, edge.GetEntity()))
+				list, err := plist.Uids(posting.ListOptions{ReadTs: m.GetStartTs()})
+				if err != nil {
 					return nil, err
 				}
+				objs = list.Uids
 			}
 			for _, obj := range objs {
-				edge = &protos.DirectedEdge{
-					Op:     mu.Op,
+				e = &protos.DirectedEdge{
+					Op:     edge.Op,
 					Entity: obj,
 					Attr:   "_predicate_",
 					Value:  []byte("~" + pred),
 				}
-				edges = append(edges, edge)
+				edges = append(edges, e)
 			}
 		}
 	}
