@@ -267,6 +267,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			if has {
 				delete(group.Members, p.Member.Id)
 				state.Removed = append(state.Removed, m)
+				conn.Get().Remove(m.Addr)
 			}
 			// else already removed.
 			return p.Id, nil
