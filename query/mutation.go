@@ -59,7 +59,6 @@ func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEd
 		if mu.Attr != x.Star {
 			preds = []string{mu.Attr}
 		} else {
-			x.AssertTrue(mu.Op == protos.DirectedEdge_DEL)
 			sg := &SubGraph{}
 			sg.DestUIDs = &protos.List{[]uint64{mu.GetEntity()}}
 			sg.ReadTs = m.StartTs
@@ -99,7 +98,6 @@ func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEd
 			if string(mu.GetValue()) != x.Star {
 				objs = []uint64{mu.GetValueId()}
 			} else {
-				x.AssertTrue(mu.Op == protos.DirectedEdge_DEL)
 				plist := posting.Get(x.DataKey(pred, mu.GetEntity()))
 				if err := plist.Iterate(m.StartTs, 0, func(p *protos.Posting) bool {
 					objs = append(objs, p.GetUid())
