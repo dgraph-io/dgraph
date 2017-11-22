@@ -49,13 +49,6 @@ func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEd
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == protos.DirectedEdge_DEL || edge.Op == protos.DirectedEdge_SET)
 
-		if edge.Op == protos.DirectedEdge_DEL && edge.Entity == 0 && string(edge.GetValue()) == x.Star {
-			// * P * case. Not allowed via mutations. This is rejected later,
-			// so just pass it on for now.
-			edges = append(edges, edge)
-			continue
-		}
-
 		var preds []string
 		if edge.Attr != x.Star {
 			preds = []string{edge.Attr}

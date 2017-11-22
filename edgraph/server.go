@@ -821,5 +821,28 @@ func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
 	}
 	res.Set = append(res.Set, mu.Set...)
 	res.Del = append(res.Del, mu.Del...)
-	return res, nil
+
+	return res, validWildcards(res.Set, res.Del)
+}
+
+func validWildcards(set, del []*protos.NQuad) error {
+	for _, nq := range set {
+		var ostar bool
+		if o, ok := nq.ObjectValue.GetVal().(*protos.Value_DefaultVal); ok {
+			ostar = o.DefaultVal == x.Star
+		}
+		if nq.Subject == x.Star || nq.Predicate == x.Star || ostar {
+			return x.Errorf("Cannot use star in set n-quad: %+v", nq)
+		}
+	}
+	for _, nq := range del {
+		var ostar bool
+		if o, ok := nq.ObjectValue.GetVal().(*protos.Value_DefaultVal); ok {
+			ostar = o.DefaultVal == x.Star
+		}
+		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
+			return x.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
+		}
+	}
+	return nil
 }
