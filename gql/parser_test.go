@@ -18,6 +18,7 @@
 package gql
 
 import (
+	"fmt"
 	"os"
 	"runtime/debug"
 	"testing"
@@ -3093,19 +3094,20 @@ func TestParseFacetsOrderError2(t *testing.T) {
 	require.Contains(t, err.Error(), "Expected ( after func name [a]")
 }
 
-func TestParseFacetsOrderError3(t *testing.T) {
+func TestParseFacetsOrderWithAlias(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x1)) {
-			friends @facets(orderdesc: closeness, order: abc) {
+			friends @facets(orderdesc: closeness, order: abc, key, key1: val, abc) {
 				name
 			}
 		}
 	}
 `
-	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected ',' or ')'")
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	fmt.Println(res.Query[0].Children[0].Facets)
+	//	require.Contains(t, err.Error(), "Expected ',' or ')'")
 }
 
 func TestParseFacetsDuplicateVarError(t *testing.T) {
@@ -3216,6 +3218,29 @@ func TestParseFacetsMultiple(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "hometown", "age"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, true, res.Query[0].Children[0].Facets.AllKeys)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
+	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
+	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Keys))
+}
+
+func TestParseFacetsAlias(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) @facets(root1: key1) {
+			friends @facets {
+				name @facets(a1: key1, a2: key2, a3: key3)
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Facets)
+
 	require.NotNil(t, res.Query[0].Children[0].Facets)
 	require.Equal(t, true, res.Query[0].Children[0].Facets.AllKeys)
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
