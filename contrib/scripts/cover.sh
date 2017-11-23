@@ -21,7 +21,7 @@ set -e
 # create coverage output
 echo 'mode: atomic' > $OUT
 for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki|customtok'); do
-  go test -race -timeout=25m -covermode=atomic -coverprofile=$TMP $PKG
+  go test -v -race -timeout=25m -covermode=atomic -coverprofile=$TMP $PKG
   tail -n +2 $TMP >> $OUT
 done
 
