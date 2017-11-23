@@ -33,7 +33,7 @@ func getPosting() *List {
 }
 
 func TestLCacheSize(t *testing.T) {
-	t.Skipf("Fails to async lru eviction")
+	t.Skipf("Fails due to async lru eviction")
 	lcache := newListCache(500)
 
 	for i := 0; i < 10; i++ {

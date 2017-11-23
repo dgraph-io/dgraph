@@ -18,13 +18,13 @@
 package worker
 
 import (
-	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -105,34 +105,26 @@ func TestValidateEdgeTypeError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestAddToMutationArray(t *testing.T) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	mutationsMap := make(map[uint32]*protos.Mutations)
-	edges := []*protos.DirectedEdge{}
-	schema := []*protos.SchemaUpdate{}
-
-	edges = append(edges, &protos.DirectedEdge{
+func TestPopulateMutationMap(t *testing.T) {
+	edges := []*protos.DirectedEdge{{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
-	})
-	schema = append(schema, &protos.SchemaUpdate{
+	}}
+	schema := []*protos.SchemaUpdate{{
 		Predicate: "name",
-	})
+	}}
 	m := &protos.Mutations{Edges: edges, Schema: schema}
 
-	err = addToMutationMap(mutationsMap, m)
-	require.NoError(t, err)
+	mutationsMap := populateMutationMap(m)
 	mu := mutationsMap[1]
 	require.NotNil(t, mu)
 	require.NotNil(t, mu.Edges)
+	require.NotNil(t, mu.Schema)
 }
 
 func TestCheckSchema(t *testing.T) {
-	dir, _ := initTest(t, "name:string @index(term) .")
-	defer os.RemoveAll(dir)
+	posting.DeleteAll()
+	initTest(t, "name:string @index(term) .")
 	// non uid to uid
 	s1 := &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_UID}
 	require.NoError(t, checkSchema(s1))

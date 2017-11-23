@@ -1,7 +1,6 @@
 package query
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -18,10 +17,11 @@ import (
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
 	if worker.Config.ExpandEdge {
-		err := handleInternalEdge(ctx, m)
+		edges, err := expandEdges(ctx, m)
 		if err != nil {
 			return nil, x.Wrapf(err, "While adding internal edges")
 		}
+		m.Edges = edges
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Added Internal edges")
 		}
@@ -42,85 +42,48 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContex
 	return tctx, err
 }
 
-func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
-	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
-	for _, mu := range m.Edges {
-		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
-		if mu.Op == protos.DirectedEdge_SET {
-			edge := &protos.DirectedEdge{
-				Op:     protos.DirectedEdge_SET,
-				Entity: mu.GetEntity(),
-				Attr:   "_predicate_",
-				Value:  []byte(mu.GetAttr()),
+func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEdge, error) {
+	edges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
+	for _, edge := range m.Edges {
+		x.AssertTrue(edge.Op == protos.DirectedEdge_DEL || edge.Op == protos.DirectedEdge_SET)
+
+		var preds []string
+		if edge.Attr != x.Star {
+			preds = []string{edge.Attr}
+		} else {
+			sg := &SubGraph{}
+			sg.DestUIDs = &protos.List{[]uint64{edge.GetEntity()}}
+			sg.ReadTs = m.StartTs
+			valMatrix, err := getNodePredicates(ctx, sg)
+			if err != nil {
+				return nil, err
 			}
-			newEdges = append(newEdges, mu)
-			newEdges = append(newEdges, edge)
-		} else if mu.Op == protos.DirectedEdge_DEL {
-			// S * * case
-			if mu.Attr == x.Star {
-				// Fetch all the predicates and replace them
-
-				sg := &SubGraph{}
-				sg.DestUIDs = &protos.List{[]uint64{mu.GetEntity()}}
-				sg.ReadTs = m.StartTs
-				valMatrix, err := getNodePredicates(ctx, sg)
-				if err != nil {
-					return err
-				}
-
-				// _predicate_ is of list type. So we will get all the predicates in the first list
-				// of the value matrix.
-				val := mu.GetValue()
-				if len(valMatrix) != 1 {
-					return x.Errorf("Expected only one list in value matrix while deleting: %v",
-						mu.GetEntity())
-				}
-				preds := valMatrix[0].Values
-				for _, pred := range preds {
-					if bytes.Equal(pred.Val, x.Nilbyte) {
-						continue
-					}
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   string(pred.Val),
-						Value:  val,
-					}
-					newEdges = append(newEdges, edge)
-				}
-				edge := &protos.DirectedEdge{
-					Op:     protos.DirectedEdge_DEL,
-					Entity: mu.GetEntity(),
-					Attr:   "_predicate_",
-					Value:  val,
-				}
-				// Delete all the _predicate_ values
-				edge.Attr = "_predicate_"
-				newEdges = append(newEdges, edge)
-
-			} else {
-				newEdges = append(newEdges, mu)
-				if mu.Entity == 0 && string(mu.GetValue()) == x.Star {
-					// * P * case.
-					continue
-				}
-
-				// S P * case.
-				if string(mu.GetValue()) == x.Star {
-					// Delete the given predicate from _predicate_.
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   "_predicate_",
-						Value:  []byte(mu.GetAttr()),
-					}
-					newEdges = append(newEdges, edge)
+			if len(valMatrix) != 1 {
+				return nil, x.Errorf("Expected only one list in value matrix while deleting: %v",
+					edge.GetEntity())
+			}
+			for _, tv := range valMatrix[0].Values {
+				if len(tv.Val) > 0 {
+					preds = append(preds, string(tv.Val))
 				}
 			}
 		}
+
+		for _, pred := range preds {
+			edgeCopy := *edge
+			edgeCopy.Attr = pred
+			edges = append(edges, &edgeCopy)
+
+			e := &protos.DirectedEdge{
+				Op:     edge.Op,
+				Entity: edge.GetEntity(),
+				Attr:   "_predicate_",
+				Value:  []byte(pred),
+			}
+			edges = append(edges, e)
+		}
 	}
-	m.Edges = newEdges
-	return nil
+	return edges, nil
 }
 
 func verifyUid(uid uint64) error {

@@ -74,7 +74,6 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 		StartTs: startTs,
 		Indices: []uint64{atomic.AddUint64(&index, 1)},
 	}
-	txn = posting.Txns().PutOrMergeIndex(txn)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, txn))
 

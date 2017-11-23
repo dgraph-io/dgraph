@@ -32,6 +32,8 @@ func TestSystem(t *testing.T) {
 	t.Run("n-quad mutation", wrap(NQuadMutationTest))
 	t.Run("expand all lang test", wrap(ExpandAllLangTest))
 	t.Run("list with languages", wrap(ListWithLanguagesTest))
+	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
+	t.Run("expand all with reverse predicates", wrap(ExpandAllReversePredicatesTest))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -225,4 +227,133 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 			{ "xid": "apple" }
 		]
 	}]}`, string(resp.Json))
+}
+
+func DeleteAllReverseIndex(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+	require.NoError(t, c.Alter(ctx, &protos.Operation{Schema: "link: uid @reverse ."}))
+	_, err := c.NewTxn().Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		SetNquads: []byte("<0x1> <link> <0x2> ."),
+	})
+	require.NoError(t, err)
+
+	_, err = c.NewTxn().Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		DelNquads: []byte("<0x1> <link> * ."),
+	})
+	resp, err := c.NewTxn().Query(ctx, "{ q(func: uid(0x2)) { ~link { uid } }}")
+	require.NoError(t, err)
+	CompareJSON(t, `{"q":[]}`, string(resp.Json))
+
+	_, err = c.NewTxn().Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		SetNquads: []byte("<0x1> <link> <0x3> ."),
+	})
+	resp, err = c.NewTxn().Query(ctx, "{ q(func: uid(0x3)) { ~link { uid } }}")
+	require.NoError(t, err)
+	CompareJSON(t, `{"q":[{"~link": [{"uid": "0x1"}]}]}`, string(resp.Json))
+}
+
+func ExpandAllReversePredicatesTest(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &protos.Operation{
+		Schema: `link: uid @reverse .`,
+	}))
+
+	_, err := c.NewTxn().Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			# SPO
+			<0x1> <link> <0x2> .
+
+			# SP*
+			<0x3> <link> <0x4> .
+			<0x3> <link> <0x5> .
+
+			# S**
+			<0x6> <link> <0x7> .
+		`),
+	})
+	require.NoError(t, err)
+
+	// Make sure expand(_all_) follows reverse edges.
+	resp, err := c.NewTxn().Query(ctx, `
+		{
+			spo(func: uid(0x2)) {
+				uid
+				expand(_all_) {
+					uid
+				}
+			}
+		}
+	`)
+	require.NoError(t, err)
+	CompareJSON(t, `
+	{
+		"spo": [
+			{
+				"uid": "0x2",
+				"~link": [
+					{
+						"uid": "0x1"
+					}
+				]
+			}
+		]
+	}`, string(resp.GetJson()))
+
+	// Delete nodes with reverse edges, and make sure the entries in
+	// _predicate_ are removed.
+	_, err = c.NewTxn().Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(`
+			<0x1> <link> <0x2> .
+			<0x3> <link> * .
+			<0x6> * * .
+		`),
+	})
+	require.NoError(t, err)
+
+	resp, err = c.NewTxn().Query(ctx, `
+		{
+			spo(func: uid(0x2)) {
+				expand(_all_) {
+					uid
+				}
+			}
+			spstar(func: uid(0x4, 0x5)) {
+				uid
+				expand(_all_) {
+					uid
+				}
+			}
+			sstarstar(func: uid(0x7)) {
+				uid
+				expand(_all_) {
+					uid
+				}
+			}
+		}
+	`)
+	require.NoError(t, err)
+	CompareJSON(t, `
+		{
+		  "spo": [],
+		  "spstar": [
+			{
+			  "uid": "0x4"
+			},
+			{
+			  "uid": "0x5"
+			}
+		  ],
+		  "sstarstar": [
+			{
+			  "uid": "0x7"
+			}
+		  ]
+		}
+	`, string(resp.GetJson()))
 }
