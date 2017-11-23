@@ -1742,6 +1742,11 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if err != nil {
 				return out, err
 			}
+			rpreds, err := getReversePredicatesOverNetwork(ctx)
+			if err != nil {
+				return out, err
+			}
+			child.ExpandPreds[0].Values = append(child.ExpandPreds[0].Values, rpreds...)
 		}
 
 		up := uniquePreds(child.ExpandPreds)
@@ -1776,6 +1781,27 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 	}
 	return out, nil
+}
+
+func getReversePredicatesOverNetwork(ctx context.Context) ([]*protos.TaskValue, error) {
+	schs, err := worker.GetSchemaOverNetwork(ctx, &protos.SchemaRequest{})
+	if err != nil {
+		return nil, err
+	}
+	var preds []*protos.TaskValue
+	for _, sch := range schs {
+		if !sch.Reverse {
+			continue
+		}
+		pred := make([]byte, 1+len(sch.Predicate))
+		pred[0] = '~'
+		copy(pred[1:], sch.Predicate)
+		preds = append(preds, &protos.TaskValue{
+			Val:     pred,
+			ValType: int32(protos.Posting_DEFAULT),
+		})
+	}
+	return preds, nil
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
