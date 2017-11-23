@@ -2543,6 +2543,28 @@ All facets on an edge are queried with `@facets`.
 {{</ runnable >}}
 
 
+### Alias with facets
+
+Alias can be specified while requesting specific predicates. Syntax is similar to how would request
+alias for other predicates. `orderasc` and `orderdesc` are not allowed as alias as they have special
+meaning. Apart from that anything else can be set as alias.
+
+Here we set `car_since`, `close_friend` alias for `since`, `close` facets respectively.
+{{< runnable >}}
+{
+   data(func: eq(name, "Alice")) {
+     name
+     mobile
+     car @facets(car_since: since)
+     friend @facets(close_friend: close) {
+       name
+     }
+   }
+}
+{{</ runnable >}}
+
+
+
 ### Facets on UID predicates
 
 Facets on UID edges work similarly to facets on value edges.

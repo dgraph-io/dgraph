@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Added
+
+* Support for alias while asking for facets.
+
 ### Fixed
 
 * `expand(_all_)` now correctly gives all language variants of a string.
