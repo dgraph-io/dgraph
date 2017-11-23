@@ -243,11 +243,12 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	})
 	var prevKey []byte
 	var pl *protos.PostingList
+	var plist *List
 	i := 0
 	for i < len(tx.deltas) {
 		d := tx.deltas[i]
 		if !bytes.Equal(prevKey, d.key) {
-			plist := Get(d.key)
+			plist = Get(d.key)
 			if plist.AlreadyCommitted(tx.StartTs) {
 				// Delta already exists, so skip the key
 				// There won't be any race from lru eviction, because we don't
@@ -262,7 +263,6 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		}
 		prevKey = d.key
 		var meta byte
-		d.posting.CommitTs = commitTs
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
 			pl.Postings = pl.Postings[:0]
 			meta = BitCompletePosting // Indicates that this is the full posting list.
@@ -284,7 +284,12 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 			meta = bitDeltaPosting
 		}
 
+		// delta postings are pointers to the postings present in the Pl present in lru.
+		// commitTs is accessed using RLock & atomics except in marshal so no RLock.
+		// TODO: Fix this hack later
+		plist.Lock()
 		val, err := pl.Marshal()
+		plist.Unlock()
 		x.Check(err)
 		if err = txn.SetWithMeta([]byte(d.key), val, meta); err == badger.ErrTxnTooBig {
 			if err := txn.CommitAt(commitTs, nil); err != nil {

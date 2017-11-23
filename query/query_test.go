@@ -5869,6 +5869,8 @@ var maxPendingCh chan uint64
 func TestMain(m *testing.M) {
 	x.Init(true)
 
+	odch = make(chan *protos.OracleDelta, 100)
+	maxPendingCh = make(chan uint64, 100)
 	StartDummyZero()
 
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -5909,8 +5911,6 @@ func TestMain(m *testing.M) {
 	err = schema.ParseBytes([]byte(schemaStr), 1)
 	x.Check(err)
 
-	odch = make(chan *protos.OracleDelta, 100)
-	maxPendingCh = make(chan uint64, 100)
 	go updateMaxPending()
 	r := m.Run()
 

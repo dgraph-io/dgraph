@@ -43,17 +43,11 @@ func timestamp() uint64 {
 
 func addEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
 	edge.Op = protos.DirectedEdge_SET
-	//	raftIndex++
-	//	rv := x.RaftValue{Group: 1, Index: raftIndex}
-	//	ctx := context.WithValue(context.Background(), "raft", rv)
 	commitTransaction(t, edge, l)
 }
 
 func delEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
 	edge.Op = protos.DirectedEdge_DEL
-	//	raftIndex++
-	//	rv := x.RaftValue{Group: 1, Index: raftIndex}
-	//	ctx := context.WithValue(context.Background(), "raft", rv)
 	commitTransaction(t, edge, l)
 }
 
@@ -110,30 +104,14 @@ func taskValues(t *testing.T, v []*protos.TaskValue) []string {
 	return out
 }
 
-func initTest(t *testing.T, schemaStr string) (string, *badger.ManagedDB) {
+func initTest(t *testing.T, schemaStr string) {
 	err := schema.ParseBytes([]byte(schemaStr), 1)
 	require.NoError(t, err)
-
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-
-	opt := badger.DefaultOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
-	ps, err := badger.OpenManaged(opt)
-	x.Check(err)
-	pstore = ps
-
-	posting.Init(ps)
 	populateGraph(t)
-
-	return dir, ps
 }
 
 func TestProcessTask(t *testing.T) {
-	dir, ps := initTest(t, `neighbour: uid .`)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+	initTest(t, `neighbour: uid .`)
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
 	r, err := helpProcessTask(context.Background(), query, 1)
@@ -173,9 +151,7 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *protos.Query {
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to RocksDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
-	dir, ps := initTest(t, `friend:string @index(term) .`)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+	initTest(t, `friend:string @index(term) .`)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
 	r, err := helpProcessTask(context.Background(), query, 1)
@@ -253,9 +229,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
 // MergeLists in between a lot of updates.
 func TestProcessTaskIndex(t *testing.T) {
-	dir, ps := initTest(t, `friend:string @index(term) .`)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+	initTest(t, `friend:string @index(term) .`)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
 	r, err := helpProcessTask(context.Background(), query, 1)
@@ -635,5 +609,18 @@ func TestMain(m *testing.M) {
 	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &protos.Tablet{GroupId: 1}
 	gr.tablets["friend_not_served"] = &protos.Tablet{GroupId: 2}
 	gr.tablets[""] = &protos.Tablet{GroupId: 1}
+
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	opt.ValueDir = dir
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	posting.Init(ps)
+	Init(ps)
 	os.Exit(m.Run())
 }

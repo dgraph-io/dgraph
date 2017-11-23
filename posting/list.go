@@ -457,7 +457,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	} else {
 		for _, mpost := range l.mlayer {
 			if mpost.StartTs == startTs {
-				mpost.CommitTs = commitTs
+				atomic.StoreUint64(&mpost.CommitTs, commitTs)
 				l.numCommits++
 			}
 		}
@@ -523,13 +523,15 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 
 func (l *List) inSnapshot(mpost *protos.Posting, readTs, deleteTs uint64) bool {
 	l.AssertRLock()
-	if mpost.CommitTs == 0 {
-		mpost.CommitTs = Oracle().CommitTs(mpost.StartTs)
+	commitTs := atomic.LoadUint64(&mpost.CommitTs)
+	if commitTs == 0 {
+		commitTs = Oracle().CommitTs(mpost.StartTs)
+		atomic.StoreUint64(&mpost.CommitTs, commitTs)
 	}
-	if mpost.CommitTs == 0 {
+	if commitTs == 0 {
 		return mpost.StartTs == readTs
 	}
-	return mpost.CommitTs <= readTs && mpost.CommitTs >= deleteTs
+	return commitTs <= readTs && commitTs >= deleteTs
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
@@ -573,7 +575,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 		}
 		if l.minTs > deleteTs && pitr.Valid() {
 			pp = pitr.Posting()
-			pp.CommitTs = l.minTs
+			atomic.StoreUint64(&pp.CommitTs, l.minTs)
 		} else {
 			pp = emptyPosting
 		}
@@ -684,7 +686,8 @@ func (l *List) rollup() error {
 	// Pick all committed entries
 	x.AssertTrue(l.minTs <= l.commitTs)
 	err := l.iterate(l.commitTs, 0, func(p *protos.Posting) bool {
-		if p.CommitTs == 0 || p.CommitTs > l.commitTs {
+		commitTs := atomic.LoadUint64(&p.CommitTs)
+		if commitTs == 0 || commitTs > l.commitTs {
 			return true
 		}
 		buf = append(buf, p.Uid)
@@ -714,7 +717,8 @@ func (l *List) rollup() error {
 	}
 	midx := 0
 	for _, mpost := range l.mlayer {
-		if mpost.CommitTs == 0 || mpost.CommitTs > l.commitTs {
+		commitTs := atomic.LoadUint64(&mpost.CommitTs)
+		if commitTs == 0 || commitTs > l.commitTs {
 			l.mlayer[midx] = mpost
 			midx++
 		}
@@ -766,6 +770,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
+	// Copy this over because minTs can change by the time callback returns.
+	minTs = l.minTs
 	retries := 0
 	var f func(error)
 	f = func(err error) {
@@ -777,7 +783,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			}
 			// Error from badger should be temporary, so we can retry.
 			retries += 1
-			doAsyncWrite(l.minTs, l.key, data, meta, f)
+			doAsyncWrite(minTs, l.key, data, meta, f)
 			return
 		}
 		x.BytesWrite.Add(int64(len(data)))
@@ -786,10 +792,10 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
 			lcache.delete(l.key)
 		}
-		pstore.PurgeVersionsBelow(l.key, l.minTs)
+		pstore.PurgeVersionsBelow(l.key, minTs)
 	}
 
-	doAsyncWrite(l.minTs, l.key, data, meta, f)
+	doAsyncWrite(minTs, l.key, data, meta, f)
 	return true, nil
 }
 

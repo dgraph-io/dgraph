@@ -28,11 +28,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -75,51 +73,34 @@ func populateGraphExport(t *testing.T) {
 	}
 }
 
-func initTestExport(t *testing.T, schemaStr string) (string, *badger.ManagedDB) {
+func initTestExport(t *testing.T, schemaStr string) {
 	schema.ParseBytes([]byte(schemaStr), 1)
 
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-
-	opt := badger.DefaultOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
-	db, err := badger.OpenManaged(opt)
-	x.Check(err)
-
-	posting.Init(db)
-	Init(db)
 	val, err := (&protos.SchemaUpdate{ValueType: protos.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
-	txn := db.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.SchemaKey("friend"), val)
+	txn := pstore.NewTransactionAt(math.MaxUint64, true)
+	require.NoError(t, txn.Set(x.SchemaKey("friend"), val))
 	// Schema is always written at timestamp 1
-	txn.CommitAt(1, nil)
+	require.NoError(t, txn.CommitAt(1, nil))
 	txn.Discard()
 
 	require.NoError(t, err)
 	val, err = (&protos.SchemaUpdate{ValueType: protos.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
-	txn = db.NewTransactionAt(math.MaxUint64, true)
+	txn = pstore.NewTransactionAt(math.MaxUint64, true)
 	txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	require.NoError(t, err)
 	txn.Set(x.SchemaKey("friend_not_served"), val)
-	txn.CommitAt(1, nil)
+	require.NoError(t, txn.CommitAt(1, nil))
 	txn.Discard()
-
-	require.NoError(t, err)
 	populateGraphExport(t)
-
-	return dir, db
 }
 
 func TestExport(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	dir, ps := initTestExport(t, "name:string @index .")
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+	initTestExport(t, "name:string @index .")
 	// Remove already existing export folders is any.
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)

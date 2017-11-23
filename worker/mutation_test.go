@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -131,8 +132,8 @@ func TestAddToMutationArray(t *testing.T) {
 }
 
 func TestCheckSchema(t *testing.T) {
-	dir, _ := initTest(t, "name:string @index(term) .")
-	defer os.RemoveAll(dir)
+	posting.DeleteAll()
+	initTest(t, "name:string @index(term) .")
 	// non uid to uid
 	s1 := &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_UID}
 	require.NoError(t, checkSchema(s1))
