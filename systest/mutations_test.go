@@ -236,6 +236,7 @@ func DeleteAllReverseIndex(t *testing.T, c *client.Dgraph) {
 		SetNquads: []byte("<0x1> <link> <0x2> ."),
 	})
 	require.NoError(t, err)
+
 	_, err = c.NewTxn().Mutate(ctx, &protos.Mutation{
 		CommitNow: true,
 		DelNquads: []byte("<0x1> <link> * ."),
@@ -243,4 +244,12 @@ func DeleteAllReverseIndex(t *testing.T, c *client.Dgraph) {
 	resp, err := c.NewTxn().Query(ctx, "{ q(func: uid(0x2)) { ~link { uid } }}")
 	require.NoError(t, err)
 	CompareJSON(t, `{"q":[]}`, string(resp.Json))
+
+	_, err = c.NewTxn().Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		SetNquads: []byte("<0x1> <link> <0x3> ."),
+	})
+	resp, err = c.NewTxn().Query(ctx, "{ q(func: uid(0x3)) { ~link { uid } }}")
+	require.NoError(t, err)
+	CompareJSON(t, `{"q":[{"~link": [{"uid": "0x1"}]}]}`, string(resp.Json))
 }
