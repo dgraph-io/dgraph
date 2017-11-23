@@ -18,7 +18,6 @@
 package worker
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
