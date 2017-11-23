@@ -23,57 +23,55 @@ option java_outer_classname = "DgraphProto";
 
 // Graph response.
 service Dgraph {
-    rpc Query (Request)           returns (Response) {}
-    rpc Mutate (Mutation)         returns (Assigned) {}
-    rpc Alter (Operation)         returns (Payload) {}
-    rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
-    rpc CheckVersion(Check)       returns (Version) {}
+	rpc Query (Request)            returns (Response) {}
+	rpc Mutate (Mutation)          returns (Assigned) {}
+	rpc Alter (Operation)          returns (Payload) {}
+	rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
+	rpc CheckVersion(Check)        returns (Version) {}
 }
 
 message Request {
-    string query = 1;
-    map<string, string> vars = 2; // Support for GraphQL like variables.
+	string query = 1;
+	map<string, string> vars = 2; // Support for GraphQL like variables.
 
-    uint64 start_ts = 13;
-    LinRead lin_read = 14;
+	uint64 start_ts = 13;
+	LinRead lin_read = 14;
 }
 
 message Response {
-    bytes json = 1;
-    repeated SchemaNode schema = 2;
-    TxnContext txn = 3;
-    Latency latency = 12;
+	bytes json = 1;
+	repeated SchemaNode schema = 2;
+	TxnContext txn = 3;
+	Latency latency = 12;
 }
 
-
-
 message Assigned {
-  map<string, string> uids = 1;
-  TxnContext context = 2;
+	map<string, string> uids = 1;
+	TxnContext context = 2;
 }
 
 message Mutation {
-  bytes set_json = 1;
-  bytes delete_json = 2;
-  bytes set_nquads = 3;
-  bytes del_nquads = 4;
+	bytes set_json = 1;
+	bytes delete_json = 2;
+	bytes set_nquads = 3;
+	bytes del_nquads = 4;
 
-  repeated NQuad set = 10;
-  repeated NQuad del = 11;
-  uint64 start_ts = 13;
-  bool commit_now = 14;
+	repeated NQuad set = 10;
+	repeated NQuad del = 11;
+	uint64 start_ts = 13;
+	bool commit_now = 14;
 }
 
 
 message AssignedIds {
-    uint64 startId = 1;
-    uint64 endId = 2;
+	uint64 startId = 1;
+	uint64 endId = 2;
 }
 
 message Operation {
-  string schema = 1;
-  string drop_attr = 2;
-  bool drop_all = 3;
+	string schema = 1;
+	string drop_attr = 2;
+	bool drop_all = 3;
 	uint64 startTs = 4;
 }
 
@@ -83,62 +81,62 @@ message Payload {
 }
 
 message TxnContext {
-  uint64 start_ts = 1;
-  uint64 commit_ts = 2;
-  bool aborted = 3;
-  repeated string keys = 4;
-  LinRead lin_read = 13;
+	uint64 start_ts = 1;
+	uint64 commit_ts = 2;
+	bool aborted = 3;
+	repeated string keys = 4;
+	LinRead lin_read = 13;
 }
 
 message Check {}
 
 message Version {
-    string tag = 1;
+	string tag = 1;
 }
 
 message LinRead {
-  map<uint32, uint64> ids = 1;
+	map<uint32, uint64> ids = 1;
 }
 
 message Latency {
-    uint64 parsing_ns = 1;
-    uint64 processing_ns = 2;
-    uint64 encoding_ns = 3;
+	uint64 parsing_ns = 1;
+	uint64 processing_ns = 2;
+	uint64 encoding_ns = 3;
 }
 
 message NQuad {
-    string subject = 1;
-    string predicate = 2;
-    string object_id = 3;
-    Value object_value = 4;
-    string label = 5;
-    string lang = 6;
-    repeated Facet facets = 7;
+	string subject = 1;
+	string predicate = 2;
+	string object_id = 3;
+	Value object_value = 4;
+	string label = 5;
+	string lang = 6;
+	repeated Facet facets = 7;
 }
 
 message Value {
-    oneof val {
-        string default_val = 1;
-        bytes bytes_val = 2;
-        int64 int_val = 3;
-        bool bool_val = 4;
-        string str_val = 5;
-        double double_val = 6;
-        bytes geo_val = 7;  // Geo data in WKB format
-        bytes date_val = 8;
-        bytes datetime_val = 9;
-        string password_val = 10;
-        uint64 uid_val=11;
-    }
+	oneof val {
+		string default_val = 1;
+		bytes bytes_val = 2;
+		int64 int_val = 3;
+		bool bool_val = 4;
+		string str_val = 5;
+		double double_val = 6;
+		bytes geo_val = 7;  // Geo data in WKB format
+		bytes date_val = 8;
+		bytes datetime_val = 9;
+		string password_val = 10;
+		uint64 uid_val=11;
+	}
 }
 
 message Facet {
 	enum ValType {
-	     STRING = 0;
-	     INT = 1;
-	     FLOAT = 2;
-	     BOOL = 3;
-	     DATETIME = 4;
+		STRING = 0;
+		INT = 1;
+		FLOAT = 2;
+		BOOL = 3;
+		DATETIME = 4;
 	}
 
 	string key = 1;
@@ -161,3 +159,4 @@ message SchemaNode {
 	bool list = 7;
 }
 
+// vim: noexpandtab sw=2 ts=2

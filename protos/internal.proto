@@ -33,9 +33,9 @@ message TaskValue {
 }
 
 message SrcFunction {
-  string name = 1;
-  repeated string args = 3;
-  bool isCount = 4;
+	string name = 1;
+	repeated string args = 3;
+	bool isCount = 4;
 }
 
 message Query {
@@ -58,7 +58,7 @@ message Query {
 	bool expand_all = 10; // expand all language variants.
 
 	uint64 read_ts = 13;
-  LinRead lin_read = 14;
+	LinRead lin_read = 14;
 }
 
 message ValueList {
@@ -77,7 +77,7 @@ message Result {
 	repeated FacetsList facet_matrix = 5;
 	repeated LangList lang_matrix = 6;
 
-  LinRead lin_read = 14;
+	LinRead lin_read = 14;
 }
 
 message Order {
@@ -93,13 +93,13 @@ message SortMessage {
 	int32 offset = 4;  // Skip this many elements.
 
 	uint64 read_ts = 13;
-  LinRead lin_read = 14;
+	LinRead lin_read = 14;
 }
 
 message SortResult {
 	repeated List uid_matrix = 1;
 
-  LinRead lin_read = 14;
+	LinRead lin_read = 14;
 }
 
 message RaftContext {
@@ -119,48 +119,48 @@ message Member {
 	bool am_dead = 5;
 	uint64 last_update = 6;
 
-  bool cluter_info_only = 13;
+	bool cluter_info_only = 13;
 }
 
 message Group {
-  map<uint64, Member> members = 1; // Raft ID is the key.
-  map<string, Tablet> tablets = 2; // Predicate + others are key.
+	map<uint64, Member> members = 1; // Raft ID is the key.
+	map<string, Tablet> tablets = 2; // Predicate + others are key.
 }
 
 message ZeroProposal {
-  uint32 id = 1;
-  Member member = 2;
-  Tablet tablet = 3;
-  uint64 maxLeaseId = 4;
-  uint64 maxTxnTs = 5;
-  uint64 maxRaftId = 6;
-  TxnContext txn = 7;
+	uint32 id = 1;
+	Member member = 2;
+	Tablet tablet = 3;
+	uint64 maxLeaseId = 4;
+	uint64 maxTxnTs = 5;
+	uint64 maxRaftId = 6;
+	TxnContext txn = 7;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
 // in the caller server; and the membership updates recorded by the callee server since
 // the provided lastUpdate.
 message MembershipState {
-  uint64 counter = 1;  // used to find latest membershipState in case of race.
-  map<uint32, Group> groups = 2;
-  map<uint64, Member> zeros = 3;
-  uint64 maxLeaseId = 4;
-  uint64 maxTxnTs = 5;
-  uint64 maxRaftId = 6;
-  repeated Member removed = 7;
+	uint64 counter = 1;  // used to find latest membershipState in case of race.
+	map<uint32, Group> groups = 2;
+	map<uint64, Member> zeros = 3;
+	uint64 maxLeaseId = 4;
+	uint64 maxTxnTs = 5;
+	uint64 maxRaftId = 6;
+	repeated Member removed = 7;
 }
 
 message ConnectionState {
-  Member member = 1;
-  MembershipState state = 2;
+	Member member = 1;
+	MembershipState state = 2;
 }
 
 message Tablet {
-  uint32 group_id  = 1; // Served by which group.
-  string predicate = 2;
+	uint32 group_id  = 1; // Served by which group.
+	string predicate = 2;
 	bool force       = 3; // Used while moving predicate.
-  bool read_only   = 4;  // Used to block mutations on this predicate.
-  int64 space      = 7;
+	bool read_only   = 4;  // Used to block mutations on this predicate.
+	int64 space      = 7;
 }
 
 message DirectedEdge {
@@ -188,7 +188,7 @@ message Mutations {
 }
 
 message KeyValues {
-  repeated KV kv = 1;
+	repeated KV kv = 1;
 }
 
 message Proposal {
@@ -239,7 +239,6 @@ message Posting {
 		REF=0;          // UID
 		VALUE=1;        // simple, plain value
 		VALUE_LANG=2;   // value with specified language
-        // VALUE_TIMESERIES=3; // value from timeseries, with specified timestamp
 	}
 	PostingType posting_type = 4;
 	bytes lang_tag = 5; // Only set for VALUE_LANG
@@ -324,10 +323,10 @@ message MapEntry {
 }
 
 message MovePredicatePayload {
- string predicate = 1;
- uint32 source_group_id = 2;
- uint32 dest_group_id = 3;
- MembershipState state = 4;
+	string predicate = 1;
+	uint32 source_group_id = 2;
+	uint32 dest_group_id = 3;
+	MembershipState state = 4;
 }
 
 // BackupPayload is used both as a request and a response.
@@ -347,14 +346,14 @@ message ExportPayload {
 }
 
 message OracleDelta {
-  map<uint64, uint64> commits = 1;
-  repeated uint64 aborts = 2;
-  uint64 max_pending = 3;
-  // implement tmax.
+	map<uint64, uint64> commits = 1;
+	repeated uint64 aborts = 2;
+	uint64 max_pending = 3;
+	// implement tmax.
 }
 
 message TxnTimestamps {
-  repeated uint64 ts = 1;
+	repeated uint64 ts = 1;
 }
 
 service Raft {
@@ -364,14 +363,14 @@ service Raft {
 }
 
 service Zero {
-	rpc Connect (Member)      returns (ConnectionState) {}
-	rpc Update (stream Group) returns (stream MembershipState) {}
-  rpc Oracle (Payload) returns (stream OracleDelta) {}
-	rpc ShouldServe (Tablet)  returns (Tablet) {}
-	rpc AssignUids (Num)      returns (AssignedIds) {}
-  rpc Timestamps (Num)      returns (AssignedIds) {}
-  rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
-	rpc TryAbort (TxnTimestamps) returns (TxnTimestamps) {}
+	rpc Connect (Member)           returns (ConnectionState) {}
+	rpc Update (stream Group)      returns (stream MembershipState) {}
+	rpc Oracle (Payload)           returns (stream OracleDelta) {}
+	rpc ShouldServe (Tablet)       returns (Tablet) {}
+	rpc AssignUids (Num)           returns (AssignedIds) {}
+	rpc Timestamps (Num)           returns (AssignedIds) {}
+	rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
+	rpc TryAbort (TxnTimestamps)   returns (TxnTimestamps) {}
 }
 
 service Worker {
@@ -382,7 +381,7 @@ service Worker {
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
 	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
-	rpc MinTxnTs (Payload)         returns (Num) {}
+	rpc MinTxnTs (Payload)                        returns (Num) {}
 
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
 	rpc ReceivePredicate(stream KV)         returns (Payload) {}
@@ -390,6 +389,7 @@ service Worker {
 }
 
 message Num {
-    uint64 val = 1;
+	uint64 val = 1;
 }
 
+// vim: noexpandtab sw=2 ts=2
