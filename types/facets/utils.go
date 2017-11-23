@@ -60,9 +60,11 @@ func CopyFacets(fcs []*protos.Facet, param *protos.FacetParams) (fs []*protos.Fa
 		f := fcs[fidx]
 		if param.AllKeys || param.Param[kidx].Key == f.Key {
 			fcopy := &protos.Facet{Key: f.Key,
-				Alias:   param.Param[kidx].Alias,
 				Value:   nil,
 				ValType: f.ValType,
+			}
+			if !param.AllKeys {
+				fcopy.Alias = param.Param[kidx].Alias
 			}
 			fcopy.Value = make([]byte, len(f.Value))
 			copy(fcopy.Value, f.Value)
