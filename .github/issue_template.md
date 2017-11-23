@@ -1,4 +1,4 @@
-Please answer these questions before submitting your issue. Thanks!
+If you suspect this could be a bug, follow the template.
 
 ### What version of Dgraph are you using?
 
@@ -6,10 +6,10 @@ Please answer these questions before submitting your issue. Thanks!
 ### Have you tried reproducing the issue with latest release?
 
 
-### What are the specifications of the hardware(RAM, OS)?
+### What is the hardware spec (RAM, OS)?
 
 
-### Steps to reproduce the issue(command/config used to run Dgraph).
+### Steps to reproduce the issue (command/config used to run Dgraph).
 
 
 ### Expected behaviour and actual result.

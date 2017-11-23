@@ -117,21 +117,29 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 // If CommitNow is set, then this call will result in the transaction
 // being committed. In this case, an explicit call to Commit doesn't need to
 // subsequently be made.
+//
+// If the mutation fails, then the transaction is discarded and all future
+// operations on it will fail.
 func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
 	if txn.finished {
 		return nil, ErrFinished
 	}
 
+	txn.mutated = true
 	mu.StartTs = txn.context.StartTs
 	dc := txn.dg.anyClient()
 	ag, err := dc.Mutate(ctx, mu)
 	if err != nil {
 		if s, ok := status.FromError(err); ok && s.Message() == y.ErrAborted.Error() {
-			return nil, y.ErrAborted
+			err = y.ErrAborted
 		}
+		// Since a mutation error occurred, the txn should no longer be used
+		// (some mutations could have applied but not others, but we don't know
+		// which ones).  Discarding the transaction enforces that the user
+		// cannot use the txn further.
+		_ = txn.Discard(ctx) // Ignore error - user should see the original error.
 		return nil, err
 	}
-	txn.mutated = true
 	err = txn.mergeContext(ag.Context)
 	return ag, err
 }
