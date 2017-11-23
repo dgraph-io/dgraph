@@ -598,8 +598,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []uint64) *SubGraph {
 	shortestSg := new(SubGraph)
 	shortestSg.Params = params{
-		Alias:  "_path_",
-		GetUid: true,
+		Alias:    "_path_",
+		shortest: true,
 	}
 	curUid := result[0]
 	shortestSg.SrcUIDs = &protos.List{[]uint64{curUid}}
@@ -613,7 +613,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		node := new(SubGraph)
 		nodeInfo := dist[childUid]
 		node.Params = params{
-			GetUid: true,
+			shortest: true,
 		}
 		if nodeInfo.facet != nil {
 			// For consistent later processing.
@@ -631,7 +631,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 
 	node := new(SubGraph)
 	node.Params = params{
-		GetUid: true,
+		shortest: true,
 	}
 	uid := result[len(result)-1]
 	node.SrcUIDs = &protos.List{[]uint64{uid}}
@@ -646,8 +646,8 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 	for _, it := range kroutes {
 		shortestSg := new(SubGraph)
 		shortestSg.Params = params{
-			Alias:  "_path_",
-			GetUid: true,
+			Alias:    "_path_",
+			shortest: true,
 		}
 		curUid := it.route[0].uid
 		shortestSg.SrcUIDs = &protos.List{[]uint64{curUid}}
@@ -661,7 +661,7 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			childUid := it.route[i+1].uid
 			node := new(SubGraph)
 			node.Params = params{
-				GetUid: true,
+				shortest: true,
 			}
 			if it.route[i+1].facet != nil {
 				// For consistent later processing.
@@ -679,7 +679,7 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 
 		node := new(SubGraph)
 		node.Params = params{
-			GetUid: true,
+			shortest: true,
 		}
 		uid := it.route[i].uid
 		node.SrcUIDs = &protos.List{[]uint64{uid}}

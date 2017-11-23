@@ -6293,7 +6293,8 @@ func TestDebugUid(t *testing.T) {
 			me(func: uid(0x01)) {
 				name
 				friend {
-				  friend
+					name
+					friend
 				}
 			}
 		}`
@@ -6305,7 +6306,7 @@ func TestDebugUid(t *testing.T) {
 	resp := mp["data"].(map[string]interface{})["me"]
 	body, err := json.Marshal(resp)
 	require.NoError(t, err)
-	require.JSONEq(t, `[{"uid":"0x1","friend":[{"uid":"0x17","friend":[{"uid":"0x1"}]},{"uid":"0x18"},{"uid":"0x19"},{"uid":"0x1f","friend":[{"uid":"0x18"}]},{"uid":"0x65"}],"name":"Michonne"}]`, string(body))
+	require.JSONEq(t, `[{"friend":[{"name":"Rick Grimes","uid":"0x17"},{"name":"Glenn Rhee","uid":"0x18"},{"name":"Daryl Dixon","uid":"0x19"},{"name":"Andrea","uid":"0x1f"}],"name":"Michonne","uid":"0x1"}]`, string(body))
 }
 
 func TestUidAlias(t *testing.T) {
