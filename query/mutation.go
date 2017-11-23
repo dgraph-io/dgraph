@@ -9,9 +9,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -83,31 +81,6 @@ func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEd
 				Value:  []byte(pred),
 			}
 			edges = append(edges, e)
-
-			if !schema.State().IsReversed(pred) {
-				continue
-			}
-
-			var objs []uint64
-			if string(edge.GetValue()) != x.Star {
-				objs = []uint64{edge.GetValueId()}
-			} else {
-				plist := posting.Get(x.DataKey(pred, edge.GetEntity()))
-				list, err := plist.Uids(posting.ListOptions{ReadTs: m.GetStartTs()})
-				if err != nil {
-					return nil, err
-				}
-				objs = list.Uids
-			}
-			for _, obj := range objs {
-				e = &protos.DirectedEdge{
-					Op:     edge.Op,
-					Entity: obj,
-					Attr:   "_predicate_",
-					Value:  []byte("~" + pred),
-				}
-				edges = append(edges, e)
-			}
 		}
 	}
 	return edges, nil
