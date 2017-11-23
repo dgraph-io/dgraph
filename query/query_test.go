@@ -7759,3 +7759,33 @@ func TestUidWithoutDebug2(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data":{"q":[{"uid":"0x1","friend":[{"uid":"0x17"},{"uid":"0x18"},{"uid":"0x19"},{"uid":"0x1f"},{"uid":"0x65"}]}]}}`, js)
 }
+
+func TestUidWithoutDebug(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1, 24)) {
+			uid
+			friend
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"q":[{"uid":"0x1"},{"uid":"0x18"}]}}`, js)
+}
+
+func TestUidWithoutDebug2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1)) {
+			uid
+			friend {
+				uid
+			}
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"q":[{"uid":"0x1","friend":[{"uid":"0x17"},{"uid":"0x18"},{"uid":"0x19"},{"uid":"0x1f"},{"uid":"0x65"}]}]}}`, js)
+}
