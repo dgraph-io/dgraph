@@ -1742,7 +1742,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if err != nil {
 				return out, err
 			}
-			rpreds, err := getReversePredicatesOverNetwork(ctx)
+			rpreds, err := getReversePredicates(ctx)
 			if err != nil {
 				return out, err
 			}
@@ -1783,7 +1783,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	return out, nil
 }
 
-func getReversePredicatesOverNetwork(ctx context.Context) ([]*protos.TaskValue, error) {
+func getReversePredicates(ctx context.Context) ([]*protos.TaskValue, error) {
 	schs, err := worker.GetSchemaOverNetwork(ctx, &protos.SchemaRequest{})
 	if err != nil {
 		return nil, err
