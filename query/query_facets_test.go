@@ -879,3 +879,41 @@ func TestRecurseFacetOrder(t *testing.T) {
 	js = processToFastJSON(t, query)
 	require.JSONEq(t, `{"data":{"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"},{"uid":"0x65","friend|since":"2005-05-02T15:04:05Z"},{"friend":[{"friend|since":"2006-01-02T15:04:05Z"}],"uid":"0x17","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x1f","name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x19","name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"}],"uid":"0x1","name":"Michonne"}]}}`, js)
 }
+
+func TestFacetsAlias(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	query := `
+		{
+			me(func: uid(0x1)) {
+				name @facets(o: origin)
+				friend @facets(family, tagalias: tag, since) {
+					name @facets(o: origin)
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data":{"me":[{"o":"french","name":"Michonne","friend":[{"o":"french","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"o":"french","name":"Glenn Rhee","friend|family":true,"friend|since":"2004-05-02T15:04:05Z","tagalias":"Domain3"},{"name":"Daryl Dixon","friend|family":true,"friend|since":"2007-05-02T15:04:05Z","tagalias":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}]}]}}`, js)
+}
+
+func TestFacetsAlias2(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	query := `
+		{
+			me2(func: uid(0x1)) {
+				friend @facets(f: family, a as since, orderdesc: tag, close)
+			}
+
+			me(func: uid(23)) {
+				name
+				val(a)
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"me2":[{"friend":[{"friend|close":true,"f":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"friend|close":false,"f":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34}]}],"me":[{"name":"Rick Grimes"}]}}`, js)
+}

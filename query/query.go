@@ -350,6 +350,13 @@ func alreadySeen(parentIds []uint64, uid uint64) bool {
 	return false
 }
 
+func facetName(fieldName string, f *protos.Facet) string {
+	if f.Alias != "" {
+		return f.Alias
+	}
+	return fieldName + FacetDelimeter + f.Key
+}
+
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	if sg.Params.IgnoreReflex {
@@ -443,8 +450,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
 					for _, f := range fs.Facets {
-						uc.AddValue(fieldName+FacetDelimeter+f.Key,
-							facets.ValFor(f))
+						uc.AddValue(facetName(fieldName, f), facets.ValFor(f))
 					}
 				}
 				if !uc.IsEmpty() {
@@ -477,8 +483,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					dst.AddValue(fieldName+FacetDelimeter+f.Key,
-						facets.ValFor(f))
+					dst.AddValue(facetName(fieldName, f), facets.ValFor(f))
 				}
 			}
 
