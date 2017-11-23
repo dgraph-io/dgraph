@@ -340,7 +340,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","~friend","age"]}]}}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
 
 	err = deletePredicate("friend")
 	require.NoError(t, err)
@@ -366,7 +366,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","~friend","age"]}]}}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
 
 	// Lets try to change the type of predicates now.
 	err = alterSchemaWithRetry(s2)
