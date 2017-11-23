@@ -147,6 +147,7 @@ type params struct {
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	expandAll      bool     // expand all languages
+	shortest       bool
 }
 
 // Function holds the information about gql functions.
@@ -364,14 +365,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		// Push myself to stack before sending this to children.
 		sg.Params.parentIds = append(sg.Params.parentIds, uid)
 	}
-	if sg.Params.GetUid {
-		// If we are asked for count() and there are no other children,
-		// then we dont return the uids at this level so that UI doesn't render
-		// nodes without any other properties.
-		if sg.Params.uidCount == "" || len(sg.Children) != 0 {
-			dst.SetUID(uid, "uid")
-		}
-	}
 
 	var invalidUids map[uint64]bool
 	var facetsNode outputNode
@@ -447,7 +440,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 							facets.ValFor(f))
 					}
 				}
+
 				if !uc.IsEmpty() {
+					if sg.Params.GetUid {
+						uc.SetUID(childUID, "uid")
+					}
 					dst.AddListChild(fieldName, uc)
 				}
 			}
@@ -527,6 +524,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	if facetsNode != nil && !facetsNode.IsEmpty() {
 		dst.AddMapChild("@facets", facetsNode, false)
 	}
+
+	// Only for shortest path query we wan't to return uid always if there is
+	// nothing else at that level.
+	if (sg.Params.GetUid && !dst.IsEmpty()) || sg.Params.shortest {
+		dst.SetUID(uid, "uid")
+	}
+
 	return nil
 }
 

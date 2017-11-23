@@ -6293,7 +6293,8 @@ func TestDebugUid(t *testing.T) {
 			me(func: uid(0x01)) {
 				name
 				friend {
-				  friend
+					name
+					friend
 				}
 			}
 		}`
@@ -6305,7 +6306,7 @@ func TestDebugUid(t *testing.T) {
 	resp := mp["data"].(map[string]interface{})["me"]
 	body, err := json.Marshal(resp)
 	require.NoError(t, err)
-	require.JSONEq(t, `[{"uid":"0x1","friend":[{"uid":"0x17","friend":[{"uid":"0x1"}]},{"uid":"0x18"},{"uid":"0x19"},{"uid":"0x1f","friend":[{"uid":"0x18"}]},{"uid":"0x65"}],"name":"Michonne"}]`, string(body))
+	require.JSONEq(t, `[{"friend":[{"name":"Rick Grimes","uid":"0x17"},{"name":"Glenn Rhee","uid":"0x18"},{"name":"Daryl Dixon","uid":"0x19"},{"name":"Andrea","uid":"0x1f"}],"name":"Michonne","uid":"0x1"}]`, string(body))
 }
 
 func TestUidAlias(t *testing.T) {
@@ -7727,4 +7728,34 @@ func TestExpandAll(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data":{"q":[{"~friend":[{"name":"Rick Grimes"}],"survival_rate":98.990000,"_xid_":"mich","graduation":"1932-01-01T00:00:00Z","path":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"sword_present":"true","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"full_name":"Michonne's large name for hashing","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"power":13.250000,"loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","bin_data":"YmluLWRhdGE=","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","son":[{"name":"Andre"},{"name":"Helmut"}],"age":38,"school":[{"name":"School A"}],"alive":true,"gender":"female","noindex_name":"Michonne's name not indexed","address":"31, 32 street, Jupiter"}]}}`, js)
+}
+
+func TestUidWithoutDebug(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1, 24)) {
+			uid
+			friend
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"q":[{"uid":"0x1"},{"uid":"0x18"}]}}`, js)
+}
+
+func TestUidWithoutDebug2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		q(func: uid(1)) {
+			uid
+			friend {
+				uid
+			}
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data":{"q":[{"uid":"0x1","friend":[{"uid":"0x17"},{"uid":"0x18"},{"uid":"0x19"},{"uid":"0x1f"},{"uid":"0x65"}]}]}}`, js)
 }
