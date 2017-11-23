@@ -9,6 +9,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Fixed
 
 * `expand(_all_)` now correctly gives all language variants of a string.
+* Indexes now correctly maintained when deleting via `S * *` and `S P *`.
 
 ### Changed
 
