@@ -3106,12 +3106,12 @@ func TestParseFacetsOrderWithAlias(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	node := res.Query[0].Children[0].Facets
-	require.Equal(t, 6, len(node.Facet))
-	require.Equal(t, "order", node.Facet[0].Alias)
-	require.Equal(t, "abc", node.Facet[0].Key)
-	require.Equal(t, "abcd", node.Facet[1].Key)
-	require.Equal(t, "val", node.Facet[5].Key)
-	require.Equal(t, "key1", node.Facet[5].Alias)
+	require.Equal(t, 6, len(node.Param))
+	require.Equal(t, "order", node.Param[0].Alias)
+	require.Equal(t, "abc", node.Param[0].Key)
+	require.Equal(t, "abcd", node.Param[1].Key)
+	require.Equal(t, "val", node.Param[5].Key)
+	require.Equal(t, "key1", node.Param[5].Alias)
 }
 
 func TestParseFacetsDuplicateVarError(t *testing.T) {
@@ -3203,7 +3203,7 @@ func TestParseOrderbyFacet(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, "facet1", res.Query[0].Children[0].Children[0].Facets.Facet[0].Key)
+	require.Equal(t, "facet1", res.Query[0].Children[0].Children[0].Facets.Param[0].Key)
 }
 
 func TestParseFacetsMultiple(t *testing.T) {
@@ -3227,7 +3227,7 @@ func TestParseFacetsMultiple(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Facet))
+	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Param))
 }
 
 func TestParseFacetsAlias(t *testing.T) {
@@ -3251,11 +3251,11 @@ func TestParseFacetsAlias(t *testing.T) {
 
 	node := res.Query[0].Children[0].Children[0].Facets
 	require.Equal(t, false, node.AllKeys)
-	require.Equal(t, 3, len(node.Facet))
-	require.Equal(t, "a1", node.Facet[0].Alias)
-	require.Equal(t, "key1", node.Facet[0].Key)
-	require.Equal(t, "a3", node.Facet[2].Alias)
-	require.Equal(t, "key3", node.Facet[2].Key)
+	require.Equal(t, 3, len(node.Param))
+	require.Equal(t, "a1", node.Param[0].Alias)
+	require.Equal(t, "key1", node.Param[0].Key)
+	require.Equal(t, "a3", node.Param[2].Alias)
+	require.Equal(t, "key3", node.Param[2].Key)
 }
 
 func TestParseFacetsMultipleVar(t *testing.T) {
@@ -3282,7 +3282,7 @@ func TestParseFacetsMultipleVar(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Facet))
+	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Param))
 	require.Equal(t, "a", res.Query[0].Children[0].Children[0].FacetVar["key1"])
 	require.Equal(t, "", res.Query[0].Children[0].Children[0].FacetVar["key2"])
 	require.Equal(t, "b", res.Query[0].Children[0].Children[0].FacetVar["key3"])
@@ -3309,7 +3309,7 @@ func TestParseFacetsMultipleRepeat(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Facet))
+	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Param))
 }
 
 func TestParseFacetsEmpty(t *testing.T) {
@@ -3329,7 +3329,7 @@ func TestParseFacetsEmpty(t *testing.T) {
 	require.Equal(t, []string{"friends", "hometown", "age"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Facets.AllKeys)
-	require.Equal(t, 0, len(res.Query[0].Children[0].Facets.Facet))
+	require.Equal(t, 0, len(res.Query[0].Children[0].Facets.Param))
 }
 
 func TestParseFacetsFail1(t *testing.T) {
@@ -3421,9 +3421,9 @@ func TestFacetsFilterAll(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"name", "friend"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[1].Facets)
-	require.Equal(t, "close", res.Query[0].Children[1].Facets.Facet[0].Key)
-	require.Equal(t, "family", res.Query[0].Children[1].Facets.Facet[1].Key)
-	require.Equal(t, "since", res.Query[0].Children[1].Facets.Facet[2].Key)
+	require.Equal(t, "close", res.Query[0].Children[1].Facets.Param[0].Key)
+	require.Equal(t, "family", res.Query[0].Children[1].Facets.Param[1].Key)
+	require.Equal(t, "since", res.Query[0].Children[1].Facets.Param[2].Key)
 	require.NotNil(t, res.Query[0].Children[1].FacetsFilter)
 	require.Equal(t, `(OR (eq close "true") (eq family "true"))`,
 		res.Query[0].Children[1].FacetsFilter.debugString())

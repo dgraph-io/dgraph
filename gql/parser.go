@@ -61,7 +61,7 @@ type GraphQuery struct {
 	RecurseArgs  RecurseArgs
 	Cascade      bool
 	IgnoreReflex bool
-	Facets       *Facets
+	Facets       *protos.FacetParams
 	FacetsFilter *FilterTree
 	GroupbyAttrs []GroupByAttr
 	FacetVar     map[string]string
@@ -157,16 +157,16 @@ type Function struct {
 	IsValueVar bool         // eq(val(s), 5)
 }
 
-type Facet struct {
-	Key   string
-	Alias string
-}
-
-// Facet holds the information about gql Facets (edge key-value pairs).
-type Facets struct {
-	AllKeys bool
-	Facet   []Facet // keys should be in sorted order.
-}
+// type Facet struct {
+// 	Key   string
+// 	Alias string
+// }
+//
+// // Facet holds the information about gql Facets (edge key-value pairs).
+// type Facets struct {
+// 	AllKeys bool
+// 	Facet   []Facet // keys should be in sorted order.
+// }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
 var filterOpPrecedence map[string]int
@@ -1750,7 +1750,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 				}
 				facetVar[facetItem.name] = facetItem.varName
 			}
-			facets.Facet = append(facets.Facet, Facet{
+			facets.Param = append(facets.Param, &protos.FacetParam{
 				Key:   facetItem.name,
 				Alias: facetItem.alias,
 			})
@@ -1765,25 +1765,25 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 
 		// Now what?  Either close-paren or a comma.
 		if _, ok := tryParseItemType(it, itemRightRound); ok {
-			sort.Slice(facets.Facet, func(i, j int) bool {
-				return facets.Facet[i].Key < facets.Facet[j].Key
+			sort.Slice(facets.Param, func(i, j int) bool {
+				return facets.Param[i].Key < facets.Param[j].Key
 			})
 			// deduplicate facets
-			out := facets.Facet[:0]
-			flen := len(facets.Facet)
+			out := facets.Param[:0]
+			flen := len(facets.Param)
 			for i := 1; i < flen; i++ {
-				if facets.Facet[i-1].Key == facets.Facet[i].Key {
+				if facets.Param[i-1].Key == facets.Param[i].Key {
 					continue
 				}
-				out = append(out, facets.Facet[i-1])
+				out = append(out, facets.Param[i-1])
 			}
-			out = append(out, facets.Facet[flen-1])
-			facets.Facet = out
+			out = append(out, facets.Param[flen-1])
+			facets.Param = out
 			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
 			return res, true, nil
 		}
 		if item, ok := tryParseItemType(it, itemComma); !ok {
-			if len(facets.Facet) < 2 {
+			if len(facets.Param) < 2 {
 				// We have only consumed ``'@facets' '(' <facetItem>`, which means parseFilter might
 				// succeed. Return no-parse, no-error.
 				return res, false, nil
