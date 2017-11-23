@@ -55,7 +55,7 @@ message Query {
 
 	bool reverse = 7;  // Whether this is a reverse edge.
 
-	Param facet_param = 8; // which facets to fetch
+	FacetParams facet_param = 8; // which facets to fetch
 	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
 
 	bool expand_all = 10; // expand all language variants.
@@ -282,9 +282,14 @@ message Facet {
 	string val=5;
 }
 
-message Param {
+message FacetParam {
+  string key = 1;
+  string alias = 2;
+}
+
+message FacetParams {
 	bool all_keys = 1;
-	repeated string keys = 2;
+	repeated FacetParam param = 2;
 }
 
 message Facets {

@@ -18,7 +18,6 @@
 package gql
 
 import (
-	"fmt"
 	"os"
 	"runtime/debug"
 	"testing"
@@ -3098,16 +3097,21 @@ func TestParseFacetsOrderWithAlias(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x1)) {
-			friends @facets(orderdesc: closeness, order: abc, key, key1: val, abc) {
-				name
+			friends @facets(orderdesc: closeness, b as some, order: abc, key, key1: val, abcd) {
+				val(b)
 			}
 		}
 	}
 `
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	fmt.Println(res.Query[0].Children[0].Facets)
-	//	require.Contains(t, err.Error(), "Expected ',' or ')'")
+	node := res.Query[0].Children[0].Facets
+	require.Equal(t, 6, len(node.Facet))
+	require.Equal(t, "order", node.Facet[0].Alias)
+	require.Equal(t, "abc", node.Facet[0].Key)
+	require.Equal(t, "abcd", node.Facet[1].Key)
+	require.Equal(t, "val", node.Facet[5].Key)
+	require.Equal(t, "key1", node.Facet[5].Alias)
 }
 
 func TestParseFacetsDuplicateVarError(t *testing.T) {
@@ -3199,7 +3203,7 @@ func TestParseOrderbyFacet(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, "facet1", res.Query[0].Children[0].Children[0].Facets.Keys[0])
+	require.Equal(t, "facet1", res.Query[0].Children[0].Children[0].Facets.Facet[0].Key)
 }
 
 func TestParseFacetsMultiple(t *testing.T) {
@@ -3223,13 +3227,13 @@ func TestParseFacetsMultiple(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Keys))
+	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Facet))
 }
 
 func TestParseFacetsAlias(t *testing.T) {
 	query := `
 	query {
-		me(func: uid(0x1)) @facets(root1: key1) {
+		me(func: uid(0x1)) {
 			friends @facets {
 				name @facets(a1: key1, a2: key2, a3: key3)
 			}
@@ -3239,14 +3243,19 @@ func TestParseFacetsAlias(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
-	require.NotNil(t, res.Query[0].Facets)
 
 	require.NotNil(t, res.Query[0].Children[0].Facets)
 	require.Equal(t, true, res.Query[0].Children[0].Facets.AllKeys)
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
-	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Keys))
+
+	node := res.Query[0].Children[0].Children[0].Facets
+	require.Equal(t, false, node.AllKeys)
+	require.Equal(t, 3, len(node.Facet))
+	require.Equal(t, "a1", node.Facet[0].Alias)
+	require.Equal(t, "key1", node.Facet[0].Key)
+	require.Equal(t, "a3", node.Facet[2].Alias)
+	require.Equal(t, "key3", node.Facet[2].Key)
 }
 
 func TestParseFacetsMultipleVar(t *testing.T) {
@@ -3273,7 +3282,7 @@ func TestParseFacetsMultipleVar(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Keys))
+	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Facet))
 	require.Equal(t, "a", res.Query[0].Children[0].Children[0].FacetVar["key1"])
 	require.Equal(t, "", res.Query[0].Children[0].Children[0].FacetVar["key2"])
 	require.Equal(t, "b", res.Query[0].Children[0].Children[0].FacetVar["key3"])
@@ -3300,7 +3309,7 @@ func TestParseFacetsMultipleRepeat(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Keys))
+	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Facet))
 }
 
 func TestParseFacetsEmpty(t *testing.T) {
@@ -3320,7 +3329,7 @@ func TestParseFacetsEmpty(t *testing.T) {
 	require.Equal(t, []string{"friends", "hometown", "age"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Facets.AllKeys)
-	require.Equal(t, 0, len(res.Query[0].Children[0].Facets.Keys))
+	require.Equal(t, 0, len(res.Query[0].Children[0].Facets.Facet))
 }
 
 func TestParseFacetsFail1(t *testing.T) {
@@ -3412,9 +3421,9 @@ func TestFacetsFilterAll(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"name", "friend"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[1].Facets)
-	require.Equal(t, "close", res.Query[0].Children[1].Facets.Keys[0])
-	require.Equal(t, "family", res.Query[0].Children[1].Facets.Keys[1])
-	require.Equal(t, "since", res.Query[0].Children[1].Facets.Keys[2])
+	require.Equal(t, "close", res.Query[0].Children[1].Facets.Facet[0].Key)
+	require.Equal(t, "family", res.Query[0].Children[1].Facets.Facet[1].Key)
+	require.Equal(t, "since", res.Query[0].Children[1].Facets.Facet[2].Key)
 	require.NotNil(t, res.Query[0].Children[1].FacetsFilter)
 	require.Equal(t, `(OR (eq close "true") (eq family "true"))`,
 		res.Query[0].Children[1].FacetsFilter.debugString())

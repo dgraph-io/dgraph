@@ -1619,7 +1619,7 @@ L:
 }
 
 type facetRes struct {
-	f          *Facets
+	f          *protos.FacetParams
 	ft         *FilterTree
 	vmap       map[string]string
 	facetOrder string
@@ -1714,7 +1714,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	// Skip past '('
 	if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 		it.Restore(savePos)
-		var facets Facets
+		var facets protos.FacetParams
 		facets.AllKeys = true
 		res.f = &facets
 		res.vmap = make(map[string]string)
@@ -1722,7 +1722,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	}
 
 	facetVar := make(map[string]string)
-	var facets Facets
+	var facets protos.FacetParams
 	var orderdesc bool
 	var orderkey string
 
@@ -1765,25 +1765,25 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 
 		// Now what?  Either close-paren or a comma.
 		if _, ok := tryParseItemType(it, itemRightRound); ok {
-			sort.Slice(facets.Keys, func(i, j int) bool {
-				return facets.Keys[i] < facets.Keys[j]
+			sort.Slice(facets.Facet, func(i, j int) bool {
+				return facets.Facet[i].Key < facets.Facet[j].Key
 			})
 			// deduplicate facets
-			out := facets.Keys[:0]
-			flen := len(facets.Keys)
+			out := facets.Facet[:0]
+			flen := len(facets.Facet)
 			for i := 1; i < flen; i++ {
-				if facets.Keys[i-1] == facets.Keys[i] {
+				if facets.Facet[i-1].Key == facets.Facet[i].Key {
 					continue
 				}
-				out = append(out, facets.Keys[i-1])
+				out = append(out, facets.Facet[i-1])
 			}
-			out = append(out, facets.Keys[flen-1])
-			facets.Keys = out
+			out = append(out, facets.Facet[flen-1])
+			facets.Facet = out
 			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
 			return res, true, nil
 		}
 		if item, ok := tryParseItemType(it, itemComma); !ok {
-			if len(facets.Keys) < 2 {
+			if len(facets.Facet) < 2 {
 				// We have only consumed ``'@facets' '(' <facetItem>`, which means parseFilter might
 				// succeed. Return no-parse, no-error.
 				return res, false, nil
