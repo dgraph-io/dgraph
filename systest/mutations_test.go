@@ -32,6 +32,7 @@ func TestSystem(t *testing.T) {
 	t.Run("n-quad mutation", wrap(NQuadMutationTest))
 	t.Run("expand all lang test", wrap(ExpandAllLangTest))
 	t.Run("list with languages", wrap(ListWithLanguagesTest))
+	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -225,4 +226,21 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 			{ "xid": "apple" }
 		]
 	}]}`, string(resp.Json))
+}
+
+func DeleteAllReverseIndex(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+	require.NoError(t, c.Alter(ctx, &protos.Operation{Schema: "link: uid @reverse ."}))
+	_, err := c.NewTxn().Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		SetNquads: []byte("<0x1> <link> <0x2> ."),
+	})
+	require.NoError(t, err)
+	_, err = c.NewTxn().Mutate(ctx, &protos.Mutation{
+		CommitNow: true,
+		DelNquads: []byte("<0x1> <link> * ."),
+	})
+	resp, err := c.NewTxn().Query(ctx, "{ q(func: uid(0x2)) { ~link { uid } }}")
+	require.NoError(t, err)
+	CompareJSON(t, `{"q":[]}`, string(resp.Json))
 }
