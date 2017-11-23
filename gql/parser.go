@@ -157,17 +157,6 @@ type Function struct {
 	IsValueVar bool         // eq(val(s), 5)
 }
 
-// type Facet struct {
-// 	Key   string
-// 	Alias string
-// }
-//
-// // Facet holds the information about gql Facets (edge key-value pairs).
-// type Facets struct {
-// 	AllKeys bool
-// 	Facet   []Facet // keys should be in sorted order.
-// }
-
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
 var filterOpPrecedence map[string]int
 var mathOpPrecedence map[string]int
@@ -1650,7 +1639,7 @@ type facetItem struct {
 // different function.
 func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err error) {
 	// We parse this:
-	// [{orderdesc|orderasc|facetAlias}:] [varname as] facetName
+	// [{orderdesc|orderasc|alias}:] [varname as] name
 
 	savePos := it.Save()
 	defer func() {

@@ -59,7 +59,8 @@ func CopyFacets(fcs []*protos.Facet, param *protos.FacetParams) (fs []*protos.Fa
 	for kidx, fidx := 0, 0; (param.AllKeys || kidx < numKeys) && fidx < numFacets; {
 		f := fcs[fidx]
 		if param.AllKeys || param.Param[kidx].Key == f.Key {
-			fcopy := &protos.Facet{Key: f.Key,
+			fcopy := &protos.Facet{
+				Key:     f.Key,
 				Value:   nil,
 				ValType: f.ValType,
 			}

@@ -61,7 +61,7 @@ message Query {
 	bool expand_all = 10; // expand all language variants.
 
 	uint64 read_ts = 13;
-  LinRead lin_read = 14;
+	LinRead lin_read = 14;
 }
 
 message ValueList {
@@ -80,7 +80,7 @@ message Result {
 	repeated FacetsList facet_matrix = 5;
 	repeated LangList lang_matrix = 6;
 
-  LinRead lin_read = 14;
+	LinRead lin_read = 14;
 }
 
 message Order {
@@ -96,13 +96,13 @@ message SortMessage {
 	int32 offset = 4;  // Skip this many elements.
 
 	uint64 read_ts = 13;
-  LinRead lin_read = 14;
+	LinRead lin_read = 14;
 }
 
 message SortResult {
 	repeated List uid_matrix = 1;
 
-  LinRead lin_read = 14;
+	LinRead lin_read = 14;
 }
 
 message RaftContext {
@@ -122,12 +122,12 @@ message Member {
 	bool am_dead = 5;
 	uint64 last_update = 6;
 
-  bool cluter_info_only = 13;
+	bool cluster_info_only = 13;
 }
 
 message Group {
-  map<uint64, Member> members = 1; // Raft ID is the key.
-  map<string, Tablet> tablets = 2; // Predicate + others are key.
+	map<uint64, Member> members = 1; // Raft ID is the key.
+	map<string, Tablet> tablets = 2; // Predicate + others are key.
 }
 
 message ZeroProposal {
@@ -276,16 +276,16 @@ message Facet {
 	bytes value = 2;
 	ValType val_type = 3;
 	repeated string tokens = 4; // tokens of value.
-  string alias = 5; // not stored, only used for query.
+	string alias = 5; // not stored, only used for query.
 }
 
 message FacetParam {
-  string key = 1;
-  string alias = 2;
+	string key = 1;
+	string alias = 2;
 }
 
 message FacetParams {
-	bool all_keys = 1;
+	bool all_keys = 1; // keys should be in sorted order.
 	repeated FacetParam param = 2;
 }
 
