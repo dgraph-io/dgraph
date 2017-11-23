@@ -18,7 +18,6 @@
 package worker
 
 import (
-	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -105,29 +104,21 @@ func TestValidateEdgeTypeError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestAddToMutationArray(t *testing.T) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	mutationsMap := make(map[uint32]*protos.Mutations)
-	edges := []*protos.DirectedEdge{}
-	schema := []*protos.SchemaUpdate{}
-
-	edges = append(edges, &protos.DirectedEdge{
+func TestPopulateMutationMap(t *testing.T) {
+	edges := []*protos.DirectedEdge{{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
-	})
-	schema = append(schema, &protos.SchemaUpdate{
+	}}
+	schema := []*protos.SchemaUpdate{{
 		Predicate: "name",
-	})
+	}}
 	m := &protos.Mutations{Edges: edges, Schema: schema}
 
-	err = addToMutationMap(mutationsMap, m)
-	require.NoError(t, err)
+	mutationsMap := populateMutationMap(m)
 	mu := mutationsMap[1]
 	require.NotNil(t, mu)
 	require.NotNil(t, mu.Edges)
+	require.NotNil(t, mu.Schema)
 }
 
 func TestCheckSchema(t *testing.T) {

@@ -415,39 +415,39 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, chr cha
 	chr <- res
 }
 
-// addToMutationArray adds the edges to the appropriate index in the mutationArray,
-// taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*protos.Mutations, src *protos.Mutations) error {
+// populateMutationMap populates a map from group id to the mutation that
+// should be sent to that group.
+func populateMutationMap(src *protos.Mutations) map[uint32]*protos.Mutations {
+	mm := make(map[uint32]*protos.Mutations)
 	for _, edge := range src.Edges {
 		gid := groups().BelongsTo(edge.Attr)
-		mu := mutationMap[gid]
+		mu := mm[gid]
 		if mu == nil {
 			mu = &protos.Mutations{GroupId: gid}
-			mutationMap[gid] = mu
+			mm[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
 	}
 	for _, schema := range src.Schema {
 		gid := groups().BelongsTo(schema.Predicate)
-		mu := mutationMap[gid]
+		mu := mm[gid]
 		if mu == nil {
 			mu = &protos.Mutations{GroupId: gid}
-			mutationMap[gid] = mu
+			mm[gid] = mu
 		}
 		mu.Schema = append(mu.Schema, schema)
 	}
-
 	if src.DropAll {
 		for _, gid := range groups().KnownGroups() {
-			mu := mutationMap[gid]
+			mu := mm[gid]
 			if mu == nil {
 				mu = &protos.Mutations{GroupId: gid}
-				mutationMap[gid] = mu
+				mm[gid] = mu
 			}
 			mu.DropAll = true
 		}
 	}
-	return nil
+	return mm
 }
 
 func commitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.Payload, error) {
@@ -476,11 +476,7 @@ type res struct {
 func MutateOverNetwork(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
 	tctx := &protos.TxnContext{StartTs: m.StartTs}
 	tctx.LinRead = &protos.LinRead{Ids: make(map[uint32]uint64)}
-	mutationMap := make(map[uint32]*protos.Mutations)
-	err := addToMutationMap(mutationMap, m)
-	if err != nil {
-		return tctx, err
-	}
+	mutationMap := populateMutationMap(m)
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
