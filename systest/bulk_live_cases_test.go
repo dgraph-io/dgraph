@@ -292,26 +292,3 @@ func TestGoldenData(t *testing.T) {
 	// https://docs.dgraph.io/query-language/. These test most of the main
 	// functionality of dgraph.
 }
-
-func TestExpandAllReverse(t *testing.T) {
-	s := newSuite(t, `
-		name: string @index(exact) .
-		link: uid @reverse .
-	`, `
-		_:a <link> _:b .
-		_:a <name> "a" .
-		_:b <name> "b" .
-	`)
-	defer s.cleanup()
-
-	t.Run("expand all should show reverse edges", s.testCase(`
-		{q(func: eq(name, "b")) {
-			expand(_all_) { name }
-		}}
-	`, `
-		{"q": [ {
-			"name": "b",
-			"~link": [{ "name": "a" }]
-		} ]}
-	`))
-}
