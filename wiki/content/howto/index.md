@@ -3,6 +3,36 @@ date = "2017-03-20T19:35:35+11:00"
 title = "How To Guides"
 +++
 
+### Retrieving Debug Information
+
+Each Dgraph data node exposes profile over `/debug/pprof` endpoint and metrics over `/debug/vars` endpoint. Each Dgraph data node has it's own profiling and metrics information. Below is a list of debugging information exposed by Dgraph and the corresponding commands to retrieve them.
+
+If you are collecting these metrics from outside the dgraph instance you need to pass `--expose_trace=true` flag, otherwise there metrics can be collected by connecting to the instance over localhost.
+
+- Metrics exposed by Dgraph
+```
+curl http://<IP>:<HTTP_PORT>/debug/vars
+```
+
+- Heap Profile
+```
+go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/heap
+#Fetching profile from ...
+#Saved Profile in ...
+```
+The output of the command would show the location where the profile is stored.
+
+- CPU Profile
+```
+go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/profile
+```
+
+- Block Profile
+Dgraph by default doesn't collect the block profile. Dgraph must be started with `--block=<N>` with N > 1.
+```
+go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/block
+```
+
 ### Giving Nodes a Type
 
 It's often useful to give the nodes in a graph *types* (also commonly referred
