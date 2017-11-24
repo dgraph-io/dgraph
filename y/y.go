@@ -22,10 +22,12 @@ import (
 	"errors"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	ErrAborted = errors.New("Transaction has been aborted due to conflict")
+	ErrAborted  = errors.New("Transaction has been aborted. Please retry.")
+	ErrConflict = x.Errorf("Conflicts with pending transaction. Please abort.")
 )
 
 func MergeLinReads(dst *protos.LinRead, src *protos.LinRead) {

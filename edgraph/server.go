@@ -285,6 +285,9 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 	m := &protos.Mutations{Edges: edges, StartTs: mu.StartTs}
 	resp.Context, err = query.ApplyMutations(ctx, m)
 	if !mu.CommitNow {
+		if err == y.ErrConflict {
+			err = status.Errorf(codes.FailedPrecondition, err.Error())
+		}
 		return resp, err
 	}
 
