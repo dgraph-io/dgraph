@@ -16,10 +16,7 @@
 
 syntax = "proto3";
 
-package protos;
-
-option java_package = "io.dgraph";
-option java_outer_classname = "DgraphProto";
+package intern;
 
 import "api.proto";
 
@@ -58,7 +55,7 @@ message Query {
 	bool expand_all = 10; // expand all language variants.
 
 	uint64 read_ts = 13;
-	LinRead lin_read = 14;
+	api.LinRead lin_read = 14;
 }
 
 message ValueList {
@@ -77,7 +74,7 @@ message Result {
 	repeated FacetsList facet_matrix = 5;
 	repeated LangList lang_matrix = 6;
 
-	LinRead lin_read = 14;
+	api.LinRead lin_read = 14;
 }
 
 message Order {
@@ -93,13 +90,13 @@ message SortMessage {
 	int32 offset = 4;  // Skip this many elements.
 
 	uint64 read_ts = 13;
-	LinRead lin_read = 14;
+	api.LinRead lin_read = 14;
 }
 
 message SortResult {
 	repeated List uid_matrix = 1;
 
-	LinRead lin_read = 14;
+	api.LinRead lin_read = 14;
 }
 
 message RaftContext {
@@ -134,7 +131,7 @@ message ZeroProposal {
 	uint64 maxLeaseId = 4;
 	uint64 maxTxnTs = 5;
 	uint64 maxRaftId = 6;
-	TxnContext txn = 7;
+	api.TxnContext txn = 7;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -176,7 +173,7 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 8;
-	repeated Facet facets = 9;
+	repeated api.Facet facets = 9;
 }
 
 message Mutations {
@@ -194,7 +191,7 @@ message KeyValues {
 message Proposal {
 	uint32 id = 1;
 	Mutations mutations = 2;
-	TxnContext txn_context = 3;
+	api.TxnContext txn_context = 3;
 	repeated KV kv = 4;
 	MembershipState state = 5;
 	string clean_predicate = 6; // Delete the predicate which was moved to other group.
@@ -243,7 +240,7 @@ message Posting {
 	PostingType posting_type = 4;
 	bytes lang_tag = 5; // Only set for VALUE_LANG
 	string label = 6;
-	repeated Facet facets = 9;
+	repeated api.Facet facets = 9;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;
@@ -265,7 +262,7 @@ message Param {
 }
 
 message Facets {
-	repeated Facet facets = 1;
+	repeated api.Facet facets = 1;
 }
 
 message FacetsList {
@@ -294,7 +291,7 @@ message SchemaRequest {
 }
 
 message SchemaResult {
-	repeated SchemaNode schema = 1;
+	repeated api.SchemaNode schema = 1;
 }
 
 message SchemaUpdate {
@@ -357,35 +354,35 @@ message TxnTimestamps {
 }
 
 service Raft {
-	rpc Echo (Payload)            returns (Payload) {}
-	rpc RaftMessage (Payload)     returns (Payload) {}
-	rpc JoinCluster (RaftContext) returns (Payload) {}
+	rpc Echo (api.Payload)        returns (api.Payload) {}
+	rpc RaftMessage (api.Payload) returns (api.Payload) {}
+	rpc JoinCluster (RaftContext) returns (api.Payload) {}
 }
 
 service Zero {
-	rpc Connect (Member)           returns (ConnectionState) {}
-	rpc Update (stream Group)      returns (stream MembershipState) {}
-	rpc Oracle (Payload)           returns (stream OracleDelta) {}
-	rpc ShouldServe (Tablet)       returns (Tablet) {}
-	rpc AssignUids (Num)           returns (AssignedIds) {}
-	rpc Timestamps (Num)           returns (AssignedIds) {}
-	rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
-	rpc TryAbort (TxnTimestamps)   returns (TxnTimestamps) {}
+	rpc Connect (Member)               returns (ConnectionState) {}
+	rpc Update (stream Group)          returns (stream MembershipState) {}
+	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
+	rpc ShouldServe (Tablet)           returns (Tablet) {}
+	rpc AssignUids (Num)               returns (api.AssignedIds) {}
+	rpc Timestamps (Num)               returns (api.AssignedIds) {}
+	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
+	rpc TryAbort (TxnTimestamps)       returns (TxnTimestamps) {}
 }
 
 service Worker {
 	// Data serving RPCs.
-	rpc Mutate (Mutations)                        returns (TxnContext) {}
-	rpc CommitOrAbort(TxnContext)                 returns (Payload) {}
+	rpc Mutate (Mutations)                        returns (api.TxnContext) {}
+	rpc CommitOrAbort(api.TxnContext)             returns (api.Payload) {}
 	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
 	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
-	rpc MinTxnTs (Payload)                        returns (Num) {}
+	rpc MinTxnTs (api.Payload)                    returns (Num) {}
 
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
-	rpc ReceivePredicate(stream KV)         returns (Payload) {}
-	rpc MovePredicate(MovePredicatePayload) returns (Payload) {}
+	rpc ReceivePredicate(stream KV)         returns (api.Payload) {}
+	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 }
 
 message Num {

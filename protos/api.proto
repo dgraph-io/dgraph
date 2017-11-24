@@ -16,7 +16,7 @@
 
 syntax = "proto3";
 
-package protos;
+package api;
 
 option java_package = "io.dgraph";
 option java_outer_classname = "DgraphProto";
