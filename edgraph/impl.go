@@ -17,40 +17,39 @@
 package edgraph
 
 import (
+	"github.com/dgraph-io/dgraph/protos/api"
 	"golang.org/x/net/context"
 
 	"google.golang.org/grpc"
-
-	"github.com/dgraph-io/dgraph/protos"
 )
 
-// inmemoryClient implements protos.DgraphClient (it's equivalent of default grpc client, but for
+// inmemoryClient implements api.DgraphClient (it's equivalent of default grpc client, but for
 // in-memory communication (without data (un)marshaling)).
 type inmemoryClient struct {
 	srv *Server
 }
 
-func (i *inmemoryClient) Query(ctx context.Context, in *protos.Request,
-	_ ...grpc.CallOption) (*protos.Response, error) {
+func (i *inmemoryClient) Query(ctx context.Context, in *api.Request,
+	_ ...grpc.CallOption) (*api.Response, error) {
 	return i.srv.Query(ctx, in)
 }
 
-func (i *inmemoryClient) Mutate(ctx context.Context, in *protos.Mutation,
-	_ ...grpc.CallOption) (*protos.Assigned, error) {
+func (i *inmemoryClient) Mutate(ctx context.Context, in *api.Mutation,
+	_ ...grpc.CallOption) (*api.Assigned, error) {
 	return i.srv.Mutate(ctx, in)
 }
 
-func (i *inmemoryClient) Alter(ctx context.Context, in *protos.Operation,
-	_ ...grpc.CallOption) (*protos.Payload, error) {
+func (i *inmemoryClient) Alter(ctx context.Context, in *api.Operation,
+	_ ...grpc.CallOption) (*api.Payload, error) {
 	return i.srv.Alter(ctx, in)
 }
 
-func (i *inmemoryClient) CommitOrAbort(ctx context.Context, in *protos.TxnContext,
-	_ ...grpc.CallOption) (*protos.TxnContext, error) {
+func (i *inmemoryClient) CommitOrAbort(ctx context.Context, in *api.TxnContext,
+	_ ...grpc.CallOption) (*api.TxnContext, error) {
 	return i.srv.CommitOrAbort(ctx, in)
 }
 
-func (i *inmemoryClient) CheckVersion(ctx context.Context, in *protos.Check,
-	_ ...grpc.CallOption) (*protos.Version, error) {
+func (i *inmemoryClient) CheckVersion(ctx context.Context, in *api.Check,
+	_ ...grpc.CallOption) (*api.Version, error) {
 	return i.srv.CheckVersion(ctx, in)
 }

@@ -677,7 +677,7 @@ func (m *Value) GetUidVal() uint64 {
 	return 0
 }
 
-// XXX_OneofFuncs is for the internal use of the proto package.
+// XXX_OneofFuncs is for the intern.use of the proto package.
 func (*Value) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
 	return _Value_OneofMarshaler, _Value_OneofUnmarshaler, _Value_OneofSizer, []interface{}{
 		(*Value_DefaultVal)(nil),

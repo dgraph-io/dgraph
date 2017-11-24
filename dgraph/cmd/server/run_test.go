@@ -40,7 +40,8 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -68,16 +69,16 @@ var m = `
 type raftServer struct {
 }
 
-func (c *raftServer) Echo(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
+func (c *raftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
 	return in, nil
 }
 
-func (c *raftServer) RaftMessage(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
-	return &protos.Payload{}, nil
+func (c *raftServer) RaftMessage(ctx context.Context, in *api.Payload) (*api.Payload, error) {
+	return &api.Payload{}, nil
 }
 
-func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*protos.Payload, error) {
-	return &protos.Payload{}, nil
+func (c *raftServer) JoinCluster(ctx context.Context, in *intern.RaftContext) (*api.Payload, error) {
+	return &api.Payload{}, nil
 }
 
 func prepare() (dir1, dir2 string, rerr error) {
@@ -390,12 +391,12 @@ func TestSchemaMutation(t *testing.T) {
 
 ` // reset schema
 	schema.ParseBytes([]byte(""), 1)
-	expected := map[string]*protos.SchemaUpdate{
+	expected := map[string]*intern.SchemaUpdate{
 		"name": {
 			Predicate: "name",
 			Tokenizer: []string{"term", "exact"},
-			ValueType: protos.Posting_ValType(types.StringID),
-			Directive: protos.SchemaUpdate_INDEX,
+			ValueType: intern.Posting_ValType(types.StringID),
+			Directive: intern.SchemaUpdate_INDEX,
 			Explicit:  true},
 	}
 
@@ -419,11 +420,11 @@ func TestSchemaMutation1(t *testing.T) {
 
 ` // reset schema
 	schema.ParseBytes([]byte(""), 1)
-	expected := map[string]*protos.SchemaUpdate{
+	expected := map[string]*intern.SchemaUpdate{
 		"pred1": {
-			ValueType: protos.Posting_ValType(types.StringID)},
+			ValueType: intern.Posting_ValType(types.StringID)},
 		"pred2": {
-			ValueType: protos.Posting_ValType(types.DefaultID)},
+			ValueType: intern.Posting_ValType(types.DefaultID)},
 	}
 
 	err := runMutation(m)
@@ -1363,11 +1364,11 @@ func TestMain(m *testing.M) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Increment lease, so that mutations work.
-	_, err = worker.AssignUidsOverNetwork(context.Background(), &protos.Num{Val: 10e6})
+	_, err = worker.AssignUidsOverNetwork(context.Background(), &intern.Num{Val: 10e6})
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Parse GQL into internal query representation.
+	// Parse GQL into intern.query representation.
 	r := m.Run()
 	closeAll(dir1, dir2)
 	exec.Command("killall", "-9", "dgraph").Run()

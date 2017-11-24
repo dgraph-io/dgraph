@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -36,7 +36,7 @@ func ExampleTxn_Query_variables() {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
@@ -44,7 +44,7 @@ func ExampleTxn_Query_variables() {
 		Name string `json:"name,omitempty"`
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		name: string @index(exact) .
 	`
@@ -59,7 +59,7 @@ func ExampleTxn_Query_variables() {
 		Name: "Alice",
 	}
 
-	mu := &protos.Mutation{
+	mu := &api.Mutation{
 		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
@@ -105,10 +105,10 @@ func ExampleDgraph_Alter_dropAll() {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
-	op := protos.Operation{
+	op := api.Operation{
 		DropAll: true,
 	}
 	ctx := context.Background()
@@ -147,7 +147,7 @@ func ExampleTxn_Mutate() {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
@@ -178,7 +178,7 @@ func ExampleTxn_Mutate() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -190,7 +190,7 @@ func ExampleTxn_Mutate() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{
+	mu := &api.Mutation{
 		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
@@ -250,7 +250,7 @@ func ExampleTxn_Mutate_bytes() {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
@@ -259,7 +259,7 @@ func ExampleTxn_Mutate_bytes() {
 		Bytes []byte `json:"bytes,omitempty"`
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		name: string @index(exact) .
 	`
@@ -275,7 +275,7 @@ func ExampleTxn_Mutate_bytes() {
 		Bytes: []byte("raw_bytes"),
 	}
 
-	mu := &protos.Mutation{
+	mu := &api.Mutation{
 		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
@@ -335,7 +335,7 @@ func ExampleTxn_Query_unmarshal() {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
@@ -362,7 +362,7 @@ func ExampleTxn_Query_unmarshal() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -375,7 +375,7 @@ func ExampleTxn_Query_unmarshal() {
 	}
 
 	txn := dg.NewTxn()
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
@@ -433,7 +433,7 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// This example shows example for SetObject using facets.
@@ -481,7 +481,7 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
@@ -536,7 +536,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 	// This example shows example for SetObject for predicates with list type.
 	type Person struct {
@@ -550,7 +550,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 		PhoneNumber: []int64{9876, 123},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		address: [string] .
 		phone_number: [int] .
@@ -561,7 +561,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
@@ -611,7 +611,7 @@ func ExampleDeleteEdges() {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	type School struct {
@@ -647,7 +647,7 @@ func ExampleDeleteEdges() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -659,7 +659,7 @@ func ExampleDeleteEdges() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
@@ -700,7 +700,7 @@ func ExampleDeleteEdges() {
 	fmt.Println(string(resp.Json))
 
 	// Now lets delete the friend and location edge from Alice
-	mu = &protos.Mutation{}
+	mu = &api.Mutation{}
 	client.DeleteEdges(mu, uid, "friends", "loc")
 
 	mu.CommitNow = true
@@ -730,7 +730,7 @@ func ExampleTxn_Mutate_deleteNode() {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// In this test we check S * * deletion.
@@ -758,7 +758,7 @@ func ExampleTxn_Mutate_deleteNode() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -770,7 +770,7 @@ func ExampleTxn_Mutate_deleteNode() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{
+	mu := &api.Mutation{
 		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
@@ -831,7 +831,7 @@ func ExampleTxn_Mutate_deleteNode() {
 		Uid: "1000",
 	}
 
-	mu = &protos.Mutation{
+	mu = &api.Mutation{
 		CommitNow: true,
 	}
 	pb, err = json.Marshal(p2)
@@ -864,7 +864,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
@@ -891,7 +891,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -903,7 +903,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{
+	mu := &api.Mutation{
 		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
@@ -946,7 +946,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 	}
 	fmt.Printf("Response after SetObject: %+v\n\n", r)
 
-	op = &protos.Operation{
+	op = &api.Operation{
 		DropAttr: "friend",
 	}
 	err = dg.Alter(ctx, op)

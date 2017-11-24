@@ -24,14 +24,15 @@ import (
 	"strconv"
 	"unicode"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // Sorts And validates the facets.
-func SortAndValidate(fs []*protos.Facet) error {
+func SortAndValidate(fs []*api.Facet) error {
 	if len(fs) == 0 {
 		return nil
 	}
@@ -48,7 +49,7 @@ func SortAndValidate(fs []*protos.Facet) error {
 }
 
 // CopyFacets makes a copy of facets of the posting which are requested in param.Keys.
-func CopyFacets(fcs []*protos.Facet, param *protos.Param) (fs []*protos.Facet) {
+func CopyFacets(fcs []*api.Facet, param *intern.Param) (fs []*api.Facet) {
 	if param == nil || fcs == nil {
 		return nil
 	}
@@ -59,7 +60,7 @@ func CopyFacets(fcs []*protos.Facet, param *protos.Param) (fs []*protos.Facet) {
 	for kidx, fidx := 0, 0; (param.AllKeys || kidx < numKeys) && fidx < numFacets; {
 		f := fcs[fidx]
 		if param.AllKeys || param.Keys[kidx] == f.Key {
-			fcopy := &protos.Facet{Key: f.Key, Value: nil, ValType: f.ValType}
+			fcopy := &api.Facet{Key: f.Key, Value: nil, ValType: f.ValType}
 			fcopy.Value = make([]byte, len(f.Value))
 			copy(fcopy.Value, f.Value)
 			fs = append(fs, fcopy)
@@ -75,17 +76,17 @@ func CopyFacets(fcs []*protos.Facet, param *protos.Param) (fs []*protos.Facet) {
 }
 
 // valAndValType returns interface val and valtype for facet.
-func valAndValType(val string) (interface{}, protos.Facet_ValType, error) {
+func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 	if len(val) == 0 { // empty string case
-		return "", protos.Facet_STRING, nil
+		return "", api.Facet_STRING, nil
 	}
 	// strings should be in quotes.
 	if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
 		uq, err := strconv.Unquote(val)
-		return uq, protos.Facet_STRING, x.Wrapf(err, "could not unquote %q:", val)
+		return uq, api.Facet_STRING, x.Wrapf(err, "could not unquote %q:", val)
 	}
 	if intVal, err := strconv.ParseInt(val, 0, 64); err == nil {
-		return int64(intVal), protos.Facet_INT, nil
+		return int64(intVal), api.Facet_INT, nil
 	} else if numErr := err.(*strconv.NumError); numErr.Err == strconv.ErrRange {
 		// if we have only digits in val, then val is a big integer : return error
 		// otherwise try to parse as float.
@@ -97,37 +98,37 @@ func valAndValType(val string) (interface{}, protos.Facet_ValType, error) {
 			}
 		}
 		if allNumChars {
-			return nil, protos.Facet_INT, err
+			return nil, api.Facet_INT, err
 		}
 	}
 	if floatVal, err := strconv.ParseFloat(val, 64); err == nil {
 		// We can't store NaN as it is because it serializes into invalid JSON.
 		if math.IsNaN(floatVal) {
-			return nil, protos.Facet_FLOAT, fmt.Errorf("Got invalid value: NaN.")
+			return nil, api.Facet_FLOAT, fmt.Errorf("Got invalid value: NaN.")
 		}
 
-		return floatVal, protos.Facet_FLOAT, nil
+		return floatVal, api.Facet_FLOAT, nil
 	} else if numErr := err.(*strconv.NumError); numErr.Err == strconv.ErrRange {
-		return nil, protos.Facet_FLOAT, err
+		return nil, api.Facet_FLOAT, err
 	}
 	if val == "true" || val == "false" {
-		return val == "true", protos.Facet_BOOL, nil
+		return val == "true", api.Facet_BOOL, nil
 	}
 	if t, err := types.ParseTime(val); err == nil {
-		return t, protos.Facet_DATETIME, nil
+		return t, api.Facet_DATETIME, nil
 	}
-	return nil, protos.Facet_STRING, x.Errorf("Could not parse the facet value : [%s]", val)
+	return nil, api.Facet_STRING, x.Errorf("Could not parse the facet value : [%s]", val)
 }
 
 // FacetFor returns Facet for given key and val.
-func FacetFor(key, val string) (*protos.Facet, error) {
+func FacetFor(key, val string) (*api.Facet, error) {
 	v, vt, err := valAndValType(val)
 	if err != nil {
 		return nil, err
 	}
 
 	// convert facet val interface{} to binary
-	tid := TypeIDFor(&protos.Facet{ValType: vt})
+	tid := TypeIDFor(&api.Facet{ValType: vt})
 	fVal := &types.Val{Tid: types.BinaryID}
 	if err = types.Marshal(types.Val{Tid: tid, Value: v}, fVal); err != nil {
 		return nil, err
@@ -137,8 +138,8 @@ func FacetFor(key, val string) (*protos.Facet, error) {
 	if !ok {
 		return nil, x.Errorf("Error while marshalling types.Val into binary.")
 	}
-	res := &protos.Facet{Key: key, Value: fval, ValType: vt}
-	if vt == protos.Facet_STRING {
+	res := &api.Facet{Key: key, Value: fval, ValType: vt}
+	if vt == api.Facet_STRING {
 		// tokenize val.
 		res.Tokens, err = tok.GetTokens([]string{v.(string)})
 		if err == nil {
@@ -150,7 +151,7 @@ func FacetFor(key, val string) (*protos.Facet, error) {
 
 // SameFacets returns whether two facets are same or not.
 // both should be sorted by key.
-func SameFacets(a []*protos.Facet, b []*protos.Facet) bool {
+func SameFacets(a []*api.Facet, b []*api.Facet) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -166,7 +167,7 @@ func SameFacets(a []*protos.Facet, b []*protos.Facet) bool {
 }
 
 // TypeIDFor gives TypeID for facet.
-func TypeIDFor(f *protos.Facet) types.TypeID {
+func TypeIDFor(f *api.Facet) types.TypeID {
 	switch TypeIDForValType(f.ValType) {
 	case IntID:
 		return types.IntID
@@ -184,7 +185,7 @@ func TypeIDFor(f *protos.Facet) types.TypeID {
 }
 
 // ValFor converts Facet into types.Val.
-func ValFor(f *protos.Facet) types.Val {
+func ValFor(f *api.Facet) types.Val {
 	val := types.Val{Tid: types.BinaryID, Value: f.Value}
 	typId := TypeIDFor(f)
 	v, err := types.Convert(val, typId)

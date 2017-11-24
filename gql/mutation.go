@@ -21,7 +21,8 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -32,8 +33,8 @@ var (
 
 // Mutation stores the strings corresponding to set and delete operations.
 type Mutation struct {
-	Set     []*protos.NQuad
-	Del     []*protos.NQuad
+	Set     []*api.NQuad
+	Del     []*api.NQuad
 	DropAll bool
 	Schema  string
 }
@@ -58,31 +59,31 @@ func ParseUid(xid string) (uint64, error) {
 }
 
 type NQuad struct {
-	*protos.NQuad
+	*api.NQuad
 }
 
-func typeValFrom(val *protos.Value) types.Val {
+func typeValFrom(val *api.Value) types.Val {
 	switch val.Val.(type) {
-	case *protos.Value_BytesVal:
+	case *api.Value_BytesVal:
 		return types.Val{types.BinaryID, val.GetBytesVal()}
-	case *protos.Value_IntVal:
+	case *api.Value_IntVal:
 		return types.Val{types.IntID, val.GetIntVal()}
-	case *protos.Value_StrVal:
+	case *api.Value_StrVal:
 		if val.GetStrVal() == "" {
 			return types.Val{types.StringID, "_nil_"}
 		}
 		return types.Val{types.StringID, val.GetStrVal()}
-	case *protos.Value_BoolVal:
+	case *api.Value_BoolVal:
 		return types.Val{types.BoolID, val.GetBoolVal()}
-	case *protos.Value_DoubleVal:
+	case *api.Value_DoubleVal:
 		return types.Val{types.FloatID, val.GetDoubleVal()}
-	case *protos.Value_GeoVal:
+	case *api.Value_GeoVal:
 		return types.Val{types.GeoID, val.GetGeoVal()}
-	case *protos.Value_DatetimeVal:
+	case *api.Value_DatetimeVal:
 		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
-	case *protos.Value_PasswordVal:
+	case *api.Value_PasswordVal:
 		return types.Val{types.PasswordID, val.GetPasswordVal()}
-	case *protos.Value_DefaultVal:
+	case *api.Value_DefaultVal:
 		if val.GetDefaultVal() == "" {
 			return types.Val{types.DefaultID, "_nil_"}
 		}
@@ -121,13 +122,13 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 	return 0, x.Errorf("uid not found/generated for xid %s\n", subject)
 }
 
-var emptyEdge protos.DirectedEdge
+var emptyEdge intern.DirectedEdge
 
-func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*protos.DirectedEdge, error) {
+func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*intern.DirectedEdge, error) {
 	var err error
 	var objectUid uint64
 
-	out := &protos.DirectedEdge{
+	out := &intern.DirectedEdge{
 		Entity: subjectUid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
@@ -153,8 +154,8 @@ func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*prot
 	return out, nil
 }
 
-func (nq NQuad) createEdgePrototype(subjectUid uint64) *protos.DirectedEdge {
-	return &protos.DirectedEdge{
+func (nq NQuad) createEdgePrototype(subjectUid uint64) *intern.DirectedEdge {
+	return &intern.DirectedEdge{
 		Entity: subjectUid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
@@ -163,13 +164,13 @@ func (nq NQuad) createEdgePrototype(subjectUid uint64) *protos.DirectedEdge {
 	}
 }
 
-func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *protos.DirectedEdge {
+func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *intern.DirectedEdge {
 	out := nq.createEdgePrototype(subjectUid)
 	out.ValueId = objectUid
 	return out
 }
 
-func (nq NQuad) CreateValueEdge(subjectUid uint64) (*protos.DirectedEdge, error) {
+func (nq NQuad) CreateValueEdge(subjectUid uint64) (*intern.DirectedEdge, error) {
 	var err error
 
 	out := nq.createEdgePrototype(subjectUid)
@@ -179,12 +180,12 @@ func (nq NQuad) CreateValueEdge(subjectUid uint64) (*protos.DirectedEdge, error)
 	return out, nil
 }
 
-func (nq NQuad) ToDeletePredEdge() (*protos.DirectedEdge, error) {
+func (nq NQuad) ToDeletePredEdge() (*intern.DirectedEdge, error) {
 	if nq.Subject != x.Star && nq.ObjectValue.String() != x.Star {
 		return &emptyEdge, x.Errorf("Subject and object both should be *. Got: %+v", nq)
 	}
 
-	out := &protos.DirectedEdge{
+	out := &intern.DirectedEdge{
 		// This along with edge.ObjectValue == x.Star would indicate
 		// that we want to delete the predicate.
 		Entity: 0,
@@ -192,7 +193,7 @@ func (nq NQuad) ToDeletePredEdge() (*protos.DirectedEdge, error) {
 		Label:  nq.Label,
 		Lang:   nq.Lang,
 		Facets: nq.Facets,
-		Op:     protos.DirectedEdge_DEL,
+		Op:     intern.DirectedEdge_DEL,
 	}
 
 	if err := copyValue(out, nq); err != nil {
@@ -203,8 +204,8 @@ func (nq NQuad) ToDeletePredEdge() (*protos.DirectedEdge, error) {
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
-func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, error) {
-	var edge *protos.DirectedEdge
+func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*intern.DirectedEdge, error) {
+	var edge *intern.DirectedEdge
 	sUid, err := toUid(nq.Subject, newToUid)
 	if err != nil {
 		return nil, err
@@ -228,7 +229,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, e
 	return edge, nil
 }
 
-func copyValue(out *protos.DirectedEdge, nq NQuad) error {
+func copyValue(out *intern.DirectedEdge, nq NQuad) error {
 	var err error
 	var t types.TypeID
 	if out.Value, t, err = byteVal(nq); err != nil {

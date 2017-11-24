@@ -22,13 +22,13 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/bp128"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 )
 
 const jump = 32 // Jump size in InsersectWithJump.
 
 // ApplyFilter applies a filter to our UIDList.
-func ApplyFilter(u *protos.List, f func(uint64, int) bool) {
+func ApplyFilter(u *intern.List, f func(uint64, int) bool) {
 	out := u.Uids[:0]
 	for i, uid := range u.Uids {
 		if f(uid, i) {
@@ -38,7 +38,7 @@ func ApplyFilter(u *protos.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
-func IntersectCompressedWith(u []byte, afterUID uint64, v, o *protos.List) {
+func IntersectCompressedWith(u []byte, afterUID uint64, v, o *intern.List) {
 	var bi bp128.BPackIterator
 	bi.Init(u, afterUID)
 	n := bi.Length() - bi.StartIdx()
@@ -130,7 +130,7 @@ func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64
 
 // IntersectWith intersects u with v. The update is made to o.
 // u, v should be sorted.
-func IntersectWith(u, v, o *protos.List) {
+func IntersectWith(u, v, o *intern.List) {
 	n := len(u.Uids)
 	m := len(v.Uids)
 
@@ -271,13 +271,13 @@ func binIntersect(d, q []uint64, final *[]uint64) {
 }
 
 type listInfo struct {
-	l      *protos.List
+	l      *intern.List
 	length int
 }
 
-func IntersectSorted(lists []*protos.List) *protos.List {
+func IntersectSorted(lists []*intern.List) *intern.List {
 	if len(lists) == 0 {
-		return &protos.List{}
+		return &intern.List{}
 	}
 	ls := make([]listInfo, 0, len(lists))
 	for _, list := range lists {
@@ -290,7 +290,7 @@ func IntersectSorted(lists []*protos.List) *protos.List {
 	sort.Slice(ls, func(i, j int) bool {
 		return ls[i].length < ls[j].length
 	})
-	out := &protos.List{Uids: make([]uint64, ls[0].length)}
+	out := &intern.List{Uids: make([]uint64, ls[0].length)}
 	if len(ls) == 1 {
 		copy(out.Uids, ls[0].l.Uids)
 		return out
@@ -309,9 +309,9 @@ func IntersectSorted(lists []*protos.List) *protos.List {
 	return out
 }
 
-func Difference(u, v *protos.List) *protos.List {
+func Difference(u, v *intern.List) *intern.List {
 	if u == nil || v == nil {
-		return &protos.List{Uids: make([]uint64, 0)}
+		return &intern.List{Uids: make([]uint64, 0)}
 	}
 	n := len(u.Uids)
 	m := len(v.Uids)
@@ -337,13 +337,13 @@ func Difference(u, v *protos.List) *protos.List {
 		out = append(out, u.Uids[i])
 		i++
 	}
-	return &protos.List{Uids: out}
+	return &intern.List{Uids: out}
 }
 
 // MergeSorted merges sorted lists.
-func MergeSorted(lists []*protos.List) *protos.List {
+func MergeSorted(lists []*intern.List) *intern.List {
 	if len(lists) == 0 {
-		return new(protos.List)
+		return new(intern.List)
 	}
 
 	h := &uint64Heap{}
@@ -387,12 +387,12 @@ func MergeSorted(lists []*protos.List) *protos.List {
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
-	return &protos.List{Uids: output}
+	return &intern.List{Uids: output}
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
-func IndexOf(u *protos.List, uid uint64) int {
+func IndexOf(u *intern.List, uid uint64) int {
 	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
 	if i < len(u.Uids) && u.Uids[i] == uid {
 		return i
@@ -401,7 +401,7 @@ func IndexOf(u *protos.List, uid uint64) int {
 }
 
 // ToUintsListForTest converts to list of uints for testing purpose only.
-func ToUintsListForTest(ul []*protos.List) [][]uint64 {
+func ToUintsListForTest(ul []*intern.List) [][]uint64 {
 	out := make([][]uint64, 0, len(ul))
 	for _, u := range ul {
 		out = append(out, u.Uids)

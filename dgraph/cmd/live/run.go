@@ -42,7 +42,8 @@ import (
 	"github.com/dgraph-io/badger"
 	bopt "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -90,7 +91,7 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 	var err error
 	for isPrefix && err == nil {
 		var line []byte
-		// The returned line is an internal buffer in bufio and is only
+		// The returned line is an intern.buffer in bufio and is only
 		// valid until the next call to ReadLine. It needs to be copied
 		// over to our own buffer.
 		line, isPrefix, err = r.ReadLine()
@@ -121,7 +122,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 		x.Checkf(err, "Error while reading file")
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = string(b)
 	return dgraphClient.Alter(ctx, op)
 }
@@ -154,7 +155,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	defer f.Close()
 
 	var line uint64
-	mu := protos.Mutation{}
+	mu := api.Mutation{}
 	var batchSize int
 	for {
 		select {
@@ -195,13 +196,13 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 			l.reqs <- mu
 			atomic.AddUint64(&l.rdfs, uint64(batchSize))
 			batchSize = 0
-			mu = protos.Mutation{}
+			mu = api.Mutation{}
 		}
 	}
 	if batchSize > 0 {
 		l.reqs <- mu
 		atomic.AddUint64(&l.rdfs, uint64(batchSize))
-		mu = protos.Mutation{}
+		mu = api.Mutation{}
 	}
 	return nil
 }
@@ -256,7 +257,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 
 	alloc := xidmap.New(kv,
 		&uidProvider{
-			zero: protos.NewZeroClient(connzero),
+			zero: intern.NewZeroClient(connzero),
 			ctx:  opts.Ctx,
 		},
 		xidmap.Options{
@@ -269,7 +270,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 		opts:     opts,
 		dc:       dc,
 		start:    time.Now(),
-		reqs:     make(chan protos.Mutation, opts.Pending*2),
+		reqs:     make(chan api.Mutation, opts.Pending*2),
 		alloc:    alloc,
 		kv:       kv,
 		zeroconn: connzero,
@@ -307,13 +308,13 @@ func run() {
 	}
 
 	ds := strings.Split(opt.dgraph, ",")
-	var clients []protos.DgraphClient
+	var clients []api.DgraphClient
 	for _, d := range ds {
 		conn, err := setupConnection(d, !tlsConf.CertRequired)
 		x.Checkf(err, "While trying to setup connection to Dgraph server.")
 		defer conn.Close()
 
-		dc := protos.NewDgraphClient(conn)
+		dc := api.NewDgraphClient(conn)
 		clients = append(clients, dc)
 	}
 	dgraphClient := client.NewDgraphClient(clients...)

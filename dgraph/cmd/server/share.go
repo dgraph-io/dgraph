@@ -28,17 +28,17 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // NewSharedQueryNQuads returns nquads with query and hash.
-func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
-	val := func(s string) *protos.Value {
-		return &protos.Value{&protos.Value_DefaultVal{s}}
+func NewSharedQueryNQuads(query []byte) []*api.NQuad {
+	val := func(s string) *api.Value {
+		return &api.Value{&api.Value_DefaultVal{s}}
 	}
 	qHash := fmt.Sprintf("%x", sha256.Sum256(query))
-	return []*protos.NQuad{
+	return []*api.NQuad{
 		{Subject: "_:share", Predicate: "_share_", ObjectValue: val(string(query))},
 		{Subject: "_:share", Predicate: "_share_hash_", ObjectValue: val(qHash)},
 	}
@@ -65,7 +65,7 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mu := &protos.Mutation{
+	mu := &api.Mutation{
 		Set:       NewSharedQueryNQuads(rawQuery),
 		CommitNow: true,
 	}

@@ -28,7 +28,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -56,7 +57,7 @@ func Txns() *transactions {
 
 type delta struct {
 	key     []byte
-	posting *protos.Posting
+	posting *intern.Posting
 }
 type Txn struct {
 	StartTs uint64
@@ -207,19 +208,19 @@ func (t *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
 
-func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
+func (t *Txn) AddDelta(key []byte, p *intern.Posting) {
 	t.Lock()
 	defer t.Unlock()
 	t.deltas = append(t.deltas, delta{key: key, posting: p})
 }
 
-func (t *Txn) Fill(ctx *protos.TxnContext) {
+func (t *Txn) Fill(ctx *api.TxnContext) {
 	t.Lock()
 	defer t.Unlock()
 	t.fill(ctx)
 }
 
-func (t *Txn) fill(ctx *protos.TxnContext) {
+func (t *Txn) fill(ctx *api.TxnContext) {
 	ctx.StartTs = t.StartTs
 	for _, d := range t.deltas {
 		fp := farm.Fingerprint64(d.key)
@@ -242,7 +243,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		return bytes.Compare(tx.deltas[i].key, tx.deltas[j].key) < 0
 	})
 	var prevKey []byte
-	var pl *protos.PostingList
+	var pl *intern.PostingList
 	var plist *List
 	i := 0
 	for i < len(tx.deltas) {
@@ -259,7 +260,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 				}
 				continue
 			}
-			pl = new(protos.PostingList)
+			pl = new(intern.PostingList)
 		}
 		prevKey = d.key
 		var meta byte
@@ -351,7 +352,7 @@ func (tx *Txn) AbortMutations(ctx context.Context) error {
 	return nil
 }
 
-func unmarshalOrCopy(plist *protos.PostingList, item *badger.Item) error {
+func unmarshalOrCopy(plist *intern.PostingList, item *badger.Item) error {
 	// It's delta
 	val, err := item.Value()
 	if err != nil {
@@ -377,7 +378,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.activeTxns = make(map[uint64]struct{})
-	l.plist = new(protos.PostingList)
+	l.plist = new(intern.PostingList)
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
@@ -401,7 +402,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			it.Next()
 			break
 		} else if item.UserMeta()&bitDeltaPosting > 0 {
-			var pl protos.PostingList
+			var pl intern.PostingList
 			x.Check(pl.Unmarshal(val))
 			for _, mpost := range pl.Postings {
 				// commitTs, startTs are meant to be only in memory, not
@@ -429,7 +430,7 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.activeTxns = make(map[uint64]struct{})
-	l.plist = new(protos.PostingList)
+	l.plist = new(intern.PostingList)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 

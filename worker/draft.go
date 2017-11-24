@@ -31,7 +31,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -137,7 +138,7 @@ type node struct {
 func newNode(gid uint32, id uint64, myAddr string) *node {
 	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
 
-	rc := &protos.RaftContext{
+	rc := &intern.RaftContext{
 		Addr:  myAddr,
 		Group: gid,
 		Id:    id,
@@ -184,7 +185,7 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) error {
+func (n *node) ProposeAndWait(ctx context.Context, proposal *intern.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")
 	}
@@ -281,7 +282,7 @@ func (n *node) processMutation(task *task) error {
 }
 
 func (n *node) processSchemaMutations(pid uint32, index uint64,
-	startTs uint64, s *protos.SchemaUpdate) error {
+	startTs uint64, s *intern.SchemaUpdate) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
@@ -301,7 +302,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		n.DeletePeer(cc.NodeID)
 	} else if len(cc.Context) > 0 {
-		var rc protos.RaftContext
+		var rc intern.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		n.Connect(rc.Id, rc.Addr)
 	}
@@ -328,7 +329,7 @@ func (n *node) processApplyCh() {
 
 		x.AssertTrue(e.Type == raftpb.EntryNormal)
 
-		proposal := &protos.Proposal{}
+		proposal := &intern.Proposal{}
 		if err := proposal.Unmarshal(e.Data); err != nil {
 			log.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
@@ -371,7 +372,7 @@ func (n *node) processApplyCh() {
 	}
 }
 
-func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) {
+func (n *node) commitOrAbort(index uint64, pid uint32, tctx *api.TxnContext) {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	_, err := commitOrAbort(ctx, tctx)
 	if tr, ok := trace.FromContext(ctx); ok {
@@ -394,7 +395,7 @@ func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	n.props.Done(pid, err)
 }
 
-func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
+func (n *node) processKeyValues(index uint64, pid uint32, kvs []*intern.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)
 	posting.TxnMarks().Done(index)
@@ -483,7 +484,7 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var rc protos.RaftContext
+				var rc intern.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
 				x.AssertTrue(rc.Group == n.gid)
 				if rc.Id != n.Id {
@@ -641,7 +642,7 @@ func (n *node) joinPeers() {
 
 	gconn := pl.Get()
 
-	c := protos.NewRaftClient(gconn)
+	c := intern.NewRaftClient(gconn)
 	x.Printf("Calling JoinCluster")
 	_, err := c.JoinCluster(n.ctx, n.RaftContext)
 	// TODO: This should keep on indefinitely trying to join the cluster, instead of crashing.

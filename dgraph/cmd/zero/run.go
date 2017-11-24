@@ -35,7 +35,7 @@ import (
 	"github.com/dgraph-io/badger"
 	bopts "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
@@ -87,7 +87,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
 
-	rc := protos.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
+	rc := intern.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
 	m := conn.NewNode(&rc)
 	st.rs = &conn.RaftServer{Node: m}
 
@@ -96,8 +96,8 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 	st.zero.Init()
 	st.node.server = st.zero
 
-	protos.RegisterZeroServer(s, st.zero)
-	protos.RegisterRaftServer(s, st.rs)
+	intern.RegisterZeroServer(s, st.zero)
+	intern.RegisterRaftServer(s, st.rs)
 
 	go func() {
 		defer wg.Done()

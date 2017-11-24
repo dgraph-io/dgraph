@@ -34,7 +34,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -51,7 +51,7 @@ type kv struct {
 
 type skv struct {
 	attr   string
-	schema *protos.SchemaUpdate
+	schema *intern.SchemaUpdate
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -70,7 +70,7 @@ var rdfTypeMap = map[types.TypeID]string{
 
 func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 	l := posting.GetNoStore(item.key)
-	err := l.Iterate(readTs, 0, func(p *protos.Posting) bool {
+	err := l.Iterate(readTs, 0, func(p *intern.Posting) bool {
 		buf.WriteString(item.prefix)
 		if !bytes.Equal(p.Value, nil) {
 			// Value posting
@@ -84,7 +84,7 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 			}
 			x.Check(err)
 			buf.WriteString(strconv.Quote(str.Value.(string)))
-			if p.PostingType == protos.Posting_VALUE_LANG {
+			if p.PostingType == intern.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.LangTag))
 			} else if vID != types.DefaultID {
@@ -153,9 +153,9 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 	if isList {
 		buf.WriteRune(']')
 	}
-	if s.schema.Directive == protos.SchemaUpdate_REVERSE {
+	if s.schema.Directive == intern.SchemaUpdate_REVERSE {
 		buf.WriteString(" @reverse")
-	} else if s.schema.Directive == protos.SchemaUpdate_INDEX && len(s.schema.Tokenizer) > 0 {
+	} else if s.schema.Directive == intern.SchemaUpdate_INDEX && len(s.schema.Tokenizer) > 0 {
 		buf.WriteString(" @index(")
 		buf.WriteString(strings.Join(s.schema.Tokenizer, ","))
 		buf.WriteByte(')')
@@ -308,7 +308,7 @@ func export(bdir string, readTs uint64) error {
 		}
 
 		if pk.IsSchema() {
-			s := &protos.SchemaUpdate{}
+			s := &intern.SchemaUpdate{}
 			val, err := item.Value()
 			if err != nil {
 				return err
@@ -352,7 +352,7 @@ func export(bdir string, readTs uint64) error {
 
 // TODO: How do we want to handle export for group, do we pause mutations, sync all and then export ?
 // TODO: Should we move export logic to dgraphzero?
-func handleExportForGroup(ctx context.Context, in *protos.ExportPayload) *protos.ExportPayload {
+func handleExportForGroup(ctx context.Context, in *intern.ExportPayload) *intern.ExportPayload {
 	n := groups().Node
 	if in.GroupId == groups().groupId() && n != nil && n.AmLeader() {
 		n.applyAllMarks(n.ctx)
@@ -363,13 +363,13 @@ func handleExportForGroup(ctx context.Context, in *protos.ExportPayload) *protos
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
-			in.Status = protos.ExportPayload_FAILED
+			in.Status = intern.ExportPayload_FAILED
 			return in
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Export done for group: %d.", in.GroupId)
 		}
-		in.Status = protos.ExportPayload_SUCCESS
+		in.Status = intern.ExportPayload_SUCCESS
 		return in
 	}
 
@@ -380,17 +380,17 @@ func handleExportForGroup(ctx context.Context, in *protos.ExportPayload) *protos
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Unable to find a server to export group: %d", in.GroupId)
 		}
-		in.Status = protos.ExportPayload_FAILED
+		in.Status = intern.ExportPayload_FAILED
 		return in
 	}
 
-	c := protos.NewWorkerClient(pl.Get())
+	c := intern.NewWorkerClient(pl.Get())
 	nrep, err := c.Export(ctx, in)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
-		in.Status = protos.ExportPayload_FAILED
+		in.Status = intern.ExportPayload_FAILED
 		return in
 	}
 	return nrep
@@ -399,19 +399,19 @@ func handleExportForGroup(ctx context.Context, in *protos.ExportPayload) *protos
 // Export request is used to trigger exports for the request list of groups.
 // If a server receives request to export a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
-func (w *grpcWorker) Export(ctx context.Context, req *protos.ExportPayload) (*protos.ExportPayload, error) {
-	reply := &protos.ExportPayload{ReqId: req.ReqId}
-	reply.Status = protos.ExportPayload_FAILED // Set by default.
+func (w *grpcWorker) Export(ctx context.Context, req *intern.ExportPayload) (*intern.ExportPayload, error) {
+	reply := &intern.ExportPayload{ReqId: req.ReqId}
+	reply.Status = intern.ExportPayload_FAILED // Set by default.
 
 	if ctx.Err() != nil {
 		return reply, ctx.Err()
 	}
 	if !w.addIfNotPresent(req.ReqId) {
-		reply.Status = protos.ExportPayload_DUPLICATE
+		reply.Status = intern.ExportPayload_DUPLICATE
 		return reply, nil
 	}
 
-	chb := make(chan *protos.ExportPayload, 1)
+	chb := make(chan *intern.ExportPayload, 1)
 	go func() {
 		chb <- handleExportForGroup(ctx, req)
 	}()
@@ -433,7 +433,7 @@ func ExportOverNetwork(ctx context.Context) error {
 		return err
 	}
 	// Get ReadTs from zero and wait for stream to catch up.
-	ts, err := Timestamps(ctx, &protos.Num{Val: 1})
+	ts, err := Timestamps(ctx, &intern.Num{Val: 1})
 	if err != nil {
 		return err
 	}
@@ -450,10 +450,10 @@ func ExportOverNetwork(ctx context.Context) error {
 		}
 	}
 
-	ch := make(chan *protos.ExportPayload, len(gids))
+	ch := make(chan *intern.ExportPayload, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
-			req := &protos.ExportPayload{
+			req := &intern.ExportPayload{
 				ReqId:   uint64(rand.Int63()),
 				GroupId: group,
 				ReadTs:  readTs,
@@ -464,7 +464,7 @@ func ExportOverNetwork(ctx context.Context) error {
 
 	for i := 0; i < len(gids); i++ {
 		bp := <-ch
-		if bp.Status != protos.ExportPayload_SUCCESS {
+		if bp.Status != intern.ExportPayload_SUCCESS {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Export status: %v for group id: %d", bp.Status, bp.GroupId)
 			}

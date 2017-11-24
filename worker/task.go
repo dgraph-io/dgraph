@@ -35,7 +35,8 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	ctask "github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/tok"
@@ -48,13 +49,13 @@ import (
 )
 
 var (
-	emptyUIDList   protos.List
-	emptyResult    protos.Result
-	emptyValueList = protos.ValueList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
+	emptyUIDList   intern.List
+	emptyResult    intern.Result
+	emptyValueList = intern.ValueList{Values: []*intern.TaskValue{&intern.TaskValue{Val: x.Nilbyte}}}
 )
 
 func invokeNetworkRequest(
-	ctx context.Context, addr string, f func(context.Context, protos.WorkerClient) (interface{}, error)) (interface{}, error) {
+	ctx context.Context, addr string, f func(context.Context, intern.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.Get().Get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
@@ -64,7 +65,7 @@ func invokeNetworkRequest(
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)
 	}
-	c := protos.NewWorkerClient(conn)
+	c := intern.NewWorkerClient(conn)
 	return f(ctx, c)
 }
 
@@ -74,7 +75,7 @@ const backupRequestGracePeriod = time.Second
 func processWithBackupRequest(
 	ctx context.Context,
 	gid uint32,
-	f func(context.Context, protos.WorkerClient) (interface{}, error)) (interface{}, error) {
+	f func(context.Context, intern.WorkerClient) (interface{}, error)) (interface{}, error) {
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {
 		return nil, errors.New("no network connection")
@@ -135,11 +136,11 @@ var errConflict = errors.New("List has a pending write.")
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
-func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
+func ProcessTaskOverNetwork(ctx context.Context, q *intern.Query) (*intern.Result, error) {
 	attr := q.Attr
 	gid := groups().BelongsTo(attr)
 	if gid == 0 {
-		return &protos.Result{}, errUnservedTablet
+		return &intern.Result{}, errUnservedTablet
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("attr: %v groupId: %v, readTs: %d", attr, gid, q.ReadTs)
@@ -150,7 +151,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return processTask(ctx, q, gid)
 	}
 
-	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c protos.WorkerClient) (interface{}, error) {
+	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c intern.WorkerClient) (interface{}, error) {
 		if tr, ok := trace.FromContext(ctx); ok {
 			id := fmt.Sprintf("%d", rand.Int())
 			tr.LazyPrintf("Sending request to server, id: %s", id)
@@ -164,7 +165,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		}
 		return nil, err
 	}
-	reply := result.(*protos.Result)
+	reply := result.(*intern.Result)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
 	}
@@ -188,8 +189,8 @@ func convertValue(attr, data string) (types.Val, error) {
 }
 
 // Returns nil byte on error
-func convertToType(v types.Val, typ types.TypeID) (*protos.TaskValue, error) {
-	result := &protos.TaskValue{ValType: int32(typ), Val: x.Nilbyte}
+func convertToType(v types.Val, typ types.TypeID) (*intern.TaskValue, error) {
+	result := &intern.TaskValue{ValType: int32(typ), Val: x.Nilbyte}
 	if v.Tid == typ {
 		result.Val = v.Value.([]byte)
 		return result, nil
@@ -227,7 +228,7 @@ const (
 	StandardFn = 100
 )
 
-func parseFuncType(srcFunc *protos.SrcFunction) (FuncType, string) {
+func parseFuncType(srcFunc *intern.SrcFunction) (FuncType, string) {
 	if srcFunc == nil {
 		return NotAFunction, ""
 	}
@@ -283,14 +284,14 @@ func needsIndex(fnType FuncType) bool {
 
 type result struct {
 	uid    uint64
-	facets []*protos.Facet
+	facets []*api.Facet
 }
 
 type funcArgs struct {
-	q     *protos.Query
+	q     *intern.Query
 	gid   uint32
 	srcFn *functionContext
-	out   *protos.Result
+	out   *intern.Result
 }
 
 // The function tells us whether we want to fetch value posting lists or uid posting lists.
@@ -373,10 +374,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				out.Counts = append(out.Counts, 0)
 			} else {
 				out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
-				out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{})
+				out.FacetMatrix = append(out.FacetMatrix, &intern.FacetsList{})
 				if q.ExpandAll {
 					// To keep the cardinality same as that of ValueMatrix.
-					out.LangMatrix = append(out.LangMatrix, &protos.LangList{})
+					out.LangMatrix = append(out.LangMatrix, &intern.LangList{})
 				}
 			}
 			continue
@@ -387,13 +388,13 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			if err != nil {
 				return err
 			}
-			out.LangMatrix = append(out.LangMatrix, &protos.LangList{langTags})
+			out.LangMatrix = append(out.LangMatrix, &intern.LangList{langTags})
 		}
 
 		valTid := vals[0].Tid
-		newValue := &protos.TaskValue{ValType: int32(valTid), Val: x.Nilbyte}
-		uidList := new(protos.List)
-		var vl protos.ValueList
+		newValue := &intern.TaskValue{ValType: int32(valTid), Val: x.Nilbyte}
+		uidList := new(intern.List)
+		var vl intern.ValueList
 		for _, val := range vals {
 			newValue, err = convertToType(val, srcFn.atype)
 			if err != nil {
@@ -426,10 +427,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		if q.FacetParam != nil {
 			fs, err := pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
 			if err != nil {
-				fs = []*protos.Facet{}
+				fs = []*api.Facet{}
 			}
 			out.FacetMatrix = append(out.FacetMatrix,
-				&protos.FacetsList{[]*protos.Facets{{fs}}})
+				&intern.FacetsList{[]*intern.Facets{{fs}}})
 		}
 
 		switch {
@@ -511,7 +512,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		var perr error
 		filteredRes = make([]*result, 0)
-		err = pl.Postings(opts, func(p *protos.Posting) bool {
+		err = pl.Postings(opts, func(p *intern.Posting) bool {
 			res := true
 			res, perr = applyFacetsTree(p.Facets, facetsTree)
 			if perr != nil {
@@ -532,11 +533,11 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		// add facets to result.
 		if q.FacetParam != nil {
-			var fcsList []*protos.Facets
+			var fcsList []*intern.Facets
 			for _, fres := range filteredRes {
-				fcsList = append(fcsList, &protos.Facets{fres.facets})
+				fcsList = append(fcsList, &intern.Facets{fres.facets})
 			}
-			out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{fcsList})
+			out.FacetMatrix = append(out.FacetMatrix, &intern.FacetsList{fcsList})
 		}
 
 		switch {
@@ -555,7 +556,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			count := int64(len)
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &intern.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == HasFn:
@@ -565,11 +566,11 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			count := int64(len)
 			if EvalCompare("gt", count, 0) {
-				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &intern.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == UidInFn:
-			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
+			reqList := &intern.List{[]uint64{srcFn.uidPresent}}
 			topts := posting.ListOptions{
 				ReadTs:    args.q.ReadTs,
 				AfterUID:  0,
@@ -580,12 +581,12 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				return err
 			}
 			if len(plist.Uids) > 0 {
-				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &intern.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		default:
 			// The more usual case: Getting the UIDs.
-			uidList := new(protos.List)
+			uidList := new(intern.List)
 			for _, fres := range filteredRes {
 				uidList.Uids = append(uidList.Uids, fres.uid)
 			}
@@ -596,7 +597,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 }
 
 // processTask processes the query, accumulates and returns the result.
-func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
+func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Result, error) {
 	n := groups().Node
 	if err := n.WaitForMinProposal(ctx, q.LinRead); err != nil {
 		return &emptyResult, err
@@ -615,13 +616,13 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	if err != nil {
 		return &emptyResult, err
 	}
-	out.LinRead = &protos.LinRead{Ids: make(map[uint32]uint64)}
+	out.LinRead = &api.LinRead{Ids: make(map[uint32]uint64)}
 	out.LinRead.Ids[n.RaftContext.Group] = n.Applied.DoneUntil()
 	return out, nil
 }
 
-func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
-	out := new(protos.Result)
+func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Result, error) {
+	out := new(intern.Result)
 	attr := q.Attr
 
 	srcFn, err := parseSrcFn(q)
@@ -758,7 +759,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 	}
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
-	empty := protos.List{}
+	empty := intern.List{}
 	uids, err := uidsForRegex(attr, arg, query, &empty)
 	lang := langForFunc(arg.q.Langs)
 	if uids != nil {
@@ -871,14 +872,14 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 
 func filterGeoFunction(arg funcArgs) error {
 	attr := arg.q.Attr
-	var values []*protos.TaskValue
+	var values []*intern.TaskValue
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
 		pl := posting.Get(key)
 
 		val, err := pl.Value(arg.q.ReadTs)
-		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
+		newValue := &intern.TaskValue{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
 		} else {
@@ -937,7 +938,7 @@ func filterStringFunction(arg funcArgs) error {
 		}
 	}
 
-	filtered := &protos.List{Uids: filteredUids}
+	filtered := &intern.List{Uids: filteredUids}
 	filter := stringFilter{
 		funcName: arg.srcFn.fname,
 		funcType: arg.srcFn.fnType,
@@ -965,8 +966,8 @@ func filterStringFunction(arg funcArgs) error {
 	return nil
 }
 
-func matchRegex(uids *protos.List, values []types.Val, regex *cregexp.Regexp) *protos.List {
-	rv := &protos.List{}
+func matchRegex(uids *intern.List, values []types.Val, regex *cregexp.Regexp) *intern.List {
+	rv := &intern.List{}
 	for i := 0; i < len(values); i++ {
 		if len(values[i].Value.(string)) == 0 {
 			continue
@@ -1002,7 +1003,7 @@ const (
 	eq = "eq" // equal
 )
 
-func ensureArgsCount(srcFunc *protos.SrcFunction, expected int) error {
+func ensureArgsCount(srcFunc *intern.SrcFunction, expected int) error {
 	if len(srcFunc.Args) != expected {
 		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
 			srcFunc.Name, expected, len(srcFunc.Args), srcFunc.Args)
@@ -1010,7 +1011,7 @@ func ensureArgsCount(srcFunc *protos.SrcFunction, expected int) error {
 	return nil
 }
 
-func checkRoot(q *protos.Query, fc *functionContext) {
+func checkRoot(q *intern.Query, fc *functionContext) {
 	if q.UidList == nil {
 		// Fetch Uids from Store and populate in q.UidList.
 		fc.n = 0
@@ -1029,7 +1030,7 @@ func langForFunc(langs []string) string {
 	return langs[0]
 }
 
-func parseSrcFn(q *protos.Query) (*functionContext, error) {
+func parseSrcFn(q *intern.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
 	fc := &functionContext{fnType: fnType, fname: f}
@@ -1203,7 +1204,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 }
 
 // ServeTask is used to respond to a query.
-func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Result, error) {
+func (w *grpcWorker) ServeTask(ctx context.Context, q *intern.Query) (*intern.Result, error) {
 	if ctx.Err() != nil {
 		return &emptyResult, ctx.Err()
 	}
@@ -1221,7 +1222,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 		"attr: %q groupId: %v Request sent to wrong server.", q.Attr, gid)
 
 	type reply struct {
-		result *protos.Result
+		result *intern.Result
 		err    error
 	}
 	c := make(chan reply, 1)
@@ -1250,13 +1251,13 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 // applyFacetsTree : we return error only when query has some problems.
 // like Or has 3 arguments, argument facet val overflows integer.
 // returns true if postingFacets can be included.
-func applyFacetsTree(postingFacets []*protos.Facet, ftree *facetsTree) (bool, error) {
+func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error) {
 	if ftree == nil {
 		return true, nil
 	}
 	if ftree.function != nil {
 		fname := strings.ToLower(ftree.function.name)
-		var fc *protos.Facet
+		var fc *api.Facet
 		for _, fci := range postingFacets {
 			if fci.Key == ftree.function.key {
 				fc = fci
@@ -1365,7 +1366,7 @@ type facetsTree struct {
 	function *facetsFunc
 }
 
-func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
+func preprocessFilter(tree *intern.FilterTree) (*facetsTree, error) {
 	if tree == nil {
 		return nil, nil
 	}
@@ -1437,7 +1438,7 @@ type countParams struct {
 	fn      string // function name
 }
 
-func (cp *countParams) evaluate(out *protos.Result) error {
+func (cp *countParams) evaluate(out *intern.Result) error {
 	count := cp.count
 	var illegal bool
 	switch cp.fn {
@@ -1507,8 +1508,8 @@ func (cp *countParams) evaluate(out *protos.Result) error {
 }
 
 // TODO - Check meta for empty PL and skip it.
-func handleHasFunction(ctx context.Context, q *protos.Query, out *protos.Result) error {
-	tlist := &protos.List{}
+func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result) error {
+	tlist := &intern.List{}
 
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()

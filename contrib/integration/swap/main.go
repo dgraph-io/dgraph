@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
@@ -154,17 +154,17 @@ func newClient() *client.Dgraph {
 	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
 	x.Check(err)
 	return client.NewDgraphClient(
-		protos.NewDgraphClient(d),
+		api.NewDgraphClient(d),
 	)
 }
 
 func setup(c *client.Dgraph, sentences []string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
-	x.Check(c.Alter(ctx, &protos.Operation{
+	x.Check(c.Alter(ctx, &api.Operation{
 		DropAll: true,
 	}))
-	x.Check(c.Alter(ctx, &protos.Operation{
+	x.Check(c.Alter(ctx, &api.Operation{
 		Schema: `sentence: string @index(term) .`,
 	}))
 
@@ -174,7 +174,7 @@ func setup(c *client.Dgraph, sentences []string) []string {
 	}
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
-	assigned, err := txn.Mutate(ctx, &protos.Mutation{SetNquads: []byte(rdfs)})
+	assigned, err := txn.Mutate(ctx, &api.Mutation{SetNquads: []byte(rdfs)})
 	x.Check(err)
 	x.Check(txn.Commit(ctx))
 
@@ -225,7 +225,7 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 		node1, *decode.Node1[0].Sentence,
 		node2, *decode.Node2[0].Sentence,
 	)
-	if _, err := txn.Mutate(ctx, &protos.Mutation{DelNquads: []byte(delRDFs)}); err != nil {
+	if _, err := txn.Mutate(ctx, &api.Mutation{DelNquads: []byte(delRDFs)}); err != nil {
 		atomic.AddUint64(&failCount, 1)
 		return
 	}
@@ -237,7 +237,7 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 	`,
 		node1, node2,
 	)
-	if _, err := txn.Mutate(ctx, &protos.Mutation{SetNquads: []byte(garbageRDFs)}); err != nil {
+	if _, err := txn.Mutate(ctx, &api.Mutation{SetNquads: []byte(garbageRDFs)}); err != nil {
 		atomic.AddUint64(&failCount, 1)
 		return
 	}
@@ -250,7 +250,7 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 		node1, *decode.Node2[0].Sentence,
 		node2, *decode.Node1[0].Sentence,
 	)
-	if _, err := txn.Mutate(ctx, &protos.Mutation{SetNquads: []byte(rdfs)}); err != nil {
+	if _, err := txn.Mutate(ctx, &api.Mutation{SetNquads: []byte(rdfs)}); err != nil {
 		atomic.AddUint64(&failCount, 1)
 		return
 	}

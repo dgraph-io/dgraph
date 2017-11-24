@@ -8,7 +8,7 @@ import (
 	"log"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
@@ -26,7 +26,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	pc := protos.NewDgraphClient(conn)
+	pc := api.NewDgraphClient(conn)
 	c := client.NewDgraphClient(pc)
 
 	// Ingest
@@ -39,44 +39,44 @@ func main() {
 
 func TestInsert3Quads(ctx context.Context, c *client.Dgraph) {
 	// Set schema
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `name: string @index(fulltext) .`
 	x.Check(c.Alter(ctx, op))
 
 	txn := c.NewTxn()
 
-	mu := &protos.Mutation{}
-	quad := &protos.NQuad{
+	mu := &api.Mutation{}
+	quad := &api.NQuad{
 		Subject:     "200",
 		Predicate:   "name",
-		ObjectValue: &protos.Value{&protos.Value_StrVal{"ok 200"}},
+		ObjectValue: &api.Value{&api.Value_StrVal{"ok 200"}},
 	}
-	mu.Set = []*protos.NQuad{quad}
+	mu.Set = []*api.NQuad{quad}
 	_, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
 
-	mu = &protos.Mutation{}
-	quad = &protos.NQuad{
+	mu = &api.Mutation{}
+	quad = &api.NQuad{
 		Subject:     "300",
 		Predicate:   "name",
-		ObjectValue: &protos.Value{&protos.Value_StrVal{"ok 300"}},
+		ObjectValue: &api.Value{&api.Value_StrVal{"ok 300"}},
 	}
-	mu.Set = []*protos.NQuad{quad}
+	mu.Set = []*api.NQuad{quad}
 	// mu.SetNquads = []byte(`<300> <name> "ok 300" .`)
 	_, err = txn.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
 	}
 
-	mu = &protos.Mutation{}
-	quad = &protos.NQuad{
+	mu = &api.Mutation{}
+	quad = &api.NQuad{
 		Subject:     "400",
 		Predicate:   "name",
-		ObjectValue: &protos.Value{&protos.Value_StrVal{"ok 400"}},
+		ObjectValue: &api.Value{&api.Value_StrVal{"ok 400"}},
 	}
-	mu.Set = []*protos.NQuad{quad}
+	mu.Set = []*api.NQuad{quad}
 	// mu.SetNquads = []byte(`<400> <name> "ok 400" .`)
 	_, err = txn.Mutate(ctx, mu)
 	if err != nil {

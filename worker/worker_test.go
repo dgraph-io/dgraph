@@ -29,7 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -41,13 +41,13 @@ func timestamp() uint64 {
 	return atomic.AddUint64(&ts, 1)
 }
 
-func addEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
-	edge.Op = protos.DirectedEdge_SET
+func addEdge(t *testing.T, edge *intern.DirectedEdge, l *posting.List) {
+	edge.Op = intern.DirectedEdge_SET
 	commitTransaction(t, edge, l)
 }
 
-func delEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
-	edge.Op = protos.DirectedEdge_DEL
+func delEdge(t *testing.T, edge *intern.DirectedEdge, l *posting.List) {
+	edge.Op = intern.DirectedEdge_DEL
 	commitTransaction(t, edge, l)
 }
 
@@ -58,7 +58,7 @@ func getOrCreate(key []byte) *posting.List {
 
 func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		ValueId: 23,
 		Label:   "author0",
 		Attr:    "neighbour",
@@ -96,7 +96,7 @@ func populateGraph(t *testing.T) {
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
 }
 
-func taskValues(t *testing.T, v []*protos.TaskValue) []string {
+func taskValues(t *testing.T, v []*intern.TaskValue) []string {
 	out := make([]string, len(v))
 	for i, tv := range v {
 		out[i] = string(tv.Val)
@@ -125,17 +125,17 @@ func TestProcessTask(t *testing.T) {
 }
 
 // newQuery creates a Query task and returns it.
-func newQuery(attr string, uids []uint64, srcFunc []string) *protos.Query {
+func newQuery(attr string, uids []uint64, srcFunc []string) *intern.Query {
 	x.AssertTrue(uids == nil || srcFunc == nil)
 	// TODO: Change later, hacky way to make the tests work
-	var srcFun *protos.SrcFunction
+	var srcFun *intern.SrcFunction
 	if len(srcFunc) > 0 {
-		srcFun = new(protos.SrcFunction)
+		srcFun = new(intern.SrcFunction)
 		srcFun.Name = srcFunc[0]
 		srcFun.Args = append(srcFun.Args, srcFunc[2:]...)
 	}
-	q := &protos.Query{
-		UidList: &protos.List{uids},
+	q := &intern.Query{
+		UidList: &intern.List{uids},
 		SrcFunc: srcFun,
 		Attr:    attr,
 		ReadTs:  timestamp(),
@@ -164,7 +164,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		Value:  []byte("notphotonExtra"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -187,7 +187,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Try deleting.
-	edge = &protos.DirectedEdge{
+	edge = &intern.DirectedEdge{
 		Value:  []byte("photon"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -242,7 +242,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		Value:  []byte("notphotonExtra"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -265,7 +265,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Try deleting.
-	edge = &protos.DirectedEdge{
+	edge = &intern.DirectedEdge{
 		Value:  []byte("photon"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -296,7 +296,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 /*
 func populateGraphForSort(t *testing.T, ps store.Store) {
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		Label: "author1",
 		Attr:  "dob",
 	}
@@ -326,14 +326,14 @@ func populateGraphForSort(t *testing.T, ps store.Store) {
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 }
 
-// newSort creates a protos.Sort for sorting.
-func newSort(uids [][]uint64, offset, count int) *protos.Sort {
+// newSort creates a intern.Sort for sorting.
+func newSort(uids [][]uint64, offset, count int) *intern.Sort {
 	x.AssertTrue(uids != nil)
-	uidMatrix := make([]*protos.List, len(uids))
+	uidMatrix := make([]*intern.List, len(uids))
 	for i, l := range uids {
-		uidMatrix[i] = &protos.List{Uids: l}
+		uidMatrix[i] = &intern.List{Uids: l}
 	}
-	return &protos.Sort{
+	return &intern.Sort{
 		Attr:      "dob",
 		Offset:    int32(offset),
 		Count:     int32(count),
@@ -601,14 +601,14 @@ func TestMain(m *testing.M) {
 	posting.Config.CommitFraction = 0.10
 	gr = new(groupi)
 	gr.gid = 1
-	gr.tablets = make(map[string]*protos.Tablet)
-	gr.tablets["name"] = &protos.Tablet{GroupId: 1}
-	gr.tablets["name2"] = &protos.Tablet{GroupId: 1}
-	gr.tablets["age"] = &protos.Tablet{GroupId: 1}
-	gr.tablets["friend"] = &protos.Tablet{GroupId: 1}
-	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &protos.Tablet{GroupId: 1}
-	gr.tablets["friend_not_served"] = &protos.Tablet{GroupId: 2}
-	gr.tablets[""] = &protos.Tablet{GroupId: 1}
+	gr.tablets = make(map[string]*intern.Tablet)
+	gr.tablets["name"] = &intern.Tablet{GroupId: 1}
+	gr.tablets["name2"] = &intern.Tablet{GroupId: 1}
+	gr.tablets["age"] = &intern.Tablet{GroupId: 1}
+	gr.tablets["friend"] = &intern.Tablet{GroupId: 1}
+	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &intern.Tablet{GroupId: 1}
+	gr.tablets["friend_not_served"] = &intern.Tablet{GroupId: 2}
+	gr.tablets[""] = &intern.Tablet{GroupId: 1}
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)

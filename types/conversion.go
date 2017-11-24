@@ -30,7 +30,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -460,9 +460,9 @@ func Marshal(from Val, to *Val) error {
 	return nil
 }
 
-// ObjectValue converts into protos.Value.
-func ObjectValue(id TypeID, value interface{}) (*protos.Value, error) {
-	def := &protos.Value{&protos.Value_StrVal{""}}
+// ObjectValue converts into api.Value.
+func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
+	def := &api.Value{&api.Value_StrVal{""}}
 	var ok bool
 	// Lets set the object value according to the storage type.
 	switch id {
@@ -471,37 +471,37 @@ func ObjectValue(id TypeID, value interface{}) (*protos.Value, error) {
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type string. Got : %v", value)
 		}
-		return &protos.Value{&protos.Value_StrVal{v}}, nil
+		return &api.Value{&api.Value_StrVal{v}}, nil
 	case DefaultID:
 		var v string
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type string. Got : %v", value)
 		}
-		return &protos.Value{&protos.Value_DefaultVal{v}}, nil
+		return &api.Value{&api.Value_DefaultVal{v}}, nil
 	case IntID:
 		var v int64
 		if v, ok = value.(int64); !ok {
 			return def, x.Errorf("Expected value of type int64. Got : %v", value)
 		}
-		return &protos.Value{&protos.Value_IntVal{v}}, nil
+		return &api.Value{&api.Value_IntVal{v}}, nil
 	case FloatID:
 		var v float64
 		if v, ok = value.(float64); !ok {
 			return def, x.Errorf("Expected value of type float64. Got : %v", value)
 		}
-		return &protos.Value{&protos.Value_DoubleVal{v}}, nil
+		return &api.Value{&api.Value_DoubleVal{v}}, nil
 	case BoolID:
 		var v bool
 		if v, ok = value.(bool); !ok {
 			return def, x.Errorf("Expected value of type bool. Got : %v", value)
 		}
-		return &protos.Value{&protos.Value_BoolVal{v}}, nil
+		return &api.Value{&api.Value_BoolVal{v}}, nil
 	case BinaryID:
 		var v []byte
 		if v, ok = value.([]byte); !ok {
 			return def, x.Errorf("Expected value of type []byte. Got : %v", value)
 		}
-		return &protos.Value{&protos.Value_BytesVal{v}}, nil
+		return &api.Value{&api.Value_BytesVal{v}}, nil
 	// Geo and datetime are stored in binary format in the NQuad, so lets
 	// convert them here.
 	case GeoID:
@@ -509,19 +509,19 @@ func ObjectValue(id TypeID, value interface{}) (*protos.Value, error) {
 		if err != nil {
 			return def, err
 		}
-		return &protos.Value{&protos.Value_GeoVal{b}}, nil
+		return &api.Value{&api.Value_GeoVal{b}}, nil
 	case DateTimeID:
 		b, err := toBinary(id, value)
 		if err != nil {
 			return def, err
 		}
-		return &protos.Value{&protos.Value_DatetimeVal{b}}, nil
+		return &api.Value{&api.Value_DatetimeVal{b}}, nil
 	case PasswordID:
 		var v string
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type password. Got : %v", value)
 		}
-		return &protos.Value{&protos.Value_PasswordVal{v}}, nil
+		return &api.Value{&api.Value_PasswordVal{v}}, nil
 	default:
 		return def, x.Errorf("ObjectValue not available for: %v", id)
 	}

@@ -27,7 +27,8 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
@@ -55,7 +56,7 @@ type Node struct {
 	Id          uint64
 	peers       map[uint64]string
 	messages    chan sendmsg
-	RaftContext *protos.RaftContext
+	RaftContext *intern.RaftContext
 	Store       *raft.MemoryStorage
 	Wal         *raftwal.Wal
 
@@ -65,7 +66,7 @@ type Node struct {
 	Applied x.WaterMark
 }
 
-func NewNode(rc *protos.RaftContext) *Node {
+func NewNode(rc *intern.RaftContext) *Node {
 	store := raft.NewMemoryStorage()
 	n := &Node{
 		Id:    rc.Id,
@@ -145,7 +146,7 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 	n.peers[pid] = addr
 }
 
-func (n *Node) WaitForMinProposal(ctx context.Context, read *protos.LinRead) error {
+func (n *Node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
 	if read == nil || read.Ids == nil {
 		return nil
 	}
@@ -298,8 +299,8 @@ func (n *Node) doSendMessage(to uint64, data []byte) {
 	}
 	client := pool.Get()
 
-	c := protos.NewRaftClient(client)
-	p := &protos.Payload{Data: data}
+	c := intern.NewRaftClient(client)
+	p := &api.Payload{Data: data}
 
 	ch := make(chan error, 1)
 	go func() {
@@ -351,7 +352,7 @@ func (n *Node) DeletePeer(pid uint64) {
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr, ok := n.peers[pid]
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
-	rc := &protos.RaftContext{
+	rc := &intern.RaftContext{
 		Addr:  addr,
 		Group: n.RaftContext.Group,
 		Id:    pid,
@@ -394,9 +395,9 @@ type RaftServer struct {
 }
 
 func (w *RaftServer) JoinCluster(ctx context.Context,
-	rc *protos.RaftContext) (*protos.Payload, error) {
+	rc *intern.RaftContext) (*api.Payload, error) {
 	if ctx.Err() != nil {
-		return &protos.Payload{}, ctx.Err()
+		return &api.Payload{}, ctx.Err()
 	}
 	// Commenting out the following checks for now, until we get rid of groups.
 	// TODO: Uncomment this after groups is removed.
@@ -417,7 +418,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 		Get().Connect(addr)
 		// There exists a healthy connection to server with same id.
 		if _, err := Get().Get(addr); err == nil {
-			return &protos.Payload{}, ErrDuplicateRaftId
+			return &api.Payload{}, ErrDuplicateRaftId
 		}
 	}
 	node.Connect(rc.Id, rc.Addr)
@@ -427,9 +428,9 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 
 	select {
 	case <-ctx.Done():
-		return &protos.Payload{}, ctx.Err()
+		return &api.Payload{}, ctx.Err()
 	case err := <-c:
-		return &protos.Payload{}, err
+		return &api.Payload{}, err
 	}
 }
 
@@ -438,7 +439,7 @@ var (
 )
 
 func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error {
-	var rc protos.RaftContext
+	var rc intern.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 
 	node := w.GetNode()
@@ -461,9 +462,9 @@ func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error
 	}
 }
 func (w *RaftServer) RaftMessage(ctx context.Context,
-	query *protos.Payload) (*protos.Payload, error) {
+	query *api.Payload) (*api.Payload, error) {
 	if ctx.Err() != nil {
-		return &protos.Payload{}, ctx.Err()
+		return &api.Payload{}, ctx.Err()
 	}
 
 	for idx := 0; idx < len(query.Data); {
@@ -474,7 +475,7 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 		idx += 4
 		msg := raftpb.Message{}
 		if idx+sz > len(query.Data) {
-			return &protos.Payload{}, x.Errorf(
+			return &api.Payload{}, x.Errorf(
 				"Invalid query. Specified size %v overflows slice [%v,%v)\n",
 				sz, idx, len(query.Data))
 		}
@@ -485,16 +486,16 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 			x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := w.applyMessage(ctx, msg); err != nil {
-			return &protos.Payload{}, err
+			return &api.Payload{}, err
 		}
 		idx += sz
 	}
 	// fmt.Printf("Got %d messages\n", count)
-	return &protos.Payload{}, nil
+	return &api.Payload{}, nil
 }
 
 // Hello rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
-func (w *RaftServer) Echo(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
-	return &protos.Payload{Data: in.Data}, nil
+func (w *RaftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
+	return &api.Payload{Data: in.Data}, nil
 }

@@ -25,7 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 
 	"google.golang.org/grpc"
@@ -153,11 +154,11 @@ func (p *Pool) MonitorHealth() {
 	for range p.ticker.C {
 		conn := p.Get()
 
-		query := new(protos.Payload)
+		query := new(api.Payload)
 		query.Data = make([]byte, 10)
 		x.Check2(rand.Read(query.Data))
 
-		c := protos.NewRaftClient(conn)
+		c := intern.NewRaftClient(conn)
 		resp, err := c.Echo(context.Background(), query)
 		var lastEcho time.Time
 		if err == nil {

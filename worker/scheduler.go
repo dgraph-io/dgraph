@@ -24,7 +24,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -34,7 +34,7 @@ import (
 type task struct {
 	rid  uint64 // raft index corresponding to the task
 	pid  uint32 // proposal id corresponding to the task
-	edge *protos.DirectedEdge
+	edge *intern.DirectedEdge
 }
 
 type scheduler struct {
@@ -108,7 +108,7 @@ func (s *scheduler) waitForConflictResolution(attr string) {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error) {
+func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error) {
 	defer func() {
 		s.n.props.Done(proposal.Id, err)
 	}()

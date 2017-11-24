@@ -23,7 +23,7 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -79,7 +79,7 @@ type groupResults struct {
 }
 
 type groupElements struct {
-	entities *protos.List
+	entities *intern.List
 	key      types.Val
 }
 
@@ -132,7 +132,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 		// If this is the first element of the group.
 		cur.elements[strKey] = groupElements{
 			key:      value,
-			entities: &protos.List{make([]uint64, 0)},
+			entities: &intern.List{make([]uint64, 0)},
 		}
 	}
 	curEntity := cur.elements[strKey].entities
@@ -162,7 +162,7 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 
 // formGroup creates all possible groups with the list of uids that belong to that
 // group.
-func (res *groupResults) formGroups(dedupMap dedup, cur *protos.List, groupVal []groupPair) {
+func (res *groupResults) formGroups(dedupMap dedup, cur *intern.List, groupVal []groupPair) {
 	l := len(groupVal)
 	if len(dedupMap.groups) == 0 || (l != 0 && len(cur.Uids) == 0) {
 		// This group is already empty or no group can be formed. So stop.
@@ -182,7 +182,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *protos.List, groupVal [
 	}
 
 	for _, v := range dedupMap.groups[l].elements {
-		temp := new(protos.List)
+		temp := new(intern.List)
 		groupVal = append(groupVal, groupPair{
 			key:  v.key,
 			attr: dedupMap.groups[l].attr,
@@ -237,7 +237,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 
 	// Create all the groups here.
 	res := new(groupResults)
-	res.formGroups(dedupMap, &protos.List{}, []groupPair{})
+	res.formGroups(dedupMap, &intern.List{}, []groupPair{})
 
 	// Go over the groups and aggregate the values.
 	for _, child := range sg.Children {

@@ -26,7 +26,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,7 +35,7 @@ import (
 type pathInfo struct {
 	uid   uint64
 	attr  string
-	facet *protos.Facets
+	facet *intern.Facets
 }
 
 type route struct {
@@ -88,7 +88,7 @@ func (h *priorityQueue) Pop() interface{} {
 type mapItem struct {
 	attr  string
 	cost  float64
-	facet *protos.Facets
+	facet *intern.Facets
 }
 
 // We manintain a map from UID to nodeInfo for Djikstras.
@@ -100,7 +100,7 @@ type nodeInfo struct {
 }
 
 func (sg *SubGraph) getCost(matrix, list int) (cost float64,
-	fcs *protos.Facets, rerr error) {
+	fcs *intern.Facets, rerr error) {
 
 	cost = 1.0
 	if sg.Params.Facet == nil {
@@ -138,8 +138,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var exec []*SubGraph
 	var err error
 	in := []uint64{start.Params.From}
-	start.SrcUIDs = &protos.List{in}
-	start.uidMatrix = []*protos.List{{in}}
+	start.SrcUIDs = &intern.List{in}
+	start.uidMatrix = []*intern.List{{in}}
 	start.DestUIDs = start.SrcUIDs
 
 	for _, child := range start.Children {
@@ -395,7 +395,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	next <- false
 
 	if len(kroutes) == 0 {
-		sg.DestUIDs = &protos.List{}
+		sg.DestUIDs = &intern.List{}
 		return nil, nil
 	}
 	var res []uint64
@@ -579,7 +579,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 	// Put the path in DestUIDs of the root.
 	if cur != sg.Params.From {
-		sg.DestUIDs = &protos.List{}
+		sg.DestUIDs = &intern.List{}
 		return nil, nil
 	}
 
@@ -602,9 +602,9 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		GetUid: true,
 	}
 	curUid := result[0]
-	shortestSg.SrcUIDs = &protos.List{[]uint64{curUid}}
-	shortestSg.DestUIDs = &protos.List{[]uint64{curUid}}
-	shortestSg.uidMatrix = []*protos.List{{[]uint64{curUid}}}
+	shortestSg.SrcUIDs = &intern.List{[]uint64{curUid}}
+	shortestSg.DestUIDs = &intern.List{[]uint64{curUid}}
+	shortestSg.uidMatrix = []*intern.List{{[]uint64{curUid}}}
 
 	curNode := shortestSg
 	for i := 0; i < len(result)-1; i++ {
@@ -617,13 +617,13 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		}
 		if nodeInfo.facet != nil {
 			// For consistent later processing.
-			node.Params.Facet = &protos.Param{}
+			node.Params.Facet = &intern.Param{}
 		}
 		node.Attr = nodeInfo.attr
-		node.facetsMatrix = []*protos.FacetsList{{[]*protos.Facets{nodeInfo.facet}}}
-		node.SrcUIDs = &protos.List{[]uint64{curUid}}
-		node.DestUIDs = &protos.List{[]uint64{childUid}}
-		node.uidMatrix = []*protos.List{{[]uint64{childUid}}}
+		node.facetsMatrix = []*intern.FacetsList{{[]*intern.Facets{nodeInfo.facet}}}
+		node.SrcUIDs = &intern.List{[]uint64{curUid}}
+		node.DestUIDs = &intern.List{[]uint64{childUid}}
+		node.uidMatrix = []*intern.List{{[]uint64{childUid}}}
 
 		curNode.Children = append(curNode.Children, node)
 		curNode = node
@@ -634,8 +634,8 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		GetUid: true,
 	}
 	uid := result[len(result)-1]
-	node.SrcUIDs = &protos.List{[]uint64{uid}}
-	node.uidMatrix = []*protos.List{{[]uint64{uid}}}
+	node.SrcUIDs = &intern.List{[]uint64{uid}}
+	node.uidMatrix = []*intern.List{{[]uint64{uid}}}
 	curNode.Children = append(curNode.Children, node)
 
 	return shortestSg
@@ -650,9 +650,9 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			GetUid: true,
 		}
 		curUid := it.route[0].uid
-		shortestSg.SrcUIDs = &protos.List{[]uint64{curUid}}
-		shortestSg.DestUIDs = &protos.List{[]uint64{curUid}}
-		shortestSg.uidMatrix = []*protos.List{{[]uint64{curUid}}}
+		shortestSg.SrcUIDs = &intern.List{[]uint64{curUid}}
+		shortestSg.DestUIDs = &intern.List{[]uint64{curUid}}
+		shortestSg.uidMatrix = []*intern.List{{[]uint64{curUid}}}
 
 		curNode := shortestSg
 		i := 0
@@ -665,13 +665,13 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			}
 			if it.route[i+1].facet != nil {
 				// For consistent later processing.
-				node.Params.Facet = &protos.Param{}
+				node.Params.Facet = &intern.Param{}
 			}
 			node.Attr = it.route[i+1].attr
-			node.facetsMatrix = []*protos.FacetsList{{[]*protos.Facets{it.route[i+1].facet}}}
-			node.SrcUIDs = &protos.List{[]uint64{curUid}}
-			node.DestUIDs = &protos.List{[]uint64{childUid}}
-			node.uidMatrix = []*protos.List{{[]uint64{childUid}}}
+			node.facetsMatrix = []*intern.FacetsList{{[]*intern.Facets{it.route[i+1].facet}}}
+			node.SrcUIDs = &intern.List{[]uint64{curUid}}
+			node.DestUIDs = &intern.List{[]uint64{childUid}}
+			node.uidMatrix = []*intern.List{{[]uint64{childUid}}}
 
 			curNode.Children = append(curNode.Children, node)
 			curNode = node
@@ -682,8 +682,8 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			GetUid: true,
 		}
 		uid := it.route[i].uid
-		node.SrcUIDs = &protos.List{[]uint64{uid}}
-		node.uidMatrix = []*protos.List{{[]uint64{uid}}}
+		node.SrcUIDs = &intern.List{[]uint64{uid}}
+		node.uidMatrix = []*intern.List{{[]uint64{uid}}}
 		curNode.Children = append(curNode.Children, node)
 
 		res = append(res, shortestSg)

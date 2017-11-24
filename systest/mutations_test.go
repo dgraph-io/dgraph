@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,7 +24,7 @@ func TestSystem(t *testing.T) {
 	wrap := func(fn func(*testing.T, *client.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
 			require.NoError(t, cluster.client.Alter(
-				context.Background(), &protos.Operation{DropAll: true}))
+				context.Background(), &api.Operation{DropAll: true}))
 			fn(t, cluster.client)
 		}
 	}
@@ -39,13 +39,13 @@ func TestSystem(t *testing.T) {
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 	ctx := context.Background()
 
-	check(t, (c.Alter(ctx, &protos.Operation{
+	check(t, (c.Alter(ctx, &api.Operation{
 		Schema: `list: [string] .`,
 	})))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
-	_, err := txn.Mutate(ctx, &protos.Mutation{
+	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
 			<0x1> <name> "abc" .
@@ -105,13 +105,13 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 func ListWithLanguagesTest(t *testing.T, c *client.Dgraph) {
 	ctx := context.Background()
 
-	check(t, (c.Alter(ctx, &protos.Operation{
+	check(t, (c.Alter(ctx, &api.Operation{
 		Schema: `pred: [string] .`,
 	})))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
-	_, err := txn.Mutate(ctx, &protos.Mutation{
+	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
 			<0x1> <pred> "first" .
@@ -164,12 +164,12 @@ func ListWithLanguagesTest(t *testing.T, c *client.Dgraph) {
 func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 	ctx := context.Background()
 
-	require.NoError(t, c.Alter(ctx, &protos.Operation{
+	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `xid: string @index(exact) .`,
 	}))
 
 	txn := c.NewTxn()
-	assigned, err := txn.Mutate(ctx, &protos.Mutation{
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
 			_:breakfast <xid> "breakfast" .
 			_:breakfast <fruit> _:banana .
@@ -209,7 +209,7 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 	}]}`, string(resp.Json))
 
 	txn = c.NewTxn()
-	_, err = txn.Mutate(ctx, &protos.Mutation{
+	_, err = txn.Mutate(ctx, &api.Mutation{
 		DelNquads: []byte(fmt.Sprintf(`
 			<%s> <fruit>  <%s> .
 			<%s> <cereal> <%s> .`,
@@ -231,14 +231,14 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 
 func DeleteAllReverseIndex(t *testing.T, c *client.Dgraph) {
 	ctx := context.Background()
-	require.NoError(t, c.Alter(ctx, &protos.Operation{Schema: "link: uid @reverse ."}))
-	_, err := c.NewTxn().Mutate(ctx, &protos.Mutation{
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "link: uid @reverse ."}))
+	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte("<0x1> <link> <0x2> ."),
 	})
 	require.NoError(t, err)
 
-	_, err = c.NewTxn().Mutate(ctx, &protos.Mutation{
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		DelNquads: []byte("<0x1> <link> * ."),
 	})
@@ -246,7 +246,7 @@ func DeleteAllReverseIndex(t *testing.T, c *client.Dgraph) {
 	require.NoError(t, err)
 	CompareJSON(t, `{"q":[]}`, string(resp.Json))
 
-	_, err = c.NewTxn().Mutate(ctx, &protos.Mutation{
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte("<0x1> <link> <0x3> ."),
 	})
@@ -258,11 +258,11 @@ func DeleteAllReverseIndex(t *testing.T, c *client.Dgraph) {
 func ExpandAllReversePredicatesTest(t *testing.T, c *client.Dgraph) {
 	ctx := context.Background()
 
-	require.NoError(t, c.Alter(ctx, &protos.Operation{
+	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `link: uid @reverse .`,
 	}))
 
-	_, err := c.NewTxn().Mutate(ctx, &protos.Mutation{
+	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
 			# SPO
@@ -306,7 +306,7 @@ func ExpandAllReversePredicatesTest(t *testing.T, c *client.Dgraph) {
 
 	// Delete nodes with reverse edges, and make sure the entries in
 	// _predicate_ are removed.
-	_, err = c.NewTxn().Mutate(ctx, &protos.Mutation{
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		DelNquads: []byte(`
 			<0x1> <link> <0x2> .

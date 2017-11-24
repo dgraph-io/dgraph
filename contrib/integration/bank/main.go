@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
@@ -39,7 +39,7 @@ type State struct {
 }
 
 func (s *State) createAccounts() {
-	op := protos.Operation{DropAll: true}
+	op := api.Operation{DropAll: true}
 	x.Check(s.dg.Alter(context.Background(), &op))
 
 	op.DropAll = false
@@ -55,7 +55,7 @@ func (s *State) createAccounts() {
 
 	txn := s.dg.NewTxn()
 	defer txn.Discard(context.Background())
-	var mu protos.Mutation
+	var mu api.Mutation
 	mu.SetJson = data
 	assigned, err := txn.Mutate(context.Background(), &mu)
 	x.Check(err)
@@ -136,7 +136,7 @@ func (s *State) runTransaction() error {
 	a.Both[0].Bal += 5
 	a.Both[1].Bal -= 5
 
-	var mu protos.Mutation
+	var mu api.Mutation
 	data, err := json.Marshal(a.Both)
 	x.Check(err)
 	mu.SetJson = data
@@ -172,7 +172,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 
 	dg := client.NewDgraphClient(dc)
 	s := State{dg: dg}

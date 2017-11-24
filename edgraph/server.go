@@ -37,7 +37,8 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
@@ -159,7 +160,7 @@ func (s *ServerState) fillTimestampRequests() {
 		if len(chs) == 0 {
 			continue
 		}
-		num := &protos.Num{Val: uint64(len(chs))}
+		num := &intern.Num{Val: uint64(len(chs))}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		ts, err := worker.Timestamps(ctx, num)
 		cancel()
@@ -194,8 +195,8 @@ func (s *ServerState) getTimestamp() uint64 {
 	return <-ch
 }
 
-func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Payload, error) {
-	empty := &protos.Payload{}
+func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
@@ -204,23 +205,23 @@ func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Paylo
 	}
 
 	if op.DropAll {
-		m := protos.Mutations{DropAll: true}
+		m := intern.Mutations{DropAll: true}
 		_, err := query.ApplyMutations(ctx, &m)
 		return empty, err
 	}
 	if len(op.DropAttr) > 0 {
-		nq := &protos.NQuad{
+		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   op.DropAttr,
-			ObjectValue: &protos.Value{&protos.Value_StrVal{x.Star}},
+			ObjectValue: &api.Value{&api.Value_StrVal{x.Star}},
 		}
 		wnq := &gql.NQuad{nq}
 		edge, err := wnq.ToDeletePredEdge()
 		if err != nil {
 			return empty, err
 		}
-		edges := []*protos.DirectedEdge{edge}
-		m := &protos.Mutations{Edges: edges}
+		edges := []*intern.DirectedEdge{edge}
+		m := &intern.Mutations{Edges: edges}
 		_, err = query.ApplyMutations(ctx, m)
 		return empty, err
 	}
@@ -236,13 +237,13 @@ func (s *Server) Alter(ctx context.Context, op *protos.Operation) (*protos.Paylo
 	if op.StartTs == 0 {
 		op.StartTs = State.getTimestamp()
 	}
-	m := &protos.Mutations{Schema: updates, StartTs: op.StartTs}
+	m := &intern.Mutations{Schema: updates, StartTs: op.StartTs}
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }
 
-func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.Assigned, err error) {
-	resp = &protos.Assigned{}
+func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
+	resp = &api.Assigned{}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
@@ -282,7 +283,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 		return resp, err
 	}
 
-	m := &protos.Mutations{Edges: edges, StartTs: mu.StartTs}
+	m := &intern.Mutations{Edges: edges, StartTs: mu.StartTs}
 	resp.Context, err = query.ApplyMutations(ctx, m)
 	if !mu.CommitNow {
 		return resp, err
@@ -312,7 +313,7 @@ func (s *Server) Mutate(ctx context.Context, mu *protos.Mutation) (resp *protos.
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.Response, err error) {
+func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Response, err error) {
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
@@ -333,7 +334,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 		defer tr.Finish()
 	}
 
-	resp = new(protos.Response)
+	resp = new(api.Response)
 	if len(req.Query) == 0 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Empty query")
@@ -362,7 +363,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp()
 	}
-	resp.Txn = &protos.TxnContext{
+	resp.Txn = &api.TxnContext{
 		StartTs: req.StartTs,
 	}
 
@@ -391,7 +392,7 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	}
 	resp.Json = json
 
-	gl := &protos.Latency{
+	gl := &api.Latency{
 		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
 		ProcessingNs: uint64(l.Processing.Nanoseconds()),
 		EncodingNs:   uint64(l.Json.Nanoseconds()),
@@ -402,16 +403,16 @@ func (s *Server) Query(ctx context.Context, req *protos.Request) (resp *protos.R
 	return resp, err
 }
 
-func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*protos.TxnContext,
+func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext,
 	error) {
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
 		}
-		return &protos.TxnContext{}, err
+		return &api.TxnContext{}, err
 	}
 
-	tctx := &protos.TxnContext{}
+	tctx := &api.TxnContext{}
 
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == y.ErrAborted {
@@ -422,7 +423,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *protos.TxnContext) (*pro
 	return tctx, err
 }
 
-func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {
+func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version, err error) {
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("request rejected %v", err)
@@ -430,7 +431,7 @@ func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.V
 		return v, err
 	}
 
-	v = new(protos.Version)
+	v = new(api.Version)
 	v.Tag = x.Version()
 	return v, nil
 }
@@ -449,13 +450,13 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-func parseFacets(m map[string]interface{}, prefix string) ([]*protos.Facet, error) {
+func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
 	// This happens at root.
 	if prefix == "" {
 		return nil, nil
 	}
 
-	var facetsForPred []*protos.Facet
+	var facetsForPred []*api.Facet
 	var fv interface{}
 	for fname, facetVal := range m {
 		if facetVal == nil {
@@ -469,30 +470,30 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*protos.Facet, erro
 			return nil, x.Errorf("Facet key is invalid: %s", fname)
 		}
 		// Prefix includes colon, predicate:
-		f := &protos.Facet{Key: fname[len(prefix):]}
+		f := &api.Facet{Key: fname[len(prefix):]}
 		switch v := facetVal.(type) {
 		case string:
 			if t, err := types.ParseTime(v); err == nil {
-				f.ValType = protos.Facet_DATETIME
+				f.ValType = api.Facet_DATETIME
 				fv = t
 			} else {
-				f.ValType = protos.Facet_STRING
+				f.ValType = api.Facet_STRING
 				fv = v
 			}
 		case float64:
 			// Could be int too, but we just store it as float.
 			fv = v
-			f.ValType = protos.Facet_FLOAT
+			f.ValType = api.Facet_FLOAT
 		case bool:
 			fv = v
-			f.ValType = protos.Facet_BOOL
+			f.ValType = api.Facet_BOOL
 		default:
 			return nil, x.Errorf("Facet value for key: %s can only be string/float64/bool.",
 				fname)
 		}
 
 		// convert facet val interface{} to binary
-		tid := facets.TypeIDFor(&protos.Facet{ValType: f.ValType})
+		tid := facets.TypeIDFor(&api.Facet{ValType: f.ValType})
 		fVal := &types.Val{Tid: types.BinaryID}
 		if err := types.Marshal(types.Val{Tid: tid, Value: fv}, fVal); err != nil {
 			return nil, err
@@ -511,12 +512,12 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*protos.Facet, erro
 
 // This is the response for a map[string]interface{} i.e. a struct.
 type mapResponse struct {
-	nquads []*protos.NQuad // nquads at this level including the children.
-	uid    string          // uid retrieved or allocated for the node.
-	fcts   []*protos.Facet // facets on the edge connecting this node to the source if any.
+	nquads []*api.NQuad // nquads at this level including the children.
+	uid    string       // uid retrieved or allocated for the node.
+	fcts   []*api.Facet // facets on the edge connecting this node to the source if any.
 }
 
-func handleBasicType(k string, v interface{}, op int, nq *protos.NQuad) error {
+func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 	switch v.(type) {
 	case string:
 		predWithLang := strings.SplitN(k, "@", 2)
@@ -527,25 +528,25 @@ func handleBasicType(k string, v interface{}, op int, nq *protos.NQuad) error {
 
 		// Default value is considered as S P * deletion.
 		if v == "" && op == delete {
-			nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
 			return nil
 		}
 
-		nq.ObjectValue = &protos.Value{&protos.Value_StrVal{v.(string)}}
+		nq.ObjectValue = &api.Value{&api.Value_StrVal{v.(string)}}
 	case float64:
 		if v == 0 && op == delete {
-			nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
 			return nil
 		}
 
-		nq.ObjectValue = &protos.Value{&protos.Value_DoubleVal{v.(float64)}}
+		nq.ObjectValue = &api.Value{&api.Value_DoubleVal{v.(float64)}}
 	case bool:
 		if v == false && op == delete {
-			nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
 			return nil
 		}
 
-		nq.ObjectValue = &protos.Value{&protos.Value_BoolVal{v.(bool)}}
+		nq.ObjectValue = &api.Value{&api.Value_BoolVal{v.(bool)}}
 	default:
 		return x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 	}
@@ -556,15 +557,15 @@ func handleBasicType(k string, v interface{}, op int, nq *protos.NQuad) error {
 func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
 	// Since uid is the only key, this must be S * * deletion.
 	if op == delete && len(mr.uid) > 0 && len(m) == 1 {
-		mr.nquads = append(mr.nquads, &protos.NQuad{
+		mr.nquads = append(mr.nquads, &api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
-			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
+			ObjectValue: &api.Value{&api.Value_DefaultVal{x.Star}},
 		})
 	}
 }
 
-func tryParseAsGeo(b []byte, nq *protos.NQuad) (bool, error) {
+func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 	var g geom.T
 	err := geojson.Unmarshal(b, &g)
 	if err == nil {
@@ -621,10 +622,10 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		if op == delete {
 			// This corresponds to edge deletion.
 			if v == nil {
-				mr.nquads = append(mr.nquads, &protos.NQuad{
+				mr.nquads = append(mr.nquads, &api.NQuad{
 					Subject:     mr.uid,
 					Predicate:   pred,
-					ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
+					ObjectValue: &api.Value{&api.Value_DefaultVal{x.Star}},
 				})
 				continue
 			}
@@ -638,7 +639,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			return mr, err
 		}
 
-		nq := protos.NQuad{
+		nq := api.NQuad{
 			Subject:   mr.uid,
 			Predicate: pred,
 			Facets:    fts,
@@ -646,7 +647,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 
 		if v == nil {
 			if op == delete {
-				nq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
 				mr.nquads = append(mr.nquads, &nq)
 			}
 			continue
@@ -696,7 +697,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			mr.nquads = append(mr.nquads, cr.nquads...)
 		case []interface{}:
 			for _, item := range v.([]interface{}) {
-				nq := protos.NQuad{
+				nq := api.NQuad{
 					Subject:   mr.uid,
 					Predicate: pred,
 				}
@@ -737,7 +738,7 @@ const (
 	delete
 )
 
-func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
+func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	ms := make(map[string]interface{})
 	var list []interface{}
 	if err := json.Unmarshal(b, &ms); err != nil {
@@ -752,7 +753,7 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 	}
 
 	var idx int
-	var nquads []*protos.NQuad
+	var nquads []*api.NQuad
 	if len(list) > 0 {
 		for _, obj := range list {
 			if _, ok := obj.(map[string]interface{}); !ok {
@@ -773,8 +774,8 @@ func nquadsFromJson(b []byte, op int) ([]*protos.NQuad, error) {
 	return mr.nquads, err
 }
 
-func parseNQuads(b []byte, op int) ([]*protos.NQuad, error) {
-	var nqs []*protos.NQuad
+func parseNQuads(b []byte, op int) ([]*api.NQuad, error) {
+	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
 		line = bytes.TrimSpace(line)
 		nq, err := rdf.Parse(string(line))
@@ -789,7 +790,7 @@ func parseNQuads(b []byte, op int) ([]*protos.NQuad, error) {
 	return nqs, nil
 }
 
-func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
+func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
 	if len(mu.SetJson) > 0 {
 		nqs, err := nquadsFromJson(mu.SetJson, set)
@@ -825,10 +826,10 @@ func parseMutationObject(mu *protos.Mutation) (*gql.Mutation, error) {
 	return res, validWildcards(res.Set, res.Del)
 }
 
-func validWildcards(set, del []*protos.NQuad) error {
+func validWildcards(set, del []*api.NQuad) error {
 	for _, nq := range set {
 		var ostar bool
-		if o, ok := nq.ObjectValue.GetVal().(*protos.Value_DefaultVal); ok {
+		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
 			ostar = o.DefaultVal == x.Star
 		}
 		if nq.Subject == x.Star || nq.Predicate == x.Star || ostar {
@@ -837,7 +838,7 @@ func validWildcards(set, del []*protos.NQuad) error {
 	}
 	for _, nq := range del {
 		var ostar bool
-		if o, ok := nq.ObjectValue.GetVal().(*protos.Value_DefaultVal); ok {
+		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
 			ostar = o.DefaultVal == x.Star
 		}
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
