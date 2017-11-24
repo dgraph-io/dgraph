@@ -296,7 +296,7 @@ func (s *Server) Connect(ctx context.Context,
 	if ctx.Err() != nil {
 		return &emptyConnectionState, ctx.Err()
 	}
-	if m.CluterInfoOnly {
+	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
 		ms, err := s.latestMembershipState(ctx)

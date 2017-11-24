@@ -49,7 +49,7 @@ message Query {
 
 	bool reverse = 7;  // Whether this is a reverse edge.
 
-	Param facet_param = 8; // which facets to fetch
+	FacetParams facet_param = 8; // which facets to fetch
 	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
 
 	bool expand_all = 10; // expand all language variants.
@@ -116,7 +116,7 @@ message Member {
 	bool am_dead = 5;
 	uint64 last_update = 6;
 
-	bool cluter_info_only = 13;
+	bool cluster_info_only = 13;
 }
 
 message Group {
@@ -255,10 +255,14 @@ message PostingList {
 	bytes uids = 4; // Encoded list of uids in this posting list.
 }
 
-// Facet messages.
-message Param {
-	bool all_keys = 1;
-	repeated string keys = 2;
+message FacetParam {
+	string key = 1;
+	string alias = 2;
+}
+
+message FacetParams {
+	bool all_keys = 1; // keys should be in sorted order.
+	repeated FacetParam param = 2;
 }
 
 message Facets {

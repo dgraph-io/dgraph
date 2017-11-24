@@ -143,10 +143,7 @@ message Facet {
 	bytes value = 2;
 	ValType val_type = 3;
 	repeated string tokens = 4; // tokens of value.
-
-	// Only used by the Go client, so that we can parse and tokenize facets
-	// on the server.
-	string val=5;
+	string alias = 5; // not stored, only used for query.
 }
 
 message SchemaNode {

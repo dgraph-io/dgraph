@@ -6,11 +6,16 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Added
+
+* Support for alias while asking for facets.
+
 ### Fixed
 
 * `expand(_all_)` now correctly gives all language variants of a string.
 * Indexes now correctly maintained when deleting via `S * *` and `S P *`.
 * `expand(_all_)` now follows reverse edges.
+* Don't return uid for nodes without any children when requested through debug flag.
 
 ### Changed
 

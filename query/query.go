@@ -134,7 +134,7 @@ type params struct {
 
 	From           uint64
 	To             uint64
-	Facet          *intern.Param
+	Facet          *intern.FacetParams
 	FacetOrder     string
 	FacetOrderDesc bool
 	ExploreDepth   uint64
@@ -148,6 +148,7 @@ type params struct {
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	expandAll      bool     // expand all languages
+	shortest       bool
 }
 
 // Function holds the information about gql functions.
@@ -351,6 +352,13 @@ func alreadySeen(parentIds []uint64, uid uint64) bool {
 	return false
 }
 
+func facetName(fieldName string, f *api.Facet) string {
+	if f.Alias != "" {
+		return f.Alias
+	}
+	return fieldName + FacetDelimeter + f.Key
+}
+
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	if sg.Params.IgnoreReflex {
@@ -364,14 +372,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 		// Push myself to stack before sending this to children.
 		sg.Params.parentIds = append(sg.Params.parentIds, uid)
-	}
-	if sg.Params.GetUid {
-		// If we are asked for count() and there are no other children,
-		// then we dont return the uids at this level so that UI doesn't render
-		// nodes without any other properties.
-		if sg.Params.uidCount == "" || len(sg.Children) != 0 {
-			dst.SetUID(uid, "uid")
-		}
 	}
 
 	var invalidUids map[uint64]bool
@@ -444,11 +444,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
 					for _, f := range fs.Facets {
-						uc.AddValue(fieldName+FacetDelimeter+f.Key,
-							facets.ValFor(f))
+						uc.AddValue(facetName(fieldName, f), facets.ValFor(f))
 					}
 				}
+
 				if !uc.IsEmpty() {
+					if sg.Params.GetUid {
+						uc.SetUID(childUID, "uid")
+					}
 					dst.AddListChild(fieldName, uc)
 				}
 			}
@@ -478,8 +481,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					dst.AddValue(fieldName+FacetDelimeter+f.Key,
-						facets.ValFor(f))
+					dst.AddValue(facetName(fieldName, f), facets.ValFor(f))
 				}
 			}
 
@@ -528,6 +530,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	if facetsNode != nil && !facetsNode.IsEmpty() {
 		dst.AddMapChild("@facets", facetsNode, false)
 	}
+
+	// Only for shortest path query we wan't to return uid always if there is
+	// nothing else at that level.
+	if (sg.Params.GetUid && !dst.IsEmpty()) || sg.Params.shortest {
+		dst.SetUID(uid, "uid")
+	}
+
 	return nil
 }
 
@@ -686,9 +695,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			FacetOrderDesc: gchild.FacetDesc,
 			IgnoreReflex:   sg.Params.IgnoreReflex,
 			Order:          gchild.Order,
-		}
-		if gchild.Facets != nil {
-			args.Facet = &intern.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
+			Facet:          gchild.Facets,
 		}
 
 		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
@@ -878,10 +885,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Recurse:      gq.Recurse,
 		RecurseArgs:  gq.RecurseArgs,
 	}
-	if gq.Facets != nil {
-		args.Facet = &intern.Param{gq.Facets.AllKeys, gq.Facets.Keys}
-	}
-
 	for _, it := range gq.NeedsVar {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
@@ -1495,8 +1498,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
 		sgPath = append(sgPath, sg)
 
-		for _, it := range sg.Params.Facet.Keys {
-			fvar, ok := sg.Params.FacetVar[it]
+		for _, it := range sg.Params.Facet.Param {
+			fvar, ok := sg.Params.FacetVar[it.Key]
 			if !ok {
 				continue
 			}

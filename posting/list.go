@@ -1046,7 +1046,7 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *intern.P
 }
 
 // Facets gives facets for the posting representing value.
-func (l *List) Facets(readTs uint64, param *intern.Param, langs []string) (fs []*api.Facet,
+func (l *List) Facets(readTs uint64, param *intern.FacetParams, langs []string) (fs []*api.Facet,
 	ferr error) {
 	l.RLock()
 	defer l.RUnlock()
