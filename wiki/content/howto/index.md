@@ -3,7 +3,7 @@ date = "2017-03-20T19:35:35+11:00"
 title = "How To Guides"
 +++
 
-### Retrieving Debug Information
+## Retrieving Debug Information
 
 Each Dgraph data node exposes profile over `/debug/pprof` endpoint and metrics over `/debug/vars` endpoint. Each Dgraph data node has it's own profiling and metrics information. Below is a list of debugging information exposed by Dgraph and the corresponding commands to retrieve them.
 
@@ -33,7 +33,7 @@ Dgraph by default doesn't collect the block profile. Dgraph must be started with
 go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/block
 ```
 
-### Giving Nodes a Type
+## Giving Nodes a Type
 
 It's often useful to give the nodes in a graph *types* (also commonly referred
 to as *labels* or *kinds*).
@@ -84,7 +84,7 @@ multi-node clusters. The second approach will also result in an increased
 transaction abortion rate, since every typed node creation would result in
 writing to the `type` index.
 
-### A Simple Login System
+## A Simple Login System
 
 {{% notice "note" %}}
 This example is based on part of the [transactions in
