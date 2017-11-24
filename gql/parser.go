@@ -61,7 +61,7 @@ type GraphQuery struct {
 	RecurseArgs  RecurseArgs
 	Cascade      bool
 	IgnoreReflex bool
-	Facets       *Facets
+	Facets       *protos.FacetParams
 	FacetsFilter *FilterTree
 	GroupbyAttrs []GroupByAttr
 	FacetVar     map[string]string
@@ -155,12 +155,6 @@ type Function struct {
 	NeedsVar   []VarContext // If the function requires some variable
 	IsCount    bool         // gt(count(friends),0)
 	IsValueVar bool         // eq(val(s), 5)
-}
-
-// Facet holds the information about gql Facets (edge key-value pairs).
-type Facets struct {
-	AllKeys bool
-	Keys    []string // should be in sorted order.
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -1614,7 +1608,7 @@ L:
 }
 
 type facetRes struct {
-	f          *Facets
+	f          *protos.FacetParams
 	ft         *FilterTree
 	vmap       map[string]string
 	facetOrder string
@@ -1633,7 +1627,8 @@ func parseFacets(it *lex.ItemIterator) (res facetRes, err error) {
 }
 
 type facetItem struct {
-	facetName string
+	name      string
+	alias     string
 	varName   string
 	ordered   bool
 	orderdesc bool
@@ -1644,7 +1639,7 @@ type facetItem struct {
 // different function.
 func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err error) {
 	// We parse this:
-	// [{orderdesc|orderasc}:] [varname as] facetName
+	// [{orderdesc|orderasc|alias}:] [varname as] name
 
 	savePos := it.Save()
 	defer func() {
@@ -1657,27 +1652,31 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 	if !ok {
 		return res, false, nil
 	}
+
 	isOrderasc := item.Val == "orderasc"
-	if isOrderasc || item.Val == "orderdesc" {
-		if _, ok := tryParseItemType(it, itemColon); ok {
+	if _, ok := tryParseItemType(it, itemColon); ok {
+		if isOrderasc || item.Val == "orderdesc" {
 			res.ordered = true
 			res.orderdesc = !isOrderasc
-			// Step past colon.
-			item, ok = tryParseItemType(it, itemName)
-			if !ok {
-				return res, false, x.Errorf("Expected name after colon")
-			}
+		} else {
+			res.alias = item.Val
+		}
+
+		// Step past colon.
+		item, ok = tryParseItemType(it, itemName)
+		if !ok {
+			return res, false, x.Errorf("Expected name after colon")
 		}
 	}
 
-	// We've possibly set ordered, orderdesc, and now we have consumed another item, which is a
-	// name.
+	// We've possibly set ordered, orderdesc, alias and now we have consumed another item,
+	// which is a name.
 	name1 := item.Val
 
 	// Now try to consume "as".
 	if !trySkipItemVal(it, "as") {
 		name1 = collectName(it, name1)
-		res.facetName = name1
+		res.name = name1
 		return res, true, nil
 	}
 	item, ok = tryParseItemType(it, itemName)
@@ -1685,7 +1684,7 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 		return res, false, x.Errorf("Expected name in facet list")
 	}
 
-	res.facetName = collectName(it, item.Val)
+	res.name = collectName(it, item.Val)
 	res.varName = name1
 	return res, true, nil
 }
@@ -1704,7 +1703,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	// Skip past '('
 	if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 		it.Restore(savePos)
-		var facets Facets
+		var facets protos.FacetParams
 		facets.AllKeys = true
 		res.f = &facets
 		res.vmap = make(map[string]string)
@@ -1712,7 +1711,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	}
 
 	facetVar := make(map[string]string)
-	var facets Facets
+	var facets protos.FacetParams
 	var orderdesc bool
 	var orderkey string
 
@@ -1734,43 +1733,46 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 		// Combine the facetitem with our result.
 		{
 			if facetItem.varName != "" {
-				if _, has := facetVar[facetItem.facetName]; has {
+				if _, has := facetVar[facetItem.name]; has {
 					return res, false, x.Errorf("Duplicate variable mappings for facet %v",
-						facetItem.facetName)
+						facetItem.name)
 				}
-				facetVar[facetItem.facetName] = facetItem.varName
+				facetVar[facetItem.name] = facetItem.varName
 			}
-			facets.Keys = append(facets.Keys, facetItem.facetName)
+			facets.Param = append(facets.Param, &protos.FacetParam{
+				Key:   facetItem.name,
+				Alias: facetItem.alias,
+			})
 			if facetItem.ordered {
 				if orderkey != "" {
 					return res, false, x.Errorf("Invalid use of orderasc/orderdesc in facets")
 				}
 				orderdesc = facetItem.orderdesc
-				orderkey = facetItem.facetName
+				orderkey = facetItem.name
 			}
 		}
 
 		// Now what?  Either close-paren or a comma.
 		if _, ok := tryParseItemType(it, itemRightRound); ok {
-			sort.Slice(facets.Keys, func(i, j int) bool {
-				return facets.Keys[i] < facets.Keys[j]
+			sort.Slice(facets.Param, func(i, j int) bool {
+				return facets.Param[i].Key < facets.Param[j].Key
 			})
 			// deduplicate facets
-			out := facets.Keys[:0]
-			flen := len(facets.Keys)
+			out := facets.Param[:0]
+			flen := len(facets.Param)
 			for i := 1; i < flen; i++ {
-				if facets.Keys[i-1] == facets.Keys[i] {
+				if facets.Param[i-1].Key == facets.Param[i].Key {
 					continue
 				}
-				out = append(out, facets.Keys[i-1])
+				out = append(out, facets.Param[i-1])
 			}
-			out = append(out, facets.Keys[flen-1])
-			facets.Keys = out
+			out = append(out, facets.Param[flen-1])
+			facets.Param = out
 			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
 			return res, true, nil
 		}
 		if item, ok := tryParseItemType(it, itemComma); !ok {
-			if len(facets.Keys) < 2 {
+			if len(facets.Param) < 2 {
 				// We have only consumed ``'@facets' '(' <facetItem>`, which means parseFilter might
 				// succeed. Return no-parse, no-error.
 				return res, false, nil

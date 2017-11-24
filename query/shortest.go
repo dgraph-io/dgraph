@@ -617,7 +617,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		}
 		if nodeInfo.facet != nil {
 			// For consistent later processing.
-			node.Params.Facet = &protos.Param{}
+			node.Params.Facet = &protos.FacetParams{}
 		}
 		node.Attr = nodeInfo.attr
 		node.facetsMatrix = []*protos.FacetsList{{[]*protos.Facets{nodeInfo.facet}}}
@@ -665,7 +665,7 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			}
 			if it.route[i+1].facet != nil {
 				// For consistent later processing.
-				node.Params.Facet = &protos.Param{}
+				node.Params.Facet = &protos.FacetParams{}
 			}
 			node.Attr = it.route[i+1].attr
 			node.facetsMatrix = []*protos.FacetsList{{[]*protos.Facets{it.route[i+1].facet}}}
