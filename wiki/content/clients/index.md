@@ -35,6 +35,7 @@ The client can be obtained in the usual way via `go get`:
 
 ```sh
 go get -u -v github.com/dgraph-io/dgraph/client
+cd $GOPATH/src/github.com/dgraph-io/dgraph && git checkout release/v0.9.2
 ```
 
 The full [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client) contains
