@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/y"
 	"google.golang.org/grpc"
@@ -62,16 +62,16 @@ func newClient() *client.Dgraph {
 	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
 	x.Check(err)
 	return client.NewDgraphClient(
-		protos.NewDgraphClient(d),
+		api.NewDgraphClient(d),
 	)
 }
 
 func setup(c *client.Dgraph) {
 	ctx := context.Background()
-	x.Check(c.Alter(ctx, &protos.Operation{
+	x.Check(c.Alter(ctx, &api.Operation{
 		DropAll: true,
 	}))
-	x.Check(c.Alter(ctx, &protos.Operation{
+	x.Check(c.Alter(ctx, &api.Operation{
 		Schema: `
 			first:  string   @index(term) .
 			last:   string   @index(hash) .
@@ -155,7 +155,7 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 		`,
 			acc.first, acc.last, acc.age,
 		)
-		mu := &protos.Mutation{SetNquads: []byte(nqs)}
+		mu := &api.Mutation{SetNquads: []byte(nqs)}
 		assigned, err := txn.Mutate(ctx, mu)
 		if err != nil {
 			return err
@@ -170,7 +170,7 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 	`,
 		uid, time.Now().Nanosecond(),
 	)
-	mu := &protos.Mutation{SetNquads: []byte(nq)}
+	mu := &api.Mutation{SetNquads: []byte(nq)}
 	if _, err = txn.Mutate(ctx, mu); err != nil {
 		return err
 	}

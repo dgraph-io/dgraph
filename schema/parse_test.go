@@ -25,17 +25,17 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type nameType struct {
 	name string
-	typ  *protos.SchemaUpdate
+	typ  *intern.SchemaUpdate
 }
 
-func checkSchema(t *testing.T, h map[string]*protos.SchemaUpdate, expected []nameType) {
+func checkSchema(t *testing.T, h map[string]*intern.SchemaUpdate, expected []nameType) {
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
@@ -55,27 +55,27 @@ name: string .
 func TestSchema(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaVal), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"name", &protos.SchemaUpdate{
+		{"name", &intern.SchemaUpdate{
 			Predicate: "name",
-			ValueType: protos.Posting_STRING,
+			ValueType: intern.Posting_STRING,
 			Explicit:  true,
 		}},
-		{"_predicate_", &protos.SchemaUpdate{
-			ValueType: protos.Posting_STRING,
+		{"_predicate_", &intern.SchemaUpdate{
+			ValueType: intern.Posting_STRING,
 			List:      true,
 		}},
-		{"address", &protos.SchemaUpdate{
+		{"address", &intern.SchemaUpdate{
 			Predicate: "address",
-			ValueType: protos.Posting_STRING,
+			ValueType: intern.Posting_STRING,
 			Explicit:  true}},
-		{"http://scalar.com/helloworld/", &protos.SchemaUpdate{
+		{"http://scalar.com/helloworld/", &intern.SchemaUpdate{
 			Predicate: "http://scalar.com/helloworld/",
-			ValueType: protos.Posting_STRING,
+			ValueType: intern.Posting_STRING,
 			Explicit:  true,
 		}},
-		{"age", &protos.SchemaUpdate{
+		{"age", &intern.SchemaUpdate{
 			Predicate: "age",
-			ValueType: protos.Posting_INT,
+			ValueType: intern.Posting_INT,
 			Explicit:  true,
 		}},
 	})
@@ -177,36 +177,36 @@ friend  : uid @reverse @count .
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"_predicate_", &protos.SchemaUpdate{
-			ValueType: protos.Posting_STRING,
+		{"_predicate_", &intern.SchemaUpdate{
+			ValueType: intern.Posting_STRING,
 			List:      true,
 		}},
-		{"name", &protos.SchemaUpdate{
+		{"name", &intern.SchemaUpdate{
 			Predicate: "name",
-			ValueType: protos.Posting_STRING,
+			ValueType: intern.Posting_STRING,
 			Tokenizer: []string{"exact"},
-			Directive: protos.SchemaUpdate_INDEX,
+			Directive: intern.SchemaUpdate_INDEX,
 			Count:     true,
 			Explicit:  true,
 		}},
-		{"address", &protos.SchemaUpdate{
+		{"address", &intern.SchemaUpdate{
 			Predicate: "address",
-			ValueType: protos.Posting_STRING,
+			ValueType: intern.Posting_STRING,
 			Tokenizer: []string{"term"},
-			Directive: protos.SchemaUpdate_INDEX,
+			Directive: intern.SchemaUpdate_INDEX,
 			Explicit:  true,
 		}},
-		{"age", &protos.SchemaUpdate{
+		{"age", &intern.SchemaUpdate{
 			Predicate: "age",
-			ValueType: protos.Posting_INT,
+			ValueType: intern.Posting_INT,
 			Tokenizer: []string{"int"},
-			Directive: protos.SchemaUpdate_INDEX,
+			Directive: intern.SchemaUpdate_INDEX,
 			Explicit:  true,
 		}},
-		{"friend", &protos.SchemaUpdate{
-			ValueType: protos.Posting_UID,
+		{"friend", &intern.SchemaUpdate{
+			ValueType: intern.Posting_UID,
 			Predicate: "friend",
-			Directive: protos.SchemaUpdate_REVERSE,
+			Directive: intern.SchemaUpdate_REVERSE,
 			Count:     true,
 			Explicit:  true,
 		}},
@@ -289,23 +289,23 @@ func TestParseScalarList(t *testing.T) {
 	`)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(schemas))
-	require.EqualValues(t, &protos.SchemaUpdate{
+	require.EqualValues(t, &intern.SchemaUpdate{
 		Predicate: "jobs",
 		ValueType: 9,
-		Directive: protos.SchemaUpdate_INDEX,
+		Directive: intern.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"},
 		List:      true,
 		Explicit:  true,
 	}, schemas[0])
 
-	require.EqualValues(t, &protos.SchemaUpdate{
+	require.EqualValues(t, &intern.SchemaUpdate{
 		Predicate: "occupations",
 		ValueType: 9,
 		List:      true,
 		Explicit:  true,
 	}, schemas[1])
 
-	require.EqualValues(t, &protos.SchemaUpdate{
+	require.EqualValues(t, &intern.SchemaUpdate{
 		Predicate: "graduation",
 		ValueType: 5,
 		List:      true,

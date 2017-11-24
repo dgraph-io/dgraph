@@ -24,27 +24,27 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 )
 
 func TestConvertEdgeType(t *testing.T) {
 	var testEdges = []struct {
-		input     *protos.DirectedEdge
+		input     *intern.DirectedEdge
 		to        types.TypeID
 		expectErr bool
-		output    *protos.DirectedEdge
+		output    *intern.DirectedEdge
 	}{
 		{
-			input: &protos.DirectedEdge{
+			input: &intern.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
 				Attr:  "name",
 			},
 			to:        types.StringID,
 			expectErr: false,
-			output: &protos.DirectedEdge{
+			output: &intern.DirectedEdge{
 				Value:     []byte("set edge"),
 				Label:     "test-mutation",
 				Attr:      "name",
@@ -52,17 +52,17 @@ func TestConvertEdgeType(t *testing.T) {
 			},
 		},
 		{
-			input: &protos.DirectedEdge{
+			input: &intern.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
 				Attr:  "name",
-				Op:    protos.DirectedEdge_DEL,
+				Op:    intern.DirectedEdge_DEL,
 			},
 			to:        types.StringID,
 			expectErr: true,
 		},
 		{
-			input: &protos.DirectedEdge{
+			input: &intern.DirectedEdge{
 				ValueId: 123,
 				Label:   "test-mutation",
 				Attr:    "name",
@@ -71,7 +71,7 @@ func TestConvertEdgeType(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			input: &protos.DirectedEdge{
+			input: &intern.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
 				Attr:  "name",
@@ -94,7 +94,7 @@ func TestConvertEdgeType(t *testing.T) {
 }
 
 func TestValidateEdgeTypeError(t *testing.T) {
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
 		Attr:  "name",
@@ -105,14 +105,14 @@ func TestValidateEdgeTypeError(t *testing.T) {
 }
 
 func TestPopulateMutationMap(t *testing.T) {
-	edges := []*protos.DirectedEdge{{
+	edges := []*intern.DirectedEdge{{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
 	}}
-	schema := []*protos.SchemaUpdate{{
+	schema := []*intern.SchemaUpdate{{
 		Predicate: "name",
 	}}
-	m := &protos.Mutations{Edges: edges, Schema: schema}
+	m := &intern.Mutations{Edges: edges, Schema: schema}
 
 	mutationsMap := populateMutationMap(m)
 	mu := mutationsMap[1]
@@ -125,54 +125,54 @@ func TestCheckSchema(t *testing.T) {
 	posting.DeleteAll()
 	initTest(t, "name:string @index(term) .")
 	// non uid to uid
-	s1 := &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_UID}
+	s1 := &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_UID}
 	require.NoError(t, checkSchema(s1))
 
 	// uid to non uid
 	err := schema.ParseBytes([]byte("name:uid ."), 1)
 	require.NoError(t, err)
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_STRING}
+	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_STRING}
 	require.NoError(t, checkSchema(s1))
 
 	// string to int
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_FLOAT}
+	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_FLOAT}
 	require.NoError(t, checkSchema(s1))
 
 	// index on uid type
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_UID, Directive: protos.SchemaUpdate_INDEX}
+	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_UID, Directive: intern.SchemaUpdate_INDEX}
 	require.Error(t, checkSchema(s1))
 
 	// reverse on non-uid type
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_REVERSE}
+	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_REVERSE}
 	require.Error(t, checkSchema(s1))
 
-	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: protos.Posting_FLOAT, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_FLOAT, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
 	require.NoError(t, checkSchema(s1))
 
-	s1 = &protos.SchemaUpdate{Predicate: "friend", ValueType: protos.Posting_UID, Directive: protos.SchemaUpdate_REVERSE}
+	s1 = &intern.SchemaUpdate{Predicate: "friend", ValueType: intern.Posting_UID, Directive: intern.SchemaUpdate_REVERSE}
 	require.NoError(t, checkSchema(s1))
 }
 
 func TestNeedReindexing(t *testing.T) {
-	s1 := protos.SchemaUpdate{ValueType: protos.Posting_UID}
-	s2 := protos.SchemaUpdate{ValueType: protos.Posting_UID}
+	s1 := intern.SchemaUpdate{ValueType: intern.Posting_UID}
+	s2 := intern.SchemaUpdate{ValueType: intern.Posting_UID}
 	require.False(t, needReindexing(s1, s2))
 
-	s1 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s1 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s2 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
 	require.False(t, needReindexing(s1, s2))
 
-	s1 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
-	s2 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX}
+	s1 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s2 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX}
 	require.True(t, needReindexing(s1, s2))
 
-	s1 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = protos.SchemaUpdate{ValueType: protos.Posting_FLOAT, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s1 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s2 = intern.SchemaUpdate{ValueType: intern.Posting_FLOAT, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
 	require.True(t, needReindexing(s1, s2))
 
-	s1 = protos.SchemaUpdate{ValueType: protos.Posting_STRING, Directive: protos.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = protos.SchemaUpdate{ValueType: protos.Posting_FLOAT, Directive: protos.SchemaUpdate_NONE}
+	s1 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s2 = intern.SchemaUpdate{ValueType: intern.Posting_FLOAT, Directive: intern.SchemaUpdate_NONE}
 	require.True(t, needReindexing(s1, s2))
 }

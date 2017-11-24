@@ -27,7 +27,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -110,12 +110,12 @@ func TestIndexingInvalidLang(t *testing.T) {
 	require.Error(t, err)
 }
 
-func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32,
+func addMutation(t *testing.T, l *List, edge *intern.DirectedEdge, op uint32,
 	startTs uint64, commitTs uint64, index bool) {
 	if op == Del {
-		edge.Op = protos.DirectedEdge_DEL
+		edge.Op = intern.DirectedEdge_DEL
 	} else if op == Set {
-		edge.Op = protos.DirectedEdge_SET
+		edge.Op = intern.DirectedEdge_SET
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
@@ -151,7 +151,7 @@ func TestTokensTable(t *testing.T) {
 	lcache.PutIfMissing(string(l.key), l)
 	require.NoError(t, err)
 
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		Value:  []byte("david"),
 		Label:  "testing",
 		Attr:   "name",
@@ -197,12 +197,12 @@ func tokensForTest(attr string) []string {
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string, startTs, commitTs uint64) {
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		Value:  []byte(value),
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     protos.DirectedEdge_SET,
+		Op:     intern.DirectedEdge_SET,
 	}
 	l := Get(x.DataKey(attr, src))
 	// No index entries added here as we do not call AddMutationWithIndex.
@@ -212,12 +212,12 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 // addEdgeToUID adds uid edge with reverse edge
 func addEdgeToUID(t *testing.T, attr string, src uint64,
 	dst uint64, startTs, commitTs uint64) {
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
-		Op:      protos.DirectedEdge_SET,
+		Op:      intern.DirectedEdge_SET,
 	}
 	l := Get(x.DataKey(attr, src))
 	// No index entries added here as we do not call AddMutationWithIndex.
@@ -227,12 +227,12 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 // addEdgeToUID adds uid edge with reverse edge
 func addReverseEdge(t *testing.T, attr string, src uint64,
 	dst uint64, startTs, commitTs uint64) {
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
-		Op:      protos.DirectedEdge_SET,
+		Op:      intern.DirectedEdge_SET,
 	}
 	txn := Txn{
 		StartTs: startTs,

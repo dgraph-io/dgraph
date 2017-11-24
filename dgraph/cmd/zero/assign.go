@@ -22,13 +22,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	emptyNum         protos.Num
-	emptyAssignedIds protos.AssignedIds
+	emptyNum         intern.Num
+	emptyAssignedIds api.AssignedIds
 )
 
 const (
@@ -61,7 +62,7 @@ func (s *Server) maxTxnTs() uint64 {
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the leasemanager
 // In essence, we just want one server to be handing out new uids.
-func (s *Server) lease(ctx context.Context, num *protos.Num, txn bool) (*protos.AssignedIds, error) {
+func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*api.AssignedIds, error) {
 	node := s.Node
 	// TODO: Fix when we move to linearizable reads, need to check if we are the leader, might be
 	// based on leader leases. If this node gets partitioned and unless checkquorum is enabled, this
@@ -88,7 +89,7 @@ func (s *Server) lease(ctx context.Context, num *protos.Num, txn bool) (*protos.
 	}
 
 	var maxLease, available uint64
-	var proposal protos.ZeroProposal
+	var proposal intern.ZeroProposal
 
 	if txn {
 		maxLease = s.maxTxnTs()
@@ -107,7 +108,7 @@ func (s *Server) lease(ctx context.Context, num *protos.Num, txn bool) (*protos.
 		}
 	}
 
-	out := &protos.AssignedIds{}
+	out := &api.AssignedIds{}
 	if txn {
 		out.StartId = s.nextTxnTs
 		out.EndId = out.StartId + num.Val - 1
@@ -123,7 +124,7 @@ func (s *Server) lease(ctx context.Context, num *protos.Num, txn bool) (*protos.
 
 // AssignUids is used to assign new uids by communicating with the leader of the RAFT group
 // responsible for handing out uids.
-func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+func (s *Server) AssignUids(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}

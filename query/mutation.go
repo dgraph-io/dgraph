@@ -9,17 +9,18 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
+func ApplyMutations(ctx context.Context, m *intern.Mutations) (*api.TxnContext, error) {
 	if worker.Config.ExpandEdge {
 		edges, err := expandEdges(ctx, m)
 		if err != nil {
-			return nil, x.Wrapf(err, "While adding internal edges")
+			return nil, x.Wrapf(err, "While adding intern.edges")
 		}
 		m.Edges = edges
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -42,17 +43,17 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContex
 	return tctx, err
 }
 
-func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEdge, error) {
-	edges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
+func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEdge, error) {
+	edges := make([]*intern.DirectedEdge, 0, 2*len(m.Edges))
 	for _, edge := range m.Edges {
-		x.AssertTrue(edge.Op == protos.DirectedEdge_DEL || edge.Op == protos.DirectedEdge_SET)
+		x.AssertTrue(edge.Op == intern.DirectedEdge_DEL || edge.Op == intern.DirectedEdge_SET)
 
 		var preds []string
 		if edge.Attr != x.Star {
 			preds = []string{edge.Attr}
 		} else {
 			sg := &SubGraph{}
-			sg.DestUIDs = &protos.List{[]uint64{edge.GetEntity()}}
+			sg.DestUIDs = &intern.List{[]uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
 			valMatrix, err := getNodePredicates(ctx, sg)
 			if err != nil {
@@ -74,7 +75,7 @@ func expandEdges(ctx context.Context, m *protos.Mutations) ([]*protos.DirectedEd
 			edgeCopy.Attr = pred
 			edges = append(edges, &edgeCopy)
 
-			e := &protos.DirectedEdge{
+			e := &intern.DirectedEdge{
 				Op:     edge.Op,
 				Entity: edge.GetEntity(),
 				Attr:   "_predicate_",
@@ -96,9 +97,9 @@ func verifyUid(uid uint64) error {
 	return nil
 }
 
-func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64, error) {
+func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
-	num := &protos.Num{}
+	num := &intern.Num{}
 	var err error
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
@@ -133,7 +134,7 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 
 	num.Val = uint64(len(newUids))
 	if int(num.Val) > 0 {
-		var res *protos.AssignedIds
+		var res *api.AssignedIds
 		// TODO: Optimize later by prefetching. Also consolidate all the UID requests into a single
 		// pending request from this server to zero.
 		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {
@@ -154,18 +155,18 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 }
 
 func ToInternal(gmu *gql.Mutation,
-	newUids map[string]uint64) (edges []*protos.DirectedEdge, err error) {
+	newUids map[string]uint64) (edges []*intern.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
 	var wnq *gql.NQuad
 
-	parse := func(nq *protos.NQuad, op protos.DirectedEdge_Op) error {
+	parse := func(nq *api.NQuad, op intern.DirectedEdge_Op) error {
 		wnq = &gql.NQuad{nq}
 		if len(nq.Subject) == 0 {
 			return nil
 		}
 		// Get edge from nquad using newUids.
-		var edge *protos.DirectedEdge
+		var edge *intern.DirectedEdge
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {
 			return x.Wrap(err)
@@ -179,7 +180,7 @@ func ToInternal(gmu *gql.Mutation,
 		if err := facets.SortAndValidate(nq.Facets); err != nil {
 			return edges, err
 		}
-		if err := parse(nq, protos.DirectedEdge_SET); err != nil {
+		if err := parse(nq, intern.DirectedEdge_SET); err != nil {
 			return edges, err
 		}
 	}
@@ -187,7 +188,7 @@ func ToInternal(gmu *gql.Mutation,
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 			return edges, errors.New("Predicate deletion should be called via alter.")
 		}
-		if err := parse(nq, protos.DirectedEdge_DEL); err != nil {
+		if err := parse(nq, intern.DirectedEdge_DEL); err != nil {
 			return edges, err
 		}
 	}

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 
 	dg := client.NewDgraphClient(dc)
 	s.dg = dg
@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 	}
 	wg.Wait()
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `name: string @index(fulltext) .`
 	if err := s.dg.Alter(context.Background(), op); err != nil {
 		log.Fatal(err)
@@ -102,7 +102,7 @@ func TestTxnRead1(t *testing.T) {
 	fmt.Println("TestTxnRead1")
 	txn := s.dg.NewTxn()
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
@@ -131,7 +131,7 @@ func TestTxnRead2(t *testing.T) {
 	fmt.Println("TestTxnRead2")
 	txn := s.dg.NewTxn()
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
@@ -159,7 +159,7 @@ func TestTxnRead2(t *testing.T) {
 
 // readTs > commitTs
 func TestTxnRead3(t *testing.T) {
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.DropAttr = "name"
 	attempts := 0
 	for attempts < 10 {
@@ -172,7 +172,7 @@ func TestTxnRead3(t *testing.T) {
 	fmt.Println("TestTxnRead3")
 	txn := s.dg.NewTxn()
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
@@ -202,7 +202,7 @@ func TestTxnRead4(t *testing.T) {
 	fmt.Println("TestTxnRead4")
 	txn := s.dg.NewTxn()
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
@@ -220,7 +220,7 @@ func TestTxnRead4(t *testing.T) {
 	txn2 := s.dg.NewTxn()
 
 	txn3 := s.dg.NewTxn()
-	mu = &protos.Mutation{}
+	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Manish2"}`, uid))
 	fmt.Println(string(mu.SetJson))
 	assigned, err = txn3.Mutate(context.Background(), mu)
@@ -251,7 +251,7 @@ func TestTxnRead5(t *testing.T) {
 	fmt.Println("TestTxnRead5")
 	txn := s.dg.NewTxn()
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
@@ -268,7 +268,7 @@ func TestTxnRead5(t *testing.T) {
 	require.NoError(t, txn.Commit(context.Background()))
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
 	// We don't supply startTs, it should be fetched from zero by dgraph server.
-	req := protos.Request{
+	req := api.Request{
 		Query: q,
 	}
 
@@ -276,7 +276,7 @@ func TestTxnRead5(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 
 	resp, err := dc.Query(context.Background(), &req)
 	if err != nil {
@@ -286,7 +286,7 @@ func TestTxnRead5(t *testing.T) {
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 	x.AssertTrue(resp.Txn.StartTs > 0)
 
-	mu = &protos.Mutation{}
+	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf("{\"uid\": \"%s\", \"name\": \"Manish2\"}", uid))
 
 	mu.CommitNow = true
@@ -304,13 +304,13 @@ func TestTxnRead5(t *testing.T) {
 
 func TestConflict(t *testing.T) {
 	fmt.Println("TestConflict")
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.DropAll = true
 	require.NoError(t, s.dg.Alter(context.Background(), op))
 
 	txn := s.dg.NewTxn()
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
@@ -325,7 +325,7 @@ func TestConflict(t *testing.T) {
 	}
 
 	txn2 := s.dg.NewTxn()
-	mu = &protos.Mutation{}
+	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Manish"}`, uid))
 	x.Check2(txn2.Mutate(context.Background(), mu))
 
@@ -348,7 +348,7 @@ func TestConflictTimeout(t *testing.T) {
 	var uid string
 	txn := s.dg.NewTxn()
 	{
-		mu := &protos.Mutation{}
+		mu := &api.Mutation{}
 		mu.SetJson = []byte(`{"name": "Manish"}`)
 		assigned, err := txn.Mutate(context.Background(), mu)
 		if err != nil {
@@ -368,7 +368,7 @@ func TestConflictTimeout(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Printf("Response should be empty. JSON: %q\n", resp.Json)
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Jan the man"}`, uid))
 	_, err = txn2.Mutate(context.Background(), mu)
 	fmt.Printf("txn2.mutate error: %v\n", err)
@@ -393,7 +393,7 @@ func TestConflictTimeout2(t *testing.T) {
 	txn := s.dg.NewTxn()
 	{
 
-		mu := &protos.Mutation{}
+		mu := &api.Mutation{}
 		mu.SetJson = []byte(`{"name": "Manish"}`)
 		assigned, err := txn.Mutate(context.Background(), mu)
 		if err != nil {
@@ -408,7 +408,7 @@ func TestConflictTimeout2(t *testing.T) {
 	}
 
 	txn2 := s.dg.NewTxn()
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Jan the man"}`, uid))
 	x.Check2(txn2.Mutate(context.Background(), mu))
 
@@ -418,7 +418,7 @@ func TestConflictTimeout2(t *testing.T) {
 	fmt.Printf("This txn commit should fail with error. Err got: %v\n", err)
 
 	txn3 := s.dg.NewTxn()
-	mu = &protos.Mutation{}
+	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Jan the man"}`, uid))
 	assigned, err := txn3.Mutate(context.Background(), mu)
 	fmt.Printf("txn2.mutate error: %v\n", err)

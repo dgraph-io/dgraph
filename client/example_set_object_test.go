@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -43,7 +43,7 @@ func Example_setObject() {
 	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
@@ -76,7 +76,7 @@ func Example_setObject() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -90,7 +90,7 @@ func Example_setObject() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{
+	mu := &api.Mutation{
 		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)

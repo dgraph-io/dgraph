@@ -20,7 +20,7 @@ package posting
 import (
 	"context"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -81,8 +81,8 @@ func (o *oracle) MaxPending() uint64 {
 	return o.maxpending
 }
 
-func (o *oracle) CurrentState() *protos.OracleDelta {
-	od := new(protos.OracleDelta)
+func (o *oracle) CurrentState() *intern.OracleDelta {
+	od := new(intern.OracleDelta)
 	od.Commits = make(map[uint64]uint64)
 	o.RLock()
 	defer o.RUnlock()
@@ -108,7 +108,7 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	}
 }
 
-func (o *oracle) ProcessOracleDelta(od *protos.OracleDelta) {
+func (o *oracle) ProcessOracleDelta(od *intern.OracleDelta) {
 	o.Lock()
 	defer o.Unlock()
 	for startTs, commitTs := range od.Commits {

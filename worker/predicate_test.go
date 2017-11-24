@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -56,7 +56,7 @@ func checkShard(ps *badger.ManagedDB) (int, []byte) {
 
 func commitTs(startTs uint64) uint64 {
 	commit := timestamp()
-	od := &protos.OracleDelta{
+	od := &intern.OracleDelta{
 		Commits: map[uint64]uint64{
 			startTs: commit,
 		},
@@ -66,7 +66,7 @@ func commitTs(startTs uint64) uint64 {
 	return commit
 }
 
-func commitTransaction(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
+func commitTransaction(t *testing.T, edge *intern.DirectedEdge, l *posting.List) {
 	startTs := timestamp()
 	txn := &posting.Txn{
 		StartTs: startTs,
@@ -85,10 +85,10 @@ func writePLs(t *testing.T, pred string, startIdx int, count int, vid uint64) {
 		k := x.DataKey(pred, uint64(i+startIdx))
 		list := posting.Get(k)
 
-		de := &protos.DirectedEdge{
+		de := &intern.DirectedEdge{
 			ValueId: vid,
 			Label:   "test",
-			Op:      protos.DirectedEdge_SET,
+			Op:      intern.DirectedEdge_SET,
 		}
 		commitTransaction(t, de, list)
 	}
@@ -107,7 +107,7 @@ func deletePLs(t *testing.T, pred string, startIdx int, count int, ps *badger.Ma
 func writeToBadger(t *testing.T, pred string, startIdx int, count int, ps *badger.ManagedDB) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i+startIdx))
-		pl := new(protos.PostingList)
+		pl := new(intern.PostingList)
 		data, err := pl.Marshal()
 		if err != nil {
 			t.Errorf("Error while marshing pl")
@@ -137,7 +137,7 @@ func newServer(port string) (*grpc.Server, net.Listener, error) {
 }
 
 func serve(s *grpc.Server, ln net.Listener) {
-	protos.RegisterWorkerServer(s, &grpcWorker{})
+	intern.RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(ln)
 }
 
@@ -208,7 +208,7 @@ func TestPopulateShard(t *testing.T) {
 	//		t.Error("Unable to find added elements in posting list")
 	//	}
 	//	var found bool
-	//	l.Iterate(math.MaxUint64, 0, func(p *protos.Posting) bool {
+	//	l.Iterate(math.MaxUint64, 0, func(p *intern.Posting) bool {
 	//		if p.Uid != 2 {
 	//			t.Errorf("Expected 2. Got: %v", p.Uid)
 	//		}

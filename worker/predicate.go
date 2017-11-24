@@ -29,7 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -39,7 +39,7 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *protos.KV, che chan error) {
+func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.KV, che chan error) {
 	var hasError int32
 	for i := range kv {
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
@@ -64,7 +64,7 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *protos.K
 	}
 }
 
-func streamKeys(pstore *badger.ManagedDB, stream protos.Worker_PredicateAndSchemaDataClient) error {
+func streamKeys(pstore *badger.ManagedDB, stream intern.Worker_PredicateAndSchemaDataClient) error {
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
@@ -72,7 +72,7 @@ func streamKeys(pstore *badger.ManagedDB, stream protos.Worker_PredicateAndSchem
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 
-	g := &protos.GroupKeys{
+	g := &intern.GroupKeys{
 		GroupId: groups().groupId(),
 	}
 
@@ -97,7 +97,7 @@ func streamKeys(pstore *badger.ManagedDB, stream protos.Worker_PredicateAndSchem
 
 		kdup := make([]byte, len(k))
 		copy(kdup, k)
-		key := &protos.KC{
+		key := &intern.KC{
 			Key: kdup,
 		}
 		key.Timestamp = iterItem.Version()
@@ -120,7 +120,7 @@ func streamKeys(pstore *badger.ManagedDB, stream protos.Worker_PredicateAndSchem
 // writes it to RocksDB.
 func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, group uint32) (int, error) {
 	conn := pl.Get()
-	c := protos.NewWorkerClient(conn)
+	c := intern.NewWorkerClient(conn)
 
 	stream, err := c.PredicateAndSchemaData(context.Background())
 	if err != nil {
@@ -140,7 +140,7 @@ func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, gro
 		return 0, x.Wrapf(err, "While streaming keys group")
 	}
 
-	kvs := make(chan *protos.KV, 1000)
+	kvs := make(chan *intern.KV, 1000)
 	che := make(chan error)
 	go writeBatch(ctx, ps, kvs, che)
 
@@ -193,7 +193,7 @@ func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, gro
 	return count, nil
 }
 
-func sendKV(stream protos.Worker_PredicateAndSchemaDataServer, it *badger.Iterator) error {
+func sendKV(stream intern.Worker_PredicateAndSchemaDataServer, it *badger.Iterator) error {
 	item := it.Item()
 	key := item.Key()
 	pk := x.Parse(key)
@@ -202,13 +202,13 @@ func sendKV(stream protos.Worker_PredicateAndSchemaDataServer, it *badger.Iterat
 		return nil
 	}
 
-	var kv *protos.KV
+	var kv *intern.KV
 	if pk.IsSchema() {
 		val, err := item.Value()
 		if err != nil {
 			return err
 		}
-		kv = &protos.KV{
+		kv = &intern.KV{
 			Key:      key,
 			Val:      val,
 			UserMeta: []byte{item.UserMeta()},
@@ -233,8 +233,8 @@ func sendKV(stream protos.Worker_PredicateAndSchemaDataServer, it *badger.Iterat
 
 // PredicateAndSchemaData can be used to return data corresponding to a predicate over
 // a stream.
-func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSchemaDataServer) error {
-	gkeys := &protos.GroupKeys{}
+func (w *grpcWorker) PredicateAndSchemaData(stream intern.Worker_PredicateAndSchemaDataServer) error {
+	gkeys := &intern.GroupKeys{}
 
 	// Receive all keys from client first.
 	// TODO: Don't fetch all at once, use stream and iterate in parallel
@@ -298,7 +298,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		// If a key is present in follower but not in leader, send a kv with empty value
 		// so that the follower can delete it
 		for gidx < len(gkeys.Keys) && bytes.Compare(gkeys.Keys[gidx].Key, k) < 0 {
-			kv := &protos.KV{Key: gkeys.Keys[gidx].Key}
+			kv := &intern.KV{Key: gkeys.Keys[gidx].Key}
 			gidx++
 			if err := stream.Send(kv); err != nil {
 				return err
@@ -323,7 +323,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 	} // end of iterator
 	// All these keys are not present in leader, so mark them for deletion
 	for gidx < len(gkeys.Keys) {
-		kv := &protos.KV{Key: gkeys.Keys[gidx].Key}
+		kv := &intern.KV{Key: gkeys.Keys[gidx].Key}
 		gidx++
 		if err := stream.Send(kv); err != nil {
 			return err

@@ -28,7 +28,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 )
@@ -48,9 +48,9 @@ func (s *shuffler) run() {
 		thr.Start()
 		go func(i int, db *badger.ManagedDB) {
 			mapFiles := filenamesInTree(shardDirs[i])
-			shuffleInputChs := make([]chan *protos.MapEntry, len(mapFiles))
+			shuffleInputChs := make([]chan *intern.MapEntry, len(mapFiles))
 			for i, mapFile := range mapFiles {
-				shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
+				shuffleInputChs[i] = make(chan *intern.MapEntry, 1000)
 				go readMapOutput(mapFile, shuffleInputChs[i])
 			}
 
@@ -76,7 +76,7 @@ func (s *shuffler) createBadger(i int) *badger.ManagedDB {
 	return db
 }
 
-func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
+func readMapOutput(filename string, mapEntryCh chan<- *intern.MapEntry) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	defer fd.Close()
@@ -100,14 +100,14 @@ func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 		}
 		x.Check2(io.ReadFull(r, unmarshalBuf[:sz]))
 
-		me := new(protos.MapEntry)
+		me := new(intern.MapEntry)
 		x.Check(proto.Unmarshal(unmarshalBuf[:sz], me))
 		mapEntryCh <- me
 	}
 	close(mapEntryCh)
 }
 
-func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *countIndexer) {
+func (s *shuffler) shufflePostings(mapEntryChs []chan *intern.MapEntry, ci *countIndexer) {
 
 	var ph postingHeap
 	for _, ch := range mapEntryChs {
@@ -116,7 +116,7 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *coun
 
 	const batchSize = 1000
 	const batchAlloc = batchSize * 11 / 10
-	batch := make([]*protos.MapEntry, 0, batchAlloc)
+	batch := make([]*intern.MapEntry, 0, batchAlloc)
 	var prevKey []byte
 	var plistLen int
 	for len(ph.nodes) > 0 {
@@ -138,7 +138,7 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *coun
 		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
 			s.output <- shuffleOutput{mapEntries: batch, db: ci.db}
 			NumQueuedReduceJobs.Add(1)
-			batch = make([]*protos.MapEntry, 0, batchAlloc)
+			batch = make([]*intern.MapEntry, 0, batchAlloc)
 		}
 		prevKey = me.Key
 		batch = append(batch, me)
@@ -154,8 +154,8 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *protos.MapEntry, ci *coun
 }
 
 type heapNode struct {
-	mapEntry *protos.MapEntry
-	ch       <-chan *protos.MapEntry
+	mapEntry *intern.MapEntry
+	ch       <-chan *intern.MapEntry
 }
 
 type postingHeap struct {

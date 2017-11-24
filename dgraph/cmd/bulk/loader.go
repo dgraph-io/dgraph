@@ -33,7 +33,8 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -84,7 +85,7 @@ type loader struct {
 func newLoader(opt options) *loader {
 	zeroConn, err := grpc.Dial(opt.ZeroAddr, grpc.WithInsecure())
 	x.Check(err)
-	zero := protos.NewZeroClient(zeroConn)
+	zero := intern.NewZeroClient(zeroConn)
 	st := &state{
 		opt:        opt,
 		prog:       newProgress(),
@@ -107,15 +108,15 @@ func newLoader(opt options) *loader {
 	return ld
 }
 
-func getWriteTimestamp(zero protos.ZeroClient) uint64 {
+func getWriteTimestamp(zero intern.ZeroClient) uint64 {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	ts, err := zero.Timestamps(ctx, &protos.Num{Val: 1})
+	ts, err := zero.Timestamps(ctx, &intern.Num{Val: 1})
 	x.Check(x.Wrapf(err, "error communicating with dgraphzero, is it running?"))
 	return ts.GetStartId()
 }
 
-func readSchema(filename string) []*protos.SchemaUpdate {
+func readSchema(filename string) []*intern.SchemaUpdate {
 	f, err := os.Open(filename)
 	x.Check(err)
 	defer f.Close()
@@ -180,12 +181,12 @@ func findRDFFiles(dir string) []string {
 }
 
 type uidRangeResponse struct {
-	uids *protos.AssignedIds
+	uids *api.AssignedIds
 	err  error
 }
 
 type zeroUidFetcher struct {
-	client protos.ZeroClient
+	client intern.ZeroClient
 	ch     chan uidRangeResponse
 }
 
@@ -197,7 +198,7 @@ func (z *zeroUidFetcher) fetchUids() {
 		// of UIDs we need to assign is 1M/sec. 100k uids per request results
 		// in an average 10 requests/sec to dgraphzero.
 		const uidChunk = 1e5
-		uids, err := z.client.AssignUids(ctx, &protos.Num{Val: uidChunk})
+		uids, err := z.client.AssignUids(ctx, &intern.Num{Val: uidChunk})
 		cancel()
 		z.ch <- uidRangeResponse{
 			uids: uids,
@@ -286,7 +287,7 @@ func (ld *loader) mapStage() {
 
 type shuffleOutput struct {
 	db         *badger.ManagedDB
-	mapEntries []*protos.MapEntry
+	mapEntries []*intern.MapEntry
 }
 
 func (ld *loader) reduceStage() {

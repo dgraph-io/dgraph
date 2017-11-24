@@ -35,7 +35,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -63,7 +63,7 @@ const (
 func init() {
 	x.AddInit(func() {
 		h := md5.New()
-		pl := protos.PostingList{
+		pl := intern.PostingList{
 			Checksum: h.Sum(nil),
 		}
 		var err error

@@ -21,14 +21,14 @@ package y
 import (
 	"errors"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 )
 
 var (
 	ErrAborted = errors.New("Transaction has been aborted due to conflict")
 )
 
-func MergeLinReads(dst *protos.LinRead, src *protos.LinRead) {
+func MergeLinReads(dst *api.LinRead, src *api.LinRead) {
 	if src == nil || src.Ids == nil {
 		return
 	}

@@ -21,7 +21,7 @@ import (
 
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/y"
 	"github.com/pkg/errors"
 )
@@ -43,7 +43,7 @@ var (
 // is a no-op if Commit has already been called, so it's safe to defer a call
 // to Discard immediately after NewTxn.
 type Txn struct {
-	context *protos.TxnContext
+	context *api.TxnContext
 
 	finished bool
 	mutated  bool
@@ -55,7 +55,7 @@ type Txn struct {
 func (d *Dgraph) NewTxn() *Txn {
 	txn := &Txn{
 		dg: d,
-		context: &protos.TxnContext{
+		context: &api.TxnContext{
 			LinRead: d.getLinRead(),
 		},
 	}
@@ -65,18 +65,18 @@ func (d *Dgraph) NewTxn() *Txn {
 // Query sends a query to one of the connected dgraph instances. If no
 // mutations need to be made in the same transaction, it's convenient to chain
 // the method, e.g. NewTxn().Query(ctx, "...").
-func (txn *Txn) Query(ctx context.Context, q string) (*protos.Response, error) {
+func (txn *Txn) Query(ctx context.Context, q string) (*api.Response, error) {
 	return txn.QueryWithVars(ctx, q, nil)
 }
 
 // QueryWithVars is like Query, but allows a variable map to be used. This can
 // provide safety against injection attacks.
 func (txn *Txn) QueryWithVars(ctx context.Context, q string,
-	vars map[string]string) (*protos.Response, error) {
+	vars map[string]string) (*api.Response, error) {
 	if txn.finished {
 		return nil, ErrFinished
 	}
-	req := &protos.Request{
+	req := &api.Request{
 		Query:   q,
 		Vars:    vars,
 		StartTs: txn.context.StartTs,
@@ -92,7 +92,7 @@ func (txn *Txn) QueryWithVars(ctx context.Context, q string,
 	return resp, err
 }
 
-func (txn *Txn) mergeContext(src *protos.TxnContext) error {
+func (txn *Txn) mergeContext(src *api.TxnContext) error {
 	if src == nil {
 		return nil
 	}
@@ -111,7 +111,7 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 }
 
 // Mutate allows data stored on dgraph instances to be modified. The fields in
-// protos.Mutation come in pairs, set and delete. Mutations can either be
+// api.Mutation come in pairs, set and delete. Mutations can either be
 // encoded as JSON or as RDFs.
 //
 // If CommitNow is set, then this call will result in the transaction
@@ -120,7 +120,7 @@ func (txn *Txn) mergeContext(src *protos.TxnContext) error {
 //
 // If the mutation fails, then the transaction is discarded and all future
 // operations on it will fail.
-func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
+func (txn *Txn) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
 	if txn.finished {
 		return nil, ErrFinished
 	}

@@ -21,7 +21,7 @@ import (
 	"encoding/base64"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	geom "github.com/twpayne/go-geom"
@@ -30,23 +30,23 @@ import (
 // This file contains helper functions for converting scalar types to
 // protobuf values.
 
-func toProtoValue(v types.Val) *protos.Value {
+func toProtoValue(v types.Val) *api.Value {
 	switch v.Tid {
 	case types.StringID:
-		return &protos.Value{&protos.Value_StrVal{v.Value.(string)}}
+		return &api.Value{&api.Value_StrVal{v.Value.(string)}}
 
 	case types.IntID:
-		return &protos.Value{&protos.Value_IntVal{v.Value.(int64)}}
+		return &api.Value{&api.Value_IntVal{v.Value.(int64)}}
 
 	case types.FloatID:
-		return &protos.Value{&protos.Value_DoubleVal{v.Value.(float64)}}
+		return &api.Value{&api.Value_DoubleVal{v.Value.(float64)}}
 
 	case types.BoolID:
-		return &protos.Value{&protos.Value_BoolVal{v.Value.(bool)}}
+		return &api.Value{&api.Value_BoolVal{v.Value.(bool)}}
 
 	case types.DateTimeID:
 		val := v.Value.(time.Time)
-		return &protos.Value{&protos.Value_StrVal{val.Format(time.RFC3339)}}
+		return &api.Value{&api.Value_StrVal{val.Format(time.RFC3339)}}
 
 	case types.BinaryID:
 		val := v.Value.([]byte)
@@ -55,23 +55,23 @@ func toProtoValue(v types.Val) *protos.Value {
 		if n < len(dst) {
 			dst = dst[:n]
 		}
-		return &protos.Value{&protos.Value_BytesVal{dst}}
+		return &api.Value{&api.Value_BytesVal{dst}}
 
 	case types.GeoID:
 		b := types.ValueForType(types.BinaryID)
 		src := types.ValueForType(types.GeoID)
 		src.Value = v.Value.(geom.T)
 		x.Check(types.Marshal(src, &b))
-		return &protos.Value{&protos.Value_GeoVal{b.Value.([]byte)}}
+		return &api.Value{&api.Value_GeoVal{b.Value.([]byte)}}
 
 	case types.PasswordID:
-		return &protos.Value{&protos.Value_PasswordVal{v.Value.(string)}}
+		return &api.Value{&api.Value_PasswordVal{v.Value.(string)}}
 
 	case types.UidID:
-		return &protos.Value{&protos.Value_UidVal{v.Value.(uint64)}}
+		return &api.Value{&api.Value_UidVal{v.Value.(uint64)}}
 
 	case types.DefaultID:
-		return &protos.Value{&protos.Value_DefaultVal{v.Value.(string)}}
+		return &api.Value{&api.Value_DefaultVal{v.Value.(string)}}
 
 	default:
 		// A type that isn't supported in the proto

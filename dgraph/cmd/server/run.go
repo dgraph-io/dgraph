@@ -38,7 +38,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
@@ -200,7 +200,7 @@ func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
-	protos.RegisterDgraphServer(s, &edgraph.Server{})
+	api.RegisterDgraphServer(s, &edgraph.Server{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()
@@ -227,7 +227,7 @@ func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 func setupServer() {
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
-	go worker.RunServer(bindall) // For internal communication.
+	go worker.RunServer(bindall) // For intern.communication.
 
 	laddr := "localhost"
 	if bindall {

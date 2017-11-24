@@ -30,7 +30,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
@@ -176,7 +176,7 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
-func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal) error {
+func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet.")
 	}
@@ -221,15 +221,15 @@ var (
 	errTabletAlreadyServed = errors.New("Tablet is already being served")
 )
 
-func newGroup() *protos.Group {
-	return &protos.Group{
-		Members: make(map[uint64]*protos.Member),
-		Tablets: make(map[string]*protos.Tablet),
+func newGroup() *intern.Group {
+	return &intern.Group{
+		Members: make(map[uint64]*intern.Member),
+		Tablets: make(map[string]*intern.Tablet),
 	}
 }
 
 func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
-	var p protos.ZeroProposal
+	var p intern.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
 	if len(e.Data) == 0 {
 		return p.Id, nil
@@ -337,11 +337,11 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.DeletePeer(cc.NodeID)
 		n.server.removeZero(cc.NodeID)
 	} else if len(cc.Context) > 0 {
-		var rc protos.RaftContext
+		var rc intern.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		n.Connect(rc.Id, rc.Addr)
 
-		m := &protos.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
 		n.server.storeZero(m)
 	}
 
@@ -352,8 +352,8 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 func (n *node) triggerLeaderChange() {
 	n.server.triggerLeaderChange()
-	m := &protos.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
-	go n.proposeAndWait(context.Background(), &protos.ZeroProposal{Member: m})
+	m := &intern.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
+	go n.proposeAndWait(context.Background(), &intern.ZeroProposal{Member: m})
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {
@@ -364,7 +364,7 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	if restart {
 		x.Println("Restarting node for dgraphzero")
 		sp, err := n.Store.Snapshot()
-		var state protos.MembershipState
+		var state intern.MembershipState
 		x.Check(state.Unmarshal(sp.Data))
 		n.server.SetMembershipState(&state)
 
@@ -378,7 +378,7 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		}
 
 		gconn := p.Get()
-		c := protos.NewRaftClient(gconn)
+		c := intern.NewRaftClient(gconn)
 		err = errJoinCluster
 		for err != nil {
 			time.Sleep(time.Millisecond)
@@ -454,7 +454,7 @@ func (n *node) Run() {
 			n.SaveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state protos.MembershipState
+				var state intern.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				n.server.SetMembershipState(&state)
 			}

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -88,7 +88,7 @@ func (d *DgraphCluster) Start() error {
 	// reliably wait).
 	time.Sleep(time.Second * 4)
 
-	d.client = client.NewDgraphClient(protos.NewDgraphClient(dgConn))
+	d.client = client.NewDgraphClient(api.NewDgraphClient(dgConn))
 
 	return nil
 }

@@ -28,7 +28,8 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -48,10 +49,10 @@ type groupi struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wal       *raftwal.Wal
-	state     *protos.MembershipState
+	state     *intern.MembershipState
 	Node      *node
 	gid       uint32
-	tablets   map[string]*protos.Tablet
+	tablets   map[string]*intern.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
 }
@@ -96,9 +97,9 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	p := conn.Get().Connect(Config.ZeroAddr)
 
 	// Connect with dgraphzero and figure out what group we should belong to.
-	zc := protos.NewZeroClient(p.Get())
-	var connState *protos.ConnectionState
-	m := &protos.Member{Id: Config.RaftId, Addr: Config.MyAddr}
+	zc := intern.NewZeroClient(p.Get())
+	var connState *intern.ConnectionState
+	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 	delay := 100 * time.Millisecond
 	for i := 0; i < 9; i++ { // Generous number of attempts.
 		var err error
@@ -146,12 +147,12 @@ func (g *groupi) proposeInitialSchema() {
 	}
 
 	// Propose schema mutation.
-	var m protos.Mutations
+	var m intern.Mutations
 	// schema for _predicate_ is not changed once set.
 	m.StartTs = 1
-	m.Schema = append(m.Schema, &protos.SchemaUpdate{
+	m.Schema = append(m.Schema, &intern.SchemaUpdate{
 		Predicate: x.PredicateListAttr,
-		ValueType: protos.Posting_STRING,
+		ValueType: intern.Posting_STRING,
 		List:      true,
 	})
 
@@ -168,7 +169,7 @@ func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
 }
 
-func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
+func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchValues = false
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
@@ -177,7 +178,7 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 	defer itr.Close()
 
 	gid := g.groupId()
-	tablets := make(map[string]*protos.Tablet)
+	tablets := make(map[string]*intern.Tablet)
 
 	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
@@ -198,7 +199,7 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 				itr.Seek(pk.SkipPredicate())
 				continue
 			}
-			tablet = &protos.Tablet{GroupId: gid, Predicate: pk.Attr}
+			tablet = &intern.Tablet{GroupId: gid, Predicate: pk.Attr}
 			tablets[pk.Attr] = tablet
 		}
 		tablet.Space += item.EstimatedSize()
@@ -214,7 +215,7 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
-func (g *groupi) applyState(state *protos.MembershipState) {
+func (g *groupi) applyState(state *intern.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
@@ -224,7 +225,7 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 
 	g.state = state
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
-	g.tablets = make(map[string]*protos.Tablet)
+	g.tablets = make(map[string]*intern.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if Config.RaftId == member.Id {
@@ -282,7 +283,7 @@ func (g *groupi) ServesTablet(key string) bool {
 }
 
 // Do not modify the returned Tablet
-func (g *groupi) Tablet(key string) *protos.Tablet {
+func (g *groupi) Tablet(key string) *intern.Tablet {
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
 	tablet, ok := g.tablets[key]
@@ -298,9 +299,9 @@ func (g *groupi) Tablet(key string) *protos.Tablet {
 	if pl == nil {
 		return nil
 	}
-	zc := protos.NewZeroClient(pl.Get())
+	zc := intern.NewZeroClient(pl.Get())
 
-	tablet = &protos.Tablet{GroupId: g.groupId(), Predicate: key}
+	tablet = &intern.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		x.Printf("Error while ShouldServe grpc call %v", err)
@@ -343,7 +344,7 @@ func (g *groupi) AnyTwoServers(gid uint32) []string {
 	return res
 }
 
-func (g *groupi) members(gid uint32) map[uint64]*protos.Member {
+func (g *groupi) members(gid uint32) map[uint64]*intern.Member {
 	g.RLock()
 	defer g.RUnlock()
 
@@ -434,7 +435,7 @@ START:
 		goto START
 	}
 
-	c := protos.NewZeroClient(pl.Get())
+	c := intern.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := c.Update(ctx)
 	if err != nil {
@@ -457,7 +458,7 @@ START:
 				return
 			}
 			if n.AmLeader() {
-				proposal := &protos.Proposal{State: state}
+				proposal := &intern.Proposal{State: state}
 				go n.ProposeAndWait(context.Background(), proposal)
 			}
 		}
@@ -567,18 +568,18 @@ func (g *groupi) cleanupTablets() {
 	}
 }
 
-func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
-	stream protos.Zero_UpdateClient) error {
+func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
+	stream intern.Zero_UpdateClient) error {
 	leader := g.Node.AmLeader()
-	member := &protos.Member{
+	member := &intern.Member{
 		Id:         Config.RaftId,
 		GroupId:    g.groupId(),
 		Addr:       Config.MyAddr,
 		Leader:     leader,
 		LastUpdate: uint64(time.Now().Unix()),
 	}
-	group := &protos.Group{
-		Members: make(map[uint64]*protos.Member),
+	group := &intern.Group{
+		Members: make(map[uint64]*intern.Member),
 	}
 	group.Members[member.Id] = member
 	if leader {
@@ -588,22 +589,22 @@ func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 	return stream.Send(group)
 }
 
-func (g *groupi) proposeDelta(oracleDelta *protos.OracleDelta) {
+func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 	for startTs, commitTs := range oracleDelta.Commits {
 		if posting.Txns().Get(startTs) == nil {
 			posting.Oracle().Done(startTs)
 			continue
 		}
-		tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTs}
-		go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTs}
+		go g.Node.ProposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
 	}
 	for _, startTs := range oracleDelta.Aborts {
 		if posting.Txns().Get(startTs) == nil {
 			posting.Oracle().Done(startTs)
 			continue
 		}
-		tctx := &protos.TxnContext{StartTs: startTs}
-		go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+		tctx := &api.TxnContext{StartTs: startTs}
+		go g.Node.ProposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
 	}
 }
 
@@ -617,8 +618,8 @@ START:
 		goto START
 	}
 
-	c := protos.NewZeroClient(pl.Get())
-	stream, err := c.Oracle(context.Background(), &protos.Payload{})
+	c := intern.NewZeroClient(pl.Get())
+	stream, err := c.Oracle(context.Background(), &api.Payload{})
 	if err != nil {
 		x.Printf("Error while calling Oracle %v\n", err)
 		time.Sleep(time.Second)
@@ -660,10 +661,10 @@ func (g *groupi) periodicAbortOldTxns() {
 		if pl == nil {
 			return
 		}
-		zc := protos.NewZeroClient(pl.Get())
+		zc := intern.NewZeroClient(pl.Get())
 		// Aborts if not already committed.
 		startTimestamps := posting.Txns().TxnsSinceSnapshot()
-		req := &protos.TxnTimestamps{Ts: startTimestamps}
+		req := &intern.TxnTimestamps{Ts: startTimestamps}
 		zc.TryAbort(context.Background(), req)
 	}
 }

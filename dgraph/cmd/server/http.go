@@ -29,7 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -75,7 +75,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := protos.Request{}
+	req := api.Request{}
 	ts, err := extractStartTs(r.URL.Path)
 	if err != nil {
 		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
@@ -91,7 +91,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 				"Error while unmarshalling LinRead header into map")
 			return
 		}
-		req.LinRead = &protos.LinRead{
+		req.LinRead = &api.LinRead{
 			Ids: lr,
 		}
 	}
@@ -234,8 +234,8 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := &protos.Assigned{}
-	tc := &protos.TxnContext{}
+	resp := &api.Assigned{}
+	tc := &api.TxnContext{}
 	resp.Context = tc
 
 	ts, err := extractStartTs(r.URL.Path)
@@ -308,8 +308,8 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := &protos.Assigned{}
-	tc := &protos.TxnContext{}
+	resp := &api.Assigned{}
+	tc := &api.TxnContext{}
 	resp.Context = tc
 
 	ts, err := extractStartTs(r.URL.Path)
@@ -358,7 +358,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 
 	defer r.Body.Close()
 	b, err := ioutil.ReadAll(r.Body)

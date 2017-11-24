@@ -33,7 +33,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -62,7 +63,7 @@ func newMapper(st *state) *mapper {
 	}
 }
 
-func less(lhs, rhs *protos.MapEntry) bool {
+func less(lhs, rhs *intern.MapEntry) bool {
 	if keyCmp := bytes.Compare(lhs.Key, rhs.Key); keyCmp != 0 {
 		return keyCmp < 0
 	}
@@ -79,12 +80,12 @@ func less(lhs, rhs *protos.MapEntry) bool {
 
 func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	buf := entriesBuf
-	var entries []*protos.MapEntry
+	var entries []*intern.MapEntry
 	for len(buf) > 0 {
 		sz, n := binary.Uvarint(buf)
 		x.AssertTrue(n > 0)
 		buf = buf[n:]
-		me := new(protos.MapEntry)
+		me := new(intern.MapEntry)
 		x.Check(proto.Unmarshal(buf[:sz], me))
 		buf = buf[sz:]
 		entries = append(entries, me)
@@ -151,13 +152,13 @@ func (m *mapper) run() {
 	}
 }
 
-func (m *mapper) addMapEntry(key []byte, p *protos.Posting, shard int) {
+func (m *mapper) addMapEntry(key []byte, p *intern.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
-	me := &protos.MapEntry{
+	me := &intern.MapEntry{
 		Key: key,
 	}
-	if p.PostingType != protos.Posting_REF || len(p.Facets) > 0 {
+	if p.PostingType != intern.Posting_REF || len(p.Facets) > 0 {
 		me.Posting = p
 	} else {
 		me.Uid = p.Uid
@@ -185,7 +186,7 @@ func (m *mapper) parseRDF(rdfLine string) error {
 func (m *mapper) processNQuad(nq gql.NQuad) {
 	sid := m.lookupUid(nq.GetSubject())
 	var oid uint64
-	var de *protos.DirectedEdge
+	var de *intern.DirectedEdge
 	if nq.GetObjectValue() == nil {
 		oid = m.lookupUid(nq.GetObjectId())
 		de = nq.CreateUidEdge(sid, oid)
@@ -224,11 +225,11 @@ func (m *mapper) lookupUid(xid string) uint64 {
 		// Don't store xids for blank nodes.
 		return uid
 	}
-	nq := gql.NQuad{&protos.NQuad{
+	nq := gql.NQuad{&api.NQuad{
 		Subject:   xid,
 		Predicate: "xid",
-		ObjectValue: &protos.Value{
-			Val: &protos.Value_StrVal{StrVal: xid},
+		ObjectValue: &api.Value{
+			Val: &api.Value_StrVal{StrVal: xid},
 		},
 	}}
 	m.processNQuad(nq)
@@ -243,18 +244,18 @@ func parseNQuad(line string) (gql.NQuad, error) {
 	return gql.NQuad{NQuad: &nq}, nil
 }
 
-func (m *mapper) createPredicatePosting(predicate string) *protos.Posting {
+func (m *mapper) createPredicatePosting(predicate string) *intern.Posting {
 	fp := farm.Fingerprint64([]byte(predicate))
-	return &protos.Posting{
+	return &intern.Posting{
 		Uid:         fp,
 		Value:       []byte(predicate),
-		ValType:     protos.Posting_DEFAULT,
-		PostingType: protos.Posting_VALUE,
+		ValType:     intern.Posting_DEFAULT,
+		PostingType: intern.Posting_VALUE,
 	}
 }
 
 func (m *mapper) createPostings(nq gql.NQuad,
-	de *protos.DirectedEdge) (*protos.Posting, *protos.Posting) {
+	de *intern.DirectedEdge) (*intern.Posting, *intern.Posting) {
 
 	m.schema.validateType(de, nq.ObjectValue == nil)
 
@@ -272,7 +273,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	p.Facets = nq.Facets
 
 	// Early exit for no reverse edge.
-	if sch.GetDirective() != protos.SchemaUpdate_REVERSE {
+	if sch.GetDirective() != intern.SchemaUpdate_REVERSE {
 		return p, nil
 	}
 
@@ -287,7 +288,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	return p, rp
 }
 
-func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
+func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *intern.DirectedEdge) {
 	if nq.GetObjectValue() == nil {
 		return // Cannot index UIDs
 	}
@@ -322,9 +323,9 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 		for _, t := range toks {
 			m.addMapEntry(
 				x.IndexKey(nq.Predicate, t),
-				&protos.Posting{
+				&intern.Posting{
 					Uid:         de.GetEntity(),
-					PostingType: protos.Posting_REF,
+					PostingType: intern.Posting_REF,
 				},
 				m.state.shards.shardFor(nq.Predicate),
 			)

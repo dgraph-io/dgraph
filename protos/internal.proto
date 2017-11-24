@@ -14,13 +14,11 @@
  * limitations under the License.
  */
 
-// Use protos/gen.sh to generate .pb.go files.
 syntax = "proto3";
 
-package protos;
+package intern;
 
-option java_package = "io.dgraph";
-option java_outer_classname = "DgraphProto";
+import "api.proto";
 
 message List {
 	repeated fixed64 uids = 1;
@@ -32,13 +30,9 @@ message TaskValue {
 }
 
 message SrcFunction {
-  string name = 1;
-  repeated string args = 3;
-  bool isCount = 4;
-}
-
-message LinRead {
-  map<uint32, uint64> ids = 1;
+	string name = 1;
+	repeated string args = 3;
+	bool isCount = 4;
 }
 
 message Query {
@@ -61,7 +55,7 @@ message Query {
 	bool expand_all = 10; // expand all language variants.
 
 	uint64 read_ts = 13;
-	LinRead lin_read = 14;
+	api.LinRead lin_read = 14;
 }
 
 message ValueList {
@@ -80,7 +74,7 @@ message Result {
 	repeated FacetsList facet_matrix = 5;
 	repeated LangList lang_matrix = 6;
 
-	LinRead lin_read = 14;
+	api.LinRead lin_read = 14;
 }
 
 message Order {
@@ -96,13 +90,13 @@ message SortMessage {
 	int32 offset = 4;  // Skip this many elements.
 
 	uint64 read_ts = 13;
-	LinRead lin_read = 14;
+	api.LinRead lin_read = 14;
 }
 
 message SortResult {
 	repeated List uid_matrix = 1;
 
-	LinRead lin_read = 14;
+	api.LinRead lin_read = 14;
 }
 
 message RaftContext {
@@ -131,39 +125,39 @@ message Group {
 }
 
 message ZeroProposal {
-  uint32 id = 1;
-  Member member = 2;
-  Tablet tablet = 3;
-  uint64 maxLeaseId = 4;
-  uint64 maxTxnTs = 5;
-  uint64 maxRaftId = 6;
-  TxnContext txn = 7;
+	uint32 id = 1;
+	Member member = 2;
+	Tablet tablet = 3;
+	uint64 maxLeaseId = 4;
+	uint64 maxTxnTs = 5;
+	uint64 maxRaftId = 6;
+	api.TxnContext txn = 7;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
 // in the caller server; and the membership updates recorded by the callee server since
 // the provided lastUpdate.
 message MembershipState {
-  uint64 counter = 1;  // used to find latest membershipState in case of race.
-  map<uint32, Group> groups = 2;
-  map<uint64, Member> zeros = 3;
-  uint64 maxLeaseId = 4;
-  uint64 maxTxnTs = 5;
-  uint64 maxRaftId = 6;
-  repeated Member removed = 7;
+	uint64 counter = 1;  // used to find latest membershipState in case of race.
+	map<uint32, Group> groups = 2;
+	map<uint64, Member> zeros = 3;
+	uint64 maxLeaseId = 4;
+	uint64 maxTxnTs = 5;
+	uint64 maxRaftId = 6;
+	repeated Member removed = 7;
 }
 
 message ConnectionState {
-  Member member = 1;
-  MembershipState state = 2;
+	Member member = 1;
+	MembershipState state = 2;
 }
 
 message Tablet {
-  uint32 group_id  = 1; // Served by which group.
-  string predicate = 2;
+	uint32 group_id  = 1; // Served by which group.
+	string predicate = 2;
 	bool force       = 3; // Used while moving predicate.
-  bool read_only   = 4;  // Used to block mutations on this predicate.
-  int64 space      = 7;
+	bool read_only   = 4;  // Used to block mutations on this predicate.
+	int64 space      = 7;
 }
 
 message DirectedEdge {
@@ -179,7 +173,7 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 8;
-	repeated Facet facets = 9;
+	repeated api.Facet facets = 9;
 }
 
 message Mutations {
@@ -191,13 +185,13 @@ message Mutations {
 }
 
 message KeyValues {
-  repeated KV kv = 1;
+	repeated KV kv = 1;
 }
 
 message Proposal {
 	uint32 id = 1;
 	Mutations mutations = 2;
-	TxnContext txn_context = 3;
+	api.TxnContext txn_context = 3;
 	repeated KV kv = 4;
 	MembershipState state = 5;
 	string clean_predicate = 6; // Delete the predicate which was moved to other group.
@@ -242,12 +236,11 @@ message Posting {
 		REF=0;          // UID
 		VALUE=1;        // simple, plain value
 		VALUE_LANG=2;   // value with specified language
-        // VALUE_TIMESERIES=3; // value from timeseries, with specified timestamp
 	}
 	PostingType posting_type = 4;
 	bytes lang_tag = 5; // Only set for VALUE_LANG
 	string label = 6;
-	repeated Facet facets = 9;
+	repeated api.Facet facets = 9;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;
@@ -262,23 +255,6 @@ message PostingList {
 	bytes uids = 4; // Encoded list of uids in this posting list.
 }
 
-// Facet messages.
-message Facet {
-	enum ValType {
-	     STRING = 0;
-	     INT = 1;
-	     FLOAT = 2;
-	     BOOL = 3;
-	     DATETIME = 4;
-	}
-
-	string key = 1;
-	bytes value = 2;
-	ValType val_type = 3;
-	repeated string tokens = 4; // tokens of value.
-	string alias = 5; // not stored, only used for query.
-}
-
 message FacetParam {
 	string key = 1;
 	string alias = 2;
@@ -290,7 +266,7 @@ message FacetParams {
 }
 
 message Facets {
-	repeated Facet facets = 1;
+	repeated api.Facet facets = 1;
 }
 
 message FacetsList {
@@ -319,17 +295,7 @@ message SchemaRequest {
 }
 
 message SchemaResult {
-	repeated SchemaNode schema = 1;
-}
-
-message SchemaNode {
-	string predicate = 1;
-	string type = 2;
-	bool index = 3;
-	repeated string tokenizer = 4;
-	bool reverse = 5;
-	bool count = 6;
-	bool list = 7;
+	repeated api.SchemaNode schema = 1;
 }
 
 message SchemaUpdate {
@@ -357,16 +323,11 @@ message MapEntry {
 	Posting posting = 3;
 }
 
-// Worker services.
-message Payload {
-	bytes Data = 1;
-}
-
 message MovePredicatePayload {
- string predicate = 1;
- uint32 source_group_id = 2;
- uint32 dest_group_id = 3;
- MembershipState state = 4;
+	string predicate = 1;
+	uint32 source_group_id = 2;
+	uint32 dest_group_id = 3;
+	MembershipState state = 4;
 }
 
 // BackupPayload is used both as a request and a response.
@@ -385,148 +346,51 @@ message ExportPayload {
 	uint64 read_ts = 4;
 }
 
-message TxnContext {
-  uint64 start_ts = 1;
-  uint64 commit_ts = 2;
-  bool aborted = 3;
-  repeated string keys = 4;
-  LinRead lin_read = 13;
-}
-
 message OracleDelta {
-  map<uint64, uint64> commits = 1;
-  repeated uint64 aborts = 2;
-  uint64 max_pending = 3;
-  // implement tmax.
+	map<uint64, uint64> commits = 1;
+	repeated uint64 aborts = 2;
+	uint64 max_pending = 3;
+	// implement tmax.
 }
 
 message TxnTimestamps {
-  repeated uint64 ts = 1;
+	repeated uint64 ts = 1;
 }
 
 service Raft {
-	rpc Echo (Payload)            returns (Payload) {}
-	rpc RaftMessage (Payload)     returns (Payload) {}
-	rpc JoinCluster (RaftContext) returns (Payload) {}
+	rpc Echo (api.Payload)        returns (api.Payload) {}
+	rpc RaftMessage (api.Payload) returns (api.Payload) {}
+	rpc JoinCluster (RaftContext) returns (api.Payload) {}
 }
 
 service Zero {
-	rpc Connect (Member)      returns (ConnectionState) {}
-	rpc Update (stream Group) returns (stream MembershipState) {}
-  rpc Oracle (Payload) returns (stream OracleDelta) {}
-	rpc ShouldServe (Tablet)  returns (Tablet) {}
-	rpc AssignUids (Num)      returns (AssignedIds) {}
-  rpc Timestamps (Num)      returns (AssignedIds) {}
-  rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
-	rpc TryAbort (TxnTimestamps) returns (TxnTimestamps) {}
+	rpc Connect (Member)               returns (ConnectionState) {}
+	rpc Update (stream Group)          returns (stream MembershipState) {}
+	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
+	rpc ShouldServe (Tablet)           returns (Tablet) {}
+	rpc AssignUids (Num)               returns (api.AssignedIds) {}
+	rpc Timestamps (Num)               returns (api.AssignedIds) {}
+	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
+	rpc TryAbort (TxnTimestamps)       returns (TxnTimestamps) {}
 }
 
 service Worker {
 	// Data serving RPCs.
-	rpc Mutate (Mutations)                        returns (TxnContext) {}
-	rpc CommitOrAbort(TxnContext)                 returns (Payload) {}
+	rpc Mutate (Mutations)                        returns (api.TxnContext) {}
+	rpc CommitOrAbort(api.TxnContext)             returns (api.Payload) {}
 	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
 	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
-	rpc MinTxnTs (Payload)         returns (Num) {}
+	rpc MinTxnTs (api.Payload)                    returns (Num) {}
 
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
-	rpc ReceivePredicate(stream KV)         returns (Payload) {}
-	rpc MovePredicate(MovePredicatePayload) returns (Payload) {}
-}
-
-// Graph response.
-service Dgraph {
-    rpc Query (Request)           returns (Response) {}
-    rpc Mutate (Mutation)         returns (Assigned) {}
-    rpc Alter (Operation)         returns (Payload) {}
-    rpc CommitOrAbort (TxnContext) returns (TxnContext) {}
-    rpc CheckVersion(Check)       returns (Version) {}
-}
-
-message Assigned {
-  map<string, string> uids = 1;
-  TxnContext context = 2;
+	rpc ReceivePredicate(stream KV)         returns (api.Payload) {}
+	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 }
 
 message Num {
-    uint64 val = 1;
+	uint64 val = 1;
 }
 
-message AssignedIds {
-    uint64 startId = 1;
-    uint64 endId = 2;
-}
-
-message NQuad {
-    string subject = 1;
-    string predicate = 2;
-    string object_id = 3;
-    Value object_value = 4;
-    string label = 5;
-    string lang = 6;
-    repeated Facet facets = 7;
-}
-
-message Value {
-    oneof val {
-        string default_val = 1;
-        bytes bytes_val = 2;
-        int64 int_val = 3;
-        bool bool_val = 4;
-        string str_val = 5;
-        double double_val = 6;
-        bytes geo_val = 7;  // Geo data in WKB format
-        bytes date_val = 8;
-        bytes datetime_val = 9;
-        string password_val = 10;
-        uint64 uid_val=11;
-    }
-}
-
-message Mutation {
-  bytes set_json = 1;
-  bytes delete_json = 2;
-  bytes set_nquads = 3;
-  bytes del_nquads = 4;
-
-  repeated NQuad set = 10;
-  repeated NQuad del = 11;
-  uint64 start_ts = 13;
-  bool commit_now = 14;
-}
-
-message Operation {
-  string schema = 1;
-  string drop_attr = 2;
-  bool drop_all = 3;
-	uint64 startTs = 4;
-}
-
-message Request {
-    string query = 1;
-    map<string, string> vars = 2; // Support for GraphQL like variables.
-
-    uint64 start_ts = 13;
-    LinRead lin_read = 14;
-}
-
-message Latency {
-    uint64 parsing_ns = 1;
-    uint64 processing_ns = 2;
-    uint64 encoding_ns = 3;
-}
-
-message Response {
-    bytes json = 1;
-    repeated SchemaNode schema = 2;
-    TxnContext txn = 3;
-    Latency latency = 12;
-}
-
-message Check {}
-
-message Version {
-    string tag = 1;
-}
+// vim: noexpandtab sw=2 ts=2

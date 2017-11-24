@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -36,7 +36,7 @@ const (
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
-// internally used query.SubGraph before processing the query.
+// intern.y used query.SubGraph before processing the query.
 type GraphQuery struct {
 	UID        []uint64
 	Attr       string
@@ -52,7 +52,7 @@ type GraphQuery struct {
 
 	Args map[string]string
 	// Query can have multiple sort parameters.
-	Order        []*protos.Order
+	Order        []*intern.Order
 	Children     []*GraphQuery
 	Filter       *FilterTree
 	MathExp      *MathTree
@@ -61,7 +61,7 @@ type GraphQuery struct {
 	RecurseArgs  RecurseArgs
 	Cascade      bool
 	IgnoreReflex bool
-	Facets       *protos.FacetParams
+	Facets       *intern.FacetParams
 	FacetsFilter *FilterTree
 	GroupbyAttrs []GroupByAttr
 	FacetVar     map[string]string
@@ -488,7 +488,7 @@ type Vars struct {
 type Result struct {
 	Query     []*GraphQuery
 	QueryVars []*Vars
-	Schema    *protos.SchemaRequest
+	Schema    *intern.SchemaRequest
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -907,7 +907,7 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 }
 
 // parses till rightround is found
-func parseSchemaPredicates(it *lex.ItemIterator, s *protos.SchemaRequest) error {
+func parseSchemaPredicates(it *lex.ItemIterator, s *intern.SchemaRequest) error {
 	// pred should be followed by colon
 	it.Next()
 	item := it.Item()
@@ -943,7 +943,7 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *protos.SchemaRequest) error 
 }
 
 // parses till rightcurl is found
-func parseSchemaFields(it *lex.ItemIterator, s *protos.SchemaRequest) error {
+func parseSchemaFields(it *lex.ItemIterator, s *intern.SchemaRequest) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -958,8 +958,8 @@ func parseSchemaFields(it *lex.ItemIterator, s *protos.SchemaRequest) error {
 	return x.Errorf("Invalid schema block.")
 }
 
-func getSchema(it *lex.ItemIterator) (*protos.SchemaRequest, error) {
-	var s protos.SchemaRequest
+func getSchema(it *lex.ItemIterator) (*intern.SchemaRequest, error) {
+	var s intern.SchemaRequest
 	leftRoundSeen := false
 	for it.Next() {
 		item := it.Item()
@@ -1608,7 +1608,7 @@ L:
 }
 
 type facetRes struct {
-	f          *protos.FacetParams
+	f          *intern.FacetParams
 	ft         *FilterTree
 	vmap       map[string]string
 	facetOrder string
@@ -1703,7 +1703,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	// Skip past '('
 	if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 		it.Restore(savePos)
-		var facets protos.FacetParams
+		var facets intern.FacetParams
 		facets.AllKeys = true
 		res.f = &facets
 		res.vmap = make(map[string]string)
@@ -1711,7 +1711,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	}
 
 	facetVar := make(map[string]string)
-	var facets protos.FacetParams
+	var facets intern.FacetParams
 	var orderdesc bool
 	var orderkey string
 
@@ -1739,7 +1739,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 				}
 				facetVar[facetItem.name] = facetItem.varName
 			}
-			facets.Param = append(facets.Param, &protos.FacetParam{
+			facets.Param = append(facets.Param, &intern.FacetParam{
 				Key:   facetItem.name,
 				Alias: facetItem.alias,
 			})
@@ -2027,7 +2027,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		valid = false
 	}
 	it.Next()
-	// No directive is allowed on internal subgraph like expand all, value variables.
+	// No directive is allowed on intern.subgraph like expand all, value variables.
 	if !valid || curp == nil || curp.IsInternal {
 		return x.Errorf("Invalid use of directive.")
 	}
@@ -2308,7 +2308,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
 				attr, langs := attrAndLang(val)
-				gq.Order = append(gq.Order, &protos.Order{attr, key == "orderdesc", langs})
+				gq.Order = append(gq.Order, &intern.Order{attr, key == "orderdesc", langs})
 				order[val] = true
 				continue
 			}
@@ -2707,7 +2707,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
 					}
 					attr, langs := attrAndLang(p.Val)
-					curp.Order = append(curp.Order, &protos.Order{attr, p.Key == "orderdesc", langs})
+					curp.Order = append(curp.Order, &intern.Order{attr, p.Key == "orderdesc", langs})
 					order[p.Val] = true
 					continue
 				}

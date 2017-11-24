@@ -41,7 +41,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -52,7 +53,7 @@ import (
 var passwordCache map[string]string = make(map[string]string, 2)
 
 var ts uint64
-var odch chan *protos.OracleDelta
+var odch chan *intern.OracleDelta
 
 func timestamp() uint64 {
 	return atomic.AddUint64(&ts, 1)
@@ -60,7 +61,7 @@ func timestamp() uint64 {
 
 func commitTs(startTs uint64) uint64 {
 	commit := timestamp()
-	od := &protos.OracleDelta{
+	od := &intern.OracleDelta{
 		Commits: map[uint64]uint64{
 			startTs: commit,
 		},
@@ -2663,12 +2664,12 @@ func TestMinSchema(t *testing.T) {
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"min(val(x))":1.600000}]}}`,
 		js)
 
-	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: protos.Posting_ValType(types.IntID)})
+	schema.State().Set("survival_rate", intern.SchemaUpdate{ValueType: intern.Posting_ValType(types.IntID)})
 	js = processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"min(val(x))":1}]}}`,
 		js)
-	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: protos.Posting_ValType(types.FloatID)})
+	schema.State().Set("survival_rate", intern.SchemaUpdate{ValueType: intern.Posting_ValType(types.FloatID)})
 }
 
 func TestAvg(t *testing.T) {
@@ -4390,14 +4391,14 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 }
 
 // Mocking Subgraph and Testing fast-json with it.
-func ageSg(uidMatrix []*protos.List, srcUids *protos.List, ages []uint64) *SubGraph {
-	var as []*protos.ValueList
+func ageSg(uidMatrix []*intern.List, srcUids *intern.List, ages []uint64) *SubGraph {
+	var as []*intern.ValueList
 	for _, a := range ages {
 		bs := make([]byte, 4)
 		binary.LittleEndian.PutUint64(bs, a)
-		as = append(as, &protos.ValueList{
-			Values: []*protos.TaskValue{
-				&protos.TaskValue{[]byte(bs), 2},
+		as = append(as, &intern.ValueList{
+			Values: []*intern.TaskValue{
+				&intern.TaskValue{[]byte(bs), 2},
 			},
 		})
 	}
@@ -4410,10 +4411,10 @@ func ageSg(uidMatrix []*protos.List, srcUids *protos.List, ages []uint64) *SubGr
 		Params:      params{GetUid: true},
 	}
 }
-func nameSg(uidMatrix []*protos.List, srcUids *protos.List, names []string) *SubGraph {
-	var ns []*protos.ValueList
+func nameSg(uidMatrix []*intern.List, srcUids *intern.List, names []string) *SubGraph {
+	var ns []*intern.ValueList
 	for _, n := range names {
-		ns = append(ns, &protos.ValueList{Values: []*protos.TaskValue{{[]byte(n), 0}}})
+		ns = append(ns, &intern.ValueList{Values: []*intern.TaskValue{{[]byte(n), 0}}})
 	}
 	return &SubGraph{
 		Attr:        "name",
@@ -4424,7 +4425,7 @@ func nameSg(uidMatrix []*protos.List, srcUids *protos.List, names []string) *Sub
 	}
 
 }
-func friendsSg(uidMatrix []*protos.List, srcUids *protos.List, friends []*SubGraph) *SubGraph {
+func friendsSg(uidMatrix []*intern.List, srcUids *intern.List, friends []*SubGraph) *SubGraph {
 	return &SubGraph{
 		Attr:      "friend",
 		uidMatrix: uidMatrix,
@@ -4433,7 +4434,7 @@ func friendsSg(uidMatrix []*protos.List, srcUids *protos.List, friends []*SubGra
 		Children:  friends,
 	}
 }
-func rootSg(uidMatrix []*protos.List, srcUids *protos.List, names []string, ages []uint64) *SubGraph {
+func rootSg(uidMatrix []*intern.List, srcUids *intern.List, names []string, ages []uint64) *SubGraph {
 	nameSg := nameSg(uidMatrix, srcUids, names)
 	ageSg := ageSg(uidMatrix, srcUids, ages)
 
@@ -5611,7 +5612,7 @@ func TestLangDotInFunction(t *testing.T) {
 		js)
 }
 
-func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*protos.SchemaNode) {
+func checkSchemaNodes(t *testing.T, expected []*api.SchemaNode, actual []*api.SchemaNode) {
 	sort.Slice(expected, func(i, j int) bool {
 		return expected[i].Predicate >= expected[j].Predicate
 	})
@@ -5633,7 +5634,7 @@ func TestSchemaBlock1(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*protos.SchemaNode{{Predicate: "genre", Type: "uid"},
+	expected := []*api.SchemaNode{{Predicate: "genre", Type: "uid"},
 		{Predicate: "age", Type: "int"}, {Predicate: "name", Type: "string"},
 		{Predicate: "film.film.initial_release_date", Type: "datetime"},
 		{Predicate: "loc", Type: "geo"}, {Predicate: "alive", Type: "bool"},
@@ -5667,7 +5668,7 @@ func TestSchemaBlock2(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*protos.SchemaNode{
+	expected := []*api.SchemaNode{
 		{Predicate: "name",
 			Type:      "string",
 			Index:     true,
@@ -5687,7 +5688,7 @@ func TestSchemaBlock3(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*protos.SchemaNode{{Predicate: "age",
+	expected := []*api.SchemaNode{{Predicate: "age",
 		Type:      "int",
 		Index:     true,
 		Tokenizer: []string{"int"},
@@ -5705,7 +5706,7 @@ func TestSchemaBlock4(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*protos.SchemaNode{
+	expected := []*api.SchemaNode{
 		{Predicate: "genre",
 			Type:    "uid",
 			Reverse: true}, {Predicate: "age",
@@ -5721,7 +5722,7 @@ func TestSchemaBlock5(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*protos.SchemaNode{
+	expected := []*api.SchemaNode{
 		{Predicate: "name",
 			Type:      "string",
 			Index:     true,
@@ -5762,44 +5763,44 @@ password                       : password .
 type raftServer struct {
 }
 
-func (c *raftServer) Echo(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
+func (c *raftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
 	return in, nil
 }
 
-func (c *raftServer) RaftMessage(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
-	return &protos.Payload{}, nil
+func (c *raftServer) RaftMessage(ctx context.Context, in *api.Payload) (*api.Payload, error) {
+	return &api.Payload{}, nil
 }
 
-func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*protos.Payload, error) {
-	return &protos.Payload{}, nil
+func (c *raftServer) JoinCluster(ctx context.Context, in *intern.RaftContext) (*api.Payload, error) {
+	return &api.Payload{}, nil
 }
 
 type zeroServer struct {
 }
 
-func (z *zeroServer) AssignUids(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
-	return &protos.AssignedIds{}, nil
+func (z *zeroServer) AssignUids(ctx context.Context, n *intern.Num) (*api.AssignedIds, error) {
+	return &api.AssignedIds{}, nil
 }
 
-func (z *zeroServer) Timestamps(ctx context.Context, n *protos.Num) (*protos.AssignedIds, error) {
-	return &protos.AssignedIds{}, nil
+func (z *zeroServer) Timestamps(ctx context.Context, n *intern.Num) (*api.AssignedIds, error) {
+	return &api.AssignedIds{}, nil
 }
 
-func (z *zeroServer) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*protos.TxnContext, error) {
-	return &protos.TxnContext{}, nil
+func (z *zeroServer) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
+	return &api.TxnContext{}, nil
 }
 
-func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.ConnectionState, error) {
-	m := &protos.MembershipState{}
-	m.Zeros = make(map[uint64]*protos.Member)
-	m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
-	m.Groups = make(map[uint32]*protos.Group)
-	g := &protos.Group{}
-	g.Members = make(map[uint64]*protos.Member)
-	g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
+func (z *zeroServer) Connect(ctx context.Context, in *intern.Member) (*intern.ConnectionState, error) {
+	m := &intern.MembershipState{}
+	m.Zeros = make(map[uint64]*intern.Member)
+	m.Zeros[2] = &intern.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
+	m.Groups = make(map[uint32]*intern.Group)
+	g := &intern.Group{}
+	g.Members = make(map[uint64]*intern.Member)
+	g.Members[1] = &intern.Member{Id: 1, Addr: "localhost:12345"}
 	m.Groups[1] = g
 
-	c := &protos.ConnectionState{
+	c := &intern.ConnectionState{
 		Member: in,
 		State:  m,
 	}
@@ -5807,30 +5808,30 @@ func (z *zeroServer) Connect(ctx context.Context, in *protos.Member) (*protos.Co
 }
 
 // Used by sync membership
-func (z *zeroServer) Update(stream protos.Zero_UpdateServer) error {
+func (z *zeroServer) Update(stream intern.Zero_UpdateServer) error {
 	for {
 		_, err := stream.Recv()
 		if err != nil {
 			return err
 		}
-		m := &protos.MembershipState{}
-		m.Zeros = make(map[uint64]*protos.Member)
-		m.Zeros[2] = &protos.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
-		m.Groups = make(map[uint32]*protos.Group)
-		g := &protos.Group{}
-		g.Members = make(map[uint64]*protos.Member)
-		g.Members[1] = &protos.Member{Id: 1, Addr: "localhost:12345"}
+		m := &intern.MembershipState{}
+		m.Zeros = make(map[uint64]*intern.Member)
+		m.Zeros[2] = &intern.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
+		m.Groups = make(map[uint32]*intern.Group)
+		g := &intern.Group{}
+		g.Members = make(map[uint64]*intern.Member)
+		g.Members[1] = &intern.Member{Id: 1, Addr: "localhost:12345"}
 		m.Groups[1] = g
 		stream.Send(m)
 	}
 }
 
-func (z *zeroServer) ShouldServe(ctx context.Context, in *protos.Tablet) (*protos.Tablet, error) {
+func (z *zeroServer) ShouldServe(ctx context.Context, in *intern.Tablet) (*intern.Tablet, error) {
 	in.GroupId = 1
 	return in, nil
 }
 
-func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) error {
+func (z *zeroServer) Oracle(u *api.Payload, server intern.Zero_OracleServer) error {
 	for delta := range odch {
 		if err := server.Send(delta); err != nil {
 			return err
@@ -5839,8 +5840,8 @@ func (z *zeroServer) Oracle(u *protos.Payload, server protos.Zero_OracleServer) 
 	return nil
 }
 
-func (s *zeroServer) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.TxnTimestamps, error) {
-	return &protos.TxnTimestamps{}, nil
+func (s *zeroServer) TryAbort(ctx context.Context, txns *intern.TxnTimestamps) (*intern.TxnTimestamps, error) {
+	return &intern.TxnTimestamps{}, nil
 }
 
 func StartDummyZero() *grpc.Server {
@@ -5849,15 +5850,15 @@ func StartDummyZero() *grpc.Server {
 	x.Printf("zero listening at address: %v", ln.Addr())
 
 	s := grpc.NewServer()
-	protos.RegisterZeroServer(s, &zeroServer{})
-	protos.RegisterRaftServer(s, &raftServer{})
+	intern.RegisterZeroServer(s, &zeroServer{})
+	intern.RegisterRaftServer(s, &raftServer{})
 	go s.Serve(ln)
 	return s
 }
 
 func updateMaxPending() {
 	for mp := range maxPendingCh {
-		posting.Oracle().ProcessOracleDelta(&protos.OracleDelta{
+		posting.Oracle().ProcessOracleDelta(&intern.OracleDelta{
 			MaxPending: mp,
 		})
 	}
@@ -5869,7 +5870,7 @@ var maxPendingCh chan uint64
 func TestMain(m *testing.M) {
 	x.Init(true)
 
-	odch = make(chan *protos.OracleDelta, 100)
+	odch = make(chan *intern.OracleDelta, 100)
 	maxPendingCh = make(chan uint64, 100)
 	StartDummyZero()
 

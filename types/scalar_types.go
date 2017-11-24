@@ -19,7 +19,7 @@ package types
 import (
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	geom "github.com/twpayne/go-geom"
 )
 
@@ -32,16 +32,16 @@ const (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	BinaryID   = TypeID(protos.Posting_BINARY)
-	IntID      = TypeID(protos.Posting_INT)
-	FloatID    = TypeID(protos.Posting_FLOAT)
-	BoolID     = TypeID(protos.Posting_BOOL)
-	DateTimeID = TypeID(protos.Posting_DATETIME)
-	StringID   = TypeID(protos.Posting_STRING)
-	GeoID      = TypeID(protos.Posting_GEO)
-	UidID      = TypeID(protos.Posting_UID)
-	PasswordID = TypeID(protos.Posting_PASSWORD)
-	DefaultID  = TypeID(protos.Posting_DEFAULT)
+	BinaryID   = TypeID(intern.Posting_BINARY)
+	IntID      = TypeID(intern.Posting_INT)
+	FloatID    = TypeID(intern.Posting_FLOAT)
+	BoolID     = TypeID(intern.Posting_BOOL)
+	DateTimeID = TypeID(intern.Posting_DATETIME)
+	StringID   = TypeID(intern.Posting_STRING)
+	GeoID      = TypeID(intern.Posting_GEO)
+	UidID      = TypeID(intern.Posting_UID)
+	PasswordID = TypeID(intern.Posting_PASSWORD)
+	DefaultID  = TypeID(intern.Posting_DEFAULT)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -56,10 +56,10 @@ var typeNameMap = map[string]TypeID{
 	"default":  DefaultID,
 }
 
-type TypeID protos.Posting_ValType
+type TypeID intern.Posting_ValType
 
-func (t TypeID) Enum() protos.Posting_ValType {
-	return protos.Posting_ValType(t)
+func (t TypeID) Enum() intern.Posting_ValType {
+	return intern.Posting_ValType(t)
 }
 
 func (t TypeID) Name() string {

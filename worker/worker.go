@@ -15,7 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package worker contains code for internal worker communication to perform
+// Package worker contains code for intern.worker communication to perform
 // queries and mutations.
 package worker
 
@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 
 	"google.golang.org/grpc"
@@ -84,7 +84,7 @@ func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
-// other workers for internal communication.
+// other workers for intern.communication.
 func RunServer(bindall bool) {
 	laddr := "localhost"
 	if bindall {
@@ -98,8 +98,8 @@ func RunServer(bindall bool) {
 	}
 	x.Printf("Worker listening at address: %v", ln.Addr())
 
-	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
-	protos.RegisterRaftServer(workerServer, &raftServer)
+	intern.RegisterWorkerServer(workerServer, &grpcWorker{})
+	intern.RegisterRaftServer(workerServer, &raftServer)
 	workerServer.Serve(ln)
 }
 
