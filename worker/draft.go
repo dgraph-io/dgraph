@@ -267,7 +267,7 @@ func (n *node) processMutation(task *task) error {
 
 	ctx, txn := n.props.CtxAndTxn(pid)
 	if txn.ShouldAbort() {
-		return dy.ErrAborted
+		return dy.ErrConflict
 	}
 	rv := x.RaftValue{Group: n.gid, Index: ridx}
 	ctx = context.WithValue(ctx, "raft", rv)

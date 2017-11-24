@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -130,14 +131,18 @@ func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assign
 	dc := txn.dg.anyClient()
 	ag, err := dc.Mutate(ctx, mu)
 	if err != nil {
-		if s, ok := status.FromError(err); ok && s.Message() == y.ErrAborted.Error() {
-			err = y.ErrAborted
-		}
 		// Since a mutation error occurred, the txn should no longer be used
 		// (some mutations could have applied but not others, but we don't know
 		// which ones).  Discarding the transaction enforces that the user
 		// cannot use the txn further.
 		_ = txn.Discard(ctx) // Ignore error - user should see the original error.
+
+		// Transaction could be aborted(codes.Aborted) if CommitNow was true, or server could send a
+		// message that this mutation conflicts(codes.FailedPrecondition) with another transaction.
+		if s, ok := status.FromError(err); ok && s.Code() == codes.Aborted ||
+			s.Code() == codes.FailedPrecondition {
+			err = y.ErrAborted
+		}
 		return nil, err
 	}
 	err = txn.mergeContext(ag.Context)
@@ -162,8 +167,8 @@ func (txn *Txn) Commit(ctx context.Context) error {
 	}
 	dc := txn.dg.anyClient()
 	_, err := dc.CommitOrAbort(ctx, txn.context)
-	if s, ok := status.FromError(err); ok && s.Message() == y.ErrAborted.Error() {
-		return y.ErrAborted
+	if s, ok := status.FromError(err); ok && s.Code() == codes.Aborted {
+		err = y.ErrAborted
 	}
 	return err
 }
