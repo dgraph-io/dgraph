@@ -1802,7 +1802,7 @@ func getReversePredicates(ctx context.Context) ([]*intern.TaskValue, error) {
 		copy(pred[1:], sch.Predicate)
 		preds = append(preds, &intern.TaskValue{
 			Val:     pred,
-			ValType: int32(intern.Posting_DEFAULT),
+			ValType: intern.Posting_DEFAULT,
 		})
 	}
 	return preds, nil

@@ -298,7 +298,7 @@ func (ag *aggregator) Apply(val types.Val) {
 func (ag *aggregator) ValueMarshalled() (*intern.TaskValue, error) {
 	data := types.ValueForType(types.BinaryID)
 	ag.divideByCount()
-	res := &intern.TaskValue{ValType: int32(ag.result.Tid), Val: x.Nilbyte}
+	res := &intern.TaskValue{ValType: ag.result.Tid.Enum(), Val: x.Nilbyte}
 	if ag.result.Value == nil {
 		return res, nil
 	}

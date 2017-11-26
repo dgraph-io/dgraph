@@ -190,7 +190,7 @@ func convertValue(attr, data string) (types.Val, error) {
 
 // Returns nil byte on error
 func convertToType(v types.Val, typ types.TypeID) (*intern.TaskValue, error) {
-	result := &intern.TaskValue{ValType: int32(typ), Val: x.Nilbyte}
+	result := &intern.TaskValue{ValType: typ.Enum(), Val: x.Nilbyte}
 	if v.Tid == typ {
 		result.Val = v.Value.([]byte)
 		return result, nil
@@ -392,7 +392,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		}
 
 		valTid := vals[0].Tid
-		newValue := &intern.TaskValue{ValType: int32(valTid), Val: x.Nilbyte}
+		newValue := &intern.TaskValue{ValType: valTid.Enum(), Val: x.Nilbyte}
 		uidList := new(intern.List)
 		var vl intern.ValueList
 		for _, val := range vals {
@@ -879,7 +879,7 @@ func filterGeoFunction(arg funcArgs) error {
 		pl := posting.Get(key)
 
 		val, err := pl.Value(arg.q.ReadTs)
-		newValue := &intern.TaskValue{ValType: int32(val.Tid)}
+		newValue := &intern.TaskValue{ValType: val.Tid.Enum()}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
 		} else {
