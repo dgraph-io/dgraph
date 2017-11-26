@@ -31,7 +31,7 @@ var (
 func FromInt(val int) *intern.TaskValue {
 	bs := make([]byte, 4)
 	binary.LittleEndian.PutUint32(bs, uint32(val))
-	return &intern.TaskValue{Val: []byte(bs), ValType: int32(2)}
+	return &intern.TaskValue{Val: []byte(bs), ValType: intern.Posting_INT}
 }
 
 func ToInt(val *intern.TaskValue) int32 {
