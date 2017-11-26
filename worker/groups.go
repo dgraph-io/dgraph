@@ -158,8 +158,13 @@ func (g *groupi) proposeInitialSchema() {
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.
-	if _, err := MutateOverNetwork(gr.ctx, &m); err != nil {
+	for {
+		_, err := MutateOverNetwork(gr.ctx, &m)
+		if err == nil {
+			break
+		}
 		fmt.Println("Error while proposing initial schema: ", err)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
