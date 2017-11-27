@@ -114,7 +114,6 @@ func BlockingStop() {
 	time.Sleep(5 * time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	groups().Node.waitForTxnMarks(ctx)
 	groups().Node.Stop()        // blocking stop raft node.
 	workerServer.GracefulStop() // blocking stop server
 	groups().Node.applyAllMarks(ctx)

@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -55,6 +56,7 @@ type Node struct {
 	MyAddr      string
 	Id          uint64
 	peers       map[uint64]string
+	confChanges map[uint64]chan error
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
 	Store       *raft.MemoryStorage
@@ -90,6 +92,7 @@ func NewNode(rc *intern.RaftContext) *Node {
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
 		peers:       make(map[uint64]string),
+		confChanges: make(map[uint64]chan error),
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
 		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
@@ -125,6 +128,30 @@ func (n *Node) SetConfState(cs *raftpb.ConfState) {
 	n._confState = cs
 }
 
+func (n *Node) DoneConfChange(id uint64, err error) {
+	n.Lock()
+	defer n.Unlock()
+	ch, has := n.confChanges[id]
+	if !has {
+		return
+	}
+	delete(n.confChanges, id)
+	ch <- err
+}
+
+func (n *Node) storeConfChange(che chan error) uint64 {
+	n.Lock()
+	defer n.Unlock()
+	id := rand.Uint64()
+	_, has := n.confChanges[id]
+	for has {
+		id = rand.Uint64()
+		_, has = n.confChanges[id]
+	}
+	n.confChanges[id] = che
+	return id
+}
+
 // ConfState would return the latest ConfState stored in node.
 func (n *Node) ConfState() *raftpb.ConfState {
 	n.RLock()
@@ -142,7 +169,8 @@ func (n *Node) Peer(pid uint64) (string, bool) {
 // addr must not be empty.
 func (n *Node) SetPeer(pid uint64, addr string) {
 	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
-	Get().Connect(addr)
+	n.Lock()
+	defer n.Unlock()
 	n.peers[pid] = addr
 }
 
@@ -290,9 +318,10 @@ func (n *Node) doSendMessage(to uint64, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	addr, has := n.peers[to]
+	addr, has := n.Peer(to)
 	pool, err := Get().Get(addr)
 	if !has || err != nil {
+		x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
 		// No such peer exists or we got handed a bogus config (bad addr), so we
 		// can't send messages to this peer.
 		return
@@ -305,6 +334,9 @@ func (n *Node) doSendMessage(to uint64, data []byte) {
 	ch := make(chan error, 1)
 	go func() {
 		_, err = c.RaftMessage(ctx, p)
+		if err != nil {
+			x.Printf("Error while sending message to node Id: %d, err: %v\n", to, err)
+		}
 		ch <- err
 	}()
 
@@ -325,7 +357,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 	if pid == n.Id {
 		return
 	}
-	if paddr, ok := n.peers[pid]; ok && paddr == addr {
+	if paddr, ok := n.Peer(pid); ok && paddr == addr {
 		// Already connected.
 		return
 	}
@@ -335,22 +367,40 @@ func (n *Node) Connect(pid uint64, addr string) {
 	if addr == n.MyAddr {
 		// TODO: Note this fact in more general peer health info somehow.
 		x.Printf("Peer %d claims same host as me\n", pid)
-		n.peers[pid] = addr
+		n.SetPeer(pid, addr)
 		return
 	}
 	Get().Connect(addr)
-	n.peers[pid] = addr
+	n.SetPeer(pid, addr)
 }
 
 func (n *Node) DeletePeer(pid uint64) {
 	if pid == n.Id {
 		return
 	}
+	n.Lock()
+	defer n.Unlock()
 	delete(n.peers, pid)
 }
 
+func (n *Node) PeerMap() map[uint64]string {
+	n.RLock()
+	defer n.RUnlock()
+	m := make(map[uint64]string)
+	for k, v := range n.peers {
+		m[k] = v
+	}
+	return m
+}
+
+func (n *Node) SetPeerMap(m map[uint64]string) {
+	n.Lock()
+	defer n.Unlock()
+	n.peers = m
+}
+
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
-	addr, ok := n.peers[pid]
+	addr, ok := n.Peer(pid)
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
 	rc := &intern.RaftContext{
 		Addr:  addr,
@@ -359,25 +409,41 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	}
 	rcBytes, err := rc.Marshal()
 	x.Check(err)
-	return n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
-		ID:      pid,
+
+	ch := make(chan error, 1)
+	id := n.storeConfChange(ch)
+	err = n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
+		ID:      id,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
 		Context: rcBytes,
 	})
+	if err != nil {
+		return err
+	}
+	err = <-ch
+	return err
 }
 
 func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 	if n.Raft() == nil {
 		return errNoNode
 	}
-	if _, ok := n.peers[id]; !ok && id != n.RaftContext.Id {
+	if _, ok := n.Peer(id); !ok && id != n.RaftContext.Id {
 		return x.Errorf("Node %d not part of group", id)
 	}
-	return n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
+	ch := make(chan error, 1)
+	pid := n.storeConfChange(ch)
+	err := n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
+		ID:     pid,
 		Type:   raftpb.ConfChangeRemoveNode,
 		NodeID: id,
 	})
+	if err != nil {
+		return err
+	}
+	err = <-ch
+	return err
 }
 
 // TODO: Get rid of this in the upcoming changes.

@@ -144,10 +144,12 @@ func (c *listCache) removeOldest() {
 			delete(c.cache, e.key)
 		}
 
+		// ele gets Reset once it's passed to Remove, so store the prev.
+		prev := ele.Prev()
 		c.ll.Remove(ele)
 		c.evicts++
 		c.curSize -= e.size
-		ele = ele.Prev()
+		ele = prev
 	}
 }
 
