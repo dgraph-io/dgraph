@@ -328,13 +328,18 @@ function eraseCookie(name) {
     var query = $(this)
       .closest(".runnable")
       .attr("data-current");
+    var vars = $(this)
+      .closest(".runnable")
+      .attr("data-vars");
 
     $runnables.find(".output-container").removeClass("empty error");
     codeEl.text("Waiting for the server response...");
 
     var startTime;
     $.post({
-      url: window.DGRAPH_ENDPOINT,
+      //url: window.DGRAPH_ENDPOINT,
+      url: "http://192.168.128.16:8080/query?latency=true",
+      headers: { "X-Dgraph-Vars": vars },
       data: query,
       dataType: "json",
       beforeSend: function() {

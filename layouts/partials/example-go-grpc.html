@@ -23,7 +23,7 @@ import (
   "log"
 
   "github.com/dgraph-io/dgraph/client"
-  "github.com/dgraph-io/dgraph/protos"
+  "github.com/dgraph-io/dgraph/protos/api"
   "google.golang.org/grpc"
 )
 
@@ -39,10 +39,12 @@ func main() {
   }
   defer conn.Close()
 
-  dg := client.NewDgraphClient(protos.NewDgraphClient(conn))
-
-  resp, err := dg.NewTxn().Query(context.Background(),
-    `<span class="query-content">{{ .Code }}</span>`, nil)
+  dg := client.NewDgraphClient(api.NewDgraphClient(conn))
+  {{ if eq .Vars nil }}
+  resp, err := dg.NewTxn().Query(context.Background(), `<span class="query-content">{{ .Code }}</span>`, nil)
+  {{ else }}
+  resp, err := dg.NewTxn().QueryWithVars(context.Background(), `<span class="query-content">{{ .Code }}</span>`, map[string]string{{ .Vars }})
+  {{ end }}
   if err != nil {
     log.Fatal(err)
   }
