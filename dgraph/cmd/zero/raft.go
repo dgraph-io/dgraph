@@ -380,13 +380,18 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		gconn := p.Get()
 		c := protos.NewRaftClient(gconn)
 		err = errJoinCluster
-		for err != nil {
-			time.Sleep(time.Millisecond)
+		delay := 50 * time.Millisecond
+		for i := 0; i < 8; i++ {
+			time.Sleep(delay)
 			_, err = c.JoinCluster(n.ctx, n.RaftContext)
+			if err == nil {
+				break
+			}
 			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
 				x.Fatalf("Error while joining cluster %v", err)
 			}
 			x.Printf("Error while joining cluster %v\n", err)
+			delay *= 2
 		}
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 

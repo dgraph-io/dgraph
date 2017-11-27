@@ -1,3 +1,12 @@
+# This file can be used to setup a Dgraph cluster with 3 Dgraph servers and 1 Zero node on a
+# Docker Swarm with replication.
+# It expects three virtual machines with hostnames host1, host2 and host3 to be part of the swarm.
+# There is a constraint to make sure that Dgraph servers run on a particular host.
+
+# Data would be persisted to a docker volume called data-volume on the virtual machines which are
+# part of the swarm.
+# Run `docker stack deploy -c docker-compose-multi.yml` on the Swarm leader to start the cluster.
+
 version: "3"
 networks:
   dgraph:
@@ -11,7 +20,6 @@ services:
     networks:
       - dgraph
     deploy:
-      replicas: 1
       placement:
         constraints:
           - node.hostname == host1
@@ -27,7 +35,6 @@ services:
     networks:
       - dgraph
     deploy:
-      replicas: 1
       placement:
         constraints:
           - node.hostname == host1
