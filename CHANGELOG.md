@@ -22,6 +22,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Changed
 
 * When showing a predicate with list type, only values without a language tag are shown. To get the values of the predicate that are tagged with a language, query the predicate with that language explicitly.
+* Validate the address advertised by dgraph nodes.
+* Store/Restore peer map on snapshot.
+* Fix rdfs per second reporting in live loader.
+* Fix bug in lru eviction.
 
 ## [0.9.2] - 2017-11-20
 

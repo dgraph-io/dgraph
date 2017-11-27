@@ -450,7 +450,6 @@ START:
 	}
 
 	go func() {
-		n := g.Node
 		for {
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
@@ -462,10 +461,7 @@ START:
 				}
 				return
 			}
-			if n.AmLeader() {
-				proposal := &intern.Proposal{State: state}
-				go n.ProposeAndWait(context.Background(), proposal)
-			}
+			g.applyState(state)
 		}
 	}()
 

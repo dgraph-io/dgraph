@@ -99,6 +99,23 @@ func (s *Server) leaderChangeChannel() chan struct{} {
 	return s.leaderChangeCh
 }
 
+func (s *Server) member(addr string) *intern.Member {
+	s.AssertRLock()
+	for _, m := range s.state.Zeros {
+		if m.Addr == addr {
+			return m
+		}
+	}
+	for _, g := range s.state.Groups {
+		for _, m := range g.Members {
+			if m.Addr == addr {
+				return m
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Server) Leader(gid uint32) *conn.Pool {
 	s.RLock()
 	defer s.RUnlock()
@@ -321,7 +338,11 @@ func (s *Server) Connect(ctx context.Context,
 		}
 	}
 	// Create a connection and check validity of the address by doing an Echo.
-	conn.Get().Connect(m.Addr)
+	pl := conn.Get().Connect(m.Addr)
+	pl.UpdateHealthStatus()
+	if !pl.IsHealthy() { // Throw error if user specifies wrong my address.
+		return &emptyConnectionState, errInvalidAddress
+	}
 
 	createProposal := func() *intern.ZeroProposal {
 		s.Lock()

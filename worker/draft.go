@@ -19,6 +19,7 @@ package worker
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"log"
 	"math/rand"
 	"sync"
@@ -29,6 +30,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/api"
@@ -309,6 +311,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+	n.DoneConfChange(cc.ID, nil)
 	// Not present in proposal map
 	n.Applied.Done(e.Index)
 	groups().triggerMembershipSync()
@@ -410,13 +413,6 @@ func (n *node) applyAllMarks(ctx context.Context) {
 	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
-func (n *node) waitForTxnMarks(ctx context.Context) {
-	// Get index of last committed.
-	lastIndex, err := n.Store.LastIndex()
-	x.Checkf(err, "Error while getting last index")
-	posting.TxnMarks().WaitForMark(ctx, lastIndex)
-}
-
 func (n *node) retrieveSnapshot(peerID uint64) {
 	addr, _ := n.Peer(peerID)
 	pool, err := conn.Get().Get(addr)
@@ -453,6 +449,10 @@ func (n *node) Run() {
 	defer ticker.Stop()
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
+
+	// Ensure we don't exit unless any snapshot in progress in done.
+	closer := y.NewCloser(1)
+	go n.snapshotPeriodically(closer)
 
 	for {
 		select {
@@ -553,10 +553,12 @@ func (n *node) Run() {
 						}
 					}
 					n.Raft().Stop()
+					closer.SignalAndWait()
 					close(n.done)
 				}()
 			} else {
 				n.Raft().Stop()
+				closer.SignalAndWait()
 				close(n.done)
 			}
 		case <-n.done:
@@ -575,14 +577,7 @@ func (n *node) Stop() {
 	<-n.done // wait for Run to respond.
 }
 
-func (n *node) snapshotPeriodically() {
-	if n.gid == 0 {
-		// Group zero is dedicated for membership information, whose state we don't persist.
-		// So, taking snapshots would end up deleting the RAFT entries that we need to
-		// regenerate the state on a crash. Therefore, don't take snapshots.
-		return
-	}
-
+func (n *node) snapshotPeriodically(closer *y.Closer) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -591,19 +586,14 @@ func (n *node) snapshotPeriodically() {
 		case <-ticker.C:
 			n.snapshot(Config.MaxPendingCount)
 
-		case <-n.done:
+		case <-closer.HasBeenClosed():
+			closer.Done()
 			return
 		}
 	}
 }
 
 func (n *node) snapshot(skip uint64) {
-	if n.gid == 0 {
-		// Group zero is dedicated for membership information, whose state we don't persist.
-		// So, taking snapshots would end up deleting the RAFT entries that we need to
-		// regenerate the state on a crash. Therefore, don't take snapshots.
-		return
-	}
 	water := posting.TxnMarks()
 	le := water.DoneUntil()
 
@@ -618,10 +608,10 @@ func (n *node) snapshot(skip uint64) {
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
 	}
-	rc, err := n.RaftContext.Marshal()
+	peers, err := json.Marshal(n.PeerMap())
 	x.Check(err)
 
-	s, err := n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
+	s, err := n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), peers)
 	x.Checkf(err, "While creating snapshot")
 	x.Checkf(n.Store.Compact(snapshotIdx), "While compacting snapshot")
 	x.Check(n.Wal.StoreSnapshot(n.gid, s))
@@ -644,7 +634,11 @@ func (n *node) joinPeers() {
 
 	c := intern.NewRaftClient(gconn)
 	x.Printf("Calling JoinCluster")
-	_, err := c.JoinCluster(n.ctx, n.RaftContext)
+	ctx, cancel := context.WithTimeout(n.ctx, time.Second)
+	defer cancel()
+	// JoinCluster can block idefinitely, raft ignores conf change proposal
+	// if it has pending configuration.
+	_, err := c.JoinCluster(ctx, n.RaftContext)
 	// TODO: This should keep on indefinitely trying to join the cluster, instead of crashing.
 	x.Checkf(err, "Error while joining cluster")
 	x.Printf("Done with JoinCluster call\n")
@@ -659,19 +653,19 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
-		found := groups().HasMeInState()
-		_, hasPeer := groups().MyPeer()
-		if !found && hasPeer {
-			n.joinPeers()
+		sp, err := n.Store.Snapshot()
+		x.Checkf(err, "Unable to get existing snapshot")
+		if !raft.IsEmptySnap(sp) {
+			var peerMap map[uint64]string
+			x.Check(json.Unmarshal(sp.Data, &peerMap))
+			n.SetPeerMap(peerMap)
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
-
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
 		if _, hasPeer := groups().MyPeer(); hasPeer {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
-
 		} else {
 			peers := []raft.Peer{{ID: n.Id}}
 			n.SetRaft(raft.StartNode(n.Cfg, peers))
@@ -681,7 +675,6 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	}
 	go n.processApplyCh()
 	go n.Run()
-	go n.snapshotPeriodically()
 	go n.BatchAndSendMessages()
 }
 
