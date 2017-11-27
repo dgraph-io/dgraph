@@ -14,7 +14,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.hostname == myvm1
+          - node.hostname == host1
     command: dgraph zero --port_offset -2000 --my=zero:5080 --replicas 3
   server_1:
     image: dgraph/dgraph:test
@@ -30,8 +30,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.hostname == myvm1
-    command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero:5080 --debugmode
+          - node.hostname == host1
+    command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero:5080
   server_2:
     image: dgraph/dgraph:test
     hostname: "server_2"
@@ -46,8 +46,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.hostname == myvm2
-    command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero:5080 --debugmode -o 1
+          - node.hostname == host2
+    command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero:5080 -o 1
   server_3:
     image: dgraph/dgraph:test
     hostname: "server_3"
@@ -62,7 +62,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.hostname == myvm3
-    command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero:5080 --debugmode -o 2
+          - node.hostname == host3
+    command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero:5080 -o 2
 volumes:
   data-volume:
