@@ -3003,42 +3003,24 @@ fragment TestFragB {
 
 ## GraphQL Variables
 
-`Variables` can be defined and used in GraphQL queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a $ symbol. For complete information on variables, please check out GraphQL specification on [variables](https://facebook.github.io/graphql/#sec-Language.Variables). We encode the variables as a separate JSON object as show in the example below.
+`Variables` can be defined and used in queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a $ symbol.
 
-{{< runnable >}}
+{{< runnable vars="{\"$a\": \"5\", \"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}
 {
- "query": "query test($a: int, $b: int, $id: string){  me(func: uid($id)) {name@en, director.film (first: $a, offset: $b) {name @en, genre(first: $a) { name@en }}}}",
- "variables" : {
-  "$a": "5",
-  "$b": "10",
-  "$id": "[m.06pj8, m.0bxtg]"
- }
+  me(func: allofterms(name@en, $name)) {
+    name@en
+    director.film (first: $a, offset: $b) {
+      name @en
+      genre(first: $a) {
+        name@en
+      }
+    }
+  }
 }
 {{< /runnable >}}
 
-* Variables whose type is suffixed with a `!` can't have a default value but must
-have a value as part of the variables map.
 * The value of the variable must be parsable to the given type, if not, an error is thrown.
-* Any variable that is being used must be declared in the named query clause in the beginning.
-* We also support default values for the variables. In the example below, `$a` has a
-default value of `2`.
-
-{{< runnable >}}
-{
- "query": "query test($a: int = 2, $b: int!){  me(func: uid(1)) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
- "variables" : {
-   "$a": "5",
-   "$b": "10"
- }
-}
-{{< /runnable >}}
-
-* If the variable is initialized in the variable map, the default value will be
-overridden (In the example, `$a` will have value 5 and `$b` will be 3).
-
 * The variable types that are supported as of now are: `int`, `float`, `bool`, `string` and `uid`.
-
-{{% notice "note" %}}In GraphiQL interface, the query and the variables have to be separately entered in their respective boxes.{{% /notice %}}
 
 ## Indexing with Custom Tokenizers
 
