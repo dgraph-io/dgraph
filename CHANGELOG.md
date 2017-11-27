@@ -16,6 +16,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Indexes now correctly maintained when deleting via `S * *` and `S P *`.
 * `expand(_all_)` now follows reverse edges.
 * Don't return uid for nodes without any children when requested through debug flag.
+* GraphQL variables for HTTP endpoints. Variable map can be set as a JSON
+  object using the `X-Dgraph-Vars` header.
 
 ### Changed
 
