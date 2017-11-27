@@ -381,7 +381,7 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		c := protos.NewRaftClient(gconn)
 		err = errJoinCluster
 		delay := 50 * time.Millisecond
-		for i := 0; i < 8; i++ {
+		for i := 0; i < 8 && err != nil; i++ {
 			time.Sleep(delay)
 			_, err = c.JoinCluster(n.ctx, n.RaftContext)
 			if err == nil {
@@ -392,6 +392,9 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 			}
 			x.Printf("Error while joining cluster %v\n", err)
 			delay *= 2
+		}
+		if err != nil {
+			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
 		}
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
