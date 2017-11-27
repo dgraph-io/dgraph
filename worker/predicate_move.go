@@ -269,7 +269,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	})
 	if len(tctxs) > 0 {
 		go tryAbortTransactions(tctxs)
-		return &emptyPayload, y.ErrAborted
+		return &emptyPayload, y.ErrConflict
 	}
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
 	n.applyAllMarks(ctx)

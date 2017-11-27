@@ -25,7 +25,8 @@ import (
 )
 
 var (
-	ErrAborted = errors.New("Transaction has been aborted due to conflict")
+	ErrAborted  = errors.New("Transaction has been aborted. Please retry.")
+	ErrConflict = errors.New("Conflicts with pending transaction. Please abort.")
 )
 
 func MergeLinReads(dst *api.LinRead, src *api.LinRead) {

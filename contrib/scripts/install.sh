@@ -18,6 +18,7 @@ github.com/dgraph-io/dgraph/protos/api
 github.com/dgraph-io/dgraph/y
 github.com/dgraph-io/dgraph/vendor/github.com/gogo/protobuf/proto
 github.com/dgraph-io/dgraph/vendor/github.com/pkg/errors
+google.golang.org/grpc/codes
 google.golang.org/grpc/status
 math/rand
 sync"

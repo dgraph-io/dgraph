@@ -286,6 +286,9 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	m := &intern.Mutations{Edges: edges, StartTs: mu.StartTs}
 	resp.Context, err = query.ApplyMutations(ctx, m)
 	if !mu.CommitNow {
+		if err == y.ErrConflict {
+			err = status.Errorf(codes.FailedPrecondition, err.Error())
+		}
 		return resp, err
 	}
 
