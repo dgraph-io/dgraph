@@ -132,6 +132,7 @@ func NewPool(addr string) (*Pool, error) {
 		return nil, err
 	}
 	pl := &Pool{conn: conn, Addr: addr, lastEcho: time.Now()}
+	pl.UpdateHealthStatus()
 	go pl.MonitorHealth()
 	return pl, nil
 }
@@ -148,29 +149,33 @@ func (p *Pool) close() {
 	p.conn.Close()
 }
 
+func (p *Pool) UpdateHealthStatus() {
+	conn := p.Get()
+
+	query := new(api.Payload)
+	query.Data = make([]byte, 10)
+	x.Check2(rand.Read(query.Data))
+
+	c := intern.NewRaftClient(conn)
+	resp, err := c.Echo(context.Background(), query)
+	var lastEcho time.Time
+	if err == nil {
+		x.AssertTruef(bytes.Equal(resp.Data, query.Data),
+			"non-matching Echo response value from %v", p.Addr)
+		lastEcho = time.Now()
+	} else {
+		x.Printf("Echo error from %v. Err: %v\n", p.Addr, err)
+	}
+	p.Lock()
+	p.lastEcho = lastEcho
+	p.Unlock()
+}
+
 // MonitorHealth monitors the health of the connection via Echo. This function blocks forever.
 func (p *Pool) MonitorHealth() {
 	p.ticker = time.NewTicker(echoDuration)
 	for range p.ticker.C {
-		conn := p.Get()
-
-		query := new(api.Payload)
-		query.Data = make([]byte, 10)
-		x.Check2(rand.Read(query.Data))
-
-		c := intern.NewRaftClient(conn)
-		resp, err := c.Echo(context.Background(), query)
-		var lastEcho time.Time
-		if err == nil {
-			x.AssertTruef(bytes.Equal(resp.Data, query.Data),
-				"non-matching Echo response value from %v", p.Addr)
-			lastEcho = time.Now()
-		} else {
-			x.Printf("Echo error from %v. Err: %v\n", p.Addr, err)
-		}
-		p.Lock()
-		p.lastEcho = lastEcho
-		p.Unlock()
+		p.UpdateHealthStatus()
 	}
 }
 

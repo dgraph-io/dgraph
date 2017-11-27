@@ -117,8 +117,9 @@ func prepare() (dir1, dir2 string, rerr error) {
 	schema.Init(edgraph.State.Pstore)
 	worker.Init(edgraph.State.Pstore)
 	worker.Config.ZeroAddr = "localhost:7080"
-	worker.Config.MyAddr = "localhost:7081"
+	x.Config.PortOffset = 1
 	worker.Config.RaftId = 1
+	go worker.RunServer(false)
 	worker.StartRaftNodes(edgraph.State.WALstore, false)
 	return dir1, dir2, nil
 }

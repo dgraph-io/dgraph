@@ -19,6 +19,7 @@ package zero
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"math/rand"
 	"sync"
@@ -253,6 +254,10 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		state.MaxRaftId = p.MaxRaftId
 	}
 	if p.Member != nil {
+		m := n.server.member(p.Member.Addr)
+		if m != nil && (m.Id != p.Member.Id || m.GroupId != p.Member.GroupId) {
+			return p.Id, errInvalidAddress
+		}
 		if p.Member.GroupId == 0 {
 			state.Zeros[p.Member.Id] = p.Member
 			return p.Id, nil
@@ -347,6 +352,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+	n.DoneConfChange(cc.ID, nil)
 	n.triggerLeaderChange()
 }
 
@@ -364,11 +370,14 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	if restart {
 		x.Println("Restarting node for dgraphzero")
 		sp, err := n.Store.Snapshot()
-		var state intern.MembershipState
-		x.Check(state.Unmarshal(sp.Data))
-		n.server.SetMembershipState(&state)
-
 		x.Checkf(err, "Unable to get existing snapshot")
+		if !raft.IsEmptySnap(sp) {
+			var sd snapshotData
+			x.Check(json.Unmarshal(sp.Data, &sd))
+			n.server.SetMembershipState(sd.state)
+			n.SetPeerMap(sd.peers)
+		}
+
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	} else if len(opts.peer) > 0 {
@@ -402,6 +411,11 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	return err
 }
 
+type snapshotData struct {
+	state *intern.MembershipState
+	peers map[uint64]string
+}
+
 func (n *node) trySnapshot() {
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
@@ -411,7 +425,11 @@ func (n *node) trySnapshot() {
 		return
 	}
 
-	data, err := n.server.MarshalMembershipState()
+	sd := &snapshotData{
+		state: n.server.membershipState(),
+		peers: n.PeerMap(),
+	}
+	data, err := json.Marshal(sd)
 	x.Check(err)
 
 	if tr, ok := trace.FromContext(n.ctx); ok {
