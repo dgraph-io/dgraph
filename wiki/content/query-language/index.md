@@ -3003,10 +3003,10 @@ fragment TestFragB {
 
 ## GraphQL Variables
 
-`Variables` can be defined and used in queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a $ symbol.
+`Variables` can be defined and used in queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a `$` symbol.
 
 {{< runnable vars="{\"$a\": \"5\", \"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}
-{
+query test($a: int, $b: int, $name: string) {
   me(func: allofterms(name@en, $name)) {
     name@en
     director.film (first: $a, offset: $b) {
@@ -3019,8 +3019,23 @@ fragment TestFragB {
 }
 {{< /runnable >}}
 
+* Variables can have default values. In the example below, `$a` has a default value of `2`. Since the value for `$a` isn't provided in the variable map, `$a` takes on the default value.
+* Variables whose type is suffixed with a `!` can't have a default value but must have a value as part of the variables map.
 * The value of the variable must be parsable to the given type, if not, an error is thrown.
 * The variable types that are supported as of now are: `int`, `float`, `bool`, `string` and `uid`.
+* Any variable that is being used must be declared in the named query clause in the beginning.
+
+{{< runnable vars="{\"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}
+query test($a: int = 2, $b: int!, $name: string) {
+  me(func: allofterms(name@en, $name)) {
+    director.film (first: $a, offset: $b) {
+      genre(first: $a) {
+        name@en
+      }
+    }
+  }
+}
+{{< /runnable >}}
 
 ## Indexing with Custom Tokenizers
 
