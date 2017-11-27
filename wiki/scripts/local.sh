@@ -22,9 +22,21 @@ run() {
   HUGO_TITLE="Dgraph Doc - local" \
   VERSIONS=${VERSION_STRING} \
   CURRENT_BRANCH="master" \
-  pushd $GOPATH/src/github.com/dgraph-io/dgraph/wiki
+  pushd $GOPATH/src/github.com/dgraph-io/dgraph/wiki > /dev/null
+
+  pushd themes > /dev/null
+  if [ ! -d "hugo-docs" ]; then
+    git clone https://github.com/dgraph-io/hugo-docs
+  else
+    pushd hugo-docs > /dev/null
+    git pull
+    popd > /dev/null
+  fi
+  popd > /dev/null
+
+
   CURRENT_VERSION=${CURRENT_VERSION} hugo server -w
-  popd
+  popd > /dev/null
 }
 
 run
