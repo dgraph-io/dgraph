@@ -337,8 +337,7 @@ function eraseCookie(name) {
 
     var startTime;
     $.post({
-      //url: window.DGRAPH_ENDPOINT,
-      url: "http://192.168.128.16:8080/query?latency=true",
+      url: window.DGRAPH_ENDPOINT,
       headers: { "X-Dgraph-Vars": vars },
       data: query,
       dataType: "json",
