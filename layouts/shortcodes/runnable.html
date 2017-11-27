@@ -50,7 +50,7 @@
             </div>
 
             <div class="runnable-tab-content" data-tab="curl">
-              <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST {{ with .Get "vars" }}-H 'X-Dgraph-Vars: {{.}}' {{ end }}-d '<span class="query-content">{{ $code }}</span>' | python -m json.tool | less
+              <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST {{ with .Get "vars" }}-H 'X-Dgraph-Vars: {{.}}' {{ end }}-d '<br/><span class="query-content">{{ $code }}</span>' | python -m json.tool | less
               </code></pre>
             </div>
             <div class="runnable-tab-content" data-tab="go-grpc">

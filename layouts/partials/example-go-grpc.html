@@ -41,7 +41,7 @@ func main() {
 
   dg := client.NewDgraphClient(api.NewDgraphClient(conn))
   {{ if eq .Vars nil }}
-  resp, err := dg.NewTxn().Query(context.Background(), `<span class="query-content">{{ .Code }}</span>`, nil)
+  resp, err := dg.NewTxn().Query(context.Background(), `<span class="query-content">{{ .Code }}</span>`)
   {{ else }}
   resp, err := dg.NewTxn().QueryWithVars(context.Background(), `<span class="query-content">{{ .Code }}</span>`, map[string]string{{ .Vars }})
   {{ end }}
