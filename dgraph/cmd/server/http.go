@@ -96,6 +96,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if vars := r.Header.Get("X-Dgraph-Vars"); vars != "" {
+		req.Vars = map[string]string{}
+		if err := json.Unmarshal([]byte(vars), &req.Vars); err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest,
+				"Error while unmarshalling Vars header into map")
+			return
+		}
+	}
+
 	defer r.Body.Close()
 	q, err := ioutil.ReadAll(r.Body)
 	if err != nil {
