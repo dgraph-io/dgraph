@@ -391,7 +391,11 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		err = errJoinCluster
 		for err != nil {
 			time.Sleep(time.Millisecond)
-			_, err = c.JoinCluster(n.ctx, n.RaftContext)
+			ctx, cancel := context.WithTimeout(n.ctx, 30*time.Second)
+			defer cancel()
+			// JoinCluster can block idefinitely, raft ignores conf change proposal
+			// if it has pending configuration.
+			_, err = c.JoinCluster(ctx, n.RaftContext)
 			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
 				x.Fatalf("Error while joining cluster %v", err)
 			}
