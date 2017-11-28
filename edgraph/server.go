@@ -357,7 +357,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
 		Variables: req.Vars,
-		Http:      false,
 	})
 	if err != nil {
 		return resp, err

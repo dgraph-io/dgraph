@@ -6142,14 +6142,6 @@ func TestBoolSort(t *testing.T) {
 	require.NotNil(t, err)
 }
 
-func TestJSONQueryVariables(t *testing.T) {
-	populateGraph(t)
-	q := `{"query": "query test ($a: int = 1) { me(func: uid(0x01)) { name, gender, friend(first: $a) { name }}}",
-	"variables" : { "$a": "2"}}`
-	js := processToFastJSON(t, q)
-	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}}`, js)
-}
-
 func TestStringEscape(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -6277,14 +6269,6 @@ func TestDuplicateAlias(t *testing.T) {
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
 	err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
-}
-
-func TestGraphQLId(t *testing.T) {
-	populateGraph(t)
-	q := `{"query": "query test ($a: string = 1) { me(func: uid($a)) { name, gender, friend(first: 1) { name }}}",
-	"variables" : { "$a": "[1, 31]"}}`
-	js := processToFastJSON(t, q)
-	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"},{"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}}`, js)
 }
 
 func TestDebugUid(t *testing.T) {

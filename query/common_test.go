@@ -217,7 +217,7 @@ func processToFastJsonReq(t *testing.T, query string) (string, error) {
 }
 
 func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (string, error) {
-	res, err := gql.Parse(gql.Request{Str: query, Http: true})
+	res, err := gql.Parse(gql.Request{Str: query})
 	if err != nil {
 		return "", err
 	}

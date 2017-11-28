@@ -148,7 +148,7 @@ func timestamp() uint64 {
 }
 
 func processToFastJSON(q string) string {
-	res, err := gql.Parse(gql.Request{Str: q, Http: true})
+	res, err := gql.Parse(gql.Request{Str: q})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -785,7 +785,7 @@ var q5 = `
 `
 
 func TestSchemaValidationError(t *testing.T) {
-	_, err := gql.Parse(gql.Request{Str: m5, Http: true})
+	_, err := gql.Parse(gql.Request{Str: m5})
 	require.Error(t, err)
 	output, err := runQuery(strings.Replace(q5, "<id>", "0x8", -1))
 	require.NoError(t, err)
