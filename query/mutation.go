@@ -89,7 +89,7 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 
 func verifyUid(uid uint64) error {
 	maxLeaseId := worker.MaxLeaseId()
-	if uid < maxLeaseId {
+	if uid <= maxLeaseId {
 		return nil
 	}
 	if err := worker.ForceStateUpdate(context.TODO()); err != nil {
