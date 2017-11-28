@@ -320,7 +320,7 @@ You can look at the logs using `docker-compose logs`.
 {{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
 Instructions for running with TLS would be added soon.{{% /notice %}}
 
-Here we'll go through an example of deploying 3 Dgraph Server nodes and 1 Zero on three different AWS instances using Docker Swarm.
+Here we'll go through an example of deploying 3 Dgraph Server nodes and 1 Zero on three different AWS instances using Docker Swarm with a replication factor of 3.
 
 * Make sure you have Docker Machine installed from the [step above]({{< relref "#deployment-on-aws">}}).
 
@@ -454,7 +454,7 @@ networks:
   dgraph:
 services:
   zero:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
     networks:
@@ -465,7 +465,7 @@ services:
           - node.hostname == aws01
     command: dgraph zero --port_offset -2000 --my=zero:5080 --replicas 3
   server_1:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:latest
     hostname: "server_1"
     volumes:
       - data-volume:/dgraph
@@ -480,7 +480,7 @@ services:
           - node.hostname == aws01
     command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero:5080
   server_2:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:latest
     hostname: "server_2"
     volumes:
       - data-volume:/dgraph
@@ -495,7 +495,7 @@ services:
           - node.hostname == aws02
     command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero:5080 -o 1
   server_3:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:latest
     hostname: "server_3"
     volumes:
       - data-volume:/dgraph
@@ -535,10 +535,10 @@ docker service ls
 Output:
 ```
 ID                  NAME                MODE                REPLICAS            IMAGE                PORTS
-69oge03y0koz        dgraph_server_2     replicated          1/1                 dgraph/dgraph:test   *:8081->8081/tcp,*:9081->9081/tcp
-kq5yks92mnk6        dgraph_server_3     replicated          1/1                 dgraph/dgraph:test   *:8082->8082/tcp,*:9082->9082/tcp
-uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:test   *:6080->6080/tcp
-v9jlw00iz2gg        dgraph_server_1     replicated          1/1                 dgraph/dgraph:test   *:8080->8080/tcp,*:9080->9080/tcp
+69oge03y0koz        dgraph_server_2     replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
+kq5yks92mnk6        dgraph_server_3     replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
+uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:latest   *:6080->6080/tcp
+v9jlw00iz2gg        dgraph_server_1     replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
 ```
 
 
@@ -549,6 +549,151 @@ To stop the cluster run
 ```
 docker stack rm dgraph
 ```
+
+### HA Cluster setup (optional)
+
+Here is a sample swarm config for running 6 Dgraph Server nodes and 3 Zero nodes on 6 different
+instances. Setup should be similar to [Cluster setup using Docker Swarm]({{< relref "#cluster-setup-using-docker-swarm" >}}) apart from a couple of differences. This setup would ensure replication with sharding of data.
+
+1. The file assumes that there are six hosts available as docker-machines.
+2. You have to open ports `8083`, `8084`, `8085`, `9083`, `9084` and `9085` as well.
+
+```sh
+version: "3"
+networks:
+  dgraph:
+services:
+  zero_1:
+    image: dgraph/dgraph:latest
+    volumes:
+      - data-volume:/dgraph
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws01
+    command: dgraph zero -o -2000 --my=zero_1:5080 --replicas 3 --idx 1
+  zero_2:
+    image: dgraph/dgraph:latest
+    volumes:
+      - data-volume:/dgraph
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws02
+    command: dgraph zero -o -1999 --my=zero_2:5081 --replicas 3 --peer zero_1:5080 --idx 2
+  zero_3:
+    image: dgraph/dgraph:latest
+    volumes:
+      - data-volume:/dgraph
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws03
+    command: dgraph zero -o -1998 --my=zero_3:5082 --replicas 3 --peer zero_1:5080 --idx 3
+  server_1:
+    image: dgraph/dgraph:latest
+    hostname: "server_1"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8080:8080
+      - 9080:9080
+    networks:
+      - dgraph
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == aws01
+    command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero_1:5080
+  server_2:
+    image: dgraph/dgraph:latest
+    hostname: "server_2"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8081:8081
+      - 9081:9081
+    networks:
+      - dgraph
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == aws02
+    command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero_1:5080 -o 1
+  server_3:
+    image: dgraph/dgraph:latest
+    hostname: "server_3"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8082:8082
+      - 9082:9082
+    networks:
+      - dgraph
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == aws03
+    command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero_1:5080 -o 2
+  server_4:
+    image: dgraph/dgraph:latest
+    hostname: "server_4"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8083:8083
+      - 9083:9083
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws04
+    command: dgraph server --my=server_4:7083 --memory_mb=2048 --zero=zero_1:5080 -o 3
+  server_5:
+    image: dgraph/dgraph:latest
+    hostname: "server_5"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8084:8084
+      - 9084:9084
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws05
+    command: dgraph server --my=server_5:7084 --memory_mb=2048 --zero=zero_1:5080 -o 4
+  server_6:
+    image: dgraph/dgraph:latest
+    hostname: "server_6"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8085:8085
+      - 9085:9085
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws06
+    command: dgraph server --my=server_6:7085 --memory_mb=2048 --zero=zero_1:5080 -o 5
+
+volumes:
+  data-volume:
+```
+
 
 ## Building from Source
 
