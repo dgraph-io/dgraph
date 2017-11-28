@@ -143,6 +143,96 @@ all the various flags available, run `dgraph server --help`.
 
 ### Run using Docker
 
+#### Docker Machine and Compose
+
+Here we'll go through an example of deploying Dgraph Server and Zero on an AWS instance.
+We will use [Docker Machine](https://docs.docker.com/machine/overview/). It is a tool that lets you install Docker Engine on virtual machines
+and easily deploy applications.
+
+* [Install Docker Machine](https://docs.docker.com/machine/install-machine/) on your machine.
+
+* Now that you have Docker Machine installed, provisioning an instance on AWS is just one step
+   away. You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) for programatic access to the Amazon API.
+
+* Create a new docker machine.
+
+```sh
+docker-machine create --driver amazonec2 aws01
+```
+
+Your output should look like
+
+```sh
+Running pre-create checks...
+Creating machine...
+(aws01) Launching instance...
+...
+...
+Docker is up and running!
+To see how to connect your Docker Client to the Docker Engine running on this virtual machine, run: docker-machine env aws01
+```
+
+The command would provision a `t2-micro` instance with a security group called `docker-machine`
+(allowing inbound access on 2376 and 22). You can either edit the security group to allow inbound
+access to `8080`, `9080` (default ports for Dgraph server) or you can provide your own security
+group which allows inbound access on port 22, 2376 (required by Docker Machine), 8080 and 9080.
+
+[Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
+instance type, security group, AMI among many other
+things.
+
+{{% notice "tip" %}}Docker machine supports [other drivers](https://docs.docker.com/machine/drivers/gce/) like GCE, Azure etc.{{% /notice %}}
+
+* Install and run Dgraph using docker-compose
+
+Docker Compose is a tool for running multi-container Docker applications. You can follow the
+instructions [here](https://docs.docker.com/compose/install/) to install it.
+
+Copy the file below in a directory on your machine and name it `docker-compose.yml`.
+
+```sh
+version: "3"
+services:
+  zero:
+    image: dgraph/dgraph:latest
+    volumes:
+      - /data:/dgraph
+    restart: on-failure
+    command: dgraph zero --port_offset -2000 --my=zero:5080
+  server:
+    image: dgraph/dgraph:latest
+    volumes:
+      - /data:/dgraph
+    ports:
+      - 8080:8080
+      - 9080:9080
+    restart: on-failure
+    command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080
+```
+
+{{% notice "note" %}}The config mounts `/data`(you could mount something else) on the instance to `/dgraph` within the
+container for persistence.{{% /notice %}}
+
+* Connect to the Docker Engine running on the machine.
+
+Running `docker-machine env aws01` tells us to run the command below to configure
+our shell.
+```
+eval $(docker-machine env aws01)
+```
+This configures our Docker client to talk to the Docker engine running on the AWS Machine.
+
+Finally run the command below to start the Server and Zero.
+```
+docker-compose up -d
+```
+This would start 2 Docker containers, one running Dgraph Server and the other Zero on the same
+machine. Docker would restart the containers in case there is any error.
+
+You can look at the logs using `docker-compose logs`.
+
+#### Manually
+
 First, you'd want to figure out the host IP address. You can typically do that
 via
 
@@ -166,6 +256,7 @@ mkdir ~/data # Or any other directory where data should be stored.
 
 docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/dgraph:latest dgraph server -port_offset 1 --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:7080 --my=HOSTIPADDR:7081 --idx <unique-id>
 ```
+
 
 {{% notice "note" %}}
 You can also use the `:master` tag when running docker image to get the nightly

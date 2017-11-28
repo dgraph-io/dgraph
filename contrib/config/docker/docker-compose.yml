@@ -13,6 +13,7 @@ services:
     ports:
       # Exposing this port is optional. It can be used to view predicate stats.
       - 6080:6080
+    restart: on-failure
     command: dgraph zero --port_offset -2000 --my=zero:5080
   server:
     image: dgraph/dgraph:latest
@@ -21,4 +22,5 @@ services:
     ports:
       - 8080:8080
       - 9080:9080
+    restart: on-failure
     command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080
