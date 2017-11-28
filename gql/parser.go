@@ -19,7 +19,6 @@ package gql
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -270,28 +269,8 @@ type queryAlt struct {
 	Query     string `json:"query"`
 }
 
-/*
-The query could be of the following forms :
-
-# Normal query.
-	`query test($a: int) { me(_xid_: alice-in-wonderland) {author(first:$a){name}}}`
-
-# With stringified variables map.
- `{
-   "query": "query test($a: int){ me(_xid_: alice-in-wonderland) {author(first:$a){name}}}",
-	 "variables": "{'$a':'2'}"
-	 }`
-
-# With a non-stringified variables map.
-  `{
-   "query": "query test($a: int){ me(_xid_: alice-in-wonderland) {author(first:$a){name}}}",
-	 "variables": {'$a':'2'}
-	 }`
-*/
-
 func convertToVarMap(variables map[string]string) (vm varMap) {
 	vm = make(map[string]varInfo)
-	// Go client passes in variables separately.
 	for k, v := range variables {
 		vm[k] = varInfo{
 			Value: v,
@@ -303,50 +282,6 @@ func convertToVarMap(variables map[string]string) (vm varMap) {
 type Request struct {
 	Str       string
 	Variables map[string]string
-	// We need this so that we don't try to do JSON.Unmarshal for request coming
-	// from Go client, as we directly get the variables in a map.
-	// TODO: Remove this flag.
-	Http bool
-}
-
-func parseQueryWithGqlVars(r Request) (string, varMap, error) {
-	var q query
-	vm := make(varMap)
-	mp := make(map[string]string)
-
-	// Go client can send variable map separately.
-	if len(r.Variables) != 0 {
-		vm = convertToVarMap(r.Variables)
-	}
-
-	// If its a language driver like Go, no more parsing needed.
-	if !r.Http {
-		return r.Str, vm, nil
-	}
-
-	if err := json.Unmarshal([]byte(r.Str), &q); err != nil {
-		// Check if the json object is stringified.
-		var q1 queryAlt
-		if err := json.Unmarshal([]byte(r.Str), &q1); err != nil {
-			return r.Str, vm, nil // It does not obey GraphiQL format but valid.
-		}
-		// Convert the stringified variables to map if it is not nil.
-		if q1.Variables != "" {
-			if err = json.Unmarshal([]byte(q1.Variables), &mp); err != nil {
-				return "", nil, err
-			}
-		}
-	} else {
-		mp = q.Variables
-	}
-
-	for k, v := range mp {
-		vm[k] = varInfo{
-			Value: v,
-		}
-	}
-
-	return q.Query, vm, nil
 }
 
 func checkValueType(vm varMap) error {
@@ -494,10 +429,8 @@ type Result struct {
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
 func Parse(r Request) (res Result, rerr error) {
-	query, vmap, err := parseQueryWithGqlVars(r)
-	if err != nil {
-		return res, err
-	}
+	query := r.Str
+	vmap := convertToVarMap(r.Variables)
 
 	lexer := lex.Lexer{Input: query}
 	lexer.Run(lexTopLevel)
@@ -685,8 +618,7 @@ func (f *FilterTree) hasVars() bool {
 // getVariablesAndQuery checks if the query has a variable list and stores it in
 // vmap. For variable list to be present, the query should have a name which is
 // also checked for. It also calls getQuery to create the GraphQuery object tree.
-func getVariablesAndQuery(it *lex.ItemIterator, vmap varMap) (gq *GraphQuery,
-	rerr error) {
+func getVariablesAndQuery(it *lex.ItemIterator, vmap varMap) (gq *GraphQuery, rerr error) {
 	var name string
 L2:
 	for it.Next() {

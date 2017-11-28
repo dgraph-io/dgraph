@@ -105,7 +105,7 @@ func TestRetrieveFacetsSimple(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"me":[{"name|origin":"french","name":"Michonne","gender":"female"}]}}`,
 		js)
@@ -125,7 +125,7 @@ func TestOrderFacets(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"me":[{"friend":[{"name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"},{"friend|since":"2005-05-02T15:04:05Z"},{"name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"}]}]}}`,
 		js)
@@ -145,7 +145,7 @@ func TestOrderdescFacets(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"me":[{"friend":[{"name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"},{"name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|since":"2005-05-02T15:04:05Z"},{"name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"}]}]}}`,
 		js)
@@ -168,7 +168,7 @@ func TestRetrieveFacetsAsVars(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Rick Grimes","val(a)":"2006-01-02T15:04:05Z"}]}}`,
 		js)
@@ -188,7 +188,7 @@ func TestRetrieveFacetsUidValues(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"me":[{"friend":[{"name|origin":"french","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name|origin":"french","name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}]}]}}`,
 		js)
@@ -210,7 +210,7 @@ func TestRetrieveFacetsAll(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"me":[{"name|origin":"french","name":"Michonne","friend":[{"name|origin":"french","name":"Rick Grimes","gender":"male","friend|since":"2006-01-02T15:04:05Z"},{"name|origin":"french","name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}],"gender":"female"}]}}`,
 		js)
@@ -232,7 +232,7 @@ func TestFacetsNotInQuery(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"gender":"male","name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
@@ -252,7 +252,7 @@ func TestSubjectWithNoFacets(t *testing.T) {
 			}
 		}
 	`
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Michale"}]}}`,
 		js)
@@ -273,7 +273,7 @@ func TestFetchingFewFacets(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee","friend|close":true},{"name":"Daryl Dixon","friend|close":false},{"name":"Andrea"},{"friend|close":true}]}]}}`,
 		js)
@@ -294,7 +294,7 @@ func TestFetchingNoFacets(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}]}}`,
 		js)
@@ -315,7 +315,7 @@ func TestFacetsSortOrder(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee","friend|close":true,"friend|family":true},{"name":"Daryl Dixon","friend|close":false,"friend|family":true},{"name":"Andrea"},{"friend|close":true,"friend|family":false}]}]}}`,
 		js)
@@ -336,7 +336,7 @@ func TestUnknownFacets(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}]}}`,
 		js)
@@ -359,7 +359,7 @@ func TestFacetsMutation(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name":"Daryl Dixon","friend|close":false,"friend|family":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|close":false,"friend|family":false,"friend|since":"2001-11-10T00:00:00Z"}]}]}}`,
 		js)
@@ -381,7 +381,7 @@ func TestFacetsFilterSimple(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	// 0x65 does not have name.
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x65"}],"name":"Michonne"}]}}`,
@@ -404,7 +404,7 @@ func TestFacetsFilterSimple2(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"}],"name":"Michonne"}]}}`,
 		js)
@@ -426,7 +426,7 @@ func TestFacetsFilterSimple3(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x19","name":"Daryl Dixon"}],"name":"Michonne"}]}}`,
 		js)
@@ -448,7 +448,7 @@ func TestFacetsFilterOr(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	// 0x65 (101) does not have name.
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x65"}],"name":"Michonne"}]}}`,
@@ -471,7 +471,7 @@ func TestFacetsFilterAnd(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
@@ -493,7 +493,7 @@ func TestFacetsFilterle(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
@@ -515,7 +515,7 @@ func TestFacetsFilterge(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
@@ -537,7 +537,7 @@ func TestFacetsFilterAndOrle(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	// 0x65 (101) does not have name.
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x65"}],"name":"Michonne"}]}}`,
@@ -560,7 +560,7 @@ func TestFacetsFilterAndOrge2(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x19","name":"Daryl Dixon"}],"name":"Michonne"}]}}`,
 		js)
@@ -583,7 +583,7 @@ func TestFacetsFilterNotAndOrgeMutuallyExclusive(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"name":"Michonne"}]}}`,
 		js)
@@ -605,7 +605,7 @@ func TestFacetsFilterUnknownFacets(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Michonne"}]}}`,
 		js)
@@ -627,7 +627,7 @@ func TestFacetsFilterUnknownOrKnown(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"}],"name":"Michonne"}]}}`,
 		js)
@@ -648,7 +648,7 @@ func TestFacetsFilterallofterms(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"name":"Michonne","uid":"0x1"}],"name":"Andrea"}]}}`,
 		js)
@@ -669,7 +669,7 @@ func TestFacetsFilterAllofMultiple(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"name":"Michonne","uid":"0x1"}, {"name":"Daryl Dixon","uid":"0x19"}],"name":"Andrea"}]}}`,
 		js)
@@ -691,7 +691,7 @@ func TestFacetsFilterAllofNone(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Andrea"}]}}`,
 		js)
@@ -712,7 +712,7 @@ func TestFacetsFilteranyofterms(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x1","name":"Michonne"}],"name":"Andrea"}]}}`,
 		js)
@@ -733,7 +733,7 @@ func TestFacetsFilterAnyofNone(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Andrea"}]}}`,
 		js)
@@ -754,7 +754,7 @@ func TestFacetsFilterAllofanyofterms(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x1","name":"Michonne"},{"uid":"0x19","name":"Daryl Dixon"}],"name":"Andrea"}]}}`,
 		js)
@@ -775,7 +775,7 @@ func TestFacetsFilterAllofAndanyofterms(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"friend":[{"uid":"0x19","name":"Daryl Dixon"}],"name":"Andrea"}]}}`,
 		js)
@@ -795,7 +795,7 @@ func TestFacetsFilterAtValueFail(t *testing.T) {
 	}
 `
 
-	_, err := processToFastJsonReq(t, query)
+	_, err := processToFastJson(t, query)
 	require.Error(t, err)
 }
 
@@ -815,7 +815,7 @@ func TestFacetsFilterAndRetrieval(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Glenn Rhee","uid":"0x18","friend|family":true},{"uid":"0x65","friend|family":false}]}]}}`,
 		js)
@@ -832,7 +832,7 @@ func TestFacetWithLang(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me":[{"name@en|type":"Test facet with lang","name@en":"Test facet"}]}}`, js)
 }
 
@@ -848,7 +848,7 @@ func TestFilterUidFacetMismatch(t *testing.T) {
 		}
 	}
 	`
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me":[{"friend":[{"name":"Glenn Rhee","friend|close":true,"friend|family":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"friend|age":33,"friend|close":true,"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}]}]}}`, js)
 }
 
@@ -864,7 +864,7 @@ func TestRecurseFacetOrder(t *testing.T) {
 		}
 	}
   `
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me":[{"friend":[{"uid":"0x19","name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"},{"friend":[{"friend|since":"2006-01-02T15:04:05Z"}],"uid":"0x17","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x1f","name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x65","friend|since":"2005-05-02T15:04:05Z"},{"uid":"0x18","name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"}],"uid":"0x1","name":"Michonne"}]}}`, js)
 
 	query = `
@@ -876,7 +876,7 @@ func TestRecurseFacetOrder(t *testing.T) {
 		}
 	}
   `
-	js = processToFastJSON(t, query)
+	js = processToFastJsonNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me":[{"friend":[{"uid":"0x18","name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"},{"uid":"0x65","friend|since":"2005-05-02T15:04:05Z"},{"friend":[{"friend|since":"2006-01-02T15:04:05Z"}],"uid":"0x17","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x1f","name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"uid":"0x19","name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"}],"uid":"0x1","name":"Michonne"}]}}`, js)
 }
 
@@ -894,7 +894,7 @@ func TestFacetsAlias(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.Equal(t, `{"data":{"me":[{"o":"french","name":"Michonne","friend":[{"o":"french","name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"o":"french","name":"Glenn Rhee","friend|family":true,"friend|since":"2004-05-02T15:04:05Z","tagalias":"Domain3"},{"name":"Daryl Dixon","friend|family":true,"friend|since":"2007-05-02T15:04:05Z","tagalias":34},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|family":false,"friend|since":"2005-05-02T15:04:05Z"}]}]}}`, js)
 }
 
@@ -914,6 +914,6 @@ func TestFacetsAlias2(t *testing.T) {
 		}
 	`
 
-	js := processToFastJSON(t, query)
+	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me2":[{"friend":[{"friend|close":true,"f":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"friend|close":false,"f":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34}]}],"me":[{"name":"Rick Grimes"}]}}`, js)
 }

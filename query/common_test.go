@@ -212,12 +212,13 @@ func defaultContext() context.Context {
 	return context.Background()
 }
 
-func processToFastJsonReq(t *testing.T, query string) (string, error) {
-	return processToFastJsonReqCtx(t, query, defaultContext())
+func processToFastJson(t *testing.T, query string) (string, error) {
+	return processToFastJsonCtxVars(t, query, defaultContext(), nil)
 }
 
-func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (string, error) {
-	res, err := gql.Parse(gql.Request{Str: query, Http: true})
+func processToFastJsonCtxVars(t *testing.T, query string, ctx context.Context,
+	vars map[string]string) (string, error) {
+	res, err := gql.Parse(gql.Request{Str: query, Variables: vars})
 	if err != nil {
 		return "", err
 	}
@@ -241,8 +242,8 @@ func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (s
 	return string(resp), err
 }
 
-func processToFastJSON(t *testing.T, query string) string {
-	res, err := processToFastJsonReq(t, query)
+func processToFastJsonNoErr(t *testing.T, query string) string {
+	res, err := processToFastJson(t, query)
 	require.NoError(t, err)
 	return res
 }
