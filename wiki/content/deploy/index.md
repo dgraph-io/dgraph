@@ -143,7 +143,13 @@ all the various flags available, run `dgraph server --help`.
 
 ### Run using Docker
 
-#### Docker Machine and Compose
+There are two options to setup the cluster using Docker.
+
+1. Deploy using a `docker-compose.yml` using `docker-compose` and `docker-machine` commands on
+   remote virtual machines.
+2. Using `docker run` commands to deploy manually on a the host machine.
+
+#### 1. Docker Machine and Compose
 
 Here we'll go through an example of deploying Dgraph Server and Zero on an AWS instance.
 We will use [Docker Machine](https://docs.docker.com/machine/overview/). It is a tool that lets you install Docker Engine on virtual machines
@@ -231,7 +237,7 @@ machine. Docker would restart the containers in case there is any error.
 
 You can look at the logs using `docker-compose logs`.
 
-#### Manually
+#### 2.Manually
 
 First, you'd want to figure out the host IP address. You can typically do that
 via
