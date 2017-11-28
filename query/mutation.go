@@ -89,9 +89,14 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 
 func verifyUid(uid uint64) error {
 	maxLeaseId := worker.MaxLeaseId()
-	// 10000 is margin for error. maxLeaseId is updated by Zero over stream so there might be some
-	// delay.
-	if uid > (maxLeaseId + 10000) {
+	if uid < maxLeaseId {
+		return nil
+	}
+	if err := worker.ForceStateUpdate(context.TODO()); err != nil {
+		return x.Wrapf(err, "updating error state")
+	}
+	maxLeaseId = worker.MaxLeaseId()
+	if uid > maxLeaseId {
 		return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, maxLeaseId)
 	}
 	return nil
