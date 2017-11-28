@@ -26,7 +26,7 @@ run() {
 
   pushd themes > /dev/null
   if [ ! -d "hugo-docs" ]; then
-    git clone https://github.com/dgraph-io/hugo-docs
+    git clone git@github.com:dgraph-io/hugo-docs.git
   else
     pushd hugo-docs > /dev/null
     git pull
