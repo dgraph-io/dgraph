@@ -143,21 +143,99 @@ all the various flags available, run `dgraph server --help`.
 
 ### Run using Docker
 
-There are two options to setup the cluster using Docker.
+First, you'd want to figure out the host IP address. You can typically do that
+via
 
-1. Deploy using a `docker-compose.yml` using `docker-compose` and `docker-machine` commands on
-   remote virtual machines.
-2. Using `docker run` commands to deploy manually on a the host machine.
+```sh
+ip addr  # On Arch Linux
+ifconfig # On Ubuntu/Mac
+```
+We'll refer to the host IP address via `HOSTIPADDR`.
 
-#### 1. Docker Machine and Compose
+**Run dgraph zero**
 
-Here we'll go through an example of deploying Dgraph Server and Zero on an AWS instance.
+```sh
+mkdir ~/data # Or any other directory where data should be stored.
+
+docker run -it -p 7080:7080 -p 8080:8080 -v ~/data:/dgraph dgraph/dgraph:latest dgraph zero --bindall=true --my=HOSTIPADDR:7080
+```
+
+**Run dgraph server**
+```sh
+mkdir ~/data # Or any other directory where data should be stored.
+
+docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/dgraph:latest dgraph server -port_offset 1 --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:7080 --my=HOSTIPADDR:7081 --idx <unique-id>
+```
+
+
+{{% notice "note" %}}
+You can also use the `:master` tag when running docker image to get the nightly
+build. Though, nightly isn't as thoroughly tested as a release, and we
+recommend not using it.
+{{% /notice %}}
+
+### High-availability setup
+
+In a high-availability setup, we need to run 3 or 5 replicas for Zero, and
+similarly, 3 or 5 replicas for the server.
+{{% notice "note" %}}
+If number of replicas is 2K + 1, up to **K servers** can be down without any
+impact on reads or writes.
+
+Avoid keeping replicas to 2K (even number). If K servers go down, this would
+block reads and writes, due to lack of consensus.
+{{% /notice %}}
+
+**Dgraph Zero**
+Run three Zero instances, assigning a unique ID to each via `--idx` flag, and
+passing the address of any healthy Zero instance via `--peer` flag.
+
+To run three replicas for server, set `--replicas=3`. Every time a new Dgraph
+server is added, Zero would check the existing groups and assign them to one,
+which doesn't have three replicas.
+
+**Dgraph Server**
+Run as many Dgraph servers as you want. You can manually set `--idx` flag, or
+you can leave that flag empty, and Zero would auto-assign an id to the server.
+This id would get persisted in the write-ahead log, so be careful not to delete
+it.
+
+The new servers will automatically detect each other by communicating with
+dgraphzero and establish connections to each other.
+
+Typically, Zero would first attempt to replicate a group, by assigning a new
+Dgraph server to run the same group as assigned to another. Once the group has
+been replicated as per the `--replicas` flag, Zero would create a new group.
+
+Over time, the data would be evenly split across all the groups. So, it's
+important to ensure that the number of Dgraph servers is a multiple of the
+replication setting. For e.g., if you set `--replicas=3` in Zero, then run three
+Dgraph servers for no sharding, but 3x replication. Run six Dgraph servers, for
+sharding the data into two groups, with 3x replication.
+
+**Removing Dead Nodes**
+If a replica goes down and can't be recovered, you can remove it and add a new node to the quorum. `/removeNode` endpoint on Zero can be used to remove the dead node (`/removeNode?id=3&group=2`).
+{{% notice "note" %}}
+Before using the api ensure that the node is down and ensure that it doesn't come back up ever again.
+
+Remember to specify the `idx` flag while adding a new replica or else Zero might assign it a different group.
+{{% /notice %}}
+
+## Deployment on AWS
+
 We will use [Docker Machine](https://docs.docker.com/machine/overview/). It is a tool that lets you install Docker Engine on virtual machines
 and easily deploy applications.
 
 * [Install Docker Machine](https://docs.docker.com/machine/install-machine/) on your machine.
 
-* Now that you have Docker Machine installed, provisioning an instance on AWS is just one step
+### Single server using Docker Compose
+
+{{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
+Instructions for running with TLS would be added soon.{{% /notice %}}
+
+Here we'll go through an example of deploying Dgraph Server and Zero on an AWS instance.
+
+* Make sure you have Docker Machine installed from the [step above]({{< relref "#deployment-on-aws">}}), provisioning an instance on AWS is just one step
    away. You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) for programatic access to the Amazon API.
 
 * Create a new docker machine.
@@ -237,85 +315,240 @@ machine. Docker would restart the containers in case there is any error.
 
 You can look at the logs using `docker-compose logs`.
 
-#### 2.Manually
+### Cluster setup using Docker Swarm
 
-First, you'd want to figure out the host IP address. You can typically do that
-via
+{{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
+Instructions for running with TLS would be added soon.{{% /notice %}}
 
-```sh
-ip addr  # On Arch Linux
-ifconfig # On Ubuntu/Mac
-```
-We'll refer to the host IP address via `HOSTIPADDR`.
+Here we'll go through an example of deploying 3 Dgraph Server nodes and 1 Zero on three different AWS instances using Docker Swarm.
 
-**Run dgraph zero**
+* Make sure you have Docker Machine installed from the [step above]({{< relref "#deployment-on-aws">}}).
 
 ```sh
-mkdir ~/data # Or any other directory where data should be stored.
-
-docker run -it -p 7080:7080 -p 8080:8080 -v ~/data:/dgraph dgraph/dgraph:latest dgraph zero --bindall=true --my=HOSTIPADDR:7080
+docker-machine --version
 ```
 
-**Run dgraph server**
+* Create 3 instances on AWS and [install Docker Engine](https://docs.docker.com/engine/installation/) on them. This can be done manually or by using `docker-machine`.
+You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) to create the instances using Docker Machine.
+
+Considering that you have AWS credentials setup, you can use the below commands to start 3 AWS
+`t2-micro` instances with Docker Engine installed on them.
+
 ```sh
-mkdir ~/data # Or any other directory where data should be stored.
+docker-machine create --driver amazonec2 aws01
+docker-machine create --driver amazonec2 aws02
+docker-machine create --driver amazonec2 aws03
+```
 
-docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/dgraph:latest dgraph server -port_offset 1 --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:7080 --my=HOSTIPADDR:7081 --idx <unique-id>
+Your output should look like
+
+```sh
+Running pre-create checks...
+Creating machine...
+(aws01) Launching instance...
+...
+...
+Docker is up and running!
+To see how to connect your Docker Client to the Docker Engine running on this virtual machine, run: docker-machine env aws01
+```
+
+The command would provision a `t2-micro` instance with a security group called `docker-machine`
+(allowing inbound access on 2376 and 22).
+
+You would need to edit the `docker-machine` security group to open inbound traffic on the following ports.
+
+1. Allow all inbound traffic on all ports with Source being `docker-machine` security ports so that
+   docker related communication can happen easily.
+
+2. Also open inbound TCP traffic on the following ports required by Dgraph: 8080, 8081, 8082, 9080, 9081, 9082.
+
+[Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
+instance type, security group, AMI among many other
+things.
+
+{{% notice "tip" %}}Docker machine supports [other drivers](https://docs.docker.com/machine/drivers/gce/) like GCE, Azure etc.{{% /notice %}}
+
+Running `docker-machine ps` shows all the AWS EC2 instances that we started.
+```sh
+➜  ~ docker-machine ls
+NAME    ACTIVE   DRIVER       STATE     URL                         SWARM   DOCKER        ERRORS
+aws01   -        amazonec2    Running   tcp://34.200.239.30:2376            v17.11.0-ce
+aws02   -        amazonec2    Running   tcp://54.236.58.120:2376            v17.11.0-ce
+aws03   -        amazonec2    Running   tcp://34.201.22.2:2376              v17.11.0-ce
+```
+
+* Start the Swarm
+
+Docker Swarm has manager and worker nodes. Swarm can be started and updated on manager nodes. We
+   will setup `aws01` as swarm manager. You can first run the following commands to initialize the
+   swarm.
+
+We are going to use the internal IP address given by AWS. Run the following command to get the
+internal IP for `aws01`. Lets assume `172.31.64.18` is the internal IP in this case.
+```
+docker-machine ssh aws01 ifconfig eth0
+```
+
+Now that we have the internal IP, lets initiate the Swarm.
+```sh
+# This configures our Docker client to talk to the Docker engine running on the aws01 host.
+eval $(docker-machine env aws01)
+docker swarm init --advertise-addr 172.31.64.18
+```
+
+Output
+```
+Swarm initialized: current node (w9mpjhuju7nyewmg8043ypctf) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join \
+    --token SWMTKN-1-1y7lba98i5jv9oscf10sscbvkmttccdqtkxg478g3qahy8dqvg-5r5cbsntc1aamsw3s4h3thvgk \
+    172.31.64.18:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+```
+
+Now we will make other nodes join the swarm.
+
+```sh
+eval $(docker-machine env aws02)
+docker swarm join \
+    --token SWMTKN-1-1y7lba98i5jv9oscf10sscbvkmttccdqtkxg478g3qahy8dqvg-5r5cbsntc1aamsw3s4h3thvgk \
+    172.31.64.18:2377
+```
+
+Output
+```
+This node joined a swarm as a worker.
+```
+
+Similary, aws03
+```sh
+eval $(docker-machine env aws03)
+docker swarm join \
+    --token SWMTKN-1-1y7lba98i5jv9oscf10sscbvkmttccdqtkxg478g3qahy8dqvg-5r5cbsntc1aamsw3s4h3thvgk \
+    172.31.64.18:2377
+```
+
+On the Swarm manager `aws01`, verify that your swarm is running.
+```sh
+docker node ls
+```
+
+Output
+```sh
+ID                            HOSTNAME            STATUS              AVAILABILITY        MANAGER STATUS
+ghzapjsto20c6d6l3n0m91zev     aws02               Ready               Active
+rb39d5lgv66it1yi4rto0gn6a     aws03               Ready               Active
+waqdyimp8llvca9i09k4202x5 *   aws01               Ready               Active              Leader
+```
+
+* Start the Dgraph cluster
+
+Copy the following file on your host machine and name it as `docker-compose.yml`
+
+```sh
+version: "3"
+networks:
+  dgraph:
+services:
+  zero:
+    image: dgraph/dgraph:test
+    volumes:
+      - data-volume:/dgraph
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws01
+    command: dgraph zero --port_offset -2000 --my=zero:5080 --replicas 3
+  server_1:
+    image: dgraph/dgraph:test
+    hostname: "server_1"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8080:8080
+      - 9080:9080
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws01
+    command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero:5080
+  server_2:
+    image: dgraph/dgraph:test
+    hostname: "server_2"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8081:8081
+      - 9081:9081
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws02
+    command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero:5080 -o 1
+  server_3:
+    image: dgraph/dgraph:test
+    hostname: "server_3"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8082:8082
+      - 9082:9082
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == aws03
+    command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero:5080 -o 2
+volumes:
+  data-volume:
+```
+Run the following command on the Swarm leader to deploy the Dgraph Cluster.
+
+```sh
+eval $(docker-machine env aws01)
+docker stack deploy -c docker-compose.yml dgraph
+```
+
+This should run three dgraph server services(one on each VM because of the constraint we have) and one dgraph zero service on aws01.
+These contraints are important so that in case of restart Dgraph Server or Zero starts with the same volumes.
+
+{{% notice "note" %}} This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstor](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
+
+
+
+You can verify that all services were created successfully by running:
+
+```sh
+docker service ls
+```
+
+Output:
+```
+ID                  NAME                MODE                REPLICAS            IMAGE                PORTS
+69oge03y0koz        dgraph_server_2     replicated          1/1                 dgraph/dgraph:test   *:8081->8081/tcp,*:9081->9081/tcp
+kq5yks92mnk6        dgraph_server_3     replicated          1/1                 dgraph/dgraph:test   *:8082->8082/tcp,*:9082->9082/tcp
+uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:test   *:6080->6080/tcp
+v9jlw00iz2gg        dgraph_server_1     replicated          1/1                 dgraph/dgraph:test   *:8080->8080/tcp,*:9080->9080/tcp
 ```
 
 
-{{% notice "note" %}}
-You can also use the `:master` tag when running docker image to get the nightly
-build. Though, nightly isn't as thoroughly tested as a release, and we
-recommend not using it.
-{{% /notice %}}
+{{% notice "note" %}} You can access the UI at `http://<external-ip-address-node>:8080`. It is also available on port `8081` and `8082`.  {{% /notice %}}
 
-### High-availability setup
+To stop the cluster run
 
-In a high-availability setup, we need to run 3 or 5 replicas for Zero, and
-similarly, 3 or 5 replicas for the server.
-{{% notice "note" %}}
-If number of replicas is 2K + 1, up to **K servers** can be down without any
-impact on reads or writes.
-
-Avoid keeping replicas to 2K (even number). If K servers go down, this would
-block reads and writes, due to lack of consensus.
-{{% /notice %}}
-
-**Dgraph Zero**
-Run three Zero instances, assigning a unique ID to each via `--idx` flag, and
-passing the address of any healthy Zero instance via `--peer` flag.
-
-To run three replicas for server, set `--replicas=3`. Every time a new Dgraph
-server is added, Zero would check the existing groups and assign them to one,
-which doesn't have three replicas.
-
-**Dgraph Server**
-Run as many Dgraph servers as you want. You can manually set `--idx` flag, or
-you can leave that flag empty, and Zero would auto-assign an id to the server.
-This id would get persisted in the write-ahead log, so be careful not to delete
-it.
-
-The new servers will automatically detect each other by communicating with
-dgraphzero and establish connections to each other.
-
-Typically, Zero would first attempt to replicate a group, by assigning a new
-Dgraph server to run the same group as assigned to another. Once the group has
-been replicated as per the `--replicas` flag, Zero would create a new group.
-
-Over time, the data would be evenly split across all the groups. So, it's
-important to ensure that the number of Dgraph servers is a multiple of the
-replication setting. For e.g., if you set `--replicas=3` in Zero, then run three
-Dgraph servers for no sharding, but 3x replication. Run six Dgraph servers, for
-sharding the data into two groups, with 3x replication.
-
-**Removing Dead Nodes**
-If a replica goes down and can't be recovered, you can remove it and add a new node to the quorum. `/removeNode` endpoint on Zero can be used to remove the dead node (`/removeNode?id=3&group=2`).
-{{% notice "note" %}}
-Before using the api ensure that the node is down and ensure that it doesn't come back up ever again.
-
-Remember to specify the `idx` flag while adding a new replica or else Zero might assign it a different group.
-{{% /notice %}}
+```
+docker stack rm dgraph
+```
 
 ## Building from Source
 
