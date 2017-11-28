@@ -1835,7 +1835,7 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 			}
 			attrLang := GroupByAttr{
-				Attr:  strings.ToLower(val),
+				Attr:  val,
 				Alias: alias,
 				Langs: langs,
 			}
