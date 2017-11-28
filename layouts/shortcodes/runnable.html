@@ -3,7 +3,7 @@
 
 {{ $customExampleGoGRPC := replace (.Get "customExampleGoGRPC") "\\n" "\n" }}
 
-<div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ $code }}" data-current="{{ $code }}" data-dirty="false">
+<div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ $code }}" data-current="{{ $code }}" data-dirty="false"{{ with .Get "vars" }} data-vars="{{ . }}"{{end}}>
   <div class="container-fluid">
     <div class="row">
       <div class="runnable-col runnable-col-code col-12 col-sm-12 col-md-12 col-lg-6 nopadding">
@@ -50,12 +50,12 @@
             </div>
 
             <div class="runnable-tab-content" data-tab="curl">
-              <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST -d '
-<span class="query-content">{{ $code }}</span>' | python -m json.tool | less</code></pre>
+              <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST {{ with .Get "vars" }}-H 'X-Dgraph-Vars: {{.}}' {{ end }}-d '<br/><span class="query-content">{{ $code }}</span>' | python -m json.tool | less
+              </code></pre>
             </div>
             <div class="runnable-tab-content" data-tab="go-grpc">
               {{ if eq $customExampleGoGRPC "" }}
-                {{ partial "example-go-grpc" ( dict "Content" . "Code" "blahblah" ) }}
+                {{ partial "example-go-grpc" ( dict "Content" . "Code" "blahblah" "Vars" ( .Get "vars" ) ) }}
               {{ else }}
                 <pre><code class="no-copy" tabindex="-1">{{ $customExampleGoGRPC }}
                 </pre></code>

@@ -1,19 +1,21 @@
 {{ $currentBranch := getenv "CURRENT_BRANCH" }}
 
+<!--
+  Getting the version here is very hacky. It assumes that $current branch is etiher:
 
-{{ $majorVersion := 0 }}
-{{ $minorVersion := 0 }}
-{{ $patchVersion := 0 }}
+  1. "master"
+  2. "release/vX.Y.Z"
 
-{{ if (ne $currentBranch "master") }}
-  {{ $version := slicestr $currentBranch 9 }}
-  {{ $majorVersion := int (slicestr $version 0 1) }}
-  {{ $minorVersion := int (slicestr $version 2 3) }}
-  {{ $patchVersion := int (slicestr $version 4 5) }}
-{{ end }}
+  Note that for option 2, X, Y, and Z must be a single character for this to work.
+-->
+{{ $version := slicestr (replace (printf "%-14s" $currentBranch) " " "0") 9 }}
+{{ $majorVersion := int (slicestr $version 0 1) }}
+{{ $minorVersion := int (slicestr $version 2 3) }}
+{{ $patchVersion := int (slicestr $version 4 5) }}
+{{ $versionGe090 := or (eq $currentBranch "master") (ge $majorVersion 1) (ge $minorVersion 9) }}
+{{ $versionGe093 := or (eq $currentBranch "master") (ge $majorVersion 1) (gt $minorVersion 9) (and (eq $minorVersion 9) (ge $patchVersion 3)) }}
 
-
-{{ if or (eq $currentBranch "master") (ge $majorVersion 1) (ge $minorVersion 9) }}
+{{ if $versionGe090 }}
 <pre><code class="no-copy" tabindex="-1">package main
 
 import (
@@ -23,7 +25,11 @@ import (
   "log"
 
   "github.com/dgraph-io/dgraph/client"
+  {{- if $versionGe093 }}
+  "github.com/dgraph-io/dgraph/protos/api"
+  {{ else }}
   "github.com/dgraph-io/dgraph/protos"
+  {{ end -}}
   "google.golang.org/grpc"
 )
 
@@ -39,10 +45,12 @@ func main() {
   }
   defer conn.Close()
 
-  dg := client.NewDgraphClient(protos.NewDgraphClient(conn))
-
-  resp, err := dg.NewTxn().Query(context.Background(),
-    `<span class="query-content">{{ .Code }}</span>`, nil)
+  dg := client.NewDgraphClient({{ if $versionGe093 }}api{{ else }}protos{{ end }}.NewDgraphClient(conn))
+  {{ if eq .Vars nil }}
+  resp, err := dg.NewTxn().Query(context.Background(), `<span class="query-content">{{ .Code }}</span>`)
+  {{ else }}
+  resp, err := dg.NewTxn().QueryWithVars(context.Background(), `<span class="query-content">{{ .Code }}</span>`, map[string]string{{ .Vars }})
+  {{ end }}
   if err != nil {
     log.Fatal(err)
   }
