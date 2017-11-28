@@ -48,11 +48,7 @@ docker pull dgraph/dgraph
 
 If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v0.x.y.tar.gz` contains the dgraph binary.
 
-If you wish to run the UI for Dgraph you should also download the `assets.tar.gz` and extract them into a folder called assets.
-
-```sh
-mkdir assets && tar -xzvf assets.tar.gz -C assets
-```
+If you wish to run the UI for Dgraph you should also download the `assets.tar.gz` and extract them into a folder called `assets`.
 
 ## Step 2: Run Dgraph
 {{% notice "note" %}} This is a set up involving just one machine. For multi-server setup, go to [Deploy]({{< relref "deploy/index.md" >}}). {{% /notice %}}

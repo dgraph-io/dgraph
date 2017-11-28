@@ -390,17 +390,25 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		gconn := p.Get()
 		c := intern.NewRaftClient(gconn)
 		err = errJoinCluster
-		for err != nil {
-			time.Sleep(time.Millisecond)
+		delay := 50 * time.Millisecond
+		for i := 0; i < 8 && err != nil; i++ {
+			time.Sleep(delay)
 			ctx, cancel := context.WithTimeout(n.ctx, time.Second)
 			defer cancel()
 			// JoinCluster can block idefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
 			_, err = c.JoinCluster(ctx, n.RaftContext)
+			if err == nil {
+				break
+			}
 			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
 				x.Fatalf("Error while joining cluster %v", err)
 			}
 			x.Printf("Error while joining cluster %v\n", err)
+			delay *= 2
+		}
+		if err != nil {
+			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
 		}
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 

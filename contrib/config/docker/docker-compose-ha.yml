@@ -1,0 +1,146 @@
+# This file can be used to setup a Dgraph cluster with 6 Dgraph servers and 3 Zero nodes on a
+# Docker Swarm with replication. This setup ensures high availability for both Zero and Server.
+
+# It expects six virtual machines with hostnames host1, host2, host3, host4, host5 and host6 to
+# be part of the swarm.  There is a constraint to make sure that Dgraph servers run on a particular
+# host. Dgraph Zero nodes run on host1, host2 and host3.
+
+# Data would be persisted to a docker volume called data-volume on the virtual machines which are
+# part of the swarm.
+# Run `docker stack deploy -c docker-compose-ha.yml` on the Swarm leader to start the cluster.
+
+version: "3"
+networks:
+  dgraph:
+services:
+  zero_1:
+    image: dgraph/dgraph:test
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 6080:6080
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == host1
+    command: dgraph zero -o -2000 --my=zero_1:5080 --replicas 3 --idx 1
+  zero_2:
+    image: dgraph/dgraph:test
+    volumes:
+      - data-volume:/dgraph
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == host2
+    command: dgraph zero -o -1999 --my=zero_2:5081 --replicas 3 --peer zero_1:5080 --idx 2
+  zero_3:
+    image: dgraph/dgraph:test
+    volumes:
+      - data-volume:/dgraph
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == host3
+    command: dgraph zero -o -1998 --my=zero_3:5082 --replicas 3 --peer zero_1:5080 --idx 3
+  server_1:
+    image: dgraph/dgraph:test
+    hostname: "server_1"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8080:8080
+      - 9080:9080
+    networks:
+      - dgraph
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == host1
+    command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero_1:5080
+  server_2:
+    image: dgraph/dgraph:test
+    hostname: "server_2"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8081:8081
+      - 9081:9081
+    networks:
+      - dgraph
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == host2
+    command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero_1:5080 -o 1
+  server_3:
+    image: dgraph/dgraph:test
+    hostname: "server_3"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8082:8082
+      - 9082:9082
+    networks:
+      - dgraph
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == host3
+    command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero_1:5080 -o 2
+  server_4:
+    image: dgraph/dgraph:test
+    hostname: "server_4"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8083:8083
+      - 9083:9083
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == host4
+    command: dgraph server --my=server_4:7083 --memory_mb=2048 --zero=zero_1:5080 -o 3
+  server_5:
+    image: dgraph/dgraph:test
+    hostname: "server_5"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8084:8084
+      - 9084:9084
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == host5
+    command: dgraph server --my=server_5:7084 --memory_mb=2048 --zero=zero_1:5080 -o 4
+  server_6:
+    image: dgraph/dgraph:test
+    hostname: "server_6"
+    volumes:
+      - data-volume:/dgraph
+    ports:
+      - 8085:8085
+      - 9085:9085
+    networks:
+      - dgraph
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == host6
+    command: dgraph server --my=server_6:7085 --memory_mb=2048 --zero=zero_1:5080 -o 5
+
+volumes:
+  data-volume:

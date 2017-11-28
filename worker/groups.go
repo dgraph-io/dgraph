@@ -100,7 +100,7 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	zc := intern.NewZeroClient(p.Get())
 	var connState *intern.ConnectionState
 	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
-	delay := 100 * time.Millisecond
+	delay := 50 * time.Millisecond
 	for i := 0; i < 9; i++ { // Generous number of attempts.
 		var err error
 		connState, err = zc.Connect(gr.ctx, m)
