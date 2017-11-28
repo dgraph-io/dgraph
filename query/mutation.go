@@ -87,17 +87,15 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 	return edges, nil
 }
 
-func verifyUid(uid uint64) error {
-	maxLeaseId := worker.MaxLeaseId()
-	if uid <= maxLeaseId {
+func verifyUid(ctx context.Context, uid uint64) error {
+	if uid <= worker.MaxLeaseId() {
 		return nil
 	}
-	if err := worker.ForceStateUpdate(context.TODO()); err != nil {
+	if err := worker.ForceStateUpdate(ctx); err != nil {
 		return x.Wrapf(err, "updating error state")
 	}
-	maxLeaseId = worker.MaxLeaseId()
-	if uid > maxLeaseId {
-		return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, maxLeaseId)
+	if lease := worker.MaxLeaseId(); uid > lease {
+		return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
 	}
 	return nil
 }
@@ -119,7 +117,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 			} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
 				return newUids, err
 			}
-			if err = verifyUid(uid); err != nil {
+			if err = verifyUid(ctx, uid); err != nil {
 				return newUids, err
 			}
 		}
@@ -131,7 +129,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 			} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
 				return newUids, err
 			}
-			if err = verifyUid(uid); err != nil {
+			if err = verifyUid(ctx, uid); err != nil {
 				return newUids, err
 			}
 		}

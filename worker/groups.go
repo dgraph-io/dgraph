@@ -222,17 +222,13 @@ func MaxLeaseId() uint64 {
 
 func ForceStateUpdate(ctx context.Context) error {
 	g := groups()
-	g.Lock()
-	defer g.Unlock()
-
 	p := g.AnyServer(0)
 	if p == nil {
 		return x.Errorf("don't have the address of any dgraphzero server")
 	}
+
 	c := intern.NewZeroClient(p.Get())
-	m := &intern.Member{}
-	m.ClusterInfoOnly = true
-	state, err := c.Connect(ctx, m)
+	state, err := c.Connect(ctx, &intern.Member{ClusterInfoOnly: true})
 	if err != nil {
 		return err
 	}
