@@ -355,6 +355,12 @@
 			"revisionTime": "2017-11-06T14:28:49Z"
 		},
 		{
+			"checksumSHA1": "zjfAVm+q8p9EbxPzjaZxGoJUc4M=",
+			"path": "github.com/spf13/viper",
+			"revision": "4dddf7c62e16bce5807744018f5b753bfe21bbd2",
+			"revisionTime": "2017-11-09T20:57:16Z"
+		},
+		{
 			"checksumSHA1": "Q2V7Zs3diLmLfmfbiuLpSxETSuY=",
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "976c720a22c8eb4eb6a0b4348ad85ad12491a506",
