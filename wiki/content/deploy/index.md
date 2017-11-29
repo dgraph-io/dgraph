@@ -360,7 +360,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 1. Allow all inbound traffic on all ports with Source being `docker-machine` security ports so that
    docker related communication can happen easily.
 
-2. Also open inbound TCP traffic on the following ports required by Dgraph: 8080, 8081, 8082, 9080, 9081, 9082.
+2. Also open inbound TCP traffic on the following ports required by Dgraph: `8080`, `8081`, `8082`, `9080`, `9081` and `9082`.
 
 [Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
 instance type, security group, AMI among many other
@@ -396,7 +396,7 @@ eval $(docker-machine env aws01)
 docker swarm init --advertise-addr 172.31.64.18
 ```
 
-Output
+Output:
 ```
 Swarm initialized: current node (w9mpjhuju7nyewmg8043ypctf) is now a manager.
 
@@ -418,7 +418,7 @@ docker swarm join \
     172.31.64.18:2377
 ```
 
-Output
+Output:
 ```
 This node joined a swarm as a worker.
 ```
@@ -436,7 +436,7 @@ On the Swarm manager `aws01`, verify that your swarm is running.
 docker node ls
 ```
 
-Output
+Output:
 ```sh
 ID                            HOSTNAME            STATUS              AVAILABILITY        MANAGER STATUS
 ghzapjsto20c6d6l3n0m91zev     aws02               Ready               Active
