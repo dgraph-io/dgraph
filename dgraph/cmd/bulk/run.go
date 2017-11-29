@@ -95,7 +95,7 @@ func run() {
 		DgraphsDir:    viper.GetString("out"),
 		TmpDir:        viper.GetString("tmp"),
 		NumGoroutines: viper.GetInt("num_go_routines"),
-		MapBufSize:    viper.GetInt("mapoutput_mb"),
+		MapBufSize:    int64(viper.GetInt("mapoutput_mb")),
 		ExpandEdges:   viper.GetBool("expand_edges"),
 		SkipMapPhase:  viper.GetBool("skip_map_phase"),
 		CleanupTmp:    viper.GetBool("cleanup_tmp"),
