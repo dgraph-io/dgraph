@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-sleepTime=5
+sleepTime=11
 if [[ "$TRAVIS" == true ]]; then
   sleepTime=30
 fi

@@ -338,11 +338,7 @@ func (s *Server) Connect(ctx context.Context,
 		}
 	}
 	// Create a connection and check validity of the address by doing an Echo.
-	pl := conn.Get().Connect(m.Addr)
-	pl.UpdateHealthStatus()
-	if !pl.IsHealthy() { // Throw error if user specifies wrong my address.
-		return &emptyConnectionState, errInvalidAddress
-	}
+	conn.Get().Connect(m.Addr)
 
 	createProposal := func() *intern.ZeroProposal {
 		s.Lock()
