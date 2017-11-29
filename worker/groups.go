@@ -251,7 +251,7 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 	}
 	for _, member := range g.state.Removed {
 		if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-			g.Node.ProposePeerRemoval(context.Background(), member.Id)
+			go g.Node.ProposePeerRemoval(context.Background(), member.Id)
 		}
 		// Each node should have different id and address.
 		conn.Get().Remove(member.Addr)
