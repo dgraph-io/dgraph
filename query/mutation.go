@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -88,13 +89,17 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 }
 
 func verifyUid(uid uint64) error {
-	maxLeaseId := worker.MaxLeaseId()
-	// 10000 is margin for error. maxLeaseId is updated by Zero over stream so there might be some
-	// delay.
-	if uid > (maxLeaseId + 10000) {
-		return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, maxLeaseId)
+	var lease uint64
+	for wait := 16 * time.Millisecond; wait <= 512*time.Millisecond; wait *= 2 {
+		// Wait for membership state to catch up before declaring that the uid
+		// is definitely greater than the lease.
+		lease = worker.MaxLeaseId()
+		if uid <= lease {
+			return nil
+		}
+		time.Sleep(wait)
 	}
-	return nil
+	return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
 }
 
 func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
