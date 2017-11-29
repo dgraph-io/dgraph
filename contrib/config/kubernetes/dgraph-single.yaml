@@ -20,7 +20,7 @@ spec:
     command:
       - "/bin/bash"
       - "-ecx"
-      - "exec /usr/local/bin/dgraph zero --port_offset -2000 --my=localhost:5080"
+      - "dgraph zero --port_offset -2000 --my=localhost:5080"
 
   - name: server
     image: dgraph/dgraph:test
@@ -33,4 +33,4 @@ spec:
     command:
       - "/bin/bash"
       - "-ecx"
-      - "exec /usr/local/bin/dgraph server --my=localhost:7080 --memory_mb=2048 --zero=localhost:5080"
+      - "dgraph server --my=localhost:7080 --memory_mb=2048 --zero=localhost:5080"
