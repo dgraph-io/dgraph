@@ -57,13 +57,13 @@ type TLSHelperConfig struct {
 
 func RegisterTLSFlags(flag *pflag.FlagSet) {
 	// TODO: Why is the naming of the flags inconsistent here?
-	flag.Bool(&conf.CertRequired, "tls_on", false, "Use TLS connections with clients.")
-	flag.String(&conf.Cert, "tls_cert", "", "Certificate file path.")
-	flag.String(&conf.Key, "tls_cert_key", "", "Certificate key file path.")
-	flag.String(&conf.KeyPassphrase, "tls_cert_key_passphrase", "", "Certificate key passphrase.")
-	flag.Bool(&conf.UseSystemClientCACerts, "tls_use_system_ca", false, "Include System CA into CA Certs.")
-	flag.String(&conf.MinVersion, "tls_min_version", "TLS11", "TLS min version.")
-	flag.String(&conf.MaxVersion, "tls_max_version", "TLS12", "TLS max version.")
+	flag.Bool("tls_on", false, "Use TLS connections with clients.")
+	flag.String("tls_cert", "", "Certificate file path.")
+	flag.String("tls_cert_key", "", "Certificate key file path.")
+	flag.String("tls_cert_key_passphrase", "", "Certificate key passphrase.")
+	flag.Bool("tls_use_system_ca", false, "Include System CA into CA Certs.")
+	flag.String("tls_min_version", "TLS11", "TLS min version.")
+	flag.String("tls_max_version", "TLS12", "TLS max version.")
 }
 
 func LoadTLSConfig(conf *TLSHelperConfig) {

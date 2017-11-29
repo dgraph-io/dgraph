@@ -319,7 +319,7 @@ func run() {
 		numRdf:     viper.GetInt("batch"),
 		clientDir:  viper.GetString("xidmap"),
 	}
-	x.LoadTLSConfig(tlsConf)
+	x.LoadTLSConfig(&tlsConf)
 	tlsConf.Insecure = viper.GetBool("tls_insecure")
 	tlsConf.RootCACerts = viper.GetString("tls_ca_certs")
 	tlsConf.ServerName = viper.GetString("tls_server_name")

@@ -40,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type options struct {
@@ -56,17 +57,17 @@ var opts options
 
 func init() {
 	flag := ZeroCmd.Flags()
-	flag.BoolVar(&opts.bindall, "bindall", true,
+	flag.Bool("bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	flag.StringVar(&opts.myAddr, "my", "",
+	flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	flag.IntVarP(&opts.portOffset, "port_offset", "o", 0,
+	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=7080, HTTP=8080]")
-	flag.Uint64Var(&opts.nodeId, "idx", 1, "Unique node index for this server.")
-	flag.IntVar(&opts.numReplicas, "replicas", 1, "How many replicas to run per data shard."+
+	flag.Uint64("idx", 1, "Unique node index for this server.")
+	flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
-	flag.StringVar(&opts.peer, "peer", "", "Address of another dgraphzero server.")
-	flag.StringVarP(&opts.w, "wal", "w", "zw", "Directory storing WAL.")
+	flag.String("peer", "", "Address of another dgraphzero server.")
+	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
@@ -199,6 +200,16 @@ instances to achieve high-availability.
 }
 
 func run() {
+	opts = options{
+		bindall:     viper.GetBool("bindall"),
+		myAddr:      viper.GetString("my"),
+		portOffset:  viper.GetInt("port_offset"),
+		nodeId:      uint64(viper.GetInt("idx")),
+		numReplicas: viper.GetInt("replicas"),
+		peer:        viper.GetString("peer"),
+		w:           viper.GetString("wal"),
+	}
+
 	grpc.EnableTracing = false
 
 	addr := "localhost"
