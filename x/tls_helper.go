@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 type tlsConfigType int8
@@ -54,14 +55,25 @@ type TLSHelperConfig struct {
 	MaxVersion             string
 }
 
-func SetTLSFlags(conf *TLSHelperConfig, flag *pflag.FlagSet) {
-	flag.BoolVar(&conf.CertRequired, "tls.on", false, "Use TLS connections with clients.")
-	flag.StringVar(&conf.Cert, "tls.cert", "", "Certificate file path.")
-	flag.StringVar(&conf.Key, "tls.cert_key", "", "Certificate key file path.")
-	flag.StringVar(&conf.KeyPassphrase, "tls.cert_key_passphrase", "", "Certificate key passphrase.")
-	flag.BoolVar(&conf.UseSystemClientCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
-	flag.StringVar(&conf.MinVersion, "tls.min_version", "TLS11", "TLS min version.")
-	flag.StringVar(&conf.MaxVersion, "tls.max_version", "TLS12", "TLS max version.")
+func RegisterTLSFlags(flag *pflag.FlagSet) {
+	// TODO: Why is the naming of the flags inconsistent here?
+	flag.Bool(&conf.CertRequired, "tls_on", false, "Use TLS connections with clients.")
+	flag.String(&conf.Cert, "tls_cert", "", "Certificate file path.")
+	flag.String(&conf.Key, "tls_cert_key", "", "Certificate key file path.")
+	flag.String(&conf.KeyPassphrase, "tls_cert_key_passphrase", "", "Certificate key passphrase.")
+	flag.Bool(&conf.UseSystemClientCACerts, "tls_use_system_ca", false, "Include System CA into CA Certs.")
+	flag.String(&conf.MinVersion, "tls_min_version", "TLS11", "TLS min version.")
+	flag.String(&conf.MaxVersion, "tls_max_version", "TLS12", "TLS max version.")
+}
+
+func LoadTLSConfig(conf *TLSHelperConfig) {
+	conf.CertRequired = viper.GetBool("tls_on")
+	conf.Cert = viper.GetString("tls_cert")
+	conf.Key = viper.GetString("tls_cert_key")
+	conf.KeyPassphrase = viper.GetString("tls_cert_key_passphrase")
+	conf.UseSystemClientCACerts = viper.GetBool("tls_use_system_ca")
+	conf.MinVersion = viper.GetString("tls_min_version")
+	conf.MaxVersion = viper.GetString("tls_max_version")
 }
 
 func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error) {

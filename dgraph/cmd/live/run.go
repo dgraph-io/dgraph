@@ -49,6 +49,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type options struct {
@@ -66,21 +67,21 @@ var tlsConf x.TLSHelperConfig
 
 func init() {
 	flag := LiveCmd.Flags()
-	flag.StringVarP(&opt.files, "rdfs", "r", "", "Location of rdf files to load")
-	flag.StringVarP(&opt.schemaFile, "schema", "s", "", "Location of schema file")
-	flag.StringVarP(&opt.dgraph, "dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	flag.StringVarP(&opt.zero, "zero", "z", "127.0.0.1:7080", "Dgraphzero gRPC server address")
-	flag.IntVarP(&opt.concurrent, "conc", "c", 1,
+	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
+	flag.StringP("schema", "s", "", "Location of schema file")
+	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
+	flag.StringP("zero", "z", "127.0.0.1:7080", "Dgraphzero gRPC server address")
+	flag.IntP("conc", "c", 1,
 		"Number of concurrent requests to make to Dgraph")
-	flag.IntVarP(&opt.numRdf, "batch", "b", 10000,
+	flag.IntP("batch", "b", 10000,
 		"Number of RDF N-Quads to send as part of a mutation.")
-	flag.StringVarP(&opt.clientDir, "xidmap", "x", "x", "Directory to store xid to uid mapping")
+	flag.StringP("xidmap", "x", "x", "Directory to store xid to uid mapping")
 
 	// TLS configuration
-	x.SetTLSFlags(&tlsConf, flag)
-	flag.BoolVar(&tlsConf.Insecure, "tls.insecure", false, "Skip certificate validation (insecure)")
-	flag.StringVar(&tlsConf.RootCACerts, "tls.ca_certs", "", "CA Certs file path.")
-	flag.StringVar(&tlsConf.ServerName, "tls.server_name", "", "Server name.")
+	x.RegisterTLSFlags(flag)
+	flag.Bool("tls_insecure", false, "Skip certificate validation (insecure)")
+	flag.String("tls_root_ca_certs", "", "CA Certs file path.")
+	flag.String("tls_server_name", "", "Server name.")
 }
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -309,6 +310,20 @@ var LiveCmd = &cobra.Command{
 }
 
 func run() {
+	opt = options{
+		files:      viper.GetString("rdfs"),
+		schemaFile: viper.GetString("schema"),
+		dgraph:     viper.GetString("dgraph"),
+		zero:       viper.GetString("zero"),
+		concurrent: viper.GetInt("conc"),
+		numRdf:     viper.GetInt("batch"),
+		clientDir:  viper.GetString("xidmap"),
+	}
+	x.LoadTLSConfig(tlsConf)
+	tlsConf.Insecure = viper.GetBool("tls_insecure")
+	tlsConf.RootCACerts = viper.GetString("tls_root_ca_certs")
+	tlsConf.ServerName = viper.GetString("tls_server_name")
+
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{

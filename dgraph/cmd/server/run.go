@@ -106,7 +106,7 @@ func init() {
 		"Allow trace endpoint to be accessible from remote")
 
 	// TLS configurations
-	x.SetTLSFlags(&tlsConf, flag)
+	x.RegisterTLSFlags(&tlsConf, flag)
 	flag.StringVar(&tlsConf.ClientAuth, "tls.client_auth", "", "Enable TLS client authentication")
 	flag.StringVar(&tlsConf.ClientCACerts, "tls.ca_certs", "", "CA Certs file path.")
 	tlsConf.ConfigType = x.TLSServerConfig
