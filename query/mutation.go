@@ -91,6 +91,8 @@ func verifyUid(ctx context.Context, uid uint64) error {
 	if uid <= worker.MaxLeaseId() {
 		return nil
 	}
+	// Even though the uid is above the max lease id, it might just be because
+	// the membership state has fallen behind. Update the state and try again.
 	if err := worker.UpdateMembershipState(ctx); err != nil {
 		return x.Wrapf(err, "updating error state")
 	}
