@@ -51,7 +51,7 @@ type scheduler struct {
 func (s *scheduler) init(n *node) {
 	s.n = n
 	s.tasks = make(map[uint32][]*task)
-	s.tch = make(chan *task, 1000)
+	s.tch = make(chan *task, 10000)
 	for i := 0; i < 1000; i++ {
 		go s.processTasks()
 	}
