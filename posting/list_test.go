@@ -448,10 +448,7 @@ func TestAddMutation_gru2(t *testing.T) {
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
 
-		merged, err := ol.SyncIfDirty(true)
 		ol.CommitMutation(context.Background(), 3, uint64(4))
-		require.Equal(t, err, errUncommitted)
-		require.False(t, merged)
 	}
 
 	// Posting list should just have the new tag.

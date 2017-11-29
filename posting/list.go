@@ -742,9 +742,9 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	if len(l.mlayer) == 0 && l.plist != emptyList {
 		return false, nil
 	}
-	if delFromCache && len(l.activeTxns) > 0 {
+	if delFromCache {
 		// Don't evict if there is pending transaction.
-		return false, errUncommitted
+		x.AssertTrue(len(l.activeTxns) == 0)
 	}
 
 	minTs := l.minTs
