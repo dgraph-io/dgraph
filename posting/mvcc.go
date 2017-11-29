@@ -232,7 +232,6 @@ func (t *Txn) fill(ctx *api.TxnContext) {
 func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	tx.Lock()
 	defer tx.Unlock()
-	x.AssertTrue(!tx.ShouldAbort())
 
 	txn := pstore.NewTransactionAt(commitTs, true)
 	defer txn.Discard()
