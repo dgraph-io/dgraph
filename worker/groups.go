@@ -220,7 +220,7 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
-func ForceStateUpdate(ctx context.Context) error {
+func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.AnyServer(0)
 	if p == nil {

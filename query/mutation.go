@@ -91,7 +91,7 @@ func verifyUid(ctx context.Context, uid uint64) error {
 	if uid <= worker.MaxLeaseId() {
 		return nil
 	}
-	if err := worker.ForceStateUpdate(ctx); err != nil {
+	if err := worker.UpdateMembershipState(ctx); err != nil {
 		return x.Wrapf(err, "updating error state")
 	}
 	if lease := worker.MaxLeaseId(); uid > lease {
