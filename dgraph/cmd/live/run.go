@@ -32,6 +32,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -128,6 +129,17 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 }
 
 func (l *loader) uid(val string) (string, error) {
+	// Attempt to parse as a UID (in the same format that dgraph outputs - a
+	// hex number prefixed by "0x"). If parsing succeeds, then this is assumed
+	// to be an existing node in the graph. There is limited protection against
+	// a user selecting an unassigned UID in this way - it may be assigned
+	// later to another node. It is up to the user to avoid this.
+	if strings.HasPrefix(val, "0x") {
+		if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
+			return val, nil
+		}
+	}
+
 	uid, _, err := l.alloc.AssignUid(val)
 	return fmt.Sprintf("%#x", uint64(uid)), err
 }
