@@ -321,7 +321,7 @@ func run() {
 	}
 	x.LoadTLSConfig(tlsConf)
 	tlsConf.Insecure = viper.GetBool("tls_insecure")
-	tlsConf.RootCACerts = viper.GetString("tls_root_ca_certs")
+	tlsConf.RootCACerts = viper.GetString("tls_ca_certs")
 	tlsConf.ServerName = viper.GetString("tls_server_name")
 
 	go http.ListenAndServe("localhost:6060", nil)
