@@ -51,7 +51,7 @@ echo -e "\nRunning dgraph live."
 
 rm -rf $BUILD/xiddir
 pushd dgraph &> /dev/null
-./dgraph live -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9081,127.0.0.1:9082" -z "127.0.0.1:7080" -c 1 -b 10000 -x $BUILD/xiddir
+./dgraph live -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9081,127.0.0.1:9082" -z "127.0.0.1:7080" -c 100 -b 1000 -x $BUILD/xiddir
 popd &> /dev/null
 
 # Restart Dgraph so that we are sure that index keys are persisted.

@@ -52,13 +52,14 @@ import (
 )
 
 type options struct {
-	files      string
-	schemaFile string
-	dgraph     string
-	zero       string
-	concurrent int
-	numRdf     int
-	clientDir  string
+	files               string
+	schemaFile          string
+	dgraph              string
+	zero                string
+	concurrent          int
+	numRdf              int
+	clientDir           string
+	ignoreIndexConflict bool
 }
 
 var opt options
@@ -75,6 +76,8 @@ func init() {
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntVarP(&opt.numRdf, "batch", "b", 10000,
 		"Number of RDF N-Quads to send as part of a mutation.")
+	flag.BoolVarP(&opt.ignoreIndexConflict, "ignore_index_conflict", "i", true,
+		"Ignores conflicts on index keys during transaction")
 
 	// TLS configuration
 	x.SetTLSFlags(&tlsConf, flag)
