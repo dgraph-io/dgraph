@@ -74,13 +74,15 @@ func Execute() {
 }
 
 func init() {
-	RootCmd.AddCommand(bulk.BulkCmd)
-	RootCmd.AddCommand(live.LiveCmd)
-	RootCmd.AddCommand(server.ServerCmd)
-	RootCmd.AddCommand(zero.ZeroCmd)
-
 	viper.SetEnvPrefix("DGRAPH")
 	viper.AutomaticEnv()
+
+	for _, cmd := range []*cobra.Command{
+		bulk.BulkCmd, live.LiveCmd, server.ServerCmd, zero.ZeroCmd,
+	} {
+		RootCmd.AddCommand(cmd)
+		viper.BindPFlags(cmd.Flags())
+	}
 
 	RootCmd.PersistentFlags().String("profile_mode", "",
 		"Enable profiling mode, one of [cpu, mem, mutex, block]")

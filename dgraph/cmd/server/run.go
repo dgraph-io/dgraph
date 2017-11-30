@@ -117,8 +117,6 @@ func init() {
 	// UI assets dir
 	flag.String("ui", "/usr/local/share/dgraph/assets",
 		"Directory which contains assets for the user interface")
-
-	viper.BindPFlags(flag)
 }
 
 func setupCustomTokenizers() {

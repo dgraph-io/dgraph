@@ -74,8 +74,6 @@ func init() {
 		"Number of reduce shards. This determines the number of dgraph instances in the final "+
 			"cluster. Increasing this potentially decreases the reduce stage runtime by using "+
 			"more parallelism, but increases memory usage.")
-
-	viper.BindPFlags(flag)
 }
 
 var BulkCmd = &cobra.Command{
