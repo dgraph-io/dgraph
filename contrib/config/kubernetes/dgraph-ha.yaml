@@ -6,10 +6,6 @@ metadata:
     app: dgraph
 spec:
   ports:
-  - port: 5080
-    targetPort: 5080
-    name: grpc
-
   - port: 8080
     targetPort: 8080
     name: http
