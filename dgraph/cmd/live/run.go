@@ -82,6 +82,8 @@ func init() {
 	flag.Bool("tls_insecure", false, "Skip certificate validation (insecure)")
 	flag.String("tls_root_ca_certs", "", "CA Certs file path.")
 	flag.String("tls_server_name", "", "Server name.")
+
+	viper.BindPFlags(flag)
 }
 
 // Reads a single line from a buffered reader. The line is read into the

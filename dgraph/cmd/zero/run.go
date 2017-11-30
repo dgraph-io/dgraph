@@ -68,6 +68,8 @@ func init() {
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
+
+	viper.BindPFlags(flag)
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {

@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -58,77 +59,68 @@ var (
 func init() {
 	defaults := edgraph.DefaultConfig
 	flag := ServerCmd.Flags()
-	flag.StringVarP(&config.PostingDir, "postings", "p", defaults.PostingDir,
+	flag.StringP("postings", "p", defaults.PostingDir,
 		"Directory to store posting lists.")
-	flag.StringVar(&config.PostingTables, "posting_tables", defaults.PostingTables,
+	flag.String("posting_tables", defaults.PostingTables,
 		"Specifies how Badger LSM tree is stored. Options are loadtoram, memorymap and "+
 			"fileio; which consume most to least RAM while providing best to worst "+
 			"performance respectively.")
-	flag.StringVarP(&config.WALDir, "wal", "w", defaults.WALDir,
+	flag.StringP("wal", "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")
-	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
+	flag.Bool("nomutations", defaults.Nomutations,
 		"Don't allow mutations on this server.")
 
-	flag.StringVar(&config.ExportPath, "export", defaults.ExportPath,
+	flag.String("export", defaults.ExportPath,
 		"Folder in which to store exports.")
-	flag.IntVar(&config.NumPendingProposals, "pending_proposals", defaults.NumPendingProposals,
+	flag.Int("pending_proposals", defaults.NumPendingProposals,
 		"Number of pending mutation proposals. Useful for rate limiting.")
-	flag.Float64Var(&config.Tracing, "trace", defaults.Tracing,
+	flag.Float64("trace", defaults.Tracing,
 		"The ratio of queries to trace.")
-	flag.StringVar(&config.MyAddr, "my", defaults.MyAddr,
+	flag.String("my", defaults.MyAddr,
 		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
-	flag.StringVar(&config.ZeroAddr, "zero", defaults.ZeroAddr,
+	flag.String("zero", defaults.ZeroAddr,
 		"IP_ADDRESS:PORT of Dgraph zero.")
-	flag.Uint64Var(&config.RaftId, "idx", 0,
+	flag.Uint64("idx", 0,
 		"Optional Raft ID that this server will use to join RAFT groups.")
-	flag.Uint64Var(&config.MaxPendingCount, "sc", defaults.MaxPendingCount,
+	flag.Uint64("sc", defaults.MaxPendingCount,
 		"Max number of pending entries in wal after which snapshot is taken")
-	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
+	flag.Bool("expand_edge", defaults.ExpandEdge,
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
 
-	flag.Float64Var(&config.AllottedMemory, "memory_mb", defaults.AllottedMemory,
+	flag.Float64("memory_mb", defaults.AllottedMemory,
 		"Estimated memory the process can take. "+
 			"Actual usage would be slightly more than specified here.")
 
-	flag.StringVar(&config.ConfigFile, "config", defaults.ConfigFile,
+	flag.String("config", defaults.ConfigFile,
 		"YAML configuration file containing dgraph settings.")
-	flag.BoolVar(&config.DebugMode, "debugmode", defaults.DebugMode,
+	flag.Bool("debugmode", defaults.DebugMode,
 		"enable debug mode for more debug information")
 
 	// Useful for running multiple servers on the same machine.
-	flag.IntVarP(&x.Config.PortOffset, "port_offset", "o", 0,
+	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	flag.BoolVar(&bindall, "bindall", true,
+	flag.Bool("bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	flag.BoolVar(&exposeTrace, "expose_trace", false,
+	flag.Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
 
 	// TLS configurations
 	x.RegisterTLSFlags(flag)
-	flag.StringVar(&tlsConf.ClientAuth, "tls.client_auth", "", "Enable TLS client authentication")
-	flag.StringVar(&tlsConf.ClientCACerts, "tls.ca_certs", "", "CA Certs file path.")
+	flag.String("tls.client_auth", "", "Enable TLS client authentication")
+	flag.String("tls.ca_certs", "", "CA Certs file path.")
 	tlsConf.ConfigType = x.TLSServerConfig
 
 	//Custom plugins.
-	flag.StringVar(&customTokenizers, "custom_tokenizers", "",
+	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
 	// UI assets dir
-	flag.StringVar(&uiDir, "ui", "/usr/local/share/dgraph/assets",
+	flag.String("ui", "/usr/local/share/dgraph/assets",
 		"Directory which contains assets for the user interface")
 
-	// Read from config file before setting config.
-	if config.ConfigFile != "" {
-		x.Println("Loading configuration from file:", config.ConfigFile)
-		x.LoadConfigFromYAML(config.ConfigFile)
-	}
-	// Lets check version flag before we SetConfiguration because we validate AllottedMemory in
-	// SetConfiguration.
-	if x.Config.Version {
-		x.PrintVersionOnly()
-	}
+	viper.BindPFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -296,6 +288,31 @@ var ServerCmd = &cobra.Command{
 }
 
 func run() {
+	config := edgraph.Options{
+		PostingDir:          viper.GetString("postings"),
+		PostingTables:       viper.GetString("posting_tables"),
+		WALDir:              viper.GetString("wal"),
+		Nomutations:         viper.GetBool("nomutations"),
+		AllottedMemory:      viper.GetFloat64("memory_mb"),
+		ExportPath:          viper.GetString("export"),
+		NumPendingProposals: viper.GetInt("pending_proposals"),
+		Tracing:             viper.GetFloat64("trace"),
+		MyAddr:              viper.GetString("my"),
+		ZeroAddr:            viper.GetString("zero"),
+		RaftId:              uint64(viper.GetInt("idx")),
+		MaxPendingCount:     uint64(viper.GetInt("sc")),
+		ExpandEdge:          viper.GetBool("expand_edge"),
+		DebugMode:           viper.GetBool("debugmode"),
+	}
+	x.Config.PortOffset = viper.GetInt("port_offset")
+	bindall = viper.GetBool("bindall")
+	exposeTrace = viper.GetBool("expose_trace")
+	x.LoadTLSConfig(&tlsConf)
+	tlsConf.ClientAuth = viper.GetString("tls_client_auth")
+	tlsConf.ClientCACerts = viper.GetString("tls_ca_certs")
+	customTokenizers = viper.GetString("custom_tokenizers")
+	uiDir = viper.GetString("ui")
+
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
 	x.Init(edgraph.Config.DebugMode)
