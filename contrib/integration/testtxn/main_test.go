@@ -435,3 +435,61 @@ func TestConflictTimeout2(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Printf("Final Response JSON: %q\n", resp.Json)
 }
+
+func TestIgnoreIndexConflict(t *testing.T) {
+	fmt.Println("TestConflict")
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, s.dg.Alter(context.Background(), op))
+
+	op = &api.Operation{}
+	op.Schema = `name: string @index(exact) .`
+	if err := s.dg.Alter(context.Background(), op); err != nil {
+		log.Fatal(err)
+	}
+
+	txn := s.dg.NewTxn()
+
+	mu := &api.Mutation{}
+	mu.SetJson = []byte(`{"name": "Manish"}`)
+	mu.IgnoreIndexConflict = true
+	assigned, err := txn.Mutate(context.Background(), mu)
+	if err != nil {
+		log.Fatalf("Error while running mutation: %v\n", err)
+	}
+	if len(assigned.Uids) != 1 {
+		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
+	}
+	var uid1, uid2 string
+	for _, u := range assigned.Uids {
+		uid1 = u
+	}
+
+	txn2 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.IgnoreIndexConflict = true
+	mu.SetJson = []byte(`{"name": "Manish"}`)
+	assigned, err = txn2.Mutate(context.Background(), mu)
+	if err != nil {
+		log.Fatalf("Error while running mutation: %v\n", err)
+	}
+	if len(assigned.Uids) != 1 {
+		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
+	}
+	for _, u := range assigned.Uids {
+		uid2 = u
+	}
+
+	require.NoError(t, txn.Commit(context.Background()))
+	require.NoError(t, txn2.Commit(context.Background()))
+
+	txn = s.dg.NewTxn()
+	q := `{ me(func: eq(name, "Manish")) { uid }}`
+	resp, err := txn.Query(context.Background(), q)
+	if err != nil {
+		log.Fatalf("Error while running query: %v\n", err)
+	}
+	expectedResp := []byte(fmt.Sprintf(`{"me":[{"uid":"%s"},{"uid":"%s"}]}`, uid1, uid2))
+	fmt.Printf("Response JSON: %q, Expected JSON: %q\n", resp.Json, expectedResp)
+	x.AssertTrue(bytes.Equal(resp.Json, expectedResp))
+}
