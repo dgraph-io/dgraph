@@ -182,6 +182,7 @@ message Mutations {
 	repeated DirectedEdge edges = 3;
 	repeated SchemaUpdate schema = 4;
 	bool DropAll = 5;
+	bool ignoreIndexConflict = 6;
 }
 
 message KeyValues {

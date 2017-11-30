@@ -52,6 +52,12 @@ cluster.
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	if err := RootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	// Flags are parsed in RootCmd.Execute
+	runtime.SetBlockProfileRate(blockRate)
 	switch profileMode {
 	case "cpu":
 		defer profile.Start(profile.CPUProfile).Stop()
@@ -60,16 +66,11 @@ func Execute() {
 	case "mutex":
 		defer profile.Start(profile.MutexProfile).Stop()
 	case "block":
-		runtime.SetBlockProfileRate(blockRate)
 		defer profile.Start(profile.BlockProfile).Stop()
 	case "":
 		// do nothing
 	default:
 		fmt.Printf("Invalid profile mode: %q\n", profileMode)
-		os.Exit(1)
-	}
-	if err := RootCmd.Execute(); err != nil {
-		fmt.Println(err)
 		os.Exit(1)
 	}
 }
