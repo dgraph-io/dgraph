@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-public
+  labels:
+    app: dgraph
+spec:
+  ports:
+  - port: 6080
+    targetPort: 6080
+    name: http
+  - port: 5080
+    targetPort: 5080
+    name: grpc
+  selector:
+    app: dgraph
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph
+  labels:
+    app: dgraph
+spec:
+  ports:
+  - port: 5080
+    targetPort: 5080
+    name: grpc
+  - port: 6080
+    targetPort: 6080
+    name: http
+  clusterIP: None
+  selector:
+    app: dgraph
+---
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: dgraph
+spec:
+  serviceName: "dgraph"
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: dgraph
+    spec:
+      containers:
+      - name: dgraph
+        image: dgraph/dgraph:test
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5080
+          name: intra-node
+        - containerPort: 6080
+          name: http
+        volumeMounts:
+        - name: datadir
+          mountPath: /dgraph
+        command:
+          - bash
+          - "-c"
+          - |
+            set -ex
+            [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+            ordinal=${BASH_REMATCH[1]}
+            idx=$(($ordinal + 1))
+            if [[ $ordinal -eq 0 ]]; then
+              dgraph zero --port_offset -2000 --my=$(hostname -f):5080
+            else
+              dgraph zero --port_offset -2000 --my=$(hostname -f):5080 --peer dgraph-0.dgraph.default.svc.cluster.local:5080 --idx $idx
+            fi
+      terminationGracePeriodSeconds: 1
+      volumes:
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: datadir
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+      annotations:
+        volume.alpha.kubernetes.io/storage-class: anything
+    spec:
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 1Gi
