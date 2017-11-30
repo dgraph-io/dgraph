@@ -6,12 +6,13 @@ metadata:
     app: dgraph
 spec:
   ports:
-  - port: 6080
-    targetPort: 6080
-    name: http
   - port: 5080
     targetPort: 5080
     name: grpc
+
+  - port: 8080
+    targetPort: 8080
+    name: http
   selector:
     app: dgraph
 ---
@@ -26,9 +27,7 @@ spec:
   - port: 5080
     targetPort: 5080
     name: grpc
-  - port: 6080
-    targetPort: 6080
-    name: http
+
   clusterIP: None
   selector:
     app: dgraph
@@ -46,14 +45,12 @@ spec:
         app: dgraph
     spec:
       containers:
-      - name: dgraph
+      - name: zero
         image: dgraph/dgraph:test
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5080
           name: intra-node
-        - containerPort: 6080
-          name: http
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -66,10 +63,22 @@ spec:
             ordinal=${BASH_REMATCH[1]}
             idx=$(($ordinal + 1))
             if [[ $ordinal -eq 0 ]]; then
-              dgraph zero --port_offset -2000 --my=$(hostname -f):5080
+              dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --idx $idx
             else
-              dgraph zero --port_offset -2000 --my=$(hostname -f):5080 --peer dgraph-0.dgraph.default.svc.cluster.local:5080 --idx $idx
+              dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --peer dgraph-0.dgraph.default.svc.cluster.local:5080 --idx $idx
             fi
+      - name: server
+        image: dgraph/dgraph:test
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - name: datadir
+          mountPath: /dgraph
+        command:
+          - bash
+          - "-c"
+          - |
+            set -ex
+            dgraph server --my=$(hostname -f):7080 --memory_mb 2048 --zero dgraph-0.dgraph.default.svc.cluster.local:5080 --debugmode
       terminationGracePeriodSeconds: 1
       volumes:
       - name: datadir
