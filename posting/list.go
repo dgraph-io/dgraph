@@ -353,9 +353,16 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	hasPendingDelete := l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
 		bytes.Equal(t.Value, []byte(x.Star))
 
-	ignoreConflict := t.Attr == "_predicate_" ||
-		(txn.IgnoreIndexConflict && !x.Parse(l.key).IsData())
-	if !ignoreConflict && (hasPendingDelete || txn.StartTs < l.commitTs) {
+	doAbort := hasPendingDelete || txn.StartTs < l.commitTs
+	ignoreConflict := false
+	if t.Attr == "_predicate_" {
+		doAbort = false
+		ignoreConflict = true
+	} else if txn.IgnoreIndexConflict && !x.Parse(l.key).IsData() {
+		doAbort = false
+		ignoreConflict = true
+	}
+	if doAbort {
 		txn.SetAbort()
 		return false, y.ErrConflict
 	}
