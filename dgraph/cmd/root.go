@@ -42,6 +42,7 @@ graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.
 ` + x.BuildDetails(),
+	PersistentPreRunE: cobra.NoArgs,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -69,7 +70,6 @@ func init() {
 		&bulk.Bulk, &live.Live, &server.Server, &zero.Zero,
 	}
 	for _, sc := range subcommands {
-		sc.Cmd.PreRunE = cobra.NoArgs
 		RootCmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()
 		sc.Conf.BindPFlags(sc.Cmd.Flags())
