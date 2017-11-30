@@ -69,6 +69,7 @@ func init() {
 		&bulk.Bulk, &live.Live, &server.Server, &zero.Zero,
 	}
 	for _, sc := range subcommands {
+		sc.Cmd.PreRunE = cobra.NoArgs
 		RootCmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()
 		sc.Conf.BindPFlags(sc.Cmd.Flags())
