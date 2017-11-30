@@ -20,13 +20,16 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/server"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -47,30 +50,24 @@ cluster.
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-
-	// TODO: Logic for starting stopping shouldn't be run here. Must be run
-	// after the config has been loaded.
-
-	fmt.Println("[Execute]")
-	//profileMode := viper.GetString("profile_mode")
-	//switch profileMode {
-	//case "cpu":
-	//	defer profile.Start(profile.CPUProfile).Stop()
-	//case "mem":
-	//	defer profile.Start(profile.MemProfile).Stop()
-	//case "mutex":
-	//	defer profile.Start(profile.MutexProfile).Stop()
-	//case "block":
-	//	blockRate := viper.GetInt("block_rate")
-	//	runtime.SetBlockProfileRate(blockRate)
-	//	defer profile.Start(profile.BlockProfile).Stop()
-	//case "":
-	//	// do nothing
-	//default:
-	//	fmt.Printf("Invalid profile mode: %q\n", profileMode)
-	//	os.Exit(1)
-	//}
-
+	profileMode := viper.GetString("profile_mode")
+	switch profileMode {
+	case "cpu":
+		defer profile.Start(profile.CPUProfile).Stop()
+	case "mem":
+		defer profile.Start(profile.MemProfile).Stop()
+	case "mutex":
+		defer profile.Start(profile.MutexProfile).Stop()
+	case "block":
+		blockRate := viper.GetInt("block_rate")
+		runtime.SetBlockProfileRate(blockRate)
+		defer profile.Start(profile.BlockProfile).Stop()
+	case "":
+		// do nothing
+	default:
+		fmt.Printf("Invalid profile mode: %q\n", profileMode)
+		os.Exit(1)
+	}
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -86,27 +83,28 @@ func init() {
 	viper.SetEnvPrefix("DGRAPH")
 	viper.AutomaticEnv()
 
-	cobra.OnInitialize(func() {
-		fmt.Println("[OnInitialize]")
-		fmt.Printf("Config: IsSet:%t Value:%q\n", viper.IsSet("config"), viper.GetString("config"))
-		cfg := viper.GetString("config")
-		if cfg == "" {
-			return
-		}
+	RootCmd.PersistentFlags().String("profile_mode", "",
+		"Enable profiling mode, one of [cpu, mem, mutex, block]")
+	RootCmd.PersistentFlags().Int("block_rate", 0,
+		"Block profiling rate. Must be used along with block profile_mode")
+	RootCmd.PersistentFlags().String("config", "",
+		"Configuration file. Takes precedence over default values, but is "+
+			"overridden to values set with environment variables and flags.")
+
+	// ParseFlags so that we can immediately so we know where to find the
+	// config file.
+	if err := RootCmd.ParseFlags(os.Args); err != nil && err != pflag.ErrHelp {
+		fmt.Println("Could not parse flags:", err)
+		os.Exit(1)
+	}
+	// Bind the flags here and access config location via viper, in case the
+	// user specified the config file using an environment variable.
+	viper.BindPFlags(RootCmd.Flags())
+	if cfg := viper.GetString("config"); cfg != "" {
 		viper.SetConfigFile(cfg)
 		if err := viper.ReadInConfig(); err != nil {
 			fmt.Println("Could not read config:", err)
 			os.Exit(1)
 		}
-	})
-
-	fmt.Println("[init]")
-	RootCmd.PersistentFlags().String("profile_mode", "",
-		"Enable profiling mode, one of [cpu, mem, mutex, block]")
-	RootCmd.PersistentFlags().Int("block_rate", 0,
-		"Block profiling rate. Must be used along with block profile_mode")
-	RootCmd.PersistentFlags().StringP("config", "c", "",
-		"Configuration file. Takes precedence over default values, but is "+
-			"overridden to values set with environment variables and flags.")
-	viper.BindPFlags(RootCmd.PersistentFlags())
+	}
 }

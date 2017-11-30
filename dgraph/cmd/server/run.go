@@ -252,7 +252,7 @@ func setupServer() {
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if
-	// our url path matches it, we want to serve index.html.
+	// our url path matches it, we wan't to serve index.html.
 	reg := regexp.MustCompile(`\/0[xX][0-9a-fA-F]+`)
 	http.Handle("/", homeHandler(http.FileServer(http.Dir(uiDir)), reg))
 	http.HandleFunc("/ui/keywords", keywordHandler)
@@ -288,8 +288,6 @@ var ServerCmd = &cobra.Command{
 }
 
 func run() {
-	fmt.Println("[run]")
-	fmt.Printf("Config: IsSet:%t Value:%q\n", viper.IsSet("config"), viper.GetString("config"))
 	config := edgraph.Options{
 		PostingDir:          viper.GetString("postings"),
 		PostingTables:       viper.GetString("posting_tables"),
