@@ -20,14 +20,12 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/server"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -49,27 +47,6 @@ cluster.
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	// TODO: This is a bit broken at the moment. Flags, config, and environs
-	// won't have been parsed yet. These stuff should really be done from
-	// inside the run functions.
-	profileMode := rootConf.GetString("profile_mode")
-	switch profileMode {
-	case "cpu":
-		defer profile.Start(profile.CPUProfile).Stop()
-	case "mem":
-		defer profile.Start(profile.MemProfile).Stop()
-	case "mutex":
-		defer profile.Start(profile.MutexProfile).Stop()
-	case "block":
-		blockRate := rootConf.GetInt("block_rate")
-		runtime.SetBlockProfileRate(blockRate)
-		defer profile.Start(profile.BlockProfile).Stop()
-	case "":
-		// do nothing
-	default:
-		fmt.Printf("Invalid profile mode: %q\n", profileMode)
-		os.Exit(1)
-	}
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

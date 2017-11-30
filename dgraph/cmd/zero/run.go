@@ -66,6 +66,7 @@ instance is sufficient for the cluster; however, one can run multiple Zero
 instances to achieve high-availability.
 `,
 		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Zero.Conf).Stop()
 			run()
 		},
 	}

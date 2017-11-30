@@ -40,6 +40,7 @@ func init() {
 		Use:   "bulk",
 		Short: "Run Dgraph bulk loader",
 		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Bulk.Conf).Stop()
 			if len(args) > 0 {
 				fmt.Fprintf(os.Stderr, "No free args allowed, but got: %v\n", args)
 				os.Exit(1)

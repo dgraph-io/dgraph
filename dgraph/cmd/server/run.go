@@ -63,6 +63,7 @@ func init() {
 		Short: "Run Dgraph data server",
 		Long:  "Run Dgraph data server",
 		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Server.Conf).Stop()
 			run()
 		},
 	}
