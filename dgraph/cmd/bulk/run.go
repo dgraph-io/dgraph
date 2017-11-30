@@ -31,11 +31,25 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
+var Bulk x.SubCommand
+
 func init() {
-	flag := BulkCmd.Flags()
+	Bulk.Cmd = &cobra.Command{
+		Use:   "bulk",
+		Short: "Run Dgraph bulk loader",
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) > 0 {
+				fmt.Fprintf(os.Stderr, "No free args allowed, but got: %v\n", args)
+				os.Exit(1)
+			}
+			run()
+		},
+	}
+	Bulk.EnvPrefix = "DGRAPH_BULK"
+
+	flag := Bulk.Cmd.Flags()
 	flag.StringP("rdfs", "r", "",
 		"Directory containing *.rdf or *.rdf.gz files to load.")
 	flag.StringP("schema_file", "s", "",
@@ -76,36 +90,24 @@ func init() {
 			"more parallelism, but increases memory usage.")
 }
 
-var BulkCmd = &cobra.Command{
-	Use:   "bulk",
-	Short: "Run Dgraph bulk loader",
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) > 0 {
-			fmt.Fprintf(os.Stderr, "No free args allowed, but got: %v\n", args)
-			os.Exit(1)
-		}
-		run()
-	},
-}
-
 func run() {
 	opt := options{
-		RDFDir:        viper.GetString("rdfs"),
-		SchemaFile:    viper.GetString("schema_file"),
-		DgraphsDir:    viper.GetString("out"),
-		TmpDir:        viper.GetString("tmp"),
-		NumGoroutines: viper.GetInt("num_go_routines"),
-		MapBufSize:    int64(viper.GetInt("mapoutput_mb")),
-		ExpandEdges:   viper.GetBool("expand_edges"),
-		SkipMapPhase:  viper.GetBool("skip_map_phase"),
-		CleanupTmp:    viper.GetBool("cleanup_tmp"),
-		NumShufflers:  viper.GetInt("shufflers"),
-		Version:       viper.GetBool("version"),
-		StoreXids:     viper.GetBool("store_xids"),
-		ZeroAddr:      viper.GetString("zero_addr"),
-		HttpAddr:      viper.GetString("http"),
-		MapShards:     viper.GetInt("map_shards"),
-		ReduceShards:  viper.GetInt("reduce_shards"),
+		RDFDir:        Bulk.Conf.GetString("rdfs"),
+		SchemaFile:    Bulk.Conf.GetString("schema_file"),
+		DgraphsDir:    Bulk.Conf.GetString("out"),
+		TmpDir:        Bulk.Conf.GetString("tmp"),
+		NumGoroutines: Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:    int64(Bulk.Conf.GetInt("mapoutput_mb")),
+		ExpandEdges:   Bulk.Conf.GetBool("expand_edges"),
+		SkipMapPhase:  Bulk.Conf.GetBool("skip_map_phase"),
+		CleanupTmp:    Bulk.Conf.GetBool("cleanup_tmp"),
+		NumShufflers:  Bulk.Conf.GetInt("shufflers"),
+		Version:       Bulk.Conf.GetBool("version"),
+		StoreXids:     Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:      Bulk.Conf.GetString("zero_addr"),
+		HttpAddr:      Bulk.Conf.GetString("http"),
+		MapShards:     Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:  Bulk.Conf.GetInt("reduce_shards"),
 	}
 
 	if opt.Version {

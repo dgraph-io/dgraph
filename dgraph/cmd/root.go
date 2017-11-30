@@ -49,7 +49,10 @@ cluster.
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	profileMode := viper.GetString("profile_mode")
+	// TODO: This is a bit broken at the moment. Flags, config, and environs
+	// won't have been parsed yet. These stuff should really be done from
+	// inside the run functions.
+	profileMode := rootConf.GetString("profile_mode")
 	switch profileMode {
 	case "cpu":
 		defer profile.Start(profile.CPUProfile).Stop()
@@ -58,7 +61,7 @@ func Execute() {
 	case "mutex":
 		defer profile.Start(profile.MutexProfile).Stop()
 	case "block":
-		blockRate := viper.GetInt("block_rate")
+		blockRate := rootConf.GetInt("block_rate")
 		runtime.SetBlockProfileRate(blockRate)
 		defer profile.Start(profile.BlockProfile).Stop()
 	case "":
@@ -73,17 +76,9 @@ func Execute() {
 	}
 }
 
+var rootConf = viper.New()
+
 func init() {
-	viper.SetEnvPrefix("DGRAPH")
-	viper.AutomaticEnv()
-
-	for _, cmd := range []*cobra.Command{
-		bulk.BulkCmd, live.LiveCmd, server.ServerCmd, zero.ZeroCmd,
-	} {
-		RootCmd.AddCommand(cmd)
-		viper.BindPFlags(cmd.Flags())
-	}
-
 	RootCmd.PersistentFlags().String("profile_mode", "",
 		"Enable profiling mode, one of [cpu, mem, mutex, block]")
 	RootCmd.PersistentFlags().Int("block_rate", 0,
@@ -91,15 +86,27 @@ func init() {
 	RootCmd.PersistentFlags().String("config", "",
 		"Configuration file. Takes precedence over default values, but is "+
 			"overridden to values set with environment variables and flags.")
-	viper.BindPFlags(RootCmd.PersistentFlags())
+	rootConf.BindPFlags(RootCmd.PersistentFlags())
 
+	var subcommands = []*x.SubCommand{
+		&bulk.Bulk, &live.Live, &server.Server, &zero.Zero,
+	}
+	for _, sc := range subcommands {
+		RootCmd.AddCommand(sc.Cmd)
+		sc.Conf = viper.New()
+		sc.Conf.BindPFlags(sc.Cmd.Flags())
+		sc.Conf.BindPFlags(RootCmd.PersistentFlags())
+		sc.Conf.AutomaticEnv()
+		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
+	}
 	cobra.OnInitialize(func() {
-		if cfg := viper.GetString("config"); cfg != "" {
-			viper.SetConfigFile(cfg)
-			if err := viper.ReadInConfig(); err != nil {
-				fmt.Println("Could not read config:", err)
-				os.Exit(1)
-			}
+		cfg := rootConf.GetString("config")
+		if cfg == "" {
+			return
+		}
+		for _, sc := range subcommands {
+			sc.Conf.SetConfigFile(cfg)
+			x.Check(x.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
 		}
 	})
 }

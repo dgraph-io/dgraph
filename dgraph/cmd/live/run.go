@@ -49,7 +49,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 type options struct {
@@ -65,8 +64,19 @@ type options struct {
 var opt options
 var tlsConf x.TLSHelperConfig
 
+var Live x.SubCommand
+
 func init() {
-	flag := LiveCmd.Flags()
+	Live.Cmd = &cobra.Command{
+		Use:   "live",
+		Short: "Run Dgraph live loader",
+		Run: func(cmd *cobra.Command, args []string) {
+			run()
+		},
+	}
+	Live.EnvPrefix = "DGRAPH_LIVE"
+
+	flag := Live.Cmd.Flags()
 	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
@@ -301,28 +311,20 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	return l
 }
 
-var LiveCmd = &cobra.Command{
-	Use:   "live",
-	Short: "Run Dgraph live loader",
-	Run: func(cmd *cobra.Command, args []string) {
-		run()
-	},
-}
-
 func run() {
 	opt = options{
-		files:      viper.GetString("rdfs"),
-		schemaFile: viper.GetString("schema"),
-		dgraph:     viper.GetString("dgraph"),
-		zero:       viper.GetString("zero"),
-		concurrent: viper.GetInt("conc"),
-		numRdf:     viper.GetInt("batch"),
-		clientDir:  viper.GetString("xidmap"),
+		files:      Live.Conf.GetString("rdfs"),
+		schemaFile: Live.Conf.GetString("schema"),
+		dgraph:     Live.Conf.GetString("dgraph"),
+		zero:       Live.Conf.GetString("zero"),
+		concurrent: Live.Conf.GetInt("conc"),
+		numRdf:     Live.Conf.GetInt("batch"),
+		clientDir:  Live.Conf.GetString("xidmap"),
 	}
-	x.LoadTLSConfig(&tlsConf)
-	tlsConf.Insecure = viper.GetBool("tls_insecure")
-	tlsConf.RootCACerts = viper.GetString("tls_ca_certs")
-	tlsConf.ServerName = viper.GetString("tls_server_name")
+	x.LoadTLSConfig(&tlsConf, Live.Conf)
+	tlsConf.Insecure = Live.Conf.GetBool("tls_insecure")
+	tlsConf.RootCACerts = Live.Conf.GetString("tls_ca_certs")
+	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()

@@ -66,14 +66,14 @@ func RegisterTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_max_version", "TLS12", "TLS max version.")
 }
 
-func LoadTLSConfig(conf *TLSHelperConfig) {
-	conf.CertRequired = viper.GetBool("tls_on")
-	conf.Cert = viper.GetString("tls_cert")
-	conf.Key = viper.GetString("tls_cert_key")
-	conf.KeyPassphrase = viper.GetString("tls_cert_key_passphrase")
-	conf.UseSystemClientCACerts = viper.GetBool("tls_use_system_ca")
-	conf.MinVersion = viper.GetString("tls_min_version")
-	conf.MaxVersion = viper.GetString("tls_max_version")
+func LoadTLSConfig(conf *TLSHelperConfig, v *viper.Viper) {
+	conf.CertRequired = v.GetBool("tls_on")
+	conf.Cert = v.GetString("tls_cert")
+	conf.Key = v.GetString("tls_cert_key")
+	conf.KeyPassphrase = v.GetString("tls_cert_key_passphrase")
+	conf.UseSystemClientCACerts = v.GetBool("tls_use_system_ca")
+	conf.MinVersion = v.GetString("tls_min_version")
+	conf.MaxVersion = v.GetString("tls_max_version")
 }
 
 func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error) {

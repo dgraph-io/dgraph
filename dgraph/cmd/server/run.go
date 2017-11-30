@@ -44,7 +44,6 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -56,9 +55,21 @@ var (
 	uiDir            string
 )
 
+var Server x.SubCommand
+
 func init() {
+	Server.Cmd = &cobra.Command{
+		Use:   "server",
+		Short: "Run Dgraph data server",
+		Long:  "Run Dgraph data server",
+		Run: func(cmd *cobra.Command, args []string) {
+			run()
+		},
+	}
+	Server.EnvPrefix = "DGRAPH_SERVER"
+
 	defaults := edgraph.DefaultConfig
-	flag := ServerCmd.Flags()
+	flag := Server.Cmd.Flags()
 	flag.StringP("postings", "p", defaults.PostingDir,
 		"Directory to store posting lists.")
 	flag.String("posting_tables", defaults.PostingTables,
@@ -274,40 +285,31 @@ func setupServer() {
 
 var sdCh chan os.Signal
 
-var ServerCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Run Dgraph data server",
-	Long:  "Run Dgraph data server",
-	Run: func(cmd *cobra.Command, args []string) {
-		run()
-	},
-}
-
 func run() {
 	config := edgraph.Options{
-		PostingDir:          viper.GetString("postings"),
-		PostingTables:       viper.GetString("posting_tables"),
-		WALDir:              viper.GetString("wal"),
-		Nomutations:         viper.GetBool("nomutations"),
-		AllottedMemory:      viper.GetFloat64("memory_mb"),
-		ExportPath:          viper.GetString("export"),
-		NumPendingProposals: viper.GetInt("pending_proposals"),
-		Tracing:             viper.GetFloat64("trace"),
-		MyAddr:              viper.GetString("my"),
-		ZeroAddr:            viper.GetString("zero"),
-		RaftId:              uint64(viper.GetInt("idx")),
-		MaxPendingCount:     uint64(viper.GetInt("sc")),
-		ExpandEdge:          viper.GetBool("expand_edge"),
-		DebugMode:           viper.GetBool("debugmode"),
+		PostingDir:          Server.Conf.GetString("postings"),
+		PostingTables:       Server.Conf.GetString("posting_tables"),
+		WALDir:              Server.Conf.GetString("wal"),
+		Nomutations:         Server.Conf.GetBool("nomutations"),
+		AllottedMemory:      Server.Conf.GetFloat64("memory_mb"),
+		ExportPath:          Server.Conf.GetString("export"),
+		NumPendingProposals: Server.Conf.GetInt("pending_proposals"),
+		Tracing:             Server.Conf.GetFloat64("trace"),
+		MyAddr:              Server.Conf.GetString("my"),
+		ZeroAddr:            Server.Conf.GetString("zero"),
+		RaftId:              uint64(Server.Conf.GetInt("idx")),
+		MaxPendingCount:     uint64(Server.Conf.GetInt("sc")),
+		ExpandEdge:          Server.Conf.GetBool("expand_edge"),
+		DebugMode:           Server.Conf.GetBool("debugmode"),
 	}
-	x.Config.PortOffset = viper.GetInt("port_offset")
-	bindall = viper.GetBool("bindall")
-	exposeTrace = viper.GetBool("expose_trace")
-	x.LoadTLSConfig(&tlsConf)
-	tlsConf.ClientAuth = viper.GetString("tls_client_auth")
-	tlsConf.ClientCACerts = viper.GetString("tls_ca_certs")
-	customTokenizers = viper.GetString("custom_tokenizers")
-	uiDir = viper.GetString("ui")
+	x.Config.PortOffset = Server.Conf.GetInt("port_offset")
+	bindall = Server.Conf.GetBool("bindall")
+	exposeTrace = Server.Conf.GetBool("expose_trace")
+	x.LoadTLSConfig(&tlsConf, Server.Conf)
+	tlsConf.ClientAuth = Server.Conf.GetString("tls_client_auth")
+	tlsConf.ClientCACerts = Server.Conf.GetString("tls_ca_certs")
+	customTokenizers = Server.Conf.GetString("custom_tokenizers")
+	uiDir = Server.Conf.GetString("ui")
 
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()

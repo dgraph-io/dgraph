@@ -40,7 +40,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 type options struct {
@@ -55,8 +54,24 @@ type options struct {
 
 var opts options
 
+var Zero x.SubCommand
+
 func init() {
-	flag := ZeroCmd.Flags()
+	Zero.Cmd = &cobra.Command{
+		Use:   "zero",
+		Short: "Run Dgraph zero server",
+		Long: `
+A Dgraph zero instance manages the Dgraph cluster.  Typically, a single Zero
+instance is sufficient for the cluster; however, one can run multiple Zero
+instances to achieve high-availability.
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			run()
+		},
+	}
+	Zero.EnvPrefix = "DGRAPH_ZERO"
+
+	flag := Zero.Cmd.Flags()
 	flag.Bool("bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.String("my", "",
@@ -186,28 +201,15 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var ZeroCmd = &cobra.Command{
-	Use:   "zero",
-	Short: "Run Dgraph zero server",
-	Long: `
-A Dgraph zero instance manages the Dgraph cluster.  Typically, a single Zero
-instance is sufficient for the cluster; however, one can run multiple Zero
-instances to achieve high-availability.
-`,
-	Run: func(cmd *cobra.Command, args []string) {
-		run()
-	},
-}
-
 func run() {
 	opts = options{
-		bindall:     viper.GetBool("bindall"),
-		myAddr:      viper.GetString("my"),
-		portOffset:  viper.GetInt("port_offset"),
-		nodeId:      uint64(viper.GetInt("idx")),
-		numReplicas: viper.GetInt("replicas"),
-		peer:        viper.GetString("peer"),
-		w:           viper.GetString("wal"),
+		bindall:     Zero.Conf.GetBool("bindall"),
+		myAddr:      Zero.Conf.GetString("my"),
+		portOffset:  Zero.Conf.GetInt("port_offset"),
+		nodeId:      uint64(Zero.Conf.GetInt("idx")),
+		numReplicas: Zero.Conf.GetInt("replicas"),
+		peer:        Zero.Conf.GetString("peer"),
+		w:           Zero.Conf.GetString("wal"),
 	}
 
 	grpc.EnableTracing = false
