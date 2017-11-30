@@ -47,12 +47,9 @@ import (
 )
 
 var (
-	bindall          bool
-	exposeTrace      bool
-	customTokenizers string
-	config           edgraph.Options
-	tlsConf          x.TLSHelperConfig
-	uiDir            string
+	bindall bool
+	config  edgraph.Options
+	tlsConf x.TLSHelperConfig
 )
 
 var Server x.SubCommand
@@ -132,6 +129,7 @@ func init() {
 }
 
 func setupCustomTokenizers() {
+	customTokenizers = Server.Conf.GetString("custom_tokenizers")
 	if customTokenizers == "" {
 		return
 	}
@@ -262,7 +260,8 @@ func setupServer() {
 	// Share urls have a hex string as the shareId. So if
 	// our url path matches it, we wan't to serve index.html.
 	reg := regexp.MustCompile(`\/0[xX][0-9a-fA-F]+`)
-	http.Handle("/", homeHandler(http.FileServer(http.Dir(uiDir)), reg))
+	uiDir := http.Dir(Server.Conf.GetString("ui"))
+	http.Handle("/", homeHandler(http.FileServer(uiDir), reg))
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.
@@ -305,12 +304,9 @@ func run() {
 	}
 	x.Config.PortOffset = Server.Conf.GetInt("port_offset")
 	bindall = Server.Conf.GetBool("bindall")
-	exposeTrace = Server.Conf.GetBool("expose_trace")
 	x.LoadTLSConfig(&tlsConf, Server.Conf)
 	tlsConf.ClientAuth = Server.Conf.GetString("tls_client_auth")
 	tlsConf.ClientCACerts = Server.Conf.GetString("tls_ca_certs")
-	customTokenizers = Server.Conf.GetString("custom_tokenizers")
-	uiDir = Server.Conf.GetString("ui")
 
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
@@ -321,7 +317,7 @@ func run() {
 		x.Check(edgraph.State.Dispose())
 	}()
 
-	if exposeTrace {
+	if Server.Conf.GetBool("expose_trace") {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
