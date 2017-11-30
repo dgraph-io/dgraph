@@ -191,6 +191,17 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		mu.CommitNow = c
 	}
 
+	ignoreIndexConflict := r.Header.Get("X-Dgraph-IgnoreIndexConflict")
+	if ignoreIndexConflict != "" {
+		ignore, err := strconv.ParseBool(ignoreIndexConflict)
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest,
+				"Error while parsing IgnoreIndexConflict header as bool")
+			return
+		}
+		mu.IgnoreIndexConflict = ignore
+	}
+
 	ts, err := extractStartTs(r.URL.Path)
 	if err != nil {
 		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)

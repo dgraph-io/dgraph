@@ -181,7 +181,8 @@ message Mutations {
 	uint64 start_ts = 2;
 	repeated DirectedEdge edges = 3;
 	repeated SchemaUpdate schema = 4;
-	bool DropAll = 5;
+	bool drop_all = 5;
+	bool ignore_index_conflict = 6;
 }
 
 message KeyValues {

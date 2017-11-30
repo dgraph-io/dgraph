@@ -225,7 +225,11 @@ func NewPosting(t *intern.DirectedEdge) *intern.Posting {
 }
 
 func (l *List) EstimatedSize() int32 {
-	return atomic.LoadInt32(&l.estimatedSize)
+	size := atomic.LoadInt32(&l.estimatedSize)
+	if size < 0 {
+		return 0
+	}
+	return size
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
@@ -348,7 +352,17 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	// We can have atmax one pending <s> <p> * mutation.
 	hasPendingDelete := l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
 		bytes.Equal(t.Value, []byte(x.Star))
-	if hasPendingDelete || txn.StartTs < l.commitTs {
+
+	doAbort := hasPendingDelete || txn.StartTs < l.commitTs
+	ignoreConflict := false
+	if t.Attr == "_predicate_" {
+		doAbort = false
+		ignoreConflict = true
+	} else if txn.IgnoreIndexConflict && !x.Parse(l.key).IsData() {
+		doAbort = false
+		ignoreConflict = true
+	}
+	if doAbort {
 		txn.SetAbort()
 		return false, y.ErrConflict
 	}
@@ -394,7 +408,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 		}
 	}
 	l.activeTxns[txn.StartTs] = struct{}{}
-	txn.AddDelta(l.key, mpost)
+	txn.AddDelta(l.key, mpost, ignoreConflict)
 	return hasMutated, nil
 }
 
@@ -417,8 +431,9 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 		if mpost.StartTs != startTs {
 			l.mlayer[midx] = mpost
 			midx++
+		} else {
+			atomic.AddInt32(&l.estimatedSize, -1*int32(mpost.Size()+16 /* various overhead */))
 		}
-		atomic.AddInt32(&l.estimatedSize, -1*int32(mpost.Size()+16 /* various overhead */))
 	}
 	l.mlayer = l.mlayer[:midx]
 	delete(l.activeTxns, startTs)

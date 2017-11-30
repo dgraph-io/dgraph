@@ -208,8 +208,9 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 	m := proposal.Mutations
 	pctx := s.n.props.pctx(proposal.Id)
 	txn := &posting.Txn{
-		StartTs: m.StartTs,
-		Indices: []uint64{index},
+		StartTs:             m.StartTs,
+		Indices:             []uint64{index},
+		IgnoreIndexConflict: m.IgnoreIndexConflict,
 	}
 	pctx.txn = posting.Txns().PutOrMergeIndex(txn)
 	for _, edge := range m.Edges {
