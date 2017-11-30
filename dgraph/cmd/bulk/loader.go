@@ -116,7 +116,7 @@ func getWriteTimestamp(zero intern.ZeroClient) uint64 {
 		if err == nil {
 			return ts.GetStartId()
 		}
-		x.Printf("error communicating with dgraph zero, retrying:", err)
+		x.Printf("error communicating with dgraph zero, retrying: %v", err)
 		time.Sleep(time.Second)
 	}
 }
