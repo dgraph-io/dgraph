@@ -29,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -90,21 +89,15 @@ func init() {
 	RootCmd.PersistentFlags().String("config", "",
 		"Configuration file. Takes precedence over default values, but is "+
 			"overridden to values set with environment variables and flags.")
+	viper.BindPFlags(RootCmd.PersistentFlags())
 
-	// ParseFlags so that we can immediately so we know where to find the
-	// config file.
-	if err := RootCmd.ParseFlags(os.Args); err != nil && err != pflag.ErrHelp {
-		fmt.Println("Could not parse flags:", err)
-		os.Exit(1)
-	}
-	// Bind the flags here and access config location via viper, in case the
-	// user specified the config file using an environment variable.
-	viper.BindPFlags(RootCmd.Flags())
-	if cfg := viper.GetString("config"); cfg != "" {
-		viper.SetConfigFile(cfg)
-		if err := viper.ReadInConfig(); err != nil {
-			fmt.Println("Could not read config:", err)
-			os.Exit(1)
+	cobra.OnInitialize(func() {
+		if cfg := viper.GetString("config"); cfg != "" {
+			viper.SetConfigFile(cfg)
+			if err := viper.ReadInConfig(); err != nil {
+				fmt.Println("Could not read config:", err)
+				os.Exit(1)
+			}
 		}
-	}
+	})
 }

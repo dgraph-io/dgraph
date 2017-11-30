@@ -92,8 +92,6 @@ func init() {
 		"Estimated memory the process can take. "+
 			"Actual usage would be slightly more than specified here.")
 
-	flag.String("config", defaults.ConfigFile,
-		"YAML configuration file containing dgraph settings.")
 	flag.Bool("debugmode", defaults.DebugMode,
 		"enable debug mode for more debug information")
 
