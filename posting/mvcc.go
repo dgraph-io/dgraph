@@ -56,11 +56,13 @@ func Txns() *transactions {
 }
 
 type delta struct {
-	key     []byte
-	posting *intern.Posting
+	key            []byte
+	posting        *intern.Posting
+	ignoreConflict bool // Ignore for conflict detection.
 }
 type Txn struct {
-	StartTs uint64
+	StartTs             uint64
+	IgnoreIndexConflict bool
 
 	// atomic
 	shouldAbort uint32
@@ -208,10 +210,10 @@ func (t *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
 
-func (t *Txn) AddDelta(key []byte, p *intern.Posting) {
+func (t *Txn) AddDelta(key []byte, p *intern.Posting, ignore bool) {
 	t.Lock()
 	defer t.Unlock()
-	t.deltas = append(t.deltas, delta{key: key, posting: p})
+	t.deltas = append(t.deltas, delta{key: key, posting: p, ignoreConflict: ignore})
 }
 
 func (t *Txn) Fill(ctx *api.TxnContext) {
@@ -223,6 +225,9 @@ func (t *Txn) Fill(ctx *api.TxnContext) {
 func (t *Txn) fill(ctx *api.TxnContext) {
 	ctx.StartTs = t.StartTs
 	for _, d := range t.deltas {
+		if d.ignoreConflict {
+			continue // Ignore for conflict detection.
+		}
 		fp := farm.Fingerprint64(d.key)
 		ctx.Keys = append(ctx.Keys, strconv.FormatUint(fp, 36))
 	}

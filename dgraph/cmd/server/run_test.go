@@ -175,7 +175,7 @@ func runQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, err := mutationWithTs(m, true, 0)
+	_, _, err := mutationWithTs(m, true, false, 0)
 	return err
 }
 

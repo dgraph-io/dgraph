@@ -57,7 +57,8 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 	return string(output), startTs, err
 }
 
-func mutationWithTs(m string, commitNow bool, ts uint64) ([]string, uint64, error) {
+func mutationWithTs(m string, commitNow bool, ignoreIndexConflict bool,
+	ts uint64) ([]string, uint64, error) {
 	url := "/mutate"
 	if ts != 0 {
 		url += "/" + strconv.FormatUint(ts, 10)
@@ -70,6 +71,9 @@ func mutationWithTs(m string, commitNow bool, ts uint64) ([]string, uint64, erro
 
 	if commitNow {
 		req.Header.Set("X-Dgraph-CommitNow", "true")
+	}
+	if ignoreIndexConflict {
+		req.Header.Set("X-Dgraph-IgnoreIndexConflict", "true")
 	}
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(mutationHandler)
@@ -150,10 +154,10 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	keys, mts, err := mutationWithTs(m1, false, ts)
+	keys, mts, err := mutationWithTs(m1, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	expected := []string{"16zy665614irg", "1ep5ewu298spd", "2oz0ld779a6yh", "2oz0ld779a6yh", "321112eei4n9g", "321112eei4n9g", "3fk4wxiwz6h3r", "3mlibw7eeno0x", "u5ausuvjgdwg", "u5ausuvjgdwg", "u5ausuvjgdwg"}
+	expected := []string{"321112eei4n9g", "321112eei4n9g", "3fk4wxiwz6h3r", "3mlibw7eeno0x"}
 	sort.Strings(expected)
 	sort.Strings(keys)
 	require.Equal(t, expected, keys)

@@ -174,7 +174,10 @@ func setup(c *client.Dgraph, sentences []string) []string {
 	}
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
-	assigned, err := txn.Mutate(ctx, &api.Mutation{SetNquads: []byte(rdfs)})
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		IgnoreIndexConflict: true,
+		SetNquads:           []byte(rdfs),
+	})
 	x.Check(err)
 	x.Check(txn.Commit(ctx))
 
@@ -225,7 +228,10 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 		node1, *decode.Node1[0].Sentence,
 		node2, *decode.Node2[0].Sentence,
 	)
-	if _, err := txn.Mutate(ctx, &api.Mutation{DelNquads: []byte(delRDFs)}); err != nil {
+	if _, err := txn.Mutate(ctx, &api.Mutation{
+		IgnoreIndexConflict: true,
+		DelNquads:           []byte(delRDFs),
+	}); err != nil {
 		atomic.AddUint64(&failCount, 1)
 		return
 	}
@@ -237,7 +243,10 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 	`,
 		node1, node2,
 	)
-	if _, err := txn.Mutate(ctx, &api.Mutation{SetNquads: []byte(garbageRDFs)}); err != nil {
+	if _, err := txn.Mutate(ctx, &api.Mutation{
+		IgnoreIndexConflict: true,
+		SetNquads:           []byte(garbageRDFs),
+	}); err != nil {
 		atomic.AddUint64(&failCount, 1)
 		return
 	}
@@ -250,7 +259,10 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 		node1, *decode.Node2[0].Sentence,
 		node2, *decode.Node1[0].Sentence,
 	)
-	if _, err := txn.Mutate(ctx, &api.Mutation{SetNquads: []byte(rdfs)}); err != nil {
+	if _, err := txn.Mutate(ctx, &api.Mutation{
+		IgnoreIndexConflict: true,
+		SetNquads:           []byte(rdfs),
+	}); err != nil {
 		atomic.AddUint64(&failCount, 1)
 		return
 	}

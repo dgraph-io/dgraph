@@ -52,13 +52,14 @@ import (
 )
 
 type options struct {
-	files      string
-	schemaFile string
-	dgraph     string
-	zero       string
-	concurrent int
-	numRdf     int
-	clientDir  string
+	files               string
+	schemaFile          string
+	dgraph              string
+	zero                string
+	concurrent          int
+	numRdf              int
+	clientDir           string
+	ignoreIndexConflict bool
 }
 
 var opt options
@@ -87,6 +88,8 @@ func init() {
 	flag.IntP("batch", "b", 10000,
 		"Number of RDF N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "x", "Directory to store xid to uid mapping")
+	flag.BoolP("ignore_index_conflict", "i", true,
+		"Ignores conflicts on index keys during transaction")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -314,13 +317,14 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 
 func run() {
 	opt = options{
-		files:      Live.Conf.GetString("rdfs"),
-		schemaFile: Live.Conf.GetString("schema"),
-		dgraph:     Live.Conf.GetString("dgraph"),
-		zero:       Live.Conf.GetString("zero"),
-		concurrent: Live.Conf.GetInt("conc"),
-		numRdf:     Live.Conf.GetInt("batch"),
-		clientDir:  Live.Conf.GetString("xidmap"),
+		files:               Live.Conf.GetString("rdfs"),
+		schemaFile:          Live.Conf.GetString("schema"),
+		dgraph:              Live.Conf.GetString("dgraph"),
+		zero:                Live.Conf.GetString("zero"),
+		concurrent:          Live.Conf.GetInt("conc"),
+		numRdf:              Live.Conf.GetInt("batch"),
+		clientDir:           Live.Conf.GetString("xidmap"),
+		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf)
 	tlsConf.Insecure = Live.Conf.GetBool("tls_insecure")
