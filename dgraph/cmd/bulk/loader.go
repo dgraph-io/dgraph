@@ -109,11 +109,16 @@ func newLoader(opt options) *loader {
 }
 
 func getWriteTimestamp(zero intern.ZeroClient) uint64 {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	ts, err := zero.Timestamps(ctx, &intern.Num{Val: 1})
-	x.Check(x.Wrapf(err, "error communicating with dgraphzero, is it running?"))
-	return ts.GetStartId()
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ts, err := zero.Timestamps(ctx, &intern.Num{Val: 1})
+		cancel()
+		if err == nil {
+			return ts.GetStartId()
+		}
+		x.Printf("error communicating with dgraph zero, retrying: %v", err)
+		time.Sleep(time.Second)
+	}
 }
 
 func readSchema(filename string) []*intern.SchemaUpdate {
