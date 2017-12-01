@@ -9,6 +9,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Added
 
 * Support for alias while asking for facets.
+* Support for general configuration via environment variables and configuration files.
 
 ### Fixed
 
