@@ -1,3 +1,6 @@
+# This is the service that should be used by the clients of Dgraph to talk to the server.
+# It exposes a ClusterIP that will automatically load balance connections the the different Dgraph
+# Servers.
 apiVersion: v1
 kind: Service
 metadata:
@@ -5,13 +8,22 @@ metadata:
   labels:
     app: dgraph
 spec:
+  type: LoadBalancer
   ports:
+    #  - port: 5080
+    #    targetPort: 5080
+    #    name: zero-grpc
   - port: 8080
     targetPort: 8080
     name: http
+  - port: 9080
+    targetPort: 9080
+    name: grpc
   selector:
     app: dgraph
 ---
+# This is a headless service which is neccessary for discovery for a StatefulSet.
+# https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
 apiVersion: v1
 kind: Service
 metadata:
@@ -28,6 +40,7 @@ spec:
   selector:
     app: dgraph
 ---
+# This StatefulSet runs 3 replicas of Zero and Server.
 apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:
@@ -40,13 +53,24 @@ spec:
       labels:
         app: dgraph
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - dgraph
       containers:
       - name: zero
         image: dgraph/dgraph:test
         imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 5080
-          name: intra-node
+        #      ports:
+        #      - containerPort: 5080
+        #        name: intra-node
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -75,11 +99,11 @@ spec:
           - |
             set -ex
             dgraph server --my=$(hostname -f):7080 --memory_mb 2048 --zero dgraph-0.dgraph.default.svc.cluster.local:5080 --debugmode
-      terminationGracePeriodSeconds: 1
+      terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir
         persistentVolumeClaim:
-          claimName: datadir
+          claimName: dummy
   updateStrategy:
     type: RollingUpdate
   volumeClaimTemplates:
