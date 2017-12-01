@@ -79,12 +79,12 @@ type loader struct {
 	*state
 	mappers []*mapper
 	xidDB   *badger.DB
+	zero    *grpc.ClientConn
 }
 
 func newLoader(opt options) *loader {
-	zeroConn, err := grpc.Dial(opt.ZeroAddr, grpc.WithInsecure())
+	zero, err := grpc.Dial(opt.ZeroAddr, grpc.WithInsecure())
 	x.Check(err)
-	zero := intern.NewZeroClient(zeroConn)
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),
@@ -97,6 +97,7 @@ func newLoader(opt options) *loader {
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
+		zero:    zero,
 	}
 	for i := 0; i < opt.NumGoroutines; i++ {
 		ld.mappers[i] = newMapper(st)
@@ -105,10 +106,11 @@ func newLoader(opt options) *loader {
 	return ld
 }
 
-func getWriteTimestamp(zero intern.ZeroClient) uint64 {
+func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
+	client := intern.NewZeroClient(zero)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ts, err := zero.Timestamps(ctx, &intern.Num{Val: 1})
+		ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
 		cancel()
 		if err == nil {
 			return ts.GetStartId()
@@ -200,7 +202,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, xidmap.Options{
+	ld.xids = xidmap.New(ld.xidDB, ld.zero, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})

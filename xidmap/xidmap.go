@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 	"google.golang.org/grpc"
@@ -91,12 +91,12 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		xm.shards[i].xm = xm
 	}
 	go func() {
-		zc := protos.NewZeroClient(zero)
+		zc := intern.NewZeroClient(zero)
 		const initBackoff = 10 * time.Millisecond
 		const maxBackoff = 30 * time.Second
 		backoff := initBackoff
 		for {
-			assigned, err := zc.AssignUids(context.Background(), &protos.Num{Val: 10000})
+			assigned, err := zc.AssignUids(context.Background(), &intern.Num{Val: 10000})
 			if err != nil {
 				x.Printf("Error while getting lease: %v\n", err)
 				backoff *= 2

@@ -150,7 +150,7 @@ func (l *loader) uid(val string) string {
 	// later to another node. It is up to the user to avoid this.
 	if strings.HasPrefix(val, "0x") {
 		if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
-			return val, nil
+			return val
 		}
 	}
 
