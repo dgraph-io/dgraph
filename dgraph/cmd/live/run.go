@@ -94,7 +94,7 @@ func init() {
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
 	flag.Bool("tls_insecure", false, "Skip certificate validation (insecure)")
-	flag.String("tls_root_ca_certs", "", "CA Certs file path.")
+	flag.String("tls_ca_certs", "", "CA Certs file path.")
 	flag.String("tls_server_name", "", "Server name.")
 }
 
