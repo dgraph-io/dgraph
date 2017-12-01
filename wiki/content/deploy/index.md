@@ -801,65 +801,65 @@ Following configuration options are available for the server:
 
 ```sh
 # Use TLS connections with clients.
-tls.on
+tls_on
 
 # CA Certs file path.
-tls.ca_certs string
+tls_ca_certs string
 
 # Include System CA into CA Certs.
-tls.use_system_ca
+tls_use_system_ca
 
 # Certificate file path.
-tls.cert string
+tls_cert string
 
 # Certificate key file path.
-tls.cert_key string
+tls_cert_key string
 
 # Certificate key passphrase.
-tls.cert_key_passphrase string
+tls_cert_key_passphrase string
 
 # Enable TLS client authentication
-tls.client_auth string
+tls_client_auth string
 
 # TLS max version. (default "TLS12")
-tls.max_version string
+tls_max_version string
 
 # TLS min version. (default "TLS11")
-tls.min_version string
+tls_min_version string
 ```
 
 Dgraph loader can be configured with following options:
 
 ```sh
 # Use TLS connections.
-tls.on
+tls_on
 
 # CA Certs file path.
-tls.ca_certs string
+tls_ca_certs string
 
 # Include System CA into CA Certs.
-tls.use_system_ca
+tls_use_system_ca
 
 # Certificate file path.
-tls.cert string
+tls_cert string
 
 # Certificate key file path.
-tls.cert_key string
+tls_cert_key string
 
 # Certificate key passphrase.
-tls.cert_key_passphrase string
+tls_cert_key_passphrase string
 
 # Server name.
-tls.server_name string
+tls_server_name string
 
 # Skip certificate validation (insecure)
-tls.insecure
+tls_insecure
 
 # TLS max version. (default "TLS12")
-tls.max_version string
+tls_max_version string
 
 # TLS min version. (default "TLS11")
-tls.min_version string
+tls_min_version string
 ```
 
 
