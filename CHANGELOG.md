@@ -6,10 +6,13 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+## [0.9.3] - 2017-12-01
+
 ### Added
 
 * Support for alias while asking for facets.
 * Support for general configuration via environment variables and configuration files.
+* `IgnoreIndexConflict` field in Txn which allows ignoring conflicts on index keys.
 
 ### Fixed
 
@@ -22,6 +25,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Abort if CommitNow flag is set and the mutation fails.
 * Live loader treats subjects/predicates that look like UIDs as existing nodes
   rather than new nodes.
+* Fix bug in `@groupby` queries where predicate was converted to lower case in queries.
 
 ### Changed
 
@@ -30,6 +34,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Store/Restore peer map on snapshot.
 * Fix rdfs per second reporting in live loader.
 * Fix bug in lru eviction.
+* Proto definitions are split into intern and api.
 
 ## [0.9.2] - 2017-11-20
 
