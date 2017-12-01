@@ -3,9 +3,6 @@ matrix:
     - os: linux
       go: 1.9.x
       language: go
-    - os: osx
-      language: go
-      go: 1.9.x
 
 install: contrib/scripts/install.sh
 git:
