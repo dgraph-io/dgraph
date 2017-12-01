@@ -47,91 +47,90 @@ import (
 )
 
 var (
-	bindall          bool
-	exposeTrace      bool
-	customTokenizers string
-	config           edgraph.Options
-	tlsConf          x.TLSHelperConfig
-	uiDir            string
+	bindall bool
+	config  edgraph.Options
+	tlsConf x.TLSHelperConfig
+	uiDir   string
 )
 
+var Server x.SubCommand
+
 func init() {
+	Server.Cmd = &cobra.Command{
+		Use:   "server",
+		Short: "Run Dgraph data server",
+		Long:  "Run Dgraph data server",
+		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Server.Conf).Stop()
+			run()
+		},
+	}
+	Server.EnvPrefix = "DGRAPH_SERVER"
+
 	defaults := edgraph.DefaultConfig
-	flag := ServerCmd.Flags()
-	flag.StringVarP(&config.PostingDir, "postings", "p", defaults.PostingDir,
+	flag := Server.Cmd.Flags()
+	flag.StringP("postings", "p", defaults.PostingDir,
 		"Directory to store posting lists.")
-	flag.StringVar(&config.PostingTables, "posting_tables", defaults.PostingTables,
+	flag.String("posting_tables", defaults.PostingTables,
 		"Specifies how Badger LSM tree is stored. Options are loadtoram, memorymap and "+
 			"fileio; which consume most to least RAM while providing best to worst "+
 			"performance respectively.")
-	flag.StringVarP(&config.WALDir, "wal", "w", defaults.WALDir,
+	flag.StringP("wal", "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")
-	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
+	flag.Bool("nomutations", defaults.Nomutations,
 		"Don't allow mutations on this server.")
 
-	flag.StringVar(&config.ExportPath, "export", defaults.ExportPath,
+	flag.String("export", defaults.ExportPath,
 		"Folder in which to store exports.")
-	flag.IntVar(&config.NumPendingProposals, "pending_proposals", defaults.NumPendingProposals,
+	flag.Int("pending_proposals", defaults.NumPendingProposals,
 		"Number of pending mutation proposals. Useful for rate limiting.")
-	flag.Float64Var(&config.Tracing, "trace", defaults.Tracing,
+	flag.Float64("trace", defaults.Tracing,
 		"The ratio of queries to trace.")
-	flag.StringVar(&config.MyAddr, "my", defaults.MyAddr,
+	flag.String("my", defaults.MyAddr,
 		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
-	flag.StringVar(&config.ZeroAddr, "zero", defaults.ZeroAddr,
+	flag.String("zero", defaults.ZeroAddr,
 		"IP_ADDRESS:PORT of Dgraph zero.")
-	flag.Uint64Var(&config.RaftId, "idx", 0,
+	flag.Uint64("idx", 0,
 		"Optional Raft ID that this server will use to join RAFT groups.")
-	flag.Uint64Var(&config.MaxPendingCount, "sc", defaults.MaxPendingCount,
+	flag.Uint64("sc", defaults.MaxPendingCount,
 		"Max number of pending entries in wal after which snapshot is taken")
-	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
+	flag.Bool("expand_edge", defaults.ExpandEdge,
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
 
-	flag.Float64Var(&config.AllottedMemory, "memory_mb", defaults.AllottedMemory,
+	flag.Float64("memory_mb", defaults.AllottedMemory,
 		"Estimated memory the process can take. "+
 			"Actual usage would be slightly more than specified here.")
 
-	flag.StringVar(&config.ConfigFile, "config", defaults.ConfigFile,
-		"YAML configuration file containing dgraph settings.")
-	flag.BoolVar(&config.DebugMode, "debugmode", defaults.DebugMode,
+	flag.Bool("debugmode", defaults.DebugMode,
 		"enable debug mode for more debug information")
 
 	// Useful for running multiple servers on the same machine.
-	flag.IntVarP(&x.Config.PortOffset, "port_offset", "o", 0,
+	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	flag.BoolVar(&bindall, "bindall", true,
+	flag.Bool("bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	flag.BoolVar(&exposeTrace, "expose_trace", false,
+	flag.Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
 
 	// TLS configurations
-	x.SetTLSFlags(&tlsConf, flag)
-	flag.StringVar(&tlsConf.ClientAuth, "tls.client_auth", "", "Enable TLS client authentication")
-	flag.StringVar(&tlsConf.ClientCACerts, "tls.ca_certs", "", "CA Certs file path.")
+	x.RegisterTLSFlags(flag)
+	flag.String("tls_client_auth", "", "Enable TLS client authentication")
+	flag.String("tls_ca_certs", "", "CA Certs file path.")
 	tlsConf.ConfigType = x.TLSServerConfig
 
 	//Custom plugins.
-	flag.StringVar(&customTokenizers, "custom_tokenizers", "",
+	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
 	// UI assets dir
-	flag.StringVar(&uiDir, "ui", "/usr/local/share/dgraph/assets",
+	flag.String("ui", "/usr/local/share/dgraph/assets",
 		"Directory which contains assets for the user interface")
-
-	// Read from config file before setting config.
-	if config.ConfigFile != "" {
-		x.Println("Loading configuration from file:", config.ConfigFile)
-		x.LoadConfigFromYAML(config.ConfigFile)
-	}
-	// Lets check version flag before we SetConfiguration because we validate AllottedMemory in
-	// SetConfiguration.
-	if x.Config.Version {
-		x.PrintVersionOnly()
-	}
 }
 
 func setupCustomTokenizers() {
+	customTokenizers := Server.Conf.GetString("custom_tokenizers")
 	if customTokenizers == "" {
 		return
 	}
@@ -286,16 +285,30 @@ func setupServer() {
 
 var sdCh chan os.Signal
 
-var ServerCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Run Dgraph data server",
-	Long:  "Run Dgraph data server",
-	Run: func(cmd *cobra.Command, args []string) {
-		run()
-	},
-}
-
 func run() {
+	config := edgraph.Options{
+		PostingDir:          Server.Conf.GetString("postings"),
+		PostingTables:       Server.Conf.GetString("posting_tables"),
+		WALDir:              Server.Conf.GetString("wal"),
+		Nomutations:         Server.Conf.GetBool("nomutations"),
+		AllottedMemory:      Server.Conf.GetFloat64("memory_mb"),
+		ExportPath:          Server.Conf.GetString("export"),
+		NumPendingProposals: Server.Conf.GetInt("pending_proposals"),
+		Tracing:             Server.Conf.GetFloat64("trace"),
+		MyAddr:              Server.Conf.GetString("my"),
+		ZeroAddr:            Server.Conf.GetString("zero"),
+		RaftId:              uint64(Server.Conf.GetInt("idx")),
+		MaxPendingCount:     uint64(Server.Conf.GetInt("sc")),
+		ExpandEdge:          Server.Conf.GetBool("expand_edge"),
+		DebugMode:           Server.Conf.GetBool("debugmode"),
+	}
+	x.Config.PortOffset = Server.Conf.GetInt("port_offset")
+	bindall = Server.Conf.GetBool("bindall")
+	x.LoadTLSConfig(&tlsConf, Server.Conf)
+	tlsConf.ClientAuth = Server.Conf.GetString("tls_client_auth")
+	tlsConf.ClientCACerts = Server.Conf.GetString("tls_ca_certs")
+	uiDir = Server.Conf.GetString("ui")
+
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
 	x.Init(edgraph.Config.DebugMode)
@@ -305,7 +318,7 @@ func run() {
 		x.Check(edgraph.State.Dispose())
 	}()
 
-	if exposeTrace {
+	if Server.Conf.GetBool("expose_trace") {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}

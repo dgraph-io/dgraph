@@ -20,20 +20,15 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/server"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
-
-var profileMode string
-var blockRate int
-var version bool
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -47,43 +42,49 @@ graph database, it tightly controls how the data is arranged on disk to optimize
 for query performance and throughput, reducing disk seeks and network calls in a
 cluster.
 ` + x.BuildDetails(),
+	PersistentPreRunE: cobra.NoArgs,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	// TODO: Fix me, Flags are parsed in RootCmd.Execute
-	runtime.SetBlockProfileRate(blockRate)
-	switch profileMode {
-	case "cpu":
-		defer profile.Start(profile.CPUProfile).Stop()
-	case "mem":
-		defer profile.Start(profile.MemProfile).Stop()
-	case "mutex":
-		defer profile.Start(profile.MutexProfile).Stop()
-	case "block":
-		defer profile.Start(profile.BlockProfile).Stop()
-	case "":
-		// do nothing
-	default:
-		fmt.Printf("Invalid profile mode: %q\n", profileMode)
-		os.Exit(1)
-	}
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
-func init() {
-	cobra.OnInitialize()
-	RootCmd.AddCommand(bulk.BulkCmd)
-	RootCmd.AddCommand(live.LiveCmd)
-	RootCmd.AddCommand(server.ServerCmd)
-	RootCmd.AddCommand(zero.ZeroCmd)
+var rootConf = viper.New()
 
-	RootCmd.PersistentFlags().StringVar(&profileMode, "profile.mode", "",
+func init() {
+	RootCmd.PersistentFlags().String("profile_mode", "",
 		"Enable profiling mode, one of [cpu, mem, mutex, block]")
-	RootCmd.PersistentFlags().IntVar(&blockRate, "block.rate", 0,
-		"Block profiling rate. Must be used along with block profile.mode")
+	RootCmd.PersistentFlags().Int("block_rate", 0,
+		"Block profiling rate. Must be used along with block profile_mode")
+	RootCmd.PersistentFlags().String("config", "",
+		"Configuration file. Takes precedence over default values, but is "+
+			"overridden to values set with environment variables and flags.")
+	rootConf.BindPFlags(RootCmd.PersistentFlags())
+
+	var subcommands = []*x.SubCommand{
+		&bulk.Bulk, &live.Live, &server.Server, &zero.Zero,
+	}
+	for _, sc := range subcommands {
+		RootCmd.AddCommand(sc.Cmd)
+		sc.Conf = viper.New()
+		sc.Conf.BindPFlags(sc.Cmd.Flags())
+		sc.Conf.BindPFlags(RootCmd.PersistentFlags())
+		sc.Conf.AutomaticEnv()
+		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
+	}
+	cobra.OnInitialize(func() {
+		cfg := rootConf.GetString("config")
+		if cfg == "" {
+			return
+		}
+		for _, sc := range subcommands {
+			sc.Conf.SetConfigFile(cfg)
+			x.Check(x.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+		}
+	})
 }

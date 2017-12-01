@@ -42,8 +42,7 @@ type Options struct {
 	MaxPendingCount     uint64
 	ExpandEdge          bool
 
-	ConfigFile string
-	DebugMode  bool
+	DebugMode bool
 }
 
 // TODO(tzdybal) - remove global
@@ -66,8 +65,7 @@ var DefaultConfig = Options{
 	MaxPendingCount:     1000,
 	ExpandEdge:          true,
 
-	ConfigFile: "",
-	DebugMode:  false,
+	DebugMode: false,
 }
 
 // Sometimes users use config.yaml flag so /debug/vars doesn't have information about the
@@ -130,7 +128,6 @@ func SetConfiguration(newConfig Options) {
 	worker.Config.MaxPendingCount = Config.MaxPendingCount
 	worker.Config.ExpandEdge = Config.ExpandEdge
 
-	x.Config.ConfigFile = Config.ConfigFile
 	x.Config.DebugMode = Config.DebugMode
 }
 

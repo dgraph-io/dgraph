@@ -65,25 +65,37 @@ type options struct {
 var opt options
 var tlsConf x.TLSHelperConfig
 
+var Live x.SubCommand
+
 func init() {
-	flag := LiveCmd.Flags()
-	flag.StringVarP(&opt.files, "rdfs", "r", "", "Location of rdf files to load")
-	flag.StringVarP(&opt.schemaFile, "schema", "s", "", "Location of schema file")
-	flag.StringVarP(&opt.dgraph, "dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	flag.StringVarP(&opt.zero, "zero", "z", "127.0.0.1:7080", "Dgraphzero gRPC server address")
-	flag.StringVarP(&opt.clientDir, "xidmap", "x", "x", "Directory to store xid to uid mapping")
-	flag.IntVarP(&opt.concurrent, "conc", "c", 1,
+	Live.Cmd = &cobra.Command{
+		Use:   "live",
+		Short: "Run Dgraph live loader",
+		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Live.Conf).Stop()
+			run()
+		},
+	}
+	Live.EnvPrefix = "DGRAPH_LIVE"
+
+	flag := Live.Cmd.Flags()
+	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
+	flag.StringP("schema", "s", "", "Location of schema file")
+	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
+	flag.StringP("zero", "z", "127.0.0.1:7080", "Dgraphzero gRPC server address")
+	flag.IntP("conc", "c", 1,
 		"Number of concurrent requests to make to Dgraph")
-	flag.IntVarP(&opt.numRdf, "batch", "b", 10000,
+	flag.IntP("batch", "b", 10000,
 		"Number of RDF N-Quads to send as part of a mutation.")
-	flag.BoolVarP(&opt.ignoreIndexConflict, "ignore_index_conflict", "i", true,
+	flag.StringP("xidmap", "x", "x", "Directory to store xid to uid mapping")
+	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
 
 	// TLS configuration
-	x.SetTLSFlags(&tlsConf, flag)
-	flag.BoolVar(&tlsConf.Insecure, "tls.insecure", false, "Skip certificate validation (insecure)")
-	flag.StringVar(&tlsConf.RootCACerts, "tls.ca_certs", "", "CA Certs file path.")
-	flag.StringVar(&tlsConf.ServerName, "tls.server_name", "", "Server name.")
+	x.RegisterTLSFlags(flag)
+	flag.Bool("tls_insecure", false, "Skip certificate validation (insecure)")
+	flag.String("tls_ca_certs", "", "CA Certs file path.")
+	flag.String("tls_server_name", "", "Server name.")
 }
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -303,15 +315,22 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	return l
 }
 
-var LiveCmd = &cobra.Command{
-	Use:   "live",
-	Short: "Run Dgraph live loader",
-	Run: func(cmd *cobra.Command, args []string) {
-		run()
-	},
-}
-
 func run() {
+	opt = options{
+		files:               Live.Conf.GetString("rdfs"),
+		schemaFile:          Live.Conf.GetString("schema"),
+		dgraph:              Live.Conf.GetString("dgraph"),
+		zero:                Live.Conf.GetString("zero"),
+		concurrent:          Live.Conf.GetInt("conc"),
+		numRdf:              Live.Conf.GetInt("batch"),
+		clientDir:           Live.Conf.GetString("xidmap"),
+		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
+	}
+	x.LoadTLSConfig(&tlsConf, Live.Conf)
+	tlsConf.Insecure = Live.Conf.GetBool("tls_insecure")
+	tlsConf.RootCACerts = Live.Conf.GetString("tls_ca_certs")
+	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
+
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{

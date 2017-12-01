@@ -33,63 +33,80 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var opt options
+var Bulk x.SubCommand
 
 func init() {
-	flag := BulkCmd.Flags()
-	flag.StringVarP(&opt.RDFDir, "rdfs", "r", "",
+	Bulk.Cmd = &cobra.Command{
+		Use:   "bulk",
+		Short: "Run Dgraph bulk loader",
+		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Bulk.Conf).Stop()
+			run()
+		},
+	}
+	Bulk.EnvPrefix = "DGRAPH_BULK"
+
+	flag := Bulk.Cmd.Flags()
+	flag.StringP("rdfs", "r", "",
 		"Directory containing *.rdf or *.rdf.gz files to load.")
-	flag.StringVarP(&opt.SchemaFile, "schema_file", "s", "",
+	flag.StringP("schema_file", "s", "",
 		"Location of schema file to load.")
-	flag.StringVar(&opt.DgraphsDir, "out", "out",
+	flag.String("out", "out",
 		"Location to write the final dgraph data directories.")
-	flag.StringVar(&opt.TmpDir, "tmp", "tmp",
+	flag.String("tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
-	flag.IntVarP(&opt.NumGoroutines, "num_go_routines", "j", runtime.NumCPU(),
+	flag.IntP("num_go_routines", "j", runtime.NumCPU(),
 		"Number of worker threads to use (defaults to the number of logical CPUs)")
-	flag.Int64Var(&opt.MapBufSize, "mapoutput_mb", 64,
+	flag.Int64("mapoutput_mb", 64,
 		"The estimated size of each map file output. Increasing this increases memory usage.")
-	// TODO: Potentially move http server to main.
-	flag.StringVar(&opt.HttpAddr, "http", "localhost:8080",
-		"Address to serve http (pprof).")
-	flag.BoolVar(&opt.SkipMapPhase, "skip_map_phase", false,
-		"Skip the map phase (assumes that map output files already exist).")
-	flag.BoolVar(&opt.CleanupTmp, "cleanup_tmp", true,
-		"Clean up the tmp directory after the loader finishes. Setting this to false allows the"+
-			" bulk loader can be re-run while skipping the map phase.")
-	flag.BoolVar(&opt.ExpandEdges, "expand_edges", true,
+	flag.Bool("expand_edges", true,
 		"Generate edges that allow nodes to be expanded using _predicate_ or expand(...). "+
 			"Disable to increase loading speed.")
-	flag.IntVar(&opt.NumShufflers, "shufflers", 1,
+	flag.Bool("skip_map_phase", false,
+		"Skip the map phase (assumes that map output files already exist).")
+	flag.Bool("cleanup_tmp", true,
+		"Clean up the tmp directory after the loader finishes. Setting this to false allows the"+
+			" bulk loader can be re-run while skipping the map phase.")
+	flag.Int("shufflers", 1,
 		"Number of shufflers to run concurrently. Increasing this can improve performance, and "+
 			"must be less than or equal to the number of reduce shards.")
-	flag.IntVar(&opt.MapShards, "map_shards", 1,
+	flag.Bool("version", false, "Prints the version of dgraph-bulk-loader.")
+	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
+	flag.StringP("zero_addr", "z", "localhost:8888", "gRPC address for dgraphzero")
+	// TODO: Potentially move http server to main.
+	flag.String("http", "localhost:8080",
+		"Address to serve http (pprof).")
+	flag.Int("map_shards", 1,
 		"Number of map output shards. Must be greater than or equal to the number of reduce "+
 			"shards. Increasing allows more evenly sized reduce shards, at the expense of "+
 			"increased memory usage.")
-	flag.IntVar(&opt.ReduceShards, "reduce_shards", 1,
+	flag.Int("reduce_shards", 1,
 		"Number of reduce shards. This determines the number of dgraph instances in the final "+
 			"cluster. Increasing this potentially decreases the reduce stage runtime by using "+
 			"more parallelism, but increases memory usage.")
-	flag.BoolVar(&opt.Version, "version", false, "Prints the version of dgraph-bulk-loader.")
-	flag.BoolVarP(&opt.StoreXids, "store_xids", "x", false, "Generate an xid edge for each node.")
-	flag.StringVarP(&opt.ZeroAddr, "zero_addr", "z", "localhost:8888", "gRPC address for dgraphzero")
-}
-
-var BulkCmd = &cobra.Command{
-	Use:   "bulk",
-	Short: "Run Dgraph bulk loader",
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) > 0 {
-			fmt.Fprintf(os.Stderr, "No free args allowed, but got: %v\n", args)
-			os.Exit(1)
-		}
-		run()
-	},
 }
 
 func run() {
+	opt := options{
+		RDFDir:        Bulk.Conf.GetString("rdfs"),
+		SchemaFile:    Bulk.Conf.GetString("schema_file"),
+		DgraphsDir:    Bulk.Conf.GetString("out"),
+		TmpDir:        Bulk.Conf.GetString("tmp"),
+		NumGoroutines: Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:    int64(Bulk.Conf.GetInt("mapoutput_mb")),
+		ExpandEdges:   Bulk.Conf.GetBool("expand_edges"),
+		SkipMapPhase:  Bulk.Conf.GetBool("skip_map_phase"),
+		CleanupTmp:    Bulk.Conf.GetBool("cleanup_tmp"),
+		NumShufflers:  Bulk.Conf.GetInt("shufflers"),
+		Version:       Bulk.Conf.GetBool("version"),
+		StoreXids:     Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:      Bulk.Conf.GetString("zero_addr"),
+		HttpAddr:      Bulk.Conf.GetString("http"),
+		MapShards:     Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:  Bulk.Conf.GetInt("reduce_shards"),
+	}
+
 	if opt.Version {
 		x.PrintVersionOnly()
 	}

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 type tlsConfigType int8
@@ -54,14 +55,25 @@ type TLSHelperConfig struct {
 	MaxVersion             string
 }
 
-func SetTLSFlags(conf *TLSHelperConfig, flag *pflag.FlagSet) {
-	flag.BoolVar(&conf.CertRequired, "tls.on", false, "Use TLS connections with clients.")
-	flag.StringVar(&conf.Cert, "tls.cert", "", "Certificate file path.")
-	flag.StringVar(&conf.Key, "tls.cert_key", "", "Certificate key file path.")
-	flag.StringVar(&conf.KeyPassphrase, "tls.cert_key_passphrase", "", "Certificate key passphrase.")
-	flag.BoolVar(&conf.UseSystemClientCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
-	flag.StringVar(&conf.MinVersion, "tls.min_version", "TLS11", "TLS min version.")
-	flag.StringVar(&conf.MaxVersion, "tls.max_version", "TLS12", "TLS max version.")
+func RegisterTLSFlags(flag *pflag.FlagSet) {
+	// TODO: Why is the naming of the flags inconsistent here?
+	flag.Bool("tls_on", false, "Use TLS connections with clients.")
+	flag.String("tls_cert", "", "Certificate file path.")
+	flag.String("tls_cert_key", "", "Certificate key file path.")
+	flag.String("tls_cert_key_passphrase", "", "Certificate key passphrase.")
+	flag.Bool("tls_use_system_ca", false, "Include System CA into CA Certs.")
+	flag.String("tls_min_version", "TLS11", "TLS min version.")
+	flag.String("tls_max_version", "TLS12", "TLS max version.")
+}
+
+func LoadTLSConfig(conf *TLSHelperConfig, v *viper.Viper) {
+	conf.CertRequired = v.GetBool("tls_on")
+	conf.Cert = v.GetString("tls_cert")
+	conf.Key = v.GetString("tls_cert_key")
+	conf.KeyPassphrase = v.GetString("tls_cert_key_passphrase")
+	conf.UseSystemClientCACerts = v.GetBool("tls_use_system_ca")
+	conf.MinVersion = v.GetString("tls_min_version")
+	conf.MaxVersion = v.GetString("tls_max_version")
 }
 
 func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error) {

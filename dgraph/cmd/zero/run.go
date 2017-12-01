@@ -54,19 +54,36 @@ type options struct {
 
 var opts options
 
+var Zero x.SubCommand
+
 func init() {
-	flag := ZeroCmd.Flags()
-	flag.BoolVar(&opts.bindall, "bindall", true,
+	Zero.Cmd = &cobra.Command{
+		Use:   "zero",
+		Short: "Run Dgraph zero server",
+		Long: `
+A Dgraph zero instance manages the Dgraph cluster.  Typically, a single Zero
+instance is sufficient for the cluster; however, one can run multiple Zero
+instances to achieve high-availability.
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Zero.Conf).Stop()
+			run()
+		},
+	}
+	Zero.EnvPrefix = "DGRAPH_ZERO"
+
+	flag := Zero.Cmd.Flags()
+	flag.Bool("bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	flag.StringVar(&opts.myAddr, "my", "",
+	flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	flag.IntVarP(&opts.portOffset, "port_offset", "o", 0,
+	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=7080, HTTP=8080]")
-	flag.Uint64Var(&opts.nodeId, "idx", 1, "Unique node index for this server.")
-	flag.IntVar(&opts.numReplicas, "replicas", 1, "How many replicas to run per data shard."+
+	flag.Uint64("idx", 1, "Unique node index for this server.")
+	flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
-	flag.StringVar(&opts.peer, "peer", "", "Address of another dgraphzero server.")
-	flag.StringVarP(&opts.w, "wal", "w", "zw", "Directory storing WAL.")
+	flag.String("peer", "", "Address of another dgraphzero server.")
+	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
@@ -185,20 +202,17 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var ZeroCmd = &cobra.Command{
-	Use:   "zero",
-	Short: "Run Dgraph zero server",
-	Long: `
-A Dgraph zero instance manages the Dgraph cluster.  Typically, a single Zero
-instance is sufficient for the cluster; however, one can run multiple Zero
-instances to achieve high-availability.
-`,
-	Run: func(cmd *cobra.Command, args []string) {
-		run()
-	},
-}
-
 func run() {
+	opts = options{
+		bindall:     Zero.Conf.GetBool("bindall"),
+		myAddr:      Zero.Conf.GetString("my"),
+		portOffset:  Zero.Conf.GetInt("port_offset"),
+		nodeId:      uint64(Zero.Conf.GetInt("idx")),
+		numReplicas: Zero.Conf.GetInt("replicas"),
+		peer:        Zero.Conf.GetString("peer"),
+		w:           Zero.Conf.GetString("wal"),
+	}
+
 	grpc.EnableTracing = false
 
 	addr := "localhost"

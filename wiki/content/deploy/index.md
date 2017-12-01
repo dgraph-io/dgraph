@@ -747,48 +747,49 @@ to see useful information, like the following:
 * `/removeNode?id=idx&group=gid` Used to remove dead node from the quorum, takes node id and group id as query param.
 
 ## Config
-{{% notice "note" %}}
-Currently only valid for Dgraph server.
-{{% /notice %}}
 
-The command-line flags can be stored in a YAML file and provided via the `--config` flag.  For example:
+The full set of dgraph's configuration options (along with brief descriptions)
+can be viewed by invoking dgraph with the `--help` flag. For example, so see
+the options for `dgraph server`, run `dgraph server --help`.
 
-```sh
-# Folder in which to store exports.
-export: export
+The options can be configured in multiple ways (from highest precedence to
+lowest precedence):
 
-# Fraction of dirty posting lists to commit every few seconds.
-gentlecommit: 0.33
+- Using command line flags (as described in the help output).
 
-# RAFT ID that this server will use to join RAFT groups.
-idx: 1
+- Using environment variables.
 
-# Port to run server on. (default 8080)
-port: 8080
+- Using a configuration file.
 
-# GRPC port to run server on. (default 9080)
-grpc_port: 9080
+If no configuration for an option is used, then the default value as described
+in the `--help` output applies.
 
-# Port used by worker for internal communication.
-workerport: 12345
+Multiple configuration methods can be used all at the same time. E.g. a core
+set of options could be set in a config file, and instance specific options
+could be set using environment vars or flags.
 
-# Estimated memory the process can take. Actual usage would be slightly more
-memory_mb: 4096
+The environment variable names mirror the flag names as seen in the `--help`
+output. They are the concatenation of `DGRAPH`, the subcommand invoked
+(`SERVER`, `ZERO`, `LIVE`, or `BULK`), and then the name of the flag (in
+uppercase). For example, instead of using `dgraph server --memory_mb=8096`, you
+could use `DGRAPH_SERVER_MEMORY_MB=8096 dgraph server`.
 
-# The ratio of queries to trace.
-trace: 0.33
+Configuration file formats supported are JSON, TOML, YAML, HCL, and Java
+properties (detected via file extension).
 
-# Directory to store posting lists.
-p: p
+A configuration file can be specified using the `--config` flag, or an
+environment variable. E.g. `dgraph zero --config my_config.json` or
+`DGRAPH_ZERO_CONFIG=my_config.json dgraph zero`.
 
-# Directory to store raft write-ahead logs.
-w: w
+The config file structure is just simple key/value pairs (mirroring the flag
+names). E.g. a JSON config file that sets `--idx`, `--peer`, and `--replicas`:
 
-# Debug mode for testing.
-debugmode: false
-
-# Address of dgraphzero
-peer: localhost:8888
+```json
+{
+  "idx": 42,
+  "peer": 192.168.0.55:9080,
+  "replicas": 2
+}
 ```
 
 ## TLS configuration
@@ -801,65 +802,65 @@ Following configuration options are available for the server:
 
 ```sh
 # Use TLS connections with clients.
-tls.on
+tls_on
 
 # CA Certs file path.
-tls.ca_certs string
+tls_ca_certs string
 
 # Include System CA into CA Certs.
-tls.use_system_ca
+tls_use_system_ca
 
 # Certificate file path.
-tls.cert string
+tls_cert string
 
 # Certificate key file path.
-tls.cert_key string
+tls_cert_key string
 
 # Certificate key passphrase.
-tls.cert_key_passphrase string
+tls_cert_key_passphrase string
 
 # Enable TLS client authentication
-tls.client_auth string
+tls_client_auth string
 
 # TLS max version. (default "TLS12")
-tls.max_version string
+tls_max_version string
 
 # TLS min version. (default "TLS11")
-tls.min_version string
+tls_min_version string
 ```
 
 Dgraph loader can be configured with following options:
 
 ```sh
 # Use TLS connections.
-tls.on
+tls_on
 
 # CA Certs file path.
-tls.ca_certs string
+tls_ca_certs string
 
 # Include System CA into CA Certs.
-tls.use_system_ca
+tls_use_system_ca
 
 # Certificate file path.
-tls.cert string
+tls_cert string
 
 # Certificate key file path.
-tls.cert_key string
+tls_cert_key string
 
 # Certificate key passphrase.
-tls.cert_key_passphrase string
+tls_cert_key_passphrase string
 
 # Server name.
-tls.server_name string
+tls_server_name string
 
 # Skip certificate validation (insecure)
-tls.insecure
+tls_insecure
 
 # TLS max version. (default "TLS12")
-tls.max_version string
+tls_max_version string
 
 # TLS min version. (default "TLS11")
-tls.min_version string
+tls_min_version string
 ```
 
 
