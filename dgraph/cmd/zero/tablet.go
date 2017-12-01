@@ -21,7 +21,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 )
@@ -54,9 +54,13 @@ This would trigger G1 to get latest state. Wait for it.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(time.Minute * 8)
 	var cancel context.CancelFunc
+	leaderChangeCh := s.leaderChangeChannel()
 	for {
 		select {
-		case <-s.leaderChangeCh:
+		case _, open := <-leaderChangeCh:
+			if !open {
+				leaderChangeCh = s.leaderChangeChannel()
+			}
 			// Cancel predicate moves when you step down as leader.
 			if !s.Node.AmLeader() {
 				if cancel != nil {
@@ -98,12 +102,12 @@ func (s *Server) runRecovery() {
 	if s.state == nil {
 		return
 	}
-	var proposals []*protos.ZeroProposal
+	var proposals []*intern.ZeroProposal
 	for _, group := range s.state.Groups {
 		for _, tab := range group.Tablets {
 			if tab.ReadOnly {
-				p := &protos.ZeroProposal{}
-				p.Tablet = &protos.Tablet{
+				p := &intern.ZeroProposal{}
+				p.Tablet = &intern.Tablet{
 					GroupId:   tab.GroupId,
 					Predicate: tab.Predicate,
 					Space:     tab.Space,
@@ -116,7 +120,7 @@ func (s *Server) runRecovery() {
 
 	errCh := make(chan error)
 	for _, pr := range proposals {
-		go func(pr *protos.ZeroProposal) {
+		go func(pr *intern.ZeroProposal) {
 			errCh <- s.Node.proposeAndWait(context.Background(), pr)
 		}(pr)
 	}
@@ -206,8 +210,8 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 
 	stab := s.ServingTablet(predicate)
 	x.AssertTrue(stab != nil)
-	p := &protos.ZeroProposal{}
-	p.Tablet = &protos.Tablet{
+	p := &intern.ZeroProposal{}
+	p.Tablet = &intern.Tablet{
 		GroupId:   srcGroup,
 		Predicate: predicate,
 		Space:     stab.Space,
@@ -225,8 +229,8 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 	stab := s.ServingTablet(predicate)
 	x.AssertTrue(stab != nil)
 	// Propose that predicate in read only
-	p := &protos.ZeroProposal{}
-	p.Tablet = &protos.Tablet{
+	p := &intern.ZeroProposal{}
+	p.Tablet = &intern.Tablet{
 		GroupId:   srcGroup,
 		Predicate: predicate,
 		Space:     stab.Space,
@@ -241,8 +245,8 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
 	}
 
-	c := protos.NewWorkerClient(pl.Get())
-	in := &protos.MovePredicatePayload{
+	c := intern.NewWorkerClient(pl.Get())
+	in := &intern.MovePredicatePayload{
 		Predicate:     predicate,
 		State:         s.membershipState(),
 		SourceGroupId: srcGroup,
@@ -253,7 +257,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 	}
 
 	// Propose that predicate is served by dstGroup in RW.
-	p.Tablet = &protos.Tablet{
+	p.Tablet = &intern.Tablet{
 		GroupId:   dstGroup,
 		Predicate: predicate,
 		Space:     stab.Space,

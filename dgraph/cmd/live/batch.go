@@ -30,7 +30,8 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 )
@@ -59,7 +60,7 @@ var defaultOptions = batchMutationOptions{
 }
 
 type uidProvider struct {
-	zero protos.ZeroClient
+	zero intern.ZeroClient
 	ctx  context.Context
 }
 
@@ -84,14 +85,14 @@ type loader struct {
 	// To get time elapsel.
 	start time.Time
 
-	reqs     chan protos.Mutation
+	reqs     chan api.Mutation
 	zeroconn *grpc.ClientConn
 }
 
 func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 	factor := time.Second
 	for {
-		assignedIds, err := p.zero.AssignUids(context.Background(), &protos.Num{Val: 1000})
+		assignedIds, err := p.zero.AssignUids(context.Background(), &intern.Num{Val: 1000})
 		if err == nil {
 			return assignedIds.StartId, assignedIds.EndId, nil
 		}
@@ -120,11 +121,12 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
-func (l *loader) infinitelyRetry(req protos.Mutation) {
+func (l *loader) infinitelyRetry(req api.Mutation) {
 	defer l.wg.Done()
 	for {
 		txn := l.dc.NewTxn()
-		req.CommitImmediately = true
+		req.CommitNow = true
+		req.IgnoreIndexConflict = opt.ignoreIndexConflict
 		_, err := txn.Mutate(l.opts.Ctx, &req)
 		if err == nil {
 			atomic.AddUint64(&l.txns, 1)
@@ -135,9 +137,10 @@ func (l *loader) infinitelyRetry(req protos.Mutation) {
 	}
 }
 
-func (l *loader) request(req protos.Mutation) {
+func (l *loader) request(req api.Mutation) {
 	txn := l.dc.NewTxn()
-	req.CommitImmediately = true
+	req.CommitNow = true
+	req.IgnoreIndexConflict = opt.ignoreIndexConflict
 	_, err := txn.Mutate(l.opts.Ctx, &req)
 
 	if err == nil {
@@ -176,7 +179,7 @@ func (l *loader) printCounters() {
 // Counter returns the current state of the BatchMutation.
 func (l *loader) Counter() Counter {
 	return Counter{
-		Rdfs:     atomic.LoadUint64(&l.rdfs),
+		Rdfs:     atomic.LoadUint64(&l.txns) * uint64(l.opts.Size),
 		TxnsDone: atomic.LoadUint64(&l.txns),
 		Elapsed:  time.Since(l.start),
 		Aborts:   atomic.LoadUint64(&l.aborts),

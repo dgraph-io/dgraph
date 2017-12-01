@@ -22,17 +22,19 @@ import (
 	"context"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 )
 
 var (
-	ErrConflict = x.Errorf("Conflicts with pending transaction")
 	ErrTsTooOld = x.Errorf("Transaction is too old")
 	txns        *transactions
 	txnMarks    *x.WaterMark // Used to find out till which index we can snapshot.
@@ -54,11 +56,13 @@ func Txns() *transactions {
 }
 
 type delta struct {
-	key     []byte
-	posting *protos.Posting
+	key            []byte
+	posting        *intern.Posting
+	ignoreConflict bool // Ignore for conflict detection.
 }
 type Txn struct {
-	StartTs uint64
+	StartTs             uint64
+	IgnoreIndexConflict bool
 
 	// atomic
 	shouldAbort uint32
@@ -73,6 +77,42 @@ type Txn struct {
 type transactions struct {
 	x.SafeMutex
 	m map[uint64]*Txn
+}
+
+func (t *transactions) MinTs() uint64 {
+	t.Lock()
+	defer t.Unlock()
+	var minTs uint64
+	for ts := range t.m {
+		if ts < minTs || minTs == 0 {
+			minTs = ts
+		}
+	}
+	return minTs
+}
+
+// Returns startTs of all pending transactions started upto 10000 raft log
+// entries after last snapshot if the memory consumed by all raft log entries
+// is high.
+func (t *transactions) TxnsSinceSnapshot() []uint64 {
+	lastSnapshotIdx := TxnMarks().DoneUntil()
+	var timestamps []uint64
+	t.Lock()
+	defer t.Unlock()
+	numKeys := 0
+	for _, txn := range t.m {
+		lenDelta, index := txn.lenAndStartIdx()
+		if index-lastSnapshotIdx <= 10000 {
+			timestamps = append(timestamps, txn.StartTs)
+		}
+		numKeys += lenDelta
+	}
+	// Users can do transactions which mutates few edges, numKeys gives us
+	// a good estimation of space consumed by raft log entries
+	if numKeys < 10<<20 { // 500MB considering average size of posting to be 50bytes.
+		return nil
+	}
+	return timestamps
 }
 
 func (t *transactions) Reset() {
@@ -94,6 +134,13 @@ func (t *transactions) Iterate(ok func(key []byte) bool) []uint64 {
 		}
 	}
 	return timestamps
+}
+
+func (t *Txn) lenAndStartIdx() (int, uint64) {
+	t.Lock()
+	defer t.Unlock()
+	x.AssertTrue(len(t.Indices) > 0)
+	return len(t.deltas), t.Indices[0]
 }
 
 func (t *Txn) conflicts(ok func(key []byte) bool) bool {
@@ -131,7 +178,9 @@ func (t *Txn) done() {
 	TxnMarks().DoneMany(t.Indices)
 }
 
-func (t *Txn) Index() uint64 {
+// LastIndex returns the index of last prewrite proposal associated with
+// the transaction.
+func (t *Txn) LastIndex() uint64 {
 	t.Lock()
 	defer t.Unlock()
 	if l := len(t.Indices); l > 0 {
@@ -161,22 +210,26 @@ func (t *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
 
-func (t *Txn) AddDelta(key []byte, p *protos.Posting) {
+func (t *Txn) AddDelta(key []byte, p *intern.Posting, ignore bool) {
 	t.Lock()
 	defer t.Unlock()
-	t.deltas = append(t.deltas, delta{key: key, posting: p})
+	t.deltas = append(t.deltas, delta{key: key, posting: p, ignoreConflict: ignore})
 }
 
-func (t *Txn) Fill(ctx *protos.TxnContext) {
+func (t *Txn) Fill(ctx *api.TxnContext) {
 	t.Lock()
 	defer t.Unlock()
 	t.fill(ctx)
 }
 
-func (t *Txn) fill(ctx *protos.TxnContext) {
+func (t *Txn) fill(ctx *api.TxnContext) {
 	ctx.StartTs = t.StartTs
 	for _, d := range t.deltas {
-		ctx.Keys = append(ctx.Keys, string(d.key))
+		if d.ignoreConflict {
+			continue // Ignore for conflict detection.
+		}
+		fp := farm.Fingerprint64(d.key)
+		ctx.Keys = append(ctx.Keys, strconv.FormatUint(fp, 36))
 	}
 }
 
@@ -184,9 +237,6 @@ func (t *Txn) fill(ctx *protos.TxnContext) {
 func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	tx.Lock()
 	defer tx.Unlock()
-	if tx.ShouldAbort() {
-		return ErrInvalidTxn
-	}
 
 	txn := pstore.NewTransactionAt(commitTs, true)
 	defer txn.Discard()
@@ -195,12 +245,13 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		return bytes.Compare(tx.deltas[i].key, tx.deltas[j].key) < 0
 	})
 	var prevKey []byte
-	var pl *protos.PostingList
+	var pl *intern.PostingList
+	var plist *List
 	i := 0
 	for i < len(tx.deltas) {
 		d := tx.deltas[i]
 		if !bytes.Equal(prevKey, d.key) {
-			plist := Get(d.key)
+			plist = Get(d.key)
 			if plist.AlreadyCommitted(tx.StartTs) {
 				// Delta already exists, so skip the key
 				// There won't be any race from lru eviction, because we don't
@@ -211,11 +262,10 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 				}
 				continue
 			}
-			pl = new(protos.PostingList)
+			pl = new(intern.PostingList)
 		}
 		prevKey = d.key
 		var meta byte
-		d.posting.CommitTs = commitTs
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
 			pl.Postings = pl.Postings[:0]
 			meta = BitCompletePosting // Indicates that this is the full posting list.
@@ -237,7 +287,12 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 			meta = bitDeltaPosting
 		}
 
+		// delta postings are pointers to the postings present in the Pl present in lru.
+		// commitTs is accessed using RLock & atomics except in marshal so no RLock.
+		// TODO: Fix this hack later
+		plist.Lock()
 		val, err := pl.Marshal()
+		plist.Unlock()
 		x.Check(err)
 		if err = txn.SetWithMeta([]byte(d.key), val, meta); err == badger.ErrTxnTooBig {
 			if err := txn.CommitAt(commitTs, nil); err != nil {
@@ -299,7 +354,7 @@ func (tx *Txn) AbortMutations(ctx context.Context) error {
 	return nil
 }
 
-func unmarshalOrCopy(plist *protos.PostingList, item *badger.Item) error {
+func unmarshalOrCopy(plist *intern.PostingList, item *badger.Item) error {
 	// It's delta
 	val, err := item.Value()
 	if err != nil {
@@ -325,7 +380,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.activeTxns = make(map[uint64]struct{})
-	l.plist = new(protos.PostingList)
+	l.plist = new(intern.PostingList)
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
@@ -349,7 +404,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			it.Next()
 			break
 		} else if item.UserMeta()&bitDeltaPosting > 0 {
-			var pl protos.PostingList
+			var pl intern.PostingList
 			x.Check(pl.Unmarshal(val))
 			for _, mpost := range pl.Postings {
 				// commitTs, startTs are meant to be only in memory, not
@@ -377,7 +432,7 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.activeTxns = make(map[uint64]struct{})
-	l.plist = new(protos.PostingList)
+	l.plist = new(intern.PostingList)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 

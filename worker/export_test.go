@@ -28,12 +28,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 
@@ -75,51 +74,34 @@ func populateGraphExport(t *testing.T) {
 	}
 }
 
-func initTestExport(t *testing.T, schemaStr string) (string, *badger.ManagedDB) {
+func initTestExport(t *testing.T, schemaStr string) {
 	schema.ParseBytes([]byte(schemaStr), 1)
 
-	dir, err := ioutil.TempDir("", "storetest_")
+	val, err := (&intern.SchemaUpdate{ValueType: intern.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
-	opt := badger.DefaultOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
-	db, err := badger.OpenManaged(opt)
-	x.Check(err)
-
-	posting.Init(db)
-	Init(db)
-	val, err := (&protos.SchemaUpdate{ValueType: protos.Posting_UID}).Marshal()
-	require.NoError(t, err)
-
-	txn := db.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.SchemaKey("friend"), val)
+	txn := pstore.NewTransactionAt(math.MaxUint64, true)
+	require.NoError(t, txn.Set(x.SchemaKey("friend"), val))
 	// Schema is always written at timestamp 1
-	txn.CommitAt(1, nil)
+	require.NoError(t, txn.CommitAt(1, nil))
 	txn.Discard()
 
 	require.NoError(t, err)
-	val, err = (&protos.SchemaUpdate{ValueType: protos.Posting_UID}).Marshal()
+	val, err = (&intern.SchemaUpdate{ValueType: intern.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
-	txn = db.NewTransactionAt(math.MaxUint64, true)
+	txn = pstore.NewTransactionAt(math.MaxUint64, true)
 	txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	require.NoError(t, err)
 	txn.Set(x.SchemaKey("friend_not_served"), val)
-	txn.CommitAt(1, nil)
+	require.NoError(t, txn.CommitAt(1, nil))
 	txn.Discard()
-
-	require.NoError(t, err)
 	populateGraphExport(t)
-
-	return dir, db
 }
 
 func TestExport(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	dir, ps := initTestExport(t, "name:string @index .")
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+	initTestExport(t, "name:string @index .")
 	// Remove already existing export folders is any.
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
@@ -163,10 +145,10 @@ func TestExport(t *testing.T) {
 		if nq.ObjectValue != nil {
 			switch nq.Subject {
 			case "_:uid1", "_:uid2":
-				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\ton"}},
+				require.Equal(t, &api.Value{&api.Value_DefaultVal{"pho\ton"}},
 					nq.ObjectValue)
 			case "_:uid3":
-				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"First Line\nSecondLine"}},
+				require.Equal(t, &api.Value{&api.Value_DefaultVal{"First Line\nSecondLine"}},
 					nq.ObjectValue)
 			case "_:uid4":
 			case "_:uid5":
@@ -177,7 +159,7 @@ func TestExport(t *testing.T) {
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
 			if nq.Subject == "_:uid1" || nq.Subject == "_:uid2" {
-				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\ton"}},
+				require.Equal(t, &api.Value{&api.Value_DefaultVal{"pho\ton"}},
 					nq.ObjectValue)
 			}
 		}
@@ -254,7 +236,7 @@ func TestExport(t *testing.T) {
 // 	byteInt := make([]byte, 4)
 // 	binary.LittleEndian.PutUint32(byteInt, 123)
 //
-// 	fac := []*protos.Facet{
+// 	fac := []*api.Facet{
 // 		{
 // 			Key:   "facetTest",
 // 			Value: []byte("testVal"),
@@ -275,9 +257,9 @@ func TestExport(t *testing.T) {
 // 	benchItems := []kv{
 // 		{
 // 			prefix: "testString",
-// 			list: &protos.PostingList{
-// 				Postings: []*protos.Posting{{
-// 					ValType: protos.Posting_STRING,
+// 			list: &intern.PostingList{
+// 				Postings: []*intern.Posting{{
+// 					ValType: intern.Posting_STRING,
 // 					Value:   []byte("手機裡的眼淚"),
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
@@ -285,36 +267,36 @@ func TestExport(t *testing.T) {
 // 			},
 // 		},
 // 		{prefix: "testGeo",
-// 			list: &protos.PostingList{
-// 				Postings: []*protos.Posting{{
-// 					ValType: protos.Posting_GEO,
+// 			list: &intern.PostingList{
+// 				Postings: []*intern.Posting{{
+// 					ValType: intern.Posting_GEO,
 // 					Value:   geoData,
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
 // 			}},
 // 		{prefix: "testPassword",
-// 			list: &protos.PostingList{
-// 				Postings: []*protos.Posting{{
-// 					ValType: protos.Posting_PASSWORD,
+// 			list: &intern.PostingList{
+// 				Postings: []*intern.Posting{{
+// 					ValType: intern.Posting_PASSWORD,
 // 					Value:   []byte("test"),
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
 // 			}},
 // 		{prefix: "testInt",
-// 			list: &protos.PostingList{
-// 				Postings: []*protos.Posting{{
-// 					ValType: protos.Posting_INT,
+// 			list: &intern.PostingList{
+// 				Postings: []*intern.Posting{{
+// 					ValType: intern.Posting_INT,
 // 					Value:   byteInt,
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
 // 			}},
 // 		{prefix: "testUid",
-// 			list: &protos.PostingList{
-// 				Postings: []*protos.Posting{{
-// 					ValType: protos.Posting_INT,
+// 			list: &intern.PostingList{
+// 				Postings: []*intern.Posting{{
+// 					ValType: intern.Posting_INT,
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},

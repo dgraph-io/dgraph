@@ -18,20 +18,33 @@ package client
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/y"
 	"github.com/pkg/errors"
 )
 
 var (
-	ErrAborted  = x.Errorf("Transaction has been aborted due to conflict")
-	ErrFinished = x.Errorf("Transaction has already been committed or discarded")
+	ErrFinished = errors.New("Transaction has already been committed or discarded")
 )
 
+// Txn is a single atomic transaction.
+//
+// A transaction lifecycle is as follows:
+//
+// 1. Created using NewTxn.
+//
+// 2. Various Query and Mutate calls made.
+//
+// 3. Commit or Discard used. If any mutations have been made, It's important
+// that at least one of these methods is called to clean up resources. Discard
+// is a no-op if Commit has already been called, so it's safe to defer a call
+// to Discard immediately after NewTxn.
 type Txn struct {
-	context *protos.TxnContext
+	context *api.TxnContext
 
 	finished bool
 	mutated  bool
@@ -39,26 +52,32 @@ type Txn struct {
 	dg *Dgraph
 }
 
+// NewTxn creates a new transaction.
 func (d *Dgraph) NewTxn() *Txn {
 	txn := &Txn{
 		dg: d,
-		context: &protos.TxnContext{
+		context: &api.TxnContext{
 			LinRead: d.getLinRead(),
 		},
 	}
 	return txn
 }
 
-func (txn *Txn) Query(ctx context.Context, q string) (*protos.Response, error) {
+// Query sends a query to one of the connected dgraph instances. If no
+// mutations need to be made in the same transaction, it's convenient to chain
+// the method, e.g. NewTxn().Query(ctx, "...").
+func (txn *Txn) Query(ctx context.Context, q string) (*api.Response, error) {
 	return txn.QueryWithVars(ctx, q, nil)
 }
 
+// QueryWithVars is like Query, but allows a variable map to be used. This can
+// provide safety against injection attacks.
 func (txn *Txn) QueryWithVars(ctx context.Context, q string,
-	vars map[string]string) (*protos.Response, error) {
+	vars map[string]string) (*api.Response, error) {
 	if txn.finished {
 		return nil, ErrFinished
 	}
-	req := &protos.Request{
+	req := &api.Request{
 		Query:   q,
 		Vars:    vars,
 		StartTs: txn.context.StartTs,
@@ -74,46 +93,69 @@ func (txn *Txn) QueryWithVars(ctx context.Context, q string,
 	return resp, err
 }
 
-func (txn *Txn) mergeContext(src *protos.TxnContext) error {
+func (txn *Txn) mergeContext(src *api.TxnContext) error {
 	if src == nil {
 		return nil
 	}
 
-	x.MergeLinReads(txn.context.LinRead, src.LinRead)
+	y.MergeLinReads(txn.context.LinRead, src.LinRead)
 	txn.dg.mergeLinRead(src.LinRead) // Also merge it with client.
 
 	if txn.context.StartTs == 0 {
 		txn.context.StartTs = src.StartTs
 	}
 	if txn.context.StartTs != src.StartTs {
-		return x.Errorf("StartTs mismatch")
+		return errors.New("StartTs mismatch")
 	}
 	txn.context.Keys = append(txn.context.Keys, src.Keys...)
 	return nil
 }
 
-func (txn *Txn) Mutate(ctx context.Context, mu *protos.Mutation) (*protos.Assigned, error) {
+// Mutate allows data stored on dgraph instances to be modified. The fields in
+// api.Mutation come in pairs, set and delete. Mutations can either be
+// encoded as JSON or as RDFs.
+//
+// If CommitNow is set, then this call will result in the transaction
+// being committed. In this case, an explicit call to Commit doesn't need to
+// subsequently be made.
+//
+// If the mutation fails, then the transaction is discarded and all future
+// operations on it will fail.
+func (txn *Txn) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
 	if txn.finished {
 		return nil, ErrFinished
 	}
 
+	txn.mutated = true
 	mu.StartTs = txn.context.StartTs
 	dc := txn.dg.anyClient()
 	ag, err := dc.Mutate(ctx, mu)
 	if err != nil {
+		// Since a mutation error occurred, the txn should no longer be used
+		// (some mutations could have applied but not others, but we don't know
+		// which ones).  Discarding the transaction enforces that the user
+		// cannot use the txn further.
+		_ = txn.Discard(ctx) // Ignore error - user should see the original error.
+
+		// Transaction could be aborted(codes.Aborted) if CommitNow was true, or server could send a
+		// message that this mutation conflicts(codes.FailedPrecondition) with another transaction.
+		if s, ok := status.FromError(err); ok && s.Code() == codes.Aborted ||
+			s.Code() == codes.FailedPrecondition {
+			err = y.ErrAborted
+		}
 		return nil, err
 	}
-	txn.mutated = true
-	if err := txn.mergeContext(ag.Context); err != nil {
-		fmt.Printf("error while merging context: %v\n", err)
-		return nil, err
-	}
-	if len(ag.Error) > 0 {
-		return nil, errors.New(ag.Error)
-	}
-	return ag, nil
+	err = txn.mergeContext(ag.Context)
+	return ag, err
 }
 
+// Commit commits any mutations that have been made in the transaction. Once
+// Commit has been called, the lifespan of the transaction is complete.
+//
+// Errors could be returned for various reasons. Notably, ErrAborted could be
+// returned if transactions that modify the same data are being run
+// concurrently. It's up to the user to decide if they wish to retry. In this
+// case, the user should create a new transaction.
 func (txn *Txn) Commit(ctx context.Context) error {
 	if txn.finished {
 		return ErrFinished
@@ -124,14 +166,11 @@ func (txn *Txn) Commit(ctx context.Context) error {
 		return nil
 	}
 	dc := txn.dg.anyClient()
-	tctx, err := dc.CommitOrAbort(ctx, txn.context)
-	if err != nil {
-		return err
+	_, err := dc.CommitOrAbort(ctx, txn.context)
+	if s, ok := status.FromError(err); ok && s.Code() == codes.Aborted {
+		err = y.ErrAborted
 	}
-	if tctx.Aborted {
-		return ErrAborted
-	}
-	return nil
+	return err
 }
 
 // Discard cleans up the resources associated with an uncommitted transaction

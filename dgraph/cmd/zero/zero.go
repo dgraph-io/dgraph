@@ -27,15 +27,15 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 )
 
 var (
-	emptyMembershipState protos.MembershipState
-	emptyConnectionState protos.ConnectionState
+	emptyMembershipState intern.MembershipState
+	emptyConnectionState intern.ConnectionState
 	errInvalidId         = errors.New("Invalid server id")
 	errInvalidAddress    = errors.New("Invalid address")
 	errEmptyPredicate    = errors.New("Empty predicate")
@@ -55,7 +55,7 @@ type Server struct {
 	orc  *Oracle
 
 	NumReplicas int
-	state       *protos.MembershipState
+	state       *intern.MembershipState
 
 	nextLeaseId uint64
 	nextTxnTs   uint64
@@ -73,9 +73,9 @@ func (s *Server) Init() {
 
 	s.orc = &Oracle{}
 	s.orc.Init()
-	s.state = &protos.MembershipState{
-		Groups: make(map[uint32]*protos.Group),
-		Zeros:  make(map[uint64]*protos.Member),
+	s.state = &intern.MembershipState{
+		Groups: make(map[uint32]*intern.Group),
+		Zeros:  make(map[uint64]*intern.Member),
 	}
 	s.nextLeaseId = 1
 	s.nextTxnTs = 1
@@ -83,6 +83,37 @@ func (s *Server) Init() {
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.shutDownCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
+	go s.purgeOracle()
+}
+
+func (s *Server) triggerLeaderChange() {
+	s.Lock()
+	defer s.Unlock()
+	close(s.leaderChangeCh)
+	s.leaderChangeCh = make(chan struct{}, 1)
+}
+
+func (s *Server) leaderChangeChannel() chan struct{} {
+	s.RLock()
+	defer s.RUnlock()
+	return s.leaderChangeCh
+}
+
+func (s *Server) member(addr string) *intern.Member {
+	s.AssertRLock()
+	for _, m := range s.state.Zeros {
+		if m.Addr == addr {
+			return m
+		}
+	}
+	for _, g := range s.state.Groups {
+		for _, m := range g.Members {
+			if m.Addr == addr {
+				return m
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Server) Leader(gid uint32) *conn.Pool {
@@ -107,6 +138,16 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 	return healthyPool
 }
 
+func (s *Server) KnownGroups() []uint32 {
+	var groups []uint32
+	s.RLock()
+	defer s.RUnlock()
+	for group := range s.state.Groups {
+		groups = append(groups, group)
+	}
+	return groups
+}
+
 func (s *Server) hasLeader(gid uint32) bool {
 	s.AssertRLock()
 	if s.state == nil {
@@ -124,15 +165,15 @@ func (s *Server) hasLeader(gid uint32) bool {
 	return false
 }
 
-func (s *Server) SetMembershipState(state *protos.MembershipState) {
+func (s *Server) SetMembershipState(state *intern.MembershipState) {
 	s.Lock()
 	defer s.Unlock()
 	s.state = state
 	if state.Zeros == nil {
-		state.Zeros = make(map[uint64]*protos.Member)
+		state.Zeros = make(map[uint64]*intern.Member)
 	}
 	if state.Groups == nil {
-		state.Groups = make(map[uint32]*protos.Group)
+		state.Groups = make(map[uint32]*intern.Group)
 	}
 	s.nextGroup = uint32(len(state.Groups) + 1)
 }
@@ -143,20 +184,32 @@ func (s *Server) MarshalMembershipState() ([]byte, error) {
 	return s.state.Marshal()
 }
 
-func (s *Server) membershipState() *protos.MembershipState {
+func (s *Server) membershipState() *intern.MembershipState {
 	s.RLock()
 	defer s.RUnlock()
-	return proto.Clone(s.state).(*protos.MembershipState)
+	return proto.Clone(s.state).(*intern.MembershipState)
 }
 
-func (s *Server) storeZero(m *protos.Member) {
+func (s *Server) storeZero(m *intern.Member) {
 	s.Lock()
 	defer s.Unlock()
 
 	s.state.Zeros[m.Id] = m
 }
 
-func (s *Server) ServingTablet(dst string) *protos.Tablet {
+func (s *Server) removeZero(nodeId uint64) {
+	s.Lock()
+	defer s.Unlock()
+	m, has := s.state.Zeros[nodeId]
+	if !has {
+		return
+	}
+	delete(s.state.Zeros, nodeId)
+	conn.Get().Remove(m.Addr)
+	s.state.Removed = append(s.state.Removed, m)
+}
+
+func (s *Server) ServingTablet(dst string) *intern.Tablet {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -170,7 +223,7 @@ func (s *Server) ServingTablet(dst string) *protos.Tablet {
 	return nil
 }
 
-func (s *Server) servingTablet(dst string) *protos.Tablet {
+func (s *Server) servingTablet(dst string) *intern.Tablet {
 	s.AssertRLock()
 
 	for _, group := range s.state.Groups {
@@ -183,8 +236,8 @@ func (s *Server) servingTablet(dst string) *protos.Tablet {
 	return nil
 }
 
-func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, error) {
-	var res []*protos.ZeroProposal
+func (s *Server) createProposals(dst *intern.Group) ([]*intern.ZeroProposal, error) {
+	var res []*intern.ZeroProposal
 	if len(dst.Members) > 1 {
 		return res, errInvalidQuery
 	}
@@ -202,10 +255,9 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 			return res, errUnknownMember
 		}
 		if srcMember.Addr != dstMember.Addr ||
-			srcMember.Leader != dstMember.Leader ||
-			srcMember.AmDead != dstMember.AmDead {
+			srcMember.Leader != dstMember.Leader {
 
-			proposal := &protos.ZeroProposal{
+			proposal := &intern.ZeroProposal{
 				Member: dstMember,
 			}
 			res = append(res, proposal)
@@ -230,7 +282,7 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 		d := float64(dstTablet.Space)
 		if (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
 			dstTablet.Force = false
-			proposal := &protos.ZeroProposal{
+			proposal := &intern.ZeroProposal{
 				Tablet: dstTablet,
 			}
 			res = append(res, proposal)
@@ -239,20 +291,33 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, err
 	return res, nil
 }
 
+// Its users responsibility to ensure that node doesn't come back again before calling the api.
+func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) error {
+	if groupId == 0 {
+		return s.Node.ProposePeerRemoval(ctx, nodeId)
+	}
+	zp := &intern.ZeroProposal{}
+	zp.Member = &intern.Member{Id: nodeId, GroupId: groupId, AmDead: true}
+	if _, ok := s.state.Groups[groupId]; !ok {
+		return x.Errorf("No node with groupId %d found", groupId)
+	}
+	return s.Node.proposeAndWait(ctx, zp)
+}
+
 // Connect is used to connect the very first time with group zero.
 func (s *Server) Connect(ctx context.Context,
-	m *protos.Member) (resp *protos.ConnectionState, err error) {
+	m *intern.Member) (resp *intern.ConnectionState, err error) {
 	x.Printf("Got connection request: %+v\n", m)
 	defer x.Println("Connected")
 
 	if ctx.Err() != nil {
 		return &emptyConnectionState, ctx.Err()
 	}
-	if m.CluterInfoOnly {
+	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
 		ms, err := s.latestMembershipState(ctx)
-		cs := &protos.ConnectionState{State: ms}
+		cs := &intern.ConnectionState{State: ms}
 		return cs, err
 	}
 	if len(m.Addr) == 0 {
@@ -275,11 +340,11 @@ func (s *Server) Connect(ctx context.Context,
 	// Create a connection and check validity of the address by doing an Echo.
 	conn.Get().Connect(m.Addr)
 
-	createProposal := func() *protos.ZeroProposal {
+	createProposal := func() *intern.ZeroProposal {
 		s.Lock()
 		defer s.Unlock()
 
-		proposal := new(protos.ZeroProposal)
+		proposal := new(intern.ZeroProposal)
 		// Check if we already have this member.
 		for _, group := range s.state.Groups {
 			if _, has := group.Members[m.Id]; has {
@@ -334,7 +399,7 @@ func (s *Server) Connect(ctx context.Context,
 			return &emptyConnectionState, err
 		}
 	}
-	resp = &protos.ConnectionState{
+	resp = &intern.ConnectionState{
 		State:  s.membershipState(),
 		Member: m,
 	}
@@ -342,7 +407,7 @@ func (s *Server) Connect(ctx context.Context,
 }
 
 func (s *Server) ShouldServe(
-	ctx context.Context, tablet *protos.Tablet) (resp *protos.Tablet, err error) {
+	ctx context.Context, tablet *intern.Tablet) (resp *intern.Tablet, err error) {
 	if len(tablet.Predicate) == 0 {
 		return resp, errEmptyPredicate
 	}
@@ -360,7 +425,7 @@ func (s *Server) ShouldServe(
 	}
 
 	// Set the tablet to be served by this server's group.
-	var proposal protos.ZeroProposal
+	var proposal intern.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
 	tablet.Force = false
 	proposal.Tablet = tablet
@@ -371,7 +436,7 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
-func (s *Server) receiveUpdates(stream protos.Zero_UpdateServer) error {
+func (s *Server) receiveUpdates(stream intern.Zero_UpdateServer) error {
 	for {
 		group, err := stream.Recv()
 		// Due to closeSend on client Side
@@ -390,7 +455,7 @@ func (s *Server) receiveUpdates(stream protos.Zero_UpdateServer) error {
 
 		errCh := make(chan error)
 		for _, pr := range proposals {
-			go func(pr *protos.ZeroProposal) {
+			go func(pr *intern.ZeroProposal) {
 				errCh <- s.Node.proposeAndWait(context.Background(), pr)
 			}(pr)
 		}
@@ -405,7 +470,7 @@ func (s *Server) receiveUpdates(stream protos.Zero_UpdateServer) error {
 	}
 }
 
-func (s *Server) Update(stream protos.Zero_UpdateServer) error {
+func (s *Server) Update(stream intern.Zero_UpdateServer) error {
 	che := make(chan error, 1)
 	// Server side cancellation can only be done by existing the handler
 	// since Recv is blocking we need to run it in a goroutine.
@@ -461,7 +526,7 @@ func (s *Server) Update(stream protos.Zero_UpdateServer) error {
 	}
 }
 
-func (s *Server) latestMembershipState(ctx context.Context) (*protos.MembershipState, error) {
+func (s *Server) latestMembershipState(ctx context.Context) (*intern.MembershipState, error) {
 	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
 		return nil, err
 	}

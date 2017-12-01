@@ -1,26 +1,29 @@
 package query
 
 import (
-	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContext, error) {
+func ApplyMutations(ctx context.Context, m *intern.Mutations) (*api.TxnContext, error) {
 	if worker.Config.ExpandEdge {
-		err := handleInternalEdge(ctx, m)
+		edges, err := expandEdges(ctx, m)
 		if err != nil {
-			return nil, x.Wrapf(err, "While adding internal edges")
+			return nil, x.Wrapf(err, "While adding intern.edges")
 		}
+		m.Edges = edges
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Added Internal edges")
 		}
@@ -41,92 +44,68 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) (*protos.TxnContex
 	return tctx, err
 }
 
-func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
-	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
-	for _, mu := range m.Edges {
-		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
-		if mu.Op == protos.DirectedEdge_SET {
-			edge := &protos.DirectedEdge{
-				Op:     protos.DirectedEdge_SET,
-				Entity: mu.GetEntity(),
-				Attr:   "_predicate_",
-				Value:  []byte(mu.GetAttr()),
+func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEdge, error) {
+	edges := make([]*intern.DirectedEdge, 0, 2*len(m.Edges))
+	for _, edge := range m.Edges {
+		x.AssertTrue(edge.Op == intern.DirectedEdge_DEL || edge.Op == intern.DirectedEdge_SET)
+
+		var preds []string
+		if edge.Attr != x.Star {
+			preds = []string{edge.Attr}
+		} else {
+			sg := &SubGraph{}
+			sg.DestUIDs = &intern.List{[]uint64{edge.GetEntity()}}
+			sg.ReadTs = m.StartTs
+			valMatrix, err := getNodePredicates(ctx, sg)
+			if err != nil {
+				return nil, err
 			}
-			newEdges = append(newEdges, mu)
-			newEdges = append(newEdges, edge)
-		} else if mu.Op == protos.DirectedEdge_DEL {
-			// S * * case
-			if mu.Attr == x.Star {
-				// Fetch all the predicates and replace them
-
-				sg := &SubGraph{}
-				sg.DestUIDs = &protos.List{[]uint64{mu.GetEntity()}}
-				sg.ReadTs = m.StartTs
-				valMatrix, err := getNodePredicates(ctx, sg)
-				if err != nil {
-					return err
-				}
-
-				// _predicate_ is of list type. So we will get all the predicates in the first list
-				// of the value matrix.
-				val := mu.GetValue()
-				if len(valMatrix) != 1 {
-					return x.Errorf("Expected only one list in value matrix while deleting: %v",
-						mu.GetEntity())
-				}
-				preds := valMatrix[0].Values
-				for _, pred := range preds {
-					if bytes.Equal(pred.Val, x.Nilbyte) {
-						continue
-					}
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   string(pred.Val),
-						Value:  val,
-					}
-					newEdges = append(newEdges, edge)
-				}
-				edge := &protos.DirectedEdge{
-					Op:     protos.DirectedEdge_DEL,
-					Entity: mu.GetEntity(),
-					Attr:   "_predicate_",
-					Value:  val,
-				}
-				// Delete all the _predicate_ values
-				edge.Attr = "_predicate_"
-				newEdges = append(newEdges, edge)
-
-			} else {
-				newEdges = append(newEdges, mu)
-				if mu.Entity == 0 && string(mu.GetValue()) == x.Star {
-					// * P * case.
-					continue
-				}
-
-				// S P * case.
-				if string(mu.GetValue()) == x.Star {
-					// Delete the given predicate from _predicate_.
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   "_predicate_",
-						Value:  []byte(mu.GetAttr()),
-					}
-					newEdges = append(newEdges, edge)
+			if len(valMatrix) != 1 {
+				return nil, x.Errorf("Expected only one list in value matrix while deleting: %v",
+					edge.GetEntity())
+			}
+			for _, tv := range valMatrix[0].Values {
+				if len(tv.Val) > 0 {
+					preds = append(preds, string(tv.Val))
 				}
 			}
 		}
+
+		for _, pred := range preds {
+			edgeCopy := *edge
+			edgeCopy.Attr = pred
+			edges = append(edges, &edgeCopy)
+
+			e := &intern.DirectedEdge{
+				Op:     edge.Op,
+				Entity: edge.GetEntity(),
+				Attr:   "_predicate_",
+				Value:  []byte(pred),
+			}
+			edges = append(edges, e)
+		}
 	}
-	m.Edges = newEdges
-	return nil
+	return edges, nil
 }
 
-func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64, error) {
+func verifyUid(uid uint64) error {
+	var lease uint64
+	for wait := 16 * time.Millisecond; wait <= 512*time.Millisecond; wait *= 2 {
+		// Wait for membership state to catch up before declaring that the uid
+		// is definitely greater than the lease.
+		lease = worker.MaxLeaseId()
+		if uid <= lease {
+			return nil
+		}
+		time.Sleep(wait)
+	}
+	return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
+}
+
+func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
-	num := &protos.Num{}
+	num := &intern.Num{}
 	var err error
-	maxLeaseId := worker.MaxLeaseId()
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
@@ -134,17 +113,25 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 		}
 
 		if len(nq.Subject) > 0 {
+			var uid uint64
 			if strings.HasPrefix(nq.Subject, "_:") {
 				newUids[nq.Subject] = 0
-			} else if uid, err := gql.ParseUid(nq.Subject); err != nil || uid > maxLeaseId {
+			} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
+				return newUids, err
+			}
+			if err = verifyUid(uid); err != nil {
 				return newUids, err
 			}
 		}
 
 		if len(nq.ObjectId) > 0 {
+			var uid uint64
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
-			} else if uid, err := gql.ParseUid(nq.ObjectId); err != nil || uid > maxLeaseId {
+			} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
+				return newUids, err
+			}
+			if err = verifyUid(uid); err != nil {
 				return newUids, err
 			}
 		}
@@ -152,7 +139,7 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 
 	num.Val = uint64(len(newUids))
 	if int(num.Val) > 0 {
-		var res *protos.AssignedIds
+		var res *api.AssignedIds
 		// TODO: Optimize later by prefetching. Also consolidate all the UID requests into a single
 		// pending request from this server to zero.
 		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {
@@ -173,18 +160,18 @@ func AssignUids(ctx context.Context, nquads []*protos.NQuad) (map[string]uint64,
 }
 
 func ToInternal(gmu *gql.Mutation,
-	newUids map[string]uint64) (edges []*protos.DirectedEdge, err error) {
+	newUids map[string]uint64) (edges []*intern.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
 	var wnq *gql.NQuad
 
-	parse := func(nq *protos.NQuad, op protos.DirectedEdge_Op) error {
+	parse := func(nq *api.NQuad, op intern.DirectedEdge_Op) error {
 		wnq = &gql.NQuad{nq}
 		if len(nq.Subject) == 0 {
 			return nil
 		}
 		// Get edge from nquad using newUids.
-		var edge *protos.DirectedEdge
+		var edge *intern.DirectedEdge
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {
 			return x.Wrap(err)
@@ -198,7 +185,7 @@ func ToInternal(gmu *gql.Mutation,
 		if err := facets.SortAndValidate(nq.Facets); err != nil {
 			return edges, err
 		}
-		if err := parse(nq, protos.DirectedEdge_SET); err != nil {
+		if err := parse(nq, intern.DirectedEdge_SET); err != nil {
 			return edges, err
 		}
 	}
@@ -206,7 +193,7 @@ func ToInternal(gmu *gql.Mutation,
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 			return edges, errors.New("Predicate deletion should be called via alter.")
 		}
-		if err := parse(nq, protos.DirectedEdge_DEL); err != nil {
+		if err := parse(nq, intern.DirectedEdge_DEL); err != nil {
 			return edges, err
 		}
 	}

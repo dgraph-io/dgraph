@@ -20,24 +20,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"google.golang.org/grpc"
 )
 
 func ExampleTxn_Query_variables() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
@@ -45,7 +44,7 @@ func ExampleTxn_Query_variables() {
 		Name string `json:"name,omitempty"`
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		name: string @index(exact) .
 	`
@@ -60,8 +59,8 @@ func ExampleTxn_Query_variables() {
 		Name: "Alice",
 	}
 
-	mu := &protos.Mutation{
-		CommitImmediately: true,
+	mu := &api.Mutation{
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -101,21 +100,21 @@ func ExampleTxn_Query_variables() {
 
 func ExampleDgraph_Alter_dropAll() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Checkf(err, "While creating temp dir")
-	defer os.RemoveAll(clientDir)
-
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
-	op := protos.Operation{
+	op := api.Operation{
 		DropAll: true,
 	}
 	ctx := context.Background()
-	x.Check(dg.Alter(ctx, &op))
+	if err := dg.Alter(ctx, &op); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func ExampleTxn_Mutate() {
@@ -136,17 +135,19 @@ func ExampleTxn_Mutate() {
 		Name     string   `json:"name,omitempty"`
 		Age      int      `json:"age,omitempty"`
 		Married  bool     `json:"married,omitempty"`
-		Raw      []byte   `json:"raw_bytes",omitempty`
+		Raw      []byte   `json:"raw_bytes,omitempty"`
 		Friends  []Person `json:"friend,omitempty"`
 		Location loc      `json:"loc,omitempty"`
 		School   []School `json:"school,omitempty"`
 	}
 
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
@@ -177,7 +178,7 @@ func ExampleTxn_Mutate() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -189,8 +190,8 @@ func ExampleTxn_Mutate() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{
-		CommitImmediately: true,
+	mu := &api.Mutation{
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -244,10 +245,12 @@ func ExampleTxn_Mutate() {
 
 func ExampleTxn_Mutate_bytes() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
@@ -256,7 +259,7 @@ func ExampleTxn_Mutate_bytes() {
 		Bytes []byte `json:"bytes,omitempty"`
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		name: string @index(exact) .
 	`
@@ -272,8 +275,8 @@ func ExampleTxn_Mutate_bytes() {
 		Bytes: []byte("raw_bytes"),
 	}
 
-	mu := &protos.Mutation{
-		CommitImmediately: true,
+	mu := &api.Mutation{
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -321,16 +324,18 @@ func ExampleTxn_Query_unmarshal() {
 		Name    string   `json:"name,omitempty"`
 		Age     int      `json:"age,omitempty"`
 		Married bool     `json:"married,omitempty"`
-		Raw     []byte   `json:"raw_bytes",omitempty`
+		Raw     []byte   `json:"raw_bytes,omitempty"`
 		Friends []Person `json:"friend,omitempty"`
 		School  []School `json:"school,omitempty"`
 	}
 
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
@@ -357,7 +362,7 @@ func ExampleTxn_Query_unmarshal() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -370,14 +375,14 @@ func ExampleTxn_Query_unmarshal() {
 	}
 
 	txn := dg.NewTxn()
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	mu.SetJson = pb
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	assigned, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -423,10 +428,12 @@ func ExampleTxn_Query_unmarshal() {
 
 func ExampleTxn_Mutate_facets(t *testing.T) {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// This example shows example for SetObject using facets.
@@ -437,14 +444,14 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 
 	type Person struct {
 		Name       string   `json:"name,omitempty"`
-		NameOrigin string   `json:"name:origin,omitempty"`
+		NameOrigin string   `json:"name|origin,omitempty"`
 		Friends    []Person `json:"friend,omitempty"`
 
 		// These are facets on the friend edge.
-		Since  time.Time `json:"friend:since,omitempty"`
-		Family string    `json:"friend:family,omitempty"`
-		Age    float64   `json:"friend:age,omitempty"`
-		Close  bool      `json:"friend:close,omitempty"`
+		Since  time.Time `json:"friend|since,omitempty"`
+		Family string    `json:"friend|family,omitempty"`
+		Age    float64   `json:"friend|age,omitempty"`
+		Close  bool      `json:"friend|close,omitempty"`
 
 		School []School `json:"school,omitempty"`
 	}
@@ -474,14 +481,14 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	mu.SetJson = pb
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -524,10 +531,12 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 
 func ExampleTxn_Mutate_list(t *testing.T) {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 	// This example shows example for SetObject for predicates with list type.
 	type Person struct {
@@ -541,7 +550,7 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 		PhoneNumber: []int64{9876, 123},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		address: [string] .
 		phone_number: [int] .
@@ -552,14 +561,14 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	mu.SetJson = pb
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -595,12 +604,14 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 	fmt.Printf("Me: %+v\n", r.Me)
 }
 
-func ExampleTxn_Mutate_delete() {
+func ExampleDeleteEdges() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	type School struct {
@@ -613,34 +624,30 @@ func ExampleTxn_Mutate_delete() {
 		Name     string    `json:"name,omitempty"`
 		Age      int       `json:"age,omitempty"`
 		Married  bool      `json:"married,omitempty"`
-		Friends  []Person  `json:"friend,omitempty"`
+		Friends  []Person  `json:"friends,omitempty"`
 		Location string    `json:"loc,omitempty"`
-		School   []*School `json:"school,omitempty"`
+		Schools  []*School `json:"schools,omitempty"`
 	}
 
 	// Lets add some data first.
 	p := Person{
-		Uid:      "1000",
 		Name:     "Alice",
 		Age:      26,
 		Married:  true,
 		Location: "Riley Street",
 		Friends: []Person{{
-			Uid:  "1001",
 			Name: "Bob",
 			Age:  24,
 		}, {
-			Uid:  "1002",
 			Name: "Charlie",
 			Age:  29,
 		}},
-		School: []*School{&School{
-			Uid:  "1003",
+		Schools: []*School{&School{
 			Name: "Crown Public School",
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -652,76 +659,51 @@ func ExampleTxn_Mutate_delete() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{}
+	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	mu.SetJson = pb
-	mu.CommitImmediately = true
-	_, err = dg.NewTxn().Mutate(ctx, mu)
+	mu.CommitNow = true
+	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	uid := assigned.Uids["blank-0"]
 	q := fmt.Sprintf(`{
-		me(func: uid(1000)) {
+		me(func: uid(%s)) {
 			uid
 			name
 			age
 			loc
 			married
-			friend {
+			friends {
 				uid
 				name
 				age
 			}
-			school {
+			schools {
 				uid
 				name@en
 			}
 		}
-
-		me2(func: uid(1001)) {
-			uid
-			name
-			age
-		}
-
-		me3(func: uid(1003)) {
-			uid
-			name@en
-		}
-
-		me4(func: uid(1002)) {
-			uid
-			name
-			age
-		}
-	}`)
+	}`, uid)
 
 	resp, err := dg.NewTxn().Query(ctx, q)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Now lets delete the edge between Alice and Bob.
-	// Also lets delete the location for Alice.
-	p2 := Person{
-		Uid:      "1000",
-		Location: "",
-		Friends:  []Person{Person{Uid: "1001"}},
-	}
+	fmt.Println(string(resp.Json))
 
-	mu = &protos.Mutation{}
-	pb, err = json.Marshal(p2)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// Now lets delete the friend and location edge from Alice
+	mu = &api.Mutation{}
+	client.DeleteEdges(mu, uid, "friends", "loc")
 
-	mu.DeleteJson = pb
-	mu.CommitImmediately = true
+	mu.CommitNow = true
 	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -733,10 +715,7 @@ func ExampleTxn_Mutate_delete() {
 	}
 
 	type Root struct {
-		Me  []Person `json:"me"`
-		Me2 []Person `json:"me2"`
-		Me3 []School `json:"me3"`
-		Me4 []Person `json:"me4"`
+		Me []Person `json:"me"`
 	}
 
 	var r Root
@@ -746,14 +725,12 @@ func ExampleTxn_Mutate_delete() {
 
 func ExampleTxn_Mutate_deleteNode() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Check(err)
-	defer os.RemoveAll(clientDir)
-
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// In this test we check S * * deletion.
@@ -781,7 +758,7 @@ func ExampleTxn_Mutate_deleteNode() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -793,8 +770,8 @@ func ExampleTxn_Mutate_deleteNode() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{
-		CommitImmediately: true,
+	mu := &api.Mutation{
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -854,8 +831,8 @@ func ExampleTxn_Mutate_deleteNode() {
 		Uid: "1000",
 	}
 
-	mu = &protos.Mutation{
-		CommitImmediately: true,
+	mu = &api.Mutation{
+		CommitNow: true,
 	}
 	pb, err = json.Marshal(p2)
 	if err != nil {
@@ -882,10 +859,12 @@ func ExampleTxn_Mutate_deleteNode() {
 
 func ExampleTxn_Mutate_deletePredicate() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	type Person struct {
@@ -912,7 +891,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
@@ -924,8 +903,8 @@ func ExampleTxn_Mutate_deletePredicate() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{
-		CommitImmediately: true,
+	mu := &api.Mutation{
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -967,7 +946,7 @@ func ExampleTxn_Mutate_deletePredicate() {
 	}
 	fmt.Printf("Response after SetObject: %+v\n\n", r)
 
-	op = &protos.Operation{
+	op = &api.Operation{
 		DropAttr: "friend",
 	}
 	err = dg.Alter(ctx, op)

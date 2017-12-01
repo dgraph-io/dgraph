@@ -24,7 +24,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/types"
 	wk "github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -32,15 +32,15 @@ import (
 
 type schemaStore struct {
 	sync.RWMutex
-	m map[string]*protos.SchemaUpdate
+	m map[string]*intern.SchemaUpdate
 	*state
 }
 
-func newSchemaStore(initial []*protos.SchemaUpdate, opt options, state *state) *schemaStore {
+func newSchemaStore(initial []*intern.SchemaUpdate, opt options, state *state) *schemaStore {
 	s := &schemaStore{
-		m: map[string]*protos.SchemaUpdate{
-			"_predicate_": &protos.SchemaUpdate{
-				ValueType: protos.Posting_STRING,
+		m: map[string]*intern.SchemaUpdate{
+			"_predicate_": &intern.SchemaUpdate{
+				ValueType: intern.Posting_STRING,
 				List:      true,
 				Explicit:  true,
 			},
@@ -48,8 +48,8 @@ func newSchemaStore(initial []*protos.SchemaUpdate, opt options, state *state) *
 		state: state,
 	}
 	if opt.StoreXids {
-		s.m["xid"] = &protos.SchemaUpdate{
-			ValueType: protos.Posting_STRING,
+		s.m["xid"] = &intern.SchemaUpdate{
+			ValueType: intern.Posting_STRING,
 			Tokenizer: []string{"hash"},
 			Explicit:  true,
 		}
@@ -65,15 +65,15 @@ func newSchemaStore(initial []*protos.SchemaUpdate, opt options, state *state) *
 	return s
 }
 
-func (s *schemaStore) getSchema(pred string) *protos.SchemaUpdate {
+func (s *schemaStore) getSchema(pred string) *intern.SchemaUpdate {
 	s.RLock()
 	defer s.RUnlock()
 	return s.m[pred]
 }
 
-func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
+func (s *schemaStore) validateType(de *intern.DirectedEdge, objectIsUID bool) {
 	if objectIsUID {
-		de.ValueType = protos.Posting_UID
+		de.ValueType = intern.Posting_UID
 	}
 
 	s.RLock()
@@ -83,7 +83,7 @@ func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 		s.Lock()
 		sch, ok = s.m[de.Attr]
 		if !ok {
-			sch = &protos.SchemaUpdate{ValueType: de.ValueType}
+			sch = &intern.SchemaUpdate{ValueType: de.ValueType}
 			s.m[de.Attr] = sch
 		}
 		s.Unlock()

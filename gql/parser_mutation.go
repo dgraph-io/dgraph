@@ -19,22 +19,22 @@ package gql
 
 import (
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func ParseMutation(mutation string) (*protos.Mutation, error) {
+func ParseMutation(mutation string) (*api.Mutation, error) {
 	lexer := lex.Lexer{Input: mutation}
 	lexer.Run(lexInsideMutation)
 	it := lexer.NewIterator()
-	var mu *protos.Mutation
+	var mu *api.Mutation
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemText {
 			continue
 		}
 		if item.Typ == itemLeftCurl {
-			mu = new(protos.Mutation)
+			mu = new(api.Mutation)
 		}
 		if item.Typ == itemRightCurl {
 			return mu, nil
@@ -49,7 +49,7 @@ func ParseMutation(mutation string) (*protos.Mutation, error) {
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
-func parseMutationOp(it *lex.ItemIterator, op string, mu *protos.Mutation) error {
+func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
 	if mu == nil {
 		return x.Errorf("Mutation is nil.")
 	}

@@ -15,7 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package worker contains code for internal worker communication to perform
+// Package worker contains code for intern.worker communication to perform
 // queries and mutations.
 package worker
 
@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 
 	"google.golang.org/grpc"
@@ -50,21 +50,17 @@ var (
 )
 
 func workerPort() int {
-	return x.Config.PortOffset + Config.BaseWorkerPort
+	return x.Config.PortOffset + x.PortInternal
 }
 
 func Init(ps *badger.ManagedDB) {
 	pstore = ps
 	// needs to be initialized after group config
 	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
-	if Config.InMemoryComm {
-		allocator.Init(ps)
-	} else {
-		workerServer = grpc.NewServer(
-			grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-			grpc.MaxSendMsgSize(x.GrpcMaxSize),
-			grpc.MaxConcurrentStreams(math.MaxInt32))
-	}
+	workerServer = grpc.NewServer(
+		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
+		grpc.MaxSendMsgSize(x.GrpcMaxSize),
+		grpc.MaxConcurrentStreams(math.MaxInt32))
 }
 
 // grpcWorker struct implements the gRPC server interface.
@@ -88,12 +84,8 @@ func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
-// other workers for internal communication.
+// other workers for intern.communication.
 func RunServer(bindall bool) {
-	if Config.InMemoryComm {
-		return
-	}
-
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"
@@ -106,8 +98,8 @@ func RunServer(bindall bool) {
 	}
 	x.Printf("Worker listening at address: %v", ln.Addr())
 
-	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
-	protos.RegisterRaftServer(workerServer, &raftServer)
+	intern.RegisterWorkerServer(workerServer, &grpcWorker{})
+	intern.RegisterRaftServer(workerServer, &raftServer)
 	workerServer.Serve(ln)
 }
 
@@ -122,11 +114,8 @@ func BlockingStop() {
 	time.Sleep(5 * time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	groups().Node.waitForTxnMarks(ctx)
-	groups().Node.Stop()     // blocking stop raft node.
-	if workerServer != nil { // possible if Config.InMemoryComm == true
-		workerServer.GracefulStop() // blocking stop server
-	}
+	groups().Node.Stop()        // blocking stop raft node.
+	workerServer.GracefulStop() // blocking stop server
 	groups().Node.applyAllMarks(ctx)
 	posting.StopLRUEviction()
 	groups().Node.snapshot(0)

@@ -19,6 +19,7 @@ package zero
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"math/rand"
 	"sync"
@@ -30,7 +31,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
@@ -176,7 +177,7 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
-func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal) error {
+func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet.")
 	}
@@ -221,15 +222,15 @@ var (
 	errTabletAlreadyServed = errors.New("Tablet is already being served")
 )
 
-func newGroup() *protos.Group {
-	return &protos.Group{
-		Members: make(map[uint64]*protos.Member),
-		Tablets: make(map[string]*protos.Tablet),
+func newGroup() *intern.Group {
+	return &intern.Group{
+		Members: make(map[uint64]*intern.Member),
+		Tablets: make(map[string]*intern.Tablet),
 	}
 }
 
 func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
-	var p protos.ZeroProposal
+	var p intern.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
 	if len(e.Data) == 0 {
 		return p.Id, nil
@@ -253,6 +254,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		state.MaxRaftId = p.MaxRaftId
 	}
 	if p.Member != nil {
+		m := n.server.member(p.Member.Addr)
+		// Ensures that different nodes don't have same address.
+		if m != nil && (m.Id != p.Member.Id || m.GroupId != p.Member.GroupId) {
+			return p.Id, errInvalidAddress
+		}
 		if p.Member.GroupId == 0 {
 			state.Zeros[p.Member.Id] = p.Member
 			return p.Id, nil
@@ -262,7 +268,16 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			group = newGroup()
 			state.Groups[p.Member.GroupId] = group
 		}
-		_, has := group.Members[p.Member.Id]
+		m, has := group.Members[p.Member.Id]
+		if p.Member.AmDead {
+			if has {
+				delete(group.Members, p.Member.Id)
+				state.Removed = append(state.Removed, m)
+				conn.Get().Remove(m.Addr)
+			}
+			// else already removed.
+			return p.Id, nil
+		}
 		if !has && len(group.Members) >= n.server.NumReplicas {
 			// We shouldn't allow more members than the number of replicas.
 			return p.Id, errInvalidProposal
@@ -314,7 +329,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			p, state.MaxLeaseId, state.MaxTxnTs)
 	}
 	if p.Txn != nil {
-		n.server.orc.updateCommitStatus(p.Txn)
+		n.server.orc.updateCommitStatus(e.Index, p.Txn)
 	}
 
 	return p.Id, nil
@@ -324,28 +339,28 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)
 
-	if len(cc.Context) > 0 {
-		var rc protos.RaftContext
+	if cc.Type == raftpb.ConfChangeRemoveNode {
+		n.DeletePeer(cc.NodeID)
+		n.server.removeZero(cc.NodeID)
+	} else if len(cc.Context) > 0 {
+		var rc intern.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		n.Connect(rc.Id, rc.Addr)
 
-		m := &protos.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
 		n.server.storeZero(m)
 	}
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+	n.DoneConfChange(cc.ID, nil)
 	n.triggerLeaderChange()
 }
 
 func (n *node) triggerLeaderChange() {
-	select {
-	case n.server.leaderChangeCh <- struct{}{}:
-	default:
-		// Ok to ingore
-	}
-	m := &protos.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
-	go n.proposeAndWait(context.Background(), &protos.ZeroProposal{Member: m})
+	n.server.triggerLeaderChange()
+	m := &intern.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
+	go n.proposeAndWait(context.Background(), &intern.ZeroProposal{Member: m})
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {
@@ -356,11 +371,14 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	if restart {
 		x.Println("Restarting node for dgraphzero")
 		sp, err := n.Store.Snapshot()
-		var state protos.MembershipState
-		x.Check(state.Unmarshal(sp.Data))
-		n.server.SetMembershipState(&state)
-
 		x.Checkf(err, "Unable to get existing snapshot")
+		if !raft.IsEmptySnap(sp) {
+			var sd snapshotData
+			x.Check(json.Unmarshal(sp.Data, &sd))
+			n.server.SetMembershipState(sd.state)
+			n.SetPeerMap(sd.peers)
+		}
+
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	} else if len(opts.peer) > 0 {
@@ -370,15 +388,27 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		}
 
 		gconn := p.Get()
-		c := protos.NewRaftClient(gconn)
+		c := intern.NewRaftClient(gconn)
 		err = errJoinCluster
-		for err != nil {
-			time.Sleep(time.Millisecond)
-			_, err = c.JoinCluster(n.ctx, n.RaftContext)
+		delay := 50 * time.Millisecond
+		for i := 0; i < 8 && err != nil; i++ {
+			time.Sleep(delay)
+			ctx, cancel := context.WithTimeout(n.ctx, time.Second)
+			defer cancel()
+			// JoinCluster can block idefinitely, raft ignores conf change proposal
+			// if it has pending configuration.
+			_, err = c.JoinCluster(ctx, n.RaftContext)
+			if err == nil {
+				break
+			}
 			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
 				x.Fatalf("Error while joining cluster %v", err)
 			}
 			x.Printf("Error while joining cluster %v\n", err)
+			delay *= 2
+		}
+		if err != nil {
+			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
 		}
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
@@ -394,18 +424,25 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	return err
 }
 
+type snapshotData struct {
+	state *intern.MembershipState
+	peers map[uint64]string
+}
+
 func (n *node) trySnapshot() {
-	// TODO: FIx later
-	return
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 	si := existing.Metadata.Index
-	idx := n.Applied.DoneUntil()
+	idx := n.server.SyncedUntil()
 	if idx <= si+1000 {
 		return
 	}
 
-	data, err := n.server.MarshalMembershipState()
+	sd := &snapshotData{
+		state: n.server.membershipState(),
+		peers: n.PeerMap(),
+	}
+	data, err := json.Marshal(sd)
 	x.Check(err)
 
 	if tr, ok := trace.FromContext(n.ctx); ok {
@@ -429,6 +466,7 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
 
+	loop := 0
 	for {
 		select {
 		case <-ticker.C:
@@ -447,12 +485,13 @@ func (n *node) Run() {
 			n.SaveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state protos.MembershipState
+				var state intern.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				n.server.SetMembershipState(&state)
 			}
 
 			for _, entry := range rd.CommittedEntries {
+				loop++
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
@@ -486,7 +525,9 @@ func (n *node) Run() {
 			if len(rd.CommittedEntries) > 0 {
 				n.triggerUpdates()
 			}
-			n.trySnapshot()
+			if loop%1000 == 0 {
+				n.trySnapshot()
+			}
 			n.Raft().Advance()
 		}
 	}

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -13,16 +13,16 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
-func makeNquad(sub, pred string, val *protos.Value) *protos.NQuad {
-	return &protos.NQuad{
+func makeNquad(sub, pred string, val *api.Value) *api.NQuad {
+	return &api.NQuad{
 		Subject:     sub,
 		Predicate:   pred,
 		ObjectValue: val,
 	}
 }
 
-func makeNquadEdge(sub, pred, obj string) *protos.NQuad {
-	return &protos.NQuad{
+func makeNquadEdge(sub, pred, obj string) *api.NQuad {
+	return &api.NQuad{
 		Subject:   sub,
 		Predicate: pred,
 		ObjectId:  obj,
@@ -72,16 +72,16 @@ func TestNquadsFromJson1(t *testing.T) {
 
 	require.Equal(t, 5, len(nq))
 
-	oval := &protos.Value{&protos.Value_StrVal{"Alice"}}
+	oval := &api.Value{&api.Value_StrVal{"Alice"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 
-	oval = &protos.Value{&protos.Value_DoubleVal{26}}
+	oval = &api.Value{&api.Value_DoubleVal{26}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "age", oval))
 
-	oval = &protos.Value{&protos.Value_BoolVal{true}}
+	oval = &api.Value{&api.Value_BoolVal{true}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "married", oval))
 
-	oval = &protos.Value{&protos.Value_StrVal{tn.Format(time.RFC3339Nano)}}
+	oval = &api.Value{&api.Value_StrVal{tn.Format(time.RFC3339Nano)}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "now", oval))
 
 	var g geom.T
@@ -117,13 +117,13 @@ func TestNquadsFromJson2(t *testing.T) {
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "_:blank-1"))
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "1000"))
 
-	oval := &protos.Value{&protos.Value_StrVal{"Charlie"}}
+	oval := &api.Value{&api.Value_StrVal{"Charlie"}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "name", oval))
 
-	oval = &protos.Value{&protos.Value_BoolVal{false}}
+	oval = &api.Value{&api.Value_BoolVal{false}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "married", oval))
 
-	oval = &protos.Value{&protos.Value_StrVal{"Bob"}}
+	oval = &api.Value{&api.Value_StrVal{"Bob"}}
 	require.Contains(t, nq, makeNquad("1000", "name", oval))
 }
 
@@ -144,7 +144,7 @@ func TestNquadsFromJson3(t *testing.T) {
 	require.Equal(t, 3, len(nq))
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "school", "_:blank-1"))
 
-	oval := &protos.Value{&protos.Value_StrVal{"Wellington Public School"}}
+	oval := &api.Value{&api.Value_StrVal{"Wellington Public School"}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval))
 }
 
@@ -154,11 +154,18 @@ func TestNquadsFromJson4(t *testing.T) {
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
-	oval := &protos.Value{&protos.Value_StrVal{"Alice"}}
+	oval := &api.Value{&api.Value_StrVal{"Alice"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 }
 
-func checkCount(t *testing.T, nq []*protos.NQuad, pred string, count int) {
+func TestNquadsDeleteEdges(t *testing.T) {
+	json := `[{"uid": "0x1","name":null,"mobile":null,"car":null}]`
+	nq, err := nquadsFromJson([]byte(json), delete)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(nq))
+}
+
+func checkCount(t *testing.T, nq []*api.NQuad, pred string, count int) {
 	for _, n := range nq {
 		if n.Predicate == pred {
 			require.Equal(t, count, len(n.Facets))
@@ -168,7 +175,7 @@ func checkCount(t *testing.T, nq []*protos.NQuad, pred string, count int) {
 }
 
 func TestNquadsFromJsonFacets1(t *testing.T) {
-	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123","mobile:since":"2006-01-02T15:04:05Z","car:first":"true"}]`
+	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123","mobile|since":"2006-01-02T15:04:05Z","car|first":"true"}]`
 
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
@@ -179,7 +186,7 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
 
 func TestNquadsFromJsonFacets2(t *testing.T) {
 	// Dave has uid facets which should go on the edge between Alice and Dave
-	json := `[{"name":"Alice","friend":[{"name":"Dave","friend:close":"true"}]}]`
+	json := `[{"name":"Alice","friend":[{"name":"Dave","friend|close":"true"}]}]`
 
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
@@ -200,7 +207,7 @@ func TestNquadsFromJsonError1(t *testing.T) {
 
 	_, err = nquadsFromJson(b, delete)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "uid must be present and non-zero.")
+	require.Contains(t, err.Error(), "uid must be present and non-zero while deleting edges.")
 }
 
 func TestNquadsFromJsonList(t *testing.T) {
@@ -228,9 +235,9 @@ func TestParseNQuads(t *testing.T) {
 	`
 	nqs, err := parseNQuads([]byte(nquads), set)
 	require.NoError(t, err)
-	require.Equal(t, []*protos.NQuad{
-		makeNquad("_:a", "predA", &protos.Value{&protos.Value_DefaultVal{"A"}}),
-		makeNquad("_:b", "predB", &protos.Value{&protos.Value_DefaultVal{"B"}}),
+	require.Equal(t, []*api.NQuad{
+		makeNquad("_:a", "predA", &api.Value{&api.Value_DefaultVal{"A"}}),
+		makeNquad("_:b", "predB", &api.Value{&api.Value_DefaultVal{"B"}}),
 		makeNquadEdge("_:a", "join", "_:b"),
 	}, nqs)
 }
@@ -239,9 +246,9 @@ func TestParseNQuadsWindowsNewline(t *testing.T) {
 	nquads := "_:a <predA> \"A\" .\r\n_:b <predB> \"B\" ."
 	nqs, err := parseNQuads([]byte(nquads), set)
 	require.NoError(t, err)
-	require.Equal(t, []*protos.NQuad{
-		makeNquad("_:a", "predA", &protos.Value{&protos.Value_DefaultVal{"A"}}),
-		makeNquad("_:b", "predB", &protos.Value{&protos.Value_DefaultVal{"B"}}),
+	require.Equal(t, []*api.NQuad{
+		makeNquad("_:a", "predA", &api.Value{&api.Value_DefaultVal{"A"}}),
+		makeNquad("_:b", "predB", &api.Value{&api.Value_DefaultVal{"B"}}),
 	}, nqs)
 }
 
@@ -249,7 +256,7 @@ func TestParseNQuadsDelete(t *testing.T) {
 	nquads := `_:a * * .`
 	nqs, err := parseNQuads([]byte(nquads), delete)
 	require.NoError(t, err)
-	require.Equal(t, []*protos.NQuad{
-		makeNquad("_:a", x.Star, &protos.Value{&protos.Value_DefaultVal{x.Star}}),
+	require.Equal(t, []*api.NQuad{
+		makeNquad("_:a", x.Star, &api.Value{&api.Value_DefaultVal{x.Star}}),
 	}, nqs)
 }

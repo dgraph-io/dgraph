@@ -30,19 +30,21 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 )
 
 var (
 	errEmptyPredicate = x.Errorf("Predicate not specified")
 	errNotLeader      = x.Errorf("Server is not leader of this group")
-	emptyPayload      = protos.Payload{}
+	emptyPayload      = api.Payload{}
 )
 
 // size of kvs won't be too big, we would take care before proposing.
-func populateKeyValues(ctx context.Context, kvs []*protos.KV) error {
+func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
 	// No new deletion/background cleanup would start after we start streaming tablet,
 	// so all the proposals for a particular tablet would atmost wait for deletion of
 	// single tablet.
@@ -74,14 +76,14 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if pl == nil {
 		return x.Errorf("Unable to find a connection for groupd: %d\n", gid)
 	}
-	c := protos.NewWorkerClient(pl.Get())
+	c := intern.NewWorkerClient(pl.Get())
 	stream, err := c.ReceivePredicate(ctx)
 	if err != nil {
 		return err
 	}
 
 	count := 0
-	sendPl := func(stream protos.Worker_ReceivePredicateClient, l *posting.List) error {
+	sendPl := func(stream intern.Worker_ReceivePredicateClient, l *posting.List) error {
 		kv, err := l.MarshalToKv()
 		if err != nil {
 			return err
@@ -130,7 +132,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if err != nil {
 		return err
 	}
-	kv := &protos.KV{}
+	kv := &intern.KV{}
 	kv.Key = schemaKey
 	kv.Val = val
 	kv.Version = 1
@@ -155,9 +157,9 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	return nil
 }
 
-func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
+func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KV) error {
 	n := groups().Node
-	proposal := &protos.Proposal{}
+	proposal := &intern.Proposal{}
 	size := 0
 	firstKV := true
 	var predicate string
@@ -177,7 +179,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 			pk := x.Parse(kv.Key)
 			predicate = pk.Attr
 			// Delete on all nodes.
-			p := &protos.Proposal{CleanPredicate: pk.Attr}
+			p := &intern.Proposal{CleanPredicate: pk.Attr}
 			err := groups().Node.ProposeAndWait(ctx, p)
 			if err != nil {
 				x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
@@ -195,14 +197,14 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *protos.KV) error {
 
 // Returns count which can be used to verify whether we have moved all keys
 // for a predicate or not.
-func (w *grpcWorker) ReceivePredicate(stream protos.Worker_ReceivePredicateServer) error {
+func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServer) error {
 	// Values can be pretty big so having less buffer is safer.
-	kvs := make(chan *protos.KV, 10)
+	kvs := make(chan *intern.KV, 10)
 	che := make(chan error, 1)
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	ctx := stream.Context()
-	payload := &protos.Payload{}
+	payload := &api.Payload{}
 
 	go func() {
 		// Takes care of throttling and batching.
@@ -240,7 +242,7 @@ func (w *grpcWorker) ReceivePredicate(stream protos.Worker_ReceivePredicateServe
 }
 
 func (w *grpcWorker) MovePredicate(ctx context.Context,
-	in *protos.MovePredicatePayload) (*protos.Payload, error) {
+	in *intern.MovePredicatePayload) (*api.Payload, error) {
 	if groups().gid != in.SourceGroupId {
 		return &emptyPayload,
 			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
@@ -258,7 +260,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	}
 
 	// Ensures that all future mtuations beyond this point are rejected
-	if err := n.ProposeAndWait(ctx, &protos.Proposal{State: in.State}); err != nil {
+	if err := n.ProposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
 	tctxs := posting.Txns().Iterate(func(key []byte) bool {
@@ -267,7 +269,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	})
 	if len(tctxs) > 0 {
 		go tryAbortTransactions(tctxs)
-		return &emptyPayload, posting.ErrConflict
+		return &emptyPayload, y.ErrConflict
 	}
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
 	n.applyAllMarks(ctx)

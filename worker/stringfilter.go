@@ -20,7 +20,7 @@ package worker
 import (
 	"strings"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -38,8 +38,8 @@ type stringFilter struct {
 	eqVals    []types.Val
 }
 
-func matchStrings(uids *protos.List, values [][]types.Val, filter stringFilter) *protos.List {
-	rv := &protos.List{}
+func matchStrings(uids *intern.List, values [][]types.Val, filter stringFilter) *intern.List {
+	rv := &intern.List{}
 	for i := 0; i < len(values); i++ {
 		for j := 0; j < len(values[i]); j++ {
 			if len(values[i][j].Value.(string)) == 0 {

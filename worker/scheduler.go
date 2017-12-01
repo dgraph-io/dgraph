@@ -24,7 +24,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -34,7 +34,7 @@ import (
 type task struct {
 	rid  uint64 // raft index corresponding to the task
 	pid  uint32 // proposal id corresponding to the task
-	edge *protos.DirectedEdge
+	edge *intern.DirectedEdge
 }
 
 type scheduler struct {
@@ -51,7 +51,7 @@ type scheduler struct {
 func (s *scheduler) init(n *node) {
 	s.n = n
 	s.tasks = make(map[uint32][]*task)
-	s.tch = make(chan *task, 1000)
+	s.tch = make(chan *task, 10000)
 	for i := 0; i < 1000; i++ {
 		go s.processTasks()
 	}
@@ -108,7 +108,7 @@ func (s *scheduler) waitForConflictResolution(attr string) {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error) {
+func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error) {
 	defer func() {
 		s.n.props.Done(proposal.Id, err)
 	}()
@@ -117,6 +117,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Txns().Reset()
 		if err = s.n.Applied.WaitForMark(s.n.ctx, index-1); err != nil {
+			posting.TxnMarks().Done(index)
 			return err
 		}
 		schema.State().DeleteAll()
@@ -127,10 +128,12 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 
 	if len(proposal.Mutations.Schema) > 0 {
 		if err = s.n.Applied.WaitForMark(s.n.ctx, index-1); err != nil {
+			posting.TxnMarks().Done(index)
 			return err
 		}
 		startTs := proposal.Mutations.StartTs
 		if startTs == 0 {
+			posting.TxnMarks().Done(index)
 			return errors.New("StartTs must be provided.")
 		}
 		for _, supdate := range proposal.Mutations.Schema {
@@ -173,6 +176,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 			// We should only have one edge drop in one mutation call.
 			ctx, _ := s.n.props.CtxAndTxn(proposal.Id)
 			if err = s.n.Applied.WaitForMark(ctx, index-1); err != nil {
+				posting.TxnMarks().Done(index)
 				return
 			}
 			s.waitForConflictResolution(edge.Attr)
@@ -204,8 +208,9 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) (err error
 	m := proposal.Mutations
 	pctx := s.n.props.pctx(proposal.Id)
 	txn := &posting.Txn{
-		StartTs: m.StartTs,
-		Indices: []uint64{index},
+		StartTs:             m.StartTs,
+		Indices:             []uint64{index},
+		IgnoreIndexConflict: m.IgnoreIndexConflict,
 	}
 	pctx.txn = posting.Txns().PutOrMergeIndex(txn)
 	for _, edge := range m.Edges {

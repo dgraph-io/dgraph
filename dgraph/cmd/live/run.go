@@ -32,6 +32,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -42,7 +43,7 @@ import (
 	"github.com/dgraph-io/badger"
 	bopt "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -50,32 +51,50 @@ import (
 )
 
 type options struct {
-	files      string
-	schemaFile string
-	dgraph     string
-	zero       string
-	concurrent int
-	numRdf     int
-	clientDir  string
+	files               string
+	schemaFile          string
+	dgraph              string
+	zero                string
+	concurrent          int
+	numRdf              int
+	clientDir           string
+	ignoreIndexConflict bool
 }
 
 var opt options
 var tlsConf x.TLSHelperConfig
 
+var Live x.SubCommand
+
 func init() {
-	flag := LiveCmd.Flags()
-	flag.StringVarP(&opt.files, "rdfs", "r", "", "Location of rdf files to load")
-	flag.StringVarP(&opt.schemaFile, "schema", "s", "", "Location of schema file")
-	flag.StringVarP(&opt.dgraph, "dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	flag.StringVarP(&opt.zero, "zero", "z", "127.0.0.1:8888", "Dgraphzero gRPC server address")
-	flag.StringVarP(&opt.clientDir, "xidmap", "x", "x", "Directory to store xid to uid mapping")
-	flag.IntVarP(&opt.concurrent, "conc", "c", 1,
+	Live.Cmd = &cobra.Command{
+		Use:   "live",
+		Short: "Run Dgraph live loader",
+		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Live.Conf).Stop()
+			run()
+		},
+	}
+	Live.EnvPrefix = "DGRAPH_LIVE"
+
+	flag := Live.Cmd.Flags()
+	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
+	flag.StringP("schema", "s", "", "Location of schema file")
+	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
+	flag.StringP("zero", "z", "127.0.0.1:7080", "Dgraphzero gRPC server address")
+	flag.IntP("conc", "c", 1,
 		"Number of concurrent requests to make to Dgraph")
-	flag.IntVarP(&opt.numRdf, "batch", "b", 10000,
+	flag.IntP("batch", "b", 10000,
 		"Number of RDF N-Quads to send as part of a mutation.")
+	flag.StringP("xidmap", "x", "x", "Directory to store xid to uid mapping")
+	flag.BoolP("ignore_index_conflict", "i", true,
+		"Ignores conflicts on index keys during transaction")
 
 	// TLS configuration
-	x.SetTLSFlags(&tlsConf, flag)
+	x.RegisterTLSFlags(flag)
+	flag.Bool("tls_insecure", false, "Skip certificate validation (insecure)")
+	flag.String("tls_ca_certs", "", "CA Certs file path.")
+	flag.String("tls_server_name", "", "Server name.")
 }
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -87,7 +106,7 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 	var err error
 	for isPrefix && err == nil {
 		var line []byte
-		// The returned line is an internal buffer in bufio and is only
+		// The returned line is an intern.buffer in bufio and is only
 		// valid until the next call to ReadLine. It needs to be copied
 		// over to our own buffer.
 		line, isPrefix, err = r.ReadLine()
@@ -118,12 +137,23 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 		x.Checkf(err, "Error while reading file")
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = string(b)
 	return dgraphClient.Alter(ctx, op)
 }
 
 func (l *loader) uid(val string) string {
+	// Attempt to parse as a UID (in the same format that dgraph outputs - a
+	// hex number prefixed by "0x"). If parsing succeeds, then this is assumed
+	// to be an existing node in the graph. There is limited protection against
+	// a user selecting an unassigned UID in this way - it may be assigned
+	// later to another node. It is up to the user to avoid this.
+	if strings.HasPrefix(val, "0x") {
+		if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
+			return val, nil
+		}
+	}
+
 	uid, _ := l.alloc.AssignUid(val)
 	return fmt.Sprintf("%#x", uint64(uid))
 }
@@ -151,7 +181,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	defer f.Close()
 
 	var line uint64
-	mu := protos.Mutation{}
+	mu := api.Mutation{}
 	var batchSize int
 	for {
 		select {
@@ -188,13 +218,13 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 			l.reqs <- mu
 			atomic.AddUint64(&l.rdfs, uint64(batchSize))
 			batchSize = 0
-			mu = protos.Mutation{}
+			mu = api.Mutation{}
 		}
 	}
 	if batchSize > 0 {
 		l.reqs <- mu
 		atomic.AddUint64(&l.rdfs, uint64(batchSize))
-		mu = protos.Mutation{}
+		mu = api.Mutation{}
 	}
 	return nil
 }
@@ -205,9 +235,13 @@ func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
 			grpc.WithDefaultCallOptions(
 				grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 				grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-			grpc.WithInsecure())
+			grpc.WithInsecure(),
+			grpc.WithBlock(),
+			grpc.WithTimeout(10*time.Second))
 	}
 
+	tlsConf.ConfigType = x.TLSClientConfig
+	tlsConf.CertRequired = false
 	tlsCfg, _, err := x.GenerateTLSConfig(tlsConf)
 	if err != nil {
 		return nil, err
@@ -219,7 +253,7 @@ func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
 		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second))
+		grpc.WithTimeout(10*time.Second))
 }
 
 func fileList(files string) []string {
@@ -241,7 +275,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	x.Checkf(err, "Error while creating badger KV posting store")
 
 	connzero, err := setupConnection(opt.zero, true)
-	x.Checkf(err, "While trying to dial gRPC")
+	x.Checkf(err, "While trying to setup connection to Zero")
 
 	alloc := xidmap.New(
 		kv,
@@ -256,7 +290,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 		opts:     opts,
 		dc:       dc,
 		start:    time.Now(),
-		reqs:     make(chan protos.Mutation, opts.Pending*2),
+		reqs:     make(chan api.Mutation, opts.Pending*2),
 		alloc:    alloc,
 		kv:       kv,
 		zeroconn: connzero,
@@ -274,15 +308,22 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	return l
 }
 
-var LiveCmd = &cobra.Command{
-	Use:   "live",
-	Short: "Run Dgraph live loader",
-	Run: func(cmd *cobra.Command, args []string) {
-		run()
-	},
-}
-
 func run() {
+	opt = options{
+		files:               Live.Conf.GetString("rdfs"),
+		schemaFile:          Live.Conf.GetString("schema"),
+		dgraph:              Live.Conf.GetString("dgraph"),
+		zero:                Live.Conf.GetString("zero"),
+		concurrent:          Live.Conf.GetInt("conc"),
+		numRdf:              Live.Conf.GetInt("batch"),
+		clientDir:           Live.Conf.GetString("xidmap"),
+		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
+	}
+	x.LoadTLSConfig(&tlsConf, Live.Conf)
+	tlsConf.Insecure = Live.Conf.GetBool("tls_insecure")
+	tlsConf.RootCACerts = Live.Conf.GetString("tls_ca_certs")
+	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
+
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
@@ -294,13 +335,13 @@ func run() {
 	}
 
 	ds := strings.Split(opt.dgraph, ",")
-	var clients []protos.DgraphClient
+	var clients []api.DgraphClient
 	for _, d := range ds {
 		conn, err := setupConnection(d, !tlsConf.CertRequired)
-		x.Checkf(err, "While trying to dial gRPC")
+		x.Checkf(err, "While trying to setup connection to Dgraph server.")
 		defer conn.Close()
 
-		dc := protos.NewDgraphClient(conn)
+		dc := api.NewDgraphClient(conn)
 		clients = append(clients, dc)
 	}
 	dgraphClient := client.NewDgraphClient(clients...)

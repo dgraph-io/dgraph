@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,7 +33,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -48,7 +50,7 @@ func childAttrs(sg *SubGraph) []string {
 	return out
 }
 
-func taskValues(t *testing.T, v []*protos.ValueList) []string {
+func taskValues(t *testing.T, v []*intern.ValueList) []string {
 	out := make([]string, len(v))
 	for i, tv := range v {
 		out[i] = string(tv.Values[0].Val)
@@ -56,11 +58,13 @@ func taskValues(t *testing.T, v []*protos.ValueList) []string {
 	return out
 }
 
-func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
+var index uint64
+
+func addEdge(t *testing.T, attr string, src uint64, edge *intern.DirectedEdge) {
 	// Mutations don't go through normal flow, so default schema for predicate won't be present.
 	// Lets add it.
 	if _, ok := schema.State().Get(attr); !ok {
-		schema.State().Set(attr, protos.SchemaUpdate{
+		schema.State().Set(attr, intern.SchemaUpdate{
 			Predicate: attr,
 			ValueType: edge.ValueType,
 		})
@@ -69,8 +73,8 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 	startTs := timestamp()
 	txn := &posting.Txn{
 		StartTs: startTs,
+		Indices: []uint64{atomic.AddUint64(&index, 1)},
 	}
-	txn = posting.Txns().PutOrMergeIndex(txn)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, txn))
 
@@ -80,7 +84,7 @@ func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
 	}()
 }
 
-func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {
+func makeFacets(facetKVs map[string]string) (fs []*api.Facet, err error) {
 	if len(facetKVs) == 0 {
 		return nil, nil
 	}
@@ -102,10 +106,10 @@ func makeFacets(facetKVs map[string]string) (fs []*protos.Facet, err error) {
 
 func addPredicateEdge(t *testing.T, attr string, src uint64) {
 	if worker.Config.ExpandEdge {
-		edge := &protos.DirectedEdge{
+		edge := &intern.DirectedEdge{
 			Value: []byte(attr),
 			Attr:  "_predicate_",
-			Op:    protos.DirectedEdge_SET,
+			Op:    intern.DirectedEdge_SET,
 		}
 		addEdge(t, "_predicate_", src, edge)
 	}
@@ -121,13 +125,13 @@ func addEdgeToLangValue(t *testing.T, attr string, src uint64,
 	value, lang string, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		Value:  []byte(value),
 		Lang:   lang,
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     protos.DirectedEdge_SET,
+		Op:     intern.DirectedEdge_SET,
 		Facets: fs,
 	}
 	addEdge(t, attr, src, edge)
@@ -138,13 +142,13 @@ func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 	typ types.TypeID, value []byte, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		Value:     value,
-		ValueType: protos.Posting_ValType(typ),
+		ValueType: intern.Posting_ValType(typ),
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
-		Op:        protos.DirectedEdge_SET,
+		Op:        intern.DirectedEdge_SET,
 		Facets:    fs,
 	}
 	addEdge(t, attr, src, edge)
@@ -155,15 +159,15 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 	dst uint64, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		ValueId: dst,
 		// This is used to set uid schema type for pred for the purpose of tests. Actual mutation
 		// won't set ValueType to types.UidID.
-		ValueType: protos.Posting_ValType(types.UidID),
+		ValueType: intern.Posting_ValType(types.UidID),
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
-		Op:        protos.DirectedEdge_SET,
+		Op:        intern.DirectedEdge_SET,
 		Facets:    fs,
 	}
 	addEdge(t, attr, src, edge)
@@ -171,25 +175,25 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 }
 
 func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
-	edge := &protos.DirectedEdge{
-		ValueType: protos.Posting_ValType(types.UidID),
+	edge := &intern.DirectedEdge{
+		ValueType: intern.Posting_ValType(types.UidID),
 		ValueId:   dst,
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
-		Op:        protos.DirectedEdge_DEL,
+		Op:        intern.DirectedEdge_DEL,
 	}
 	addEdge(t, attr, src, edge)
 }
 
 func delEdgeToLangValue(t *testing.T, attr string, src uint64, value, lang string) {
-	edge := &protos.DirectedEdge{
+	edge := &intern.DirectedEdge{
 		Value:  []byte(value),
 		Lang:   lang,
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     protos.DirectedEdge_DEL,
+		Op:     intern.DirectedEdge_DEL,
 	}
 	addEdge(t, attr, src, edge)
 }
@@ -208,12 +212,13 @@ func defaultContext() context.Context {
 	return context.Background()
 }
 
-func processToFastJsonReq(t *testing.T, query string) (string, error) {
-	return processToFastJsonReqCtx(t, query, defaultContext())
+func processToFastJson(t *testing.T, query string) (string, error) {
+	return processToFastJsonCtxVars(t, query, defaultContext(), nil)
 }
 
-func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (string, error) {
-	res, err := gql.Parse(gql.Request{Str: query, Http: true})
+func processToFastJsonCtxVars(t *testing.T, query string, ctx context.Context,
+	vars map[string]string) (string, error) {
+	res, err := gql.Parse(gql.Request{Str: query, Variables: vars})
 	if err != nil {
 		return "", err
 	}
@@ -237,13 +242,13 @@ func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (s
 	return string(resp), err
 }
 
-func processToFastJSON(t *testing.T, query string) string {
-	res, err := processToFastJsonReq(t, query)
+func processToFastJsonNoErr(t *testing.T, query string) string {
+	res, err := processToFastJson(t, query)
 	require.NoError(t, err)
 	return res
 }
 
-func processSchemaQuery(t *testing.T, q string) []*protos.SchemaNode {
+func processSchemaQuery(t *testing.T, q string) []*api.SchemaNode {
 	res, err := gql.Parse(gql.Request{Str: q})
 	require.NoError(t, err)
 

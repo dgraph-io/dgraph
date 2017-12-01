@@ -28,7 +28,7 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -57,8 +57,8 @@ func sane(s string) bool {
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
-func Parse(line string) (protos.NQuad, error) {
-	var rnq protos.NQuad
+func Parse(line string) (api.NQuad, error) {
+	var rnq api.NQuad
 	l := lex.Lexer{
 		Input: line,
 	}
@@ -99,7 +99,7 @@ L:
 			} else if rnq.Predicate == "" {
 				rnq.Predicate = x.Star
 			} else {
-				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
+				rnq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
 			}
 		case itemLiteral:
 			var err error
@@ -117,7 +117,7 @@ L:
 			// if lang tag is specified then type is set to string
 			// grammar allows either ^^ iriref or lang tag
 			if len(oval) > 0 {
-				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{oval}}
+				rnq.ObjectValue = &api.Value{&api.Value_DefaultVal{oval}}
 				oval = ""
 			}
 		case itemObjectType:
@@ -194,7 +194,7 @@ L:
 		return rnq, ErrEmpty
 	}
 	if len(oval) > 0 {
-		rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{oval}}
+		rnq.ObjectValue = &api.Value{&api.Value_DefaultVal{oval}}
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
@@ -211,8 +211,8 @@ L:
 }
 
 // ConvertToNQuads parses multi line mutation string to a list of NQuads.
-func ConvertToNQuads(mutation string) ([]*protos.NQuad, error) {
-	var nquads []*protos.NQuad
+func ConvertToNQuads(mutation string) ([]*api.NQuad, error) {
+	var nquads []*api.NQuad
 	r := strings.NewReader(mutation)
 	reader := bufio.NewReader(r)
 
@@ -230,7 +230,7 @@ func ConvertToNQuads(mutation string) ([]*protos.NQuad, error) {
 		nq, err := Parse(ln)
 		if len(nq.Predicate) > 0 && nq.Predicate[0] == '_' &&
 			nq.Predicate[len(nq.Predicate)-1] == '_' {
-			return nil, x.Errorf("Predicates starting and ending with _ are reserved internally.")
+			return nil, x.Errorf("Predicates starting and ending with _ are reserved intern.y.")
 		}
 		if err == ErrEmpty { // special case: comment/empty line
 			continue
@@ -245,7 +245,7 @@ func ConvertToNQuads(mutation string) ([]*protos.NQuad, error) {
 	return nquads, nil
 }
 
-func parseFacets(it *lex.ItemIterator, rnq *protos.NQuad) error {
+func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {
 	if !it.Next() {
 		return x.Errorf("Unexpected end of facets.")
 	}

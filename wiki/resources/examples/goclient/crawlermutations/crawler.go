@@ -86,7 +86,7 @@ import (
 	//"github.com/gogo/protobuf/proto"	// for with fmt.Printf("Raw Response: %+v\n", proto.MarshalTextString(resp))
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 )
 
 var (
@@ -232,7 +232,7 @@ func getContext() context.Context {
 }
 
 // Setup a request and run a query with variables.
-func runQueryWithVariables(dgraphClient *client.Dgraph, query string, varMap map[string]string) (*protos.Response, error) {
+func runQueryWithVariables(dgraphClient *client.Dgraph, query string, varMap map[string]string) (*api.Response, error) {
 	req := client.Req{}
 	req.SetQueryWithVariables(query, varMap)
 	return dgraphClient.Run(getContext(), &req)

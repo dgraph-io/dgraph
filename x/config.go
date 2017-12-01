@@ -16,8 +16,6 @@
 package x
 
 type Options struct {
-	ConfigFile string
-	Version    bool
 	DebugMode  bool
 	PortOffset int
 }

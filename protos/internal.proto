@@ -1,0 +1,397 @@
+/*
+ * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+
+package intern;
+
+import "api.proto";
+
+message List {
+	repeated fixed64 uids = 1;
+}
+
+message TaskValue {
+	bytes val = 1;
+	Posting.ValType val_type = 2;
+}
+
+message SrcFunction {
+	string name = 1;
+	repeated string args = 3;
+	bool isCount = 4;
+}
+
+message Query {
+	string attr = 1;
+	repeated string langs = 2; // language list for attribute
+	fixed64 after_uid = 3;  // Only return UIDs greater than this.
+	bool do_count = 4;      // Are we just getting lengths?
+
+	// Exactly one of uids and terms is populated.
+	List uid_list = 5;
+
+	// Function to generate or filter UIDs.
+	SrcFunction src_func = 6;
+
+	bool reverse = 7;  // Whether this is a reverse edge.
+
+	FacetParams facet_param = 8; // which facets to fetch
+	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
+
+	bool expand_all = 10; // expand all language variants.
+
+	uint64 read_ts = 13;
+	api.LinRead lin_read = 14;
+}
+
+message ValueList {
+	repeated TaskValue values = 1;
+}
+
+message LangList {
+	repeated string lang = 1;
+}
+
+message Result {
+	repeated List uid_matrix = 1;
+	repeated ValueList value_matrix = 2;
+	repeated uint32 counts = 3;
+	bool intersect_dest = 4;
+	repeated FacetsList facet_matrix = 5;
+	repeated LangList lang_matrix = 6;
+
+	api.LinRead lin_read = 14;
+}
+
+message Order {
+	string attr = 1;
+	bool desc = 2;
+	repeated string langs = 3;
+}
+
+message SortMessage {
+	repeated Order order = 1;
+	repeated List uid_matrix = 2;
+	int32 count = 3;   // Return this many elements.
+	int32 offset = 4;  // Skip this many elements.
+
+	uint64 read_ts = 13;
+	api.LinRead lin_read = 14;
+}
+
+message SortResult {
+	repeated List uid_matrix = 1;
+
+	api.LinRead lin_read = 14;
+}
+
+message RaftContext {
+	fixed64 id = 1;
+	uint32 group = 2;
+	string addr = 3;
+}
+
+// Member stores information about RAFT group member for a single RAFT node.
+// Note that each server can be serving multiple RAFT groups. Each group would have
+// one RAFT node per server serving that group.
+message Member {
+	fixed64 id = 1;
+	uint32 group_id = 2;
+	string addr = 3;
+	bool leader = 4;
+	bool am_dead = 5;
+	uint64 last_update = 6;
+
+	bool cluster_info_only = 13;
+}
+
+message Group {
+	map<uint64, Member> members = 1; // Raft ID is the key.
+	map<string, Tablet> tablets = 2; // Predicate + others are key.
+}
+
+message ZeroProposal {
+	uint32 id = 1;
+	Member member = 2;
+	Tablet tablet = 3;
+	uint64 maxLeaseId = 4;
+	uint64 maxTxnTs = 5;
+	uint64 maxRaftId = 6;
+	api.TxnContext txn = 7;
+}
+
+// MembershipState is used to pack together the current membership state of all the nodes
+// in the caller server; and the membership updates recorded by the callee server since
+// the provided lastUpdate.
+message MembershipState {
+	uint64 counter = 1;  // used to find latest membershipState in case of race.
+	map<uint32, Group> groups = 2;
+	map<uint64, Member> zeros = 3;
+	uint64 maxLeaseId = 4;
+	uint64 maxTxnTs = 5;
+	uint64 maxRaftId = 6;
+	repeated Member removed = 7;
+}
+
+message ConnectionState {
+	Member member = 1;
+	MembershipState state = 2;
+}
+
+message Tablet {
+	uint32 group_id  = 1; // Served by which group.
+	string predicate = 2;
+	bool force       = 3; // Used while moving predicate.
+	bool read_only   = 4;  // Used to block mutations on this predicate.
+	int64 space      = 7;
+}
+
+message DirectedEdge {
+	fixed64 entity = 1;    // Subject or source node / UID.
+	string attr = 2;       // Attribute or predicate. Labels the edge.
+	bytes value = 3;       // Edge points to a value.
+	Posting.ValType value_type = 4;  // The type of the value
+	fixed64 value_id = 5;   // Object or destination node / UID.
+	string label = 6;
+	string lang = 7;
+	enum Op {
+		SET = 0;
+		DEL = 1;
+	}
+	Op op = 8;
+	repeated api.Facet facets = 9;
+}
+
+message Mutations {
+	uint32 group_id = 1;
+	uint64 start_ts = 2;
+	repeated DirectedEdge edges = 3;
+	repeated SchemaUpdate schema = 4;
+	bool drop_all = 5;
+	bool ignore_index_conflict = 6;
+}
+
+message KeyValues {
+	repeated KV kv = 1;
+}
+
+message Proposal {
+	uint32 id = 1;
+	Mutations mutations = 2;
+	api.TxnContext txn_context = 3;
+	repeated KV kv = 4;
+	MembershipState state = 5;
+	string clean_predicate = 6; // Delete the predicate which was moved to other group.
+}
+
+message KV {
+	bytes key = 1;
+	bytes val = 2;
+	bytes userMeta = 3;
+	uint64 version = 4;
+}
+
+message KC {
+	bytes key = 1;
+	uint64 timestamp = 2;
+}
+
+message GroupKeys {
+	uint32 group_id = 1;
+	repeated KC keys = 2;
+}
+
+// Posting messages.
+message Posting {
+	fixed64 uid = 1;
+	bytes value = 2;
+	enum ValType {
+		DEFAULT = 0;
+		BINARY = 1;
+		INT = 2; // We treat it as int64.
+		FLOAT = 3;
+		BOOL = 4;
+		DATETIME = 5;
+		GEO = 6;
+		UID = 7;
+		PASSWORD = 8;
+		STRING = 9;
+
+	}
+	ValType val_type = 3;
+	enum PostingType {
+		REF=0;          // UID
+		VALUE=1;        // simple, plain value
+		VALUE_LANG=2;   // value with specified language
+	}
+	PostingType posting_type = 4;
+	bytes lang_tag = 5; // Only set for VALUE_LANG
+	string label = 6;
+	repeated api.Facet facets = 9;
+
+	// TODO: op is only used temporarily. See if we can remove it from here.
+	uint32 op = 12;
+	uint64 start_ts = 13;   // Meant to use only inmemory
+	uint64 commit_ts = 14;  // Meant to use only inmemory
+}
+
+message PostingList {
+	repeated Posting postings = 1;
+	bytes checksum = 2;
+	uint64 commit = 3; // More inclination towards smaller values.
+	bytes uids = 4; // Encoded list of uids in this posting list.
+}
+
+message FacetParam {
+	string key = 1;
+	string alias = 2;
+}
+
+message FacetParams {
+	bool all_keys = 1; // keys should be in sorted order.
+	repeated FacetParam param = 2;
+}
+
+message Facets {
+	repeated api.Facet facets = 1;
+}
+
+message FacetsList {
+	repeated Facets facets_list = 1;
+}
+
+message Function {
+	string name = 1;          // Name of the function : eq, le
+	string key = 2;           // Facet key over which to run the function.
+	repeated string args = 3; // Arguments of the function.
+}
+
+// Op and Children are internal nodes and Func on leaves.
+message FilterTree {
+	string op = 1;
+	repeated FilterTree children = 2;
+	Function func = 3;
+}
+
+// Schema messages.
+message SchemaRequest {
+	uint32 group_id = 1;
+	repeated string predicates = 2;
+	// fields can be on of type, index, reverse or tokenizer
+	repeated string fields = 3;
+}
+
+message SchemaResult {
+	repeated api.SchemaNode schema = 1;
+}
+
+message SchemaUpdate {
+	string predicate = 1;
+	Posting.ValType value_type = 2;
+	enum Directive {
+	   NONE = 0;
+	   INDEX = 1;
+	   REVERSE = 2;
+	   DELETE = 3;
+	}
+	Directive directive = 3;
+	repeated string tokenizer = 4;
+	bool count = 5;
+	bool list = 6;
+	bool explicit = 7; // whether schema was set by the user.
+}
+
+// Bulk loader proto.
+message MapEntry {
+	bytes key = 1;
+
+	// Only one should be set.
+	fixed64 uid = 2;
+	Posting posting = 3;
+}
+
+message MovePredicatePayload {
+	string predicate = 1;
+	uint32 source_group_id = 2;
+	uint32 dest_group_id = 3;
+	MembershipState state = 4;
+}
+
+// BackupPayload is used both as a request and a response.
+// When used in request, groups represents the list of groups that need to be backed up.
+// When used in response, groups represent the list of groups that were backed up.
+message ExportPayload {
+	uint64 req_id = 1;    // Use req_id to handle duplicate requests.
+	uint32 group_id = 2;  // Group id to back up.
+	enum Status {
+		NONE      = 0;
+		SUCCESS   = 1;
+		DUPLICATE = 2;
+		FAILED    = 3;
+	}
+	Status status = 3;
+	uint64 read_ts = 4;
+}
+
+message OracleDelta {
+	map<uint64, uint64> commits = 1;
+	repeated uint64 aborts = 2;
+	uint64 max_pending = 3;
+	// implement tmax.
+}
+
+message TxnTimestamps {
+	repeated uint64 ts = 1;
+}
+
+service Raft {
+	rpc Echo (api.Payload)        returns (api.Payload) {}
+	rpc RaftMessage (api.Payload) returns (api.Payload) {}
+	rpc JoinCluster (RaftContext) returns (api.Payload) {}
+}
+
+service Zero {
+	rpc Connect (Member)               returns (ConnectionState) {}
+	rpc Update (stream Group)          returns (stream MembershipState) {}
+	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
+	rpc ShouldServe (Tablet)           returns (Tablet) {}
+	rpc AssignUids (Num)               returns (api.AssignedIds) {}
+	rpc Timestamps (Num)               returns (api.AssignedIds) {}
+	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
+	rpc TryAbort (TxnTimestamps)       returns (TxnTimestamps) {}
+}
+
+service Worker {
+	// Data serving RPCs.
+	rpc Mutate (Mutations)                        returns (api.TxnContext) {}
+	rpc CommitOrAbort(api.TxnContext)             returns (api.Payload) {}
+	rpc ServeTask (Query)                         returns (Result) {}
+	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
+	rpc Sort (SortMessage)                        returns (SortResult) {}
+	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
+	rpc MinTxnTs (api.Payload)                    returns (Num) {}
+
+	rpc Export (ExportPayload)              returns (ExportPayload) {}
+	rpc ReceivePredicate(stream KV)         returns (api.Payload) {}
+	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
+}
+
+message Num {
+	uint64 val = 1;
+}
+
+// vim: noexpandtab sw=2 ts=2

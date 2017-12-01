@@ -20,37 +20,58 @@ package zero
 import (
 	"errors"
 	"math/rand"
+	"time"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 )
 
+type syncMark struct {
+	index uint64
+	ts    uint64
+}
+
 type Oracle struct {
 	x.SafeMutex
-	commits    map[uint64]uint64 // start -> commit
+	commits map[uint64]uint64 // start -> commit
+	// TODO: Check if we need LRU.
 	rowCommit  map[string]uint64 // fp(key) -> commit
 	aborts     map[uint64]struct{}
-	pending    map[uint64]struct{} // TODO: Do we need this?
 	maxPending uint64
-	// Implement Tmax.
-	subscribers map[int]chan *protos.OracleDelta
-	updates     chan *protos.OracleDelta
+
+	tmax uint64
+	// timestamp at the time of start of server or when it became leader.
+	startTxnTs  uint64
+	subscribers map[int]chan *intern.OracleDelta
+	updates     chan *intern.OracleDelta
 	doneUntil   x.WaterMark
+	syncMarks   []syncMark
 }
 
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	o.rowCommit = make(map[string]uint64)
 	o.aborts = make(map[uint64]struct{})
-	o.pending = make(map[uint64]struct{})
-	o.subscribers = make(map[int]chan *protos.OracleDelta)
-	o.updates = make(chan *protos.OracleDelta, 100000) // Keeping 1 second worth of updates.
+	o.subscribers = make(map[int]chan *intern.OracleDelta)
+	o.updates = make(chan *intern.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init()
 	go o.sendDeltasToSubscribers()
 }
 
-func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
+func (o *Oracle) updateStartTxnTs(ts uint64) {
+	o.Lock()
+	defer o.Unlock()
+	o.startTxnTs = ts
+	o.rowCommit = make(map[string]uint64)
+}
+
+func (o *Oracle) hasConflict(src *api.TxnContext) bool {
+	// This transaction was not started after i became leader.
+	if src.StartTs < o.startTxnTs {
+		return true
+	}
 	for _, k := range src.Keys {
 		if last := o.rowCommit[k]; last > src.StartTs {
 			return true
@@ -59,7 +80,34 @@ func (o *Oracle) hasConflict(src *protos.TxnContext) bool {
 	return false
 }
 
-func (o *Oracle) commit(src *protos.TxnContext) error {
+func (o *Oracle) purgeBelow(minTs uint64) {
+	x.Printf("purging below ts:%d, len(o.commits):%d, len(o.aborts):%d\n",
+		minTs, len(o.commits), len(o.aborts))
+	o.Lock()
+	defer o.Unlock()
+
+	// Dropping would be cheaper if abort/commits map is sharded
+	for ts := range o.commits {
+		if ts < minTs {
+			delete(o.commits, ts)
+		}
+	}
+	for ts := range o.aborts {
+		if ts < minTs {
+			delete(o.aborts, ts)
+		}
+	}
+	// There is no transaction running with startTs less than minTs
+	// So we can delete everything from rowCommit whose commitTs < minTs
+	for key, ts := range o.rowCommit {
+		if ts < minTs {
+			delete(o.rowCommit, key)
+		}
+	}
+	o.tmax = minTs
+}
+
+func (o *Oracle) commit(src *api.TxnContext) error {
 	o.Lock()
 	defer o.Unlock()
 
@@ -72,9 +120,9 @@ func (o *Oracle) commit(src *protos.TxnContext) error {
 	return nil
 }
 
-func (o *Oracle) currentState() *protos.OracleDelta {
+func (o *Oracle) currentState() *intern.OracleDelta {
 	o.AssertRLock()
-	resp := &protos.OracleDelta{
+	resp := &intern.OracleDelta{
 		Commits: make(map[uint64]uint64, len(o.commits)),
 	}
 	for start, commit := range o.commits {
@@ -87,7 +135,7 @@ func (o *Oracle) currentState() *protos.OracleDelta {
 	return resp
 }
 
-func (o *Oracle) newSubscriber() (<-chan *protos.OracleDelta, int) {
+func (o *Oracle) newSubscriber() (<-chan *intern.OracleDelta, int) {
 	o.Lock()
 	defer o.Unlock()
 	var id int
@@ -97,7 +145,7 @@ func (o *Oracle) newSubscriber() (<-chan *protos.OracleDelta, int) {
 			break
 		}
 	}
-	ch := make(chan *protos.OracleDelta, 1000)
+	ch := make(chan *intern.OracleDelta, 1000)
 	ch <- o.currentState() // Queue up the full state as the first entry.
 	o.subscribers[id] = ch
 	return ch, id
@@ -110,7 +158,7 @@ func (o *Oracle) removeSubscriber(id int) {
 }
 
 func (o *Oracle) sendDeltasToSubscribers() {
-	delta := &protos.OracleDelta{
+	delta := &intern.OracleDelta{
 		Commits: make(map[uint64]uint64),
 	}
 	for {
@@ -149,31 +197,36 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			}
 		}
 		o.Unlock()
-		delta = &protos.OracleDelta{
+		delta = &intern.OracleDelta{
 			Commits: make(map[uint64]uint64),
 		}
 	}
 }
 
-func (o *Oracle) updateCommitStatusHelper(src *protos.TxnContext) bool {
-	// TODO: Have a way to clear out the commits and aborts.
+func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) bool {
 	o.Lock()
 	defer o.Unlock()
-	if _, ok := o.pending[src.StartTs]; !ok {
+	if src.StartTs < o.tmax {
 		return false
 	}
-	delete(o.pending, src.StartTs)
+	if _, ok := o.commits[src.StartTs]; ok {
+		return false
+	}
+	if _, ok := o.aborts[src.StartTs]; ok {
+		return false
+	}
 	if src.Aborted {
 		o.aborts[src.StartTs] = struct{}{}
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
+	o.syncMarks = append(o.syncMarks, syncMark{index: index, ts: src.StartTs})
 	return true
 }
 
-func (o *Oracle) updateCommitStatus(src *protos.TxnContext) {
-	if o.updateCommitStatusHelper(src) {
-		delta := new(protos.OracleDelta)
+func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
+	if o.updateCommitStatusHelper(index, src) {
+		delta := new(intern.OracleDelta)
 		if src.Aborted {
 			delta.Aborts = append(delta.Aborts, src.StartTs)
 		} else {
@@ -190,27 +243,24 @@ func (o *Oracle) commitTs(startTs uint64) uint64 {
 	return o.commits[startTs]
 }
 
-func (o *Oracle) storePending(ids *protos.AssignedIds) {
+func (o *Oracle) storePending(ids *api.AssignedIds) {
 	// Wait to finish up processing everything before start id.
 	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
 	// Now send it out to updates.
-	o.updates <- &protos.OracleDelta{MaxPending: ids.EndId}
+	o.updates <- &intern.OracleDelta{MaxPending: ids.EndId}
 	o.Lock()
 	defer o.Unlock()
 	max := ids.EndId
 	if o.maxPending < max {
 		o.maxPending = max
 	}
-	for id := ids.StartId; id <= ids.EndId; id++ {
-		o.pending[id] = struct{}{}
-	}
 }
 
 var errConflict = errors.New("Transaction conflict")
 
-func (s *Server) proposeTxn(ctx context.Context, src *protos.TxnContext) error {
-	var zp protos.ZeroProposal
-	zp.Txn = &protos.TxnContext{
+func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
+	var zp intern.ZeroProposal
+	zp.Txn = &api.TxnContext{
 		StartTs:  src.StartTs,
 		CommitTs: src.CommitTs,
 		Aborted:  src.Aborted,
@@ -218,7 +268,7 @@ func (s *Server) proposeTxn(ctx context.Context, src *protos.TxnContext) error {
 	return s.Node.proposeAndWait(ctx, &zp)
 }
 
-func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
+func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
 	}
@@ -232,8 +282,7 @@ func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
 		return s.proposeTxn(ctx, src)
 	}
 
-	// TODO: Consider Tmax here.
-	var num protos.Num
+	var num intern.Num
 	num.Val = 1
 	assigned, err := s.lease(ctx, &num, true)
 	if err != nil {
@@ -251,7 +300,7 @@ func (s *Server) commit(ctx context.Context, src *protos.TxnContext) error {
 	return err
 }
 
-func (s *Server) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*protos.TxnContext, error) {
+func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -263,15 +312,18 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *protos.TxnContext) (*pr
 }
 
 var errClosed = errors.New("Streaming closed by Oracle.")
+var errNotLeader = errors.New("Node is no longer leader.")
 
-func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer) error {
-	// TODO: Add leader check and test leader changes.
+func (s *Server) Oracle(unused *api.Payload, server intern.Zero_OracleServer) error {
 	ch, id := s.orc.newSubscriber()
 	defer s.orc.removeSubscriber(id)
 
 	ctx := server.Context()
+	leaderChangeCh := s.leaderChangeChannel()
 	for {
 		select {
+		case <-leaderChangeCh:
+			return errNotLeader
 		case delta, open := <-ch:
 			if !open {
 				return errClosed
@@ -286,11 +338,64 @@ func (s *Server) Oracle(unused *protos.Payload, server protos.Zero_OracleServer)
 	return nil
 }
 
-func (s *Server) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*protos.TxnTimestamps, error) {
-	commitTimestamps := new(protos.TxnTimestamps)
+func (s *Server) SyncedUntil() uint64 {
+	s.orc.Lock()
+	defer s.orc.Unlock()
+	// Find max index with timestamp less than tmax
+	var idx int
+	for i, sm := range s.orc.syncMarks {
+		idx = i
+		if sm.ts >= s.orc.tmax {
+			break
+		}
+	}
+	var syncUntil uint64
+	if idx > 0 {
+		syncUntil = s.orc.syncMarks[idx-1].index
+	}
+	s.orc.syncMarks = s.orc.syncMarks[idx:]
+	return syncUntil
+}
+
+func (s *Server) purgeOracle() {
+	ticker := time.NewTicker(time.Second * 10)
+	defer ticker.Stop()
+
+	var lastPurgeTs uint64
+OUTER:
+	for {
+		<-ticker.C
+		groups := s.KnownGroups()
+		var minTs uint64
+		for _, group := range groups {
+			pl := s.Leader(group)
+			if pl == nil {
+				x.Printf("No healthy connection found to leader of group %d\n", group)
+				goto OUTER
+			}
+			c := intern.NewWorkerClient(pl.Get())
+			num, err := c.MinTxnTs(context.Background(), &api.Payload{})
+			if err != nil {
+				x.Printf("Error while fetching minTs from group %d, err: %v\n", group, err)
+				goto OUTER
+			}
+			if minTs == 0 || num.Val < minTs {
+				minTs = num.Val
+			}
+		}
+
+		if minTs > 0 && minTs != lastPurgeTs {
+			s.orc.purgeBelow(minTs)
+			lastPurgeTs = minTs
+		}
+	}
+}
+
+func (s *Server) TryAbort(ctx context.Context, txns *intern.TxnTimestamps) (*intern.TxnTimestamps, error) {
+	commitTimestamps := new(intern.TxnTimestamps)
 	for _, startTs := range txns.Ts {
 		// Do via proposals to avoid race
-		tctx := &protos.TxnContext{StartTs: startTs, Aborted: true}
+		tctx := &api.TxnContext{StartTs: startTs, Aborted: true}
 		if err := s.proposeTxn(ctx, tctx); err != nil {
 			return commitTimestamps, err
 		}
@@ -301,7 +406,7 @@ func (s *Server) TryAbort(ctx context.Context, txns *protos.TxnTimestamps) (*pro
 }
 
 // Timestamps is used to assign startTs for a new transaction
-func (s *Server) Timestamps(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+func (s *Server) Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}

@@ -34,11 +34,13 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/bp128"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/y"
 )
 
 var (
@@ -49,8 +51,8 @@ var (
 	ErrNoValue     = fmt.Errorf("No value found")
 	ErrInvalidTxn  = fmt.Errorf("Invalid transaction")
 	errUncommitted = fmt.Errorf("Posting List has uncommitted data")
-	emptyPosting   = &protos.Posting{}
-	emptyList      = &protos.PostingList{}
+	emptyPosting   = &intern.Posting{}
+	emptyList      = &intern.PostingList{}
 )
 
 const (
@@ -68,8 +70,8 @@ const (
 type List struct {
 	x.SafeMutex
 	key           []byte
-	plist         *protos.PostingList
-	mlayer        []*protos.Posting // committed mutations, sorted by uid,ts
+	plist         *intern.PostingList
+	mlayer        []*intern.Posting // committed mutations, sorted by uid,ts
 	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
 	commitTs      uint64            // last commitTs of this pl
 	activeTxns    map[uint64]struct{}
@@ -90,8 +92,8 @@ func (l *List) calculateSize() int32 {
 }
 
 type PIterator struct {
-	pl         *protos.PostingList
-	uidPosting *protos.Posting
+	pl         *intern.PostingList
+	uidPosting *intern.Posting
 	pidx       int // index of postings
 	plen       int
 	valid      bool
@@ -101,9 +103,9 @@ type PIterator struct {
 	offset int
 }
 
-func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
+func (it *PIterator) Init(pl *intern.PostingList, afterUid uint64) {
 	it.pl = pl
-	it.uidPosting = &protos.Posting{}
+	it.uidPosting = &intern.Posting{}
 	it.bi.Init(pl.Uids, afterUid)
 	it.plen = len(pl.Postings)
 	it.uids = it.bi.Uids()
@@ -134,7 +136,7 @@ func (it *PIterator) Valid() bool {
 	return it.valid
 }
 
-func (it *PIterator) Posting() *protos.Posting {
+func (it *PIterator) Posting() *intern.Posting {
 	uid := it.uids[it.offset]
 
 	for it.pidx < it.plen {
@@ -151,17 +153,17 @@ func (it *PIterator) Posting() *protos.Posting {
 }
 
 // ListOptions is used in List.Uids (in posting) to customize our output list of
-// UIDs, for each posting list. It should be internal to this package.
+// UIDs, for each posting list. It should be intern.to this package.
 type ListOptions struct {
 	ReadTs    uint64
 	AfterUID  uint64       // Any UID returned must be after this value.
-	Intersect *protos.List // Intersect results with this list of UIDs.
+	Intersect *intern.List // Intersect results with this list of UIDs.
 }
 
 // samePosting tells whether this is same posting depending upon operation of new posting.
 // if operation is Del, we ignore facets and only care about uid and value.
 // otherwise we match everything.
-func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
+func samePosting(oldp *intern.Posting, newp *intern.Posting) bool {
 	if oldp.Uid != newp.Uid {
 		return false
 	}
@@ -174,7 +176,7 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 	if oldp.PostingType != newp.PostingType {
 		return false
 	}
-	if bytes.Compare(oldp.Metadata, newp.Metadata) != 0 {
+	if bytes.Compare(oldp.LangTag, newp.LangTag) != 0 {
 		return false
 	}
 
@@ -188,36 +190,34 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 	return facets.SameFacets(oldp.Facets, newp.Facets)
 }
 
-func NewPosting(t *protos.DirectedEdge) *protos.Posting {
+func NewPosting(t *intern.DirectedEdge) *intern.Posting {
 	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 
 	var op uint32
-	if t.Op == protos.DirectedEdge_SET {
+	if t.Op == intern.DirectedEdge_SET {
 		op = Set
-	} else if t.Op == protos.DirectedEdge_DEL {
+	} else if t.Op == intern.DirectedEdge_DEL {
 		op = Del
 	} else {
 		x.Fatalf("Unhandled operation: %+v", t)
 	}
 
-	var postingType protos.Posting_PostingType
-	var metadata []byte
+	var postingType intern.Posting_PostingType
 	if len(t.Lang) > 0 {
-		postingType = protos.Posting_VALUE_LANG
-		metadata = []byte(t.Lang)
+		postingType = intern.Posting_VALUE_LANG
 	} else if len(t.Value) == 0 {
-		postingType = protos.Posting_REF
+		postingType = intern.Posting_REF
 	} else if len(t.Value) > 0 {
-		postingType = protos.Posting_VALUE
+		postingType = intern.Posting_VALUE
 	}
 
-	return &protos.Posting{
+	return &intern.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
-		ValType:     protos.Posting_ValType(t.ValueType),
+		ValType:     intern.Posting_ValType(t.ValueType),
 		PostingType: postingType,
-		Metadata:    metadata,
+		LangTag:     []byte(t.Lang),
 		Label:       t.Label,
 		Op:          op,
 		Facets:      t.Facets,
@@ -225,7 +225,11 @@ func NewPosting(t *protos.DirectedEdge) *protos.Posting {
 }
 
 func (l *List) EstimatedSize() int32 {
-	return atomic.LoadInt32(&l.estimatedSize)
+	size := atomic.LoadInt32(&l.estimatedSize)
+	if size < 0 {
+		return 0
+	}
+	return size
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
@@ -240,7 +244,7 @@ func (l *List) SetForDeletion() bool {
 }
 
 // Ensure that you either abort the uncomitted postings or commit them before calling me.
-func (l *List) updateMutationLayer(startTs uint64, mpost *protos.Posting) bool {
+func (l *List) updateMutationLayer(startTs uint64, mpost *intern.Posting) bool {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 	if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
@@ -286,7 +290,7 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *protos.Posting) bool {
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge) (bool, error) {
 	t1 := time.Now()
 	l.Lock()
 	if dur := time.Since(t1); dur > time.Millisecond {
@@ -298,7 +302,7 @@ func (l *List) AddMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 	return l.addMutation(ctx, txn, t)
 }
 
-func edgeType(t *protos.DirectedEdge) x.ValueTypeInfo {
+func edgeType(t *intern.DirectedEdge) x.ValueTypeInfo {
 	hasVal := !bytes.Equal(t.Value, nil)
 	hasId := t.ValueId != 0
 	switch {
@@ -313,13 +317,13 @@ func edgeType(t *protos.DirectedEdge) x.ValueTypeInfo {
 	}
 }
 
-func postingType(p *protos.Posting) x.ValueTypeInfo {
+func postingType(p *intern.Posting) x.ValueTypeInfo {
 	switch p.PostingType {
-	case protos.Posting_REF:
+	case intern.Posting_REF:
 		return x.ValueUid
-	case protos.Posting_VALUE:
+	case intern.Posting_VALUE:
 		return x.ValuePlain
-	case protos.Posting_VALUE_LANG:
+	case intern.Posting_VALUE_LANG:
 		return x.ValueMulti
 	default:
 		return x.ValueEmpty
@@ -327,14 +331,14 @@ func postingType(p *protos.Posting) x.ValueTypeInfo {
 }
 
 // TypeID returns the typeid of destination vertex
-func TypeID(edge *protos.DirectedEdge) types.TypeID {
+func TypeID(edge *intern.DirectedEdge) types.TypeID {
 	if edge.ValueId != 0 {
 		return types.UidID
 	}
 	return types.TypeID(edge.ValueType)
 }
 
-func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge) (bool, error) {
+func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
@@ -343,14 +347,24 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 	}
 
 	if txn.ShouldAbort() {
-		return false, ErrConflict
+		return false, y.ErrConflict
 	}
 	// We can have atmax one pending <s> <p> * mutation.
-	hasPendingDelete := l.markdeleteAll > 0 && t.Op == protos.DirectedEdge_DEL &&
+	hasPendingDelete := l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
 		bytes.Equal(t.Value, []byte(x.Star))
-	if hasPendingDelete || txn.StartTs < l.commitTs {
+
+	doAbort := hasPendingDelete || txn.StartTs < l.commitTs
+	ignoreConflict := false
+	if t.Attr == "_predicate_" {
+		doAbort = false
+		ignoreConflict = true
+	} else if txn.IgnoreIndexConflict && !x.Parse(l.key).IsData() {
+		doAbort = false
+		ignoreConflict = true
+	}
+	if doAbort {
 		txn.SetAbort()
-		return false, ErrConflict
+		return false, y.ErrConflict
 	}
 
 	// All edges with a value without LANGTAG, have the same uid. In other words,
@@ -394,7 +408,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *protos.DirectedEdge
 		}
 	}
 	l.activeTxns[txn.StartTs] = struct{}{}
-	txn.AddDelta(l.key, mpost)
+	txn.AddDelta(l.key, mpost, ignoreConflict)
 	return hasMutated, nil
 }
 
@@ -417,8 +431,9 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 		if mpost.StartTs != startTs {
 			l.mlayer[midx] = mpost
 			midx++
+		} else {
+			atomic.AddInt32(&l.estimatedSize, -1*int32(mpost.Size()+16 /* various overhead */))
 		}
-		atomic.AddInt32(&l.estimatedSize, -1*int32(mpost.Size()+16 /* various overhead */))
 	}
 	l.mlayer = l.mlayer[:midx]
 	delete(l.activeTxns, startTs)
@@ -458,7 +473,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	} else {
 		for _, mpost := range l.mlayer {
 			if mpost.StartTs == startTs {
-				mpost.CommitTs = commitTs
+				atomic.StoreUint64(&mpost.CommitTs, commitTs)
 				l.numCommits++
 			}
 		}
@@ -499,12 +514,12 @@ func (l *List) deleteHelper(ctx context.Context) error {
 // The function will loop until either the Posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
 //
-// 	pl.Iterate(func(p *protos.Posting) bool {
+// 	pl.Iterate(func(p *intern.Posting) bool {
 //    // Use posting p
 //    return true  // to continue iteration.
 //    return false // to break iteration.
 //  })
-func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
+func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *intern.Posting) bool) error {
 	l.RLock()
 	defer l.RUnlock()
 	return l.iterate(readTs, afterUid, f)
@@ -522,18 +537,20 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	return conflicts
 }
 
-func (l *List) inSnapshot(mpost *protos.Posting, readTs, deleteTs uint64) bool {
+func (l *List) inSnapshot(mpost *intern.Posting, readTs, deleteTs uint64) bool {
 	l.AssertRLock()
-	if mpost.CommitTs == 0 {
-		mpost.CommitTs = Oracle().CommitTs(mpost.StartTs)
+	commitTs := atomic.LoadUint64(&mpost.CommitTs)
+	if commitTs == 0 {
+		commitTs = Oracle().CommitTs(mpost.StartTs)
+		atomic.StoreUint64(&mpost.CommitTs, commitTs)
 	}
-	if mpost.CommitTs == 0 {
+	if commitTs == 0 {
 		return mpost.StartTs == readTs
 	}
-	return mpost.CommitTs <= readTs && mpost.CommitTs >= deleteTs
+	return commitTs <= readTs && commitTs >= deleteTs
 }
 
-func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Posting) bool) error {
+func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Posting) bool) error {
 	l.AssertRLock()
 	midx := 0
 	var deleteTs uint64
@@ -557,7 +574,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 		})
 	}
 
-	var mp, pp *protos.Posting
+	var mp, pp *intern.Posting
 	cont := true
 	var pitr PIterator
 	pitr.Init(l.plist, afterUid)
@@ -574,7 +591,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 		}
 		if l.minTs > deleteTs && pitr.Valid() {
 			pp = pitr.Posting()
-			pp.CommitTs = l.minTs
+			atomic.StoreUint64(&pp.CommitTs, l.minTs)
 		} else {
 			pp = emptyPosting
 		}
@@ -610,7 +627,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *protos.Postin
 func (l *List) length(readTs, afterUid uint64) int {
 	l.AssertRLock()
 	count := 0
-	err := l.iterate(readTs, afterUid, func(p *protos.Posting) bool {
+	err := l.iterate(readTs, afterUid, func(p *intern.Posting) bool {
 		count++
 		return true
 	})
@@ -644,7 +661,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	return l.syncIfDirty(delFromCache)
 }
 
-func (l *List) MarshalToKv() (*protos.KV, error) {
+func (l *List) MarshalToKv() (*intern.KV, error) {
 	l.Lock()
 	defer l.Unlock()
 	x.AssertTrue(len(l.activeTxns) == 0)
@@ -652,7 +669,7 @@ func (l *List) MarshalToKv() (*protos.KV, error) {
 		return nil, err
 	}
 
-	kv := &protos.KV{}
+	kv := &intern.KV{}
 	kv.Version = l.minTs
 	kv.Key = l.key
 	val, meta := marshalPostingList(l.plist)
@@ -661,7 +678,7 @@ func (l *List) MarshalToKv() (*protos.KV, error) {
 	return kv, nil
 }
 
-func marshalPostingList(plist *protos.PostingList) (data []byte, meta byte) {
+func marshalPostingList(plist *intern.PostingList) (data []byte, meta byte) {
 	if len(plist.Uids) == 0 {
 		data = nil
 	} else if len(plist.Postings) > 0 {
@@ -678,14 +695,15 @@ func marshalPostingList(plist *protos.PostingList) (data []byte, meta byte) {
 
 func (l *List) rollup() error {
 	l.AssertLock()
-	final := new(protos.PostingList)
+	final := new(intern.PostingList)
 	var bp bp128.BPackEncoder
 	buf := make([]uint64, 0, bp128.BlockSize)
 
 	// Pick all committed entries
 	x.AssertTrue(l.minTs <= l.commitTs)
-	err := l.iterate(l.commitTs, 0, func(p *protos.Posting) bool {
-		if p.CommitTs == 0 || p.CommitTs > l.commitTs {
+	err := l.iterate(l.commitTs, 0, func(p *intern.Posting) bool {
+		commitTs := atomic.LoadUint64(&p.CommitTs)
+		if commitTs == 0 || commitTs > l.commitTs {
 			return true
 		}
 		buf = append(buf, p.Uid)
@@ -694,7 +712,7 @@ func (l *List) rollup() error {
 			buf = buf[:0]
 		}
 
-		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || len(p.Label) != 0 {
+		if p.Facets != nil || p.Value != nil || len(p.LangTag) != 0 || len(p.Label) != 0 {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
@@ -715,7 +733,8 @@ func (l *List) rollup() error {
 	}
 	midx := 0
 	for _, mpost := range l.mlayer {
-		if mpost.CommitTs == 0 || mpost.CommitTs > l.commitTs {
+		commitTs := atomic.LoadUint64(&mpost.CommitTs)
+		if commitTs == 0 || commitTs > l.commitTs {
 			l.mlayer[midx] = mpost
 			midx++
 		}
@@ -738,9 +757,9 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	if len(l.mlayer) == 0 && l.plist != emptyList {
 		return false, nil
 	}
-	if delFromCache && len(l.activeTxns) > 0 {
+	if delFromCache {
 		// Don't evict if there is pending transaction.
-		return false, errUncommitted
+		x.AssertTrue(len(l.activeTxns) == 0)
 	}
 
 	minTs := l.minTs
@@ -767,6 +786,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
+	// Copy this over because minTs can change by the time callback returns.
+	minTs = l.minTs
 	retries := 0
 	var f func(error)
 	f = func(err error) {
@@ -778,7 +799,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			}
 			// Error from badger should be temporary, so we can retry.
 			retries += 1
-			doAsyncWrite(l.minTs, l.key, data, meta, f)
+			doAsyncWrite(minTs, l.key, data, meta, f)
 			return
 		}
 		x.BytesWrite.Add(int64(len(data)))
@@ -787,15 +808,15 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
 			lcache.delete(l.key)
 		}
-		pstore.PurgeVersionsBelow(l.key, l.minTs)
+		pstore.PurgeVersionsBelow(l.key, minTs)
 	}
 
-	doAsyncWrite(l.minTs, l.key, data, meta, f)
+	doAsyncWrite(minTs, l.key, data, meta, f)
 	return true, nil
 }
 
 // Copies the val if it's uid only posting, be careful
-func UnmarshalOrCopy(val []byte, metadata byte, pl *protos.PostingList) {
+func UnmarshalOrCopy(val []byte, metadata byte, pl *intern.PostingList) {
 	if metadata == BitUidPosting {
 		buf := make([]byte, len(val))
 		copy(buf, val)
@@ -808,12 +829,12 @@ func UnmarshalOrCopy(val []byte, metadata byte, pl *protos.PostingList) {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get Uids is expensive
-func (l *List) Uids(opt ListOptions) (*protos.List, error) {
+func (l *List) Uids(opt ListOptions) (*intern.List, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
 	// Use approximate length for initial capacity.
 	res := make([]uint64, 0, len(l.mlayer)+bp128.NumIntegers(l.plist.Uids))
-	out := &protos.List{}
+	out := &intern.List{}
 	if len(l.mlayer) == 0 && opt.Intersect != nil {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
@@ -824,7 +845,7 @@ func (l *List) Uids(opt ListOptions) (*protos.List, error) {
 		return out, nil
 	}
 
-	err := l.iterate(opt.ReadTs, opt.AfterUID, func(p *protos.Posting) bool {
+	err := l.iterate(opt.ReadTs, opt.AfterUID, func(p *intern.Posting) bool {
 		if postingType(p) == x.ValueUid {
 			res = append(res, p.Uid)
 		}
@@ -845,11 +866,11 @@ func (l *List) Uids(opt ListOptions) (*protos.List, error) {
 
 // Postings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
-func (l *List) Postings(opt ListOptions, postFn func(*protos.Posting) bool) error {
+func (l *List) Postings(opt ListOptions, postFn func(*intern.Posting) bool) error {
 	l.RLock()
 	defer l.RUnlock()
 
-	return l.iterate(opt.ReadTs, opt.AfterUID, func(p *protos.Posting) bool {
+	return l.iterate(opt.ReadTs, opt.AfterUID, func(p *intern.Posting) bool {
 		if postingType(p) != x.ValueUid {
 			return true
 		}
@@ -857,18 +878,49 @@ func (l *List) Postings(opt ListOptions, postFn func(*protos.Posting) bool) erro
 	})
 }
 
-func (l *List) AllValues(readTs uint64) (vals []types.Val, rerr error) {
+func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	l.RLock()
 	defer l.RUnlock()
 
-	rerr = l.iterate(readTs, 0, func(p *protos.Posting) bool {
+	var vals []types.Val
+	err := l.iterate(readTs, 0, func(p *intern.Posting) bool {
+		if len(p.LangTag) == 0 {
+			vals = append(vals, types.Val{
+				Tid:   types.TypeID(p.ValType),
+				Value: p.Value,
+			})
+		}
+		return true
+	})
+	return vals, err
+}
+
+func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	var vals []types.Val
+	err := l.iterate(readTs, 0, func(p *intern.Posting) bool {
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValType),
 			Value: p.Value,
 		})
 		return true
 	})
-	return
+	return vals, err
+}
+
+// GetLangTags finds the language tags of each posting in the list.
+func (l *List) GetLangTags(readTs uint64) ([]string, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	var tags []string
+	err := l.iterate(readTs, 0, func(p *intern.Posting) bool {
+		tags = append(tags, string(p.LangTag))
+		return true
+	})
+	return tags, err
 }
 
 // Returns Value from posting list.
@@ -899,7 +951,7 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 	return valueToTypesVal(p), nil
 }
 
-func (l *List) postingFor(readTs uint64, langs []string) (p *protos.Posting, rerr error) {
+func (l *List) postingFor(readTs uint64, langs []string) (p *intern.Posting, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
 	return l.postingForLangs(readTs, langs)
@@ -915,7 +967,7 @@ func (l *List) ValueForTag(readTs uint64, tag string) (rval types.Val, rerr erro
 	return valueToTypesVal(p), nil
 }
 
-func valueToTypesVal(p *protos.Posting) (rval types.Val) {
+func valueToTypesVal(p *intern.Posting) (rval types.Val) {
 	// This is ok because we dont modify the value of a Posting. We create a newPosting
 	// and add it to the PostingList to do a set.
 	rval.Value = p.Value
@@ -923,7 +975,7 @@ func valueToTypesVal(p *protos.Posting) (rval types.Val) {
 	return
 }
 
-func (l *List) postingForLangs(readTs uint64, langs []string) (pos *protos.Posting, rerr error) {
+func (l *List) postingForLangs(readTs uint64, langs []string) (pos *intern.Posting, rerr error) {
 	l.AssertRLock()
 
 	any := false
@@ -951,7 +1003,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *protos.Posti
 	var found bool
 	// last resort - return value with smallest lang Uid
 	if any {
-		err := l.iterate(readTs, 0, func(p *protos.Posting) bool {
+		err := l.iterate(readTs, 0, func(p *intern.Posting) bool {
 			if postingType(p) == x.ValueMulti {
 				pos = p
 				found = true
@@ -971,7 +1023,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *protos.Posti
 	return pos, ErrNoValue
 }
 
-func (l *List) postingForTag(readTs uint64, tag string) (p *protos.Posting, rerr error) {
+func (l *List) postingForTag(readTs uint64, tag string) (p *intern.Posting, rerr error) {
 	l.AssertRLock()
 	uid := farm.Fingerprint64([]byte(tag))
 	found, p, err := l.findPosting(readTs, uid)
@@ -995,9 +1047,9 @@ func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err er
 	return valueToTypesVal(p), true, nil
 }
 
-func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *protos.Posting, err error) {
+func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *intern.Posting, err error) {
 	// Iterate starts iterating after the given argument, so we pass uid - 1
-	err = l.iterate(readTs, uid-1, func(p *protos.Posting) bool {
+	err = l.iterate(readTs, uid-1, func(p *intern.Posting) bool {
 		if p.Uid == uid {
 			pos = p
 			found = true
@@ -1009,7 +1061,7 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *protos.P
 }
 
 // Facets gives facets for the posting representing value.
-func (l *List) Facets(readTs uint64, param *protos.Param, langs []string) (fs []*protos.Facet,
+func (l *List) Facets(readTs uint64, param *intern.FacetParams, langs []string) (fs []*api.Facet,
 	ferr error) {
 	l.RLock()
 	defer l.RUnlock()

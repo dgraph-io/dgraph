@@ -1,4 +1,5 @@
-# Dgraph
+![](/logo.png)
+
 **Fast, Transactional, Distributed Graph Database.**
 
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://docs.dgraph.io)
@@ -7,31 +8,40 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
+
 Dgraph is an open source, horizontally scalable and distributed graph database, providing ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
 a rich set of queries. Being a native graph database, it tightly controls how the
 data is arranged on disk to optimize for query performance and throughput,
 reducing disk seeks and network calls in a cluster.
 
+
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
 Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP.
 
+## Status
+
+Dgraph is [at version 0.9.x][rel].  We're aiming to convert this into
+v1.0 release before Christmas. We recommend using it in your projects and in
+production environment.
+
+[rel]: https://github.com/dgraph-io/dgraph/releases
+
+## Quick Install
+
+The quickest way to install Dgraph is to run this command on Linux or Mac.
+
+```bash
+curl https://get.dgraph.io -sSf | bash
+```
+
 ## Get Started
 **To get started with Dgraph, follow:**
 
-- Installation to queries in 7 minutes via [docs.dgraph.io](https://docs.dgraph.io/get-started/).
+- Installation to queries in 3 steps via [docs.dgraph.io](https://docs.dgraph.io/get-started/).
 - A longer interactive tutorial via [tour.dgraph.io](https://tour.dgraph.io).
 - Tutorial and
 presentation videos on [YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w/featured).
-
-## Current Status
-
-Dgraph is [currently at version
-0.8.x](https://github.com/dgraph-io/dgraph/releases).  We have largely frozen
-the feature set at this point, and focusing solely on stability, performance and
-robustness.  We recommend using it in your projects. If you plan to use Dgraph
-for user-facing production environment, [come talk to
-us](mailto:manish@dgraph.io).
 
 ## Is Dgraph the right choice for me?
 
@@ -74,6 +84,8 @@ makes it easy to build applications with it.
   working and planned features.
 - Read about the latest updates from Dgraph team [on our
   blog](https://open.dgraph.io/).
+- Watch tech talks on our [YouTube
+  channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w/featured).
 
 ## Developers
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).

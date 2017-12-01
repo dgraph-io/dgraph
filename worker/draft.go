@@ -19,6 +19,7 @@ package worker
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"log"
 	"math/rand"
 	"sync"
@@ -32,10 +33,12 @@ import (
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	dy "github.com/dgraph-io/dgraph/y"
 )
 
 type proposalCtx struct {
@@ -137,7 +140,7 @@ type node struct {
 func newNode(gid uint32, id uint64, myAddr string) *node {
 	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
 
-	rc := &protos.RaftContext{
+	rc := &intern.RaftContext{
 		Addr:  myAddr,
 		Group: gid,
 		Id:    id,
@@ -184,7 +187,7 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) error {
+func (n *node) ProposeAndWait(ctx context.Context, proposal *intern.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")
 	}
@@ -267,7 +270,7 @@ func (n *node) processMutation(task *task) error {
 
 	ctx, txn := n.props.CtxAndTxn(pid)
 	if txn.ShouldAbort() {
-		return posting.ErrConflict
+		return dy.ErrConflict
 	}
 	rv := x.RaftValue{Group: n.gid, Index: ridx}
 	ctx = context.WithValue(ctx, "raft", rv)
@@ -281,7 +284,7 @@ func (n *node) processMutation(task *task) error {
 }
 
 func (n *node) processSchemaMutations(pid uint32, index uint64,
-	startTs uint64, s *protos.SchemaUpdate) error {
+	startTs uint64, s *intern.SchemaUpdate) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
@@ -298,14 +301,17 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)
 
-	if len(cc.Context) > 0 {
-		var rc protos.RaftContext
+	if cc.Type == raftpb.ConfChangeRemoveNode {
+		n.DeletePeer(cc.NodeID)
+	} else if len(cc.Context) > 0 {
+		var rc intern.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		n.Connect(rc.Id, rc.Addr)
 	}
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+	n.DoneConfChange(cc.ID, nil)
 	// Not present in proposal map
 	n.Applied.Done(e.Index)
 	groups().triggerMembershipSync()
@@ -326,7 +332,7 @@ func (n *node) processApplyCh() {
 
 		x.AssertTrue(e.Type == raftpb.EntryNormal)
 
-		proposal := &protos.Proposal{}
+		proposal := &intern.Proposal{}
 		if err := proposal.Unmarshal(e.Data); err != nil {
 			log.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
@@ -369,7 +375,7 @@ func (n *node) processApplyCh() {
 	}
 }
 
-func (n *node) commitOrAbort(index uint64, pid uint32, tctx *protos.TxnContext) {
+func (n *node) commitOrAbort(index uint64, pid uint32, tctx *api.TxnContext) {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	_, err := commitOrAbort(ctx, tctx)
 	if tr, ok := trace.FromContext(ctx); ok {
@@ -392,7 +398,7 @@ func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	n.props.Done(pid, err)
 }
 
-func (n *node) processKeyValues(index uint64, pid uint32, kvs []*protos.KV) error {
+func (n *node) processKeyValues(index uint64, pid uint32, kvs []*intern.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)
 	posting.TxnMarks().Done(index)
@@ -405,13 +411,6 @@ func (n *node) applyAllMarks(ctx context.Context) {
 	lastIndex, err := n.Store.LastIndex()
 	x.Checkf(err, "Error while getting last index")
 	n.Applied.WaitForMark(ctx, lastIndex)
-}
-
-func (n *node) waitForTxnMarks(ctx context.Context) {
-	// Get index of last committed.
-	lastIndex, err := n.Store.LastIndex()
-	x.Checkf(err, "Error while getting last index")
-	posting.TxnMarks().WaitForMark(ctx, lastIndex)
 }
 
 func (n *node) retrieveSnapshot(peerID uint64) {
@@ -451,14 +450,9 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	// This chan could have capacity zero, because runReadIndexLoop never blocks without selecting
-	// on readStateCh.  It's 2 so that sending rarely blocks (so the Go runtime doesn't have to
-	// switch threads as much.)
-	readStateCh := make(chan raft.ReadState, 2)
+	// Ensure we don't exit unless any snapshot in progress in done.
 	closer := y.NewCloser(1)
-	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
-	// That way we know sending to readStateCh will not deadlock.
-	defer closer.SignalAndWait()
+	go n.snapshotPeriodically(closer)
 
 	for {
 		select {
@@ -466,10 +460,6 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			for _, rs := range rd.ReadStates {
-				readStateCh <- rs
-			}
-
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
 				leader = rd.RaftState == raft.StateLeader
@@ -494,7 +484,7 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var rc protos.RaftContext
+				var rc intern.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
 				x.AssertTrue(rc.Group == n.gid)
 				if rc.Id != n.Id {
@@ -563,10 +553,12 @@ func (n *node) Run() {
 						}
 					}
 					n.Raft().Stop()
+					closer.SignalAndWait()
 					close(n.done)
 				}()
 			} else {
 				n.Raft().Stop()
+				closer.SignalAndWait()
 				close(n.done)
 			}
 		case <-n.done:
@@ -585,14 +577,7 @@ func (n *node) Stop() {
 	<-n.done // wait for Run to respond.
 }
 
-func (n *node) snapshotPeriodically() {
-	if n.gid == 0 {
-		// Group zero is dedicated for membership information, whose state we don't persist.
-		// So, taking snapshots would end up deleting the RAFT entries that we need to
-		// regenerate the state on a crash. Therefore, don't take snapshots.
-		return
-	}
-
+func (n *node) snapshotPeriodically(closer *y.Closer) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -601,19 +586,14 @@ func (n *node) snapshotPeriodically() {
 		case <-ticker.C:
 			n.snapshot(Config.MaxPendingCount)
 
-		case <-n.done:
+		case <-closer.HasBeenClosed():
+			closer.Done()
 			return
 		}
 	}
 }
 
 func (n *node) snapshot(skip uint64) {
-	if n.gid == 0 {
-		// Group zero is dedicated for membership information, whose state we don't persist.
-		// So, taking snapshots would end up deleting the RAFT entries that we need to
-		// regenerate the state on a crash. Therefore, don't take snapshots.
-		return
-	}
 	water := posting.TxnMarks()
 	le := water.DoneUntil()
 
@@ -628,10 +608,10 @@ func (n *node) snapshot(skip uint64) {
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
 	}
-	rc, err := n.RaftContext.Marshal()
+	peers, err := json.Marshal(n.PeerMap())
 	x.Check(err)
 
-	s, err := n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
+	s, err := n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), peers)
 	x.Checkf(err, "While creating snapshot")
 	x.Checkf(n.Store.Compact(snapshotIdx), "While compacting snapshot")
 	x.Check(n.Wal.StoreSnapshot(n.gid, s))
@@ -652,9 +632,13 @@ func (n *node) joinPeers() {
 
 	gconn := pl.Get()
 
-	c := protos.NewRaftClient(gconn)
+	c := intern.NewRaftClient(gconn)
 	x.Printf("Calling JoinCluster")
-	_, err := c.JoinCluster(n.ctx, n.RaftContext)
+	ctx, cancel := context.WithTimeout(n.ctx, time.Second)
+	defer cancel()
+	// JoinCluster can block idefinitely, raft ignores conf change proposal
+	// if it has pending configuration.
+	_, err := c.JoinCluster(ctx, n.RaftContext)
 	// TODO: This should keep on indefinitely trying to join the cluster, instead of crashing.
 	x.Checkf(err, "Error while joining cluster")
 	x.Printf("Done with JoinCluster call\n")
@@ -669,19 +653,19 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
-		found := groups().HasMeInState()
-		_, hasPeer := groups().MyPeer()
-		if !found && hasPeer {
-			n.joinPeers()
+		sp, err := n.Store.Snapshot()
+		x.Checkf(err, "Unable to get existing snapshot")
+		if !raft.IsEmptySnap(sp) {
+			var peerMap map[uint64]string
+			x.Check(json.Unmarshal(sp.Data, &peerMap))
+			n.SetPeerMap(peerMap)
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
-
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
 		if _, hasPeer := groups().MyPeer(); hasPeer {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
-
 		} else {
 			peers := []raft.Peer{{ID: n.Id}}
 			n.SetRaft(raft.StartNode(n.Cfg, peers))
@@ -691,7 +675,6 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	}
 	go n.processApplyCh()
 	go n.Run()
-	go n.snapshotPeriodically()
 	go n.BatchAndSendMessages()
 }
 

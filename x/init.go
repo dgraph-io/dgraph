@@ -17,12 +17,8 @@
 package x
 
 import (
-	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
-
-	yaml "gopkg.in/yaml.v2"
 )
 
 var (
@@ -57,21 +53,6 @@ func Init(debug bool) {
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
 		f()
-	}
-}
-
-// loadConfigFromYAML reads configurations from specified YAML file.
-func LoadConfigFromYAML(file string) {
-	bs, err := ioutil.ReadFile(file)
-	Checkf(err, "Cannot open specified config file: %v", file)
-
-	m := make(map[string]string)
-	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing config file: %v", Config.ConfigFile)
-
-	for k, v := range m {
-		Printf("Picked flag from config: [%q = %v]\n", k, v)
-		err := flag.Set(k, v)
-		Checkf(err, "While setting flag from config.")
 	}
 }
 

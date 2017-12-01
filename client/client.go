@@ -21,16 +21,17 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/y"
 	"github.com/gogo/protobuf/proto"
 )
 
+// Dgraph is a transaction aware client to a set of dgraph server instances.
 type Dgraph struct {
-	dc []protos.DgraphClient
+	dc []api.DgraphClient
 
 	mu      sync.Mutex
-	linRead *protos.LinRead
+	linRead *api.LinRead
 }
 
 // NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
@@ -39,37 +40,56 @@ type Dgraph struct {
 // cluster).
 //
 // A single client is thread safe for sharing with multiple go routines.
-func NewDgraphClient(clients ...protos.DgraphClient) *Dgraph {
+func NewDgraphClient(clients ...api.DgraphClient) *Dgraph {
 	dg := &Dgraph{
 		dc:      clients,
-		linRead: &protos.LinRead{},
+		linRead: &api.LinRead{},
 	}
 
 	return dg
 }
 
-func (d *Dgraph) mergeLinRead(src *protos.LinRead) {
+func (d *Dgraph) mergeLinRead(src *api.LinRead) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	x.MergeLinReads(d.linRead, src)
+	y.MergeLinReads(d.linRead, src)
 }
 
-func (d *Dgraph) getLinRead() *protos.LinRead {
+func (d *Dgraph) getLinRead() *api.LinRead {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return proto.Clone(d.linRead).(*protos.LinRead)
+	return proto.Clone(d.linRead).(*api.LinRead)
 }
 
-// Alter can be used to do the following.
+// By setting various fields of api.Operation, Alter can be used to do the
+// following:
+//
 // 1. Modify the schema.
+//
 // 2. Drop a predicate.
+//
 // 3. Drop the database.
-func (d *Dgraph) Alter(ctx context.Context, op *protos.Operation) error {
+func (d *Dgraph) Alter(ctx context.Context, op *api.Operation) error {
 	dc := d.anyClient()
 	_, err := dc.Alter(ctx, op)
 	return err
 }
 
-func (d *Dgraph) anyClient() protos.DgraphClient {
+func (d *Dgraph) anyClient() api.DgraphClient {
 	return d.dc[rand.Intn(len(d.dc))]
+}
+
+// DeleteEdges sets the edges corresponding to predicates on the node with the given uid
+// for deletion.
+// This helper function doesn't run the mutation on the server. It must be done by the user
+// after the function returns.
+func DeleteEdges(mu *api.Mutation, uid string, predicates ...string) {
+	for _, predicate := range predicates {
+		mu.Del = append(mu.Del, &api.NQuad{
+			Subject:   uid,
+			Predicate: predicate,
+			// _STAR_ALL is defined as x.Star in x package.
+			ObjectValue: &api.Value{&api.Value_DefaultVal{"_STAR_ALL"}},
+		})
+	}
 }

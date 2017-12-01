@@ -40,7 +40,8 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -68,30 +69,33 @@ var m = `
 type raftServer struct {
 }
 
-func (c *raftServer) Echo(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
+func (c *raftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
 	return in, nil
 }
 
-func (c *raftServer) RaftMessage(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
-	return &protos.Payload{}, nil
+func (c *raftServer) RaftMessage(ctx context.Context, in *api.Payload) (*api.Payload, error) {
+	return &api.Payload{}, nil
 }
 
-func (c *raftServer) JoinCluster(ctx context.Context, in *protos.RaftContext) (*protos.Payload, error) {
-	return &protos.Payload{}, nil
+func (c *raftServer) JoinCluster(ctx context.Context, in *intern.RaftContext) (*api.Payload, error) {
+	return &api.Payload{}, nil
 }
 
 func prepare() (dir1, dir2 string, rerr error) {
-	// TODO - Stop at end and clear dir.
+	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
+	cmd.Env = os.Environ()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
+	}
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"-w=wz",
-		"--port", "12341",
 	)
 	zero.Stdout = os.Stdout
+	zero.Stderr = os.Stdout
 	if err := zero.Start(); err != nil {
 		return "", "", err
 	}
-	time.Sleep(4 * time.Second)
 
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
@@ -107,13 +111,15 @@ func prepare() (dir1, dir2 string, rerr error) {
 	edgraph.Config.PostingDir = dir1
 	edgraph.Config.PostingTables = "loadtoram"
 	edgraph.Config.WALDir = dir2
-	edgraph.State = edgraph.NewServerState()
+	edgraph.InitServerState()
 
 	posting.Init(edgraph.State.Pstore)
 	schema.Init(edgraph.State.Pstore)
 	worker.Init(edgraph.State.Pstore)
-	worker.Config.ZeroAddr = "localhost:12341"
+	worker.Config.ZeroAddr = "localhost:7080"
+	x.Config.PortOffset = 1
 	worker.Config.RaftId = 1
+	go worker.RunServer(false)
 	worker.StartRaftNodes(edgraph.State.WALstore, false)
 	return dir1, dir2, nil
 }
@@ -142,7 +148,7 @@ func timestamp() uint64 {
 }
 
 func processToFastJSON(q string) string {
-	res, err := gql.Parse(gql.Request{Str: q, Http: true})
+	res, err := gql.Parse(gql.Request{Str: q})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -164,51 +170,13 @@ func processToFastJSON(q string) string {
 }
 
 func runQuery(q string) (string, error) {
-	req, err := http.NewRequest("POST", "/query", bytes.NewBufferString(q))
-	if err != nil {
-		return "", err
-	}
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(queryHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		return "", fmt.Errorf("Unexpected status code: %v", status)
-	}
-
-	var qr x.QueryResWithData
-	json.Unmarshal(rr.Body.Bytes(), &qr)
-	if len(qr.Errors) > 0 {
-		return "", errors.New(qr.Errors[0].Message)
-	}
-
-	// Remove the extensions.
-	mp := make(map[string]interface{})
-	json.Unmarshal(rr.Body.Bytes(), &mp)
-	delete(mp, "extensions")
-	output, err := json.Marshal(mp)
+	output, _, err := queryWithTs(q, 0)
 	return string(output), err
 }
 
 func runMutation(m string) error {
-	req, err := http.NewRequest("POST", "/mutate", bytes.NewBufferString(m))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("X-Dgraph-CommitNow", "true")
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(mutationHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		return fmt.Errorf("Unexpected status code: %v", status)
-	}
-	var qr x.QueryResWithData
-	json.Unmarshal(rr.Body.Bytes(), &qr)
-	if len(qr.Errors) > 0 {
-		return errors.New(qr.Errors[0].Message)
-	}
-	return nil
+	_, _, err := mutationWithTs(m, true, false, 0)
+	return err
 }
 
 func alterSchema(s string) error {
@@ -424,12 +392,12 @@ func TestSchemaMutation(t *testing.T) {
 
 ` // reset schema
 	schema.ParseBytes([]byte(""), 1)
-	expected := map[string]*protos.SchemaUpdate{
+	expected := map[string]*intern.SchemaUpdate{
 		"name": {
 			Predicate: "name",
 			Tokenizer: []string{"term", "exact"},
-			ValueType: protos.Posting_ValType(types.StringID),
-			Directive: protos.SchemaUpdate_INDEX,
+			ValueType: intern.Posting_ValType(types.StringID),
+			Directive: intern.SchemaUpdate_INDEX,
 			Explicit:  true},
 	}
 
@@ -453,11 +421,11 @@ func TestSchemaMutation1(t *testing.T) {
 
 ` // reset schema
 	schema.ParseBytes([]byte(""), 1)
-	expected := map[string]*protos.SchemaUpdate{
+	expected := map[string]*intern.SchemaUpdate{
 		"pred1": {
-			ValueType: protos.Posting_ValType(types.StringID)},
+			ValueType: intern.Posting_ValType(types.StringID)},
 		"pred2": {
-			ValueType: protos.Posting_ValType(types.DefaultID)},
+			ValueType: intern.Posting_ValType(types.DefaultID)},
 	}
 
 	err := runMutation(m)
@@ -662,7 +630,6 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	fmt.Println("output", output)
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	// remove reverse edge
@@ -818,7 +785,7 @@ var q5 = `
 `
 
 func TestSchemaValidationError(t *testing.T) {
-	_, err := gql.Parse(gql.Request{Str: m5, Http: true})
+	_, err := gql.Parse(gql.Request{Str: m5})
 	require.Error(t, err)
 	output, err := runQuery(strings.Replace(q5, "<id>", "0x8", -1))
 	require.NoError(t, err)
@@ -935,6 +902,7 @@ func BenchmarkQuery(b *testing.B) {
 }
 
 func TestListPred(t *testing.T) {
+	require.NoError(t, alterSchema(`{"drop_all": true}`))
 	var q1 = `
 	{
 		listpred(func:anyofterms(name, "Alice")) {
@@ -1336,7 +1304,7 @@ func TestDropAll(t *testing.T) {
 func TestRecurseExpandAll(t *testing.T) {
 	var q1 = `
 	{
-		recurse(func:anyofterms(name, "Alica")) {
+		me(func:anyofterms(name, "Alica")) @recurse {
   			expand(_all_)
 		}
 	}
@@ -1365,7 +1333,7 @@ func TestRecurseExpandAll(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"recurse":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
 }
 
 func TestIllegalCountInQueryFn(t *testing.T) {
@@ -1390,12 +1358,21 @@ func TestMain(m *testing.M) {
 	edgraph.SetConfiguration(dc)
 	x.Init(true)
 
-	dir1, dir2, _ := prepare()
+	dir1, dir2, err := prepare()
+	if err != nil {
+		log.Fatal(err)
+	}
 	time.Sleep(10 * time.Millisecond)
 
-	// Parse GQL into internal query representation.
+	// Increment lease, so that mutations work.
+	_, err = worker.AssignUidsOverNetwork(context.Background(), &intern.Num{Val: 10e6})
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Parse GQL into intern.query representation.
 	r := m.Run()
 	closeAll(dir1, dir2)
 	exec.Command("killall", "-9", "dgraph").Run()
+	os.RemoveAll("wz")
 	os.Exit(r)
 }

@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -25,22 +25,25 @@ type loc struct {
 // for bool) would be created for values not specified explicitly.
 
 type Person struct {
-	Uid      string   `json:"uid,omitempty"`
-	Name     string   `json:"name,omitempty"`
-	Age      int      `json:"age,omitempty"`
-	Married  bool     `json:"married,omitempty"`
-	Raw      []byte   `json:"raw_bytes",omitempty`
-	Friends  []Person `json:"friend,omitempty"`
-	Location loc      `json:"loc,omitempty"`
-	School   []School `json:"school,omitempty"`
+	Uid      string     `json:"uid,omitempty"`
+	Name     string     `json:"name,omitempty"`
+	Age      int        `json:"age,omitempty"`
+	Dob      *time.Time `json:"dob,omitempty"`
+	Married  bool       `json:"married,omitempty"`
+	Raw      []byte     `json:"raw_bytes",omitempty`
+	Friends  []Person   `json:"friend,omitempty"`
+	Location loc        `json:"loc,omitempty"`
+	School   []School   `json:"school,omitempty"`
 }
 
 func Example_setObject() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
 	defer conn.Close()
 
-	dc := protos.NewDgraphClient(conn)
+	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
@@ -49,6 +52,7 @@ func Example_setObject() {
 	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
 	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
 
+	dob := time.Date(1980, 01, 01, 23, 0, 0, 0, time.UTC)
 	p := Person{
 		Name:    "Alice",
 		Age:     26,
@@ -57,6 +61,7 @@ func Example_setObject() {
 			Type:   "Point",
 			Coords: []float64{1.1, 2},
 		},
+		Dob: &dob,
 		Raw: []byte("raw_bytes"),
 		Friends: []Person{{
 			Uid:  "1000",
@@ -71,10 +76,12 @@ func Example_setObject() {
 		}},
 	}
 
-	op := &protos.Operation{}
+	op := &api.Operation{}
 	op.Schema = `
 		age: int .
 		married: bool .
+		loc: geo .
+		dob: datetime .
 	`
 
 	ctx := context.Background()
@@ -83,8 +90,8 @@ func Example_setObject() {
 		log.Fatal(err)
 	}
 
-	mu := &protos.Mutation{
-		CommitImmediately: true,
+	mu := &api.Mutation{
+		CommitNow: true,
 	}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -103,6 +110,7 @@ func Example_setObject() {
 		me(func: uid(%s)) {
 			uid
 			name
+			dob
 			age
 			loc
 			raw_bytes

@@ -17,7 +17,7 @@ function run_index_test {
   while (( $attempt < $max_attempts ))
   do
     set +e
-    N=`curl -s localhost:8080/query -XPOST -d @${X}.in`
+    N=`curl -s localhost:8081/query -XPOST -d @${X}.in`
     exitCode=$?
 
     set -e
@@ -35,7 +35,7 @@ function run_index_test {
 
   NUM=$(echo $N | python -m json.tool | grep $GREPFOR | wc -l)
   if [[ ! "$NUM" -eq "$ANS" ]]; then
-    echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM"
+    echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM, Resp: $N"
     quit 1
   else
     echo -e "Index test passed: ${X}\n"

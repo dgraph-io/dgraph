@@ -28,7 +28,8 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -48,10 +49,10 @@ type groupi struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wal       *raftwal.Wal
-	state     *protos.MembershipState
+	state     *intern.MembershipState
 	Node      *node
 	gid       uint32
-	tablets   map[string]*protos.Tablet
+	tablets   map[string]*intern.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
 }
@@ -70,13 +71,9 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
-	if Config.InMemoryComm {
-		Config.MyAddr = "inmemory"
-	}
-
 	if len(Config.MyAddr) == 0 {
 		Config.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
-	} else if !Config.InMemoryComm {
+	} else {
 		// check if address is valid or not
 		ok := x.ValidateAddress(Config.MyAddr)
 		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
@@ -85,48 +82,41 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 		}
 	}
 
-	if Config.InMemoryComm {
-		Config.RaftId = 1
-		atomic.StoreUint32(&gr.gid, 1)
-		gr.state = &protos.MembershipState{}
-		gr.state.Groups = make(map[uint32]*protos.Group)
-		gr.state.Groups[gr.groupId()] = &protos.Group{}
-		inMemoryTablet = &protos.Tablet{GroupId: gr.groupId()}
+	x.AssertTruefNoTrace(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
+	x.AssertTruefNoTrace(Config.ZeroAddr != Config.MyAddr,
+		"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
 
-	} else {
-		x.AssertTruefNoTrace(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
-		x.AssertTruefNoTrace(Config.ZeroAddr != Config.MyAddr,
-			"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
-
-		if Config.RaftId == 0 {
-			id, err := raftwal.RaftId(walStore)
-			x.Check(err)
-			Config.RaftId = id
-		}
-		x.Printf("Current Raft Id: %d\n", Config.RaftId)
-
-		// Successfully connect with dgraphzero, before doing anything else.
-		p := conn.Get().Connect(Config.ZeroAddr)
-
-		// Connect with dgraphzero and figure out what group we should belong to.
-		zc := protos.NewZeroClient(p.Get())
-		var connState *protos.ConnectionState
-		m := &protos.Member{Id: Config.RaftId, Addr: Config.MyAddr}
-		for i := 0; i < 100; i++ { // Generous number of attempts.
-			var err error
-			connState, err = zc.Connect(gr.ctx, m)
-			if err == nil {
-				break
-			}
-			x.Printf("Error while connecting with group zero: %v", err)
-		}
-		if connState.GetMember() == nil || connState.GetState() == nil {
-			x.Fatalf("Unable to join cluster via dgraphzero")
-		}
-		x.Printf("Connected to group zero. Connection state: %+v\n", connState)
-		Config.RaftId = connState.GetMember().GetId()
-		gr.applyState(connState.GetState())
+	if Config.RaftId == 0 {
+		id, err := raftwal.RaftId(walStore)
+		x.Check(err)
+		Config.RaftId = id
 	}
+	x.Printf("Current Raft Id: %d\n", Config.RaftId)
+
+	// Successfully connect with dgraphzero, before doing anything else.
+	p := conn.Get().Connect(Config.ZeroAddr)
+
+	// Connect with dgraphzero and figure out what group we should belong to.
+	zc := intern.NewZeroClient(p.Get())
+	var connState *intern.ConnectionState
+	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
+	delay := 50 * time.Millisecond
+	for i := 0; i < 9; i++ { // Generous number of attempts.
+		var err error
+		connState, err = zc.Connect(gr.ctx, m)
+		if err == nil {
+			break
+		}
+		x.Printf("Error while connecting with group zero: %v", err)
+		time.Sleep(delay)
+		delay *= 2
+	}
+	if connState.GetMember() == nil || connState.GetState() == nil {
+		x.Fatalf("Unable to join cluster via dgraphzero")
+	}
+	x.Printf("Connected to group zero. Connection state: %+v\n", connState)
+	Config.RaftId = connState.GetMember().GetId()
+	gr.applyState(connState.GetState())
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
 	gr.triggerCh = make(chan struct{}, 1)
@@ -138,11 +128,10 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	gr.Node.InitAndStartNode(gr.wal)
 
 	x.UpdateHealthStatus(true)
-	if !Config.InMemoryComm {
-		go gr.periodicMembershipUpdate() // Now set it to be run periodically.
-		go gr.cleanupTablets()
-		go gr.processOracleDeltaStream()
-	}
+	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
+	go gr.cleanupTablets()
+	go gr.processOracleDeltaStream()
+	go gr.periodicAbortOldTxns()
 	gr.proposeInitialSchema()
 }
 
@@ -158,19 +147,24 @@ func (g *groupi) proposeInitialSchema() {
 	}
 
 	// Propose schema mutation.
-	var m protos.Mutations
+	var m intern.Mutations
 	// schema for _predicate_ is not changed once set.
 	m.StartTs = 1
-	m.Schema = append(m.Schema, &protos.SchemaUpdate{
+	m.Schema = append(m.Schema, &intern.SchemaUpdate{
 		Predicate: x.PredicateListAttr,
-		ValueType: protos.Posting_STRING,
+		ValueType: intern.Posting_STRING,
 		List:      true,
 	})
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.
-	if _, err := MutateOverNetwork(gr.ctx, &m); err != nil {
+	for {
+		_, err := MutateOverNetwork(gr.ctx, &m)
+		if err == nil {
+			break
+		}
 		fmt.Println("Error while proposing initial schema: ", err)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -180,7 +174,7 @@ func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
 }
 
-func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
+func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchValues = false
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
@@ -189,7 +183,7 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 	defer itr.Close()
 
 	gid := g.groupId()
-	tablets := make(map[string]*protos.Tablet)
+	tablets := make(map[string]*intern.Tablet)
 
 	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
@@ -210,7 +204,7 @@ func (g *groupi) calculateTabletSizes() map[string]*protos.Tablet {
 				itr.Seek(pk.SkipPredicate())
 				continue
 			}
-			tablet = &protos.Tablet{GroupId: gid, Predicate: pk.Attr}
+			tablet = &intern.Tablet{GroupId: gid, Predicate: pk.Attr}
 			tablets[pk.Attr] = tablet
 		}
 		tablet.Space += item.EstimatedSize()
@@ -226,7 +220,7 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
-func (g *groupi) applyState(state *protos.MembershipState) {
+func (g *groupi) applyState(state *intern.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
@@ -236,7 +230,7 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 
 	g.state = state
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
-	g.tablets = make(map[string]*protos.Tablet)
+	g.tablets = make(map[string]*intern.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if Config.RaftId == member.Id {
@@ -255,6 +249,13 @@ func (g *groupi) applyState(state *protos.MembershipState) {
 			go conn.Get().Connect(member.Addr)
 		}
 	}
+	for _, member := range g.state.Removed {
+		if member.GroupId == g.Node.gid && g.Node.AmLeader() {
+			go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+		}
+		// Each node should have different id and address.
+		conn.Get().Remove(member.Addr)
+	}
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {
@@ -264,9 +265,6 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 }
 
 func (g *groupi) BelongsTo(key string) uint32 {
-	if Config.InMemoryComm {
-		return g.groupId()
-	}
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
@@ -281,8 +279,6 @@ func (g *groupi) BelongsTo(key string) uint32 {
 	return 0
 }
 
-var inMemoryTablet *protos.Tablet
-
 func (g *groupi) ServesTablet(key string) bool {
 	tablet := g.Tablet(key)
 	if tablet != nil && tablet.GroupId == groups().groupId() {
@@ -292,11 +288,8 @@ func (g *groupi) ServesTablet(key string) bool {
 }
 
 // Do not modify the returned Tablet
-func (g *groupi) Tablet(key string) *protos.Tablet {
+func (g *groupi) Tablet(key string) *intern.Tablet {
 	// TODO: Remove all this later, create a membership state and apply it
-	if Config.InMemoryComm {
-		return inMemoryTablet
-	}
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
@@ -311,9 +304,9 @@ func (g *groupi) Tablet(key string) *protos.Tablet {
 	if pl == nil {
 		return nil
 	}
-	zc := protos.NewZeroClient(pl.Get())
+	zc := intern.NewZeroClient(pl.Get())
 
-	tablet = &protos.Tablet{GroupId: g.groupId(), Predicate: key}
+	tablet = &intern.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		x.Printf("Error while ShouldServe grpc call %v", err)
@@ -356,7 +349,7 @@ func (g *groupi) AnyTwoServers(gid uint32) []string {
 	return res
 }
 
-func (g *groupi) members(gid uint32) map[uint64]*protos.Member {
+func (g *groupi) members(gid uint32) map[uint64]*intern.Member {
 	g.RLock()
 	defer g.RUnlock()
 
@@ -447,7 +440,7 @@ START:
 		goto START
 	}
 
-	c := protos.NewZeroClient(pl.Get())
+	c := intern.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := c.Update(ctx)
 	if err != nil {
@@ -457,7 +450,6 @@ START:
 	}
 
 	go func() {
-		n := g.Node
 		for {
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
@@ -469,10 +461,7 @@ START:
 				}
 				return
 			}
-			if n.AmLeader() {
-				proposal := &protos.Proposal{State: state}
-				go n.ProposeAndWait(context.Background(), proposal)
-			}
+			g.applyState(state)
 		}
 	}()
 
@@ -580,18 +569,18 @@ func (g *groupi) cleanupTablets() {
 	}
 }
 
-func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
-	stream protos.Zero_UpdateClient) error {
+func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
+	stream intern.Zero_UpdateClient) error {
 	leader := g.Node.AmLeader()
-	member := &protos.Member{
+	member := &intern.Member{
 		Id:         Config.RaftId,
 		GroupId:    g.groupId(),
 		Addr:       Config.MyAddr,
 		Leader:     leader,
 		LastUpdate: uint64(time.Now().Unix()),
 	}
-	group := &protos.Group{
-		Members: make(map[uint64]*protos.Member),
+	group := &intern.Group{
+		Members: make(map[uint64]*intern.Member),
 	}
 	group.Members[member.Id] = member
 	if leader {
@@ -601,22 +590,22 @@ func (g *groupi) sendMembership(tablets map[string]*protos.Tablet,
 	return stream.Send(group)
 }
 
-func (g *groupi) proposeDelta(oracleDelta *protos.OracleDelta) {
+func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 	for startTs, commitTs := range oracleDelta.Commits {
 		if posting.Txns().Get(startTs) == nil {
 			posting.Oracle().Done(startTs)
 			continue
 		}
-		tctx := &protos.TxnContext{StartTs: startTs, CommitTs: commitTs}
-		go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTs}
+		go g.Node.ProposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
 	}
 	for _, startTs := range oracleDelta.Aborts {
 		if posting.Txns().Get(startTs) == nil {
 			posting.Oracle().Done(startTs)
 			continue
 		}
-		tctx := &protos.TxnContext{StartTs: startTs}
-		go g.Node.ProposeAndWait(context.Background(), &protos.Proposal{TxnContext: tctx})
+		tctx := &api.TxnContext{StartTs: startTs}
+		go g.Node.ProposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
 	}
 }
 
@@ -630,8 +619,8 @@ START:
 		goto START
 	}
 
-	c := protos.NewZeroClient(pl.Get())
-	stream, err := c.Oracle(context.Background(), &protos.Payload{})
+	c := intern.NewZeroClient(pl.Get())
+	stream, err := c.Oracle(context.Background(), &api.Payload{})
 	if err != nil {
 		x.Printf("Error while calling Oracle %v\n", err)
 		time.Sleep(time.Second)
@@ -663,4 +652,20 @@ START:
 		g.proposeDelta(oracleDelta)
 	}
 	goto START
+}
+
+func (g *groupi) periodicAbortOldTxns() {
+	ticker := time.NewTicker(time.Second * 10)
+	for {
+		<-ticker.C
+		pl := groups().Leader(0)
+		if pl == nil {
+			return
+		}
+		zc := intern.NewZeroClient(pl.Get())
+		// Aborts if not already committed.
+		startTimestamps := posting.Txns().TxnsSinceSnapshot()
+		req := &intern.TxnTimestamps{Ts: startTimestamps}
+		zc.TryAbort(context.Background(), req)
+	}
 }

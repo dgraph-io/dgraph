@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# We run the TLS tests only when a commit is made on master/release
- if [[ $TRAVIS_BRANCH =~ master|release\/ ]] ; then
-	make test
- else
- 	echo "TLS tests skipped."
- fi
+pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/tlstest
+set -e
+make test || [[ $TRAVIS_OS_NAME == "osx" ]] # don't fail for mac
+popd

@@ -3,10 +3,11 @@ package main
 import (
 	"os"
 	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -16,6 +17,9 @@ type DgraphCluster struct {
 	dgraphPort string
 	zeroPort   string
 
+	dgraphPortOffset int
+	zeroPortOffset   int
+
 	dir    string
 	zero   *exec.Cmd
 	dgraph *exec.Cmd
@@ -24,10 +28,14 @@ type DgraphCluster struct {
 }
 
 func NewDgraphCluster(dir string) *DgraphCluster {
+	do := freePort()
+	zo := freePort()
 	return &DgraphCluster{
-		dgraphPort: freePort(),
-		zeroPort:   freePort(),
-		dir:        dir,
+		dgraphPort:       strconv.Itoa(do + 9080),
+		zeroPort:         strconv.Itoa(zo + 7080),
+		dgraphPortOffset: do,
+		zeroPortOffset:   zo,
+		dir:              dir,
 	}
 }
 
@@ -35,8 +43,7 @@ func (d *DgraphCluster) StartZeroOnly() error {
 	d.zero = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"-w=wz",
-		"--idx=1",
-		"--port", d.zeroPort,
+		"-o", strconv.Itoa(d.zeroPortOffset),
 	)
 	d.zero.Dir = d.dir
 	d.zero.Stdout = os.Stdout
@@ -60,9 +67,7 @@ func (d *DgraphCluster) Start() error {
 		"server",
 		"--memory_mb=1024",
 		"--zero", ":"+d.zeroPort,
-		"--port", freePort(),
-		"--grpc_port", d.dgraphPort,
-		"--workerport", freePort(),
+		"--port_offset", strconv.Itoa(d.dgraphPortOffset),
 		"--custom_tokenizers", d.TokenizerPluginsArg,
 	)
 	d.dgraph.Dir = d.dir
@@ -83,7 +88,7 @@ func (d *DgraphCluster) Start() error {
 	// reliably wait).
 	time.Sleep(time.Second * 4)
 
-	d.client = client.NewDgraphClient(protos.NewDgraphClient(dgConn))
+	d.client = client.NewDgraphClient(api.NewDgraphClient(dgConn))
 
 	return nil
 }

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 )
 
 func TestPlugins(t *testing.T) {
@@ -54,18 +54,18 @@ func TestPlugins(t *testing.T) {
 		wantResult string
 	}
 	suite := func(initialSchema string, setJSON string, cases []testCase) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		check(t, cluster.client.Alter(ctx, &protos.Operation{
+		check(t, cluster.client.Alter(ctx, &api.Operation{
 			DropAll: true,
 		}))
-		check(t, cluster.client.Alter(ctx, &protos.Operation{
+		check(t, cluster.client.Alter(ctx, &api.Operation{
 			Schema: initialSchema,
 		}))
 
 		txn := cluster.client.NewTxn()
-		_, err = txn.Mutate(ctx, &protos.Mutation{SetJson: []byte(setJSON)})
+		_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
 		check(t, err)
 		check(t, txn.Commit(ctx))
 

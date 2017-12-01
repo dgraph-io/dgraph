@@ -18,9 +18,6 @@ import (
 )
 
 func init() {
-	if testing.Short() {
-		return
-	}
 	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
 	cmd.Env = os.Environ()
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -76,7 +73,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
 		"-r", rdfFile,
 		"-s", schemaFile,
-		"--http", ":"+freePort(),
+		"--http", ":"+strconv.Itoa(freePort()),
 		"-z", ":"+s.bulkCluster.zeroPort,
 		"-j=1",
 		"-x=true",
@@ -114,7 +111,6 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		s.cleanup()
 		s.t.Fatalf("Live Loader didn't run: %v\n", err)
 	}
-
 }
 
 func makeDirEmpty(dir string) error {
@@ -139,7 +135,7 @@ func (s *suite) cleanup() {
 func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
 		for _, cluster := range []*DgraphCluster{s.bulkCluster, s.liveCluster} {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 			txn := cluster.client.NewTxn()
 			resp, err := txn.Query(ctx, query)
@@ -172,15 +168,16 @@ func init() {
 	rand.Seed(int64(time.Now().Nanosecond()))
 }
 
-func freePort() string {
+func freePort() int {
 	// Linux reuses ports in FIFO order. So a port that we listen on and then
 	// release will be free for a long time.
 	for {
-		p := 20000 + rand.Intn(40000)
+		// p + 7080 and p + 9080 must lie within [20000, 60000]
+		p := 14000 + rand.Intn(30000)
 		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", p))
 		if err == nil {
 			listener.Close()
-			return strconv.Itoa(p)
+			return p
 		}
 	}
 }

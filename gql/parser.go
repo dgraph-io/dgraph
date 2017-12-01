@@ -19,14 +19,13 @@ package gql
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -36,7 +35,7 @@ const (
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
-// internally used query.SubGraph before processing the query.
+// intern.y used query.SubGraph before processing the query.
 type GraphQuery struct {
 	UID        []uint64
 	Attr       string
@@ -52,16 +51,18 @@ type GraphQuery struct {
 
 	Args map[string]string
 	// Query can have multiple sort parameters.
-	Order        []*protos.Order
+	Order        []*intern.Order
 	Children     []*GraphQuery
 	Filter       *FilterTree
 	MathExp      *MathTree
 	Normalize    bool
+	Recurse      bool
+	RecurseArgs  RecurseArgs
 	Cascade      bool
 	IgnoreReflex bool
-	Facets       *Facets
+	Facets       *intern.FacetParams
 	FacetsFilter *FilterTree
-	GroupbyAttrs []AttrLang
+	GroupbyAttrs []GroupByAttr
 	FacetVar     map[string]string
 	FacetOrder   string
 	FacetDesc    bool
@@ -77,11 +78,16 @@ type GraphQuery struct {
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
-	Upsert  bool // Whether we should add the edge in case it doesn't exist.
 }
 
-type AttrLang struct {
+type RecurseArgs struct {
+	Depth     uint64
+	AllowLoop bool
+}
+
+type GroupByAttr struct {
 	Attr  string
+	Alias string
 	Langs []string
 }
 
@@ -148,12 +154,6 @@ type Function struct {
 	NeedsVar   []VarContext // If the function requires some variable
 	IsCount    bool         // gt(count(friends),0)
 	IsValueVar bool         // eq(val(s), 5)
-}
-
-// Facet holds the information about gql Facets (edge key-value pairs).
-type Facets struct {
-	AllKeys bool
-	Keys    []string // should be in sorted order.
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -269,28 +269,8 @@ type queryAlt struct {
 	Query     string `json:"query"`
 }
 
-/*
-The query could be of the following forms :
-
-# Normal query.
-	`query test($a: int) { me(_xid_: alice-in-wonderland) {author(first:$a){name}}}`
-
-# With stringified variables map.
- `{
-   "query": "query test($a: int){ me(_xid_: alice-in-wonderland) {author(first:$a){name}}}",
-	 "variables": "{'$a':'2'}"
-	 }`
-
-# With a non-stringified variables map.
-  `{
-   "query": "query test($a: int){ me(_xid_: alice-in-wonderland) {author(first:$a){name}}}",
-	 "variables": {'$a':'2'}
-	 }`
-*/
-
 func convertToVarMap(variables map[string]string) (vm varMap) {
 	vm = make(map[string]varInfo)
-	// Go client passes in variables separately.
 	for k, v := range variables {
 		vm[k] = varInfo{
 			Value: v,
@@ -302,50 +282,6 @@ func convertToVarMap(variables map[string]string) (vm varMap) {
 type Request struct {
 	Str       string
 	Variables map[string]string
-	// We need this so that we don't try to do JSON.Unmarshal for request coming
-	// from Go client, as we directly get the variables in a map.
-	// TODO: Remove this flag.
-	Http bool
-}
-
-func parseQueryWithGqlVars(r Request) (string, varMap, error) {
-	var q query
-	vm := make(varMap)
-	mp := make(map[string]string)
-
-	// Go client can send variable map separately.
-	if len(r.Variables) != 0 {
-		vm = convertToVarMap(r.Variables)
-	}
-
-	// If its a language driver like Go, no more parsing needed.
-	if !r.Http {
-		return r.Str, vm, nil
-	}
-
-	if err := json.Unmarshal([]byte(r.Str), &q); err != nil {
-		// Check if the json object is stringified.
-		var q1 queryAlt
-		if err := json.Unmarshal([]byte(r.Str), &q1); err != nil {
-			return r.Str, vm, nil // It does not obey GraphiQL format but valid.
-		}
-		// Convert the stringified variables to map if it is not nil.
-		if q1.Variables != "" {
-			if err = json.Unmarshal([]byte(q1.Variables), &mp); err != nil {
-				return "", nil, err
-			}
-		}
-	} else {
-		mp = q.Variables
-	}
-
-	for k, v := range mp {
-		vm[k] = varInfo{
-			Value: v,
-		}
-	}
-
-	return q.Query, vm, nil
 }
 
 func checkValueType(vm varMap) error {
@@ -487,16 +423,14 @@ type Vars struct {
 type Result struct {
 	Query     []*GraphQuery
 	QueryVars []*Vars
-	Schema    *protos.SchemaRequest
+	Schema    *intern.SchemaRequest
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
 func Parse(r Request) (res Result, rerr error) {
-	query, vmap, err := parseQueryWithGqlVars(r)
-	if err != nil {
-		return res, err
-	}
+	query := r.Str
+	vmap := convertToVarMap(r.Variables)
 
 	lexer := lex.Lexer{Input: query}
 	lexer.Run(lexTopLevel)
@@ -684,8 +618,7 @@ func (f *FilterTree) hasVars() bool {
 // getVariablesAndQuery checks if the query has a variable list and stores it in
 // vmap. For variable list to be present, the query should have a name which is
 // also checked for. It also calls getQuery to create the GraphQuery object tree.
-func getVariablesAndQuery(it *lex.ItemIterator, vmap varMap) (gq *GraphQuery,
-	rerr error) {
+func getVariablesAndQuery(it *lex.ItemIterator, vmap varMap) (gq *GraphQuery, rerr error) {
 	var name string
 L2:
 	for it.Next() {
@@ -719,6 +652,59 @@ L2:
 	}
 
 	return gq, nil
+}
+
+func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
+	if ok := trySkipItemTyp(it, itemLeftRound); !ok {
+		// We don't have a (, we can return.
+		return nil
+	}
+
+	var key, val string
+	var item lex.Item
+	var ok bool
+	for it.Next() {
+		item = it.Item()
+		if item.Typ != itemName {
+			return fmt.Errorf("Expected key inside @recurse().")
+		}
+		key = strings.ToLower(item.Val)
+
+		if ok := trySkipItemTyp(it, itemColon); !ok {
+			return fmt.Errorf("Expected colon(:) after %s")
+		}
+
+		if item, ok = tryParseItemType(it, itemName); !ok {
+			return fmt.Errorf("Expected value inside @recurse() for key: %s.", key)
+		}
+		val = item.Val
+
+		switch key {
+		case "depth":
+			depth, err := strconv.ParseUint(val, 0, 64)
+			if err != nil {
+				return err
+			}
+			gq.RecurseArgs.Depth = depth
+		case "loop":
+			allowLoop, err := strconv.ParseBool(val)
+			if err != nil {
+				return err
+			}
+			gq.RecurseArgs.AllowLoop = allowLoop
+		default:
+			return fmt.Errorf("Unexpected key: [%s] inside @recurse block", key)
+		}
+
+		if _, ok := tryParseItemType(it, itemRightRound); ok {
+			return nil
+		}
+
+		if _, ok := tryParseItemType(it, itemComma); !ok {
+			return fmt.Errorf("Expected comma after value: %s inside recurse block.", val)
+		}
+	}
+	return nil
 }
 
 // getQuery creates a GraphQuery object tree by calling getRoot
@@ -767,14 +753,11 @@ L:
 				parseGroupby(it, gq)
 			case "ignorereflex":
 				gq.IgnoreReflex = true
-			case "upsert":
-				if gq.Func == nil || gq.Func.Name != "eq" {
-					return nil, x.Errorf("Upsert query can only be done with eq function.")
+			case "recurse":
+				gq.Recurse = true
+				if err := parseRecurseArgs(it, gq); err != nil {
+					return nil, err
 				}
-				if len(gq.Func.Args) != 1 {
-					return nil, x.Errorf("Upsert query can only have one argument.")
-				}
-				gq.Upsert = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -856,7 +839,7 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 }
 
 // parses till rightround is found
-func parseSchemaPredicates(it *lex.ItemIterator, s *protos.SchemaRequest) error {
+func parseSchemaPredicates(it *lex.ItemIterator, s *intern.SchemaRequest) error {
 	// pred should be followed by colon
 	it.Next()
 	item := it.Item()
@@ -892,7 +875,7 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *protos.SchemaRequest) error 
 }
 
 // parses till rightcurl is found
-func parseSchemaFields(it *lex.ItemIterator, s *protos.SchemaRequest) error {
+func parseSchemaFields(it *lex.ItemIterator, s *intern.SchemaRequest) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -907,8 +890,8 @@ func parseSchemaFields(it *lex.ItemIterator, s *protos.SchemaRequest) error {
 	return x.Errorf("Invalid schema block.")
 }
 
-func getSchema(it *lex.ItemIterator) (*protos.SchemaRequest, error) {
-	var s protos.SchemaRequest
+func getSchema(it *lex.ItemIterator) (*intern.SchemaRequest, error) {
+	var s intern.SchemaRequest
 	leftRoundSeen := false
 	for it.Next() {
 		item := it.Item()
@@ -1557,7 +1540,7 @@ L:
 }
 
 type facetRes struct {
-	f          *Facets
+	f          *intern.FacetParams
 	ft         *FilterTree
 	vmap       map[string]string
 	facetOrder string
@@ -1576,7 +1559,8 @@ func parseFacets(it *lex.ItemIterator) (res facetRes, err error) {
 }
 
 type facetItem struct {
-	facetName string
+	name      string
+	alias     string
 	varName   string
 	ordered   bool
 	orderdesc bool
@@ -1587,7 +1571,7 @@ type facetItem struct {
 // different function.
 func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err error) {
 	// We parse this:
-	// [{orderdesc|orderasc}:] [varname as] facetName
+	// [{orderdesc|orderasc|alias}:] [varname as] name
 
 	savePos := it.Save()
 	defer func() {
@@ -1600,27 +1584,31 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 	if !ok {
 		return res, false, nil
 	}
+
 	isOrderasc := item.Val == "orderasc"
-	if isOrderasc || item.Val == "orderdesc" {
-		if _, ok := tryParseItemType(it, itemColon); ok {
+	if _, ok := tryParseItemType(it, itemColon); ok {
+		if isOrderasc || item.Val == "orderdesc" {
 			res.ordered = true
 			res.orderdesc = !isOrderasc
-			// Step past colon.
-			item, ok = tryParseItemType(it, itemName)
-			if !ok {
-				return res, false, x.Errorf("Expected name after colon")
-			}
+		} else {
+			res.alias = item.Val
+		}
+
+		// Step past colon.
+		item, ok = tryParseItemType(it, itemName)
+		if !ok {
+			return res, false, x.Errorf("Expected name after colon")
 		}
 	}
 
-	// We've possibly set ordered, orderdesc, and now we have consumed another item, which is a
-	// name.
+	// We've possibly set ordered, orderdesc, alias and now we have consumed another item,
+	// which is a name.
 	name1 := item.Val
 
 	// Now try to consume "as".
 	if !trySkipItemVal(it, "as") {
 		name1 = collectName(it, name1)
-		res.facetName = name1
+		res.name = name1
 		return res, true, nil
 	}
 	item, ok = tryParseItemType(it, itemName)
@@ -1628,7 +1616,7 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 		return res, false, x.Errorf("Expected name in facet list")
 	}
 
-	res.facetName = collectName(it, item.Val)
+	res.name = collectName(it, item.Val)
 	res.varName = name1
 	return res, true, nil
 }
@@ -1647,7 +1635,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	// Skip past '('
 	if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 		it.Restore(savePos)
-		var facets Facets
+		var facets intern.FacetParams
 		facets.AllKeys = true
 		res.f = &facets
 		res.vmap = make(map[string]string)
@@ -1655,7 +1643,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	}
 
 	facetVar := make(map[string]string)
-	var facets Facets
+	var facets intern.FacetParams
 	var orderdesc bool
 	var orderkey string
 
@@ -1677,43 +1665,46 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 		// Combine the facetitem with our result.
 		{
 			if facetItem.varName != "" {
-				if _, has := facetVar[facetItem.facetName]; has {
+				if _, has := facetVar[facetItem.name]; has {
 					return res, false, x.Errorf("Duplicate variable mappings for facet %v",
-						facetItem.facetName)
+						facetItem.name)
 				}
-				facetVar[facetItem.facetName] = facetItem.varName
+				facetVar[facetItem.name] = facetItem.varName
 			}
-			facets.Keys = append(facets.Keys, facetItem.facetName)
+			facets.Param = append(facets.Param, &intern.FacetParam{
+				Key:   facetItem.name,
+				Alias: facetItem.alias,
+			})
 			if facetItem.ordered {
 				if orderkey != "" {
 					return res, false, x.Errorf("Invalid use of orderasc/orderdesc in facets")
 				}
 				orderdesc = facetItem.orderdesc
-				orderkey = facetItem.facetName
+				orderkey = facetItem.name
 			}
 		}
 
 		// Now what?  Either close-paren or a comma.
 		if _, ok := tryParseItemType(it, itemRightRound); ok {
-			sort.Slice(facets.Keys, func(i, j int) bool {
-				return facets.Keys[i] < facets.Keys[j]
+			sort.Slice(facets.Param, func(i, j int) bool {
+				return facets.Param[i].Key < facets.Param[j].Key
 			})
 			// deduplicate facets
-			out := facets.Keys[:0]
-			flen := len(facets.Keys)
+			out := facets.Param[:0]
+			flen := len(facets.Param)
 			for i := 1; i < flen; i++ {
-				if facets.Keys[i-1] == facets.Keys[i] {
+				if facets.Param[i-1].Key == facets.Param[i].Key {
 					continue
 				}
-				out = append(out, facets.Keys[i-1])
+				out = append(out, facets.Param[i-1])
 			}
-			out = append(out, facets.Keys[flen-1])
-			facets.Keys = out
+			out = append(out, facets.Param[flen-1])
+			facets.Param = out
 			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
 			return res, true, nil
 		}
 		if item, ok := tryParseItemType(it, itemComma); !ok {
-			if len(facets.Keys) < 2 {
+			if len(facets.Param) < 2 {
 				// We have only consumed ``'@facets' '(' <facetItem>`, which means parseFilter might
 				// succeed. Return no-parse, no-error.
 				return res, false, nil
@@ -1732,6 +1723,7 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	expectArg := true
 	it.Next()
 	item := it.Item()
+	alias := ""
 	if item.Typ != itemLeftRound {
 		return x.Errorf("Expected a left round after groupby")
 	}
@@ -1749,7 +1741,21 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 			if !expectArg {
 				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
-			attr := collectName(it, item.Val)
+
+			val := collectName(it, item.Val)
+			peekIt, err := it.Peek(1)
+			if err != nil {
+				return err
+			}
+			if peekIt[0].Typ == itemColon {
+				if alias != "" {
+					return x.Errorf("Expected predicate after %s:", alias)
+				}
+				alias = val
+				it.Next() // Consume the itemColon
+				continue
+			}
+
 			var langs []string
 			items, err := it.Peek(1)
 			if err == nil && items[0].Typ == itemAt {
@@ -1760,10 +1766,12 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 			}
-			attrLang := AttrLang{
-				Attr:  attr,
+			attrLang := GroupByAttr{
+				Attr:  val,
+				Alias: alias,
 				Langs: langs,
 			}
+			alias = ""
 			gq.GroupbyAttrs = append(gq.GroupbyAttrs, attrLang)
 			count++
 			expectArg = false
@@ -1943,11 +1951,21 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 }
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
-	if curp == nil {
-		return x.Errorf("Invalid use of directive.")
+	valid := true
+	it.Prev()
+	item := it.Item()
+	if item.Typ == itemLeftCurl {
+		// Ideally we should check that curp was created at current depth.
+		valid = false
 	}
 	it.Next()
-	item := it.Item()
+	// No directive is allowed on intern.subgraph like expand all, value variables.
+	if !valid || curp == nil || curp.IsInternal {
+		return x.Errorf("Invalid use of directive.")
+	}
+
+	it.Next()
+	item = it.Item()
 	peek, err := it.Peek(1)
 	if err != nil || item.Typ != itemName {
 		return x.Errorf("Expected directive or language list")
@@ -1982,12 +2000,18 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		// this is directive
 		switch item.Val {
 		case "filter":
+			if curp.Filter != nil {
+				return x.Errorf("Use AND, OR and round brackets instead of multiple filter directives.")
+			}
 			filter, err := parseFilter(it)
 			if err != nil {
 				return err
 			}
 			curp.Filter = filter
 		case "groupby":
+			if curp.IsGroupby {
+				return x.Errorf("Only one group by directive allowed.")
+			}
 			curp.IsGroupby = true
 			parseGroupby(it, curp)
 		default:
@@ -2216,7 +2240,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
 				attr, langs := attrAndLang(val)
-				gq.Order = append(gq.Order, &protos.Order{attr, key == "orderdesc", langs})
+				gq.Order = append(gq.Order, &intern.Order{attr, key == "orderdesc", langs})
 				order[val] = true
 				continue
 			}
@@ -2316,6 +2340,17 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			val := collectName(it, item.Val)
 			valLower := strings.ToLower(val)
+
+			peekIt, err = it.Peek(1)
+			if err != nil {
+				return err
+			}
+			if peekIt[0].Typ == itemColon {
+				alias = val
+				it.Next() // Consume the itemCollon
+				continue
+			}
+
 			if gq.IsGroupby && (!isAggregator(val) && val != "count" && count != seen) {
 				// Only aggregator or count allowed inside the groupby block.
 				return x.Errorf("Only aggregator/count functions allowed inside @groupby. Got: %v", val)
@@ -2474,8 +2509,17 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if peekIt[0].Typ == itemRightRound {
-					// We encountered a count(), lets reset count to notSeen
-					// and set UidCount on parent.
+					return x.Errorf("Cannot use count(), please use count(uid)")
+				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
+					if gq.IsGroupby {
+						// count(uid) case which occurs inside @groupby
+						val = uid
+						// Skip uid)
+						it.Next()
+						it.Next()
+						goto Fall
+					}
+
 					if varName != "" {
 						return x.Errorf("Cannot assign variable to count()")
 					}
@@ -2485,13 +2529,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						gq.UidCount = alias
 					}
 					it.Next()
-				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
-					// count(uid) case which occurs inside @groupby
-					val = uid
-					// Skip uid)
 					it.Next()
-					it.Next()
-					goto Fall
 				}
 				continue
 			} else if valLower == value {
@@ -2542,15 +2580,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return x.Errorf("Cannot do uid() of a variable")
 			}
 		Fall:
-			peekIt, err = it.Peek(1)
-			if err != nil {
-				return err
-			}
-			if peekIt[0].Typ == itemColon {
-				alias = val
-				it.Next() // Consume the itemCollon
-				continue
-			}
 			if count == seenWithPred {
 				return x.Errorf("Multiple predicates not allowed in single count.")
 			}
@@ -2610,7 +2639,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
 					}
 					attr, langs := attrAndLang(p.Val)
-					curp.Order = append(curp.Order, &protos.Order{attr, p.Key == "orderdesc", langs})
+					curp.Order = append(curp.Order, &intern.Order{attr, p.Key == "orderdesc", langs})
 					order[p.Val] = true
 					continue
 				}

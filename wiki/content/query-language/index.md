@@ -666,10 +666,7 @@ Syntax Examples: `has(predicate)`
 
 Schema Types: all
 
-Index Required: `count` (when used at query root)
-
 Determines if a node has a particular predicate.
-
 
 Query Example: First five directors and all their movies that have a release date recorded.  Directors have directed at least one film --- equivalent semantics to `gt(count(director.film), 0)`.
 {{< runnable >}}
@@ -1005,11 +1002,11 @@ The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `
 Syntax Examples:
 
 * `count(predicate)`
-* `count()`
+* `count(uid)`
 
 The form `count(predicate)` counts how many `predicate` edges lead out of a node.
 
-The form `count()` counts the number of UIDs matched in the enclosing block.
+The form `count(uid)` counts the number of UIDs matched in the enclosing block.
 
 Query Example: The number of films acted in by each actor with `Orlando` in their name.
 
@@ -1029,7 +1026,7 @@ Query Example: Count of directors who have directed more than five films.  When 
 {{< runnable >}}
 {
   directors(func: gt(count(director.film), 5)) {
-    totalDirectors : count()
+    totalDirectors : count(uid)
   }
 }
 {{< /runnable >}}
@@ -2531,7 +2528,7 @@ The syntax `@facets(facet-name)` is used to query facet data. For Alice the `sin
 {{</ runnable >}}
 
 
-Facets are retuned at the same level as the corresponding edge and have keys like edge:facet.
+Facets are retuned at the same level as the corresponding edge and have keys like edge|facet.
 
 All facets on an edge are queried with `@facets`.
 
@@ -2544,6 +2541,28 @@ All facets on an edge are queried with `@facets`.
   }
 }
 {{</ runnable >}}
+
+
+### Alias with facets
+
+Alias can be specified while requesting specific predicates. Syntax is similar to how would request
+alias for other predicates. `orderasc` and `orderdesc` are not allowed as alias as they have special
+meaning. Apart from that anything else can be set as alias.
+
+Here we set `car_since`, `close_friend` alias for `since`, `close` facets respectively.
+{{< runnable >}}
+{
+   data(func: eq(name, "Alice")) {
+     name
+     mobile
+     car @facets(car_since: since)
+     friend @facets(close_friend: close) {
+       name
+     }
+   }
+}
+{{</ runnable >}}
+
 
 
 ### Facets on UID predicates
@@ -2581,8 +2600,8 @@ A query for friends and the facet `close` with `@facets(close)`.
 {{</ runnable >}}
 
 
-For uid edges like `friend`, facets go to the corresponding child under the key edge:facet. In the above
-example you can see that the `close` facet on the edge between Alice and Bob appears with the key `friend:close`
+For uid edges like `friend`, facets go to the corresponding child under the key edge|facet. In the above
+example you can see that the `close` facet on the edge between Alice and Bob appears with the key `friend|close`
 along with Bob's results.
 
 {{< runnable >}}
@@ -2598,7 +2617,7 @@ along with Bob's results.
 {{</ runnable >}}
 
 Bob has a `car` and it has a facet `since`, which, in the results, is part of the same object as Bob
-under the key car:since.
+under the key car|since.
 Also, the `close` relationship between Bob and Alice is part of Bob's output object.
 Charlie does not have `car` edge and thus only UID facets.
 
@@ -2946,7 +2965,7 @@ curl localhost:8080/query -XPOST -d $'{
 To get 10 movies from a genre that has more than 30000 films and then get two actors for those movies we'd do something as follows:
 {{< runnable >}}
 {
-	recurse(func: gt(count(~genre), 30000), first: 1){
+	me(func: gt(count(~genre), 30000), first: 1) @recurse(depth: 5, loop: true) {
 		name@en
 		~genre (first:10) @filter(gt(count(starring), 2))
 		starring (first: 2)
@@ -2956,23 +2975,9 @@ To get 10 movies from a genre that has more than 30000 films and then get two ac
 {{< /runnable >}}
 Some points to keep in mind while using recurse queries are:
 
-- Each edge would be traversed only once. Hence, cycles would be avoided.
 - You can specify only one level of predicates after root. These would be traversed recursively. Both scalar and entity-nodes are treated similarly.
 - Only one recurse block is advised per query.
 - Be careful as the result size could explode quickly and an error would be returned if the result set gets too large. In such cases use more filter, limit resutls using pagination, or provide a depth parameter at root as follows:
-
-{{< runnable >}}
-{
-	recurse(func: gt(count(~genre), 30000), depth: 2){
-		name@en
-		~genre (first:2) @filter(gt(count(starring), 2))
-		starring (first: 2)
-		performance.actor
-	}
-}
-{{< /runnable >}}
-
-
 
 
 ## Fragments
@@ -2998,42 +3003,39 @@ fragment TestFragB {
 
 ## GraphQL Variables
 
-`Variables` can be defined and used in GraphQL queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a $ symbol. For complete information on variables, please check out GraphQL specification on [variables](https://facebook.github.io/graphql/#sec-Language.Variables). We encode the variables as a separate JSON object as show in the example below.
+`Variables` can be defined and used in queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a `$` symbol.
 
-{{< runnable >}}
-{
- "query": "query test($a: int, $b: int, $id: string){  me(func: uid($id)) {name@en, director.film (first: $a, offset: $b) {name @en, genre(first: $a) { name@en }}}}",
- "variables" : {
-  "$a": "5",
-  "$b": "10",
-  "$id": "[m.06pj8, m.0bxtg]"
- }
+{{< runnable vars="{\"$a\": \"5\", \"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}
+query test($a: int, $b: int, $name: string) {
+  me(func: allofterms(name@en, $name)) {
+    name@en
+    director.film (first: $a, offset: $b) {
+      name @en
+      genre(first: $a) {
+        name@en
+      }
+    }
+  }
 }
 {{< /runnable >}}
 
-* Variables whose type is suffixed with a `!` can't have a default value but must
-have a value as part of the variables map.
+* Variables can have default values. In the example below, `$a` has a default value of `2`. Since the value for `$a` isn't provided in the variable map, `$a` takes on the default value.
+* Variables whose type is suffixed with a `!` can't have a default value but must have a value as part of the variables map.
 * The value of the variable must be parsable to the given type, if not, an error is thrown.
+* The variable types that are supported as of now are: `int`, `float`, `bool`, `string` and `uid`.
 * Any variable that is being used must be declared in the named query clause in the beginning.
-* We also support default values for the variables. In the example below, `$a` has a
-default value of `2`.
 
-{{< runnable >}}
-{
- "query": "query test($a: int = 2, $b: int!){  me(func: uid(1)) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
- "variables" : {
-   "$a": "5",
-   "$b": "10"
- }
+{{< runnable vars="{\"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}
+query test($a: int = 2, $b: int!, $name: string) {
+  me(func: allofterms(name@en, $name)) {
+    director.film (first: $a, offset: $b) {
+      genre(first: $a) {
+        name@en
+      }
+    }
+  }
 }
 {{< /runnable >}}
-
-* If the variable is initialized in the variable map, the default value will be
-overridden (In the example, `$a` will have value 5 and `$b` will be 3).
-
-* The variable types that are supported as of now are: `int`, `float`, `bool`, `string` and `uid`.
-
-{{% notice "note" %}}In GraphiQL interface, the query and the variables have to be separately entered in their respective boxes.{{% /notice %}}
 
 ## Indexing with Custom Tokenizers
 

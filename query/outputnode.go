@@ -30,7 +30,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -371,6 +371,10 @@ type attrVal struct {
 }
 
 func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
+	// Don't add empty groupby
+	if len(sg.GroupbyRes.group) == 0 {
+		return
+	}
 	g := n.New(fname)
 	for _, grp := range sg.GroupbyRes.group {
 		uc := g.New("@groupby")
@@ -474,8 +478,8 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 }
 
 type Extensions struct {
-	Latency *protos.Latency    `json:"server_latency,omitempty"`
-	Txn     *protos.TxnContext `json:"txn,omitempty"`
+	Latency *api.Latency    `json:"server_latency,omitempty"`
+	Txn     *api.TxnContext `json:"txn,omitempty"`
 }
 
 func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {

@@ -36,9 +36,9 @@ title = "Dgraph Documentation"
   identifier = "faq"
   weight = 6
 [[menu.main]]
-  name = "Performance"
-  url = "/performance/"
-  identifier = "performance"
+  name = "How To Guides"
+  url = "/howto/"
+  identifier = "how-to-guides"
   weight = 7
 [[menu.main]]
   name = "Design Concepts"
