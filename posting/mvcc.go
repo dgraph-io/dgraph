@@ -456,10 +456,92 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 		l, err = ReadPostingList(key, it)
 	}
 
+	l.onDisk = 1
 	l.Lock()
 	size := l.calculateSize()
 	l.Unlock()
 	x.BytesRead.Add(int64(size))
 	atomic.StoreInt32(&l.estimatedSize, size)
 	return l, err
+}
+
+type TxnPrefixIterator struct {
+	iter    *badger.Iterator
+	reverse bool
+	prefix  []byte
+	// Acummulate all keys for a prefix to reduce the lock contention over btree
+	inMemoryKeys [][]byte
+	idx          int
+	key          []byte
+}
+
+func NewTxnPrefixIterator(txn *badger.Txn,
+	iterOpts badger.IteratorOptions) *TxnPrefixIterator {
+	txnIt := new(TxnPrefixIterator)
+	txnIt.iter = txn.NewIterator(iterOpts)
+	txnIt.reverse = iterOpts.Reverse
+	x.AssertTrue(iterOpts.PrefetchValues == false)
+	return txnIt
+}
+
+func (t *TxnPrefixIterator) Seek(key []byte, prefix []byte) {
+	t.prefix = prefix
+	cont := func(key []byte) bool {
+		if !bytes.HasPrefix(key, prefix) {
+			return false
+		}
+		t.inMemoryKeys = append(t.inMemoryKeys, key)
+		return true
+	}
+	if !t.reverse {
+		btree.AscendGreaterOrEqual(key, cont)
+	} else {
+		btree.DescendLessOrEqual(key, cont)
+	}
+	t.iter.Seek(key)
+	t.Next()
+}
+
+func (t *TxnPrefixIterator) Valid() bool {
+	return len(t.key) > 0
+}
+
+func (t *TxnPrefixIterator) Next() {
+	if t.idx >= len(t.inMemoryKeys) {
+		if t.iter.ValidForPrefix(t.prefix) {
+			t.key = t.iter.Item().Key()
+			t.iter.Next()
+		} else {
+			t.key = nil
+		}
+		return
+	} else if !t.iter.ValidForPrefix(t.prefix) {
+		if t.idx < len(t.inMemoryKeys) {
+			t.key = t.inMemoryKeys[t.idx]
+			t.idx++
+		} else {
+			t.key = nil
+		}
+		return
+	}
+
+	if cmp := bytes.Compare(t.inMemoryKeys[t.idx], t.iter.Item().Key()); cmp < 0 {
+		t.key = t.inMemoryKeys[t.idx]
+		t.idx++
+	} else if cmp > 0 {
+		t.key = t.iter.Item().Key()
+		t.iter.Next()
+	} else {
+		t.key = t.inMemoryKeys[t.idx]
+		t.idx++
+		t.iter.Next()
+	}
+}
+
+func (t *TxnPrefixIterator) Key() []byte {
+	return t.key
+}
+
+func (t *TxnPrefixIterator) Close() {
+	t.iter.Close()
 }

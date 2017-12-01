@@ -170,12 +170,14 @@ func updateMemoryMetrics() {
 var (
 	pstore *badger.ManagedDB
 	lcache *listCache
+	btree  *BTree
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.ManagedDB) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
+	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
 	go periodicUpdateStats()
@@ -211,6 +213,8 @@ func Get(key []byte) (rlist *List) {
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
 		x.CacheRace.Add(1)
+	} else if l.onDisk == 0 {
+		btree.Insert(l.key)
 	}
 	return lp
 }

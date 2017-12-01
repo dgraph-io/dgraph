@@ -79,6 +79,7 @@ type List struct {
 	markdeleteAll uint64
 	estimatedSize int32
 	numCommits    int
+	onDisk        int32 // Using atomic, Was written to disk atleast once.
 }
 
 // calculateSize would give you the size estimate. Does not consider elements in mutation layer.
@@ -801,6 +802,10 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			retries += 1
 			doAsyncWrite(minTs, l.key, data, meta, f)
 			return
+		}
+		if atomic.LoadInt32(&l.onDisk) == 0 {
+			btree.Delete(l.key)
+			atomic.StoreInt32(&l.onDisk, 1)
 		}
 		x.BytesWrite.Add(int64(len(data)))
 		x.PostingWrites.Add(1)
