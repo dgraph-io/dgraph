@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
@@ -32,7 +33,7 @@ type XidMap struct {
 	shards    []shard
 	kv        *badger.DB
 	opt       Options
-	newRanges chan rangeResponse
+	newRanges chan *api.AssignedIds
 
 	noMapMu sync.Mutex
 	noMap   block // block for allocating uids without an xid to uid mapping
@@ -59,20 +60,15 @@ type block struct {
 	start, end uint64
 }
 
-func (b *block) assign(ch <-chan rangeResponse) uint64 {
+func (b *block) assign(ch <-chan *api.AssignedIds) uint64 {
 	if b.end == 0 || b.start > b.end {
 		newRange := <-ch
-		b.start, b.end = newRange.start, newRange.end
+		b.start, b.end = newRange.StartId, newRange.EndId
 	}
 	x.AssertTrue(b.start <= b.end)
 	uid := b.start
 	b.start++
 	return uid
-}
-
-type rangeResponse struct {
-	start uint64
-	end   uint64
 }
 
 // New creates an XidMap with given badger and uid provider.
@@ -83,7 +79,7 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		shards:    make([]shard, opt.NumShards),
 		kv:        kv,
 		opt:       opt,
-		newRanges: make(chan rangeResponse),
+		newRanges: make(chan *api.AssignedIds),
 	}
 	for i := range xm.shards {
 		xm.shards[i].elems = make(map[string]*list.Element)
@@ -93,7 +89,7 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 	go func() {
 		zc := intern.NewZeroClient(zero)
 		const initBackoff = 10 * time.Millisecond
-		const maxBackoff = 30 * time.Second
+		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
 			assigned, err := zc.AssignUids(context.Background(), &intern.Num{Val: 10000})
@@ -106,10 +102,7 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 				time.Sleep(backoff)
 			} else {
 				backoff = initBackoff
-				xm.newRanges <- rangeResponse{
-					start: assigned.GetStartId(),
-					end:   assigned.GetEndId(),
-				}
+				xm.newRanges <- assigned
 			}
 		}
 	}()
