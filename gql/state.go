@@ -541,6 +541,9 @@ func isLangOrDirective(r rune) bool {
 	if r == '-' {
 		return true
 	}
+	if r >= '0' && r <= '9' {
+		return true
+	}
 	return false
 }
 
