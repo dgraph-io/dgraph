@@ -830,12 +830,5 @@ func DeletePredicate(ctx context.Context, attr string) error {
 		}
 	}
 
-	s, ok := schema.State().Get(attr)
-	if !ok {
-		return nil
-	}
-	if !s.Explicit {
-		schema.State().Delete(attr)
-	}
-	return nil
+	return schema.State().Delete(attr)
 }
