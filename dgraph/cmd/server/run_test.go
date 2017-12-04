@@ -304,7 +304,7 @@ func TestDeletePredicate(t *testing.T) {
 				}
 			}
 		}
-		`
+	`
 
 	var s1 = `
 	friend: uid @reverse .
@@ -313,8 +313,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	var s2 = `
 	friend: string @index(term) .
-	name: uid @reverse .
-		`
+	`
 
 	schema.ParseBytes([]byte(""), 1)
 	err := alterSchemaWithRetry(s1)
@@ -346,21 +345,20 @@ func TestDeletePredicate(t *testing.T) {
 
 	err = deletePredicate("friend")
 	require.NoError(t, err)
-	err = deletePredicate("name")
-	require.NoError(t, err)
 	err = deletePredicate("salary")
 	require.NoError(t, err)
 
 	output, err = runQuery(`schema{}`)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"age","type":"default"},{"predicate":"friend","type":"uid","reverse":true},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]}]}}`, output)
+	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"age","type":"default"},{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}]}}`, output)
 
 	output, err = runQuery(q1)
+	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user": []}}`, output)
+	require.JSONEq(t, `{"data": {"user": [{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}}`, output)
 
 	output, err = runQuery(q5)
 	require.NoError(t, err)
