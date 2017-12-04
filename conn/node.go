@@ -383,22 +383,6 @@ func (n *Node) DeletePeer(pid uint64) {
 	delete(n.peers, pid)
 }
 
-func (n *Node) PeerMap() map[uint64]string {
-	n.RLock()
-	defer n.RUnlock()
-	m := make(map[uint64]string)
-	for k, v := range n.peers {
-		m[k] = v
-	}
-	return m
-}
-
-func (n *Node) SetPeerMap(m map[uint64]string) {
-	n.Lock()
-	defer n.Unlock()
-	n.peers = m
-}
-
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr, ok := n.Peer(pid)
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
