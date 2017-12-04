@@ -60,6 +60,9 @@ pushd $tmp_dir > /dev/null
 if [[ $platform == "windows" ]]; then
   tar -zcvf $tar_file dgraph.exe
 else
+  checksum=$(shasum -a 256 dgraph | awk '{print $1}')
+  echo -e "Checksum $checksum"
+  echo "$checksum /usr/local/bin/dgraph" >> $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
   tar -zcvf $tar_file dgraph
 fi
 

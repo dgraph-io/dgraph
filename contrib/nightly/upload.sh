@@ -105,8 +105,10 @@ LATEST_TAG=$(curl -s https://api.github.com/repos/dgraph-io/dgraph/releases/late
 DGRAPH_COMMIT=$(git rev-parse HEAD)
 TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
 NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
+OSX_NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-darwin-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
 SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
 SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
+OSX_SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-checksum--amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
 ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 CURRENT_BRANCH=$TRAVIS_BRANCH
 CURRENT_DIR=$(pwd)
@@ -172,8 +174,14 @@ upload_assets() {
 	local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
 	update_or_create_asset $release_id $name ${NIGHTLY_FILE}
 
+	local name="dgraph-darwin-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
+	update_or_create_asset $release_id $name ${OSX_NIGHTLY_FILE}
+
 	local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
 	update_or_create_asset $release_id $sha_name ${SHA_FILE}
+
+	local sha_name="dgraph-checksum-darwin-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
+	update_or_create_asset $release_id $sha_name ${OSX_SHA_FILE}
 
 	# As asset would be the same on both platforms, we only upload it from linux.
 	update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
@@ -238,10 +246,10 @@ upload_docker_image() {
 }
 
 pushd $DGRAPH > /dev/null
-$BUILD_DIR/build.sh $ASSET_SUFFIX
 
-$BUILD_DIR/build-cross-platform.sh "windows" $ASSET_SUFFIX
+# $BUILD_DIR/build-cross-platform.sh "windows" $ASSET_SUFFIX
 $BUILD_DIR/build-cross-platform.sh "darwin" $ASSET_SUFFIX
+$BUILD_DIR/build.sh $ASSET_SUFFIX
 
 if [[ $DOCKER_TAG == "" ]]; then
   echo -e "No docker tag found. Exiting the script"
