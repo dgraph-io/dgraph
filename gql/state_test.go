@@ -265,3 +265,27 @@ func TestMultiLangSupport(t *testing.T) {
 		t.Log(item.String())
 	}
 }
+
+func TestNumberInLang(t *testing.T) {
+	input := `
+	{
+		q(func: eq(name@es-419, "aoeu")) {
+			name@.
+		}
+	}
+	`
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
+	it := l.NewIterator()
+	gotEs := false
+	for it.Next() {
+		item := it.Item()
+		require.NotEqual(t, item.Typ, lex.ItemError)
+		if item.Val == "es-419" {
+			gotEs = true
+		}
+	}
+	require.True(t, gotEs)
+}
