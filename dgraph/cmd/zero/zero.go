@@ -280,7 +280,7 @@ func (s *Server) createProposals(dst *intern.Group) ([]*intern.ZeroProposal, err
 
 		s := float64(srcTablet.Space)
 		d := float64(dstTablet.Space)
-		if (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
+		if dstTablet.Remove || (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
 			dstTablet.Force = false
 			proposal := &intern.ZeroProposal{
 				Tablet: dstTablet,
