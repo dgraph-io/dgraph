@@ -312,6 +312,10 @@ message SchemaUpdate {
 	repeated string tokenizer = 4;
 	bool count = 5;
 	bool list = 6;
+
+	// Deleted field:
+	reserved 7;
+	reserved "explicit";
 }
 
 // Bulk loader proto.
