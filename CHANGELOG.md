@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Fixed
+
+* Language tag parsing in queries now accepts digits (in line with RDF parsing).
+
 ## [0.9.3] - 2017-12-01
 
 ### Added
