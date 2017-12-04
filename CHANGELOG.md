@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Changed
+
+* `DropAttr` now also removes the schema for the attribute (previously it just removed the edges).
+
 ## [0.9.3] - 2017-12-01
 
 ### Added
