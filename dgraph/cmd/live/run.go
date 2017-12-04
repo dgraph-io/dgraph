@@ -44,7 +44,6 @@ import (
 	bopt "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -143,7 +142,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	return dgraphClient.Alter(ctx, op)
 }
 
-func (l *loader) uid(val string) (string, error) {
+func (l *loader) uid(val string) string {
 	// Attempt to parse as a UID (in the same format that dgraph outputs - a
 	// hex number prefixed by "0x"). If parsing succeeds, then this is assumed
 	// to be an existing node in the graph. There is limited protection against
@@ -151,12 +150,12 @@ func (l *loader) uid(val string) (string, error) {
 	// later to another node. It is up to the user to avoid this.
 	if strings.HasPrefix(val, "0x") {
 		if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
-			return val, nil
+			return val
 		}
 	}
 
-	uid, _, err := l.alloc.AssignUid(val)
-	return fmt.Sprintf("%#x", uint64(uid)), err
+	uid, _ := l.alloc.AssignUid(val)
+	return fmt.Sprintf("%#x", uint64(uid))
 }
 
 func fileReader(file string) (io.Reader, *os.File) {
@@ -209,13 +208,9 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 		batchSize++
 		buf.Reset()
 
-		if nq.Subject, err = l.uid(nq.Subject); err != nil {
-			return err
-		}
+		nq.Subject = l.uid(nq.Subject)
 		if len(nq.ObjectId) > 0 {
-			if nq.ObjectId, err = l.uid(nq.ObjectId); err != nil {
-				return err
-			}
+			nq.ObjectId = l.uid(nq.ObjectId)
 		}
 		mu.Set = append(mu.Set, &nq)
 
@@ -282,11 +277,9 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	connzero, err := setupConnection(opt.zero, true)
 	x.Checkf(err, "While trying to setup connection to Zero")
 
-	alloc := xidmap.New(kv,
-		&uidProvider{
-			zero: intern.NewZeroClient(connzero),
-			ctx:  opts.Ctx,
-		},
+	alloc := xidmap.New(
+		kv,
+		connzero,
 		xidmap.Options{
 			NumShards: 100,
 			LRUSize:   1e5,

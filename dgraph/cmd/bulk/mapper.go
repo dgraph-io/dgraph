@@ -216,8 +216,7 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid, isNew, err := m.xids.AssignUid(xid)
-	x.Check(err)
+	uid, isNew := m.xids.AssignUid(xid)
 	if !isNew || !m.opt.StoreXids {
 		return uid
 	}
