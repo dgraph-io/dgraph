@@ -6,7 +6,7 @@ kind: Service
 metadata:
   name: dgraph-public
   labels:
-    app: dgraph
+    app: dgraph-server
 spec:
   type: LoadBalancer
   ports:
@@ -17,16 +17,16 @@ spec:
     targetPort: 9080
     name: grpc
   selector:
-    app: dgraph
+    app: dgraph-server
 ---
 # This is a headless service which is neccessary for discovery for a StatefulSet.
 # https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
 apiVersion: v1
 kind: Service
 metadata:
-  name: dgraph
+  name: dgraph-zero
   labels:
-    app: dgraph
+    app: dgraph-zero
 spec:
   ports:
   - port: 5080
@@ -35,33 +35,37 @@ spec:
 
   clusterIP: None
   selector:
-    app: dgraph
+    app: dgraph-zero
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-server
+  labels:
+    app: dgraph-server
+spec:
+  ports:
+  - port: 7080
+    targetPort: 7080
+    name: grpc
+
+  clusterIP: None
+  selector:
+    app: dgraph-server
 ---
 # This StatefulSet runs 3 replicas of Zero and Server.
 apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:
-  name: dgraph
+  name: dgraph-zero
 spec:
-  serviceName: "dgraph"
-  replicas: 3
+  serviceName: "dgraph-zero"
+  replicas: 1
   template:
     metadata:
       labels:
-        app: dgraph
+        app: dgraph-zero
     spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - dgraph
-              topologyKey: kubernetes.io/hostname
       containers:
       - name: zero
         image: dgraph/dgraph:test
@@ -77,17 +81,45 @@ spec:
           - "-c"
           - |
             set -ex
-            [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
-            ordinal=${BASH_REMATCH[1]}
-            idx=$(($ordinal + 1))
-            if [[ $ordinal -eq 0 ]]; then
-              dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --idx $idx
-            else
-              dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --peer dgraph-0.dgraph.default.svc.cluster.local:5080 --idx $idx
-            fi
+            dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --idx 1
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: dummy
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+      annotations:
+        volume.alpha.kubernetes.io/storage-class: anything
+    spec:
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 1Gi
+
+---
+# This StatefulSet runs 3 replicas of Zero and Server.
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: dgraph-server
+spec:
+  serviceName: "dgraph-server"
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: dgraph-server
+    spec:
+      containers:
       - name: server
         image: dgraph/dgraph:test
         imagePullPolicy: IfNotPresent
+        ports:
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -96,7 +128,7 @@ spec:
           - "-c"
           - |
             set -ex
-            dgraph server --my=$(hostname -f):7080 --memory_mb 2048 --zero dgraph-0.dgraph.default.svc.cluster.local:5080 --debugmode
+            dgraph server --my=$(hostname -f):7080 --memory_mb 2048 --zero dgraph-zero-0.dgraph-zero.default.svc.cluster.local:5080 --debugmode
       terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir
