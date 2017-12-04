@@ -21,7 +21,7 @@ set -e
 # create coverage output
 echo 'mode: atomic' > $OUT
 for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki|customtok'); do
-  #if [[ "$TRAVIS_BRANCH" =~ master|release\/ && $TRAVIS_OS_NAME == "linux" ]]; then
+  #if [[ "$TRAVIS_BRANCH" =~ master|release\/ ]]; then
     #echo "Running tests with race flag."
     #go test -v -race -timeout=30m -covermode=atomic -coverprofile=$TMP $PKG
   #else

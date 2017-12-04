@@ -49,7 +49,8 @@ fi
 # Create the checksum file for dgraph binary.
 checksum_file=$cur_dir/"dgraph-checksum-$platform-amd64-$release_version".sha256
 if [ -f "$checksum_file" ]; then
-	rm $checksum_file
+  rm $checksum_file
+  rm -rf $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
 fi
 
 checksum=$($digest_cmd dgraph | awk '{print $1}')
@@ -77,6 +78,7 @@ mv $tmp_dir ./
 GZIP=-n tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
 checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
 echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
+echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
 
 # Only run this locally.
 if [[ $TRAVIS != true ]]; then

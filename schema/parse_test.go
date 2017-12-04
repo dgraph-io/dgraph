@@ -58,7 +58,6 @@ func TestSchema(t *testing.T) {
 		{"name", &intern.SchemaUpdate{
 			Predicate: "name",
 			ValueType: intern.Posting_STRING,
-			Explicit:  true,
 		}},
 		{"_predicate_", &intern.SchemaUpdate{
 			ValueType: intern.Posting_STRING,
@@ -67,16 +66,14 @@ func TestSchema(t *testing.T) {
 		{"address", &intern.SchemaUpdate{
 			Predicate: "address",
 			ValueType: intern.Posting_STRING,
-			Explicit:  true}},
+		}},
 		{"http://scalar.com/helloworld/", &intern.SchemaUpdate{
 			Predicate: "http://scalar.com/helloworld/",
 			ValueType: intern.Posting_STRING,
-			Explicit:  true,
 		}},
 		{"age", &intern.SchemaUpdate{
 			Predicate: "age",
 			ValueType: intern.Posting_INT,
-			Explicit:  true,
 		}},
 	})
 
@@ -187,28 +184,24 @@ func TestSchemaIndexCustom(t *testing.T) {
 			Tokenizer: []string{"exact"},
 			Directive: intern.SchemaUpdate_INDEX,
 			Count:     true,
-			Explicit:  true,
 		}},
 		{"address", &intern.SchemaUpdate{
 			Predicate: "address",
 			ValueType: intern.Posting_STRING,
 			Tokenizer: []string{"term"},
 			Directive: intern.SchemaUpdate_INDEX,
-			Explicit:  true,
 		}},
 		{"age", &intern.SchemaUpdate{
 			Predicate: "age",
 			ValueType: intern.Posting_INT,
 			Tokenizer: []string{"int"},
 			Directive: intern.SchemaUpdate_INDEX,
-			Explicit:  true,
 		}},
 		{"friend", &intern.SchemaUpdate{
 			ValueType: intern.Posting_UID,
 			Predicate: "friend",
 			Directive: intern.SchemaUpdate_REVERSE,
 			Count:     true,
-			Explicit:  true,
 		}},
 	})
 	require.True(t, State().IsIndexed("name"))
@@ -295,21 +288,18 @@ func TestParseScalarList(t *testing.T) {
 		Directive: intern.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"},
 		List:      true,
-		Explicit:  true,
 	}, schemas[0])
 
 	require.EqualValues(t, &intern.SchemaUpdate{
 		Predicate: "occupations",
 		ValueType: 9,
 		List:      true,
-		Explicit:  true,
 	}, schemas[1])
 
 	require.EqualValues(t, &intern.SchemaUpdate{
 		Predicate: "graduation",
 		ValueType: 5,
 		List:      true,
-		Explicit:  true,
 	}, schemas[2])
 }
 

@@ -42,7 +42,6 @@ func newSchemaStore(initial []*intern.SchemaUpdate, opt options, state *state) *
 			"_predicate_": &intern.SchemaUpdate{
 				ValueType: intern.Posting_STRING,
 				List:      true,
-				Explicit:  true,
 			},
 		},
 		state: state,
@@ -51,7 +50,6 @@ func newSchemaStore(initial []*intern.SchemaUpdate, opt options, state *state) *
 		s.m["xid"] = &intern.SchemaUpdate{
 			ValueType: intern.Posting_STRING,
 			Tokenizer: []string{"hash"},
-			Explicit:  true,
 		}
 	}
 	for _, sch := range initial {
@@ -91,7 +89,7 @@ func (s *schemaStore) validateType(de *intern.DirectedEdge, objectIsUID bool) {
 
 	schTyp := types.TypeID(sch.ValueType)
 	err := wk.ValidateAndConvert(de, schTyp)
-	if sch.GetExplicit() && err != nil {
+	if err != nil {
 		log.Fatalf("RDF doesn't match schema: %v", err)
 	}
 }
