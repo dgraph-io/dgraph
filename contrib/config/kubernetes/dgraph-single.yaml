@@ -8,7 +8,7 @@ spec:
     emptyDir: {}
   containers:
   - name: zero
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:latest
     ports:
     - containerPort: 9080
       name: grpc
@@ -23,7 +23,7 @@ spec:
       - "dgraph zero --port_offset -2000 --my=localhost:5080"
 
   - name: server
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:latest
     ports:
     - containerPort: 6080
       name: http

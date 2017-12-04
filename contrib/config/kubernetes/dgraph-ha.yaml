@@ -107,7 +107,7 @@ spec:
       volumes:
       - name: datadir
         persistentVolumeClaim:
-          claimName: dummy
+          claimName: datadir
   updateStrategy:
     type: RollingUpdate
   volumeClaimTemplates:
@@ -120,4 +120,4 @@ spec:
         - "ReadWriteOnce"
       resources:
         requests:
-          storage: 1Gi
+          storage: 5Gi
