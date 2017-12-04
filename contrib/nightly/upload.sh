@@ -247,7 +247,7 @@ upload_docker_image() {
 
 pushd $DGRAPH > /dev/null
 
-# $BUILD_DIR/build-cross-platform.sh "windows" $ASSET_SUFFIX
+$BUILD_DIR/build-cross-platform.sh "windows" $ASSET_SUFFIX
 $BUILD_DIR/build-cross-platform.sh "darwin" $ASSET_SUFFIX
 $BUILD_DIR/build.sh $ASSET_SUFFIX
 
