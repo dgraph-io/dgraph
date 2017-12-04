@@ -11,14 +11,14 @@ set -e
 echo -e "\n\n Downloading xgo"
 go get github.com/karalabe/xgo
 
-asset_suffix=$1
+platform=$1
+asset_suffix=$2
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
 release_version=$(git describe --abbrev=0);
 if [[ -n $asset_suffix ]]; then
   release_version="$release_version${asset_suffix}"
 fi
-platform="windows"
 
 # TODO - Add checksum file later when we support get.dgraph.io for Windows.
 
@@ -33,28 +33,47 @@ source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/constants.sh
 
 pushd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph > /dev/null
 
-xgo_target="windows/amd64"
+if [[ $platform == "windows" ]]; then
+  xgo_target="$platform/amd64"
+else
+  xgo_target="$platform-10.9/amd64"
+fi
+
 echo -e "\n\n\033[1;33mBuilding binaries for $platform\033[0m"
 xgo --go 1.8.3 --targets $xgo_target -ldflags \
   "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
 
-cp dgraph-windows-4.0-amd64.exe dgraph.exe
+if [[ $platform == "windows" ]]; then
+  cp dgraph-windows-4.0-amd64.exe dgraph.exe
+else
+  cp dgraph-darwin-10.9-amd64 dgraph
+fi
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 pushd $tmp_dir > /dev/null
-cp $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dgraph.exe .
+if [[ $platfrom == "windows" ]]; then
+  cp $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dgraph.exe .
+else
+  cp $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dgraph .
+fi
 echo -e "\n\033[1;34mSize of files: $(du -sh)\033[0m"
 popd &> /dev/null
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
-tar_file=dgraph-"$platform"-amd64-$release_version
+tar_file=dgraph-"$platform"-amd64-$release_version.tar.gz
 # Create a tar file with the contents of the dgraph folder (i.e the binaries)
 pushd $tmp_dir > /dev/null
-tar -zcvf $tar_file.tar.gz dgraph.exe;
-echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file.tar.gz)\033[0m"
+
+if [[ $platform == "windows" ]]; then
+  tar -zcvf $tar_file dgraph
+else
+  tar -zcvf $tar_file dgraph.exe
+fi
+
+echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file)\033[0m"
 
 echo -e "\n\033[1;33mMoving tarfile to original directory\033[0m"
-mv $tar_file.tar.gz $cur_dir
+mv $tar_file $cur_dir
 popd > /dev/null
 rm -rf $tmp_dir
 

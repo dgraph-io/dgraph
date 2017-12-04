@@ -92,11 +92,7 @@ else
 	echo "Running nightly script"
 fi
 
-if [[ $TRAVIS_OS_NAME == "osx" ]]; then
-	OS="darwin"
-else
-	OS="linux"
-fi
+OS="linux"
 
 DGRAPH=$GOPATH/src/github.com/dgraph-io/dgraph
 BUILD_DIR=$DGRAPH/contrib/nightly
@@ -179,25 +175,23 @@ upload_assets() {
 	local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
 	update_or_create_asset $release_id $sha_name ${SHA_FILE}
 
-	if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-		# As asset would be the same on both platforms, we only upload it from linux.
-		update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
-		update_or_create_asset $release_id $WINDOWS_TAR_NAME ${NIGHTLY_WINDOWS_FILE}
+	# As asset would be the same on both platforms, we only upload it from linux.
+	update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
+	update_or_create_asset $release_id $WINDOWS_TAR_NAME ${NIGHTLY_WINDOWS_FILE}
 
-		# We dont want to update description programatically for version releases and commit apart from
-		# nightly.
-		if [[ $BUILD_TAG == "nightly" ]]; then
-			echo 'Updating release description.'
-			# TODO(pawan) - This fails, investigate and fix.
-			# 			send_gh_api_data_request repos/${DGRAPH_REPO}/releases/${release_id} PATCH \
-			# 				"{ \"force\": true, \"body\": $(get_nightly_release_body) | jq -s -c -R '.') }" \
-			# 				> /dev/null
-			#
-			echo "Updating ${BUILD_TAG} tag to point to ${DGRAPH_COMMIT}."
-			send_gh_api_data_request repos/${DGRAPH_REPO}/git/refs/tags/${BUILD_TAG} PATCH \
-				"{ \"force\": true, \"sha\": \"${DGRAPH_COMMIT}\" }" \
-				> /dev/null
-		fi
+	# We dont want to update description programatically for version releases and commit apart from
+	# nightly.
+	if [[ $BUILD_TAG == "nightly" ]]; then
+		echo 'Updating release description.'
+		# TODO(pawan) - This fails, investigate and fix.
+		# 			send_gh_api_data_request repos/${DGRAPH_REPO}/releases/${release_id} PATCH \
+		# 				"{ \"force\": true, \"body\": $(get_nightly_release_body) | jq -s -c -R '.') }" \
+		# 				> /dev/null
+		#
+		echo "Updating ${BUILD_TAG} tag to point to ${DGRAPH_COMMIT}."
+		send_gh_api_data_request repos/${DGRAPH_REPO}/git/refs/tags/${BUILD_TAG} PATCH \
+			"{ \"force\": true, \"sha\": \"${DGRAPH_COMMIT}\" }" \
+			> /dev/null
 	fi
 }
 
@@ -213,10 +207,6 @@ docker_tag() {
 docker_tag
 
 build_docker_image() {
-	if [[ $TRAVIS_OS_NAME == "osx" ]]; then
-		return 0
-	fi
-
 	pushd $DGRAPH/contrib/nightly > /dev/null
 	# Extract dgraph binary from the tar into dgraph-build folder.
 	if [ ! -d dgraph-build ]; then
@@ -235,10 +225,6 @@ build_docker_image() {
 }
 
 upload_docker_image() {
-	if [[ $TRAVIS_OS_NAME == "osx" ]]; then
-		return 0
-	fi
-
 	echo "Logging into Docker."
 	docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
 	echo "Pushing the image"
@@ -253,9 +239,9 @@ upload_docker_image() {
 
 pushd $DGRAPH > /dev/null
 $BUILD_DIR/build.sh $ASSET_SUFFIX
-if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-	$BUILD_DIR/build-windows.sh $ASSET_SUFFIX
-fi
+
+$BUILD_DIR/build-cross-platform.sh "windows" $ASSET_SUFFIX
+$BUILD_DIR/build-cross-platform.sh "darwin" $ASSET_SUFFIX
 
 if [[ $DOCKER_TAG == "" ]]; then
   echo -e "No docker tag found. Exiting the script"
