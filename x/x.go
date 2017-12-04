@@ -48,8 +48,13 @@ const (
 	ErrorServiceUnavailable = "ErrorServiceUnavailable"
 	ValidHostnameRegex      = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
-	Star        = "_STAR_ALL"
-	GrpcMaxSize = 256 << 20
+	Star = "_STAR_ALL"
+
+	// Use the max possible grpc msg size for the most flexibility (4GB - equal
+	// to the max grpc frame size). Users will still need to set the max
+	// message sizes allowable on the client size when dialing.
+	GrpcMaxSize = 4 << 30
+
 	// The attr used to store list of predicates for a node.
 	PredicateListAttr = "_predicate_"
 
