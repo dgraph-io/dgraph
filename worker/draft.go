@@ -19,7 +19,6 @@ package worker
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"log"
 	"math/rand"
 	"sync"
@@ -608,10 +607,10 @@ func (n *node) snapshot(skip uint64) {
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
 	}
-	peers, err := json.Marshal(n.PeerMap())
+	rc, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	s, err := n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), peers)
+	s, err := n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
 	x.Checkf(err, "While creating snapshot")
 	x.Checkf(n.Store.Compact(snapshotIdx), "While compacting snapshot")
 	x.Check(n.Wal.StoreSnapshot(n.gid, s))
@@ -656,9 +655,10 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
 		if !raft.IsEmptySnap(sp) {
-			var peerMap map[uint64]string
-			x.Check(json.Unmarshal(sp.Data, &peerMap))
-			n.SetPeerMap(peerMap)
+			members := groups().members(n.gid)
+			for _, id := range sp.Metadata.ConfState.Nodes {
+				n.Connect(id, members[id].Addr)
+			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
 	} else {

@@ -19,7 +19,6 @@ package zero
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"math/rand"
 	"sync"
@@ -373,10 +372,12 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
 		if !raft.IsEmptySnap(sp) {
-			var sd snapshotData
-			x.Check(json.Unmarshal(sp.Data, &sd))
-			n.server.SetMembershipState(sd.state)
-			n.SetPeerMap(sd.peers)
+			var state intern.MembershipState
+			x.Check(state.Unmarshal(sp.Data))
+			n.server.SetMembershipState(&state)
+			for _, id := range sp.Metadata.ConfState.Nodes {
+				n.Connect(id, state.Zeros[id].Addr)
+			}
 		}
 
 		n.SetRaft(raft.RestartNode(n.Cfg))
@@ -424,11 +425,6 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	return err
 }
 
-type snapshotData struct {
-	state *intern.MembershipState
-	peers map[uint64]string
-}
-
 func (n *node) trySnapshot() {
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
@@ -438,11 +434,7 @@ func (n *node) trySnapshot() {
 		return
 	}
 
-	sd := &snapshotData{
-		state: n.server.membershipState(),
-		peers: n.PeerMap(),
-	}
-	data, err := json.Marshal(sd)
+	data, err := n.server.MarshalMembershipState()
 	x.Check(err)
 
 	if tr, ok := trace.FromContext(n.ctx); ok {
