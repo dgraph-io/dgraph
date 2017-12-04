@@ -396,7 +396,7 @@ func TestSchemaMutation(t *testing.T) {
 			Tokenizer: []string{"term", "exact"},
 			ValueType: intern.Posting_ValType(types.StringID),
 			Directive: intern.SchemaUpdate_INDEX,
-			Explicit:  true},
+		},
 	}
 
 	err := alterSchemaWithRetry(m)

@@ -90,7 +90,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*intern.SchemaUpda
 		return nil, x.Errorf("Invalid ending while trying to parse schema.")
 	}
 	next := it.Item()
-	schema := &intern.SchemaUpdate{Predicate: predicate, Explicit: true}
+	schema := &intern.SchemaUpdate{Predicate: predicate}
 	// Could be list type.
 	if next.Typ == itemLeftSquare {
 		schema.List = true

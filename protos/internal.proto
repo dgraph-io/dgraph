@@ -312,7 +312,6 @@ message SchemaUpdate {
 	repeated string tokenizer = 4;
 	bool count = 5;
 	bool list = 6;
-	bool explicit = 7; // whether schema was set by the user.
 }
 
 // Bulk loader proto.
