@@ -10,6 +10,12 @@ metadata:
 spec:
   type: LoadBalancer
   ports:
+  - port: 5080
+    targetPort: 5080
+    name: zero-grpc
+  - port: 6080
+    targetPort: 6080
+    name: zero-http
   - port: 8080
     targetPort: 8080
     name: http
@@ -64,7 +70,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: zero
-        image: dgraph/dgraph:test
+        image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5080
@@ -86,7 +92,7 @@ spec:
               dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --peer dgraph-0.dgraph.default.svc.cluster.local:5080 --idx $idx
             fi
       - name: server
-        image: dgraph/dgraph:test
+        image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent
         volumeMounts:
         - name: datadir

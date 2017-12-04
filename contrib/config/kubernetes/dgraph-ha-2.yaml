@@ -6,7 +6,7 @@ kind: Service
 metadata:
   name: dgraph-public
   labels:
-    app: dgraph-server
+    app: dgraph
 spec:
   type: LoadBalancer
   ports:
@@ -16,33 +16,41 @@ spec:
   - port: 9080
     targetPort: 9080
     name: grpc
+  - port: 5080
+    targetPort: 5080
+    name: zero-grpc
+  - port: 6080
+    targetPort: 6080
+    name: zero-http
   selector:
-    app: dgraph-server
+    app: dgraph
 ---
-# This is a headless service which is neccessary for discovery for a StatefulSet.
+# This is a headless service which is neccessary for discovery for a dgraph-zero StatefulSet.
 # https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
 apiVersion: v1
 kind: Service
 metadata:
   name: dgraph-zero
   labels:
-    app: dgraph-zero
+    app: dgraph
 spec:
   ports:
   - port: 5080
     targetPort: 5080
-    name: grpc
+    name: zero-grpc
 
   clusterIP: None
   selector:
-    app: dgraph-zero
+    app: dgraph
 ---
+# This is a headless service which is neccessary for discovery for a dgraph-server StatefulSet.
+# https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
 apiVersion: v1
 kind: Service
 metadata:
   name: dgraph-server
   labels:
-    app: dgraph-server
+    app: dgraph
 spec:
   ports:
   - port: 7080
@@ -51,9 +59,9 @@ spec:
 
   clusterIP: None
   selector:
-    app: dgraph-server
+    app: dgraph
 ---
-# This StatefulSet runs 3 replicas of Zero and Server.
+# This StatefulSet runs 1 Dgraph Zero.
 apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:
@@ -64,11 +72,11 @@ spec:
   template:
     metadata:
       labels:
-        app: dgraph-zero
+        app: dgraph
     spec:
       containers:
       - name: zero
-        image: dgraph/dgraph:test
+        image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5080
@@ -86,7 +94,7 @@ spec:
       volumes:
       - name: datadir
         persistentVolumeClaim:
-          claimName: dummy
+          claimName: datadir
   updateStrategy:
     type: RollingUpdate
   volumeClaimTemplates:
@@ -99,10 +107,10 @@ spec:
         - "ReadWriteOnce"
       resources:
         requests:
-          storage: 1Gi
+          storage: 5Gi
 
 ---
-# This StatefulSet runs 3 replicas of Zero and Server.
+# This StatefulSet runs 3 replicas of Dgraph Server.
 apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:
@@ -113,11 +121,11 @@ spec:
   template:
     metadata:
       labels:
-        app: dgraph-server
+        app: dgraph
     spec:
       containers:
       - name: server
-        image: dgraph/dgraph:test
+        image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent
         ports:
         volumeMounts:
@@ -133,7 +141,7 @@ spec:
       volumes:
       - name: datadir
         persistentVolumeClaim:
-          claimName: dummy
+          claimName: datadir
   updateStrategy:
     type: RollingUpdate
   volumeClaimTemplates:
@@ -146,4 +154,4 @@ spec:
         - "ReadWriteOnce"
       resources:
         requests:
-          storage: 1Gi
+          storage: 5Gi
