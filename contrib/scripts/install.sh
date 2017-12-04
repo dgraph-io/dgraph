@@ -6,9 +6,7 @@ set -ex
 
 # Lets install the dependencies that are not vendored in anymore.
 go get -d golang.org/x/net/context
-echo before grpc
 go get -d google.golang.org/grpc
-echo after grpc
 
 expected="context
 github.com/dgraph-io/dgraph/protos/api
