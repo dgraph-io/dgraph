@@ -9,6 +9,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Fixed
 
 * Language tag parsing in queries now accepts digits (in line with RDF parsing).
+* Export now uses correct blank node syntax.
 
 ### Changed
 
