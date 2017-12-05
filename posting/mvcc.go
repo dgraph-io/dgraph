@@ -506,34 +506,48 @@ func (t *TxnPrefixIterator) Valid() bool {
 	return len(t.key) > 0
 }
 
+func (t *TxnPrefixIterator) storeKeyFromIter() {
+	key := t.iter.Item().Key()
+	t.key = make([]byte, len(key))
+	copy(t.key, key)
+}
+
+func (t *TxnPrefixIterator) compare(key1 []byte, key2 []byte) int {
+	if !t.reverse {
+		return bytes.Compare(key1, key2)
+	}
+	return bytes.Compare(key2, key1)
+}
+
 func (t *TxnPrefixIterator) Next() {
-	if t.idx >= len(t.inMemoryKeys) {
-		if t.iter.ValidForPrefix(t.prefix) {
-			t.key = t.iter.Item().Key()
+	if len(t.key) > 0 {
+		// Ensures duplicate keys are not returned during merging.
+		for t.iter.ValidForPrefix(t.prefix) && t.compare(t.iter.Item().Key(), t.key) <= 0 {
 			t.iter.Next()
-		} else {
-			t.key = nil
 		}
+		for t.idx < len(t.inMemoryKeys) && t.compare(t.inMemoryKeys[t.idx], t.key) <= 0 {
+			t.idx++
+		}
+	}
+
+	if t.idx >= len(t.inMemoryKeys) && !t.iter.ValidForPrefix(t.prefix) {
+		t.key = nil
+		return
+	} else if t.idx >= len(t.inMemoryKeys) {
+		t.storeKeyFromIter()
+		t.iter.Next()
 		return
 	} else if !t.iter.ValidForPrefix(t.prefix) {
-		if t.idx < len(t.inMemoryKeys) {
-			t.key = t.inMemoryKeys[t.idx]
-			t.idx++
-		} else {
-			t.key = nil
-		}
+		t.key = t.inMemoryKeys[t.idx]
+		t.idx++
 		return
 	}
 
-	if cmp := bytes.Compare(t.inMemoryKeys[t.idx], t.iter.Item().Key()); cmp < 0 {
+	if cmp := t.compare(t.inMemoryKeys[t.idx], t.iter.Item().Key()); cmp < 0 {
 		t.key = t.inMemoryKeys[t.idx]
 		t.idx++
-	} else if cmp > 0 {
-		t.key = t.iter.Item().Key()
-		t.iter.Next()
 	} else {
-		t.key = t.inMemoryKeys[t.idx]
-		t.idx++
+		t.storeKeyFromIter()
 		t.iter.Next()
 	}
 }

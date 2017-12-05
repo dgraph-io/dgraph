@@ -162,7 +162,7 @@ func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 	iterOpt.Reverse = order.Desc
 	txn := pstore.NewTransactionAt(ts.ReadTs, false)
 	defer txn.Discard()
-	it := txn.NewIterator(iterOpt)
+	it := posting.NewTxnPrefixIterator(txn, iterOpt)
 	defer it.Close()
 
 	typ, err := schema.State().TypeOf(order.Attr)
@@ -206,16 +206,13 @@ func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 		// We need to reach the last key of this index type.
 		seekKey = x.IndexKey(order.Attr, string(tokenizer.Identifier()+1))
 	}
-	it.Seek(seekKey)
+	it.Seek(seekKey, indexPrefix)
 
 BUCKETS:
 
 	// Outermost loop is over index buckets.
 	for it.Valid() {
-		key := it.Item().Key()
-		if !bytes.HasPrefix(key, indexPrefix) {
-			break
-		}
+		key := it.Key()
 		select {
 		case <-ctx.Done():
 			return &sortresult{&emptySortResult, nil, ctx.Err()}
@@ -226,7 +223,7 @@ BUCKETS:
 				continue
 			}
 
-			x.AssertTrue(k.IsIndex())
+			x.AssertTruef(k.IsIndex(), "%q", key)
 			token := k.Term
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("processSort: Token: %s", token)
