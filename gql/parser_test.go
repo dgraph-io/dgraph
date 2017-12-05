@@ -4150,3 +4150,23 @@ func TestParseMutation(t *testing.T) {
 		dels[0])
 
 }
+
+func TestParseMissingGraphQLVar(t *testing.T) {
+	for _, q := range []string{
+		"{ q(func: eq(name, $a)) { name }}",
+		"query { q(func: eq(name, $a)) { name }}",
+		"query foo { q(func: eq(name, $a)) { name }}",
+		"query foo () { q(func: eq(name, $a)) { name }}",
+		"query foo ($b: string) { q(func: eq(name, $a)) { name }}",
+		"query foo ($a: string) { q(func: eq(name, $b)) { name }}",
+	} {
+		r := Request{
+			Str:       q,
+			Variables: map[string]string{"$a": "alice"},
+		}
+		_, err := Parse(r)
+		t.Log(q)
+		t.Log(err)
+		require.Error(t, err)
+	}
+}
