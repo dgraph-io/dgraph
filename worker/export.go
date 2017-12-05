@@ -95,9 +95,8 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 				buf.WriteByte('>')
 			}
 		} else {
-			buf.WriteString("<_:uid")
+			buf.WriteString("_:uid")
 			buf.WriteString(strconv.FormatUint(p.Uid, 16))
-			buf.WriteByte('>')
 		}
 		// Label
 		if len(p.Label) > 0 {
