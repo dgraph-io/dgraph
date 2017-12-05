@@ -158,6 +158,7 @@ message Tablet {
 	bool force       = 3; // Used while moving predicate.
 	bool read_only   = 4;  // Used to block mutations on this predicate.
 	int64 space      = 7;
+	bool remove      = 8;
 }
 
 message DirectedEdge {

@@ -296,6 +296,12 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			return p.Id, errInvalidProposal
 		}
 		group := state.Groups[p.Tablet.GroupId]
+		if p.Tablet.Remove {
+			if group != nil {
+				delete(group.Tablets, p.Tablet.Predicate)
+			}
+			return p.Id, nil
+		}
 		if group == nil {
 			group = newGroup()
 			state.Groups[p.Tablet.GroupId] = group

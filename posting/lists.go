@@ -120,8 +120,11 @@ func getMemUsage() int {
 }
 
 func periodicUpdateStats() {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	setLruMemory := true
+	var maxSize uint64
+	var lruIncreased bool
+	var lastUse float64
 	for {
 		select {
 
@@ -144,9 +147,23 @@ func periodicUpdateStats() {
 			mem := Config.AllottedMemory
 			Config.Mu.Unlock()
 			if setLruMemory && inUse > 0.75*mem {
-				lcache.UpdateMaxSize()
+				maxSize = lcache.UpdateMaxSize()
 				setLruMemory = false
+			} else if inUse > 0.85*mem { // Decrease max Size by 10%
+				maxSize = (9 * maxSize) / 10
+				maxSize = lcache.SetMaxSize(maxSize)
+				lruIncreased = false
+			} else if inUse < 0.65*mem { // Increase max Size by 10%
+				if lruIncreased && mem/lastUse < 1.1 {
+					// Skip if total memory usage hasn't increased by 10%
+					// since last increase in lruCache Size.
+					break
+				}
+				maxSize = (11 * maxSize) / 10
+				maxSize = lcache.SetMaxSize(maxSize)
+				lruIncreased = true
 			}
+			lastUse = mem
 		}
 	}
 }
