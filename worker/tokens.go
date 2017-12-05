@@ -151,12 +151,12 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	// until the txn is committed. Merge it with inmemory keys.
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
-	it := posting.NewTxnPrefixIterator(txn, itOpt)
-	defer it.Close()
 
 	var out []string
 	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
-	for it.Seek(x.IndexKey(attr, ineqToken), indexPrefix); it.Valid(); it.Next() {
+	it := posting.NewTxnPrefixIterator(txn, itOpt, indexPrefix)
+	defer it.Close()
+	for it.Seek(x.IndexKey(attr, ineqToken)); it.Valid(); it.Next() {
 		key := it.Key()
 		k := x.Parse(key)
 		if k == nil {

@@ -1485,14 +1485,14 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 	itOpt.Reverse = cp.fn == "le" || cp.fn == "lt"
 	txn := pstore.NewTransactionAt(cp.readTs, false)
 	defer txn.Discard()
-	it := posting.NewTxnPrefixIterator(txn, itOpt)
-	defer it.Close()
 	pk := x.ParsedKey{
 		Attr: cp.attr,
 	}
 	countPrefix := pk.CountPrefix(cp.reverse)
+	it := posting.NewTxnPrefixIterator(txn, itOpt, countPrefix)
+	defer it.Close()
 
-	for it.Seek(countKey, countPrefix); it.Valid(); it.Next() {
+	for it.Seek(countKey); it.Valid(); it.Next() {
 		key := it.Key()
 		pl := posting.Get(key)
 		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
@@ -1512,8 +1512,6 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
-	it := posting.NewTxnPrefixIterator(txn, itOpt)
-	defer it.Close()
 
 	pk := x.ParsedKey{
 		Attr: q.Attr,
@@ -1526,7 +1524,9 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	}
 
 	w := 0
-	for it.Seek(startKey, prefix); it.Valid(); it.Next() {
+	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix)
+	defer it.Close()
+	for it.Seek(startKey); it.Valid(); it.Next() {
 		pl := posting.Get(it.Key())
 		if l := pl.Length(q.ReadTs, 0); l <= 0 {
 			continue
