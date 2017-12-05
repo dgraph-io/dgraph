@@ -68,17 +68,19 @@ func newListCache(maxSize uint64) *listCache {
 	return lc
 }
 
-func (c *listCache) UpdateMaxSize() {
+func (c *listCache) UpdateMaxSize(size uint64) uint64 {
 	c.Lock()
 	defer c.Unlock()
-	if c.curSize < (50 << 20) {
-		c.MaxSize = 50 << 20
-		x.Println("LRU cache max size is being set to 50 MB")
-		x.LcacheCapacity.Set(50 << 20)
-		return
+	if size == 0 {
+		size = c.curSize
 	}
-	x.LcacheCapacity.Set(int64(c.curSize))
-	c.MaxSize = c.curSize
+	if size < (50 << 20) {
+		size = 50 << 20
+		x.Println("LRU cache max size is being set to 50 MB")
+	}
+	c.MaxSize = size
+	x.LcacheCapacity.Set(int64(c.MaxSize))
+	return c.MaxSize
 }
 
 // Add adds a value to the cache.

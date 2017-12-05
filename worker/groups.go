@@ -470,20 +470,45 @@ OUTER:
 	for {
 		select {
 		case <-g.triggerCh:
+			if !g.Node.AmLeader() {
+				tablets = nil
+			}
 			// On start of node if it becomes a leader, we would send tablets size for sure.
 			if err := g.sendMembership(tablets, stream); err != nil {
 				stream.CloseSend()
 				break OUTER
 			}
 		case <-ticker.C:
-			// dgraphzero just adds to the map so we needn't worry about race condition
-			// where a newly added tablet is not sent.
+			// dgraphzero just adds to the map so check that no data is present for the tablet
+			// before we remove it to avoid the race condition where a tablet is added recently
+			// and mutation has not been persisted to disk.
+			var allTablets map[string]*intern.Tablet
 			if g.Node.AmLeader() {
+				prevTablets := tablets
 				tablets = g.calculateTabletSizes()
+				if prevTablets != nil {
+					allTablets = make(map[string]*intern.Tablet)
+					g.RLock()
+					for attr := range g.tablets {
+						if tablets[attr] == nil && prevTablets[attr] == nil {
+							allTablets[attr] = &intern.Tablet{
+								GroupId:   g.gid,
+								Predicate: attr,
+								Remove:    true,
+							}
+						}
+					}
+					g.RUnlock()
+					for attr, tab := range tablets {
+						allTablets[attr] = tab
+					}
+				} else {
+					allTablets = tablets
+				}
 			}
 			// Let's send update even if not leader, zero will know that this node is still
 			// active.
-			if err := g.sendMembership(tablets, stream); err != nil {
+			if err := g.sendMembership(allTablets, stream); err != nil {
 				x.Printf("Error while updating tablets size %v\n", err)
 				stream.CloseSend()
 				break OUTER
