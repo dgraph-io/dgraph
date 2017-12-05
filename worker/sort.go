@@ -223,7 +223,7 @@ BUCKETS:
 				continue
 			}
 
-			x.AssertTruef(k.IsIndex(), "%q", key)
+			x.AssertTrue(k.IsIndex())
 			token := k.Term
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("processSort: Token: %s", token)
