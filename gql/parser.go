@@ -334,7 +334,7 @@ func checkValueType(vm varMap) error {
 func substituteVar(f string, res *string, vmap varMap) error {
 	if len(f) > 0 && f[0] == '$' {
 		va, ok := vmap[f]
-		if !ok {
+		if !ok || va.Type == "" {
 			return x.Errorf("Variable not defined %v", f)
 		}
 		*res = va.Value
