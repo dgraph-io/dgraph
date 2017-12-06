@@ -456,7 +456,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					dst.AddListChild(fieldName, uc)
 				}
 			}
-			if pc.Params.uidCount {
+			if pc.Params.uidCount && (pc.Params.uidCountAlias != "" || !pc.Params.Normalize) {
 				uc := dst.New(fieldName)
 				c := types.ValueForType(types.IntID)
 				c.Value = int64(len(ul.Uids))
