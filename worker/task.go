@@ -1494,6 +1494,8 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 
 	for it.Seek(countKey); it.Valid(); it.Next() {
 		key := it.Key()
+		nk := make([]byte, len(key))
+		copy(nk, key)
 		pl := posting.Get(key)
 		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
 		if err != nil {
@@ -1504,6 +1506,8 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 	return nil
 }
 
+// TODO - Check meta for empty PL and skip it.
+// This is not transactionally isolated, add to docs
 func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result) error {
 	tlist := &intern.List{}
 
@@ -1527,11 +1531,6 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix)
 	defer it.Close()
 	for it.Seek(startKey); it.Valid(); it.Next() {
-		pl := posting.Get(it.Key())
-		if l := pl.Length(q.ReadTs, 0); l <= 0 {
-			continue
-		}
-
 		pk := x.Parse(it.Key())
 		if w%1000 == 0 {
 			select {
