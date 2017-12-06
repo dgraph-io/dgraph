@@ -1531,6 +1531,11 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix)
 	defer it.Close()
 	for it.Seek(startKey); it.Valid(); it.Next() {
+		pl := posting.GetLru(it.Key())
+		if pl.CommitTs() == 0 {
+			// empty pl's can be present in lru
+			continue
+		}
 		pk := x.Parse(it.Key())
 		if w%1000 == 0 {
 			select {

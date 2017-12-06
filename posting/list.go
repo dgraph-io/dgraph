@@ -625,6 +625,12 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 	return nil
 }
 
+func (l *List) CommitTs() uint64 {
+	l.RLock()
+	defer l.RUnlock()
+	return l.commitTs
+}
+
 func (l *List) length(readTs, afterUid uint64) int {
 	l.AssertRLock()
 	count := 0

@@ -219,6 +219,11 @@ func Get(key []byte) (rlist *List) {
 	return lp
 }
 
+// GetLru checks the lru map and returns it if it exits
+func GetLru(key []byte) *List {
+	return lcache.Get(string(key))
+}
+
 // GetNoStore takes a key. It checks if the in-memory map has an updated value and returns it if it exists
 // or it gets from the store and DOES NOT ADD to lru cache.
 func GetNoStore(key []byte) (rlist *List) {
