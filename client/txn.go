@@ -127,9 +127,6 @@ func (txn *Txn) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, er
 	}
 
 	txn.mutated = true
-	if mu.CommitNow {
-		txn.finished = true
-	}
 	mu.StartTs = txn.context.StartTs
 	dc := txn.dg.anyClient()
 	ag, err := dc.Mutate(ctx, mu)
@@ -147,6 +144,9 @@ func (txn *Txn) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, er
 			err = y.ErrAborted
 		}
 		return nil, err
+	}
+	if mu.CommitNow {
+		txn.finished = true
 	}
 	err = txn.mergeContext(ag.Context)
 	return ag, err
