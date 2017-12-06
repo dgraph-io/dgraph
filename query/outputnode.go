@@ -407,10 +407,16 @@ func (n *fastJsonNode) addAggregations(sg *SubGraph) error {
 		if !ok {
 			return x.Errorf("Only aggregated variables allowed within empty block.")
 		}
+		if child.Params.Normalize && child.Params.Alias == "" {
+			continue
+		}
 		fieldName := aggWithVarFieldName(child)
 		n1 := n.New(fieldName)
 		n1.AddValue(fieldName, aggVal)
 		n.AddListChild(sg.Params.Alias, n1)
+	}
+	if n.IsEmpty() {
+		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
 	}
 	return nil
 }
