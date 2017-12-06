@@ -82,9 +82,15 @@ func InitServerState() {
 }
 
 func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
-	// TODO - Make this smarter later. Maybe get size of directories from badger and only run GC
-	// if size increases by more than 1GB.
+	var lastVlogSize int64
+	const GB = int64(1 << 30)
 	for range s.vlogTicker.C {
+		_, currentVlogSize := store.Size()
+		if currentVlogSize < lastVlogSize+GB {
+			continue
+		}
+
+		lastVlogSize = currentVlogSize
 		store.RunValueLogGC(0.5)
 	}
 }
@@ -122,7 +128,7 @@ func (s *ServerState) initStorage() {
 	}
 	s.Pstore, err = badger.OpenManaged(opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
-	s.vlogTicker = time.NewTicker(10 * time.Minute)
+	s.vlogTicker = time.NewTicker(10 * time.Second)
 	go s.runVlogGC(s.Pstore)
 	go s.runVlogGC(s.WALstore)
 }
