@@ -22,6 +22,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -150,13 +151,13 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	// until the txn is committed. Merge it with inmemory keys.
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
-	it := txn.NewIterator(itOpt)
-	defer it.Close()
 
 	var out []string
 	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
-	for it.Seek(x.IndexKey(attr, ineqToken)); it.ValidForPrefix(indexPrefix); it.Next() {
-		key := it.Item().Key()
+	it := posting.NewTxnPrefixIterator(txn, itOpt, indexPrefix)
+	defer it.Close()
+	for it.Seek(x.IndexKey(attr, ineqToken)); it.Valid(); it.Next() {
+		key := it.Key()
 		k := x.Parse(key)
 		if k == nil {
 			continue

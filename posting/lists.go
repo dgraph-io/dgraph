@@ -195,12 +195,14 @@ func updateMemoryMetrics() {
 var (
 	pstore *badger.ManagedDB
 	lcache *listCache
+	btree  *BTree
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.ManagedDB) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
+	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
 	go periodicUpdateStats()
@@ -236,8 +238,15 @@ func Get(key []byte) (rlist *List) {
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
 		x.CacheRace.Add(1)
+	} else if atomic.LoadInt32(&l.onDisk) == 0 {
+		btree.Insert(l.key)
 	}
 	return lp
+}
+
+// GetLru checks the lru map and returns it if it exits
+func GetLru(key []byte) *List {
+	return lcache.Get(string(key))
 }
 
 // GetNoStore takes a key. It checks if the in-memory map has an updated value and returns it if it exists

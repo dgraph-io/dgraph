@@ -1485,19 +1485,18 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 	itOpt.Reverse = cp.fn == "le" || cp.fn == "lt"
 	txn := pstore.NewTransactionAt(cp.readTs, false)
 	defer txn.Discard()
-	it := txn.NewIterator(itOpt)
-	defer it.Close()
 	pk := x.ParsedKey{
 		Attr: cp.attr,
 	}
 	countPrefix := pk.CountPrefix(cp.reverse)
+	it := posting.NewTxnPrefixIterator(txn, itOpt, countPrefix)
+	defer it.Close()
 
-	// TODO: Wait for txn watermarks to catch up.
-	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
-		key := it.Item().Key()
+	for it.Seek(countKey); it.Valid(); it.Next() {
+		key := it.Key()
 		nk := make([]byte, len(key))
 		copy(nk, key)
-		pl := posting.Get(nk)
+		pl := posting.Get(key)
 		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
 		if err != nil {
 			return err
@@ -1508,6 +1507,7 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 }
 
 // TODO - Check meta for empty PL and skip it.
+// This is not transactionally isolated, add to docs
 func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result) error {
 	tlist := &intern.List{}
 
@@ -1516,8 +1516,6 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
-	it := txn.NewIterator(itOpt)
-	defer it.Close()
 
 	pk := x.ParsedKey{
 		Attr: q.Attr,
@@ -1530,9 +1528,15 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	}
 
 	w := 0
-	for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
-		pk := x.Parse(it.Item().Key())
-
+	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix)
+	defer it.Close()
+	for it.Seek(startKey); it.Valid(); it.Next() {
+		pl := posting.GetLru(it.Key())
+		if pl != nil && pl.CommitTs() == 0 {
+			// empty pl's can be present in lru
+			continue
+		}
+		pk := x.Parse(it.Key())
 		if w%1000 == 0 {
 			select {
 			case <-ctx.Done():
