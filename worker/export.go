@@ -351,25 +351,10 @@ func export(bdir string, readTs uint64) error {
 
 // TODO: How do we want to handle export for group, do we pause mutations, sync all and then export ?
 // TODO: Should we move export logic to dgraphzero?
-func handleExportForGroup(ctx context.Context, in *intern.ExportPayload) *intern.ExportPayload {
+func handleExportForGroupOverNetwork(ctx context.Context, in *intern.ExportPayload) *intern.ExportPayload {
 	n := groups().Node
 	if in.GroupId == groups().groupId() && n != nil && n.AmLeader() {
-		n.applyAllMarks(n.ctx)
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Leader of group: %d. Running export.", in.GroupId)
-		}
-		if err := export(Config.ExportPath, in.ReadTs); err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(err.Error())
-			}
-			in.Status = intern.ExportPayload_FAILED
-			return in
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Export done for group: %d.", in.GroupId)
-		}
-		in.Status = intern.ExportPayload_SUCCESS
-		return in
+		return handleExportForGroup(ctx, in)
 	}
 
 	pl := groups().Leader(in.GroupId)
@@ -395,11 +380,38 @@ func handleExportForGroup(ctx context.Context, in *intern.ExportPayload) *intern
 	return nrep
 }
 
+func handleExportForGroup(ctx context.Context, in *intern.ExportPayload) *intern.ExportPayload {
+	n := groups().Node
+	if in.GroupId != groups().groupId() || !n.AmLeader() {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("I am not leader of group %d.", in.GroupId)
+		}
+		in.Status = intern.ExportPayload_FAILED
+		return in
+	}
+	n.applyAllMarks(n.ctx)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Leader of group: %d. Running export.", in.GroupId)
+	}
+	if err := export(Config.ExportPath, in.ReadTs); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
+		in.Status = intern.ExportPayload_FAILED
+		return in
+	}
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Export done for group: %d.", in.GroupId)
+	}
+	in.Status = intern.ExportPayload_SUCCESS
+	return in
+}
+
 // Export request is used to trigger exports for the request list of groups.
 // If a server receives request to export a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
 func (w *grpcWorker) Export(ctx context.Context, req *intern.ExportPayload) (*intern.ExportPayload, error) {
-	reply := &intern.ExportPayload{ReqId: req.ReqId}
+	reply := &intern.ExportPayload{ReqId: req.ReqId, GroupId: req.GroupId}
 	reply.Status = intern.ExportPayload_FAILED // Set by default.
 
 	if ctx.Err() != nil {
@@ -442,13 +454,6 @@ func ExportOverNetwork(ctx context.Context) error {
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
 
-	for i, gid := range gids {
-		if gid == 0 {
-			gids[i] = gids[len(gids)-1]
-			gids = gids[:len(gids)-1]
-		}
-	}
-
 	ch := make(chan *intern.ExportPayload, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
@@ -457,7 +462,7 @@ func ExportOverNetwork(ctx context.Context) error {
 				GroupId: group,
 				ReadTs:  readTs,
 			}
-			ch <- handleExportForGroup(ctx, req)
+			ch <- handleExportForGroupOverNetwork(ctx, req)
 		}(gid)
 	}
 
