@@ -23,10 +23,6 @@ import (
 )
 
 var (
-	// ErrInvalidDir is returned when Badger cannot find the directory
-	// from where it is supposed to load the key-value store.
-	ErrInvalidDir = errors.New("Invalid Dir, directory does not exist")
-
 	// ErrValueLogSize is returned when opt.ValueLogFileSize option is not within the valid
 	// range.
 	ErrValueLogSize = errors.New("Invalid ValueLogFileSize, must be between 1MB and 2GB")

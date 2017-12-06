@@ -75,8 +75,8 @@ func OpenTruncFile(filename string, sync bool) (*os.File, error) {
 	return os.OpenFile(filename, flags, 0666)
 }
 
-// Safecopy does append(a[:0], src...).
-func Safecopy(a []byte, src []byte) []byte {
+// SafeCopy does append(a[:0], src...).
+func SafeCopy(a []byte, src []byte) []byte {
 	return append(a[:0], src...)
 }
 

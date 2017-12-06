@@ -86,6 +86,22 @@ func (item *Item) Value() ([]byte, error) {
 	return buf, err
 }
 
+// ValueCopy returns a copy of the value of the item from the value log, writing it to dst slice.
+// If nil is passed, or capacity of dst isn't sufficient, a new slice would be allocated and
+// returned. Tip: It might make sense to reuse the returned slice as dst argument for the next call.
+//
+// This function is useful in long running iterate/update transactions to avoid a write deadlock.
+// See Github issue: https://github.com/dgraph-io/badger/issues/315
+func (item *Item) ValueCopy(dst []byte) ([]byte, error) {
+	item.wg.Wait()
+	if item.status == prefetched {
+		return y.SafeCopy(dst, item.val), item.err
+	}
+	buf, cb, err := item.yieldItemValue()
+	defer runCallback(cb)
+	return y.SafeCopy(dst, buf), err
+}
+
 func (item *Item) hasValue() bool {
 	if item.meta == 0 && item.vptr == nil {
 		// key not found
@@ -241,6 +257,9 @@ func (txn *Txn) NewIterator(opt IteratorOptions) *Iterator {
 	defer decr()
 	txn.db.vlog.incrIteratorCount()
 	var iters []y.Iterator
+	if itr := txn.newPendingWritesIterator(opt.Reverse); itr != nil {
+		iters = append(iters, itr)
+	}
 	for i := 0; i < len(tables); i++ {
 		iters = append(iters, tables[i].NewUniIterator(opt.Reverse))
 	}
@@ -374,7 +393,7 @@ func (it *Iterator) parseItem() bool {
 		// Consider keys: a 5, b 7 (del), b 5. When iterating, lastKey = a.
 		// Then we see b 7, which is deleted. If we don't store lastKey = b, we'll then return b 5,
 		// which is wrong. Therefore, update lastKey here.
-		it.lastKey = y.Safecopy(it.lastKey, mi.Key())
+		it.lastKey = y.SafeCopy(it.lastKey, mi.Key())
 	}
 
 FILL:
@@ -414,9 +433,9 @@ func (it *Iterator) fill(item *Item) {
 	item.expiresAt = vs.ExpiresAt
 
 	item.version = y.ParseTs(it.iitr.Key())
-	item.key = y.Safecopy(item.key, y.ParseKey(it.iitr.Key()))
+	item.key = y.SafeCopy(item.key, y.ParseKey(it.iitr.Key()))
 
-	item.vptr = y.Safecopy(item.vptr, vs.Value)
+	item.vptr = y.SafeCopy(item.vptr, vs.Value)
 	item.val = nil
 	if it.opt.PrefetchValues {
 		item.wg.Add(1)
