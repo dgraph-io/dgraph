@@ -393,6 +393,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Params.Expand != "" {
 				continue
 			}
+			if pc.Params.Normalize && pc.Params.Alias == "" {
+				continue
+			}
 			if err := addInternalNode(pc, uid, dst); err != nil {
 				return err
 			}
