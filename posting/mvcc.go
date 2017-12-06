@@ -500,46 +500,12 @@ func (bi *bTreeIterator) Seek(key []byte) {
 	}
 }
 
-func (bi *bTreeIterator) Close() {
-}
-
-type badgerIterator struct {
-	itr    *badger.Iterator
-	prefix []byte
-}
-
-func (bi *badgerIterator) Next() {
-	bi.itr.Next()
-}
-
-func (bi *badgerIterator) Key() []byte {
-	return bi.itr.Item().Key()
-}
-
-func (bi *badgerIterator) Valid() bool {
-	return bi.itr.ValidForPrefix(bi.prefix)
-}
-
-func (bi *badgerIterator) Seek(key []byte) {
-	bi.itr.Seek(key)
-}
-
-func (bi *badgerIterator) Close() {
-	bi.itr.Close()
-}
-
-type PrefixIterator interface {
-	Next()
-	Key() []byte
-	Valid() bool
-	Seek([]byte)
-	Close()
-}
-
 type TxnPrefixIterator struct {
-	itrs    []PrefixIterator
-	reverse bool
-	curKey  []byte
+	btreeIter  *bTreeIterator
+	badgerIter *badger.Iterator
+	prefix     []byte
+	reverse    bool
+	curKey     []byte
 }
 
 func NewTxnPrefixIterator(txn *badger.Txn,
@@ -547,23 +513,18 @@ func NewTxnPrefixIterator(txn *badger.Txn,
 	x.AssertTrue(iterOpts.PrefetchValues == false)
 	txnIt := new(TxnPrefixIterator)
 	txnIt.reverse = iterOpts.Reverse
-	badgerIter := badgerIterator{
-		itr:    txn.NewIterator(iterOpts),
-		prefix: prefix,
-	}
-	txnIt.itrs = append(txnIt.itrs, &badgerIter)
-	btreeIter := bTreeIterator{
+	txnIt.prefix = prefix
+	txnIt.badgerIter = txn.NewIterator(iterOpts)
+	txnIt.btreeIter = &bTreeIterator{
 		reverse: iterOpts.Reverse,
 		prefix:  prefix,
 	}
-	txnIt.itrs = append(txnIt.itrs, &btreeIter)
 	return txnIt
 }
 
 func (t *TxnPrefixIterator) Seek(key []byte) {
-	for _, itr := range t.itrs {
-		itr.Seek(key)
-	}
+	t.btreeIter.Seek(key)
+	t.badgerIter.Seek(key)
 	t.Next()
 }
 
@@ -580,31 +541,34 @@ func (t *TxnPrefixIterator) compare(key1 []byte, key2 []byte) int {
 
 func (t *TxnPrefixIterator) Next() {
 	if len(t.curKey) > 0 {
-		for _, itr := range t.itrs {
-			for itr.Valid() && t.compare(itr.Key(), t.curKey) <= 0 {
-				itr.Next()
-			}
+		// Avoid duplicate keys during merging.
+		for t.btreeIter.Valid() && t.compare(t.btreeIter.Key(), t.curKey) <= 0 {
+			t.btreeIter.Next()
+		}
+		for t.badgerIter.ValidForPrefix(t.prefix) &&
+			t.compare(t.badgerIter.Item().Key(), t.curKey) <= 0 {
+			t.badgerIter.Next()
 		}
 	}
 
-	var itr PrefixIterator
-	if !t.itrs[0].Valid() && !t.itrs[1].Valid() {
+	if !t.btreeIter.Valid() && !t.badgerIter.ValidForPrefix(t.prefix) {
 		t.curKey = nil
 		return
-	} else if !t.itrs[1].Valid() {
-		itr = t.itrs[0]
-	} else if !t.itrs[0].Valid() {
-		itr = t.itrs[1]
+	} else if !t.badgerIter.ValidForPrefix(t.prefix) {
+		t.storeKey(t.btreeIter.Key())
+		t.btreeIter.Next()
+	} else if !t.btreeIter.Valid() {
+		t.storeKey(t.badgerIter.Item().Key())
+		t.badgerIter.Next()
 	} else { // Both are valid
-		if t.compare(t.itrs[0].Key(), t.itrs[1].Key()) < 0 {
-			itr = t.itrs[0]
+		if t.compare(t.btreeIter.Key(), t.badgerIter.Item().Key()) < 0 {
+			t.storeKey(t.btreeIter.Key())
+			t.btreeIter.Next()
 		} else {
-			itr = t.itrs[1]
+			t.storeKey(t.badgerIter.Item().Key())
+			t.badgerIter.Next()
 		}
 	}
-
-	t.storeKey(itr.Key())
-	itr.Next()
 }
 
 func (t *TxnPrefixIterator) storeKey(key []byte) {
@@ -620,7 +584,5 @@ func (t *TxnPrefixIterator) Key() []byte {
 }
 
 func (t *TxnPrefixIterator) Close() {
-	for _, itr := range t.itrs {
-		itr.Close()
-	}
+	t.badgerIter.Close()
 }
