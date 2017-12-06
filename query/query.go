@@ -297,6 +297,9 @@ func (sg *SubGraph) fieldName() string {
 }
 
 func addCount(pc *SubGraph, count uint64, dst outputNode) {
+	if pc.Params.Normalize && pc.Params.Alias == "" {
+		return
+	}
 	c := types.ValueForType(types.IntID)
 	c.Value = int64(count)
 	fieldName := fmt.Sprintf("count(%s)", pc.Attr)
