@@ -84,7 +84,18 @@ func InitServerState() {
 func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
 	var lastVlogSize int64
 	const GB = int64(1 << 30)
+	mandatoryGCDuration := 10 * time.Minute
+	counter := 0
+
 	for range s.vlogTicker.C {
+		// We run GC every 10 minutes, irrespective of vlog size. Ticker runs every 10 seconds.
+		if counter == int(mandatoryGCDuration)/int(10*time.Second) {
+			counter = 0
+			store.RunValueLogGC(0.5)
+			continue
+		}
+
+		counter++
 		_, currentVlogSize := store.Size()
 		if currentVlogSize < lastVlogSize+GB {
 			continue
