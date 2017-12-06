@@ -1016,7 +1016,7 @@ dgraph instances more evenly.
 - The `--shufflers` controls the level of parallelism in the shuffle/reduce
   stage. Increasing this increases memory consumption.
 
-# Export
+## Export
 
 An export of all nodes is started by locally accessing the export endpoint of any server in the cluster.
 
@@ -1032,7 +1032,7 @@ This triggers a export of all the groups spread across the entire cluster. Each 
 
 {{% notice "note" %}}It is up to the user to retrieve the right export files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
 
-# Shutdown
+## Shutdown
 
 A clean exit of a single dgraph node is initiated by running the following command on that node.
 {{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.
@@ -1044,7 +1044,7 @@ $ curl localhost:8080/admin/shutdown
 
 This stops the server on which the command is executed and not the entire cluster.
 
-# Delete database
+## Delete database
 
 Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).
 
@@ -1056,7 +1056,7 @@ Alternatively, you could:
 * delete (maybe do an export first) the `p` and `w` directories, then
 * restart Dgraph.
 
-# Upgrade Dgraph
+## Upgrade Dgraph
 
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
 
@@ -1069,11 +1069,11 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
 
-# Post Installation
+## Post Installation
 
 Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec]({{< relref "query-language/index.md">}}). Also, have a look at [Frequently asked questions]({{< relref "faq/index.md" >}}).
 
-# Monitoring
+## Monitoring
 
 Dgraph exposes metrics via `/debug/vars` endpoint in json format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. You can either poll this endpoint to get the data in your monitoring systems or install **[Prometheus](https://prometheus.io/docs/introduction/install/)**. Replace targets in the below config file with the ip of your dgraph instances and run prometheus using the command `prometheus -config.file my_config.yaml`.
 ```sh
@@ -1091,10 +1091,10 @@ scrape_configs:
 
 Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**.
 
-# Troubleshooting
+## Troubleshooting
 Here are some problems that you may encounter and some solutions to try.
 
-## Running OOM (out of memory)
+### Running OOM (out of memory)
 
 During bulk loading of data, Dgraph can consume more memory than usual, due to high volume of writes. That's generally when you see the OOM crashes.
 
@@ -1102,6 +1102,6 @@ The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can t
 
 On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `-memory_mb` to half of RAM size.
 
-# See Also
+## See Also
 
 * [Product Roadmap to v1.0](https://github.com/dgraph-io/dgraph/issues/1)
