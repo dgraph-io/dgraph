@@ -466,11 +466,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				uc := dst.New(fieldName)
 				c := types.ValueForType(types.IntID)
 				c.Value = int64(len(ul.Uids))
-				field := pc.Params.uidCountAlias
-				if field == "" {
-					field = "count"
+				alias := pc.Params.uidCountAlias
+				if alias == "" {
+					alias = "count"
 				}
-				uc.AddValue(field, c)
+				uc.AddValue(alias, c)
 				dst.AddListChild(fieldName, uc)
 			}
 		} else {
