@@ -551,26 +551,15 @@ func TestSPStar2(t *testing.T) {
 	op.Schema = `friend: uid .`
 	require.NoError(t, s.dg.Alter(context.Background(), op))
 
+	// Add edge
 	txn := s.dg.NewTxn()
 	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish", "friend": [{"name": "Jan"}]}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
 	uid1 := assigned.Uids["blank-0"]
+	uid2 := assigned.Uids["blank-1"]
 	require.NoError(t, err)
 	require.Equal(t, 2, len(assigned.Uids))
-
-	mu = &api.Mutation{}
-	client.DeleteEdges(mu, uid1, "friend")
-	assigned, err = txn.Mutate(context.Background(), mu)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(assigned.Uids))
-
-	mu = &api.Mutation{}
-	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s" ,"name": "Manish", "friend": [{"name": "Jan2"}]}`, uid1))
-	assigned, err = txn.Mutate(context.Background(), mu)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(assigned.Uids))
-	uid2 := assigned.Uids["blank-0"]
 
 	q := fmt.Sprintf(`{
 		me(func: uid(%s)) {
@@ -584,6 +573,56 @@ func TestSPStar2(t *testing.T) {
 
 	resp, err := txn.Query(context.Background(), q)
 	require.NoError(t, err)
-	expectedResp := fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan2", "uid":"%s"}]}]}`, uid1, uid2)
+	expectedResp := fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan", "uid":"%s"}]}]}`, uid1, uid2)
+	require.JSONEq(t, expectedResp, string(resp.Json))
+
+	// Delete S P *
+	mu = &api.Mutation{}
+	client.DeleteEdges(mu, uid1, "friend")
+	assigned, err = txn.Mutate(context.Background(), mu)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(assigned.Uids))
+
+	resp, err = txn.Query(context.Background(), q)
+	require.NoError(t, err)
+	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s"}]}`, uid1)
+	require.JSONEq(t, expectedResp, string(resp.Json))
+
+	// Add edge
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s" ,"name": "Manish", "friend": [{"name": "Jan2"}]}`, uid1))
+	assigned, err = txn.Mutate(context.Background(), mu)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(assigned.Uids))
+	uid2 = assigned.Uids["blank-0"]
+
+	resp, err = txn.Query(context.Background(), q)
+	require.NoError(t, err)
+	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan2", "uid":"%s"}]}]}`, uid1, uid2)
+	require.JSONEq(t, expectedResp, string(resp.Json))
+
+	// Delete S P *
+	mu = &api.Mutation{}
+	client.DeleteEdges(mu, uid1, "friend")
+	assigned, err = txn.Mutate(context.Background(), mu)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(assigned.Uids))
+
+	resp, err = txn.Query(context.Background(), q)
+	require.NoError(t, err)
+	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s"}]}`, uid1)
+	require.JSONEq(t, expectedResp, string(resp.Json))
+
+	// Add edge
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s" ,"name": "Manish", "friend": [{"name": "Jan3"}]}`, uid1))
+	assigned, err = txn.Mutate(context.Background(), mu)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(assigned.Uids))
+	uid2 = assigned.Uids["blank-0"]
+
+	resp, err = txn.Query(context.Background(), q)
+	require.NoError(t, err)
+	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan3", "uid":"%s"}]}]}`, uid1, uid2)
 	require.JSONEq(t, expectedResp, string(resp.Json))
 }

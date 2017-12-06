@@ -349,10 +349,10 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	if txn.ShouldAbort() {
 		return false, y.ErrConflict
 	}
-	// We can have atmax one pending <s> <p> * mutation.
-	hasPendingDelete := l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
+	// We can have at max one pending <s> <p> * mutation.
+	hasPendingDelete := (l.markdeleteAll != txn.StartTs) &&
+		l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
 		bytes.Equal(t.Value, []byte(x.Star))
-
 	doAbort := hasPendingDelete || txn.StartTs < l.commitTs
 	ignoreConflict := false
 	if t.Attr == "_predicate_" {
