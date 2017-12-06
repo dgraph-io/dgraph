@@ -1532,7 +1532,7 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	defer it.Close()
 	for it.Seek(startKey); it.Valid(); it.Next() {
 		pl := posting.GetLru(it.Key())
-		if pl.CommitTs() == 0 {
+		if pl != nil && pl.CommitTs() == 0 {
 			// empty pl's can be present in lru
 			continue
 		}
