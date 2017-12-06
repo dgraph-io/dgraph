@@ -213,7 +213,7 @@ func Get(key []byte) (rlist *List) {
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
 		x.CacheRace.Add(1)
-	} else if l.onDisk == 0 {
+	} else if atomic.LoadInt32(&l.onDisk) == 0 {
 		btree.Insert(l.key)
 	}
 	return lp
