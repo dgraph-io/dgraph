@@ -175,6 +175,11 @@ func (s *Server) SetMembershipState(state *intern.MembershipState) {
 	if state.Groups == nil {
 		state.Groups = make(map[uint32]*intern.Group)
 	}
+	for _, g := range state.Groups {
+		for _, m := range g.Members {
+			conn.Get().Connect(m.Addr)
+		}
+	}
 	s.nextGroup = uint32(len(state.Groups) + 1)
 }
 

@@ -112,6 +112,8 @@ func (n *node) sendReadIndex(ri, id uint64) {
 var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
 
 func (n *node) WaitLinearizableRead(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
 	ch := make(chan uint64, 1)
 	ri := n.setRead(ch)
 	var b [8]byte
@@ -508,11 +510,15 @@ func (n *node) Run() {
 			}
 
 			// TODO: Should we move this to the top?
+			leaderChanged := false
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
 					n.server.updateLeases()
 					leader = true
+					leaderChanged = true
 				}
+				// Oracle stream would close the stream once it steps down as leader
+				// predicate move would cancel any in progress move on stepping down.
 				n.triggerLeaderChange()
 			}
 
@@ -520,7 +526,8 @@ func (n *node) Run() {
 				msg.Context = rcBytes
 				n.Send(msg)
 			}
-			if len(rd.CommittedEntries) > 0 {
+			// Need to send membership state to dgraph nodes on leader change also.
+			if leaderChanged || len(rd.CommittedEntries) > 0 {
 				n.triggerUpdates()
 			}
 			if loop%1000 == 0 {
