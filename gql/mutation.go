@@ -19,6 +19,7 @@ package gql
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/protos/api"
@@ -69,9 +70,6 @@ func typeValFrom(val *api.Value) types.Val {
 	case *api.Value_IntVal:
 		return types.Val{types.IntID, val.GetIntVal()}
 	case *api.Value_StrVal:
-		if val.GetStrVal() == "" {
-			return types.Val{types.StringID, "_nil_"}
-		}
 		return types.Val{types.StringID, val.GetStrVal()}
 	case *api.Value_BoolVal:
 		return types.Val{types.BoolID, val.GetBoolVal()}
@@ -84,9 +82,6 @@ func typeValFrom(val *api.Value) types.Val {
 	case *api.Value_PasswordVal:
 		return types.Val{types.PasswordID, val.GetPasswordVal()}
 	case *api.Value_DefaultVal:
-		if val.GetDefaultVal() == "" {
-			return types.Val{types.DefaultID, "_nil_"}
-		}
 		return types.Val{types.DefaultID, val.GetDefaultVal()}
 	}
 
@@ -111,7 +106,6 @@ func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
 }
 
 func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
-	x.AssertTrue(len(subject) > 0)
 	if id, err := ParseUid(subject); err == nil || err == ErrInvalidUID {
 		return id, err
 	}
@@ -211,11 +205,18 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*intern.DirectedEdge, e
 		return nil, err
 	}
 
+	if sUid == 0 {
+		return nil, fmt.Errorf("Subject should be > 0 for nquad: %+v", nq)
+	}
+
 	switch nq.valueType() {
 	case x.ValueUid:
 		oUid, err := toUid(nq.ObjectId, newToUid)
 		if err != nil {
 			return nil, err
+		}
+		if oUid == 0 {
+			return nil, fmt.Errorf("ObjectId should be > 0 for nquad: %+v", nq)
 		}
 		edge = nq.CreateUidEdge(sUid, oUid)
 	case x.ValuePlain, x.ValueMulti:

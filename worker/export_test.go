@@ -152,8 +152,6 @@ func TestExport(t *testing.T) {
 					nq.ObjectValue)
 			case "_:uid4":
 			case "_:uid5":
-				// Compare directly with the raw string to avoid the object
-				// being convert from "" to "_nil_" when it is parsed as an RDF.
 				require.Equal(t, `<_:uid5> <name> "" .`, scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)

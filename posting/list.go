@@ -192,9 +192,6 @@ func samePosting(oldp *intern.Posting, newp *intern.Posting) bool {
 }
 
 func NewPosting(t *intern.DirectedEdge) *intern.Posting {
-	x.AssertTruef(edgeType(t) != x.ValueEmpty,
-		"This should have been set by the caller.")
-
 	var op uint32
 	if t.Op == intern.DirectedEdge_SET {
 		op = Set
@@ -207,10 +204,10 @@ func NewPosting(t *intern.DirectedEdge) *intern.Posting {
 	var postingType intern.Posting_PostingType
 	if len(t.Lang) > 0 {
 		postingType = intern.Posting_VALUE_LANG
-	} else if len(t.Value) == 0 {
-		postingType = intern.Posting_REF
-	} else if len(t.Value) > 0 {
+	} else if t.ValueId == 0 {
 		postingType = intern.Posting_VALUE
+	} else {
+		postingType = intern.Posting_REF
 	}
 
 	return &intern.Posting{
@@ -303,34 +300,6 @@ func (l *List) AddMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	return l.addMutation(ctx, txn, t)
 }
 
-func edgeType(t *intern.DirectedEdge) x.ValueTypeInfo {
-	hasVal := !bytes.Equal(t.Value, nil)
-	hasId := t.ValueId != 0
-	switch {
-	case hasVal && hasId:
-		return x.ValueMulti
-	case hasVal && !hasId:
-		return x.ValuePlain
-	case !hasVal && hasId:
-		return x.ValueUid
-	default:
-		return x.ValueEmpty
-	}
-}
-
-func postingType(p *intern.Posting) x.ValueTypeInfo {
-	switch p.PostingType {
-	case intern.Posting_REF:
-		return x.ValueUid
-	case intern.Posting_VALUE:
-		return x.ValuePlain
-	case intern.Posting_VALUE_LANG:
-		return x.ValueMulti
-	default:
-		return x.ValueEmpty
-	}
-}
-
 // TypeID returns the typeid of destination vertex
 func TypeID(edge *intern.DirectedEdge) types.TypeID {
 	if edge.ValueId != 0 {
@@ -368,9 +337,9 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 		return false, y.ErrConflict
 	}
 
-	// All edges with a value without LANGTAG, have the same uid. In other words,
-	// an (entity, attribute) can only have one untagged value.
-	if !bytes.Equal(t.Value, nil) {
+	mpost := NewPosting(t)
+
+	if mpost.PostingType != intern.Posting_REF {
 		// There could be a collision if the user gives us a value with Lang = "en" and later gives
 		// us a value = "en" for the same predicate. We would end up overwritting his older lang
 		// value.
@@ -384,21 +353,13 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 			// Value for list type.
 			t.ValueId = farm.Fingerprint64(t.Value)
 		} else {
-			// Plain value for non-list type and without a language.
+			// All edges with a value without LANGTAG, have the same uid. In other words,
+			// an (entity, attribute) can only have one untagged value.
 			t.ValueId = math.MaxUint64
 		}
 	}
-	if t.ValueId == 0 {
-		err := x.Errorf("ValueId cannot be zero for edge: %+v", t)
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
-		}
-		// Ensures that txn is aborted.
-		txn.SetAbort()
-		return false, err
-	}
 
-	mpost := NewPosting(t)
+	mpost.Uid = t.ValueId
 	mpost.StartTs = txn.StartTs
 	t1 := time.Now()
 	hasMutated := l.updateMutationLayer(txn.StartTs, mpost)
@@ -438,6 +399,10 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 	}
 	l.mlayer = l.mlayer[:midx]
 	delete(l.activeTxns, startTs)
+	if l.markdeleteAll == startTs {
+		// Reset it so that other transactions can perform S P * deletion.
+		l.markdeleteAll = 0
+	}
 	return nil
 }
 
@@ -857,7 +822,7 @@ func (l *List) Uids(opt ListOptions) (*intern.List, error) {
 	}
 
 	err := l.iterate(opt.ReadTs, opt.AfterUID, func(p *intern.Posting) bool {
-		if postingType(p) == x.ValueUid {
+		if p.PostingType == intern.Posting_REF {
 			res = append(res, p.Uid)
 		}
 		return true
@@ -882,7 +847,7 @@ func (l *List) Postings(opt ListOptions, postFn func(*intern.Posting) bool) erro
 	defer l.RUnlock()
 
 	return l.iterate(opt.ReadTs, opt.AfterUID, func(p *intern.Posting) bool {
-		if postingType(p) != x.ValueUid {
+		if p.PostingType != intern.Posting_REF {
 			return true
 		}
 		return postFn(p)
@@ -1015,7 +980,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *intern.Posti
 	// last resort - return value with smallest lang Uid
 	if any {
 		err := l.iterate(readTs, 0, func(p *intern.Posting) bool {
-			if postingType(p) == x.ValueMulti {
+			if p.PostingType == intern.Posting_VALUE_LANG {
 				pos = p
 				found = true
 				return false

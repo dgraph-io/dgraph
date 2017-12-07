@@ -109,19 +109,20 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			continue
+			return newUids, errors.New("Predicate deletion should be called via alter.")
 		}
 
-		if len(nq.Subject) > 0 {
-			var uid uint64
-			if strings.HasPrefix(nq.Subject, "_:") {
-				newUids[nq.Subject] = 0
-			} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
-				return newUids, err
-			}
-			if err = verifyUid(uid); err != nil {
-				return newUids, err
-			}
+		if len(nq.Subject) == 0 {
+			return nil, fmt.Errorf("Subject must not be empty for nquad: %+v", nq)
+		}
+		var uid uint64
+		if strings.HasPrefix(nq.Subject, "_:") {
+			newUids[nq.Subject] = 0
+		} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
+			return newUids, err
+		}
+		if err = verifyUid(uid); err != nil {
+			return newUids, err
 		}
 
 		if len(nq.ObjectId) > 0 {

@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 	"unicode"
@@ -66,6 +65,7 @@ func Parse(line string) (api.NQuad, error) {
 
 	it := l.NewIterator()
 	var oval string
+	var seenOval bool
 	var vend bool
 	isCommentLine := false
 	// We read items from the l.Items channel to which the lexer sends items.
@@ -107,25 +107,12 @@ L:
 			if err != nil {
 				return rnq, x.Wrapf(err, "while unquoting")
 			}
-			if oval == "" {
-				oval = "_nil_"
-			}
+			seenOval = true
 
 		case itemLanguage:
 			rnq.Lang = item.Val
 
-			// if lang tag is specified then type is set to string
-			// grammar allows either ^^ iriref or lang tag
-			if len(oval) > 0 {
-				rnq.ObjectValue = &api.Value{&api.Value_DefaultVal{oval}}
-				oval = ""
-			}
 		case itemObjectType:
-			if len(oval) == 0 {
-				log.Fatalf(
-					"itemObject should be emitted before itemObjectType. Input: [%s]",
-					line)
-			}
 			if rnq.Predicate == x.Star || rnq.Subject == x.Star {
 				return rnq, x.Errorf("If predicate/subject is *, value should be * as well")
 			}
@@ -140,7 +127,7 @@ L:
 			if !ok {
 				return rnq, x.Errorf("Unrecognized rdf type %s", val)
 			}
-			if oval == "_nil_" && t != types.StringID {
+			if oval == "" && t != types.StringID {
 				return rnq, x.Errorf("Invalid ObjectValue")
 			}
 			src := types.ValueForType(types.StringID)
@@ -153,7 +140,6 @@ L:
 			if rnq.ObjectValue, err = types.ObjectValue(t, p.Value); err != nil {
 				return rnq, err
 			}
-			oval = ""
 
 		case lex.ItemError:
 			return rnq, x.Errorf(item.Val)
@@ -193,7 +179,9 @@ L:
 	if isCommentLine {
 		return rnq, ErrEmpty
 	}
-	if len(oval) > 0 {
+	// We only want to set default value if we have seen ObjectValue within "" and if we didn't
+	// already set it.
+	if seenOval && rnq.ObjectValue == nil {
 		rnq.ObjectValue = &api.Value{&api.Value_DefaultVal{oval}}
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {

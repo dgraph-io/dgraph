@@ -13,6 +13,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Export now uses correct blank node syntax.
 * Fix issue where sets were not being returned after doing a S P * deletion when part of same
   transaction.
+* Empty string values are stored as it is and no strings have special meaning now.
 
 ### Changed
 

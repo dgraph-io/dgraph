@@ -171,6 +171,8 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 	txn := c.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
+			_:breakfast <name> "" .
+			_:breakfast <nil_name> "_nil_" .
 			_:breakfast <xid> "breakfast" .
 			_:breakfast <fruit> _:banana .
 			_:breakfast <fruit> _:apple .
@@ -186,6 +188,9 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 	const breakfastQuery = `
 	{
 		q(func: eq(xid, "breakfast")) {
+			name
+			nil_name
+			extra
 			fruit {
 				xid
 			}
@@ -205,16 +210,21 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 		],
 		"cereal": [
 			{ "xid": "weetbix" }
-		]
+		],
+		"name": "",
+		"nil_name": "_nil_"
 	}]}`, string(resp.Json))
 
 	txn = c.NewTxn()
 	_, err = txn.Mutate(ctx, &api.Mutation{
 		DelNquads: []byte(fmt.Sprintf(`
 			<%s> <fruit>  <%s> .
-			<%s> <cereal> <%s> .`,
+			<%s> <cereal> <%s> .
+			<%s> <name> * .
+			<%s> <nil_name> * .`,
 			assigned.Uids["breakfast"], assigned.Uids["banana"],
-			assigned.Uids["breakfast"], assigned.Uids["weetbix"])),
+			assigned.Uids["breakfast"], assigned.Uids["weetbix"],
+			assigned.Uids["breakfast"], assigned.Uids["breakfast"])),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))

@@ -150,6 +150,10 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 		if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
 			continue
 		}
+
+		if len(child.valueMatrix[idx].Values) == 0 {
+			continue
+		}
 		v := child.valueMatrix[idx].Values[0]
 		val, err := convertWithBestEffort(v, child.Attr)
 		if err != nil {
@@ -226,6 +230,9 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 			// It's a value node.
 			for i, v := range child.valueMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
+				if len(v.Values) == 0 {
+					continue
+				}
 				val, err := convertTo(v.Values[0])
 				if err != nil {
 					continue
