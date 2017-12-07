@@ -103,7 +103,7 @@ func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*api.Ass
 
 	if available < num.Val {
 		// Blocking propose to get more ids or timestamps.
-		if err := s.Node.proposeAndWait(context.Background(), &proposal); err != nil {
+		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
 			return nil, err
 		}
 	}

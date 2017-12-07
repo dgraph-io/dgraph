@@ -175,6 +175,7 @@ func (s *Server) SetMembershipState(state *intern.MembershipState) {
 	if state.Groups == nil {
 		state.Groups = make(map[uint32]*intern.Group)
 	}
+	// Create connections to all members.
 	for _, g := range state.Groups {
 		for _, m := range g.Members {
 			conn.Get().Connect(m.Addr)

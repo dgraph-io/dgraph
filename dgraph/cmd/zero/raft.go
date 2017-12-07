@@ -112,6 +112,8 @@ func (n *node) sendReadIndex(ri, id uint64) {
 var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
 
 func (n *node) WaitLinearizableRead(ctx context.Context) error {
+	// Read Request can get rejected then we would wait idefinitely on the channel
+	// so have a timeout of 1 second.
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	ch := make(chan uint64, 1)
