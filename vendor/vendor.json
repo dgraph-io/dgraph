@@ -163,40 +163,40 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "fIu/ZimZwt+pNlOrAhKs1mWdYQ8=",
+			"checksumSHA1": "XDcrGBf1nb0ip4f4OSo49zL23i0=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
-			"revisionTime": "2017-11-08T03:32:58Z"
+			"revision": "a9ee745cab4986fd4511c3882f9797501ed45dd6",
+			"revisionTime": "2017-12-06T03:56:37Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
-			"revisionTime": "2017-11-08T03:32:58Z"
+			"revision": "a9ee745cab4986fd4511c3882f9797501ed45dd6",
+			"revisionTime": "2017-12-06T03:56:37Z"
 		},
 		{
 			"checksumSHA1": "gGTDnTVVw5kcT2P5NXZV1YSckOU=",
 			"path": "github.com/dgraph-io/badger/protos",
-			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
-			"revisionTime": "2017-11-08T03:32:58Z"
+			"revision": "a9ee745cab4986fd4511c3882f9797501ed45dd6",
+			"revisionTime": "2017-12-06T03:56:37Z"
 		},
 		{
-			"checksumSHA1": "PbfYA5nvlgi/zvRHlKJQRDb149s=",
+			"checksumSHA1": "xBLLiAouTGA/lCAcQ5qjxQiuPCc=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
-			"revisionTime": "2017-11-08T03:32:58Z"
+			"revision": "a9ee745cab4986fd4511c3882f9797501ed45dd6",
+			"revisionTime": "2017-12-06T03:56:37Z"
 		},
 		{
-			"checksumSHA1": "hYJDo6Fzh2zJgzZsxNsCRcMKOUY=",
+			"checksumSHA1": "neLytbzhhuRdBNPEMMoNLOY/qR0=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
-			"revisionTime": "2017-11-08T03:32:58Z"
+			"revision": "a9ee745cab4986fd4511c3882f9797501ed45dd6",
+			"revisionTime": "2017-12-06T03:56:37Z"
 		},
 		{
-			"checksumSHA1": "+gorc2jnHxrO1XkOpkBPpi8WI0s=",
+			"checksumSHA1": "HXSzJBx1/9bRkHhlDiHqn8BFT1A=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "912e6fef14ff1085d47996a1832235a9c8b712ce",
-			"revisionTime": "2017-11-08T03:32:58Z"
+			"revision": "a9ee745cab4986fd4511c3882f9797501ed45dd6",
+			"revisionTime": "2017-12-06T03:56:37Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",

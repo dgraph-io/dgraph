@@ -59,7 +59,8 @@ type ServerState struct {
 	Pstore   *badger.ManagedDB
 	WALstore *badger.ManagedDB
 
-	vlogTicker *time.Ticker
+	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
+	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
 
 	mu     sync.Mutex
 	needTs []chan uint64
@@ -82,10 +83,28 @@ func InitServerState() {
 }
 
 func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
-	// TODO - Make this smarter later. Maybe get size of directories from badger and only run GC
-	// if size increases by more than 1GB.
-	for range s.vlogTicker.C {
-		store.RunValueLogGC(0.5)
+	// Get initial size on start.
+	_, lastVlogSize := store.Size()
+	const GB = int64(1 << 30)
+
+	for {
+		select {
+		case <-s.vlogTicker.C:
+			_, currentVlogSize := store.Size()
+			if currentVlogSize < lastVlogSize+GB {
+				continue
+			}
+
+			// If size increased by 3.5 GB, then we run this 3 times.
+			numTimes := (currentVlogSize - lastVlogSize) / GB
+			for i := 0; i < int(numTimes); i++ {
+				store.RunValueLogGC(0.5)
+			}
+			_, lastVlogSize = store.Size()
+
+		case <-s.mandatoryVlogTicker.C:
+			store.RunValueLogGC(0.5)
+		}
 	}
 }
 
@@ -122,7 +141,8 @@ func (s *ServerState) initStorage() {
 	}
 	s.Pstore, err = badger.OpenManaged(opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
-	s.vlogTicker = time.NewTicker(10 * time.Minute)
+	s.vlogTicker = time.NewTicker(1 * time.Minute)
+	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
 	go s.runVlogGC(s.Pstore)
 	go s.runVlogGC(s.WALstore)
 }
@@ -135,6 +155,7 @@ func (s *ServerState) Dispose() error {
 		return errors.Wrapf(err, "While closing WAL store")
 	}
 	s.vlogTicker.Stop()
+	s.mandatoryVlogTicker.Stop()
 	return nil
 }
 

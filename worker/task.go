@@ -51,7 +51,7 @@ import (
 var (
 	emptyUIDList   intern.List
 	emptyResult    intern.Result
-	emptyValueList = intern.ValueList{Values: []*intern.TaskValue{&intern.TaskValue{Val: x.Nilbyte}}}
+	emptyValueList = intern.ValueList{Values: []*intern.TaskValue{}}
 )
 
 func invokeNetworkRequest(
@@ -447,9 +447,11 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 		case srcFn.fnType == PasswordFn:
 			lastPos := len(out.ValueMatrix) - 1
+			if len(out.ValueMatrix[lastPos].Values) == 0 {
+				continue
+			}
 			newValue := out.ValueMatrix[lastPos].Values[0]
 			if len(newValue.Val) == 0 {
-				// TODO - Check that this is safe.
 				out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
 			}
 			pwd := q.SrcFunc.Args[0]
@@ -508,7 +510,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		// get filtered uids and facets.
 		var filteredRes []*result
-		out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
 
 		var perr error
 		filteredRes = make([]*result, 0)

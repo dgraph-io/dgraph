@@ -78,7 +78,7 @@ const (
 	kvWriteChCapacity = 1000
 )
 
-func replayFunction(out *DB) func(entry, valuePointer) error {
+func replayFunction(out *DB) func(Entry, valuePointer) error {
 	type txnEntry struct {
 		nk []byte
 		v  y.ValueStruct
@@ -96,7 +96,7 @@ func replayFunction(out *DB) func(entry, valuePointer) error {
 	}
 
 	first := true
-	return func(e entry, vp valuePointer) error { // Function for replaying.
+	return func(e Entry, vp valuePointer) error { // Function for replaying.
 		if first {
 			out.elog.Printf("First key=%s\n", e.Key)
 		}
@@ -171,7 +171,11 @@ func Open(opt Options) (db *DB, err error) {
 			return nil, y.Wrapf(err, "Invalid Dir: %q", path)
 		}
 		if !dirExists {
-			return nil, ErrInvalidDir
+			// Try to create the directory
+			err = os.Mkdir(path, 0700)
+			if err != nil {
+				return nil, y.Wrapf(err, "Error Creating Dir: %q", path)
+			}
 		}
 	}
 	absDir, err := filepath.Abs(opt.Dir)
@@ -237,6 +241,8 @@ func Open(opt Options) (db *DB, err error) {
 		orc:           orc,
 	}
 
+	// Calculate initial size.
+	db.calculateSize()
 	db.closers.updateSize = y.NewCloser(1)
 	go db.updateSize(db.closers.updateSize)
 	db.mt = skl.NewSkiplist(arenaSize(opt))
@@ -478,7 +484,7 @@ var requestPool = sync.Pool{
 	},
 }
 
-func (db *DB) shouldWriteValueToLSM(e entry) bool {
+func (db *DB) shouldWriteValueToLSM(e Entry) bool {
 	return len(e.Value) < db.opt.ValueThreshold
 }
 
@@ -563,7 +569,7 @@ func (db *DB) writeRequests(reqs []*request) error {
 	return nil
 }
 
-func (db *DB) sendToWriteCh(entries []*entry) (*request, error) {
+func (db *DB) sendToWriteCh(entries []*Entry) (*request, error) {
 	var count, size int64
 	for _, e := range entries {
 		size += int64(e.estimateSize(db.opt.ValueThreshold))
@@ -648,7 +654,7 @@ func (db *DB) doWrites(lc *y.Closer) {
 // batchSet applies a list of badger.Entry. If a request level error occurs it
 // will be returned.
 //   Check(kv.BatchSet(entries))
-func (db *DB) batchSet(entries []*entry) error {
+func (db *DB) batchSet(entries []*Entry) error {
 	req, err := db.sendToWriteCh(entries)
 	if err != nil {
 		return err
@@ -667,7 +673,7 @@ func (db *DB) batchSet(entries []*entry) error {
 //   err := kv.BatchSetAsync(entries, func(err error)) {
 //      Check(err)
 //   }
-func (db *DB) batchSetAsync(entries []*entry, f func(error)) error {
+func (db *DB) batchSetAsync(entries []*Entry, f func(error)) error {
 	req, err := db.sendToWriteCh(entries)
 	if err != nil {
 		return err
@@ -816,12 +822,9 @@ func exists(path string) (bool, error) {
 	return true, err
 }
 
-func (db *DB) updateSize(lc *y.Closer) {
-	defer lc.Done()
-
-	metricsTicker := time.NewTicker(5 * time.Minute)
-	defer metricsTicker.Stop()
-
+// This function does a filewalk, calculates the size of vlog and sst files and stores it in
+// y.LSMSize and y.VlogSize.
+func (db *DB) calculateSize() {
 	newInt := func(val int64) *expvar.Int {
 		v := new(expvar.Int)
 		v.Add(val)
@@ -848,16 +851,26 @@ func (db *DB) updateSize(lc *y.Closer) {
 		return lsmSize, vlogSize
 	}
 
+	lsmSize, vlogSize := totalSize(db.opt.Dir)
+	y.LSMSize.Set(db.opt.Dir, newInt(lsmSize))
+	// If valueDir is different from dir, we'd have to do another walk.
+	if db.opt.ValueDir != db.opt.Dir {
+		_, vlogSize = totalSize(db.opt.ValueDir)
+	}
+	y.VlogSize.Set(db.opt.Dir, newInt(vlogSize))
+
+}
+
+func (db *DB) updateSize(lc *y.Closer) {
+	defer lc.Done()
+
+	metricsTicker := time.NewTicker(time.Minute)
+	defer metricsTicker.Stop()
+
 	for {
 		select {
 		case <-metricsTicker.C:
-			lsmSize, vlogSize := totalSize(db.opt.Dir)
-			y.LSMSize.Set(db.opt.Dir, newInt(lsmSize))
-			// If valueDir is different from dir, we'd have to do another walk.
-			if db.opt.ValueDir != db.opt.Dir {
-				_, vlogSize = totalSize(db.opt.ValueDir)
-			}
-			y.VlogSize.Set(db.opt.Dir, newInt(vlogSize))
+			db.calculateSize()
 		case <-lc.HasBeenClosed():
 			return
 		}
@@ -877,7 +890,7 @@ func (db *DB) purgeVersionsBelow(txn *Txn, key []byte, ts uint64) error {
 	opts.PrefetchValues = false
 	it := txn.NewIterator(opts)
 
-	var entries []*entry
+	var entries []*Entry
 
 	for it.Seek(key); it.ValidForPrefix(key); it.Next() {
 		item := it.Item()
@@ -887,7 +900,7 @@ func (db *DB) purgeVersionsBelow(txn *Txn, key []byte, ts uint64) error {
 
 		// Found an older version. Mark for deletion
 		entries = append(entries,
-			&entry{
+			&Entry{
 				Key:  y.KeyWithTs(key, item.version),
 				meta: bitDelete,
 			})
@@ -909,14 +922,14 @@ func (db *DB) PurgeOlderVersions() error {
 		opts.PrefetchValues = false
 		it := txn.NewIterator(opts)
 
-		var entries []*entry
+		var entries []*Entry
 		var lastKey []byte
 		var count int
 		var wg sync.WaitGroup
 		errChan := make(chan error, 1)
 
 		// func to check for pending error before sending off a batch for writing
-		batchSetAsyncIfNoErr := func(entries []*entry) error {
+		batchSetAsyncIfNoErr := func(entries []*Entry) error {
 			select {
 			case err := <-errChan:
 				return err
@@ -937,12 +950,12 @@ func (db *DB) PurgeOlderVersions() error {
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			if !bytes.Equal(lastKey, item.Key()) {
-				lastKey = y.Safecopy(lastKey, item.Key())
+				lastKey = y.SafeCopy(lastKey, item.Key())
 				continue
 			}
 			// Found an older version. Mark for deletion
 			entries = append(entries,
-				&entry{
+				&Entry{
 					Key:  y.KeyWithTs(lastKey, item.version),
 					meta: bitDelete,
 				})
@@ -955,7 +968,7 @@ func (db *DB) PurgeOlderVersions() error {
 					return err
 				}
 				count = 0
-				entries = []*entry{}
+				entries = []*Entry{}
 			}
 		}
 
@@ -1017,4 +1030,16 @@ func (db *DB) RunValueLogGC(discardRatio float64) error {
 
 	// Pick a log file and run GC
 	return db.vlog.runGC(discardRatio, head)
+}
+
+// Size returns the size of lsm and value log files in bytes. It can be used to decide how often to
+// call RunValueLogGC.
+func (db *DB) Size() (lsm int64, vlog int64) {
+	if y.LSMSize.Get(db.opt.Dir) == nil {
+		lsm, vlog = 0, 0
+		return
+	}
+	lsm = y.LSMSize.Get(db.opt.Dir).(*expvar.Int).Value()
+	vlog = y.VlogSize.Get(db.opt.Dir).(*expvar.Int).Value()
+	return
 }

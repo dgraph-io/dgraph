@@ -18,7 +18,6 @@
 package worker
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 	"strings"
@@ -321,14 +320,13 @@ func multiSort(ctx context.Context, r *sortresult, ts *intern.SortMessage) error
 		result := or.r
 		x.AssertTrue(len(result.ValueMatrix) == len(dest.Uids))
 		for i, _ := range dest.Uids {
-			v := result.ValueMatrix[i].Values[0]
-			val := types.ValueForType(types.TypeID(v.ValType))
 			var sv types.Val
-			if bytes.Equal(v.Val, x.Nilbyte) {
+			if len(result.ValueMatrix[i].Values) == 0 {
 				// Assign nil value which is sorted as greater than all other values.
 				sv.Value = nil
-				sv.Tid = val.Tid
 			} else {
+				v := result.ValueMatrix[i].Values[0]
+				val := types.ValueForType(types.TypeID(v.ValType))
 				val.Value = v.Val
 				var err error
 				sv, err = types.Convert(val, val.Tid)

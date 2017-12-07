@@ -18,7 +18,6 @@
 package query
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -143,7 +142,8 @@ type params struct {
 	Expand         string // Value is either _all_/variable-name or empty.
 	isGroupBy      bool
 	groupbyAttrs   []gql.GroupByAttr
-	uidCount       string
+	uidCount       bool
+	uidCountAlias  string
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
@@ -296,6 +296,9 @@ func (sg *SubGraph) fieldName() string {
 }
 
 func addCount(pc *SubGraph, count uint64, dst outputNode) {
+	if pc.Params.Normalize && pc.Params.Alias == "" {
+		return
+	}
 	c := types.ValueForType(types.IntID)
 	c.Value = int64(count)
 	fieldName := fmt.Sprintf("count(%s)", pc.Attr)
@@ -328,16 +331,19 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	if !ok || sv.Value == nil {
 		return nil
 	}
-	if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
-		sv.Value = ""
-	}
 	dst.AddValue(fieldName, sv)
 	return nil
 }
 
-func addCheckPwd(pc *SubGraph, val *intern.TaskValue, dst outputNode) {
+func addCheckPwd(pc *SubGraph, vals []*intern.TaskValue, dst outputNode) {
 	c := types.ValueForType(types.BoolID)
-	c.Value = task.ToBool(val)
+	if len(vals) == 0 {
+		// No value found for predicate.
+		c.Value = false
+	} else {
+		c.Value = task.ToBool(vals[0])
+	}
+
 	uc := dst.New(pc.Attr)
 	uc.AddValue("checkpwd", c)
 	dst.AddListChild(pc.Attr, uc)
@@ -389,6 +395,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Params.Expand != "" {
 				continue
 			}
+			if pc.Params.Normalize && pc.Params.Alias == "" {
+				continue
+			}
 			if err := addInternalNode(pc, uid, dst); err != nil {
 				return err
 			}
@@ -404,14 +413,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if idx < 0 {
 			continue
 		}
-		ul := pc.uidMatrix[idx]
 
 		fieldName := pc.fieldName()
 		if len(pc.counts) > 0 {
 			addCount(pc, uint64(pc.counts[idx]), dst)
 		} else if pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd" {
-			addCheckPwd(pc, pc.valueMatrix[idx].Values[0], dst)
-		} else if len(ul.Uids) > 0 {
+			addCheckPwd(pc, pc.valueMatrix[idx].Values, dst)
+		} else if idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0 {
 			var fcsList []*intern.Facets
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
@@ -422,6 +430,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
+			ul := pc.uidMatrix[idx]
 			for childIdx, childUID := range ul.Uids {
 				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
 					continue
@@ -455,11 +464,15 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					dst.AddListChild(fieldName, uc)
 				}
 			}
-			if pc.Params.uidCount != "" {
+			if pc.Params.uidCount && !(pc.Params.uidCountAlias == "" && pc.Params.Normalize) {
 				uc := dst.New(fieldName)
 				c := types.ValueForType(types.IntID)
 				c.Value = int64(len(ul.Uids))
-				uc.AddValue(pc.Params.uidCount, c)
+				alias := pc.Params.uidCountAlias
+				if alias == "" {
+					alias = "count"
+				}
+				uc.AddValue(alias, c)
 				dst.AddListChild(fieldName, uc)
 			}
 		} else {
@@ -473,11 +486,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				continue
 			}
 
-			tv := pc.valueMatrix[idx]
-			if bytes.Equal(tv.Values[0].Val, x.Nilbyte) {
-				continue
-			}
-
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
@@ -485,19 +493,17 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 			}
 
+			if len(pc.valueMatrix) <= idx {
+				continue
+			}
+
 			for i, tv := range pc.valueMatrix[idx].Values {
 				// if conversion not possible, we ignore it in the result.
 				sv, convErr := convertWithBestEffort(tv, pc.Attr)
-				if convErr == ErrEmptyVal {
-					continue
-				} else if convErr != nil {
+				if convErr != nil {
 					return convErr
 				}
-				// Only strings and default can have empty values.
-				if (sv.Tid == types.StringID || sv.Tid == types.DefaultID) &&
-					sv.Value.(string) == "_nil_" {
-					sv.Value = ""
-				}
+
 				if pc.Params.expandAll && len(pc.LangTags[idx].Lang) != 0 {
 					if i >= len(pc.LangTags[idx].Lang) {
 						return x.Errorf(
@@ -547,9 +553,6 @@ func convertWithBestEffort(tv *intern.TaskValue, attr string) (types.Val, error)
 	v, _ := getValue(tv)
 	if !v.Tid.IsScalar() {
 		return v, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
-	}
-	if bytes.Equal(tv.Val, nil) {
-		return v, ErrEmptyVal
 	}
 
 	// creates appropriate type from binary format
@@ -690,6 +693,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			groupbyAttrs:   gchild.GroupbyAttrs,
 			FacetVar:       gchild.FacetVar,
 			uidCount:       gchild.UidCount,
+			uidCountAlias:  gchild.UidCountAlias,
 			Cascade:        sg.Params.Cascade,
 			FacetOrder:     gchild.FacetOrder,
 			FacetOrderDesc: gchild.FacetDesc,
@@ -869,21 +873,22 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		GetUid:       isDebug(ctx),
-		Alias:        gq.Alias,
-		Langs:        gq.Langs,
-		Var:          gq.Var,
-		ParentVars:   make(map[string]varValue),
-		Normalize:    gq.Normalize,
-		Cascade:      gq.Cascade,
-		isGroupBy:    gq.IsGroupby,
-		groupbyAttrs: gq.GroupbyAttrs,
-		uidCount:     gq.UidCount,
-		IgnoreReflex: gq.IgnoreReflex,
-		IsEmpty:      gq.IsEmpty,
-		Order:        gq.Order,
-		Recurse:      gq.Recurse,
-		RecurseArgs:  gq.RecurseArgs,
+		GetUid:        isDebug(ctx),
+		Alias:         gq.Alias,
+		Langs:         gq.Langs,
+		Var:           gq.Var,
+		ParentVars:    make(map[string]varValue),
+		Normalize:     gq.Normalize,
+		Cascade:       gq.Cascade,
+		isGroupBy:     gq.IsGroupby,
+		groupbyAttrs:  gq.GroupbyAttrs,
+		uidCount:      gq.UidCount,
+		uidCountAlias: gq.UidCountAlias,
+		IgnoreReflex:  gq.IgnoreReflex,
+		IsEmpty:       gq.IsEmpty,
+		Order:         gq.Order,
+		Recurse:       gq.Recurse,
+		RecurseArgs:   gq.RecurseArgs,
 	}
 	for _, it := range gq.NeedsVar {
 		args.NeedsVar = append(args.NeedsVar, it)
@@ -1375,7 +1380,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 			// current UID should be removed from this level.
 			if !child.IsInternal() &&
 				// Check len before accessing index.
-				(len(child.valueMatrix) <= i || len(child.valueMatrix[i].Values[0].Val) == 0) &&
+				(len(child.valueMatrix) <= i || len(child.valueMatrix[i].Values) == 0) &&
 				(len(child.counts) <= i) &&
 				(len(child.uidMatrix) <= i || len(child.uidMatrix[i].Uids) == 0) {
 				exclude = true
@@ -1472,6 +1477,9 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 				return x.Errorf("Value variables not supported for predicate with list type.")
 			}
 
+			if len(sg.valueMatrix[idx].Values) == 0 {
+				continue
+			}
 			val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0], sg.Attr)
 			if err != nil {
 				continue

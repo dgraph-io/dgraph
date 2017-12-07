@@ -145,6 +145,9 @@ func (txn *Txn) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, er
 		}
 		return nil, err
 	}
+	if mu.CommitNow {
+		txn.finished = true
+	}
 	err = txn.mergeContext(ag.Context)
 	return ag, err
 }
