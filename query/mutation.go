@@ -112,6 +112,9 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 			return newUids, errors.New("Predicate deletion should be called via alter.")
 		}
 
+		if len(nq.Subject) == 0 {
+			return nil, fmt.Errorf("Subject must not be empty for nquad: %+v", nq)
+		}
 		var uid uint64
 		if strings.HasPrefix(nq.Subject, "_:") {
 			newUids[nq.Subject] = 0
