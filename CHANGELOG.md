@@ -11,6 +11,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Language tag parsing in queries now accepts digits (in line with RDF parsing).
 * Ensure that GraphQL variables are declared before use.
 * Export now uses correct blank node syntax.
+* Membership stream doesn't get stuck if node steps down as leader.
 
 ### Changed
 
