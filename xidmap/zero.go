@@ -1,7 +1,7 @@
 package xidmap
 
 import (
-	"context"
+	"math/rand"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
@@ -11,36 +11,70 @@ import (
 
 type ZeroPool struct {
 	sync.Mutex
-	leader intern.ZeroClient
-	zeros  map[string]intern.ZeroClient
+	leaderId   uint32
+	leader     intern.ZeroClient
+	knownAddrs []string
 }
 
-func NewZero(cc *grpc.ClientConn) *ZeroPool {
-	p := &ZeroPool{}
+func NewZeroPool(cc *grpc.ClientConn) *ZeroPool {
+	zp := &ZeroPool{}
 	go func() {
-		c := intern.NewZeroClient(cc)
-		stream, err := c.Update(context.Background())
-		x.Check(err) // TODO: Retry?
+		seedClient := intern.NewZeroClient(cc)
+		zp.readMembershipStream(seedClient)
 		for {
-			ms, err := stream.Recv()
-			// TODO: Handle error
-			for _, zz := range ms.Zeros {
-				if zz.Leader {
-					p.Lock()
-					if cl, ok := p.zeros[zz.Addr]; ok {
-					}
-
-					zz.Addr
-					break
+			client := seedClient
+			if len(zp.knownAddrs) > 0 {
+				addr := zp.knownAddrs[rand.Intn(len(zp.knownAddrs))]
+				err, conn := grpc.Dial(addr)
+				if err != nil {
+					x.Printf("could not dial zero address %q: %v", addr, err)
+					// TODO: Remove from known addresses?
+					continue
 				}
 			}
 		}
 	}()
-	return p
+	return zp
 }
 
 func (p *ZeroPool) Leader() intern.ZeroClient {
 	p.Lock()
 	defer p.Unlock()
 	return p.leader
+}
+
+func (p *ZeroPool) readMembershipStream(zc intern.ZeroClient) {
+	uc, err := zc.Update(ctx)
+	if err != nil {
+		x.Printf("could not start reading membership stream: %v", err)
+		return
+	}
+	for {
+		ms, err := uc.Recv()
+		if err != nil {
+			x.Printf("could not read membership stream: %v", err)
+			return
+		}
+		if err := p.updateMembershipState(ms.Zeros); err != nil {
+			x.Printf("could not update membership state: %v", err)
+			return
+		}
+	}
+}
+
+func (p *ZeroPool) updateMembershipState(state map[uint64]*Member) error {
+	p.knownAddrs = p.knownAddrs[:0]
+	for id, z := range ms.Zeros {
+		p.knownAddrs = append(z.Addr)
+		if !z.Leader || p.leaderId == id {
+			continue
+		}
+		p.leaderId = id
+		conn, err := grpc.Dial(z.Addr)
+		if err != nil {
+			return err
+		}
+		p.leader = zero
+	}
+	return nil
 }
