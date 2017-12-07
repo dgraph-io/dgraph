@@ -31,13 +31,13 @@ func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
 			leaderAddr = member.Addr
 		}
 	}
-	conn, err := grpc.Dial(leaderAddr)
+	conn, err := grpc.Dial(leaderAddr, grpc.WithInsecure())
 	return intern.NewZeroClient(conn), err
 }
 
 func (p *ZeroPool) Any() intern.ZeroClient {
 	for _, addr := range p.knownAddrs {
-		conn, err := grpc.Dial(addr)
+		conn, err := grpc.Dial(addr, grpc.WithInsecure())
 		if err != nil {
 			x.Printf("could not dial zero addr %q: %v", addr, err)
 			continue
