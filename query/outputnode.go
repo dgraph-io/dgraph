@@ -391,10 +391,13 @@ func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
 
 func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 	c := types.ValueForType(types.IntID)
-	// This is count() without any attribute.
 	c.Value = int64(len(sg.DestUIDs.Uids))
 	n1 := n.New(sg.Params.Alias)
-	n1.AddValue(sg.Params.uidCount, c)
+	field := sg.Params.uidCountAlias
+	if field == "" {
+		field = "count"
+	}
+	n1.AddValue(field, c)
 	n.AddListChild(sg.Params.Alias, n1)
 }
 
@@ -404,10 +407,16 @@ func (n *fastJsonNode) addAggregations(sg *SubGraph) error {
 		if !ok {
 			return x.Errorf("Only aggregated variables allowed within empty block.")
 		}
+		if child.Params.Normalize && child.Params.Alias == "" {
+			continue
+		}
 		fieldName := aggWithVarFieldName(child)
 		n1 := n.New(fieldName)
 		n1.AddValue(fieldName, aggVal)
 		n.AddListChild(sg.Params.Alias, n1)
+	}
+	if n.IsEmpty() {
+		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
 	}
 	return nil
 }
@@ -424,7 +433,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	}
 
 	hasChild := false
-	if sg.Params.uidCount != "" {
+	if sg.Params.uidCount && !(sg.Params.uidCountAlias == "" && sg.Params.Normalize) {
 		hasChild = true
 		n.addCountAtRoot(sg)
 	}

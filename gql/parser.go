@@ -71,10 +71,12 @@ type GraphQuery struct {
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
 	fragment string
 
-	// Indicates whether count of uids is requested as a child node. If
-	// there is a child with count() attr, then this is not empty for the parent.
-	// If there is an alias, this has the alias value, else its value is count.
-	UidCount string
+	// Indicates whether count of uids is requested as a child node. If there
+	// is an alias, then UidCountAlias will be set (otherwise it will be the
+	// empty string).
+	UidCount      bool
+	UidCountAlias string
+
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
@@ -2524,9 +2526,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						return x.Errorf("Cannot assign variable to count()")
 					}
 					count = notSeen
-					gq.UidCount = "count"
+					gq.UidCount = true
 					if alias != "" {
-						gq.UidCount = alias
+						gq.UidCountAlias = alias
 					}
 					it.Next()
 					it.Next()
