@@ -264,6 +264,15 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		if p.Member.GroupId == 0 {
 			state.Zeros[p.Member.Id] = p.Member
+			if p.Member.Leader {
+				// Unset leader flag for other nodes, there can be only one
+				// leader at a time.
+				for _, m := range state.Zeros {
+					if m.Id != p.Member.Id {
+						m.Leader = false
+					}
+				}
+			}
 			return p.Id, nil
 		}
 		group := state.Groups[p.Member.GroupId]
@@ -290,6 +299,15 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		go conn.Get().Connect(p.Member.Addr)
 
 		group.Members[p.Member.Id] = p.Member
+		if p.Member.Leader {
+			// Unset leader flag for other nodes, there can be only one
+			// leader at a time.
+			for _, m := range group.Members {
+				if m.Id != p.Member.Id {
+					m.Leader = false
+				}
+			}
+		}
 		// On replay of logs on restart we need to set nextGroup.
 		if n.server.nextGroup <= p.Member.GroupId {
 			n.server.nextGroup = p.Member.GroupId + 1

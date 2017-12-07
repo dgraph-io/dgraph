@@ -90,7 +90,9 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 
 func verifyUid(uid uint64) error {
 	var lease uint64
-	for wait := 16 * time.Millisecond; wait <= 512*time.Millisecond; wait *= 2 {
+	// Stream can wait upto 1 second waiting for read index, so we wait for around
+	// 2 seconds.
+	for wait := 16 * time.Millisecond; wait <= 1024*time.Millisecond; wait *= 2 {
 		// Wait for membership state to catch up before declaring that the uid
 		// is definitely greater than the lease.
 		lease = worker.MaxLeaseId()
