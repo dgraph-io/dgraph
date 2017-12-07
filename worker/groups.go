@@ -635,6 +635,20 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 }
 
 func (g *groupi) processOracleDeltaStream() {
+	go func() {
+		// In the event where there in no leader for a group, commit/abort won't get proposed.
+		// So periodically check oracle and propose
+		// Ticker time should be long enough so that same startTs
+		// doesn't get proposed again and again.
+		ticker := time.NewTicker(time.Minute)
+		for {
+			<-ticker.C
+			if g.Node.AmLeader() {
+				g.proposeDelta(posting.Oracle().CurrentState())
+			}
+		}
+	}()
+
 START:
 	pl := g.Leader(0)
 	// We should always have some connection to dgraphzero.
@@ -651,20 +665,6 @@ START:
 		time.Sleep(time.Second)
 		goto START
 	}
-
-	go func() {
-		// In the event where there in no leader for a group, commit/abort won't get proposed.
-		// So periodically check oracle and propose
-		// Ticker time should be long enough so that same startTs
-		// doesn't get proposed again and again.
-		ticker := time.NewTicker(time.Minute)
-		for {
-			<-ticker.C
-			if g.Node.AmLeader() {
-				g.proposeDelta(posting.Oracle().CurrentState())
-			}
-		}
-	}()
 
 	for {
 		oracleDelta, err := stream.Recv()
