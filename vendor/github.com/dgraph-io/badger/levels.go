@@ -32,13 +32,12 @@ import (
 )
 
 type levelsController struct {
-	elog trace.EventLog
+	nextFileID uint64 // Atomic
+	elog       trace.EventLog
 
 	// The following are initialized once and const.
 	levels []*levelHandler
 	kv     *DB
-
-	nextFileID uint64 // Atomic
 
 	cstatus compactStatus
 }

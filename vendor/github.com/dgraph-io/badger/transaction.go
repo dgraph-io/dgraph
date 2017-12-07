@@ -21,6 +21,7 @@ import (
 	"container/heap"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -46,10 +47,11 @@ func (u *uint64Heap) Pop() interface{} {
 }
 
 type oracle struct {
+	curRead   uint64 // Managed by the mutex.
+	refCount  int64
 	isManaged bool // Does not change value, so no locking required.
 
 	sync.Mutex
-	curRead    uint64
 	nextCommit uint64
 
 	// These two structures are used to figure out when a commit is done. The minimum done commit is
@@ -59,8 +61,7 @@ type oracle struct {
 
 	// commits stores a key fingerprint and latest commit counter for it.
 	// refCount is used to clear out commits map to avoid a memory blowup.
-	commits  map[uint64]uint64
-	refCount int64
+	commits map[uint64]uint64
 }
 
 func (o *oracle) addRef() {
@@ -71,7 +72,12 @@ func (o *oracle) decrRef() {
 	if count := atomic.AddInt64(&o.refCount, -1); count == 0 {
 		// Clear out pendingCommits maps to release memory.
 		o.Lock()
-		y.AssertTrue(len(o.commitMark) == 0)
+		// There could be race here, so check again.
+		// Checking commitMark is safe since it is protected by mutex.
+		if len(o.commitMark) > 0 {
+			o.Unlock()
+			return
+		}
 		y.AssertTrue(len(o.pendingCommits) == 0)
 		if len(o.commits) >= 1000 { // If the map is still small, let it slide.
 			o.commits = make(map[uint64]uint64)
@@ -179,7 +185,7 @@ type Txn struct {
 	reads  []uint64 // contains fingerprints of keys read.
 	writes []uint64 // contains fingerprints of keys written.
 
-	pendingWrites map[string]*entry // cache stores any writes done by txn.
+	pendingWrites map[string]*Entry // cache stores any writes done by txn.
 
 	db        *DB
 	callbacks []func()
@@ -189,10 +195,85 @@ type Txn struct {
 	count int64
 }
 
-func (txn *Txn) checkSize(e *entry) error {
+type pendingWritesIterator struct {
+	entries  []*Entry
+	nextIdx  int
+	readTs   uint64
+	reversed bool
+}
+
+func (pi *pendingWritesIterator) Next() {
+	pi.nextIdx++
+}
+
+func (pi *pendingWritesIterator) Rewind() {
+	pi.nextIdx = 0
+}
+
+func (pi *pendingWritesIterator) Seek(key []byte) {
+	key = y.ParseKey(key)
+	pi.nextIdx = sort.Search(len(pi.entries), func(idx int) bool {
+		cmp := bytes.Compare(pi.entries[idx].Key, key)
+		if !pi.reversed {
+			return cmp >= 0
+		}
+		return cmp <= 0
+	})
+}
+
+func (pi *pendingWritesIterator) Key() []byte {
+	y.AssertTrue(pi.Valid())
+	entry := pi.entries[pi.nextIdx]
+	return y.KeyWithTs(entry.Key, pi.readTs)
+}
+
+func (pi *pendingWritesIterator) Value() y.ValueStruct {
+	y.AssertTrue(pi.Valid())
+	entry := pi.entries[pi.nextIdx]
+	return y.ValueStruct{
+		Value:     entry.Value,
+		Meta:      entry.meta,
+		UserMeta:  entry.UserMeta,
+		ExpiresAt: entry.ExpiresAt,
+		Version:   pi.readTs,
+	}
+}
+
+func (pi *pendingWritesIterator) Valid() bool {
+	return pi.nextIdx < len(pi.entries)
+}
+
+func (pi *pendingWritesIterator) Close() error {
+	return nil
+}
+
+func (txn *Txn) newPendingWritesIterator(reversed bool) *pendingWritesIterator {
+	if !txn.update || len(txn.pendingWrites) == 0 {
+		return nil
+	}
+	entries := make([]*Entry, 0, len(txn.pendingWrites))
+	for _, e := range txn.pendingWrites {
+		entries = append(entries, e)
+	}
+	// Number of pending writes per transaction shouldn't be too big in general.
+	sort.Slice(entries, func(i, j int) bool {
+		cmp := bytes.Compare(entries[i].Key, entries[j].Key)
+		if !reversed {
+			return cmp < 0
+		}
+		return cmp > 0
+	})
+	return &pendingWritesIterator{
+		readTs:   txn.readTs,
+		entries:  entries,
+		reversed: reversed,
+	}
+}
+
+func (txn *Txn) checkSize(e *Entry) error {
 	count := txn.count + 1
 	// Extra bytes for version in key.
-	size := txn.size + int64(e.estimateSize(txn.db.opt.ValueThreshold)) + 10 
+	size := txn.size + int64(e.estimateSize(txn.db.opt.ValueThreshold)) + 10
 	if count >= txn.db.opt.maxBatchCount || size >= txn.db.opt.maxBatchSize {
 		return ErrTxnTooBig
 	}
@@ -205,11 +286,11 @@ func (txn *Txn) checkSize(e *entry) error {
 // It will return ErrReadOnlyTxn if update flag was set to false when creating the
 // transaction.
 func (txn *Txn) Set(key, val []byte) error {
-	e := &entry{
+	e := &Entry{
 		Key:   key,
 		Value: val,
 	}
-	return txn.setEntry(e)
+	return txn.SetEntry(e)
 }
 
 // SetWithMeta adds a key-value pair to the database, along with a metadata
@@ -217,8 +298,8 @@ func (txn *Txn) Set(key, val []byte) error {
 // interpret the value or store other contextual bits corresponding to the
 // key-value pair.
 func (txn *Txn) SetWithMeta(key, val []byte, meta byte) error {
-	e := &entry{Key: key, Value: val, UserMeta: meta}
-	return txn.setEntry(e)
+	e := &Entry{Key: key, Value: val, UserMeta: meta}
+	return txn.SetEntry(e)
 }
 
 // SetWithTTL adds a key-value pair to the database, along with a time-to-live
@@ -226,11 +307,13 @@ func (txn *Txn) SetWithMeta(key, val []byte, meta byte) error {
 // the time has elapsed , and be eligible for garbage collection.
 func (txn *Txn) SetWithTTL(key, val []byte, dur time.Duration) error {
 	expire := time.Now().Add(dur).Unix()
-	e := &entry{Key: key, Value: val, ExpiresAt: uint64(expire)}
-	return txn.setEntry(e)
+	e := &Entry{Key: key, Value: val, ExpiresAt: uint64(expire)}
+	return txn.SetEntry(e)
 }
 
-func (txn *Txn) setEntry(e *entry) error {
+// SetEntry takes an Entry struct and adds the key-value pair in the struct, along
+// with other metadata to the database.
+func (txn *Txn) SetEntry(e *Entry) error {
 	switch {
 	case !txn.update:
 		return ErrReadOnlyTxn
@@ -267,7 +350,7 @@ func (txn *Txn) Delete(key []byte) error {
 		return exceedsMaxKeySizeError(key)
 	}
 
-	e := &entry{
+	e := &Entry{
 		Key:  key,
 		meta: bitDelete,
 	}
@@ -294,6 +377,12 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 	item = new(Item)
 	if txn.update {
 		if e, has := txn.pendingWrites[string(key)]; has && bytes.Equal(key, e.Key) {
+			if e.meta&bitDelete > 0 {
+				return nil, ErrKeyNotFound
+			}
+			if e.ExpiresAt > 0 && e.ExpiresAt <= uint64(time.Now().Unix()) {
+				return nil, ErrKeyNotFound
+			}
 			// Fulfill from cache.
 			item.meta = e.meta
 			item.val = e.Value
@@ -386,9 +475,8 @@ func (txn *Txn) Commit(callback func(error)) error {
 	if commitTs == 0 {
 		return ErrConflict
 	}
-	defer state.doneCommit(commitTs)
 
-	entries := make([]*entry, 0, len(txn.pendingWrites)+1)
+	entries := make([]*Entry, 0, len(txn.pendingWrites)+1)
 	for _, e := range txn.pendingWrites {
 		// Suffix the keys with commit ts, so the key versions are sorted in
 		// descending order of commit timestamp.
@@ -396,7 +484,7 @@ func (txn *Txn) Commit(callback func(error)) error {
 		e.meta |= bitTxn
 		entries = append(entries, e)
 	}
-	e := &entry{
+	e := &Entry{
 		Key:   y.KeyWithTs(txnKey, commitTs),
 		Value: []byte(strconv.FormatUint(commitTs, 10)),
 		meta:  bitFinTxn,
@@ -408,9 +496,13 @@ func (txn *Txn) Commit(callback func(error)) error {
 
 		// TODO: What if some of the txns successfully make it to value log, but others fail.
 		// Nothing gets updated to LSM, until a restart happens.
+		defer state.doneCommit(commitTs)
 		return txn.db.batchSet(entries)
 	}
-	return txn.db.batchSetAsync(entries, callback)
+	return txn.db.batchSetAsync(entries, func(err error) {
+		state.doneCommit(commitTs)
+		callback(err)
+	})
 }
 
 // NewTransaction creates a new transaction. Badger supports concurrent execution of transactions,
@@ -442,7 +534,7 @@ func (db *DB) NewTransaction(update bool) *Txn {
 		size:   int64(len(txnKey) + 10), // Some buffer for the extra entry.
 	}
 	if update {
-		txn.pendingWrites = make(map[string]*entry)
+		txn.pendingWrites = make(map[string]*Entry)
 		txn.db.orc.addRef()
 	}
 	return txn
