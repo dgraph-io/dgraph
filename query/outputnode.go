@@ -433,7 +433,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	}
 
 	hasChild := false
-	if sg.Params.uidCount && (sg.Params.uidCountAlias != "" || !sg.Params.Normalize) {
+	if sg.Params.uidCount && !(sg.Params.uidCountAlias == "" && sg.Params.Normalize) {
 		hasChild = true
 		n.addCountAtRoot(sg)
 	}
