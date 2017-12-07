@@ -76,8 +76,8 @@ func (h *header) Decode(buf []byte) {
 	h.userMeta = buf[17]
 }
 
-// entry provides Key, Value, UserMeta and ExpiresAt. This struct can be used by the user to set data.
-type entry struct {
+// Entry provides Key, Value, UserMeta and ExpiresAt. This struct can be used by the user to set data.
+type Entry struct {
 	Key       []byte
 	Value     []byte
 	UserMeta  byte
@@ -88,7 +88,7 @@ type entry struct {
 	offset uint32
 }
 
-func (e *entry) estimateSize(threshold int) int {
+func (e *Entry) estimateSize(threshold int) int {
 	if len(e.Value) < threshold {
 		return len(e.Key) + len(e.Value) + 2 // Meta, UserMeta
 	}
@@ -96,7 +96,7 @@ func (e *entry) estimateSize(threshold int) int {
 }
 
 // Encodes e to buf. Returns number of bytes written.
-func encodeEntry(e *entry, buf *bytes.Buffer) (int, error) {
+func encodeEntry(e *Entry, buf *bytes.Buffer) (int, error) {
 	h := header{
 		klen:      uint32(len(e.Key)),
 		vlen:      uint32(len(e.Value)),
@@ -126,7 +126,7 @@ func encodeEntry(e *entry, buf *bytes.Buffer) (int, error) {
 	return len(headerEnc) + len(e.Key) + len(e.Value) + len(crcBuf), nil
 }
 
-func (e entry) print(prefix string) {
+func (e Entry) print(prefix string) {
 	fmt.Printf("%s Key: %s Meta: %d UserMeta: %d Offset: %d len(val)=%d",
 		prefix, e.Key, e.meta, e.UserMeta, e.offset, len(e.Value))
 }

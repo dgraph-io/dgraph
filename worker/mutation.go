@@ -289,13 +289,10 @@ func ValidateAndConvert(edge *intern.DirectedEdge, schemaType types.TypeID) erro
 		return nil
 	}
 	if types.TypeID(edge.ValueType) == types.DefaultID && string(edge.Value) == x.Star {
-		if edge.Op != intern.DirectedEdge_DEL {
-			return x.Errorf("* allowed only with delete operation")
-		}
 		return nil
 	}
 	// <s> <p> <o> Del on non list scalar type.
-	if len(edge.Value) > 0 && !bytes.Equal(edge.Value, []byte(x.Star)) &&
+	if edge.ValueId == 0 && !bytes.Equal(edge.Value, []byte(x.Star)) &&
 		edge.Op == intern.DirectedEdge_DEL {
 		if !schema.State().IsList(edge.Attr) {
 			return x.Errorf("Please use * with delete operation for non-list type")

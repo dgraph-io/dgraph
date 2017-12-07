@@ -12,12 +12,17 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Ensure that GraphQL variables are declared before use.
 * Export now uses correct blank node syntax.
 * Membership stream doesn't get stuck if node steps down as leader.
+* Fix issue where sets were not being returned after doing a S P * deletion when part of same
+  transaction.
+* Empty string values are stored as it is and no strings have special meaning now.
 
 ### Changed
 
 * `DropAttr` now also removes the schema for the attribute (previously it just removed the edges).
 *  Tablet metadata is removed from zero after deletion of predicate.
 *  LRU size is changed dynamically now based on `max_memory_mb`
+*  Call RunValueLogGC for every GB increase in size of value logs. Upgrade vendored version of
+   Badger.
 
 ## [0.9.3] - 2017-12-01
 

@@ -7,7 +7,9 @@ written in pure Go. It's meant to be a performant alternative to non-Go-based
 key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
 
 ## Project Status
-Badger v1.0 was released in Nov 2017. The latest release is [v1.0.1]
+Badger v1.0 was released in Nov 2017. Check the [Changelog] for the full details.
+
+[Changelog]:https://github.com/dgraph-io/badger/blob/master/CHANGELOG.md
 
 We introduced transactions in [v0.9.0] which involved a major API change. If you have a Badger 
 datastore prior to that, please use [v0.8.1], but we strongly urge you to upgrade. Upgrading from
@@ -33,6 +35,7 @@ version.
       - [Key-only iteration](#key-only-iteration)
     + [Garbage Collection](#garbage-collection)
     + [Database backup](#database-backup)
+    + [Memory usage](#memory-usage)
     + [Statistics](#statistics)
   * [Resources](#resources)
     + [Blog Posts](#blog-posts)
@@ -120,9 +123,30 @@ err := db.Update(func(tx *badger.Txn) error {
 
 All database operations are allowed inside a read-write transaction.
 
-Always check the return error as it will report an `ErrConflict` in case of
-conflict or other errors, for e.g. due to disk failures. If you return an error
+Always check the returned error value. If you return an error
 within your closure it will be passed through.
+
+An `ErrConflict` error will be reported in case of a conflict. Depending on the state 
+of your application, you have the option to retry the operation if you receive 
+this error.
+
+An `ErrTxnTooBig` will be reported in case the number of pending writes/deletes in
+the transaction exceed a certain limit. In that case, it is best to commit the
+transaction and start a new transaction immediately. Here is an example (we are
+not checking for errors in some places for simplicity):
+
+```go
+updates := make(map[string]string)
+txn := db.NewTransaction(true)
+for k,v := range updates {
+  if err := txn.Set(byte[](k),byte[](v)); err == ErrTxnTooBig {
+    _ = txn.Commit()
+    txn = db.NewTransaction(..)
+    _ = txn.Set(k,v) 
+  }
+}
+_ = txn.Commit()
+```
 
 #### Managing transactions manually
 The `DB.View()` and `DB.Update()` methods are wrappers around the
@@ -134,7 +158,7 @@ returned. This is the recommended way to use Badger transactions.
 However, sometimes you may want to manually create and commit your
 transactions. You can use the `DB.NewTransaction()` function directly, which
 takes in a boolean argument to specify whether a read-write transaction is
-required. For read-write transactions, it is necessary to call `Txn,Commit()`
+required. For read-write transactions, it is necessary to call `Txn.Commit()`
 to ensure the transaction is committed. For read-only transactions, calling
 `Txn.Discard()` is sufficient. `Txn.Commit()` also calls `Txn.Discard()`
 internally to cleanup the transaction, so just calling `Txn.Commit()` is
@@ -224,7 +248,8 @@ metadata can be set using the `Txn.SetWithMeta()` API method.
 
 ### Iterating over keys
 To iterate over keys, we can use an `Iterator`, which can be obtained using the
-`Txn.NewIterator()` method.
+`Txn.NewIterator()` method. Iteration happens in byte-wise lexicographical sorting
+order.
 
 
 ```go
@@ -351,6 +376,21 @@ command above to upgrade your database to work with the latest version.
 badger_backup --dir <path/to/badgerdb> --backup-file badger.bak
 ```
 
+### Memory usage
+
+Badger's memory usage is a function of:
+
+- Number of memtables `(Options::NumMemtables)`
+  - If you modify `NumMemtables`, also adjust `NumLevelZeroTables` and
+    `NumLevelZeroTablesStall` accordingly.
+- Number of concurrent compactions `(Options::NumCompactors)`
+- Mode in which LSM tree is loaded `(Options::TableLoadingMode)`
+- Size of table `(Options::MaxTableSize)`
+- Size of value log file `(Options::ValueLogFileSize)`
+
+If you want to decrease the memory usage of Badger instance, tweak these
+options ideally doing them one at a time until you achieve the desired
+memory usage.
 
 ### Statistics
 Badger records metrics using the [expvar] package, which is included in the Go
@@ -428,6 +468,26 @@ Below is a list of public, open source projects that use Badger:
 If you are using Badger in a project please send a pull request to add it to the list.
 
 ## Frequently Asked Questions
+- **My writes are getting stuck. Why?**
+
+This can happen if a long running iteration with `Prefetch` is set to false, but
+a `Item::Value` call is made internally in the loop. That causes Badger to
+acquire read locks over the value log files to avoid value log GC removing the
+file from underneath. As a side effect, this also blocks a new value log GC
+file from being created, when the value log file boundary is hit.
+
+Please see Github issues [#293](https://github.com/dgraph-io/badger/issues/293)
+and [#315](https://github.com/dgraph-io/badger/issues/315).
+
+There are multiple workarounds during iteration:
+
+1. Use `Item::ValueCopy` instead of `Item::Value` when retrieving value.
+1. Set `Prefetch` to true. Badger would then copy over the value and release the
+   file lock immediately.
+1. When `Prefetch` is false, don't call `Item::Value` and do a pure key-only
+   iteration. This might be useful if you just want to delete a lot of keys.
+1. Do the writes in a separate transaction after the reads.
+
 - **My writes are really slow. Why?**
 
 Are you creating a new transaction for every single key update? This will lead

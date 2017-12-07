@@ -72,16 +72,13 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 	l := posting.GetNoStore(item.key)
 	err := l.Iterate(readTs, 0, func(p *intern.Posting) bool {
 		buf.WriteString(item.prefix)
-		if !bytes.Equal(p.Value, nil) {
+		if p.PostingType != intern.Posting_REF {
 			// Value posting
 			// Convert to appropriate type
 			vID := types.TypeID(p.ValType)
 			src := types.ValueForType(vID)
 			src.Value = p.Value
 			str, err := types.Convert(src, types.StringID)
-			if (vID == types.StringID || vID == types.DefaultID) && str.Value.(string) == "_nil_" {
-				str.Value = ""
-			}
 			x.Check(err)
 			buf.WriteString(strconv.Quote(str.Value.(string)))
 			if p.PostingType == intern.Posting_VALUE_LANG {

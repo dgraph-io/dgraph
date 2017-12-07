@@ -34,6 +34,7 @@ func TestSystem(t *testing.T) {
 	t.Run("list with languages", wrap(ListWithLanguagesTest))
 	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
 	t.Run("expand all with reverse predicates", wrap(ExpandAllReversePredicatesTest))
+	t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -171,6 +172,8 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 	txn := c.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
+			_:breakfast <name> "" .
+			_:breakfast <nil_name> "_nil_" .
 			_:breakfast <xid> "breakfast" .
 			_:breakfast <fruit> _:banana .
 			_:breakfast <fruit> _:apple .
@@ -186,6 +189,9 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 	const breakfastQuery = `
 	{
 		q(func: eq(xid, "breakfast")) {
+			name
+			nil_name
+			extra
 			fruit {
 				xid
 			}
@@ -205,16 +211,21 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 		],
 		"cereal": [
 			{ "xid": "weetbix" }
-		]
+		],
+		"name": "",
+		"nil_name": "_nil_"
 	}]}`, string(resp.Json))
 
 	txn = c.NewTxn()
 	_, err = txn.Mutate(ctx, &api.Mutation{
 		DelNquads: []byte(fmt.Sprintf(`
 			<%s> <fruit>  <%s> .
-			<%s> <cereal> <%s> .`,
+			<%s> <cereal> <%s> .
+			<%s> <name> * .
+			<%s> <nil_name> * .`,
 			assigned.Uids["breakfast"], assigned.Uids["banana"],
-			assigned.Uids["breakfast"], assigned.Uids["weetbix"])),
+			assigned.Uids["breakfast"], assigned.Uids["weetbix"],
+			assigned.Uids["breakfast"], assigned.Uids["breakfast"])),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
@@ -356,4 +367,80 @@ func ExpandAllReversePredicatesTest(t *testing.T, c *client.Dgraph) {
 		  ]
 		}
 	`, string(resp.GetJson()))
+}
+
+func NormalizeEdgeCasesTest(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "xid: string @index(exact) ."}))
+
+	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:root <xid> "root" .
+			_:root <link> _:a .
+			_:root <link> _:b .
+		`),
+	})
+	require.NoError(t, err)
+
+	for _, test := range []struct{ query, want string }{
+		{
+			`{ q(func: uid(0x1)) @normalize { count(uid) } } `,
+			`{ "q": [] }`,
+		},
+		{
+			`{ q(func: uid(0x1)) @normalize { c: count(uid) } } `,
+			`{ "q": [ {"c": 1} ] }`,
+		},
+		{
+			`{ q(func: uid(0x1)) @normalize { count: count(uid) } } `,
+			`{ "q": [ {"count": 1} ] }`,
+		},
+		{
+			`{ q(func: eq(xid, "root")) @normalize { link { count(uid) } } } `,
+			`{ "q": [] }`,
+		},
+		{
+			`{ q(func: eq(xid, "root")) @normalize { link { c: count(uid) } } } `,
+			`{ "q": [ {"c": 2} ] }`,
+		},
+		{
+			`{ q(func: eq(xid, "root")) @normalize { link { count: count(uid) } } } `,
+			`{ "q": [ {"count": 2} ] }`,
+		},
+		{
+			`{ q(func: eq(xid, "root")) @normalize { count(link) } } `,
+			`{ "q": [] }`,
+		},
+		{
+			`{ q(func: eq(xid, "root")) @normalize { c: count(link) } } `,
+			`{ "q": [ {"c": 2} ] }`,
+		},
+		{
+			`{ q(func: eq(xid, "root")) @normalize { count: count(link) } } `,
+			`{ "q": [ {"count": 2} ] }`,
+		},
+		{
+			`{ q(func: uid(0x01)) @normalize { one as math(1) uno: val(one) } } `,
+			`{ "q": [ {"uno": 1} ] }`,
+		},
+		{
+			`
+			{ var(func: uid(0x1, 0x2)) { ones as math(1) }
+			q() @normalize { sum(val(ones)) } }
+			`,
+			`{ "q": [] }`,
+		},
+		{
+			`
+			{ var(func: uid(0x1, 0x2)) { ones as math(1) }
+			q() @normalize { s: sum(val(ones)) } }
+			`,
+			`{ "q": [ {"s": 2} ] }`,
+		},
+	} {
+		resp, err := c.NewTxn().Query(ctx, test.query)
+		require.NoError(t, err)
+		require.JSONEq(t, test.want, string(resp.GetJson()))
+	}
 }
