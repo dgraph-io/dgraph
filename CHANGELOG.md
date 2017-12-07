@@ -11,6 +11,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Language tag parsing in queries now accepts digits (in line with RDF parsing).
 * Ensure that GraphQL variables are declared before use.
 * Export now uses correct blank node syntax.
+* Fix issue where sets were not being returned after doing a S P * deletion when part of same
+  transaction.
 
 ### Changed
 
