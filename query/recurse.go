@@ -121,6 +121,10 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			}
 
 			for mIdx, fromUID := range sg.SrcUIDs.Uids {
+				if sg.uidMatrix == nil || mIdx >= len(sg.uidMatrix) {
+					continue
+				}
+
 				if allowLoop {
 					for _, ul := range sg.uidMatrix {
 						numEdges = numEdges + len(ul.Uids)

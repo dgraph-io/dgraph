@@ -51,7 +51,7 @@ import (
 var (
 	emptyUIDList   intern.List
 	emptyResult    intern.Result
-	emptyValueList = intern.ValueList{Values: []*intern.TaskValue{&intern.TaskValue{Val: x.Nilbyte}}}
+	emptyValueList = intern.ValueList{Values: []*intern.TaskValue{}}
 )
 
 func invokeNetworkRequest(
@@ -508,7 +508,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		// get filtered uids and facets.
 		var filteredRes []*result
-		out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
 
 		var perr error
 		filteredRes = make([]*result, 0)

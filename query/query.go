@@ -18,7 +18,6 @@
 package query
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -332,9 +331,15 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	return nil
 }
 
-func addCheckPwd(pc *SubGraph, val *intern.TaskValue, dst outputNode) {
+func addCheckPwd(pc *SubGraph, vals []*intern.TaskValue, dst outputNode) {
 	c := types.ValueForType(types.BoolID)
-	c.Value = task.ToBool(val)
+	if len(vals) == 0 {
+		// No value found for predicate.
+		c.Value = false
+	} else {
+		c.Value = task.ToBool(vals[0])
+	}
+
 	uc := dst.New(pc.Attr)
 	uc.AddValue("checkpwd", c)
 	dst.AddListChild(pc.Attr, uc)
@@ -401,14 +406,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if idx < 0 {
 			continue
 		}
-		ul := pc.uidMatrix[idx]
 
 		fieldName := pc.fieldName()
 		if len(pc.counts) > 0 {
 			addCount(pc, uint64(pc.counts[idx]), dst)
 		} else if pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd" {
-			addCheckPwd(pc, pc.valueMatrix[idx].Values[0], dst)
-		} else if len(ul.Uids) > 0 {
+			addCheckPwd(pc, pc.valueMatrix[idx].Values, dst)
+		} else if pc.uidMatrix != nil && idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0 {
 			var fcsList []*intern.Facets
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
@@ -419,6 +423,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
+			ul := pc.uidMatrix[idx]
 			for childIdx, childUID := range ul.Uids {
 				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
 					continue
@@ -470,11 +475,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				continue
 			}
 
-			tv := pc.valueMatrix[idx]
-			if bytes.Equal(tv.Values[0].Val, x.Nilbyte) {
-				continue
-			}
-
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
@@ -482,12 +482,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 			}
 
+			if len(pc.valueMatrix) <= idx {
+				continue
+			}
+
 			for i, tv := range pc.valueMatrix[idx].Values {
 				// if conversion not possible, we ignore it in the result.
 				sv, convErr := convertWithBestEffort(tv, pc.Attr)
-				if convErr == ErrEmptyVal {
-					continue
-				} else if convErr != nil {
+				if convErr != nil {
 					return convErr
 				}
 
@@ -540,9 +542,6 @@ func convertWithBestEffort(tv *intern.TaskValue, attr string) (types.Val, error)
 	v, _ := getValue(tv)
 	if !v.Tid.IsScalar() {
 		return v, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
-	}
-	if bytes.Equal(tv.Val, nil) {
-		return v, ErrEmptyVal
 	}
 
 	// creates appropriate type from binary format
@@ -1368,7 +1367,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 			// current UID should be removed from this level.
 			if !child.IsInternal() &&
 				// Check len before accessing index.
-				(len(child.valueMatrix) <= i || len(child.valueMatrix[i].Values[0].Val) == 0) &&
+				(len(child.valueMatrix) <= i || len(child.valueMatrix[i].Values) == 0) &&
 				(len(child.counts) <= i) &&
 				(len(child.uidMatrix) <= i || len(child.uidMatrix[i].Uids) == 0) {
 				exclude = true
@@ -1465,6 +1464,9 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 				return x.Errorf("Value variables not supported for predicate with list type.")
 			}
 
+			if len(sg.valueMatrix[idx].Values) == 0 {
+				continue
+			}
 			val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0], sg.Attr)
 			if err != nil {
 				continue
