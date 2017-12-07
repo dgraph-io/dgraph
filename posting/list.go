@@ -398,6 +398,10 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 	}
 	l.mlayer = l.mlayer[:midx]
 	delete(l.activeTxns, startTs)
+	if l.markdeleteAll == startTs {
+		// Reset it so that other transactions can perform S P * deletion.
+		l.markdeleteAll = 0
+	}
 	return nil
 }
 
