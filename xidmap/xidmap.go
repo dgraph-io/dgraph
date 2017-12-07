@@ -98,7 +98,10 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 				zc, err = pool.Leader()
 			}
 			if err == nil {
-				assigned, err := zc.AssignUids(context.Background(), &intern.Num{Val: 10000})
+				var assigned *api.AssignedIds
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				assigned, err = zc.AssignUids(ctx, &intern.Num{Val: 10000})
+				cancel()
 				if err == nil {
 					backoff = initBackoff
 					xm.newRanges <- assigned

@@ -2,6 +2,7 @@ package xidmap
 
 import (
 	"context"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
@@ -19,7 +20,9 @@ func NewZeroPool(cc *grpc.ClientConn) *ZeroPool {
 
 func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
 	c := p.Any()
-	state, err := c.Connect(context.Background(), &intern.Member{ClusterInfoOnly: true})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	state, err := c.Connect(ctx, &intern.Member{ClusterInfoOnly: true})
 	if err != nil {
 		return nil, err
 	}
