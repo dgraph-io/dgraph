@@ -530,12 +530,10 @@ func (n *node) Run() {
 			}
 
 			// TODO: Should we move this to the top?
-			leaderChanged := false
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
 					n.server.updateLeases()
 					leader = true
-					leaderChanged = true
 				}
 				// Oracle stream would close the stream once it steps down as leader
 				// predicate move would cancel any in progress move on stepping down.
@@ -547,7 +545,7 @@ func (n *node) Run() {
 				n.Send(msg)
 			}
 			// Need to send membership state to dgraph nodes on leader change also.
-			if leaderChanged || len(rd.CommittedEntries) > 0 {
+			if rd.SoftState != nil || len(rd.CommittedEntries) > 0 {
 				n.triggerUpdates()
 			}
 			if loop%1000 == 0 {
