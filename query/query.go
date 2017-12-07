@@ -412,7 +412,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			addCount(pc, uint64(pc.counts[idx]), dst)
 		} else if pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd" {
 			addCheckPwd(pc, pc.valueMatrix[idx].Values, dst)
-		} else if pc.uidMatrix != nil && idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0 {
+		} else if idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0 {
 			var fcsList []*intern.Facets
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList

@@ -338,8 +338,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 
 	mpost := NewPosting(t)
 
-	// ValueId can only be 0 when ObjectValue was set.
-	if t.ValueId == 0 {
+	if mpost.PostingType != intern.Posting_REF {
 		// There could be a collision if the user gives us a value with Lang = "en" and later gives
 		// us a value = "en" for the same predicate. We would end up overwritting his older lang
 		// value.
