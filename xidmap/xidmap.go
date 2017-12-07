@@ -87,24 +87,34 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		xm.shards[i].xm = xm
 	}
 	go func() {
-		zc := intern.NewZeroClient(zero)
+		pool := NewZeroPool(zero)
+		var zc intern.ZeroClient
 		const initBackoff = 10 * time.Millisecond
 		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
-			assigned, err := zc.AssignUids(context.Background(), &intern.Num{Val: 10000})
-			if err != nil {
-				x.Printf("Error while getting lease: %v\n", err)
-				backoff *= 2
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
-				time.Sleep(backoff)
-			} else {
-				backoff = initBackoff
-				xm.newRanges <- assigned
+			var err error
+			if zc == nil {
+				zc, err = pool.Leader()
 			}
+			if err == nil {
+				assigned, err := zc.AssignUids(context.Background(), &intern.Num{Val: 10000})
+				if err == nil {
+					backoff = initBackoff
+					xm.newRanges <- assigned
+					continue
+				}
+			}
+
+			x.Printf("Error while getting lease: %v\n", err)
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			time.Sleep(backoff)
+			zc = nil // try a different zero connection
 		}
+
 	}()
 	return xm
 }

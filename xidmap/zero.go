@@ -1,8 +1,7 @@
 package xidmap
 
 import (
-	"math/rand"
-	"sync"
+	"context"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
@@ -10,71 +9,40 @@ import (
 )
 
 type ZeroPool struct {
-	sync.Mutex
-	leaderId   uint32
-	leader     intern.ZeroClient
+	seed       intern.ZeroClient
 	knownAddrs []string
 }
 
 func NewZeroPool(cc *grpc.ClientConn) *ZeroPool {
-	zp := &ZeroPool{}
-	go func() {
-		seedClient := intern.NewZeroClient(cc)
-		zp.readMembershipStream(seedClient)
-		for {
-			client := seedClient
-			if len(zp.knownAddrs) > 0 {
-				addr := zp.knownAddrs[rand.Intn(len(zp.knownAddrs))]
-				err, conn := grpc.Dial(addr)
-				if err != nil {
-					x.Printf("could not dial zero address %q: %v", addr, err)
-					// TODO: Remove from known addresses?
-					continue
-				}
-			}
-		}
-	}()
-	return zp
+	return &ZeroPool{seed: intern.NewZeroClient(cc)}
 }
 
-func (p *ZeroPool) Leader() intern.ZeroClient {
-	p.Lock()
-	defer p.Unlock()
-	return p.leader
-}
-
-func (p *ZeroPool) readMembershipStream(zc intern.ZeroClient) {
-	uc, err := zc.Update(ctx)
+func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
+	c := p.Any()
+	state, err := c.Connect(context.Background(), &intern.Member{ClusterInfoOnly: true})
 	if err != nil {
-		x.Printf("could not start reading membership stream: %v", err)
-		return
+		return nil, err
 	}
-	for {
-		ms, err := uc.Recv()
-		if err != nil {
-			x.Printf("could not read membership stream: %v", err)
-			return
-		}
-		if err := p.updateMembershipState(ms.Zeros); err != nil {
-			x.Printf("could not update membership state: %v", err)
-			return
+	p.knownAddrs = p.knownAddrs[:0]
+	var leaderAddr string
+	for _, member := range state.GetState().Zeros {
+		p.knownAddrs = append(p.knownAddrs, member.Addr)
+		if member.Leader {
+			leaderAddr = member.Addr
 		}
 	}
+	conn, err := grpc.Dial(leaderAddr)
+	return intern.NewZeroClient(conn), err
 }
 
-func (p *ZeroPool) updateMembershipState(state map[uint64]*Member) error {
-	p.knownAddrs = p.knownAddrs[:0]
-	for id, z := range ms.Zeros {
-		p.knownAddrs = append(z.Addr)
-		if !z.Leader || p.leaderId == id {
+func (p *ZeroPool) Any() intern.ZeroClient {
+	for _, addr := range p.knownAddrs {
+		conn, err := grpc.Dial(addr)
+		if err != nil {
+			x.Printf("could not dial zero addr %q: %v", addr, err)
 			continue
 		}
-		p.leaderId = id
-		conn, err := grpc.Dial(z.Addr)
-		if err != nil {
-			return err
-		}
-		p.leader = zero
+		return intern.NewZeroClient(conn)
 	}
-	return nil
+	return p.seed
 }
