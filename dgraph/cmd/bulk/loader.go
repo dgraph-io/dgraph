@@ -107,13 +107,16 @@ func newLoader(opt options) *loader {
 }
 
 func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
-	client := intern.NewZeroClient(zero)
+	pool := xidmap.NewZeroPool(zero)
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
-		cancel()
+		client, err := pool.Leader()
 		if err == nil {
-			return ts.GetStartId()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
+			cancel()
+			if err == nil {
+				return ts.GetStartId()
+			}
 		}
 		x.Printf("error communicating with dgraph zero, retrying: %v", err)
 		time.Sleep(time.Second)
