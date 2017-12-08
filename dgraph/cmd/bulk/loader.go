@@ -79,6 +79,7 @@ type loader struct {
 	*state
 	mappers []*mapper
 	xidDB   *badger.DB
+	zeros   *xidmap.ZeroPool
 }
 
 func newLoader(opt options) *loader {
@@ -88,13 +89,16 @@ func newLoader(opt options) *loader {
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
-		writeTs:    getWriteTimestamp(opt.ZeroAddr),
 	}
 	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
+		zeros: xidmap.NewZeroPool(func(addr string) (*grpc.ClientConn, error) {
+			return grpc.Dial(addr, grpc.WithInsecure())
+		}, opt.ZeroAddr),
 	}
+	ld.state.writeTs = ld.getWriteTimestamp()
 	for i := 0; i < opt.NumGoroutines; i++ {
 		ld.mappers[i] = newMapper(st)
 	}
@@ -102,12 +106,9 @@ func newLoader(opt options) *loader {
 	return ld
 }
 
-func getWriteTimestamp(zeroAddr string) uint64 {
-	pool := xidmap.NewZeroPool(func(addr string) (*grpc.ClientConn, error) {
-		return grpc.Dial(addr, grpc.WithInsecure())
-	}, zeroAddr)
+func (ld *loader) getWriteTimestamp() uint64 {
 	for {
-		client, err := pool.Leader()
+		client, err := ld.zeros.Leader()
 		if err == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			var ts *api.AssignedIds
@@ -204,10 +205,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	pool := xidmap.NewZeroPool(func(addr string) (*grpc.ClientConn, error) {
-		return grpc.Dial(addr, grpc.WithInsecure())
-	}, ld.opt.ZeroAddr)
-	ld.xids = xidmap.New(ld.xidDB, pool, xidmap.Options{
+	ld.xids = xidmap.New(ld.xidDB, ld.zeros, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})
