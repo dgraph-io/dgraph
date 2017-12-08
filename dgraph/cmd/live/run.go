@@ -277,9 +277,15 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	connzero, err := setupConnection(opt.zero, true)
 	x.Checkf(err, "While trying to setup connection to Zero")
 
+	zeroPool := xidmap.NewZeroPool(
+		func(addr string) (*grpc.ClientConn, error) {
+			return setupConnection(addr, true)
+		},
+		opt.zero,
+	)
 	alloc := xidmap.New(
 		kv,
-		connzero,
+		zeroPool,
 		xidmap.Options{
 			NumShards: 100,
 			LRUSize:   1e5,
