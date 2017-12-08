@@ -45,6 +45,9 @@ func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
 				leaderAddr = member.Addr
 			}
 		}
+		if leaderAddr == "" {
+			return nil, x.Errorf("no known zero leader")
+		}
 
 		conn, err = p.dial(leaderAddr)
 		if err != nil {
