@@ -464,7 +464,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 		return nil, ErrDuplicateRaftId
 	}
 	// Check that the new node is not already part of the group.
-	if addr, ok := node.peers[rc.Id]; ok {
+	if addr, ok := node.peers[rc.Id]; ok && rc.Addr != addr {
 		Get().Connect(addr)
 		// There exists a healthy connection to server with same id.
 		if _, err := Get().Get(addr); err == nil {
