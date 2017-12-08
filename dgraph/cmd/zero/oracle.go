@@ -333,6 +333,8 @@ func (s *Server) Oracle(unused *api.Payload, server intern.Zero_OracleServer) er
 			}
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-s.shutDownCh:
+			return errServerShutDown
 		}
 	}
 	return nil

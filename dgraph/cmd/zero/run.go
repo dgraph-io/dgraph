@@ -264,7 +264,7 @@ func run() {
 		// Close doesn't close already opened connections.
 		httpListener.Close()
 		grpcListener.Close()
-		st.zero.shutDownCh <- struct{}{}
+		close(st.zero.shutDownCh)
 	}()
 
 	fmt.Println("Running Dgraph zero...")
