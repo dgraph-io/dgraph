@@ -29,10 +29,10 @@ function quit {
 function start {
   pushd dgraph &> /dev/null
   echo -e "Starting first server."
-  ./dgraph server -p $BUILD/p -w $BUILD/w --memory_mb 4096 -o 1 > $BUILD/server.log 2>&1 &
+  ./dgraph server -p $BUILD/p -w $BUILD/w --memory_mb 4096 -o 1 &
   sleep 5
   echo -e "Starting second server.\n"
-  ./dgraph server -p $BUILD/p2 -w $BUILD/w2 --memory_mb 4096 -o 2  > $BUILD/server2.log 2>&1 &
+  ./dgraph server -p $BUILD/p2 -w $BUILD/w2 --memory_mb 4096 -o 2 &
   # Wait for membership sync to happen.
   sleep $sleepTime
   popd &> /dev/null
@@ -44,7 +44,7 @@ function startZero {
   echo -e "\nBuilding Dgraph."
   go build .
 	echo -e "Starting dgraph zero.\n"
-  ./dgraph zero -w $BUILD/wz > $BUILD/zero.log 2>&1 &
+  ./dgraph zero -w $BUILD/wz &
   # To ensure dgraph doesn't start before dgraphzero.
 	# It takes time for zero to start on travis(mac).
 	sleep $sleepTime
