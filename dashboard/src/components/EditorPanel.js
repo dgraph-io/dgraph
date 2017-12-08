@@ -7,6 +7,21 @@ import Editor from "../containers/Editor";
 import "../assets/css/EditorPanel.css";
 
 class EditorPanel extends React.Component {
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      action: "query"
+    };
+
+    this.handleChange = this.handleChange.bind(this);
+  }
+
+  handleChange(event) {
+    this.setState({
+      action: event.target.dataset.action
+    });
+  }
   render() {
     const {
       canDiscardAll,
@@ -78,7 +93,7 @@ class EditorPanel extends React.Component {
                   return;
                 }
 
-                onRunQuery(query);
+                onRunQuery(query, this.state.action);
               }}
             >
               <i className="fa fa-play" /> Run
@@ -90,11 +105,39 @@ class EditorPanel extends React.Component {
           onUpdateQuery={onUpdateQuery}
           onRunQuery={onRunQuery}
           query={query}
+          action={this.state.action}
           saveCodeMirrorInstance={saveCodeMirrorInstance}
         />
         <div className="editor-radio">
-          Read-only queries. Mutations and schema changes can be done via cURL
-          or Grpc client.
+          <form>
+            <label>
+              <input
+                className="editor-type"
+                type="radio"
+                name="action"
+                data-action="query"
+                onChange={this.handleChange}
+              />Query
+            </label>
+            <label>
+              <input
+                className="editor-type"
+                type="radio"
+                name="action"
+                data-action="mutate"
+                onChange={this.handleChange}
+              />Mutate
+            </label>
+            <label>
+              <input
+                className="editor-type"
+                type="radio"
+                name="action"
+                data-action="alter"
+                onChange={this.handleChange}
+              />Alter
+            </label>
+          </form>
         </div>
       </div>
     );

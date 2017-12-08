@@ -106,7 +106,7 @@ class App extends React.Component {
     frames.forEach(handleCollapseFrame);
   };
 
-  handleRunQuery = query => {
+  handleRunQuery = (query, action) => {
     const { _handleRunQuery } = this.props;
 
     // First, collapse all frames in order to prevent slow rendering
@@ -114,7 +114,7 @@ class App extends React.Component {
     // TODO: Compare benchmarks between d3.js and vis.js and make migration if needed
     this.collapseAllFrames();
 
-    _handleRunQuery(query, () => {
+    _handleRunQuery(query, action, () => {
       const { queryExecutionCounter } = this.state;
 
       if (queryExecutionCounter === 7) {
@@ -160,17 +160,17 @@ class App extends React.Component {
           onToggleMenu={this.handleToggleSidebarMenu}
         />
         <div className="main-content">
-          {currentSidebarMenu !== ""
-            ? <div
-                className="click-capture"
-                onClick={e => {
-                  e.stopPropagation();
-                  this.setState({
-                    currentSidebarMenu: ""
-                  });
-                }}
-              />
-            : null}
+          {currentSidebarMenu !== "" ? (
+            <div
+              className="click-capture"
+              onClick={e => {
+                e.stopPropagation();
+                this.setState({
+                  currentSidebarMenu: ""
+                });
+              }}
+            />
+          ) : null}
           <div className="container-fluid">
             <div className="row justify-content-md-center">
               <div className="col-sm-12">
@@ -209,8 +209,8 @@ const mapStateToProps = state => ({
 });
 
 const mapDispatchToProps = dispatch => ({
-  _handleRunQuery(query, done = () => {}) {
-    dispatch(runQuery(query));
+  _handleRunQuery(query, action, done = () => {}) {
+    dispatch(runQuery(query, action));
 
     // FIXME: this callback is a remnant from previous implementation in which
     // `runQuery` returned a thunk. Remove if no longer relevant

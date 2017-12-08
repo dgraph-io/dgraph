@@ -128,10 +128,10 @@ class Editor extends Component {
           CodeMirror.commands.autocomplete(cm);
         },
         "Cmd-Enter": () => {
-          this.props.onRunQuery(this.getValue());
+          this.props.onRunQuery(this.getValue(), this.props.action);
         },
         "Ctrl-Enter": () => {
-          this.props.onRunQuery(this.getValue());
+          this.props.onRunQuery(this.getValue(), this.props.action);
         }
       },
       autofocus: true
