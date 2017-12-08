@@ -2,7 +2,6 @@ package xidmap
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
@@ -23,9 +22,7 @@ func NewZeroPool(dial func(string) (*grpc.ClientConn, error), addr string) *Zero
 }
 
 func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
-	fmt.Println("getting leader")
 	for _, addr := range p.knownAddrs {
-		fmt.Println("dialing addr:", addr)
 		conn, err := p.dial(addr)
 		if err != nil {
 			x.Printf("could not dial zero addr %q: %v", addr, err)
@@ -33,7 +30,6 @@ func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
 		}
 		client := intern.NewZeroClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		fmt.Println("connecting addr:", addr)
 		state, err := client.Connect(ctx, &intern.Member{ClusterInfoOnly: true})
 		cancel()
 		if err != nil {
@@ -44,14 +40,12 @@ func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
 		p.knownAddrs = p.knownAddrs[:0]
 		var leaderAddr string
 		for _, member := range state.GetState().Zeros {
-			fmt.Println("member:", member.Addr, member.Leader)
 			p.knownAddrs = append(p.knownAddrs, member.Addr)
 			if member.Leader {
 				leaderAddr = member.Addr
 			}
 		}
 
-		fmt.Println("dialing:", leaderAddr)
 		conn, err = p.dial(leaderAddr)
 		if err != nil {
 			x.Printf("could not dial zero addr %q: %v", leaderAddr, err)

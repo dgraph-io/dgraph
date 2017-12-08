@@ -98,7 +98,7 @@ func New(kv *badger.DB, pool *ZeroPool, opt Options) *XidMap {
 			if err == nil {
 				var assigned *api.AssignedIds
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-				assigned, err = zc.AssignUids(ctx, &intern.Num{Val: 1})
+				assigned, err = zc.AssignUids(ctx, &intern.Num{Val: 10000})
 				cancel()
 				if err == nil {
 					backoff = initBackoff
