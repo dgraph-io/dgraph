@@ -139,7 +139,7 @@ export function serverLatency(latencyObj) {
     totalLatency += parseFloat(latencyObj[latency]);
   }
 
-  totalLatency = totalLatency / Math.pow(10, 6);
+  totalLatency /= Math.pow(10, 6);
 
   var lat;
   if (totalLatency < 1) {

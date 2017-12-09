@@ -17,7 +17,11 @@ import {
   toggleCollapseFrame,
   updateFrame
 } from "../actions/frames";
-import { updateQuery } from "../actions/query";
+import {
+  updateQuery,
+  updateAction,
+  updateQueryAndAction
+} from "../actions/query";
 
 import "../assets/css/App.css";
 
@@ -82,6 +86,12 @@ class App extends React.Component {
     done();
   };
 
+  handleUpdateAction = event => {
+    const { _handleUpdateAction } = this.props;
+
+    _handleUpdateAction(event.target.value);
+  };
+
   // focusCodemirror sets focus on codemirror and moves the cursor to the end
   focusCodemirror = () => {
     const cm = this._codemirror;
@@ -92,8 +102,11 @@ class App extends React.Component {
     cm.setCursor({ line: lastlineNumber, ch: lastCharPos });
   };
 
-  handleSelectQuery = val => {
-    this.handleUpdateQuery(val, this.focusCodemirror);
+  handleSelectQuery = (query, action) => {
+    const { _handleUpdateQueryAndAction } = this.props;
+
+    _handleUpdateQueryAndAction(query, action);
+    this.focusCodemirror();
   };
 
   handleClearQuery = () => {
@@ -182,6 +195,7 @@ class App extends React.Component {
                   saveCodeMirrorInstance={this.saveCodeMirrorInstance}
                   connected={connected}
                   onUpdateQuery={this.handleUpdateQuery}
+                  onUpdateAction={this.handleUpdateAction}
                 />
               </div>
 
@@ -236,6 +250,12 @@ const mapDispatchToProps = dispatch => ({
   },
   _handleUpdateQuery(query) {
     dispatch(updateQuery(query));
+  },
+  _handleUpdateAction(action) {
+    dispatch(updateAction(action));
+  },
+  _handleUpdateQueryAndAction(query, action) {
+    dispatch(updateQueryAndAction(query, action));
   },
   updateFrame(frame) {
     dispatch(updateFrame(frame));

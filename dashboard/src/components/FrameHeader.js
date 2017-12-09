@@ -23,9 +23,13 @@ const FrameHeader = ({
 
   return (
     <div className="header">
-      {frame.query
-        ? <QueryPreview query={frame.query} onSelectQuery={onSelectQuery} />
-        : null}
+      {frame.query ? (
+        <QueryPreview
+          query={frame.query}
+          action={frame.action}
+          onSelectQuery={onSelectQuery}
+        />
+      ) : null}
 
       <div className="actions">
         <a
@@ -53,20 +57,22 @@ const FrameHeader = ({
           }}
         />
 
-        {isFullscreen
-          ? null
-          : <a
-              href="#expand-toggle"
-              className="action"
-              onClick={e => {
-                e.preventDefault();
-                onToggleCollapse();
-              }}
-            >
-              {isCollapsed
-                ? <i className="fa fa-chevron-down" />
-                : <i className="fa fa-chevron-up" />}
-            </a>}
+        {isFullscreen ? null : (
+          <a
+            href="#expand-toggle"
+            className="action"
+            onClick={e => {
+              e.preventDefault();
+              onToggleCollapse();
+            }}
+          >
+            {isCollapsed ? (
+              <i className="fa fa-chevron-down" />
+            ) : (
+              <i className="fa fa-chevron-up" />
+            )}
+          </a>
+        )}
 
         <a
           href="#fullscreen-toggle"
@@ -76,23 +82,25 @@ const FrameHeader = ({
             onToggleFullscreen();
           }}
         >
-          {isFullscreen
-            ? <i className="fa fa-compress" />
-            : <i className="fa fa-expand" />}
+          {isFullscreen ? (
+            <i className="fa fa-compress" />
+          ) : (
+            <i className="fa fa-expand" />
+          )}
         </a>
 
-        {!isFullscreen
-          ? <a
-              href="#discard"
-              className="action"
-              onClick={e => {
-                e.preventDefault();
-                onDiscardFrame(frame.id);
-              }}
-            >
-              <i className="fa fa-close" />
-            </a>
-          : null}
+        {!isFullscreen ? (
+          <a
+            href="#discard"
+            className="action"
+            onClick={e => {
+              e.preventDefault();
+              onDiscardFrame(frame.id);
+            }}
+          >
+            <i className="fa fa-close" />
+          </a>
+        ) : null}
       </div>
     </div>
   );

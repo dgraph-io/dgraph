@@ -7,21 +7,6 @@ import Editor from "../containers/Editor";
 import "../assets/css/EditorPanel.css";
 
 class EditorPanel extends React.Component {
-  constructor(props) {
-    super(props);
-
-    this.state = {
-      action: "query"
-    };
-
-    this.handleChange = this.handleChange.bind(this);
-  }
-
-  handleChange(event) {
-    this.setState({
-      action: event.target.dataset.action
-    });
-  }
   render() {
     const {
       canDiscardAll,
@@ -31,7 +16,8 @@ class EditorPanel extends React.Component {
       onClearQuery,
       onDiscardAllFrames,
       saveCodeMirrorInstance,
-      connected
+      connected,
+      onUpdateAction
     } = this.props;
 
     const isQueryDirty = query.trim() !== "";
@@ -93,7 +79,7 @@ class EditorPanel extends React.Component {
                   return;
                 }
 
-                onRunQuery(query, this.state.action);
+                onRunQuery(query, this.props.action);
               }}
             >
               <i className="fa fa-play" /> Run
@@ -105,39 +91,40 @@ class EditorPanel extends React.Component {
           onUpdateQuery={onUpdateQuery}
           onRunQuery={onRunQuery}
           query={query}
-          action={this.state.action}
+          action={this.props.action}
           saveCodeMirrorInstance={saveCodeMirrorInstance}
         />
         <div className="editor-radio">
-          <form>
-            <label>
-              <input
-                className="editor-type"
-                type="radio"
-                name="action"
-                data-action="query"
-                onChange={this.handleChange}
-              />Query
-            </label>
-            <label>
-              <input
-                className="editor-type"
-                type="radio"
-                name="action"
-                data-action="mutate"
-                onChange={this.handleChange}
-              />Mutate
-            </label>
-            <label>
-              <input
-                className="editor-type"
-                type="radio"
-                name="action"
-                data-action="alter"
-                onChange={this.handleChange}
-              />Alter
-            </label>
-          </form>
+          <label className="editor-label">
+            <input
+              className="editor-type"
+              type="radio"
+              name="action"
+              value="query"
+              checked={this.props.action === "query"}
+              onChange={onUpdateAction}
+            />Query
+          </label>
+          <label className="editor-label">
+            <input
+              className="editor-type"
+              type="radio"
+              name="action"
+              value="mutate"
+              checked={this.props.action === "mutate"}
+              onChange={onUpdateAction}
+            />Mutate
+          </label>
+          <label className="editor-label">
+            <input
+              className="editor-type"
+              type="radio"
+              name="action"
+              value="alter"
+              checked={this.props.action === "alter"}
+              onChange={onUpdateAction}
+            />Alter
+          </label>
         </div>
       </div>
     );
@@ -146,7 +133,8 @@ class EditorPanel extends React.Component {
 
 function mapStateToProps(state) {
   return {
-    query: state.query.query
+    query: state.query.query,
+    action: state.query.action
   };
 }
 
