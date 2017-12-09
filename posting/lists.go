@@ -51,14 +51,14 @@ const (
 // syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
 // of many individual mutations, which could be applied to many different posting lists.
 // Thus, each PL when being mutated would send an undone Mark, and each list would
-// accumulate all such pending marks. When the PL is synced to RocksDB, it would
+// accumulate all such pending marks. When the PL is synced to BadgerDB, it would
 // mark all the pending ones as done.
 // This ideally belongs to RAFT node struct (where committed watermark is being tracked),
 // but because the logic of mutations is
 // present here and to avoid a circular dependency, we've placed it here.
 // Note that there's one watermark for each RAFT node/group.
 // This watermark would be used for taking snapshots, to ensure that all the data and
-// index mutations have been syned to RocksDB, before a snapshot is taken, and previous
+// index mutations have been syned to BadgerDB, before a snapshot is taken, and previous
 // RAFT entries discarded.
 func init() {
 	x.AddInit(func() {

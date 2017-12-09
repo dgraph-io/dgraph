@@ -38,7 +38,7 @@ const (
 	MB = 1 << 20
 )
 
-// writeBatch performs a batch write of key value pairs to RocksDB.
+// writeBatch performs a batch write of key value pairs to BadgerDB.
 func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.KV, che chan error) {
 	var hasError int32
 	for i := range kv {
@@ -117,7 +117,7 @@ func streamKeys(pstore *badger.ManagedDB, stream intern.Worker_PredicateAndSchem
 }
 
 // PopulateShard gets data for predicate pred from server with id serverId and
-// writes it to RocksDB.
+// writes it to BadgerDB.
 func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, group uint32) (int, error) {
 	conn := pl.Get()
 	c := intern.NewWorkerClient(conn)

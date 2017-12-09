@@ -64,7 +64,7 @@ type Node struct {
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
-	// applied (to PL) -> synced (to RocksDB).
+	// applied (to PL) -> synced (to BadgerDB).
 	Applied x.WaterMark
 }
 

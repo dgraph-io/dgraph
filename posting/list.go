@@ -287,7 +287,7 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *intern.Posting) bool {
 
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
-// changes in mutation layers to RocksDB. Returns whether any mutation happens.
+// changes in mutation layers to BadgerDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge) (bool, error) {
 	t1 := time.Now()
 	l.Lock()

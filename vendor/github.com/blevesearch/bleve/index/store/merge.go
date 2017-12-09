@@ -15,7 +15,7 @@
 package store
 
 // At the moment this happens to be the same interface as described by
-// RocksDB, but this may not always be the case.
+// BadgerDB, but this may not always be the case.
 
 type MergeOperator interface {
 

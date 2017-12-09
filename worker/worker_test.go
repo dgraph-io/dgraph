@@ -149,7 +149,7 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *intern.Query {
 
 // Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only
 // at the end. In other words, everything is happening only in mutation layers,
-// and not committed to RocksDB until near the end.
+// and not committed to BadgerDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
 	initTest(t, `friend:string @index(term) .`)
 

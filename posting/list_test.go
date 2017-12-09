@@ -168,7 +168,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	key := x.DataKey("value", 12)
 	ol := Get(key)
 
-	// Set value to cars and merge to RocksDB.
+	// Set value to cars and merge to BadgerDB.
 	edge := &intern.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
@@ -266,7 +266,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	key := x.DataKey("value", 29)
 	ol := Get(key)
 
-	// Set value to cars and merge to RocksDB.
+	// Set value to cars and merge to BadgerDB.
 	edge := &intern.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
@@ -460,7 +460,7 @@ func TestAfterUIDCount(t *testing.T) {
 	key := x.DataKey("value", 22)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
-	// Set value to cars and merge to RocksDB.
+	// Set value to cars and merge to BadgerDB.
 	edge := &intern.DirectedEdge{
 		Label: "jchiu",
 	}
@@ -535,7 +535,7 @@ func TestAfterUIDCount2(t *testing.T) {
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 
-	// Set value to cars and merge to RocksDB.
+	// Set value to cars and merge to BadgerDB.
 	edge := &intern.DirectedEdge{
 		Label: "jchiu",
 	}
@@ -565,7 +565,7 @@ func TestDelete(t *testing.T) {
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 
-	// Set value to cars and merge to RocksDB.
+	// Set value to cars and merge to BadgerDB.
 	edge := &intern.DirectedEdge{
 		Label: "jchiu",
 	}
@@ -592,7 +592,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 
-	// Set value to cars and merge to RocksDB.
+	// Set value to cars and merge to BadgerDB.
 	edge := &intern.DirectedEdge{
 		Label: "jchiu",
 	}
