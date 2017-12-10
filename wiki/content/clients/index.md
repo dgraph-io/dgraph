@@ -351,7 +351,7 @@ guide to help you build Dgraph client in a new language.
 {{% /notice %}}
 
 It's also possible to interact with dgraph directly via its HTTP endpoints.
-This this allows clients to be built for languages that don't have access to a
+This allows clients to be built for languages that don't have access to a
 working gRPC implementation.
 
 In the examples shown here, regular command line tools such as `curl` and
