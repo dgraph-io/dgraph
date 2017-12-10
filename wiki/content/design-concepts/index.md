@@ -171,7 +171,7 @@ gets divided across two groups.
   Group 2:  (Predicate, Sj..z)
 ```
 
-Note that keys are sorted in RocksDB. So, the group split would be done in a way to maintain that
+Note that keys are sorted in BadgerDB. So, the group split would be done in a way to maintain that
 sorting order, i.e. it would be split in a way where the lexicographically earlier subjects would be
 in one group, and the later in the second.
 
@@ -185,7 +185,7 @@ establish connections, and transfer a subset of existing predicates to it based 
 by the new machine.
 
 ### Write Ahead Logs
-Every mutation upon hitting the database doesn't immediately make it on disk via RocksDB. We avoid
+Every mutation upon hitting the database doesn't immediately make it on disk via BadgerDB. We avoid
 re-generating the posting list too often, because all the postings need to be kept sorted, and it's
 expensive. Instead, every mutation gets logged and synced to disk via append only log files called
 `write-ahead logs`. So, any acknowledged writes would always be on disk. This allows us to recover
@@ -197,7 +197,7 @@ overlay over immutable `Posting list` in a mutation layer. This mutation layer a
 over `Posting`s as though they're sorted, without requiring re-creating the posting list.
 
 When a posting list has mutations in memory, it's considered a `dirty` posting list. Periodically,
-we re-generate the immutable version, and write to RocksDB. Note that the writes to RocksDB are
+we re-generate the immutable version, and write to BadgerDB. Note that the writes to BadgerDB are
 asynchronous, which means they don't get flushed out to disk immediately, but that wouldn't lead
 to data loss on a machine crash. When `Posting lists` are initialized, write-ahead logs get referred,
 and any missing writes get applied.
