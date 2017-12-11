@@ -11,36 +11,35 @@ import (
 
 type ZeroPool struct {
 	dial       func(addr string) (*grpc.ClientConn, error)
-	knownAddrs []string
+	knownZeros map[string]intern.ZeroClient
 }
 
 func NewZeroPool(dial func(string) (*grpc.ClientConn, error), addr string) *ZeroPool {
 	return &ZeroPool{
 		dial:       dial,
-		knownAddrs: []string{addr},
+		knownZeros: map[string]intern.ZeroClient{addr: nil},
 	}
 }
 
 func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
-	for _, addr := range p.knownAddrs {
-		conn, err := p.dial(addr)
+	for addr := range p.knownZeros {
+		zero, err := p.getZero(addr)
 		if err != nil {
-			x.Printf("could not dial zero addr %q: %v", addr, err)
 			continue
 		}
-		client := intern.NewZeroClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		state, err := client.Connect(ctx, &intern.Member{ClusterInfoOnly: true})
+		state, err := zero.Connect(ctx, &intern.Member{ClusterInfoOnly: true})
 		cancel()
 		if err != nil {
 			x.Printf("could not connect to zero with addr %q: %v", addr, err)
 			continue
 		}
 
-		p.knownAddrs = p.knownAddrs[:0]
 		var leaderAddr string
 		for _, member := range state.GetState().Zeros {
-			p.knownAddrs = append(p.knownAddrs, member.Addr)
+			// Adds address to map map of known connections, but doesn't
+			// overwrite connection if it already exists.
+			p.knownZeros[member.Addr] = p.knownZeros[member.Addr]
 			if member.Leader {
 				leaderAddr = member.Addr
 			}
@@ -49,12 +48,26 @@ func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
 			return nil, x.Errorf("no known zero leader")
 		}
 
-		conn, err = p.dial(leaderAddr)
+		zero, err = p.getZero(leaderAddr)
 		if err != nil {
-			x.Printf("could not dial zero addr %q: %v", leaderAddr, err)
 			continue
 		}
-		return intern.NewZeroClient(conn), nil
+		return zero, nil
 	}
 	return nil, x.Errorf("could not find leader")
+}
+
+func (p *ZeroPool) getZero(addr string) (intern.ZeroClient, error) {
+	zero := p.knownZeros[addr]
+	if zero != nil {
+		return zero, nil
+	}
+	conn, err := p.dial(addr)
+	if err != nil {
+		x.Printf("could not dial to zero with address %q: %v", addr, err)
+		return nil, err
+	}
+	zero = intern.NewZeroClient(conn)
+	p.knownZeros[addr] = zero
+	return zero, nil
 }
