@@ -399,8 +399,11 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := map[string]interface{}{}
-	res["code"] = x.Success
-	res["message"] = "Done"
+	data := map[string]interface{}{}
+	data["code"] = x.Success
+	data["message"] = "Done"
+	res["data"] = data
+
 	js, err := json.Marshal(res)
 	if err != nil {
 		x.SetStatus(w, x.Error, err.Error())

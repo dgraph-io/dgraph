@@ -8,12 +8,13 @@ import { receiveFrame } from "./frames";
 /**
  * runQuery runs the query and displays the appropriate result in a frame
  * @params query {String}
+ * @params action {String}
  * @params [frameId] {String}
  *
  */
-export const runQuery = query => {
+export const runQuery = (query, action = "query") => {
   return dispatch => {
-    const frame = makeFrame({ query });
+    const frame = makeFrame({ query, action });
 
     dispatch(receiveFrame(frame));
   };
