@@ -155,7 +155,7 @@ func runAdd(txn *client.Txn) error {
 	if err != nil {
 		return err
 	}
-	//rdfs := fmt.Sprintf("_:node <xid> %q .\n", xid)
+	var rdfs string
 	for char := 'a'; char <= 'z'; char++ {
 		var links int
 		switch rnd := rand.Float64(); {
@@ -172,7 +172,7 @@ func runAdd(txn *client.Txn) error {
 			if err != nil {
 				return err
 			}
-			rdfs += fmt.Sprintf("_:node <link_%c> <%s> .\n", char, rndUid)
+			rdfs += fmt.Sprintf("<%s> <link_%c> <%s> .\n", uid, char, rndUid)
 		}
 	}
 
@@ -182,11 +182,14 @@ func runAdd(txn *client.Txn) error {
 		}
 		payload := make([]byte, 16+rand.Intn(16))
 		rand.Read(payload)
-		rdfs += fmt.Sprintf("_:node <attr_%c> \"%s\" .\n", char, url.QueryEscape(string(payload)))
+		rdfs += fmt.Sprintf("<%s> <attr_%c> \"%s\" .\n", uid, char, url.QueryEscape(string(payload)))
 	}
 
-	_, err = txn.Mutate(context.Background(), &api.Mutation{SetNquads: []byte(rdfs)})
-	return err
+	if rdfs != "" {
+		_, err = txn.Mutate(context.Background(), &api.Mutation{SetNquads: []byte(rdfs)})
+		return err
+	}
+	return nil
 }
 
 func runDelete(txn *client.Txn) error {
@@ -214,16 +217,19 @@ func newNode(txn *client.Txn) (string, error) {
 		return "", x.Errorf("bad result %v", result)
 	}
 
-	if _, err := txn.Mutate(context.Background(), &api.Mutation{
+	assigned, err := txn.Mutate(context.Background(), &api.Mutation{
 		SetNquads: []byte(fmt.Sprintf(`
 			<%s> <end_xid_%c> "%d" .
-			`, *result.Q[0].Uid, char, *result.Q[0].End+1)),
-	}); err != nil {
+			_:node <xid> %q .
+			`,
+			*result.Q[0].Uid, char, *result.Q[0].End+1,
+			fmt.Sprintf("%c_%d", char, *result.Q[0].End)),
+		),
+	})
+	if err != nil {
 		return "", err
 	}
-	xid := fmt.Sprintf("%c_%d", char, *result.Q[0].End)
-
-	rdfs := fmt.Sprintf("_:node <xid> %q .\n", xid)
+	return assigned.Uids["node"], nil
 }
 
 func getRandomNodeUid(txn *client.Txn) (string, error) {
