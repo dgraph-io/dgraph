@@ -29,10 +29,10 @@ class FrameItem extends React.Component {
 
   componentDidMount() {
     const { frame } = this.props;
-    const { query, share, meta } = frame;
+    const { query, share, meta, action } = frame;
 
     if (!meta.collapsed && query && query.length > 0) {
-      this.executeFrameQuery(query);
+      this.executeFrameQuery(query, action);
     } else if (share && share.length > 0 && !query) {
       this.getAndExecuteSharedQuery(share);
     }
@@ -57,7 +57,7 @@ class FrameItem extends React.Component {
           executed: true
         });
       } else {
-        this.executeFrameQuery(query);
+        this.executeFrameQuery(query, "query");
         updateFrame({
           query: query,
           id: frame.id,
@@ -70,39 +70,78 @@ class FrameItem extends React.Component {
 
   executeOnJsonClick = () => {
     const { frame } = this.props;
-    const { query } = frame;
+    const { query, action } = frame;
 
-    executeQuery(query, false).then(res => {
+    if (action !== "query") {
+      return;
+    }
+
+    executeQuery(query, action, false).then(res => {
       this.setState({
         data: res
       });
     });
   };
 
-  executeFrameQuery = query => {
+  executeFrameQuery = (query, action) => {
     const { frame: { meta }, onUpdateConnectedState } = this.props;
 
-    executeQuery(query, true)
+    executeQuery(query, action, true)
       .then(res => {
         onUpdateConnectedState(true);
 
-        if (res.errors) {
-          // Handle query error responses here.
-          this.setState({
-            errorMessage: res.errors[0].message,
-            data: res,
-            executed: true
-          });
-        } else if (
-          res.data &&
-          res.data.code !== undefined &&
-          res.data.message !== undefined
-        ) {
-          // This is the case in which user sends a mutation.
-          // We display the response from server.
-          if (res.data.code.startsWith("Error")) {
+        if (action === "query") {
+          if (res.errors) {
+            // Handle query error responses here.
             this.setState({
-              errorMessage: res.data.message,
+              errorMessage: res.errors[0].message,
+              data: res,
+              executed: true
+            });
+          } else if (isNotEmpty(res.data)) {
+            const regexStr = meta.regexStr || "Name";
+            const {
+              nodes,
+              edges,
+              labels,
+              nodesIndex,
+              edgesIndex
+            } = processGraph(res.data, false, query, regexStr);
+
+            if (nodes.length === 0) {
+              this.setState({
+                successMessage: "Your query did not return any results",
+                executed: true,
+                data: res
+              });
+              return;
+            }
+
+            const response = {
+              plotAxis: labels,
+              allNodes: nodes,
+              allEdges: edges,
+              numNodes: nodes.length,
+              numEdges: edges.length,
+              nodes: nodes.slice(0, nodesIndex),
+              edges: edges.slice(0, edgesIndex),
+              treeView: false,
+              data: res
+            };
+
+            this.setState({ response, executed: true });
+          } else {
+            this.setState({
+              successMessage: "Your query did not return any results",
+              executed: true,
+              data: res
+            });
+          }
+        } else {
+          // Mutation or Alter
+          if (res.errors) {
+            this.setState({
+              errorMessage: res.errors[0].message,
               data: res,
               executed: true
             });
@@ -113,41 +152,6 @@ class FrameItem extends React.Component {
               executed: true
             });
           }
-        } else if (isNotEmpty(res.data)) {
-          const regexStr = meta.regexStr || "Name";
-          const { nodes, edges, labels, nodesIndex, edgesIndex } = processGraph(
-            res.data,
-            false,
-            query,
-            regexStr
-          );
-
-          const response = {
-            plotAxis: labels,
-            allNodes: nodes,
-            allEdges: edges,
-            numNodes: nodes.length,
-            numEdges: edges.length,
-            nodes: nodes.slice(0, nodesIndex),
-            edges: edges.slice(0, edgesIndex),
-            treeView: false,
-            data: res
-          };
-
-          this.setState({ response, executed: true });
-          let hasMutation = query.indexOf("mutation") > -1;
-          if (hasMutation) {
-            // This would mean that its not run again when user clicks on JSON tab.
-            // TODO - Ideally, we want to remove the mutation and run the query again.
-            // Maybe parse the query and remove the mutation block.
-            this.setState({ response, data: res });
-          }
-        } else {
-          this.setState({
-            successMessage: "Your query did not return any results",
-            executed: true,
-            data: res
-          });
         }
       })
       .catch(error => {

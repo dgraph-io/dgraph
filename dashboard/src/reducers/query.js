@@ -1,7 +1,12 @@
-import { UPDATE_QUERY } from "../actions/query";
+import {
+  UPDATE_QUERY,
+  UPDATE_ACTION,
+  UPDATE_QUERY_AND_ACTION
+} from "../actions/query";
 
 const defaultState = {
-  query: ""
+  query: "",
+  action: "query"
 };
 
 const frames = (state = defaultState, action) => {
@@ -10,6 +15,18 @@ const frames = (state = defaultState, action) => {
       return {
         ...state,
         query: action.query
+      };
+
+    case UPDATE_ACTION:
+      return {
+        ...state,
+        action: action.action
+      };
+    case UPDATE_QUERY_AND_ACTION:
+      return {
+        ...state,
+        query: action.query,
+        action: action.action
       };
     default:
       return state;
