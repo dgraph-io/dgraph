@@ -34,6 +34,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	zw, err := ioutil.TempDir("", "")
 	x.Check(err)
 
@@ -77,6 +78,29 @@ func TestMain(m *testing.M) {
 	os.RemoveAll(p)
 	exec.Command("killall", "-9", "dgraph").Run()
 	os.Exit(s)
+}
+
+func ExampleDgraph_Alter_dropAll() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
+	defer conn.Close()
+
+	dc := api.NewDgraphClient(conn)
+	dg := client.NewDgraphClient(dc)
+
+	op := api.Operation{
+		DropAll: true,
+	}
+	ctx := context.Background()
+	if err := dg.Alter(ctx, &op); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(err)
+
+	// Output: <nil>
 }
 
 func ExampleTxn_Query_variables() {
@@ -148,29 +172,6 @@ func ExampleTxn_Query_variables() {
 
 	fmt.Println(string(resp.Json))
 	// Output: {"me":[{"name":"Alice"}]}
-}
-
-func ExampleDgraph_Alter_dropAll() {
-	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	if err != nil {
-		log.Fatal("While trying to dial gRPC")
-	}
-	defer conn.Close()
-
-	dc := api.NewDgraphClient(conn)
-	dg := client.NewDgraphClient(dc)
-
-	op := api.Operation{
-		DropAll: true,
-	}
-	ctx := context.Background()
-	if err := dg.Alter(ctx, &op); err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(err)
-
-	// Output: <nil>
 }
 
 func ExampleTxn_Mutate() {
@@ -266,7 +267,7 @@ func ExampleTxn_Mutate() {
 			loc
 			raw_bytes
 			married
-			friend {
+			friend @filter(eq(name, "Bob")) {
 				name
 				age
 			}
@@ -297,7 +298,7 @@ func ExampleTxn_Mutate() {
 	// fmt.Printf("Me: %+v\n", r.Me)
 
 	fmt.Println(string(resp.Json))
-	// Output: {"me":[{"name":"Alice","age":26,"loc":{"type":"Point","coordinates":[1.1,2]},"raw_bytes":"cmF3X2J5dGVz","married":true,"friend":[{"name":"Bob","age":24},{"name":"Charlie","age":29}],"school":[{"name":"Crown Public School"}]}]}
+	// Output: {"me":[{"name":"Alice","age":26,"loc":{"type":"Point","coordinates":[1.1,2]},"raw_bytes":"cmF3X2J5dGVz","married":true,"friend":[{"name":"Bob","age":24}],"school":[{"name":"Crown Public School"}]}]}
 
 }
 
@@ -497,6 +498,26 @@ func ExampleTxn_Mutate_facets() {
 	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
+	// Doing a dropAll isn't required by the user. We do it here so that we can verify that the
+	// example runs as expected.
+	op := api.Operation{
+		DropAll: true,
+	}
+	ctx := context.Background()
+	if err := dg.Alter(ctx, &op); err != nil {
+		log.Fatal(err)
+	}
+
+	op = api.Operation{}
+	op.Schema = `
+		name: string @index(exact) .
+	`
+
+	err = dg.Alter(ctx, &op)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// This example shows example for SetObject using facets.
 	type School struct {
 		Name  string    `json:"name,omitempty"`
@@ -541,7 +562,6 @@ func ExampleTxn_Mutate_facets() {
 		}},
 	}
 
-	ctx := context.Background()
 	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -562,7 +582,7 @@ func ExampleTxn_Mutate_facets() {
 	const q = `query Me($id: string){
         me(func: uid($id)) {
             name @facets
-			friend(orderdesc: name) @facets {
+			friend @filter(eq(name, "Bob")) @facets {
                 name
             }
             school @facets {
@@ -588,7 +608,7 @@ func ExampleTxn_Mutate_facets() {
 	}
 
 	fmt.Printf("Me: %+v\n", r.Me)
-	// Output: Me: [{Name:Alice NameOrigin:Indonesia Friends:[{Name:Charlie NameOrigin: Friends:[] Since:0001-01-01 00:00:00 +0000 UTC Family:maybe Age:16 Close:false School:[]} {Name:Bob NameOrigin: Friends:[] Since:2009-11-10 23:00:00 +0000 UTC Family:yes Age:13 Close:true School:[]}] Since:0001-01-01 00:00:00 +0000 UTC Family: Age:0 Close:false School:[{Name:Wellington School Since:2009-11-10 23:00:00 +0000 UTC}]}]
+	// Output: Me: [{Name:Alice NameOrigin:Indonesia Friends:[{Name:Bob NameOrigin: Friends:[] Since:2009-11-10 23:00:00 +0000 UTC Family:yes Age:13 Close:true School:[]}] Since:0001-01-01 00:00:00 +0000 UTC Family: Age:0 Close:false School:[{Name:Wellington School Since:2009-11-10 23:00:00 +0000 UTC}]}]
 }
 
 func ExampleTxn_Mutate_list() {
@@ -676,6 +696,18 @@ func ExampleDeleteEdges() {
 	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
+	op := &api.Operation{}
+	op.Schema = `
+			age: int .
+			married: bool .
+		`
+
+	ctx := context.Background()
+	err = dg.Alter(ctx, op)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	type School struct {
 		Uid  string `json:"uid"`
 		Name string `json:"name@en,omitempty"`
@@ -709,18 +741,6 @@ func ExampleDeleteEdges() {
 		}},
 	}
 
-	op := &api.Operation{}
-	op.Schema = `
-		age: int .
-		married: bool .
-	`
-
-	ctx := context.Background()
-	err = dg.Alter(ctx, op)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -729,6 +749,7 @@ func ExampleDeleteEdges() {
 
 	mu.SetJson = pb
 	mu.CommitNow = true
+	mu.IgnoreIndexConflict = true
 	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
@@ -748,7 +769,6 @@ func ExampleDeleteEdges() {
 				age
 			}
 			schools {
-				uid
 				name@en
 			}
 		}
@@ -781,7 +801,7 @@ func ExampleDeleteEdges() {
 	var r Root
 	err = json.Unmarshal(resp.Json, &r)
 	fmt.Println(string(resp.Json))
-	// Output: yo
+	// Output: {"me":[{"name":"Alice","age":26,"married":true,"schools":[{"name@en":"Crown Public School"}]}]}
 }
 
 func ExampleTxn_Mutate_deleteNode() {
