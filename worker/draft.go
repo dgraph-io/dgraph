@@ -204,6 +204,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		for _, edge := range proposal.Mutations.Edges {
 			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
+			} else if tablet.GroupId != groups().gid {
+				// Tablet can move by the time request reaches here.
+				return errUnservedTablet
 			}
 			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
 				continue

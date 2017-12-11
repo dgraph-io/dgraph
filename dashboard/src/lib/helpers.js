@@ -139,7 +139,7 @@ export function serverLatency(latencyObj) {
     totalLatency += parseFloat(latencyObj[latency]);
   }
 
-  totalLatency = totalLatency / Math.pow(10, 6);
+  totalLatency /= Math.pow(10, 6);
 
   var lat;
   if (totalLatency < 1) {
@@ -164,14 +164,17 @@ export function childNodes(edges) {
  * IDEA: We could use class with flow if it's not an overkill
  *
  * @params type {String} - type of the frame as defined in the const
+ * @params action {String} - action can be query/mutate or alter.
  * @params data {Objecg} - data for the frame
  */
-export function makeFrame({ query, share }) {
+export function makeFrame({ query, action, type, share }) {
   return {
     id: uuid(),
     meta: { collapsed: false },
+    type,
     query,
-    share
+    share,
+    action
   };
 }
 
@@ -206,10 +209,18 @@ export function collapseQuery(query) {
   return ret;
 }
 
-export function executeQuery(query, debug) {
-  const endpoint = getEndpoint("query", { debug: debug });
+export function executeQuery(query, action = "query", debug) {
+  var endpoint;
 
-  return fetch(endpoint, {
+  if (action === "query") {
+    endpoint = getEndpoint("query", { debug: debug });
+  } else if (action === "mutate") {
+    endpoint = getEndpoint("mutate", { debug: false });
+  } else if (action === "alter") {
+    endpoint = getEndpoint("alter", { debug: false });
+  }
+
+  var options = {
     method: "POST",
     mode: "cors",
     cache: "no-cache",
@@ -217,7 +228,21 @@ export function executeQuery(query, debug) {
       "Content-Type": "text/plain"
     },
     body: query
-  })
+  };
+
+  if (action === "mutate") {
+    options.headers["X-Dgraph-CommitNow"] = true;
+  }
+
+  if (action === "alter") {
+    try {
+      // DropAll and DropAttr requests are sent through JSON.
+      JSON.parse(query);
+      options.headers["Content-Type"] = "application/json";
+    } catch (e) {}
+  }
+
+  return fetch(endpoint, options)
     .then(checkStatus)
     .then(response => response.json());
 }

@@ -46,13 +46,11 @@ func Example_setObject() {
 	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
+	dob := time.Date(1980, 01, 01, 23, 0, 0, 0, time.UTC)
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
 	// else a new node is created.
-	// In the example below new nodes for Alice and Charlie and school are created (since they dont
-	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
-	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
-
-	dob := time.Date(1980, 01, 01, 23, 0, 0, 0, time.UTC)
+	// In the example below new nodes for Alice, Bob and Charlie and school are created (since they
+	// dont have a Uid).
 	p := Person{
 		Name:    "Alice",
 		Age:     26,
@@ -64,7 +62,6 @@ func Example_setObject() {
 		Dob: &dob,
 		Raw: []byte("raw_bytes"),
 		Friends: []Person{{
-			Uid:  "1000",
 			Name: "Bob",
 			Age:  24,
 		}, {
@@ -78,6 +75,7 @@ func Example_setObject() {
 
 	op := &api.Operation{}
 	op.Schema = `
+		name: string @index(exact) .
 		age: int .
 		married: bool .
 		loc: geo .
@@ -105,18 +103,16 @@ func Example_setObject() {
 	}
 
 	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
-	puid := assigned.Uids["blank-0"]
-	q := fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			uid
+	variables := map[string]string{"$id": assigned.Uids["blank-0"]}
+	q := `query Me($id: string){
+		me(func: uid($id)) {
 			name
 			dob
 			age
 			loc
 			raw_bytes
 			married
-			friend {
-				uid
+			friend @filter(eq(name, "Bob")){
 				name
 				age
 			}
@@ -124,9 +120,9 @@ func Example_setObject() {
 				name
 			}
 		}
-	}`, puid)
+	}`
 
-	resp, err := dg.NewTxn().Query(ctx, q)
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -140,6 +136,10 @@ func Example_setObject() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Me: %+v\n", r.Me)
+	// fmt.Printf("Me: %+v\n", r.Me)
 	// R.Me would be same as the person that we set above.
+
+	fmt.Println(string(resp.Json))
+	// Output: {"me":[{"name":"Alice","dob":"1980-01-01T23:00:00Z","age":26,"loc":{"type":"Point","coordinates":[1.1,2]},"raw_bytes":"cmF3X2J5dGVz","married":true,"friend":[{"name":"Bob","age":24}],"school":[{"name":"Crown Public School"}]}]}
+
 }

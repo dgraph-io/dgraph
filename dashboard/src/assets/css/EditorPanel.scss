@@ -71,3 +71,16 @@
   background-color: white;
   color: #8a8a8a;
 }
+
+.editor-radio {
+  padding: 5px;
+  background: #f3f3f3;
+  .editor-label {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 0px;
+  }
+  .editor-type {
+    margin: 0px 5px;
+  }
+}

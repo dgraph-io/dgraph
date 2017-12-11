@@ -3,7 +3,7 @@ export const DISCARD_FRAME = "frames/DISCARD_FRAME";
 export const DISCARD_ALL_FRAMES = "frames/DISCARD_ALL_FRAMES";
 export const UPDATE_FRAME = "frames/UPDATE_FRAME";
 
-export function receiveFrame({ id, type, meta, query, share }) {
+export function receiveFrame({ id, type, meta, query, share, action }) {
   return {
     type: RECEIVE_FRAME,
     frame: {
@@ -11,7 +11,8 @@ export function receiveFrame({ id, type, meta, query, share }) {
       type,
       meta,
       query,
-      share
+      share,
+      action
     }
   };
 }
