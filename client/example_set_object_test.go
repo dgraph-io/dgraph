@@ -75,6 +75,7 @@ func Example_setObject() {
 
 	op := &api.Operation{}
 	op.Schema = `
+		name: string @index(exact) .
 		age: int .
 		married: bool .
 		loc: geo .
@@ -111,7 +112,7 @@ func Example_setObject() {
 			loc
 			raw_bytes
 			married
-			friend {
+			friend @filter(eq(name, "Bob")){
 				name
 				age
 			}
@@ -139,6 +140,6 @@ func Example_setObject() {
 	// R.Me would be same as the person that we set above.
 
 	fmt.Println(string(resp.Json))
-	// Output: {"me":[{"name":"Alice","dob":"1980-01-01T23:00:00Z","age":26,"loc":{"type":"Point","coordinates":[1.1,2]},"raw_bytes":"cmF3X2J5dGVz","married":true,"friend":[{"name":"Bob","age":24},{"name":"Charlie","age":29}],"school":[{"name":"Crown Public School"}]}]}
+	// Output: {"me":[{"name":"Alice","dob":"1980-01-01T23:00:00Z","age":26,"loc":{"type":"Point","coordinates":[1.1,2]},"raw_bytes":"cmF3X2J5dGVz","married":true,"friend":[{"name":"Bob","age":24}],"school":[{"name":"Crown Public School"}]}]}
 
 }

@@ -76,7 +76,9 @@ func TestMain(m *testing.M) {
 	os.RemoveAll(zw)
 	os.RemoveAll(w)
 	os.RemoveAll(p)
-	exec.Command("killall", "-9", "dgraph").Run()
+	if err := exec.Command("killall", "-9", "dgraph").Run(); err != nil {
+		log.Fatal(err)
+	}
 	os.Exit(s)
 }
 
