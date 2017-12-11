@@ -53,7 +53,11 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
-	x.AssertTrue(groups().ServesTablet(edge.Attr))
+	if !groups().ServesTablet(edge.Attr) {
+		// Don't assert, can happen during replay of raft logs if server crashes immediately
+		// after predicate move and before snapshot.
+		return errUnservedTablet
+	}
 
 	typ, err := schema.State().TypeOf(edge.Attr)
 	x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
