@@ -20,14 +20,88 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
+
+func TestMain(m *testing.M) {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	zw, err := ioutil.TempDir("", "")
+	x.Check(err)
+
+	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
+	cmd.Env = os.Environ()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
+	}
+	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"zero",
+		"-w", zw,
+		"-o", "-2000",
+	)
+	zero.Stdout = os.Stdout
+	zero.Stderr = os.Stdout
+	x.Check(zero.Start())
+
+	p, err := ioutil.TempDir("", "")
+	x.Check(err)
+	w, err := ioutil.TempDir("", "")
+	x.Check(err)
+
+	server := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"server",
+		"-w", w,
+		"-p", p,
+		"--zero", "127.0.0.1:5080",
+		"--memory_mb", "2048",
+	)
+	server.Stdout = os.Stdout
+	server.Stderr = os.Stdout
+	x.Check(server.Start())
+	// Wait for servers to start and connect.
+	time.Sleep(5 * time.Second)
+	s := m.Run()
+
+	x.Check(zero.Process.Kill())
+	x.Check(server.Process.Kill())
+	x.Check(os.RemoveAll(zw))
+	x.Check(os.RemoveAll(w))
+	x.Check(os.RemoveAll(p))
+	x.Check(exec.Command("killall", "-9", "dgraph").Run())
+	os.Exit(s)
+}
+
+func ExampleDgraph_Alter_dropAll() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
+	defer conn.Close()
+
+	dc := api.NewDgraphClient(conn)
+	dg := client.NewDgraphClient(dc)
+
+	op := api.Operation{
+		DropAll: true,
+	}
+	ctx := context.Background()
+	if err := dg.Alter(ctx, &op); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(err)
+
+	// Output: <nil>
+}
 
 func ExampleTxn_Query_variables() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -75,7 +149,7 @@ func ExampleTxn_Query_variables() {
 
 	variables := make(map[string]string)
 	variables["$a"] = "Alice"
-	q := `{
+	q := `query Alice($a: string){
 		me(func: eq(name, $a)) {
 			name
 		}
@@ -95,26 +169,9 @@ func ExampleTxn_Query_variables() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Me: %+v\n", r.Me)
-}
 
-func ExampleDgraph_Alter_dropAll() {
-	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	if err != nil {
-		log.Fatal("While trying to dial gRPC")
-	}
-	defer conn.Close()
-
-	dc := api.NewDgraphClient(conn)
-	dg := client.NewDgraphClient(dc)
-
-	op := api.Operation{
-		DropAll: true,
-	}
-	ctx := context.Background()
-	if err := dg.Alter(ctx, &op); err != nil {
-		log.Fatal(err)
-	}
+	fmt.Println(string(resp.Json))
+	// Output: {"me":[{"name":"Alice"}]}
 }
 
 func ExampleTxn_Mutate() {
@@ -152,10 +209,8 @@ func ExampleTxn_Mutate() {
 
 	// While setting an object if a struct has a Uid then its properties in the graph are updated
 	// else a new node is created.
-	// In the example below new nodes for Alice and Charlie and school are created (since they dont
-	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
-	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
-
+	// In the example below new nodes for Alice, Bob and Charlie and school are created (since they
+	// dont have a Uid).
 	p := Person{
 		Name:    "Alice",
 		Age:     26,
@@ -166,7 +221,6 @@ func ExampleTxn_Mutate() {
 		},
 		Raw: []byte("raw_bytes"),
 		Friends: []Person{{
-			Uid:  "1000",
 			Name: "Bob",
 			Age:  24,
 		}, {
@@ -206,16 +260,14 @@ func ExampleTxn_Mutate() {
 
 	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
 	puid := assigned.Uids["blank-0"]
-	q := fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			uid
+	const q = `query Me($id: string){
+		me(func: uid($id)) {
 			name
 			age
 			loc
 			raw_bytes
 			married
-			friend {
-				uid
+			friend @filter(eq(name, "Bob")) {
 				name
 				age
 			}
@@ -223,9 +275,11 @@ func ExampleTxn_Mutate() {
 				name
 			}
 		}
-	}`, puid)
+	}`
 
-	resp, err := dg.NewTxn().Query(ctx, q)
+	variables := make(map[string]string)
+	variables["$id"] = puid
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -239,8 +293,13 @@ func ExampleTxn_Mutate() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Me: %+v\n", r.Me)
+
 	// R.Me would be same as the person that we set above.
+	// fmt.Printf("Me: %+v\n", r.Me)
+
+	fmt.Println(string(resp.Json))
+	// Output: {"me":[{"name":"Alice","age":26,"loc":{"type":"Point","coordinates":[1.1,2]},"raw_bytes":"cmF3X2J5dGVz","married":true,"friend":[{"name":"Bob","age":24}],"school":[{"name":"Crown Public School"}]}]}
+
 }
 
 func ExampleTxn_Mutate_bytes() {
@@ -271,7 +330,7 @@ func ExampleTxn_Mutate_bytes() {
 	}
 
 	p := Person{
-		Name:  "Alice",
+		Name:  "Alice-new",
 		Bytes: []byte("raw_bytes"),
 	}
 
@@ -290,8 +349,7 @@ func ExampleTxn_Mutate_bytes() {
 	}
 
 	q := `{
-	q(func: eq(name, "Alice")) {
-		uid
+	q(func: eq(name, "Alice-new")) {
 		name
 		bytes
 	}
@@ -312,6 +370,8 @@ func ExampleTxn_Mutate_bytes() {
 		log.Fatal(err)
 	}
 	fmt.Printf("Me: %+v\n", r.Me)
+
+	// Output: Me: [{Uid: Name:Alice-new Bytes:[114 97 119 95 98 121 116 101 115]}]
 }
 
 func ExampleTxn_Query_unmarshal() {
@@ -390,16 +450,16 @@ func ExampleTxn_Query_unmarshal() {
 
 	// Assigned uids for nodes which were created would be returned in the resp.AssignedUids map.
 	puid := assigned.Uids["blank-0"]
-	q := fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			uid
+	variables := make(map[string]string)
+	variables["$id"] = puid
+	const q = `query Me($id: string){
+		me(func: uid($id)) {
 			name
 			age
 			loc
 			raw_bytes
 			married
-			friend {
-				uid
+			friend @filter(eq(name, "Bob")) {
 				name
 				age
 			}
@@ -407,9 +467,9 @@ func ExampleTxn_Query_unmarshal() {
 				name
 			}
 		}
-	}`, puid)
+	}`
 
-	resp, err := dg.NewTxn().Query(ctx, q)
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -423,10 +483,12 @@ func ExampleTxn_Query_unmarshal() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Me: %+v\n", r.Me)
+
+	fmt.Println(string(resp.Json))
+	// Output: {"me":[{"name":"Alice","age":26,"raw_bytes":"cmF3X2J5dGVz","married":true,"friend":[{"name":"Bob","age":24}],"school":[{"name":"Crown Public School"}]}]}
 }
 
-func ExampleTxn_Mutate_facets(t *testing.T) {
+func ExampleTxn_Mutate_facets() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal("While trying to dial gRPC")
@@ -436,10 +498,30 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
+	// Doing a dropAll isn't required by the user. We do it here so that we can verify that the
+	// example runs as expected.
+	op := api.Operation{
+		DropAll: true,
+	}
+	ctx := context.Background()
+	if err := dg.Alter(ctx, &op); err != nil {
+		log.Fatal(err)
+	}
+
+	op = api.Operation{}
+	op.Schema = `
+		name: string @index(exact) .
+	`
+
+	err = dg.Alter(ctx, &op)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// This example shows example for SetObject using facets.
 	type School struct {
 		Name  string    `json:"name,omitempty"`
-		Since time.Time `json:"school:since,omitempty"`
+		Since time.Time `json:"school|since,omitempty"`
 	}
 
 	type Person struct {
@@ -480,7 +562,6 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 		}},
 	}
 
-	ctx := context.Background()
 	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -495,13 +576,13 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	}
 
 	auid := assigned.Uids["blank-0"]
+	variables := make(map[string]string)
+	variables["$id"] = auid
 
-	q := fmt.Sprintf(`
-    {
-
-        me(func: uid(%v)) {
+	const q = `query Me($id: string){
+        me(func: uid($id)) {
             name @facets
-            friend @facets {
+			friend @filter(eq(name, "Bob")) @facets {
                 name
             }
             school @facets {
@@ -509,9 +590,9 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
             }
 
         }
-    }`, auid)
+    }`
 
-	resp, err := dg.NewTxn().Query(ctx, q)
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -527,9 +608,10 @@ func ExampleTxn_Mutate_facets(t *testing.T) {
 	}
 
 	fmt.Printf("Me: %+v\n", r.Me)
+	// Output: Me: [{Name:Alice NameOrigin:Indonesia Friends:[{Name:Bob NameOrigin: Friends:[] Since:2009-11-10 23:00:00 +0000 UTC Family:yes Age:13 Close:true School:[]}] Since:0001-01-01 00:00:00 +0000 UTC Family: Age:0 Close:false School:[{Name:Wellington School Since:2009-11-10 23:00:00 +0000 UTC}]}]
 }
 
-func ExampleTxn_Mutate_list(t *testing.T) {
+func ExampleTxn_Mutate_list() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal("While trying to dial gRPC")
@@ -574,19 +656,17 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	uid := assigned.Uids["blank-0"]
-
-	q := fmt.Sprintf(`
-	{
-		me(func: uid(%s)) {
-			uid
+	variables := map[string]string{"$id": assigned.Uids["blank-0"]}
+	const q = `
+	query Me($id: string){
+		me(func: uid($id)) {
 			address
 			phone_number
 		}
 	}
-	`, uid)
+	`
 
-	resp, err := dg.NewTxn().Query(ctx, q)
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -601,7 +681,9 @@ func ExampleTxn_Mutate_list(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Me: %+v\n", r.Me)
+	fmt.Println(string(resp.Json))
+	// Output: {"me":[{"address":["Riley Street","Redfern"],"phone_number":[9876,123]}]}
+
 }
 
 func ExampleDeleteEdges() {
@@ -613,6 +695,18 @@ func ExampleDeleteEdges() {
 
 	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
+
+	op := &api.Operation{}
+	op.Schema = `
+			age: int .
+			married: bool .
+		`
+
+	ctx := context.Background()
+	err = dg.Alter(ctx, op)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	type School struct {
 		Uid  string `json:"uid"`
@@ -647,18 +741,6 @@ func ExampleDeleteEdges() {
 		}},
 	}
 
-	op := &api.Operation{}
-	op.Schema = `
-		age: int .
-		married: bool .
-	`
-
-	ctx := context.Background()
-	err = dg.Alter(ctx, op)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
 	if err != nil {
@@ -667,37 +749,35 @@ func ExampleDeleteEdges() {
 
 	mu.SetJson = pb
 	mu.CommitNow = true
+	mu.IgnoreIndexConflict = true
 	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	uid := assigned.Uids["blank-0"]
-	q := fmt.Sprintf(`{
-		me(func: uid(%s)) {
-			uid
+	variables := make(map[string]string)
+	variables["$id"] = uid
+	const q = `query Me($id: string){
+		me(func: uid($id)) {
 			name
 			age
 			loc
 			married
 			friends {
-				uid
 				name
 				age
 			}
 			schools {
-				uid
 				name@en
 			}
 		}
-	}`, uid)
+	}`
 
-	resp, err := dg.NewTxn().Query(ctx, q)
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	fmt.Println(string(resp.Json))
 
 	// Now lets delete the friend and location edge from Alice
 	mu = &api.Mutation{}
@@ -709,7 +789,7 @@ func ExampleDeleteEdges() {
 		log.Fatal(err)
 	}
 
-	resp, err = dg.NewTxn().Query(ctx, q)
+	resp, err = dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -720,7 +800,8 @@ func ExampleDeleteEdges() {
 
 	var r Root
 	err = json.Unmarshal(resp.Json, &r)
-	fmt.Printf("Resp: %+v\n", r)
+	fmt.Println(string(resp.Json))
+	// Output: {"me":[{"name":"Alice","age":26,"married":true,"schools":[{"name@en":"Crown Public School"}]}]}
 }
 
 func ExampleTxn_Mutate_deleteNode() {
@@ -784,9 +865,10 @@ func ExampleTxn_Mutate_deleteNode() {
 		log.Fatal(err)
 	}
 
-	q := fmt.Sprintf(`{
-		me(func: uid(1000)) {
-			uid
+	variables := make(map[string]string)
+	variables["$id"] = "1000"
+	const q = `query Me($id: string){
+		me(func: uid($id)) {
 			name
 			age
 			married
@@ -808,9 +890,9 @@ func ExampleTxn_Mutate_deleteNode() {
 			name
 			age
 		}
-	}`)
+	}`
 
-	resp, err := dg.NewTxn().Query(ctx, q)
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -823,7 +905,6 @@ func ExampleTxn_Mutate_deleteNode() {
 
 	var r Root
 	err = json.Unmarshal(resp.Json, &r)
-	fmt.Printf("Resp after SetObject: %+v\n", r)
 
 	// Now lets try to delete Alice. This won't delete Bob and Charlie but just remove the
 	// connection between Alice and them.
@@ -845,7 +926,7 @@ func ExampleTxn_Mutate_deleteNode() {
 		log.Fatal(err)
 	}
 
-	resp, err = dg.NewTxn().Query(ctx, q)
+	resp, err = dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -854,7 +935,8 @@ func ExampleTxn_Mutate_deleteNode() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Resp after deleting node: %+v\n", r)
+	fmt.Printf("Resp after deleting node: %+v\n", string(resp.Json))
+	// Output: Resp after deleting node: {"me":[],"me2":[{"uid":"0x3e9","name":"Bob","age":24}],"me3":[{"uid":"0x3ea","name":"Charlie","age":29}]}
 }
 
 func ExampleTxn_Mutate_deletePredicate() {
@@ -917,8 +999,10 @@ func ExampleTxn_Mutate_deletePredicate() {
 		log.Fatal(err)
 	}
 
-	q := fmt.Sprintf(`{
-		me(func: uid(1000)) {
+	variables := make(map[string]string)
+	variables["$id"] = "1000"
+	const q = `query Me($id: string){
+		me(func: uid($id)) {
 			uid
 			name
 			age
@@ -929,9 +1013,9 @@ func ExampleTxn_Mutate_deletePredicate() {
 				age
 			}
 		}
-	}`)
+	}`
 
-	resp, err := dg.NewTxn().Query(ctx, q)
+	resp, err := dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -944,7 +1028,6 @@ func ExampleTxn_Mutate_deletePredicate() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Response after SetObject: %+v\n\n", r)
 
 	op = &api.Operation{
 		DropAttr: "friend",
@@ -961,15 +1044,18 @@ func ExampleTxn_Mutate_deletePredicate() {
 	}
 
 	// Also lets run the query again to verify that predicate data was deleted.
-	resp, err = dg.NewTxn().Query(ctx, q)
+	resp, err = dg.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	r = Root{}
 	err = json.Unmarshal(resp.Json, &r)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	// Alice should have no friends and only two attributes now.
 	fmt.Printf("Response after deletion: %+v\n", r)
+	// Output: Response after deletion: {Me:[{Uid:0x3e8 Name:Alice Age:26 Married:false Friends:[]}]}
 }
