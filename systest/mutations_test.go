@@ -35,6 +35,7 @@ func TestSystem(t *testing.T) {
 	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
 	t.Run("expand all with reverse predicates", wrap(ExpandAllReversePredicatesTest))
 	t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
+	t.Run("facets with order", wrap(FacetOrderTest))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -443,4 +444,59 @@ func NormalizeEdgeCasesTest(t *testing.T, c *client.Dgraph) {
 		require.NoError(t, err)
 		require.JSONEq(t, test.want, string(resp.GetJson()))
 	}
+}
+
+func FacetOrderTest(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `name: string @index(exact) .`,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "Alice" .
+			_:a <friend> _:b (age=13,car="Honda") .
+			_:b <name> "Bob" .
+			_:a <friend> _:c (age=15,car="Tesla") .
+			_:c <name> "Charlie" .
+		`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	const breakfastQuery = `
+	{
+		q(func: eq(name, "Alice")) {
+			name
+			friend(orderdesc: name) @facets {
+				name
+			}
+		}
+	}`
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, breakfastQuery)
+	require.NoError(t, err)
+	CompareJSON(t, `{
+		  "q": [
+		    {
+		      "friend": [
+		        {
+		          "friend|age": 15,
+		          "friend|car": "Tesla",
+		          "name": "Charlie"
+		        },
+		        {
+		          "friend|age": 13,
+		          "friend|car": "Honda",
+		          "name": "Bob"
+		        }
+		      ],
+		      "name": "Alice"
+		    }
+		  ]
+		}`, string(resp.Json))
+
 }
