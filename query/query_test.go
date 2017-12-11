@@ -5809,11 +5809,16 @@ func (z *zeroServer) Connect(ctx context.Context, in *intern.Member) (*intern.Co
 
 // Used by sync membership
 func (z *zeroServer) Update(stream intern.Zero_UpdateServer) error {
+	first := true
 	for {
 		_, err := stream.Recv()
 		if err != nil {
 			return err
 		}
+		if !first {
+			continue
+		}
+		first = false
 		m := &intern.MembershipState{}
 		m.Zeros = make(map[uint64]*intern.Member)
 		m.Zeros[2] = &intern.Member{Id: 2, Leader: true, Addr: "localhost:12340"}

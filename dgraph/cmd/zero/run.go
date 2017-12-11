@@ -86,9 +86,9 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 }
 
-func setupListener(addr string, port int) (listener net.Listener, err error) {
+func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
 	laddr := fmt.Sprintf("%s:%d", addr, port)
-	fmt.Printf("Setting up listener at: %v\n", laddr)
+	fmt.Printf("Setting up %s listener at: %v\n", kind, laddr)
 	return net.Listen("tcp", laddr)
 }
 
@@ -222,11 +222,11 @@ func run() {
 	if len(opts.myAddr) == 0 {
 		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortInternal+opts.portOffset)
 	}
-	grpcListener, err := setupListener(addr, x.PortInternal+opts.portOffset)
+	grpcListener, err := setupListener(addr, x.PortInternal+opts.portOffset, "grpc")
 	if err != nil {
 		log.Fatal(err)
 	}
-	httpListener, err := setupListener(addr, x.PortHTTP+opts.portOffset)
+	httpListener, err := setupListener(addr, x.PortHTTP+opts.portOffset, "http")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func run() {
 		// Close doesn't close already opened connections.
 		httpListener.Close()
 		grpcListener.Close()
-		st.zero.shutDownCh <- struct{}{}
+		close(st.zero.shutDownCh)
 	}()
 
 	fmt.Println("Running Dgraph zero...")

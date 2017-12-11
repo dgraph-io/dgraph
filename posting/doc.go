@@ -16,5 +16,5 @@
  */
 
 // Package posting takes care of posting lists. It contains logic for mutation
-// layers, merging them with RocksDB, etc.
+// layers, merging them with BadgerDB, etc.
 package posting

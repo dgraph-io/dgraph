@@ -25,6 +25,17 @@ service methods.
 It's possible to interface with dgraph directly via gRPC or HTTP. However, if a
 client library exists for you language, this will be an easier option.
 
+{{% notice "tip" %}}
+For multi-node setups, predicates are assigned to the group that first sees
+that predicate. Dgraph also automatically moves predicate data to different
+groups in order to make the predicate distribution more even. This occurs
+automatically every 10 minutes.  It's possible for clients to aid this process
+by by communicating with all dgraph instances. For the Go client, this means
+passing in one `*grpc.ClientConn` per dgraph instance.  Mutations will be made
+in a round robin fashion, resulting in an initially semi random predicate
+distribution.
+{{% /notice %}}
+
 ## Go
 
 [![GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client?status.svg)](https://godoc.org/github.com/dgraph-io/dgraph/client)
@@ -351,7 +362,7 @@ guide to help you build Dgraph client in a new language.
 {{% /notice %}}
 
 It's also possible to interact with dgraph directly via its HTTP endpoints.
-This this allows clients to be built for languages that don't have access to a
+This allows clients to be built for languages that don't have access to a
 working gRPC implementation.
 
 In the examples shown here, regular command line tools such as `curl` and

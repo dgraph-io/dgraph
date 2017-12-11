@@ -64,7 +64,7 @@ type Node struct {
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
-	// applied (to PL) -> synced (to RocksDB).
+	// applied (to PL) -> synced (to BadgerDB).
 	Applied x.WaterMark
 }
 
@@ -464,7 +464,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 		return nil, ErrDuplicateRaftId
 	}
 	// Check that the new node is not already part of the group.
-	if addr, ok := node.peers[rc.Id]; ok {
+	if addr, ok := node.peers[rc.Id]; ok && rc.Addr != addr {
 		Get().Connect(addr)
 		// There exists a healthy connection to server with same id.
 		if _, err := Get().Get(addr); err == nil {

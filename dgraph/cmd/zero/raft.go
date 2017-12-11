@@ -112,6 +112,10 @@ func (n *node) sendReadIndex(ri, id uint64) {
 var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
 
 func (n *node) WaitLinearizableRead(ctx context.Context) error {
+	// Read Request can get rejected then we would wait idefinitely on the channel
+	// so have a timeout of 1 second.
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
 	ch := make(chan uint64, 1)
 	ri := n.setRead(ch)
 	var b [8]byte
@@ -260,6 +264,15 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		if p.Member.GroupId == 0 {
 			state.Zeros[p.Member.Id] = p.Member
+			if p.Member.Leader {
+				// Unset leader flag for other nodes, there can be only one
+				// leader at a time.
+				for _, m := range state.Zeros {
+					if m.Id != p.Member.Id {
+						m.Leader = false
+					}
+				}
+			}
 			return p.Id, nil
 		}
 		group := state.Groups[p.Member.GroupId]
@@ -286,6 +299,15 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		go conn.Get().Connect(p.Member.Addr)
 
 		group.Members[p.Member.Id] = p.Member
+		if p.Member.Leader {
+			// Unset leader flag for other nodes, there can be only one
+			// leader at a time.
+			for _, m := range group.Members {
+				if m.Id != p.Member.Id {
+					m.Leader = false
+				}
+			}
+		}
 		// On replay of logs on restart we need to set nextGroup.
 		if n.server.nextGroup <= p.Member.GroupId {
 			n.server.nextGroup = p.Member.GroupId + 1
@@ -513,6 +535,8 @@ func (n *node) Run() {
 					n.server.updateLeases()
 					leader = true
 				}
+				// Oracle stream would close the stream once it steps down as leader
+				// predicate move would cancel any in progress move on stepping down.
 				n.triggerLeaderChange()
 			}
 
@@ -520,7 +544,8 @@ func (n *node) Run() {
 				msg.Context = rcBytes
 				n.Send(msg)
 			}
-			if len(rd.CommittedEntries) > 0 {
+			// Need to send membership state to dgraph nodes on leader change also.
+			if rd.SoftState != nil || len(rd.CommittedEntries) > 0 {
 				n.triggerUpdates()
 			}
 			if loop%1000 == 0 {
