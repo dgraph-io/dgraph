@@ -91,20 +91,16 @@ func New(kv *badger.DB, pool *ZeroPool, opt Options) *XidMap {
 		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
-			var err error
 			if zc == nil {
-				zc, err = pool.Leader()
+				zc = pool.NextZero()
 			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			assigned, err := zc.AssignUids(ctx, &intern.Num{Val: 10000})
+			cancel()
 			if err == nil {
-				var assigned *api.AssignedIds
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-				assigned, err = zc.AssignUids(ctx, &intern.Num{Val: 10000})
-				cancel()
-				if err == nil {
-					backoff = initBackoff
-					xm.newRanges <- assigned
-					continue
-				}
+				backoff = initBackoff
+				xm.newRanges <- assigned
+				continue
 			}
 
 			x.Printf("Error while getting lease: %v\n", err)

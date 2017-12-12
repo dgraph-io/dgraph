@@ -91,12 +91,14 @@ func newLoader(opt options) *loader {
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 	}
 	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
+	zeroPool, err := xidmap.NewZeroPool(func(addr string) (*grpc.ClientConn, error) {
+		return grpc.Dial(addr, grpc.WithInsecure())
+	}, opt.ZeroAddr)
+	x.Check(err)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
-		zeros: xidmap.NewZeroPool(func(addr string) (*grpc.ClientConn, error) {
-			return grpc.Dial(addr, grpc.WithInsecure())
-		}, opt.ZeroAddr),
+		zeros:   zeroPool,
 	}
 	ld.state.writeTs = ld.getWriteTimestamp()
 	for i := 0; i < opt.NumGoroutines; i++ {
@@ -108,15 +110,12 @@ func newLoader(opt options) *loader {
 
 func (ld *loader) getWriteTimestamp() uint64 {
 	for {
-		client, err := ld.zeros.Leader()
+		client := ld.zeros.NextZero()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
+		cancel()
 		if err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			var ts *api.AssignedIds
-			ts, err = client.Timestamps(ctx, &intern.Num{Val: 1})
-			cancel()
-			if err == nil {
-				return ts.GetStartId()
-			}
+			return ts.GetStartId()
 		}
 		x.Printf("error communicating with dgraph zero, retrying: %v", err)
 		time.Sleep(time.Second)
