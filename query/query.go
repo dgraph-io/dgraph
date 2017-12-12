@@ -2164,12 +2164,13 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
 	if sg.facetsMatrix != nil {
 		// The order of uids in the lists which are part of the uidMatrix would have been changed
-		// after sort. We wan't to update the order of lists in the facetMatrix to be the same.
+		// after sort. We want to update the order of lists in the facetMatrix accordingly.
 		for idx, rl := range result.UidMatrix {
 			fl := make([]*intern.Facets, 0, len(sg.facetsMatrix[idx].FacetsList))
 			for _, uid := range rl.Uids {
 				// Find index of this uid in original sorted uid list.
 				oidx := algo.IndexOf(sg.uidMatrix[idx], uid)
+				// Find corresponding facet.
 				f := sg.facetsMatrix[idx].FacetsList[oidx]
 				fl = append(fl, f)
 			}
