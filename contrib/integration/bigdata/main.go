@@ -230,11 +230,12 @@ func doDelete(c *client.Dgraph) error {
 
 	// delete this node, and links from other nodes to this node
 	fmt.Println(len(result.Q))
-	x.AssertTrue(len(result.Q) == 1)
 	rdfs := fmt.Sprintf("<%s> * * .\n", uid)
-	for _, outUid := range result.Q[0].fields() {
-		for char := 'a'; char < 'z'; char++ {
-			rdfs += fmt.Sprintf("<%s> <link_%c> <%s> .\n", outUid, char, uid)
+	if len(result.Q) > 0 { // might not be any links
+		for _, outUid := range result.Q[0].fields() {
+			for char := 'a'; char < 'z'; char++ {
+				rdfs += fmt.Sprintf("<%s> <link_%c> <%s> .\n", outUid, char, uid)
+			}
 		}
 	}
 
