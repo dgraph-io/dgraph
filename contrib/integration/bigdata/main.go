@@ -58,11 +58,6 @@ var (
 	endXids   []string
 )
 
-const (
-	addPerRound    = 2
-	deletePerRound = 1
-)
-
 func init() {
 	for i := 'a'; i <= 'z'; i++ {
 		links = append(links, fmt.Sprintf("link_%c", i))
@@ -88,9 +83,8 @@ func main() {
 		}))
 	}
 
-	r := &runner{ctx: context.Background()}
 	for i := 0; i < 10; i++ {
-		r.runMutation(c)
+		doRound(c)
 	}
 
 }
@@ -133,32 +127,37 @@ func makeClient() *client.Dgraph {
 	return client.NewDgraphClient(dgcs...)
 }
 
-type runner struct {
-	ctx context.Context
-	txn *client.Txn
-}
-
-func (r *runner) runMutation(c *client.Dgraph) {
-	r.txn = c.NewTxn()
-	defer r.txn.Discard(r.ctx)
+func doRound(c *client.Dgraph) {
+	const (
+		addPerRound    = 2
+		deletePerRound = 1
+	)
 	for i := 0; i < addPerRound; i++ {
-		if err := r.runAdd(); err != nil {
+		if err := doAdd(c); err != nil {
 			fmt.Println("Error:", err)
 			return
 		}
 	}
 	for i := 0; i < deletePerRound; i++ {
-		if err := r.runDelete(); err != nil {
+		if err := doDelete(c); err != nil {
 			fmt.Println("Error:", err)
 			return
 		}
 	}
-	if err := r.txn.Commit(r.ctx); err != nil {
-		fmt.Println("Error:", err)
-	}
 }
 
-func (r *runner) runAdd() error {
+type runner struct {
+	ctx context.Context
+	txn *client.Txn
+}
+
+func doAdd(c *client.Dgraph) error {
+	r := &runner{
+		ctx: context.Background(), // TODO
+		txn: c.NewTxn(),
+	}
+	defer r.txn.Discard(r.ctx)
+
 	uid, err := r.newNode()
 	if err != nil {
 		return err
@@ -197,10 +196,17 @@ func (r *runner) runAdd() error {
 		_, err = r.txn.Mutate(context.Background(), &api.Mutation{SetNquads: []byte(rdfs)})
 		return err
 	}
-	return nil
+
+	return r.txn.Commit(r.ctx)
 }
 
-func (r *runner) runDelete() error {
+func doDelete(c *client.Dgraph) error {
+	r := &runner{
+		ctx: context.Background(), // TODO
+		txn: c.NewTxn(),
+	}
+	defer r.txn.Discard(r.ctx)
+
 	// select random node
 	uid, err := r.nodeUidToDelete()
 	if err != nil {
@@ -223,6 +229,7 @@ func (r *runner) runDelete() error {
 	fmt.Printf("to delete result %+v\n", result)
 
 	// delete this node, and links from other nodes to this node
+	fmt.Println(len(result.Q))
 	x.AssertTrue(len(result.Q) == 1)
 	rdfs := fmt.Sprintf("<%s> * * .\n", uid)
 	for _, outUid := range result.Q[0].fields() {
@@ -231,12 +238,12 @@ func (r *runner) runDelete() error {
 		}
 	}
 
-	// update lease
-
-	_, err = r.txn.Mutate(context.Background(), &api.Mutation{
+	if _, err := r.txn.Mutate(context.Background(), &api.Mutation{
 		DelNquads: []byte(rdfs),
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+	return r.txn.Commit(r.ctx)
 }
 
 func (r *runner) nodeUidToDelete() (string, error) {
@@ -389,6 +396,7 @@ func (r *runner) query(out interface{}, q string, args ...interface{}) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println(string(resp.Json))
 	return json.Unmarshal(resp.Json, out)
 }
 
