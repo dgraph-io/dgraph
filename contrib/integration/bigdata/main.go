@@ -59,7 +59,7 @@ var (
 )
 
 const (
-	addPerRound    = 10
+	addPerRound    = 2
 	deletePerRound = 1
 )
 
@@ -193,6 +193,32 @@ func runAdd(txn *client.Txn) error {
 }
 
 func runDelete(txn *client.Txn) error {
+	// select random node
+	uid, err := getRandomNodeUid(txn)
+	if err != nil {
+		return err
+	}
+
+	// query all nodes that link to this node
+	var result struct {
+		Q []struct {
+			U []string
+		}
+	}
+	q := fmt.Sprintf("{ q(func: uid(%s)) @normalize {\n", uid)
+	for char := 'a'; char <= 'z'; char++ {
+		q += fmt.Sprintf("~link_%c { u: uid }\n", char)
+	}
+	q += "}}"
+	if err := query(context.Background(), txn, &result, q); err != nil {
+		return err
+	}
+	fmt.Println("result", result)
+
+	// delete links from other nodes to this node
+
+	// delete this node
+
 	return nil
 }
 
