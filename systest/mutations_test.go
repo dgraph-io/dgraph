@@ -461,12 +461,17 @@ func FacetOrderTest(t *testing.T, c *client.Dgraph) {
 			_:b <name> "Bob" .
 			_:a <friend> _:c (age=15,car="Tesla") .
 			_:c <name> "Charlie" .
+			_:a <friend> _:d .
+			_:d <name> "Bubble" .
+			_:a <friend> _:e .
+			_:a <friend> _:f (age=20,car="Hyundai") .
+			_:f <name> "Abc" .
 		`),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	const breakfastQuery = `
+	const friendQuery = `
 	{
 		q(func: eq(name, "Alice")) {
 			name
@@ -477,7 +482,7 @@ func FacetOrderTest(t *testing.T, c *client.Dgraph) {
 	}`
 
 	txn = c.NewTxn()
-	resp, err := txn.Query(ctx, breakfastQuery)
+	resp, err := txn.Query(ctx, friendQuery)
 	require.NoError(t, err)
 	CompareJSON(t, `{
 		  "q": [
@@ -489,9 +494,17 @@ func FacetOrderTest(t *testing.T, c *client.Dgraph) {
 		          "name": "Charlie"
 		        },
 		        {
+		          "name": "Bubble"
+		        },
+		        {
 		          "friend|age": 13,
 		          "friend|car": "Honda",
 		          "name": "Bob"
+		        },
+		        {
+		          "friend|age": 20,
+		          "friend|car": "Hyundai",
+		          "name": "Abc"
 		        }
 		      ],
 		      "name": "Alice"

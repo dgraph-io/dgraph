@@ -30,7 +30,7 @@ start
 
 #Set Schema
 curl -X PUT  -d '
-    name: string @index(term, exact) .
+    name: string @index(hash) .
     initial_release_date: datetime @index(year) .
 ' "http://localhost:8081/alter"
 
