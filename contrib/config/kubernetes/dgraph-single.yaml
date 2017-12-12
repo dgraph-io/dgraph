@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dgraph
+spec:
+  volumes:
+  - name: shared-data
+    emptyDir: {}
+  containers:
+  - name: zero
+    image: dgraph/dgraph:latest
+    ports:
+    - containerPort: 9080
+      name: grpc
+    - containerPort: 8080
+      name: http
+    volumeMounts:
+    - name: shared-data
+      mountPath: /dgraph
+    command:
+      - "/bin/bash"
+      - "-ecx"
+      - "dgraph zero --port_offset -2000 --my=localhost:5080"
+
+  - name: server
+    image: dgraph/dgraph:latest
+    ports:
+    - containerPort: 6080
+      name: http
+    volumeMounts:
+    - name: shared-data
+      mountPath: /dgraph
+    command:
+      - "/bin/bash"
+      - "-ecx"
+      - "dgraph server --my=localhost:7080 --memory_mb=2048 --zero=localhost:5080"
