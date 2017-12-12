@@ -201,25 +201,34 @@ func runDelete(txn *client.Txn) error {
 
 	// query all nodes that link to this node
 	var result struct {
-		Q []struct {
-			U []string
-		}
+		Q []AZ
 	}
 	q := fmt.Sprintf("{ q(func: uid(%s)) @normalize {\n", uid)
 	for char := 'a'; char <= 'z'; char++ {
-		q += fmt.Sprintf("~link_%c { u: uid }\n", char)
+		q += fmt.Sprintf("~link_%c { %c: uid }\n", char, char)
 	}
 	q += "}}"
 	if err := query(context.Background(), txn, &result, q); err != nil {
 		return err
 	}
-	fmt.Println("result", result)
+	fmt.Println("UID:", uid)
+	fmt.Printf("to delete result %+v\n", result)
 
-	// delete links from other nodes to this node
+	// delete this node, and links from other nodes to this node
+	x.AssertTrue(len(result.Q) == 1)
+	rdfs := fmt.Sprintf("<%s> * * .\n", uid)
+	for _, outUid := range result.Q[0].fields() {
+		for char := 'a'; char < 'z'; char++ {
+			rdfs += fmt.Sprintf("<%s> <link_%c> <%s> .\n", outUid, char, uid)
+		}
+	}
 
-	// delete this node
+	// update lease
 
-	return nil
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		DelNquads: []byte(rdfs),
+	})
+	return err
 }
 
 func newNode(txn *client.Txn) (string, error) {
@@ -292,7 +301,6 @@ func getRandomNodeUid(txn *client.Txn) (string, error) {
 			}
 		}
 		xid := fmt.Sprintf("%c_%d", char, rand.Intn(end-start)+start)
-		fmt.Println("xid:", xid)
 		if err := query(context.Background(), txn, &res, `
 		{
 			q(func: eq(xid, "%s")) {
@@ -302,7 +310,6 @@ func getRandomNodeUid(txn *client.Txn) (string, error) {
 		`, xid); err != nil {
 			return "", err
 		}
-		fmt.Printf("%+v\n", res)
 		x.AssertTrue(len(res.Q) == 1 && res.Q[0].Uid != nil)
 		return *res.Q[0].Uid, nil
 	}
@@ -314,4 +321,46 @@ func query(ctx context.Context, txn *client.Txn, out interface{}, q string, args
 		return err
 	}
 	return json.Unmarshal(resp.Json, out)
+}
+
+type AZ struct {
+	A string
+	B string
+	C string
+	D string
+	E string
+	F string
+	G string
+	H string
+	I string
+	J string
+	K string
+	L string
+	M string
+	N string
+	O string
+	P string
+	Q string
+	R string
+	S string
+	T string
+	U string
+	V string
+	W string
+	X string
+	Y string
+	Z string
+}
+
+func (a *AZ) fields() []string {
+	var fs []string
+	for _, f := range []string{
+		a.A, a.B, a.C, a.D, a.E, a.F, a.G, a.H, a.I, a.J, a.K, a.L, a.M,
+		a.N, a.O, a.P, a.Q, a.R, a.S, a.T, a.U, a.V, a.W, a.X, a.Y, a.Z,
+	} {
+		if f != "" {
+			fs = append(fs, f)
+		}
+	}
+	return fs
 }
