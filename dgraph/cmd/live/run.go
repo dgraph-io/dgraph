@@ -274,16 +274,14 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	zeroPool, err := xidmap.NewZeroPool(
-		func(addr string) (*grpc.ClientConn, error) {
-			return setupConnection(addr, true)
-		},
-		opt.zero,
-	)
-	x.Checkf(err, "While establishing Zero pool")
 	alloc := xidmap.New(
 		kv,
-		zeroPool,
+		xidmap.NewZeroPool(
+			func(addr string) (*grpc.ClientConn, error) {
+				return setupConnection(addr, true)
+			},
+			opt.zero,
+		),
 		xidmap.Options{
 			NumShards: 100,
 			LRUSize:   1e5,

@@ -2,49 +2,60 @@ package xidmap
 
 import (
 	"context"
-	"time"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
 
 type ZeroPool struct {
 	dial  func(addr string) (*grpc.ClientConn, error)
-	zeros []intern.ZeroClient
-	idx   int
+	state *intern.ConnectionState
 }
 
-func NewZeroPool(dial func(string) (*grpc.ClientConn, error), addr string) (*ZeroPool, error) {
-	p := &ZeroPool{
+func NewZeroPool(dial func(string) (*grpc.ClientConn, error), addr string) *ZeroPool {
+	return &ZeroPool{
 		dial: dial,
+		state: &intern.ConnectionState{State: &intern.MembershipState{
+			Zeros: map[uint64]*intern.Member{0: &intern.Member{Addr: addr}},
+		}},
 	}
-	conn, err := dial(addr)
-	if err != nil {
-		return nil, err
-	}
-	initialZero := intern.NewZeroClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	state, err := initialZero.Connect(ctx, &intern.Member{ClusterInfoOnly: true})
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	for _, member := range state.GetState().Zeros {
-		conn, err = dial(member.Addr)
-		if err != nil {
-			return nil, err
-		}
-		p.zeros = append(p.zeros, intern.NewZeroClient(conn))
-		if member.Leader {
-			// Use leader first.
-			p.idx = len(p.zeros) - 1
-		}
-	}
-	return p, nil
 }
 
-func (p *ZeroPool) NextZero() intern.ZeroClient {
-	z := p.zeros[p.idx]
-	p.idx = (p.idx + 1) % len(p.zeros)
-	return z
+func (p *ZeroPool) Leader() (intern.ZeroClient, error) {
+	for _, member := range p.state.State.Zeros {
+		conn, err := p.dial(member.Addr)
+		if err != nil {
+			x.Printf("Could not dial zero at address %q: %v", member.Addr, err)
+			continue // try next known address
+		}
+
+		state, err := intern.NewZeroClient(conn).Connect(
+			context.Background(), &intern.Member{ClusterInfoOnly: true})
+		if err != nil {
+			x.Printf("Could not get membership state from zero at address %q: %v",
+				member.Addr, err)
+			continue // try next known address
+		}
+
+		p.state = state
+		var leaderAddr string
+		for _, member := range p.state.State.Zeros {
+			if member.Leader {
+				leaderAddr = member.Addr
+				break
+			}
+		}
+		if leaderAddr == "" {
+			return nil, x.Errorf("Could not find zero leader")
+		}
+
+		conn, err = p.dial(leaderAddr)
+		if err != nil {
+			return nil, x.Errorf("Could not dial leader zero at address %q: %v",
+				leaderAddr, err)
+		}
+		return intern.NewZeroClient(conn), nil
+	}
+	return nil, x.Errorf("Failed to obtain zero leader after trying all connections")
 }
