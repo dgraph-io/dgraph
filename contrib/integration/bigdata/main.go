@@ -194,7 +194,7 @@ func runAdd(txn *client.Txn) error {
 
 func runDelete(txn *client.Txn) error {
 	// select random node
-	uid, err := getRandomNodeUid(txn)
+	uid, err := nodeUidToDelete(txn)
 	if err != nil {
 		return err
 	}
@@ -229,6 +229,67 @@ func runDelete(txn *client.Txn) error {
 		DelNquads: []byte(rdfs),
 	})
 	return err
+}
+
+func nodeUidToDelete(txn *client.Txn) (string, error) {
+	for {
+		char := 'a' + rune(rand.Intn(26))
+		var result struct {
+			Q []struct {
+				Uid   *string
+				Start *int
+				End   *int
+			}
+		}
+		if err := query(context.Background(), txn, &result, `
+		{
+			q(func: eq(xid, "root")) {
+				uid
+				start: start_xid_%c
+				end: end_xid_%c
+			}
+		}
+		`, char, char); err != nil {
+			return "", err
+		}
+
+		x.AssertTrue(len(result.Q) == 1 && result.Q[0].Uid != nil &&
+			result.Q[0].Start != nil && result.Q[0].End != nil)
+		start := *result.Q[0].Start
+		end := *result.Q[0].End
+		if start == end {
+			continue // try another char
+		}
+
+		_, err := txn.Mutate(context.Background(), &api.Mutation{
+			SetNquads: []byte(fmt.Sprintf(`
+				<%s> <start_xid_%c> "%d" .
+				`, *result.Q[0].Uid, char, start+1)),
+		})
+		if err != nil {
+			return "", err
+		}
+
+		return getUidForXid(txn, fmt.Sprintf("%c_%d", char, start))
+	}
+}
+
+func getUidForXid(txn *client.Txn, xid string) (string, error) {
+	var result struct {
+		Q []struct {
+			Uid string
+		}
+	}
+	if err := query(context.Background(), txn, &result, `
+	{
+		q(func: eq(xid, %q)) {
+			uid
+		}
+	}`, xid); err != nil {
+		return "", err
+	}
+	x.AssertTrue(len(result.Q) == 1 && result.Q[0].Uid != "")
+	return result.Q[0].Uid, nil
 }
 
 func newNode(txn *client.Txn) (string, error) {
