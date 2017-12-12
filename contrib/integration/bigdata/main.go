@@ -95,7 +95,7 @@ func main() {
 func schema() string {
 	s := "xid: string @index(hash) .\n"
 	for _, attr := range links {
-		s += attr + ": uid .\n"
+		s += attr + ": uid @reverse .\n"
 	}
 	for _, attr := range attrs {
 		s += attr + ": string .\n"
