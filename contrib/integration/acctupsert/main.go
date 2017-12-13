@@ -128,7 +128,7 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 	q := fmt.Sprintf(`
 		{
 			get(func: eq(first, %q)) @filter(eq(last, %q) AND eq(age, %d)) {
-				uid: _uid_
+				uid
 			}
 		}
 	`, acc.first, acc.last, acc.age)

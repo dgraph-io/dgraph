@@ -315,6 +315,9 @@ var errClosed = errors.New("Streaming closed by Oracle.")
 var errNotLeader = errors.New("Node is no longer leader.")
 
 func (s *Server) Oracle(unused *api.Payload, server intern.Zero_OracleServer) error {
+	if !s.Node.AmLeader() {
+		return errNotLeader
+	}
 	ch, id := s.orc.newSubscriber()
 	defer s.orc.removeSubscriber(id)
 

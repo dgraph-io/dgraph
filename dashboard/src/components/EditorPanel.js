@@ -16,7 +16,8 @@ class EditorPanel extends React.Component {
       onClearQuery,
       onDiscardAllFrames,
       saveCodeMirrorInstance,
-      connected
+      connected,
+      onUpdateAction
     } = this.props;
 
     const isQueryDirty = query.trim() !== "";
@@ -78,7 +79,7 @@ class EditorPanel extends React.Component {
                   return;
                 }
 
-                onRunQuery(query);
+                onRunQuery(query, this.props.action);
               }}
             >
               <i className="fa fa-play" /> Run
@@ -90,11 +91,40 @@ class EditorPanel extends React.Component {
           onUpdateQuery={onUpdateQuery}
           onRunQuery={onRunQuery}
           query={query}
+          action={this.props.action}
           saveCodeMirrorInstance={saveCodeMirrorInstance}
         />
         <div className="editor-radio">
-          Read-only queries. Mutations and schema changes can be done via cURL
-          or Grpc client.
+          <label className="editor-label">
+            <input
+              className="editor-type"
+              type="radio"
+              name="action"
+              value="query"
+              checked={this.props.action === "query"}
+              onChange={onUpdateAction}
+            />Query
+          </label>
+          <label className="editor-label">
+            <input
+              className="editor-type"
+              type="radio"
+              name="action"
+              value="mutate"
+              checked={this.props.action === "mutate"}
+              onChange={onUpdateAction}
+            />Mutate
+          </label>
+          <label className="editor-label">
+            <input
+              className="editor-type"
+              type="radio"
+              name="action"
+              value="alter"
+              checked={this.props.action === "alter"}
+              onChange={onUpdateAction}
+            />Alter
+          </label>
         </div>
       </div>
     );
@@ -103,7 +133,8 @@ class EditorPanel extends React.Component {
 
 function mapStateToProps(state) {
   return {
-    query: state.query.query
+    query: state.query.query,
+    action: state.query.action
   };
 }
 
