@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/url"
 	"os"
@@ -289,6 +290,7 @@ func (r *runner) updateXidRanges(newNodeXid string) error {
 func (r *runner) getRandomNodeUid() (string, error) {
 	for {
 		char := 'a' + rune(rand.Intn(26))
+		log.Println("trying char:", char)
 		var result struct {
 			Q []struct {
 				Start *int
@@ -336,6 +338,7 @@ func (r *runner) getRandomNodeUid() (string, error) {
 
 func (r *runner) query(out interface{}, q string, args ...interface{}) error {
 	q = fmt.Sprintf(q, args...)
+	log.Println("sending query:", q)
 	resp, err := r.txn.Query(r.ctx, q)
 	if err != nil {
 		return err
@@ -407,9 +410,11 @@ func prettyPrintJSON(j []byte) string {
 }
 
 func expandGraph(c *client.Dgraph) error {
+	log.Println("start of expandGraph")
 	r := runner{txn: c.NewTxn(), ctx: context.Background()}
 	defer r.txn.Discard(r.ctx)
 
+	log.Println("getting random node uid")
 	uid, err := r.getRandomNodeUid()
 	if err != nil {
 		return err
@@ -427,6 +432,7 @@ func expandGraph(c *client.Dgraph) error {
 	}
 	`, uid, q)
 
+	log.Println("Sending q")
 	resp, err := r.txn.Query(r.ctx, q)
 	if err != nil {
 		return err
