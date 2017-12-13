@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos/api"
@@ -59,6 +61,7 @@ var (
 )
 
 func init() {
+	rand.Seed(time.Now().Unix())
 	for i := 'a'; i <= 'z'; i++ {
 		links = append(links, fmt.Sprintf("link_%c", i))
 		attrs = append(attrs, fmt.Sprintf("attr_%c", i))
@@ -83,7 +86,7 @@ func main() {
 		}))
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1; i++ {
 		doRound(c)
 	}
 
@@ -134,15 +137,19 @@ func doRound(c *client.Dgraph) {
 	)
 	for i := 0; i < addPerRound; i++ {
 		if err := doAdd(c); err != nil {
+			log.Fatal(err) // TODO remove
 			fmt.Println("Error:", err)
 			return
 		}
+		showLeases(c)
 	}
 	for i := 0; i < deletePerRound; i++ {
 		if err := doDelete(c); err != nil {
+			log.Fatal(err) // TODO remove
 			fmt.Println("Error:", err)
 			return
 		}
+		showLeases(c)
 	}
 }
 
@@ -156,27 +163,36 @@ func doAdd(c *client.Dgraph) error {
 		ctx: context.Background(), // TODO
 		txn: c.NewTxn(),
 	}
-	defer r.txn.Discard(r.ctx)
+	defer func() {
+		fmt.Println("discarding")
+		r.txn.Discard(r.ctx)
+	}()
 
 	uid, err := r.newNode()
 	if err != nil {
+		fmt.Println("EARLY EXIT 1", err)
 		return err
 	}
 	var rdfs string
 	for char := 'a'; char <= 'z'; char++ {
 		var links int
 		switch rnd := rand.Float64(); {
-		case rnd < 0.80:
-		case rnd < 0.90:
-			links = 1
 		case rnd < 0.95:
-			links = 2
+			links = 0
 		default:
-			links = 3
+			links = 1
+			//case rnd < 0.80:
+			//case rnd < 0.90:
+			//links = 1
+			//case rnd < 0.95:
+			//links = 2
+			//default:
+			//links = 3
 		}
 		for i := 0; i < links; i++ {
 			rndUid, err := r.getRandomNodeUid()
 			if err != nil {
+				fmt.Println("EARLY EXIT 2", err)
 				return err
 			}
 			rdfs += fmt.Sprintf("<%s> <link_%c> <%s> .\n", uid, char, rndUid)
@@ -193,10 +209,13 @@ func doAdd(c *client.Dgraph) error {
 	}
 
 	if rdfs != "" {
-		_, err = r.txn.Mutate(context.Background(), &api.Mutation{SetNquads: []byte(rdfs)})
-		return err
+		if _, err = r.txn.Mutate(context.Background(), &api.Mutation{SetNquads: []byte(rdfs)}); err != nil {
+			fmt.Println("EARLY EXIT 3", err)
+			return err
+		}
 	}
 
+	fmt.Println("ADD COMMIT")
 	return r.txn.Commit(r.ctx)
 }
 
@@ -217,7 +236,7 @@ func doDelete(c *client.Dgraph) error {
 	var result struct {
 		Q []AZ
 	}
-	q := fmt.Sprintf("{ q(func: uid(%s)) @normalize {\n", uid)
+	q := fmt.Sprintf("{ q(func: uid(%s)) @normalize {\n uid\n", uid)
 	for char := 'a'; char <= 'z'; char++ {
 		q += fmt.Sprintf("~link_%c { %c: uid }\n", char, char)
 	}
@@ -225,17 +244,12 @@ func doDelete(c *client.Dgraph) error {
 	if err := r.query(&result, q); err != nil {
 		return err
 	}
-	fmt.Println("UID:", uid)
-	fmt.Printf("to delete result %+v\n", result)
 
 	// delete this node, and links from other nodes to this node
-	fmt.Println(len(result.Q))
 	rdfs := fmt.Sprintf("<%s> * * .\n", uid)
-	if len(result.Q) > 0 { // might not be any links
-		for _, outUid := range result.Q[0].fields() {
-			for char := 'a'; char < 'z'; char++ {
-				rdfs += fmt.Sprintf("<%s> <link_%c> <%s> .\n", outUid, char, uid)
-			}
+	for _, outUid := range result.Q[0].fields() {
+		for char := 'a'; char < 'z'; char++ {
+			rdfs += fmt.Sprintf("<%s> <link_%c> <%s> .\n", outUid, char, uid)
 		}
 	}
 
@@ -244,6 +258,8 @@ func doDelete(c *client.Dgraph) error {
 	}); err != nil {
 		return err
 	}
+
+	fmt.Println("DEL COMMIT")
 	return r.txn.Commit(r.ctx)
 }
 
@@ -274,6 +290,7 @@ func (r *runner) nodeUidToDelete() (string, error) {
 		start := *result.Q[0].Start
 		end := *result.Q[0].End
 		if start == end {
+			fmt.Println("start is end", start, end)
 			continue // try another char
 		}
 
@@ -393,11 +410,13 @@ func (r *runner) getRandomNodeUid() (string, error) {
 }
 
 func (r *runner) query(out interface{}, q string, args ...interface{}) error {
-	resp, err := r.txn.Query(r.ctx, fmt.Sprintf(q, args...))
+	q = fmt.Sprintf(q, args...)
+	//fmt.Println("Query:\n\t" + q)
+	resp, err := r.txn.Query(r.ctx, q)
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(resp.Json))
+	//fmt.Println("Response:\n\t" + string(resp.Json))
 	return json.Unmarshal(resp.Json, out)
 }
 
@@ -441,4 +460,25 @@ func (a *AZ) fields() []string {
 		}
 	}
 	return fs
+}
+
+func showLeases(c *client.Dgraph) {
+	resp, err := c.NewTxn().Query(context.Background(), `
+	{
+		q(func: eq(xid, "root")) {
+			uid
+			expand(_all_)
+		}
+	}
+	`)
+	x.Check(err)
+	fmt.Println(prettyPrintJSON(resp.Json))
+}
+
+func prettyPrintJSON(j []byte) string {
+	var m map[string]interface{}
+	x.Check(json.Unmarshal(j, &m))
+	pretty, err := json.MarshalIndent(m, "", "  ")
+	x.Check(err)
+	return string(pretty)
 }
