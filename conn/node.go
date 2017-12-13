@@ -188,7 +188,7 @@ func (n *Node) Send(m raftpb.Message) {
 	data, err := m.Marshal()
 	x.Check(err)
 	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
-		x.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+		//x.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
 	}
 	select {
 	case n.messages <- sendmsg{to: m.To, data: data}:
@@ -533,7 +533,7 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 			x.Check(err)
 		}
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
-			x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+			//x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := w.applyMessage(ctx, msg); err != nil {
 			return &api.Payload{}, err
