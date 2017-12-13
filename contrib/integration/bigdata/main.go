@@ -216,7 +216,8 @@ func showNode(c *client.Dgraph) error {
 	}
 	x.AssertTrue(len(result.Q) > 0 && result.Q[0].Count != nil)
 
-	if err := r.query(make(map[string]interface{}), `
+	var m map[string]interface{}
+	if err := r.query(&m, `
 	{
 		q(func: eq(xid, "%c_%d")) {
 			expand(_all_)
