@@ -1,5 +1,5 @@
 # This is the service that should be used by the clients of Dgraph to talk to the server.
-# It exposes a ClusterIP that will automatically load balance connections the the different Dgraph
+# It exposes a ClusterIP that will automatically load balance connections to the different Dgraph
 # Servers.
 apiVersion: v1
 kind: Service
@@ -43,7 +43,7 @@ spec:
   selector:
     app: dgraph
 ---
-# This StatefulSet runs 1 replicas of Zero and Server.
+# This StatefulSet runs 1 replica of Zero and Server.
 apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:

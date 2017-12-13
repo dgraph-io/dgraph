@@ -778,7 +778,7 @@ kops delete cluster ${NAME} --yes
 ### Cluster setup
 
 In this setup, we are going to deploy 1 Zero node and 3 Server nodes. We start Zero with `--replicas
-3` flag, so all data would be replicated on each of 3 Server nodes.
+3` flag, so all data would be replicated on each of the 3 Server nodes.
 
 {{% notice "note" %}} Ideally you should have atleast three worker nodes as part of your Kubernetes
 cluster so that each Dgraph Server runs on a separate node.{{% /notice %}}
@@ -798,7 +798,7 @@ ip-172-20-59-116.us-west-2.compute.internal   Ready     node      4m        v1.8
 ip-172-20-61-88.us-west-2.compute.internal    Ready     node      5m        v1.8.4
 ```
 
-Once your kubernetes cluster is up, you can use [dgraph-multi.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-multi.yaml) to the cluster.
+Once your kubernetes cluster is up, you can use [dgraph-multi.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-multi.yaml) to start the cluster.
 
 * From your machine, run the following command to start the cluster.
 
@@ -837,7 +837,7 @@ dgraph-zero-0     1/1       Running   0          1m
 Port forward from your local machine to the pod
 
 ```sh
-kubectl port-forward dgraph-0 8080
+kubectl port-forward dgraph-server-0 8080
 ```
 
 Go to `http://localhost:8080` and verify Dgraph is working as expected.
@@ -865,6 +865,8 @@ This setup allows you to run 3 Dgraph Servers and 3 Zero Servers. The instructio
 [cluster-setup]({{< relref "#cluster-setup">}}) apart from the step to start the cluster. We start Zero with `--replicas
 3` flag, so all data would be replicated on each of 3 Server nodes.
 
+{{% notice "note" %}} Ideally you should have atleast three worker nodes as part of your Kubernetes
+cluster so that each Dgraph Server runs on a separate node.{{% /notice %}}
 
 Once your kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha.yaml) to start the cluster.
 
