@@ -81,9 +81,11 @@ func main() {
 		x.Check(c.Alter(context.Background(), &api.Operation{
 			DropAll: true,
 		}))
-		x.Check(c.Alter(context.Background(), &api.Operation{
-			Schema: schema(),
-		}))
+		for _, s := range schema() {
+			x.Check(c.Alter(context.Background(), &api.Operation{
+				Schema: s,
+			}))
+		}
 		x.Check2(c.NewTxn().Mutate(context.Background(), &api.Mutation{
 			CommitNow: true,
 			SetNquads: []byte(initialData()),
@@ -129,6 +131,7 @@ func main() {
 					if err == nil {
 						atomic.AddInt64(&queryCount, 1)
 					} else {
+						fmt.Println(err)
 						atomic.AddInt64(&errCount, 1)
 					}
 				}
@@ -145,16 +148,16 @@ func main() {
 	}
 }
 
-func schema() string {
-	s := "xid: string @index(hash) .\n"
+func schema() []string {
+	s := []string{"xid: string @index(hash) .\n"}
 	for _, attr := range links {
-		s += attr + ": uid @reverse .\n"
+		s = append(s, attr+": uid @reverse .\n")
 	}
 	for _, attr := range attrs {
-		s += attr + ": string .\n"
+		s = append(s, attr+": string .\n")
 	}
 	for _, attr := range append(startXids, endXids...) {
-		s += attr + ": int .\n"
+		s = append(s, attr+": int .\n")
 	}
 	return s
 }
