@@ -90,9 +90,10 @@ func main() {
 		x.Check(err)
 		x.Check(r.updateXidRanges(xid))
 		x.Check(r.txn.Commit(r.ctx))
+		return
 	}
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 100; i++ {
 		doAdd(c)
 	}
 
@@ -183,112 +184,6 @@ func doAdd(c *client.Dgraph) error {
 
 	fmt.Println("ADD COMMIT")
 	return r.txn.Commit(r.ctx)
-}
-
-func doDelete(c *client.Dgraph) error {
-	r := &runner{
-		ctx: context.Background(), // TODO
-		txn: c.NewTxn(),
-	}
-	defer r.txn.Discard(r.ctx)
-
-	// select random node
-	uid, err := r.nodeUidToDelete()
-	if err != nil {
-		return err
-	}
-
-	// query all nodes that link to this node
-	var result struct {
-		Q []AZ
-	}
-	q := fmt.Sprintf("{ q(func: uid(%s)) @normalize {\n uid\n", uid)
-	for char := 'a'; char <= 'z'; char++ {
-		q += fmt.Sprintf("~link_%c { %c: uid }\n", char, char)
-	}
-	q += "}}"
-	if err := r.query(&result, q); err != nil {
-		return err
-	}
-
-	// delete this node, and links from other nodes to this node
-	rdfs := fmt.Sprintf("<%s> * * .\n", uid)
-	for _, outUid := range result.Q[0].fields() {
-		for char := 'a'; char < 'z'; char++ {
-			rdfs += fmt.Sprintf("<%s> <link_%c> <%s> .\n", outUid, char, uid)
-		}
-	}
-
-	if _, err := r.txn.Mutate(context.Background(), &api.Mutation{
-		DelNquads: []byte(rdfs),
-	}); err != nil {
-		return err
-	}
-
-	fmt.Println("DEL COMMIT")
-	return r.txn.Commit(r.ctx)
-}
-
-func (r *runner) nodeUidToDelete() (string, error) {
-	for {
-		char := 'a' + rune(rand.Intn(26))
-		var result struct {
-			Q []struct {
-				Uid   *string
-				Start *int
-				End   *int
-			}
-		}
-		if err := r.query(&result, `
-		{
-			q(func: eq(xid, "root")) {
-				uid
-				start: start_xid_%c
-				end: end_xid_%c
-			}
-		}
-		`, char, char); err != nil {
-			return "", err
-		}
-
-		x.AssertTrue(len(result.Q) == 1 && result.Q[0].Uid != nil &&
-			result.Q[0].Start != nil && result.Q[0].End != nil)
-		start := *result.Q[0].Start
-		end := *result.Q[0].End
-		if start == end {
-			fmt.Println("start is end", start, end)
-			continue // try another char
-		}
-
-		_, err := r.txn.Mutate(context.Background(), &api.Mutation{
-			SetNquads: []byte(fmt.Sprintf(`
-				<%s> <start_xid_%c> "%d" .
-				`, *result.Q[0].Uid, char, start+1)),
-		})
-		if err != nil {
-			return "", err
-		}
-
-		return r.getUidForXid(fmt.Sprintf("%c_%d", char, start))
-	}
-}
-
-func (r *runner) getUidForXid(xid string) (string, error) {
-	var result struct {
-		Q []struct {
-			Uid string
-		}
-	}
-	if err := r.query(&result, `
-	{
-		q(func: eq(xid, %q)) {
-			uid
-		}
-	}`, xid); err != nil {
-		return "", err
-	}
-	x.AssertTrue(len(result.Q) == 1 && result.Q[0].Uid != "")
-	return result.Q[0].Uid, nil
 }
 
 func (r *runner) newNode() (string, string, error) {
