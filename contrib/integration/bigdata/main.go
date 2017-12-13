@@ -116,10 +116,29 @@ func main() {
 		}
 		for {
 			time.Sleep(time.Second)
-			fmt.Printf("Status: mutations=%d errors=%d\n",
+			fmt.Printf("Status: success_mutations=%d errors=%d\n",
 				atomic.LoadInt64(&mutateCount), atomic.LoadInt64(&errCount))
 		}
 	case "query":
+		var errCount int64
+		var queryCount int64
+		for i := 0; i < *conc; i++ {
+			go func() {
+				for {
+					err := expandGraph(c)
+					if err == nil {
+						atomic.AddInt64(&queryCount, 1)
+					} else {
+						atomic.AddInt64(&errCount, 1)
+					}
+				}
+			}()
+		}
+		for {
+			time.Sleep(time.Second)
+			fmt.Printf("Status: success_queries=%d errors=%d\n",
+				atomic.LoadInt64(&queryCount), atomic.LoadInt64(&errCount))
+		}
 	default:
 		fmt.Printf("unknown mode: %q\n", *mode)
 		os.Exit(1)
@@ -382,4 +401,37 @@ func prettyPrintJSON(j []byte) string {
 	pretty, err := json.MarshalIndent(m, "", "  ")
 	x.Check(err)
 	return string(pretty)
+}
+
+func expandGraph(c *client.Dgraph) error {
+	r := runner{txn: c.NewTxn(), ctx: context.Background()}
+	defer r.txn.Discard(r.ctx)
+
+	uid, err := r.getRandomNodeUid()
+	if err != nil {
+		return err
+	}
+
+	q := ""
+	for i := 0; i < 1+rand.Intn(3); i++ {
+		q = "expand(_all_) { " + q + "}"
+	}
+	q = fmt.Sprintf(`
+	{
+		q(func: uid(%s)) {
+			%s
+		}
+	}
+	`, uid, q)
+
+	resp, err := r.txn.Query(r.ctx, q)
+	if err != nil {
+		return err
+	}
+
+	_ = resp
+	//fmt.Printf("Query:\n%s\n", q)
+	//fmt.Printf("Response:\n%s\n", prettyPrintJSON(resp.Json))
+
+	return nil
 }
