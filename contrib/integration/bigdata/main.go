@@ -129,7 +129,6 @@ func main() {
 					if err == nil {
 						atomic.AddInt64(&queryCount, 1)
 					} else {
-						fmt.Println(err)
 						atomic.AddInt64(&errCount, 1)
 					}
 				}
