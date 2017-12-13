@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
+	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/client"
@@ -51,6 +53,7 @@ Correctness testing:
 
 var setup = flag.Bool("setup", false, "sets up the initial schema and nodes")
 var addrs = flag.String("addrs", "", "comma separated dgraph addresses")
+var mode = flag.String("mode", "", "mode to run in ('mutate' or 'query')")
 
 var (
 	links     []string
@@ -72,6 +75,7 @@ func init() {
 func main() {
 	flag.Parse()
 	c := makeClient()
+
 	if *setup {
 		x.Check(c.Alter(context.Background(), &api.Operation{
 			DropAll: true,
@@ -93,10 +97,30 @@ func main() {
 		return
 	}
 
-	for i := 0; i < 100; i++ {
-		doAdd(c)
+	switch *mode {
+	case "mutate":
+		var errCount int64
+		var mutateCount int64
+		go func() {
+			for {
+				time.Sleep(time.Second)
+				fmt.Printf("Status: mutations=%d errors=%d\n",
+					atomic.LoadInt64(&mutateCount), atomic.LoadInt64(&errCount))
+			}
+		}()
+		for {
+			err := doAdd(c)
+			if err == nil {
+				atomic.AddInt64(&mutateCount, 1)
+			} else {
+				atomic.AddInt64(&errCount, 1)
+			}
+		}
+	case "query":
+	default:
+		fmt.Printf("unknown mode: %q\n", *mode)
+		os.Exit(1)
 	}
-
 }
 
 func schema() string {
@@ -146,19 +170,16 @@ func doAdd(c *client.Dgraph) error {
 		txn: c.NewTxn(),
 	}
 	defer func() {
-		fmt.Println("discarding")
 		r.txn.Discard(r.ctx)
 	}()
 
 	uid, xid, err := r.newNode()
 	if err != nil {
-		fmt.Println("EARLY EXIT 1", err)
 		return err
 	}
 
 	rndUid, err := r.getRandomNodeUid()
 	if err != nil {
-		fmt.Println("EARLY EXIT 2", err)
 		return err
 	}
 	char := 'a' + rune(rand.Intn(26))
@@ -174,7 +195,6 @@ func doAdd(c *client.Dgraph) error {
 	}
 
 	if _, err = r.txn.Mutate(context.Background(), &api.Mutation{SetNquads: []byte(rdfs)}); err != nil {
-		fmt.Println("EARLY EXIT 3", err)
 		return err
 	}
 
@@ -182,7 +202,6 @@ func doAdd(c *client.Dgraph) error {
 		return err
 	}
 
-	fmt.Println("ADD COMMIT")
 	return r.txn.Commit(r.ctx)
 }
 
@@ -292,12 +311,10 @@ func (r *runner) getRandomNodeUid() (string, error) {
 
 func (r *runner) query(out interface{}, q string, args ...interface{}) error {
 	q = fmt.Sprintf(q, args...)
-	//fmt.Println("Query:\n\t" + q)
 	resp, err := r.txn.Query(r.ctx, q)
 	if err != nil {
 		return err
 	}
-	//fmt.Println("Response:\n\t" + string(resp.Json))
 	return json.Unmarshal(resp.Json, out)
 }
 
