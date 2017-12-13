@@ -326,7 +326,7 @@ func (r *runner) getRandomNodeUid() (string, error) {
 		`, xid); err != nil {
 			return "", err
 		}
-		x.AssertTrue(len(res.Q) == 1 && res.Q[0].Uid != nil)
+		x.AssertTruef(len(res.Q) == 1 && res.Q[0].Uid != nil, "len=%v", len(res.Q))
 		return *res.Q[0].Uid, nil
 	}
 }
