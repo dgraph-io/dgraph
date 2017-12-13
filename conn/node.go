@@ -321,7 +321,7 @@ func (n *Node) doSendMessage(to uint64, data []byte) {
 	addr, has := n.Peer(to)
 	pool, err := Get().Get(addr)
 	if !has || err != nil {
-		x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
+		//x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
 		// No such peer exists or we got handed a bogus config (bad addr), so we
 		// can't send messages to this peer.
 		return
