@@ -54,6 +54,7 @@ Correctness testing:
 var setup = flag.Bool("setup", false, "sets up the initial schema and nodes")
 var addrs = flag.String("addrs", "", "comma separated dgraph addresses")
 var mode = flag.String("mode", "", "mode to run in ('mutate' or 'query')")
+var conc = flag.Int("j", 1, "number of operations to run in parallel")
 
 var (
 	links     []string
@@ -101,20 +102,22 @@ func main() {
 	case "mutate":
 		var errCount int64
 		var mutateCount int64
-		go func() {
-			for {
-				time.Sleep(time.Second)
-				fmt.Printf("Status: mutations=%d errors=%d\n",
-					atomic.LoadInt64(&mutateCount), atomic.LoadInt64(&errCount))
-			}
-		}()
+		for i := 0; i < *conc; i++ {
+			go func() {
+				for {
+					err := doAdd(c)
+					if err == nil {
+						atomic.AddInt64(&mutateCount, 1)
+					} else {
+						atomic.AddInt64(&errCount, 1)
+					}
+				}
+			}()
+		}
 		for {
-			err := doAdd(c)
-			if err == nil {
-				atomic.AddInt64(&mutateCount, 1)
-			} else {
-				atomic.AddInt64(&errCount, 1)
-			}
+			time.Sleep(time.Second)
+			fmt.Printf("Status: mutations=%d errors=%d\n",
+				atomic.LoadInt64(&mutateCount), atomic.LoadInt64(&errCount))
 		}
 	case "query":
 	default:
