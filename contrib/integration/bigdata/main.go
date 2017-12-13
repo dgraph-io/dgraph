@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/url"
 	"strings"
@@ -84,10 +83,17 @@ func main() {
 			CommitNow: true,
 			SetNquads: []byte(initialData()),
 		}))
+
+		// Add an initial node.
+		r := &runner{txn: c.NewTxn(), ctx: context.Background()}
+		_, xid, err := r.newNode()
+		x.Check(err)
+		x.Check(r.updateXidRanges(xid))
+		x.Check(r.txn.Commit(r.ctx))
 	}
 
 	for i := 0; i < 1; i++ {
-		doRound(c)
+		doAdd(c)
 	}
 
 }
@@ -108,15 +114,13 @@ func schema() string {
 
 func initialData() string {
 	rdfs := "_:root <xid> \"root\" .\n"
-	for char := 'a'; char <= 'z'; char++ {
-		rdfs += fmt.Sprintf("_:%c <xid> \"%c_0\" .\n", char, char)
-	}
 	for _, attr := range startXids {
 		rdfs += "_:root <" + attr + "> \"0\" .\n"
 	}
 	for _, attr := range endXids {
-		rdfs += "_:root <" + attr + "> \"1\" .\n"
+		rdfs += "_:root <" + attr + "> \"0\" .\n"
 	}
+
 	return rdfs
 }
 
@@ -128,29 +132,6 @@ func makeClient() *client.Dgraph {
 		dgcs = append(dgcs, api.NewDgraphClient(c))
 	}
 	return client.NewDgraphClient(dgcs...)
-}
-
-func doRound(c *client.Dgraph) {
-	const (
-		addPerRound    = 2
-		deletePerRound = 1
-	)
-	for i := 0; i < addPerRound; i++ {
-		if err := doAdd(c); err != nil {
-			log.Fatal(err) // TODO remove
-			fmt.Println("Error:", err)
-			return
-		}
-		showLeases(c)
-	}
-	for i := 0; i < deletePerRound; i++ {
-		if err := doDelete(c); err != nil {
-			log.Fatal(err) // TODO remove
-			fmt.Println("Error:", err)
-			return
-		}
-		showLeases(c)
-	}
 }
 
 type runner struct {
@@ -168,36 +149,19 @@ func doAdd(c *client.Dgraph) error {
 		r.txn.Discard(r.ctx)
 	}()
 
-	uid, err := r.newNode()
+	uid, xid, err := r.newNode()
 	if err != nil {
 		fmt.Println("EARLY EXIT 1", err)
 		return err
 	}
-	var rdfs string
-	for char := 'a'; char <= 'z'; char++ {
-		var links int
-		switch rnd := rand.Float64(); {
-		case rnd < 0.95:
-			links = 0
-		default:
-			links = 1
-			//case rnd < 0.80:
-			//case rnd < 0.90:
-			//links = 1
-			//case rnd < 0.95:
-			//links = 2
-			//default:
-			//links = 3
-		}
-		for i := 0; i < links; i++ {
-			rndUid, err := r.getRandomNodeUid()
-			if err != nil {
-				fmt.Println("EARLY EXIT 2", err)
-				return err
-			}
-			rdfs += fmt.Sprintf("<%s> <link_%c> <%s> .\n", uid, char, rndUid)
-		}
+
+	rndUid, err := r.getRandomNodeUid()
+	if err != nil {
+		fmt.Println("EARLY EXIT 2", err)
+		return err
 	}
+	char := 'a' + rune(rand.Intn(26))
+	rdfs := fmt.Sprintf("<%s> <link_%c> <%s> .\n", uid, char, rndUid)
 
 	for char := 'a'; char <= 'z'; char++ {
 		if rand.Float64() < 0.9 {
@@ -208,11 +172,13 @@ func doAdd(c *client.Dgraph) error {
 		rdfs += fmt.Sprintf("<%s> <attr_%c> \"%s\" .\n", uid, char, url.QueryEscape(string(payload)))
 	}
 
-	if rdfs != "" {
-		if _, err = r.txn.Mutate(context.Background(), &api.Mutation{SetNquads: []byte(rdfs)}); err != nil {
-			fmt.Println("EARLY EXIT 3", err)
-			return err
-		}
+	if _, err = r.txn.Mutate(context.Background(), &api.Mutation{SetNquads: []byte(rdfs)}); err != nil {
+		fmt.Println("EARLY EXIT 3", err)
+		return err
+	}
+
+	if err := r.updateXidRanges(xid); err != nil {
+		return err
 	}
 
 	fmt.Println("ADD COMMIT")
@@ -325,8 +291,37 @@ func (r *runner) getUidForXid(xid string) (string, error) {
 	return result.Q[0].Uid, nil
 }
 
-func (r *runner) newNode() (string, error) {
+func (r *runner) newNode() (string, string, error) {
 	char := 'a' + rune(rand.Intn(26))
+	var result struct {
+		Q []struct {
+			End *int
+		}
+	}
+	if err := r.query(&result, `
+	{
+		q(func: eq(xid, "root")) {
+			uid
+			end: end_xid_%c
+		}
+	}`, char); err != nil {
+		return "", "", err
+	}
+	x.AssertTrue(len(result.Q) == 1 && result.Q[0].End != nil)
+	xid := fmt.Sprintf("%c_%d", char, *result.Q[0].End)
+	assigned, err := r.txn.Mutate(context.Background(), &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf("_:node <xid> %q .\n", xid)),
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return assigned.Uids["node"], xid, nil
+}
+
+func (r *runner) updateXidRanges(newNodeXid string) error {
+	char := rune(newNodeXid[0])
+	x.AssertTrue(char >= 'a' && char <= 'z')
+
 	var result struct {
 		Q []struct {
 			Uid *string
@@ -340,25 +335,16 @@ func (r *runner) newNode() (string, error) {
 			end: end_xid_%c
 		}
 	}`, char); err != nil {
-		return "", err
-	}
-	if len(result.Q) != 1 || result.Q[0].End == nil || result.Q[0].Uid == nil {
-		return "", x.Errorf("bad result %v", result)
+		return err
 	}
 
-	assigned, err := r.txn.Mutate(context.Background(), &api.Mutation{
-		SetNquads: []byte(fmt.Sprintf(`
-			<%s> <end_xid_%c> "%d" .
-			_:node <xid> %q .
-			`,
-			*result.Q[0].Uid, char, *result.Q[0].End+1,
-			fmt.Sprintf("%c_%d", char, *result.Q[0].End)),
-		),
+	x.AssertTrue(len(result.Q) == 1 && result.Q[0].Uid != nil && result.Q[0].End != nil)
+
+	_, err := r.txn.Mutate(r.ctx, &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf("<%s> <end_xid_%c> \"%d\" .\n",
+			*result.Q[0].Uid, char, *result.Q[0].End+1)),
 	})
-	if err != nil {
-		return "", err
-	}
-	return assigned.Uids["node"], nil
+	return err
 }
 
 func (r *runner) getRandomNodeUid() (string, error) {
