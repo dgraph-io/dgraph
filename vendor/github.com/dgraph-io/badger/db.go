@@ -19,6 +19,7 @@ package badger
 import (
 	"bytes"
 	"container/heap"
+	"encoding/binary"
 	"expvar"
 	"log"
 	"math"
@@ -27,6 +28,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/dgraph-io/badger/options"
 
 	"golang.org/x/net/trace"
 
@@ -210,6 +213,10 @@ func Open(opt Options) (db *DB, err error) {
 	}()
 	if !(opt.ValueLogFileSize <= 2<<30 && opt.ValueLogFileSize >= 1<<20) {
 		return nil, ErrValueLogSize
+	}
+	if !(opt.ValueLogLoadingMode == options.FileIO ||
+		opt.ValueLogLoadingMode == options.MemoryMap) {
+		return nil, ErrInvalidLoadingMode
 	}
 	manifestFile, manifest, err := openOrCreateManifestFile(opt.Dir)
 	if err != nil {
@@ -889,6 +896,7 @@ func (db *DB) purgeVersionsBelow(txn *Txn, key []byte, ts uint64) error {
 	opts.AllVersions = true
 	opts.PrefetchValues = false
 	it := txn.NewIterator(opts)
+	defer it.Close()
 
 	var entries []*Entry
 
@@ -921,10 +929,11 @@ func (db *DB) PurgeOlderVersions() error {
 		opts.AllVersions = true
 		opts.PrefetchValues = false
 		it := txn.NewIterator(opts)
+		defer it.Close()
 
 		var entries []*Entry
 		var lastKey []byte
-		var count int
+		var count, size int
 		var wg sync.WaitGroup
 		errChan := make(chan error, 1)
 
@@ -954,22 +963,27 @@ func (db *DB) PurgeOlderVersions() error {
 				continue
 			}
 			// Found an older version. Mark for deletion
-			entries = append(entries,
-				&Entry{
-					Key:  y.KeyWithTs(lastKey, item.version),
-					meta: bitDelete,
-				})
+			e := &Entry{
+				Key:  y.KeyWithTs(lastKey, item.version),
+				meta: bitDelete,
+			}
 			db.vlog.updateGCStats(item)
-			count++
+			curSize := e.estimateSize(db.opt.ValueThreshold)
 
-			// Batch up 1000 entries at a time and write
-			if count == 1000 {
+			// Batch up min(1000, maxBatchCount) entries at a time and write
+			// Ensure that total batch size doesn't exceed maxBatchSize
+			if count == 1000 || count+1 >= int(db.opt.maxBatchCount) ||
+				size+curSize >= int(db.opt.maxBatchSize) {
 				if err := batchSetAsyncIfNoErr(entries); err != nil {
 					return err
 				}
 				count = 0
+				size = 0
 				entries = []*Entry{}
 			}
+			size += curSize
+			count++
+			entries = append(entries, e)
 		}
 
 		// Write last batch pending deletes
@@ -1042,4 +1056,78 @@ func (db *DB) Size() (lsm int64, vlog int64) {
 	lsm = y.LSMSize.Get(db.opt.Dir).(*expvar.Int).Value()
 	vlog = y.VlogSize.Get(db.opt.Dir).(*expvar.Int).Value()
 	return
+}
+
+// Sequence represents a Badger sequence.
+type Sequence struct {
+	sync.Mutex
+	db        *DB
+	key       []byte
+	next      uint64
+	leased    uint64
+	bandwidth uint64
+}
+
+// Next would return the next integer in the sequence, updating the lease by running a transaction
+// if needed.
+func (seq *Sequence) Next() (uint64, error) {
+	seq.Lock()
+	defer seq.Unlock()
+	if seq.next >= seq.leased {
+		if err := seq.updateLease(); err != nil {
+			return 0, err
+		}
+	}
+	val := seq.next
+	seq.next++
+	return val, nil
+}
+
+func (seq *Sequence) updateLease() error {
+	return seq.db.Update(func(txn *Txn) error {
+		item, err := txn.Get(seq.key)
+		if err == ErrKeyNotFound {
+			seq.next = 0
+		} else if err != nil {
+			return err
+		} else {
+			val, err := item.Value()
+			if err != nil {
+				return err
+			}
+			num := binary.BigEndian.Uint64(val)
+			seq.next = num
+		}
+
+		lease := seq.next + seq.bandwidth
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], lease)
+		if err = txn.Set(seq.key, buf[:]); err != nil {
+			return err
+		}
+		seq.leased = lease
+		return nil
+	})
+}
+
+// GetSequence would initiate a new sequence object, generating it from the stored lease, if
+// available, in the database. Sequence can be used to get a list of monotonically increasing
+// integers. Multiple sequences can be created by providing different keys. Bandwidth sets the
+// size of the lease, determining how many Next() requests can be served from memory.
+func (db *DB) GetSequence(key []byte, bandwidth uint64) (*Sequence, error) {
+	switch {
+	case len(key) == 0:
+		return nil, ErrEmptyKey
+	case bandwidth == 0:
+		return nil, ErrZeroBandwidth
+	}
+	seq := &Sequence{
+		db:        db,
+		key:       key,
+		next:      0,
+		leased:    0,
+		bandwidth: bandwidth,
+	}
+	err := seq.updateLease()
+	return seq, err
 }
