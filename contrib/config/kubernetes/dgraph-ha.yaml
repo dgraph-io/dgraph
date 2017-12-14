@@ -1,0 +1,123 @@
+# This is the service that should be used by the clients of Dgraph to talk to the server.
+# It exposes a ClusterIP that will automatically load balance connections the the different Dgraph
+# Servers.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-public
+  labels:
+    app: dgraph
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 5080
+    targetPort: 5080
+    name: zero-grpc
+  - port: 6080
+    targetPort: 6080
+    name: zero-http
+  - port: 8080
+    targetPort: 8080
+    name: http
+  - port: 9080
+    targetPort: 9080
+    name: grpc
+  selector:
+    app: dgraph
+---
+# This is a headless service which is neccessary for discovery for a StatefulSet.
+# https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph
+  labels:
+    app: dgraph
+spec:
+  ports:
+  - port: 5080
+    targetPort: 5080
+    name: grpc
+
+  clusterIP: None
+  selector:
+    app: dgraph
+---
+# This StatefulSet runs 3 replicas of Zero and Server.
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: dgraph
+spec:
+  serviceName: "dgraph"
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: dgraph
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - dgraph
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: zero
+        image: dgraph/dgraph:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5080
+          name: intra-node
+        volumeMounts:
+        - name: datadir
+          mountPath: /dgraph
+        command:
+          - bash
+          - "-c"
+          - |
+            set -ex
+            [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+            ordinal=${BASH_REMATCH[1]}
+            idx=$(($ordinal + 1))
+            if [[ $ordinal -eq 0 ]]; then
+              dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --idx $idx
+            else
+              dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --peer dgraph-0.dgraph.default.svc.cluster.local:5080 --idx $idx
+            fi
+      - name: server
+        image: dgraph/dgraph:latest
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - name: datadir
+          mountPath: /dgraph
+        command:
+          - bash
+          - "-c"
+          - |
+            set -ex
+            dgraph server --my=$(hostname -f):7080 --memory_mb 2048 --zero dgraph-0.dgraph.default.svc.cluster.local:5080
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: datadir
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+      annotations:
+        volume.alpha.kubernetes.io/storage-class: anything
+    spec:
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 5Gi

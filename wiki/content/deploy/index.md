@@ -221,7 +221,7 @@ Before using the api ensure that the node is down and ensure that it doesn't com
 Remember to specify the `idx` flag while adding a new replica or else Zero might assign it a different group.
 {{% /notice %}}
 
-## Deployment on AWS
+## AWS using Docker
 
 We will use [Docker Machine](https://docs.docker.com/machine/overview/). It is a tool that lets you install Docker Engine on virtual machines
 and easily deploy applications.
@@ -360,7 +360,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 1. Allow all inbound traffic on all ports with Source being `docker-machine` security ports so that
    docker related communication can happen easily.
 
-2. Also open inbound TCP traffic on the following ports required by Dgraph: 8080, 8081, 8082, 9080, 9081, 9082.
+2. Also open inbound TCP traffic on the following ports required by Dgraph: `8080`, `8081`, `8082`, `9080`, `9081` and `9082`.
 
 [Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
 instance type, security group, AMI among many other
@@ -396,7 +396,7 @@ eval $(docker-machine env aws01)
 docker swarm init --advertise-addr 172.31.64.18
 ```
 
-Output
+Output:
 ```
 Swarm initialized: current node (w9mpjhuju7nyewmg8043ypctf) is now a manager.
 
@@ -418,7 +418,7 @@ docker swarm join \
     172.31.64.18:2377
 ```
 
-Output
+Output:
 ```
 This node joined a swarm as a worker.
 ```
@@ -436,7 +436,7 @@ On the Swarm manager `aws01`, verify that your swarm is running.
 docker node ls
 ```
 
-Output
+Output:
 ```sh
 ID                            HOSTNAME            STATUS              AVAILABILITY        MANAGER STATUS
 ghzapjsto20c6d6l3n0m91zev     aws02               Ready               Active
@@ -693,6 +693,198 @@ services:
 volumes:
   data-volume:
 ```
+
+
+## Kubernetes
+
+{{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
+Instructions for running with TLS would be added soon.{{% /notice %}}
+
+* Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) which is used to deploy
+  and manage applications on kubernetes.
+* Get the kubernetes cluster up and running on a cloud provider of your choice. You can use [kops](https://github.com/kubernetes/kops/blob/master/docs/aws.md) to set it up on AWS. Kops does auto-scaling by default on AWS and creates the volumes and instances for you.
+
+Verify that you have your cluster up and running using `kubectl get nodes`. If you used `kops` with
+the default options, you should have a master and two worker nodes ready.
+
+```sh
+➜  kubernetes git:(master) ✗ kubectl get nodes
+NAME                                          STATUS    ROLES     AGE       VERSION
+ip-172-20-42-118.us-west-2.compute.internal   Ready     node      1h        v1.8.4
+ip-172-20-61-179.us-west-2.compute.internal   Ready     master    2h        v1.8.4
+ip-172-20-61-73.us-west-2.compute.internal    Ready     node      2h        v1.8.4
+```
+
+### Single Server
+
+Once your kubernetes cluster is up, you can use [dgraph-single.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-single.yaml) to start a Dgraph Server and Zero.
+
+* From your machine, run the following command to start a StatefulSet that creates a Pod with Dgraph
+  Server and Zero running in it.
+
+```sh
+kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single.yaml
+```
+
+Output:
+```
+service "dgraph-public" created
+service "dgraph" created
+statefulset "dgraph" created
+```
+
+* Confirm that the pod was created successfully.
+
+```sh
+kubectl get pods
+```
+
+Output:
+```
+NAME       READY     STATUS    RESTARTS   AGE
+dgraph-0   2/2       Running   0          1m
+```
+
+{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs -f dgraph-0 server` and `kubectl logs -f dgraph-0 zero`.{{% /notice %}}
+
+* Test the setup
+
+Port forward from your local machine to the pod
+
+```sh
+kubectl port-forward dgraph-0 8080
+```
+
+Go to `http://localhost:8080` and verify Dgraph is working as expected.
+
+{{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
+
+
+* Stop the cluster
+
+Delete all the resources
+
+```sh
+kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph
+```
+
+Stop the cluster. If you used `kops` you can run the following command.
+
+```sh
+kops delete cluster ${NAME} --yes
+```
+
+
+### Cluster setup
+
+In this setup, we are going to deploy 1 Zero node and 3 Server nodes. We start Zero with `--replicas
+3` flag, so all data would be replicated on each of the 3 Server nodes.
+
+{{% notice "note" %}} Ideally you should have atleast three worker nodes as part of your Kubernetes
+cluster so that each Dgraph Server runs on a separate node.{{% /notice %}}
+
+* Check the nodes that are part of the Kubernetes cluster.
+
+```sh
+kubectl get nodes
+```
+
+Output:
+```sh
+NAME                                          STATUS    ROLES     AGE       VERSION
+ip-172-20-34-90.us-west-2.compute.internal    Ready     master    6m        v1.8.4
+ip-172-20-51-1.us-west-2.compute.internal     Ready     node      4m        v1.8.4
+ip-172-20-59-116.us-west-2.compute.internal   Ready     node      4m        v1.8.4
+ip-172-20-61-88.us-west-2.compute.internal    Ready     node      5m        v1.8.4
+```
+
+Once your kubernetes cluster is up, you can use [dgraph-multi.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-multi.yaml) to start the cluster.
+
+* From your machine, run the following command to start the cluster.
+
+```sh
+kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-multi.yaml
+```
+
+Output:
+```
+service "dgraph-public" created
+service "dgraph-zero" created
+service "dgraph-server" created
+statefulset "dgraph-zero" created
+statefulset "dgraph-server" created
+```
+
+* Confirm that the pods were created successfully.
+
+```sh
+kubectl get pods
+```
+
+Output:
+```sh
+NAME              READY     STATUS    RESTARTS   AGE
+dgraph-server-0   1/1       Running   0          1m
+dgraph-server-1   1/1       Running   0          1m
+dgraph-server-2   1/1       Running   0          53s
+dgraph-zero-0     1/1       Running   0          1m
+```
+
+{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs -f dgraph-server-0` and `kubectl logs -f dgraph-zero-0`.{{% /notice %}}
+
+* Test the setup
+
+Port forward from your local machine to the pod
+
+```sh
+kubectl port-forward dgraph-server-0 8080
+```
+
+Go to `http://localhost:8080` and verify Dgraph is working as expected.
+
+{{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
+
+
+* Stop the cluster
+
+Delete all the resources
+
+```sh
+kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph
+```
+
+Stop the cluster. If you used `kops` you can run the following command.
+
+```sh
+kops delete cluster ${NAME} --yes
+```
+
+### HA Cluster setup
+
+This setup allows you to run 3 Dgraph Servers and 3 Zero Servers. The instructions are same as
+[cluster-setup]({{< relref "#cluster-setup">}}) apart from the step to start the cluster. We start Zero with `--replicas
+3` flag, so all data would be replicated on each of 3 Server nodes.
+
+{{% notice "note" %}} Ideally you should have atleast three worker nodes as part of your Kubernetes
+cluster so that each Dgraph Server runs on a separate node.{{% /notice %}}
+
+Once your kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha.yaml) to start the cluster.
+
+* From your machine, run the following command to start the cluster.
+
+```sh
+kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha.yaml
+```
+
+Output:
+```sh
+service "dgraph-public" created
+service "dgraph" created
+statefulset "dgraph" created
+```
+
+After this you can follow other steps from [cluster-setup]({{< relref "#cluster-setup">}}) to verify
+that your setup is working as expected.
 
 
 ## Building from Source

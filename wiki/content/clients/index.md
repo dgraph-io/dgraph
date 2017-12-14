@@ -341,17 +341,13 @@ working example of how to use the Java client.
 
 ## Javascript
 
-{{% notice "note" %}}
-A Javascript client doesn't exist yet. But due to popular demand, a Javascript
-client will be created to work with dgraph v0.9.0. Watch this space!
-{{% /notice %}}
+The offical Javascipt client [can be found here](https://github.com/dgraph-io/dgraph-js)
+and it fully supports Dgraph v0.9.4. Follow the instructions in the
+[README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
 
-Please see the new javascript client written by Cal Moore, which supports
-transactions via Grpc.
-
-https://github.com/calummoore/dgraph-node
-
-This replaces [another client](https://github.com/reicheltp/dgraph-client) built by Paul Reichelt, which works pre v0.9.
+We also have a [simple example](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple)
+project, which contains an end-to-end working example of how to use the Javascript client,
+for Node.js >= v6.
 
 ## Python
 {{% notice "incomplete" %}}
