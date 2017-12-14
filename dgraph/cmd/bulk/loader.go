@@ -79,26 +79,26 @@ type loader struct {
 	*state
 	mappers []*mapper
 	xidDB   *badger.DB
-	zero    *grpc.ClientConn
+	zeros   *xidmap.ZeroPool
 }
 
 func newLoader(opt options) *loader {
-	zero, err := grpc.Dial(opt.ZeroAddr, grpc.WithInsecure())
-	x.Check(err)
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
-		writeTs:    getWriteTimestamp(zero),
 	}
 	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
-		zero:    zero,
+		zeros: xidmap.NewZeroPool(func(addr string) (*grpc.ClientConn, error) {
+			return grpc.Dial(addr, grpc.WithInsecure())
+		}, opt.ZeroAddr),
 	}
+	ld.state.writeTs = ld.getWriteTimestamp()
 	for i := 0; i < opt.NumGoroutines; i++ {
 		ld.mappers[i] = newMapper(st)
 	}
@@ -106,14 +106,16 @@ func newLoader(opt options) *loader {
 	return ld
 }
 
-func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
-	client := intern.NewZeroClient(zero)
+func (ld *loader) getWriteTimestamp() uint64 {
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
-		cancel()
+		client, err := ld.zeros.Leader()
 		if err == nil {
-			return ts.GetStartId()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
+			cancel()
+			if err == nil {
+				return ts.GetStartId()
+			}
 		}
 		x.Printf("error communicating with dgraph zero, retrying: %v", err)
 		time.Sleep(time.Second)
@@ -202,7 +204,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, ld.zero, xidmap.Options{
+	ld.xids = xidmap.New(ld.xidDB, ld.zeros, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})
