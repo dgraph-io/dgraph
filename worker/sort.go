@@ -142,7 +142,6 @@ func sortWithoutIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 }
 
 func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
-	fmt.Printf("SortMessage: %+v\n", ts)
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	values := make([][]types.Val, 0, n) // Values corresponding to uids in the uid matrix.
@@ -155,6 +154,7 @@ func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 	}
 
 	order := ts.Order[0]
+	r := new(intern.SortResult)
 	// Iterate over every bucket / token.
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
@@ -173,9 +173,6 @@ func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 	}
 
 	tokenizers := schema.State().Tokenizer(order.Attr)
-	for _, t := range tokenizers {
-		fmt.Printf("Tokz: %v\n", t.Identifier())
-	}
 	var tokenizer tok.Tokenizer
 	for _, t := range tokenizers {
 		// Get the first sortable index.
@@ -198,9 +195,6 @@ func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 	}
 
 	indexPrefix := x.IndexKey(order.Attr, string(tokenizer.Identifier()))
-	fmt.Printf("tokenizer.Identifier %v\n", tokenizer.Identifier())
-	fmt.Printf("IndexPrefix: %v\n", indexPrefix)
-	fmt.Printf("%+v\n", *x.Parse(indexPrefix))
 	var seekKey []byte
 	if !order.Desc {
 		// We need to seek to the first key of this index type.
@@ -218,8 +212,6 @@ BUCKETS:
 	// Outermost loop is over index buckets.
 	for it.Valid() {
 		key := it.Key()
-		fmt.Printf("Key: %v\n", key)
-		fmt.Printf("%+v\n", *x.Parse(key))
 		select {
 		case <-ctx.Done():
 			return &sortresult{&emptySortResult, nil, ctx.Err()}
@@ -238,7 +230,6 @@ BUCKETS:
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
 			err := intersectBucket(ctx, ts, token, out)
-			fmt.Printf("loop: out[0].ulist: %+v\n", *out[0].ulist) // duplicates by this point
 			switch err {
 			case errDone:
 				break BUCKETS
@@ -251,8 +242,6 @@ BUCKETS:
 		}
 	}
 
-	r := new(intern.SortResult)
-	fmt.Printf("out[0].ulist: %+v\n", *out[0].ulist) // duplicates by this point
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 		if len(ts.Order) > 1 {
@@ -265,9 +254,7 @@ BUCKETS:
 	case <-ctx.Done():
 		return &sortresult{&emptySortResult, nil, ctx.Err()}
 	default:
-		result := &sortresult{r, values, nil}
-		fmt.Printf("Reply: %+v\n", *result.reply)
-		return result
+		return &sortresult{r, values, nil}
 	}
 }
 
@@ -491,7 +478,6 @@ type intersectedList struct {
 // indexed bucket.
 func intersectBucket(ctx context.Context, ts *intern.SortMessage, token string,
 	out []intersectedList) error {
-	fmt.Println("[intersectBucket]")
 	count := int(ts.Count)
 	order := ts.Order[0]
 	sType, err := schema.State().TypeOf(order.Attr)
