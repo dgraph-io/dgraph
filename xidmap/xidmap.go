@@ -12,7 +12,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
-	"google.golang.org/grpc"
 )
 
 // Options controls the performance characteristics of the XidMap.
@@ -72,7 +71,7 @@ func (b *block) assign(ch <-chan *api.AssignedIds) uint64 {
 }
 
 // New creates an XidMap with given badger and uid provider.
-func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
+func New(kv *badger.DB, pool *ZeroPool, opt Options) *XidMap {
 	x.AssertTrue(opt.LRUSize != 0)
 	x.AssertTrue(opt.NumShards != 0)
 	xm := &XidMap{
@@ -87,24 +86,36 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		xm.shards[i].xm = xm
 	}
 	go func() {
-		zc := intern.NewZeroClient(zero)
+		var zc intern.ZeroClient
 		const initBackoff = 10 * time.Millisecond
 		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
-			assigned, err := zc.AssignUids(context.Background(), &intern.Num{Val: 10000})
-			if err != nil {
-				x.Printf("Error while getting lease: %v\n", err)
-				backoff *= 2
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
-				time.Sleep(backoff)
-			} else {
-				backoff = initBackoff
-				xm.newRanges <- assigned
+			var err error
+			if zc == nil {
+				zc, err = pool.Leader()
 			}
+			if err == nil {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				var assigned *api.AssignedIds
+				assigned, err = zc.AssignUids(ctx, &intern.Num{Val: 10000})
+				cancel()
+				if err == nil {
+					backoff = initBackoff
+					xm.newRanges <- assigned
+					continue
+				}
+			}
+
+			x.Printf("Error while getting lease: %v\n", err)
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			time.Sleep(backoff)
+			zc = nil // try a different zero connection
 		}
+
 	}()
 	return xm
 }

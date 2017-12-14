@@ -16,6 +16,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   transaction.
 * Empty string values are stored as it is and no strings have special meaning now.
 * Correctly update order of facetMatrix when orderdesc/orderasc is applied.
+* Allow live and bulk loaders to work with multiple zeros.
 
 ### Changed
 
