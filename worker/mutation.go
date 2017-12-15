@@ -283,7 +283,6 @@ func checkSchema(s *intern.SchemaUpdate) error {
 			return x.Errorf("Schema change not allowed from [%s] => %s without"+
 				" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
 		}
-		// New and old type are both scalar or both are uid. Allow schema change.
 	} else {
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasEdges(s.Predicate, math.MaxUint64) {
