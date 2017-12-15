@@ -510,16 +510,9 @@ func intersectBucket(ctx context.Context, ts *intern.SortMessage, token string,
 			return err
 		}
 
-		// Deduplicate uid list.
-		for i := 0; i < len(result.Uids); i++ {
-			uid := result.Uids[i]
-			if _, ok := il.uset[uid]; ok {
-				copy(result.Uids[:i], result.Uids[i+1:])
-				result.Uids = result.Uids[:len(result.Uids)-1]
-			} else {
-				il.uset[uid] = struct{}{}
-			}
-		}
+		// Duplicates will exist between buckets if there are multiple language
+		// variants of a predicate.
+		result.Uids = removeDuplicates(result.Uids, il.uset)
 
 		// Check offsets[i].
 		n := len(result.Uids)
@@ -579,6 +572,22 @@ func intersectBucket(ctx context.Context, ts *intern.SortMessage, token string,
 	// All UID lists have enough items (according to pagination). Let's notify
 	// the outermost loop.
 	return errDone
+}
+
+// removeDuplicates removes elements from uids if they are in set. It also adds
+// all uids to set.
+func removeDuplicates(uids []uint64, set map[uint64]struct{}) []uint64 {
+	for i := 0; i < len(uids); i++ {
+		uid := uids[i]
+		if _, ok := set[uid]; ok {
+			copy(uids[i:], uids[i+1:])
+			uids = uids[:len(uids)-1]
+			i-- // we just removed an entry, so go back one step
+		} else {
+			set[uid] = struct{}{}
+		}
+	}
+	return uids
 }
 
 func paginate(ts *intern.SortMessage, dest *intern.List, vals []types.Val) (int, int, error) {
