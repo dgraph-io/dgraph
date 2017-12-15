@@ -514,8 +514,8 @@ func intersectBucket(ctx context.Context, ts *intern.SortMessage, token string,
 		for i := 0; i < len(result.Uids); i++ {
 			uid := result.Uids[i]
 			if _, ok := il.uset[uid]; ok {
-				copy(il.ulist.Uids[:i], il.ulist.Uids[i+1:])
-				il.ulist.Uids = il.ulist.Uids[:len(il.ulist.Uids)-1]
+				copy(result.Uids[:i], result.Uids[i+1:])
+				result.Uids = result.Uids[:len(result.Uids)-1]
 			} else {
 				il.uset[uid] = struct{}{}
 			}
