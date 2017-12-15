@@ -521,9 +521,8 @@ func intersectBucket(ctx context.Context, ts *intern.SortMessage, token string,
 			}
 		}
 
-		n := len(result.Uids)
-
 		// Check offsets[i].
+		n := len(result.Uids)
 		if il.offset >= n {
 			// We are going to skip the whole intersection. No need to do actual
 			// sorting. Just update offsets[i]. We now offset less.
