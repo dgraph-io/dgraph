@@ -108,7 +108,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 	m := conn.NewNode(&rc)
 	st.rs = &conn.RaftServer{Node: m}
 
-	st.node = &node{Node: m, ctx: context.Background()}
+	st.node = &node{Node: m, ctx: context.Background(), stop: make(chan struct{})}
 	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}
 	st.zero.Init()
 	st.node.server = st.zero
@@ -120,6 +120,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		defer wg.Done()
 		err := s.Serve(l)
 		log.Printf("gRpc server stopped : %s", err.Error())
+		st.node.stop <- struct{}{}
 		s.GracefulStop()
 	}()
 }
