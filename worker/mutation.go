@@ -274,7 +274,7 @@ func checkSchema(s *intern.SchemaUpdate) error {
 
 	// schema was defined already
 	if t.Enum() == intern.Posting_STRING && s.ValueType == intern.Posting_PASSWORD {
-		return x.Errorf("Schema change to allowed from 'string' to 'password'")
+		return x.Errorf("Schema change not allowed from 'string' to 'password'")
 	}
 	if t.IsScalar() == typ.IsScalar() {
 		// If old type was list and new type is non-list, we don't allow it until user
