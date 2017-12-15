@@ -206,9 +206,6 @@ func (o *Oracle) sendDeltasToSubscribers() {
 func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) bool {
 	o.Lock()
 	defer o.Unlock()
-	if src.StartTs < o.tmax {
-		return false
-	}
 	if _, ok := o.commits[src.StartTs]; ok {
 		return false
 	}

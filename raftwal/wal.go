@@ -186,6 +186,8 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 	if t > 0 || i > 0 {
 		// When writing an Entry with Index i, any previously-persisted entries
 		// with Index >= i must be discarded.
+		// Ideally we should be deleting entries from previous term with index >= i,
+		// but to avoid complexity we remove them during reading from wal.
 		start := w.entryKey(gid, t, i+1)
 		prefix := w.prefix(gid)
 		opt := badger.DefaultIteratorOptions
@@ -252,6 +254,7 @@ func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry
 	itr := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer itr.Close()
 
+	var firstIndex uint64
 	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
 		var e raftpb.Entry
@@ -262,7 +265,14 @@ func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry
 		if err = e.Unmarshal(val); err != nil {
 			return es, err
 		}
-		es = append(es, e)
+		if e.Index < fromIndex {
+			continue
+		}
+		if firstIndex == 0 {
+			firstIndex = e.Index
+		}
+		// When you see entry with Index i, ignore all entries with index >= i
+		es = append(es[:e.Index-firstIndex], e)
 	}
 	return
 }

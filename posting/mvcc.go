@@ -81,12 +81,23 @@ type transactions struct {
 
 func (t *transactions) MinTs() uint64 {
 	t.Lock()
-	defer t.Unlock()
 	var minTs uint64
 	for ts := range t.m {
 		if ts < minTs || minTs == 0 {
 			minTs = ts
 		}
+	}
+	t.Unlock()
+	maxPending := Oracle().MaxPending()
+	if minTs == 0 {
+		// max Pending gives the guarante that all commits with timestamp
+		// less than maxPending should have been done and since nothing
+		// is present in map, all transactions with commitTs below maxPending
+		// have been written to disk.
+		return maxPending
+	} else if maxPending < minTs {
+		// Not sure if needed, but just for safety
+		return maxPending
 	}
 	return minTs
 }

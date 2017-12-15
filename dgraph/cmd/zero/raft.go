@@ -511,7 +511,6 @@ func (n *node) Run() {
 			}
 
 			for _, entry := range rd.CommittedEntries {
-				loop++
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
@@ -528,6 +527,7 @@ func (n *node) Run() {
 				}
 				n.Applied.Done(entry.Index)
 			}
+			loop++
 
 			// TODO: Should we move this to the top?
 			if rd.SoftState != nil {
@@ -548,7 +548,7 @@ func (n *node) Run() {
 			if rd.SoftState != nil || len(rd.CommittedEntries) > 0 {
 				n.triggerUpdates()
 			}
-			if loop%1000 == 0 {
+			if loop%500 == 0 {
 				n.trySnapshot()
 			}
 			n.Raft().Advance()
