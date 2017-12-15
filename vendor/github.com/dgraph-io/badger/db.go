@@ -456,14 +456,28 @@ func (db *DB) get(key []byte) (y.ValueStruct, error) {
 	defer decr()
 
 	y.NumGets.Add(1)
+	version := y.ParseTs(key)
+	var maxVs y.ValueStruct
+	// Need to search for values in all tables, with managed db
+	// latest value needn't be present in the latest table.
+	// Even without managed db, purging can cause this constraint
+	// to be violated.
+	// Search until required version is found or iterate over all
+	// tables and return max version.
 	for i := 0; i < len(tables); i++ {
 		vs := tables[i].Get(key)
 		y.NumMemtableGets.Add(1)
-		if vs.Meta != 0 || vs.Value != nil {
+		if vs.Meta == 0 && vs.Value == nil {
+			continue
+		}
+		if vs.Version == version {
 			return vs, nil
 		}
+		if maxVs.Version < vs.Version {
+			maxVs = vs
+		}
 	}
-	return db.lc.get(key)
+	return db.lc.get(key, maxVs)
 }
 
 func (db *DB) updateOffset(ptrs []valuePointer) {
@@ -1004,26 +1018,34 @@ func (db *DB) PurgeOlderVersions() error {
 	})
 }
 
-// RunValueLogGC would trigger a value log garbage collection with no guarantees that a call would
-// result in a space reclaim. Every run would in the best case rewrite only one log file. So,
-// repeated calls may be necessary.
+// RunValueLogGC triggers a value log garbage collection.
 //
-// The way it currently works is that it would randomly pick up a value log file, and sample it. If
-// the sample shows that we can discard at least discardRatio space of that file, it would be
-// rewritten. Else, an ErrNoRewrite error would be returned indicating that the GC didn't result in
-// any file rewrite.
+// It picks value log files to perform GC based on statistics that are collected
+// duing the session, when DB.PurgeOlderVersions() and DB.PurgeVersions() is
+// called. If no such statistics are available, then log files are picked in
+// random order. The process stops as soon as the first log file is encountered
+// which does not result in garbage collection.
 //
-// We recommend setting discardRatio to 0.5, thus indicating that a file be rewritten if half the
-// space can be discarded.  This results in a lifetime value log write amplification of 2 (1 from
-// original write + 0.5 rewrite + 0.25 + 0.125 + ... = 2). Setting it to higher value would result
-// in fewer space reclaims, while setting it to a lower value would result in more space reclaims at
-// the cost of increased activity on the LSM tree. discardRatio must be in the range (0.0, 1.0),
-// both endpoints excluded, otherwise an ErrInvalidRequest is returned.
+// When a log file is picked, it is first sampled If the sample shows that we
+// can discard at least discardRatio space of that file, it would be rewritten.
 //
-// Only one GC is allowed at a time. If another value log GC is running, or DB has been closed, this
-// would return an ErrRejected.
+// If a call to RunValueLogGC results in no rewrites, then an ErrNoRewrite is
+// thrown indicating that the call resulted in no file rewrites.
 //
-// Note: Every time GC is run, it would produce a spike of activity on the LSM tree.
+// We recommend setting discardRatio to 0.5, thus indicating that a file be
+// rewritten if half the space can be discarded.  This results in a lifetime
+// value log write amplification of 2 (1 from original write + 0.5 rewrite +
+// 0.25 + 0.125 + ... = 2). Setting it to higher value would result in fewer
+// space reclaims, while setting it to a lower value would result in more space
+// reclaims at the cost of increased activity on the LSM tree. discardRatio
+// must be in the range (0.0, 1.0), both endpoints excluded, otherwise an
+// ErrInvalidRequest is returned.
+//
+// Only one GC is allowed at a time. If another value log GC is running, or DB
+// has been closed, this would return an ErrRejected.
+//
+// Note: Every time GC is run, it would produce a spike of activity on the LSM
+// tree.
 func (db *DB) RunValueLogGC(discardRatio float64) error {
 	if discardRatio >= 1.0 || discardRatio <= 0.0 {
 		return ErrInvalidRequest
@@ -1032,7 +1054,8 @@ func (db *DB) RunValueLogGC(discardRatio float64) error {
 	// Find head on disk
 	headKey := y.KeyWithTs(head, math.MaxUint64)
 	// Need to pass with timestamp, lsm get removes the last 8 bytes and compares key
-	val, err := db.lc.get(headKey)
+	var maxVs y.ValueStruct
+	val, err := db.lc.get(headKey, maxVs)
 	if err != nil {
 		return errors.Wrap(err, "Retrieving head from on-disk LSM")
 	}
