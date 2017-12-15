@@ -151,6 +151,7 @@ func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 		out[i].offset = int(ts.Offset)
 		var emptyList intern.List
 		out[i].ulist = &emptyList
+		out[i].uset = map[uint64]struct{}{}
 	}
 
 	order := ts.Order[0]
@@ -472,6 +473,7 @@ type intersectedList struct {
 	offset int
 	ulist  *intern.List
 	values []types.Val
+	uset   map[uint64]struct{}
 }
 
 // intersectBucket intersects every UID list in the UID matrix with the
@@ -507,9 +509,13 @@ func intersectBucket(ctx context.Context, ts *intern.SortMessage, token string,
 		if err != nil {
 			return err
 		}
-		n := len(result.Uids)
+
+		// Duplicates will exist between buckets if there are multiple language
+		// variants of a predicate.
+		result.Uids = removeDuplicates(result.Uids, il.uset)
 
 		// Check offsets[i].
+		n := len(result.Uids)
 		if il.offset >= n {
 			// We are going to skip the whole intersection. No need to do actual
 			// sorting. Just update offsets[i]. We now offset less.
@@ -566,6 +572,22 @@ func intersectBucket(ctx context.Context, ts *intern.SortMessage, token string,
 	// All UID lists have enough items (according to pagination). Let's notify
 	// the outermost loop.
 	return errDone
+}
+
+// removeDuplicates removes elements from uids if they are in set. It also adds
+// all uids to set.
+func removeDuplicates(uids []uint64, set map[uint64]struct{}) []uint64 {
+	for i := 0; i < len(uids); i++ {
+		uid := uids[i]
+		if _, ok := set[uid]; ok {
+			copy(uids[i:], uids[i+1:])
+			uids = uids[:len(uids)-1]
+			i-- // we just removed an entry, so go back one step
+		} else {
+			set[uid] = struct{}{}
+		}
+	}
+	return uids
 }
 
 func paginate(ts *intern.SortMessage, dest *intern.List, vals []types.Val) (int, int, error) {
