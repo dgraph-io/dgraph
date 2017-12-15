@@ -265,18 +265,25 @@ func checkSchema(s *intern.SchemaUpdate) error {
 		// reverse on non-uid type
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}
-	if t, err := schema.State().TypeOf(s.Predicate); err == nil {
-		// schema was defined already
-		if t.IsScalar() == typ.IsScalar() {
-			// If old type was list and new type is non-list, we don't allow it until user
-			// has data.
-			if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, math.MaxUint64) {
-				return x.Errorf("Schema change not allowed from [%s] => %s without"+
-					" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
-			}
-			// New and old type are both scalar or both are uid. Allow schema change.
-			return nil
+
+	t, err := schema.State().TypeOf(s.Predicate)
+	if err != nil {
+		// No schema previously defined, so no need to do checks about schema conversions.
+		return nil
+	}
+
+	// schema was defined already
+	if t.IsScalar() && t.Enum() != intern.Posting_PASSWORD && s.ValueType == intern.Posting_PASSWORD {
+		return x.Errorf("Schema change not allowed from %s to PASSWORD", t.Enum().String())
+	}
+	if t.IsScalar() == typ.IsScalar() {
+		// If old type was list and new type is non-list, we don't allow it until user
+		// has data.
+		if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, math.MaxUint64) {
+			return x.Errorf("Schema change not allowed from [%s] => %s without"+
+				" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
 		}
+	} else {
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasEdges(s.Predicate, math.MaxUint64) {
 			return x.Errorf("Schema change not allowed from predicate to uid or vice versa"+
