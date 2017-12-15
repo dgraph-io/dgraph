@@ -20,7 +20,6 @@ package worker
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -274,7 +273,6 @@ func checkSchema(s *intern.SchemaUpdate) error {
 	}
 
 	// schema was defined already
-	fmt.Println("====>", s.ValueType, t.Enum())
 	if t.Enum() == intern.Posting_STRING && s.ValueType == intern.Posting_PASSWORD {
 		return x.Errorf("Schema change to allowed from 'string' to 'password'")
 	}
