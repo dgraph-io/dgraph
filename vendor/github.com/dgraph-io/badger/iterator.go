@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/badger/options"
+
 	"github.com/dgraph-io/badger/y"
 	farm "github.com/dgryski/go-farm"
 )
@@ -127,7 +129,7 @@ func (item *Item) yieldItemValue() ([]byte, func(), error) {
 
 	var vp valuePointer
 	vp.Decode(item.vptr)
-	return item.db.vlog.Read(vp)
+	return item.db.vlog.Read(vp, item.slice)
 }
 
 func runCallback(cb func()) {
@@ -145,9 +147,13 @@ func (item *Item) prefetchValue() {
 	if val == nil {
 		return
 	}
-	buf := item.slice.Resize(len(val))
-	copy(buf, val)
-	item.val = buf
+	if item.db.opt.ValueLogLoadingMode == options.MemoryMap {
+		buf := item.slice.Resize(len(val))
+		copy(buf, val)
+		item.val = buf
+	} else {
+		item.val = val
+	}
 }
 
 // EstimatedSize returns approximate size of the key-value pair.

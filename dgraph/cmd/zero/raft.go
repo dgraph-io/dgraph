@@ -81,6 +81,7 @@ type node struct {
 	props       proposals
 	reads       map[uint64]chan uint64
 	subscribers map[uint32]chan struct{}
+	stop        chan struct{} // to send stop signal to Run
 }
 
 func (n *node) setRead(ch chan uint64) uint64 {
@@ -489,6 +490,9 @@ func (n *node) Run() {
 	loop := 0
 	for {
 		select {
+		case <-n.stop:
+			n.Raft().Stop()
+			return
 		case <-ticker.C:
 			n.Raft().Tick()
 
@@ -511,7 +515,6 @@ func (n *node) Run() {
 			}
 
 			for _, entry := range rd.CommittedEntries {
-				loop++
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
@@ -528,6 +531,7 @@ func (n *node) Run() {
 				}
 				n.Applied.Done(entry.Index)
 			}
+			loop++
 
 			// TODO: Should we move this to the top?
 			if rd.SoftState != nil {
@@ -548,7 +552,7 @@ func (n *node) Run() {
 			if rd.SoftState != nil || len(rd.CommittedEntries) > 0 {
 				n.triggerUpdates()
 			}
-			if loop%1000 == 0 {
+			if loop%500 == 0 {
 				n.trySnapshot()
 			}
 			n.Raft().Advance()

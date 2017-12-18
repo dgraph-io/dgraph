@@ -26,8 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos/api"
@@ -85,8 +83,7 @@ type loader struct {
 	// To get time elapsel.
 	start time.Time
 
-	reqs     chan api.Mutation
-	zeroconn *grpc.ClientConn
+	reqs chan api.Mutation
 }
 
 func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {

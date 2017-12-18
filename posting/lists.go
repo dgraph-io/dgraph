@@ -18,6 +18,7 @@
 package posting
 
 import (
+	"bytes"
 	"crypto/md5"
 	"fmt"
 	"io/ioutil"
@@ -207,10 +208,51 @@ func Init(ps *badger.ManagedDB) {
 
 	go periodicUpdateStats()
 	go updateMemoryMetrics()
+	go periodicPurgeOldVersions()
 }
 
 func StopLRUEviction() {
 	atomic.StoreInt32(&lcache.done, 1)
+}
+
+func periodicPurgeOldVersions() {
+	// Runs every 1 minute
+	purge := func() {
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchValues = false
+		opt.AllVersions = true
+
+		txn := pstore.NewTransactionAt(math.MaxUint64, false)
+		defer txn.Discard()
+		itr := txn.NewIterator(opt)
+		defer itr.Close()
+
+		var prevKey []byte
+		// Iterate  over all versions of key, from latest to oldest
+		// For each key find the latest complete pl and purge all versions
+		// below that
+		for itr.Rewind(); itr.Valid(); itr.Next() {
+			item := itr.Item()
+			key := item.Key()
+			if bytes.Equal(key, prevKey) {
+				continue
+			}
+			if item.UserMeta()&BitCompletePosting == 0 {
+				continue
+			}
+			// Found complete pl, purge all versions below this TS
+			pstore.PurgeVersionsBelow(key, item.Version())
+			if cap(prevKey) < len(key) {
+				prevKey = make([]byte, len(key))
+			}
+			prevKey = prevKey[:len(key)]
+			copy(prevKey, key)
+		}
+	}
+	for {
+		time.Sleep(time.Minute)
+		purge()
+	}
 }
 
 // Get stores the List corresponding to key, if it's not there already.

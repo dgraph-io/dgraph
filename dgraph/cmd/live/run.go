@@ -274,12 +274,14 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	connzero, err := setupConnection(opt.zero, true)
-	x.Checkf(err, "While trying to setup connection to Zero")
-
 	alloc := xidmap.New(
 		kv,
-		connzero,
+		xidmap.NewZeroPool(
+			func(addr string) (*grpc.ClientConn, error) {
+				return setupConnection(addr, true)
+			},
+			opt.zero,
+		),
 		xidmap.Options{
 			NumShards: 100,
 			LRUSize:   1e5,
@@ -287,13 +289,12 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	)
 
 	l := &loader{
-		opts:     opts,
-		dc:       dc,
-		start:    time.Now(),
-		reqs:     make(chan api.Mutation, opts.Pending*2),
-		alloc:    alloc,
-		kv:       kv,
-		zeroconn: connzero,
+		opts:  opts,
+		dc:    dc,
+		start: time.Now(),
+		reqs:  make(chan api.Mutation, opts.Pending*2),
+		alloc: alloc,
+		kv:    kv,
 	}
 
 	l.wg.Add(opts.Pending)
@@ -346,7 +347,6 @@ func run() {
 	}
 	dgraphClient := client.NewDgraphClient(clients...)
 	l := setup(bmOpts, dgraphClient)
-	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {

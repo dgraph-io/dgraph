@@ -34,6 +34,7 @@ test_script:
   # Unit tests
   - ps: Add-AppveyorTest "Unit Tests" -Outcome Running
   - go test -v github.com/dgraph-io/badger/...
+  - go test -v -vlog_mmap=false github.com/dgraph-io/badger/...
   - ps: Update-AppveyorTest "Unit Tests" -Outcome Passed
 
 notifications:

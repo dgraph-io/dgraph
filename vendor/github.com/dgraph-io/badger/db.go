@@ -19,6 +19,7 @@ package badger
 import (
 	"bytes"
 	"container/heap"
+	"encoding/binary"
 	"expvar"
 	"log"
 	"math"
@@ -27,6 +28,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/dgraph-io/badger/options"
 
 	"golang.org/x/net/trace"
 
@@ -210,6 +213,10 @@ func Open(opt Options) (db *DB, err error) {
 	}()
 	if !(opt.ValueLogFileSize <= 2<<30 && opt.ValueLogFileSize >= 1<<20) {
 		return nil, ErrValueLogSize
+	}
+	if !(opt.ValueLogLoadingMode == options.FileIO ||
+		opt.ValueLogLoadingMode == options.MemoryMap) {
+		return nil, ErrInvalidLoadingMode
 	}
 	manifestFile, manifest, err := openOrCreateManifestFile(opt.Dir)
 	if err != nil {
@@ -449,14 +456,28 @@ func (db *DB) get(key []byte) (y.ValueStruct, error) {
 	defer decr()
 
 	y.NumGets.Add(1)
+	version := y.ParseTs(key)
+	var maxVs y.ValueStruct
+	// Need to search for values in all tables, with managed db
+	// latest value needn't be present in the latest table.
+	// Even without managed db, purging can cause this constraint
+	// to be violated.
+	// Search until required version is found or iterate over all
+	// tables and return max version.
 	for i := 0; i < len(tables); i++ {
 		vs := tables[i].Get(key)
 		y.NumMemtableGets.Add(1)
-		if vs.Meta != 0 || vs.Value != nil {
+		if vs.Meta == 0 && vs.Value == nil {
+			continue
+		}
+		if vs.Version == version {
 			return vs, nil
 		}
+		if maxVs.Version < vs.Version {
+			maxVs = vs
+		}
 	}
-	return db.lc.get(key)
+	return db.lc.get(key, maxVs)
 }
 
 func (db *DB) updateOffset(ptrs []valuePointer) {
@@ -889,6 +910,7 @@ func (db *DB) purgeVersionsBelow(txn *Txn, key []byte, ts uint64) error {
 	opts.AllVersions = true
 	opts.PrefetchValues = false
 	it := txn.NewIterator(opts)
+	defer it.Close()
 
 	var entries []*Entry
 
@@ -921,10 +943,11 @@ func (db *DB) PurgeOlderVersions() error {
 		opts.AllVersions = true
 		opts.PrefetchValues = false
 		it := txn.NewIterator(opts)
+		defer it.Close()
 
 		var entries []*Entry
 		var lastKey []byte
-		var count int
+		var count, size int
 		var wg sync.WaitGroup
 		errChan := make(chan error, 1)
 
@@ -954,22 +977,27 @@ func (db *DB) PurgeOlderVersions() error {
 				continue
 			}
 			// Found an older version. Mark for deletion
-			entries = append(entries,
-				&Entry{
-					Key:  y.KeyWithTs(lastKey, item.version),
-					meta: bitDelete,
-				})
+			e := &Entry{
+				Key:  y.KeyWithTs(lastKey, item.version),
+				meta: bitDelete,
+			}
 			db.vlog.updateGCStats(item)
-			count++
+			curSize := e.estimateSize(db.opt.ValueThreshold)
 
-			// Batch up 1000 entries at a time and write
-			if count == 1000 {
+			// Batch up min(1000, maxBatchCount) entries at a time and write
+			// Ensure that total batch size doesn't exceed maxBatchSize
+			if count == 1000 || count+1 >= int(db.opt.maxBatchCount) ||
+				size+curSize >= int(db.opt.maxBatchSize) {
 				if err := batchSetAsyncIfNoErr(entries); err != nil {
 					return err
 				}
 				count = 0
+				size = 0
 				entries = []*Entry{}
 			}
+			size += curSize
+			count++
+			entries = append(entries, e)
 		}
 
 		// Write last batch pending deletes
@@ -990,26 +1018,34 @@ func (db *DB) PurgeOlderVersions() error {
 	})
 }
 
-// RunValueLogGC would trigger a value log garbage collection with no guarantees that a call would
-// result in a space reclaim. Every run would in the best case rewrite only one log file. So,
-// repeated calls may be necessary.
+// RunValueLogGC triggers a value log garbage collection.
 //
-// The way it currently works is that it would randomly pick up a value log file, and sample it. If
-// the sample shows that we can discard at least discardRatio space of that file, it would be
-// rewritten. Else, an ErrNoRewrite error would be returned indicating that the GC didn't result in
-// any file rewrite.
+// It picks value log files to perform GC based on statistics that are collected
+// duing the session, when DB.PurgeOlderVersions() and DB.PurgeVersions() is
+// called. If no such statistics are available, then log files are picked in
+// random order. The process stops as soon as the first log file is encountered
+// which does not result in garbage collection.
 //
-// We recommend setting discardRatio to 0.5, thus indicating that a file be rewritten if half the
-// space can be discarded.  This results in a lifetime value log write amplification of 2 (1 from
-// original write + 0.5 rewrite + 0.25 + 0.125 + ... = 2). Setting it to higher value would result
-// in fewer space reclaims, while setting it to a lower value would result in more space reclaims at
-// the cost of increased activity on the LSM tree. discardRatio must be in the range (0.0, 1.0),
-// both endpoints excluded, otherwise an ErrInvalidRequest is returned.
+// When a log file is picked, it is first sampled If the sample shows that we
+// can discard at least discardRatio space of that file, it would be rewritten.
 //
-// Only one GC is allowed at a time. If another value log GC is running, or DB has been closed, this
-// would return an ErrRejected.
+// If a call to RunValueLogGC results in no rewrites, then an ErrNoRewrite is
+// thrown indicating that the call resulted in no file rewrites.
 //
-// Note: Every time GC is run, it would produce a spike of activity on the LSM tree.
+// We recommend setting discardRatio to 0.5, thus indicating that a file be
+// rewritten if half the space can be discarded.  This results in a lifetime
+// value log write amplification of 2 (1 from original write + 0.5 rewrite +
+// 0.25 + 0.125 + ... = 2). Setting it to higher value would result in fewer
+// space reclaims, while setting it to a lower value would result in more space
+// reclaims at the cost of increased activity on the LSM tree. discardRatio
+// must be in the range (0.0, 1.0), both endpoints excluded, otherwise an
+// ErrInvalidRequest is returned.
+//
+// Only one GC is allowed at a time. If another value log GC is running, or DB
+// has been closed, this would return an ErrRejected.
+//
+// Note: Every time GC is run, it would produce a spike of activity on the LSM
+// tree.
 func (db *DB) RunValueLogGC(discardRatio float64) error {
 	if discardRatio >= 1.0 || discardRatio <= 0.0 {
 		return ErrInvalidRequest
@@ -1018,7 +1054,8 @@ func (db *DB) RunValueLogGC(discardRatio float64) error {
 	// Find head on disk
 	headKey := y.KeyWithTs(head, math.MaxUint64)
 	// Need to pass with timestamp, lsm get removes the last 8 bytes and compares key
-	val, err := db.lc.get(headKey)
+	var maxVs y.ValueStruct
+	val, err := db.lc.get(headKey, maxVs)
 	if err != nil {
 		return errors.Wrap(err, "Retrieving head from on-disk LSM")
 	}
@@ -1042,4 +1079,78 @@ func (db *DB) Size() (lsm int64, vlog int64) {
 	lsm = y.LSMSize.Get(db.opt.Dir).(*expvar.Int).Value()
 	vlog = y.VlogSize.Get(db.opt.Dir).(*expvar.Int).Value()
 	return
+}
+
+// Sequence represents a Badger sequence.
+type Sequence struct {
+	sync.Mutex
+	db        *DB
+	key       []byte
+	next      uint64
+	leased    uint64
+	bandwidth uint64
+}
+
+// Next would return the next integer in the sequence, updating the lease by running a transaction
+// if needed.
+func (seq *Sequence) Next() (uint64, error) {
+	seq.Lock()
+	defer seq.Unlock()
+	if seq.next >= seq.leased {
+		if err := seq.updateLease(); err != nil {
+			return 0, err
+		}
+	}
+	val := seq.next
+	seq.next++
+	return val, nil
+}
+
+func (seq *Sequence) updateLease() error {
+	return seq.db.Update(func(txn *Txn) error {
+		item, err := txn.Get(seq.key)
+		if err == ErrKeyNotFound {
+			seq.next = 0
+		} else if err != nil {
+			return err
+		} else {
+			val, err := item.Value()
+			if err != nil {
+				return err
+			}
+			num := binary.BigEndian.Uint64(val)
+			seq.next = num
+		}
+
+		lease := seq.next + seq.bandwidth
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], lease)
+		if err = txn.Set(seq.key, buf[:]); err != nil {
+			return err
+		}
+		seq.leased = lease
+		return nil
+	})
+}
+
+// GetSequence would initiate a new sequence object, generating it from the stored lease, if
+// available, in the database. Sequence can be used to get a list of monotonically increasing
+// integers. Multiple sequences can be created by providing different keys. Bandwidth sets the
+// size of the lease, determining how many Next() requests can be served from memory.
+func (db *DB) GetSequence(key []byte, bandwidth uint64) (*Sequence, error) {
+	switch {
+	case len(key) == 0:
+		return nil, ErrEmptyKey
+	case bandwidth == 0:
+		return nil, ErrZeroBandwidth
+	}
+	seq := &Sequence{
+		db:        db,
+		key:       key,
+		next:      0,
+		leased:    0,
+		bandwidth: bandwidth,
+	}
+	err := seq.updateLease()
+	return seq, err
 }

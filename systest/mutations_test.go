@@ -36,6 +36,7 @@ func TestSystem(t *testing.T) {
 	t.Run("expand all with reverse predicates", wrap(ExpandAllReversePredicatesTest))
 	t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
 	t.Run("facets with order", wrap(FacetOrderTest))
+	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -512,4 +513,37 @@ func FacetOrderTest(t *testing.T, c *client.Dgraph) {
 		  ]
 		}`, string(resp.Json))
 
+}
+
+// Shows fix for issue #1918.
+func LangAndSortBugTest(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "name: string @index(exact) ."}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:michael <name> "Michael" .
+			_:michael <friend> _:sang .
+
+			_:sang <name> "상현"@ko .
+			_:sang <name> "Sang Hyun"@en .
+		`),
+	})
+	resp, err := txn.Query(ctx, `
+	{
+	  q(func: eq(name, "Michael")) {
+	    name
+	    friend (orderdesc: name@.) {
+	      name@en
+	    }
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `
+	{"q":[{
+		"name": "Michael",
+		"friend": [{ "name@en": "Sang Hyun" }]
+	}]}
+	`, string(resp.Json))
 }

@@ -46,6 +46,9 @@ type Options struct {
 	// How should LSM tree be accessed.
 	TableLoadingMode options.FileLoadingMode
 
+	// How should value log be accessed
+	ValueLogLoadingMode options.FileLoadingMode
+
 	// 3. Flags that user might want to review
 	// ----------------------------------------
 	// The following affect all levels of LSM tree.
@@ -92,6 +95,7 @@ var DefaultOptions = Options{
 	LevelOneSize:        256 << 20,
 	LevelSizeMultiplier: 10,
 	TableLoadingMode:    options.LoadToRAM,
+	ValueLogLoadingMode: options.MemoryMap,
 	// table.MemoryMap to mmap() the tables.
 	// table.Nothing to not preload the tables.
 	MaxLevels:               7,

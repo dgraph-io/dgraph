@@ -134,6 +134,24 @@ func TestCheckSchema(t *testing.T) {
 	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_STRING}
 	require.NoError(t, checkSchema(s1))
 
+	// string to password
+	err = schema.ParseBytes([]byte("name:string ."), 1)
+	require.NoError(t, err)
+	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_PASSWORD}
+	require.Error(t, checkSchema(s1))
+
+	// int to password
+	err = schema.ParseBytes([]byte("name:int ."), 1)
+	require.NoError(t, err)
+	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_PASSWORD}
+	require.Error(t, checkSchema(s1))
+
+	// password to password
+	err = schema.ParseBytes([]byte("name:password ."), 1)
+	require.NoError(t, err)
+	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_PASSWORD}
+	require.NoError(t, checkSchema(s1))
+
 	// string to int
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)

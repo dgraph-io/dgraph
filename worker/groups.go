@@ -616,6 +616,9 @@ func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
 }
 
 func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
+	if !g.Node.AmLeader() {
+		return
+	}
 	for startTs, commitTs := range oracleDelta.Commits {
 		if posting.Txns().Get(startTs) == nil {
 			posting.Oracle().Done(startTs)
@@ -643,9 +646,7 @@ func (g *groupi) processOracleDeltaStream() {
 		ticker := time.NewTicker(time.Minute)
 		for {
 			<-ticker.C
-			if g.Node.AmLeader() {
-				g.proposeDelta(posting.Oracle().CurrentState())
-			}
+			g.proposeDelta(posting.Oracle().CurrentState())
 		}
 	}()
 
