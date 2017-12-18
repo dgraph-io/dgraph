@@ -17,6 +17,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Empty string values are stored as it is and no strings have special meaning now.
 * Correctly update order of facetMatrix when orderdesc/orderasc is applied.
 * Allow live and bulk loaders to work with multiple zeros.
+* SIGINT now forces a shutdown after 5 seconds when there are pending RPCs.
 
 ### Changed
 
