@@ -121,7 +121,22 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		err := s.Serve(l)
 		log.Printf("gRpc server stopped : %s", err.Error())
 		st.node.stop <- struct{}{}
-		s.GracefulStop()
+
+		// Attempt graceful stop (waits for pending RPCs), but force a stop if
+		// it doesn't happen in a reasonable amount of time.
+		done := make(chan struct{})
+		const timeout = 5 * time.Second
+		go func() {
+			s.GracefulStop()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(timeout):
+			log.Printf("Stopping grpc gracefully is taking longer than %v."+
+				" Force stopping now. Pending RPCs will be abandoned.", timeout)
+			s.Stop()
+		}
 	}()
 }
 

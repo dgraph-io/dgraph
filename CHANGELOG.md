@@ -26,6 +26,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Fix alias edge cases in normalize directive.
 * Allow reading new index key mutated as part of same transaction.
 * Fix bug in value log GC in badger.
+* SIGINT now forces a shutdown after 5 seconds when there are pending RPCs.
 
 ### Changed
 
