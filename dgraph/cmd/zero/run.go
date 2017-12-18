@@ -135,8 +135,8 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		select {
 		case <-stopDone:
 		case <-time.After(stopTimeout):
-			log.Printf("Stopping grpc gracefully is taking "+
-				"longer than %v. Force stopping now.", stopTimeout)
+			log.Printf("Stopping grpc gracefully is taking longer than %v."+
+				" Force stopping now. Pending RPCs will be abandoned.", stopTimeout)
 			s.Stop()
 		}
 
