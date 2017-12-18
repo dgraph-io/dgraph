@@ -14,8 +14,8 @@ title = "Contribute to Dgraph"
 
 ### Setup Dgraph from source repo
 
-    $ mkdir -p src/github.com/dgraph-io/
-    $ cd src/github.com/dgraph-io
+    $ mkdir -p $GOPATH/src/github.com/dgraph-io/
+    $ cd $GOPATH/src/github.com/dgraph-io
     $ git clone git@github.com:dgraph-io/dgraph.git
     $ cd dgraph
     $ ./contrib/scripts/install.sh
