@@ -91,20 +91,27 @@ if ! run_upload_script; then
 else
  declare -r SSH_FILE="$(mktemp -u $HOME/.ssh/XXXXX)"
 
- openssl aes-256-cbc \
-   -K $encrypted_b471ec07d33f_key \
-   -iv $encrypted_b471ec07d33f_iv \
-   -in ".travis/ratel.enc" \
-   -out "$SSH_FILE" -d
 
- chmod 600 "$SSH_FILE" \
-   && printf "%s\n" \
-     "Host github.com" \
-     "  IdentityFile $SSH_FILE" \
-     "  LogLevel ERROR" >> ~/.ssh/config
+  if [[ "$TRAVIS" == true ]]; then
+    openssl aes-256-cbc \
+      -K $encrypted_b471ec07d33f_key \
+      -iv $encrypted_b471ec07d33f_iv \
+      -in ".travis/ratel.enc" \
+      -out "$SSH_FILE" -d
+
+     chmod 600 "$SSH_FILE" \
+      && printf "%s\n" \
+        "Host github.com" \
+        "  IdentityFile $SSH_FILE" \
+        "  LogLevel ERROR" >> ~/.ssh/config
+  fi
 
   go get -u github.com/jteeuwen/go-bindata/...
-  pushd $GOPATH/src/github.com/dgraph-io && git clone git@github.com:dgraph-io/ratel.git
+  pushd $GOPATH/src/github.com/dgraph-io
+  if [[ ! -d ratel ]]; then
+    git clone git@github.com:dgraph-io/ratel.git
+  fi
+
   pushd ratel
   ./scripts/build.sh
   popd
