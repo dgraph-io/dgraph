@@ -175,6 +175,11 @@ Sometimes, you only want to commit mutation, without querying anything further.
 In such cases, you can use a `CommitNow` field in `api.Mutation` to
 indicate that the mutation must be immediately committed.
 
+The `IgnoreIndexConflict` flag can be set to `true` on the `Mutation` object
+to not run conflict detection over the index, which would decrease the number
+of transaction conflicts and aborts. However, this would come at the cost of
+potentially inconsistent upsert operations
+
 ### Commit the transaction
 
 Once all the queries and mutations are done, you can commit the transaction. It
@@ -592,6 +597,13 @@ state.
 It's possible to commit immediately after a mutation is made (without requiring
 to use the `/commit` endpoint as explained in this section). To do this, add
 the `X-Dgraph-CommitNow: true` header to the final `/mutate` call.
+{{% /notice %}}
+
+{{% notice "note" %}}
+The `IgnoreIndexConflict` can be set to not run conflict detection over the index, 
+which would decrease the number of transaction conflicts and aborts. However, this 
+would come at the cost of potentially inconsistent upsert operations. To do this, 
+add the `X-Dgraph-IgnoreIndexConflict: true` header to each `/mutate` call.
 {{% /notice %}}
 
 Finally, we can commit the transaction using the `/commit` endpoint. We need
