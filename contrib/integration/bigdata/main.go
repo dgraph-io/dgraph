@@ -166,14 +166,12 @@ func mutate(c *client.Dgraph) error {
 
 	x.AssertTrue(len(result.Q) > 0 && result.Q[0].Count != nil && result.Q[0].Uid != nil)
 
-	fmt.Println(time.Now().Unix(), "before mutate 1")
 	if _, err := r.txn.Mutate(r.ctx, &api.Mutation{
 		SetNquads: []byte(fmt.Sprintf("<%s> <count_%c> \"%d\" .\n",
 			*result.Q[0].Uid, char, *result.Q[0].Count+1)),
 	}); err != nil {
 		return err
 	}
-	fmt.Println(time.Now().Unix(), "after mutate 1")
 
 	rdfs := fmt.Sprintf("_:node <xid> \"%c_%d\" .\n", char, *result.Q[0].Count)
 	for char := 'a'; char <= 'z'; char++ {
@@ -184,13 +182,11 @@ func mutate(c *client.Dgraph) error {
 		rand.Read(payload)
 		rdfs += fmt.Sprintf("_:node <attr_%c> \"%s\" .\n", char, url.QueryEscape(string(payload)))
 	}
-	fmt.Println(time.Now().Unix(), "before mutate 2")
 	if _, err := r.txn.Mutate(r.ctx, &api.Mutation{
 		SetNquads: []byte(rdfs),
 	}); err != nil {
 		return err
 	}
-	fmt.Println(time.Now().Unix(), "after mutate 2")
 
 	return r.txn.Commit(r.ctx)
 }
