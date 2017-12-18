@@ -89,6 +89,27 @@ if ! run_upload_script; then
 	echo "Skipping running the nightly script"
 	exit 0
 else
+ declare -r SSH_FILE="$(mktemp -u $HOME/.ssh/XXXXX)"
+
+ openssl aes-256-cbc \
+   -K $encrypted_b471ec07d33f_key \
+   -iv $encrypted_b471ec07d33f_iv \
+   -in ".travis/ratel.enc" \
+   -out "$SSH_FILE" -d
+
+ chmod 600 "$SSH_FILE" \
+   && printf "%s\n" \
+     "Host github.com" \
+     "  IdentityFile $SSH_FILE" \
+     "  LogLevel ERROR" >> ~/.ssh/config
+
+  go get -u github.com/jteeuwen/go-bindata/...
+  pushd $GOPATH/src/github.com/dgraph-io && git clone git@github.com:dgraph-io/ratel.git
+  pushd ratel
+  ./scripts/build.sh
+  popd
+  popd
+
 	echo "Running nightly script"
 fi
 
