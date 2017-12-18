@@ -41,7 +41,7 @@ fi
 
 echo -e "\n\n\033[1;33mBuilding binaries for $platform\033[0m"
 xgo --go 1.8.3 --targets $xgo_target -ldflags \
-  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
+  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 if [[ $platform == "windows" ]]; then

@@ -31,7 +31,7 @@ source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/constants.sh
 pushd $dgraph_cmd
 echo -e "\033[1;33mBuilding dgraph binary for $platform\033[0m"
 go build -ldflags \
-  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
+  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
 
 echo -e "\n\033[1;34mSize of files before strip: $(du -sh dgraph)\033[0m"
 
