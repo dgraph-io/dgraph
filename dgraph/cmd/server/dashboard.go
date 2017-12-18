@@ -34,7 +34,7 @@ type keywords struct {
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Dgraph Browser is available for running separately using the hedgehog binary"))
+	w.Write([]byte("Dgraph browser is available for running separately using the dgraph-ratel binary"))
 }
 
 // Used to return a list of keywords, so that UI can show them for autocompletion.
