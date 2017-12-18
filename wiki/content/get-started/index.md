@@ -70,12 +70,12 @@ Run `dgraph server` to start Dgraph server.
 dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
-**Run Dgraph UI**
+**Run Ratel**
 
-Run 'dgraph-rattle' to start Dgraph UI. This can be used to do mutations and query through UI.
+Run 'dgraph-ratel' to start Dgraph UI. This can be used to do mutations and query through UI.
 
 ```sh
-dgraph-rattle
+dgraph-ratel
 ```
 
 {{% notice "tip" %}}You need to set the estimated memory dgraph can take through `memory_mb` flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
@@ -95,7 +95,7 @@ dgraph-rattle
 ```
 
 ```sh
-./dgraph-rattle.exe
+./dgraph-ratel.exe
 ```
 
 ### Docker on Linux
@@ -111,7 +111,7 @@ docker run -it -p 8080:8080 -p 9080:9080 -p 8081:8081 -v /tmp/data:/dgraph --nam
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
 
 # Run Dgraph UI
-docker exec -it diggy dgraph-rattle
+docker exec -it diggy dgraph-ratel
 ```
 
 The dgraph server listens on ports 8080 and 9080  with log output to the terminal.

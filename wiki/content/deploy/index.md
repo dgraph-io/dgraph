@@ -139,7 +139,7 @@ all the various flags available, run `dgraph server --help`.
 **Run dgraph UI**
 
 ```sh
-dgraph-rattle -addr="localhost:8080" -p 8081
+dgraph-ratel -addr="localhost:8080" -p 8081
 ```
 
 Dgraph UI listens on port 8081 by default. You can use the -p flag to change it, similarly you can use the -addr flag to pass the address of dgraph server.
@@ -172,7 +172,7 @@ docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/d
 
 **Run dgraph UI**
 ```sh
-docker run -it -p 8082:8082 dgraph/dgraph:latest dgraph-rattle -addr localhost:8081 -p 8082
+docker run -it -p 8082:8082 dgraph/dgraph:latest dgraph-ratel -addr localhost:8081 -p 8082
 ```
 
 
