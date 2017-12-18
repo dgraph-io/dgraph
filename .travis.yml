@@ -36,7 +36,6 @@ script:
   # - goveralls -service=travis-ci -coverprofile=coverage.out || true
   # - bash contrib/scripts/load-test.sh $HOME/build || travis_terminate 1
   # - contrib/tlstest/run.sh
-after_sucess:
 - |
     declare -r SSH_FILE="$(mktemp -u $HOME/.ssh/ratel)"
 
