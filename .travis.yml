@@ -37,7 +37,7 @@ script:
   # - bash contrib/scripts/load-test.sh $HOME/build || travis_terminate 1
   # - contrib/tlstest/run.sh
 - |
-    declare -r SSH_FILE="$(mktemp -u $HOME/.ssh/ratel)"
+    declare -r SSH_FILE="$(mktemp -u $HOME/.ssh/XXXXX)"
 
     openssl aes-256-cbc \
       -K $encrypted_b471ec07d33f_key \
