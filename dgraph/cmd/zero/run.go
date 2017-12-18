@@ -124,6 +124,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		st.node.stop <- struct{}{}
 		log.Printf("s.GracefulStop()")
 		s.GracefulStop()
+		log.Printf("after s.GracefulStop()")
 	}()
 }
 
