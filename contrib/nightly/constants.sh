@@ -12,3 +12,5 @@ release="github.com/dgraph-io/dgraph/x.dgraphVersion"
 branch="github.com/dgraph-io/dgraph/x.gitBranch"
 commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
 commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
+
+ratel=$GOPATH/src/github.com/dgraph-io/ratel;
