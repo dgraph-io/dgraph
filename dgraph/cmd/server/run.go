@@ -26,7 +26,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -50,7 +49,6 @@ var (
 	bindall bool
 	config  edgraph.Options
 	tlsConf x.TLSHelperConfig
-	uiDir   string
 )
 
 var Server x.SubCommand
@@ -123,10 +121,6 @@ func init() {
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
-
-	// UI assets dir
-	flag.String("ui", "/usr/local/share/dgraph/assets",
-		"Directory which contains assets for the user interface")
 }
 
 func setupCustomTokenizers() {
@@ -257,11 +251,7 @@ func setupServer() {
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/memory_mb", memoryLimitHandler)
 
-	// UI related API's.
-	// Share urls have a hex string as the shareId. So if
-	// our url path matches it, we wan't to serve index.html.
-	reg := regexp.MustCompile(`\/0[xX][0-9a-fA-F]+`)
-	http.Handle("/", homeHandler(http.FileServer(http.Dir(uiDir)), reg))
+	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.
@@ -307,7 +297,6 @@ func run() {
 	x.LoadTLSConfig(&tlsConf, Server.Conf)
 	tlsConf.ClientAuth = Server.Conf.GetString("tls_client_auth")
 	tlsConf.ClientCACerts = Server.Conf.GetString("tls_ca_certs")
-	uiDir = Server.Conf.GetString("ui")
 
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
