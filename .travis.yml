@@ -36,7 +36,7 @@ script:
   # - goveralls -service=travis-ci -coverprofile=coverage.out || true
   # - bash contrib/scripts/load-test.sh $HOME/build || travis_terminate 1
   # - contrib/tlstest/run.sh
-before_deploy:
+after_sucess:
 - |
     declare -r SSH_FILE="$(mktemp -u $HOME/.ssh/ratel)"
 
@@ -52,5 +52,4 @@ before_deploy:
         "  IdentityFile $SSH_FILE" \
         "  LogLevel ERROR" >> ~/.ssh/config
 - cd $GOPATH/src/github.com/dgraph-io && git clone git@github.com:dgraph-io/ratel.git
-deploy:
 - contrib/nightly/upload.sh
