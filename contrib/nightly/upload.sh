@@ -130,7 +130,6 @@ OSX_NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-darwin-amd64-
 SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
 SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
 OSX_SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-checksum-darwin-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
-ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 CURRENT_BRANCH=$TRAVIS_BRANCH
 CURRENT_DIR=$(pwd)
 
@@ -205,7 +204,6 @@ upload_assets() {
 	update_or_create_asset $release_id $sha_name ${OSX_SHA_FILE}
 
 	# As asset would be the same on both platforms, we only upload it from linux.
-	update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
 	update_or_create_asset $release_id $WINDOWS_TAR_NAME ${NIGHTLY_WINDOWS_FILE}
 
 	# We dont want to update description programatically for version releases and commit apart from
@@ -242,7 +240,6 @@ build_docker_image() {
     mkdir dgraph-build
   fi
 	tar -xzf ${NIGHTLY_FILE} -C dgraph-build
-	cp ${ASSETS_FILE} .
 	echo -e "Building the docker image with tag: $DOCKER_TAG."
 	docker build -t dgraph/dgraph:$DOCKER_TAG -f $DGRAPH/contrib/nightly/Dockerfile .
 	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
@@ -250,7 +247,6 @@ build_docker_image() {
 		docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest
 	fi
   rm -rf dgraph
-	rm assets.tar.gz
 }
 
 upload_docker_image() {
@@ -285,7 +281,7 @@ if [ "$TRAVIS" = true ]; then
 fi
 
 if [ "$DGRAPH" != "$CURRENT_DIR" ]; then
-	mv $ASSETS_FILE $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
+	mv $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
 fi
 
 # Lets rename the binaries before they are uploaded to S3.
