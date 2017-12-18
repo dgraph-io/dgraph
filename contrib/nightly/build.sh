@@ -31,12 +31,9 @@ source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/constants.sh
 pushd $dgraph_cmd
 echo -e "\033[1;33mBuilding dgraph binary for $platform\033[0m"
 go build -ldflags \
-  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
-
-echo -e "\n\033[1;34mSize of files before strip: $(du -sh dgraph)\033[0m"
+  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
 
 strip -x dgraph
-echo -e "\n\033[1;34mSize of files after  strip: $(du -sh dgraph)\033[0m"
 
 digest_cmd=""
 if hash shasum 2>/dev/null; then
@@ -59,26 +56,28 @@ echo "$checksum /usr/local/bin/dgraph" >> $checksum_file
 # Move dgraph to tmp directory.
 cp dgraph $tmp_dir
 
+popd
+
+pushd $ratel
+echo -e "\033[1;33mBuilding ratel binary for $platform\033[0m"
+go build -o dgraph-ratel
+strip -x dgraph-ratel
+checksum=$($digest_cmd dgraph-ratel | awk '{print $1}')
+echo "$checksum /usr/local/bin/dgraph-ratel" >> $checksum_file
+cp dgraph-ratel $tmp_dir
+
+echo -e "\n\033[1;34mSize of files after  strip: $(du -sh $tmp_dir)\033[0m"
+
 echo -e "\n\033[1;33mCreating tar file\033[0m"
 tar_file=dgraph-"$platform"-amd64-$release_version
 #popd &> /dev/null
 popd
 
-pushd $tmp_dir
 # Create a tar file with the contents of the dgraph folder (i.e the binaries)
-GZIP=-n tar -zcf $tar_file.tar.gz dgraph;
+tar -zvcf $tar_file.tar.gz -C $tmp_dir .;
 echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file.tar.gz)\033[0m"
 
-echo -e "\n\033[1;33mMoving tarfile to original directory\033[0m"
-mv $tar_file.tar.gz $cur_dir
-
-echo -e "Calculating and storing checksum for tar gzipped assets."
-popd
 mv $tmp_dir ./
-GZIP=-n tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
-checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
-echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
-echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
 
 # Only run this locally.
 if [[ $TRAVIS != true ]]; then
