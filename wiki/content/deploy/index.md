@@ -29,8 +29,7 @@ curl https://get.dgraph.io -sSf | bash
 # Test that it worked fine, by running:
 dgraph
 ```
-would install the `dgraph` binary into your system, along with assets required
-for the UI.
+would install the `dgraph` binary into your system.
 
 ### Manual download [optional]
 
@@ -46,10 +45,6 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 # Test that it worked fine, by running:
 dgraph
 ```
-
-{{% notice "todo" %}}
-Explain where to install UI assets.
-{{% /notice %}}
 
 ### Nightly
 
@@ -141,6 +136,14 @@ a unique ID to each Dgraph server, which Dgraph server persists in the write ahe
 You can use `-p` and `-w` to change the storage location of data and WAL. For
 all the various flags available, run `dgraph server --help`.
 
+**Run dgraph UI**
+
+```sh
+dgraph-rattle -addr="localhost:8080" -p 8081
+```
+
+Dgraph UI listens on port 8081 by default. You can use the -p flag to change it, similarly you can use the -addr flag to pass the address of dgraph server.
+
 ### Run using Docker
 
 First, you'd want to figure out the host IP address. You can typically do that
@@ -165,6 +168,11 @@ docker run -it -p 7080:7080 -p 8080:8080 -v ~/data:/dgraph dgraph/dgraph:latest 
 mkdir ~/data # Or any other directory where data should be stored.
 
 docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/dgraph:latest dgraph server -port_offset 1 --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:7080 --my=HOSTIPADDR:7081 --idx <unique-id>
+```
+
+**Run dgraph UI**
+```sh
+docker run -it -p 8082:8082 dgraph/dgraph:latest dgraph-rattle -addr localhost:8081 -p 8082
 ```
 
 
