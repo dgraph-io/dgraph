@@ -59,12 +59,12 @@ cp dgraph $tmp_dir
 popd
 
 pushd $ratel
-echo -e "\033[1;33mBuilding ratle binary for $platform\033[0m"
-go build -o dgraph-ratle
-strip -x dgraph-ratle
-checksum=$($digest_cmd dgraph-ratle | awk '{print $1}')
-echo "$checksum /usr/local/bin/dgraph-ratle" >> $checksum_file
-cp dgraph-ratle $tmp_dir
+echo -e "\033[1;33mBuilding ratel binary for $platform\033[0m"
+go build -o dgraph-ratel
+strip -x dgraph-ratel
+checksum=$($digest_cmd dgraph-ratel | awk '{print $1}')
+echo "$checksum /usr/local/bin/dgraph-ratel" >> $checksum_file
+cp dgraph-ratel $tmp_dir
 
 echo -e "\n\033[1;34mSize of files after  strip: $(du -sh $tmp_dir)\033[0m"
 

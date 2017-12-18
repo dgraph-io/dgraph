@@ -52,13 +52,13 @@ fi
 
 
 pushd $ratel
-echo -e "\033[1;33mBuilding ratle binary for $platform\033[0m"
+echo -e "\033[1;33mBuilding ratel binary for $platform\033[0m"
 if [[ $platform == "windows" ]]; then
-  GOOS=windows GOARCH=amd64 go build -o dgraph-ratle.exe .
-  cp dgraph-ratle.exe $tmp_dir
+  GOOS=windows GOARCH=amd64 go build -o dgraph-ratel.exe .
+  cp dgraph-ratel.exe $tmp_dir
 else
-  GOOS=darwin GOARCH=amd64 go build -o dgraph-ratle .
-  cp dgraph-ratle $tmp_dir
+  GOOS=darwin GOARCH=amd64 go build -o dgraph-ratel .
+  cp dgraph-ratel $tmp_dir
 fi
 popd
 
@@ -74,8 +74,8 @@ else
   checksum=$(shasum -a 256 dgraph | awk '{print $1}')
   echo "$checksum /usr/local/bin/dgraph" >> $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
 
-   checksum=$(shasum -a 256 $tmp_dir/dgraph-ratle | awk '{print $1}')
-  echo "$checksum /usr/local/bin/dgraph-ratle" >> $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
+   checksum=$(shasum -a 256 $tmp_dir/dgraph-ratel | awk '{print $1}')
+  echo "$checksum /usr/local/bin/dgraph-ratel" >> $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
 
   tar -zcvf $tar_file -C $tmp_dir .
 fi
