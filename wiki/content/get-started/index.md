@@ -48,8 +48,6 @@ docker pull dgraph/dgraph
 
 If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v0.x.y.tar.gz` contains the dgraph binary.
 
-If you wish to run the UI for Dgraph you should also download the `assets.tar.gz` and extract them into a folder called `assets`.
-
 ## Step 2: Run Dgraph
 {{% notice "note" %}} This is a set up involving just one machine. For multi-server setup, go to [Deploy]({{< relref "deploy/index.md" >}}). {{% /notice %}}
 
@@ -72,6 +70,14 @@ Run `dgraph server` to start Dgraph server.
 dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
+**Run Dgraph UI**
+
+Run 'dgraph-rattle' to start Dgraph UI. This can be used to do mutations and query through UI.
+
+```sh
+dgraph-rattle
+```
+
 {{% notice "tip" %}}You need to set the estimated memory dgraph can take through `memory_mb` flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
 
 #### Windows
@@ -84,9 +90,12 @@ dgraph server --memory_mb 2048 --zero localhost:5080
 
 **Run Dgraph data server**
 
-To run dgraph with the UI on Windows, you also have to supply the path to the assets using the (`--ui` option).
 ```sh
-./dgraph.exe server --memory_mb 2048 --zero localhost:5080 --ui path-to-assets-folder
+./dgraph.exe server --memory_mb 2048 --zero localhost:5080
+```
+
+```sh
+./dgraph-rattle.exe
 ```
 
 ### Docker on Linux
@@ -96,10 +105,13 @@ To run dgraph with the UI on Windows, you also have to supply the path to the as
 mkdir -p /tmp/data
 
 # Run Dgraph Zero
-docker run -it -p 8080:8080 -p 9080:9080 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero --port_offset -2000
+docker run -it -p 8080:8080 -p 9080:9080 -p 8081:8081 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero --port_offset -2000
 
 # Run Dgraph Server
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
+
+# Run Dgraph UI
+docker exec -it diggy dgraph-rattle
 ```
 
 The dgraph server listens on ports 8080 and 9080  with log output to the terminal.
@@ -121,7 +133,7 @@ docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
 ```
 
 ## Step 3: Run Queries
-{{% notice "tip" %}}Once Dgraph is running, a user interface is available at [`http://localhost:8080`](http://localhost:8080).  It allows browser-based queries, mutations and visualizations.
+{{% notice "tip" %}}Once Dgraph is running, you can run dgraph ui binary to access user interface at [`http://localhost:8081`](http://localhost:8081).  It allows browser-based queries, mutations and visualizations.
 
 The mutations and queries below can either be run from the command line using `curl localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
 
