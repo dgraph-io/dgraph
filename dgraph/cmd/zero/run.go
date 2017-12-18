@@ -120,7 +120,9 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		defer wg.Done()
 		err := s.Serve(l)
 		log.Printf("gRpc server stopped : %s", err.Error())
+		log.Printf("st.node.stop <- struct{}{}")
 		st.node.stop <- struct{}{}
+		log.Printf("s.GracefulStop()")
 		s.GracefulStop()
 	}()
 }
