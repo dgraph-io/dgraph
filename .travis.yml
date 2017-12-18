@@ -50,5 +50,5 @@ script:
         "Host github.com" \
         "  IdentityFile $SSH_FILE" \
         "  LogLevel ERROR" >> ~/.ssh/config
-- cd $GOPATH/src/github.com/dgraph-io && git clone git@github.com:dgraph-io/ratel.git
+- pushd $GOPATH/src/github.com/dgraph-io && git clone git@github.com:dgraph-io/ratel.git && ls && popd
 - contrib/nightly/upload.sh
