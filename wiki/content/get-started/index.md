@@ -13,6 +13,14 @@ Dgraph can be installed from the install scripts, or run via Docker.
 
 {{% notice "note" %}}These instructions will install the latest release version.  To instead install our nightly build see [these instructions]({{< relref "deploy/index.md#nightly" >}}).{{% /notice %}}
 
+### From Docker Image
+
+Pull the Dgraph Docker images [from here](https://hub.docker.com/r/dgraph/dgraph/). From a terminal:
+
+```sh
+docker pull dgraph/dgraph
+```
+
 ### From Install Scripts (Linux/Mac)
 
 Install the binaries with
@@ -34,14 +42,6 @@ sh /tmp/get.sh   # Execute the script
 You can check that Dgraph binary installed correctly by running `dgraph` and
 looking at its output, which includes the version number.
 
-### From Docker Image
-
-Pull the Dgraph Docker images [from here](https://hub.docker.com/r/dgraph/dgraph/). From a terminal:
-
-```sh
-docker pull dgraph/dgraph
-```
-
 ### Installing on Windows
 
 {{% notice "note" %}}Binaries for Windows are available from `v0.8.3`.{{% /notice %}}
@@ -50,6 +50,54 @@ If you wish to install the binaries on Windows, you can get them from the [Githu
 
 ## Step 2: Run Dgraph
 {{% notice "note" %}} This is a set up involving just one machine. For multi-server setup, go to [Deploy]({{< relref "deploy/index.md" >}}). {{% /notice %}}
+
+### Docker Compose
+
+The easiest way to get Dgraph up and running is using Docker Compose. Follow the instructions
+[here](https://docs.docker.com/compose/install/) to install Docker Compose if you don't have it
+already.
+
+
+
+```
+version: "3"
+services:
+  zero:
+    image: dgraph/dgraph:latest
+    volumes:
+      - /tmp/data:/dgraph
+    ports:
+      - 6080:6080
+    restart: on-failure
+    command: dgraph zero --port_offset -2000 --my=zero:5080
+  server:
+    image: dgraph/dgraph:latest
+    volumes:
+      - /tmp/data:/dgraph
+    ports:
+      - 8080:8080
+      - 9080:9080
+    restart: on-failure
+    command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080
+  ratel:
+    image: dgraph/dgraph:latest
+    volumes:
+      - /tmp/data:/dgraph
+    ports:
+      - 8081:8081
+    command: dgraph-ratel
+```
+
+{{% notice "note" %}}You should change `/tmp/data` to the path of the folder where you want your data to
+be persisted.{{% /notice %}}
+
+Save the contents of the snippet above in a file called `docker-compose.yml`, then run the following
+command from the folder containing the file.
+```
+docker-compose up -d
+```
+
+This would start Dgraph Server, Zero and Ratel. You can check the logs using `docker-compose logs`
 
 ### From Installed Binary
 
@@ -110,7 +158,7 @@ docker run -it -p 8080:8080 -p 9080:9080 -p 8081:8081 -v /tmp/data:/dgraph --nam
 # Run Dgraph Server
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
 
-# Run Dgraph UI
+# Run Dgraph Ratel
 docker exec -it diggy dgraph-ratel
 ```
 
@@ -130,10 +178,13 @@ Now if we run dgraph container with `--volumes-from` flag and run dgraph with th
 ```sh
 docker run -it -p 8080:8080 -p 9080:9080 --volumes-from data --name diggy dgraph/dgraph dgraph zero --port_offset -2000
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
+
+# Run Dgraph Ratel
+docker exec -it diggy dgraph-ratel
 ```
 
 ## Step 3: Run Queries
-{{% notice "tip" %}}Once Dgraph is running, you can run dgraph ui binary to access user interface at [`http://localhost:8081`](http://localhost:8081).  It allows browser-based queries, mutations and visualizations.
+{{% notice "tip" %}}Once Dgraph is running, you can access user interface at [`http://localhost:8081`](http://localhost:8081).  It allows browser-based queries, mutations and visualizations.
 
 The mutations and queries below can either be run from the command line using `curl localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
 
@@ -296,21 +347,9 @@ with Dgraph from your application.
 
 ## Troubleshooting
 
-### 1. Docker: Error initializing postings store
+### 1. Docker: Error response from daemon; Conflict. Container name already exists.
 
-One of the things to try would be to open bash in the container and try to run Dgraph from within it.
-
-```sh
-docker run -it dgraph/dgraph bash
-# Now that you are within the container, run Dgraph.
-dgraph server --memory_mb 2048
+Remove the diggy container and try the docker run command again.
 ```
-
-If Dgraph runs for you that indicates there could be something wrong with mounting volumes.
-
-### 2. Docker: Error response from daemon; Conflict. Container name already exists.
-
-Remove the dgraph container and try the docker run command again.
-```
-docker rm dgraph
+docker rm diggy
 ```
