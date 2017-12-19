@@ -459,7 +459,7 @@ h3:hover .anchor i {
 
 .community-cta-wrapper {
   position: fixed;
-  bottom: -75px;
+  bottom: -145px;
   right: 3%;
   transition: bottom 300ms ease-in;
 }
@@ -551,9 +551,6 @@ h3:hover .anchor i {
   .edit-btn {
     display: none;
   }
-  .community-cta {
-    display: none;
-  }
 }
 @media screen and (max-width: 425px) {
   #header {
@@ -578,4 +575,20 @@ section.toc .section-item {
 .row-no-padding [class^="col-"] {
   padding-left: 0 !important;
   padding-right: 0 !important;
+}
+
+/* MC modal */
+.mc-modal {
+  width: 360px;
+  bottom: 0;
+  right: 15px;
+}
+
+.modalContent {
+  width: 360px;
+}
+
+.mc-banner {
+  top: auto;
+  bottom: 0;
 }
