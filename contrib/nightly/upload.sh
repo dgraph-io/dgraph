@@ -89,6 +89,34 @@ if ! run_upload_script; then
 	echo "Skipping running the nightly script"
 	exit 0
 else
+ declare -r SSH_FILE="$(mktemp -u $HOME/.ssh/XXXXX)"
+
+
+  if [[ "$TRAVIS" == true ]]; then
+    openssl aes-256-cbc \
+      -K $encrypted_b471ec07d33f_key \
+      -iv $encrypted_b471ec07d33f_iv \
+      -in ".travis/ratel.enc" \
+      -out "$SSH_FILE" -d
+
+     chmod 600 "$SSH_FILE" \
+      && printf "%s\n" \
+        "Host github.com" \
+        "  IdentityFile $SSH_FILE" \
+        "  LogLevel ERROR" >> ~/.ssh/config
+  fi
+
+  go get -u github.com/jteeuwen/go-bindata/...
+  pushd $GOPATH/src/github.com/dgraph-io
+  if [[ ! -d ratel ]]; then
+    git clone git@github.com:dgraph-io/ratel.git
+  fi
+
+  pushd ratel
+  ./scripts/build.sh
+  popd
+  popd
+
 	echo "Running nightly script"
 fi
 
@@ -109,7 +137,6 @@ OSX_NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-darwin-amd64-
 SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
 SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
 OSX_SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-checksum-darwin-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
-ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 CURRENT_BRANCH=$TRAVIS_BRANCH
 CURRENT_DIR=$(pwd)
 
@@ -184,7 +211,6 @@ upload_assets() {
 	update_or_create_asset $release_id $sha_name ${OSX_SHA_FILE}
 
 	# As asset would be the same on both platforms, we only upload it from linux.
-	update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
 	update_or_create_asset $release_id $WINDOWS_TAR_NAME ${NIGHTLY_WINDOWS_FILE}
 
 	# We dont want to update description programatically for version releases and commit apart from
@@ -221,7 +247,6 @@ build_docker_image() {
     mkdir dgraph-build
   fi
 	tar -xzf ${NIGHTLY_FILE} -C dgraph-build
-	cp ${ASSETS_FILE} .
 	echo -e "Building the docker image with tag: $DOCKER_TAG."
 	docker build -t dgraph/dgraph:$DOCKER_TAG -f $DGRAPH/contrib/nightly/Dockerfile .
 	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
@@ -229,7 +254,6 @@ build_docker_image() {
 		docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest
 	fi
   rm -rf dgraph
-	rm assets.tar.gz
 }
 
 upload_docker_image() {
@@ -264,7 +288,7 @@ if [ "$TRAVIS" = true ]; then
 fi
 
 if [ "$DGRAPH" != "$CURRENT_DIR" ]; then
-	mv $ASSETS_FILE $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
+	mv $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
 fi
 
 # Lets rename the binaries before they are uploaded to S3.

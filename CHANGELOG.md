@@ -6,6 +6,11 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Added
+
+* Allow doing Mutate and Alter Operations using dgraph UI.
+* Provide option to user to ignore conflicts on index keys.
+
 ### Fixed
 
 * Language tag parsing in queries now accepts digits (in line with RDF parsing).
@@ -17,6 +22,11 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Empty string values are stored as it is and no strings have special meaning now.
 * Correctly update order of facetMatrix when orderdesc/orderasc is applied.
 * Allow live and bulk loaders to work with multiple zeros.
+* Fix sorting with for predicates with multiple language tags.
+* Fix alias edge cases in normalize directive.
+* Allow reading new index key mutated as part of same transaction.
+* Fix bug in value log GC in badger.
+* SIGINT now forces a shutdown after 5 seconds when there are pending RPCs.
 
 ### Changed
 
@@ -25,6 +35,9 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 *  LRU size is changed dynamically now based on `max_memory_mb`
 *  Call RunValueLogGC for every GB increase in size of value logs. Upgrade vendored version of
    Badger.
+*  Prohibit string to password schema change.
+*  Make purging less aggresive.
+*  Check if GraphQL Variable is defined before using.
 
 ## [0.9.3] - 2017-12-01
 

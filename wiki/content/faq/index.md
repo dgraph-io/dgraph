@@ -14,7 +14,7 @@ We think graph databases are currently second class citizens. They are not consi
 ### Why would I use Dgraph?
 If you're interested in a high-performance graph database with an emphasis on sound design, thoughtful implementation, resilience, and cutting edge technologies Dgraph is definitely something you should consider.
 
-If you're running more than five tables in a traditional relational database managment system such as MySQL, SQL Server, or Oracle and your application requires five or more foreign keys, a graph database may be a better fit. If you're running a NoSQL database like MongoDB or Cassandra forcing you to do joins in the application layer, you should definitely take a look at moving to a graph database.
+If you're running more than five tables in a traditional relational database management system such as MySQL, SQL Server, or Oracle and your application requires five or more foreign keys, a graph database may be a better fit. If you're running a NoSQL database like MongoDB or Cassandra forcing you to do joins in the application layer, you should definitely take a look at moving to a graph database.
 
 While we absolutely believe in Dgraph it's important to remember it's still young. At this stage it's ideal for internal non-user facing projects as well as for projects that you've found impossible to realize in the past due to the complexity and computational cost imposed by classic table driven systems, endless joins, or the seemingly inescapable ''curse of dimensionality''.
 
@@ -33,6 +33,10 @@ Here are some actual benchmarks:
 
 * Dgraph against Neo4J – check [this blog post](https://open.dgraph.io/post/benchmark-neo4j/)
 * Dgraph against Cayley – check [this github repo](https://github.com/ankurayadav/graphdb-benchmarks#results-of-queries-benchmark) (credit to Ankur Yadav)
+
+### How is Dgraph Licensed?
+
+The server is licensed under [AGPL v3](https://www.gnu.org/licenses/agpl-3.0.html) and the clients (Go, Java, JS etc.) are licensed under [Apache 2](https://www.apache.org/licenses/LICENSE-2.0). More details about licensing can be found [here](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md), with an explanation of why we're doing it that way [here](https://blog.dgraph.io/post/licensing/).
 
 ## Internals
 

@@ -19,22 +19,9 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"regexp"
 
 	"github.com/dgraph-io/dgraph/x"
 )
-
-func homeHandler(h http.Handler, reg *regexp.Regexp) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// If path is '/hexValue', lets return the index.html.
-		if reg.MatchString(r.URL.Path) {
-			http.ServeFile(w, r, uiDir+"/index.html")
-			return
-		}
-
-		h.ServeHTTP(w, r)
-	})
-}
 
 type keyword struct {
 	// Type could be a predicate, function etc.
@@ -44,6 +31,10 @@ type keyword struct {
 
 type keywords struct {
 	Keywords []keyword `json:"keywords"`
+}
+
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Dgraph browser is available for running separately using the dgraph-ratel binary"))
 }
 
 // Used to return a list of keywords, so that UI can show them for autocompletion.
