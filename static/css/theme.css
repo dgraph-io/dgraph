@@ -579,16 +579,22 @@ section.toc .section-item {
 
 /* MC modal */
 .mc-modal {
-  width: 360px;
-  bottom: 0;
-  right: 15px;
+  width: 360px !important;
+  bottom: 0 !important;
+  right: 15px !important;
 }
 
 .modalContent {
-  width: 360px;
+  width: 360px !important;
 }
 
 .mc-banner {
-  top: auto!important;
-  bottom: 0;
+  top: auto !important;
+  bottom: 0 !important;
+}
+
+@media only screen and (max-width: 768px) {
+  .mc-banner {
+    border-top: 1px solid #ccc !important;
+  }
 }
