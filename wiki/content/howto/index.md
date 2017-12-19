@@ -141,3 +141,68 @@ if len(login.Account) == 0 {
     fmt.Println("Wrong email or password.")
 }
 ```
+
+## Upserts
+
+Upsert-style operations are operations where a node is:
+
+1. Searched for, and then
+2. Depending on if it is found or not, either:
+    - Updating some of its attributes, or
+    - Creating a new node with those attributes.
+
+The upsert has to be an atomic operation such that either a new node is
+created, or an existing node is modified. It's not allowed that two concurrent
+operations running the upsert both create a new node.
+
+There are many examples where upserts are useful. Most examples surround the
+creation of a 1 to 1 mapping between two different entities. E.g. associating
+usernames with user account nodes.
+
+Upserts are common in both traditional RDBMSs and newer NoSQL databases.
+Dgraph is no exception.
+
+### Upsert Procedure
+
+In Dgraph, upsert-style behaviour can be implemented by users on top of
+transactions. There steps are as follows:
+
+1. Create a new transaction.
+
+2. Query for the node. This will usually be as simple as `{ q(func:
+   eq(username, $uname) { uid }}`. If a `uid` result is returned, then that's
+the `uid` for the existing node. If no results are returned, then the user
+account doesn't exist.
+
+3. In the case where the user account doesn't exist, then a new node has to be
+   created. This is done in the usual way by making a mutation (inside the
+transaction), e.g.  the RDF `_:newUser <username> "Bob" .`. The `uid` assigned
+can be accessed by looking up the blank node name `newUser` in the `Assigned`
+object returned from the mutation.
+
+4. Now that you have the `uid` of the account (either new or existing), you can
+   modify the account (using additional mutations) or perform queries on it in
+whichever way you wish.
+
+### Conflicts
+
+Upsert operations are intended to be run concurrently, as per the needs of the
+application. As such, it's possible that two concurrently running operations
+could try to add the same node at the same time. If they do, then one of the
+transactions will fail with an error indicating that the transaction was
+aborted.
+
+If this happens, the transaction is rolled back and it's up to the
+user's application logic to retry the whole operation. The transaction has to
+be retried in its entirety, including creating a new transaction.
+
+The choice of index placed on the predicate is important for performance.
+**Hash is almost always the best choice of index.**
+
+{{% notice "note" %}}
+It's the _index_ that typically causes conflicts to occur. The index
+is stored as key/value pairs, where each key is a combination of the predicate
+name and some function of the predicate value (e.g. its hash for the hash
+index). If two transactions modify the same key concurrently, then one will
+fail.
+{{% /notice %}}
