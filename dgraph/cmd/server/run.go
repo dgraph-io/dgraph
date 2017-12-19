@@ -86,7 +86,7 @@ func init() {
 		"The ratio of queries to trace.")
 	flag.String("my", defaults.MyAddr,
 		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
-	flag.String("zero", defaults.ZeroAddr,
+	flag.StringP("zero", "z", defaults.ZeroAddr,
 		"IP_ADDRESS:PORT of Dgraph zero.")
 	flag.Uint64("idx", 0,
 		"Optional Raft ID that this server will use to join RAFT groups.")
