@@ -225,6 +225,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
+	if !isMutationAllowed(ctx) {
+		return nil, x.Errorf("No mutations allowed.")
+	}
+
 	if op.DropAll {
 		m := intern.Mutations{DropAll: true}
 		_, err := query.ApplyMutations(ctx, &m)
