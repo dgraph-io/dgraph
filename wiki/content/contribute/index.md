@@ -14,12 +14,7 @@ title = "Contribute to Dgraph"
 
 ### Setup Dgraph from source repo
 
-    $ mkdir -p $GOPATH/src/github.com/dgraph-io/
-    $ cd $GOPATH/src/github.com/dgraph-io
-    $ git clone git@github.com:dgraph-io/dgraph.git
-    $ cd dgraph
-    $ ./contrib/scripts/install.sh
-    $ go install ./dgraph
+    $ go get -u -v -t github.com/dgraph-io/dgraph/...
 
 This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and compile the binaries to `$GOPATH/bin`.
 
