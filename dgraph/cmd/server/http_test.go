@@ -177,3 +177,19 @@ func TestTransactionBasic(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"uid":"0x1","name":"Bob","balance":"110"}]}}`, data)
 }
+
+func TestAlterAllFieldsShouldBeSet(t *testing.T) {
+	req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(
+		`{"dropall":true}`, // "dropall" is spelt incorrect - should be "drop_all"
+	))
+	require.NoError(t, err)
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(alterHandler)
+	handler.ServeHTTP(rr, req)
+
+	require.Equal(t, rr.Code, http.StatusOK)
+	var qr x.QueryResWithData
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &qr))
+	require.Len(t, qr.Errors, 1)
+	require.Equal(t, qr.Errors[0].Code, "Error")
+}
