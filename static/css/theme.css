@@ -589,6 +589,6 @@ section.toc .section-item {
 }
 
 .mc-banner {
-  top: auto;
+  top: auto!important;
   bottom: 0;
 }
