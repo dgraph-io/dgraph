@@ -57,8 +57,6 @@ The easiest way to get Dgraph up and running is using Docker Compose. Follow the
 [here](https://docs.docker.com/compose/install/) to install Docker Compose if you don't have it
 already.
 
-
-
 ```
 version: "3"
 services:
