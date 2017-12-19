@@ -217,6 +217,12 @@ func (s *ServerState) getTimestamp() uint64 {
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.StartTs == 0 {
+		// Must have at least one field set. This helps users if they attempt
+		// to set a field but use the wrong name (could be decoded from JSON).
+		return nil, x.Errorf("Operation must have at least one field set")
+	}
+
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {

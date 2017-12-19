@@ -392,11 +392,6 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		op.Schema = string(b)
 	}
 
-	if err := checkOpValid(op); err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
 	_, err = (&edgraph.Server{}).Alter(context.Background(), op)
 	if err != nil {
 		x.SetStatus(w, x.Error, err.Error())
@@ -415,13 +410,4 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(js)
-}
-
-func checkOpValid(op *api.Operation) error {
-	// Must have at least one field set. This helps users if they attempt to
-	// set a field but use the wrong name.
-	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.StartTs == 0 {
-		return x.Errorf("Operation must have at least one field set")
-	}
-	return nil
 }

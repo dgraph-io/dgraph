@@ -191,5 +191,5 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 	var qr x.QueryResWithData
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &qr))
 	require.Len(t, qr.Errors, 1)
-	require.Equal(t, qr.Errors[0].Code, "ErrorInvalidRequest")
+	require.Equal(t, qr.Errors[0].Code, "Error")
 }
