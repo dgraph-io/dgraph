@@ -6,6 +6,21 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+## [1.0.1] - 2017-12-20
+
+### Fixed
+
+* Wait for background goroutines to finish in posting package on shutdown.
+* Return error if we cant parse the uid given in json input for mutations.
+* Dont remove `_predicate_` schema from disk during drop all.
+* Fix panic in expand(_all_)
+
+### Changed
+
+* Make sure atleast one field is set while doing Alter.
+
+## [1.0.0] - 2017-12-18
+
 ### Added
 
 * Allow doing Mutate and Alter Operations using dgraph UI.

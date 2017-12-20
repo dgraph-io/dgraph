@@ -317,6 +317,7 @@ func run() {
 	// schema before calling posting.Init().
 	schema.Init(edgraph.State.Pstore)
 	posting.Init(edgraph.State.Pstore)
+	defer posting.Cleanup()
 	worker.Init(edgraph.State.Pstore)
 
 	// setup shutdown os signal handler
