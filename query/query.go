@@ -1695,13 +1695,20 @@ func (sg *SubGraph) appendDummyValues() {
 	}
 }
 
-func uniquePreds(vl []*intern.ValueList) map[string]struct{} {
-	preds := make(map[string]struct{})
+func uniquePreds(vl []*intern.ValueList) []string {
+	predMap := make(map[string]struct{})
 
 	for _, l := range vl {
 		for _, v := range l.Values {
-			preds[string(v.Val)] = struct{}{}
+			if len(v.Val) > 0 {
+				predMap[string(v.Val)] = struct{}{}
+			}
 		}
+	}
+
+	preds := make([]string, 0, len(predMap))
+	for pred := range predMap {
+		preds = append(preds, pred)
 	}
 	return preds
 }
@@ -1746,6 +1753,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
 		}
 
+		var preds []string
 		// It could be expand(_all_) or expand(val(x)).
 		if child.Params.Expand == "_all_" {
 			// Get the predicate list for expansion. Otherwise we already
@@ -1754,15 +1762,19 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if err != nil {
 				return out, err
 			}
+			preds = uniquePreds(child.ExpandPreds)
+
 			rpreds, err := getReversePredicates(ctx)
 			if err != nil {
 				return out, err
 			}
-			child.ExpandPreds[0].Values = append(child.ExpandPreds[0].Values, rpreds...)
+			preds = append(preds, rpreds...)
+		} else {
+			// We already have the predicates populated from the var.
+			preds = uniquePreds(child.ExpandPreds)
 		}
 
-		up := uniquePreds(child.ExpandPreds)
-		for pred, _ := range up {
+		for _, pred := range preds {
 			temp := &SubGraph{
 				ReadTs:  sg.ReadTs,
 				LinRead: sg.LinRead,
@@ -1795,12 +1807,12 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	return out, nil
 }
 
-func getReversePredicates(ctx context.Context) ([]*intern.TaskValue, error) {
+func getReversePredicates(ctx context.Context) ([]string, error) {
 	schs, err := worker.GetSchemaOverNetwork(ctx, &intern.SchemaRequest{})
 	if err != nil {
 		return nil, err
 	}
-	var preds []*intern.TaskValue
+	preds := make([]string, 0, len(schs))
 	for _, sch := range schs {
 		if !sch.Reverse {
 			continue
@@ -1808,10 +1820,7 @@ func getReversePredicates(ctx context.Context) ([]*intern.TaskValue, error) {
 		pred := make([]byte, 1+len(sch.Predicate))
 		pred[0] = '~'
 		copy(pred[1:], sch.Predicate)
-		preds = append(preds, &intern.TaskValue{
-			Val:     pred,
-			ValType: intern.Posting_DEFAULT,
-		})
+		preds = append(preds, string(pred))
 	}
 	return preds, nil
 }
