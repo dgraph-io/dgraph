@@ -144,18 +144,18 @@ if len(login.Account) == 0 {
 
 ## Upserts
 
-Upsert-style operations are operations where a node is:
+Upsert-style operations are operations where:
 
-1. Searched for, and then
+1. A node is searched for, and then
 2. Depending on if it is found or not, either:
     - Updating some of its attributes, or
     - Creating a new node with those attributes.
 
 The upsert has to be an atomic operation such that either a new node is
 created, or an existing node is modified. It's not allowed that two concurrent
-operations running the upsert both create a new node.
+upserts both create a new node.
 
-There are many examples where upserts are useful. Most examples surround the
+There are many examples where upserts are useful. Most examples involve the
 creation of a 1 to 1 mapping between two different entities. E.g. associating
 usernames with user account nodes.
 
@@ -165,7 +165,7 @@ Dgraph is no exception.
 ### Upsert Procedure
 
 In Dgraph, upsert-style behaviour can be implemented by users on top of
-transactions. There steps are as follows:
+transactions. The steps are as follows:
 
 1. Create a new transaction.
 
@@ -192,17 +192,17 @@ could try to add the same node at the same time. If they do, then one of the
 transactions will fail with an error indicating that the transaction was
 aborted.
 
-If this happens, the transaction is rolled back and it's up to the
-user's application logic to retry the whole operation. The transaction has to
-be retried in its entirety, including creating a new transaction.
+If this happens, the transaction is rolled back and it's up to the user's
+application logic to retry the whole operation. The transaction has to be
+retried in its entirety, all the way from creating a new transaction.
 
 The choice of index placed on the predicate is important for performance.
 **Hash is almost always the best choice of index.**
 
 {{% notice "note" %}}
-It's the _index_ that typically causes conflicts to occur. The index
-is stored as key/value pairs, where each key is a combination of the predicate
-name and some function of the predicate value (e.g. its hash for the hash
-index). If two transactions modify the same key concurrently, then one will
-fail.
+It's the _index_ that typically causes upsert conflicts to occur. The index is
+stored as many key/value pairs, where each key is a combination of the
+predicate name and some function of the predicate value (e.g. its hash for the
+hash index). If two transactions modify the same key concurrently, then one
+will fail.
 {{% /notice %}}
