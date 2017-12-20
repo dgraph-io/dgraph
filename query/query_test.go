@@ -7781,3 +7781,17 @@ func TestUidWithoutDebug2(t *testing.T) {
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t, `{"data":{"q":[{"uid":"0x1","friend":[{"uid":"0x17"},{"uid":"0x18"},{"uid":"0x19"},{"uid":"0x1f"},{"uid":"0x65"}]}]}}`, js)
 }
+
+func TestExpandAll_empty_panic(t *testing.T) {
+	populateGraph(t)
+
+	query := `
+		{
+			me(func: uid(0x01)) @filter(eq(name,"foobar")){
+				expand(_all_)
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[]}}`, js)
+}
