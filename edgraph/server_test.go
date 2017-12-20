@@ -159,7 +159,14 @@ func TestNquadsFromJson4(t *testing.T) {
 }
 
 func TestNquadsFromJson_UidOutofRangeError(t *testing.T) {
-	json := `{"uid":"0xa14222b693e4ba34","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
+	json := `{"uid":"0xa14222b693e4ba34123","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
+
+	_, err := nquadsFromJson([]byte(json), set)
+	require.Error(t, err)
+}
+
+func TestNquadsFromJson_NegativeUidError(t *testing.T) {
+	json := `{"uid":"-100","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
 
 	_, err := nquadsFromJson([]byte(json), set)
 	require.Error(t, err)
