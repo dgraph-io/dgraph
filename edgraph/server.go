@@ -217,12 +217,22 @@ func (s *ServerState) getTimestamp() uint64 {
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.StartTs == 0 {
+		// Must have at least one field set. This helps users if they attempt
+		// to set a field but use the wrong name (could be decoded from JSON).
+		return nil, x.Errorf("Operation must have at least one field set")
+	}
+
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
 		}
 		return empty, err
+	}
+
+	if !isMutationAllowed(ctx) {
+		return nil, x.Errorf("No mutations allowed.")
 	}
 
 	if op.DropAll {
@@ -616,8 +626,12 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		var uid uint64
 		if id, ok := uidVal.(float64); ok {
 			uid = uint64(id)
-		} else if id, ok := uidVal.(string); ok {
-			if u, err := strconv.ParseInt(id, 0, 64); err == nil {
+		} else if id, ok := uidVal.(string); ok && len(id) > 0 {
+			// We need to check for length of id as empty string would give an error while
+			// calling ParseUint. We should assign a new uid if len == 0.
+			if u, err := strconv.ParseUint(id, 0, 64); err != nil {
+				return mr, err
+			} else {
 				uid = uint64(u)
 			}
 		}

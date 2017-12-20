@@ -397,30 +397,6 @@ func ExampleTxn_Query_unmarshal() {
 	dc := api.NewDgraphClient(conn)
 	dg := client.NewDgraphClient(dc)
 
-	// While setting an object if a struct has a Uid then its properties in the graph are updated
-	// else a new node is created.
-	// In the example below new nodes for Alice and Charlie and school are created (since they dont
-	// have a Uid).  Alice is also connected via the friend edge to an existing node with Uid
-	// 1000(Bob).  We also set Name and Age values for this node with Uid 1000.
-
-	p := Person{
-		Name:    "Alice",
-		Age:     26,
-		Married: true,
-		Raw:     []byte("raw_bytes"),
-		Friends: []Person{{
-			Uid:  "1000",
-			Name: "Bob",
-			Age:  24,
-		}, {
-			Name: "Charlie",
-			Age:  29,
-		}},
-		School: []School{{
-			Name: "Crown Public School",
-		}},
-	}
-
 	op := &api.Operation{}
 	op.Schema = `
 		age: int .
@@ -433,16 +409,57 @@ func ExampleTxn_Query_unmarshal() {
 		log.Fatal(err)
 	}
 
+	p := Person{
+		Name: "Bob",
+		Age:  24,
+	}
+
 	txn := dg.NewTxn()
-	mu := &api.Mutation{}
 	pb, err := json.Marshal(p)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mu := &api.Mutation{
+		CommitNow: true,
+		SetJson:   pb,
+	}
+	assigned, err := txn.Mutate(ctx, mu)
+	if err != nil {
+		log.Fatal(err)
+	}
+	bob := assigned.Uids["blank-0"]
+
+	// While setting an object if a struct has a Uid then its properties in the graph are updated
+	// else a new node is created.
+	// In the example below new nodes for Alice and Charlie and school are created (since they dont
+	// have a Uid).  Alice is also connected via the friend edge to an existing node Bob.
+	p = Person{
+		Name:    "Alice",
+		Age:     26,
+		Married: true,
+		Raw:     []byte("raw_bytes"),
+		Friends: []Person{{
+			Uid: bob,
+		}, {
+			Name: "Charlie",
+			Age:  29,
+		}},
+		School: []School{{
+			Name: "Crown Public School",
+		}},
+	}
+
+	txn = dg.NewTxn()
+	mu = &api.Mutation{}
+	pb, err = json.Marshal(p)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	mu.SetJson = pb
 	mu.CommitNow = true
-	assigned, err := txn.Mutate(ctx, mu)
+	assigned, err = txn.Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -754,11 +771,12 @@ func ExampleDeleteEdges() {
 		log.Fatal(err)
 	}
 
-	uid := assigned.Uids["blank-0"]
+	alice := assigned.Uids["blank-0"]
+
 	variables := make(map[string]string)
-	variables["$id"] = uid
-	const q = `query Me($id: string){
-		me(func: uid($id)) {
+	variables["$alice"] = alice
+	const q = `query Me($alice: string){
+		me(func: uid($alice)) {
 			name
 			age
 			loc
@@ -780,7 +798,7 @@ func ExampleDeleteEdges() {
 
 	// Now lets delete the friend and location edge from Alice
 	mu = &api.Mutation{}
-	client.DeleteEdges(mu, uid, "friends", "loc")
+	client.DeleteEdges(mu, alice, "friends", "loc")
 
 	mu.CommitNow = true
 	_, err = dg.NewTxn().Mutate(ctx, mu)
@@ -823,16 +841,13 @@ func ExampleTxn_Mutate_deleteNode() {
 	}
 
 	p := Person{
-		Uid:     "1000",
 		Name:    "Alice",
 		Age:     26,
 		Married: true,
 		Friends: []*Person{&Person{
-			Uid:  "1001",
 			Name: "Bob",
 			Age:  24,
 		}, &Person{
-			Uid:  "1002",
 			Name: "Charlie",
 			Age:  29,
 		}},
@@ -859,15 +874,21 @@ func ExampleTxn_Mutate_deleteNode() {
 	}
 
 	mu.SetJson = pb
-	_, err = dg.NewTxn().Mutate(ctx, mu)
+	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	alice := assigned.Uids["blank-0"]
+	bob := assigned.Uids["blank-1"]
+	charlie := assigned.Uids["blank-2"]
+
 	variables := make(map[string]string)
-	variables["$id"] = "1000"
-	const q = `query Me($id: string){
-		me(func: uid($id)) {
+	variables["$alice"] = alice
+	variables["$bob"] = bob
+	variables["$charlie"] = charlie
+	const q = `query Me($alice: string, $bob: string, $charlie: string){
+		me(func: uid($alice)) {
 			name
 			age
 			married
@@ -878,14 +899,12 @@ func ExampleTxn_Mutate_deleteNode() {
 			}
 		}
 
-		me2(func: uid(1001)) {
-			uid
+		me2(func: uid($bob)) {
 			name
 			age
 		}
 
-		me3(func: uid(1002)) {
-			uid
+		me3(func: uid($charlie)) {
 			name
 			age
 		}
@@ -908,7 +927,7 @@ func ExampleTxn_Mutate_deleteNode() {
 	// Now lets try to delete Alice. This won't delete Bob and Charlie but just remove the
 	// connection between Alice and them.
 	p2 := Person{
-		Uid: "1000",
+		Uid: alice,
 	}
 
 	mu = &api.Mutation{
@@ -935,7 +954,7 @@ func ExampleTxn_Mutate_deleteNode() {
 		log.Fatal(err)
 	}
 	fmt.Printf("Resp after deleting node: %+v\n", string(resp.Json))
-	// Output: Resp after deleting node: {"me":[],"me2":[{"uid":"0x3e9","name":"Bob","age":24}],"me3":[{"uid":"0x3ea","name":"Charlie","age":29}]}
+	// Output: Resp after deleting node: {"me":[],"me2":[{"name":"Bob","age":24}],"me3":[{"name":"Charlie","age":29}]}
 }
 
 func ExampleTxn_Mutate_deletePredicate() {
@@ -957,16 +976,13 @@ func ExampleTxn_Mutate_deletePredicate() {
 	}
 
 	p := Person{
-		Uid:     "1000",
 		Name:    "Alice",
 		Age:     26,
 		Married: true,
 		Friends: []Person{Person{
-			Uid:  "1001",
 			Name: "Bob",
 			Age:  24,
 		}, Person{
-			Uid:  "1002",
 			Name: "Charlie",
 			Age:  29,
 		}},
@@ -993,16 +1009,17 @@ func ExampleTxn_Mutate_deletePredicate() {
 	}
 
 	mu.SetJson = pb
-	_, err = dg.NewTxn().Mutate(ctx, mu)
+	assigned, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	alice := assigned.Uids["blank-0"]
+
 	variables := make(map[string]string)
-	variables["$id"] = "1000"
+	variables["$id"] = alice
 	const q = `query Me($id: string){
 		me(func: uid($id)) {
-			uid
 			name
 			age
 			married
@@ -1056,5 +1073,5 @@ func ExampleTxn_Mutate_deletePredicate() {
 
 	// Alice should have no friends and only two attributes now.
 	fmt.Printf("Response after deletion: %+v\n", r)
-	// Output: Response after deletion: {Me:[{Uid:0x3e8 Name:Alice Age:26 Married:false Friends:[]}]}
+	// Output: Response after deletion: {Me:[{Uid: Name:Alice Age:26 Married:false Friends:[]}]}
 }

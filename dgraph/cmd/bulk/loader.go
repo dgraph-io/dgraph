@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -230,6 +231,11 @@ func (ld *loader) mapStage() {
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
 			readers = append(readers, bufio.NewReader(gzr))
 		}
+	}
+
+	if len(readers) == 0 {
+		fmt.Println("No rdf files found.")
+		os.Exit(1)
 	}
 
 	thr := x.NewThrottle(ld.opt.NumGoroutines)

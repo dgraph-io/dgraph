@@ -230,7 +230,7 @@ func (n *Node) InitFromWal(wal *raftwal.Wal) (idx uint64, restart bool, rerr err
 	}
 	var term uint64
 	if !raft.IsEmptySnap(sp) {
-		x.Printf("Found Snapshot: %+v\n", sp)
+		x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
 		restart = true
 		if rerr = n.Store.ApplySnapshot(sp); rerr != nil {
 			return

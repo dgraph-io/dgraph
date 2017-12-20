@@ -677,6 +677,7 @@ START:
 		// Do Immediately so that index keys are written.
 		g.proposeDelta(oracleDelta)
 	}
+	time.Sleep(time.Second)
 	goto START
 }
 

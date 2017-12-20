@@ -412,7 +412,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *intern.DirectedEdge,
 	return nil
 }
 
-func deleteEntries(prefix []byte) error {
+func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
@@ -426,6 +426,9 @@ func deleteEntries(prefix []byte) error {
 	var err error
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		item := idxIt.Item()
+		if !remove(item.Key()) {
+			continue
+		}
 		nkey := make([]byte, len(item.Key()))
 		copy(nkey, item.Key())
 
@@ -464,19 +467,17 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
-	if err := deleteEntries(prefix); err != nil {
-		return err
-	}
-	return nil
+	return deleteEntries(prefix, func(key []byte) bool {
+		return true
+	})
 }
 
 func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.CountPrefix(reverse)
-	if err := deleteEntries(prefix); err != nil {
-		return err
-	}
-	return nil
+	return deleteEntries(prefix, func(key []byte) bool {
+		return true
+	})
 }
 
 func DeleteCountIndex(ctx context.Context, attr string) error {
@@ -693,10 +694,9 @@ func DeleteIndex(ctx context.Context, attr string) error {
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	if err := deleteEntries(prefix); err != nil {
-		return err
-	}
-	return nil
+	return deleteEntries(prefix, func(key []byte) bool {
+		return true
+	})
 }
 
 // RebuildIndex rebuilds index for a given attribute.
@@ -794,7 +794,16 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) {
 
 func DeleteAll() error {
 	lcache.clear(func([]byte) bool { return true })
-	return deleteEntries(nil)
+	return deleteEntries(nil, func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk == nil {
+			return true
+		} else if pk.IsSchema() && pk.Attr == x.PredicateListAttr {
+			// Don't delete schema for _predicate_
+			return false
+		}
+		return true
+	})
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
@@ -806,7 +815,10 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	}
 	prefix := pk.DataPrefix()
 	// Delete all data postings for the given predicate.
-	if err := deleteEntries(prefix); err != nil {
+	err := deleteEntries(prefix, func(key []byte) bool {
+		return true
+	})
+	if err != nil {
 		return err
 	}
 
