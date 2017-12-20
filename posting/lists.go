@@ -35,6 +35,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
@@ -120,14 +121,17 @@ func getMemUsage() int {
 	return rss * os.Getpagesize()
 }
 
-func periodicUpdateStats() {
+func periodicUpdateStats(lc *y.Closer) {
+	defer lc.Done()
 	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 	setLruMemory := true
 	var maxSize uint64
 	var lastUse float64
 	for {
 		select {
-
+		case <-lc.HasBeenClosed():
+			return
 		case <-ticker.C:
 
 			var ms runtime.MemStats
@@ -177,26 +181,40 @@ func periodicUpdateStats() {
 	}
 }
 
-func updateMemoryMetrics() {
+func updateMemoryMetrics(lc *y.Closer) {
+	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 	for range ticker.C {
-		var ms runtime.MemStats
-		runtime.ReadMemStats(&ms)
-		megs := (ms.HeapInuse + ms.StackInuse)
+		select {
+		case <-lc.HasBeenClosed():
+			return
+		default:
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			megs := (ms.HeapInuse + ms.StackInuse)
 
-		inUse := float64(megs)
-		idle := float64(ms.HeapIdle - ms.HeapReleased)
+			inUse := float64(megs)
+			idle := float64(ms.HeapIdle - ms.HeapReleased)
 
-		x.MemoryInUse.Set(int64(inUse))
-		x.HeapIdle.Set(int64(idle))
-		x.TotalOSMemory.Set(int64(getMemUsage()))
+			x.MemoryInUse.Set(int64(inUse))
+			x.HeapIdle.Set(int64(idle))
+			x.TotalOSMemory.Set(int64(getMemUsage()))
+		}
 	}
+}
+
+type closers struct {
+	updateStats         *y.Closer
+	updateMemoryMetrics *y.Closer
+	purgeOldVersions    *y.Closer
 }
 
 var (
 	pstore *badger.ManagedDB
 	lcache *listCache
 	btree  *BTree
+	c      closers
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -206,16 +224,29 @@ func Init(ps *badger.ManagedDB) {
 	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
-	go periodicUpdateStats()
-	go updateMemoryMetrics()
-	go periodicPurgeOldVersions()
+	c := closers{
+		updateStats:         y.NewCloser(1),
+		updateMemoryMetrics: y.NewCloser(1),
+		purgeOldVersions:    y.NewCloser(1),
+	}
+
+	go periodicUpdateStats(c.updateStats)
+	go updateMemoryMetrics(c.updateMemoryMetrics)
+	go periodicPurgeOldVersions(c.purgeOldVersions)
+}
+
+func Cleanup() {
+	c.purgeOldVersions.SignalAndWait()
+	c.updateMemoryMetrics.SignalAndWait()
+	c.updateStats.SignalAndWait()
 }
 
 func StopLRUEviction() {
 	atomic.StoreInt32(&lcache.done, 1)
 }
 
-func periodicPurgeOldVersions() {
+func periodicPurgeOldVersions(lc *y.Closer) {
+	defer lc.Done()
 	// Runs every 1 minute
 	purge := func() {
 		opt := badger.DefaultIteratorOptions
@@ -250,8 +281,13 @@ func periodicPurgeOldVersions() {
 		}
 	}
 	for {
-		time.Sleep(time.Minute)
-		purge()
+		select {
+		case <-lc.HasBeenClosed():
+			return
+		default:
+			time.Sleep(time.Minute)
+			purge()
+		}
 	}
 }
 
