@@ -688,7 +688,6 @@ func (l *List) rollup() error {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
-			p.StartTs, p.CommitTs = 0, 0
 			final.Postings = append(final.Postings, p)
 		}
 		return true
@@ -734,11 +733,14 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		x.AssertTrue(len(l.activeTxns) == 0)
 	}
 
-	minTs := l.minTs
+	lmlayer := len(l.mlayer)
 	if err := l.rollup(); err != nil {
 		return false, err
 	}
-	if l.minTs == minTs && l.plist != emptyList { // Would be emptyList for s p *
+	// Check if length of mlayer has changed after rollup, else skip writing to disk
+	// minTs can remain same after rollup during schema mutations of large index, so
+	// don't check minTs.
+	if len(l.mlayer) == lmlayer && l.plist != emptyList { // Would be emptyList for s p *
 		// There was no change in immutable layer.
 		return false, nil
 	}
@@ -759,7 +761,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	}
 
 	// Copy this over because minTs can change by the time callback returns.
-	minTs = l.minTs
+	minTs := l.minTs
 	retries := 0
 	var f func(error)
 	f = func(err error) {

@@ -21,9 +21,7 @@ Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-
 
 ## Status
 
-Dgraph is [at version 0.9.x][rel].  We're aiming to convert this into
-v1.0 release before Christmas. We recommend using it in your projects and in
-production environment.
+Dgraph is [at version 1.0.0][rel] and is production ready.
 
 [rel]: https://github.com/dgraph-io/dgraph/releases
 
