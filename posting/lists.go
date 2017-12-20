@@ -133,7 +133,6 @@ func periodicUpdateStats(lc *y.Closer) {
 		case <-lc.HasBeenClosed():
 			return
 		case <-ticker.C:
-
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
 			megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
@@ -185,11 +184,11 @@ func updateMemoryMetrics(lc *y.Closer) {
 	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
+	for {
 		select {
 		case <-lc.HasBeenClosed():
 			return
-		default:
+		case <-ticker.C:
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
 			megs := (ms.HeapInuse + ms.StackInuse)
@@ -224,7 +223,7 @@ func Init(ps *badger.ManagedDB) {
 	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
-	c := closers{
+	c = closers{
 		updateStats:         y.NewCloser(1),
 		updateMemoryMetrics: y.NewCloser(1),
 		purgeOldVersions:    y.NewCloser(1),
@@ -247,6 +246,9 @@ func StopLRUEviction() {
 
 func periodicPurgeOldVersions(lc *y.Closer) {
 	defer lc.Done()
+
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 	// Runs every 1 minute
 	purge := func() {
 		opt := badger.DefaultIteratorOptions
@@ -284,8 +286,7 @@ func periodicPurgeOldVersions(lc *y.Closer) {
 		select {
 		case <-lc.HasBeenClosed():
 			return
-		default:
-			time.Sleep(time.Minute)
+		case <-ticker.C:
 			purge()
 		}
 	}
