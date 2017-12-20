@@ -164,7 +164,7 @@ specifies the preference order for returned languages, with the following rules.
 * At most one result will be returned.
 * The preference list is considered left to right: if a value in given language is not found, the next language from the list is considered.
 * If there are no values in any of the specified languages, no value is returned.
-* A final `.` means that the a value without a specified language is returned or if there is no value without language, a value in ''some'' language is returned.
+* A final `.` means that a value without a specified language is returned or if there is no value without language, a value in ''some'' language is returned.
 
 For example:
 
@@ -2059,13 +2059,18 @@ Types `string` and `dateTime` have a number of indices.
 #### String Indices
 The indices available for strings are as follows.
 
-| Index name / Tokenizer   | Purpose                                                             | Dgraph functions             |
-| :----------- | :------------------------------------------------------------------ | :--------------------------- |
-| `exact`      | matching of entire value                                            | `eq`, `le`, `ge`, `gt`, `lt` |
-| `hash`       | matching of entire value, useful when the values are large in size  | `eq`                         |
-| `term`       | matching of terms/words                                             | `eq`, `allofterms`, `anyofterms`   |
-| `fulltext`   | matching with language specific stemming and stopwords              | `eq`, `alloftext`, `anyoftext`     |
-| `trigram`    | regular expressions matching                                        | `regexp`                     |
+| Dgraph function            | Required index / tokenizer             | Notes                                                                                                                     |
+| :-----------------------   | :------------                          | :---                                                                                                                      |
+| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full text search. |
+| `le`, `ge`, `lt`, `gt`     | `exact`                                | Allows faster sorting.                                                                                                    |
+| `allofterms`, `anyofterms` | `fulltext`                             | Matching with language specific stemming and stopwords.                                                                   |
+| `regexp`                   | `trigram`                              | Regular expression matching.                                                                                              |
+
+{{% notice "warning" %}}
+Incorrect index choice can impose performance penalties and an increased
+transaction conflict rate. Use only the minimum number of and simplest indexes
+that your application needs.
+{{% /notice %}}
 
 
 #### DateTime Indices
