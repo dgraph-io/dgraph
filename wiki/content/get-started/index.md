@@ -65,6 +65,7 @@ services:
     volumes:
       - /tmp/data:/dgraph
     ports:
+      - 5080:5080
       - 6080:6080
     restart: on-failure
     command: dgraph zero --port_offset -2000 --my=zero:5080
