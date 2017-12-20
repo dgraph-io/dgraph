@@ -203,17 +203,11 @@ func updateMemoryMetrics(lc *y.Closer) {
 	}
 }
 
-type closers struct {
-	updateStats         *y.Closer
-	updateMemoryMetrics *y.Closer
-	purgeOldVersions    *y.Closer
-}
-
 var (
 	pstore *badger.ManagedDB
 	lcache *listCache
 	btree  *BTree
-	c      closers
+	closer *y.Closer
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -223,21 +217,15 @@ func Init(ps *badger.ManagedDB) {
 	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
-	c = closers{
-		updateStats:         y.NewCloser(1),
-		updateMemoryMetrics: y.NewCloser(1),
-		purgeOldVersions:    y.NewCloser(1),
-	}
+	closer = y.NewCloser(3)
 
-	go periodicUpdateStats(c.updateStats)
-	go updateMemoryMetrics(c.updateMemoryMetrics)
-	go periodicPurgeOldVersions(c.purgeOldVersions)
+	go periodicUpdateStats(closer)
+	go updateMemoryMetrics(closer)
+	go periodicPurgeOldVersions(closer)
 }
 
 func Cleanup() {
-	c.purgeOldVersions.SignalAndWait()
-	c.updateMemoryMetrics.SignalAndWait()
-	c.updateStats.SignalAndWait()
+	closer.SignalAndWait()
 }
 
 func StopLRUEviction() {
