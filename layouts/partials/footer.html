@@ -35,9 +35,14 @@
     </script>
     <script type="text/javascript" src="https://downloads.mailchimp.com/js/signup-forms/popup/embed.js" data-dojo-config="usePlainJson: true, isDebug: false"></script>
     <script type="text/javascript">
+      function isLocal() {
+        const hostname = window.location.hostname;
+        return hostname === "localhost" || hostname === "127.0.0.1";
+      }
+
       function showPopup(isStart) {
         var skip = false;
-        if (isStart && getCookie("MCCustom")) {
+        if (isStart && (getCookie("MCCustom") || isLocal())) {
           skip = true;
         }
 
