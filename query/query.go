@@ -1756,8 +1756,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		var preds []string
 		// It could be expand(_all_) or expand(val(x)).
 		if child.Params.Expand == "_all_" {
-			// Get the predicate list for expansion. Otherwise we already
-			// have the list populated from the var.
+			// Get the predicate list for expansion.
 			child.ExpandPreds, err = getNodePredicates(ctx, sg)
 			if err != nil {
 				return out, err
