@@ -2059,12 +2059,13 @@ Types `string` and `dateTime` have a number of indices.
 #### String Indices
 The indices available for strings are as follows.
 
-| Dgraph function            | Required index / tokenizer             | Notes                                                                                                                     |
-| :-----------------------   | :------------                          | :---                                                                                                                      |
-| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full text search. |
-| `le`, `ge`, `lt`, `gt`     | `exact`                                | Allows faster sorting.                                                                                                    |
-| `allofterms`, `anyofterms` | `fulltext`                             | Matching with language specific stemming and stopwords.                                                                   |
-| `regexp`                   | `trigram`                              | Regular expression matching.                                                                                              |
+| Dgraph function            | Required index / tokenizer             | Notes |
+| :-----------------------   | :------------                          | :---  |
+| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full text search. If you're already using `term`, there is no need to use `hash` or `exact` as well. |
+| `le`, `ge`, `lt`, `gt`     | `exact`                                | Allows faster sorting.                                   |
+| `allofterms`, `anyofterms` | `term`                                 | Allows searching by a term in a sentence.                |
+| `alloftext`, `anyoftext`   | `fulltext`                             | Matching with language specific stemming and stopwords.  |
+| `regexp`                   | `trigram`                              | Regular expression matching. Can also be used for equality checking. |
 
 {{% notice "warning" %}}
 Incorrect index choice can impose performance penalties and an increased

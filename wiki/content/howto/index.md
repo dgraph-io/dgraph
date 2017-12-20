@@ -157,7 +157,7 @@ upserts both create a new node.
 
 There are many examples where upserts are useful. Most examples involve the
 creation of a 1 to 1 mapping between two different entities. E.g. associating
-usernames with user account nodes.
+email addresses with user accounts.
 
 Upserts are common in both traditional RDBMSs and newer NoSQL databases.
 Dgraph is no exception.
@@ -169,16 +169,16 @@ transactions. The steps are as follows:
 
 1. Create a new transaction.
 
-2. Query for the node. This will usually be as simple as `{ q(func:
-   eq(username, $uname) { uid }}`. If a `uid` result is returned, then that's
-the `uid` for the existing node. If no results are returned, then the user
-account doesn't exist.
+2. Query for the node. This will usually be as simple as `{ q(func: eq(email,
+   "bob@example.com") { uid }}`. If a `uid` result is returned, then that's the
+`uid` for the existing node. If no results are returned, then the user account
+doesn't exist.
 
 3. In the case where the user account doesn't exist, then a new node has to be
    created. This is done in the usual way by making a mutation (inside the
-transaction), e.g.  the RDF `_:newUser <username> "Bob" .`. The `uid` assigned
-can be accessed by looking up the blank node name `newUser` in the `Assigned`
-object returned from the mutation.
+transaction), e.g.  the RDF `_:newAccount <email> "bob@example.com" .`. The
+`uid` assigned can be accessed by looking up the blank node name `newAccount`
+in the `Assigned` object returned from the mutation.
 
 4. Now that you have the `uid` of the account (either new or existing), you can
    modify the account (using additional mutations) or perform queries on it in
@@ -188,16 +188,16 @@ whichever way you wish.
 
 Upsert operations are intended to be run concurrently, as per the needs of the
 application. As such, it's possible that two concurrently running operations
-could try to add the same node at the same time. If they do, then one of the
-transactions will fail with an error indicating that the transaction was
-aborted.
+could try to add the same node at the same time. For example, both try to add a
+user with the same email address. If they do, then one of the transactions will
+fail with an error indicating that the transaction was aborted.
 
 If this happens, the transaction is rolled back and it's up to the user's
 application logic to retry the whole operation. The transaction has to be
 retried in its entirety, all the way from creating a new transaction.
 
 The choice of index placed on the predicate is important for performance.
-**Hash is almost always the best choice of index.**
+**Hash is almost always the best choice of index for equality checking.**
 
 {{% notice "note" %}}
 It's the _index_ that typically causes upsert conflicts to occur. The index is
