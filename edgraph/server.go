@@ -626,8 +626,12 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		var uid uint64
 		if id, ok := uidVal.(float64); ok {
 			uid = uint64(id)
-		} else if id, ok := uidVal.(string); ok {
-			if u, err := strconv.ParseInt(id, 0, 64); err == nil {
+		} else if id, ok := uidVal.(string); ok && len(id) > 0 {
+			// We need to check for length of id as empty string would give an error while
+			// calling ParseUint. We should assign a new uid if len == 0.
+			if u, err := strconv.ParseUint(id, 0, 64); err != nil {
+				return mr, err
+			} else {
 				uid = uint64(u)
 			}
 		}

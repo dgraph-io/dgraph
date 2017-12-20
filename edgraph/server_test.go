@@ -158,6 +158,31 @@ func TestNquadsFromJson4(t *testing.T) {
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 }
 
+func TestNquadsFromJson_UidOutofRangeError(t *testing.T) {
+	json := `{"uid":"0xa14222b693e4ba34123","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
+
+	_, err := nquadsFromJson([]byte(json), set)
+	require.Error(t, err)
+}
+
+func TestNquadsFromJson_NegativeUidError(t *testing.T) {
+	json := `{"uid":"-100","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
+
+	_, err := nquadsFromJson([]byte(json), set)
+	require.Error(t, err)
+}
+
+func TestNquadsFromJson_EmptyUid(t *testing.T) {
+	json := `{"uid":"","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name":"Crown Public School"}]}`
+
+	nq, err := nquadsFromJson([]byte(json), set)
+	require.NoError(t, err)
+
+	require.Equal(t, 5, len(nq))
+	oval := &api.Value{&api.Value_StrVal{"Name"}}
+	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
+}
+
 func TestNquadsDeleteEdges(t *testing.T) {
 	json := `[{"uid": "0x1","name":null,"mobile":null,"car":null}]`
 	nq, err := nquadsFromJson([]byte(json), delete)
