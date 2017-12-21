@@ -121,6 +121,9 @@ func init() {
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
+
+	// By default Go GRPC traces all requests.
+	grpc.EnableTracing = false
 }
 
 func setupCustomTokenizers() {
@@ -218,8 +221,6 @@ func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 }
 
 func setupServer() {
-	// By default Go GRPC traces all requests.
-	grpc.EnableTracing = false
 	go worker.RunServer(bindall) // For intern.communication.
 
 	laddr := "localhost"
