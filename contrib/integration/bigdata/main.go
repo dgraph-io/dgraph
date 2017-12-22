@@ -204,16 +204,22 @@ func showNode(c *client.Dgraph) error {
 			Count *int
 		}
 	}
-	if err := r.query(&result, `
+
+	q := fmt.Sprintf(`
 	{
 		q(func: eq(xid, "root")) {
 			count: count_%c
 		}
 	}
-	`, char); err != nil {
+	`, char)
+	resp, err := r.txn.Query
+	if err != nil {
 		return err
 	}
-	x.AssertTrue(len(result.Q) > 0 && result.Q[0].Count != nil)
+	if err := json.Unmarshal(resp.Json, &result); err != nil {
+		return err
+	}
+	x.AssertTruef(len(result.Q) > 0 && result.Q[0].Count != nil, "%v %+v", string(resp.Json), result)
 
 	var m map[string]interface{}
 	if err := r.query(&m, `
@@ -222,7 +228,7 @@ func showNode(c *client.Dgraph) error {
 			expand(_all_)
 		}
 	}
-	`); err != nil {
+	`, char, *rand.Intn(result.Q[0].Count)); err != nil {
 		return err
 	}
 	return nil
