@@ -212,7 +212,7 @@ func showNode(c *client.Dgraph) error {
 		}
 	}
 	`, char)
-	resp, err := r.txn.Query
+	resp, err := r.txn.Query(r.ctx, q)
 	if err != nil {
 		return err
 	}
@@ -228,7 +228,7 @@ func showNode(c *client.Dgraph) error {
 			expand(_all_)
 		}
 	}
-	`, char, *rand.Intn(result.Q[0].Count)); err != nil {
+	`, char, rand.Intn(*result.Q[0].Count)); err != nil {
 		return err
 	}
 	return nil
