@@ -368,7 +368,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			vals = append(vals, val)
 		}
 
-		if err == ErrNoValue || len(vals) == 0 {
+		if err == posting.ErrNoValue || len(vals) == 0 {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			if q.DoCount {
 				out.Counts = append(out.Counts, 0)
