@@ -167,7 +167,7 @@ docker run -it -p 7080:7080 -p 8080:8080 -v ~/data:/dgraph dgraph/dgraph:latest 
 ```sh
 mkdir ~/data # Or any other directory where data should be stored.
 
-docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/dgraph:latest dgraph server -port_offset 1 --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:7080 --my=HOSTIPADDR:7081 --idx <unique-id>
+docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/dgraph:latest dgraph server --port_offset 1 --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:7080 --my=HOSTIPADDR:7081 --idx <unique-id>
 ```
 
 **Run dgraph UI**
