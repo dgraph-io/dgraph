@@ -382,6 +382,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			}
 			continue
 		} else if err != nil {
+			fmt.Println("the bad thing happened")
 			return err
 		}
 
