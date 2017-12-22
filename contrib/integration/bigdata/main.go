@@ -208,6 +208,7 @@ func showNode(c *client.Dgraph) error {
 	q := fmt.Sprintf(`
 	{
 		q(func: eq(xid, "root")) {
+			uid
 			count: count_%c
 		}
 	}
