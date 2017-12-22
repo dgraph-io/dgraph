@@ -368,7 +368,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			vals = append(vals, val)
 		}
 
-		if err != nil || len(vals) == 0 {
+		if err == ErrNoValue || len(vals) == 0 {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			if q.DoCount {
 				out.Counts = append(out.Counts, 0)
@@ -381,6 +381,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				}
 			}
 			continue
+		} else if err != nil {
+			return err
 		}
 
 		if q.ExpandAll {
