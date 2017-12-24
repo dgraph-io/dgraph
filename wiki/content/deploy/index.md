@@ -1123,6 +1123,8 @@ way to perform the initial import of large datasets into dgraph.
 You can [read some technical details](https://blog.dgraph.io/post/bulkloader/)
 about the bulk loader on the blog.
 
+See [Fast Data Loading]({{< relref "#fast-data-loading" >}}) for more about the expected N-Quads format.
+
 You need to determine the
 number of dgraph instances you want in your cluster. You should set the number
 of reduce shards to this number. You will also need to set the number of map
