@@ -139,10 +139,10 @@ all the various flags available, run `dgraph server --help`.
 **Run dgraph UI**
 
 ```sh
-dgraph-ratel -addr="localhost:8080" -p 8081
+dgraph-ratel -p 8081
 ```
 
-Dgraph UI listens on port 8081 by default. You can use the -p flag to change it, similarly you can use the -addr flag to pass the address of dgraph server.
+Dgraph UI listens on port 8081 by default. You can use the -p flag to change it. By default ratel assumes that dgraph is running on localhost:8080, you can change this address from the ui itself.
 
 ### Run using Docker
 
@@ -167,12 +167,12 @@ docker run -it -p 7080:7080 -p 8080:8080 -v ~/data:/dgraph dgraph/dgraph:latest 
 ```sh
 mkdir ~/data # Or any other directory where data should be stored.
 
-docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/dgraph:latest dgraph server --port_offset 1 --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:7080 --my=HOSTIPADDR:7081 --idx <unique-id>
+docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/dgraph:latest dgraph server --port_offset 1 --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:7080 --my=HOSTIPADDR:7081 --idx <unique-id(integer)>
 ```
 
 **Run dgraph UI**
 ```sh
-docker run -it -p 8082:8082 dgraph/dgraph:latest dgraph-ratel -addr localhost:8081 -p 8082
+docker run -it -p 8082:8082 dgraph/dgraph:latest dgraph-ratel -p 8082
 ```
 
 
@@ -195,7 +195,7 @@ block reads and writes, due to lack of consensus.
 {{% /notice %}}
 
 **Dgraph Zero**
-Run three Zero instances, assigning a unique ID to each via `--idx` flag, and
+Run three Zero instances, assigning a unique ID(Integer) to each via `--idx` flag, and
 passing the address of any healthy Zero instance via `--peer` flag.
 
 To run three replicas for server, set `--replicas=3`. Every time a new Dgraph
