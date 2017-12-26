@@ -1527,10 +1527,10 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	pk := x.ParsedKey{
 		Attr: q.Attr,
 	}
-	startKey := x.DataKey(q.Attr, 0)
+	startKey := x.DataKey(q.Attr, q.AfterUid+1)
 	prefix := pk.DataPrefix()
 	if q.Reverse {
-		startKey = x.ReverseKey(q.Attr, 0)
+		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
 		prefix = pk.ReversePrefix()
 	}
 
@@ -1539,8 +1539,10 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	defer it.Close()
 	for it.Seek(startKey); it.Valid(); it.Next() {
 		pl := posting.GetLru(it.Key())
-		if pl != nil && pl.CommitTs() == 0 {
+		if pl != nil && pl.IsEmpty() {
 			// empty pl's can be present in lru
+			// We merge the keys on badger and the keys present in memory so
+			// we need to skip empty pls
 			continue
 		}
 		pk := x.Parse(it.Key())
