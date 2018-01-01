@@ -1132,38 +1132,57 @@ shards to at least this number (a higher number helps the bulk loader evenly
 distribute predicates between the reduce shards). For this example, you could use
 2 reduce shards and 4 map shards.
 
+{{% notice "note" %}}
+Ports in the example below may have to be adjusted depending on how other
+processes have been set up.
+{{% /notice %}}
+
 ```sh
-$ dgraph-bulk-loader -r=goldendata.rdf.gz -s=goldendata.schema --map_shards=4 --reduce_shards=2
+$ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero_addr=localhost:7080
 {
-        "RDFDir": "goldendata.rdf.gz",
-        "SchemaFile": "goldendata.schema",
-        "DgraphsDir": "out",
-        "LeaseFile": "LEASE",
-        "TmpDir": "tmp",
-        "NumGoroutines": 4,
-        "MapBufSize": 67108864,
-        "ExpandEdges": true,
-        "BlockRate": 0,
-        "SkipMapPhase": false,
-        "CleanupTmp": true,
-        "NumShufflers": 1,
-        "Version": false,
-        "MapShards": 4,
-        "ReduceShards": 2
+	"RDFDir": "goldendata.rdf.gz",
+	"SchemaFile": "goldendata.schema",
+	"DgraphsDir": "out",
+	"TmpDir": "tmp",
+	"NumGoroutines": 4,
+	"MapBufSize": 67108864,
+	"ExpandEdges": true,
+	"SkipMapPhase": false,
+	"CleanupTmp": true,
+	"NumShufflers": 1,
+	"Version": false,
+	"StoreXids": false,
+	"ZeroAddr": "localhost:7080",
+	"HttpAddr": "localhost:8000",
+	"MapShards": 4,
+	"ReduceShards": 2
 }
-MAP 01s rdf_count:219.0k rdf_speed:218.7k/sec edge_count:693.4k edge_speed:692.7k/sec
-MAP 02s rdf_count:494.2k rdf_speed:247.0k/sec edge_count:1.596M edge_speed:797.7k/sec
-MAP 03s rdf_count:749.4k rdf_speed:249.4k/sec edge_count:2.459M edge_speed:818.3k/sec
-MAP 04s rdf_count:1.005M rdf_speed:250.8k/sec edge_count:3.308M edge_speed:826.1k/sec
-MAP 05s rdf_count:1.121M rdf_speed:223.9k/sec edge_count:3.695M edge_speed:738.3k/sec
-MAP 06s rdf_count:1.121M rdf_speed:186.6k/sec edge_count:3.695M edge_speed:615.3k/sec
-MAP 07s rdf_count:1.121M rdf_speed:160.0k/sec edge_count:3.695M edge_speed:527.5k/sec
-REDUCE 08s [22.68%] edge_count:837.9k edge_speed:837.9k/sec plist_count:450.2k plist_speed:450.2k/sec
-REDUCE 09s [40.79%] edge_count:1.507M edge_speed:1.507M/sec plist_count:905.8k plist_speed:905.7k/sec
-REDUCE 10s [79.91%] edge_count:2.953M edge_speed:1.476M/sec plist_count:1.395M plist_speed:697.3k/sec
-REDUCE 11s [100.00%] edge_count:3.695M edge_speed:1.231M/sec plist_count:1.778M plist_speed:592.5k/sec
-REDUCE 11s [100.00%] edge_count:3.695M edge_speed:1.182M/sec plist_count:1.778M plist_speed:568.8k/sec
-Total: 11s
+The bulk loader needs to open many files at once. This number depends on the size of the data set loaded, the map file output size, and the level of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for details of how to change the limit.
+Current max open files limit: 1024
+MAP 01s rdf_count:176.0 rdf_speed:174.4/sec edge_count:564.0 edge_speed:558.8/sec
+MAP 02s rdf_count:399.0 rdf_speed:198.5/sec edge_count:1.291k edge_speed:642.4/sec
+MAP 03s rdf_count:666.0 rdf_speed:221.3/sec edge_count:2.164k edge_speed:718.9/sec
+MAP 04s rdf_count:952.0 rdf_speed:237.4/sec edge_count:3.014k edge_speed:751.5/sec
+MAP 05s rdf_count:1.327k rdf_speed:264.8/sec edge_count:4.243k edge_speed:846.7/sec
+MAP 06s rdf_count:1.774k rdf_speed:295.1/sec edge_count:5.720k edge_speed:951.5/sec
+MAP 07s rdf_count:2.375k rdf_speed:338.7/sec edge_count:7.607k edge_speed:1.085k/sec
+MAP 08s rdf_count:3.697k rdf_speed:461.4/sec edge_count:11.89k edge_speed:1.484k/sec
+MAP 09s rdf_count:71.98k rdf_speed:7.987k/sec edge_count:225.4k edge_speed:25.01k/sec
+MAP 10s rdf_count:354.8k rdf_speed:35.44k/sec edge_count:1.132M edge_speed:113.1k/sec
+MAP 11s rdf_count:610.5k rdf_speed:55.39k/sec edge_count:1.985M edge_speed:180.1k/sec
+MAP 12s rdf_count:883.9k rdf_speed:73.52k/sec edge_count:2.907M edge_speed:241.8k/sec
+MAP 13s rdf_count:1.108M rdf_speed:85.10k/sec edge_count:3.653M edge_speed:280.5k/sec
+MAP 14s rdf_count:1.121M rdf_speed:79.93k/sec edge_count:3.695M edge_speed:263.5k/sec
+MAP 15s rdf_count:1.121M rdf_speed:74.61k/sec edge_count:3.695M edge_speed:246.0k/sec
+REDUCE 16s [1.69%] edge_count:62.61k edge_speed:62.61k/sec plist_count:29.98k plist_speed:29.98k/sec
+REDUCE 17s [18.43%] edge_count:681.2k edge_speed:651.7k/sec plist_count:328.1k plist_speed:313.9k/sec
+REDUCE 18s [33.28%] edge_count:1.230M edge_speed:601.1k/sec plist_count:678.9k plist_speed:331.8k/sec
+REDUCE 19s [45.70%] edge_count:1.689M edge_speed:554.4k/sec plist_count:905.9k plist_speed:297.4k/sec
+REDUCE 20s [60.94%] edge_count:2.252M edge_speed:556.5k/sec plist_count:1.278M plist_speed:315.9k/sec
+REDUCE 21s [93.21%] edge_count:3.444M edge_speed:681.5k/sec plist_count:1.555M plist_speed:307.7k/sec
+REDUCE 22s [100.00%] edge_count:3.695M edge_speed:610.4k/sec plist_count:1.778M plist_speed:293.8k/sec
+REDUCE 22s [100.00%] edge_count:3.695M edge_speed:584.4k/sec plist_count:1.778M plist_speed:281.3k/sec
+Total: 22s
 ```
 
 Once the data is generated, you can start the Dgraph servers by pointing their
