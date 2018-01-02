@@ -2229,15 +2229,21 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		values := make([][]types.Val, 0, len(ul.Uids))
 		facetList := fl.FacetsList[:0]
 		for j := 0; j < len(ul.Uids); j++ {
+			var facet *api.Facet
 			uid := ul.Uids[j]
 			f := fl.FacetsList[j]
+			uids = append(uids, uid)
+			facetList = append(facetList, f)
 			for _, it := range f.Facets {
 				if it.Key == orderby {
-					values = append(values, []types.Val{facets.ValFor(it)})
-					uids = append(uids, uid)
-					facetList = append(facetList, f)
+					facet = it
 					break
 				}
+			}
+			if facet != nil {
+				values = append(values, []types.Val{facets.ValFor(facet)})
+			} else {
+				values = append(values, []types.Val{{Value: nil}})
 			}
 		}
 		if len(values) == 0 {
