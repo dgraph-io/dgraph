@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Fixed
+
+* Always return predicates of list type in an array.
+
 ## [1.0.1] - 2017-12-20
 
 ### Fixed

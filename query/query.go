@@ -188,6 +188,7 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *intern.List
+	List     bool // whether predicate is of list type
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -510,20 +511,24 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 							"intern.error: all lang tags should be either present or absent")
 					}
 					fieldNameWithTag := fieldName
-					if pc.LangTags[idx].Lang[i] != "" {
-						fieldNameWithTag += "@" + pc.LangTags[idx].Lang[i]
+					lang := pc.LangTags[idx].Lang[i]
+					if lang != "" {
+						fieldNameWithTag += "@" + lang
 					}
-					dst.AddValue(fieldNameWithTag, sv)
+					encodeAsList := pc.List && len(lang) == 0
+					dst.AddListValue(fieldNameWithTag, sv, encodeAsList)
 					continue
 				}
+
+				encodeAsList := pc.List && len(pc.Params.Langs) == 0
 				if !pc.Params.Normalize {
-					dst.AddValue(fieldName, sv)
+					dst.AddListValue(fieldName, sv, encodeAsList)
 					continue
 				}
 				// If the query had the normalize directive, then we only add nodes
 				// with an Alias.
 				if pc.Params.Alias != "" {
-					dst.AddValue(fieldName, sv)
+					dst.AddListValue(fieldName, sv, encodeAsList)
 				}
 			}
 		}
@@ -1905,6 +1910,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.counts = result.Counts
 			sg.LinRead = result.LinRead
 			sg.LangTags = result.LangMatrix
+			sg.List = result.List
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
