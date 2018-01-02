@@ -511,10 +511,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 							"intern.error: all lang tags should be either present or absent")
 					}
 					fieldNameWithTag := fieldName
-					if pc.LangTags[idx].Lang[i] != "" {
-						fieldNameWithTag += "@" + pc.LangTags[idx].Lang[i]
+					lang := pc.LangTags[idx].Lang[i]
+					if lang != "" {
+						fieldNameWithTag += "@" + lang
 					}
-					dst.AddValue(fieldNameWithTag, sv, false)
+					encodeAsList := pc.List && len(lang) == 0
+					dst.AddValue(fieldNameWithTag, sv, encodeAsList)
 					continue
 				}
 
