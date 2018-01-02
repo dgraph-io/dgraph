@@ -2745,7 +2745,7 @@ func TestPasswordExpandAll1(t *testing.T) {
     }
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"alive":true,"loc":{"type":"Point","coordinates":[1.1,2]},"sword_present":"true","gender":"female","power":13.250000,"graduation":"1932-01-01T00:00:00Z","_xid_":"mich","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","noindex_name":"Michonne's name not indexed","name":"Michonne","age":38,"full_name":"Michonne's large name for hashing","bin_data":"YmluLWRhdGE=","survival_rate":98.990000,"address":"31, 32 street, Jupiter"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"alive":true,"loc":{"type":"Point","coordinates":[1.1,2]},"sword_present":"true","gender":"female","power":13.250000,"graduation":["1932-01-01T00:00:00Z"],"_xid_":"mich","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","noindex_name":"Michonne's name not indexed","name":"Michonne","age":38,"full_name":"Michonne's large name for hashing","bin_data":"YmluLWRhdGE=","survival_rate":98.990000,"address":"31, 32 street, Jupiter"}]}}`, js)
 }
 
 func TestPasswordExpandAll2(t *testing.T) {
@@ -2760,7 +2760,7 @@ func TestPasswordExpandAll2(t *testing.T) {
     }
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"sword_present":"true","bin_data":"YmluLWRhdGE=","power":13.250000,"_xid_":"mich","name":"Michonne","age":38,"dob_day":"1910-01-01T00:00:00Z","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","gender":"female","noindex_name":"Michonne's name not indexed","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"graduation":"1932-01-01T00:00:00Z","full_name":"Michonne's large name for hashing","alive":true,"password":[{"checkpwd":false}]}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"sword_present":"true","bin_data":"YmluLWRhdGE=","power":13.250000,"_xid_":"mich","name":"Michonne","age":38,"dob_day":"1910-01-01T00:00:00Z","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","gender":"female","noindex_name":"Michonne's name not indexed","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"graduation":["1932-01-01T00:00:00Z"],"full_name":"Michonne's large name for hashing","alive":true,"password":[{"checkpwd":false}]}]}}`, js)
 }
 
 func TestPasswordExpandError(t *testing.T) {
@@ -7344,7 +7344,7 @@ func TestMultipleValueFilter(t *testing.T) {
 	}
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":"1932-01-01T00:00:00Z"},{"name":"Andrea","graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":["1932-01-01T00:00:00Z"]},{"name":"Andrea","graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`, js)
 }
 
 func TestMultipleValueFilter2(t *testing.T) {
@@ -7358,18 +7358,30 @@ func TestMultipleValueFilter2(t *testing.T) {
 	}
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":"1932-01-01T00:00:00Z"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":["1932-01-01T00:00:00Z"]}]}}`, js)
 }
 
 func TestMultipleValueArray(t *testing.T) {
-	// Skip for now, fix later.
-	t.Skip()
 	populateGraph(t)
 	query := `
 	{
 		me(func: uid(1)) {
 			name
 			graduation
+		}
+	}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":["1932-01-01T00:00:00Z"]}]}}`, js)
+}
+
+func TestMultipleValueArray2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(1)) {
+			graduation
+			name
 		}
 	}
 	`
@@ -7389,7 +7401,7 @@ func TestMultipleValueHasAndCount(t *testing.T) {
 	}
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","count(graduation)":1,"graduation":"1932-01-01T00:00:00Z"},{"name":"Andrea","count(graduation)":2,"graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","count(graduation)":1,"graduation":["1932-01-01T00:00:00Z"]},{"name":"Andrea","count(graduation)":2,"graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`, js)
 }
 
 func TestMultipleValueSortError(t *testing.T) {
@@ -7708,7 +7720,7 @@ func TestExpandVal(t *testing.T) {
 	}
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"survival_rate":98.990000,"address":"31, 32 street, Jupiter","bin_data":"YmluLWRhdGE=","power":13.250000,"gender":"female","_xid_":"mich","alive":true,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","graduation":"1932-01-01T00:00:00Z","age":38,"noindex_name":"Michonne's name not indexed","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","sword_present":"true","dob":"1910-01-01T00:00:00Z"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"survival_rate":98.990000,"address":"31, 32 street, Jupiter","bin_data":"YmluLWRhdGE=","power":13.250000,"gender":"female","_xid_":"mich","alive":true,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","graduation":["1932-01-01T00:00:00Z"],"age":38,"noindex_name":"Michonne's name not indexed","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","sword_present":"true","dob":"1910-01-01T00:00:00Z"}]}}`, js)
 }
 
 func TestGroupByGeoCrash(t *testing.T) {
@@ -7767,7 +7779,7 @@ func TestExpandAll(t *testing.T) {
 	}
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data":{"q":[{"~friend":[{"name":"Rick Grimes"}],"survival_rate":98.990000,"_xid_":"mich","graduation":"1932-01-01T00:00:00Z","path":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"sword_present":"true","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"full_name":"Michonne's large name for hashing","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"power":13.250000,"loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","bin_data":"YmluLWRhdGE=","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","son":[{"name":"Andre"},{"name":"Helmut"}],"age":38,"school":[{"name":"School A"}],"alive":true,"gender":"female","noindex_name":"Michonne's name not indexed","address":"31, 32 street, Jupiter"}]}}`, js)
+	require.JSONEq(t, `{"data":{"q":[{"~friend":[{"name":"Rick Grimes"}],"survival_rate":98.990000,"_xid_":"mich","graduation":["1932-01-01T00:00:00Z"],"path":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"sword_present":"true","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"full_name":"Michonne's large name for hashing","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"power":13.250000,"loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","bin_data":"YmluLWRhdGE=","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","son":[{"name":"Andre"},{"name":"Helmut"}],"age":38,"school":[{"name":"School A"}],"alive":true,"gender":"female","noindex_name":"Michonne's name not indexed","address":"31, 32 street, Jupiter"}]}}`, js)
 }
 
 func TestUidWithoutDebug(t *testing.T) {

@@ -915,5 +915,5 @@ func TestFacetsAlias2(t *testing.T) {
 	`
 
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me2":[{"friend":[{"friend|close":true,"f":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"friend|close":false,"f":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34}]}],"me":[{"name":"Rick Grimes"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me2":[{"friend":[{"friend|close":true,"f":false,"friend|since":"2005-05-02T15:04:05Z"},{"friend|since":"2006-01-02T15:04:05Z"},{"friend|since":"2006-01-02T15:04:05Z"},{"friend|close":true,"f":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"friend|close":false,"f":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34}]}],"me":[{"name":"Rick Grimes", "val(a)":"2006-01-02T15:04:05Z"}]}}`, js)
 }

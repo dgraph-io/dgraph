@@ -8,6 +8,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Fixed
 
+* Always return predicates of list type in an array.
+* Edges without facet values are also returned when performing sort on facet.
 * Better error checking when accessing posting lists. Fixes bug where parts of
   queries are sometimes omitted when system is under heavy load.
 
