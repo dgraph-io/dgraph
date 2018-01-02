@@ -73,6 +73,7 @@ message Result {
 	bool intersect_dest = 4;
 	repeated FacetsList facet_matrix = 5;
 	repeated LangList lang_matrix = 6;
+	bool list = 7;
 
 	api.LinRead lin_read = 14;
 }

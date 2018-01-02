@@ -653,6 +653,7 @@ func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.
 		// or if we load through bulk loader.
 		typ = types.DefaultID
 	}
+	out.List = schema.State().IsList(attr)
 	srcFn.atype = typ
 
 	opts := posting.ListOptions{

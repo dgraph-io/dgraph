@@ -188,6 +188,7 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *intern.List
+	List     bool // whether predicate is of list type
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -305,7 +306,7 @@ func addCount(pc *SubGraph, count uint64, dst outputNode) {
 	if pc.Params.Alias != "" {
 		fieldName = pc.Params.Alias
 	}
-	dst.AddValue(fieldName, c)
+	dst.AddValue(fieldName, c, false)
 }
 
 func aggWithVarFieldName(pc *SubGraph) string {
@@ -331,7 +332,7 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	if !ok || sv.Value == nil {
 		return nil
 	}
-	dst.AddValue(fieldName, sv)
+	dst.AddValue(fieldName, sv, false)
 	return nil
 }
 
@@ -345,7 +346,7 @@ func addCheckPwd(pc *SubGraph, vals []*intern.TaskValue, dst outputNode) {
 	}
 
 	uc := dst.New(pc.Attr)
-	uc.AddValue("checkpwd", c)
+	uc.AddValue("checkpwd", c, false)
 	dst.AddListChild(pc.Attr, uc)
 }
 
@@ -453,7 +454,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
 					for _, f := range fs.Facets {
-						uc.AddValue(facetName(fieldName, f), facets.ValFor(f))
+						uc.AddValue(facetName(fieldName, f), facets.ValFor(f), false)
 					}
 				}
 
@@ -472,7 +473,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if alias == "" {
 					alias = "count"
 				}
-				uc.AddValue(alias, c)
+				uc.AddValue(alias, c, false)
 				dst.AddListChild(fieldName, uc)
 			}
 		} else {
@@ -489,7 +490,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					dst.AddValue(facetName(fieldName, f), facets.ValFor(f))
+					dst.AddValue(facetName(fieldName, f), facets.ValFor(f), false)
 				}
 			}
 
@@ -513,17 +514,17 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if pc.LangTags[idx].Lang[i] != "" {
 						fieldNameWithTag += "@" + pc.LangTags[idx].Lang[i]
 					}
-					dst.AddValue(fieldNameWithTag, sv)
+					dst.AddValue(fieldNameWithTag, sv, pc.List)
 					continue
 				}
 				if !pc.Params.Normalize {
-					dst.AddValue(fieldName, sv)
+					dst.AddValue(fieldName, sv, pc.List)
 					continue
 				}
 				// If the query had the normalize directive, then we only add nodes
 				// with an Alias.
 				if pc.Params.Alias != "" {
-					dst.AddValue(fieldName, sv)
+					dst.AddValue(fieldName, sv, pc.List)
 				}
 			}
 		}
@@ -1905,6 +1906,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.counts = result.Counts
 			sg.LinRead = result.LinRead
 			sg.LangTags = result.LangMatrix
+			sg.List = result.List
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {

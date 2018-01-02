@@ -56,7 +56,7 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
-	AddValue(attr string, v types.Val)
+	AddValue(attr string, v types.Val, list bool)
 	AddMapChild(attr string, node outputNode, isRoot bool)
 	AddListChild(attr string, child outputNode)
 	New(attr string) outputNode
@@ -68,11 +68,12 @@ type outputNode interface {
 	addAggregations(*SubGraph) error
 }
 
-func makeScalarNode(attr string, isChild bool, val []byte) *fastJsonNode {
+func makeScalarNode(attr string, isChild bool, val []byte, list bool) *fastJsonNode {
 	return &fastJsonNode{
 		attr:      attr,
 		isChild:   isChild,
 		scalarVal: val,
+		list:      list,
 	}
 }
 
@@ -90,11 +91,12 @@ type fastJsonNode struct {
 	isChild   bool
 	scalarVal []byte
 	attrs     []*fastJsonNode
+	list      bool
 }
 
-func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
+func (fj *fastJsonNode) AddValue(attr string, v types.Val, list bool) {
 	if bs, err := valToBytes(v); err == nil {
-		fj.attrs = append(fj.attrs, makeScalarNode(attr, false, bs))
+		fj.attrs = append(fj.attrs, makeScalarNode(attr, false, bs, list))
 	}
 }
 
@@ -137,7 +139,8 @@ func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
 			}
 		}
 	}
-	fj.attrs = append(fj.attrs, makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid))))
+	fj.attrs = append(fj.attrs, makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid)),
+		false))
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
@@ -234,13 +237,13 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 				} else {
 					if cnt == 1 {
 						cur.writeKey(out)
-						if cur.isChild {
+						if cur.isChild || cur.list {
 							out.WriteRune('[')
 							inArray = true
 						}
 					}
 					cur.encode(out)
-					if cnt != 1 || cur.isChild {
+					if cnt != 1 || (cur.isChild || cur.list) {
 						out.WriteRune(']')
 						inArray = false
 					}
@@ -253,11 +256,11 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 				if cnt == 1 {
 					cur.writeKey(out)
 				}
-				if cur.isChild && !inArray {
+				if (cur.isChild || cur.list) && !inArray {
 					out.WriteRune('[')
 				}
 				cur.encode(out)
-				if cnt != 1 || cur.isChild {
+				if cnt != 1 || (cur.isChild || cur.list) {
 					out.WriteRune(']')
 					inArray = false
 				}
@@ -379,10 +382,10 @@ func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
 	for _, grp := range sg.GroupbyRes.group {
 		uc := g.New("@groupby")
 		for _, it := range grp.keys {
-			uc.AddValue(it.attr, it.key)
+			uc.AddValue(it.attr, it.key, false)
 		}
 		for _, it := range grp.aggregates {
-			uc.AddValue(it.attr, it.key)
+			uc.AddValue(it.attr, it.key, false)
 		}
 		g.AddListChild("@groupby", uc)
 	}
@@ -397,7 +400,7 @@ func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 	if field == "" {
 		field = "count"
 	}
-	n1.AddValue(field, c)
+	n1.AddValue(field, c, false)
 	n.AddListChild(sg.Params.Alias, n1)
 }
 
@@ -412,7 +415,7 @@ func (n *fastJsonNode) addAggregations(sg *SubGraph) error {
 		}
 		fieldName := aggWithVarFieldName(child)
 		n1 := n.New(fieldName)
-		n1.AddValue(fieldName, aggVal)
+		n1.AddValue(fieldName, aggVal, false)
 		n.AddListChild(sg.Params.Alias, n1)
 	}
 	if n.IsEmpty() {

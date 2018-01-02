@@ -42,7 +42,7 @@ func TestEncodeMemory(t *testing.T) {
 		n := makeFastJsonNode()
 		require.NotNil(t, n)
 		for i := 0; i < 15000; i++ {
-			n.AddValue(fmt.Sprintf("very long attr name %06d", i), types.ValueForType(types.StringID))
+			n.AddValue(fmt.Sprintf("very long attr name %06d", i), types.ValueForType(types.StringID), false)
 			n.AddListChild(fmt.Sprintf("another long child %06d", i), &fastJsonNode{})
 		}
 		wg.Add(1)
@@ -67,24 +67,24 @@ func TestNormalizeJSONLimit(t *testing.T) {
 	require.NotNil(t, n)
 	for i := 0; i < 1000; i++ {
 		n.AddValue(fmt.Sprintf("very long attr name %06d", i),
-			types.ValueForType(types.StringID))
+			types.ValueForType(types.StringID), false)
 		child1 := n.New("child1")
 		n.AddListChild("child1", child1)
 		for j := 0; j < 100; j++ {
 			child1.AddValue(fmt.Sprintf("long child1 attr %06d", j),
-				types.ValueForType(types.StringID))
+				types.ValueForType(types.StringID), false)
 		}
 		child2 := n.New("child2")
 		n.AddListChild("child2", child2)
 		for j := 0; j < 100; j++ {
 			child2.AddValue(fmt.Sprintf("long child2 attr %06d", j),
-				types.ValueForType(types.StringID))
+				types.ValueForType(types.StringID), false)
 		}
 		child3 := n.New("child3")
 		n.AddListChild("child3", child3)
 		for j := 0; j < 100; j++ {
 			child3.AddValue(fmt.Sprintf("long child3 attr %06d", j),
-				types.ValueForType(types.StringID))
+				types.ValueForType(types.StringID), false)
 		}
 	}
 	_, err := n.(*fastJsonNode).normalize()
@@ -96,17 +96,17 @@ func TestNormalizeJSONUid1(t *testing.T) {
 	require.NotNil(t, n)
 	child1 := n.New("child1")
 	child1.SetUID(uint64(1), "uid")
-	child1.AddValue("attr1", types.ValueForType(types.StringID))
+	child1.AddValue("attr1", types.ValueForType(types.StringID), false)
 	n.AddListChild("child1", child1)
 
 	child2 := n.New("child2")
 	child2.SetUID(uint64(2), "uid")
-	child2.AddValue("attr2", types.ValueForType(types.StringID))
+	child2.AddValue("attr2", types.ValueForType(types.StringID), false)
 	child1.AddListChild("child2", child2)
 
 	child3 := n.New("child3")
 	child3.SetUID(uint64(3), "uid")
-	child3.AddValue("attr3", types.ValueForType(types.StringID))
+	child3.AddValue("attr3", types.ValueForType(types.StringID), false)
 	child2.AddListChild("child3", child3)
 
 	normalized, err := n.(*fastJsonNode).normalize()
@@ -127,17 +127,17 @@ func TestNormalizeJSONUid2(t *testing.T) {
 	require.NotNil(t, n)
 	child1 := n.New("child1")
 	child1.SetUID(uint64(1), "uid")
-	child1.AddValue("___attr1", types.ValueForType(types.StringID))
+	child1.AddValue("___attr1", types.ValueForType(types.StringID), false)
 	n.AddListChild("child1", child1)
 
 	child2 := n.New("child2")
 	child2.SetUID(uint64(2), "uid")
-	child2.AddValue("___attr2", types.ValueForType(types.StringID))
+	child2.AddValue("___attr2", types.ValueForType(types.StringID), false)
 	child1.AddListChild("child2", child2)
 
 	child3 := n.New("child3")
 	child3.SetUID(uint64(3), "uid")
-	child3.AddValue(fmt.Sprintf("attr3"), types.ValueForType(types.StringID))
+	child3.AddValue(fmt.Sprintf("attr3"), types.ValueForType(types.StringID), false)
 	child2.AddListChild("child3", child3)
 
 	normalized, err := n.(*fastJsonNode).normalize()
