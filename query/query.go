@@ -514,7 +514,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if pc.LangTags[idx].Lang[i] != "" {
 						fieldNameWithTag += "@" + pc.LangTags[idx].Lang[i]
 					}
-					dst.AddValue(fieldNameWithTag, sv, pc.List)
+					dst.AddValue(fieldNameWithTag, sv, false)
 					continue
 				}
 				if !pc.Params.Normalize {
