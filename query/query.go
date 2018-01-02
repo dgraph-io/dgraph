@@ -306,7 +306,7 @@ func addCount(pc *SubGraph, count uint64, dst outputNode) {
 	if pc.Params.Alias != "" {
 		fieldName = pc.Params.Alias
 	}
-	dst.AddValue(fieldName, c, false)
+	dst.AddValue(fieldName, c)
 }
 
 func aggWithVarFieldName(pc *SubGraph) string {
@@ -332,7 +332,7 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	if !ok || sv.Value == nil {
 		return nil
 	}
-	dst.AddValue(fieldName, sv, false)
+	dst.AddValue(fieldName, sv)
 	return nil
 }
 
@@ -346,7 +346,7 @@ func addCheckPwd(pc *SubGraph, vals []*intern.TaskValue, dst outputNode) {
 	}
 
 	uc := dst.New(pc.Attr)
-	uc.AddValue("checkpwd", c, false)
+	uc.AddValue("checkpwd", c)
 	dst.AddListChild(pc.Attr, uc)
 }
 
@@ -454,7 +454,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
 					for _, f := range fs.Facets {
-						uc.AddValue(facetName(fieldName, f), facets.ValFor(f), false)
+						uc.AddValue(facetName(fieldName, f), facets.ValFor(f))
 					}
 				}
 
@@ -473,7 +473,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if alias == "" {
 					alias = "count"
 				}
-				uc.AddValue(alias, c, false)
+				uc.AddValue(alias, c)
 				dst.AddListChild(fieldName, uc)
 			}
 		} else {
@@ -490,7 +490,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					dst.AddValue(facetName(fieldName, f), facets.ValFor(f), false)
+					dst.AddValue(facetName(fieldName, f), facets.ValFor(f))
 				}
 			}
 
@@ -516,19 +516,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						fieldNameWithTag += "@" + lang
 					}
 					encodeAsList := pc.List && len(lang) == 0
-					dst.AddValue(fieldNameWithTag, sv, encodeAsList)
+					dst.AddListValue(fieldNameWithTag, sv, encodeAsList)
 					continue
 				}
 
 				encodeAsList := pc.List && len(pc.Params.Langs) == 0
 				if !pc.Params.Normalize {
-					dst.AddValue(fieldName, sv, encodeAsList)
+					dst.AddListValue(fieldName, sv, encodeAsList)
 					continue
 				}
 				// If the query had the normalize directive, then we only add nodes
 				// with an Alias.
 				if pc.Params.Alias != "" {
-					dst.AddValue(fieldName, sv, encodeAsList)
+					dst.AddListValue(fieldName, sv, encodeAsList)
 				}
 			}
 		}
