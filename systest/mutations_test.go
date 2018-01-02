@@ -37,6 +37,7 @@ func TestSystem(t *testing.T) {
 	t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
 	t.Run("facets with order", wrap(FacetOrderTest))
 	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
+	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -546,4 +547,42 @@ func LangAndSortBugTest(t *testing.T, c *client.Dgraph) {
 		"friend": [{ "name@en": "Sang Hyun" }]
 	}]}
 	`, string(resp.Json))
+}
+
+func SortFacetsReturnNil(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:michael <name> "Michael" .
+			_:michael <friend> _:sang (since=2012-01-02) .
+			_:sang <name> "Sang Hyun" .
+
+			_:michael <friend> _:alice (since=2014-01-02) .
+			_:alice <name> "Alice" .
+
+			_:michael <friend> _:bob .
+			_:bob <name> "Bob" .
+
+
+			_:michael <friend> _:charlie .
+			_:charlie <name> "Charlie" .
+			`),
+	})
+
+	michael := assigned.Uids["michael"]
+	resp, err := txn.Query(ctx, `
+	{
+	  q(func: uid(`+michael+`)) {
+	    name
+	    friend @facets(orderdesc: since) {
+	      name
+	    }
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `
+	{"q":[{"name":"Michael","friend":[{"name":"Charlie"},{"name":"Bob"},{"name":"Alice","friend|since":"2014-01-02T00:00:00Z"},{"name":"Sang Hyun","friend|since":"2012-01-02T00:00:00Z"}]}]}
+		`, string(resp.Json))
 }
