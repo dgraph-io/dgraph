@@ -517,14 +517,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					dst.AddValue(fieldNameWithTag, sv, false)
 					continue
 				}
+
+				encodeAsList := pc.List && len(pc.Params.Langs) == 0
 				if !pc.Params.Normalize {
-					dst.AddValue(fieldName, sv, pc.List)
+					dst.AddValue(fieldName, sv, encodeAsList)
 					continue
 				}
 				// If the query had the normalize directive, then we only add nodes
 				// with an Alias.
 				if pc.Params.Alias != "" {
-					dst.AddValue(fieldName, sv, pc.List)
+					dst.AddValue(fieldName, sv, encodeAsList)
 				}
 			}
 		}
