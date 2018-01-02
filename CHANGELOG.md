@@ -6,6 +6,11 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Fixed
+
+* Better error checking when accessing posting lists. Fixes bug where parts of
+  queries are sometimes omitted when system is under heavy load.
+
 ## [1.0.1] - 2017-12-20
 
 ### Fixed
