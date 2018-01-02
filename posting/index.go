@@ -793,6 +793,7 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) {
 }
 
 func DeleteAll() error {
+	btree.DeleteAll()
 	lcache.clear(func([]byte) bool { return true })
 	return deleteEntries(nil, func(key []byte) bool {
 		pk := x.Parse(key)

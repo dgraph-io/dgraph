@@ -590,10 +590,10 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 	return nil
 }
 
-func (l *List) CommitTs() uint64 {
+func (l *List) IsEmpty() bool {
 	l.RLock()
 	defer l.RUnlock()
-	return l.commitTs
+	return len(l.plist.Uids) == 0 && len(l.mlayer) == 0
 }
 
 func (l *List) length(readTs, afterUid uint64) int {

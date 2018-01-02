@@ -2114,7 +2114,7 @@ For example, given an edge `name` of `string` type, to sort by `name` or perform
 
 #### Count index
 
-For predicates with the `@count` Dgraph indexes the number of edges out of each node.  The enables fast queries of the form:
+For predicates with the `@count` Dgraph indexes the number of edges out of each node.  This enables fast queries of the form:
 ```
 {
   q(func: gt(count(pred), threshold)) {

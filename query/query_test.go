@@ -6446,6 +6446,24 @@ func TestHasFuncAtRoot(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"}]}}`, js)
 }
 
+func TestHasFuncAtRootWithAfter(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: has(friend), after: 0x01) {
+			uid
+			name
+			friend {
+				count(uid)
+			}
+		}
+	}
+	`
+
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":1}],"name":"Rick Grimes","uid":"0x17"},{"friend":[{"count":1}],"name":"Andrea","uid":"0x1f"}]}}`, js)
+}
+
 func TestHasFuncAtRootFilter(t *testing.T) {
 	populateGraph(t)
 	query := `

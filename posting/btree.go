@@ -628,6 +628,15 @@ func (t *BTree) Delete(item []byte) []byte {
 	return t.deleteItem(item, removeItem)
 }
 
+// DeleteAll Resets the btree
+func (t *BTree) DeleteAll() {
+	t.Lock()
+	defer t.Unlock()
+	t.length = 0
+	t.root = nil
+	t.cow = &copyOnWriteContext{freelist: newFreeList(defaultFreeListSize)}
+}
+
 // AscendGreaterOrEqual calls the iterator for every value in the tree within
 // the range [pivot, last], until iterator returns false.
 func (t *BTree) AscendGreaterOrEqual(pivot []byte, iterator btreeIterator) {
