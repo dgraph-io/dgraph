@@ -562,9 +562,6 @@ func SortFacetsReturnNil(t *testing.T, c *client.Dgraph) {
 			_:michael <friend> _:alice (since=2014-01-02) .
 			_:alice <name> "Alice" .
 
-			_:michael <friend> _:bob .
-			_:bob <name> "Bob" .
-
 
 			_:michael <friend> _:charlie .
 			_:charlie <name> "Charlie" .
@@ -583,6 +580,6 @@ func SortFacetsReturnNil(t *testing.T, c *client.Dgraph) {
 	}`)
 	require.NoError(t, err)
 	require.JSONEq(t, `
-	{"q":[{"name":"Michael","friend":[{"name":"Charlie"},{"name":"Bob"},{"name":"Alice","friend|since":"2014-01-02T00:00:00Z"},{"name":"Sang Hyun","friend|since":"2012-01-02T00:00:00Z"}]}]}
+	{"q":[{"name":"Michael","friend":[{"name":"Charlie"},{"name":"Alice","friend|since":"2014-01-02T00:00:00Z"},{"name":"Sang Hyun","friend|since":"2012-01-02T00:00:00Z"}]}]}
 		`, string(resp.Json))
 }
