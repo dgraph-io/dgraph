@@ -10,8 +10,13 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 * Always return predicates of list type in an array.
 * Edges without facet values are also returned when performing sort on facet.
+* Dont derive schema while deleting edges.
 * Better error checking when accessing posting lists. Fixes bug where parts of
   queries are sometimes omitted when system is under heavy load.
+
+### Changed
+
+* Remove StartTs field from `api.Operation`.
 
 ## [1.0.1] - 2017-12-20
 
