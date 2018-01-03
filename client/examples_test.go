@@ -926,19 +926,22 @@ func ExampleTxn_Mutate_deleteNode() {
 
 	// Now lets try to delete Alice. This won't delete Bob and Charlie but just remove the
 	// connection between Alice and them.
-	p2 := Person{
-		Uid: alice,
-	}
 
-	mu = &api.Mutation{
-		CommitNow: true,
-	}
-	pb, err = json.Marshal(p2)
+	// The JSON for deleting a node should be of the form {"uid": "0x123"}. If you wanted to
+	// delete multiple nodes you could supply an array of objects like [{"uid": "0x321"}, {"uid":
+	// "0x123"}] to DeleteJson.
+
+	d := map[string]string{"uid": alice}
+	pb, err = json.Marshal(d)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	mu.DeleteJson = pb
+	mu = &api.Mutation{
+		CommitNow:  true,
+		DeleteJson: pb,
+	}
+
 	_, err = dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		log.Fatal(err)
