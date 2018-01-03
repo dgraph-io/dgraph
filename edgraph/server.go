@@ -322,6 +322,9 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 
 	// The following logic is for committing immediately.
+	if err != nil {
+		return resp, err
+	}
 	tr, ok := trace.FromContext(ctx)
 	if ok {
 		tr.LazyPrintf("Prewrites err: %v. Attempting to commit/abort immediately.", err)
