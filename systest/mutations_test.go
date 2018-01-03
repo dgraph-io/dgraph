@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/client"
@@ -38,6 +40,7 @@ func TestSystem(t *testing.T) {
 	t.Run("facets with order", wrap(FacetOrderTest))
 	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
 	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
+	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -582,4 +585,51 @@ func SortFacetsReturnNil(t *testing.T, c *client.Dgraph) {
 	require.JSONEq(t, `
 	{"q":[{"name":"Michael","friend":[{"name":"Charlie"},{"name":"Alice","friend|since":"2014-01-02T00:00:00Z"},{"name":"Sang Hyun","friend|since":"2012-01-02T00:00:00Z"}]}]}
 		`, string(resp.Json))
+}
+
+func SchemaAfterDeleteNode(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "married: bool ."}))
+
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:michael <name> "Michael" .
+			_:michael <friend> _:sang .
+			`),
+	})
+	michael := assigned.Uids["michael"]
+
+	sortSchema := func(schema []*api.SchemaNode) {
+		sort.Slice(schema, func(i, j int) bool {
+			return schema[i].Predicate < schema[j].Predicate
+		})
+	}
+
+	resp, err := c.NewTxn().Query(ctx, `schema{}`)
+	require.NoError(t, err)
+	sortSchema(resp.Schema)
+	b, err := json.Marshal(resp.Schema)
+	require.NoError(t, err)
+	require.JSONEq(t, `[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"friend","type":"uid"},{"predicate":"married","type":"bool"},{"predicate":"name","type":"default"}]`, string(b))
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
+
+	// Lets try to do a S P * deletion. Schema for married shouldn't be rederived.
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(`
+		    <` + michael + `> * * .
+			`),
+	})
+	require.NoError(t, err)
+
+	resp, err = c.NewTxn().Query(ctx, `schema{}`)
+	require.NoError(t, err)
+	sortSchema(resp.Schema)
+	b, err = json.Marshal(resp.Schema)
+	require.NoError(t, err)
+	require.JSONEq(t, `[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"friend","type":"uid"},{"predicate":"name","type":"default"}]`, string(b))
 }

@@ -60,7 +60,10 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 	}
 
 	typ, err := schema.State().TypeOf(edge.Attr)
-	x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
+
+	if edge.Op == intern.DirectedEdge_SET {
+		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
+	}
 
 	if deletePredicateEdge(edge) {
 		return errors.New("We should never reach here")
