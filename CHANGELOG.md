@@ -12,6 +12,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Edges without facet values are also returned when performing sort on facet.
 * Dont derive schema while deleting edges.
 
+### Changed
+
+* Remove StartTs field from `api.Operation`.
+
 ## [1.0.1] - 2017-12-20
 
 ### Fixed
