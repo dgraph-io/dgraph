@@ -122,8 +122,6 @@ func (txn *Txn) mergeContext(src *api.TxnContext) error {
 // If the mutation fails, then the transaction is discarded and all future
 // operations on it will fail.
 func (txn *Txn) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
-	//fmt.Println("+++\n" + string(mu.SetNquads) + "\n+++")
-	//fmt.Println("---\n" + string(mu.DelNquads) + "\n---")
 	if txn.finished {
 		return nil, ErrFinished
 	}

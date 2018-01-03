@@ -188,7 +188,7 @@ func (n *Node) Send(m raftpb.Message) {
 	data, err := m.Marshal()
 	x.Check(err)
 	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
-		//x.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+		x.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
 	}
 	select {
 	case n.messages <- sendmsg{to: m.To, data: data}:
@@ -321,7 +321,7 @@ func (n *Node) doSendMessage(to uint64, data []byte) {
 	addr, has := n.Peer(to)
 	pool, err := Get().Get(addr)
 	if !has || err != nil {
-		//x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
+		x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
 		// No such peer exists or we got handed a bogus config (bad addr), so we
 		// can't send messages to this peer.
 		return
@@ -533,7 +533,7 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 			x.Check(err)
 		}
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
-			//x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+			x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := w.applyMessage(ctx, msg); err != nil {
 			return &api.Payload{}, err
