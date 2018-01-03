@@ -22,21 +22,8 @@ var addrs = flag.String("addrs", "", "comma separated dgraph addresses")
 var mode = flag.String("mode", "", "mode to run in ('mutate' or 'query')")
 var conc = flag.Int("j", 1, "number of operations to run in parallel")
 
-var (
-	links     []string
-	attrs     []string
-	startXids []string
-	endXids   []string
-)
-
 func init() {
 	rand.Seed(time.Now().Unix())
-	for i := 'a'; i <= 'z'; i++ {
-		links = append(links, fmt.Sprintf("link_%c", i))
-		attrs = append(attrs, fmt.Sprintf("attr_%c", i))
-		startXids = append(startXids, fmt.Sprintf("start_xid_%c", i))
-		endXids = append(endXids, fmt.Sprintf("end_xid_%c", i))
-	}
 }
 
 func main() {
@@ -46,6 +33,8 @@ func main() {
 	resp, err := c.NewTxn().Query(context.Background(), "schema {}")
 	x.Check(err)
 	if len(resp.Schema) < 5 { // account for a few built in schemas
+		// Run each schema alter separately so that there is an even
+		// distribution among all groups.
 		for _, s := range schema() {
 			x.Check(c.Alter(context.Background(), &api.Operation{
 				Schema: s,
@@ -140,7 +129,7 @@ type runner struct {
 
 func mutate(c *client.Dgraph) error {
 	r := &runner{
-		ctx: context.Background(), // TODO
+		ctx: context.Background(),
 		txn: c.NewTxn(),
 	}
 	defer r.txn.Discard(r.ctx)
@@ -194,7 +183,7 @@ func mutate(c *client.Dgraph) error {
 func showNode(c *client.Dgraph) error {
 	r := &runner{
 		txn: c.NewTxn(),
-		ctx: context.Background(), // TODO
+		ctx: context.Background(),
 	}
 	defer r.txn.Discard(r.ctx)
 
@@ -233,14 +222,6 @@ func showNode(c *client.Dgraph) error {
 		return err
 	}
 	return nil
-}
-
-func prettyPrintJSON(j []byte) string {
-	var m map[string]interface{}
-	x.Check(json.Unmarshal(j, &m))
-	pretty, err := json.MarshalIndent(m, "", "  ")
-	x.Check(err)
-	return string(pretty)
 }
 
 func (r *runner) query(out interface{}, q string, args ...interface{}) error {
