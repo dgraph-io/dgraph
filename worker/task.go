@@ -864,7 +864,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
 				case ".":
 					pl := posting.GetNoStore(x.DataKey(attr, uid))
-					values, err := pl.AllValues(arg.q.ReadTs)
+					values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
 					if err != nil {
 						filterErr = err
 						return false
@@ -891,6 +891,9 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					return types.CompareVals(arg.q.SrcFunc.Name, sv, arg.srcFn.eqTokens[row])
 				}
 			})
+			if filterErr != nil {
+				return err
+			}
 		}
 	}
 	return nil
