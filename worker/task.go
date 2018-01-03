@@ -368,7 +368,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			vals = append(vals, val)
 		}
 
-		if err != nil || len(vals) == 0 {
+		if err == posting.ErrNoValue || len(vals) == 0 {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			if q.DoCount {
 				out.Counts = append(out.Counts, 0)
@@ -381,6 +381,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				}
 			}
 			continue
+		} else if err != nil {
+			return err
 		}
 
 		if q.ExpandAll {
@@ -790,10 +792,12 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			} else {
 				val, err = pl.Value(arg.q.ReadTs)
 			}
-
-			if err != nil {
+			if err == posting.ErrNoValue {
 				continue
+			} else if err != nil {
+				return err
 			}
+
 			// conver data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
 			if err == nil {
@@ -843,20 +847,28 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 				return ctx.Err()
 			default:
 			}
+			var filterErr error
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
 				switch lang {
 				case "":
 					pl := posting.GetNoStore(x.DataKey(attr, uid))
 					sv, err := pl.Value(arg.q.ReadTs)
-					if err == nil {
-						dst, err := types.Convert(sv, typ)
-						return err == nil &&
-							types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
+					if err != nil {
+						if err != posting.ErrNoValue {
+							filterErr = err
+						}
+						return false
 					}
-					return false
+					dst, err := types.Convert(sv, typ)
+					return err == nil &&
+						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
 				case ".":
 					pl := posting.GetNoStore(x.DataKey(attr, uid))
-					values, _ := pl.AllValues(arg.q.ReadTs)
+					values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
+					if err != nil {
+						filterErr = err
+						return false
+					}
 					for _, sv := range values {
 						dst, err := types.Convert(sv, typ)
 						if err == nil &&
@@ -867,12 +879,21 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					return false
 				default:
 					sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
-					if sv.Value == nil || err != nil {
+					if err != nil {
+						if err != posting.ErrNoValue {
+							filterErr = err
+						}
+						return false
+					}
+					if sv.Value == nil {
 						return false
 					}
 					return types.CompareVals(arg.q.SrcFunc.Name, sv, arg.srcFn.eqTokens[row])
 				}
 			})
+			if filterErr != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -890,8 +911,8 @@ func filterGeoFunction(arg funcArgs) error {
 		newValue := &intern.TaskValue{ValType: val.Tid.Enum()}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
-		} else {
-			newValue.Val = x.Nilbyte
+		} else if err != posting.ErrNoValue {
+			return err
 		}
 		values = append(values, newValue)
 	}
@@ -927,8 +948,10 @@ func filterStringFunction(arg funcArgs) error {
 			val, err = pl.ValueForTag(arg.q.ReadTs, lang)
 			vals = append(vals, val)
 		}
-		if err != nil {
+		if err == posting.ErrNoValue {
 			continue
+		} else if err != nil {
+			return err
 		}
 
 		var strVals []types.Val
