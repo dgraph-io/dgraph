@@ -217,7 +217,7 @@ func (s *ServerState) getTimestamp() uint64 {
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
-	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.StartTs == 0 {
+	if op.Schema == "" && op.DropAttr == "" && !op.DropAll {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
 		return nil, x.Errorf("Operation must have at least one field set")
@@ -262,10 +262,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 	fmt.Printf("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
-	if op.StartTs == 0 {
-		op.StartTs = State.getTimestamp()
-	}
-	m := &intern.Mutations{Schema: updates, StartTs: op.StartTs}
+	m := &intern.Mutations{Schema: updates, StartTs: State.getTimestamp()}
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }

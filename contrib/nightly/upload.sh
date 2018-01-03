@@ -113,7 +113,9 @@ else
   fi
 
   pushd ratel
-  ./scripts/build.sh
+  source ~/.nvm/nvm.sh
+  nvm install --lts
+  ./scripts/build.prod.sh
   popd
   popd
 

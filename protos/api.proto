@@ -73,7 +73,6 @@ message Operation {
 	string schema = 1;
 	string drop_attr = 2;
 	bool drop_all = 3;
-	uint64 startTs = 4;
 }
 
 // Worker services.

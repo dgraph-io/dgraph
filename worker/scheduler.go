@@ -184,6 +184,10 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 			posting.TxnMarks().Done(index)
 			return
 		}
+		// Dont derive schema when doing deletion.
+		if edge.Op == intern.DirectedEdge_DEL {
+			continue
+		}
 		if _, ok := schemaMap[edge.Attr]; !ok {
 			schemaMap[edge.Attr] = posting.TypeID(edge)
 		}

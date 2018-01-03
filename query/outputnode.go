@@ -57,6 +57,7 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
 	AddValue(attr string, v types.Val)
+	AddListValue(attr string, v types.Val, list bool)
 	AddMapChild(attr string, node outputNode, isRoot bool)
 	AddListChild(attr string, child outputNode)
 	New(attr string) outputNode
@@ -68,11 +69,12 @@ type outputNode interface {
 	addAggregations(*SubGraph) error
 }
 
-func makeScalarNode(attr string, isChild bool, val []byte) *fastJsonNode {
+func makeScalarNode(attr string, isChild bool, val []byte, list bool) *fastJsonNode {
 	return &fastJsonNode{
 		attr:      attr,
 		isChild:   isChild,
 		scalarVal: val,
+		list:      list,
 	}
 }
 
@@ -90,11 +92,16 @@ type fastJsonNode struct {
 	isChild   bool
 	scalarVal []byte
 	attrs     []*fastJsonNode
+	list      bool
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
+	fj.AddListValue(attr, v, false)
+}
+
+func (fj *fastJsonNode) AddListValue(attr string, v types.Val, list bool) {
 	if bs, err := valToBytes(v); err == nil {
-		fj.attrs = append(fj.attrs, makeScalarNode(attr, false, bs))
+		fj.attrs = append(fj.attrs, makeScalarNode(attr, false, bs, list))
 	}
 }
 
@@ -137,7 +144,8 @@ func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
 			}
 		}
 	}
-	fj.attrs = append(fj.attrs, makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid))))
+	fj.attrs = append(fj.attrs, makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid)),
+		false))
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
@@ -234,13 +242,13 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 				} else {
 					if cnt == 1 {
 						cur.writeKey(out)
-						if cur.isChild {
+						if cur.isChild || cur.list {
 							out.WriteRune('[')
 							inArray = true
 						}
 					}
 					cur.encode(out)
-					if cnt != 1 || cur.isChild {
+					if cnt != 1 || (cur.isChild || cur.list) {
 						out.WriteRune(']')
 						inArray = false
 					}
@@ -253,11 +261,11 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 				if cnt == 1 {
 					cur.writeKey(out)
 				}
-				if cur.isChild && !inArray {
+				if (cur.isChild || cur.list) && !inArray {
 					out.WriteRune('[')
 				}
 				cur.encode(out)
-				if cnt != 1 || cur.isChild {
+				if cnt != 1 || (cur.isChild || cur.list) {
 					out.WriteRune(']')
 					inArray = false
 				}
