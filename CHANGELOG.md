@@ -10,9 +10,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 * Always return predicates of list type in an array.
 * Edges without facet values are also returned when performing sort on facet.
-* Dont derive schema while deleting edges.
+* Don't derive schema while deleting edges.
 * Better error checking when accessing posting lists. Fixes bug where parts of
   queries are sometimes omitted when system is under heavy load.
+* Fix missing error check in mutation handling when using CommitNow (gave incorrect error).
 
 ### Changed
 
@@ -24,7 +25,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 * Wait for background goroutines to finish in posting package on shutdown.
 * Return error if we cant parse the uid given in json input for mutations.
-* Dont remove `_predicate_` schema from disk during drop all.
+* Don't remove `_predicate_` schema from disk during drop all.
 * Fix panic in expand(_all_)
 
 ### Changed
