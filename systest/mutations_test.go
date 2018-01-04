@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -41,6 +42,7 @@ func TestSystem(t *testing.T) {
 	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
 	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
 	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
+	t.Run("fulltext equal", wrap(FullTextEqual))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -632,4 +634,33 @@ func SchemaAfterDeleteNode(t *testing.T, c *client.Dgraph) {
 	b, err = json.Marshal(resp.Schema)
 	require.NoError(t, err)
 	require.JSONEq(t, `[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"friend","type":"uid"},{"predicate":"name","type":"default"}]`, string(b))
+}
+
+func FullTextEqual(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "text: string @index(fulltext) ."}))
+
+	texts := []string{"bat man", "aqua man", "bat cave", "bat", "man", "aqua", "cave"}
+	var rdfs bytes.Buffer
+	for i, text := range texts {
+		fmt.Fprintf(&rdfs, "_:node%d <text> %q .\n", i, text)
+	}
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: rdfs.Bytes(),
+	})
+	require.NoError(t, err)
+
+	for _, text := range texts {
+		resp, err := c.NewTxn().Query(ctx, `
+		{
+			q(func: eq(text, "`+text+`")) {
+				text
+			}
+		}`)
+		require.NoError(t, err)
+		require.Equal(t, `{"q":[{"text":"`+text+`"}]}`, string(resp.GetJson()))
+	}
 }
