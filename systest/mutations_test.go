@@ -663,4 +663,15 @@ func FullTextEqual(t *testing.T, c *client.Dgraph) {
 		require.NoError(t, err)
 		require.Equal(t, `{"q":[{"text":"`+text+`"}]}`, string(resp.GetJson()))
 	}
+
+	for _, bad := range []string{"cave dweller", "bat ears", "elephant"} {
+		resp, err := c.NewTxn().Query(ctx, `
+		{
+			q(func: eq(text, "`+bad+`")) {
+				text
+			}
+		}`)
+		require.NoError(t, err)
+		require.Equal(t, `{"q":[]}`, string(resp.GetJson()))
+	}
 }
