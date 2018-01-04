@@ -14,6 +14,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Better error checking when accessing posting lists. Fixes bug where parts of
   queries are sometimes omitted when system is under heavy load.
 * Fix missing error check in mutation handling when using CommitNow (gave incorrect error).
+* Fix bug where eq didn't work correctly for the fulltext index.
 
 ### Changed
 
@@ -30,7 +31,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Changed
 
-* Make sure atleast one field is set while doing Alter.
+* Make sure at least one field is set while doing Alter.
 
 ## [1.0.0] - 2017-12-18
 
@@ -64,7 +65,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 *  Call RunValueLogGC for every GB increase in size of value logs. Upgrade vendored version of
    Badger.
 *  Prohibit string to password schema change.
-*  Make purging less aggresive.
+*  Make purging less aggressive.
 *  Check if GraphQL Variable is defined before using.
 
 ## [0.9.3] - 2017-12-01
