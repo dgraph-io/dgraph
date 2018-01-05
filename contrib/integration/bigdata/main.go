@@ -26,21 +26,27 @@ func init() {
 	rand.Seed(time.Now().Unix())
 }
 
+var ctx = context.Background()
+
 func main() {
 	flag.Parse()
 	c := makeClient()
 
-	resp, err := c.NewTxn().Query(context.Background(), "schema {}")
+	// Install the schema automatically on the first run. This allows the same
+	// command to be used when running this program for the first and
+	// subsequent times. We guess if it's the first run based on the number of
+	// schema items.
+	resp, err := c.NewTxn().Query(ctx, "schema {}")
 	x.Check(err)
-	if len(resp.Schema) < 5 { // account for a few built in schemas
+	if len(resp.Schema) < 5 {
 		// Run each schema alter separately so that there is an even
 		// distribution among all groups.
 		for _, s := range schema() {
-			x.Check(c.Alter(context.Background(), &api.Operation{
+			x.Check(c.Alter(ctx, &api.Operation{
 				Schema: s,
 			}))
 		}
-		x.Check2(c.NewTxn().Mutate(context.Background(), &api.Mutation{
+		x.Check2(c.NewTxn().Mutate(ctx, &api.Mutation{
 			CommitNow: true,
 			SetNquads: []byte(initialData()),
 		}))
@@ -123,16 +129,14 @@ func makeClient() *client.Dgraph {
 }
 
 type runner struct {
-	ctx context.Context
 	txn *client.Txn
 }
 
 func mutate(c *client.Dgraph) error {
 	r := &runner{
-		ctx: context.Background(),
 		txn: c.NewTxn(),
 	}
-	defer r.txn.Discard(r.ctx)
+	defer r.txn.Discard(ctx)
 
 	char := 'a' + rune(rand.Intn(26))
 
@@ -155,7 +159,7 @@ func mutate(c *client.Dgraph) error {
 
 	x.AssertTrue(len(result.Q) > 0 && result.Q[0].Count != nil && result.Q[0].Uid != nil)
 
-	if _, err := r.txn.Mutate(r.ctx, &api.Mutation{
+	if _, err := r.txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(fmt.Sprintf("<%s> <count_%c> \"%d\" .\n",
 			*result.Q[0].Uid, char, *result.Q[0].Count+1)),
 	}); err != nil {
@@ -171,21 +175,20 @@ func mutate(c *client.Dgraph) error {
 		rand.Read(payload)
 		rdfs += fmt.Sprintf("_:node <attr_%c> \"%s\" .\n", char, url.QueryEscape(string(payload)))
 	}
-	if _, err := r.txn.Mutate(r.ctx, &api.Mutation{
+	if _, err := r.txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(rdfs),
 	}); err != nil {
 		return err
 	}
 
-	return r.txn.Commit(r.ctx)
+	return r.txn.Commit(ctx)
 }
 
 func showNode(c *client.Dgraph) error {
 	r := &runner{
 		txn: c.NewTxn(),
-		ctx: context.Background(),
 	}
-	defer r.txn.Discard(r.ctx)
+	defer r.txn.Discard(ctx)
 
 	char := 'a' + rune(rand.Intn(26))
 	var result struct {
@@ -202,7 +205,7 @@ func showNode(c *client.Dgraph) error {
 		}
 	}
 	`, char)
-	resp, err := r.txn.Query(r.ctx, q)
+	resp, err := r.txn.Query(ctx, q)
 	if err != nil {
 		return err
 	}
@@ -226,7 +229,7 @@ func showNode(c *client.Dgraph) error {
 
 func (r *runner) query(out interface{}, q string, args ...interface{}) error {
 	q = fmt.Sprintf(q, args...)
-	resp, err := r.txn.Query(r.ctx, q)
+	resp, err := r.txn.Query(ctx, q)
 	if err != nil {
 		return err
 	}
