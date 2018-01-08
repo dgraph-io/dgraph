@@ -289,8 +289,8 @@ func checkSchema(s *intern.SchemaUpdate) error {
 	} else {
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasEdges(s.Predicate, math.MaxUint64) {
-			return x.Errorf("Schema change not allowed from predicate to uid or vice versa"+
-				" till you have data for pred: %s", s.Predicate)
+			return x.Errorf("Schema change not allowed from scalar to uid or vice versa"+
+				" while there is data for pred: %s", s.Predicate)
 		}
 	}
 	return nil
