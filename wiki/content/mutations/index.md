@@ -207,12 +207,12 @@ See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand
 
 ## Batch mutations
 
-Each mutation may contain multiple RDF triples. For large data uploads many such mutations can be batched in parallel.  The tool `dgraph-live-loader` does just this; by default batching 1000 RDF lines into a query, while running 100 such queries in parallel.
+Each mutation may contain multiple RDF triples. For large data uploads many such mutations can be batched in parallel.  The command `dgraph live` does just this; by default batching 1000 RDF lines into a query, while running 100 such queries in parallel.
 
-Dgraphloader takes as input gzipped N-Quad files (that is triple lists without `{ set {`) and batches mutations for all triples in the input.  The tool has documentation of options.
+`dgraph live` takes as input gzipped N-Quad files (that is triple lists without `{ set {`) and batches mutations for all triples in the input.  The tool has documentation of options.
 
 ```
-dgraph-live-loader --help
+dgraph live --help
 ```
 See also [Bulk Data Loading]({{< relref "deploy/index.md#bulk-data-loading" >}}).
 
@@ -260,3 +260,184 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
 
+## JSON Mutation Format
+
+Mutations can also be specified using JSON objects. This can allow mutations to
+be expressed in a more natural way. It also eliminates the need for apps to
+have custom serialisation code, since most languages already have a JSON
+marshalling library.
+
+When Dgraph receives a mutation as a JSON object, it first converts in into
+multiple RDFs that are then processed as normal.
+
+Each JSON object represents a single node in the graph.
+
+{{% notice "note" %}}
+JSON mutations are only available via gRPC clients, such as the Go client, JS
+client, and Java client. They're not available via the raw HTTP interface.
+{{% /notice %}}
+
+### Setting literal values
+
+When setting new values, the `set_json` field in the `Mutation` message should
+contain a JSON object.
+
+Literal values can be set by adding a key/value to the JSON object. The key
+represents the predicate, and the value represents the object.
+
+For example:
+```json
+{
+  "name": "diggy",
+  "food": "pizza"
+}
+```
+Will be converted into the RDFs:
+```
+_:blank-0 <name> "diggy" .
+_:blank-0 <food> "pizza" .
+```
+
+### Referencing existing nodes
+
+If a JSON object contains a field named `"uid"`, then that field is interpreted
+as the UID of an existing node in the graph. This mechanism allows you to
+reference existing nodes.
+
+For example:
+```json
+{
+  "uid": "0x467ba0",
+  "food": "taco",
+  "rating": "tastes good",
+}
+```
+Will be converted into the RDFs:
+```
+<0x467ba0> <food> "taco" .
+<0x467ba0> <rating> "tastes good" .
+```
+
+### Edges between nodes
+
+Edges between nodes are represented in a similar way to literal values, except
+that the object is a JSON object.
+
+For example:
+```json
+{
+  "name": "Alice",
+  "friend": {
+    "name": "Betty"
+  }
+}
+```
+Will be converted into the RDFs:
+```
+_:blank-0 <name> "Alice" .
+_:blank-0 <friend> _:blank-1 .
+_:blank-1 <name> "Betty" .
+```
+Existing nodes can be referenced in the same way as when adding literal values.
+E.g. to link two existing nodes:
+```json
+{
+  "uid": "0x123",
+  "link": {
+    "uid": "0x456"
+  }
+}
+```
+Will be converted to:
+```
+<0x123> <link> <0x456> .
+```
+{{% notice "note" %}}
+A common mistake is to attempt to use `{"uid":"0x123","link":"0x456"}`.  This
+will result in an error. Dgraph interprets this JSON object as setting the
+`link` predicate to the string`"0x456"`, which is usually not intended.  {{%
+/notice %}}
+
+### Deleting literal values
+
+Deletion mutations can also be sent in JSON format. To send a delete mutation,
+use the `delete_json` field instead of the `set_json` field in the `Mutation`
+message.
+
+When using delete mutations, an existing node always has to be referenced. So
+the `"uid"` field for each JSON object must be present. Predicates that should
+be deleted should be set to the JSON value `null`.
+
+For example, to remove a food rating:
+```json
+{
+  "uid": "0x467ba0",
+  "rating": null
+}
+```
+
+### Deleting edges
+
+Deleting a single edge requires the same JSON object that would create that
+edge. E.g. to delete the predicate `link` from `"0x123"` to `"0x456"`:
+```json
+{
+  "uid": "0x123",
+  "link": {
+    "uid": "0x456"
+  }
+}
+```
+
+All edges for a predicate emanating from a single node can be deleted at once
+(corresponding to deleting `S P *`):
+```json
+{
+  "uid": "0x123",
+  "link": null
+}
+```
+
+If no predicates specified, then all of the nodes outbound edges are deleted
+(corresponding to deleting `S * *`):
+```json
+{
+  "uid": "0x123"
+}
+```
+
+### Facets
+
+Facets can be created by using the `|` character to separate the predicate
+and facet key in a JSON object field name. This is the same encoding schema
+used to show facets in query results. E.g.
+```json
+{
+  "name": "Carol",
+  "name|initial": "C",
+  "friend": {
+    "name": "Daryl"
+  },
+  "friend|close": "yes"
+}
+```
+Produces the following RDFs:
+```
+_:blank-0 <name> "Carol" (initial=C) .
+_:blank-0 <friend> _:blank-1 (close=yes) .
+_:blank-1 <name> "Daryl" .
+```
+
+### Specifying multiple operations
+
+When specifying add or delete mutations, multiple operations can be specified
+at the same time using JSON arrays.
+
+For example, the following JSON object can be used to add two new nodes, each
+with a `name`:
+```json
+[
+  { "name": "Edward" },
+  { "name": "Fredric" }
+]
+```
