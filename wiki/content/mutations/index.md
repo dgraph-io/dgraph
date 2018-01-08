@@ -272,6 +272,11 @@ multiple RDFs that are then processed as normal.
 
 Each JSON object represents a single node in the graph.
 
+{{% notice "note" %}}
+JSON mutations are only available via gRPC clients, such as the Go client, JS
+client, and Java client. They're not available via the raw HTTP interface.
+{{% /notice %}}
+
 ### Setting literal values
 
 When setting new values, the `set_json` field in the `Mutation` message should
@@ -374,8 +379,7 @@ For example, to remove a food rating:
 ### Deleting edges
 
 Deleting a single edge requires the same JSON object that would create that
-edge. E.g. to delete the predicate `link` between nodes with uids `"0x123"` and
-`"0x456"`:
+edge. E.g. to delete the predicate `link` from `"0x123"` to `"0x456"`:
 ```json
 {
   "uid": "0x123",
@@ -394,6 +398,14 @@ All edges for a predicate emanating from a single node can be deleted at once
 }
 ```
 
+If no predicates specified, then all of the nodes outbound edges are deleted
+(corresponding to deleting `S * *`):
+```json
+{
+  "uid": "0x123"
+}
+```
+
 ### Facets
 
 Facets can be created by using the `|` character to separate the predicate
@@ -402,15 +414,30 @@ used to show facets in query results. E.g.
 ```json
 {
   "name": "Carol",
-  "friend|close": "yes",
+  "name|initial": "C",
   "friend": {
     "name": "Daryl"
-  }
+  },
+  "friend|close": "yes"
 }
 ```
 Produces the following RDFs:
 ```
-_:blank-0 <name> "Carol" .
+_:blank-0 <name> "Carol" (initial=C) .
 _:blank-0 <friend> _:blank-1 (close=yes) .
 _:blank-1 <name> "Daryl" .
+```
+
+### Specifying multiple operations
+
+When specifying add or delete mutations, multiple operations can be specified
+at the same time using JSON arrays.
+
+For example, the following JSON object can be used to add two new nodes, each
+with a `name`:
+```json
+[
+  { "name": "Edward" },
+  { "name": "Fredric" }
+]
 ```
