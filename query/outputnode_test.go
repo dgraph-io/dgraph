@@ -33,9 +33,9 @@ func makeFastJsonNode() *fastJsonNode {
 }
 
 func TestEncodeMemory(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping TestEncodeMemory")
-	}
+	//	if testing.Short() {
+	t.Skip("Skipping TestEncodeMemory")
+	//	}
 	var wg sync.WaitGroup
 
 	for x := 0; x < runtime.NumCPU(); x++ {

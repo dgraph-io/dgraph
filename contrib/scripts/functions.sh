@@ -2,9 +2,6 @@
 
 
 sleepTime=11
-if [[ "$TRAVIS" == true ]]; then
-  sleepTime=30
-fi
 
 function quit {
   echo "Shutting down dgraph server and zero"

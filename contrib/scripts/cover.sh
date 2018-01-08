@@ -21,12 +21,11 @@ set -e
 # create coverage output
 echo 'mode: atomic' > $OUT
 for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki|customtok'); do
-  #if [[ "$TRAVIS_BRANCH" =~ master|release\/ ]]; then
-    #echo "Running tests with race flag."
-    #go test -v -race -timeout=30m -covermode=atomic -coverprofile=$TMP $PKG
-  #else
+  if [[ "$TRAVIS" == true ]]; then
     go test -v -covermode=atomic -coverprofile=$TMP $PKG
-  #fi
+  else
+    go test -v -race -timeout 25m -covermode=atomic -coverprofile=$TMP $PKG | go-test-teamcity
+  fi
   tail -n +2 $TMP >> $OUT
 done
 

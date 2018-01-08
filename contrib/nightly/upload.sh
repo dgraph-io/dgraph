@@ -11,6 +11,8 @@ set -e
 # 1. A cronjob is run on master which happens everyday and updates the nightly tag.
 # 2. A new tag is pushed i.e. when we make a new release.
 # 3. A release is updated.
+
+# TODO - Remove logic for step which updates the binaries for a release.
 run_upload_script() {
   # So that script can run locally too.
   if [[ "$TRAVIS" != true ]]; then

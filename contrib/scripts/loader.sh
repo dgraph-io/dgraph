@@ -11,6 +11,8 @@ if [ -z "$1" ]; then
   BUILD=$SRC/build
 fi
 
+mkdir -p $BUILD
+
 set -e
 
 pushd $BUILD &> /dev/null
@@ -33,18 +35,6 @@ curl -X PUT  -d '
     name: string @index(term) .
     initial_release_date: datetime @index(year) .
 ' "http://localhost:8081/alter"
-
-# Server returns extensions key now. Take that into account while comparing.
-# res=$(curl -X POST  -d 'schema {}' "http://localhost:8080/query")
-# expected='"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"initial_release_date","type":"datetime","index":true,"tokenizer":["year"]},{"predicate":"name","type":"string","index":true,"tokenizer":["term"]},{"predicate":"xid","type":"string","index":true,"tokenizer":["exact"]}]'
-# echo -e "Response $res"
-# 
-# if [[ "$res" == *"$expected"* ]]; then
-#   echo "Schema comparison successful."
-# else
-#   echo "Schema comparison failed."
-#   quit 1
-# fi
 
 echo -e "\nRunning dgraph live."
 # Delete client directory to clear xidmap.
@@ -85,7 +75,7 @@ if [[ ! "$exportCount" -eq "$dataCount" ]]; then
   echo "Export test failed. Expected: $dataCount Got: $exportCount"
   quit 1
 else
-  echo "Export count matches"	
+  echo "Export count matches"
 fi
 
 quit 0

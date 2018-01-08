@@ -7,7 +7,6 @@ source contrib/scripts/functions.sh
 function finish {
   if [ $? -ne 0 ]; then
 	  quit 0
-	  rm -rf $1
   fi
 }
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-killall -9 dgraph
+killall -9 dgraph || true
 
 DGRAPH_ROOT=$GOPATH/src/github.com/dgraph-io/dgraph/dgraph
 function build {
