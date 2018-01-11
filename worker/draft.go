@@ -434,7 +434,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictLRU()
-	if _, err := populateShard(n.ctx, pstore, pool, n.gid); err != nil {
+	if _, err := n.populateShard(pstore, pool); err != nil {
 		// TODO: We definitely don't want to just fall flat on our face if we can't
 		// retrieve a simple snapshot.
 		x.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n", peerID, err)
@@ -617,8 +617,6 @@ func (n *node) snapshot(skip uint64) {
 		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
 	}
 
-	// TODO - Do we need any locks before modifying this?
-	n.RaftContext.MaxPending = posting.Oracle().MaxPending()
 	rc, err := n.RaftContext.Marshal()
 	x.Check(err)
 

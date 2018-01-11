@@ -104,7 +104,7 @@ message RaftContext {
 	fixed64 id = 1;
 	uint32 group = 2;
 	string addr = 3;
-	uint64 max_pending = 4;
+	uint64 snapshot_ts = 4;
 }
 
 // Member stores information about RAFT group member for a single RAFT node.

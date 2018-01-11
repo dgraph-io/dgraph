@@ -80,15 +80,19 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 }
 
 // PopulateShard gets for a shard from the leader and writes it to BadgerDB on the follower.
-func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, group uint32) (int, error) {
+func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
 	c := intern.NewWorkerClient(conn)
 
-	stream, err := c.PredicateAndSchemaData(context.Background(),
+	n.RLock()
+	ctx := n.ctx
+	group := n.gid
+	stream, err := c.PredicateAndSchemaData(ctx,
 		&intern.SnapshotMeta{
-			ClientTs: posting.Oracle().MaxPending(),
+			ClientTs: n.RaftContext.SnapshotTs,
 			GroupId:  group,
 		})
+	n.RUnlock()
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
@@ -102,6 +106,17 @@ func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, gro
 	kvs := make(chan *intern.KV, 1000)
 	che := make(chan error)
 	go writeBatch(ctx, ps, kvs, che)
+
+	ikv, err := stream.Recv()
+	if err != nil {
+		return 0, err
+	}
+
+	// First key has the snapshot ts from the leader.
+	x.AssertTrue(bytes.Equal(ikv.Key, []byte("min_ts")))
+	n.Lock()
+	n.RaftContext.SnapshotTs = ikv.Version
+	n.Unlock()
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
@@ -209,8 +224,17 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	// Any commit which happens in the future will have commitTs greater than
 	// this.
 	// TODO: Ensure all deltas have made to disk and read in memory before checking disk.
-	timestamp := posting.Oracle().MaxPending()
-	txn := pstore.NewTransactionAt(timestamp, false)
+	min_ts := posting.Txns().MinTs()
+
+	// Send ts as first KV.
+	if err := stream.Send(&intern.KV{
+		Key:     []byte("min_ts"),
+		Version: min_ts,
+	}); err != nil {
+		return err
+	}
+
+	txn := pstore.NewTransactionAt(min_ts, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
