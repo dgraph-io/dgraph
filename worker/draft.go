@@ -663,6 +663,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	posting.TxnMarks().SetDoneUntil(idx)
 
 	if restart {
+		// TODO - Handle restart fetching snapshot before joining quorum.
 		x.Printf("Restarting node for group: %d\n", n.gid)
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
