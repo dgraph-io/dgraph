@@ -19,7 +19,7 @@ package worker
 
 import (
 	"encoding/binary"
-	"log"
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -336,7 +336,7 @@ func (n *node) processApplyCh() {
 
 		proposal := &intern.Proposal{}
 		if err := proposal.Unmarshal(e.Data); err != nil {
-			log.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
+			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
 
 		// One final applied and synced watermark would be emitted when proposal ctx ref count
@@ -411,16 +411,18 @@ func (n *node) processKeyValues(index uint64, pid uint32, kvs []*intern.KV) erro
 func (n *node) applyAllMarks(ctx context.Context) {
 	// Get index of last committed.
 	lastIndex, err := n.Store.LastIndex()
+	fmt.Println("lastIndex", lastIndex)
 	x.Checkf(err, "Error while getting last index")
 	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
 func (n *node) retrieveSnapshot(peerID uint64) {
 	addr, _ := n.Peer(peerID)
+	fmt.Println("addr", addr)
 	pool, err := conn.Get().Get(addr)
 	if err != nil {
 		// err is just going to be errNoConnection
-		log.Fatalf("Cannot retrieve snapshot from peer %v, no connection.  Error: %v\n",
+		x.Fatalf("Cannot retrieve snapshot from peer %v, no connection.  Error: %v\n",
 			peerID, err)
 	}
 
@@ -432,10 +434,12 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictLRU()
+	fmt.Println("Evicted LRU")
+	fmt.Println("gid", n.gid)
 	if _, err := populateShard(n.ctx, pstore, pool, n.gid); err != nil {
 		// TODO: We definitely don't want to just fall flat on our face if we can't
 		// retrieve a simple snapshot.
-		log.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n", peerID, err)
+		x.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n", peerID, err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
@@ -489,6 +493,7 @@ func (n *node) Run() {
 				var rc intern.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
 				x.AssertTrue(rc.Group == n.gid)
+				fmt.Println("Snapshot size", rc.Size())
 				if rc.Id != n.Id {
 					// NOTE: Retrieving snapshot here is OK, after storing it above in WAL, because
 					// rc.Id != n.Id.
@@ -541,7 +546,7 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
-			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
+			if peerId, _, has := groups().MyPeer(); has && n.AmLeader() {
 				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				go func() {
 					select {
@@ -580,7 +585,7 @@ func (n *node) Stop() {
 }
 
 func (n *node) snapshotPeriodically(closer *y.Closer) {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -599,6 +604,7 @@ func (n *node) snapshot(skip uint64) {
 	water := posting.TxnMarks()
 	le := water.DoneUntil()
 
+	skip = 10
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 
@@ -606,10 +612,14 @@ func (n *node) snapshot(skip uint64) {
 	if le <= si+skip {
 		return
 	}
+	fmt.Println("Taking snapshot")
 	snapshotIdx := le - skip
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
 	}
+
+	// TODO - Do we need any locks before modifying this?
+	n.RaftContext.MaxPending = posting.Oracle().MaxPending()
 	rc, err := n.RaftContext.Marshal()
 	x.Check(err)
 
@@ -623,7 +633,7 @@ func (n *node) joinPeers() {
 	// Get leader information for MY group.
 	pl := groups().Leader(n.gid)
 	if pl == nil {
-		log.Fatalf("Unable to reach leader or any other server in group %d", n.gid)
+		x.Fatalf("Unable to reach leader or any other server in group %d", n.gid)
 	}
 
 	// Bring the instance up to speed first.
@@ -638,7 +648,7 @@ func (n *node) joinPeers() {
 	x.Printf("Calling JoinCluster")
 	ctx, cancel := context.WithTimeout(n.ctx, time.Second)
 	defer cancel()
-	// JoinCluster can block idefinitely, raft ignores conf change proposal
+	// JoinCluster can block indefinitely, raft ignores conf change proposal
 	// if it has pending configuration.
 	_, err := c.JoinCluster(ctx, n.RaftContext)
 	// TODO: This should keep on indefinitely trying to join the cluster, instead of crashing.
@@ -666,7 +676,11 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 		n.SetRaft(raft.RestartNode(n.Cfg))
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
-		if _, hasPeer := groups().MyPeer(); hasPeer {
+		if peerId, addr, hasPeer := groups().MyPeer(); hasPeer {
+			// Get snapshot before joining peers as it can take time to retrieve it and we dont
+			// want the quorum to be inactive when it happens.
+			n.Connect(peerId, addr)
+			n.retrieveSnapshot(peerId)
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 		} else {

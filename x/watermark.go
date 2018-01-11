@@ -19,6 +19,7 @@ package x
 import (
 	"container/heap"
 	"context"
+	"fmt"
 	"sync/atomic"
 
 	"golang.org/x/net/trace"
@@ -101,6 +102,7 @@ func (w *WaterMark) SetDoneUntil(val uint64) {
 }
 
 func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
+	fmt.Println("done", w.DoneUntil(), "index", index)
 	if w.DoneUntil() >= index {
 		return nil
 	}

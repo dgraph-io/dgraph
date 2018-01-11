@@ -104,6 +104,7 @@ message RaftContext {
 	fixed64 id = 1;
 	uint32 group = 2;
 	string addr = 3;
+	uint64 max_pending = 4;
 }
 
 // Member stores information about RAFT group member for a single RAFT node.
@@ -205,16 +206,6 @@ message KV {
 	bytes val = 2;
 	bytes userMeta = 3;
 	uint64 version = 4;
-}
-
-message KC {
-	bytes key = 1;
-	uint64 timestamp = 2;
-}
-
-message GroupKeys {
-	uint32 group_id = 1;
-	repeated KC keys = 2;
 }
 
 // Posting messages.
@@ -385,7 +376,7 @@ service Worker {
 	rpc Mutate (Mutations)                        returns (api.TxnContext) {}
 	rpc CommitOrAbort(api.TxnContext)             returns (api.Payload) {}
 	rpc ServeTask (Query)                         returns (Result) {}
-	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
+	rpc PredicateAndSchemaData (SnapshotMeta) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
 	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
 	rpc MinTxnTs (api.Payload)                    returns (Num) {}
@@ -397,6 +388,11 @@ service Worker {
 
 message Num {
 	uint64 val = 1;
+}
+
+message SnapshotMeta {
+	uint64 client_ts = 1;
+	uint32 group_id = 2;
 }
 
 // vim: noexpandtab sw=2 ts=2

@@ -35,14 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type server struct {
-	NodeId    uint64     // Raft Id associated with the raft node.
-	Addr      string     // The public address of the server serving this node.
-	Leader    bool       // Set to true if the node is a leader of the group.
-	RaftIdx   uint64     // The raft index which applied this membership update in group zero.
-	PoolOrNil *conn.Pool // An owned reference to the server's Pool entry (nil if Addr is our own).
-}
-
 type groupi struct {
 	x.SafeMutex
 	// TODO: Is this context being used?
@@ -376,16 +368,16 @@ func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 	return nil
 }
 
-func (g *groupi) MyPeer() (uint64, bool) {
+func (g *groupi) MyPeer() (uint64, string, bool) {
 	members := g.members(g.groupId())
 	if members != nil {
 		for _, m := range members {
 			if m.Id != g.Node.Id {
-				return m.Id, true
+				return m.Id, m.Addr, true
 			}
 		}
 	}
-	return 0, false
+	return 0, "", false
 }
 
 // Leader will try to return the leader of a given group, based on membership information.

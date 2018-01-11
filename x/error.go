@@ -100,5 +100,5 @@ func Errorf(format string, args ...interface{}) error {
 
 // Fatalf logs fatal.
 func Fatalf(format string, args ...interface{}) {
-	log.Fatalf("%+v", Errorf(format, args...))
+	log.Fatalf("%+v", errors.Errorf(format, args...))
 }
