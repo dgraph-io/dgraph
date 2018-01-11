@@ -258,7 +258,6 @@ func LoadFromDb() error {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		fmt.Println("key", string(key))
 		pk := x.Parse(key)
 		if pk == nil {
 			continue

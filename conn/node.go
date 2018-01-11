@@ -198,8 +198,7 @@ func (n *Node) Send(m raftpb.Message) {
 	}
 }
 
-func (n *Node) SaveToStorage(s raftpb.Snapshot, h raftpb.HardState,
-	es []raftpb.Entry) {
+func (n *Node) SaveSnapshot(s raftpb.Snapshot) {
 	if !raft.IsEmptySnap(s) {
 		le, err := n.Store.LastIndex()
 		if err != nil {
@@ -213,7 +212,9 @@ func (n *Node) SaveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 			log.Fatalf("Applying snapshot: %v", err)
 		}
 	}
+}
 
+func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry) {
 	if !raft.IsEmptyHardState(h) {
 		n.Store.SetHardState(h)
 	}

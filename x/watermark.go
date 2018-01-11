@@ -19,7 +19,6 @@ package x
 import (
 	"container/heap"
 	"context"
-	"fmt"
 	"sync/atomic"
 
 	"golang.org/x/net/trace"
@@ -102,7 +101,6 @@ func (w *WaterMark) SetDoneUntil(val uint64) {
 }
 
 func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
-	fmt.Println("done", w.DoneUntil(), "index", index)
 	if w.DoneUntil() >= index {
 		return nil
 	}
@@ -119,10 +117,10 @@ func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
 // process is used to process the Mark channel. This is not thread-safe,
 // so only run one goroutine for process. One is sufficient, because
 // all goroutine ops use purely memory and cpu.
-// Each index has to emit atleast one begin watermak in serial order otherwise waiters
+// Each index has to emit atleast one begin watermark in serial order otherwise waiters
 // can get blocked idefinitely. Example: We had an watermark at 100 and a waiter at 101,
-// if no watermark is emitted at index 101 then waiter would get stuck idefinitely as it
-// can't decide whether the task at 101 has decided not to emit watermak or it didn't get
+// if no watermark is emitted at index 101 then waiter would get stuck indefinitely as it
+// can't decide whether the task at 101 has decided not to emit watermark or it didn't get
 // scheduled yet.
 func (w *WaterMark) process() {
 	var indices uint64Heap

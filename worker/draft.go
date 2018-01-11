@@ -411,14 +411,12 @@ func (n *node) processKeyValues(index uint64, pid uint32, kvs []*intern.KV) erro
 func (n *node) applyAllMarks(ctx context.Context) {
 	// Get index of last committed.
 	lastIndex, err := n.Store.LastIndex()
-	fmt.Println("lastIndex", lastIndex)
 	x.Checkf(err, "Error while getting last index")
 	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
 func (n *node) retrieveSnapshot(peerID uint64) {
 	addr, _ := n.Peer(peerID)
-	fmt.Println("addr", addr)
 	pool, err := conn.Get().Get(addr)
 	if err != nil {
 		// err is just going to be errNoConnection
@@ -429,13 +427,13 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
 	// the values might get overwritten
 	// Safe to keep this line
-	n.applyAllMarks(n.ctx)
+	// TODO - Bring it back after changing implementation.
+	//	n.applyAllMarks(n.ctx)
+
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictLRU()
-	fmt.Println("Evicted LRU")
-	fmt.Println("gid", n.gid)
 	if _, err := populateShard(n.ctx, pstore, pool, n.gid); err != nil {
 		// TODO: We definitely don't want to just fall flat on our face if we can't
 		// retrieve a simple snapshot.
@@ -481,10 +479,9 @@ func (n *node) Run() {
 
 			// First store the entries, then the hardstate and snapshot.
 			x.Check(n.Wal.Store(n.gid, rd.HardState, rd.Entries))
-			x.Check(n.Wal.StoreSnapshot(n.gid, rd.Snapshot))
 
 			// Now store them in the in-memory store.
-			n.SaveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
+			n.SaveToStorage(rd.HardState, rd.Entries)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
@@ -504,7 +501,10 @@ func (n *node) Run() {
 				} else {
 					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
+				x.Check(n.Wal.StoreSnapshot(n.gid, rd.Snapshot))
+				n.SaveSnapshot(rd.Snapshot)
 			}
+
 			if len(rd.CommittedEntries) > 0 {
 				if tr, ok := trace.FromContext(n.ctx); ok {
 					tr.LazyPrintf("Found %d committed entries", len(rd.CommittedEntries))
@@ -612,7 +612,6 @@ func (n *node) snapshot(skip uint64) {
 	if le <= si+skip {
 		return
 	}
-	fmt.Println("Taking snapshot")
 	snapshotIdx := le - skip
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)

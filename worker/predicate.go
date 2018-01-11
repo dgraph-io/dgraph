@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"sync/atomic"
 	"time"
 
@@ -44,11 +43,11 @@ const (
 // writeBatch performs a batch write of key value pairs to BadgerDB.
 func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.KV, che chan error) {
 	bytesWritten := 0
-	t := time.NewTicker(10 * time.Second)
+	t := time.NewTicker(5 * time.Second)
 	go func() {
 		now := time.Now()
 		for range t.C {
-			fmt.Printf("Time elapsed: %v, bytes written: %d\n", time.Since(now), bytesWritten)
+			fmt.Printf("Writing Snapshot. Time elapsed: %v, bytes written: %d\n", time.Since(now), bytesWritten)
 		}
 	}()
 
@@ -59,7 +58,6 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 			pstore.PurgeVersionsBelow(i.Key, math.MaxUint64)
 		} else {
 			bytesWritten += len(i.Key) + len(i.Val)
-			x.Parse(i.Key)
 			txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0])
 			txn.CommitAt(i.Version, func(err error) {
 				// We don't care about exact error
@@ -71,8 +69,8 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 		}
 		defer txn.Discard()
 	}
-	fmt.Println("write batch done")
 	t.Stop()
+
 	// TODO - Wait for all callbacks to return.
 	if hasError == 0 {
 		che <- nil
@@ -107,7 +105,6 @@ func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, gro
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
-	f, err := os.Create("keys.txt")
 	for {
 		kv, err := stream.Recv()
 		if err == io.EOF {
@@ -120,9 +117,6 @@ func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, gro
 			close(kvs)
 			return count, err
 		}
-		f.WriteString(string(kv.Key))
-		f.WriteString("\n")
-		x.Parse(kv.Key)
 		count++
 
 		// We check for errors, if there are no errors we send value to channel.
@@ -219,6 +213,7 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	txn := pstore.NewTransactionAt(timestamp, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
 	iterOpts.PrefetchValues = false
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
