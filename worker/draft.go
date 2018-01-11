@@ -19,7 +19,6 @@ package worker
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -490,7 +489,6 @@ func (n *node) Run() {
 				var rc intern.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
 				x.AssertTrue(rc.Group == n.gid)
-				fmt.Println("Snapshot size", rc.Size())
 				if rc.Id != n.Id {
 					// NOTE: Retrieving snapshot here is OK, after storing it above in WAL, because
 					// rc.Id != n.Id.
@@ -585,6 +583,7 @@ func (n *node) Stop() {
 }
 
 func (n *node) snapshotPeriodically(closer *y.Closer) {
+	// TODO - Change before merge.
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -604,6 +603,7 @@ func (n *node) snapshot(skip uint64) {
 	water := posting.TxnMarks()
 	le := water.DoneUntil()
 
+	// TODO - Remove before merge.
 	skip = 10
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
