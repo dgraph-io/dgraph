@@ -87,7 +87,6 @@ func TestClusterSnapshot(t *testing.T) {
 	quickCheck(err)
 	b, err := ioutil.ReadAll(resp.Body)
 	quickCheck(err)
-	fmt.Println(string(b), "port", o+8080)
 	expected := `{"code": "Success", "message": "Export completed."}`
 	if string(b) != expected {
 		shutdownCluster()
