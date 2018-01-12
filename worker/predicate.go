@@ -244,13 +244,11 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 
 	var count int
 	var prevKey []byte
-	// TODO - Remove after merging master
-	dummyKey := x.DataKey("_dummy_", 0)
 	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
 	for it.Rewind(); it.Valid(); {
 		iterItem := it.Item()
 		k := iterItem.Key()
-		if bytes.Equal(k, prevKey) || bytes.Equal(k, dummyKey) {
+		if bytes.Equal(k, prevKey) {
 			it.Next()
 			continue
 		}
