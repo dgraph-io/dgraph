@@ -129,12 +129,22 @@ func (s *Server) AssignUids(ctx context.Context, num *intern.Num) (*api.Assigned
 		return &emptyAssignedIds, ctx.Err()
 	}
 
-	// TODO: Forward it to the leader, if I'm not the leader.
 	reply := &emptyAssignedIds
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply, err = s.lease(ctx, num, false)
+		if s.Node.AmLeader() {
+			reply, err = s.lease(ctx, num, false)
+			c <- err
+			return
+		}
+		pl := s.Leader(0)
+		if pl == nil {
+			err = x.Errorf("No healthy connection found to Leader of group zero")
+		} else {
+			zc := intern.NewZeroClient(pl.Get())
+			reply, err = zc.AssignUids(ctx, num)
+		}
 		c <- err
 	}()
 

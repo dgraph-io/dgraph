@@ -84,7 +84,10 @@ type loader struct {
 }
 
 func newLoader(opt options) *loader {
-	zero, err := grpc.Dial(opt.ZeroAddr, grpc.WithInsecure())
+	zero, err := grpc.Dial(opt.ZeroAddr,
+		grpc.WithBlock(),
+		grpc.WithInsecure(),
+		grpc.WithTimeout(10*time.Second))
 	x.Check(err)
 	st := &state{
 		opt:    opt,
