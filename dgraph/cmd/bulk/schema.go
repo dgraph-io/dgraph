@@ -95,12 +95,14 @@ func (s *schemaStore) validateType(de *intern.DirectedEdge, objectIsUID bool) {
 }
 
 func (s *schemaStore) write(db *badger.ManagedDB) {
-	txn := db.NewTransactionAt(s.state.writeTs, true)
+	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
+	// if bulk loader was restarted or other similar scenarios.
+	txn := db.NewTransactionAt(1, true)
 	for pred, sch := range s.m {
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
 		x.Check(txn.SetWithMeta(k, v, posting.BitCompletePosting))
 	}
-	x.Check(txn.CommitAt(s.state.writeTs, nil))
+	x.Check(txn.CommitAt(1, nil))
 }
