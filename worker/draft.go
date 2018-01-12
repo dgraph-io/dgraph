@@ -581,8 +581,7 @@ func (n *node) Stop() {
 }
 
 func (n *node) snapshotPeriodically(closer *y.Closer) {
-	// TODO - Change before merge.
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for {
@@ -601,8 +600,6 @@ func (n *node) snapshot(skip uint64) {
 	water := posting.TxnMarks()
 	le := water.DoneUntil()
 
-	// TODO - Remove before merge.
-	skip = 10
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 
