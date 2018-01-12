@@ -20,9 +20,9 @@ package worker
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
+	humanize "github.com/dustin/go-humanize"
 )
 
 const (
@@ -42,25 +43,29 @@ const (
 
 // writeBatch performs a batch write of key value pairs to BadgerDB.
 func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.KV, che chan error) {
-	bytesWritten := 0
+	var bytesWritten uint64
 	t := time.NewTicker(5 * time.Second)
 	go func() {
 		now := time.Now()
 		for range t.C {
-			fmt.Printf("Writing Snapshot. Time elapsed: %v, bytes written: %d\n", time.Since(now), bytesWritten)
+			x.Printf("Getting SNAPSHOT: Time elapsed: %v, bytes written: %s\n",
+				x.FixedDuration(time.Since(now)), humanize.Bytes(bytesWritten))
 		}
 	}()
 
 	var hasError int32
+	var wg sync.WaitGroup // to wait for all callbacks to return
 	for i := range kv {
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
 		if len(i.Val) == 0 {
 			pstore.PurgeVersionsBelow(i.Key, math.MaxUint64)
 		} else {
-			bytesWritten += len(i.Key) + len(i.Val)
+			bytesWritten += uint64(len(i.Key) + len(i.Val))
 			txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0])
+			wg.Add(1)
 			txn.CommitAt(i.Version, func(err error) {
 				// We don't care about exact error
+				wg.Done()
 				if err != nil {
 					x.Printf("Error while committing kv to badger %v\n", err)
 					atomic.StoreInt32(&hasError, 1)
@@ -69,9 +74,9 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 		}
 		defer txn.Discard()
 	}
+	wg.Wait()
 	t.Stop()
 
-	// TODO - Wait for all callbacks to return.
 	if hasError == 0 {
 		che <- nil
 	} else {
@@ -167,11 +172,11 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	return count, nil
 }
 
-func sendKV(stream intern.Worker_PredicateAndSchemaDataServer, it *badger.Iterator) error {
+func sendKV(stream intern.Worker_PredicateAndSchemaDataServer, it *badger.Iterator,
+	pk *x.ParsedKey) error {
 	item := it.Item()
-	pk := x.Parse(item.Key())
-
 	var kv *intern.KV
+
 	if pk.IsSchema() {
 		val, err := item.Value()
 		if err != nil {
@@ -260,14 +265,15 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		}
 		copy(prevKey, k)
 
-		// TODO - Schema keys version is always one.
-		if iterItem.Version() <= clientTs {
+		pk := x.Parse(prevKey)
+		// Schema keys always have version 1. So we send it irrespective of the timestamp.
+		if iterItem.Version() <= clientTs && !pk.IsSchema() {
 			it.Next()
 			continue
 		}
 
 		// This key is not present in follower.
-		if err := sendKV(stream, it); err != nil {
+		if err := sendKV(stream, it, pk); err != nil {
 			return err
 		}
 		count++

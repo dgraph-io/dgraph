@@ -82,7 +82,7 @@ func (p *progress) reportOnce() {
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
 		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
-			fixedDuration(elapsed),
+			x.FixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
 			niceFloat(float64(mapEdgeCount)),
@@ -103,7 +103,7 @@ func (p *progress) reportOnce() {
 		}
 		fmt.Printf("REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
 			"plist_count:%s plist_speed:%s/sec\n",
-			fixedDuration(now.Sub(p.start)),
+			x.FixedDuration(now.Sub(p.start)),
 			pct,
 			niceFloat(float64(reduceEdgeCount)),
 			niceFloat(float64(reduceEdgeCount)/elapsed.Seconds()),
@@ -121,19 +121,8 @@ func (p *progress) endSummary() {
 
 	p.reportOnce()
 
-	total := fixedDuration(time.Since(p.start))
+	total := x.FixedDuration(time.Since(p.start))
 	fmt.Printf("Total: %v\n", total)
-}
-
-func fixedDuration(d time.Duration) string {
-	str := fmt.Sprintf("%02ds", int(d.Seconds())%60)
-	if d >= time.Minute {
-		str = fmt.Sprintf("%02dm", int(d.Minutes())%60) + str
-	}
-	if d >= time.Hour {
-		str = fmt.Sprintf("%02dh", int(d.Hours())) + str
-	}
-	return str
 }
 
 var suffixes = [...]string{"", "k", "M", "G", "T"}
