@@ -84,7 +84,7 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 	}
 }
 
-// PopulateShard gets for a shard from the leader and writes it to BadgerDB on the follower.
+// populateShard gets data for a shard from the leader and writes it to BadgerDB on the follower.
 func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
 	c := intern.NewWorkerClient(conn)
