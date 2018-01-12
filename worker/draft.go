@@ -425,8 +425,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
 	// the values might get overwritten
 	// Safe to keep this line
-	// TODO - Bring it back after changing implementation.
-	//	n.applyAllMarks(n.ctx)
+	n.applyAllMarks(n.ctx)
 
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
