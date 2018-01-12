@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
+
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
@@ -71,7 +73,7 @@ func (b *block) assign(ch <-chan *api.AssignedIds) uint64 {
 }
 
 // New creates an XidMap with given badger and uid provider.
-func New(kv *badger.DB, pool *ZeroPool, opt Options) *XidMap {
+func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 	x.AssertTrue(opt.LRUSize != 0)
 	x.AssertTrue(opt.NumShards != 0)
 	xm := &XidMap{
@@ -86,34 +88,25 @@ func New(kv *badger.DB, pool *ZeroPool, opt Options) *XidMap {
 		xm.shards[i].xm = xm
 	}
 	go func() {
-		var zc intern.ZeroClient
+		zc := intern.NewZeroClient(zero)
 		const initBackoff = 10 * time.Millisecond
 		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
-			var err error
-			if zc == nil {
-				zc, err = pool.Leader()
-			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			assigned, err := zc.AssignUids(ctx, &intern.Num{Val: 10000})
+			cancel()
 			if err == nil {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-				var assigned *api.AssignedIds
-				assigned, err = zc.AssignUids(ctx, &intern.Num{Val: 10000})
-				cancel()
-				if err == nil {
-					backoff = initBackoff
-					xm.newRanges <- assigned
-					continue
-				}
+				backoff = initBackoff
+				xm.newRanges <- assigned
+				continue
 			}
-
 			x.Printf("Error while getting lease: %v\n", err)
 			backoff *= 2
 			if backoff > maxBackoff {
 				backoff = maxBackoff
 			}
 			time.Sleep(backoff)
-			zc = nil // try a different zero connection
 		}
 
 	}()
