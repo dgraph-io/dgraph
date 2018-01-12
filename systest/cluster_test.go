@@ -15,6 +15,9 @@ import (
 )
 
 func TestClusterSnapshot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
 	tmpDir, err := ioutil.TempDir("", "")
 	check(t, err)
 	defer os.RemoveAll(tmpDir)
