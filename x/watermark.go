@@ -67,6 +67,7 @@ type WaterMark struct {
 	Name      string
 	markCh    chan mark
 	doneUntil uint64
+	lastIndex uint64
 	elog      trace.EventLog
 }
 
@@ -78,9 +79,11 @@ func (w *WaterMark) Init() {
 }
 
 func (w *WaterMark) Begin(index uint64) {
+	atomic.StoreUint64(&w.lastIndex, index)
 	w.markCh <- mark{index: index, done: false}
 }
 func (w *WaterMark) BeginMany(indices []uint64) {
+	atomic.StoreUint64(&w.lastIndex, indices[len(indices)-1])
 	w.markCh <- mark{index: 0, indices: indices, done: false}
 }
 
@@ -98,6 +101,10 @@ func (w *WaterMark) DoneUntil() uint64 {
 
 func (w *WaterMark) SetDoneUntil(val uint64) {
 	atomic.StoreUint64(&w.doneUntil, val)
+}
+
+func (w *WaterMark) LastIndex() uint64 {
+	return atomic.LoadUint64(&w.lastIndex)
 }
 
 func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {

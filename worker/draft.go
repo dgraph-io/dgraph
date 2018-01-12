@@ -409,8 +409,7 @@ func (n *node) processKeyValues(index uint64, pid uint32, kvs []*intern.KV) erro
 
 func (n *node) applyAllMarks(ctx context.Context) {
 	// Get index of last committed.
-	lastIndex, err := n.Store.LastIndex()
-	x.Checkf(err, "Error while getting last index")
+	lastIndex := n.Applied.LastIndex()
 	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
