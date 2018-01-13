@@ -188,7 +188,7 @@ docker exec -it diggy dgraph-ratel
 The mutations and queries below can either be run from the command line using `curl localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
 
 
-Changing the data or schema stored in Dgraph is a mutation.  The following mutation stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.  Running this mutation, either through the UI or on the command line, will store the data in Dgraph.
+Changing the data stored in Dgraph is a mutation.  The following mutation stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.  Running this mutation, either through the UI or on the command line, will store the data in Dgraph.
 
 
 ```sh
@@ -238,7 +238,7 @@ curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
 ' | python -m json.tool | less
 ```
 
-Running this next mutation adds a schema and indexes some of the data so queries can use term matching, filtering and sorting.
+Alter the schema to add indexes on some of the data so queries can use term matching, filtering and sorting.
 
 ```sh
 curl localhost:8080/alter -XPOST -d $'
