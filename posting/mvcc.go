@@ -185,7 +185,7 @@ func (t *transactions) Done(startTs uint64) {
 func (t *Txn) done() {
 	t.Lock()
 	defer t.Unlock()
-	// All indices should have been added by  now.
+	// All indices should have been added by now.
 	TxnMarks().DoneMany(t.Indices)
 }
 

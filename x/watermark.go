@@ -67,6 +67,7 @@ type WaterMark struct {
 	Name      string
 	markCh    chan mark
 	doneUntil uint64
+	lastIndex uint64
 	elog      trace.EventLog
 }
 
@@ -78,9 +79,11 @@ func (w *WaterMark) Init() {
 }
 
 func (w *WaterMark) Begin(index uint64) {
+	atomic.StoreUint64(&w.lastIndex, index)
 	w.markCh <- mark{index: index, done: false}
 }
 func (w *WaterMark) BeginMany(indices []uint64) {
+	atomic.StoreUint64(&w.lastIndex, indices[len(indices)-1])
 	w.markCh <- mark{index: 0, indices: indices, done: false}
 }
 
@@ -100,6 +103,10 @@ func (w *WaterMark) SetDoneUntil(val uint64) {
 	atomic.StoreUint64(&w.doneUntil, val)
 }
 
+func (w *WaterMark) LastIndex() uint64 {
+	return atomic.LoadUint64(&w.lastIndex)
+}
+
 func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
 	if w.DoneUntil() >= index {
 		return nil
@@ -117,10 +124,10 @@ func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
 // process is used to process the Mark channel. This is not thread-safe,
 // so only run one goroutine for process. One is sufficient, because
 // all goroutine ops use purely memory and cpu.
-// Each index has to emit atleast one begin watermak in serial order otherwise waiters
+// Each index has to emit atleast one begin watermark in serial order otherwise waiters
 // can get blocked idefinitely. Example: We had an watermark at 100 and a waiter at 101,
-// if no watermark is emitted at index 101 then waiter would get stuck idefinitely as it
-// can't decide whether the task at 101 has decided not to emit watermak or it didn't get
+// if no watermark is emitted at index 101 then waiter would get stuck indefinitely as it
+// can't decide whether the task at 101 has decided not to emit watermark or it didn't get
 // scheduled yet.
 func (w *WaterMark) process() {
 	var indices uint64Heap

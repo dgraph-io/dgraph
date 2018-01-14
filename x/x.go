@@ -170,27 +170,15 @@ func ReadLine(r *bufio.Reader, buf *bytes.Buffer) error {
 	return err
 }
 
-// Go doesn't have a round function for Duration and the duration value can be a
-// bit ugly to look at sometimes. This is an attempt to round the value.
-func Round(d time.Duration) time.Duration {
-	var denominator time.Duration
-	if d > time.Minute {
-		denominator = 0.1e12 // So that it has one digit after the decimal.
-	} else if d > time.Second {
-		denominator = 0.1e9 // 0.1 * time.Second
-	} else if d > time.Millisecond {
-		denominator = time.Millisecond
-	} else {
-		denominator = time.Microsecond
+func FixedDuration(d time.Duration) string {
+	str := fmt.Sprintf("%02ds", int(d.Seconds())%60)
+	if d >= time.Minute {
+		str = fmt.Sprintf("%02dm", int(d.Minutes())%60) + str
 	}
-
-	if remainder := d % denominator; 2*remainder < denominator {
-		// This means we have to round it down.
-		d = d - remainder
-	} else {
-		d = d + denominator - remainder
+	if d >= time.Hour {
+		str = fmt.Sprintf("%02dh", int(d.Hours())) + str
 	}
-	return d
+	return str
 }
 
 // PageRange returns start and end indices given pagination params. Note that n

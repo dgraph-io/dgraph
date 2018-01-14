@@ -503,15 +503,16 @@ func (n *node) Run() {
 			}
 			// First store the entries, then the hardstate and snapshot.
 			x.Check(n.Wal.Store(0, rd.HardState, rd.Entries))
-			x.Check(n.Wal.StoreSnapshot(0, rd.Snapshot))
 
 			// Now store them in the in-memory store.
-			n.SaveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
+			n.SaveToStorage(rd.HardState, rd.Entries)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state intern.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				n.server.SetMembershipState(&state)
+				x.Check(n.Wal.StoreSnapshot(0, rd.Snapshot))
+				n.SaveSnapshot(rd.Snapshot)
 			}
 
 			for _, entry := range rd.CommittedEntries {

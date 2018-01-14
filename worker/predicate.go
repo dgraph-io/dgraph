@@ -22,7 +22,9 @@ import (
 	"context"
 	"io"
 	"math"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
@@ -31,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
+	humanize "github.com/dustin/go-humanize"
 )
 
 const (
@@ -40,23 +43,40 @@ const (
 
 // writeBatch performs a batch write of key value pairs to BadgerDB.
 func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.KV, che chan error) {
+	var bytesWritten uint64
+	t := time.NewTicker(5 * time.Second)
+	go func() {
+		now := time.Now()
+		for range t.C {
+			x.Printf("Getting SNAPSHOT: Time elapsed: %v, bytes written: %s\n",
+				x.FixedDuration(time.Since(now)), humanize.Bytes(bytesWritten))
+		}
+	}()
+
 	var hasError int32
+	var wg sync.WaitGroup // to wait for all callbacks to return
 	for i := range kv {
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
 		if len(i.Val) == 0 {
 			pstore.PurgeVersionsBelow(i.Key, math.MaxUint64)
 		} else {
+			bytesWritten += uint64(len(i.Key) + len(i.Val))
 			txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0])
+			wg.Add(1)
 			txn.CommitAt(i.Version, func(err error) {
 				// We don't care about exact error
-				x.Printf("Error while committing kv to badger %v\n", err)
+				wg.Done()
 				if err != nil {
+					x.Printf("Error while committing kv to badger %v\n", err)
 					atomic.StoreInt32(&hasError, 1)
 				}
 			})
 		}
 		defer txn.Discard()
 	}
+	wg.Wait()
+	t.Stop()
+
 	if hasError == 0 {
 		che <- nil
 	} else {
@@ -64,65 +84,20 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 	}
 }
 
-func streamKeys(pstore *badger.ManagedDB, stream intern.Worker_PredicateAndSchemaDataClient) error {
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.PrefetchValues = false
-	it := txn.NewIterator(iterOpts)
-	defer it.Close()
-
-	g := &intern.GroupKeys{
-		GroupId: groups().groupId(),
-	}
-
-	// Do NOT go to next by default. Be careful when you "continue" in loop.
-	for it.Rewind(); it.Valid(); {
-		iterItem := it.Item()
-		k := iterItem.Key()
-		pk := x.Parse(k)
-		if pk == nil {
-			it.Next()
-			continue
-		}
-
-		if !groups().ServesTablet(pk.Attr) {
-			it.Seek(pk.SkipPredicate())
-			continue
-		} else if pk.IsSchema() {
-			// No version check for schema keys.
-			it.Seek(pk.SkipSchema())
-			continue
-		}
-
-		kdup := make([]byte, len(k))
-		copy(kdup, k)
-		key := &intern.KC{
-			Key: kdup,
-		}
-		key.Timestamp = iterItem.Version()
-		g.Keys = append(g.Keys, key)
-		if len(g.Keys) >= 1000 {
-			if err := stream.Send(g); err != nil {
-				return x.Wrapf(err, "While sending group keys to server.")
-			}
-			g.Keys = g.Keys[:0]
-		}
-		it.Next()
-	}
-	if err := stream.Send(g); err != nil {
-		return x.Wrapf(err, "While sending group keys to server.")
-	}
-	return stream.CloseSend()
-}
-
-// PopulateShard gets data for predicate pred from server with id serverId and
-// writes it to BadgerDB.
-func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, group uint32) (int, error) {
+// populateShard gets data for a shard from the leader and writes it to BadgerDB on the follower.
+func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
 	c := intern.NewWorkerClient(conn)
 
-	stream, err := c.PredicateAndSchemaData(context.Background())
+	n.RLock()
+	ctx := n.ctx
+	group := n.gid
+	stream, err := c.PredicateAndSchemaData(ctx,
+		&intern.SnapshotMeta{
+			ClientTs: n.RaftContext.SnapshotTs,
+			GroupId:  group,
+		})
+	n.RUnlock()
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
@@ -133,16 +108,20 @@ func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, gro
 		tr.LazyPrintf("Streaming data for group: %v", group)
 	}
 
-	if err := streamKeys(ps, stream); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
-		}
-		return 0, x.Wrapf(err, "While streaming keys group")
-	}
-
 	kvs := make(chan *intern.KV, 1000)
 	che := make(chan error)
 	go writeBatch(ctx, ps, kvs, che)
+
+	ikv, err := stream.Recv()
+	if err != nil {
+		return 0, err
+	}
+
+	// First key has the snapshot ts from the leader.
+	x.AssertTrue(bytes.Equal(ikv.Key, []byte("min_ts")))
+	n.Lock()
+	n.RaftContext.SnapshotTs = ikv.Version
+	n.Unlock()
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
@@ -193,37 +172,40 @@ func populateShard(ctx context.Context, ps *badger.ManagedDB, pl *conn.Pool, gro
 	return count, nil
 }
 
-func sendKV(stream intern.Worker_PredicateAndSchemaDataServer, it *badger.Iterator) error {
+func sendKV(stream intern.Worker_PredicateAndSchemaDataServer, it *badger.Iterator,
+	pk *x.ParsedKey) error {
 	item := it.Item()
-	key := item.Key()
-	pk := x.Parse(key)
-	if pk == nil {
-		it.Next()
-		return nil
-	}
-
 	var kv *intern.KV
+
 	if pk.IsSchema() {
 		val, err := item.Value()
 		if err != nil {
 			return err
 		}
 		kv = &intern.KV{
-			Key:      key,
+			Key:      item.Key(),
 			Val:      val,
 			UserMeta: []byte{item.UserMeta()},
 			Version:  item.Version(),
 		}
-		it.Next()
-	} else {
-		l, err := posting.ReadPostingList(key, it)
-		if err != nil {
-			return nil
-		}
-		kv, err = l.MarshalToKv()
-		if err != nil {
+		if err := stream.Send(kv); err != nil {
 			return err
 		}
+		it.Next()
+		return nil
+	}
+
+	key := make([]byte, len(item.Key()))
+	// Key would be modified by ReadPostingList as it advances the iterator and changes the item.
+	copy(key, item.Key())
+
+	l, err := posting.ReadPostingList(key, it)
+	if err != nil {
+		return nil
+	}
+	kv, err = l.MarshalToKv()
+	if err != nil {
+		return err
 	}
 	if err := stream.Send(kv); err != nil {
 		return err
@@ -231,56 +213,41 @@ func sendKV(stream intern.Worker_PredicateAndSchemaDataServer, it *badger.Iterat
 	return nil
 }
 
-// PredicateAndSchemaData can be used to return data corresponding to a predicate over
-// a stream.
-func (w *grpcWorker) PredicateAndSchemaData(stream intern.Worker_PredicateAndSchemaDataServer) error {
-	gkeys := &intern.GroupKeys{}
-
-	// Receive all keys from client first.
-	// TODO: Don't fetch all at once, use stream and iterate in parallel
-	for {
-		keys, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return x.Wrap(err)
-		}
-		if gkeys.GroupId == 0 {
-			gkeys.GroupId = keys.GroupId
-		}
-		x.AssertTruef(gkeys.GroupId == keys.GroupId,
-			"Group ids don't match [%v] v/s [%v]", gkeys.GroupId, keys.GroupId)
-		// Do we need to check if keys are sorted? They should already be.
-		gkeys.Keys = append(gkeys.Keys, keys.Keys...)
-	}
-	if tr, ok := trace.FromContext(stream.Context()); ok {
-		tr.LazyPrintf("Got %d keys from client\n", len(gkeys.Keys))
-	}
+func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream intern.Worker_PredicateAndSchemaDataServer) error {
+	clientTs := m.ClientTs
 
 	if !x.IsTestRun() {
-		if !groups().ServesGroup(gkeys.GroupId) {
-			return x.Errorf("Group %d not served.", gkeys.GroupId)
+		if !groups().ServesGroup(m.GroupId) {
+			return x.Errorf("Group %d not served.", m.GroupId)
 		}
 		n := groups().Node
 		if !n.AmLeader() {
-			return x.Errorf("Not leader of group: %d", gkeys.GroupId)
+			return x.Errorf("Not leader of group: %d", m.GroupId)
 		}
 	}
 
 	// Any commit which happens in the future will have commitTs greater than
 	// this.
 	// TODO: Ensure all deltas have made to disk and read in memory before checking disk.
-	timestamp := posting.Oracle().MaxPending()
-	txn := pstore.NewTransactionAt(timestamp, false)
+	min_ts := posting.Txns().MinTs()
+
+	// Send ts as first KV.
+	if err := stream.Send(&intern.KV{
+		Key:     []byte("min_ts"),
+		Version: min_ts,
+	}); err != nil {
+		return err
+	}
+
+	txn := pstore.NewTransactionAt(min_ts, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
+	iterOpts.PrefetchValues = false
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 
 	var count int
-	var gidx int
 	var prevKey []byte
 	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
 	for it.Rewind(); it.Valid(); {
@@ -290,45 +257,27 @@ func (w *grpcWorker) PredicateAndSchemaData(stream intern.Worker_PredicateAndSch
 			it.Next()
 			continue
 		}
+
 		if cap(prevKey) < len(k) {
 			prevKey = make([]byte, len(k))
+		} else {
+			prevKey = prevKey[:len(k)]
 		}
 		copy(prevKey, k)
 
-		// If a key is present in follower but not in leader, send a kv with empty value
-		// so that the follower can delete it
-		for gidx < len(gkeys.Keys) && bytes.Compare(gkeys.Keys[gidx].Key, k) < 0 {
-			kv := &intern.KV{Key: gkeys.Keys[gidx].Key}
-			gidx++
-			if err := stream.Send(kv); err != nil {
-				return err
-			}
-		}
-
-		// Found a match, skip if version is <= version on follower
-		if gidx < len(gkeys.Keys) && bytes.Equal(k, gkeys.Keys[gidx].Key) {
-			t := gkeys.Keys[gidx]
-			gidx++
-			if iterItem.Version() <= t.Timestamp {
-				it.Next()
-				continue
-			}
+		pk := x.Parse(prevKey)
+		// Schema keys always have version 1. So we send it irrespective of the timestamp.
+		if iterItem.Version() <= clientTs && !pk.IsSchema() {
+			it.Next()
+			continue
 		}
 
 		// This key is not present in follower.
-		if err := sendKV(stream, it); err != nil {
+		if err := sendKV(stream, it, pk); err != nil {
 			return err
 		}
 		count++
 	} // end of iterator
-	// All these keys are not present in leader, so mark them for deletion
-	for gidx < len(gkeys.Keys) {
-		kv := &intern.KV{Key: gkeys.Keys[gidx].Key}
-		gidx++
-		if err := stream.Send(kv); err != nil {
-			return err
-		}
-	}
 	if tr, ok := trace.FromContext(stream.Context()); ok {
 		tr.LazyPrintf("Sent %d keys to client. Done.\n", count)
 	}
