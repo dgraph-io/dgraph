@@ -275,7 +275,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	x.Checkf(err, "Error while creating badger KV posting store")
 
 	connzero, err := setupConnection(opt.zero, true)
-	x.Checkf(err, "While trying to setup connection to Zero")
+	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(
 		kv,

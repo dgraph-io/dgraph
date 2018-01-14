@@ -88,7 +88,7 @@ func newLoader(opt options) *loader {
 		grpc.WithBlock(),
 		grpc.WithInsecure(),
 		grpc.WithTimeout(time.Minute))
-	x.Check(err)
+	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),

@@ -124,6 +124,16 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
+func handleError(err error) {
+	errString := err.Error()
+	// Irrecoverable
+	if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
+		x.Fatalf(errString)
+	} else if err != y.ErrAborted {
+		x.Printf("Error while mutating %v\n", errString)
+	}
+}
+
 func (l *loader) infinitelyRetry(req api.Mutation) {
 	defer l.wg.Done()
 	for {
@@ -135,13 +145,7 @@ func (l *loader) infinitelyRetry(req api.Mutation) {
 			atomic.AddUint64(&l.txns, 1)
 			return
 		}
-		errString := err.Error()
-		// Irrecoverable
-		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
-			x.Fatalf(errString)
-		} else if err != y.ErrAborted {
-			x.Printf("Error while mutating %v\n", errString)
-		}
+		handleError(err)
 		atomic.AddUint64(&l.aborts, 1)
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -157,13 +161,7 @@ func (l *loader) request(req api.Mutation) {
 		atomic.AddUint64(&l.txns, 1)
 		return
 	}
-	errString := err.Error()
-	// Irrecoverable
-	if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
-		x.Fatalf(errString)
-	} else if err != y.ErrAborted {
-		x.Printf("Error while mutating %v\n", errString)
-	}
+	handleError(err)
 	atomic.AddUint64(&l.aborts, 1)
 	l.wg.Add(1)
 	go l.infinitelyRetry(req)
