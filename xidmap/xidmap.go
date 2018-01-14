@@ -183,7 +183,7 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 func (s *shard) add(xid string, uid uint64, persisted bool) {
 	lruSizePerShard := s.xm.opt.LRUSize / s.xm.opt.NumShards
 	if s.queue.Len() >= lruSizePerShard && len(s.beingEvicted) == 0 {
-		s.evict()
+		s.evict(0.5)
 	}
 
 	m := &mapping{
@@ -195,9 +195,14 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 	s.elems[xid] = elem
 }
 
-func (s *shard) evict() {
-	const evictRatio = 0.5
-	evict := int(float64(s.queue.Len()) * evictRatio)
+func (m *XidMap) EvictAll() {
+	for _, s := range m.shards {
+		s.evict(1.0)
+	}
+}
+
+func (s *shard) evict(ratio float64) {
+	evict := int(float64(s.queue.Len()) * ratio)
 	s.beingEvicted = make(map[string]uint64)
 	txn := s.xm.kv.NewTransaction(true)
 	defer txn.Discard()
