@@ -87,7 +87,7 @@ func newLoader(opt options) *loader {
 	zero, err := grpc.Dial(opt.ZeroAddr,
 		grpc.WithBlock(),
 		grpc.WithInsecure(),
-		grpc.WithTimeout(10*time.Second))
+		grpc.WithTimeout(time.Minute))
 	x.Check(err)
 	st := &state{
 		opt:    opt,
