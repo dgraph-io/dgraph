@@ -22,9 +22,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/client"
@@ -32,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+	"github.com/dgraph-io/dgraph/y"
 )
 
 var (
@@ -83,7 +88,8 @@ type loader struct {
 	// To get time elapsel.
 	start time.Time
 
-	reqs chan api.Mutation
+	reqs     chan api.Mutation
+	zeroconn *grpc.ClientConn
 }
 
 func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
@@ -118,6 +124,16 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
+func handleError(err error) {
+	errString := err.Error()
+	// Irrecoverable
+	if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
+		x.Fatalf(errString)
+	} else if err != y.ErrAborted {
+		x.Printf("Error while mutating %v\n", errString)
+	}
+}
+
 func (l *loader) infinitelyRetry(req api.Mutation) {
 	defer l.wg.Done()
 	for {
@@ -129,6 +145,7 @@ func (l *loader) infinitelyRetry(req api.Mutation) {
 			atomic.AddUint64(&l.txns, 1)
 			return
 		}
+		handleError(err)
 		atomic.AddUint64(&l.aborts, 1)
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -144,6 +161,7 @@ func (l *loader) request(req api.Mutation) {
 		atomic.AddUint64(&l.txns, 1)
 		return
 	}
+	handleError(err)
 	atomic.AddUint64(&l.aborts, 1)
 	l.wg.Add(1)
 	go l.infinitelyRetry(req)

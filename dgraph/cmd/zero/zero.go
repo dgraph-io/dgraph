@@ -122,12 +122,18 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 	if s.state == nil {
 		return nil
 	}
-	group := s.state.Groups[gid]
-	if group == nil {
-		return nil
+	var members map[uint64]*intern.Member
+	if gid == 0 {
+		members = s.state.Zeros
+	} else {
+		group := s.state.Groups[gid]
+		if group == nil {
+			return nil
+		}
+		members = group.Members
 	}
 	var healthyPool *conn.Pool
-	for _, m := range group.Members {
+	for _, m := range members {
 		if pl, err := conn.Get().Get(m.Addr); err == nil {
 			healthyPool = pl
 			if m.Leader {
