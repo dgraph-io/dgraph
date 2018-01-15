@@ -703,7 +703,7 @@ volumes:
 ```
 
 
-## Kubernetes
+## Kubernetes (v1.8.4)
 
 {{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
 Instructions for running with TLS would be added soon.{{% /notice %}}
@@ -750,10 +750,10 @@ kubectl get pods
 Output:
 ```
 NAME       READY     STATUS    RESTARTS   AGE
-dgraph-0   2/2       Running   0          1m
+dgraph-0   3/3       Running   0          1m
 ```
 
-{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs -f dgraph-0 server` and `kubectl logs -f dgraph-0 zero`.{{% /notice %}}
+{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs -f dgraph-0 <container_name>`. For example, try `kubectl logs -f dgraph-0 server` for server logs.{{% /notice %}}
 
 * Test the setup
 
@@ -761,9 +761,10 @@ Port forward from your local machine to the pod
 
 ```sh
 kubectl port-forward dgraph-0 8080
+kubectl port-forward dgraph-0 8081
 ```
 
-Go to `http://localhost:8080` and verify Dgraph is working as expected.
+Go to `http://localhost:8081` and verify Dgraph is working as expected.
 
 {{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
 
@@ -821,6 +822,7 @@ service "dgraph-zero" created
 service "dgraph-server" created
 statefulset "dgraph-zero" created
 statefulset "dgraph-server" created
+deployment "dgraph-ratel" created
 ```
 
 * Confirm that the pods were created successfully.
@@ -831,11 +833,13 @@ kubectl get pods
 
 Output:
 ```sh
-NAME              READY     STATUS    RESTARTS   AGE
-dgraph-server-0   1/1       Running   0          1m
-dgraph-server-1   1/1       Running   0          1m
-dgraph-server-2   1/1       Running   0          53s
-dgraph-zero-0     1/1       Running   0          1m
+NAME                            READY     STATUS    RESTARTS   AGE
+dgraph-ratel-6bb4f847b6-4xv65   1/1       Running   0          9s
+dgraph-server-0                 1/1       Running   0          2m
+dgraph-server-1                 1/1       Running   0          2m
+dgraph-server-2                 1/1       Running   0          1m
+dgraph-zero-0                   1/1       Running   0          2m
+
 ```
 
 {{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs -f dgraph-server-0` and `kubectl logs -f dgraph-zero-0`.{{% /notice %}}
@@ -846,9 +850,10 @@ Port forward from your local machine to the pod
 
 ```sh
 kubectl port-forward dgraph-server-0 8080
+kubectl port-forward dgraph-ratel-6bb4f847b6-4xv65 8081
 ```
 
-Go to `http://localhost:8080` and verify Dgraph is working as expected.
+Go to `http://localhost:8081` and verify Dgraph is working as expected.
 
 {{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
 
@@ -889,6 +894,7 @@ Output:
 service "dgraph-public" created
 service "dgraph" created
 statefulset "dgraph" created
+deployment "dgraph-ratel" created
 ```
 
 After this you can follow other steps from [cluster-setup]({{< relref "#cluster-setup">}}) to verify
