@@ -102,7 +102,7 @@ func TestClusterSnapshot(t *testing.T) {
 	quickCheck(err)
 	if string(out) != "1120879\n" {
 		shutdownCluster()
-		t.Fatal("Export count mismatch. Got: %s", string(out))
+		t.Fatalf("Export count mismatch. Got: %s", string(out))
 	}
 
 	schemaFile, err := findFile(filepath.Join(dgraphDir, "export"), ".schema.gz")
@@ -111,7 +111,7 @@ func TestClusterSnapshot(t *testing.T) {
 	quickCheck(err)
 	if string(out) != "10\n" {
 		shutdownCluster()
-		t.Fatal("Schema export count mismatch. Got: %s", string(out))
+		t.Fatalf("Schema export count mismatch. Got: %s", string(out))
 	}
 }
 
