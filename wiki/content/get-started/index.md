@@ -58,12 +58,16 @@ The easiest way to get Dgraph up and running is using Docker Compose. Follow the
 already.
 
 ```
-version: "3"
+version: "3.2"
 services:
   zero:
     image: dgraph/dgraph:latest
     volumes:
-      - /tmp/data:/dgraph
+      - type: volume
+        source: dgraph
+        target: /dgraph
+        volume:
+          nocopy: true
     ports:
       - 5080:5080
       - 6080:6080
@@ -72,7 +76,11 @@ services:
   server:
     image: dgraph/dgraph:latest
     volumes:
-      - /tmp/data:/dgraph
+      - type: volume
+        source: dgraph
+        target: /dgraph
+        volume:
+          nocopy: true
     ports:
       - 8080:8080
       - 9080:9080
@@ -81,10 +89,17 @@ services:
   ratel:
     image: dgraph/dgraph:latest
     volumes:
-      - /tmp/data:/dgraph
+      - type: volume
+        source: dgraph
+        target: /dgraph
+        volume:
+          nocopy: true
     ports:
       - 8081:8081
     command: dgraph-ratel
+
+volumes:
+  dgraph:
 ```
 
 {{% notice "note" %}}You should change `/tmp/data` to the path of the folder where you want your data to
