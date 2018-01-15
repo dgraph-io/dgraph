@@ -1,4 +1,3 @@
-*.rdf.gz
 /build
 /installs
 /coverage.out

@@ -1091,6 +1091,10 @@ The `dgraph live` binary is a small helper program which reads RDF NQuads from a
 
 Live loader correctly handles assigning unique IDs to blank nodes across multiple files, and persists them to disk to save memory and in case the loader was re-run.
 
+
+{{% notice "note" %}} Live loader writes the xid->uid mapping in the `x` directory, which can reused
+given that live loader completed successfully in the previous run.{{% /notice %}}
+
 ```sh
 $ dgraph live --help # To see the available flags.
 
@@ -1098,7 +1102,7 @@ $ dgraph live --help # To see the available flags.
 $ dgraph live -r <path-to-rdf-gzipped-file>
 
 # Read RDFs and a schema file and send to Dgraph running at given address
-$ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
+$ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port> -z <dgraph-zero-address:grpc_port>
 ```
 
 ### Bulk Loader

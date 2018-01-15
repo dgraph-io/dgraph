@@ -101,8 +101,6 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		"--schema", schemaFile,
 		"--dgraph", ":"+s.liveCluster.dgraphPort,
 		"--zero", ":"+s.liveCluster.zeroPort,
-		"--conc=1", // use only 1 concurrent transaction to avoid txn conflicts
-		"--batch=10000",
 	)
 	liveCmd.Dir = liveDir
 	liveCmd.Stdout = os.Stdout
