@@ -22,6 +22,9 @@ spec:
   - port: 9080
     targetPort: 9080
     name: grpc
+  - port: 8081
+    targetPort: 8081
+    name: ratel-http
   selector:
     app: dgraph
 ---
@@ -121,3 +124,26 @@ spec:
       resources:
         requests:
           storage: 5Gi
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: dgraph-ratel
+  labels:
+    app: dgraph
+spec:
+  selector:
+    matchLabels:
+      app: dgraph
+  template:
+    metadata:
+      labels:
+        app: dgraph
+    spec:
+      containers:
+      - name: ratel
+        image: dgraph/dgraph:latest
+        ports:
+        - containerPort: 8081
+        command:
+          - dgraph-ratel

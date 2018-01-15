@@ -22,6 +22,9 @@ spec:
   - port: 9080
     targetPort: 9080
     name: grpc
+  - port: 8081
+    targetPort: 8081
+    name: ratel-http
   selector:
     app: dgraph
 ---
@@ -57,6 +60,14 @@ spec:
         app: dgraph
     spec:
       containers:
+      - name: ratel
+        image: dgraph/dgraph:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8081
+          name: ratel-http
+        command:
+          - dgraph-ratel
       - name: zero
         image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent
