@@ -190,7 +190,9 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 
 func (m *XidMap) EvictAll() {
 	for _, s := range m.shards {
+		s.Lock()
 		s.evict(1.0)
+		s.Unlock()
 	}
 }
 
