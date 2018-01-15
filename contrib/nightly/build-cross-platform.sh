@@ -45,9 +45,9 @@ xgo --go 1.8.3 --targets $xgo_target -ldflags \
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 if [[ $platform == "windows" ]]; then
-  cp dgraph-windows-4.0-amd64.exe $tmp_dir/dgraph.exe
+  mv dgraph-windows-4.0-amd64.exe $tmp_dir/dgraph.exe
 else
-  cp dgraph-darwin-10.9-amd64 $tmp_dir/dgraph
+  mv dgraph-darwin-10.9-amd64 $tmp_dir/dgraph
 fi
 
 
@@ -56,11 +56,11 @@ echo -e "\033[1;33mBuilding ratel binary for $platform\033[0m"
 if [[ $platform == "windows" ]]; then
   GOOS=windows GOARCH=amd64 go build -ldflags \
   "-X $ratel_release=$release_version" -o dgraph-ratel.exe .
-  cp dgraph-ratel.exe $tmp_dir
+  mv dgraph-ratel.exe $tmp_dir
 else
   GOOS=darwin GOARCH=amd64 go build -ldflags \
   "-X $ratel_release=$release_version" -o dgraph-ratel .
-  cp dgraph-ratel $tmp_dir
+  mv dgraph-ratel $tmp_dir
 fi
 popd
 
@@ -73,7 +73,7 @@ tar_file=dgraph-"$platform"-amd64-$release_version.tar.gz
 if [[ $platform == "windows" ]]; then
   tar -zcvf $tar_file -C $tmp_dir .
 else
-  checksum=$(shasum -a 256 dgraph | awk '{print $1}')
+  checksum=$(shasum -a 256 $tmp_dir/dgraph | awk '{print $1}')
   echo "$checksum /usr/local/bin/dgraph" >> $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
 
    checksum=$(shasum -a 256 $tmp_dir/dgraph-ratel | awk '{print $1}')
