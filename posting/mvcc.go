@@ -520,23 +520,23 @@ type TxnPrefixIterator struct {
 }
 
 func NewTxnPrefixIterator(txn *badger.Txn,
-	iterOpts badger.IteratorOptions, prefix []byte) *TxnPrefixIterator {
+	iterOpts badger.IteratorOptions, prefix, key []byte) *TxnPrefixIterator {
 	x.AssertTrue(iterOpts.PrefetchValues == false)
 	txnIt := new(TxnPrefixIterator)
 	txnIt.reverse = iterOpts.Reverse
 	txnIt.prefix = prefix
-	txnIt.badgerIter = txn.NewIterator(iterOpts)
 	txnIt.btreeIter = &bTreeIterator{
 		reverse: iterOpts.Reverse,
 		prefix:  prefix,
 	}
+	txnIt.btreeIter.Seek(key)
+	// Create iterator only after copying the keys from btree, or else there could
+	// be race after creating iterator and before reading btree. Some keys might end up
+	// getting deleted and iterator won't be initialized with new memtbales.
+	txnIt.badgerIter = txn.NewIterator(iterOpts)
+	txnIt.badgerIter.Seek(key)
+	txnIt.Next()
 	return txnIt
-}
-
-func (t *TxnPrefixIterator) Seek(key []byte) {
-	t.btreeIter.Seek(key)
-	t.badgerIter.Seek(key)
-	t.Next()
 }
 
 func (t *TxnPrefixIterator) Valid() bool {

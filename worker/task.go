@@ -1520,10 +1520,10 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 		Attr: cp.attr,
 	}
 	countPrefix := pk.CountPrefix(cp.reverse)
-	it := posting.NewTxnPrefixIterator(txn, itOpt, countPrefix)
+	it := posting.NewTxnPrefixIterator(txn, itOpt, countPrefix, countKey)
 	defer it.Close()
 
-	for it.Seek(countKey); it.Valid(); it.Next() {
+	for ; it.Valid(); it.Next() {
 		key := it.Key()
 		nk := make([]byte, len(key))
 		copy(nk, key)
@@ -1559,9 +1559,9 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	}
 
 	w := 0
-	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix)
+	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix, startKey)
 	defer it.Close()
-	for it.Seek(startKey); it.Valid(); it.Next() {
+	for ; it.Valid(); it.Next() {
 		pl := posting.GetLru(it.Key())
 		if pl != nil && pl.IsEmpty() {
 			// empty pl's can be present in lru

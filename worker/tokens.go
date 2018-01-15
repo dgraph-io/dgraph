@@ -155,9 +155,10 @@ func getInequalityTokens(readTs uint64, attr, f string,
 
 	var out []string
 	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
-	it := posting.NewTxnPrefixIterator(txn, itOpt, indexPrefix)
+	seekKey := x.IndexKey(attr, ineqToken)
+	it := posting.NewTxnPrefixIterator(txn, itOpt, indexPrefix, seekKey)
 	defer it.Close()
-	for it.Seek(x.IndexKey(attr, ineqToken)); it.Valid(); it.Next() {
+	for ; it.Valid(); it.Next() {
 		key := it.Key()
 		k := x.Parse(key)
 		if k == nil {

@@ -204,9 +204,8 @@ func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 		// We need to reach the last key of this index type.
 		seekKey = x.IndexKey(order.Attr, string(tokenizer.Identifier()+1))
 	}
-	it := posting.NewTxnPrefixIterator(txn, iterOpt, indexPrefix)
+	it := posting.NewTxnPrefixIterator(txn, iterOpt, indexPrefix, seekKey)
 	defer it.Close()
-	it.Seek(seekKey)
 
 BUCKETS:
 
