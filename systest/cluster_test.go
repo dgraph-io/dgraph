@@ -97,6 +97,7 @@ func TestClusterSnapshot(t *testing.T) {
 	}
 
 	dataFile, err := findFile(filepath.Join(dgraphDir, "export"), ".rdf.gz")
+	quickCheck(err)
 	cmd := fmt.Sprintf("zcat %s | wc -l", dataFile)
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	quickCheck(err)
@@ -106,6 +107,7 @@ func TestClusterSnapshot(t *testing.T) {
 	}
 
 	schemaFile, err := findFile(filepath.Join(dgraphDir, "export"), ".schema.gz")
+	quickCheck(err)
 	cmd = fmt.Sprintf("zcat %s | wc -l", schemaFile)
 	out, err = exec.Command("sh", "-c", cmd).Output()
 	quickCheck(err)

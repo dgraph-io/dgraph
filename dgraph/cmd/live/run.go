@@ -347,6 +347,8 @@ func run() {
 	}
 	dgraphClient := client.NewDgraphClient(clients...)
 	l := setup(bmOpts, dgraphClient)
+	defer l.kv.Close()
+	defer l.alloc.EvictAll()
 
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
