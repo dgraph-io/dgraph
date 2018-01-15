@@ -400,7 +400,8 @@ func (s *Server) Connect(ctx context.Context,
 		}
 		// We either don't have any groups, or don't have any groups which need another member.
 		m.GroupId = s.nextGroup
-		s.nextGroup++
+		// We shouldn't increase nextGroup here as we don't know whether we have enough
+		// replicas until proposal is committed and can cause issues due to race.
 		proposal.Member = m
 		return proposal
 	}

@@ -300,6 +300,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		go conn.Get().Connect(p.Member.Addr)
 
 		group.Members[p.Member.Id] = p.Member
+		// Increment nextGroup when we have enough replicas
+		if p.Member.GroupId == n.server.nextGroup &&
+			len(group.Members) >= n.server.NumReplicas {
+			n.server.nextGroup++
+		}
 		if p.Member.Leader {
 			// Unset leader flag for other nodes, there can be only one
 			// leader at a time.
