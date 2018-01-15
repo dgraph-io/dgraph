@@ -5809,24 +5809,29 @@ func (z *zeroServer) Connect(ctx context.Context, in *intern.Member) (*intern.Co
 
 // Used by sync membership
 func (z *zeroServer) Update(stream intern.Zero_UpdateServer) error {
-	first := true
+	m := &intern.MembershipState{}
+	m.Zeros = make(map[uint64]*intern.Member)
+	m.Zeros[2] = &intern.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
+	m.Groups = make(map[uint32]*intern.Group)
+	g := &intern.Group{}
+	g.Members = make(map[uint64]*intern.Member)
+	g.Members[1] = &intern.Member{Id: 1, Addr: "localhost:12345"}
+	// Store tablets information to avoid race.
+	g.Tablets = make(map[string]*intern.Tablet)
+	m.Groups[1] = g
+	// Dgraph server calls should serve and updates the information about the
+	// tablet it should serve immediately without waiting for stream, If stream
+	// doesn't send tablet information, dgraph will ask again but there could be
+	// race between asking, updating locally and stream updating the state with
+	// tablet information before reading.
 	for {
-		_, err := stream.Recv()
+		group, err := stream.Recv()
 		if err != nil {
 			return err
 		}
-		if !first {
-			continue
+		for attr := range group.Tablets {
+			g.Tablets[attr] = &intern.Tablet{Predicate: attr, GroupId: 1}
 		}
-		first = false
-		m := &intern.MembershipState{}
-		m.Zeros = make(map[uint64]*intern.Member)
-		m.Zeros[2] = &intern.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
-		m.Groups = make(map[uint32]*intern.Group)
-		g := &intern.Group{}
-		g.Members = make(map[uint64]*intern.Member)
-		g.Members[1] = &intern.Member{Id: 1, Addr: "localhost:12345"}
-		m.Groups[1] = g
 		stream.Send(m)
 	}
 }
