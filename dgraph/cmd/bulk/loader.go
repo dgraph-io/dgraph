@@ -80,26 +80,30 @@ type loader struct {
 	*state
 	mappers []*mapper
 	xidDB   *badger.DB
-	zeros   *xidmap.ZeroPool
+	zero    *grpc.ClientConn
 }
 
 func newLoader(opt options) *loader {
+	x.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
+	zero, err := grpc.Dial(opt.ZeroAddr,
+		grpc.WithBlock(),
+		grpc.WithInsecure(),
+		grpc.WithTimeout(time.Minute))
+	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
+		writeTs:    getWriteTimestamp(zero),
 	}
 	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
-		zeros: xidmap.NewZeroPool(func(addr string) (*grpc.ClientConn, error) {
-			return grpc.Dial(addr, grpc.WithInsecure())
-		}, opt.ZeroAddr),
+		zero:    zero,
 	}
-	ld.state.writeTs = ld.getWriteTimestamp()
 	for i := 0; i < opt.NumGoroutines; i++ {
 		ld.mappers[i] = newMapper(st)
 	}
@@ -107,16 +111,14 @@ func newLoader(opt options) *loader {
 	return ld
 }
 
-func (ld *loader) getWriteTimestamp() uint64 {
+func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
+	client := intern.NewZeroClient(zero)
 	for {
-		client, err := ld.zeros.Leader()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
+		cancel()
 		if err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
-			cancel()
-			if err == nil {
-				return ts.GetStartId()
-			}
+			return ts.GetStartId()
 		}
 		x.Printf("error communicating with dgraph zero, retrying: %v", err)
 		time.Sleep(time.Second)
@@ -205,7 +207,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, ld.zeros, xidmap.Options{
+	ld.xids = xidmap.New(ld.xidDB, ld.zero, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})
