@@ -202,12 +202,14 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *intern.List, groupVal [
 	}
 }
 
-func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGraph) error {
+func (sg *SubGraph) formResult(ul *intern.List, doneVars map[string]varValue,
+	path []*SubGraph) (*groupResults, error) {
+
 	var dedupMap dedup
 	var pathNode *SubGraph
+	res := new(groupResults)
+
 	for _, child := range sg.Children {
-		// Find a better name for ignoreResult.
-		// Aggregation children would be skipped because of this condition.
 		if !child.Params.ignoreResult {
 			continue
 		}
@@ -217,20 +219,11 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 			attr = child.Attr
 		}
 		if len(child.DestUIDs.Uids) != 0 {
-			// It's a UID node.
-			for i := 0; i < len(child.uidMatrix); i++ {
-				srcUid := child.SrcUIDs.Uids[i]
-				ul := child.uidMatrix[i]
-				for _, uid := range ul.Uids {
-					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
-				}
-			}
-			pathNode = child
 		} else {
 			// It's a value node.
 			for i, v := range child.valueMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
-				if len(v.Values) == 0 {
+				if len(v.Values) == 0 || algo.IndexOf(ul, srcUid) < 0 {
 					continue
 				}
 				val, err := convertTo(v.Values[0])
@@ -243,7 +236,6 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 	}
 
 	// Create all the groups here.
-	res := new(groupResults)
 	res.formGroups(dedupMap, &intern.List{}, []groupPair{})
 
 	// Go over the groups and aggregate the values.
@@ -255,7 +247,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 		for _, grp := range res.group {
 			err := grp.aggregateChild(child)
 			if err != nil && err != ErrEmptyVal {
-				return err
+				return res, err
 			}
 		}
 		chVar := child.Params.Var
@@ -266,12 +258,12 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 					continue
 				}
 				if len(grp.keys) > 1 {
-					return x.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
+					return res, x.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
 				}
 				uidVal := grp.keys[0].key.Value
 				uid, ok := uidVal.(uint64)
 				if !ok {
-					return x.Errorf("Vars can be assigned only when grouped by UID attribute")
+					return res, x.Errorf("Vars can be assigned only when grouped by UID attribute")
 				}
 				// grp.aggregates could be empty if schema conversion failed during aggregation
 				if len(grp.aggregates) > 0 {
@@ -289,7 +281,61 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 	sort.Slice(res.group, func(i, j int) bool {
 		return groupLess(res.group[i], res.group[j])
 	})
-	sg.GroupbyRes = res
+
+	return res, nil
+}
+
+func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGraph) error {
+	for _, ul := range sg.uidMatrix {
+		// We need to process groupby for each list as grouping needs to happen for each path of the
+		// tree.
+		// Here we'll first try to aggregate the values and uidmatrix corresponding to uidList from
+		// all sg.Children.
+
+		r, err := sg.formResult(ul, doneVars, path)
+		if err != nil {
+			return err
+		}
+		sg.GroupbyRes = append(sg.GroupbyRes, r)
+	}
+
+	// for _, child := range sg.Children {
+	// 	// Find a better name for ignoreResult.
+	// 	// Aggregation children would be skipped because of this condition.
+	// 	if !child.Params.ignoreResult {
+	// 		continue
+	// 	}
+
+	// 	attr := child.Params.Alias
+	// 	if attr == "" {
+	// 		attr = child.Attr
+	// 	}
+	// 	if len(child.DestUIDs.Uids) != 0 {
+	// 		// It's a UID node.
+	// 		for i := 0; i < len(child.uidMatrix); i++ {
+	// 			srcUid := child.SrcUIDs.Uids[i]
+	// 			ul := child.uidMatrix[i]
+	// 			for _, uid := range ul.Uids {
+	// 				dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
+	// 			}
+	// 		}
+	// 		pathNode = child
+	// 	} else {
+	// 		// It's a value node.
+	// 		for i, v := range child.valueMatrix {
+	// 			srcUid := child.SrcUIDs.Uids[i]
+	// 			if len(v.Values) == 0 {
+	// 				continue
+	// 			}
+	// 			val, err := convertTo(v.Values[0])
+	// 			if err != nil {
+	// 				continue
+	// 			}
+	// 			dedupMap.addValue(attr, val, srcUid)
+	// 		}
+	// 	}
+	// }
+
 	return nil
 }
 

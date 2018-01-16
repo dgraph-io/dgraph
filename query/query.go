@@ -172,7 +172,7 @@ type SubGraph struct {
 	uidMatrix    []*intern.List
 	facetsMatrix []*intern.FacetsList
 	ExpandPreds  []*intern.ValueList
-	GroupbyRes   *groupResults
+	GroupbyRes   []*groupResults // one result for each uid list.
 	LangTags     []*intern.LangList
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs

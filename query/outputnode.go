@@ -380,19 +380,21 @@ type attrVal struct {
 
 func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
 	// Don't add empty groupby
-	if len(sg.GroupbyRes.group) == 0 {
+	if len(sg.GroupbyRes) == 0 {
 		return
 	}
 	g := n.New(fname)
-	for _, grp := range sg.GroupbyRes.group {
-		uc := g.New("@groupby")
-		for _, it := range grp.keys {
-			uc.AddValue(it.attr, it.key)
+	for _, gr := range sg.GroupbyRes {
+		for _, grp := range gr.group {
+			uc := g.New("@groupby")
+			for _, it := range grp.keys {
+				uc.AddValue(it.attr, it.key)
+			}
+			for _, it := range grp.aggregates {
+				uc.AddValue(it.attr, it.key)
+			}
+			g.AddListChild("@groupby", uc)
 		}
-		for _, it := range grp.aggregates {
-			uc.AddValue(it.attr, it.key)
-		}
-		g.AddListChild("@groupby", uc)
 	}
 	n.AddListChild(fname, g)
 }

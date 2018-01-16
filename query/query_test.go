@@ -1328,6 +1328,22 @@ func TestGroupByMulti2(t *testing.T) {
 		js)
 }
 
+func TestGroupByMultiParents(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(1,23,31)) {
+				name
+				friend @groupby(name, age) {
+					count(uid)
+				}
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	fmt.Println(string(js))
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 	populateGraph(t)
 	query := `
