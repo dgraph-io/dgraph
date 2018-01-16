@@ -58,8 +58,13 @@ func TestClusterSnapshot(t *testing.T) {
 		t.Fatalf("Couldn't add server: %v\n", err)
 	}
 
+	dur := time.Minute
+	// TODO - Remove later when we move nightly to Teamcity
+	if ok := os.Getenv("TRAVIS"); ok {
+		dur = 2 * dur
+	}
 	// Approx time for snapshot to be transferred to the second instance.
-	time.Sleep(time.Minute)
+	time.Sleep(dur)
 
 	cluster.dgraph.Process.Signal(syscall.SIGINT)
 	if _, err = cluster.dgraph.Process.Wait(); err != nil {
