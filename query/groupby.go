@@ -219,6 +219,18 @@ func (sg *SubGraph) formResult(ul *intern.List, doneVars map[string]varValue,
 			attr = child.Attr
 		}
 		if len(child.DestUIDs.Uids) != 0 {
+			// 		// It's a UID node.
+			for i := 0; i < len(child.uidMatrix); i++ {
+				srcUid := child.SrcUIDs.Uids[i]
+				if algo.IndexOf(ul, srcUid) < 0 {
+					continue
+				}
+				ul := child.uidMatrix[i]
+				for _, uid := range ul.Uids {
+					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
+				}
+			}
+			pathNode = child
 		} else {
 			// It's a value node.
 			for i, v := range child.valueMatrix {
@@ -298,43 +310,6 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 		}
 		sg.GroupbyRes = append(sg.GroupbyRes, r)
 	}
-
-	// for _, child := range sg.Children {
-	// 	// Find a better name for ignoreResult.
-	// 	// Aggregation children would be skipped because of this condition.
-	// 	if !child.Params.ignoreResult {
-	// 		continue
-	// 	}
-
-	// 	attr := child.Params.Alias
-	// 	if attr == "" {
-	// 		attr = child.Attr
-	// 	}
-	// 	if len(child.DestUIDs.Uids) != 0 {
-	// 		// It's a UID node.
-	// 		for i := 0; i < len(child.uidMatrix); i++ {
-	// 			srcUid := child.SrcUIDs.Uids[i]
-	// 			ul := child.uidMatrix[i]
-	// 			for _, uid := range ul.Uids {
-	// 				dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
-	// 			}
-	// 		}
-	// 		pathNode = child
-	// 	} else {
-	// 		// It's a value node.
-	// 		for i, v := range child.valueMatrix {
-	// 			srcUid := child.SrcUIDs.Uids[i]
-	// 			if len(v.Values) == 0 {
-	// 				continue
-	// 			}
-	// 			val, err := convertTo(v.Values[0])
-	// 			if err != nil {
-	// 				continue
-	// 			}
-	// 			dedupMap.addValue(attr, val, srcUid)
-	// 		}
-	// 	}
-	// }
 
 	return nil
 }

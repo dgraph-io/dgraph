@@ -65,7 +65,7 @@ type outputNode interface {
 	IsEmpty() bool
 
 	addCountAtRoot(*SubGraph)
-	addGroupby(*SubGraph, string)
+	addGroupby(*SubGraph, *groupResults, string)
 	addAggregations(*SubGraph) error
 }
 
@@ -378,23 +378,21 @@ type attrVal struct {
 	val  *fastJsonNode
 }
 
-func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
+func (n *fastJsonNode) addGroupby(sg *SubGraph, res *groupResults, fname string) {
 	// Don't add empty groupby
-	if len(sg.GroupbyRes) == 0 {
+	if len(res.group) == 0 {
 		return
 	}
 	g := n.New(fname)
-	for _, gr := range sg.GroupbyRes {
-		for _, grp := range gr.group {
-			uc := g.New("@groupby")
-			for _, it := range grp.keys {
-				uc.AddValue(it.attr, it.key)
-			}
-			for _, it := range grp.aggregates {
-				uc.AddValue(it.attr, it.key)
-			}
-			g.AddListChild("@groupby", uc)
+	for _, grp := range res.group {
+		uc := g.New("@groupby")
+		for _, it := range grp.keys {
+			uc.AddValue(it.attr, it.key)
 		}
+		for _, it := range grp.aggregates {
+			uc.AddValue(it.attr, it.key)
+		}
+		g.AddListChild("@groupby", uc)
 	}
 	n.AddListChild(fname, g)
 }
@@ -449,7 +447,11 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	}
 
 	if sg.Params.isGroupBy {
-		n.addGroupby(sg, sg.Params.Alias)
+		if len(sg.GroupbyRes) == 0 {
+			// TODO - Maybe return an error.
+			return nil
+		}
+		n.addGroupby(sg, sg.GroupbyRes[0], sg.Params.Alias)
 		return nil
 	}
 

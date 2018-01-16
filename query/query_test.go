@@ -1341,7 +1341,7 @@ func TestGroupByMultiParents(t *testing.T) {
 		}
 	`
 	js := processToFastJsonNoErr(t, query)
-	fmt.Println(string(js))
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","friend":[{"@groupby":[{"name":"Andrea","age":19,"count":1},{"name":"Daryl Dixon","age":17,"count":1},{"name":"Glenn Rhee","age":15,"count":1},{"name":"Rick Grimes","age":15,"count":1}]}]},{"name":"Rick Grimes","friend":[{"@groupby":[{"name":"Michonne","age":38}]}]},{"name":"Andrea","friend":[{"@groupby":[{"name":"Glenn Rhee","age":15}]}]}]}}`, js)
 }
 
 func TestMultiEmptyBlocks(t *testing.T) {

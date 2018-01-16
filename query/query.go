@@ -388,10 +388,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if pc.Params.ignoreResult {
 			continue
 		}
-		if pc.Params.isGroupBy {
-			dst.addGroupby(pc, pc.fieldName())
-			continue
-		}
 		if pc.IsInternal() {
 			if pc.Params.Expand != "" {
 				continue
@@ -412,6 +408,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
+			continue
+		}
+		if pc.Params.isGroupBy {
+			if len(pc.GroupbyRes) <= idx {
+				continue
+			}
+			dst.addGroupby(pc, pc.GroupbyRes[idx], pc.fieldName())
 			continue
 		}
 
