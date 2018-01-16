@@ -60,7 +60,7 @@ func TestClusterSnapshot(t *testing.T) {
 
 	dur := time.Minute
 	// TODO - Remove later when we move nightly to Teamcity
-	if ok := os.Getenv("TRAVIS"); ok {
+	if ok := os.Getenv("TRAVIS"); ok == "true" {
 		dur = 2 * dur
 	}
 	// Approx time for snapshot to be transferred to the second instance.
