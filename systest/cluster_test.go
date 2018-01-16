@@ -73,13 +73,18 @@ func TestClusterSnapshot(t *testing.T) {
 	}
 
 	cluster.dgraph.Process = nil
+	fmt.Println("Trying to restart Dgraph Server")
 	if err := cluster.dgraph.Start(); err != nil {
 		shutdownCluster()
 		t.Fatalf("Couldn't start Dgraph server again: %v\n", err)
 	}
 
+	dur = 15 * time.Second
+	if ok := os.Getenv("TRAVIS"); ok == "true" {
+		dur = 2 * dur
+	}
 	// Wait for leader election to happen again.
-	time.Sleep(15 * time.Second)
+	time.Sleep(dur)
 
 	quickCheck := func(err error) {
 		if err != nil {
