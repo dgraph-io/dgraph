@@ -32,7 +32,7 @@ env:
 before_script:
 - go get github.com/mattn/goveralls
 script:
-- if [ "$TRAVIS" == true ]; then
+- if [ "$TRAVIS_EVENT_TYPE" == "cron" ] || [ ! -z "$TRAVIS_TAG"]; then
   bash contrib/scripts/cover.sh $HOME/build coverage.out || travis_terminate 1;
   goveralls -service=travis-ci -coverprofile=coverage.out || true;
   bash contrib/scripts/load-test.sh $HOME/build || travis_terminate 1;
