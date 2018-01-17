@@ -71,7 +71,8 @@ type Txn struct {
 	deltas []delta
 	// Stores list of proposal indexes belonging to the transaction, the watermark would
 	// be marked as done only when it's committed.
-	Indices []uint64
+	Indices    []uint64
+	nextKeyIdx int
 }
 
 type transactions struct {
@@ -230,18 +231,16 @@ func (t *Txn) AddDelta(key []byte, p *intern.Posting, ignore bool) {
 func (t *Txn) Fill(ctx *api.TxnContext) {
 	t.Lock()
 	defer t.Unlock()
-	t.fill(ctx)
-}
-
-func (t *Txn) fill(ctx *api.TxnContext) {
 	ctx.StartTs = t.StartTs
-	for _, d := range t.deltas {
+	for i := t.nextKeyIdx; i < len(t.deltas); i++ {
+		d := t.deltas[i]
 		if d.ignoreConflict {
 			continue // Ignore for conflict detection.
 		}
 		fp := farm.Fingerprint64(d.key)
 		ctx.Keys = append(ctx.Keys, strconv.FormatUint(fp, 36))
 	}
+	t.nextKeyIdx = len(t.deltas)
 }
 
 // Don't call this for schema mutations. Directly commit them.
