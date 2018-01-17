@@ -21,6 +21,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Fix snapshot retrieval for new nodes by retrieving it before joining the cluster.
 * Write schema at timestamp 1 in bulk loader.
 * Fix unexpected meta fatal error.
+* Fix groupby result incase the child being grouped open has multiple parents.
 
 ### Changed
 
