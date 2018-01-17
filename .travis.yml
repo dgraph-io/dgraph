@@ -37,5 +37,4 @@ script:
   goveralls -service=travis-ci -coverprofile=coverage.out || true;
   bash contrib/scripts/load-test.sh $HOME/build || travis_terminate 1;
   contrib/tlstest/run.sh;
-  contrib/nightly/upload.sh;
   fi
