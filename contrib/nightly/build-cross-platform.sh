@@ -67,17 +67,17 @@ popd
 echo -e "\n\033[1;34mSize of files: $(du -sh $tmp_dir)\033[0m"
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
-tar_file=dgraph-"$platform"-amd64-$release_version.tar.gz
+tar_file=dgraph-"$platform"-amd64.tar.gz
 
 # Create a tar file with the contents of the dgraph folder (i.e the binaries)
 if [[ $platform == "windows" ]]; then
   tar -zcvf $tar_file -C $tmp_dir .
 else
   checksum=$(shasum -a 256 $tmp_dir/dgraph | awk '{print $1}')
-  echo "$checksum /usr/local/bin/dgraph" >> $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
+  echo "$checksum /usr/local/bin/dgraph" >> $cur_dir/"dgraph-checksum-darwin-amd64.sha256"
 
-   checksum=$(shasum -a 256 $tmp_dir/dgraph-ratel | awk '{print $1}')
-  echo "$checksum /usr/local/bin/dgraph-ratel" >> $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
+  checksum=$(shasum -a 256 $tmp_dir/dgraph-ratel | awk '{print $1}')
+  echo "$checksum /usr/local/bin/dgraph-ratel" >> $cur_dir/"dgraph-checksum-darwin-amd64.sha256"
 
   tar -zcvf $tar_file -C $tmp_dir .
 fi

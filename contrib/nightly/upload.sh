@@ -135,16 +135,16 @@ DGRAPH_VERSION=$(git describe --abbrev=0)
 LATEST_TAG=$(curl -s https://api.github.com/repos/dgraph-io/dgraph/releases/latest \
  | grep "tag_name" | awk '{print $2}' | tr -dc '[:alnum:]-.\n\r' | head -n1)
 DGRAPH_COMMIT=$(git rev-parse HEAD)
-TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
+TAR_FILE="dgraph-${OS}-amd64.tar.gz"
 NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
-OSX_NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-darwin-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
-SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
+OSX_NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-darwin-amd64.tar.gz"
+SHA_FILE_NAME="dgraph-checksum-${OS}-amd64.sha256"
 SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
-OSX_SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-checksum-darwin-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
+OSX_SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/dgraph-checksum-darwin-amd64.sha256"
 CURRENT_BRANCH=$TRAVIS_BRANCH
 CURRENT_DIR=$(pwd)
 
-WINDOWS_TAR_NAME="dgraph-windows-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
+WINDOWS_TAR_NAME="dgraph-windows-amd64.tar.gz"
 NIGHTLY_WINDOWS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/$WINDOWS_TAR_NAME"
 
 update_or_create_asset() {
@@ -202,16 +202,16 @@ upload_assets() {
 	fi
 
 	# We upload the tar binary.
-	local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
+	local name="dgraph-${OS}-amd64.tar.gz"
 	update_or_create_asset $release_id $name ${NIGHTLY_FILE}
 
-	local name="dgraph-darwin-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.tar.gz"
+	local name="dgraph-darwin-amd64.tar.gz"
 	update_or_create_asset $release_id $name ${OSX_NIGHTLY_FILE}
 
-	local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
+	local sha_name="dgraph-checksum-${OS}-amd64.sha256"
 	update_or_create_asset $release_id $sha_name ${SHA_FILE}
 
-	local sha_name="dgraph-checksum-darwin-amd64-${DGRAPH_VERSION}${ASSET_SUFFIX}.sha256"
+	local sha_name="dgraph-checksum-darwin-amd64.sha256"
 	update_or_create_asset $release_id $sha_name ${OSX_SHA_FILE}
 
 	# As asset would be the same on both platforms, we only upload it from linux.

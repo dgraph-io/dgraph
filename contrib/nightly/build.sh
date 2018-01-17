@@ -44,10 +44,10 @@ else
 fi
 
 # Create the checksum file for dgraph binary.
-checksum_file=$cur_dir/"dgraph-checksum-$platform-amd64-$release_version".sha256
+checksum_file=$cur_dir/"dgraph-checksum-$platform-amd64.sha256"
 if [ -f "$checksum_file" ]; then
   rm $checksum_file
-  rm -rf $cur_dir/"dgraph-checksum-darwin-amd64-$release_version".sha256
+  rm -rf $cur_dir/"dgraph-checksum-darwin-amd64.sha256"
 fi
 
 checksum=$($digest_cmd dgraph | awk '{print $1}')
@@ -70,7 +70,7 @@ cp dgraph-ratel $tmp_dir
 echo -e "\n\033[1;34mSize of files after  strip: $(du -sh $tmp_dir)\033[0m"
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
-tar_file=dgraph-"$platform"-amd64-$release_version
+tar_file=dgraph-"$platform"-amd64
 #popd &> /dev/null
 popd
 

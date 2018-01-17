@@ -6,6 +6,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+## [1.0.2] - 2018-01-17
+
 ### Fixed
 
 * Always return predicates of list type in an array.
@@ -28,6 +30,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Remove StartTs field from `api.Operation`.
 * Print error message in live loader if its not ErrAborted. Also, stop using membership state and
 instead use the address given by user.
+* Only send keys corresponding to data that was mutated.
 
 ## [1.0.1] - 2017-12-20
 
