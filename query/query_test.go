@@ -1138,6 +1138,20 @@ func TestGroupByRoot(t *testing.T) {
 		js)
 }
 
+func TestGroupByRootEmpty(t *testing.T) {
+	populateGraph(t)
+	// Predicate agent doesn't exist.
+	query := `
+	{
+		me(func: uid(1, 23, 24, 25, 31)) @groupby(agent) {
+				count(uid)
+		}
+	}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
+
 func TestGroupByRootAlias(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1326,6 +1340,97 @@ func TestGroupByMulti2(t *testing.T) {
 	require.JSONEq(t,
 		`{"data":{"me":[{"Friend":[{"@groupby":[{"Friend":"0x1","Name":"Rick Grimes","Count":1},{"Friend":"0x18","Name":"Andrea","Count":1}]}]}]}}`,
 		js)
+}
+
+func TestGroupByMultiParents(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(1,23,31)) {
+				name
+				friend @groupby(name, age) {
+					count(uid)
+				}
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","friend":[{"@groupby":[{"name":"Andrea","age":19,"count":1},{"name":"Daryl Dixon","age":17,"count":1},{"name":"Glenn Rhee","age":15,"count":1},{"name":"Rick Grimes","age":15,"count":1}]}]},{"name":"Rick Grimes","friend":[{"@groupby":[{"name":"Michonne","age":38,"count":1}]}]},{"name":"Andrea","friend":[{"@groupby":[{"name":"Glenn Rhee","age":15,"count":1}]}]}]}}`, js)
+}
+
+func TestGroupByMultiParents_2(t *testing.T) {
+	populateGraph(t)
+	// We dont have any data for uid 99999
+	query := `
+		{
+			me(func: uid(1,23,99999,31)) {
+				name
+				friend @groupby(name, age) {
+					count(uid)
+				}
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","friend":[{"@groupby":[{"name":"Andrea","age":19,"count":1},{"name":"Daryl Dixon","age":17,"count":1},{"name":"Glenn Rhee","age":15,"count":1},{"name":"Rick Grimes","age":15,"count":1}]}]},{"name":"Rick Grimes","friend":[{"@groupby":[{"name":"Michonne","age":38,"count":1}]}]},{"name":"Andrea","friend":[{"@groupby":[{"name":"Glenn Rhee","age":15,"count":1}]}]}]}}`, js)
+
+}
+
+func TestGroupByAgeMultiParents(t *testing.T) {
+	populateGraph(t)
+	// We dont have any data for uid 99999, 99998.
+	query := `
+		{
+			me(func: uid(23,99999,31, 99998,1)) {
+				name
+				friend @groupby(age) {
+					count(uid)
+				}
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","friend":[{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":15,"count":2}]}]},{"name":"Rick Grimes","friend":[{"@groupby":[{"age":38,"count":1}]}]},{"name":"Andrea","friend":[{"@groupby":[{"age":15,"count":1}]}]}]}}`, js)
+}
+
+func TestGroupByFriendsMultipleParents(t *testing.T) {
+	populateGraph(t)
+	// We dont have any data for uid 99999, 99998.
+	query := `
+		{
+			me(func: uid(23,99999,31, 99998,1)) {
+				name
+				friend @groupby(friend) {
+					count(uid)
+				}
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","friend":[{"@groupby":[{"friend":"0x1","count":1},{"friend":"0x18","count":1}]}]},{"name":"Rick Grimes","friend":[{"@groupby":[{"friend":"0x17","count":1},{"friend":"0x18","count":1},{"friend":"0x19","count":1},{"friend":"0x1f","count":1},{"friend":"0x65","count":1}]}]},{"name":"Andrea"}]}}`, js)
+}
+
+func TestGroupByFriendsMultipleParentsVar(t *testing.T) {
+	populateGraph(t)
+	// We dont have any data for uid 99999, 99998.
+	query := `
+		{
+			var(func: uid(23,99999,31, 99998,1)) {
+				name
+				friend @groupby(friend) {
+					f as count(uid)
+				}
+			}
+
+			me(func: uid(f), orderdesc: val(f)) {
+				uid
+				name
+				val(f)
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"uid":"0x18","name":"Glenn Rhee","val(f)":2},{"uid":"0x1","name":"Michonne","val(f)":1},{"uid":"0x17","name":"Rick Grimes","val(f)":1},{"uid":"0x19","name":"Daryl Dixon","val(f)":1},{"uid":"0x1f","name":"Andrea","val(f)":1},{"uid":"0x65","val(f)":1}]}}`, js)
 }
 
 func TestMultiEmptyBlocks(t *testing.T) {

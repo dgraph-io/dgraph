@@ -65,7 +65,7 @@ type outputNode interface {
 	IsEmpty() bool
 
 	addCountAtRoot(*SubGraph)
-	addGroupby(*SubGraph, string)
+	addGroupby(*SubGraph, *groupResults, string)
 	addAggregations(*SubGraph) error
 }
 
@@ -378,13 +378,13 @@ type attrVal struct {
 	val  *fastJsonNode
 }
 
-func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
+func (n *fastJsonNode) addGroupby(sg *SubGraph, res *groupResults, fname string) {
 	// Don't add empty groupby
-	if len(sg.GroupbyRes.group) == 0 {
+	if len(res.group) == 0 {
 		return
 	}
 	g := n.New(fname)
-	for _, grp := range sg.GroupbyRes.group {
+	for _, grp := range res.group {
 		uc := g.New("@groupby")
 		for _, it := range grp.keys {
 			uc.AddValue(it.attr, it.key)
@@ -447,7 +447,10 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	}
 
 	if sg.Params.isGroupBy {
-		n.addGroupby(sg, sg.Params.Alias)
+		if len(sg.GroupbyRes) == 0 {
+			return fmt.Errorf("Expected GroupbyRes to have length > 0.")
+		}
+		n.addGroupby(sg, sg.GroupbyRes[0], sg.Params.Alias)
 		return nil
 	}
 

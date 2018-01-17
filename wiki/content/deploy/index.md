@@ -1108,7 +1108,7 @@ $ dgraph live --help # To see the available flags.
 $ dgraph live -r <path-to-rdf-gzipped-file>
 
 # Read RDFs and a schema file and send to Dgraph running at given address
-$ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port> -z <dgraph-zero-address:grpc_port>
+$ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
 
 ### Bulk Loader

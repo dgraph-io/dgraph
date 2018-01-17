@@ -172,7 +172,7 @@ type SubGraph struct {
 	uidMatrix    []*intern.List
 	facetsMatrix []*intern.FacetsList
 	ExpandPreds  []*intern.ValueList
-	GroupbyRes   *groupResults
+	GroupbyRes   []*groupResults // one result for each uid list.
 	LangTags     []*intern.LangList
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
@@ -388,10 +388,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if pc.Params.ignoreResult {
 			continue
 		}
-		if pc.Params.isGroupBy {
-			dst.addGroupby(pc, pc.fieldName())
-			continue
-		}
 		if pc.IsInternal() {
 			if pc.Params.Expand != "" {
 				continue
@@ -412,6 +408,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
+			continue
+		}
+		if pc.Params.isGroupBy {
+			if len(pc.GroupbyRes) <= idx {
+				return fmt.Errorf("Unexpected length while adding Groupby. Idx: [%v], len: [%v]",
+					idx, len(pc.GroupbyRes))
+			}
+			dst.addGroupby(pc, pc.GroupbyRes[idx], pc.fieldName())
 			continue
 		}
 

@@ -15,10 +15,19 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   queries are sometimes omitted when system is under heavy load.
 * Fix missing error check in mutation handling when using CommitNow (gave incorrect error).
 * Fix bug where eq didn't work correctly for the fulltext index.
+* Fix race because of which `replicas` flag was not respected.
+* Fix bug with key copy during predicate move.
+* Fix race in merging keys keys from btree and badger iterator.
+* Fix snapshot retrieval for new nodes by retrieving it before joining the cluster.
+* Write schema at timestamp 1 in bulk loader.
+* Fix unexpected meta fatal error.
+* Fix groupby result incase the child being grouped open has multiple parents.
 
 ### Changed
 
 * Remove StartTs field from `api.Operation`.
+* Print error message in live loader if its not ErrAborted. Also, stop using membership state and
+instead use the address given by user.
 
 ## [1.0.1] - 2017-12-20
 
