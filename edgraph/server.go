@@ -322,6 +322,8 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 
 	// The following logic is for committing immediately.
+	// CommitNow was true, no need to send keys.
+	resp.Context.Keys = resp.Context.Keys[:0]
 	if err != nil {
 		// ApplyMutations failed. We now want to abort the transaction,
 		// ignoring any error that might occur during the abort (the user would
