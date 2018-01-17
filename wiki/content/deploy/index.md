@@ -48,10 +48,10 @@ dgraph
 
 ### Nightly
 
-Nightly builds from Dgraph master branch at https://github.com/dgraph-io/dgraph are available from https://nightly.dgraph.io.  To install run:
+Nightly builds from Dgraph master branch at https://github.com/dgraph-io/dgraph are available from https://get.dgraph.io.  To install run:
 
 ```sh
-curl https://nightly.dgraph.io -sSf | bash
+curl https://get.dgraph.io -sSf | bash -s nightly
 ```
 
 The Docker version is available as _master_.  Pull and run with:

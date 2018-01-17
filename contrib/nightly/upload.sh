@@ -169,7 +169,7 @@ get_nightly_release_body() {
 	echo '
 	Dgraph development (pre-release) build which is updated every night.
 	You can automatically install the nightly binaries along with the assets by running
-	`curl https://nightly.dgraph.io -sSf | bash`.
+	`curl https://get.dgraph.io -sSf | bash -s nightly`.
 	'
 }
 
