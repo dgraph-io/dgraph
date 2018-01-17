@@ -1410,6 +1410,29 @@ func TestGroupByFriendsMultipleParents(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne","friend":[{"@groupby":[{"friend":"0x1","count":1},{"friend":"0x18","count":1}]}]},{"name":"Rick Grimes","friend":[{"@groupby":[{"friend":"0x17","count":1},{"friend":"0x18","count":1},{"friend":"0x19","count":1},{"friend":"0x1f","count":1},{"friend":"0x65","count":1}]}]},{"name":"Andrea"}]}}`, js)
 }
 
+func TestGroupByFriendsMultipleParentsVar(t *testing.T) {
+	populateGraph(t)
+	// We dont have any data for uid 99999, 99998.
+	query := `
+		{
+			var(func: uid(23,99999,31, 99998,1)) {
+				name
+				friend @groupby(friend) {
+					f as count(uid)
+				}
+			}
+
+			me(func: uid(f), orderdesc: val(f)) {
+				uid
+				name
+				val(f)
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"uid":"0x18","name":"Glenn Rhee","val(f)":2},{"uid":"0x1","name":"Michonne","val(f)":1},{"uid":"0x17","name":"Rick Grimes","val(f)":1},{"uid":"0x19","name":"Daryl Dixon","val(f)":1},{"uid":"0x1f","name":"Andrea","val(f)":1},{"uid":"0x65","val(f)":1}]}}`, js)
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 	populateGraph(t)
 	query := `

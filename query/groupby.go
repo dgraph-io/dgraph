@@ -202,11 +202,8 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *intern.List, groupVal [
 	}
 }
 
-func (sg *SubGraph) formResult(ul *intern.List, doneVars map[string]varValue,
-	path []*SubGraph) (*groupResults, error) {
-
+func (sg *SubGraph) formResult(ul *intern.List) (*groupResults, error) {
 	var dedupMap dedup
-	var pathNode *SubGraph
 	res := new(groupResults)
 
 	for _, child := range sg.Children {
@@ -231,7 +228,6 @@ func (sg *SubGraph) formResult(ul *intern.List, doneVars map[string]varValue,
 					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
 				}
 			}
-			pathNode = child
 		} else {
 			// It's a value node.
 			for i, v := range child.valueMatrix {
@@ -263,31 +259,6 @@ func (sg *SubGraph) formResult(ul *intern.List, doneVars map[string]varValue,
 				return res, err
 			}
 		}
-		chVar := child.Params.Var
-		if chVar != "" {
-			tempMap := make(map[uint64]types.Val)
-			for _, grp := range res.group {
-				if len(grp.keys) == 0 {
-					continue
-				}
-				if len(grp.keys) > 1 {
-					return res, x.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
-				}
-				uidVal := grp.keys[0].key.Value
-				uid, ok := uidVal.(uint64)
-				if !ok {
-					return res, x.Errorf("Vars can be assigned only when grouped by UID attribute")
-				}
-				// grp.aggregates could be empty if schema conversion failed during aggregation
-				if len(grp.aggregates) > 0 {
-					tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
-				}
-			}
-			doneVars[chVar] = varValue{
-				Vals: tempMap,
-				path: append(path, pathNode),
-			}
-		}
 	}
 	// Sort to order the groups for determinism.
 	sort.Slice(res.group, func(i, j int) bool {
@@ -297,16 +268,120 @@ func (sg *SubGraph) formResult(ul *intern.List, doneVars map[string]varValue,
 	return res, nil
 }
 
+// This function is to use the fillVars. It is similar to formResult, the only difference being
+// that it considers the whole uidMatrix to do the grouping before assigning the variable.
+// TODO - Check if we can reduce this duplication.
+func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGraph) error {
+	childHasVar := false
+	for _, child := range sg.Children {
+		if child.Params.Var != "" {
+			childHasVar = true
+		}
+	}
+
+	if !childHasVar {
+		return nil
+	}
+
+	var pathNode *SubGraph
+	var dedupMap dedup
+
+	for _, child := range sg.Children {
+		if !child.Params.ignoreResult {
+			continue
+		}
+
+		attr := child.Params.Alias
+		if attr == "" {
+			attr = child.Attr
+		}
+		if len(child.DestUIDs.Uids) != 0 {
+			// It's a UID node.
+			for i := 0; i < len(child.uidMatrix); i++ {
+				srcUid := child.SrcUIDs.Uids[i]
+				ul := child.uidMatrix[i]
+				for _, uid := range ul.Uids {
+					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
+				}
+			}
+			pathNode = child
+		} else {
+			// It's a value node.
+			for i, v := range child.valueMatrix {
+				srcUid := child.SrcUIDs.Uids[i]
+				if len(v.Values) == 0 {
+					continue
+				}
+				val, err := convertTo(v.Values[0])
+				if err != nil {
+					continue
+				}
+				dedupMap.addValue(attr, val, srcUid)
+			}
+		}
+	}
+
+	// Create all the groups here.
+	res := new(groupResults)
+	res.formGroups(dedupMap, &intern.List{}, []groupPair{})
+
+	// Go over the groups and aggregate the values.
+	for _, child := range sg.Children {
+		if child.Params.ignoreResult {
+			continue
+		}
+		// This is a aggregation node.
+		for _, grp := range res.group {
+			err := grp.aggregateChild(child)
+			if err != nil && err != ErrEmptyVal {
+				return err
+			}
+		}
+		if child.Params.Var == "" {
+			continue
+		}
+		chVar := child.Params.Var
+
+		tempMap := make(map[uint64]types.Val)
+		for _, grp := range res.group {
+			if len(grp.keys) == 0 {
+				continue
+			}
+			if len(grp.keys) > 1 {
+				return x.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
+			}
+			uidVal := grp.keys[0].key.Value
+			uid, ok := uidVal.(uint64)
+			if !ok {
+				return x.Errorf("Vars can be assigned only when grouped by UID attribute")
+			}
+			// grp.aggregates could be empty if schema conversion failed during aggregation
+			if len(grp.aggregates) > 0 {
+				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+			}
+		}
+		doneVars[chVar] = varValue{
+			Vals: tempMap,
+			path: append(path, pathNode),
+		}
+	}
+	return nil
+}
+
 func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGraph) error {
 	for _, ul := range sg.uidMatrix {
 		// We need to process groupby for each list as grouping needs to happen for each path of the
 		// tree.
 
-		r, err := sg.formResult(ul, doneVars, path)
+		r, err := sg.formResult(ul)
 		if err != nil {
 			return err
 		}
 		sg.GroupbyRes = append(sg.GroupbyRes, r)
+	}
+
+	if err := sg.fillGroupedVars(doneVars, path); err != nil {
+		return err
 	}
 
 	// All the result that we want to return is in sg.GroupbyRes
