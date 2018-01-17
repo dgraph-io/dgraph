@@ -219,9 +219,10 @@ func (sg *SubGraph) formResult(ul *intern.List, doneVars map[string]varValue,
 			attr = child.Attr
 		}
 		if len(child.DestUIDs.Uids) != 0 {
-			// 		// It's a UID node.
+			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]
+				// Ignore uids which are not part of srcUid.
 				if algo.IndexOf(ul, srcUid) < 0 {
 					continue
 				}
@@ -287,7 +288,6 @@ func (sg *SubGraph) formResult(ul *intern.List, doneVars map[string]varValue,
 				path: append(path, pathNode),
 			}
 		}
-		child.Params.ignoreResult = true
 	}
 	// Sort to order the groups for determinism.
 	sort.Slice(res.group, func(i, j int) bool {
@@ -301,8 +301,6 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 	for _, ul := range sg.uidMatrix {
 		// We need to process groupby for each list as grouping needs to happen for each path of the
 		// tree.
-		// Here we'll first try to aggregate the values and uidmatrix corresponding to uidList from
-		// all sg.Children.
 
 		r, err := sg.formResult(ul, doneVars, path)
 		if err != nil {
@@ -310,6 +308,9 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 		}
 		sg.GroupbyRes = append(sg.GroupbyRes, r)
 	}
+
+	// All the result that we want to return is in sg.GroupbyRes
+	sg.Children = sg.Children[:0]
 
 	return nil
 }
