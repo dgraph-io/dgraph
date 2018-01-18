@@ -73,7 +73,7 @@ func init() {
 			"must be less than or equal to the number of reduce shards.")
 	flag.Bool("version", false, "Prints the version of dgraph-bulk-loader.")
 	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
-	flag.StringP("zero_addr", "z", "localhost:8888", "gRPC address for dgraphzero")
+	flag.StringP("zero", "z", "localhost:8888", "gRPC address for dgraphzero")
 	// TODO: Potentially move http server to main.
 	flag.String("http", "localhost:8080",
 		"Address to serve http (pprof).")
@@ -101,7 +101,7 @@ func run() {
 		NumShufflers:  Bulk.Conf.GetInt("shufflers"),
 		Version:       Bulk.Conf.GetBool("version"),
 		StoreXids:     Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:      Bulk.Conf.GetString("zero_addr"),
+		ZeroAddr:      Bulk.Conf.GetString("zero"),
 		HttpAddr:      Bulk.Conf.GetString("http"),
 		MapShards:     Bulk.Conf.GetInt("map_shards"),
 		ReduceShards:  Bulk.Conf.GetInt("reduce_shards"),
