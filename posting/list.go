@@ -786,6 +786,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
 			lcache.delete(l.key)
 		}
+		pstore.PurgeVersionsBelow(l.key, minTs)
 	}
 
 	doAsyncWrite(minTs, l.key, data, meta, f)
