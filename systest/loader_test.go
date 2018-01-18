@@ -81,7 +81,7 @@ func TestLoaderXidmap(t *testing.T) {
 		cluster.Close()
 		t.Fatalf("While trying to find exported file: %v", err)
 	}
-	cmd := fmt.Sprintf("zcat %s | sort", dataFile)
+	cmd := fmt.Sprintf("gunzip -c %s | sort", dataFile)
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
 		cluster.Close()
