@@ -1143,12 +1143,12 @@ distribute predicates between the reduce shards). For this example, you could us
 2 reduce shards and 4 map shards.
 
 {{% notice "note" %}}
-Ports in the example below may have to be adjusted depending on how other
-processes have been set up.
+Ports in the example below may have to be adjusted depending on how other processes have been set up.
+If you are using Dgraph v1.0.2 (and older) the option would be `--zero_addr` instead of `--zero`.
 {{% /notice %}}
 
 ```sh
-$ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero_addr=localhost:7080
+$ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero=localhost:7080
 {
 	"RDFDir": "goldendata.rdf.gz",
 	"SchemaFile": "goldendata.schema",
