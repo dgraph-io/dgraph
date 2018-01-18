@@ -82,7 +82,7 @@ Over years of writing big scalable systems, we are convinced that striving for s
 - Simple and minimal approach to features, like Go.
 - Refactoring existing code now for better performance, better readability or better testability wins over adding a new feature.
 - Don't add a function to a module that you don't use right now, or doesn't clearly enable a planned functionality.
-- Don't ship a half done feature, which would significantl alterations to work fully.
+- Don't ship a half done feature, which would require significant alterations to work fully.
 - Avoid [Technical debt](https://en.wikipedia.org/wiki/Technical_debt) like cancer.
 - Leave the code cleaner than when you began.
 

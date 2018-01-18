@@ -126,6 +126,18 @@ spec:
       labels:
         app: dgraph
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - dgraph-server
+              topologyKey: kubernetes.io/hostname
       containers:
       - name: server
         image: dgraph/dgraph:latest

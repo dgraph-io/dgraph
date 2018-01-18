@@ -76,7 +76,6 @@ func (c *listCache) UpdateMaxSize(size uint64) uint64 {
 	}
 	if size < (50 << 20) {
 		size = 50 << 20
-		x.Println("LRU cache max size is being set to 50 MB")
 	}
 	c.MaxSize = size
 	x.LcacheCapacity.Set(int64(c.MaxSize))
