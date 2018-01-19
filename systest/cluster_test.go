@@ -108,22 +108,24 @@ func TestClusterSnapshot(t *testing.T) {
 
 	dataFile, err := findFile(filepath.Join(dgraphDir, "export"), ".rdf.gz")
 	quickCheck(err)
-	cmd := fmt.Sprintf("zcat %s | wc -l", dataFile)
+	cmd := fmt.Sprintf("gunzip -c %s | wc -l", dataFile)
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	quickCheck(err)
-	if string(out) != "1120879\n" {
+	count := strings.TrimSpace(string(out))
+	if count != "1120879" {
 		shutdownCluster()
-		t.Fatalf("Export count mismatch. Got: %s", string(out))
+		t.Fatalf("Export count mismatch. Got: %s", count)
 	}
 
 	schemaFile, err := findFile(filepath.Join(dgraphDir, "export"), ".schema.gz")
 	quickCheck(err)
-	cmd = fmt.Sprintf("zcat %s | wc -l", schemaFile)
+	cmd = fmt.Sprintf("gunzip -c %s | wc -l", schemaFile)
 	out, err = exec.Command("sh", "-c", cmd).Output()
 	quickCheck(err)
-	if string(out) != "10\n" {
+	count = strings.TrimSpace(string(out))
+	if count != "10" {
 		shutdownCluster()
-		t.Fatalf("Schema export count mismatch. Got: %s", string(out))
+		t.Fatalf("Schema export count mismatch. Got: %s", count)
 	}
 }
 
