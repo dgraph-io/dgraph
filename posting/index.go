@@ -434,14 +434,21 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 
 		pending <- struct{}{}
 		go func(key []byte, version uint64) {
-			e := pstore.PurgeVersionsBelow(key, version)
+			txn := pstore.NewTransactionAt(math.MaxUint64, true)
+			defer txn.Discard()
+			// Purge doesn't delete anything, so write an empty pl
+			txn.SetWithMeta(nkey, nil, BitCompletePosting)
+			e := txn.CommitAt(version, nil)
+			if e == nil {
+				e = pstore.PurgeVersionsBelow(key, version+1)
+			}
 			if e != nil {
 				m.Lock()
 				err = e
 				m.Unlock()
 			}
 			<-pending
-		}(nkey, item.Version()+1)
+		}(nkey, item.Version())
 	}
 	for i := 0; i < 1000; i++ {
 		pending <- struct{}{}
