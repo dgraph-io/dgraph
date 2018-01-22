@@ -581,7 +581,7 @@ func (n *node) Stop() {
 }
 
 func (n *node) snapshotPeriodically(closer *y.Closer) {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
