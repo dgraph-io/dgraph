@@ -298,6 +298,20 @@ _:blank-0 <name> "diggy" .
 _:blank-0 <food> "pizza" .
 ```
 
+The result of the mutation would also contain a map, which would have the uid assigned corresponding
+to the key `blank-0`. You could specify your own key like
+
+```json
+{
+  "uid": "_:diggy",
+  "name": "diggy",
+  "food": "pizza"
+}
+```
+
+In this case, the assigned uids map would have a key called `diggy` with the value being the uid
+assigned to it.
+
 ### Referencing existing nodes
 
 If a JSON object contains a field named `"uid"`, then that field is interpreted
@@ -338,6 +352,28 @@ _:blank-0 <name> "Alice" .
 _:blank-0 <friend> _:blank-1 .
 _:blank-1 <name> "Betty" .
 ```
+
+The result of the mutation would contain the uids assigned to `blank-0` and `blank-1` nodes. If you
+wanted to return these uids under a different key, you could specify the `uid` field as a blank
+node.
+
+```json
+{
+  "uid": "_:alice",
+  "name": "Alice",
+  "friend": {
+    "uid": "_:bob",
+    "name": "Betty"
+  }
+}
+```
+Will be converted to:
+```
+_:alice <name> "Alice" .
+_:alice <friend> _:bob .
+_:bob <name> "Betty" .
+```
+
 Existing nodes can be referenced in the same way as when adding literal values.
 E.g. to link two existing nodes:
 ```json

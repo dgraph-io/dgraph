@@ -183,6 +183,16 @@ func TestNquadsFromJson_EmptyUid(t *testing.T) {
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 }
 
+func TestNquadsFromJson_BlankNodes(t *testing.T) {
+	json := `{"uid":"_:alice","name":"Alice","following":[{"name":"Bob"}],"school":[{"uid":"_:school","name":"Crown Public School"}]}`
+
+	nq, err := nquadsFromJson([]byte(json), set)
+	require.NoError(t, err)
+
+	require.Equal(t, 5, len(nq))
+	require.Contains(t, nq, makeNquadEdge("_:alice", "school", "_:school"))
+}
+
 func TestNquadsDeleteEdges(t *testing.T) {
 	json := `[{"uid": "0x1","name":null,"mobile":null,"car":null}]`
 	nq, err := nquadsFromJson([]byte(json), delete)

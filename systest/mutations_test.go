@@ -43,6 +43,7 @@ func TestSystem(t *testing.T) {
 	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
 	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
 	t.Run("fulltext equal", wrap(FullTextEqual))
+	t.Run("json blank node", wrap(JSONBlankNode))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -674,4 +675,31 @@ func FullTextEqual(t *testing.T, c *client.Dgraph) {
 		require.NoError(t, err)
 		require.Equal(t, `{"q":[]}`, string(resp.GetJson()))
 	}
+}
+
+func JSONBlankNode(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		SetJson: []byte(`
+			{"uid": "_:michael", "name": "Michael", "friend": [{ "uid": "_:sang", "name": "Sang Hyun"}, { "uid": "_:alice", "name": "Alice"}]}
+		`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, 3, len(assigned.Uids))
+	michael := assigned.Uids["michael"]
+	resp, err := c.NewTxn().Query(ctx, `
+	{
+	  q(func: uid(`+michael+`)) {
+	    name
+	    friend {
+	      name
+	    }
+	  }
+	}`)
+	require.NoError(t, err)
+	require.Equal(t, `{"q":[{"name":"Michael","friend":[{"name":"Sang Hyun"},{"name":"Alice"}]}]}`, string(resp.Json))
 }
