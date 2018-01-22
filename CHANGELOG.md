@@ -6,6 +6,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+### Added
+
+* Support for specifying blank nodes as part of JSON mutation.
+
 ## [1.0.2] - 2018-01-17
 
 ### Fixed
