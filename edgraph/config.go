@@ -125,7 +125,6 @@ func SetConfiguration(newConfig Options) {
 	worker.Config.MyAddr = Config.MyAddr
 	worker.Config.ZeroAddr = Config.ZeroAddr
 	worker.Config.RaftId = Config.RaftId
-	worker.Config.MaxPendingCount = Config.MaxPendingCount
 	worker.Config.ExpandEdge = Config.ExpandEdge
 
 	x.Config.DebugMode = Config.DebugMode
