@@ -57,21 +57,17 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 	var wg sync.WaitGroup // to wait for all callbacks to return
 	for i := range kv {
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		if len(i.Val) == 0 {
-			pstore.PurgeVersionsBelow(i.Key, math.MaxUint64)
-		} else {
-			bytesWritten += uint64(len(i.Key) + len(i.Val))
-			txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0])
-			wg.Add(1)
-			txn.CommitAt(i.Version, func(err error) {
-				// We don't care about exact error
-				wg.Done()
-				if err != nil {
-					x.Printf("Error while committing kv to badger %v\n", err)
-					atomic.StoreInt32(&hasError, 1)
-				}
-			})
-		}
+		bytesWritten += uint64(len(i.Key) + len(i.Val))
+		txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0])
+		wg.Add(1)
+		txn.CommitAt(i.Version, func(err error) {
+			// We don't care about exact error
+			wg.Done()
+			if err != nil {
+				x.Printf("Error while committing kv to badger %v\n", err)
+				atomic.StoreInt32(&hasError, 1)
+			}
+		})
 		defer txn.Discard()
 	}
 	wg.Wait()
