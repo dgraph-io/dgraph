@@ -3,47 +3,8 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Deploy"
 +++
 
-This page talks about running Dgraph in various deployment modes and in a distributed fashion and involves
+This page talks about running Dgraph in various deployment modes, in a distributed fashion and involves
 running multiple instances of Dgraph, over multiple servers in a cluster.
-
-Table of contents
-=================
-
-  * [Install Dgraph](#install-dgraph)
-    * [Building from source](#building-from-source)
-    * [Config](#config)
-  * [Cluster Setup](#cluster-setup)
-    * [Understanding Dgraph Cluster](#understanding-dgraph-cluster)
-    * [Ports Usage](#ports-usage)
-    * [Disk Usage](#disk-usage)
-    * [HA Setup](#ha=setup)
-  * [Single Host Setup](#single-host-setup)
-    * [Run directly on the host](#run-directly-on-the-host)
-    * [Run using docker](#run-using-docker)
-    * [Run using docker compose](#run-using-docker-compose-on-single-aws-instance)
-  * [Multi Host Setup](#multi-host-setup)
-    * [Using Docker Swarm](#using-docker-swarm)
-      * [Cluster using Docker Swarm](#cluster-setup-using-docker-swarm)
-      * [HA cluster using Docker Swarm](#ha-cluster-setup-using-docker-swarm)
-    * [Using Kubernetes (v1.8.4)](#using-kubernetes-v1-8-4)
-      * [Single Server](#single-server)
-      * [Replicated Cluster](#replicated-cluster)
-      * [HA Cluster using Kubernetes](#ha-cluster-setup-using-kubernetes)
-  * [More about Dgraph](#more-about-dgraph)
-  * [More about Dgraph Zero](#more-about-dgraph-zero)
-  * [TLS Configuration](#tls-configuration)
-  * [Cluster Checklist](#cluster-checklist)
-  * [Fast Data Loading](#fast-data-loading)
-    * [Live Loader](#live-loader)
-    * [Bulk Loader](#bulk-loader)
-  * [Tuning & monitoring](#tuning-monitoring)
-    * [Performance Tuning](#performance-turning)
-    * [Monitoring](#monitoring)
-  * [Dgraph Administration](#dgraph-administration)
-    * [Export Database](#export-database)
-    * [Shutdown Database](#shutdown-database)
-    * [Delete Database](#delete-database)
-    * [Upgrade Database](#upgrade-database)
 
 {{% notice "tip" %}}
 For a single server setup, recommended for new users, please see [Get Started]({{< relref "get-started/index.md" >}}) page.
@@ -211,7 +172,7 @@ Dgraph cluster nodes use different ports to communicate over gRPC and http. User
 
 ### Types of ports
 
-- **gRPC-internal:** Port that is used between the cluster nodes for internal communication and messaage exchange.
+- **gRPC-internal:** Port that is used between the cluster nodes for internal communication and message exchange.
 - **gRPC-external:** Port that is used by Dgraph clients, live-loader & bulk-loader to access APIs over gRPC.
 - **http-external:** Port that is used by clients to access APIs over http and other monitoring & administrative tasks.
 
@@ -296,7 +257,7 @@ Remember to specify the `idx` flag while replacing the dead node or else Zero mi
 **Run dgraph zero**
 
 ```sh
-dgraph zero --my=IPADDR:5080 --wal zw
+dgraph zero --my=IPADDR:5080
 ```
 The `--my` flag is the connection that Dgraph servers would dial to talk to
 zero. So, the port `5080` and the IP address must be visible to all the Dgraph servers.
@@ -306,10 +267,10 @@ For all other various flags, run `dgraph zero --help`.
 **Run dgraph server**
 
 ```sh
-dgraph server --idx=1 --memory_mb=<typically half the RAM> --my=IPADDR:7080 --zero=localhost:5080
-dgraph server --idx=2 --memory_mb=<typically half the RAM> --my=IPADDR:7081 --zero=localhost:5080 --port_offset=1
+dgraph server --memory_mb=<typically half the RAM> --my=IPADDR:7080 --zero=localhost:5080
+dgraph server --memory_mb=<typically half the RAM> --my=IPADDR:7081 --zero=localhost:5080 -o=1
 ```
-Notice the use of --port_offset for the second server and note that the `--idx` flag can be omitted. Zero would then automatically assign a unique ID to each Dgraph server, which is persisted in the write ahead log (wal) directory. You can use `-p` and `-w` to change the storage location of data and WAL. For all other flags, run
+Notice the use of -o for the second server to add offset to the default ports used by server. Zero automatically assigns an unique ID to each Dgraph server, which is persisted in the write ahead log (wal) directory, users can specify the index using `--idx` option. Dgraph servers use two location to persist data and wal logs and have to be different for each server if they are running on the same host. User can use `-p` and `-w` to change the location of data and WAL. For all other flags, run
 
 `dgraph server --help`.
 
@@ -334,20 +295,20 @@ We'll refer to the host IP address via `HOSTIPADDR`.
 ```sh
 mkdir ~/zero # Or any other directory where data should be stored.
 
-docker run -it -p 5080:5080 -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest dgraph zero --bindall=true --my=HOSTIPADDR:5080
+docker run -it -p 5080:5080 -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest dgraph zero --my=HOSTIPADDR:5080
 ```
 
 **Run dgraph server**
 ```sh
 mkdir ~/sever1 # Or any other directory where data should be stored.
 
-docker run -it -p 7080:7080 -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080 --idx=<unique-id(integer)>
+docker run -it -p 7080:7080 -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
 
 mkdir ~/sever2 # Or any other directory where data should be stored.
 
-docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081 --idx=<unique-id(integer)> --port_offset=1
+docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
 ```
-Notice the use of port_offset for server2 to override the default ports for server2.
+Notice the use of -o for server2 to override the default ports for server2.
 
 **Run dgraph UI**
 ```sh
@@ -355,7 +316,7 @@ docker run -it -p 8000:8000 dgraph/dgraph:latest dgraph-ratel
 ```
 
 {{% notice "note" %}}
-You can also use the `:master` tag when running docker image to get the nightly build. Though, nightly isn't as thoroughly tested as a release, and we recomemnd not using it.
+You can also use the `:master` tag when running docker image to get the nightly build. Though, nightly is thoroughly tested and could have unseen bugs.
 {{% /notice %}}
 
 ### Run using Docker Compose (On single AWS instance)
@@ -427,8 +388,6 @@ services:
     command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080
   ratel:
     image: dgraph/dgraph:latest
-    volumes:
-      - /data:/dgraph
     ports:
       - 8000:8000
     command: dgraph-ratel
@@ -733,6 +692,9 @@ services:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
+    ports:
+      - 5080:5080
+      - 6080:6080
     networks:
       - dgraph
     deploy:
@@ -744,6 +706,9 @@ services:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
+    ports:
+      - 5080:5080
+      - 6080:6080      
     networks:
       - dgraph
     deploy:
