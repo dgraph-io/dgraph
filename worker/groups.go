@@ -368,16 +368,16 @@ func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 	return nil
 }
 
-func (g *groupi) MyPeer() (uint64, string, bool) {
+func (g *groupi) MyPeer() (uint64, bool) {
 	members := g.members(g.groupId())
 	if members != nil {
 		for _, m := range members {
 			if m.Id != g.Node.Id {
-				return m.Id, m.Addr, true
+				return m.Id, true
 			}
 		}
 	}
-	return 0, "", false
+	return 0, false
 }
 
 // Leader will try to return the leader of a given group, based on membership information.

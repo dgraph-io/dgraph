@@ -413,13 +413,10 @@ func (n *node) applyAllMarks(ctx context.Context) {
 	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
-func (n *node) retrieveSnapshot(peerID uint64) {
-	addr, _ := n.Peer(peerID)
-	pool, err := conn.Get().Get(addr)
-	if err != nil {
-		// err is just going to be errNoConnection
-		x.Fatalf("Cannot retrieve snapshot from peer %v, no connection.  Error: %v\n",
-			peerID, err)
+func (n *node) retrieveSnapshot() {
+	pool := groups().Leader(groups().groupId())
+	if pool == nil {
+		x.Fatalf("Unable to reach leader in group %d", n.gid)
 	}
 
 	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
@@ -434,7 +431,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	if _, err := n.populateShard(pstore, pool); err != nil {
 		// TODO: We definitely don't want to just fall flat on our face if we can't
 		// retrieve a simple snapshot.
-		x.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n", peerID, err)
+		x.Fatalf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
@@ -492,7 +489,8 @@ func (n *node) Run() {
 					// rc.Id != n.Id.
 					x.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
 					// It's ok to block tick while retrieving snapshot, since it's a follower
-					n.retrieveSnapshot(rc.Id)
+
+					n.retrieveSnapshot()
 					x.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
 					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
@@ -542,7 +540,7 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
-			if peerId, _, has := groups().MyPeer(); has && n.AmLeader() {
+			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
 				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				go func() {
 					select {
@@ -668,11 +666,10 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 		n.SetRaft(raft.RestartNode(n.Cfg))
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
-		if peerId, addr, hasPeer := groups().MyPeer(); hasPeer {
+		if _, hasPeer := groups().MyPeer(); hasPeer {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
-			n.Connect(peerId, addr)
-			n.retrieveSnapshot(peerId)
+			n.retrieveSnapshot()
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 		} else {

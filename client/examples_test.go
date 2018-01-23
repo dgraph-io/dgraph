@@ -46,7 +46,7 @@ func TestMain(m *testing.M) {
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"-w", zw,
-		"-o", "-2000",
+		"-o", "-1999",
 	)
 	zero.Stdout = os.Stdout
 	zero.Stderr = os.Stdout
@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 		"server",
 		"-w", w,
 		"-p", p,
-		"--zero", "127.0.0.1:5080",
+		"--zero", "127.0.0.1:5081",
 		"--memory_mb", "2048",
 	)
 	server.Stdout = os.Stdout
