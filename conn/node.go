@@ -269,6 +269,7 @@ const (
 
 func (n *Node) BatchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
+	failedConn := make(map[uint64]bool)
 	for {
 		totalSize := 0
 		sm := <-n.messages
@@ -300,8 +301,6 @@ func (n *Node) BatchAndSendMessages() {
 			}
 		}
 
-		failedConn := make(map[uint64]bool)
-
 		for to, buf := range batches {
 			if buf.Len() == 0 {
 				continue
@@ -310,7 +309,7 @@ func (n *Node) BatchAndSendMessages() {
 			addr, has := n.Peer(to)
 			pool, err := Get().Get(addr)
 			if !has || err != nil {
-				if _, exists := failedConn[to]; !exists {
+				if exists := failedConn[to]; !exists {
 					// So that we print error only the first time we are not able to connect.
 					// Otherwise, the log is polluted with multiple errors.
 					x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
