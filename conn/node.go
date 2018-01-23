@@ -340,7 +340,7 @@ func (n *Node) doSendMessage(pool *Pool, data []byte) {
 	go func() {
 		_, err := c.RaftMessage(ctx, p)
 		if err != nil {
-			x.Printf("Error while sending message to node Id: %d, err: %v\n", to, err)
+			x.Printf("Error while sending message to node with addr: %d, err: %v\n", pool.Addr, err)
 		}
 		ch <- err
 	}()
