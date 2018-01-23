@@ -570,15 +570,6 @@ func convertWithBestEffort(tv *intern.TaskValue, attr string) (types.Val, error)
 	return sv, nil
 }
 
-func isPresent(list []string, str string) bool {
-	for _, v := range list {
-		if v == str {
-			return true
-		}
-	}
-	return false
-}
-
 func mathCopy(dst *mathTree, src *gql.MathTree) error {
 	// Either we'll have an operation specified, or the function specified.
 	dst.Const = src.Const

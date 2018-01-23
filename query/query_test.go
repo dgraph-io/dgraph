@@ -5902,9 +5902,12 @@ func TestMain(m *testing.M) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
 	}
+	zw, err := ioutil.TempDir("", "wal_")
+	x.Check(err)
+
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
-		"-w=wz",
+		"--wal", zw,
 		"-o=-2000",
 	)
 	zero.Stdout = os.Stdout
@@ -5957,7 +5960,7 @@ func TestMain(m *testing.M) {
 	os.RemoveAll(dir)
 	os.RemoveAll(dir2)
 	x.Check(zero.Process.Kill())
-	os.RemoveAll("zw")
+	os.RemoveAll(zw)
 	os.Exit(r)
 }
 

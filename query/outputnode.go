@@ -78,14 +78,6 @@ func makeScalarNode(attr string, isChild bool, val []byte, list bool) *fastJsonN
 	}
 }
 
-func makeNestedNode(attr string, isChild bool, val *fastJsonNode) *fastJsonNode {
-	return &fastJsonNode{
-		attr:    attr,
-		isChild: isChild,
-		attrs:   []*fastJsonNode{val},
-	}
-}
-
 type fastJsonNode struct {
 	attr      string
 	order     int // relative ordering (for sorted results)
@@ -371,11 +363,6 @@ func (n *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	}
 
 	return parentSlice, nil
-}
-
-type attrVal struct {
-	attr string
-	val  *fastJsonNode
 }
 
 func (n *fastJsonNode) addGroupby(sg *SubGraph, res *groupResults, fname string) {
