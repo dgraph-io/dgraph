@@ -269,6 +269,7 @@ const (
 
 func (n *Node) BatchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
+	failedConn := make(map[uint64]bool)
 	for {
 		totalSize := 0
 		sm := <-n.messages
@@ -304,26 +305,32 @@ func (n *Node) BatchAndSendMessages() {
 			if buf.Len() == 0 {
 				continue
 			}
+
+			addr, has := n.Peer(to)
+			pool, err := Get().Get(addr)
+			if !has || err != nil {
+				if exists := failedConn[to]; !exists {
+					// So that we print error only the first time we are not able to connect.
+					// Otherwise, the log is polluted with multiple errors.
+					x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
+					failedConn[to] = true
+				}
+				continue
+			}
+
+			failedConn[to] = false
 			data := make([]byte, buf.Len())
 			copy(data, buf.Bytes())
-			go n.doSendMessage(to, data)
+			go n.doSendMessage(pool, data)
 			buf.Reset()
 		}
 	}
 }
 
-func (n *Node) doSendMessage(to uint64, data []byte) {
+func (n *Node) doSendMessage(pool *Pool, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	addr, has := n.Peer(to)
-	pool, err := Get().Get(addr)
-	if !has || err != nil {
-		x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
-		// No such peer exists or we got handed a bogus config (bad addr), so we
-		// can't send messages to this peer.
-		return
-	}
 	client := pool.Get()
 
 	c := intern.NewRaftClient(client)
@@ -331,9 +338,9 @@ func (n *Node) doSendMessage(to uint64, data []byte) {
 
 	ch := make(chan error, 1)
 	go func() {
-		_, err = c.RaftMessage(ctx, p)
+		_, err := c.RaftMessage(ctx, p)
 		if err != nil {
-			x.Printf("Error while sending message to node Id: %d, err: %v\n", to, err)
+			x.Printf("Error while sending message to node with addr: %d, err: %v\n", pool.Addr, err)
 		}
 		ch <- err
 	}()

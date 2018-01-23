@@ -131,8 +131,6 @@ func processWithBackupRequest(
 	}
 }
 
-var errConflict = errors.New("List has a pending write.")
-
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
