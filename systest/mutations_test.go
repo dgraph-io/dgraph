@@ -701,5 +701,5 @@ func JSONBlankNode(t *testing.T, c *client.Dgraph) {
 	  }
 	}`)
 	require.NoError(t, err)
-	require.Equal(t, `{"q":[{"name":"Michael","friend":[{"name":"Sang Hyun"},{"name":"Alice"}]}]}`, string(resp.Json))
+	require.JSONEq(t, `{"q":[{"name":"Michael","friend":[{"name":"Sang Hyun"},{"name":"Alice"}]}]}`, string(resp.Json))
 }
