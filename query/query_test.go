@@ -22,8 +22,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net"
+	"log"
 	"os"
+	"os/exec"
 	"reflect"
 	"sort"
 	"strings"
@@ -32,7 +33,6 @@ import (
 	"time"
 
 	context "golang.org/x/net/context"
-	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -5880,97 +5880,6 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *intern.RaftContext) (*
 	return &api.Payload{}, nil
 }
 
-type zeroServer struct {
-}
-
-func (z *zeroServer) AssignUids(ctx context.Context, n *intern.Num) (*api.AssignedIds, error) {
-	return &api.AssignedIds{}, nil
-}
-
-func (z *zeroServer) Timestamps(ctx context.Context, n *intern.Num) (*api.AssignedIds, error) {
-	return &api.AssignedIds{}, nil
-}
-
-func (z *zeroServer) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
-	return &api.TxnContext{}, nil
-}
-
-func (z *zeroServer) Connect(ctx context.Context, in *intern.Member) (*intern.ConnectionState, error) {
-	m := &intern.MembershipState{}
-	m.Zeros = make(map[uint64]*intern.Member)
-	m.Zeros[2] = &intern.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
-	m.Groups = make(map[uint32]*intern.Group)
-	g := &intern.Group{}
-	g.Members = make(map[uint64]*intern.Member)
-	g.Members[1] = &intern.Member{Id: 1, Addr: "localhost:12345"}
-	m.Groups[1] = g
-
-	c := &intern.ConnectionState{
-		Member: in,
-		State:  m,
-	}
-	return c, nil
-}
-
-// Used by sync membership
-func (z *zeroServer) Update(stream intern.Zero_UpdateServer) error {
-	m := &intern.MembershipState{}
-	m.Zeros = make(map[uint64]*intern.Member)
-	m.Zeros[2] = &intern.Member{Id: 2, Leader: true, Addr: "localhost:12340"}
-	m.Groups = make(map[uint32]*intern.Group)
-	g := &intern.Group{}
-	g.Members = make(map[uint64]*intern.Member)
-	g.Members[1] = &intern.Member{Id: 1, Addr: "localhost:12345"}
-	// Store tablets information to avoid race.
-	g.Tablets = make(map[string]*intern.Tablet)
-	m.Groups[1] = g
-	// Dgraph server calls should serve and updates the information about the
-	// tablet it should serve immediately without waiting for stream, If stream
-	// doesn't send tablet information, dgraph will ask again but there could be
-	// race between asking, updating locally and stream updating the state with
-	// tablet information before reading.
-	for {
-		group, err := stream.Recv()
-		if err != nil {
-			return err
-		}
-		for attr := range group.Tablets {
-			g.Tablets[attr] = &intern.Tablet{Predicate: attr, GroupId: 1}
-		}
-		stream.Send(m)
-	}
-}
-
-func (z *zeroServer) ShouldServe(ctx context.Context, in *intern.Tablet) (*intern.Tablet, error) {
-	in.GroupId = 1
-	return in, nil
-}
-
-func (z *zeroServer) Oracle(u *api.Payload, server intern.Zero_OracleServer) error {
-	for delta := range odch {
-		if err := server.Send(delta); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *zeroServer) TryAbort(ctx context.Context, txns *intern.TxnTimestamps) (*intern.TxnTimestamps, error) {
-	return &intern.TxnTimestamps{}, nil
-}
-
-func StartDummyZero() *grpc.Server {
-	ln, err := net.Listen("tcp", "localhost:12340")
-	x.Check(err)
-	x.Printf("zero listening at address: %v", ln.Addr())
-
-	s := grpc.NewServer()
-	intern.RegisterZeroServer(s, &zeroServer{})
-	intern.RegisterRaftServer(s, &raftServer{})
-	go s.Serve(ln)
-	return s
-}
-
 func updateMaxPending() {
 	for mp := range maxPendingCh {
 		posting.Oracle().ProcessOracleDelta(&intern.OracleDelta{
@@ -5987,7 +5896,22 @@ func TestMain(m *testing.M) {
 
 	odch = make(chan *intern.OracleDelta, 100)
 	maxPendingCh = make(chan uint64, 100)
-	StartDummyZero()
+
+	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
+	cmd.Env = os.Environ()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
+	}
+	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"zero",
+		"-w=wz",
+		"-o=-2000",
+	)
+	zero.Stdout = os.Stdout
+	zero.Stderr = os.Stdout
+	if err := zero.Start(); err != nil {
+		log.Fatalf("While starting Zero: %v", err)
+	}
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
@@ -6002,7 +5926,7 @@ func TestMain(m *testing.M) {
 	worker.Config.RaftId = 1
 	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
-	worker.Config.ZeroAddr = "localhost:12340"
+	worker.Config.ZeroAddr = "localhost:5080"
 	worker.Config.RaftId = 1
 	worker.Config.MyAddr = "localhost:12345"
 	worker.Config.ExpandEdge = true
@@ -6032,6 +5956,8 @@ func TestMain(m *testing.M) {
 
 	os.RemoveAll(dir)
 	os.RemoveAll(dir2)
+	x.Check(zero.Process.Kill())
+	os.RemoveAll("zw")
 	os.Exit(r)
 }
 
