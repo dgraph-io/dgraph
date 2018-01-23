@@ -463,6 +463,8 @@ You would need to edit the `docker-machine` security group to open inbound traff
 2. Also open inbound TCP traffic on the following ports required by Dgraph: `5080`, `6080`, `808[0-2]`, `908[0-2]`. Remember port *5080* is only required if you are running Dgraph live or bulk loader from outside. You need to open `7080` to enable Dgraph server to server communication in case you have not opened all ports in #1.
 
 If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
+
+
 ![AWS Security Group](./aws.png)
 
 [Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
@@ -665,6 +667,8 @@ You would need to edit the `docker-machine` security group to open inbound traff
 2. Also open inbound TCP traffic on the following ports required by Dgraph: `5080`, `808[0-5]`, `908[0-5]`. Remember port *5080* is only required if you are running Dgraph live or bulk loader from outside. You need to open `7080` to enable Dgraph server to server communication in case you have not opened all ports in #1.
 
 If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
+
+
 ![AWS Security Group](./aws.png)
 
 Copy the following file on your host machine and name it as docker-compose.yml
