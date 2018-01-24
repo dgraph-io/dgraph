@@ -192,7 +192,7 @@ Dgraph cluster nodes use different ports to communicate over gRPC and http. User
 
 *Eg: When user runs a Dgraph server by setting --port_offset 2, then the server node binds to 7082 (grpc-internal), 8082 (http-external) & 9092 (grpc-external)* respectively.
 
-**Ratel UI** by default listens on port 8000. You can use the -p flag to configure to listen on any other port.
+**Ratel UI** by default listens on port 8000. You can use the -port flag to configure to listen on any other port.
 
 {{% notice "tip" %}}
 If you are using Dgraph v1.0.2 (or older) then the default ports are 7080, 8080 for zero, so when following instructions for different setup guides below override zero port using `--port_offset`.
@@ -460,7 +460,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 
 1. Allow all inbound traffic on all ports with Source being `docker-machine` security ports so that docker related communication can happen easily.
 
-2. Also open inbound TCP traffic on the following ports required by Dgraph: `5080`, `6080`, `808[0-2]`, `908[0-2]`. Remember port *5080* is only required if you are running Dgraph live or bulk loader from outside. You need to open `7080` to enable Dgraph server to server communication in case you have not opened all ports in #1.
+2. Also open inbound TCP traffic on the following ports required by Dgraph: `5080`, `6080`, `8000`, `808[0-2]`, `908[0-2]`. Remember port *5080* is only required if you are running Dgraph live or bulk loader from outside. You need to open `7080` to enable Dgraph server to server communication in case you have not opened all ports in #1.
 
 If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
 
@@ -617,6 +617,14 @@ services:
         constraints:
           - node.hostname == aws03
     command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero:5080 -o 2
+  ratel:
+    image: dgraph/dgraph:latest
+    hostname: "ratel"
+    ports:
+      - 8000:8000
+    networks:
+      - dgraph
+    command: dgraph-ratel
 volumes:
   data-volume:
 ```
@@ -626,12 +634,11 @@ Run the following command on the Swarm leader to deploy the Dgraph Cluster.
 eval $(docker-machine env aws01)
 docker stack deploy -c docker-compose.yml dgraph
 ```
-This should run three dgraph server services(one on each VM because of the constraint we have) and one Dgraph zero service on aws01.
+This should run three Dgraph server services(one on each VM because of the constraint we have), one Dgraph zero service on aws01 and one Dgraph Ratel.
 These placement constraints(as seen in the compose file) are important so that in case of restarting any containers, swarm places the respective Dgraph Server or Zero containers on the same hosts to re-use the volumes. Also if you are running fewer than three hosts, make sure you use either different volumes or run dgraph-servers with ``-p p1 -w w1` options.
 
 {{% notice "note" %}}
-1. Ratel is not part of the stack. You can run ratel on your local machine and configure to point to remote cluster.
-2. This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
+1. This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
 
 You can verify that all services were created successfully by running:
 
@@ -642,6 +649,7 @@ docker service ls
 Output:
 ```
 ID                  NAME                MODE                REPLICAS            IMAGE                PORTS
+vp5bpwzwawoe        dgraph_ratel        replicated          1/1                 dgraph/dgraph:latest   *:8000->8000/tcp
 69oge03y0koz        dgraph_server_2     replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
 kq5yks92mnk6        dgraph_server_3     replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
 uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:latest   *:5080->5080/tcp,*:6080->6080/tcp
@@ -664,7 +672,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 1. Allow all inbound traffic on all ports with Source being `docker-machine` security ports so that
    docker related communication can happen easily.
 
-2. Also open inbound TCP traffic on the following ports required by Dgraph: `5080`, `808[0-5]`, `908[0-5]`. Remember port *5080* is only required if you are running Dgraph live or bulk loader from outside. You need to open `7080` to enable Dgraph server to server communication in case you have not opened all ports in #1.
+2. Also open inbound TCP traffic on the following ports required by Dgraph: `5080`, `8000`, `808[0-5]`, `908[0-5]`. Remember port *5080* is only required if you are running Dgraph live or bulk loader from outside. You need to open `7080` to enable Dgraph server to server communication in case you have not opened all ports in #1.
 
 If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
 
@@ -697,8 +705,8 @@ services:
     volumes:
       - data-volume:/dgraph
     ports:
-      - 5080:5080
-      - 6080:6080
+      - 5081:5081
+      - 6081:6081
     networks:
       - dgraph
     deploy:
@@ -711,8 +719,8 @@ services:
     volumes:
       - data-volume:/dgraph
     ports:
-      - 5080:5080
-      - 6080:6080      
+      - 5082:5082
+      - 6082:6082      
     networks:
       - dgraph
     deploy:
@@ -813,14 +821,20 @@ services:
         constraints:
           - node.hostname == aws06
     command: dgraph server --my=server_6:7085 --memory_mb=2048 --zero=zero_1:5080 -o 5
-
+  ratel:
+    image: dgraph/dgraph:latest
+    hostname: "ratel"
+    ports:
+      - 8000:8000
+    networks:
+      - dgraph
+    command: dgraph-ratel
 volumes:
   data-volume:
 ```
 {{% notice "note" %}}
-1. Ratel is not part of the stack. You can run ratel on your local machine and configure to point to remote cluster.
-2. This setup assumes that you are using 6 hosts, but if you are running fewer than 6 hosts then you have to either use different volumes between Dgraph servers or use `-p` & `-w` to configure data directories.
-3. This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
+1. This setup assumes that you are using 6 hosts, but if you are running fewer than 6 hosts then you have to either use different volumes between Dgraph servers or use `-p` & `-w` to configure data directories.
+2. This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
 
 ## Using Kubernetes (v1.8.4)
 

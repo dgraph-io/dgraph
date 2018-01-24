@@ -167,7 +167,7 @@ dgraph-ratel
 mkdir -p /tmp/data
 
 # Run Dgraph Zero
-docker run -it -p 5080:5080 -p 6080:6080 -p 7080:7080 -p 8080:8080 -p 9080:9080 -p 8000:8000 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
+docker run -it -p 5080:5080 -p 6080:6080 -p 8080:8080 -p 9080:9080 -p 8000:8000 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
 
 # Run Dgraph Server
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
