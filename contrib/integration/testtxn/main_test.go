@@ -47,7 +47,7 @@ func TestMain(m *testing.M) {
 	dgraph := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"server",
 		"--memory_mb=2048",
-		"--zero=127.0.0.1:7080",
+		fmt.Sprintf("--zero=127.0.0.1:%d", x.PortZeroGrpc),
 		"-o=1",
 	)
 	dgraph.Stdout = os.Stdout

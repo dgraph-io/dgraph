@@ -1215,7 +1215,7 @@ If you are using Dgraph v1.0.2 (and older) the option would be `--zero_addr` ins
 {{% /notice %}}
 
 ```sh
-$ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero=localhost:7080
+$ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero=localhost:5080
 {
 	"RDFDir": "goldendata.rdf.gz",
 	"SchemaFile": "goldendata.schema",
@@ -1229,7 +1229,7 @@ $ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_
 	"NumShufflers": 1,
 	"Version": false,
 	"StoreXids": false,
-	"ZeroAddr": "localhost:7080",
+	"ZeroAddr": "localhost:5080",
 	"HttpAddr": "localhost:8000",
 	"MapShards": 4,
 	"ReduceShards": 2
@@ -1268,7 +1268,7 @@ copy over the output shards into different servers.
 
 ```sh
 $ cd out/i # i = shard number.
-$ dgraph server -zero=localhost:7080 -memory_mb=1024
+$ dgraph server -zero=localhost:5080 -memory_mb=1024
 ```
 ## Tuning & monitoring
 

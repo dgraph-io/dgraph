@@ -58,6 +58,8 @@ const (
 	// The attr used to store list of predicates for a node.
 	PredicateListAttr = "_predicate_"
 
+	PortZeroGrpc = 5080
+	PortZeroHTTP = 6080
 	PortInternal = 7080
 	PortHTTP     = 8080
 	PortGrpc     = 9080

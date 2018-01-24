@@ -32,8 +32,8 @@ func NewDgraphCluster(dir string) *DgraphCluster {
 	do := freePort()
 	zo := freePort()
 	return &DgraphCluster{
-		dgraphPort:       strconv.Itoa(do + 9080),
-		zeroPort:         strconv.Itoa(zo + 7080),
+		dgraphPort:       strconv.Itoa(do + x.PortGrpc),
+		zeroPort:         strconv.Itoa(zo + x.PortZeroGrpc),
 		dgraphPortOffset: do,
 		zeroPortOffset:   zo,
 		dir:              dir,

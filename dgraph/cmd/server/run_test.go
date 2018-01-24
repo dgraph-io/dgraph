@@ -116,7 +116,7 @@ func prepare() (dir1, dir2 string, rerr error) {
 	posting.Init(edgraph.State.Pstore)
 	schema.Init(edgraph.State.Pstore)
 	worker.Init(edgraph.State.Pstore)
-	worker.Config.ZeroAddr = "localhost:7080"
+	worker.Config.ZeroAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc)
 	x.Config.PortOffset = 1
 	worker.Config.RaftId = 1
 	go worker.RunServer(false)
