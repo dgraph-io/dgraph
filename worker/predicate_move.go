@@ -91,7 +91,6 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		return stream.Send(kv)
 	}
 
-	// sends all data except schema, schema key has different prefix
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
@@ -99,11 +98,13 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 
+	// sends all data except schema, schema key has different prefix
 	prefix := x.PredicatePrefix(predicate)
 	var prevKey []byte
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	for it.Seek(prefix); it.ValidForPrefix(prefix); {
 		item := it.Item()
 		key := item.Key()
+
 		if bytes.Equal(key, prevKey) {
 			it.Next()
 			continue
