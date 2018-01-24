@@ -3,7 +3,7 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Deploy"
 +++
 
-This page talks about running Dgraph in a distributed fashion. This involves
+This page talks about running Dgraph in various deployment modes, in a distributed fashion and involves
 running multiple instances of Dgraph, over multiple servers in a cluster.
 
 {{% notice "tip" %}}
@@ -11,7 +11,7 @@ For a single server setup, recommended for new users, please see [Get Started]({
 {{% /notice %}}
 
 ## Install Dgraph
-### Docker
+#### Docker
 
 ```sh
 docker pull dgraph/dgraph:latest
@@ -20,7 +20,7 @@ docker pull dgraph/dgraph:latest
 docker run -it dgraph/dgraph:latest dgraph
 ```
 
-### Automatic download
+#### Automatic download
 
 Running
 ```sh
@@ -31,7 +31,7 @@ dgraph
 ```
 would install the `dgraph` binary into your system.
 
-### Manual download [optional]
+#### Manual download [optional]
 
 If you don't want to follow the automatic installation method, you could manually download the appropriate tar for your platform from **[Dgraph releases](https://github.com/dgraph-io/dgraph/releases)**. After downloading the tar for your platform from Github, extract the binary to `/usr/local/bin` like so.
 
@@ -46,7 +46,7 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 dgraph
 ```
 
-### Nightly
+#### Nightly
 
 Nightly builds from Dgraph master branch at https://github.com/dgraph-io/dgraph are available from https://get.dgraph.io.  To install run:
 
@@ -60,7 +60,71 @@ The Docker version is available as _master_.  Pull and run with:
 docker pull dgraph/dgraph:master
 ```
 
-## Simple cluster setup
+#### Building from Source
+
+Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
+
+After installing Go, run
+```sh
+# This should install dgraph binary in your $GOPATH/bin.
+
+go get -u -v github.com/dgraph-io/dgraph/dgraph
+```
+
+If you get errors related to `grpc` while building them, your
+`go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it
+causes issues while using the Go client). Update your `go-grpc` by running.
+```sh
+go get -u -v google.golang.org/grpc
+```
+
+#### Config
+
+The full set of dgraph's configuration options (along with brief descriptions)
+can be viewed by invoking dgraph with the `--help` flag. For example, to see
+the options available for `dgraph server`, run `dgraph server --help`.
+
+The options can be configured in multiple ways (from highest precedence to
+lowest precedence):
+
+- Using command line flags (as described in the help output).
+
+- Using environment variables.
+
+- Using a configuration file.
+
+If no configuration for an option is used, then the default value as described
+in the `--help` output applies.
+
+Multiple configuration methods can be used all at the same time. E.g. a core
+set of options could be set in a config file, and instance specific options
+could be set using environment vars or flags.
+
+The environment variable names mirror the flag names as seen in the `--help`
+output. They are the concatenation of `DGRAPH`, the subcommand invoked
+(`SERVER`, `ZERO`, `LIVE`, or `BULK`), and then the name of the flag (in
+uppercase). For example, instead of using `dgraph server --memory_mb=8096`, you
+could use `DGRAPH_SERVER_MEMORY_MB=8096 dgraph server`.
+
+Configuration file formats supported are JSON, TOML, YAML, HCL, and Java
+properties (detected via file extension).
+
+A configuration file can be specified using the `--config` flag, or an
+environment variable. E.g. `dgraph zero --config my_config.json` or
+`DGRAPH_ZERO_CONFIG=my_config.json dgraph zero`.
+
+The config file structure is just simple key/value pairs (mirroring the flag
+names). E.g. a JSON config file that sets `--idx`, `--peer`, and `--replicas`:
+
+```json
+{
+  "idx": 42,
+  "peer": 192.168.0.55:9080,
+  "replicas": 2
+}
+```
+
+## Cluster Setup
 
 ### Understanding Dgraph cluster
 
@@ -102,96 +166,52 @@ recommend setting `--replicas` to 1, 3 or 5 (not 2 or 4). This allows 0, 1, or 2
 nodes serving the same group to be down, respectively without affecting the
 overall health of that group.
 
-### Run directly on host
+## Ports Usage
 
-**Run dgraph zero**
+Dgraph cluster nodes use different ports to communicate over gRPC and http. User has to pay attention while choosing these ports based on their topology and deployment-mode as each port needs different access security rules or firewall.
 
-```sh
-dgraph zero --my=IPADDR:7080 --wal zw
-```
+### Types of ports
 
-The default Zero ports are 7080 for internal (Grpc) communication to other Dgraph
-servers, and 8080 for HTTP communication with external processes. You can change
-these ports by using `--port_offset` flag.
+- **gRPC-internal:** Port that is used between the cluster nodes for internal communication and message exchange.
+- **gRPC-external:** Port that is used by Dgraph clients, live-loader & bulk-loader to access APIs over gRPC.
+- **http-external:** Port that is used by clients to access APIs over http and other monitoring & administrative tasks.
 
-The `--my` flag is the connection that Dgraph servers would dial to talk to
-zero. So, the port `7080` and the IP address must be visible to all the Dgraph servers.
+### Ports used by different nodes
 
-For all the various flags available, run `dgraph zero --help`.
+ Dgraph Node Type | gRPC-internal  | gRPC-external | http-external
+------------------|----------------|---------------|---------------
+       zero       |  --Not Used--  |     5080      |     6080
+       server     |      7080      |     9090      |     8080
+       ratel      |  --Not Used--  | --Not Used--  |     8000
 
-**Run dgraph server**
+ Users have to modify security rules or open firewall depending up on their underlying network to allow communication between cluster nodes and between a server and a client. During development a general rule could be wide open *-external (gRPC/HTTP) ports to public and gRPC-internal to be open within the cluster nodes.
 
-```sh
-dgraph server --idx=2 --memory_mb=<typically half the RAM>
---my=IPADDR:7081 --zero=localhost:7080 --port_offset=1
-```
+ **Ratel UI** accesses Dgraph server on http-external port (default localhost:8080) and can be configured to talk to remote Dgraph cluster. This way you can run Ratel on your local machine and point to a remote cluster. But if you are deploying Ratel along with Dgraph cluster, then you may have to expose 8000 to the public.
 
-**Dgraph server listens on port 7080 for internal, port 8080 for external HTTP and
-port 9080 for external Grpc communication by default.** You can change that via
-`--port_offset` flag.
+**Port Offset** To make it easier for user to setup the cluster, Dgraph defaults the ports used by Dgraph nodes and let user to provide an offset  (through command option `--port_offset`) to define actual ports used by the node. Offset can also be used when starting multiple zero nodes in a HA setup.
 
-Note that the `--idx` flag can be ommitted. Zero would then automatically assign
-a unique ID to each Dgraph server, which Dgraph server persists in the write ahead log (wal) directory.
+*Eg: When user runs a Dgraph server by setting --port_offset 2, then the server node binds to 7082 (grpc-internal), 8082 (http-external) & 9092 (grpc-external)* respectively.
 
-You can use `-p` and `-w` to change the storage location of data and WAL. For
-all the various flags available, run `dgraph server --help`.
+**Ratel UI** by default listens on port 8000. You can use the -port flag to configure to listen on any other port.
 
-**Run dgraph UI**
+{{% notice "tip" %}}
+If you are using Dgraph v1.0.2 (or older) then the default ports are 7080, 8080 for zero, so when following instructions for different setup guides below override zero port using `--port_offset`.
 
 ```sh
-dgraph-ratel -p 8081
+dgraph zero --idx=1 --memory_mb=<typically half the RAM> --port_offset -2000
+dgraph zero --idx=2 --memory_mb=<typically half the RAM> --port_offset -1999
 ```
+Ratel's default port is 8081, so override it using -p 8000.
 
-Dgraph UI listens on port 8081 by default. You can use the -p flag to change it. By default ratel assumes that dgraph is running on localhost:8080, you can change this address from the ui itself.
-
-### Run using Docker
-
-First, you'd want to figure out the host IP address. You can typically do that
-via
-
-```sh
-ip addr  # On Arch Linux
-ifconfig # On Ubuntu/Mac
-```
-We'll refer to the host IP address via `HOSTIPADDR`.
-
-**Run dgraph zero**
-
-```sh
-mkdir ~/data # Or any other directory where data should be stored.
-
-docker run -it -p 7080:7080 -p 8080:8080 -v ~/data:/dgraph dgraph/dgraph:latest dgraph zero --bindall=true --my=HOSTIPADDR:7080
-```
-
-**Run dgraph server**
-```sh
-mkdir ~/data # Or any other directory where data should be stored.
-
-docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/dgraph:latest dgraph server --port_offset 1 --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:7080 --my=HOSTIPADDR:7081 --idx <unique-id(integer)>
-```
-
-**Run dgraph UI**
-```sh
-docker run -it -p 8082:8082 dgraph/dgraph:latest dgraph-ratel -p 8082
-```
-
-
-{{% notice "note" %}}
-You can also use the `:master` tag when running docker image to get the nightly
-build. Though, nightly isn't as thoroughly tested as a release, and we
-recommend not using it.
 {{% /notice %}}
 
-### High-availability setup
+### HA Cluster Setup
 
-In a high-availability setup, we need to run 3 or 5 replicas for Zero, and
-similarly, 3 or 5 replicas for the server.
+In a high-availability setup, we need to run 3 or 5 replicas for Zero, and similarly, 3 or 5 replicas for the server.
 {{% notice "note" %}}
-If number of replicas is 2K + 1, up to **K servers** can be down without any
-impact on reads or writes.
+If number of replicas is 2K + 1, up to **K servers** can be down without any impact on reads or writes.
 
-Avoid keeping replicas to 2K (even number). If K servers go down, this would
-block reads and writes, due to lack of consensus.
+Avoid keeping replicas to 2K (even number). If K servers go down, this would block reads and writes, due to lack of consensus.
 {{% /notice %}}
 
 **Dgraph Zero**
@@ -209,7 +229,7 @@ This id would get persisted in the write-ahead log, so be careful not to delete
 it.
 
 The new servers will automatically detect each other by communicating with
-dgraphzero and establish connections to each other.
+Dgraph zero and establish connections to each other.
 
 Typically, Zero would first attempt to replicate a group, by assigning a new
 Dgraph server to run the same group as assigned to another. Once the group has
@@ -222,29 +242,95 @@ Dgraph servers for no sharding, but 3x replication. Run six Dgraph servers, for
 sharding the data into two groups, with 3x replication.
 
 **Removing Dead Nodes**
-If a replica goes down and can't be recovered, you can remove it and add a new node to the quorum. `/removeNode` endpoint on Zero can be used to remove the dead node (`/removeNode?id=3&group=2`).
+If a replica goes down and can't be recovered, you can remove it and add a new node to the quorum.
+`/removeNode` endpoint on Zero can be used to remove the dead node (`/removeNode?id=3&group=2`).
 {{% notice "note" %}}
 Before using the api ensure that the node is down and ensure that it doesn't come back up ever again.
 
-Remember to specify the `idx` flag while adding a new replica or else Zero might assign it a different group.
+Remember to specify the `idx` flag while replacing the dead node or else Zero might assign it a different group.
 {{% /notice %}}
 
-## AWS using Docker
+## Single Host Setup
 
-We will use [Docker Machine](https://docs.docker.com/machine/overview/). It is a tool that lets you install Docker Engine on virtual machines
-and easily deploy applications.
+### Run directly on the host
+
+**Run dgraph zero**
+
+```sh
+dgraph zero --my=IPADDR:5080
+```
+The `--my` flag is the connection that Dgraph servers would dial to talk to
+zero. So, the port `5080` and the IP address must be visible to all the Dgraph servers.
+
+For all other various flags, run `dgraph zero --help`.
+
+**Run dgraph server**
+
+```sh
+dgraph server --memory_mb=<typically half the RAM> --my=IPADDR:7080 --zero=localhost:5080
+dgraph server --memory_mb=<typically half the RAM> --my=IPADDR:7081 --zero=localhost:5080 -o=1
+```
+Notice the use of -o for the second server to add offset to the default ports used by server. Zero automatically assigns an unique ID to each Dgraph server, which is persisted in the write ahead log (wal) directory, users can specify the index using `--idx` option. Dgraph servers use two location to persist data and wal logs and have to be different for each server if they are running on the same host. User can use `-p` and `-w` to change the location of data and WAL. For all other flags, run
+
+`dgraph server --help`.
+
+**Run dgraph UI**
+
+```sh
+dgraph-ratel
+```
+
+### Run using Docker
+
+Dgraph cluster can be setup running as containers on a single host. First, you'd want to figure out the host IP address. You can typically do that via
+
+```sh
+ip addr  # On Arch Linux
+ifconfig # On Ubuntu/Mac
+```
+We'll refer to the host IP address via `HOSTIPADDR`.
+
+**Run dgraph zero**
+
+```sh
+mkdir ~/zero # Or any other directory where data should be stored.
+
+docker run -it -p 5080:5080 -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest dgraph zero --my=HOSTIPADDR:5080
+```
+
+**Run dgraph server**
+```sh
+mkdir ~/sever1 # Or any other directory where data should be stored.
+
+docker run -it -p 7080:7080 -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
+
+mkdir ~/sever2 # Or any other directory where data should be stored.
+
+docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
+```
+Notice the use of -o for server2 to override the default ports for server2.
+
+**Run dgraph UI**
+```sh
+docker run -it -p 8000:8000 dgraph/dgraph:latest dgraph-ratel
+```
+
+{{% notice "note" %}}
+You can also use the `:master` tag when running docker image to get the nightly build. Though, nightly is thoroughly tested and could have unseen bugs.
+{{% /notice %}}
+
+### Run using Docker Compose (On single AWS instance)
+
+We will use [Docker Machine](https://docs.docker.com/machine/overview/). It is a tool that lets you install Docker Engine on virtual machines and easily deploy applications.
 
 * [Install Docker Machine](https://docs.docker.com/machine/install-machine/) on your machine.
 
-### Single server using Docker Compose
-
 {{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
-Instructions for running with TLS would be added soon.{{% /notice %}}
+Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
 
-Here we'll go through an example of deploying Dgraph Server and Zero on an AWS instance.
+Here we'll go through an example of deploying Dgraph zero, server and ratel on an AWS instance.
 
-* Make sure you have Docker Machine installed from the [step above]({{< relref "#deployment-on-aws">}}), provisioning an instance on AWS is just one step
-   away. You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) for programatic access to the Amazon API.
+* Make sure you have Docker Machine installed by following [instructions](https://docs.docker.com/machine/install-machine/), provisioning an instance on AWS is just one step away. You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) for programatic access to the Amazon API.
 
 * Create a new docker machine.
 
@@ -265,13 +351,10 @@ To see how to connect your Docker Client to the Docker Engine running on this vi
 ```
 
 The command would provision a `t2-micro` instance with a security group called `docker-machine`
-(allowing inbound access on 2376 and 22). You can either edit the security group to allow inbound
-access to `8080`, `9080` (default ports for Dgraph server) or you can provide your own security
-group which allows inbound access on port 22, 2376 (required by Docker Machine), 8080 and 9080.
+(allowing inbound access on 2376 and 22). You can either edit the security group to allow inbound access to '5080`, `8080`, `9080` (default ports for Dgraph zero & server) or you can provide your own security
+group which allows inbound access on port 22, 2376 (required by Docker Machine), 5080, 8080 and 9080. Remember port *5080* is only required if you are running Dgraph live or bulk loader from outside.
 
-[Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
-instance type, security group, AMI among many other
-things.
+[Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the instance type, security group, AMI among many other things.
 
 {{% notice "tip" %}}Docker machine supports [other drivers](https://docs.docker.com/machine/drivers/gce/) like GCE, Azure etc.{{% /notice %}}
 
@@ -283,14 +366,17 @@ instructions [here](https://docs.docker.com/compose/install/) to install it.
 Copy the file below in a directory on your machine and name it `docker-compose.yml`.
 
 ```sh
-version: "3"
+version: "3.2"
 services:
   zero:
     image: dgraph/dgraph:latest
     volumes:
       - /data:/dgraph
+    ports:
+      - 5080:5080
+      - 6080:6080
     restart: on-failure
-    command: dgraph zero --port_offset -2000 --my=zero:5080
+    command: dgraph zero --my=zero:5080
   server:
     image: dgraph/dgraph:latest
     volumes:
@@ -300,6 +386,11 @@ services:
       - 9080:9080
     restart: on-failure
     command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080
+  ratel:
+    image: dgraph/dgraph:latest
+    ports:
+      - 8000:8000
+    command: dgraph-ratel
 ```
 
 {{% notice "note" %}}The config mounts `/data`(you could mount something else) on the instance to `/dgraph` within the
@@ -318,19 +409,21 @@ Finally run the command below to start the Server and Zero.
 ```
 docker-compose up -d
 ```
-This would start 2 Docker containers, one running Dgraph Server and the other Zero on the same
-machine. Docker would restart the containers in case there is any error.
-
+This would start 3 Docker containers running Dgraph Zero, Server and Ratel on the same machine. Docker would restart the containers in case there is any error.
 You can look at the logs using `docker-compose logs`.
 
-### Cluster setup using Docker Swarm
+## Multi Host Setup
+
+### Using Docker Swarm
+
+#### Cluster setup using Docker Swarm
 
 {{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
-Instructions for running with TLS would be added soon.{{% /notice %}}
+Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
 
 Here we'll go through an example of deploying 3 Dgraph Server nodes and 1 Zero on three different AWS instances using Docker Swarm with a replication factor of 3.
 
-* Make sure you have Docker Machine installed from the [step above]({{< relref "#deployment-on-aws">}}).
+* Make sure you have Docker Machine installed by following [instructions](https://docs.docker.com/machine/install-machine/).
 
 ```sh
 docker-machine --version
@@ -365,10 +458,14 @@ The command would provision a `t2-micro` instance with a security group called `
 
 You would need to edit the `docker-machine` security group to open inbound traffic on the following ports.
 
-1. Allow all inbound traffic on all ports with Source being `docker-machine` security ports so that
-   docker related communication can happen easily.
+1. Allow all inbound traffic on all ports with Source being `docker-machine` security ports so that docker related communication can happen easily.
 
-2. Also open inbound TCP traffic on the following ports required by Dgraph: `8080`, `8081`, `8082`, `9080`, `9081` and `9082`.
+2. Also open inbound TCP traffic on the following ports required by Dgraph: `5080`, `6080`, `8000`, `808[0-2]`, `908[0-2]`. Remember port *5080* is only required if you are running Dgraph live or bulk loader from outside. You need to open `7080` to enable Dgraph server to server communication in case you have not opened all ports in #1.
+
+If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
+
+
+![AWS Security Group](./aws.png)
 
 [Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the
 instance type, security group, AMI among many other
@@ -465,13 +562,16 @@ services:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
+    ports:
+      - 5080:5080
+      - 6080:6080
     networks:
       - dgraph
     deploy:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph zero --port_offset -2000 --my=zero:5080 --replicas 3
+    command: dgraph zero --my=zero:5080 --replicas 3
   server_1:
     image: dgraph/dgraph:latest
     hostname: "server_1"
@@ -517,6 +617,14 @@ services:
         constraints:
           - node.hostname == aws03
     command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero:5080 -o 2
+  ratel:
+    image: dgraph/dgraph:latest
+    hostname: "ratel"
+    ports:
+      - 8000:8000
+    networks:
+      - dgraph
+    command: dgraph-ratel
 volumes:
   data-volume:
 ```
@@ -526,13 +634,11 @@ Run the following command on the Swarm leader to deploy the Dgraph Cluster.
 eval $(docker-machine env aws01)
 docker stack deploy -c docker-compose.yml dgraph
 ```
+This should run three Dgraph server services(one on each VM because of the constraint we have), one Dgraph zero service on aws01 and one Dgraph Ratel.
+These placement constraints(as seen in the compose file) are important so that in case of restarting any containers, swarm places the respective Dgraph Server or Zero containers on the same hosts to re-use the volumes. Also if you are running fewer than three hosts, make sure you use either different volumes or run dgraph-servers with ``-p p1 -w w1` options.
 
-This should run three dgraph server services(one on each VM because of the constraint we have) and one dgraph zero service on aws01.
-These contraints are important so that in case of restart Dgraph Server or Zero starts with the same volumes.
-
-{{% notice "note" %}} This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstor](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
-
-
+{{% notice "note" %}}
+1. This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
 
 You can verify that all services were created successfully by running:
 
@@ -543,14 +649,12 @@ docker service ls
 Output:
 ```
 ID                  NAME                MODE                REPLICAS            IMAGE                PORTS
+vp5bpwzwawoe        dgraph_ratel        replicated          1/1                 dgraph/dgraph:latest   *:8000->8000/tcp
 69oge03y0koz        dgraph_server_2     replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
 kq5yks92mnk6        dgraph_server_3     replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
-uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:latest   *:6080->6080/tcp
+uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:latest   *:5080->5080/tcp,*:6080->6080/tcp
 v9jlw00iz2gg        dgraph_server_1     replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
 ```
-
-
-{{% notice "note" %}} You can access the UI at `http://<external-ip-address-node>:8080`. It is also available on port `8081` and `8082`.  {{% /notice %}}
 
 To stop the cluster run
 
@@ -558,13 +662,24 @@ To stop the cluster run
 docker stack rm dgraph
 ```
 
-### HA Cluster setup (optional)
+### HA Cluster setup using Docker Swarm
 
 Here is a sample swarm config for running 6 Dgraph Server nodes and 3 Zero nodes on 6 different
-instances. Setup should be similar to [Cluster setup using Docker Swarm]({{< relref "#cluster-setup-using-docker-swarm" >}}) apart from a couple of differences. This setup would ensure replication with sharding of data.
+ec2 instances. Setup should be similar to [Cluster setup using Docker Swarm]({{< relref "#cluster-setup-using-docker-swarm" >}}) apart from a couple of differences. This setup would ensure replication with sharding of data. The file assumes that there are six hosts available as docker-machines. Also if you are running on fewer than six hosts, make sure you use either different volumes or run dgraph-servers with `-p p1 -w w1` options.
 
-1. The file assumes that there are six hosts available as docker-machines.
-2. You have to open ports `8083`, `8084`, `8085`, `9083`, `9084` and `9085` as well.
+You would need to edit the `docker-machine` security group to open inbound traffic on the following ports.
+
+1. Allow all inbound traffic on all ports with Source being `docker-machine` security ports so that
+   docker related communication can happen easily.
+
+2. Also open inbound TCP traffic on the following ports required by Dgraph: `5080`, `8000`, `808[0-5]`, `908[0-5]`. Remember port *5080* is only required if you are running Dgraph live or bulk loader from outside. You need to open `7080` to enable Dgraph server to server communication in case you have not opened all ports in #1.
+
+If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
+
+
+![AWS Security Group](./aws.png)
+
+Copy the following file on your host machine and name it as docker-compose.yml
 
 ```sh
 version: "3"
@@ -575,35 +690,44 @@ services:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
+    ports:
+      - 5080:5080
+      - 6080:6080
     networks:
       - dgraph
     deploy:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph zero -o -2000 --my=zero_1:5080 --replicas 3 --idx 1
+    command: dgraph zero --my=zero_1:5080 --replicas 3 --idx 1
   zero_2:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
+    ports:
+      - 5081:5081
+      - 6081:6081
     networks:
       - dgraph
     deploy:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph zero -o -1999 --my=zero_2:5081 --replicas 3 --peer zero_1:5080 --idx 2
+    command: dgraph zero -o 1 --my=zero_2:5081 --replicas 3 --peer zero_1:5080 --idx 2
   zero_3:
     image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
+    ports:
+      - 5082:5082
+      - 6082:6082      
     networks:
       - dgraph
     deploy:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph zero -o -1998 --my=zero_3:5082 --replicas 3 --peer zero_1:5080 --idx 3
+    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero_1:5080 --idx 3
   server_1:
     image: dgraph/dgraph:latest
     hostname: "server_1"
@@ -697,16 +821,25 @@ services:
         constraints:
           - node.hostname == aws06
     command: dgraph server --my=server_6:7085 --memory_mb=2048 --zero=zero_1:5080 -o 5
-
+  ratel:
+    image: dgraph/dgraph:latest
+    hostname: "ratel"
+    ports:
+      - 8000:8000
+    networks:
+      - dgraph
+    command: dgraph-ratel
 volumes:
   data-volume:
 ```
+{{% notice "note" %}}
+1. This setup assumes that you are using 6 hosts, but if you are running fewer than 6 hosts then you have to either use different volumes between Dgraph servers or use `-p` & `-w` to configure data directories.
+2. This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
 
-
-## Kubernetes (v1.8.4)
+## Using Kubernetes (v1.8.4)
 
 {{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
-Instructions for running with TLS would be added soon.{{% /notice %}}
+Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
 
 * Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) which is used to deploy
   and manage applications on kubernetes.
@@ -783,8 +916,7 @@ Stop the cluster. If you used `kops` you can run the following command.
 kops delete cluster ${NAME} --yes
 ```
 
-
-### Cluster setup
+### Replicated Cluster
 
 In this setup, we are going to deploy 1 Zero node and 3 Server nodes. We start Zero with `--replicas
 3` flag, so all data would be replicated on each of the 3 Server nodes.
@@ -872,7 +1004,7 @@ Stop the cluster. If you used `kops` you can run the following command.
 kops delete cluster ${NAME} --yes
 ```
 
-### HA Cluster setup
+### HA Cluster Setup using Kubernetes
 
 This setup allows you to run 3 Dgraph Servers and 3 Zero Servers. The instructions are same as
 [cluster-setup]({{< relref "#cluster-setup">}}) apart from the step to start the cluster. We start Zero with `--replicas
@@ -899,25 +1031,6 @@ deployment "dgraph-ratel" created
 
 After this you can follow other steps from [cluster-setup]({{< relref "#cluster-setup">}}) to verify
 that your setup is working as expected.
-
-
-## Building from Source
-
-Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
-
-After installing Go, run
-```sh
-# This should install dgraph binary in your $GOPATH/bin.
-
-go get -u -v github.com/dgraph-io/dgraph/dgraph
-```
-
-If you get errors related to `grpc` while building them, your
-`go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it
-causes issues while using the Go client). Update your `go-grpc` by running.
-```sh
-go get -u -v google.golang.org/grpc
-```
 
 ## More about Dgraph
 
@@ -951,52 +1064,6 @@ to see useful information, like the following:
 * `/state` Information about the nodes that are part of the cluster. Also contains information about
   size of predicates and groups they belong to.
 * `/removeNode?id=idx&group=gid` Used to remove dead node from the quorum, takes node id and group id as query param.
-
-## Config
-
-The full set of dgraph's configuration options (along with brief descriptions)
-can be viewed by invoking dgraph with the `--help` flag. For example, so see
-the options for `dgraph server`, run `dgraph server --help`.
-
-The options can be configured in multiple ways (from highest precedence to
-lowest precedence):
-
-- Using command line flags (as described in the help output).
-
-- Using environment variables.
-
-- Using a configuration file.
-
-If no configuration for an option is used, then the default value as described
-in the `--help` output applies.
-
-Multiple configuration methods can be used all at the same time. E.g. a core
-set of options could be set in a config file, and instance specific options
-could be set using environment vars or flags.
-
-The environment variable names mirror the flag names as seen in the `--help`
-output. They are the concatenation of `DGRAPH`, the subcommand invoked
-(`SERVER`, `ZERO`, `LIVE`, or `BULK`), and then the name of the flag (in
-uppercase). For example, instead of using `dgraph server --memory_mb=8096`, you
-could use `DGRAPH_SERVER_MEMORY_MB=8096 dgraph server`.
-
-Configuration file formats supported are JSON, TOML, YAML, HCL, and Java
-properties (detected via file extension).
-
-A configuration file can be specified using the `--config` flag, or an
-environment variable. E.g. `dgraph zero --config my_config.json` or
-`DGRAPH_ZERO_CONFIG=my_config.json dgraph zero`.
-
-The config file structure is just simple key/value pairs (mirroring the flag
-names). E.g. a JSON config file that sets `--idx`, `--peer`, and `--replicas`:
-
-```json
-{
-  "idx": 42,
-  "peer": 192.168.0.55:9080,
-  "replicas": 2
-}
-```
 
 ## TLS configuration
 Connections between client and server can be secured with TLS.
@@ -1203,6 +1270,7 @@ copy over the output shards into different servers.
 $ cd out/i # i = shard number.
 $ dgraph server -zero=localhost:7080 -memory_mb=1024
 ```
+## Tuning & monitoring
 
 #### Performance Tuning
 
@@ -1247,65 +1315,7 @@ dgraph instances more evenly.
 - The `--shufflers` controls the level of parallelism in the shuffle/reduce
   stage. Increasing this increases memory consumption.
 
-## Export
-
-An export of all nodes is started by locally accessing the export endpoint of any server in the cluster.
-
-```sh
-$ curl localhost:8080/admin/export
-```
-{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.
-{{% /notice %}}
-
-This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph instance is running.
-
-This triggers a export of all the groups spread across the entire cluster. Each server writes output in gzipped rdf to the export directory specified on startup by `--export`. If any of the groups fail, the entire export process is considered failed, and an error is returned.
-
-{{% notice "note" %}}It is up to the user to retrieve the right export files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
-
-## Shutdown
-
-A clean exit of a single dgraph node is initiated by running the following command on that node.
-{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.
-{{% /notice %}}
-
-```sh
-$ curl localhost:8080/admin/shutdown
-```
-
-This stops the server on which the command is executed and not the entire cluster.
-
-## Delete database
-
-Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).
-
-To drop all data, you could send a `DropAll` request via `/alter` endpoint.
-
-Alternatively, you could:
-
-* [stop Dgraph]({{< relref "#shutdown" >}}) and wait for all writes to complete,
-* delete (maybe do an export first) the `p` and `w` directories, then
-* restart Dgraph.
-
-## Upgrade Dgraph
-
-Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
-
-- Start an [export]({{< relref "#export">}})
-- Ensure it's successful
-- Bring down the cluster
-- Run Dgraph using new data directories.
-- Reload the data via [bulk loader]({{< relref "#Bulk Loader" >}}).
-- If all looks good, you can delete the old directories (export serves as an insurance)
-
-These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
-
-## Post Installation
-
-Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec]({{< relref "query-language/index.md">}}). Also, have a look at [Frequently asked questions]({{< relref "faq/index.md" >}}).
-
-## Monitoring
-
+#### Monitoring
 Dgraph exposes metrics via `/debug/vars` endpoint in json format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. You can either poll this endpoint to get the data in your monitoring systems or install **[Prometheus](https://prometheus.io/docs/introduction/install/)**. Replace targets in the below config file with the ip of your dgraph instances and run prometheus using the command `prometheus -config.file my_config.yaml`.
 ```sh
 scrape_configs:
@@ -1322,10 +1332,69 @@ scrape_configs:
 
 Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**.
 
+## Dgraph Administration
+
+#### Export Database
+
+An export of all nodes is started by locally accessing the export endpoint of any server in the cluster.
+
+```sh
+$ curl localhost:8080/admin/export
+```
+{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.
+{{% /notice %}}
+
+This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph instance is running.
+
+This triggers a export of all the groups spread across the entire cluster. Each server writes output in gzipped rdf to the export directory specified on startup by `--export`. If any of the groups fail, the entire export process is considered failed, and an error is returned.
+
+{{% notice "note" %}}It is up to the user to retrieve the right export files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
+
+#### Shutdown Database
+
+A clean exit of a single dgraph node is initiated by running the following command on that node.
+{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.
+{{% /notice %}}
+
+```sh
+$ curl localhost:8080/admin/shutdown
+```
+
+This stops the server on which the command is executed and not the entire cluster.
+
+#### Delete database
+
+Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).
+
+To drop all data, you could send a `DropAll` request via `/alter` endpoint.
+
+Alternatively, you could:
+
+* [stop Dgraph]({{< relref "#shutdown" >}}) and wait for all writes to complete,
+* delete (maybe do an export first) the `p` and `w` directories, then
+* restart Dgraph.
+
+#### Upgrade Database
+
+Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
+
+- Start an [export]({{< relref "#export">}})
+- Ensure it's successful
+- Bring down the cluster
+- Run Dgraph using new data directories.
+- Reload the data via [bulk loader]({{< relref "#Bulk Loader" >}}).
+- If all looks good, you can delete the old directories (export serves as an insurance)
+
+These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
+
+#### Post Installation
+
+Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec]({{< relref "query-language/index.md">}}). Also, have a look at [Frequently asked questions]({{< relref "faq/index.md" >}}).
+
 ## Troubleshooting
 Here are some problems that you may encounter and some solutions to try.
 
-### Running OOM (out of memory)
+#### Running OOM (out of memory)
 
 During bulk loading of data, Dgraph can consume more memory than usual, due to high volume of writes. That's generally when you see the OOM crashes.
 

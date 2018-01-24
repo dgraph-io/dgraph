@@ -21,7 +21,7 @@ Each triple has the form
 ```
 <subject> <predicate> <object> .
 ```
-Meaning that the graph node identified by `subject` is linked to `object` with directed edge `predicate`.  Each triple ends with a full stop.  The subject of a triple is always a node in the graph, while the object may be a node or a value (a literal).
+Meaning that the graph node identified by `subject` is linked to `object` with directed edge `predicate`.  Each triple ends with a period.  The subject of a triple is always a node in the graph, while the object may be a node or a value (a literal).
 
 For example, the triple
 ```

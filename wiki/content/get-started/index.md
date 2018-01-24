@@ -72,7 +72,7 @@ services:
       - 5080:5080
       - 6080:6080
     restart: on-failure
-    command: dgraph zero --port_offset -2000 --my=zero:5080
+    command: dgraph zero --my=zero:5080
   server:
     image: dgraph/dgraph:latest
     volumes:
@@ -121,7 +121,7 @@ Run `dgraph zero` to start Dgraph zero. This process controls Dgraph cluster,
 maintaining membership information, shard assignment and shard movement, etc.
 
 ```sh
-dgraph zero --port_offset -2000
+dgraph zero
 ```
 
 **Run Dgraph data server**
@@ -147,7 +147,7 @@ dgraph-ratel
 
 **Run Dgraph zero**
 ```sh
-./dgraph.exe zero --port_offset -2000
+./dgraph.exe zero
 ```
 
 **Run Dgraph data server**
@@ -167,7 +167,7 @@ dgraph-ratel
 mkdir -p /tmp/data
 
 # Run Dgraph Zero
-docker run -it -p 8080:8080 -p 9080:9080 -p 8081:8081 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero --port_offset -2000
+docker run -it -p 5080:5080 -p 6080:6080 -p 8080:8080 -p 9080:9080 -p 8000:8000 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
 
 # Run Dgraph Server
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
@@ -183,19 +183,30 @@ File access in mounted filesystems is slower when using docker. Try running the 
 
 {{% notice "tip" %}}If you are using docker on non-linux distribution, please use docker data volumes.{{% /notice %}}
 
-Create a docker data container named datacontainer with dgraph/dgraph image.
+Create a docker data container named *data* with dgraph/dgraph image.
 ```sh
 docker create -v /dgraph --name data dgraph/dgraph
 ```
 
-Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
+Now if we run Dgraph container with `--volumes-from` flag and run Dgraph with the following command, then anything we write to /dgraph in Dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
-docker run -it -p 8080:8080 -p 9080:9080 --volumes-from data --name diggy dgraph/dgraph dgraph zero --port_offset -2000
+docker run -it -p 5080:5080 -p 6080:6080 --volumes-from data --name diggy dgraph/dgraph dgraph zero
 docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
 
 # Run Dgraph Ratel
 docker exec -it diggy dgraph-ratel
 ```
+
+{{% notice "tip" %}}
+If you are using Dgraph v1.0.2 (or older) then the default ports are 7080, 8080 for zero, so when following instructions for different setup guides override zero port using `--port_offset`.
+
+```sh
+dgraph zero --memory_mb=<typically half the RAM> --port_offset -2000
+```
+Ratel's default port is 8081, so override it using -p 8000.
+
+{{% /notice %}}
+
 
 ## Step 3: Run Queries
 {{% notice "tip" %}}Once Dgraph is running, you can access user interface at [`http://localhost:8081`](http://localhost:8081).  It allows browser-based queries, mutations and visualizations.
