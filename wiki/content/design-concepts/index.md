@@ -5,6 +5,8 @@ title = "Design Concepts"
 
 ## Transactions: FAQ
 
+Dgraph supports distributed ACID transactions through snapshot isolation.
+
 ### Can we do pre-writes only on leaders?
 
 Seems like a good idea, but has bad implications. If we only do a prewrite
