@@ -29,8 +29,8 @@ type DgraphCluster struct {
 }
 
 func NewDgraphCluster(dir string) *DgraphCluster {
-	do := freePort()
-	zo := freePort()
+	do := freePort(x.PortGrpc)
+	zo := freePort(x.PortZeroGrpc)
 	return &DgraphCluster{
 		dgraphPort:       strconv.Itoa(do + x.PortGrpc),
 		zeroPort:         strconv.Itoa(zo + x.PortZeroGrpc),
@@ -101,7 +101,7 @@ type Node struct {
 }
 
 func (d *DgraphCluster) AddNode(dir string) (Node, error) {
-	o := strconv.Itoa(freePort())
+	o := strconv.Itoa(freePort(x.PortInternal))
 	dgraph := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"server",
 		"--memory_mb=4096",
