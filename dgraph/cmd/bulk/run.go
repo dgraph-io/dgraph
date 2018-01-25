@@ -73,7 +73,7 @@ func init() {
 			"must be less than or equal to the number of reduce shards.")
 	flag.Bool("version", false, "Prints the version of dgraph-bulk-loader.")
 	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
-	flag.StringP("zero", "z", "localhost:8888", "gRPC address for dgraphzero")
+	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
 	// TODO: Potentially move http server to main.
 	flag.String("http", "localhost:8080",
 		"Address to serve http (pprof).")
