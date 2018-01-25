@@ -691,15 +691,16 @@ func JSONBlankNode(t *testing.T, c *client.Dgraph) {
 
 	require.Equal(t, 3, len(assigned.Uids))
 	michael := assigned.Uids["michael"]
+	alice := assigned.Uids["alice"]
 	resp, err := c.NewTxn().Query(ctx, `
 	{
 	  q(func: uid(`+michael+`)) {
 	    name
-	    friend {
+	    friend @filter(uid(`+alice+`)){
 	      name
 	    }
 	  }
 	}`)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"q":[{"name":"Michael","friend":[{"name":"Sang Hyun"},{"name":"Alice"}]}]}`, string(resp.Json))
+	require.JSONEq(t, `{"q":[{"name":"Michael","friend":[{"name":"Alice"}]}]}`, string(resp.Json))
 }
