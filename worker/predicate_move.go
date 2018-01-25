@@ -68,6 +68,7 @@ func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
 	if hasError > 0 {
 		return x.Errorf("Error while writing to badger")
 	}
+	wg.Wait()
 	return nil
 }
 

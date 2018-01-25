@@ -134,7 +134,7 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	}
 
 	if len(ineqTokens) == 0 {
-		return nil, "", x.Errorf("Attribute %s does not have a valid tokenizer.", attr)
+		return nil, "", nil
 	} else if f == "eq" && (tokenizer.Name() == "term" || tokenizer.Name() == "fulltext") {
 		// Allow eq with term/fulltext tokenizers, even though they give
 		// multiple tokens.
