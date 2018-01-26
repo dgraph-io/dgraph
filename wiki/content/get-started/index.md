@@ -2,11 +2,24 @@
 title = "Get Started"
 +++
 
-**New to Dgraph? Here's a 3 step tutorial to get you up and running.**
+## Dgraph
+
+Dgraph cluster consists of different nodes (zero, server & ratel) and each node serves a different purpose.
+
+**Dgraph Zero** controls the Dgraph cluster, assigns servers to a group and re-balances data between server groups.
+
+**Dgraph Server** hosts data, predicates and indexes. Dgraph server will be assigned to a server group and hosts the assigned predicates.
+
+**Dgraph Ratel** serves the UI to run queries, mutations & altering schema.
+
+You atleast need one Dgraph zero and one Dgraph Server to get started.
+
+**Here's a 3 step tutorial to get you up and running.**
 
 This is a quick-start guide to running Dgraph. For an interactive walk through, take the [tour](https://tour.dgraph.io).
 
 You can see the accompanying [video here](https://www.youtube.com/watch?v=QIIdSp2zLcs).
+
 ## Step 1: Install Dgraph
 
 Dgraph can be installed from the install scripts, or run via Docker.
@@ -140,7 +153,7 @@ Run 'dgraph-ratel' to start Dgraph UI. This can be used to do mutations and quer
 dgraph-ratel
 ```
 
-{{% notice "tip" %}}You need to set the estimated memory dgraph can take through `memory_mb` flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
+{{% notice "tip" %}}You need to set the estimated memory Dgraph server can take through `memory_mb` flag. This is just a hint to the Dgraph server and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
 
 #### Windows
 
