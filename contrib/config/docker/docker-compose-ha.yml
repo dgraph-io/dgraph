@@ -9,47 +9,54 @@
 # part of the swarm.
 # Run `docker stack deploy -c docker-compose-ha.yml` on the Swarm leader to start the cluster.
 
-version: "3"
+version: "3.2"
 networks:
   dgraph:
 services:
   zero_1:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:master
     volumes:
       - data-volume:/dgraph
     ports:
+      - 5080:5080
       - 6080:6080
     networks:
       - dgraph
     deploy:
       placement:
         constraints:
-          - node.hostname == host1
-    command: dgraph zero -o -2000 --my=zero_1:5080 --replicas 3 --idx 1
+          - node.hostname == aws01
+    command: dgraph zero --my=zero_1:5080 --replicas 3 --idx 1
   zero_2:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:master
     volumes:
       - data-volume:/dgraph
+    ports:
+      - 5081:5081
+      - 6081:6081
     networks:
       - dgraph
     deploy:
       placement:
         constraints:
-          - node.hostname == host2
-    command: dgraph zero -o -1999 --my=zero_2:5081 --replicas 3 --peer zero_1:5080 --idx 2
+          - node.hostname == aws02
+    command: dgraph zero -o 1 --my=zero_2:5081 --replicas 3 --peer zero_1:5080 --idx 2
   zero_3:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:master
     volumes:
       - data-volume:/dgraph
+    ports:
+      - 5082:5082
+      - 6082:6082
     networks:
       - dgraph
     deploy:
       placement:
         constraints:
-          - node.hostname == host3
-    command: dgraph zero -o -1998 --my=zero_3:5082 --replicas 3 --peer zero_1:5080 --idx 3
+          - node.hostname == aws03
+    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero_1:5080 --idx 3
   server_1:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:master
     hostname: "server_1"
     volumes:
       - data-volume:/dgraph
@@ -62,10 +69,10 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.hostname == host1
+          - node.hostname == aws01
     command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero_1:5080
   server_2:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:master
     hostname: "server_2"
     volumes:
       - data-volume:/dgraph
@@ -78,10 +85,10 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.hostname == host2
+          - node.hostname == aws02
     command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero_1:5080 -o 1
   server_3:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:master
     hostname: "server_3"
     volumes:
       - data-volume:/dgraph
@@ -94,10 +101,10 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.hostname == host3
+          - node.hostname == aws03
     command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero_1:5080 -o 2
   server_4:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:master
     hostname: "server_4"
     volumes:
       - data-volume:/dgraph
@@ -109,10 +116,10 @@ services:
     deploy:
       placement:
         constraints:
-          - node.hostname == host4
+          - node.hostname == aws04
     command: dgraph server --my=server_4:7083 --memory_mb=2048 --zero=zero_1:5080 -o 3
   server_5:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:master
     hostname: "server_5"
     volumes:
       - data-volume:/dgraph
@@ -124,10 +131,10 @@ services:
     deploy:
       placement:
         constraints:
-          - node.hostname == host5
+          - node.hostname == aws05
     command: dgraph server --my=server_5:7084 --memory_mb=2048 --zero=zero_1:5080 -o 4
   server_6:
-    image: dgraph/dgraph:test
+    image: dgraph/dgraph:master
     hostname: "server_6"
     volumes:
       - data-volume:/dgraph
@@ -139,8 +146,15 @@ services:
     deploy:
       placement:
         constraints:
-          - node.hostname == host6
+          - node.hostname == aws06
     command: dgraph server --my=server_6:7085 --memory_mb=2048 --zero=zero_1:5080 -o 5
-
+  ratel:
+    image: dgraph/dgraph:master
+    hostname: "ratel"
+    ports:
+      - 8000:8000
+    networks:
+      - dgraph
+    command: dgraph-ratel
 volumes:
   data-volume:
