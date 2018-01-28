@@ -78,7 +78,7 @@ instances to achieve high-availability.
 	flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	flag.IntP("port_offset", "o", 0,
-		"Value added to all listening port numbers. [Grpc=7080, HTTP=8080]")
+		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
 	flag.Uint64("idx", 1, "Unique node index for this server.")
 	flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
@@ -236,13 +236,13 @@ func run() {
 		addr = "0.0.0.0"
 	}
 	if len(opts.myAddr) == 0 {
-		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortInternal+opts.portOffset)
+		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
-	grpcListener, err := setupListener(addr, x.PortInternal+opts.portOffset, "grpc")
+	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
 	if err != nil {
 		log.Fatal(err)
 	}
-	httpListener, err := setupListener(addr, x.PortHTTP+opts.portOffset, "http")
+	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
 	if err != nil {
 		log.Fatal(err)
 	}

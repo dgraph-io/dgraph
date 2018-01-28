@@ -81,7 +81,7 @@ func init() {
 	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	flag.StringP("zero", "z", "127.0.0.1:7080", "Dgraphzero gRPC server address")
+	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
 	flag.IntP("conc", "c", 1,
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 10000,

@@ -18,6 +18,7 @@ package edgraph
 
 import (
 	"expvar"
+	"fmt"
 	"path/filepath"
 
 	"github.com/dgraph-io/dgraph/posting"
@@ -61,7 +62,7 @@ var DefaultConfig = Options{
 	NumPendingProposals: 2000,
 	Tracing:             0.0,
 	MyAddr:              "",
-	ZeroAddr:            "localhost:7080",
+	ZeroAddr:            fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 	MaxPendingCount:     1000,
 	ExpandEdge:          true,
 

@@ -46,7 +46,7 @@ func TestMain(m *testing.M) {
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"-w", zw,
-		"-o", "-1999",
+		"-o", "1",
 	)
 	zero.Stdout = os.Stdout
 	zero.Stderr = os.Stdout
