@@ -141,8 +141,8 @@ sharding, replication and rebalancing works.
 
 Dgraph colocates data per predicate (* P *, in RDF terminology), thus the
 smallest unit of data is one predicate.  To shard the graph, one or many
-predicates are assigned to a group.  Each node in the cluster serves a single
-group. Dgraph zero assigns a group to each node.
+predicates are assigned to a group.  Each server node in the cluster serves a single
+group. Dgraph zero assigns a group to each server node.
 
 **Shard rebalancing**
 
@@ -1048,14 +1048,14 @@ By default the server listens on `localhost` (the loopback address only accessib
 ## More about Dgraph Zero
 
 Dgraph Zero controls the Dgraph cluster. It automatically moves data between
-different dgraph instances based on the size of the data served by each instance.
+different Dgraph server instances based on the size of the data served by each server instance.
 
 It is mandatory to run atleast one `dgraph zero` node before running any `dgraph server`.
 Options present for `dgraph zero` can be seen by running `dgraph zero --help`.
 
 * Zero stores information about the cluster.
 * `--replicas` is the option that controls the replication factor. (i.e. number of replicas per data shard, including the original shard)
-* Whenever a new machine is brought up it is assigned a group based on replication factor. If replication factor is 1 then each node will serve different group. If replication factor is 2 and you launch 4 machines then first two machines would server group 1 and next two machines would server group 2.
+* Whenever a new machine is brought up it is assigned a group based on replication factor. If replication factor is 1 then each server node will serve different group. If replication factor is 2 and you launch 4 machines then first two machines would server group 1 and next two machines would server group 2.
 * Zero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
 
 Like Dgraph, Zero also exposes HTTP on 8080 (+ any `--port_offset`). You can query it
@@ -1141,9 +1141,9 @@ tls_min_version string
 
 In setting up a cluster be sure the check the following.
 
-* Is atleast one dgraphzero node running?
-* Is each dgraph instance in the cluster [set up correctly]({{< relref "#running-dgraph">}})?
-* Will each instance be accessible to all peers on 7080 (+ any port offset)?
+* Is atleast one Dgraph zero node running?
+* Is each Dgraph server instance in the cluster set up correctly?
+* Will each server instance be accessible to all peers on 7080 (+ any port offset)?
 * Does each node have a unique ID on startup?
 * Has `--bindall=true` been set for networked communication?
 
@@ -1186,16 +1186,15 @@ section below for details.
 {{% /notice %}}
 
 Bulk loader serves a similar purpose to the live loader, but can only be used
-while dgraph is offline for the initial population. It cannot run on an
-existing dgraph instance.
+while Dgraph is offline (i.e., no Dgraph servers are running, except a Dgraph zero) for the initial population. It cannot be run on an existing live Dgraph cluster.
 
 {{% notice "warning" %}}
-Don't use bulk loader once Dgraph is up and running. Use it to import your
+Don't use bulk loader once Dgraph cluster is up and running. Use it to import your
 existing data into a new instance of Dgraph server.
 {{% /notice %}}
 
 Bulk loader is **considerably faster** than the live loader, and is the recommended
-way to perform the initial import of large datasets into dgraph.
+way to perform the initial import of large datasets into Dgraph.
 
 You can [read some technical details](https://blog.dgraph.io/post/bulkloader/)
 about the bulk loader on the blog.
@@ -1203,7 +1202,7 @@ about the bulk loader on the blog.
 See [Fast Data Loading]({{< relref "#fast-data-loading" >}}) for more about the expected N-Quads format.
 
 You need to determine the
-number of dgraph instances you want in your cluster. You should set the number
+number of Dgraph server instances you want in your cluster. You should set the number
 of reduce shards to this number. You will also need to set the number of map
 shards to at least this number (a higher number helps the bulk loader evenly
 distribute predicates between the reduce shards). For this example, you could use
@@ -1304,27 +1303,27 @@ has a negligible impact on memory usage.
 use a lot.  Some flags may be increased to improve performance, *but only if
 you have large amounts of RAM*:
 
-- The `--reduce_shards` flag controls the number of resultant dgraph instances.
+- The `--reduce_shards` flag controls the number of resultant Dgraph server instances.
   Increasing this increases memory consumption, but in exchange allows for
 higher CPU utilization.
 
 - The `--map_shards` flag controls the number of separate map output shards.
   Increasing this increases memory consumption but balances the resultant
-dgraph instances more evenly.
+Dgraph server instances more evenly.
 
 - The `--shufflers` controls the level of parallelism in the shuffle/reduce
   stage. Increasing this increases memory consumption.
 
 #### Monitoring
-Dgraph exposes metrics via `/debug/vars` endpoint in json format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. You can either poll this endpoint to get the data in your monitoring systems or install **[Prometheus](https://prometheus.io/docs/introduction/install/)**. Replace targets in the below config file with the ip of your dgraph instances and run prometheus using the command `prometheus -config.file my_config.yaml`.
+Dgraph exposes metrics via `/debug/vars` endpoint in json format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. You can either poll this endpoint to get the data in your monitoring systems or install **[Prometheus](https://prometheus.io/docs/introduction/install/)**. Replace targets in the below config file with the ip of your Dgraph instances and run prometheus using the command `prometheus -config.file my_config.yaml`.
 ```sh
 scrape_configs:
   - job_name: "dgraph"
-    metrics_path: "/debug/prometheus_metrics"
+    metrics_path: "/debug/vars"
     scrape_interval: "2s"
     static_configs:
     - targets:
-      - 172.31.9.133:8080
+      - 172.31.9.133:6080 #For Dgraph zero, 6080 is the http endpoint exposing metrics.
       - 172.31.15.230:8080
       - 172.31.0.170:8080
       - 172.31.8.118:8080
@@ -1341,10 +1340,10 @@ An export of all nodes is started by locally accessing the export endpoint of an
 ```sh
 $ curl localhost:8080/admin/export
 ```
-{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.
+{{% notice "warning" %}}This won't work if called from outside the server where Dgraph server is running.
 {{% /notice %}}
 
-This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph instance is running.
+This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph server instance is running.
 
 This triggers a export of all the groups spread across the entire cluster. Each server writes output in gzipped rdf to the export directory specified on startup by `--export`. If any of the groups fail, the entire export process is considered failed, and an error is returned.
 
@@ -1352,8 +1351,8 @@ This triggers a export of all the groups spread across the entire cluster. Each 
 
 #### Shutdown Database
 
-A clean exit of a single dgraph node is initiated by running the following command on that node.
-{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.
+A clean exit of a single Dgraph node is initiated by running the following command on that node.
+{{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
 {{% /notice %}}
 
 ```sh
