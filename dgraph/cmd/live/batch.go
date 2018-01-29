@@ -194,7 +194,7 @@ func (l *loader) printCounters() {
 // Counter returns the current state of the BatchMutation.
 func (l *loader) Counter() Counter {
 	return Counter{
-		Rdfs:     atomic.LoadUint64(&l.txns) * uint64(l.opts.Size),
+		Rdfs:     atomic.LoadUint64(&l.rdfs),
 		TxnsDone: atomic.LoadUint64(&l.txns),
 		Elapsed:  time.Since(l.start),
 		Aborts:   atomic.LoadUint64(&l.aborts),
