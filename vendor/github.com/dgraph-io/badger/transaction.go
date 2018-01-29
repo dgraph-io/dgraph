@@ -18,8 +18,6 @@ package badger
 
 import (
 	"bytes"
-	"container/heap"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -52,12 +50,8 @@ type oracle struct {
 	isManaged bool // Does not change value, so no locking required.
 
 	sync.Mutex
+	writeLock  sync.Mutex
 	nextCommit uint64
-
-	// These two structures are used to figure out when a commit is done. The minimum done commit is
-	// used to update curRead.
-	commitMark     uint64Heap
-	pendingCommits map[uint64]struct{}
 
 	// commits stores a key fingerprint and latest commit counter for it.
 	// refCount is used to clear out commits map to avoid a memory blowup.
@@ -70,15 +64,14 @@ func (o *oracle) addRef() {
 
 func (o *oracle) decrRef() {
 	if count := atomic.AddInt64(&o.refCount, -1); count == 0 {
-		// Clear out pendingCommits maps to release memory.
+		// Clear out commits maps to release memory.
 		o.Lock()
-		// There could be race here, so check again.
-		// Checking commitMark is safe since it is protected by mutex.
-		if len(o.commitMark) > 0 {
+		// Avoids the race where something new is added to commitsMap
+		// after we check refCount and before we take Lock.
+		if atomic.LoadInt64(&o.refCount) != 0 {
 			o.Unlock()
 			return
 		}
-		y.AssertTrue(len(o.pendingCommits) == 0)
 		if len(o.commits) >= 1000 { // If the map is still small, let it slide.
 			o.commits = make(map[uint64]uint64)
 		}
@@ -134,15 +127,6 @@ func (o *oracle) newCommitTs(txn *Txn) uint64 {
 	for _, w := range txn.writes {
 		o.commits[w] = ts // Update the commitTs.
 	}
-	if o.isManaged {
-		// No need to update the heap.
-		return ts
-	}
-	heap.Push(&o.commitMark, ts)
-	if _, has := o.pendingCommits[ts]; has {
-		panic(fmt.Sprintf("We shouldn't have the commit ts: %d", ts))
-	}
-	o.pendingCommits[ts] = struct{}{}
 	return ts
 }
 
@@ -151,29 +135,14 @@ func (o *oracle) doneCommit(cts uint64) {
 		// No need to update anything.
 		return
 	}
-	o.Lock()
-	defer o.Unlock()
 
-	if _, has := o.pendingCommits[cts]; !has {
-		panic(fmt.Sprintf("We should already have the commit ts: %d", cts))
-	}
-	delete(o.pendingCommits, cts)
-
-	var min uint64
-	for len(o.commitMark) > 0 {
-		ts := o.commitMark[0]
-		if _, has := o.pendingCommits[ts]; has {
-			// Still waiting for a txn to commit.
-			break
+	for {
+		curRead := atomic.LoadUint64(&o.curRead)
+		if cts <= curRead {
+			return
 		}
-		min = ts
-		heap.Pop(&o.commitMark)
+		atomic.CompareAndSwapUint64(&o.curRead, curRead, cts)
 	}
-	if min == 0 {
-		return
-	}
-	atomic.StoreUint64(&o.curRead, min)
-	// nextCommit must never be reset.
 }
 
 // Txn represents a Badger transaction.
@@ -377,10 +346,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 	item = new(Item)
 	if txn.update {
 		if e, has := txn.pendingWrites[string(key)]; has && bytes.Equal(key, e.Key) {
-			if e.meta&bitDelete > 0 {
-				return nil, ErrKeyNotFound
-			}
-			if e.ExpiresAt > 0 && e.ExpiresAt <= uint64(time.Now().Unix()) {
+			if isDeletedOrExpired(e.meta, e.ExpiresAt) {
 				return nil, ErrKeyNotFound
 			}
 			// Fulfill from cache.
@@ -407,7 +373,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 	if vs.Value == nil && vs.Meta == 0 {
 		return nil, ErrKeyNotFound
 	}
-	if isDeletedOrExpired(vs) {
+	if isDeletedOrExpired(vs.Meta, vs.ExpiresAt) {
 		return nil, ErrKeyNotFound
 	}
 
@@ -471,8 +437,10 @@ func (txn *Txn) Commit(callback func(error)) error {
 	}
 
 	state := txn.db.orc
+	state.writeLock.Lock()
 	commitTs := state.newCommitTs(txn)
 	if commitTs == 0 {
+		state.writeLock.Unlock()
 		return ErrConflict
 	}
 
@@ -491,18 +459,27 @@ func (txn *Txn) Commit(callback func(error)) error {
 	}
 	entries = append(entries, e)
 
+	req, err := txn.db.sendToWriteCh(entries)
+	state.writeLock.Unlock()
+	if err != nil {
+		return err
+	}
+
 	if callback == nil {
 		// If batchSet failed, LSM would not have been updated. So, no need to rollback anything.
 
 		// TODO: What if some of the txns successfully make it to value log, but others fail.
 		// Nothing gets updated to LSM, until a restart happens.
 		defer state.doneCommit(commitTs)
-		return txn.db.batchSet(entries)
+		return req.Wait()
 	}
-	return txn.db.batchSetAsync(entries, func(err error) {
+	go func() {
+		err := req.Wait()
+		// Write is complete. Let's call the callback function now.
 		state.doneCommit(commitTs)
 		callback(err)
-	})
+	}()
+	return nil
 }
 
 // NewTransaction creates a new transaction. Badger supports concurrent execution of transactions,

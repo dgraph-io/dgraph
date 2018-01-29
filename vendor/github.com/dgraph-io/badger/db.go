@@ -18,7 +18,6 @@ package badger
 
 import (
 	"bytes"
-	"container/heap"
 	"encoding/binary"
 	"expvar"
 	"log"
@@ -40,9 +39,10 @@ import (
 )
 
 var (
-	badgerPrefix = []byte("!badger!")     // Prefix for internal keys used by badger.
-	head         = []byte("!badger!head") // For storing value offset for replay.
-	txnKey       = []byte("!badger!txn")  // For indicating end of entries in txn.
+	badgerPrefix = []byte("!badger!")      // Prefix for internal keys used by badger.
+	head         = []byte("!badger!head")  // For storing value offset for replay.
+	txnKey       = []byte("!badger!txn")   // For indicating end of entries in txn.
+	purgePrefix  = []byte("!badger!purge") // Stores the version below which we need to purge.
 )
 
 type closers struct {
@@ -51,6 +51,7 @@ type closers struct {
 	memtable   *y.Closer
 	writes     *y.Closer
 	valueGC    *y.Closer
+	gcStats    *y.Closer
 }
 
 // DB provides the various functions required to interact with Badger.
@@ -62,17 +63,18 @@ type DB struct {
 	// nil if Dir and ValueDir are the same
 	valueDirGuard *directoryLockGuard
 
-	closers   closers
-	elog      trace.EventLog
-	mt        *skl.Skiplist   // Our latest (actively written) in-memory table
-	imm       []*skl.Skiplist // Add here only AFTER pushing to flushChan.
-	opt       Options
-	manifest  *manifestFile
-	lc        *levelsController
-	vlog      valueLog
-	vptr      valuePointer // less than or equal to a pointer to the last vlog value put into mt
-	writeCh   chan *request
-	flushChan chan flushTask // For flushing memtables.
+	closers       closers
+	elog          trace.EventLog
+	mt            *skl.Skiplist   // Our latest (actively written) in-memory table
+	imm           []*skl.Skiplist // Add here only AFTER pushing to flushChan.
+	opt           Options
+	manifest      *manifestFile
+	lc            *levelsController
+	vlog          valueLog
+	vptr          valuePointer // less than or equal to a pointer to the last vlog value put into mt
+	writeCh       chan *request
+	flushChan     chan flushTask   // For flushing memtables.
+	purgeUpdateCh chan purgeUpdate // For updating GcStats
 
 	orc *oracle
 }
@@ -229,17 +231,16 @@ func Open(opt Options) (db *DB, err error) {
 	}()
 
 	orc := &oracle{
-		isManaged:      opt.managedTxns,
-		nextCommit:     1,
-		pendingCommits: make(map[uint64]struct{}),
-		commits:        make(map[uint64]uint64),
+		isManaged:  opt.managedTxns,
+		nextCommit: 1,
+		commits:    make(map[uint64]uint64),
 	}
-	heap.Init(&orc.commitMark)
 
 	db = &DB{
 		imm:           make([]*skl.Skiplist, 0, opt.NumMemtables),
 		flushChan:     make(chan flushTask, opt.NumMemtables),
 		writeCh:       make(chan *request, kvWriteChCapacity),
+		purgeUpdateCh: make(chan purgeUpdate, 1000),
 		opt:           opt,
 		manifest:      manifestFile,
 		elog:          trace.NewEventLog("Badger", "DB"),
@@ -312,6 +313,9 @@ func Open(opt Options) (db *DB, err error) {
 	db.closers.valueGC = y.NewCloser(1)
 	go db.vlog.waitOnGC(db.closers.valueGC)
 
+	db.closers.gcStats = y.NewCloser(1)
+	go db.runUpdateGCStats(db.closers.gcStats)
+
 	valueDirLockGuard = nil
 	dirLockGuard = nil
 	manifestFile = nil
@@ -324,6 +328,9 @@ func (db *DB) Close() (err error) {
 	db.elog.Printf("Closing database")
 	// Stop value GC first.
 	db.closers.valueGC.SignalAndWait()
+
+	// Stop GC stats update.
+	db.closers.gcStats.SignalAndWait()
 
 	// Stop writes next.
 	db.closers.writes.SignalAndWait()
@@ -681,11 +688,7 @@ func (db *DB) batchSet(entries []*Entry) error {
 		return err
 	}
 
-	req.Wg.Wait()
-	req.Entries = nil
-	err = req.Err
-	requestPool.Put(req)
-	return err
+	return req.Wait()
 }
 
 // batchSetAsync is the asynchronous version of batchSet. It accepts a callback
@@ -700,10 +703,7 @@ func (db *DB) batchSetAsync(entries []*Entry, f func(error)) error {
 		return err
 	}
 	go func() {
-		req.Wg.Wait()
-		err := req.Err
-		req.Entries = nil
-		requestPool.Put(req)
+		err := req.Wait()
 		// Write is complete. Let's call the callback function now.
 		f(err)
 	}()
@@ -898,37 +898,85 @@ func (db *DB) updateSize(lc *y.Closer) {
 	}
 }
 
-// PurgeVersionsBelow will delete all versions of a key below the specified version
-func (db *DB) PurgeVersionsBelow(key []byte, ts uint64) error {
-	txn := db.NewTransaction(false)
-	defer txn.Discard()
-	return db.purgeVersionsBelow(txn, key, ts)
+func (db *DB) runUpdateGCStats(lc *y.Closer) {
+	defer lc.Done()
+	for {
+		select {
+		case t := <-db.purgeUpdateCh:
+			txn := db.NewTransaction(false)
+			db.updateGCStats(txn, t)
+			txn.Discard()
+		case <-lc.HasBeenClosed():
+			return
+		}
+	}
 }
 
-func (db *DB) purgeVersionsBelow(txn *Txn, key []byte, ts uint64) error {
+func purgeKey(key []byte) []byte {
+	return y.KeyWithTs(append(purgePrefix, key...), 1)
+}
+
+func (db *DB) purgeTs(key []byte) uint64 {
+	vs, err := db.get(purgeKey(key))
+	if err != nil {
+		return 0
+	} else if isDeletedOrExpired(vs.Meta, vs.ExpiresAt) {
+		// If purgekey is deleted, then purgeTs would be zero
+		// But we never delete purgeKey.
+		return 0
+	} else if len(vs.Value) > 0 {
+		return binary.BigEndian.Uint64(vs.Value)
+	}
+	return 0
+}
+
+type purgeUpdate struct {
+	key  []byte
+	from uint64
+	end  uint64
+}
+
+func (db *DB) updateGCStats(txn *Txn, t purgeUpdate) {
 	opts := DefaultIteratorOptions
 	opts.AllVersions = true
 	opts.PrefetchValues = false
 	it := txn.NewIterator(opts)
 	defer it.Close()
 
-	var entries []*Entry
-
-	for it.Seek(key); it.ValidForPrefix(key); it.Next() {
+	for it.Seek(t.key); it.ValidForPrefix(t.key); it.Next() {
 		item := it.Item()
-		if !bytes.Equal(key, item.Key()) || item.Version() >= ts {
+		if !bytes.Equal(t.key, item.Key()) {
+			break
+		} else if item.Version() > t.end {
+			continue
+		} else if item.Version() < t.from {
+			break
+		} else if isDeletedOrExpired(item.meta, item.ExpiresAt()) {
 			continue
 		}
-
-		// Found an older version. Mark for deletion
-		entries = append(entries,
-			&Entry{
-				Key:  y.KeyWithTs(key, item.version),
-				meta: bitDelete,
-			})
 		db.vlog.updateGCStats(item)
 	}
-	return db.batchSet(entries)
+}
+
+// PurgeVersionsBelow will delete all versions of a key below the specified version
+func (db *DB) PurgeVersionsBelow(key []byte, ts uint64) error {
+	updateGcTask := purgeUpdate{
+		key:  key,
+		from: db.purgeTs(key),
+		end:  ts - 1,
+	}
+	select {
+	case db.purgeUpdateCh <- updateGcTask:
+	default:
+	}
+
+	buf := make([]byte, 10)
+	binary.BigEndian.PutUint64(buf, ts)
+	e := &Entry{
+		Key:   purgeKey(key),
+		Value: buf,
+	}
+	return db.batchSet([]*Entry{e})
 }
 
 // PurgeOlderVersions deletes older versions of all keys.
@@ -940,6 +988,7 @@ func (db *DB) purgeVersionsBelow(txn *Txn, key []byte, ts uint64) error {
 func (db *DB) PurgeOlderVersions() error {
 	return db.View(func(txn *Txn) error {
 		opts := DefaultIteratorOptions
+		// We need to use AllVersions otherwise we won't get deleted keys in merge iterator.
 		opts.AllVersions = true
 		opts.PrefetchValues = false
 		it := txn.NewIterator(opts)
@@ -970,34 +1019,43 @@ func (db *DB) PurgeOlderVersions() error {
 			}
 		}
 
+		// Since the older versions of value are not deleted in lsm, we need to reset gcstats
+		// or else same entry would be counted as discarded everytime we call PurgeOlderVersions.
+		db.vlog.resetGCStats()
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
+			// This is latest version for this key.
 			if !bytes.Equal(lastKey, item.Key()) {
 				lastKey = y.SafeCopy(lastKey, item.Key())
+				buf := make([]byte, 10)
+				binary.BigEndian.PutUint64(buf, item.Version())
+				e := &Entry{
+					Key:   purgeKey(lastKey),
+					Value: buf,
+				}
+
+				curSize := e.estimateSize(db.opt.ValueThreshold)
+				// Batch up min(1000, maxBatchCount) entries at a time and write
+				// Ensure that total batch size doesn't exceed maxBatchSize
+				if count == 1000 || count+1 >= int(db.opt.maxBatchCount) ||
+					size+curSize >= int(db.opt.maxBatchSize) {
+					if err := batchSetAsyncIfNoErr(entries); err != nil {
+						return err
+					}
+					count = 0
+					size = 0
+					entries = []*Entry{}
+				}
+				size += curSize
+				count++
+				entries = append(entries, e)
 				continue
 			}
-			// Found an older version. Mark for deletion
-			e := &Entry{
-				Key:  y.KeyWithTs(lastKey, item.version),
-				meta: bitDelete,
+
+			if isDeletedOrExpired(item.meta, item.ExpiresAt()) {
+				continue
 			}
 			db.vlog.updateGCStats(item)
-			curSize := e.estimateSize(db.opt.ValueThreshold)
-
-			// Batch up min(1000, maxBatchCount) entries at a time and write
-			// Ensure that total batch size doesn't exceed maxBatchSize
-			if count == 1000 || count+1 >= int(db.opt.maxBatchCount) ||
-				size+curSize >= int(db.opt.maxBatchSize) {
-				if err := batchSetAsyncIfNoErr(entries); err != nil {
-					return err
-				}
-				count = 0
-				size = 0
-				entries = []*Entry{}
-			}
-			size += curSize
-			count++
-			entries = append(entries, e)
 		}
 
 		// Write last batch pending deletes
@@ -1106,6 +1164,24 @@ func (seq *Sequence) Next() (uint64, error) {
 	return val, nil
 }
 
+// Release the leased sequence to avoid wasted integers. This should be done right
+// before closing the associated DB. However it is valid to use the sequence after
+// it was released, causing a new lease with full bandwidth.
+func (seq *Sequence) Release() error {
+	seq.Lock()
+	defer seq.Unlock()
+	err := seq.db.Update(func(txn *Txn) error {
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], seq.next)
+		return txn.Set(seq.key, buf[:])
+	})
+	if err != nil {
+		return err
+	}
+	seq.leased = seq.next
+	return nil
+}
+
 func (seq *Sequence) updateLease() error {
 	return seq.db.Update(func(txn *Txn) error {
 		item, err := txn.Get(seq.key)
@@ -1153,4 +1229,158 @@ func (db *DB) GetSequence(key []byte, bandwidth uint64) (*Sequence, error) {
 	}
 	err := seq.updateLease()
 	return seq, err
+}
+
+// MergeOperator represents a Badger merge operator.
+type MergeOperator struct {
+	sync.RWMutex
+	f             MergeFunc
+	db            *DB
+	key           []byte
+	skipAtOrBelow uint64
+	closer        *y.Closer
+}
+
+// MergeFunc accepts two byte slices, one representing an existing value, and
+// another representing a new value that needs to be ‘merged’ into it. MergeFunc
+// contains the logic to perform the ‘merge’ and return an updated value.
+// MergeFunc could perform operations like integer addition, list appends etc.
+// Note that the ordering of the operands is unspecified, so the merge func
+// should either be agnostic to ordering or do additional handling if ordering
+// is required.
+type MergeFunc func(existing, val []byte) []byte
+
+// GetMergeOperator creates a new MergeOperator for a given key and returns a
+// pointer to it. It also fires off a goroutine that performs a compaction using
+// the merge function that runs periodically, as specified by dur.
+func (db *DB) GetMergeOperator(key []byte,
+	f MergeFunc, dur time.Duration) *MergeOperator {
+	op := &MergeOperator{
+		f:      f,
+		db:     db,
+		key:    key,
+		closer: y.NewCloser(1),
+	}
+
+	go op.runCompactions(dur)
+	return op
+}
+
+func (op *MergeOperator) iterateAndMerge(txn *Txn) (maxVersion uint64, val []byte, err error) {
+	opt := DefaultIteratorOptions
+	opt.AllVersions = true
+	it := txn.NewIterator(opt)
+	var first bool
+	for it.Rewind(); it.ValidForPrefix(op.key); it.Next() {
+		item := it.Item()
+		if item.Version() <= op.skipAtOrBelow {
+			continue
+		}
+		if item.Version() > maxVersion {
+			maxVersion = item.Version()
+		}
+		if !first {
+			first = true
+			val, err = item.ValueCopy(val)
+			if err != nil {
+				return 0, nil, err
+			}
+		} else {
+			newVal, err := item.Value()
+			if err != nil {
+				return 0, nil, err
+			}
+			val = op.f(val, newVal)
+		}
+	}
+	if !first {
+		return 0, nil, ErrKeyNotFound
+	}
+	return maxVersion, val, nil
+}
+
+func (op *MergeOperator) compact() error {
+	op.Lock()
+	defer op.Unlock()
+	var maxVersion uint64
+	err := op.db.Update(func(txn *Txn) error {
+		var (
+			val []byte
+			err error
+		)
+		maxVersion, val, err = op.iterateAndMerge(txn)
+		if err != nil {
+			return err
+		}
+
+		// Write value back to db
+		if maxVersion > op.skipAtOrBelow {
+			if err := txn.Set(op.key, val); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil && err != ErrKeyNotFound { // Ignore ErrKeyNotFound errors during compaction
+		return err
+	}
+	// Update version
+	op.skipAtOrBelow = maxVersion
+	return nil
+}
+
+func (op *MergeOperator) runCompactions(dur time.Duration) {
+	ticker := time.NewTicker(dur)
+	defer op.closer.Done()
+	var stop bool
+	for {
+		select {
+		case <-op.closer.HasBeenClosed():
+			stop = true
+		case <-ticker.C: // wait for tick
+		}
+		oldSkipVersion := op.skipAtOrBelow
+		if err := op.compact(); err != nil {
+			log.Printf("Error while running merge operation: %s", err)
+		}
+		// Purge older versions if version has updated
+		if op.skipAtOrBelow > oldSkipVersion {
+			if err := op.db.PurgeVersionsBelow(op.key, op.skipAtOrBelow+1); err != nil {
+				log.Printf("Error purging merged keys: %s", err)
+			}
+		}
+		if stop {
+			ticker.Stop()
+			break
+		}
+	}
+}
+
+// Add records a value in Badger which will eventually be merged by a background
+// routine into the values that were recorded by previous invocations to Add().
+func (op *MergeOperator) Add(val []byte) error {
+	return op.db.Update(func(txn *Txn) error {
+		return txn.Set(op.key, val)
+	})
+}
+
+// Get returns the latest value for the merge operator, which is derived by
+// applying the merge function to all the values added so far.
+//
+// If Add has not been called even once, Get will return ErrKeyNotFound
+func (op *MergeOperator) Get() ([]byte, error) {
+	op.RLock()
+	defer op.RUnlock()
+	var existing []byte
+	err := op.db.View(func(txn *Txn) (err error) {
+		_, existing, err = op.iterateAndMerge(txn)
+		return err
+	})
+	return existing, err
+}
+
+// Stop waits for any pending merge to complete and then stops the background
+// goroutine.
+func (op *MergeOperator) Stop() {
+	op.closer.SignalAndWait()
 }
