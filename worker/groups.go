@@ -241,12 +241,16 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 			go conn.Get().Connect(member.Addr)
 		}
 	}
-	for _, member := range g.state.Removed {
-		if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-			go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+
+	// While restarting we fill Node information after retrieving initial state.
+	if g.Node != nil {
+		for _, member := range g.state.Removed {
+			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
+				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+			}
+			// Each node should have different id and address.
+			conn.Get().Remove(member.Addr)
 		}
-		// Each node should have different id and address.
-		conn.Get().Remove(member.Addr)
 	}
 }
 
