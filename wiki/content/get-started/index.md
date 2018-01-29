@@ -8,11 +8,11 @@ Dgraph cluster consists of different nodes (zero, server & ratel) and each node 
 
 **Dgraph Zero** controls the Dgraph cluster, assigns servers to a group and re-balances data between server groups.
 
-**Dgraph Server** hosts data, predicates and indexes. Dgraph server will be assigned to a server group and hosts the assigned predicates.
+**Dgraph Server** hosts predicates and indexes.
 
 **Dgraph Ratel** serves the UI to run queries, mutations & altering schema.
 
-You atleast need one Dgraph zero and one Dgraph Server to get started.
+You need atleast need one Dgraph zero and one Dgraph Server to get started.
 
 **Here's a 3 step tutorial to get you up and running.**
 

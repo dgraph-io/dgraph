@@ -1323,7 +1323,7 @@ scrape_configs:
     scrape_interval: "2s"
     static_configs:
     - targets:
-      - 172.31.9.133:6080 #For Dgraph zero, 6080 is the http endpoint exposing matrics.
+      - 172.31.9.133:6080 #For Dgraph zero, 6080 is the http endpoint exposing metrics.
       - 172.31.15.230:8080
       - 172.31.0.170:8080
       - 172.31.8.118:8080
