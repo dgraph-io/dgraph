@@ -56,13 +56,18 @@ func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
 	wg.Add(len(kvs))
 	for _, kv := range kvs {
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0])
-		txn.CommitAt(kv.Version, func(err error) {
+		if err := txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]); err != nil {
+			return err
+		}
+		err := txn.CommitAt(kv.Version, func(err error) {
 			if err != nil {
 				atomic.StoreUint32(&hasError, 1)
 			}
 			wg.Done()
 		})
+		if err != nil {
+			return err
+		}
 		txn.Discard()
 	}
 	if hasError > 0 {
@@ -174,7 +179,6 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KV) error {
 			}
 			proposal.Kv = proposal.Kv[:0]
 			size = 0
-			continue
 		}
 
 		if firstKV {
@@ -191,9 +195,11 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KV) error {
 		proposal.Kv = append(proposal.Kv, kv)
 		size = size + len(kv.Key) + len(kv.Val)
 	}
-	// Propose remaining keys.
-	if err := n.ProposeAndWait(ctx, proposal); err != nil {
-		return err
+	if size > 0 {
+		// Propose remaining keys.
+		if err := n.ProposeAndWait(ctx, proposal); err != nil {
+			return err
+		}
 	}
 	return schema.Load(predicate)
 }
