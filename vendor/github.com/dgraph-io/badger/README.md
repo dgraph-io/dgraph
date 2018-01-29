@@ -1,4 +1,4 @@
-# BadgerDB [![GoDoc](https://godoc.org/github.com/dgraph-io/badger?status.svg)](https://godoc.org/github.com/dgraph-io/badger) [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/badger)](https://goreportcard.com/report/github.com/dgraph-io/badger) [![Build Status](https://travis-ci.org/dgraph-io/badger.svg?branch=master)](https://travis-ci.org/dgraph-io/badger) ![Appveyor](https://ci.appveyor.com/api/projects/status/github/dgraph-io/badger?branch=master&svg=true) [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/badger/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/badger?branch=master)
+# BadgerDB [![GoDoc](https://godoc.org/github.com/dgraph-io/badger?status.svg)](https://godoc.org/github.com/dgraph-io/badger) [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/badger)](https://goreportcard.com/report/github.com/dgraph-io/badger) [![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:(id:Badger_UnitTests)/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=Badger_UnitTests&buildId=lastFinished&guest=1) ![Appveyor](https://ci.appveyor.com/api/projects/status/github/dgraph-io/badger?branch=master&svg=true) [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/badger/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/badger?branch=master)
 
 ![Badger mascot](images/diggy-shadow.png)
 
@@ -30,6 +30,7 @@ version.
       - [Managing transactions manually](#managing-transactions-manually)
     + [Using key/value pairs](#using-keyvalue-pairs)
     + [Monotonically increasing integers](#monotonically-increasing-integers)
+    * [Merge Operations](#merge-operations)
     + [Setting Time To Live(TTL) and User Metadata on Keys](#setting-time-to-livettl-and-user-metadata-on-keys)
     + [Iterating over keys](#iterating-over-keys)
       - [Prefix scans](#prefix-scans)
@@ -101,7 +102,7 @@ cannot open the same database at the same time.
 To start a read-only transaction, you can use the `DB.View()` method:
 
 ```go
-err := db.View(func(tx *badger.Txn) error {
+err := db.View(func(txn *badger.Txn) error {
   // Your code here…
   return nil
 })
@@ -116,7 +117,7 @@ seen by calls made within the closure.
 To start a read-write transaction, you can use the `DB.Update()` method:
 
 ```go
-err := db.Update(func(tx *badger.Txn) error {
+err := db.Update(func(txn *badger.Txn) error {
   // Your code here…
   return nil
 })
@@ -247,12 +248,59 @@ bandwidth provided to `DB.GetSequence`. The frequency at which disk writes are
 done is determined by this lease bandwidth and the frequency of `Next`
 invocations. Setting a bandwith too low would do more disk writes, setting it
 too high would result in wasted integers if Badger is closed or crashes.
+To avoid wasted integers, call `Release` before closing Badger.
 
 ```go
 seq, err := db.GetSequence(key, 1000)
+defer seq.Release()
 for {
   num, err := seq.Next()
 }
+```
+
+### Merge Operations
+Badger provides support for unordered merge operations. You can define a func
+of type `MergeFunc` which takes in an existing value, and a value to be
+_merged_ with it. It returns a new value which is the result of the _merge_
+operation. All values are specified in byte arrays. For e.g., here is a merge
+function (`add`) which adds a `uint64` value to an existing `uint64` value.
+
+```Go
+uint64ToBytes(i uint64) []byte {
+  var buf [8]byte
+  binary.BigEndian.PutUint64(buf[:], i)
+  return buf[:]
+}
+
+func bytesToUint64(b []byte) uint64 {
+  return binary.BigEndian.Uint64(b)
+}
+
+// Merge function to add two uint64 numbers
+func add(existing, new []byte) []byte {
+  return uint64ToBytes(bytesToUint64(existing) + bytesToUint64(new))
+}
+```
+
+This function can then be passed to the `DB.GetMergeOperator()` method, along
+with a key, and a duration value. The duration specifies how often the merge
+function is run on values that have been added using the `MergeOperator.Add()`
+method.
+
+`MergeOperator.Get()` method can be used to retrieve the cumulative value of the key
+associated with the merge operation.
+
+```Go
+key := []byte("merge")
+m := db.GetMergeOperator(key, add, 200*time.Millisecond)
+defer m.Stop()
+
+m.Add(uint64ToBytes(1))
+m.Add(uint64ToBytes(2))
+m.Add(uint64ToBytes(3))
+
+res, err := m.Get() // res should have value 6 encoded
+fmt.Println(bytesToUint64(res))
 ```
 
 ### Setting Time To Live(TTL) and User Metadata on Keys
@@ -265,6 +313,9 @@ An optional user metadata value can be set on each key. A user metadata value
 is represented by a single byte. It can be used to set certain bits along
 with the key to aid in interpreting or decoding the key-value pair. User
 metadata can be set using the `Txn.SetWithMeta()` API method.
+
+`Txn.SetEntry()` can be used to set the key, value, user metatadata and TTL,
+all at once.
 
 ### Iterating over keys
 To iterate over keys, we can use an `Iterator`, which can be obtained using the
@@ -304,7 +355,7 @@ To iterate over a key prefix, you can combine `Seek()` and `ValidForPrefix()`:
 
 ```go
 db.View(func(txn *badger.Txn) error {
-  it := txn.NewIterator(&DefaultIteratorOptions)
+  it := txn.NewIterator(badger.DefaultIteratorOptions)
   prefix := []byte("1234")
   for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
     item := it.Item()

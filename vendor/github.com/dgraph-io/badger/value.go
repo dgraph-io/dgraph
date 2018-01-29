@@ -285,6 +285,14 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) error {
 	return nil
 }
 
+func (vlog *valueLog) purgeEntry(keyWithTs []byte) (bool, error) {
+	purgeTs := vlog.kv.purgeTs(y.ParseKey(keyWithTs))
+	if purgeTs > 0 && y.ParseTs(keyWithTs) < purgeTs {
+		return true, nil
+	}
+	return false, nil
+}
+
 func (vlog *valueLog) rewrite(f *logFile) error {
 	maxFid := atomic.LoadUint32(&vlog.maxFid)
 	y.AssertTruef(uint32(f.fid) < maxFid, "fid to move: %d. Current max fid: %d", f.fid, maxFid)
@@ -309,6 +317,11 @@ func (vlog *valueLog) rewrite(f *logFile) error {
 			return err
 		}
 		if discardEntry(e, vs) {
+			return nil
+		}
+		if purge, err := vlog.purgeEntry(e.Key); err != nil {
+			return err
+		} else if purge {
 			return nil
 		}
 
@@ -667,6 +680,14 @@ type request struct {
 	Err  error
 }
 
+func (req *request) Wait() error {
+	req.Wg.Wait()
+	req.Entries = nil
+	err := req.Err
+	requestPool.Put(req)
+	return err
+}
+
 // sync is thread-unsafe and should not be called concurrently with write.
 func (vlog *valueLog) sync() error {
 	if vlog.opt.SyncWrites {
@@ -725,7 +746,7 @@ func (vlog *valueLog) write(reqs []*request) error {
 			}
 
 			newid := atomic.AddUint32(&vlog.maxFid, 1)
-			y.AssertTruef(newid < 1<<16, "newid will overflow uint16: %v", newid)
+			y.AssertTruef(newid <= math.MaxUint32, "newid will overflow uint32: %v", newid)
 			newlf, err := vlog.createVlogFile(newid)
 			if err != nil {
 				return err
@@ -842,23 +863,18 @@ func (vlog *valueLog) pickLog(head valuePointer) *logFile {
 		return nil
 	}
 
-	i := sort.Search(len(fids), func(i int) bool {
-		return fids[i] == head.Fid
-	})
-	if i == len(fids) {
-		return nil
-	}
-
 	// Pick a candidate that contains the largest amount of discardable data
 	candidate := struct {
 		fid     uint32
 		discard int64
 	}{math.MaxUint32, 0}
 	vlog.lfDiscardStats.Lock()
-	for j := 0; j < i; j++ {
-		fid := fids[j]
+	for _, fid := range fids {
+		if fid >= head.Fid {
+			break
+		}
 		if vlog.lfDiscardStats.m[fid] > candidate.discard {
-			candidate.fid = fids[j]
+			candidate.fid = fid
 			candidate.discard = vlog.lfDiscardStats.m[fid]
 		}
 	}
@@ -869,7 +885,17 @@ func (vlog *valueLog) pickLog(head valuePointer) *logFile {
 	}
 
 	// Fallback to randomly picking a log file
-	idx := rand.Intn(i) // Don’t include head.Fid. We pick a random file before it.
+	var idxHead int
+	for i, fid := range fids {
+		if fid == head.Fid {
+			idxHead = i
+			break
+		}
+	}
+	if idxHead == 0 { // Not found or first file
+		return nil
+	}
+	idx := rand.Intn(idxHead) // Don’t include head.Fid. We pick a random file before it.
 	if idx > 0 {
 		idx = rand.Intn(idx + 1) // Another level of rand to favor smaller fids.
 	}
@@ -881,7 +907,7 @@ func discardEntry(e Entry, vs y.ValueStruct) bool {
 		// Version not found. Discard.
 		return true
 	}
-	if isDeletedOrExpired(vs) {
+	if isDeletedOrExpired(vs.Meta, vs.ExpiresAt) {
 		return true
 	}
 	if (vs.Meta & bitValuePointer) == 0 {
@@ -952,6 +978,12 @@ func (vlog *valueLog) doRunGC(gcThreshold float64, head valuePointer) (err error
 			return err
 		}
 		if discardEntry(e, vs) {
+			r.discard += esz
+			return nil
+		}
+		if purge, err := vlog.purgeEntry(e.Key); err != nil {
+			return err
+		} else if purge {
 			r.discard += esz
 			return nil
 		}
@@ -1054,4 +1086,10 @@ func (vlog *valueLog) updateGCStats(item *Item) {
 		vlog.lfDiscardStats.m[vp.Fid] += int64(vp.Len)
 		vlog.lfDiscardStats.Unlock()
 	}
+}
+
+func (vlog *valueLog) resetGCStats() {
+	vlog.lfDiscardStats.Lock()
+	vlog.lfDiscardStats.m = make(map[uint32]int64)
+	vlog.lfDiscardStats.Unlock()
 }
