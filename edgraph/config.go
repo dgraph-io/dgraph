@@ -105,7 +105,6 @@ func setConfVar(conf Options) {
 	x.Conf.Set("wal_dir", newStr(conf.WALDir))
 	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
 	x.Conf.Set("tracing", newFloat(conf.Tracing))
-	x.Conf.Set("max_pending_count", newInt(int(conf.MaxPendingCount)))
 	x.Conf.Set("num_pending_proposals", newInt(conf.NumPendingProposals))
 	x.Conf.Set("expand_edge", newIntFromBool(conf.ExpandEdge))
 }
