@@ -435,18 +435,19 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 		}
 		nkey := make([]byte, len(item.Key()))
 		copy(nkey, item.Key())
+		version := item.Version()
 
-		txn := pstore.NewTransactionAt(item.Version(), true)
+		txn := pstore.NewTransactionAt(version, true)
 		// Purge doesn't delete anything, so write an empty pl
 		txn.SetWithMeta(nkey, nil, BitEmptyPosting)
 		wg.Add(1)
-		err := txn.CommitAt(item.Version(), func(e error) {
+		err := txn.CommitAt(version, func(e error) {
 			defer wg.Done()
 			if e != nil {
 				setError(e)
 				return
 			}
-			pstore.PurgeVersionsBelow(nkey, item.Version())
+			pstore.PurgeVersionsBelow(nkey, version)
 		})
 		txn.Discard()
 		if err != nil {
