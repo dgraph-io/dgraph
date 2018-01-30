@@ -437,7 +437,7 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 			txn := pstore.NewTransactionAt(math.MaxUint64, true)
 			defer txn.Discard()
 			// Purge doesn't delete anything, so write an empty pl
-			txn.SetWithMeta(nkey, nil, BitCompletePosting)
+			txn.SetWithMeta(nkey, nil, BitCompletePosting|BitEmptyPosting)
 			e := txn.CommitAt(version, nil)
 			if e == nil {
 				e = pstore.PurgeVersionsBelow(key, version+1)
