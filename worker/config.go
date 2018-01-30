@@ -25,7 +25,6 @@ type Options struct {
 	MyAddr              string
 	ZeroAddr            string
 	RaftId              uint64
-	MaxPendingCount     uint64
 	ExpandEdge          bool
 }
 

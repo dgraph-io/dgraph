@@ -579,13 +579,13 @@ func (n *node) Stop() {
 }
 
 func (n *node) snapshotPeriodically(closer *y.Closer) {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			n.snapshot(Config.MaxPendingCount)
+			n.snapshot(10)
 
 		case <-closer.HasBeenClosed():
 			closer.Done()
@@ -594,18 +594,22 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 	}
 }
 
-func (n *node) snapshot(skip uint64) {
-	water := posting.TxnMarks()
-	le := water.DoneUntil()
+// Since we have incremental snapshots now, we can snapshot aggresively
+// as long as we have given number of entries atleast.
+func (n *node) snapshot(minEntries uint64) {
+	snapshotIdx := posting.Txns().SyncedUntil()
 
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 
+	// Find last snapshot index
 	si := existing.Metadata.Index
-	if le <= si+skip {
+	// Some proposals like predicate move can consume around 32MB per proposal, so keeping
+	// too many proposals would increase the memory usage so snapshot as soon as
+	// possible
+	if snapshotIdx <= si+minEntries { // Ensure we have atleast minEntries
 		return
 	}
-	snapshotIdx := le - skip
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
 	}

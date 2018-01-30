@@ -75,9 +75,15 @@ type Txn struct {
 	nextKeyIdx int
 }
 
+type syncMark struct {
+	index uint64
+	ts    uint64
+}
+
 type transactions struct {
 	x.SafeMutex
-	m map[uint64]*Txn
+	m         map[uint64]*Txn
+	syncMarks []syncMark
 }
 
 func (t *transactions) MinTs() uint64 {
@@ -201,6 +207,28 @@ func (t *Txn) LastIndex() uint64 {
 	return 0
 }
 
+// Returns the raft index till which we can snapshot
+func (t *transactions) SyncedUntil() uint64 {
+	minTs := t.MinTs()
+	var idx int
+	var syncUntil uint64
+
+	t.Lock()
+	defer t.Unlock()
+	// Find max index with timestamp less than minTs
+	for i, sm := range t.syncMarks {
+		idx = i
+		if sm.ts > minTs {
+			break
+		}
+	}
+	if idx > 0 {
+		syncUntil = t.syncMarks[idx-1].index
+	}
+	t.syncMarks = t.syncMarks[idx:]
+	return syncUntil
+}
+
 func (t *transactions) PutOrMergeIndex(src *Txn) *Txn {
 	t.Lock()
 	defer t.Unlock()
@@ -211,6 +239,10 @@ func (t *transactions) PutOrMergeIndex(src *Txn) *Txn {
 	}
 	x.AssertTrue(src.StartTs == dst.StartTs)
 	dst.Indices = append(dst.Indices, src.Indices...)
+	t.syncMarks = append(t.syncMarks, syncMark{
+		index: src.Indices[0],
+		ts:    src.StartTs,
+	})
 	return dst
 }
 
