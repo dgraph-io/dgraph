@@ -440,7 +440,7 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 			txn.SetWithMeta(nkey, nil, BitCompletePosting|BitEmptyPosting)
 			e := txn.CommitAt(version, nil)
 			if e == nil {
-				e = pstore.PurgeVersionsBelow(key, version+1)
+				e = pstore.PurgeVersionsBelow(key, version)
 			}
 			if e != nil {
 				m.Lock()
