@@ -26,13 +26,6 @@ them in a Raft group.
 
 ## Concepts
 
-### XID <-> UID
-All the entities get assigned a unique 64 bit integer id, `UID`. If the entity has an external id `XID`,
-we fingerprint the `XID` and store the corresponding `UID`. If the entity does not have an `XID`,
-we only add a new `UID` to indicate that the `UID` is used. All the posting lists refer to entities
-via their UIDs. Given UIDs are 8 byte integers, this provides for a very efficient data representation.
-During data import, we require that each unique entity has a unique `UID`.
-
 ### Edges
 
 Typical data format is RDF [NQuad](https://www.w3.org/TR/n-quads/) which is:

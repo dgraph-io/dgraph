@@ -1,6 +1,4 @@
 # This is the service that should be used by the clients of Dgraph to talk to the server.
-# It exposes a ClusterIP that will automatically load balance connections to the different Dgraph
-# Servers.
 apiVersion: v1
 kind: Service
 metadata:
@@ -18,42 +16,27 @@ spec:
     name: zero-http
   - port: 8080
     targetPort: 8080
-    name: http
+    name: server-http
   - port: 9080
     targetPort: 9080
-    name: grpc
-  - port: 8081
-    targetPort: 8081
+    name: server-grpc
+  - port: 8000
+    targetPort: 8000
     name: ratel-http
   selector:
     app: dgraph
 ---
-# This is a headless service which is neccessary for discovery for a StatefulSet.
-# https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
-apiVersion: v1
-kind: Service
-metadata:
-  name: dgraph
-  labels:
-    app: dgraph
-spec:
-  ports:
-  - port: 5080
-    targetPort: 5080
-    name: grpc
-
-  clusterIP: None
-  selector:
-    app: dgraph
----
-# This StatefulSet runs 1 replica of Zero and Server.
-apiVersion: apps/v1beta1
+# This StatefulSet runs 1 pod with one Zero, one Server & one Ratel containers.
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: dgraph
 spec:
   serviceName: "dgraph"
   replicas: 1
+  selector:
+      matchLabels:
+        app: dgraph
   template:
     metadata:
       labels:
@@ -64,7 +47,7 @@ spec:
         image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8081
+        - containerPort: 8000
           name: ratel-http
         command:
           - dgraph-ratel
@@ -74,6 +57,8 @@ spec:
         ports:
         - containerPort: 5080
           name: zero-grpc
+        - containerPort: 6080
+          name: zero-http
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -82,10 +67,15 @@ spec:
           - "-c"
           - |
             set -ex
-            dgraph zero -o -2000 --my=$(hostname -f):5080 --idx 1
+            dgraph zero --my=$(hostname -f):5080
       - name: server
         image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: server-http
+        - containerPort: 9080
+          name: server-grpc
         volumeMounts:
         - name: datadir
           mountPath: /dgraph

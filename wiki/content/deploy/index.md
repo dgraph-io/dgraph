@@ -870,7 +870,6 @@ kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/cont
 Output:
 ```
 service "dgraph-public" created
-service "dgraph" created
 statefulset "dgraph" created
 ```
 
@@ -894,10 +893,10 @@ Port forward from your local machine to the pod
 
 ```sh
 kubectl port-forward dgraph-0 8080
-kubectl port-forward dgraph-0 8081
+kubectl port-forward dgraph-0 8000
 ```
 
-Go to `http://localhost:8081` and verify Dgraph is working as expected.
+Go to `http://localhost:8000` and verify Dgraph is working as expected.
 
 {{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
 
@@ -949,7 +948,10 @@ kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/cont
 
 Output:
 ```
-service "dgraph-public" created
+service "dgraph-zero-public" created
+service "dgraph-server-public" created
+service "dgraph-server-0-http-public" created
+service "dgraph-ratel-public" created
 service "dgraph-zero" created
 service "dgraph-server" created
 statefulset "dgraph-zero" created
@@ -982,10 +984,10 @@ Port forward from your local machine to the pod
 
 ```sh
 kubectl port-forward dgraph-server-0 8080
-kubectl port-forward dgraph-ratel-<pod-id>
+kubectl port-forward dgraph-ratel-<pod-id> 8000
 ```
 
-Go to `http://localhost:8081` and verify Dgraph is working as expected.
+Go to `http://localhost:8000` and verify Dgraph is working as expected.
 
 {{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
 
@@ -995,7 +997,9 @@ Go to `http://localhost:8081` and verify Dgraph is working as expected.
 Delete all the resources
 
 ```sh
-kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph
+kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph-zero
+kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph-server
+kubectl delete pods,replicasets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph-ratel
 ```
 
 Stop the cluster. If you used `kops` you can run the following command.
@@ -1006,9 +1010,9 @@ kops delete cluster ${NAME} --yes
 
 ### HA Cluster Setup using Kubernetes
 
-This setup allows you to run 3 Dgraph Servers and 3 Zero Servers. The instructions are same as
-[cluster-setup]({{< relref "#cluster-setup">}}) apart from the step to start the cluster. We start Zero with `--replicas
-3` flag, so all data would be replicated on each of 3 Server nodes.
+This setup allows you to run 15 Dgraph Servers and 3 Zero Servers. The instructions are similar to
+[replicated cluster]({{< relref "#replicated-cluster">}}) setup. We start Zero with `--replicas
+5` flag, so all data would be replicated on 15 Servers and forms 3 server groups to distribute predicates.
 
 {{% notice "note" %}} Ideally you should have atleast three worker nodes as part of your Kubernetes
 cluster so that each Dgraph Server runs on a separate node.{{% /notice %}}
@@ -1023,13 +1027,18 @@ kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/cont
 
 Output:
 ```sh
-service "dgraph-public" created
-service "dgraph" created
-statefulset "dgraph" created
+service "dgraph-zero-public" created
+service "dgraph-server-public" created
+service "dgraph-server-0-http-public" created
+service "dgraph-ratel-public" created
+service "dgraph-zero" created
+service "dgraph-server" created
+statefulset "dgraph-zero" created
+statefulset "dgraph-server" created
 deployment "dgraph-ratel" created
 ```
 
-After this you can follow other steps from [cluster-setup]({{< relref "#cluster-setup">}}) to verify
+After this you can follow other steps from [Relicated Cluster]({{< relref "#replicated-cluster">}}) to verify
 that your setup is working as expected.
 
 ## More about Dgraph
