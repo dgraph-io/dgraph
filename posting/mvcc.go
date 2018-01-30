@@ -279,7 +279,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 		if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
 			pl.Postings = pl.Postings[:0]
 			// Indicates that this is the full posting list.
-			meta = BitCompletePosting | BitEmptyPosting
+			meta = BitEmptyPosting
 		} else {
 			midx := sort.Search(len(pl.Postings), func(idx int) bool {
 				mp := pl.Postings[idx]

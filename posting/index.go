@@ -420,39 +420,39 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 	idxIt := txn.NewIterator(iterOpt)
 	defer idxIt.Close()
 
-	// Throttle number of parallel purges.
-	pending := make(chan struct{}, 1000)
 	var m sync.Mutex
 	var err error
+	setError := func(e error) {
+		m.Lock()
+		err = e
+		m.Unlock()
+	}
+	var wg sync.WaitGroup
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		item := idxIt.Item()
 		if !remove(item.Key()) {
 			continue
 		}
-		nkey := make([]byte, len(item.Key()))
-		copy(nkey, item.Key())
+		key := item.Key()
 
-		pending <- struct{}{}
-		go func(key []byte, version uint64) {
-			txn := pstore.NewTransactionAt(math.MaxUint64, true)
-			defer txn.Discard()
-			// Purge doesn't delete anything, so write an empty pl
-			txn.SetWithMeta(nkey, nil, BitCompletePosting|BitEmptyPosting)
-			e := txn.CommitAt(version, nil)
-			if e == nil {
-				e = pstore.PurgeVersionsBelow(key, version)
-			}
+		txn := pstore.NewTransactionAt(item.Version(), true)
+		// Purge doesn't delete anything, so write an empty pl
+		txn.SetWithMeta(key, nil, BitEmptyPosting)
+		wg.Add(1)
+		err := txn.CommitAt(item.Version(), func(e error) {
+			defer wg.Done()
 			if e != nil {
-				m.Lock()
-				err = e
-				m.Unlock()
+				setError(e)
+				return
 			}
-			<-pending
-		}(nkey, item.Version())
+			pstore.PurgeVersionsBelow(key, item.Version())
+		})
+		txn.Discard()
+		if err != nil {
+			break
+		}
 	}
-	for i := 0; i < 1000; i++ {
-		pending <- struct{}{}
-	}
+	wg.Wait()
 	return err
 }
 
