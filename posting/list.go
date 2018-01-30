@@ -63,6 +63,7 @@ const (
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
 	BitUidPosting      byte = 0x01
+	BitEmptyPosting    byte = 0x02
 	bitDeltaPosting    byte = 0x04
 	BitCompletePosting byte = 0x08
 )
@@ -653,6 +654,7 @@ func (l *List) MarshalToKv() (*intern.KV, error) {
 func marshalPostingList(plist *intern.PostingList) (data []byte, meta byte) {
 	if len(plist.Uids) == 0 {
 		data = nil
+		meta = meta | BitEmptyPosting
 	} else if len(plist.Postings) > 0 {
 		var err error
 		data, err = plist.Marshal()
