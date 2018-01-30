@@ -278,6 +278,9 @@ func TestRebuildIndex(t *testing.T) {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
+		if item.UserMeta()&BitEmptyPosting > 0 {
+			continue
+		}
 		idxKeys = append(idxKeys, string(key))
 		l := Get(key)
 		idxVals = append(idxVals, l)
