@@ -4,17 +4,17 @@
 # to a more appropriate location.
 # Run `docker-compose up` to start Dgraph.
 
-version: "3"
+version: "3.2"
 services:
   zero:
     image: dgraph/dgraph:latest
     volumes:
       - /tmp/data:/dgraph
     ports:
-      # Exposing this port is optional. It can be used to view predicate stats.
+      - 5080:5080
       - 6080:6080
     restart: on-failure
-    command: dgraph zero --port_offset -2000 --my=zero:5080
+    command: dgraph zero --my=zero:5080
   server:
     image: dgraph/dgraph:latest
     volumes:
@@ -24,3 +24,8 @@ services:
       - 9080:9080
     restart: on-failure
     command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080
+  ratel:
+    image: dgraph/dgraph:latest
+    ports:
+      - 8000:8000
+    command: dgraph-ratel
