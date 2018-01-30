@@ -12,7 +12,7 @@ networks:
   dgraph:
 services:
   zero:
-    image: dgraph/dgraph:master
+    image: dgraph/dgraph:latest
     volumes:
       - data-volume:/dgraph
     ports:
@@ -26,7 +26,7 @@ services:
           - node.hostname == aws01
     command: dgraph zero --my=zero:5080 --replicas 3
   server_1:
-    image: dgraph/dgraph:master
+    image: dgraph/dgraph:latest
     hostname: "server_1"
     volumes:
       - data-volume:/dgraph
@@ -41,7 +41,7 @@ services:
           - node.hostname == aws01
     command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero:5080
   server_2:
-    image: dgraph/dgraph:master
+    image: dgraph/dgraph:latest
     hostname: "server_2"
     volumes:
       - data-volume:/dgraph
@@ -57,7 +57,7 @@ services:
           - node.hostname == aws02
     command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero:5080 -o 1
   server_3:
-    image: dgraph/dgraph:master
+    image: dgraph/dgraph:latest
     hostname: "server_3"
     volumes:
       - data-volume:/dgraph
@@ -73,7 +73,7 @@ services:
           - node.hostname == aws03
     command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero:5080 -o 2
   ratel:
-    image: dgraph/dgraph:master
+    image: dgraph/dgraph:latest
     hostname: "ratel"
     ports:
       - 8000:8000
