@@ -18,7 +18,6 @@
 package posting
 
 import (
-	"bytes"
 	"crypto/md5"
 	"fmt"
 	"io/ioutil"
@@ -217,11 +216,10 @@ func Init(ps *badger.ManagedDB) {
 	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
-	closer = y.NewCloser(3)
+	closer = y.NewCloser(2)
 
 	go periodicUpdateStats(closer)
 	go updateMemoryMetrics(closer)
-	go periodicPurgeOldVersions(closer)
 }
 
 func Cleanup() {
@@ -230,54 +228,6 @@ func Cleanup() {
 
 func StopLRUEviction() {
 	atomic.StoreInt32(&lcache.done, 1)
-}
-
-func periodicPurgeOldVersions(lc *y.Closer) {
-	defer lc.Done()
-
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	// Runs every 1 minute
-	purge := func() {
-		opt := badger.DefaultIteratorOptions
-		opt.PrefetchValues = false
-		opt.AllVersions = true
-
-		txn := pstore.NewTransactionAt(math.MaxUint64, false)
-		defer txn.Discard()
-		itr := txn.NewIterator(opt)
-		defer itr.Close()
-
-		var prevKey []byte
-		// Iterate  over all versions of key, from latest to oldest
-		// For each key find the latest complete pl and purge all versions
-		// below that
-		for itr.Rewind(); itr.Valid(); itr.Next() {
-			item := itr.Item()
-			key := item.Key()
-			if bytes.Equal(key, prevKey) {
-				continue
-			}
-			if item.UserMeta()&BitCompletePosting == 0 {
-				continue
-			}
-			// Found complete pl, purge all versions below this TS
-			pstore.PurgeVersionsBelow(key, item.Version())
-			if cap(prevKey) < len(key) {
-				prevKey = make([]byte, len(key))
-			}
-			prevKey = prevKey[:len(key)]
-			copy(prevKey, key)
-		}
-	}
-	for {
-		select {
-		case <-lc.HasBeenClosed():
-			return
-		case <-ticker.C:
-			purge()
-		}
-	}
 }
 
 // Get stores the List corresponding to key, if it's not there already.
@@ -361,6 +311,8 @@ func CommitLists(commit func(key []byte) bool) {
 	// Hacky solution for now, ensures that everything is flushed to disk before we return.
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
-	txn.Delete([]byte("_dummy_"))
+	// Code is written with assumption that nothing is deleted in dgraph, so don't
+	// use delete
+	txn.SetWithMeta(x.DataKey("dummy", 1), nil, BitEmptyPosting)
 	txn.CommitAt(1, nil)
 }

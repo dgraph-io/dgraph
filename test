@@ -12,12 +12,7 @@ function run {
 set -o pipefail
 echo
 echo "Running tests. Ignoring vendor folder."
-run "$(go list ./... | grep -v -E 'cmd|contrib|wiki|customtok')"
-# Exit if the previous command failed.
-if [ $? != 0 ]; then
-    exit 1
-fi
-
-echo
-echo "Running tests in cmd directory."
-run "$(go list ./... | grep -v -E 'contrib' | grep cmd)"
+for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki|customtok'); do
+	echo "Running test for $PKG"
+	run $PKG
+done

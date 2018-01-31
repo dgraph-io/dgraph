@@ -241,7 +241,13 @@ func hasEdges(attr string, startTs uint64) bool {
 	}
 	prefix := pk.DataPrefix()
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		return true
+		// Check for non-empty posting
+		// BitEmptyPosting is also a complete posting,
+		// so checking for CompletePosting&BitCompletePosting > 0 would
+		// be wrong
+		if it.Item().UserMeta()&posting.BitEmptyPosting != posting.BitEmptyPosting {
+			return true
+		}
 	}
 	return false
 }
