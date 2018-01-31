@@ -156,11 +156,11 @@ func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, s
 		return nil
 	}
 
-	fmt.Println("current", current, "old", old)
 	// schema was present already
 	if current.List && !old.List {
-		// TODO - Disallow converting list type to scalar.
-		posting.RebuildListType(ctx, update.Predicate, startTs)
+		if err := posting.RebuildListType(ctx, update.Predicate, startTs); err != nil {
+			return err
+		}
 	} else if old.List && !current.List {
 		return fmt.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
 			" without dropping it first.", current.Predicate)

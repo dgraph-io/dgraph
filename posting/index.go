@@ -706,13 +706,12 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
 	})
-	// Add index entries to data store.
+
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
 	t := pstore.NewTransactionAt(startTs, false)
 	defer t.Discard()
 	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
 	it := t.NewIterator(iterOpts)
 	defer it.Close()
 
@@ -728,6 +727,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 			return true
 		})
 		if mpost != nil {
+			// Delete the old edge corresponding to ValueId math.MaxUint64
 			t := &intern.DirectedEdge{
 				ValueId: mpost.Uid,
 				Attr:    attr,
@@ -739,6 +739,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 				return err
 			}
 
+			// Add the new edge with the fingerprinted value id.
 			newEdge := &intern.DirectedEdge{
 				ValueId:   farm.Fingerprint64(mpost.Value),
 				Value:     mpost.Value,
@@ -781,29 +782,25 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 		}()
 	}
 
-	var prevKey []byte
 	it.Seek(prefix)
 	for it.ValidForPrefix(prefix) {
 		iterItem := it.Item()
 		key := iterItem.Key()
-		if bytes.Equal(key, prevKey) {
-			it.Next()
-			continue
-		}
 		nk := make([]byte, len(key))
 		copy(nk, key)
-		prevKey = nk
 		pki := x.Parse(key)
 		if pki == nil {
 			it.Next()
 			continue
 		}
-		l := Get(nk)
 
+		// Get is important because we are modifying the mutation layer of the posting lists.
+		l := Get(nk)
 		ch <- item{
 			uid:  pki.Uid,
 			list: l,
 		}
+		it.Next()
 	}
 	close(ch)
 	for i := 0; i < 1000; i++ {
