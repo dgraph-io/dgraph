@@ -311,6 +311,8 @@ func CommitLists(commit func(key []byte) bool) {
 	// Hacky solution for now, ensures that everything is flushed to disk before we return.
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
-	txn.Delete([]byte("_dummy_"))
+	// Code is written with assumption that nothing is deleted in dgraph, so don't
+	// use delete
+	txn.SetWithMeta(x.DataKey("dummy", 1), nil, BitEmptyPosting)
 	txn.CommitAt(1, nil)
 }
