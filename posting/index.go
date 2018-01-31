@@ -562,7 +562,10 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh ch
 			continue
 		}
 		// readPostingList advances the iterator until it finds complete pl
-		l := Get(nk)
+		l, err := ReadPostingList(nk, it)
+		if err != nil {
+			continue
+		}
 
 		ch <- item{
 			uid:  pki.Uid,
