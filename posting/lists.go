@@ -343,6 +343,7 @@ func CommitLists(commit func(key []byte) bool) {
 		go func() {
 			defer wg.Done()
 			for l := range workChan {
+				fmt.Println("syncIf3")
 				l.SyncIfDirty(false)
 			}
 		}()

@@ -567,10 +567,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh ch
 			continue
 		}
 		// readPostingList advances the iterator until it finds complete pl
-		l, err := ReadPostingList(nk, it)
-		if err != nil {
-			continue
-		}
+		l := Get(nk)
 
 		ch <- item{
 			uid:  pki.Uid,
@@ -708,6 +705,9 @@ func DeleteIndex(ctx context.Context, attr string) error {
 // We need to fingerprint the values to get the new ValueId.
 func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().IsList(attr), "Attr %s is not of list type", attr)
+	lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteData)
+	})
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
@@ -764,6 +764,9 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 			var err error
 			txn := &Txn{StartTs: startTs}
 			for it := range ch {
+				for _, mp := range it.list.mlayer {
+					fmt.Printf("rewrite: %+v, mp before: %+v\n", it.list.key, mp)
+				}
 				if err := rewriteValuePostings(it.uid, it.list, txn); err != nil {
 					che <- err
 					return
@@ -775,9 +778,8 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 				}
 				txn.deltas = nil
 
-				fmt.Println("rewrite", it.list.key)
 				for _, mp := range it.list.mlayer {
-					fmt.Printf("mp after: %+v\n", mp)
+					fmt.Printf("rewrite: %+v, mp after: %+v\n", it.list.key, mp)
 				}
 			}
 			che <- err

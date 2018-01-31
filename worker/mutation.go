@@ -161,7 +161,9 @@ func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, s
 		// TODO - Disallow converting list type to scalar.
 		posting.RebuildListType(ctx, update.Predicate, startTs)
 		// schema was present already
-	} else if needReindexing(old, current) {
+	}
+
+	if needReindexing(old, current) {
 		// Reindex if update.Index is true or remove index
 		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
 			current.Directive == intern.SchemaUpdate_INDEX, startTs); err != nil {

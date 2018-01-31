@@ -433,7 +433,6 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		// It was already committed, might be happening due to replay.
 		return nil
 	}
-	fmt.Println("in commit mutations")
 	if l.markdeleteAll > 0 {
 		l.deleteHelper(ctx)
 		l.minTs = commitTs
@@ -446,7 +445,6 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 			}
 		}
 	}
-	fmt.Println("num", l.numCommits)
 	if commitTs > l.commitTs {
 		l.commitTs = commitTs
 	}
@@ -457,6 +455,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		numUids = 1000
 	}
 	if l.numCommits > numUids {
+		fmt.Println("syncif1")
 		l.syncIfDirty(false)
 	}
 	return nil
@@ -728,9 +727,8 @@ func (l *List) rollup() error {
 func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	// emptyList is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
-	fmt.Println("syncIfDirty", l.key)
 	for _, mp := range l.mlayer {
-		fmt.Printf("mps: %+v\n", mp)
+		fmt.Printf("here key: %+v, mps: %+v\n", l.key, mp)
 	}
 	for _, pp := range l.plist.Postings {
 		fmt.Printf("pp: %+v\n", pp)
@@ -869,7 +867,6 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	l.RLock()
 	defer l.RUnlock()
 
-	fmt.Println("All untagged")
 	for _, mp := range l.mlayer {
 		fmt.Printf("mp: %+v\n", mp)
 	}
