@@ -322,7 +322,11 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	}
 
 	if doUpdateIndex {
+		for _, mp := range l.mlayer {
+			fmt.Printf("mp here: %+v\n", mp)
+		}
 		// Check original value BEFORE any mutation actually happens.
+		fmt.Println("startTs", txn.StartTs)
 		if len(t.Lang) > 0 {
 			val, found, err = l.findValue(txn.StartTs, farm.Fingerprint64([]byte(t.Lang)))
 		} else {
@@ -377,6 +381,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *intern.DirectedEdge,
 	if err != nil {
 		return err
 	}
+	fmt.Println("val", val, "found", found, "t", t, txn.StartTs)
 	x.PredicateStats.Add(t.Attr, 1)
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
@@ -697,6 +702,122 @@ func DeleteIndex(ctx context.Context, attr string) error {
 	return deleteEntries(prefix, func(key []byte) bool {
 		return true
 	})
+}
+
+// This function is called when the schema is changed from scalar to list type.
+// We need to fingerprint the values to get the new ValueId.
+func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
+	x.AssertTruef(schema.State().IsList(attr), "Attr %s is not of list type", attr)
+	// Add index entries to data store.
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.DataPrefix()
+	t := pstore.NewTransactionAt(startTs, false)
+	defer t.Discard()
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	it := t.NewIterator(iterOpts)
+	defer it.Close()
+
+	rewriteValuePostings := func(uid uint64, pl *List, txn *Txn) error {
+		var mpost *intern.Posting
+		pl.Iterate(txn.StartTs, 0, func(p *intern.Posting) bool {
+			// We only want to modify the untagged value. There could be other values with a
+			// lang tag.
+			if p.Uid == math.MaxUint64 {
+				mpost = p
+				return false
+			}
+			return true
+		})
+		if mpost != nil {
+			t := &intern.DirectedEdge{
+				ValueId: mpost.Uid,
+				Attr:    attr,
+				Op:      intern.DirectedEdge_DEL,
+			}
+
+			ok, err := pl.AddMutation(ctx, txn, t)
+			fmt.Println("ok", ok, "err", err)
+
+			newEdge := &intern.DirectedEdge{
+				ValueId:   farm.Fingerprint64(mpost.Value),
+				Value:     mpost.Value,
+				ValueType: mpost.ValType,
+				Op:        intern.DirectedEdge_SET,
+				Label:     mpost.Label,
+				Facets:    mpost.Facets,
+			}
+			ok, err = pl.AddMutation(ctx, txn, newEdge)
+			fmt.Println("ok", ok, "err", err)
+		}
+		return nil
+	}
+
+	type item struct {
+		uid  uint64
+		list *List
+	}
+	ch := make(chan item, 10000)
+	che := make(chan error, 1000)
+	for i := 0; i < 1000; i++ {
+		go func() {
+			var err error
+			txn := &Txn{StartTs: startTs}
+			for it := range ch {
+				if err := rewriteValuePostings(it.uid, it.list, txn); err != nil {
+					che <- err
+					return
+				}
+
+				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
+				if err != nil {
+					txn.AbortMutations(ctx)
+				}
+				txn.deltas = nil
+
+				fmt.Println("rewrite", it.list.key)
+				for _, mp := range it.list.mlayer {
+					fmt.Printf("mp after: %+v\n", mp)
+				}
+			}
+			che <- err
+		}()
+	}
+
+	var prevKey []byte
+	it.Seek(prefix)
+	for it.ValidForPrefix(prefix) {
+		iterItem := it.Item()
+		key := iterItem.Key()
+		if bytes.Equal(key, prevKey) {
+			it.Next()
+			continue
+		}
+		nk := make([]byte, len(key))
+		copy(nk, key)
+		prevKey = nk
+		pki := x.Parse(key)
+		if pki == nil {
+			it.Next()
+			continue
+		}
+		l, err := ReadPostingList(nk, it)
+		if err != nil {
+			continue
+		}
+
+		ch <- item{
+			uid:  pki.Uid,
+			list: l,
+		}
+	}
+	close(ch)
+	for i := 0; i < 1000; i++ {
+		if err := <-che; err != nil {
+			x.Printf("Error while committing: %v\n", err)
+		}
+	}
+	return nil
 }
 
 // RebuildIndex rebuilds index for a given attribute.

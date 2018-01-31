@@ -44,6 +44,7 @@ func TestSystem(t *testing.T) {
 	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
 	t.Run("fulltext equal", wrap(FullTextEqual))
 	t.Run("json blank node", wrap(JSONBlankNode))
+	t.Run("scalar to list", wrap(ScalarToList))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -703,4 +704,82 @@ func JSONBlankNode(t *testing.T, c *client.Dgraph) {
 	}`)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"q":[{"name":"Michael","friend":[{"name":"Alice"}]}]}`, string(resp.Json))
+}
+
+func ScalarToList(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`}))
+
+	uids, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`_:blank <pred> "first" .`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+	uid := uids.Uids["blank"]
+
+	q := `
+	{
+		me(func: eq(pred, "first")) {
+			pred
+		}
+	}
+	`
+	//resp, err := c.NewTxn().Query(ctx, q)
+	//require.NoError(t, err)
+	//	require.Equal(t, `{"me":[{"pred":"first"}]}`, string(resp.Json))
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: [string] @index(exact) .`}))
+	// resp, err = c.NewTxn().Query(ctx, q)
+	// require.NoError(t, err)
+	//	require.Equal(t, `{"me":[{"pred":["first"]}]}`, string(resp.Json))
+
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`<` + uid + `> <pred> "second" .`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	resp, err := c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[{"pred":["second","first"]}]}`, string(resp.Json))
+
+	q2 := `
+	{
+		me(func: eq(pred, "second")) {
+			pred
+		}
+	}
+	`
+	resp, err = c.NewTxn().Query(ctx, q2)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[{"pred":["second","first"]}]}`, string(resp.Json))
+
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+		DelNquads: []byte(`<` + uid + `> <pred> "second" .`),
+		SetNquads: []byte(`<` + uid + `> <pred> "third" .`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	resp, err = c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[{"pred":["third","first"]}]}`, string(resp.Json))
+
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+		DelNquads: []byte(`<` + uid + `> <pred> "first" .`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	q3 := `
+	{
+		me(func: eq(pred, "third")) {
+			pred
+		}
+	}
+	`
+	resp, err = c.NewTxn().Query(ctx, q3)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[{"pred":["third"]}]}`, string(resp.Json))
 }

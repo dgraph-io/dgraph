@@ -20,6 +20,7 @@ package worker
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -83,6 +84,7 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 		}
 	}
 
+	fmt.Println("attr", edge.Attr, "entity", edge.Entity)
 	if err = plist.AddMutationWithIndex(ctx, edge, txn); err != nil {
 		return err // abort applying the rest of them.
 	}
@@ -154,8 +156,12 @@ func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, s
 		}
 		return nil
 	}
-	// schema was present already
-	if needReindexing(old, current) {
+
+	if current.List && !old.List {
+		// TODO - Disallow converting list type to scalar.
+		posting.RebuildListType(ctx, update.Predicate, startTs)
+		// schema was present already
+	} else if needReindexing(old, current) {
 		// Reindex if update.Index is true or remove index
 		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
 			current.Directive == intern.SchemaUpdate_INDEX, startTs); err != nil {
