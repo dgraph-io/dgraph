@@ -45,6 +45,7 @@ func TestSystem(t *testing.T) {
 	t.Run("fulltext equal", wrap(FullTextEqual))
 	t.Run("json blank node", wrap(JSONBlankNode))
 	t.Run("scalar to list", wrap(ScalarToList))
+	t.Run("list to scalar", wrap(ListToScalar))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -790,4 +791,18 @@ func ScalarToList(t *testing.T, c *client.Dgraph) {
 	resp, err = c.NewTxn().Query(ctx, q2)
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[]}`, string(resp.Json))
+}
+
+func ListToScalar(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: [string] @index(exact) .`}))
+
+	err := c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `Type can't be changed from list to scalar for attr: [pred] without dropping it first.`)
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: `pred`}))
+	err = c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
+	require.NoError(t, err)
 }
