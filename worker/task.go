@@ -350,7 +350,6 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			return ctx.Err()
 		default:
 		}
-		fmt.Println("attr", attr, "uids", q.UidList.Uids)
 		key = x.DataKey(attr, q.UidList.Uids[i])
 
 		// Get or create the posting list for an entity, attribute combination.
@@ -360,14 +359,12 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		if q.ExpandAll {
 			vals, err = pl.AllValues(args.q.ReadTs)
 		} else if listType && len(q.Langs) == 0 {
-			fmt.Println("here")
 			vals, err = pl.AllUntaggedValues(args.q.ReadTs)
 		} else {
 			var val types.Val
 			val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
 			vals = append(vals, val)
 		}
-		fmt.Println("vals", vals)
 
 		if err == posting.ErrNoValue || len(vals) == 0 {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
@@ -527,7 +524,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 					uid:    p.Uid,
 					facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 			}
-			fmt.Println("uid", p.Uid)
 			return true // continue iteration.
 		})
 		if err != nil {

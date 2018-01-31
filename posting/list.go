@@ -371,7 +371,6 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	}
 	l.activeTxns[txn.StartTs] = struct{}{}
 	txn.AddDelta(l.key, mpost, ignoreConflict)
-	fmt.Println("hasMutated", hasMutated, "mpost", mpost)
 	return hasMutated, nil
 }
 
@@ -455,7 +454,6 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		numUids = 1000
 	}
 	if l.numCommits > numUids {
-		fmt.Println("syncif1")
 		l.syncIfDirty(false)
 	}
 	return nil
@@ -727,12 +725,6 @@ func (l *List) rollup() error {
 func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	// emptyList is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
-	for _, mp := range l.mlayer {
-		fmt.Printf("here key: %+v, mps: %+v\n", l.key, mp)
-	}
-	for _, pp := range l.plist.Postings {
-		fmt.Printf("pp: %+v\n", pp)
-	}
 	if len(l.mlayer) == 0 && l.plist != emptyList {
 		return false, nil
 	}
@@ -867,9 +859,6 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	l.RLock()
 	defer l.RUnlock()
 
-	for _, mp := range l.mlayer {
-		fmt.Printf("mp: %+v\n", mp)
-	}
 	var vals []types.Val
 	err := l.iterate(readTs, 0, func(p *intern.Posting) bool {
 		if len(p.LangTag) == 0 {

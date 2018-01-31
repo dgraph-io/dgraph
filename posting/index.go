@@ -322,11 +322,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	}
 
 	if doUpdateIndex {
-		for _, mp := range l.mlayer {
-			fmt.Printf("mp here: %+v\n", mp)
-		}
 		// Check original value BEFORE any mutation actually happens.
-		fmt.Println("startTs", txn.StartTs)
 		if len(t.Lang) > 0 {
 			val, found, err = l.findValue(txn.StartTs, farm.Fingerprint64([]byte(t.Lang)))
 		} else {
@@ -381,7 +377,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *intern.DirectedEdge,
 	if err != nil {
 		return err
 	}
-	fmt.Println("val", val, "found", found, "t", t, txn.StartTs)
 	x.PredicateStats.Add(t.Attr, 1)
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
@@ -736,8 +731,10 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 				Op:      intern.DirectedEdge_DEL,
 			}
 
-			ok, err := pl.AddMutation(ctx, txn, t)
-			fmt.Println("ok", ok, "err", err)
+			_, err := pl.AddMutation(ctx, txn, t)
+			if err != nil {
+				return err
+			}
 
 			newEdge := &intern.DirectedEdge{
 				ValueId:   farm.Fingerprint64(mpost.Value),
@@ -747,8 +744,10 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 				Label:     mpost.Label,
 				Facets:    mpost.Facets,
 			}
-			ok, err = pl.AddMutation(ctx, txn, newEdge)
-			fmt.Println("ok", ok, "err", err)
+			_, err = pl.AddMutation(ctx, txn, newEdge)
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -764,9 +763,6 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 			var err error
 			txn := &Txn{StartTs: startTs}
 			for it := range ch {
-				for _, mp := range it.list.mlayer {
-					fmt.Printf("rewrite: %+v, mp before: %+v\n", it.list.key, mp)
-				}
 				if err := rewriteValuePostings(it.uid, it.list, txn); err != nil {
 					che <- err
 					return
@@ -777,10 +773,6 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 					txn.AbortMutations(ctx)
 				}
 				txn.deltas = nil
-
-				for _, mp := range it.list.mlayer {
-					fmt.Printf("rewrite: %+v, mp after: %+v\n", it.list.key, mp)
-				}
 			}
 			che <- err
 		}()
@@ -803,10 +795,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 			it.Next()
 			continue
 		}
-		l, err := ReadPostingList(nk, it)
-		if err != nil {
-			continue
-		}
+		l := Get(nk)
 
 		ch <- item{
 			uid:  pki.Uid,

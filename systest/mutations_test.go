@@ -725,14 +725,14 @@ func ScalarToList(t *testing.T, c *client.Dgraph) {
 		}
 	}
 	`
-	//resp, err := c.NewTxn().Query(ctx, q)
-	//require.NoError(t, err)
-	//	require.Equal(t, `{"me":[{"pred":"first"}]}`, string(resp.Json))
+	resp, err := c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[{"pred":"first"}]}`, string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: [string] @index(exact) .`}))
-	// resp, err = c.NewTxn().Query(ctx, q)
-	// require.NoError(t, err)
-	//	require.Equal(t, `{"me":[{"pred":["first"]}]}`, string(resp.Json))
+	resp, err = c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[{"pred":["first"]}]}`, string(resp.Json))
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`<` + uid + `> <pred> "second" .`),
@@ -740,7 +740,7 @@ func ScalarToList(t *testing.T, c *client.Dgraph) {
 	})
 	require.NoError(t, err)
 
-	resp, err := c.NewTxn().Query(ctx, q)
+	resp, err = c.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[{"pred":["second","first"]}]}`, string(resp.Json))
 
@@ -782,4 +782,12 @@ func ScalarToList(t *testing.T, c *client.Dgraph) {
 	resp, err = c.NewTxn().Query(ctx, q3)
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[{"pred":["third"]}]}`, string(resp.Json))
+
+	resp, err = c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[]}`, string(resp.Json))
+
+	resp, err = c.NewTxn().Query(ctx, q2)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[]}`, string(resp.Json))
 }

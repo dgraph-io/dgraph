@@ -22,7 +22,6 @@ package posting
 import (
 	"container/list"
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -139,7 +138,6 @@ func (c *listCache) removeOldest() {
 		}
 		// If length of mutation layer is zero, then we won't call pstore.SetAsync and the
 		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
-		fmt.Println("syncIf")
 		if committed, err := e.pl.SyncIfDirty(true); err != nil {
 			ele = ele.Prev()
 			continue
@@ -224,7 +222,6 @@ func (c *listCache) clear(remove func(key []byte) bool) {
 		if !remove(kv.pl.key) {
 			continue
 		}
-		fmt.Println("remove", kv.pl.key)
 
 		c.ll.Remove(e)
 		delete(c.cache, k)

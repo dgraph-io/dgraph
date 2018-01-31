@@ -20,7 +20,6 @@ package worker
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -84,7 +83,6 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 		}
 	}
 
-	fmt.Println("attr", edge.Attr, "entity", edge.Entity)
 	if err = plist.AddMutationWithIndex(ctx, edge, txn); err != nil {
 		return err // abort applying the rest of them.
 	}
