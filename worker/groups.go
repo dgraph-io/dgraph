@@ -229,7 +229,7 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 				atomic.StoreUint32(&g.gid, gid)
 			}
 			if Config.MyAddr != member.Addr {
-				go conn.Get().Connect(member.Addr)
+				conn.Get().Connect(member.Addr)
 			}
 		}
 		for _, tablet := range group.Tablets {
@@ -238,7 +238,7 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 	}
 	for _, member := range g.state.Zeros {
 		if Config.MyAddr != member.Addr {
-			go conn.Get().Connect(member.Addr)
+			conn.Get().Connect(member.Addr)
 		}
 	}
 
