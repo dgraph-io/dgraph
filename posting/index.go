@@ -715,7 +715,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	it := t.NewIterator(iterOpts)
 	defer it.Close()
 
-	rewriteValuePostings := func(uid uint64, pl *List, txn *Txn) error {
+	rewriteValuePostings := func(pl *List, txn *Txn) error {
 		var mpost *intern.Posting
 		pl.Iterate(txn.StartTs, 0, func(p *intern.Posting) bool {
 			// We only want to modify the untagged value. There could be other values with a
@@ -756,18 +756,14 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 		return nil
 	}
 
-	type item struct {
-		uid  uint64
-		list *List
-	}
-	ch := make(chan item, 10000)
+	ch := make(chan *List, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
 		go func() {
 			var err error
 			txn := &Txn{StartTs: startTs}
-			for it := range ch {
-				if err := rewriteValuePostings(it.uid, it.list, txn); err != nil {
+			for list := range ch {
+				if err := rewriteValuePostings(list, txn); err != nil {
 					che <- err
 					return
 				}
@@ -782,27 +778,18 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 		}()
 	}
 
-	it.Seek(prefix)
-	for it.ValidForPrefix(prefix) {
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		iterItem := it.Item()
 		key := iterItem.Key()
 		nk := make([]byte, len(key))
 		copy(nk, key)
-		pki := x.Parse(key)
-		if pki == nil {
-			it.Next()
-			continue
-		}
 
-		// Get is important because we are modifying the mutation layer of the posting lists.
-		l := Get(nk)
-		ch <- item{
-			uid:  pki.Uid,
-			list: l,
-		}
-		it.Next()
+		// Get is important because we are modifying the mutation layer of the posting lists and
+		// hence want to put the PL in LRU cache.
+		ch <- Get(nk)
 	}
 	close(ch)
+
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
 			x.Printf("Error while committing: %v\n", err)
