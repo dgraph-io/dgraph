@@ -324,7 +324,10 @@ func run() {
 	// setup shutdown os signal handler
 	sdCh = make(chan os.Signal, 3)
 	var numShutDownSig int
-	defer close(sdCh)
+	defer func() {
+		signal.Stop(sdCh)
+		close(sdCh)
+	}()
 	// sigint : Ctrl-C, sigterm : kill command.
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
