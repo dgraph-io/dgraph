@@ -708,6 +708,105 @@ func DeleteIndex(ctx context.Context, attr string) error {
 	})
 }
 
+// This function is called when the schema is changed from scalar to list type.
+// We need to fingerprint the values to get the new ValueId.
+func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
+	x.AssertTruef(schema.State().IsList(attr), "Attr %s is not of list type", attr)
+	lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteData)
+	})
+
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.DataPrefix()
+	t := pstore.NewTransactionAt(startTs, false)
+	defer t.Discard()
+	iterOpts := badger.DefaultIteratorOptions
+	it := t.NewIterator(iterOpts)
+	defer it.Close()
+
+	rewriteValuePostings := func(pl *List, txn *Txn) error {
+		var mpost *intern.Posting
+		pl.Iterate(txn.StartTs, 0, func(p *intern.Posting) bool {
+			// We only want to modify the untagged value. There could be other values with a
+			// lang tag.
+			if p.Uid == math.MaxUint64 {
+				mpost = p
+				return false
+			}
+			return true
+		})
+		if mpost != nil {
+			// Delete the old edge corresponding to ValueId math.MaxUint64
+			t := &intern.DirectedEdge{
+				ValueId: mpost.Uid,
+				Attr:    attr,
+				Op:      intern.DirectedEdge_DEL,
+			}
+
+			_, err := pl.AddMutation(ctx, txn, t)
+			if err != nil {
+				return err
+			}
+
+			// Add the new edge with the fingerprinted value id.
+			newEdge := &intern.DirectedEdge{
+				ValueId:   farm.Fingerprint64(mpost.Value),
+				Value:     mpost.Value,
+				ValueType: mpost.ValType,
+				Op:        intern.DirectedEdge_SET,
+				Label:     mpost.Label,
+				Facets:    mpost.Facets,
+			}
+			_, err = pl.AddMutation(ctx, txn, newEdge)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	ch := make(chan *List, 10000)
+	che := make(chan error, 1000)
+	for i := 0; i < 1000; i++ {
+		go func() {
+			var err error
+			txn := &Txn{StartTs: startTs}
+			for list := range ch {
+				if err := rewriteValuePostings(list, txn); err != nil {
+					che <- err
+					return
+				}
+
+				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
+				if err != nil {
+					txn.AbortMutations(ctx)
+				}
+				txn.deltas = nil
+			}
+			che <- err
+		}()
+	}
+
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		iterItem := it.Item()
+		key := iterItem.Key()
+		nk := make([]byte, len(key))
+		copy(nk, key)
+
+		// Get is important because we are modifying the mutation layer of the posting lists and
+		// hence want to put the PL in LRU cache.
+		ch <- Get(nk)
+	}
+	close(ch)
+
+	for i := 0; i < 1000; i++ {
+		if err := <-che; err != nil {
+			x.Printf("Error while committing: %v\n", err)
+		}
+	}
+	return nil
+}
+
 // RebuildIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
 func RebuildIndex(ctx context.Context, attr string, startTs uint64) {

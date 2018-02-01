@@ -20,6 +20,7 @@ package worker
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -154,7 +155,17 @@ func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, s
 		}
 		return nil
 	}
+
 	// schema was present already
+	if current.List && !old.List {
+		if err := posting.RebuildListType(ctx, update.Predicate, startTs); err != nil {
+			return err
+		}
+	} else if old.List && !current.List {
+		return fmt.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
+			" without dropping it first.", current.Predicate)
+	}
+
 	if needReindexing(old, current) {
 		// Reindex if update.Index is true or remove index
 		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
