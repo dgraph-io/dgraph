@@ -557,7 +557,7 @@ func (g *groupi) cleanupTablets() {
 			for itr.Rewind(); itr.Valid(); {
 				item := itr.Item()
 
-				// TODO: Investiage out of bounds.
+				// TODO: Investigate out of bounds.
 				pk := x.Parse(item.Key())
 				if pk == nil {
 					itr.Next()
