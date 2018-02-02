@@ -336,7 +336,7 @@ func populateGraph(t *testing.T) {
 
 	// full_name has hash index, we need following data for bug with eq (#1295)
 	addEdgeToLangValue(t, "royal_title", 0x10000, "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith", "en", nil)
-	addEdgeToLangValue(t, "royal_title", 0x10000, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi", "fr", nil)
+	addEdgeToLangValue(t, "royal_title", 0x10000, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territories, Chef du Commonwealth, Défenseur de la Foi", "fr", nil)
 
 	// regex test data
 	// 0x1234 is uid of interest for regex testing
@@ -5681,7 +5681,7 @@ func TestLangBug1295(t *testing.T) {
 			t.Run(f+l, func(t *testing.T) {
 				query := `
 			{
-				q(func:` + f + "(royal_title" + l + `, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi")) {
+				q(func:` + f + "(royal_title" + l + `, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territories, Chef du Commonwealth, Défenseur de la Foi")) {
 					royal_title@en
 				}
 			}`

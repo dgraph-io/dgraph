@@ -145,7 +145,7 @@ func processBinaryBoolean(mNode *mathTree) (err error) {
 		}
 		res, err := compareValues(aggName, val, curVal)
 		if err != nil {
-			return x.Wrapf(err, "Wrong values in comaprison function.")
+			return x.Wrapf(err, "Wrong values in comparison function.")
 		}
 		destMap[k] = types.Val{
 			Tid:   types.BoolID,

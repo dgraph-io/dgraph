@@ -590,7 +590,7 @@ var m1000 = `mutation {
 <g.11b63f5ncb>	<type.object.name>	"Out of the Darkness"@en	.
 <g.11b6_482vp>	<film.film.directed_by>	<g.11bc15x6zt>	.
 <g.11b6_482vp>	<film.film.initial_release_date>	"1976"^^<http://www.w3.org/2001/XMLSchema#gYear>	.
-<g.11b6_482vp>	<type.object.name>	"Los Cuatro secretos"@en	.
+<g.11b6_482vp>	<type.object.name>	"Los Cuatro secrets"@en	.
 <g.11b66c_rjf>	<film.film.directed_by>	<m.09gcrwp>	.
 <g.11b66c_rjf>	<film.film.initial_release_date>	"2001"^^<http://www.w3.org/2001/XMLSchema#gYear>	.
 <g.11b66c_rjf>	<type.object.name>	"At the Edge of the Earth"@en	.
