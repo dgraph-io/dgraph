@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/server"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -67,7 +68,7 @@ func init() {
 	rootConf.BindPFlags(RootCmd.PersistentFlags())
 
 	var subcommands = []*x.SubCommand{
-		&bulk.Bulk, &live.Live, &server.Server, &zero.Zero,
+		&bulk.Bulk, &live.Live, &server.Server, &zero.Zero, &version.Version,
 	}
 	for _, sc := range subcommands {
 		RootCmd.AddCommand(sc.Cmd)
