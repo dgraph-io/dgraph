@@ -452,9 +452,9 @@ used to show facets in query results. E.g.
   "name": "Carol",
   "name|initial": "C",
   "friend": {
-    "name": "Daryl"
-  },
-  "friend|close": "yes"
+    "name": "Daryl",
+    "friend|close": "yes"
+  }
 }
 ```
 Produces the following RDFs:
