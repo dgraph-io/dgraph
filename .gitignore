@@ -7,3 +7,19 @@
 gql/gql-fuzz.zip
 gql/fuzz-data/crashers
 gql/fuzz-data/suppressions
+
+#goland project folder
+.idea
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
