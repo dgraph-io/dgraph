@@ -151,6 +151,31 @@ func TestOrderdescFacets(t *testing.T) {
 		js)
 }
 
+func TestOrderdescFacetsWithFilters(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	// to see how friend @facets are positioned in output.
+	query := `
+		{
+
+			var(func: uid(1)) {
+				f as friend
+			}
+
+			me(func: uid(1)) {
+				friend @filter(uid(f)) @facets(orderdesc:since) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"me":[{"friend":[{"name":"Daryl Dixon","friend|since":"2007-05-02T15:04:05Z"},{"name":"Rick Grimes","friend|since":"2006-01-02T15:04:05Z"},{"name":"Andrea","friend|since":"2006-01-02T15:04:05Z"},{"friend|since":"2005-05-02T15:04:05Z"},{"name":"Glenn Rhee","friend|since":"2004-05-02T15:04:05Z"}]}]}}`,
+		js)
+}
+
 func TestRetrieveFacetsAsVars(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
