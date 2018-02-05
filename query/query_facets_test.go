@@ -154,7 +154,6 @@ func TestOrderdescFacets(t *testing.T) {
 func TestOrderdescFacetsWithFilters(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
-	// to see how friend @facets are positioned in output.
 	query := `
 		{
 

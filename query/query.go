@@ -1347,6 +1347,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	if len(sg.Filters) > 0 {
 		sg.updateUidMatrix()
 	}
+
 	for _, child := range sg.Children {
 		sgPath = append(sgPath, sg) // Add the current node to path
 		if err := child.populateVarMap(doneVars, sgPath); err != nil {
