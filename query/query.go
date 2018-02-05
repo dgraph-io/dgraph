@@ -1316,7 +1316,7 @@ func (sg *SubGraph) updateFacetMatrix() {
 func (sg *SubGraph) updateUidMatrix() {
 	sg.updateFacetMatrix()
 	for _, l := range sg.uidMatrix {
-		if len(sg.Params.Order) > 0 {
+		if len(sg.Params.Order) > 0 || len(sg.Params.FacetOrder) > 0 {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
@@ -1347,6 +1347,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	if len(sg.Filters) > 0 {
 		sg.updateUidMatrix()
 	}
+
 	for _, child := range sg.Children {
 		sgPath = append(sgPath, sg) // Add the current node to path
 		if err := child.populateVarMap(doneVars, sgPath); err != nil {

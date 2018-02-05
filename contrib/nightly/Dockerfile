@@ -8,7 +8,7 @@ MAINTAINER Dgraph Labs <contact@dgraph.io>
 
 RUN mkdir /dgraph \
     && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 ADD dgraph-build /usr/local/bin
