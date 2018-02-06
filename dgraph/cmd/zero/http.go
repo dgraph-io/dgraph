@@ -14,20 +14,27 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 )
 
+// intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.
+// It also writes any errors to w. A bool is returned to indicate if the param was parsed
+// successfully.
 func intFromQueryParam(w http.ResponseWriter, r *http.Request, name string) (uint64, bool) {
 	str := r.URL.Query().Get(name)
 	if len(str) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("%s not passed", name))
 		return 0, false
 	}
 	val, err := strconv.ParseUint(str, 0, 64)
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("Error while parsing %s", name))
 		return 0, false
 	}
 	return val, true
 }
 
+// removeNode can be used to remove a node from the cluster. It takes in the RAFT id of the node
+// and the group it belongs to. It can be used to remove Dgraph server and Zero nodes(group=0).
 func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {
@@ -53,9 +60,10 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write([]byte(fmt.Sprintf("Removed node with group: %v, idx: %v", groupId, nodeId)))
-	return
 }
 
+// moveTablet can be used to move a tablet to a specific group. It takes in tablet and group as
+// argument.
 func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {

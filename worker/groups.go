@@ -422,7 +422,7 @@ func (g *groupi) triggerMembershipSync() {
 }
 
 func (g *groupi) periodicMembershipUpdate() {
-	ticker := time.NewTicker(time.Minute * 1)
+	ticker := time.NewTicker(time.Minute * 5)
 	// Node might not be the leader when we are calculating size.
 	// We need to send immediately on start so no leader check inside calculatesize.
 	tablets := g.calculateTabletSizes()
