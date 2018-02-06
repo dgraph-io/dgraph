@@ -54,7 +54,14 @@ func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
 	var hasError uint32
 	var wg sync.WaitGroup
 	wg.Add(len(kvs))
+	first := true
+	var predicate string
 	for _, kv := range kvs {
+		if first {
+			pk := x.Parse(kv.Key)
+			predicate = pk.Attr
+			first = false
+		}
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
 		if err := txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]); err != nil {
 			return err
@@ -74,7 +81,7 @@ func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
 		return x.Errorf("Error while writing to badger")
 	}
 	wg.Wait()
-	return nil
+	return schema.Load(predicate)
 }
 
 func movePredicateHelper(ctx context.Context, predicate string, gid uint32) error {
@@ -201,7 +208,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KV) error {
 			return err
 		}
 	}
-	return schema.Load(predicate)
+	return
 }
 
 // Returns count which can be used to verify whether we have moved all keys
