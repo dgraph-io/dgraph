@@ -53,19 +53,31 @@ This would trigger G1 to get latest state. Wait for it.
 //  TODO: Have a event log for everything.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(time.Minute * 8)
-	var cancel context.CancelFunc
-	leaderChangeCh := s.leaderChangeChannel()
 	for {
 		select {
-		case _, open := <-leaderChangeCh:
-			if !open {
-				leaderChangeCh = s.leaderChangeChannel()
+		case <-ticker.C:
+			predicate, srcGroup, dstGroup := s.chooseTablet()
+			if len(predicate) == 0 {
+				break
 			}
+			if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
+				x.Println(err)
+			}
+		}
+	}
+}
+
+func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
+	x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*20)
+
+	go func(cancel context.CancelFunc) {
+		select {
+		case <-s.leaderChangeChannel():
 			// Cancel predicate moves when you step down as leader.
 			if !s.Node.AmLeader() {
 				if cancel != nil {
 					cancel()
-					cancel = nil
 				}
 				break
 			}
@@ -79,26 +91,15 @@ func (s *Server) rebalanceTablets() {
 			// periodically because we revert back the predicate to write state in case
 			// of any error unless a node crashes or is shutdown.
 			s.runRecovery()
-		case <-ticker.C:
-			predicate, srcGroup, dstGroup := s.chooseTablet()
-			if len(predicate) == 0 {
-				break
-			}
-			cancel = s.movePredicate(predicate, srcGroup, dstGroup)
-			cancel = nil
 		}
-	}
-}
+	}(cancel)
 
-func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) context.CancelFunc {
-	x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*20)
-	if err := s.moveTablet(ctx, predicate, srcGroup, dstGroup); err != nil {
-		x.Printf("Error while trying to move predicate %v from %d to %d: %v\n",
-			predicate, srcGroup, dstGroup, err)
+	err := s.moveTablet(ctx, predicate, srcGroup, dstGroup)
+	if err != nil {
+		return x.Errorf("Error while trying to move predicate %v from %d to %d: %v", predicate,
+			srcGroup, dstGroup, err)
 	}
-
-	return cancel
+	return nil
 }
 
 func (s *Server) runRecovery() {

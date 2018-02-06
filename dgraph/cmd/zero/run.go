@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -38,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/spf13/cobra"
 )
 
@@ -138,123 +136,6 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 			s.Stop()
 		}
 	}()
-}
-
-func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
-	srv := &http.Server{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 600 * time.Second,
-		IdleTimeout:  2 * time.Minute,
-	}
-
-	go func() {
-		defer wg.Done()
-		err := srv.Serve(l)
-		log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
-		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
-		defer cancel()
-		err = srv.Shutdown(ctx)
-		log.Printf("All http(s) requests finished.")
-		if err != nil {
-			log.Printf("Http(s) shutdown err: %v", err.Error())
-		}
-	}()
-}
-
-func intFromQueryParam(w http.ResponseWriter, r *http.Request, name string) (uint64, bool) {
-	str := r.URL.Query().Get(name)
-	if len(str) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("%s not passed", name))
-		return 0, false
-	}
-	val, err := strconv.ParseUint(str, 0, 64)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("Error while parsing %s", name))
-		return 0, false
-	}
-	return val, true
-}
-
-func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	if r.Method == "OPTIONS" {
-		return
-	}
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
-	}
-
-	nodeId, ok := intFromQueryParam(w, r, "id")
-	if !ok {
-		return
-	}
-	groupId, ok := intFromQueryParam(w, r, "group")
-	if !ok {
-		return
-	}
-
-	if err := st.zero.removeNode(context.Background(), nodeId, uint32(groupId)); err != nil {
-		x.SetStatus(w, x.Error, err.Error())
-		return
-	}
-	w.Write([]byte(fmt.Sprintf("Removed node with group: %v, idx: %v", groupId, nodeId)))
-	return
-}
-
-func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	if r.Method == "OPTIONS" {
-		return
-	}
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
-	}
-
-	tablet := r.URL.Query().Get("tablet")
-	if len(tablet) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")
-		return
-	}
-
-	groupId, ok := intFromQueryParam(w, r, "group")
-	if !ok {
-		return
-	}
-	dstGroup := uint32(groupId)
-
-	tab := st.zero.ServingTablet(tablet)
-	if tab == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("No tablet found for: %s", tablet))
-		return
-	}
-
-	srcGroup := tab.GroupId
-	// TODO - Validate dstGroup
-	cancel := st.zero.movePredicate(tablet, srcGroup, dstGroup)
-	cancel()
-}
-
-func (st *state) getState(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	w.Header().Set("Content-Type", "application/json")
-
-	mstate := st.zero.membershipState()
-	if mstate == nil {
-		x.SetStatus(w, x.ErrorNoData, "No membership state found.")
-		return
-	}
-
-	m := jsonpb.Marshaler{}
-	if err := m.Marshal(w, mstate); err != nil {
-		x.SetStatus(w, x.ErrorNoData, err.Error())
-		return
-	}
 }
 
 func run() {
