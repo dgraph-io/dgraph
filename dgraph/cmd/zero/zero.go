@@ -221,13 +221,14 @@ func (s *Server) removeZero(nodeId uint64) {
 	s.state.Removed = append(s.state.Removed, m)
 }
 
-func (s *Server) ServingTablet(dst string) *intern.Tablet {
+// ServingTablet returns the Tablet called tablet.
+func (s *Server) ServingTablet(tablet string) *intern.Tablet {
 	s.RLock()
 	defer s.RUnlock()
 
 	for _, group := range s.state.Groups {
 		for key, tab := range group.Tablets {
-			if key == dst {
+			if key == tablet {
 				return tab
 			}
 		}
@@ -235,12 +236,12 @@ func (s *Server) ServingTablet(dst string) *intern.Tablet {
 	return nil
 }
 
-func (s *Server) servingTablet(dst string) *intern.Tablet {
+func (s *Server) servingTablet(tablet string) *intern.Tablet {
 	s.AssertRLock()
 
 	for _, group := range s.state.Groups {
 		for key, tab := range group.Tablets {
-			if key == dst {
+			if key == tablet {
 				return tab
 			}
 		}

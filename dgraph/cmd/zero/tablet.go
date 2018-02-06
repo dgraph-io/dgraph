@@ -84,16 +84,21 @@ func (s *Server) rebalanceTablets() {
 			if len(predicate) == 0 {
 				break
 			}
-			x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
-			var ctx context.Context
-			ctx, cancel = context.WithTimeout(context.Background(), time.Minute*20)
-			if err := s.moveTablet(ctx, predicate, srcGroup, dstGroup); err != nil {
-				x.Printf("Error while trying to move predicate %v from %d to %d: %v\n",
-					predicate, srcGroup, dstGroup, err)
-			}
+			cancel = s.movePredicate(predicate, srcGroup, dstGroup)
 			cancel = nil
 		}
 	}
+}
+
+func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) context.CancelFunc {
+	x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*20)
+	if err := s.moveTablet(ctx, predicate, srcGroup, dstGroup); err != nil {
+		x.Printf("Error while trying to move predicate %v from %d to %d: %v\n",
+			predicate, srcGroup, dstGroup, err)
+	}
+
+	return cancel
 }
 
 func (s *Server) runRecovery() {

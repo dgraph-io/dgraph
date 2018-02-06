@@ -194,12 +194,50 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+
 	if err := st.zero.removeNode(context.Background(), nodeId, uint32(groupId)); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 	w.Write([]byte(fmt.Sprintf("Removed node with group: %v, idx: %v", groupId, nodeId)))
 	return
+}
+
+func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	tablet := r.URL.Query().Get("tablet")
+	if len(tablet) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")
+		return
+	}
+
+	groupId, ok := intFromQueryParam(w, r, "group")
+	if !ok {
+		return
+	}
+	dstGroup := uint32(groupId)
+
+	tab := st.zero.ServingTablet(tablet)
+	if tab == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("No tablet found for: %s", tablet))
+		return
+	}
+
+	srcGroup := tab.GroupId
+	// TODO - Validate dstGroup
+	cancel := st.zero.movePredicate(tablet, srcGroup, dstGroup)
+	cancel()
 }
 
 func (st *state) getState(w http.ResponseWriter, r *http.Request) {
@@ -257,6 +295,7 @@ func run() {
 
 	http.HandleFunc("/state", st.getState)
 	http.HandleFunc("/removeNode", st.removeNode)
+	http.HandleFunc("/moveTablet", st.moveTablet)
 
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
