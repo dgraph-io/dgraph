@@ -235,7 +235,7 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 	if ok {
 		s.ValueType = typ.Enum()
 	} else {
-		s = intern.SchemaUpdate{ValueType: typ.Enum()}
+		s = intern.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
 	}
 	updateSchema(attr, s, index)
 }
