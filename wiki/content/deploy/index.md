@@ -139,10 +139,10 @@ all the various flags available, run `dgraph server --help`.
 **Run dgraph UI**
 
 ```sh
-dgraph-ratel -p 8081
+dgraph-ratel -port 8082 -addr localhost:8081
 ```
 
-Dgraph UI listens on port 8081 by default. You can use the -p flag to change it. By default ratel assumes that dgraph is running on localhost:8080, you can change this address from the ui itself.
+Dgraph UI listens on port 8081 by default. You can use the `-port` flag to change it. By default ratel assumes that dgraph is running on localhost:8080, you can change this address using the `-addr` from the ui itself.
 
 ### Run using Docker
 
@@ -172,7 +172,7 @@ docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/data:/dgraph dgraph/d
 
 **Run dgraph UI**
 ```sh
-docker run -it -p 8082:8082 dgraph/dgraph:latest dgraph-ratel -p 8082
+docker run -it -p 8082:8082 dgraph/dgraph:latest dgraph-ratel --port 8082
 ```
 
 
