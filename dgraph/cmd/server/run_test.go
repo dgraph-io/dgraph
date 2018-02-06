@@ -421,9 +421,13 @@ func TestSchemaMutation1(t *testing.T) {
 	schema.ParseBytes([]byte(""), 1)
 	expected := map[string]*intern.SchemaUpdate{
 		"pred1": {
-			ValueType: intern.Posting_ValType(types.StringID)},
+			ValueType: intern.Posting_ValType(types.StringID),
+			Predicate: "pred1",
+		},
 		"pred2": {
-			ValueType: intern.Posting_ValType(types.DefaultID)},
+			ValueType: intern.Posting_ValType(types.DefaultID),
+			Predicate: "pred2",
+		},
 	}
 
 	err := runMutation(m)
