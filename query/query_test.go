@@ -383,6 +383,16 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "age", 10006, "25", nil)
 	addEdgeToValue(t, "name", 10007, "Elizabeth", nil)
 	addEdgeToValue(t, "age", 10007, "25", nil)
+
+	// Data to test inequality (specifically gt, lt) on exact tokenizer
+	addEdgeToValue(t, "name", 3000, "mystocks", nil)
+	addEdgeToValue(t, "symbol", 3001, "AAPL", nil)
+	addEdgeToValue(t, "symbol", 3002, "AMZN", nil)
+	addEdgeToValue(t, "symbol", 3003, "AMD", nil)
+	addEdgeToValue(t, "symbol", 3004, "FB", nil)
+	addEdgeToValue(t, "symbol", 3005, "GOOG", nil)
+	addEdgeToValue(t, "symbol", 3006, "MSFT", nil)
+
 }
 
 func TestGetUID(t *testing.T) {
@@ -405,6 +415,90 @@ func TestGetUID(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"uid":"0x1","alive":true,"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
 		js)
+}
+
+func TestStocksStartsWithAInPortfolio(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  portfolio(func: lt(symbol, "B")) {
+		symbol
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"portfolio": [{"symbol":"AAPL"},{"symbol":"AMZN"},{"symbol":"AMD"}]}}`,
+		js)
+}
+
+func TestFindFriendsWhoAreBetween15And19(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  friends_15_and_19(func: uid(1)) {
+		name
+		friend @filter(ge(age, 15) AND lt(age, 19)) {
+			name
+			age
+	    }
+      }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"friends_15_and_19":[{"name":"Michonne","friend":[{"name":"Rick Grimes","age":15},{"name":"Glenn Rhee","age":15},{"name":"Daryl Dixon","age":17}]}]}}`,
+		js)
+}
+
+func TestGeAge(t *testing.T) {
+	populateGraph(t)
+	query := `{
+		  senior_citizens(func: ge(age, 75)) {
+			name
+			age
+		  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"senior_citizens": [{"name":"Elizabeth", "age":75}, {"name":"Alice", "age":75}, {"age":75, "name":"Bob"}, {"name":"Alice", "age":75}]}}`,
+		js)
+}
+
+func TestGtAge(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			senior_citizens(func: gt(age, 75)) {
+				name
+				age
+			}
+    }`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"senior_citizens":[]}}`, js)
+}
+
+func TestLeAge(t *testing.T) {
+	populateGraph(t)
+	query := `{
+		  minors(func: le(age, 15)) {
+			name
+			age
+		  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"minors": [{"name":"Rick Grimes", "age":15}, {"name":"Glenn Rhee", "age":15}]}}`,
+		js)
+}
+
+func TestLtAge(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			minors(func: Lt(age, 15)) {
+				name
+				age
+			}
+    }`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"minors":[]}}`, js)
 }
 
 func TestGetUIDInDebugMode(t *testing.T) {
@@ -5758,6 +5852,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "_predicate_", Type: "string"},
 		{Predicate: "salary", Type: "float"},
 		{Predicate: "password", Type: "password"},
+		{Predicate: "symbol", Type: "string"},
 	}
 	checkSchemaNodes(t, expected, actual)
 }
@@ -5861,6 +5956,7 @@ occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
 password                       : password .
+symbol                         : string @index(exact) .
 `
 
 // Duplicate implemention as in cmd/dgraph/main_test.go
