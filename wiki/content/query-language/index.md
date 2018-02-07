@@ -2770,7 +2770,7 @@ query test($a: int, $b: int, $name: string) {
 * Variables can have default values. In the example below, `$a` has a default value of `2`. Since the value for `$a` isn't provided in the variable map, `$a` takes on the default value.
 * Variables whose type is suffixed with a `!` can't have a default value but must have a value as part of the variables map.
 * The value of the variable must be parsable to the given type, if not, an error is thrown.
-* The variable types that are supported as of now are: `int`, `float`, `bool`, `string` and `uid`.
+* The variable types that are supported as of now are: `int`, `float`, `bool` and `string`.
 * Any variable that is being used must be declared in the named query clause in the beginning.
 
 {{< runnable vars="{\"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}

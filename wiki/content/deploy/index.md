@@ -241,15 +241,6 @@ replication setting. For e.g., if you set `--replicas=3` in Zero, then run three
 Dgraph servers for no sharding, but 3x replication. Run six Dgraph servers, for
 sharding the data into two groups, with 3x replication.
 
-**Removing Dead Nodes**
-If a replica goes down and can't be recovered, you can remove it and add a new node to the quorum.
-`/removeNode` endpoint on Zero can be used to remove the dead node (`/removeNode?id=3&group=2`).
-{{% notice "note" %}}
-Before using the api ensure that the node is down and ensure that it doesn't come back up ever again.
-
-Remember to specify the `idx` flag while replacing the dead node or else Zero might assign it a different group.
-{{% /notice %}}
-
 ## Single Host Setup
 
 ### Run directly on the host
@@ -1063,7 +1054,16 @@ to see useful information, like the following:
 
 * `/state` Information about the nodes that are part of the cluster. Also contains information about
   size of predicates and groups they belong to.
-* `/removeNode?id=idx&group=gid` Used to remove dead node from the quorum, takes node id and group id as query param.
+* `/removeNode?id=3&group=2` If a replica goes down and can't be recovered, you can remove it and add a new node to the quorum.
+This endpoint can be used to remove a dead Zero or Dgraph server node. To remove dead Zero nodes, just pass `group=0` and the
+id of the Zero node.
+{{% notice "note" %}}
+Before using the api ensure that the node is down and ensure that it doesn't come back up ever again.
+
+Remember to specify the `idx` flag while replacing the dead node or else Zero might assign it a different group.
+{{% /notice %}}
+
+
 
 ## TLS configuration
 Connections between client and server can be secured with TLS.
