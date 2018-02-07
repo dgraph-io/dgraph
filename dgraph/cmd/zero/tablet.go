@@ -70,15 +70,14 @@ func (s *Server) rebalanceTablets() {
 func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
 	x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*20)
+	done := make(chan struct{}, 1)
 
-	go func(cancel context.CancelFunc) {
+	go func(done chan struct{}, cancel context.CancelFunc) {
 		select {
 		case <-s.leaderChangeChannel():
 			// Cancel predicate moves when you step down as leader.
 			if !s.Node.AmLeader() {
-				if cancel != nil {
-					cancel()
-				}
+				cancel()
 				break
 			}
 
@@ -91,10 +90,13 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 			// periodically because we revert back the predicate to write state in case
 			// of any error unless a node crashes or is shutdown.
 			s.runRecovery()
+		case <-done:
+			cancel()
 		}
-	}(cancel)
+	}(done, cancel)
 
 	err := s.moveTablet(ctx, predicate, srcGroup, dstGroup)
+	done <- struct{}{}
 	if err != nil {
 		return x.Errorf("Error while trying to move predicate %v from %d to %d: %v", predicate,
 			srcGroup, dstGroup, err)

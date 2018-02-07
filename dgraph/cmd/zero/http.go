@@ -97,7 +97,8 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	}
 	if !isKnown {
 		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("Group: [%d] is not a known group.", dstGroup))
+		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf("Group: [%d] is not a known group.",
+			dstGroup))
 		return
 	}
 
