@@ -5963,7 +5963,7 @@ occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
 password                       : password .
-symbol						   : string @index(exact) .
+symbol                         : string @index(exact) .
 `
 
 // Duplicate implemention as in cmd/dgraph/main_test.go
