@@ -385,13 +385,6 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "age", 10007, "25", nil)
 
 	// Data to test inequality (specifically gt, lt) on exact tokenizer
-	addEdgeToUID(t, "contains", 3000, 3001, nil)
-	addEdgeToUID(t, "contains", 3000, 3002, nil)
-	addEdgeToUID(t, "contains", 3000, 3003, nil)
-	addEdgeToUID(t, "contains", 3000, 3004, nil)
-	addEdgeToUID(t, "contains", 3000, 3005, nil)
-	addEdgeToUID(t, "contains", 3000, 3006, nil)
-
 	addEdgeToValue(t, "name", 3000, "mystocks", nil)
 	addEdgeToValue(t, "symbol", 3001, "AAPL", nil)
 	addEdgeToValue(t, "symbol", 3002, "AMZN", nil)

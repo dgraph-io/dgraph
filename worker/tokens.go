@@ -177,11 +177,11 @@ func getInequalityTokens(readTs uint64, attr, f string,
 			// for non Lossy lets compare for inequality (gt & lt)
 			// to see if key needs to be included
 			if f == "gt" {
-				if bytes.Compare([]byte(k.Term), []byte(ineqTokenInBytes)) > 0 {
+				if bytes.Compare([]byte(k.Term), ineqTokenInBytes) > 0 {
 					out = append(out, k.Term)
 				}
 			} else if f == "lt" {
-				if bytes.Compare([]byte(k.Term), []byte(ineqTokenInBytes)) < 0 {
+				if bytes.Compare([]byte(k.Term), ineqTokenInBytes) < 0 {
 					out = append(out, k.Term)
 				}
 			} else { //for le or ge or any other fn consider the key
