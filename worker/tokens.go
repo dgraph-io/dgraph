@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"bytes"
 )
 
 func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
@@ -167,7 +168,22 @@ func getInequalityTokens(readTs uint64, attr, f string,
 		if k == nil {
 			continue
 		}
-		out = append(out, k.Term)
+		//if its lossy then we handle inequality comparison later on and any custom tokenizer is lossy too
+		if tokenizer.IsLossy() {
+			out = append(out, k.Term)
+		} else { //for non Lossy lets compare for inequality (gt & lt) to see if key needs to be included
+			if f == "gt" {
+				if bytes.Compare([]byte(k.Term), []byte (ineqToken)) > 0 {
+					out = append(out, k.Term)
+				}
+			} else if f == "lt" {
+				if bytes.Compare([]byte(k.Term), []byte (ineqToken)) < 0 {
+					out = append(out, k.Term)
+				}
+			} else {//for le or ge or any other fn consider the key
+				out = append(out, k.Term)
+			}
+		}
 	}
 	return out, ineqToken, nil
 }

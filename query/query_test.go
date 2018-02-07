@@ -407,6 +407,92 @@ func TestGetUID(t *testing.T) {
 		js)
 }
 
+func TestPeopleStartsWithA(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  name_starts_with_a(func: lt(name, "B")) {
+		name
+		age
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"name_starts_with_a": [{"name":"Andrea","age":19},{"name":"Alice"},{"name":"Andrea With no friends"},{"name":"Alice"},{"name":"Andre"},{"name":"Alice\""},{"name":"Alice","age":25},{"name":"Alice","age":75}]}}`,
+		js)
+}
+
+func TestFindFriendsWhoAreBetween15And17(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  friends_15_and_17(func: uid(1)) {
+		name
+		friend @filter(ge(age, 15) AND lt(age, 18)) {
+			name
+			age
+	    }
+      }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	x.Printf("All people: ", js)
+	require.JSONEq(t,
+		`{"data":{"friends_15_and_17":[{"name":"Michonne","friend":[{"name":"Rick Grimes","age":15},{"name":"Glenn Rhee","age":15},{"name":"Daryl Dixon","age":17}]}]}}`,
+		js)
+}
+
+func TestGeAge(t *testing.T) {
+	populateGraph(t)
+	query := `{
+		  senior_citizens(func: ge(age, 75)) {
+			name
+			age
+		  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"senior_citizens": [{"name":"Elizabeth", "age":75}, {"name":"Alice", "age":75}, {"age":75, "name":"Bob"}, {"name":"Alice", "age":75}]}}`,
+		js)
+}
+
+func TestGtAge(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			senior_citizens(func: gt(age, 75)) {
+				name
+				age
+			}
+    }`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"senior_citizens":[]}}`, js)
+}
+
+func TestLeAge(t *testing.T) {
+	populateGraph(t)
+	query := `{
+		  minors(func: le(age, 15)) {
+			name
+			age
+		  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"minors": [{"name":"Rick Grimes", "age":15}, {"name":"Glenn Rhee", "age":15}]}}`,
+		js)
+}
+
+func TestLtAge(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			minors(func: Lt(age, 15)) {
+				name
+				age
+			}
+    }`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"minors":[]}}`, js)
+}
+
 func TestGetUIDInDebugMode(t *testing.T) {
 	populateGraph(t)
 	query := `
