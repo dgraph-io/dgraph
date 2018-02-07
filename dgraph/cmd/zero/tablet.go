@@ -53,20 +53,31 @@ This would trigger G1 to get latest state. Wait for it.
 //  TODO: Have a event log for everything.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(time.Minute * 8)
-	var cancel context.CancelFunc
-	leaderChangeCh := s.leaderChangeChannel()
 	for {
 		select {
-		case _, open := <-leaderChangeCh:
-			if !open {
-				leaderChangeCh = s.leaderChangeChannel()
+		case <-ticker.C:
+			predicate, srcGroup, dstGroup := s.chooseTablet()
+			if len(predicate) == 0 {
+				break
 			}
+			if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
+				x.Println(err)
+			}
+		}
+	}
+}
+
+func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
+	x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*20)
+	done := make(chan struct{}, 1)
+
+	go func(done chan struct{}, cancel context.CancelFunc) {
+		select {
+		case <-s.leaderChangeChannel():
 			// Cancel predicate moves when you step down as leader.
 			if !s.Node.AmLeader() {
-				if cancel != nil {
-					cancel()
-					cancel = nil
-				}
+				cancel()
 				break
 			}
 
@@ -79,21 +90,18 @@ func (s *Server) rebalanceTablets() {
 			// periodically because we revert back the predicate to write state in case
 			// of any error unless a node crashes or is shutdown.
 			s.runRecovery()
-		case <-ticker.C:
-			predicate, srcGroup, dstGroup := s.chooseTablet()
-			if len(predicate) == 0 {
-				break
-			}
-			x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
-			var ctx context.Context
-			ctx, cancel = context.WithTimeout(context.Background(), time.Minute*20)
-			if err := s.moveTablet(ctx, predicate, srcGroup, dstGroup); err != nil {
-				x.Printf("Error while trying to move predicate %v from %d to %d: %v\n",
-					predicate, srcGroup, dstGroup, err)
-			}
-			cancel = nil
+		case <-done:
+			cancel()
 		}
+	}(done, cancel)
+
+	err := s.moveTablet(ctx, predicate, srcGroup, dstGroup)
+	done <- struct{}{}
+	if err != nil {
+		return x.Errorf("Error while trying to move predicate %v from %d to %d: %v", predicate,
+			srcGroup, dstGroup, err)
 	}
+	return nil
 }
 
 func (s *Server) runRecovery() {
