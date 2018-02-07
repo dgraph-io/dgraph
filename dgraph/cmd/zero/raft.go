@@ -542,6 +542,7 @@ func (n *node) Run() {
 			// TODO: Should we move this to the top?
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
+					// TODO(pawan) - Why isn't this done on leader change.
 					n.server.updateLeases()
 					leader = true
 				}

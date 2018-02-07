@@ -185,6 +185,8 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
+// proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
+// to be applied(written to WAL) to all the nodes in the group.
 func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")

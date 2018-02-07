@@ -184,7 +184,7 @@ func (n *Node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error 
 }
 
 func (n *Node) Send(m raftpb.Message) {
-	x.AssertTruef(n.Id != m.To, "Seding message to itself")
+	x.AssertTruef(n.Id != m.To, "Sending message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
 	select {

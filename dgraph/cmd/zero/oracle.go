@@ -35,14 +35,15 @@ type syncMark struct {
 
 type Oracle struct {
 	x.SafeMutex
-	commits map[uint64]uint64 // start -> commit
+	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
-	rowCommit  map[string]uint64 // fp(key) -> commit
-	aborts     map[uint64]struct{}
-	maxPending uint64
+	rowCommit  map[string]uint64   // fp(key) -> commitTs. Used to detect conflict.
+	aborts     map[uint64]struct{} // key is startTs
+	maxPending uint64              // max transaction startTs given out by us.
 
 	tmax uint64
-	// timestamp at the time of start of server or when it became leader.
+	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
+	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
 	subscribers map[int]chan *intern.OracleDelta
 	updates     chan *intern.OracleDelta
@@ -63,12 +64,13 @@ func (o *Oracle) Init() {
 func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
+	// TODO(pawan) - Is this maintained only on leader?
 	o.startTxnTs = ts
 	o.rowCommit = make(map[string]uint64)
 }
 
 func (o *Oracle) hasConflict(src *api.TxnContext) bool {
-	// This transaction was not started after i became leader.
+	// This transaction was started before I became leader.
 	if src.StartTs < o.startTxnTs {
 		return true
 	}
@@ -206,6 +208,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) bool {
 	o.Lock()
 	defer o.Unlock()
+	// TODO (pawan): When would the below false things happen?
 	if _, ok := o.commits[src.StartTs]; ok {
 		return false
 	}
@@ -217,6 +220,7 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
+	// TODO (pawan): What are the syncMarks for?
 	o.syncMarks = append(o.syncMarks, syncMark{index: index, ts: src.StartTs})
 	return true
 }
@@ -242,12 +246,13 @@ func (o *Oracle) commitTs(startTs uint64) uint64 {
 
 func (o *Oracle) storePending(ids *api.AssignedIds) {
 	// Wait to finish up processing everything before start id.
+	// TODO(pawan) - Why is that so?
 	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
 	// Now send it out to updates.
 	o.updates <- &intern.OracleDelta{MaxPending: ids.EndId}
 	o.Lock()
-	defer o.Unlock()
 	max := ids.EndId
+	defer o.Unlock()
 	if o.maxPending < max {
 		o.maxPending = max
 	}
@@ -266,6 +271,7 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 }
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
+	// TODO (pawan) - When would this happen? Dgraph server doesn't send Aborted as true.
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
 	}
@@ -293,6 +299,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	// Propose txn should be used to set watermark as done.
 	err = s.proposeTxn(ctx, src)
 	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
+	// TODO (pawan) - Why is that so?
 	s.orc.doneUntil.Done(src.CommitTs)
 	return err
 }
