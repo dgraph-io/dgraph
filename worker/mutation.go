@@ -399,7 +399,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *intern.Mutations, chr cha
 	if groups().ServesGroup(gid) {
 		node := groups().Node
 		// we don't timeout after proposing
-		res.err = node.ProposeAndWait(ctx, &intern.Proposal{Mutations: m})
+		res.err = node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
 		res.ctx = &api.TxnContext{}
 		if txn := posting.Txns().Get(m.StartTs); txn != nil {
 			txn.Fill(res.ctx)
@@ -555,7 +555,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 
 func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Payload, error) {
 	node := groups().Node
-	err := node.ProposeAndWait(ctx, &intern.Proposal{TxnContext: tc})
+	err := node.proposeAndWait(ctx, &intern.Proposal{TxnContext: tc})
 	return &api.Payload{}, err
 }
 
@@ -583,7 +583,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 		defer tr.Finish()
 	}
 
-	err := node.ProposeAndWait(ctx, &intern.Proposal{Mutations: m})
+	err := node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
 	txnCtx.StartTs = m.StartTs
 	txnCtx.LinRead = &api.LinRead{
 		Ids: map[uint32]uint64{

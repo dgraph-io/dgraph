@@ -621,7 +621,7 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 			continue
 		}
 		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTs}
-		go g.Node.ProposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
+		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
 	}
 	for _, startTs := range oracleDelta.Aborts {
 		if posting.Txns().Get(startTs) == nil {
@@ -629,7 +629,7 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 			continue
 		}
 		tctx := &api.TxnContext{StartTs: startTs}
-		go g.Node.ProposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
+		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
 	}
 }
 
