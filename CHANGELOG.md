@@ -6,9 +6,32 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+## [1.0.3] - 2018-02-08
+
 ### Added
 
 * Support for specifying blank nodes as part of JSON mutation.
+* `dgraph version` command to check current version.
+* `curl` to Docker image.
+* `moveTablet` endpoint to Zero to allow initiating a predicate move.
+
+### Fixed
+
+* Out of range error while doing `eq` query.
+* Reduce `maxBackOffDelay` to 10 sec so that leader election is faster after restart.
+* Fix bugs with predicate move where some data was not sent and schema not loaded properly on
+  replicas.
+* Fix the total number of RDF's processed when live loader ends.
+* Reindex data when schema is changed to list type to fix adding and deleting new data.
+* Correctly upate uidMatrix when facetOrder is supplied.
+* Inequality operator(`gt` and `lt`) result for non lossy tokenizers.
+
+### Changed
+
+* `--zero_addr` flag changed to `--zero` for `dgraph bulk` command.
+* Default ports for Zero have been changed `7080` => `5080`(grpc) and `8080` => `6080`(http).
+* Update badger version and how purging is done to fix CPU spiking when Dgraph is idle.
+* Print predicate name as part of the warning about long term for exact index.
 
 ## [1.0.2] - 2018-01-17
 
