@@ -247,9 +247,6 @@ func (t ExactTokenizer) Tokens(v interface{}) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("Exact indices only supported for string types")
 	}
-	if len(term) > 100 {
-		x.Printf("Long text for exact index. Consider switching to hash for better performance\n")
-	}
 	return []string{term}, nil
 }
 func (t ExactTokenizer) Identifier() byte { return 0x2 }

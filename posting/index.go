@@ -68,6 +68,16 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 				return nil, x.Errorf("Tokenizer not available for language: %s", lang)
 			}
 		}
+		if schemaType == types.StringID {
+			exactTok, ok := tok.GetTokenizer("exact")
+			x.AssertTruef(ok, "Couldn't find exact tokenizer.")
+			// Exact index can only be applied for strings so we can safely try to convert Value to
+			// string.
+			if (it.Identifier() == exactTok.Identifier()) && len(sv.Value.(string)) > 100 {
+				x.Printf("Long term for exact index on predicate: [%s]. "+
+					"Consider switching to hash for better performance.\n", attr)
+			}
+		}
 		toks, err := tok.BuildTokens(sv.Value, it)
 		if err != nil {
 			return tokens, err
