@@ -22,12 +22,12 @@ import (
 
 	"github.com/dgraph-io/badger"
 
+	"bytes"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"bytes"
 )
 
 func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
@@ -161,6 +161,7 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
 	seekKey := x.IndexKey(attr, ineqToken)
 	it := posting.NewTxnPrefixIterator(txn, itOpt, indexPrefix, seekKey)
+	ineqTokenInBytes := []byte(ineqToken) //used for inequality comparison below
 	defer it.Close()
 	for ; it.Valid(); it.Next() {
 		key := it.Key()
@@ -168,19 +169,22 @@ func getInequalityTokens(readTs uint64, attr, f string,
 		if k == nil {
 			continue
 		}
-		//if its lossy then we handle inequality comparison later on and any custom tokenizer is lossy too
+		// if its lossy then we handle inequality comparison later
+		// on in handleCompareAttr
 		if tokenizer.IsLossy() {
 			out = append(out, k.Term)
-		} else { //for non Lossy lets compare for inequality (gt & lt) to see if key needs to be included
+		} else {
+			// for non Lossy lets compare for inequality (gt & lt)
+			// to see if key needs to be included
 			if f == "gt" {
-				if bytes.Compare([]byte(k.Term), []byte (ineqToken)) > 0 {
+				if bytes.Compare([]byte(k.Term), []byte(ineqTokenInBytes)) > 0 {
 					out = append(out, k.Term)
 				}
 			} else if f == "lt" {
-				if bytes.Compare([]byte(k.Term), []byte (ineqToken)) < 0 {
+				if bytes.Compare([]byte(k.Term), []byte(ineqTokenInBytes)) < 0 {
 					out = append(out, k.Term)
 				}
-			} else {//for le or ge or any other fn consider the key
+			} else { //for le or ge or any other fn consider the key
 				out = append(out, k.Term)
 			}
 		}

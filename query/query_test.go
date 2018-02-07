@@ -383,6 +383,23 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "age", 10006, "25", nil)
 	addEdgeToValue(t, "name", 10007, "Elizabeth", nil)
 	addEdgeToValue(t, "age", 10007, "25", nil)
+
+	// Data to test inequality (specifically gt, lt) on exact tokenizer
+	addEdgeToUID(t, "contains", 3000, 3001, nil)
+	addEdgeToUID(t, "contains", 3000, 3002, nil)
+	addEdgeToUID(t, "contains", 3000, 3003, nil)
+	addEdgeToUID(t, "contains", 3000, 3004, nil)
+	addEdgeToUID(t, "contains", 3000, 3005, nil)
+	addEdgeToUID(t, "contains", 3000, 3006, nil)
+
+	addEdgeToValue(t, "name", 3000, "mystocks", nil)
+	addEdgeToValue(t, "symbol", 3001, "AAPL", nil)
+	addEdgeToValue(t, "symbol", 3002, "AMZN", nil)
+	addEdgeToValue(t, "symbol", 3003, "AMD", nil)
+	addEdgeToValue(t, "symbol", 3004, "FB", nil)
+	addEdgeToValue(t, "symbol", 3005, "GOOG", nil)
+	addEdgeToValue(t, "symbol", 3006, "MSFT", nil)
+
 }
 
 func TestGetUID(t *testing.T) {
@@ -407,35 +424,33 @@ func TestGetUID(t *testing.T) {
 		js)
 }
 
-func TestPeopleStartsWithA(t *testing.T) {
+func TestStocksStartsWithAInPortfolio(t *testing.T) {
 	populateGraph(t)
 	query := `{
-	  name_starts_with_a(func: lt(name, "B")) {
-		name
-		age
+	  portfolio(func: lt(symbol, "B")) {
+		symbol
 	  }
 	}`
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
-		`{"data":{"name_starts_with_a": [{"name":"Andrea","age":19},{"name":"Alice"},{"name":"Andrea With no friends"},{"name":"Alice"},{"name":"Andre"},{"name":"Alice\""},{"name":"Alice","age":25},{"name":"Alice","age":75}]}}`,
+		`{"data":{"portfolio": [{"symbol":"AAPL"},{"symbol":"AMZN"},{"symbol":"AMD"}]}}`,
 		js)
 }
 
-func TestFindFriendsWhoAreBetween15And17(t *testing.T) {
+func TestFindFriendsWhoAreBetween15And19(t *testing.T) {
 	populateGraph(t)
 	query := `{
-	  friends_15_and_17(func: uid(1)) {
+	  friends_15_and_19(func: uid(1)) {
 		name
-		friend @filter(ge(age, 15) AND lt(age, 18)) {
+		friend @filter(ge(age, 15) AND lt(age, 19)) {
 			name
 			age
 	    }
       }
 	}`
 	js := processToFastJsonNoErr(t, query)
-	x.Printf("All people: ", js)
 	require.JSONEq(t,
-		`{"data":{"friends_15_and_17":[{"name":"Michonne","friend":[{"name":"Rick Grimes","age":15},{"name":"Glenn Rhee","age":15},{"name":"Daryl Dixon","age":17}]}]}}`,
+		`{"data":{"friends_15_and_19":[{"name":"Michonne","friend":[{"name":"Rick Grimes","age":15},{"name":"Glenn Rhee","age":15},{"name":"Daryl Dixon","age":17}]}]}}`,
 		js)
 }
 
@@ -5844,6 +5859,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "_predicate_", Type: "string"},
 		{Predicate: "salary", Type: "float"},
 		{Predicate: "password", Type: "password"},
+		{Predicate: "symbol", Type: "string"},
 	}
 	checkSchemaNodes(t, expected, actual)
 }
@@ -5947,6 +5963,7 @@ occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
 password                       : password .
+symbol						   : string @index(exact) .
 `
 
 // Duplicate implemention as in cmd/dgraph/main_test.go
