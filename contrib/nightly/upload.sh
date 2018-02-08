@@ -187,14 +187,14 @@ upload_assets() {
 		if [[ $BUILD_TAG == "nightly" ]]; then
 			read release_id < <( \
 				send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
-				"{ \"name\": \"Dgraph ${DGRAPH_VERSION}${ASSET_SUFFIX}\", \"tag_name\": \"${BUILD_TAG}\", \
+				"{ \"name\": \"${DGRAPH_VERSION}${ASSET_SUFFIX}\", \"tag_name\": \"${BUILD_TAG}\", \
 				\"prerelease\": true }" \
 				| jq -r -c '.id') \
 				|| exit
 		else
 			read release_id < <( \
 				send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
-				"{ \"name\": \"Dgraph ${DGRAPH_VERSION} Release\", \"tag_name\": \"${BUILD_TAG}\", \
+				"{ \"name\": \"${DGRAPH_VERSION}\", \"tag_name\": \"${BUILD_TAG}\", \
 				\"draft\": true }" \
 				| jq -r -c '.id') \
 				|| exit
