@@ -374,7 +374,6 @@ service Zero {
 service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                        returns (api.TxnContext) {}
-	rpc CommitOrAbort(api.TxnContext)             returns (api.Payload) {}
 	rpc ServeTask (Query)                         returns (Result) {}
 	rpc PredicateAndSchemaData (SnapshotMeta) returns (stream KV) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}

@@ -246,6 +246,7 @@ func (l *List) SetForDeletion() bool {
 func (l *List) updateMutationLayer(startTs uint64, mpost *intern.Posting) bool {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+	fmt.Printf("mpost: %+v\n", mpost)
 	if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
 		l.markdeleteAll = startTs
 		// Remove all mutations done in same transaction.
@@ -272,6 +273,7 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *intern.Posting) bool {
 	if midx >= len(l.mlayer) {
 		// Add it at the end.
 		l.mlayer = append(l.mlayer, mpost)
+		fmt.Println("I am here", mpost)
 		return true
 	}
 
@@ -507,10 +509,12 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 func (l *List) inSnapshot(mpost *intern.Posting, readTs, deleteTs uint64) bool {
 	l.AssertRLock()
 	commitTs := atomic.LoadUint64(&mpost.CommitTs)
+	fmt.Println("mpost commitTs", mpost.CommitTs)
 	if commitTs == 0 {
 		commitTs = Oracle().CommitTs(mpost.StartTs)
 		atomic.StoreUint64(&mpost.CommitTs, commitTs)
 	}
+	fmt.Println("from oracle", commitTs)
 	if commitTs == 0 {
 		return mpost.StartTs == readTs
 	}
@@ -530,12 +534,12 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 		// Fixing the pl is difficult with locks.
 		deleteTs = Oracle().CommitTs(l.markdeleteAll)
 	}
-	fmt.Println("markdeleteAll", l.markdeleteAll, "readTs", readTs, "deleteTs", deleteTs)
+	x.Println("markdeleteAll", l.markdeleteAll, "readTs", readTs, "deleteTs", deleteTs)
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
 	mlayerLen := len(l.mlayer)
-	fmt.Println("mlayerLen", mlayerLen)
+	x.Println("mlayerLen", mlayerLen)
 	if afterUid > 0 {
 		midx = sort.Search(mlayerLen, func(idx int) bool {
 			mp := l.mlayer[idx]
@@ -552,7 +556,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
 			if !l.inSnapshot(mp, readTs, deleteTs) {
-				fmt.Println("Not in snapshot")
+				x.Println("Not in snapshot")
 				midx++
 				continue
 			}

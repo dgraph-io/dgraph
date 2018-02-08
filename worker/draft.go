@@ -355,6 +355,9 @@ func (n *node) processApplyCh() {
 
 		posting.TxnMarks().Begin(e.Index)
 		if proposal.Mutations != nil {
+			if len(proposal.Mutations.Edges) > 0 {
+				fmt.Println(proposal.Mutations.Edges[0])
+			}
 			// syncmarks for this shouldn't be marked done until it's comitted.
 			n.sch.schedule(proposal, e.Index)
 		} else if len(proposal.Kv) > 0 {

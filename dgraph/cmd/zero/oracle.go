@@ -19,6 +19,7 @@ package zero
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -305,6 +306,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 }
 
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
+	fmt.Println("commitOrAbort call")
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
