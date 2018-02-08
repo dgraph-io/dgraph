@@ -353,8 +353,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		key = x.DataKey(attr, q.UidList.Uids[i])
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.Get(key)
-		var err error
+		pl, err := posting.Get(key)
+		if err != nil {
+			return err
+		}
 		var vals []types.Val
 		if q.ExpandAll {
 			vals, err = pl.AllValues(args.q.ReadTs)
@@ -506,7 +508,10 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		}
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.Get(key)
+		pl, err := posting.Get(key)
+		if err != nil {
+			return err
+		}
 
 		// get filtered uids and facets.
 		var filteredRes []*result
@@ -781,10 +786,12 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			key := x.DataKey(attr, uid)
-			pl := posting.Get(key)
+			pl, err := posting.Get(key)
+			if err != nil {
+				return err
+			}
 
 			var val types.Val
-			var err error
 			if lang != "" {
 				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
 			} else {
@@ -903,7 +910,10 @@ func filterGeoFunction(arg funcArgs) error {
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.Get(key)
+		pl, err := posting.Get(key)
+		if err != nil {
+			return err
+		}
 
 		val, err := pl.Value(arg.q.ReadTs)
 		newValue := &intern.TaskValue{ValType: val.Tid.Enum()}
@@ -930,11 +940,13 @@ func filterStringFunction(arg funcArgs) error {
 	lang := langForFunc(arg.q.Langs)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.Get(key)
+		pl, err := posting.Get(key)
+		if err != nil {
+			return err
+		}
 
 		var vals []types.Val
 		var val types.Val
-		var err error
 		if lang == "" {
 			if schema.State().IsList(attr) {
 				vals, err = pl.AllValues(arg.q.ReadTs)
@@ -1491,7 +1503,10 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
-		pl := posting.Get(countKey)
+		pl, err := posting.Get(countKey)
+		if err != nil {
+			return err
+		}
 		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
 		if err != nil {
 			return err
@@ -1525,7 +1540,10 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 		key := it.Key()
 		nk := make([]byte, len(key))
 		copy(nk, key)
-		pl := posting.Get(key)
+		pl, err := posting.Get(key)
+		if err != nil {
+			return err
+		}
 		uids, err := pl.Uids(posting.ListOptions{ReadTs: cp.readTs})
 		if err != nil {
 			return err

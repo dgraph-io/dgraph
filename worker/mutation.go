@@ -77,11 +77,14 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 	key := x.DataKey(edge.Attr, edge.Entity)
 
 	t := time.Now()
-	plist := posting.Get(key)
+	plist, err := posting.Get(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("GetLru took %v", dur)
 		}
+	}
+	if err != nil {
+		return err
 	}
 
 	if err = plist.AddMutationWithIndex(ctx, edge, txn); err != nil {

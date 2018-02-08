@@ -45,7 +45,10 @@ func uidsForRegex(attr string, arg funcArgs,
 
 	uidsForTrigram := func(trigram string) (*intern.List, error) {
 		key := x.IndexKey(attr, trigram)
-		pl := posting.Get(key)
+		pl, err := posting.Get(key)
+		if err != nil {
+			return nil, err
+		}
 		return pl.Uids(opts)
 	}
 

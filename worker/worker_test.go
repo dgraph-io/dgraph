@@ -52,7 +52,8 @@ func delEdge(t *testing.T, edge *intern.DirectedEdge, l *posting.List) {
 }
 
 func getOrCreate(key []byte) *posting.List {
-	l := posting.Get(key)
+	l, err := posting.Get(key)
+	x.Checkf(err, "While calling posting.Get")
 	return l
 }
 
