@@ -82,7 +82,7 @@ mv $tmp_dir ./
 
 # Only run this locally.
 if [[ $TRAVIS != true ]]; then
-  docker build -t dgraph/dgraph:master -f $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/Dockerfile .
+  docker build -t dgraph/dgraph:dev -f $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/Dockerfile .
 fi
 
 rm -Rf dgraph-build

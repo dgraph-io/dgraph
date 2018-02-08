@@ -530,10 +530,12 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 		// Fixing the pl is difficult with locks.
 		deleteTs = Oracle().CommitTs(l.markdeleteAll)
 	}
+	fmt.Println("markdeleteAll", l.markdeleteAll, "readTs", readTs, "deleteTs", deleteTs)
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
 	mlayerLen := len(l.mlayer)
+	fmt.Println("mlayerLen", mlayerLen)
 	if afterUid > 0 {
 		midx = sort.Search(mlayerLen, func(idx int) bool {
 			mp := l.mlayer[idx]
@@ -550,6 +552,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
 			if !l.inSnapshot(mp, readTs, deleteTs) {
+				fmt.Println("Not in snapshot")
 				midx++
 				continue
 			}

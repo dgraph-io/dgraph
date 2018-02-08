@@ -356,6 +356,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		pl := posting.Get(key)
 		var err error
 		var vals []types.Val
+		fmt.Println("here")
 		if q.ExpandAll {
 			vals, err = pl.AllValues(args.q.ReadTs)
 		} else if listType && len(q.Langs) == 0 {
