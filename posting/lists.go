@@ -240,17 +240,17 @@ func StopLRUEviction() {
 // worker pkg would push the indices to the watermarks held by lists.
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
-func Get(key []byte) (rlist *List) {
+func Get(key []byte) (rlist *List, err error) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
 		x.CacheHit.Add(1)
-		return lp
+		return lp, nil
 	}
 	x.CacheMiss.Add(1)
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
-	l, _ := getNew(key, pstore)
+	l, err := getNew(key, pstore)
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
@@ -258,7 +258,7 @@ func Get(key []byte) (rlist *List) {
 	} else if atomic.LoadInt32(&l.onDisk) == 0 {
 		btree.Insert(l.key)
 	}
-	return lp
+	return lp, err
 }
 
 // GetLru checks the lru map and returns it if it exits

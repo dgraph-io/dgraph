@@ -123,15 +123,18 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *intern.DirectedEdge,
 	key := x.IndexKey(edge.Attr, token)
 
 	t := time.Now()
-	plist := Get(key)
+	plist, err := Get(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("getOrMutate took %v", dur)
 		}
 	}
+	if err != nil {
+		return err
+	}
 
 	x.AssertTrue(plist != nil)
-	_, err := plist.AddMutation(ctx, txn, edge)
+	_, err = plist.AddMutation(ctx, txn, edge)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error adding/deleting %s for attr %s entity %d: %v",
@@ -187,7 +190,10 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *intern.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	plist := Get(key)
+	plist, err := Get(key)
+	if err != nil {
+		return err
+	}
 
 	x.AssertTrue(plist != nil)
 	edge := &intern.DirectedEdge{
@@ -278,11 +284,14 @@ func (l *List) handleDeleteAll(ctx context.Context, t *intern.DirectedEdge,
 func (txn *Txn) addCountMutation(ctx context.Context, t *intern.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
-	plist := Get(key)
+	plist, err := Get(key)
+	if err != nil {
+		return err
+	}
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	_, err := plist.AddMutation(ctx, txn, t)
+	_, err = plist.AddMutation(ctx, txn, t)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error adding/deleting count edge for attr %s count %d dst %d: %v",
@@ -805,7 +814,11 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 
 		// Get is important because we are modifying the mutation layer of the posting lists and
 		// hence want to put the PL in LRU cache.
-		ch <- Get(nk)
+		pl, err := Get(nk)
+		if err != nil {
+			return err
+		}
+		ch <- pl
 	}
 	close(ch)
 
