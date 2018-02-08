@@ -493,7 +493,7 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	l.Unlock()
 	x.BytesRead.Add(int64(size))
 	atomic.StoreInt32(&l.estimatedSize, size)
-	return l, err
+	return l, nil
 }
 
 type bTreeIterator struct {
