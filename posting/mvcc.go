@@ -257,11 +257,12 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	var prevKey []byte
 	var pl *intern.PostingList
 	var plist *List
+	var err error
 	i := 0
 	for i < len(tx.deltas) {
 		d := tx.deltas[i]
 		if !bytes.Equal(prevKey, d.key) {
-			plist, err := Get(d.key)
+			plist, err = Get(d.key)
 			if err != nil {
 				return err
 			}
