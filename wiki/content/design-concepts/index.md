@@ -201,29 +201,6 @@ Every time we regenerate a posting list, we also write the max commit log timest
 included -- this helps us figure out how long back to seek in write-ahead logs when initializing
 the posting list, the first time it's brought back into memory.
 
-### Note on Transactions
-Dgraph does not support transactions at this point. A mutation can be composed of multiple
-[Edges]({{< relref "#edges">}}), each edge might belong to a different
-[Posting List]({{< relref "#posting-list" >}}). Dgraph acquires `RWMutex` locks at a posting list
-level. It DOES NOT acquire locks across multiple posting lists.
-
-What this means for writes is that some edges would get written before others, and so any reads
-which happen while a mutation is going on would read partially committed data. However, there's a
-guarantee of [**durability**](https://en.wikipedia.org/wiki/ACID#Durability). When a mutation
-succeeds, any successive reads will read the updated data in its entirety.
-
-On the other hand, if a mutation fails, it's up to the application author to clean the partially
-written data or retry with the right logic. The response from Dgraph would make it clear which edges
-weren't written so that the application author can set the right edges for retry.
-
-**Ways around this limitation**
-
-* You should determine if your reads need to have transactional [atomicity](https://en.wikipedia.org/wiki/ACID#Atomicity).
-Unless you are dealing with financial data, this might not be the case.
-* To ensure atomicity, you could have only one edge (RDF NQuads) per mutation. This would mean more
-network calls back and forth between client and server which would affect your write throughput, but
-would help make the failure handling logic easier.
-
 ### Versioning
 Broadly speaking, there're two kinds of data stored in Dgraph. One is relationship data; other is value data.
 ```
