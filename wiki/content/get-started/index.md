@@ -108,7 +108,7 @@ services:
         volume:
           nocopy: true
     ports:
-      - 8081:8081
+      - 8000:8000
     command: dgraph-ratel
 
 volumes:
@@ -222,7 +222,7 @@ Ratel's default port is 8081, so override it using -p 8000.
 
 
 ## Step 3: Run Queries
-{{% notice "tip" %}}Once Dgraph is running, you can access user interface at [`http://localhost:8081`](http://localhost:8081).  It allows browser-based queries, mutations and visualizations.
+{{% notice "tip" %}}Once Dgraph is running, you can access Ratel at [`http://localhost:8000`](http://localhost:8000). It allows browser-based queries, mutations and visualizations.
 
 The mutations and queries below can either be run from the command line using `curl localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
 
