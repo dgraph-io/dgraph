@@ -1,12 +1,14 @@
-# This is the service that should be used by the clients of Dgraph to talk to the server.
-# It exposes a ClusterIP that will automatically load balance connections the the different Dgraph
-# Servers.
+# There are 4 public services exposed, users can use:
+#       dgraph-zero-public - To load data using Live & Bulk Loaders
+#       dgraph-server-public - To connect clients and for HTTP APIs
+#       dgraph-ratel-public - For Dgraph UI
+#       dgraph-server-x-http-public - Use for debugging & profiling
 apiVersion: v1
 kind: Service
 metadata:
-  name: dgraph-public
+  name: dgraph-zero-public
   labels:
-    app: dgraph
+    app: dgraph-zero
 spec:
   type: LoadBalancer
   ports:
@@ -16,48 +18,108 @@ spec:
   - port: 6080
     targetPort: 6080
     name: zero-http
+  selector:
+    app: dgraph-zero
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-server-public
+  labels:
+    app: dgraph-server
+spec:
+  type: LoadBalancer
+  ports:
   - port: 8080
     targetPort: 8080
-    name: http
+    name: server-http
   - port: 9080
     targetPort: 9080
-    name: grpc
-  - port: 8081
-    targetPort: 8081
+    name: server-grpc
+  selector:
+    app: dgraph-server
+---
+# This service is created in-order to debug & profile a specific server.
+# You can create one for each server that you need to profile.
+# For a more general HTTP APIs use the above service instead.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-server-0-http-public
+  labels:
+    app: dgraph-server
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: server-http
+  selector:
+    statefulset.kubernetes.io/pod-name: dgraph-server-0
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-ratel-public
+  labels:
+    app: dgraph-ratel
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8000
+    targetPort: 8000
     name: ratel-http
   selector:
-    app: dgraph
+    app: dgraph-ratel
 ---
-# This is a headless service which is neccessary for discovery for a StatefulSet.
+# This is a headless service which is neccessary for discovery for a dgraph-zero StatefulSet.
 # https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
 apiVersion: v1
 kind: Service
 metadata:
-  name: dgraph
+  name: dgraph-zero
   labels:
-    app: dgraph
+    app: dgraph-zero
 spec:
   ports:
   - port: 5080
     targetPort: 5080
-    name: grpc
-
+    name: zero-grpc
   clusterIP: None
   selector:
-    app: dgraph
+    app: dgraph-zero
 ---
-# This StatefulSet runs 3 replicas of Zero and Server.
-apiVersion: apps/v1beta1
+# This is a headless service which is neccessary for discovery for a dgraph-server StatefulSet.
+# https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
+apiVersion: v1
+kind: Service
+metadata:
+  name: dgraph-server
+  labels:
+    app: dgraph-server
+spec:
+  ports:
+  - port: 7080
+    targetPort: 7080
+    name: server-grpc-int
+  clusterIP: None
+  selector:
+    app: dgraph-server
+---
+# This StatefulSet runs 3 Dgraph Zero.
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: dgraph
+  name: dgraph-zero
 spec:
-  serviceName: "dgraph"
+  serviceName: "dgraph-zero"
   replicas: 3
+  selector:
+    matchLabels:
+      app: dgraph-zero
   template:
     metadata:
       labels:
-        app: dgraph
+        app: dgraph-zero
     spec:
       affinity:
         podAntiAffinity:
@@ -69,7 +131,7 @@ spec:
                 - key: app
                   operator: In
                   values:
-                  - dgraph
+                  - dgraph-zero
               topologyKey: kubernetes.io/hostname
       containers:
       - name: zero
@@ -77,7 +139,9 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5080
-          name: intra-node
+          name: zero-grpc
+        - containerPort: 6080
+          name: zero-http
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -90,22 +154,10 @@ spec:
             ordinal=${BASH_REMATCH[1]}
             idx=$(($ordinal + 1))
             if [[ $ordinal -eq 0 ]]; then
-              dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --idx $idx
+              dgraph zero --my=$(hostname -f):5080 --idx $idx --replicas 3
             else
-              dgraph zero -o -2000 --replicas 3 --my=$(hostname -f):5080 --peer dgraph-0.dgraph.default.svc.cluster.local:5080 --idx $idx
+              dgraph zero --my=$(hostname -f):5080 --peer dgraph-zero-0.dgraph-zero.default.svc.cluster.local:5080 --idx $idx --replicas 3
             fi
-      - name: server
-        image: dgraph/dgraph:latest
-        imagePullPolicy: IfNotPresent
-        volumeMounts:
-        - name: datadir
-          mountPath: /dgraph
-        command:
-          - bash
-          - "-c"
-          - |
-            set -ex
-            dgraph server --my=$(hostname -f):7080 --memory_mb 2048 --zero dgraph-0.dgraph.default.svc.cluster.local:5080
       terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir
@@ -125,25 +177,92 @@ spec:
         requests:
           storage: 5Gi
 ---
-apiVersion: apps/v1beta2
+# This StatefulSet runs 6 Dgraph Server forming two server groups, 3 servers in each group.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dgraph-server
+spec:
+  serviceName: "dgraph-server"
+  replicas: 6
+  selector:
+    matchLabels:
+      app: dgraph-server
+  template:
+    metadata:
+      labels:
+        app: dgraph-server
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - dgraph-server
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: server
+        image: dgraph/dgraph:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 7080
+          name: server-grpc-int
+        - containerPort: 8080
+          name: server-http
+        - containerPort: 9080
+          name: server-grpc
+        volumeMounts:
+        - name: datadir
+          mountPath: /dgraph
+        command:
+          - bash
+          - "-c"
+          - |
+            set -ex
+            dgraph server --my=$(hostname -f):7080 --memory_mb 2048 --zero dgraph-zero-0.dgraph-zero.default.svc.cluster.local:5080
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: datadir
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+      annotations:
+        volume.alpha.kubernetes.io/storage-class: anything
+    spec:
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: 5Gi
+---
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: dgraph-ratel
   labels:
-    app: dgraph
+    app: dgraph-ratel
 spec:
   selector:
     matchLabels:
-      app: dgraph
+      app: dgraph-ratel
   template:
     metadata:
       labels:
-        app: dgraph
+        app: dgraph-ratel
     spec:
       containers:
       - name: ratel
         image: dgraph/dgraph:latest
         ports:
-        - containerPort: 8081
+        - containerPort: 8000
         command:
           - dgraph-ratel
