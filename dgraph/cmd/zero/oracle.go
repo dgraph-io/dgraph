@@ -41,8 +41,8 @@ type Oracle struct {
 	aborts     map[uint64]struct{} // key is startTs
 	maxPending uint64              // max transaction startTs given out by us.
 
-	tmax uint64
 	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
+	tmax uint64
 	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
 	subscribers map[int]chan *intern.OracleDelta
@@ -299,7 +299,6 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 }
 
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
-	x.Printf("commitOrAbort call: %+v\n", src)
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

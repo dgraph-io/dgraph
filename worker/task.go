@@ -356,7 +356,6 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		pl := posting.Get(key)
 		var err error
 		var vals []types.Val
-		fmt.Println("here")
 		if q.ExpandAll {
 			vals, err = pl.AllValues(args.q.ReadTs)
 		} else if listType && len(q.Langs) == 0 {
@@ -607,7 +606,6 @@ func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Resu
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Done waiting for applied watermark attr %q\n", q.Attr)
 	}
-	fmt.Println("readts query", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}

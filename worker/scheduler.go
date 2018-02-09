@@ -108,6 +108,11 @@ func (s *scheduler) waitForConflictResolution(attr string) {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
+
+// 1 watermark would be done in the defer call. Rest n(number of edges) would be done when
+// processTasks calls processMutation. When all are done, then we would send back error on
+// proposal channel and finally mutation would return to the user. This ensures they are
+// applied to memory before we return.
 func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error) {
 	defer func() {
 		s.n.props.Done(proposal.Id, err)
@@ -228,7 +233,6 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 		}
 	}
 	err = nil
-	// Block until the above edges are applied.
 	return
 }
 

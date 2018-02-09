@@ -434,6 +434,9 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		return nil
 	}
 	if l.markdeleteAll > 0 {
+		// We need to pass startTs and commitTs, so that we can add commitTs to the postings
+		// corresponding to startTs.
+		// Otherwise a deleteAll, followed by set would not mark the set mpost as committed.
 		l.deleteHelper(ctx, startTs, commitTs)
 		l.minTs = commitTs
 		l.markdeleteAll = 0
