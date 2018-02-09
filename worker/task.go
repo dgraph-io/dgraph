@@ -607,6 +607,7 @@ func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Resu
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Done waiting for applied watermark attr %q\n", q.Attr)
 	}
+	fmt.Println("readts query", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}

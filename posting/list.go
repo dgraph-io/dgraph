@@ -436,11 +436,13 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		return nil
 	}
 	if l.markdeleteAll > 0 {
-		l.deleteHelper(ctx)
+		fmt.Println("in deleteAll", startTs, "commit", commitTs)
+		l.deleteHelper(ctx, startTs, commitTs)
 		l.minTs = commitTs
 		l.markdeleteAll = 0
 	} else {
 		for _, mpost := range l.mlayer {
+			fmt.Printf("mark mpost: %+v as committed with ts: %+v\n", mpost, commitTs)
 			if mpost.StartTs == startTs {
 				atomic.StoreUint64(&mpost.CommitTs, commitTs)
 				l.numCommits++
@@ -462,12 +464,15 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	return nil
 }
 
-func (l *List) deleteHelper(ctx context.Context) error {
+func (l *List) deleteHelper(ctx context.Context, startTs uint64, commitTs uint64) error {
 	l.AssertLock()
 	l.plist = emptyList
 	midx := 0
 	for _, mpost := range l.mlayer {
 		if mpost.StartTs >= l.markdeleteAll {
+			if mpost.StartTs == startTs {
+				atomic.StoreUint64(&mpost.CommitTs, commitTs)
+			}
 			l.mlayer[midx] = mpost
 			midx++
 		}

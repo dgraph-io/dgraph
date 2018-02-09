@@ -19,6 +19,7 @@ package posting
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
@@ -58,6 +59,7 @@ func (o *oracle) init() {
 func (o *oracle) Done(startTs uint64) {
 	o.Lock()
 	defer o.Unlock()
+	fmt.Println("startTs in done", startTs)
 	delete(o.commits, startTs)
 	delete(o.aborts, startTs)
 }
@@ -71,9 +73,12 @@ func (o *oracle) CommitTs(startTs uint64) uint64 {
 func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 	o.Lock()
 	defer o.Unlock()
+	fmt.Println("maxpending", o.maxpending, "startTs", startTs)
 	if o.maxpending >= startTs {
+		fmt.Println("maxpending great return", o.commits)
 		return nil, false
 	}
+	fmt.Println("wait")
 	ch := make(chan struct{})
 	o.waiters[startTs] = append(o.waiters[startTs], ch)
 	return ch, true
@@ -129,6 +134,7 @@ func (o *oracle) ProcessOracleDelta(od *intern.OracleDelta) {
 		if startTs > od.MaxPending {
 			continue
 		}
+		fmt.Println("startTs", startTs)
 		for _, ch := range toNotify {
 			close(ch)
 		}

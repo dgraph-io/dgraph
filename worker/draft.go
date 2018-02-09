@@ -387,6 +387,7 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *api.TxnContext) {
 	}
 	if err == nil {
 		posting.Txns().Done(tctx.StartTs)
+		fmt.Println("yo 2")
 		posting.Oracle().Done(tctx.StartTs)
 	}
 	posting.TxnMarks().Done(index)

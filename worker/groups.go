@@ -619,6 +619,7 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 	// propose these updates then?
 	for startTs, commitTs := range oracleDelta.Commits {
 		if posting.Txns().Get(startTs) == nil {
+			fmt.Println("yo1")
 			posting.Oracle().Done(startTs)
 			continue
 		}
@@ -627,6 +628,7 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 	}
 	for _, startTs := range oracleDelta.Aborts {
 		if posting.Txns().Get(startTs) == nil {
+			fmt.Println("yo3")
 			posting.Oracle().Done(startTs)
 			continue
 		}
@@ -635,6 +637,8 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 	}
 }
 
+// processOracleDeltaStream is used to process oracle delta stream from Zero.
+// Zero sends information about aborted/committed transactions and maxPending.
 func (g *groupi) processOracleDeltaStream() {
 	go func() {
 		// TODO (pawan) - What is this for? Comment says this is required when there is no leader
