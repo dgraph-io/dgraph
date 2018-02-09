@@ -509,12 +509,12 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 func (l *List) inSnapshot(mpost *intern.Posting, readTs, deleteTs uint64) bool {
 	l.AssertRLock()
 	commitTs := atomic.LoadUint64(&mpost.CommitTs)
-	fmt.Println("mpost commitTs", mpost.CommitTs)
+	x.Printf("mpost: %+v\n", mpost)
 	if commitTs == 0 {
 		commitTs = Oracle().CommitTs(mpost.StartTs)
 		atomic.StoreUint64(&mpost.CommitTs, commitTs)
 	}
-	fmt.Println("from oracle", commitTs)
+	x.Println("from oracle", commitTs)
 	if commitTs == 0 {
 		return mpost.StartTs == readTs
 	}
