@@ -1461,9 +1461,6 @@ L:
 				return nil, err
 			}
 			val += v
-			if val == "" {
-				return nil, x.Errorf("Empty argument received")
-			}
 			if val == "uid" {
 				return nil, x.Errorf("Argument cannot be %q", val)
 			}
