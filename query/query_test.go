@@ -393,6 +393,15 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "symbol", 3005, "GOOG", nil)
 	addEdgeToValue(t, "symbol", 3006, "MSFT", nil)
 
+	addEdgeToValue(t, "name", 3500, "", nil) // empty default name
+	addEdgeToLangValue(t, "name", 3500, "상현", "ko", nil)
+	addEdgeToValue(t, "name", 3501, "Alex", nil)
+	addEdgeToLangValue(t, "name", 3501, "Alex", "en", nil)
+	addEdgeToValue(t, "name", 3502, "", nil) // empty default name
+	addEdgeToLangValue(t, "name", 3502, "Amit", "en", nil)
+	addEdgeToLangValue(t, "name", 3502, "अमित", "hi", nil)
+	addEdgeToLangValue(t, "name", 3503, "Andrew", "en", nil) // no default name & empty hi name
+	addEdgeToLangValue(t, "name", 3503, "", "hi", nil)
 }
 
 func TestGetUID(t *testing.T) {
@@ -414,6 +423,75 @@ func TestGetUID(t *testing.T) {
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"uid":"0x1","alive":true,"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
+		js)
+}
+
+func TestQueryEmptyDefaultNames(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  people(func: eq(name, "")) {
+		uid
+		name
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	// only two empty names should be retrieved as the other one is empty in a particular lang.
+	require.JSONEq(t,
+		`{"data":{"people": [{"uid":"0xdac","name":""}, {"uid":"0xdae","name":""}]}}`,
+		js)
+}
+
+func TestQueryEmptyDefaultNameWithLanguage(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  people(func: eq(name, "")) {
+		name@ko:en:hi
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"people": [{"name@ko:en:hi":"상현"},{"name@ko:en:hi":"Amit"}]}}`,
+		js)
+}
+
+func TestQueryNamesThatAreEmptyInLanguage(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  people(func: eq(name@hi, "")) {
+		name@en
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"people": [{"name@en":"Andrew"}]}}`,
+		js)
+}
+
+func TestQueryNamesInLanguage(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  people(func: eq(name@hi, "अमित")) {
+		name@en
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"people": [{"name@en":"Amit"}]}}`,
+		js)
+}
+
+func TestQueryNamesBeforeA(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  people(func: lt(name, "A")) {
+		uid
+		name
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	// only two empty names should be retrieved as the other one is empty in a particular lang.
+	require.JSONEq(t,
+		`{"data":{"people": [{"uid":"0xdac", "name":""}, {"uid":"0xdae", "name":""}]}}`,
 		js)
 }
 
@@ -6661,7 +6739,7 @@ func TestHasFuncAtRoot2(t *testing.T) {
 	`
 
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"},{"name@en":"Artem Tkachenko"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name@en":"Alex"},{"name@en":"Amit"},{"name@en":"Andrew"},{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"},{"name@en":"Artem Tkachenko"}]}}`, js)
 }
 
 func getSubGraphs(t *testing.T, query string) (subGraphs []*SubGraph) {
