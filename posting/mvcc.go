@@ -20,7 +20,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -252,13 +251,9 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	txn := pstore.NewTransactionAt(commitTs, true)
 	defer txn.Discard()
 	// Sort by keys so that we have all postings for same pl side by side.
-	fmt.Println("cts", commitTs, "len", len(tx.deltas))
 	sort.SliceStable(tx.deltas, func(i, j int) bool {
 		return bytes.Compare(tx.deltas[i].key, tx.deltas[j].key) < 0
 	})
-	for _, d := range tx.deltas {
-		fmt.Printf("d: %+v\n", d.posting)
-	}
 	var prevKey []byte
 	var pl *intern.PostingList
 	var plist *List

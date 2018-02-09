@@ -246,7 +246,6 @@ func (l *List) SetForDeletion() bool {
 func (l *List) updateMutationLayer(startTs uint64, mpost *intern.Posting) bool {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
-	fmt.Printf("mpost: %+v\n", mpost)
 	if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
 		l.markdeleteAll = startTs
 		// Remove all mutations done in same transaction.
@@ -273,7 +272,6 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *intern.Posting) bool {
 	if midx >= len(l.mlayer) {
 		// Add it at the end.
 		l.mlayer = append(l.mlayer, mpost)
-		fmt.Println("I am here", mpost)
 		return true
 	}
 
@@ -436,13 +434,11 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		return nil
 	}
 	if l.markdeleteAll > 0 {
-		fmt.Println("in deleteAll", startTs, "commit", commitTs)
 		l.deleteHelper(ctx, startTs, commitTs)
 		l.minTs = commitTs
 		l.markdeleteAll = 0
 	} else {
 		for _, mpost := range l.mlayer {
-			fmt.Printf("mark mpost: %+v as committed with ts: %+v\n", mpost, commitTs)
 			if mpost.StartTs == startTs {
 				atomic.StoreUint64(&mpost.CommitTs, commitTs)
 				l.numCommits++
@@ -514,12 +510,10 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 func (l *List) inSnapshot(mpost *intern.Posting, readTs, deleteTs uint64) bool {
 	l.AssertRLock()
 	commitTs := atomic.LoadUint64(&mpost.CommitTs)
-	x.Printf("mpost: %+v\n", mpost)
 	if commitTs == 0 {
 		commitTs = Oracle().CommitTs(mpost.StartTs)
 		atomic.StoreUint64(&mpost.CommitTs, commitTs)
 	}
-	x.Println("from oracle", commitTs)
 	if commitTs == 0 {
 		return mpost.StartTs == readTs
 	}
@@ -539,12 +533,10 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 		// Fixing the pl is difficult with locks.
 		deleteTs = Oracle().CommitTs(l.markdeleteAll)
 	}
-	x.Println("markdeleteAll", l.markdeleteAll, "readTs", readTs, "deleteTs", deleteTs)
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
 	mlayerLen := len(l.mlayer)
-	x.Println("mlayerLen", mlayerLen)
 	if afterUid > 0 {
 		midx = sort.Search(mlayerLen, func(idx int) bool {
 			mp := l.mlayer[idx]
@@ -561,7 +553,6 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
 			if !l.inSnapshot(mp, readTs, deleteTs) {
-				x.Println("Not in snapshot")
 				midx++
 				continue
 			}

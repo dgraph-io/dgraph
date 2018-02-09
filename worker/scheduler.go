@@ -19,7 +19,6 @@ package worker
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -112,7 +111,6 @@ func (s *scheduler) waitForConflictResolution(attr string) {
 func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error) {
 	defer func() {
 		s.n.props.Done(proposal.Id, err)
-		s.n.Applied.WaitForMark(context.Background(), index)
 	}()
 
 	if proposal.Mutations.DropAll {

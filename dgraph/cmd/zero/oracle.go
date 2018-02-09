@@ -64,7 +64,6 @@ func (o *Oracle) Init() {
 func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
-	// TODO(pawan) - Is this maintained only on leader?
 	o.startTxnTs = ts
 	o.rowCommit = make(map[string]uint64)
 }
@@ -208,7 +207,6 @@ func (o *Oracle) sendDeltasToSubscribers() {
 func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) bool {
 	o.Lock()
 	defer o.Unlock()
-	// TODO (pawan): When would the below false things happen?
 	if _, ok := o.commits[src.StartTs]; ok {
 		return false
 	}
@@ -220,7 +218,6 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
-	// TODO (pawan): What are the syncMarks for?
 	o.syncMarks = append(o.syncMarks, syncMark{index: index, ts: src.StartTs})
 	return true
 }
@@ -246,13 +243,12 @@ func (o *Oracle) commitTs(startTs uint64) uint64 {
 
 func (o *Oracle) storePending(ids *api.AssignedIds) {
 	// Wait to finish up processing everything before start id.
-	// TODO(pawan) - Why is that so?
 	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
 	// Now send it out to updates.
 	o.updates <- &intern.OracleDelta{MaxPending: ids.EndId}
 	o.Lock()
-	max := ids.EndId
 	defer o.Unlock()
+	max := ids.EndId
 	if o.maxPending < max {
 		o.maxPending = max
 	}
@@ -271,7 +267,6 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 }
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
-	// TODO (pawan) - When would this happen? Dgraph server doesn't send Aborted as true.
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
 	}
@@ -299,7 +294,6 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	// Propose txn should be used to set watermark as done.
 	err = s.proposeTxn(ctx, src)
 	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
-	// TODO (pawan) - Why is that so?
 	s.orc.doneUntil.Done(src.CommitTs)
 	return err
 }
