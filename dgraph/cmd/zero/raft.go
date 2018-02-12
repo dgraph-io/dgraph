@@ -340,8 +340,8 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		// only the first one succeeds.
 		if tablet := n.server.servingTablet(p.Tablet.Predicate); tablet != nil {
 			if p.Tablet.Force {
-				group := state.Groups[tablet.GroupId]
-				delete(group.Tablets, p.Tablet.Predicate)
+				originalGroup := state.Groups[tablet.GroupId]
+				delete(originalGroup.Tablets, p.Tablet.Predicate)
 			} else {
 				if tablet.GroupId != p.Tablet.GroupId {
 					return p.Id, errTabletAlreadyServed
@@ -358,8 +358,10 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	} else if p.MaxTxnTs > state.MaxTxnTs {
 		state.MaxTxnTs = p.MaxTxnTs
 	} else if p.MaxLeaseId != 0 || p.MaxTxnTs != 0 {
-		x.Printf("Could not apply lease, ignoring: proposedLease=%v maxLeaseId=%d maxTxnTs=%d",
-			p, state.MaxLeaseId, state.MaxTxnTs)
+		// Could happen after restart when some entries were there in WAL and did not get
+		// snapshotted.
+		x.Printf("Could not apply proposal, ignoring: p.MaxLeaseId=%v, p.MaxTxnTs=%v maxLeaseId=%d"+
+			" maxTxnTs=%d\n", p.MaxLeaseId, p.MaxTxnTs, state.MaxLeaseId, state.MaxTxnTs)
 	}
 	if p.Txn != nil {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
@@ -537,6 +539,7 @@ func (n *node) Run() {
 				}
 				n.Applied.Done(entry.Index)
 			}
+
 			loop++
 
 			// TODO: Should we move this to the top?
