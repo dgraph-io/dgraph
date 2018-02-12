@@ -495,6 +495,33 @@ func TestQueryNamesBeforeA(t *testing.T) {
 		js)
 }
 
+func TestQueryCountEmptyNames(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  people_empty_name(func: has(name)) @filter(eq(name, "")) {
+		count(uid)
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	// only two empty names should be counted as the other one is empty in a particular lang.
+	require.JSONEq(t,
+		`{"data":{"people_empty_name": [{"count":2}]}}`,
+		js)
+}
+
+func TestQueryCountEmptyNamesWithLang(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	  people_empty_name(func: has(name@hi)) @filter(eq(name@hi, "")) {
+		count(uid)
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"people_empty_name": [{"count":1}]}}`,
+		js)
+}
+
 func TestStocksStartsWithAInPortfolio(t *testing.T) {
 	populateGraph(t)
 	query := `{
@@ -6034,7 +6061,7 @@ occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
 password                       : password .
-symbol                         : string @index(exact) .
+symbol                         : string @index(exact) @count .
 `
 
 // Duplicate implemention as in cmd/dgraph/main_test.go
