@@ -235,9 +235,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return nil, x.Errorf("No mutations allowed.")
 	}
 
+	// StartTs is not needed if the predicate to be dropped lies on this server but is required
+	// if it lies on some other machine. Let's get it for safety.
+	m := &intern.Mutations{StartTs: State.getTimestamp()}
 	if op.DropAll {
-		m := intern.Mutations{DropAll: true}
-		_, err := query.ApplyMutations(ctx, &m)
+		m.DropAll = true
+		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
 	if len(op.DropAttr) > 0 {
@@ -252,7 +255,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, err
 		}
 		edges := []*intern.DirectedEdge{edge}
-		m := &intern.Mutations{Edges: edges}
+		m.Edges = edges
 		_, err = query.ApplyMutations(ctx, m)
 		return empty, err
 	}
@@ -262,7 +265,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 	x.Printf("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
-	m := &intern.Mutations{Schema: updates, StartTs: State.getTimestamp()}
+	m.Schema = updates
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }
