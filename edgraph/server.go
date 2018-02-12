@@ -260,7 +260,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if err != nil {
 		return empty, err
 	}
-	fmt.Printf("Got schema: %+v\n", updates)
+	x.Printf("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
 	m := &intern.Mutations{Schema: updates, StartTs: State.getTimestamp()}
 	_, err = query.ApplyMutations(ctx, m)

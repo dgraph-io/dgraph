@@ -70,6 +70,7 @@ func (s *state) Delete(attr string) error {
 	s.Lock()
 	defer s.Unlock()
 
+	x.Printf("Deleting schema for predicate: [%s]", attr)
 	delete(s.predicate, attr)
 	txn := pstore.NewTransactionAt(1, true)
 	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
