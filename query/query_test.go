@@ -6086,8 +6086,8 @@ graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
 password                       : password .
 symbol                         : string @index(exact) @count .
-office						   : string @index(hash) .
-room						   : string @index(term) .
+office                         : string @index(hash) .
+room                           : string @index(term) .
 office.room                    : uid @count @reverse .
 `
 
