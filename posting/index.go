@@ -926,6 +926,7 @@ func DeleteAll() error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
+	x.Printf("Dropping predicate: [%s]", attr)
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
 	})

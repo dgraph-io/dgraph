@@ -143,19 +143,25 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if err != nil && err != badger.ErrKeyNotFound {
 		return err
 	}
-	val, err := item.Value()
-	if err != nil {
-		return err
+
+	// The predicate along with the schema could have been deleted. In that case badger would
+	// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
+	if err == nil {
+		val, err := item.Value()
+		if err != nil {
+			return err
+		}
+		kv := &intern.KV{}
+		kv.Key = schemaKey
+		kv.Val = val
+		kv.Version = 1
+		kv.UserMeta = []byte{item.UserMeta()}
+		if err := stream.Send(kv); err != nil {
+			return err
+		}
+		count++
 	}
-	kv := &intern.KV{}
-	kv.Key = schemaKey
-	kv.Val = val
-	kv.Version = 1
-	kv.UserMeta = []byte{item.UserMeta()}
-	if err := stream.Send(kv); err != nil {
-		return err
-	}
-	count++
+
 	x.Printf("Sent %d number of keys for predicate %v\n", count, predicate)
 
 	payload, err := stream.CloseAndRecv()

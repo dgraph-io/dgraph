@@ -1527,8 +1527,24 @@ func TestParseMutationError(t *testing.T) {
 			}
 		}
 	`
-	_, err := Parse(Request{Str: query})
+	_, err := ParseMutation(query)
 	require.Error(t, err)
+	require.Equal(t, `Expected { at the start of block. Got: [mutation]`, err.Error())
+}
+
+func TestParseMutationError2(t *testing.T) {
+	query := `
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san/francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+	`
+	_, err := ParseMutation(query)
+	require.Error(t, err)
+	require.Equal(t, `Expected { at the start of block. Got: [set]`, err.Error())
 }
 
 func TestParseMutationAndQueryWithComments(t *testing.T) {

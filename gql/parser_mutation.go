@@ -18,6 +18,9 @@
 package gql
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/x"
@@ -28,13 +31,20 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	lexer.Run(lexInsideMutation)
 	it := lexer.NewIterator()
 	var mu *api.Mutation
+
+	if !it.Next() {
+		return nil, errors.New("Invalid mutation.")
+	}
+	item := it.Item()
+	if item.Typ != itemLeftCurl {
+		return nil, fmt.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
+	}
+	mu = new(api.Mutation)
+
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemText {
 			continue
-		}
-		if item.Typ == itemLeftCurl {
-			mu = new(api.Mutation)
 		}
 		if item.Typ == itemRightCurl {
 			return mu, nil
