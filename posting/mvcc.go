@@ -91,7 +91,7 @@ func (t *transactions) MinTs() uint64 {
 	t.Unlock()
 	maxPending := Oracle().MaxPending()
 	if minTs == 0 {
-		// max Pending gives the guarante that all commits with timestamp
+		// maxPending gives the guarantee that all commits with timestamp
 		// less than maxPending should have been done and since nothing
 		// is present in map, all transactions with commitTs below maxPending
 		// have been written to disk.

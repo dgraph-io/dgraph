@@ -48,7 +48,6 @@ type proposalCtx struct {
 	// non-nil error returned by task
 	err   error
 	index uint64
-	n     *node
 	// Used for writing all deltas at end
 	txn *posting.Txn
 }
@@ -111,7 +110,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
-	pd.n.Applied.Done(pd.index)
+	groups().Node.Applied.Done(pd.index)
 }
 
 func (p *proposals) Has(pid uint32) bool {
@@ -186,7 +185,9 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, proposal *intern.Proposal) error {
+// proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
+// to be applied(written to WAL) to all the nodes in the group.
+func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")
 	}
@@ -228,7 +229,6 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 	pctx := &proposalCtx{
 		ch:  che,
 		ctx: ctx,
-		n:   n,
 		cnt: 1,
 	}
 	for {
@@ -347,7 +347,6 @@ func (n *node) processApplyCh() {
 			pctx = &proposalCtx{
 				ch:  make(chan error, 1),
 				ctx: n.ctx,
-				n:   n,
 				cnt: 1,
 			}
 		}

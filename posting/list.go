@@ -434,7 +434,10 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		return nil
 	}
 	if l.markdeleteAll > 0 {
-		l.deleteHelper(ctx)
+		// We need to pass startTs and commitTs, so that we can add commitTs to the postings
+		// corresponding to startTs.
+		// Otherwise a deleteAll, followed by set would not mark the set mpost as committed.
+		l.deleteHelper(ctx, startTs, commitTs)
 		l.minTs = commitTs
 		l.markdeleteAll = 0
 	} else {
@@ -460,12 +463,15 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	return nil
 }
 
-func (l *List) deleteHelper(ctx context.Context) error {
+func (l *List) deleteHelper(ctx context.Context, startTs uint64, commitTs uint64) error {
 	l.AssertLock()
 	l.plist = emptyList
 	midx := 0
 	for _, mpost := range l.mlayer {
 		if mpost.StartTs >= l.markdeleteAll {
+			if mpost.StartTs == startTs {
+				atomic.StoreUint64(&mpost.CommitTs, commitTs)
+			}
 			l.mlayer[midx] = mpost
 			midx++
 		}

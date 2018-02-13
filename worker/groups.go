@@ -616,13 +616,15 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 	if !g.Node.AmLeader() {
 		return
 	}
+	// TODO (pawan) - All servers open a stream with Zero and processDelta. Why do we still have to
+	// propose these updates then?
 	for startTs, commitTs := range oracleDelta.Commits {
 		if posting.Txns().Get(startTs) == nil {
 			posting.Oracle().Done(startTs)
 			continue
 		}
 		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTs}
-		go g.Node.ProposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
+		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
 	}
 	for _, startTs := range oracleDelta.Aborts {
 		if posting.Txns().Get(startTs) == nil {
@@ -630,19 +632,23 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 			continue
 		}
 		tctx := &api.TxnContext{StartTs: startTs}
-		go g.Node.ProposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
+		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
 	}
 }
 
+// processOracleDeltaStream is used to process oracle delta stream from Zero.
+// Zero sends information about aborted/committed transactions and maxPending.
 func (g *groupi) processOracleDeltaStream() {
 	go func() {
+		// TODO (pawan) - What is this for? Comment says this is required when there is no leader
+		// but proposeDelta returns if the current node is not leader.
+
 		// In the event where there in no leader for a group, commit/abort won't get proposed.
 		// So periodically check oracle and propose
 		// Ticker time should be long enough so that same startTs
 		// doesn't get proposed again and again.
 		ticker := time.NewTicker(time.Minute)
-		for {
-			<-ticker.C
+		for range ticker.C {
 			g.proposeDelta(posting.Oracle().CurrentState())
 		}
 	}()
@@ -680,8 +686,7 @@ START:
 
 func (g *groupi) periodicAbortOldTxns() {
 	ticker := time.NewTicker(time.Second * 10)
-	for {
-		<-ticker.C
+	for range ticker.C {
 		pl := groups().Leader(0)
 		if pl == nil {
 			return

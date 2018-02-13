@@ -46,6 +46,7 @@ func TestSystem(t *testing.T) {
 	t.Run("json blank node", wrap(JSONBlankNode))
 	t.Run("scalar to list", wrap(ScalarToList))
 	t.Run("list to scalar", wrap(ListToScalar))
+	t.Run("set after delete for list", wrap(SetAfterDeletionListType))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -805,4 +806,53 @@ func ListToScalar(t *testing.T, c *client.Dgraph) {
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: `pred`}))
 	err = c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
 	require.NoError(t, err)
+}
+
+func SetAfterDeletionListType(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `
+		property.test: [string] .
+	`}))
+
+	m1 := []byte(`
+		_:alice <property.test> "initial value" .
+	`)
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(context.Background(),
+		&api.Mutation{SetNquads: m1},
+	)
+	require.NoError(t, err)
+	alice := assigned.Uids["alice"]
+	require.NoError(t, txn.Commit(ctx))
+
+	q := `
+	{
+		me(func: uid(` + alice + `)) {
+			property.test
+		}
+	}
+	`
+	resp, err := c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[{"property.test":["initial value"]}]}`, string(resp.Json))
+
+	txn = c.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		DelNquads: []byte(`<` + alice + `> <property.test> * .`),
+	})
+	require.NoError(t, err)
+	resp, err = txn.Query(ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[]}`, string(resp.Json))
+
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`<` + alice + `> <property.test> "rewritten value". `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	resp, err = c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, `{"me":[{"property.test":["rewritten value"]}]}`, string(resp.Json))
 }

@@ -186,7 +186,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KV) error {
 
 	for kv := range kvs {
 		if size >= 32<<20 { // 32 MB
-			if err := n.ProposeAndWait(ctx, proposal); err != nil {
+			if err := n.proposeAndWait(ctx, proposal); err != nil {
 				return err
 			}
 			proposal.Kv = proposal.Kv[:0]
@@ -198,7 +198,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KV) error {
 			pk := x.Parse(kv.Key)
 			// Delete on all nodes.
 			p := &intern.Proposal{CleanPredicate: pk.Attr}
-			err := groups().Node.ProposeAndWait(ctx, p)
+			err := groups().Node.proposeAndWait(ctx, p)
 			if err != nil {
 				x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 			}
@@ -208,7 +208,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KV) error {
 	}
 	if size > 0 {
 		// Propose remaining keys.
-		if err := n.ProposeAndWait(ctx, proposal); err != nil {
+		if err := n.proposeAndWait(ctx, proposal); err != nil {
 			return err
 		}
 	}
@@ -280,7 +280,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	}
 
 	// Ensures that all future mtuations beyond this point are rejected
-	if err := n.ProposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
+	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
 	tctxs := posting.Txns().Iterate(func(key []byte) bool {

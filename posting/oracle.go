@@ -37,11 +37,15 @@ func init() {
 
 type oracle struct {
 	x.SafeMutex
-	commits    map[uint64]uint64
-	aborts     map[uint64]struct{}
+	commits map[uint64]uint64   // startTs => commitTs map
+	aborts  map[uint64]struct{} // key is startTs
+
+	// We know for sure that transactions with startTs <= maxpending have either been
+	// aborted/committed.
 	maxpending uint64
 
-	// Used for waiting logic.
+	// Used for waiting logic for transactions with startTs > maxpending so that we don't read an
+	// uncommitted transaction.
 	waiters map[uint64][]chan struct{}
 }
 

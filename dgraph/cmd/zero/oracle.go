@@ -35,14 +35,15 @@ type syncMark struct {
 
 type Oracle struct {
 	x.SafeMutex
-	commits map[uint64]uint64 // start -> commit
+	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
-	rowCommit  map[string]uint64 // fp(key) -> commit
-	aborts     map[uint64]struct{}
-	maxPending uint64
+	rowCommit  map[string]uint64   // fp(key) -> commitTs. Used to detect conflict.
+	aborts     map[uint64]struct{} // key is startTs
+	maxPending uint64              // max transaction startTs given out by us.
 
+	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
 	tmax uint64
-	// timestamp at the time of start of server or when it became leader.
+	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
 	subscribers map[int]chan *intern.OracleDelta
 	updates     chan *intern.OracleDelta
@@ -68,7 +69,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 }
 
 func (o *Oracle) hasConflict(src *api.TxnContext) bool {
-	// This transaction was not started after i became leader.
+	// This transaction was started before I became leader.
 	if src.StartTs < o.startTxnTs {
 		return true
 	}

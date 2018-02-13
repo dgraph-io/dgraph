@@ -399,7 +399,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *intern.Mutations, chr cha
 	if groups().ServesGroup(gid) {
 		node := groups().Node
 		// we don't timeout after proposing
-		res.err = node.ProposeAndWait(ctx, &intern.Proposal{Mutations: m})
+		res.err = node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
 		res.ctx = &api.TxnContext{}
 		if txn := posting.Txns().Get(m.StartTs); txn != nil {
 			txn.Fill(res.ctx)
@@ -537,6 +537,7 @@ func MutateOverNetwork(ctx context.Context, m *intern.Mutations) (*api.TxnContex
 	return tctx, e
 }
 
+// CommitOverNetwork makes a proxy call to Zero to commit or abort a transaction.
 func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
@@ -551,12 +552,6 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		return 0, y.ErrAborted
 	}
 	return tctx.CommitTs, nil
-}
-
-func (w *grpcWorker) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Payload, error) {
-	node := groups().Node
-	err := node.ProposeAndWait(ctx, &intern.Proposal{TxnContext: tc})
-	return &api.Payload{}, err
 }
 
 func (w *grpcWorker) MinTxnTs(ctx context.Context,
@@ -583,7 +578,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 		defer tr.Finish()
 	}
 
-	err := node.ProposeAndWait(ctx, &intern.Proposal{Mutations: m})
+	err := node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
 	txnCtx.StartTs = m.StartTs
 	txnCtx.LinRead = &api.LinRead{
 		Ids: map[uint32]uint64{
