@@ -879,10 +879,10 @@ func EmptyNamesWithExact(t *testing.T, c *client.Dgraph) {
 	require.NoError(t, err)
 
 	resp, err := c.NewTxn().Query(ctx, `{
-		  names(func: has(name)) {
-			count(uid @filter(eq(name, "")))
-		  }
-		}`)
+	  names(func: has(name)) @filter(eq(name, "")) {
+		count(uid)
+	  }
+	}`)
 	require.NoError(t, err)
 
 	require.Equal(t, `{"names":[{"count":2}]}`, string(resp.Json))
