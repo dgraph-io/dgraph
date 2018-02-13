@@ -148,8 +148,8 @@ func TestTokensTable(t *testing.T) {
 
 	key := x.DataKey("name", 1)
 	l, err := getNew(key, ps)
-	lcache.PutIfMissing(string(l.key), l)
 	require.NoError(t, err)
+	lcache.PutIfMissing(string(l.key), l)
 
 	edge := &intern.DirectedEdge{
 		Value:  []byte("david"),
@@ -204,7 +204,8 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 		Entity: src,
 		Op:     intern.DirectedEdge_SET,
 	}
-	l := Get(x.DataKey(attr, src))
+	l, err := Get(x.DataKey(attr, src))
+	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
 }
@@ -219,7 +220,8 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      intern.DirectedEdge_SET,
 	}
-	l := Get(x.DataKey(attr, src))
+	l, err := Get(x.DataKey(attr, src))
+	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
 }
@@ -282,7 +284,8 @@ func TestRebuildIndex(t *testing.T) {
 			continue
 		}
 		idxKeys = append(idxKeys, string(key))
-		l := Get(key)
+		l, err := Get(key)
+		require.NoError(t, err)
 		idxVals = append(idxVals, l)
 	}
 	require.Len(t, idxKeys, 2)

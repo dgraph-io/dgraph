@@ -257,11 +257,15 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	var prevKey []byte
 	var pl *intern.PostingList
 	var plist *List
+	var err error
 	i := 0
 	for i < len(tx.deltas) {
 		d := tx.deltas[i]
 		if !bytes.Equal(prevKey, d.key) {
-			plist = Get(d.key)
+			plist, err = Get(d.key)
+			if err != nil {
+				return err
+			}
 			if plist.AlreadyCommitted(tx.StartTs) {
 				// Delta already exists, so skip the key
 				// There won't be any race from lru eviction, because we don't
@@ -332,11 +336,17 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
 	for _, d := range tx.deltas {
-		plist := Get(d.key)
-		err := plist.CommitMutation(ctx, tx.StartTs, commitTs)
+		plist, err := Get(d.key)
+		if err != nil {
+			return err
+		}
+		err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		for err == ErrRetry {
 			time.Sleep(5 * time.Millisecond)
-			plist = Get(d.key)
+			plist, err = Get(d.key)
+			if err != nil {
+				return err
+			}
 			err = plist.CommitMutation(ctx, tx.StartTs, commitTs)
 		}
 		if err != nil {
@@ -350,11 +360,17 @@ func (tx *Txn) AbortMutations(ctx context.Context) error {
 	tx.Lock()
 	defer tx.Unlock()
 	for _, d := range tx.deltas {
-		plist := Get([]byte(d.key))
-		err := plist.AbortTransaction(ctx, tx.StartTs)
+		plist, err := Get([]byte(d.key))
+		if err != nil {
+			return err
+		}
+		err = plist.AbortTransaction(ctx, tx.StartTs)
 		for err == ErrRetry {
 			time.Sleep(5 * time.Millisecond)
-			plist = Get(d.key)
+			plist, err = Get(d.key)
+			if err != nil {
+				return err
+			}
 			err = plist.AbortTransaction(ctx, tx.StartTs)
 		}
 		if err != nil {
@@ -467,13 +483,17 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 		l, err = ReadPostingList(key, it)
 	}
 
+	if err != nil {
+		return l, err
+	}
+
 	l.onDisk = 1
 	l.Lock()
 	size := l.calculateSize()
 	l.Unlock()
 	x.BytesRead.Add(int64(size))
 	atomic.StoreInt32(&l.estimatedSize, size)
-	return l, err
+	return l, nil
 }
 
 type bTreeIterator struct {

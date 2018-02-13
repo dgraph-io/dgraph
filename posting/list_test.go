@@ -73,7 +73,8 @@ func addMutationHelper(t *testing.T, l *List, edge *intern.DirectedEdge, op uint
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 2)
 
-	l := Get(key)
+	l, err := Get(key)
+	require.NoError(t, err)
 
 	txn := &Txn{StartTs: uint64(1)}
 	edge := &intern.DirectedEdge{
@@ -120,7 +121,8 @@ func TestAddMutation(t *testing.T) {
 	require.EqualValues(t, "anti-testing", p.Label)
 
 	// Try reading the same data in another PostingList.
-	dl := Get(key)
+	dl, err := Get(key)
+	require.NoError(t, err)
 	checkUids(t, dl, uids, 3)
 }
 
@@ -166,7 +168,8 @@ func TestAddMutation_Value(t *testing.T) {
 
 func TestAddMutation_jchiu1(t *testing.T) {
 	key := x.DataKey("value", 12)
-	ol := Get(key)
+	ol, err := Get(key)
+	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
 	edge := &intern.DirectedEdge{
@@ -215,7 +218,8 @@ func TestAddMutation_jchiu1(t *testing.T) {
 
 func TestAddMutation_jchiu2(t *testing.T) {
 	key := x.DataKey("value", 15)
-	ol := Get(key)
+	ol, err := Get(key)
+	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
 	edge := &intern.DirectedEdge{
@@ -238,7 +242,8 @@ func TestAddMutation_jchiu2(t *testing.T) {
 
 func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	key := x.DataKey("value", 16)
-	ol := Get(key)
+	ol, err := Get(key)
+	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
 	edge := &intern.DirectedEdge{
@@ -264,7 +269,8 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 
 func TestAddMutation_jchiu3(t *testing.T) {
 	key := x.DataKey("value", 29)
-	ol := Get(key)
+	ol, err := Get(key)
+	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
 	edge := &intern.DirectedEdge{
@@ -310,7 +316,8 @@ func TestAddMutation_jchiu3(t *testing.T) {
 
 func TestAddMutation_mrjn1(t *testing.T) {
 	key := x.DataKey("value", 21)
-	ol := Get(key)
+	ol, err := Get(key)
+	require.NoError(t, err)
 
 	// Set a value cars and merge.
 	edge := &intern.DirectedEdge{

@@ -69,7 +69,8 @@ func addEdge(t *testing.T, attr string, src uint64, edge *intern.DirectedEdge) {
 			ValueType: edge.ValueType,
 		})
 	}
-	l := posting.Get(x.DataKey(attr, src))
+	l, err := posting.Get(x.DataKey(attr, src))
+	require.NoError(t, err)
 	startTs := timestamp()
 	txn := &posting.Txn{
 		StartTs: startTs,
