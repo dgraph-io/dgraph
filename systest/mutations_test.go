@@ -46,12 +46,9 @@ func TestSystem(t *testing.T) {
 	t.Run("json blank node", wrap(JSONBlankNode))
 	t.Run("scalar to list", wrap(ScalarToList))
 	t.Run("list to scalar", wrap(ListToScalar))
-<<<<<<< HEAD
 	t.Run("set after delete for list", wrap(SetAfterDeletionListType))
-=======
 	t.Run("empty strings with exact", wrap(EmptyNamesWithExact))
 	t.Run("empty strings with term", wrap(EmptyRoomsWithTermIndex))
->>>>>>> 2f5f1472... handle empty string during mutation and eq fn with term tok
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
