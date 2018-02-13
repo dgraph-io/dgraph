@@ -46,7 +46,12 @@ func TestSystem(t *testing.T) {
 	t.Run("json blank node", wrap(JSONBlankNode))
 	t.Run("scalar to list", wrap(ScalarToList))
 	t.Run("list to scalar", wrap(ListToScalar))
+<<<<<<< HEAD
 	t.Run("set after delete for list", wrap(SetAfterDeletionListType))
+=======
+	t.Run("empty strings with exact", wrap(EmptyNamesWithExact))
+	t.Run("empty strings with term", wrap(EmptyRoomsWithTermIndex))
+>>>>>>> 2f5f1472... handle empty string during mutation and eq fn with term tok
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -855,4 +860,67 @@ func SetAfterDeletionListType(t *testing.T, c *client.Dgraph) {
 	resp, err = c.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[{"property.test":["rewritten value"]}]}`, string(resp.Json))
+}
+
+func EmptyNamesWithExact(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) @count .`})
+	require.NoError(t, err)
+
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:alex <name> "Alex" .
+			_:alex <name@en> "Alex" .
+			_:y <name> "" .
+			_:y <name@ko> "상현" .
+			_:amit <name> "" .
+			_:amit <name@en> "" .
+			_:amit <name@hi> "अमित" .
+		`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	resp, err := c.NewTxn().Query(ctx, `{
+		  names(func: has(name)) {
+			count(uid @filter(eq(name, "")))
+		  }
+		}`)
+	require.NoError(t, err)
+
+	require.Equal(t, `{"names":[{"count":2}]}`, string(resp.Json))
+}
+
+func EmptyRoomsWithTermIndex(t *testing.T, c *client.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `
+		office: string @index(hash) .
+		room: string @index(term) .
+		office.room: uid @count @reverse .
+	`
+	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:o <office> "office 1" .
+			_:o <office.room> _:x .
+			_:o <office.room> _:y .
+			_:o <office.room> _:z .
+			_:x <room> "room 1" .
+			_:y <room> "room 2" .
+			_:z <room> "" .
+		`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	resp, err := c.NewTxn().Query(ctx, `{
+		  offices(func: has(office)) {
+			count(office.room @filter(eq(room, "")))
+		  }
+		}`)
+	require.NoError(t, err)
+	require.Equal(t, `{"offices":[{"count(office.room)":1}]}`, string(resp.GetJson()))
 }

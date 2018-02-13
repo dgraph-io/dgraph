@@ -390,7 +390,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *intern.DirectedEdge,
 		return l.handleDeleteAll(ctx, t, txn)
 	}
 
-	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
+	doUpdateIndex := pstore != nil && schema.State().IsIndexed(t.Attr)
 	hasCountIndex := schema.State().HasCount(t.Attr)
 	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, t)
 	if err != nil {

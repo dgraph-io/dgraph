@@ -402,6 +402,14 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 3502, "अमित", "hi", nil)
 	addEdgeToLangValue(t, "name", 3503, "Andrew", "en", nil) // no default name & empty hi name
 	addEdgeToLangValue(t, "name", 3503, "", "hi", nil)
+
+	addEdgeToValue(t, "office", 4001, "office 1", nil)
+	addEdgeToValue(t, "room", 4002, "room 1", nil)
+	addEdgeToValue(t, "room", 4003, "room 2", nil)
+	addEdgeToValue(t, "room", 4004, "", nil)
+	addEdgeToUID(t, "office.room", 4001, 4002, nil)
+	addEdgeToUID(t, "office.room", 4001, 4003, nil)
+	addEdgeToUID(t, "office.room", 4001, 4004, nil)
 }
 
 func TestGetUID(t *testing.T) {
@@ -506,6 +514,19 @@ func TestQueryCountEmptyNames(t *testing.T) {
 	// only two empty names should be counted as the other one is empty in a particular lang.
 	require.JSONEq(t,
 		`{"data":{"people_empty_name": [{"count":2}]}}`,
+		js)
+}
+
+func TestQueryEmptyRoomsWithTermIndex(t *testing.T) {
+	populateGraph(t)
+	query := `{
+		  offices(func: has(office)) {
+			count(office.room @filter(eq(room, "")))
+		  }
+		}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"offices": [{"count(office.room)":1}]}}`,
 		js)
 }
 
@@ -5958,6 +5979,9 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "salary", Type: "float"},
 		{Predicate: "password", Type: "password"},
 		{Predicate: "symbol", Type: "string"},
+		{Predicate: "office", Type: "string"},
+		{Predicate: "room", Type: "string"},
+		{Predicate: "office.room", Type: "uid"},
 	}
 	checkSchemaNodes(t, expected, actual)
 }
@@ -6062,6 +6086,9 @@ graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
 password                       : password .
 symbol                         : string @index(exact) @count .
+office						   : string @index(hash) .
+room						   : string @index(term) .
+office.room                    : uid @count @reverse .
 `
 
 // Duplicate implemention as in cmd/dgraph/main_test.go
