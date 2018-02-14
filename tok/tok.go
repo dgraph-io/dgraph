@@ -272,7 +272,7 @@ func getBleveTokens(name string, str string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if str == "" {
+	if name == "term" && str == "" {
 		terms := make([]string, 1)
 		terms[0] = str
 		return terms, nil

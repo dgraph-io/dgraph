@@ -5979,7 +5979,6 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "salary", Type: "float"},
 		{Predicate: "password", Type: "password"},
 		{Predicate: "symbol", Type: "string"},
-		{Predicate: "office", Type: "string"},
 		{Predicate: "room", Type: "string"},
 		{Predicate: "office.room", Type: "uid"},
 	}
@@ -6086,9 +6085,8 @@ graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
 password                       : password .
 symbol                         : string @index(exact) @count .
-office                         : string @index(hash) .
 room                           : string @index(term) .
-office.room                    : uid @count @reverse .
+office.room                    : uid .
 `
 
 // Duplicate implemention as in cmd/dgraph/main_test.go

@@ -861,7 +861,7 @@ func SetAfterDeletionListType(t *testing.T, c *client.Dgraph) {
 
 func EmptyNamesWithExact(t *testing.T, c *client.Dgraph) {
 	ctx := context.Background()
-	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) @count .`})
+	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) .`})
 	require.NoError(t, err)
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
@@ -891,9 +891,8 @@ func EmptyNamesWithExact(t *testing.T, c *client.Dgraph) {
 func EmptyRoomsWithTermIndex(t *testing.T, c *client.Dgraph) {
 	op := &api.Operation{}
 	op.Schema = `
-		office: string @index(hash) .
 		room: string @index(term) .
-		office.room: uid @count @reverse .
+		office.room: uid .
 	`
 	ctx := context.Background()
 	err := c.Alter(ctx, op)
