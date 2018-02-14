@@ -490,7 +490,7 @@ func (n *node) Run() {
 					// rc.Id != n.Id.
 					x.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
 					// It's ok to block tick while retrieving snapshot, since it's a follower
-					n.retrySnapshotRetrieval(100 * time.Millisecond)
+					n.retryUntilSuccess(n.retrieveSnapshot, 100*time.Millisecond)
 					x.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
 					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
@@ -640,14 +640,13 @@ func (n *node) joinPeers() error {
 	return nil
 }
 
-// Indefinitely retry retrieval.
-func (n *node) retrySnapshotRetrieval(pause time.Duration) {
+func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
 	var err error
 	for {
-		if err = n.retrieveSnapshot(); err == nil {
+		if err = fn(); err == nil {
 			break
 		}
-		x.Printf("Error while retrieving snapshot: %v. Retrying...\n", err)
+		x.Printf("Error while calling fn: %v. Retrying...\n", err)
 		time.Sleep(pause)
 	}
 }
@@ -676,15 +675,11 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
 
-			n.retrySnapshotRetrieval(time.Second)
-			// Retry joinPeers indefinitely.
-			for {
-				if err = n.joinPeers(); err == nil {
-					break
-				}
-				x.Printf("Error while joining peers: %+v. Retrying...\n", err)
-				time.Sleep(time.Second)
-			}
+			x.Println("Retrieving snapshot.")
+			n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
+
+			x.Println("Trying to join peers.")
+			n.retryUntilSuccess(n.joinPeers, time.Second)
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 		} else {
 			peers := []raft.Peer{{ID: n.Id}}
