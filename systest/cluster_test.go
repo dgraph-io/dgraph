@@ -58,7 +58,8 @@ func TestClusterSnapshot(t *testing.T) {
 		t.Fatalf("Couldn't add server: %v\n", err)
 	}
 
-	dur := time.Minute
+	// TODO - Make this more deterministic.
+	dur := 90 * time.Second
 	// TODO - Remove later when we move nightly to Teamcity
 	if ok := os.Getenv("TRAVIS"); ok == "true" {
 		dur = 2 * dur
