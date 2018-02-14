@@ -6084,7 +6084,7 @@ occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .
 password                       : password .
-symbol                         : string @index(exact) @count .
+symbol                         : string @index(exact) .
 room                           : string @index(term) .
 office.room                    : uid .
 `
