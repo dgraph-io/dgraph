@@ -348,7 +348,7 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 
 	_, aerr := worker.CommitOverNetwork(context.Background(), tc)
 	if aerr != nil {
-		x.SetStatus(w, x.Error, err.Error())
+		x.SetStatus(w, x.Error, aerr.Error())
 		return
 	}
 
