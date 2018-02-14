@@ -636,8 +636,7 @@ func (n *node) joinPeers() error {
 	defer cancel()
 	// JoinCluster can block indefinitely, raft ignores conf change proposal
 	// if it has pending configuration.
-	_, err := c.JoinCluster(ctx, n.RaftContext)
-	if err != nil {
+	if _, err := c.JoinCluster(ctx, n.RaftContext); err != nil {
 		return x.Errorf("Error while joining cluster: %+v\n", err)
 	}
 	x.Printf("Done with JoinCluster call\n")
@@ -679,7 +678,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 				if err := n.joinPeers(); err == nil {
 					break
 				}
-				x.Println("Error while calling joinPeers: %+v\n", err)
+				x.Printf("Error while joining peers: %+v. Retrying ...\n", err)
 				time.Sleep(time.Second)
 			}
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
