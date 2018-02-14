@@ -429,8 +429,6 @@ func (n *node) retrieveSnapshot() error {
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictLRU()
 	if _, err := n.populateShard(pstore, pool); err != nil {
-		// TODO: We definitely don't want to just fall flat on our face if we can't
-		// retrieve a simple snapshot.
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -492,8 +490,7 @@ func (n *node) Run() {
 					// rc.Id != n.Id.
 					x.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
 					// It's ok to block tick while retrieving snapshot, since it's a follower
-
-					x.Checkf(n.retrieveSnapshot(), "While retrieving snapshot")
+					n.retrySnapshotRetrieval(100 * time.Millisecond)
 					x.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
 					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
@@ -643,6 +640,18 @@ func (n *node) joinPeers() error {
 	return nil
 }
 
+// Indefinitely retry retrieval.
+func (n *node) retrySnapshotRetrieval(pause time.Duration) {
+	var err error
+	for {
+		if err = n.retrieveSnapshot(); err == nil {
+			break
+		}
+		x.Printf("Error while retrieving snapshot: %v. Retrying...\n", err)
+		time.Sleep(pause)
+	}
+}
+
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
 func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	idx, restart, err := n.InitFromWal(wal)
@@ -666,16 +675,11 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 		if _, hasPeer := groups().MyPeer(); hasPeer {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
-			err := n.retrieveSnapshot()
-			count := 1
-			for err != nil && count <= 5 {
-				x.Printf("While retrieving snapshot, err: %v", err)
-				err = n.retrieveSnapshot()
-				count++
-				time.Sleep(time.Second)
-			}
+
+			n.retrySnapshotRetrieval(time.Second)
+			// Retry joinPeers indefinitely.
 			for {
-				if err := n.joinPeers(); err == nil {
+				if err = n.joinPeers(); err == nil {
 					break
 				}
 				x.Printf("Error while joining peers: %+v. Retrying...\n", err)
