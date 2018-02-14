@@ -251,6 +251,9 @@ func Get(key []byte) (rlist *List, err error) {
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l, err := getNew(key, pstore)
+	if err != nil {
+		return nil, err
+	}
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
@@ -258,7 +261,7 @@ func Get(key []byte) (rlist *List, err error) {
 	} else if atomic.LoadInt32(&l.onDisk) == 0 {
 		btree.Insert(l.key)
 	}
-	return lp, err
+	return lp, nil
 }
 
 // GetLru checks the lru map and returns it if it exits
