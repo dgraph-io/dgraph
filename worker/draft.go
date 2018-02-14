@@ -678,7 +678,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 				if err := n.joinPeers(); err == nil {
 					break
 				}
-				x.Printf("Error while joining peers: %+v. Retrying ...\n", err)
+				x.Printf("Error while joining peers: %+v. Retrying...\n", err)
 				time.Sleep(time.Second)
 			}
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
