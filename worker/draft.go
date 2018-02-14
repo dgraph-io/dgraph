@@ -622,21 +622,14 @@ func (n *node) snapshot(skip uint64) {
 	x.Check(n.Wal.StoreSnapshot(n.gid, s))
 }
 
-func (n *node) joinPeers() {
+func (n *node) joinPeers() error {
 	// Get leader information for MY group.
 	pl := groups().Leader(n.gid)
 	if pl == nil {
-		x.Fatalf("Unable to reach leader or any other server in group %d", n.gid)
+		return x.Errorf("Unable to reach leader or any other server in group %d", n.gid)
 	}
 
-	// Bring the instance up to speed first.
-	// Raft would decide whether snapshot needs to fetched or not
-	// so populateShard is not needed
-	// _, err := populateShard(n.ctx, pool, n.gid)
-	// x.Checkf(err, "Error while populating shard")
-
 	gconn := pl.Get()
-
 	c := intern.NewRaftClient(gconn)
 	x.Printf("Calling JoinCluster")
 	ctx, cancel := context.WithTimeout(n.ctx, time.Second)
@@ -644,9 +637,11 @@ func (n *node) joinPeers() {
 	// JoinCluster can block indefinitely, raft ignores conf change proposal
 	// if it has pending configuration.
 	_, err := c.JoinCluster(ctx, n.RaftContext)
-	// TODO: This should keep on indefinitely trying to join the cluster, instead of crashing.
-	x.Checkf(err, "Error while joining cluster")
+	if err != nil {
+		return x.Errorf("Error while joining cluster: %+v\n", err)
+	}
 	x.Printf("Done with JoinCluster call\n")
+	return nil
 }
 
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
@@ -680,7 +675,13 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 				count++
 				time.Sleep(time.Second)
 			}
-			n.joinPeers()
+			for {
+				if err := n.joinPeers(); err == nil {
+					break
+				}
+				x.Println("Error while calling joinPeers: %+v\n", err)
+				time.Sleep(time.Second)
+			}
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 		} else {
 			peers := []raft.Peer{{ID: n.Id}}
