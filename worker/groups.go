@@ -212,6 +212,22 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
+func UpdateMembershipState(ctx context.Context) error {
+	g := groups()
+	p := g.AnyServer(0)
+	if p == nil {
+		return x.Errorf("don't have the address of any dgraphzero server")
+	}
+
+	c := intern.NewZeroClient(p.Get())
+	state, err := c.Connect(ctx, &intern.Member{ClusterInfoOnly: true})
+	if err != nil {
+		return err
+	}
+	g.applyState(state.GetState())
+	return nil
+}
+
 func (g *groupi) applyState(state *intern.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()

@@ -87,7 +87,7 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 	return edges, nil
 }
 
-func verifyUid(uid uint64) error {
+func verifyUid(ctx context.Context, uid uint64) error {
 	if uid <= worker.MaxLeaseId() {
 		return nil
 	}
@@ -121,7 +121,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 		} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
 			return newUids, err
 		}
-		if err = verifyUid(uid); err != nil {
+		if err = verifyUid(ctx, uid); err != nil {
 			return newUids, err
 		}
 
@@ -132,7 +132,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 			} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
 				return newUids, err
 			}
-			if err = verifyUid(uid); err != nil {
+			if err = verifyUid(ctx, uid); err != nil {
 				return newUids, err
 			}
 		}
