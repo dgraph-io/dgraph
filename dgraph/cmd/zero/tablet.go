@@ -226,7 +226,7 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 		Force:     true,
 	}
 	if err := s.Node.proposeAndWait(context.Background(), p); err != nil {
-		x.Printf("Error while reverting group %d to RW", srcGroup)
+		x.Printf("Error while reverting group %d to RW: %+v\n", srcGroup, err)
 	}
 	return err
 }

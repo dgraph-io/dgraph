@@ -214,7 +214,7 @@ func MaxLeaseId() uint64 {
 
 func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
-	p := g.AnyServer(0)
+	p := g.Leader(0)
 	if p == nil {
 		return x.Errorf("don't have the address of any dgraphzero server")
 	}
