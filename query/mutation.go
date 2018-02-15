@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"golang.org/x/net/trace"
 
@@ -88,20 +87,19 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 	return edges, nil
 }
 
-func verifyUid(uid uint64) error {
-	var lease uint64
-	// Stream can wait upto 1 second waiting for read index, so we wait for around
-	// 2 seconds.
-	for wait := 16 * time.Millisecond; wait <= 1024*time.Millisecond; wait *= 2 {
-		// Wait for membership state to catch up before declaring that the uid
-		// is definitely greater than the lease.
-		lease = worker.MaxLeaseId()
-		if uid <= lease {
-			return nil
-		}
-		time.Sleep(wait)
+func verifyUid(ctx context.Context, uid uint64) error {
+	if uid <= worker.MaxLeaseId() {
+		return nil
 	}
-	return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
+	// Even though the uid is above the max lease id, it might just be because
+	// the membership state has fallen behind. Update the state and try again.
+	if err := worker.UpdateMembershipState(ctx); err != nil {
+		return x.Wrapf(err, "updating error state")
+	}
+	if lease := worker.MaxLeaseId(); uid > lease {
+		return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
+	}
+	return nil
 }
 
 func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
@@ -123,7 +121,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 		} else if uid, err = gql.ParseUid(nq.Subject); err != nil {
 			return newUids, err
 		}
-		if err = verifyUid(uid); err != nil {
+		if err = verifyUid(ctx, uid); err != nil {
 			return newUids, err
 		}
 
@@ -134,7 +132,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 			} else if uid, err = gql.ParseUid(nq.ObjectId); err != nil {
 				return newUids, err
 			}
-			if err = verifyUid(uid); err != nil {
+			if err = verifyUid(ctx, uid); err != nil {
 				return newUids, err
 			}
 		}
