@@ -395,6 +395,17 @@ func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) 
 	return c.Timestamps(ctx, num)
 }
 
+func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
+	node := groups().Node
+	if txn := posting.Txns().Get(startTs); txn != nil {
+		txn.Fill(tctx)
+	}
+	tctx.LinRead = &api.LinRead{
+		Ids: make(map[uint32]uint64),
+	}
+	tctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
+}
+
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
 // the leader of the group gid for proposing.
 func proposeOrSend(ctx context.Context, gid uint32, m *intern.Mutations, chr chan res) {
@@ -404,13 +415,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *intern.Mutations, chr cha
 		// we don't timeout after proposing
 		res.err = node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
 		res.ctx = &api.TxnContext{}
-		if txn := posting.Txns().Get(m.StartTs); txn != nil {
-			txn.Fill(res.ctx)
-		}
-		res.ctx.LinRead = &api.LinRead{
-			Ids: make(map[uint32]uint64),
-		}
-		res.ctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
+		fillTxnContext(res.ctx, gid, m.StartTs)
 		chr <- res
 		return
 	}
@@ -582,12 +587,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 	}
 
 	err := node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
-	txnCtx.StartTs = m.StartTs
-	txnCtx.LinRead = &api.LinRead{
-		Ids: map[uint32]uint64{
-			m.GroupId: node.Applied.DoneUntil(),
-		},
-	}
+	fillTxnContext(txnCtx, m.GroupId, m.StartTs)
 	return txnCtx, err
 }
 
