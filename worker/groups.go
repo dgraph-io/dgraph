@@ -237,6 +237,20 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 	}
 
 	g.state = state
+
+	// While restarting we fill Node information after retrieving initial state.
+	if g.Node != nil {
+		// Lets have this block before the one that adds the new members, else we may end up
+		// removing a freshly added node.
+		for _, member := range g.state.Removed {
+			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
+				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+			}
+			// Each node should have different id and address.
+			conn.Get().Remove(member.Addr)
+		}
+	}
+
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
 	g.tablets = make(map[string]*intern.Tablet)
 	for gid, group := range g.state.Groups {
@@ -258,16 +272,6 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 		}
 	}
 
-	// While restarting we fill Node information after retrieving initial state.
-	if g.Node != nil {
-		for _, member := range g.state.Removed {
-			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
-			}
-			// Each node should have different id and address.
-			conn.Get().Remove(member.Addr)
-		}
-	}
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {
