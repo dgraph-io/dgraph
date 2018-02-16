@@ -582,6 +582,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 	}
 
 	err := node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
+	if txn := posting.Txns().Get(m.StartTs); txn != nil {
+		txn.Fill(txnCtx)
+	}
 	txnCtx.StartTs = m.StartTs
 	txnCtx.LinRead = &api.LinRead{
 		Ids: map[uint32]uint64{
