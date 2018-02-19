@@ -106,7 +106,7 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}
-	x.Printf("Connected to group zero. Connection state: %+v\n", connState)
+	x.Printf("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
 	Config.RaftId = connState.GetMember().GetId()
 	gr.applyState(connState.GetState())
 
@@ -418,9 +418,7 @@ func (g *groupi) Leader(gid uint32) *conn.Pool {
 			}
 		}
 	}
-	// Unable to find a healthy connection to leader. Get connection to any other server in the
-	// group.
-	return g.AnyServer(gid)
+	return nil
 }
 
 func (g *groupi) KnownGroups() (gids []uint32) {
