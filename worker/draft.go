@@ -416,6 +416,12 @@ func (n *node) applyAllMarks(ctx context.Context) {
 func (n *node) retrieveSnapshot() error {
 	pool := groups().Leader(groups().groupId())
 	if pool == nil {
+		// retrieveSnapshot is blocking at initial start and leader election for a group might
+		// not have happened when it is called. If we can't find a leader, get latest state from
+		// Zero.
+		if err := UpdateMembershipState(context.Background()); err != nil {
+			return fmt.Errorf("Error while trying to update membership state: %+v", err)
+		}
 		return fmt.Errorf("Unable to reach leader in group %d", n.gid)
 	}
 
@@ -623,6 +629,9 @@ func (n *node) joinPeers() error {
 	// Get leader information for MY group.
 	pl := groups().Leader(n.gid)
 	if pl == nil {
+		if err := UpdateMembershipState(context.Background()); err != nil {
+			return fmt.Errorf("Error while trying to update membership state: %+v", err)
+		}
 		return x.Errorf("Unable to reach leader or any other server in group %d", n.gid)
 	}
 
