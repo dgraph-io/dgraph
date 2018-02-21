@@ -115,9 +115,6 @@ volumes:
   dgraph:
 ```
 
-{{% notice "note" %}}You should change `/tmp/data` to the path of the folder where you want your data to
-be persisted.{{% /notice %}}
-
 Save the contents of the snippet above in a file called `docker-compose.yml`, then run the following
 command from the folder containing the file.
 ```

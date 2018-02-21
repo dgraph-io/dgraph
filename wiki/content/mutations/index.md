@@ -33,7 +33,7 @@ Represents that graph node with ID `0x01` has a `name` with string value `"Alice
 ```
 Represents that graph node with ID `0x01` is linked with the `friend` edge to node `0x02`.
 
-Dgraph creates a unique 64 bit identifier for every node in the graph - the node's UID.  A mutation either lets Dgraph create the UID as the identifier for the subject or object, using blank or external id nodes, or specifies a known UID from a previous mutation..
+Dgraph creates a unique 64 bit identifier for every blank node in the mutation - the node's UID.  A mutation can include a blank node as an identifier for the subject or object, or a known UID from a previous mutation.
 
 
 ## Blank Nodes and UID
