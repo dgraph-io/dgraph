@@ -180,7 +180,6 @@ func convertValue(attr, data string) (types.Val, error) {
 	if !t.IsScalar() {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
-
 	src := types.Val{types.StringID, []byte(data)}
 	dst, err := types.Convert(src, t)
 	return dst, err
@@ -998,7 +997,7 @@ func filterStringFunction(arg funcArgs) error {
 		filter.ineqValue = arg.srcFn.ineqValue
 		filter.eqVals = arg.srcFn.eqTokens
 		filter.match = ineqMatch
-		filtered = matchStrings(uids, values, filter)
+		filtered = matchStrings(filtered, values, filter)
 	}
 
 	for i := 0; i < len(arg.out.UidMatrix); i++ {

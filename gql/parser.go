@@ -1461,7 +1461,7 @@ L:
 				return nil, err
 			}
 			val += v
-			if val == "" {
+			if val == "" && function.Name != "eq" { // allow eq(attr, "")
 				return nil, x.Errorf("Empty argument received")
 			}
 			if val == "uid" {

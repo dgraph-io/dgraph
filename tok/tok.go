@@ -272,8 +272,12 @@ func getBleveTokens(name string, str string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	if name == "term" && str == "" {
+		terms := make([]string, 1)
+		terms[0] = str
+		return terms, nil
+	}
 	tokenStream := analyzer.Analyze([]byte(str))
-
 	terms := make([]string, len(tokenStream))
 	for i, token := range tokenStream {
 		terms[i] = string(token.Term)
