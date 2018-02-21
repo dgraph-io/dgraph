@@ -315,7 +315,10 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 	zp := &intern.ZeroProposal{}
 	zp.Member = &intern.Member{Id: nodeId, GroupId: groupId, AmDead: true}
 	if _, ok := s.state.Groups[groupId]; !ok {
-		return x.Errorf("No node with groupId %d found", groupId)
+		return x.Errorf("No group with groupId %d found", groupId)
+	}
+	if _, ok := s.state.Groups[groupId].Members[nodeId]; !ok {
+		return x.Errorf("No node with nodeId %d found in group %d", nodeId, groupId)
 	}
 	return s.Node.proposeAndWait(ctx, zp)
 }
