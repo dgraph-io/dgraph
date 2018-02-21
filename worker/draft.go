@@ -585,7 +585,7 @@ func (n *node) Stop() {
 }
 
 func (n *node) snapshotPeriodically(closer *y.Closer) {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -609,6 +609,13 @@ func (n *node) snapshot(skip uint64) {
 
 	si := existing.Metadata.Index
 	if le <= si+skip {
+		// If difference grows above 100*skip we try to abort old transactions, so it shouldn't
+		// ideally go above 110*skip.
+		applied := n.Applied.DoneUntil()
+		if applied-le > 110*skip {
+			x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
+				le, applied)
+		}
 		return
 	}
 	snapshotIdx := le - skip

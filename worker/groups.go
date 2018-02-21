@@ -703,8 +703,17 @@ START:
 }
 
 func (g *groupi) periodicAbortOldTxns() {
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 30)
 	for range ticker.C {
+		lastSnapshotIdx := posting.TxnMarks().DoneUntil()
+		water := groups().Node.Applied.DoneUntil()
+		// We try to abort transactions if difference between applied and last snapshottted is more
+		// than 10000. Ideally a snapshot should happen every 100 entries so this suggests that some
+		// transaction was left in a dangling state(not aborted or committed).
+		if water-lastSnapshotIdx < 10000 {
+			continue
+		}
+
 		pl := groups().Leader(0)
 		if pl == nil {
 			return
