@@ -259,12 +259,32 @@ pre.collapsed .showmore span {
 #header .logo {
   width: 118px;
 }
-#header .menu-container {
-  /*margin-top: 15px;*/
+#header .menu-search {
+  width: 250px;
+}
+#header .outer-menu-container {
+  height: 100%;
   float: right;
+  padding-left: 16px;
+}
+#header .outer-menu-container:before {
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  height: 100%;
+}
+#header .menu-search {
+  display: inline-block;
+}
+#header .menu-search .algolia-autocomplete {
+  width: 100%;
+}
+#header .menu-container {
+  display: inline-block;
 }
 #header .menu-container .main-menu {
   margin: 0;
+  padding-left: 10px;
 }
 #header .menu-container ul {
   list-style: none;
@@ -297,7 +317,7 @@ pre.collapsed .showmore span {
   color: #3e3e3e;
   font-size: 21px;
   float: right;
-  padding: 15px 16px;
+  padding: 15px 16px 15px 30px;
 }
 
 #sidebar {
@@ -544,8 +564,13 @@ h3:hover .anchor i {
     display: none;
   }
 }
+@media screen and (max-width: 999px) {
+  #header .menu-search {
+    width: 192px;
+  }
+}
 @media screen and (max-width: 799px) {
-  .menu-container {
+  #header .menu-container {
     display: none;
   }
   .edit-btn {

@@ -1,12 +1,26 @@
       </div>
     </main>
 
+    <!-- DocSearch -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/docsearch.js@2/dist/cdn/docsearch.min.js"></script>
+    <script type="text/javascript">
+      if (window.docsearch || true) {
+        window.docsearch({
+         apiKey: 'fe4cbc1640c6c87bbc5f099902d86f97',
+         indexName: 'dgraph',
+         inputSelector: '#algolia-doc-search',
+         debug: false // Set debug to true if you want to inspect the dropdown
+        });
+      }
+    </script>
+
     <script src="{{ .Site.BaseURL }}/js/clipboard.min.js"></script>
     <script src="{{ .Site.BaseURL }}/js/dgraph.js?{{ now }}"></script>
     <script src="{{ .Site.BaseURL }}/js/runnable.js?{{ now }}"></script>
     <script>
       hljs.initHighlightingOnLoad();
     </script>
+
     <!-- Mailchimp popup-->
     <script>
       function getCookie(cname) {

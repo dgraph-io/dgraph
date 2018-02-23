@@ -1,30 +1,16 @@
-<!DOCTYPE html>
-<html lang="en" class="js csstransforms3d">
-  <head>
-    <meta charset="utf-8">
-    {{ partial "meta.html" . }}
-    {{ .Scratch.Add "title" "" }}
-    <title>{{ .Title }}</title>
+{{ partial "header.html" . }}
 
-    <link href="{{ .Site.BaseURL }}css/theme.css?{{ now }}" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css?family=Lato:400,700" rel="stylesheet">
-  </head>
-  <body>
-    {{ partial "header.html" . }}
+<article id="{{ .Slug }}">
+  {{ partial "request-edit.html" . }}
+  {{ partial "suggest-edit.html" . }}
 
-    <article id="{{ .Slug }}">
-      {{ partial "request-edit.html" . }}
-      {{ partial "suggest-edit.html" . }}
+  <h1 class="post-title">{{ .Title }}</h1>
 
-      <h1 class="post-title">{{ .Title }}</h1>
+  <div>{{ .Content }}</div>
+</article>
 
-      <div>{{ .Content }}</div>
-    </article>
+{{ partial "community-footer.html" . }}
 
-    {{ partial "community-footer.html" . }}
+{{ partial "runnable-modal.html" . }}
 
-    {{ partial "runnable-modal.html" . }}
-
-    {{ partial "footer.html" . }}
-  </body>
-</html>
+{{ partial "footer.html" . }}
