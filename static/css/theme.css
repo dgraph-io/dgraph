@@ -570,6 +570,12 @@ h3:hover .anchor i {
   }
 }
 @media screen and (max-width: 799px) {
+  #header .menu-search {
+    width: 180px;
+  }
+  #header .menu-search .algolia-autocomplete .ds-dropdown-menu {
+    min-width: 390px;
+  }
   #header .menu-container {
     display: none;
   }
@@ -577,9 +583,42 @@ h3:hover .anchor i {
     display: none;
   }
 }
+@media screen and (max-width: 500px) {
+  #header {
+    padding: 0 13px 0 31px;
+  }
+  #header .menu-search {
+    width: 150px;
+  }
+  #header .menu-search .algolia-autocomplete .ds-dropdown-menu {
+    min-width: 310px;
+  }
+}
 @media screen and (max-width: 425px) {
   #header {
     padding: 0 13px 0 31px;
+  }
+}
+@media screen and (max-width: 400px) {
+  #header .menu-search {
+    width: 120px;
+  }
+  #header .menu-search .algolia-autocomplete .ds-dropdown-menu {
+    min-width: 290px;
+  }
+}
+@media screen and (max-width: 375px) {
+  #header .outer-menu-container {
+    padding-left: 8px;
+  }
+  #header .menu-search {
+    width: 112px;
+  }
+  #header .menu-search .algolia-autocomplete .ds-dropdown-menu {
+    min-width: 250px;
+  }
+  #header #sidebar-toggle {
+    padding-left: 8px;
   }
 }
 
