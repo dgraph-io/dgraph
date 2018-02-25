@@ -26,6 +26,7 @@ func TestLoaderXidmap(t *testing.T) {
 		"--rdfs", data,
 		"--dgraph", ":"+cluster.dgraphPort,
 		"--zero", ":"+cluster.zeroPort,
+		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
 	liveCmd.Stdout = os.Stdout
@@ -41,6 +42,7 @@ func TestLoaderXidmap(t *testing.T) {
 		"--rdfs", data,
 		"--dgraph", ":"+cluster.dgraphPort,
 		"--zero", ":"+cluster.zeroPort,
+		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
 	liveCmd.Stdout = os.Stdout
