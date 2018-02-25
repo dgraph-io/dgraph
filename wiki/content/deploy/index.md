@@ -1172,10 +1172,9 @@ this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
 
 The `dgraph live` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph.
 
-Live loader correctly handles assigning unique IDs to blank nodes across multiple files, and persists them to disk to save memory and in case the loader was re-run.
+Live loader correctly handles assigning unique IDs to blank nodes across multiple files, and can optionally persist them to disk to save memory, in case the loader was re-run.
 
-
-{{% notice "note" %}} Live loader writes the xid->uid mapping in the `x` directory, which can reused
+{{% notice "note" %}} Live loader can optionally write the xid->uid mapping to a directory specified using the `-x` flag, which can reused
 given that live loader completed successfully in the previous run.{{% /notice %}}
 
 ```sh
