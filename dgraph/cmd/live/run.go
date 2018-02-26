@@ -86,7 +86,7 @@ func init() {
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 10000,
 		"Number of RDF N-Quads to send as part of a mutation.")
-	flag.StringP("xidmap", "x", "x", "Directory to store xid to uid mapping")
+	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
 
@@ -302,9 +302,6 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	}
 
 	rand.Seed(time.Now().Unix())
-	if opts.PrintCounters {
-		go l.printCounters()
-	}
 	return l
 }
 
@@ -345,6 +342,14 @@ func run() {
 		clients = append(clients, dc)
 	}
 	dgraphClient := client.NewDgraphClient(clients...)
+
+	if len(opt.clientDir) == 0 {
+		var err error
+		opt.clientDir, err = ioutil.TempDir("", "x")
+		x.Checkf(err, "Error while trying to create temporary client directory.")
+		x.Printf("Creating temp client directory at %s\n", opt.clientDir)
+		defer os.RemoveAll(opt.clientDir)
+	}
 	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
 	defer l.kv.Close()
@@ -362,6 +367,10 @@ func run() {
 		x.Printf("Processed schema file")
 	}
 
+	// PrintCounters should be called after schema has been updated.
+	if bmOpts.PrintCounters {
+		go l.printCounters()
+	}
 	filesList := fileList(opt.files)
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
