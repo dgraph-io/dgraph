@@ -621,6 +621,20 @@ h3:hover .anchor i {
     padding-left: 8px;
   }
 }
+@media screen and (max-width: 340px) {
+  #header .outer-menu-container {
+    padding-left: 5px;
+  }
+  #header .menu-search {
+    width: 100px;
+  }
+  #header .menu-search .algolia-autocomplete .ds-dropdown-menu {
+    min-width: 225px;
+  }
+  #header #sidebar-toggle {
+    padding-left: 5px;
+  }
+}
 
 /* table of contents in home page */
 
