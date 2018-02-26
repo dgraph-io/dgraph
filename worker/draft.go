@@ -47,7 +47,7 @@ type proposalCtx struct {
 	// Since each proposal consists of multiple tasks we need to store
 	// non-nil error returned by task
 	err   error
-	index uint64
+	index uint64 // RAFT index for the proposal.
 	// Used for writing all deltas at end
 	txn *posting.Txn
 }
