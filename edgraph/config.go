@@ -63,7 +63,7 @@ var DefaultConfig = Options{
 	Tracing:             0.0,
 	MyAddr:              "",
 	ZeroAddr:            fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
-	MaxPendingCount:     1000,
+	MaxPendingCount:     100,
 	ExpandEdge:          true,
 
 	DebugMode: false,
