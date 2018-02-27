@@ -4186,3 +4186,30 @@ func TestParseMissingGraphQLVar(t *testing.T) {
 		require.Error(t, err)
 	}
 }
+
+func TestParseGraphQLVarPagination(t *testing.T) {
+	for _, q := range []string{
+		"query test($a: int = 2){ q(func: uid(0x1), first: $a) { name }}",
+		"query test($a: int = 2){ q(func: uid(0x1), offset: $a) { name }}",
+		"query test($a: int = 2){ q(func: uid(0x1), orderdesc: name, first: $a) { name }}",
+		"query test($a: int = 2){ q(func: uid(0x1), orderdesc: name, offset: $a) { name }}",
+		"query test($a: int = 2){ q(func: eq(name, \"abc\"), orderdesc: name, first: $a) { name }}",
+		"query test($a: int = 2){ q(func: eq(name, \"abc\"), orderdesc: name, offset: $a) { name }}",
+
+		"query test($a: int = 2){ q(func: uid(0x1)) { friend(first: $a) }}",
+		"query test($a: int = 2){ q(func: uid(0x1)) { friend(offset: $a) }}",
+		"query test($a: int = 2){ q(func: uid(0x1), orderdesc: name) { friend(first: $a) }}",
+		"query test($a: int = 2){ q(func: uid(0x1), orderdesc: name) { friend(offset: $a) }}",
+		"query test($a: int = 2){ q(func: eq(name, \"abc\"), orderdesc: name) { friend(first: $a) }}",
+		"query test($a: int = 2){ q(func: eq(name, \"abc\"), orderdesc: name) { friend(offset: $a) }}",
+	} {
+		r := Request{
+			Str:       q,
+			Variables: map[string]string{"$a": "3"},
+		}
+		_, err := Parse(r)
+		t.Log(q)
+		t.Log(err)
+		require.NoError(t, err)
+	}
+}
