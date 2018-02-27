@@ -4186,3 +4186,67 @@ func TestParseMissingGraphQLVar(t *testing.T) {
 		require.Error(t, err)
 	}
 }
+
+func TestParseGraphQLVarPaginationRoot(t *testing.T) {
+	for _, q := range []string{
+		"query test($a: int = 2){ q(func: uid(0x1), first: $a) { name }}",
+		"query test($a: int = 2){ q(func: uid(0x1), offset: $a) { name }}",
+		"query test($a: int = 2){ q(func: uid(0x1), orderdesc: name, first: $a) { name }}",
+		"query test($a: int = 2){ q(func: uid(0x1), orderdesc: name, offset: $a) { name }}",
+		"query test($a: int = 2){ q(func: eq(name, \"abc\"), orderdesc: name, first: $a) { name }}",
+		"query test($a: int = 2){ q(func: eq(name, \"abc\"), orderdesc: name, offset: $a) { name }}",
+	} {
+		r := Request{
+			Str:       q,
+			Variables: map[string]string{"$a": "3"},
+		}
+		gq, err := Parse(r)
+		t.Log(q)
+		t.Log(err)
+		require.NoError(t, err)
+		args := gq.Query[0].Args
+		require.True(t, args["first"] == "3" || args["offset"] == "3")
+	}
+}
+
+func TestParseGraphQLVarPaginationChild(t *testing.T) {
+	for _, q := range []string{
+		"query test($a: int = 2){ q(func: uid(0x1)) { friend(first: $a) }}",
+		"query test($a: int = 2){ q(func: uid(0x1)) { friend(offset: $a) }}",
+		"query test($a: int = 2){ q(func: uid(0x1), orderdesc: name) { friend(first: $a) }}",
+		"query test($a: int = 2){ q(func: uid(0x1), orderdesc: name) { friend(offset: $a) }}",
+		"query test($a: int = 2){ q(func: eq(name, \"abc\"), orderdesc: name) { friend(first: $a) }}",
+		"query test($a: int = 2){ q(func: eq(name, \"abc\"), orderdesc: name) { friend(offset: $a) }}",
+	} {
+		r := Request{
+			Str:       q,
+			Variables: map[string]string{"$a": "3"},
+		}
+		gq, err := Parse(r)
+		t.Log(q)
+		t.Log(err)
+		require.NoError(t, err)
+		args := gq.Query[0].Children[0].Args
+		require.True(t, args["first"] == "3" || args["offset"] == "3")
+	}
+}
+
+func TestParseGraphQLVarPaginationRootMultiple(t *testing.T) {
+	q := `query test($a: int, $b: int, $after: string){
+		q(func: uid(0x1), first: $a, offset: $b, after: $after, orderasc: name) {
+			friend
+		}
+	}`
+
+	r := Request{
+		Str:       q,
+		Variables: map[string]string{"$a": "3", "$b": "5", "$after": "0x123"},
+	}
+	gq, err := Parse(r)
+	require.NoError(t, err)
+	args := gq.Query[0].Args
+	require.Equal(t, args["first"], "3")
+	require.Equal(t, args["offset"], "5")
+	require.Equal(t, args["after"], "0x123")
+	require.Equal(t, gq.Query[0].Order[0].Attr, "name")
+}

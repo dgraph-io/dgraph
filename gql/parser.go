@@ -2186,7 +2186,16 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 			item := it.Item()
 
-			if item.Typ == itemMathOp {
+			if item.Typ == itemDollar {
+				it.Next()
+				item = it.Item()
+				if item.Typ == itemName {
+					val = fmt.Sprintf("$%s", item.Val)
+				} else {
+					return nil, x.Errorf("Expecting a variable name. Got: %v", item)
+				}
+				goto ASSIGN
+			} else if item.Typ == itemMathOp {
 				if item.Val != "+" && item.Val != "-" {
 					return nil,
 						x.Errorf("Only Plus and minus are allowed unary ops. Got: %v",
@@ -2247,6 +2256,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				continue
 			}
 
+		ASSIGN:
 			if _, ok := gq.Args[key]; ok {
 				return gq, x.Errorf("Repeated key %q at root", key)
 			}
