@@ -1278,9 +1278,9 @@ copy over the output shards into different servers.
 $ cd out/i # i = shard number.
 $ dgraph server -zero=localhost:5080 -memory_mb=1024
 ```
-## Tuning & monitoring
+#### Tuning & monitoring
 
-#### Performance Tuning
+##### Performance Tuning
 
 {{% notice "tip" %}}
 We highly recommend [disabling swap
@@ -1323,7 +1323,7 @@ Dgraph server instances more evenly.
 - The `--shufflers` controls the level of parallelism in the shuffle/reduce
   stage. Increasing this increases memory consumption.
 
-#### Monitoring
+## Monitoring
 Dgraph exposes metrics via `/debug/vars` endpoint in json format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. You can either poll this endpoint to get the data in your monitoring systems or install **[Prometheus](https://prometheus.io/docs/introduction/install/)**. Replace targets in the below config file with the ip of your Dgraph instances and run prometheus using the command `prometheus -config.file my_config.yaml`.
 ```sh
 scrape_configs:
@@ -1338,11 +1338,15 @@ scrape_configs:
       - 172.31.8.118:8080
 ```
 
+{{% notice "note" %}}
+Raw data exported by Prometheus is available via `/debug/prometheus_metrics` endpoint on Dgraph servers.
+{{% /notice %}}
+
 Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**.
 
 ## Dgraph Administration
 
-#### Export Database
+### Export Database
 
 An export of all nodes is started by locally accessing the export endpoint of any server in the cluster.
 
@@ -1358,7 +1362,7 @@ This triggers a export of all the groups spread across the entire cluster. Each 
 
 {{% notice "note" %}}It is up to the user to retrieve the right export files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
 
-#### Shutdown Database
+### Shutdown Database
 
 A clean exit of a single Dgraph node is initiated by running the following command on that node.
 {{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
@@ -1370,7 +1374,7 @@ $ curl localhost:8080/admin/shutdown
 
 This stops the server on which the command is executed and not the entire cluster.
 
-#### Delete database
+### Delete database
 
 Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).
 
@@ -1382,7 +1386,7 @@ Alternatively, you could:
 * delete (maybe do an export first) the `p` and `w` directories, then
 * restart Dgraph.
 
-#### Upgrade Database
+### Upgrade Database
 
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
 
@@ -1395,7 +1399,7 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
 
-#### Post Installation
+### Post Installation
 
 Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec]({{< relref "query-language/index.md">}}). Also, have a look at [Frequently asked questions]({{< relref "faq/index.md" >}}).
 
