@@ -18,6 +18,7 @@
 package gql
 
 import (
+	"bytes"
 	"os"
 	"runtime/debug"
 	"testing"
@@ -4136,6 +4137,22 @@ func TestParseUidAsArgument(t *testing.T) {
 	require.Contains(t, err.Error(), "Argument cannot be \"uid\"")
 }
 
+func parseNquads(b []byte) ([]*api.NQuad, error) {
+	var nqs []*api.NQuad
+	for _, line := range bytes.Split(b, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		nq, err := rdf.Parse(string(line))
+		if err == rdf.ErrEmpty {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		nqs = append(nqs, &nq)
+	}
+	return nqs, nil
+}
+
 func TestParseMutation(t *testing.T) {
 	m := `
 		{
@@ -4151,7 +4168,7 @@ func TestParseMutation(t *testing.T) {
 	mu, err := ParseMutation(m)
 	require.NoError(t, err)
 	require.NotNil(t, mu)
-	sets, err := rdf.ConvertToNQuads(string(mu.SetNquads))
+	sets, err := parseNquads(mu.SetNquads)
 	require.NoError(t, err)
 	require.EqualValues(t, &api.NQuad{
 		Subject: "name", Predicate: "is", ObjectId: "something"},
@@ -4159,7 +4176,7 @@ func TestParseMutation(t *testing.T) {
 	require.EqualValues(t, &api.NQuad{
 		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
 		sets[1])
-	dels, err := rdf.ConvertToNQuads(string(mu.DelNquads))
+	dels, err := parseNquads(mu.DelNquads)
 	require.NoError(t, err)
 	require.EqualValues(t, &api.NQuad{
 		Subject: "name", Predicate: "is", ObjectId: "something-else"},
