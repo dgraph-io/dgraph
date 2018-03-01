@@ -18,10 +18,7 @@
 package rdf
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
-	"io"
 	"strconv"
 	"strings"
 	"unicode"
@@ -196,41 +193,6 @@ L:
 	}
 
 	return rnq, nil
-}
-
-// ConvertToNQuads parses multi line mutation string to a list of NQuads.
-func ConvertToNQuads(mutation string) ([]*api.NQuad, error) {
-	var nquads []*api.NQuad
-	r := strings.NewReader(mutation)
-	reader := bufio.NewReader(r)
-
-	var strBuf bytes.Buffer
-	var err error
-	for {
-		err = x.ReadLine(reader, &strBuf)
-		if err != nil {
-			break
-		}
-		ln := strings.Trim(strBuf.String(), " \t")
-		if len(ln) == 0 {
-			continue
-		}
-		nq, err := Parse(ln)
-		if len(nq.Predicate) > 0 && nq.Predicate[0] == '_' &&
-			nq.Predicate[len(nq.Predicate)-1] == '_' {
-			return nil, x.Errorf("Predicates starting and ending with _ are reserved intern.y.")
-		}
-		if err == ErrEmpty { // special case: comment/empty line
-			continue
-		} else if err != nil {
-			return nquads, x.Wrapf(err, "While parsing RDF: %s", strBuf.String())
-		}
-		nquads = append(nquads, &nq)
-	}
-	if err != io.EOF {
-		return nquads, err
-	}
-	return nquads, nil
 }
 
 func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {

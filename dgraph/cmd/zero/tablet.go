@@ -156,7 +156,7 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 	// Sort all groups by their sizes.
 	type kv struct {
 		gid  uint32
-		size int64
+		size int64 // in bytes
 	}
 	var groups []kv
 	for k, v := range s.state.Groups {
