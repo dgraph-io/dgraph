@@ -41,13 +41,14 @@ import (
 )
 
 type options struct {
-	bindall     bool
-	myAddr      string
-	portOffset  int
-	nodeId      uint64
-	numReplicas int
-	peer        string
-	w           string
+	bindall           bool
+	myAddr            string
+	portOffset        int
+	nodeId            uint64
+	numReplicas       int
+	peer              string
+	w                 string
+	rebalanceInterval time.Duration
 }
 
 var opts options
@@ -82,6 +83,7 @@ instances to achieve high-availability.
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
+	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -140,13 +142,14 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 
 func run() {
 	opts = options{
-		bindall:     Zero.Conf.GetBool("bindall"),
-		myAddr:      Zero.Conf.GetString("my"),
-		portOffset:  Zero.Conf.GetInt("port_offset"),
-		nodeId:      uint64(Zero.Conf.GetInt("idx")),
-		numReplicas: Zero.Conf.GetInt("replicas"),
-		peer:        Zero.Conf.GetString("peer"),
-		w:           Zero.Conf.GetString("wal"),
+		bindall:           Zero.Conf.GetBool("bindall"),
+		myAddr:            Zero.Conf.GetString("my"),
+		portOffset:        Zero.Conf.GetInt("port_offset"),
+		nodeId:            uint64(Zero.Conf.GetInt("idx")),
+		numReplicas:       Zero.Conf.GetInt("replicas"),
+		peer:              Zero.Conf.GetString("peer"),
+		w:                 Zero.Conf.GetString("wal"),
+		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 	}
 
 	grpc.EnableTracing = false
