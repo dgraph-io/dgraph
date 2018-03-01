@@ -80,7 +80,10 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 			src.Value = p.Value
 			str, err := types.Convert(src, types.StringID)
 			x.Check(err)
-			buf.WriteString(strconv.Quote(str.Value.(string)))
+
+			// trim null character at end
+			trimmed := strings.TrimRight(str.Value.(string), "\x00")
+			buf.WriteString(strconv.Quote(trimmed))
 			if p.PostingType == intern.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.LangTag))
