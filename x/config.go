@@ -18,6 +18,7 @@ package x
 type Options struct {
 	DebugMode  bool
 	PortOffset int
+	NumEdgeLimit uint64
 }
 
 var Config Options

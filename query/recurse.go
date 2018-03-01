@@ -32,7 +32,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 	// Note: Key format is - "attr|fromUID|toUID"
 	reachMap := make(map[string]struct{})
 	allowLoop := start.Params.RecurseArgs.AllowLoop
-	var numEdges int
+	var numEdges uint64
 	var exec []*SubGraph
 	var err error
 
@@ -123,7 +123,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			for mIdx, fromUID := range sg.SrcUIDs.Uids {
 				if allowLoop {
 					for _, ul := range sg.uidMatrix {
-						numEdges = numEdges + len(ul.Uids)
+						numEdges = numEdges + uint64(len(ul.Uids))
 					}
 				} else {
 					algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
@@ -164,7 +164,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			}
 		}
 
-		if numEdges > 1000000 {
+		if numEdges > x.Config.NumEdgeLimit {
 			// If we've seen too many nodes, stop the query.
 			return ErrTooBig
 		}
