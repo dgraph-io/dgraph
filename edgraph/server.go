@@ -577,7 +577,8 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
-		nq.ObjectValue = &api.Value{&api.Value_StrVal{v.(string)}}
+		// We trim null character from null terminated strings.
+		nq.ObjectValue = &api.Value{&api.Value_StrVal{strings.TrimRight(v.(string), "\x00")}}
 	case float64:
 		if v == 0 && op == delete {
 			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
