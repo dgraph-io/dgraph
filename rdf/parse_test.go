@@ -808,15 +808,6 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		// null character at end should be trimmed.
-		input: `<alice> <lives> "A\tB\u0000" .`,
-		nq: api.NQuad{
-			Subject:     "alice",
-			Predicate:   "lives",
-			ObjectValue: &api.Value{&api.Value_DefaultVal{"A\tB"}},
-		},
-	},
-	{
 		input:       `<alice> <age> "NaN"^^<xs:double> .`,
 		expectedErr: true,
 	},

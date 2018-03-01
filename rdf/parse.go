@@ -104,8 +104,6 @@ L:
 			if err != nil {
 				return rnq, x.Wrapf(err, "while unquoting")
 			}
-			// trim null character
-			oval = strings.TrimRight(oval, "\x00")
 			seenOval = true
 
 		case itemLanguage:

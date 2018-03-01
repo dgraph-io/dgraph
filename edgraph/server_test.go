@@ -149,7 +149,7 @@ func TestNquadsFromJson3(t *testing.T) {
 }
 
 func TestNquadsFromJson4(t *testing.T) {
-	json := `[{"name":"Alice\u0000","mobile":"040123456","car":"MA0123"}]`
+	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123"}]`
 
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
