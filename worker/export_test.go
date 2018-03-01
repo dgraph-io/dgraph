@@ -48,7 +48,7 @@ func populateGraphExport(t *testing.T) {
 		`<3> <friend> <5> .`,
 		`<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,` +
 			`age=33,game="football",poem="roses are red\nviolets are blue") .`,
-		`<1> <name> "pho\ton" <author0> .`,
+		`<1> <name> "pho\ton\u0000" <author0> .`,
 		`<2> <name> "pho\ton"@en <author0> .`,
 		`<3> <name> "First Line\nSecondLine" .`,
 		"<1> <friend_not_served> <5> <author0> .",
