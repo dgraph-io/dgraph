@@ -18,6 +18,7 @@ package x
 type Options struct {
 	DebugMode  bool
 	PortOffset int
+	QueryEdgeLimit uint64
 }
 
 var Config Options

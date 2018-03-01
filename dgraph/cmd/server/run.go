@@ -42,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 )
 
@@ -111,6 +112,9 @@ func init() {
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
+
+	flag.Uint64("query_edge_limit", 10000000,
+		"Limit for the maximum number of edges that can be returned in a query.")
 
 	// TLS configurations
 	x.RegisterTLSFlags(flag)
@@ -293,6 +297,8 @@ func run() {
 		ExpandEdge:          Server.Conf.GetBool("expand_edge"),
 		DebugMode:           Server.Conf.GetBool("debugmode"),
 	}
+
+	x.Config.QueryEdgeLimit = cast.ToUint64(Server.Conf.GetString("query_edge_limit"))
 	x.Config.PortOffset = Server.Conf.GetInt("port_offset")
 	bindall = Server.Conf.GetBool("bindall")
 	x.LoadTLSConfig(&tlsConf, Server.Conf)
