@@ -211,7 +211,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			}
 		}
 
-		if numEdges > 10000000 {
+		if numEdges > x.Config.QueryEdgeLimit {
 			// If we've seen too many nodes, stop the query.
 			rch <- ErrTooBig
 			return
