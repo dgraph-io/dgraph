@@ -325,6 +325,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 
 	// The following logic is for committing immediately.
+
 	if err != nil {
 		// ApplyMutations failed. We now want to abort the transaction,
 		// ignoring any error that might occur during the abort (the user would
@@ -332,6 +333,11 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		ctxn := resp.Context
 		ctxn.Aborted = true
 		_, _ = worker.CommitOverNetwork(ctx, ctxn)
+
+		if err == y.ErrConflict {
+			// We have already aborted the transaction, so the error message should reflect that.
+			return resp, y.ErrAborted
+		}
 		return resp, err
 	}
 	tr, ok := trace.FromContext(ctx)

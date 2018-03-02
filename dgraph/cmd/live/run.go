@@ -82,9 +82,9 @@ func init() {
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
-	flag.IntP("conc", "c", 1,
+	flag.IntP("conc", "c", 100,
 		"Number of concurrent requests to make to Dgraph")
-	flag.IntP("batch", "b", 10000,
+	flag.IntP("batch", "b", 1000,
 		"Number of RDF N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
@@ -274,7 +274,9 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
+	n := time.Now()
 	connzero, err := setupConnection(opt.zero, true)
+	fmt.Println("top setup conn to zero", time.Since(n))
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(
@@ -334,7 +336,9 @@ func run() {
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
+		n := time.Now()
 		conn, err := setupConnection(d, !tlsConf.CertRequired)
+		fmt.Println("top setup conn to dgraph", time.Since(n))
 		x.Checkf(err, "While trying to setup connection to Dgraph server.")
 		defer conn.Close()
 
@@ -350,7 +354,9 @@ func run() {
 		x.Printf("Creating temp client directory at %s\n", opt.clientDir)
 		defer os.RemoveAll(opt.clientDir)
 	}
+	n := time.Now()
 	l := setup(bmOpts, dgraphClient)
+	fmt.Println("setup time", time.Since(n))
 	defer l.zeroconn.Close()
 	defer l.kv.Close()
 	defer l.alloc.EvictAll()
@@ -367,10 +373,6 @@ func run() {
 		x.Printf("Processed schema file")
 	}
 
-	// PrintCounters should be called after schema has been updated.
-	if bmOpts.PrintCounters {
-		go l.printCounters()
-	}
 	filesList := fileList(opt.files)
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
@@ -384,6 +386,11 @@ func run() {
 		go func(file string) {
 			errCh <- l.processFile(ctx, file)
 		}(file)
+	}
+
+	// PrintCounters should be called after schema has been updated.
+	if bmOpts.PrintCounters {
+		go l.printCounters()
 	}
 
 	for i := 0; i < totalFiles; i++ {
