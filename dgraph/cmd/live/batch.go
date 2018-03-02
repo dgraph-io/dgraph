@@ -125,11 +125,11 @@ type Counter struct {
 }
 
 func handleError(err error) {
-	errString := err.Error()
+	errString := grpc.ErrorDesc(err)
 	// Irrecoverable
 	if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
 		x.Fatalf(errString)
-	} else if err != y.ErrAborted {
+	} else if errString != y.ErrAborted.Error() {
 		x.Printf("Error while mutating %v\n", errString)
 	}
 }

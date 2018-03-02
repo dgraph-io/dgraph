@@ -82,9 +82,9 @@ func init() {
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
-	flag.IntP("conc", "c", 1,
+	flag.IntP("conc", "c", 100,
 		"Number of concurrent requests to make to Dgraph")
-	flag.IntP("batch", "b", 10000,
+	flag.IntP("batch", "b", 1000,
 		"Number of RDF N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
@@ -367,10 +367,6 @@ func run() {
 		x.Printf("Processed schema file")
 	}
 
-	// PrintCounters should be called after schema has been updated.
-	if bmOpts.PrintCounters {
-		go l.printCounters()
-	}
 	filesList := fileList(opt.files)
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
@@ -384,6 +380,11 @@ func run() {
 		go func(file string) {
 			errCh <- l.processFile(ctx, file)
 		}(file)
+	}
+
+	// PrintCounters should be called after schema has been updated.
+	if bmOpts.PrintCounters {
+		go l.printCounters()
 	}
 
 	for i := 0; i < totalFiles; i++ {

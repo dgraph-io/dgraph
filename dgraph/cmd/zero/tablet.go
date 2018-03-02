@@ -23,6 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
+	humanize "github.com/dustin/go-humanize"
 	"golang.org/x/net/context"
 )
 
@@ -52,7 +53,7 @@ This would trigger G1 to get latest state. Wait for it.
 
 //  TODO: Have a event log for everything.
 func (s *Server) rebalanceTablets() {
-	ticker := time.NewTicker(time.Minute * 8)
+	ticker := time.NewTicker(8 * time.Minute)
 	for {
 		select {
 		case <-ticker.C:
@@ -68,8 +69,11 @@ func (s *Server) rebalanceTablets() {
 }
 
 func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
-	x.Printf("Going to move predicate %v from %d to %d\n", predicate, srcGroup, dstGroup)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*20)
+	tab := s.ServingTablet(predicate)
+	x.AssertTruef(tab != nil, "Tablet to be moved: [%v] should not be nil", predicate)
+	x.Printf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
+		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
 	done := make(chan struct{}, 1)
 
 	go func(done chan struct{}, cancel context.CancelFunc) {
@@ -101,6 +105,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		return x.Errorf("Error while trying to move predicate %v from %d to %d: %v", predicate,
 			srcGroup, dstGroup, err)
 	}
+	x.Printf("Predicate move done for: [%v] from group %d to %d\n", predicate, srcGroup, dstGroup)
 	return nil
 }
 
