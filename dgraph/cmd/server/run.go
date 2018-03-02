@@ -113,7 +113,7 @@ func init() {
 	flag.Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
 
-	flag.Uint64("query_edge_limit", 10000000,
+	flag.Uint64("query_edge_limit", 1e6,
 		"Limit for the maximum number of edges that can be returned in a query.")
 
 	// TLS configurations
@@ -298,7 +298,6 @@ func run() {
 		DebugMode:           Server.Conf.GetBool("debugmode"),
 	}
 
-	x.Config.QueryEdgeLimit = cast.ToUint64(Server.Conf.GetString("query_edge_limit"))
 	x.Config.PortOffset = Server.Conf.GetInt("port_offset")
 	bindall = Server.Conf.GetBool("bindall")
 	x.LoadTLSConfig(&tlsConf, Server.Conf)
@@ -308,6 +307,7 @@ func run() {
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
 	x.Init(edgraph.Config.DebugMode)
+	x.Config.QueryEdgeLimit = cast.ToUint64(Server.Conf.GetString("query_edge_limit"))
 
 	edgraph.InitServerState()
 	defer func() {
