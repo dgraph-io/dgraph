@@ -128,7 +128,7 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 		schema.State().DeleteAll()
 		err = posting.DeleteAll()
 		posting.TxnMarks().Done(index)
-		return
+		return err
 	}
 
 	if len(proposal.Mutations.Schema) > 0 {

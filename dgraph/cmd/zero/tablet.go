@@ -53,7 +53,7 @@ This would trigger G1 to get latest state. Wait for it.
 
 //  TODO: Have a event log for everything.
 func (s *Server) rebalanceTablets() {
-	ticker := time.NewTicker(2 * time.Minute)
+	ticker := time.NewTicker(8 * time.Minute)
 	for {
 		select {
 		case <-ticker.C:

@@ -274,9 +274,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	n := time.Now()
 	connzero, err := setupConnection(opt.zero, true)
-	fmt.Println("top setup conn to zero", time.Since(n))
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(
@@ -336,9 +334,7 @@ func run() {
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
-		n := time.Now()
 		conn, err := setupConnection(d, !tlsConf.CertRequired)
-		fmt.Println("top setup conn to dgraph", time.Since(n))
 		x.Checkf(err, "While trying to setup connection to Dgraph server.")
 		defer conn.Close()
 
@@ -354,9 +350,7 @@ func run() {
 		x.Printf("Creating temp client directory at %s\n", opt.clientDir)
 		defer os.RemoveAll(opt.clientDir)
 	}
-	n := time.Now()
 	l := setup(bmOpts, dgraphClient)
-	fmt.Println("setup time", time.Since(n))
 	defer l.zeroconn.Close()
 	defer l.kv.Close()
 	defer l.alloc.EvictAll()
