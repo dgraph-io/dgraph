@@ -73,7 +73,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	x.AssertTruef(tab != nil, "Tablet to be moved: [%v] should not be nil", predicate)
 	x.Printf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
 		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*20)
 	done := make(chan struct{}, 1)
 
 	go func(done chan struct{}, cancel context.CancelFunc) {
