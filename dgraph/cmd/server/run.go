@@ -114,7 +114,8 @@ func init() {
 		"Allow trace endpoint to be accessible from remote")
 
 	flag.Uint64("query_edge_limit", 1e6,
-		"Limit for the maximum number of edges that can be returned in a query.")
+		"Limit for the maximum number of edges that can be returned in a query."+
+			" This is only useful for shortest path queries.")
 
 	// TLS configurations
 	x.RegisterTLSFlags(flag)
