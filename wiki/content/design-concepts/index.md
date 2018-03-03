@@ -201,29 +201,6 @@ Every time we regenerate a posting list, we also write the max commit log timest
 included -- this helps us figure out how long back to seek in write-ahead logs when initializing
 the posting list, the first time it's brought back into memory.
 
-### Versioning
-Broadly speaking, there're two kinds of data stored in Dgraph. One is relationship data; other is value data.
-```
- Me friend person0    [Relation]
- Me name "Константи́н" [Value]
-```
-
-The way Dgraph stores [Posting List]({{< relref "#posting-list" >}}), the relationship data gets
-converted to UIDs and stored in a sorted list of increasing uint64 ids to allow for efficient
-traversal, lookups, and intersection.
-
-Versioning involves writing deltas and reading them to generate the final state. This isn't as
-effective when you're dealing with millions of UIDs and want to do the operations mentioned above.
-It would be too slow and memory-consuming to re-generate the long posting lists for every read operation.
-
-For those reasons, **versioning wouldn't be supported for relationship data.**
-
-On the other hand, we only expect one value per `subject-predicate-language` composite. This allows
-us to store many versions of this value in the same posting list, without having to do any
-regeneration. So, we can potentially support versioning of value data.
-
-{{% notice "warning" %}}Value data versioning is under consideration, and not yet implemented.{{% /notice %}}
-
 ### Queries
 
 Let's understand how query execution works, by looking at an example.
