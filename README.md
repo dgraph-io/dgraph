@@ -59,8 +59,8 @@ makes it easy to build applications with it.
 
 | Features | Dgraph | Neo4j | Janus Graph |
 | -------- | ------ | ----- | ----------- |
-| Architecture | Distributed | Single server | Layer on top of other distributed DBs |
-| Replication | Consistent | None (only available in Enterprise) | Via underlying DB |
+| Architecture | Sharded and Distributed | Single server (+ replicas in enterprise) | Layer on top of other distributed DBs |
+| Replication | Consistent | None in community edition (only available in enterprise) | Via underlying DB |
 | Data movement for shard rebalancing | Automatic | Not applicable (all data lies on each server) | Via underlying DB |
 | Language | GraphQL inspired | Cypher, Gremlin | Gremlin |
 | Protocols | Grpc / HTTP + JSON / RDF | Bolt + Cypher | Websocket / HTTP |
