@@ -831,7 +831,7 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	return mr.nquads, err
 }
 
-func parseNQuads(b []byte, op int) ([]*api.NQuad, error) {
+func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
 		line = bytes.TrimSpace(line)
@@ -864,14 +864,14 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
-		nqs, err := parseNQuads(mu.SetNquads, set)
+		nqs, err := parseNQuads(mu.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DelNquads) > 0 {
-		nqs, err := parseNQuads(mu.DelNquads, delete)
+		nqs, err := parseNQuads(mu.DelNquads)
 		if err != nil {
 			return nil, err
 		}

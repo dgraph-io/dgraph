@@ -268,7 +268,7 @@ func TestParseNQuads(t *testing.T) {
 		# this line is a comment
 		_:a <join> _:b .
 	`
-	nqs, err := parseNQuads([]byte(nquads), set)
+	nqs, err := parseNQuads([]byte(nquads))
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
 		makeNquad("_:a", "predA", &api.Value{&api.Value_DefaultVal{"A"}}),
@@ -279,7 +279,7 @@ func TestParseNQuads(t *testing.T) {
 
 func TestParseNQuadsWindowsNewline(t *testing.T) {
 	nquads := "_:a <predA> \"A\" .\r\n_:b <predB> \"B\" ."
-	nqs, err := parseNQuads([]byte(nquads), set)
+	nqs, err := parseNQuads([]byte(nquads))
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
 		makeNquad("_:a", "predA", &api.Value{&api.Value_DefaultVal{"A"}}),
@@ -289,7 +289,7 @@ func TestParseNQuadsWindowsNewline(t *testing.T) {
 
 func TestParseNQuadsDelete(t *testing.T) {
 	nquads := `_:a * * .`
-	nqs, err := parseNQuads([]byte(nquads), delete)
+	nqs, err := parseNQuads([]byte(nquads))
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
 		makeNquad("_:a", x.Star, &api.Value{&api.Value_DefaultVal{x.Star}}),
