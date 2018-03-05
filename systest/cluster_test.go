@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -16,6 +17,39 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
+
+type Member struct {
+	Id      string `json:"id"`
+	GroupId int    `json:"groupId"`
+	Leader  bool   `json:"leader"`
+}
+
+type GroupState struct {
+	Members map[string]Member `json:"members"`
+}
+
+type State struct {
+	Groups map[string]GroupState `json:"groups"`
+}
+
+func waitForConvergence(t *testing.T, c *DgraphCluster) {
+	for i := 0; i < 60; i++ {
+		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/state", c.zeroPortOffset+6080))
+		require.NoError(t, err)
+		b, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var s State
+		require.NoError(t, json.Unmarshal(b, &s))
+		members := s.Groups["1"].Members
+		if len(members) == 2 && (members["1"].Leader || members["2"].Leader) {
+			break
+		}
+
+		x.Println("Couldn't find leader, waiting...")
+		time.Sleep(time.Second)
+	}
+}
 
 func waitForNodeToBeHealthy(t *testing.T, port int) {
 	for i := 0; i < 90; i++ {
@@ -51,7 +85,7 @@ func TestClusterSnapshot(t *testing.T) {
 	defer cluster.Close()
 
 	schema := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.schema")
-	data := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.rdf.gz")
+	data := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata_first_200k.rdf.gz")
 
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--rdfs", data,
@@ -108,6 +142,8 @@ func TestClusterSnapshot(t *testing.T) {
 	}
 
 	waitForNodeToBeHealthy(t, cluster.dgraphPortOffset+8080)
+	waitForNodeToBeHealthy(t, o+8080)
+	waitForConvergence(t, cluster)
 
 	// Now try and export data from second server.
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", o+8080))
@@ -126,7 +162,7 @@ func TestClusterSnapshot(t *testing.T) {
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	quickCheck(err)
 	count := strings.TrimSpace(string(out))
-	if count != "1120879" {
+	if count != "200000" {
 		shutdownCluster()
 		t.Fatalf("Export count mismatch. Got: %s", count)
 	}
