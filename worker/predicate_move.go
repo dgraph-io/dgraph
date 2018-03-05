@@ -87,7 +87,7 @@ func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
 func movePredicateHelper(ctx context.Context, predicate string, gid uint32) error {
 	pl := groups().Leader(gid)
 	if pl == nil {
-		return x.Errorf("Unable to find a connection for groupd: %d\n", gid)
+		return x.Errorf("Unable to find a connection for group: %d\n", gid)
 	}
 	c := intern.NewWorkerClient(pl.Get())
 	stream, err := c.ReceivePredicate(ctx)
@@ -279,7 +279,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errNotLeader
 	}
 
-	// Ensures that all future mtuations beyond this point are rejected
+	// Ensures that all future mutations beyond this point are rejected.
 	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}

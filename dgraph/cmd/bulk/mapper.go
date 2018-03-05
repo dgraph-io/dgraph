@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
@@ -178,6 +179,9 @@ func (m *mapper) parseRDF(rdfLine string) error {
 			return nil
 		}
 		return errors.Wrapf(err, "while parsing line %q", rdfLine)
+	}
+	if err := facets.SortAndValidate(nq.Facets); err != nil {
+		return err
 	}
 	m.processNQuad(nq)
 	return nil
