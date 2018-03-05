@@ -673,6 +673,8 @@ func marshalPostingList(plist *intern.PostingList) (data []byte, meta byte) {
 	return
 }
 
+// Merge all entries in mutation layer with commitTs <= l.commitTs
+// into immutable layer.
 func (l *List) rollup() error {
 	l.AssertLock()
 	final := new(intern.PostingList)
@@ -711,6 +713,8 @@ func (l *List) rollup() error {
 		bp.WriteTo(final.Uids)
 	}
 	midx := 0
+	// Keep all uncommited Entries or postings with commitTs > l.commitTs
+	// in mutable layer.
 	for _, mpost := range l.mlayer {
 		commitTs := atomic.LoadUint64(&mpost.CommitTs)
 		if commitTs == 0 || commitTs > l.commitTs {
@@ -720,11 +724,7 @@ func (l *List) rollup() error {
 	}
 	l.mlayer = l.mlayer[:midx]
 	l.minTs = l.commitTs
-	if sz > 0 {
-		// Don't overwrite plist if nothing new is merged.
-		// We set plist to emptyList when we do sp*
-		l.plist = final
-	}
+	l.plist = final
 	l.numCommits = 0
 	return nil
 }
@@ -742,13 +742,16 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	}
 
 	lmlayer := len(l.mlayer)
+	// plist is emptyList only during SP*
+	isSPStar := l.plist == emptyList
+	// Merge all entries in mutation layer with commitTs <= l.commitTs
+	// into immutable layer.
 	if err := l.rollup(); err != nil {
 		return false, err
 	}
 	// Check if length of mlayer has changed after rollup, else skip writing to disk
-	// minTs can remain same after rollup during schema mutations of large index, so
-	// don't check minTs.
-	if len(l.mlayer) == lmlayer && l.plist != emptyList { // Would be emptyList for s p *
+	// Always sync for SP*
+	if len(l.mlayer) == lmlayer && !isSPStar {
 		// There was no change in immutable layer.
 		return false, nil
 	}
