@@ -72,11 +72,13 @@ type uidProvider struct {
 type loader struct {
 	opts batchMutationOptions
 
-	dc     *client.Dgraph
-	alloc  *xidmap.XidMap
-	ticker *time.Ticker
-	kv     *badger.DB
-	wg     sync.WaitGroup
+	dc         *client.Dgraph
+	alloc      *xidmap.XidMap
+	ticker     *time.Ticker
+	kv         *badger.DB
+	requestsWg sync.WaitGroup
+	// If we retry a request, we add one to retryRequestsWg.
+	retryRequestsWg sync.WaitGroup
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -135,7 +137,7 @@ func handleError(err error) {
 }
 
 func (l *loader) infinitelyRetry(req api.Mutation) {
-	defer l.wg.Done()
+	defer l.retryRequestsWg.Done()
 	for {
 		txn := l.dc.NewTxn()
 		req.CommitNow = true
@@ -163,7 +165,7 @@ func (l *loader) request(req api.Mutation) {
 	}
 	handleError(err)
 	atomic.AddUint64(&l.aborts, 1)
-	l.wg.Add(1)
+	l.retryRequestsWg.Add(1)
 	go l.infinitelyRetry(req)
 }
 
@@ -171,7 +173,7 @@ func (l *loader) request(req api.Mutation) {
 // It doesn't need to batch the requests anymore. Batching is already done for it by the
 // caller functions.
 func (l *loader) makeRequests() {
-	defer l.wg.Done()
+	defer l.requestsWg.Done()
 	for req := range l.reqs {
 		l.request(req)
 	}
