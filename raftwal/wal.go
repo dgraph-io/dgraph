@@ -166,7 +166,15 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 			return x.Wrapf(err, "wal.Store: While marshal entry")
 		}
 		k := w.entryKey(gid, e.Term, e.Index)
-		if err := txn.Set(k, data); err != nil {
+		if err := txn.Set(k, data); err == badger.ErrTxnTooBig {
+			if err := txn.CommitAt(1, nil); err != nil {
+				return err
+			}
+			txn = w.wals.NewTransactionAt(1, true)
+			if err := txn.Set(k, data); err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 	}
@@ -199,7 +207,15 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 			key := itr.Item().Key()
 			newk := make([]byte, len(key))
 			copy(newk, key)
-			if err := txn.Delete(newk); err != nil {
+			if err := txn.Delete(newk); err == badger.ErrTxnTooBig {
+				if err := txn.CommitAt(1, nil); err != nil {
+					return err
+				}
+				txn = w.wals.NewTransactionAt(1, true)
+				if err := txn.Delete(newk); err != nil {
+					return err
+				}
+			} else if err != nil {
 				return err
 			}
 		}
