@@ -320,6 +320,30 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 }
 
 func (n *node) processApplyCh() {
+	type KeyValueOrCleanProposal struct {
+		index    uint64
+		id       uint32
+		proposal *intern.Proposal
+	}
+	kvChan := make(chan KeyValueOrCleanProposal, 1000)
+	go func() {
+		// Run KeyValueProposals and CleanPredicate one by one always.
+		// During predicate move we first clean the predicate and then
+		// propose key values, we wait for clean predicate to be done before
+		// we propose key values. But during replay if we run these proposals
+		// in goroutine then we will have no such guarantees so always run
+		// them sequentially.
+		for e := range kvChan {
+			if len(e.proposal.Kv) > 0 {
+				n.processKeyValues(e.index, e.id, e.proposal.Kv)
+			} else if len(e.proposal.CleanPredicate) > 0 {
+				n.deletePredicate(e.index, e.id, e.proposal.CleanPredicate)
+			} else {
+				x.Fatalf("Unknown proposal, shouldn't happen\n")
+			}
+		}
+	}()
+
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
 			// This is not in the proposal map
@@ -358,7 +382,11 @@ func (n *node) processApplyCh() {
 			// syncmarks for this shouldn't be marked done until it's comitted.
 			n.sch.schedule(proposal, e.Index)
 		} else if len(proposal.Kv) > 0 {
-			go n.processKeyValues(e.Index, proposal.Id, proposal.Kv)
+			kvChan <- KeyValueOrCleanProposal{
+				index:    e.Index,
+				id:       proposal.Id,
+				proposal: proposal,
+			}
 		} else if proposal.State != nil {
 			// This state needn't be snapshotted in this group, on restart we would fetch
 			// a state which is latest or equal to this.
@@ -367,13 +395,18 @@ func (n *node) processApplyCh() {
 			posting.TxnMarks().Done(e.Index)
 			n.props.Done(proposal.Id, nil)
 		} else if len(proposal.CleanPredicate) > 0 {
-			go n.deletePredicate(e.Index, proposal.Id, proposal.CleanPredicate)
+			kvChan <- KeyValueOrCleanProposal{
+				index:    e.Index,
+				id:       proposal.Id,
+				proposal: proposal,
+			}
 		} else if proposal.TxnContext != nil {
 			go n.commitOrAbort(e.Index, proposal.Id, proposal.TxnContext)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
 	}
+	close(kvChan)
 }
 
 func (n *node) commitOrAbort(index uint64, pid uint32, tctx *api.TxnContext) {
