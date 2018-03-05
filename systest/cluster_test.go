@@ -12,7 +12,31 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
 )
+
+func waitForNodeToBeHealthy(t *testing.T, port int) {
+	for i := 0; i < 90; i++ {
+		// Ignore error, server might be unhealthy temporarily.
+		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/health", port))
+		if err != nil {
+			x.Printf("Server running on: [%v] is not up yet, waiting...\n", port)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		b, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		if string(b) == "OK" {
+			break
+		}
+
+		x.Printf("Server running on: [%v] not healthy, retrying...\n", port)
+		time.Sleep(2 * time.Second)
+	}
+}
 
 func TestClusterSnapshot(t *testing.T) {
 	if testing.Short() {
@@ -58,14 +82,17 @@ func TestClusterSnapshot(t *testing.T) {
 		t.Fatalf("Couldn't add server: %v\n", err)
 	}
 
-	// TODO - Make this more deterministic.
-	dur := 90 * time.Second
-	// TODO - Remove later when we move nightly to Teamcity
-	if ok := os.Getenv("TRAVIS"); ok == "true" {
-		dur = 2 * dur
+	quickCheck := func(err error) {
+		if err != nil {
+			shutdownCluster()
+			t.Fatalf("Got error: %v\n", err)
+		}
 	}
-	// Approx time for snapshot to be transferred to the second instance.
-	time.Sleep(dur)
+
+	o, err := strconv.Atoi(n.offset)
+	quickCheck(err)
+
+	waitForNodeToBeHealthy(t, o+8080)
 
 	cluster.dgraph.Process.Signal(syscall.SIGINT)
 	if _, err = cluster.dgraph.Process.Wait(); err != nil {
@@ -80,23 +107,9 @@ func TestClusterSnapshot(t *testing.T) {
 		t.Fatalf("Couldn't start Dgraph server again: %v\n", err)
 	}
 
-	dur = 15 * time.Second
-	if ok := os.Getenv("TRAVIS"); ok == "true" {
-		dur = 2 * dur
-	}
-	// Wait for leader election to happen again.
-	time.Sleep(dur)
-
-	quickCheck := func(err error) {
-		if err != nil {
-			shutdownCluster()
-			t.Fatalf("Got error: %v\n", err)
-		}
-	}
+	waitForNodeToBeHealthy(t, cluster.dgraphPortOffset+8080)
 
 	// Now try and export data from second server.
-	o, err := strconv.Atoi(n.offset)
-	quickCheck(err)
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", o+8080))
 	quickCheck(err)
 	b, err := ioutil.ReadAll(resp.Body)
