@@ -220,10 +220,7 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 			}
 		}
 	}
-	if err := txn.CommitAt(1, nil); err != nil {
-		return err
-	}
-	return nil
+	return txn.CommitAt(1, nil)
 }
 
 func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
