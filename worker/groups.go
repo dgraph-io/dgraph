@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
@@ -47,6 +48,7 @@ type groupi struct {
 	tablets   map[string]*intern.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
+	elog      trace.EventLog
 }
 
 var gr *groupi
@@ -62,6 +64,7 @@ func groups() *groupi {
 func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
+	gr.elog = trace.NewEventLog("Groups", "")
 
 	if len(Config.MyAddr) == 0 {
 		Config.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
@@ -313,7 +316,7 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 		return tablet
 	}
 
-	x.Printf("Asking if I can serve tablet for: %v\n", key)
+	g.elog.Printf("Asking if I can serve tablet for: %v\n", key)
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
 	pl := g.AnyServer(0)
@@ -325,7 +328,7 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 	tablet = &intern.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
-		x.Printf("Error while ShouldServe grpc call %v", err)
+		g.elog.Printf("Error while ShouldServe grpc call %v", err)
 		return nil
 	}
 	g.Lock()
@@ -450,7 +453,7 @@ START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero server.")
+		g.elog.Printf("WARNING: We don't have address of any dgraphzero server.")
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -459,7 +462,7 @@ START:
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := c.Update(ctx)
 	if err != nil {
-		x.Printf("Error while calling update %v\n", err)
+		g.elog.Printf("Error while calling update %v\n", err)
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -469,7 +472,7 @@ START:
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
 			if err != nil || state == nil {
-				x.Printf("Unable to sync memberships. Error: %v", err)
+				g.elog.Printf("Unable to sync memberships. Error: %v", err)
 				// If zero server is lagging behind leader.
 				if ctx.Err() == nil {
 					cancel()
@@ -524,7 +527,7 @@ OUTER:
 			// Let's send update even if not leader, zero will know that this node is still
 			// active.
 			if err := g.sendMembership(allTablets, stream); err != nil {
-				x.Printf("Error while updating tablets size %v\n", err)
+				g.elog.Printf("Error while updating tablets size %v\n", err)
 				stream.CloseSend()
 				break OUTER
 			}
@@ -675,7 +678,7 @@ START:
 	pl := g.Leader(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero server.")
+		g.elog.Printf("WARNING: We don't have address of any dgraphzero server.")
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -683,7 +686,7 @@ START:
 	c := intern.NewZeroClient(pl.Get())
 	stream, err := c.Oracle(context.Background(), &api.Payload{})
 	if err != nil {
-		x.Printf("Error while calling Oracle %v\n", err)
+		g.elog.Printf("Error while calling Oracle %v\n", err)
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -691,7 +694,7 @@ START:
 	for {
 		oracleDelta, err := stream.Recv()
 		if err != nil || oracleDelta == nil {
-			x.Printf("Error in oracle delta stream. Error: %v", err)
+			g.elog.Printf("Error in oracle delta stream. Error: %v", err)
 			break
 		}
 		posting.Oracle().ProcessOracleDelta(oracleDelta)
