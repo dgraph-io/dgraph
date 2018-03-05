@@ -463,6 +463,45 @@ func TestAddMutation_gru2(t *testing.T) {
 	require.Equal(t, uids, listToArray(t, 0, ol, uint64(5)))
 }
 
+func TestAddAndDelMutation(t *testing.T) {
+	key := x.DataKey("question.tag", 0x01)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
+
+	// Set and callSyncIfDirty
+	{
+		edge := &intern.DirectedEdge{
+			ValueId: 0x02,
+			Label:   "gru",
+		}
+		txn := &Txn{StartTs: 1}
+		addMutationHelper(t, ol, edge, Set, txn)
+		ol.CommitMutation(context.Background(), 1, uint64(2))
+		merged, err := ol.SyncIfDirty(false)
+		require.NoError(t, err)
+		require.True(t, merged)
+	}
+
+	// Delete and callSyncIfDirty
+	{
+		edge := &intern.DirectedEdge{
+			ValueId: 0x02,
+			Label:   "gru",
+		}
+		txn := &Txn{StartTs: 3}
+		addMutationHelper(t, ol, edge, Del, txn)
+		addMutationHelper(t, ol, edge, Del, txn)
+		ol.CommitMutation(context.Background(), 3, uint64(4))
+
+		checkUids(t, ol, []uint64{}, 5)
+
+		merged, err := ol.SyncIfDirty(false)
+		require.NoError(t, err)
+		require.True(t, merged)
+	}
+	checkUids(t, ol, []uint64{}, 5)
+}
+
 func TestAfterUIDCount(t *testing.T) {
 	key := x.DataKey("value", 22)
 	ol, err := getNew(key, ps)

@@ -742,6 +742,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	}
 
 	lmlayer := len(l.mlayer)
+	// plist is emptyList only during SP*
 	isSPStar := l.plist == emptyList
 	// Merge all entries in mutation layer with commitTs <= l.commitTs
 	// into immutable layer.
@@ -749,7 +750,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		return false, err
 	}
 	// Check if length of mlayer has changed after rollup, else skip writing to disk
-	// Need to sync for SP*, mutation layer won't change during SP*
+	// Always sync for SP*
 	if len(l.mlayer) == lmlayer && !isSPStar {
 		// There was no change in immutable layer.
 		return false, nil
