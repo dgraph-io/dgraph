@@ -267,6 +267,7 @@ func (ld *loader) mapStage() {
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
+	ld.xids.EvictAll()
 	x.Check(ld.xidDB.Close())
 	ld.xids = nil
 	runtime.GC()
