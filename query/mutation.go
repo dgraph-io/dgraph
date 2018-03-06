@@ -75,6 +75,12 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 			edgeCopy.Attr = pred
 			edges = append(edges, &edgeCopy)
 
+			// We only want to delete the pred from <uid> + <_predicate_> posting list if this is
+			// a SP* deletion operation. Otherwise we just continue.
+			if edge.Op == intern.DirectedEdge_DEL && string(edge.Value) != x.Star {
+				continue
+			}
+
 			e := &intern.DirectedEdge{
 				Op:     edge.Op,
 				Entity: edge.GetEntity(),

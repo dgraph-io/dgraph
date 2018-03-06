@@ -927,6 +927,7 @@ func DeleteWithExpandAll(t *testing.T, c *client.Dgraph) {
 	assigned, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
 			_:a <to> _:b .
+			_:b <name> "b" .
 			_:a <to> _:c .
 			_:a <to> _:d .
 		`),
@@ -935,29 +936,6 @@ func DeleteWithExpandAll(t *testing.T, c *client.Dgraph) {
 	require.NoError(t, err)
 	auid := assigned.Uids["a"]
 	buid := assigned.Uids["b"]
-
-	q := `{
-		  me(func: has(to)) {
-			to {
-				uid
-			}
-		  }
-		}`
-	resp, err := c.NewTxn().Query(ctx, q)
-	require.NoError(t, err)
-
-	type Person struct {
-		Uid string   `json:"uid"`
-		To  []Person `json:"to"`
-	}
-
-	type Root struct {
-		Me []Person `json:"me"`
-	}
-
-	var r Root
-	json.Unmarshal(resp.Json, &r)
-	require.Equal(t, 3, len(r.Me[0].To))
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		DelNquads: []byte(`
@@ -968,21 +946,31 @@ func DeleteWithExpandAll(t *testing.T, c *client.Dgraph) {
 	})
 	require.NoError(t, err)
 
-	resp, err = c.NewTxn().Query(ctx, q)
-	require.NoError(t, err)
-	json.Unmarshal(resp.Json, &r)
-	require.Equal(t, 2, len(r.Me[0].To))
-
-	expandAllQuery := `{
-		  me(func: has(to)) {
-			expand(_all_) {
-				uid
-			}
+	q := `query test($id: string) {
+		  me(func: uid($id)) {
+			_predicate_
 		  }
 		}`
-	resp, err = c.NewTxn().Query(ctx, expandAllQuery)
+
+	type Preds struct {
+		Predicates []string `json:"_predicate_"`
+	}
+
+	type Root struct {
+		Me []Preds `json:"me"`
+	}
+
+	var r Root
+	resp, err := c.NewTxn().QueryWithVars(ctx, q, map[string]string{"$id": auid})
 	require.NoError(t, err)
 	json.Unmarshal(resp.Json, &r)
-	require.Equal(t, 1, len(r.Me))
-	require.Equal(t, 2, len(r.Me[0].To))
+	// S P O deletion shouldn't delete "to" .
+	require.Equal(t, 1, len(r.Me[0].Predicates))
+	require.Equal(t, "to", r.Me[0].Predicates[0])
+
+	// b should not have any _predicate_.
+	resp, err = c.NewTxn().QueryWithVars(ctx, q, map[string]string{"$id": buid})
+	require.NoError(t, err)
+	json.Unmarshal(resp.Json, &r)
+	require.Equal(t, 0, len(r.Me))
 }
