@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
@@ -173,11 +174,13 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	parseStart := time.Now()
 	mu, err := gql.ParseMutation(string(m))
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	parseEnd := time.Now()
 
 	// Maybe rename it so that default is CommitNow.
 	commit := r.Header.Get("X-Dgraph-CommitNow")
@@ -215,6 +218,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	resp.Latency.ParsingNs = uint64(parseEnd.Sub(parseStart).Nanoseconds())
 	e := query.Extensions{
 		Txn:     resp.Context,
 		Latency: resp.Latency,
