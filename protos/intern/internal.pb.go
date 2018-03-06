@@ -2341,7 +2341,6 @@ var _Zero_serviceDesc = grpc.ServiceDesc{
 type WorkerClient interface {
 	// Data serving RPCs.
 	Mutate(ctx context.Context, in *Mutations, opts ...grpc.CallOption) (*api.TxnContext, error)
-	// 	rpc CommitOrAbort(api.TxnContext)             returns (api.Payload) {}
 	ServeTask(ctx context.Context, in *Query, opts ...grpc.CallOption) (*Result, error)
 	PredicateAndSchemaData(ctx context.Context, in *SnapshotMeta, opts ...grpc.CallOption) (Worker_PredicateAndSchemaDataClient, error)
 	Sort(ctx context.Context, in *SortMessage, opts ...grpc.CallOption) (*SortResult, error)
@@ -2494,7 +2493,6 @@ func (c *workerClient) MovePredicate(ctx context.Context, in *MovePredicatePaylo
 type WorkerServer interface {
 	// Data serving RPCs.
 	Mutate(context.Context, *Mutations) (*api.TxnContext, error)
-	// 	rpc CommitOrAbort(api.TxnContext)             returns (api.Payload) {}
 	ServeTask(context.Context, *Query) (*Result, error)
 	PredicateAndSchemaData(*SnapshotMeta, Worker_PredicateAndSchemaDataServer) error
 	Sort(context.Context, *SortMessage) (*SortResult, error)

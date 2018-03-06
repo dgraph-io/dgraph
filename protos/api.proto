@@ -48,6 +48,7 @@ message Response {
 message Assigned {
 	map<string, string> uids = 1;
 	TxnContext context = 2;
+	Latency latency = 12;
 }
 
 message Mutation {
