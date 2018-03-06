@@ -51,6 +51,58 @@ func waitForConvergence(t *testing.T, c *DgraphCluster) {
 	}
 }
 
+type matchExport struct {
+	expectedRDF    int
+	expectedSchema int
+	dir            string
+	port           int
+}
+
+func matchExportCount(opts matchExport) error {
+	// Now try and export data from second server.
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", opts.port))
+	if err != nil {
+		return err
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	expected := `{"code": "Success", "message": "Export completed."}`
+	if string(b) != expected {
+		return x.Errorf("Unexpected message while exporting: %v", string(b))
+	}
+
+	dataFile, err := findFile(filepath.Join(opts.dir, "export"), ".rdf.gz")
+	if err != nil {
+		return err
+	}
+	cmd := fmt.Sprintf("gunzip -c %s | wc -l", dataFile)
+	out, err := exec.Command("sh", "-c", cmd).Output()
+	if err != nil {
+		return err
+	}
+	count := strings.TrimSpace(string(out))
+	if count != strconv.Itoa(opts.expectedRDF) {
+		return x.Errorf("Export count mismatch. Got: %s", count)
+	}
+
+	schemaFile, err := findFile(filepath.Join(opts.dir, "export"), ".schema.gz")
+	if err != nil {
+		return err
+	}
+	cmd = fmt.Sprintf("gunzip -c %s | wc -l", schemaFile)
+	out, err = exec.Command("sh", "-c", cmd).Output()
+	if err != nil {
+		return err
+	}
+	count = strings.TrimSpace(string(out))
+	if count != strconv.Itoa(opts.expectedSchema) {
+		return x.Errorf("Schema export count mismatch. Got: %s", count)
+	}
+	return nil
+}
+
 func waitForNodeToBeHealthy(t *testing.T, port int) {
 	for i := 0; i < 90; i++ {
 		// Ignore error, server might be unhealthy temporarily.
@@ -126,7 +178,7 @@ func TestClusterSnapshot(t *testing.T) {
 	o, err := strconv.Atoi(n.offset)
 	quickCheck(err)
 
-	waitForNodeToBeHealthy(t, o+8080)
+	waitForNodeToBeHealthy(t, o+x.PortHTTP)
 
 	cluster.dgraph.Process.Signal(syscall.SIGINT)
 	if _, err = cluster.dgraph.Process.Wait(); err != nil {
@@ -141,41 +193,19 @@ func TestClusterSnapshot(t *testing.T) {
 		t.Fatalf("Couldn't start Dgraph server again: %v\n", err)
 	}
 
-	waitForNodeToBeHealthy(t, cluster.dgraphPortOffset+8080)
-	waitForNodeToBeHealthy(t, o+8080)
+	waitForNodeToBeHealthy(t, cluster.dgraphPortOffset+x.PortHTTP)
+	waitForNodeToBeHealthy(t, o+x.PortHTTP)
 	waitForConvergence(t, cluster)
 
-	// Now try and export data from second server.
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", o+8080))
-	quickCheck(err)
-	b, err := ioutil.ReadAll(resp.Body)
-	quickCheck(err)
-	expected := `{"code": "Success", "message": "Export completed."}`
-	if string(b) != expected {
+	err = matchExportCount(matchExport{
+		expectedRDF:    2e5,
+		expectedSchema: 10,
+		dir:            dgraphDir,
+		port:           o + x.PortHTTP,
+	})
+	if err != nil {
 		shutdownCluster()
-		t.Fatalf("Unexpected message while exporting: %v", string(b))
-	}
-
-	dataFile, err := findFile(filepath.Join(dgraphDir, "export"), ".rdf.gz")
-	quickCheck(err)
-	cmd := fmt.Sprintf("gunzip -c %s | wc -l", dataFile)
-	out, err := exec.Command("sh", "-c", cmd).Output()
-	quickCheck(err)
-	count := strings.TrimSpace(string(out))
-	if count != "200000" {
-		shutdownCluster()
-		t.Fatalf("Export count mismatch. Got: %s", count)
-	}
-
-	schemaFile, err := findFile(filepath.Join(dgraphDir, "export"), ".schema.gz")
-	quickCheck(err)
-	cmd = fmt.Sprintf("gunzip -c %s | wc -l", schemaFile)
-	out, err = exec.Command("sh", "-c", cmd).Output()
-	quickCheck(err)
-	count = strings.TrimSpace(string(out))
-	if count != "10" {
-		shutdownCluster()
-		t.Fatalf("Schema export count mismatch. Got: %s", count)
+		t.Fatal(err)
 	}
 }
 
