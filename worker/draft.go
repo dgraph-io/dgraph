@@ -319,30 +319,33 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	groups().triggerMembershipSync()
 }
 
-func (n *node) processApplyCh() {
-	type KeyValueOrCleanProposal struct {
-		index    uint64
-		id       uint32
-		proposal *intern.Proposal
-	}
-	kvChan := make(chan KeyValueOrCleanProposal, 1000)
-	go func() {
-		// Run KeyValueProposals and CleanPredicate one by one always.
-		// During predicate move we first clean the predicate and then
-		// propose key values, we wait for clean predicate to be done before
-		// we propose key values. But during replay if we run these proposals
-		// in goroutine then we will have no such guarantees so always run
-		// them sequentially.
-		for e := range kvChan {
-			if len(e.proposal.Kv) > 0 {
-				n.processKeyValues(e.index, e.id, e.proposal.Kv)
-			} else if len(e.proposal.CleanPredicate) > 0 {
-				n.deletePredicate(e.index, e.id, e.proposal.CleanPredicate)
-			} else {
-				x.Fatalf("Unknown proposal, shouldn't happen\n")
-			}
+type KeyValueOrCleanProposal struct {
+	raftIdx  uint64
+	proposal *intern.Proposal
+}
+
+func (n *node) processKeyValueOrCleanProposals(
+	kvChan chan KeyValueOrCleanProposal) {
+	// Run KeyValueProposals and CleanPredicate one by one always.
+	// During predicate move we first clean the predicate and then
+	// propose key values, we wait for clean predicate to be done before
+	// we propose key values. But during replay if we run these proposals
+	// in goroutine then we will have no such guarantees so always run
+	// them sequentially.
+	for e := range kvChan {
+		if len(e.proposal.Kv) > 0 {
+			n.processKeyValues(e.raftIdx, e.proposal.Id, e.proposal.Kv)
+		} else if len(e.proposal.CleanPredicate) > 0 {
+			n.deletePredicate(e.raftIdx, e.proposal.Id, e.proposal.CleanPredicate)
+		} else {
+			x.Fatalf("Unknown proposal, %+v\n", e.proposal)
 		}
-	}()
+	}
+}
+
+func (n *node) processApplyCh() {
+	kvChan := make(chan KeyValueOrCleanProposal, 1000)
+	go n.processKeyValueOrCleanProposals(kvChan)
 
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
@@ -383,8 +386,7 @@ func (n *node) processApplyCh() {
 			n.sch.schedule(proposal, e.Index)
 		} else if len(proposal.Kv) > 0 {
 			kvChan <- KeyValueOrCleanProposal{
-				index:    e.Index,
-				id:       proposal.Id,
+				raftIdx:  e.Index,
 				proposal: proposal,
 			}
 		} else if proposal.State != nil {
@@ -396,8 +398,7 @@ func (n *node) processApplyCh() {
 			n.props.Done(proposal.Id, nil)
 		} else if len(proposal.CleanPredicate) > 0 {
 			kvChan <- KeyValueOrCleanProposal{
-				index:    e.Index,
-				id:       proposal.Id,
+				raftIdx:  e.Index,
 				proposal: proposal,
 			}
 		} else if proposal.TxnContext != nil {
