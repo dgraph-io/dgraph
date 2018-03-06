@@ -205,6 +205,7 @@ func run() {
 		httpListener.Close()
 		grpcListener.Close()
 		close(st.zero.shutDownCh)
+		st.node.trySnapshot()
 	}()
 
 	fmt.Println("Running Dgraph zero...")
