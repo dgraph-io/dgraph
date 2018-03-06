@@ -49,6 +49,7 @@ func TestSystem(t *testing.T) {
 	t.Run("set after delete for list", wrap(SetAfterDeletionListType))
 	t.Run("empty strings with exact", wrap(EmptyNamesWithExact))
 	t.Run("empty strings with term", wrap(EmptyRoomsWithTermIndex))
+	t.Run("delete with expand all", wrap(DeleteWithExpandAll))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -919,4 +920,69 @@ func EmptyRoomsWithTermIndex(t *testing.T, c *client.Dgraph) {
 		}`)
 	require.NoError(t, err)
 	require.Equal(t, `{"offices":[{"count(office.room)":1}]}`, string(resp.GetJson()))
+}
+
+func DeleteWithExpandAll(t *testing.T, c *client.Dgraph) {
+	ctx := context.Background()
+	assigned, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:a <to> _:b .
+			_:a <to> _:c .
+			_:a <to> _:d .
+		`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+	auid := assigned.Uids["a"]
+	buid := assigned.Uids["b"]
+
+	q := `{
+		  me(func: has(to)) {
+			to {
+				uid
+			}
+		  }
+		}`
+	resp, err := c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+
+	type Person struct {
+		Uid string   `json:"uid"`
+		To  []Person `json:"to"`
+	}
+
+	type Root struct {
+		Me []Person `json:"me"`
+	}
+
+	var r Root
+	json.Unmarshal(resp.Json, &r)
+	require.Equal(t, 3, len(r.Me[0].To))
+
+	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+		DelNquads: []byte(`
+			<` + auid + `> <to> <` + buid + `> .
+			<` + buid + `> * * .
+		`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	resp, err = c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	json.Unmarshal(resp.Json, &r)
+	require.Equal(t, 2, len(r.Me[0].To))
+
+	expandAllQuery := `{
+		  me(func: has(to)) {
+			expand(_all_) {
+				uid
+			}
+		  }
+		}`
+	resp, err = c.NewTxn().Query(ctx, expandAllQuery)
+	require.NoError(t, err)
+	json.Unmarshal(resp.Json, &r)
+	require.Equal(t, 1, len(r.Me))
+	require.Equal(t, 2, len(r.Me[0].To))
 }
