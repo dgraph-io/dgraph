@@ -216,7 +216,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	e := query.Extensions{
-		Txn: resp.Context,
+		Txn:     resp.Context,
+		Latency: resp.Latency,
 	}
 
 	// Don't send keys array which is part of txn context if its commit immediately.

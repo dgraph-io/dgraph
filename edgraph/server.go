@@ -297,10 +297,25 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		tr, ctx = x.NewTrace("GrpcMutate", ctx)
 		defer tr.Finish()
 	}
+
+	var l query.Latency
+	l.Start = time.Now()
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return resp, err
 	}
+
+	parsingEnd := time.Now()
+	l.Parsing = time.Since(l.Start)
+	defer func() {
+		l.Processing = time.Since(parsingEnd)
+
+		resp.Latency = &api.Latency{
+			ParsingNs:    uint64(l.Parsing.Nanoseconds()),
+			ProcessingNs: uint64(l.Processing.Nanoseconds()),
+		}
+	}()
+
 	newUids, err := query.AssignUids(ctx, gmu.Set)
 	if err != nil {
 		return resp, err
@@ -325,7 +340,6 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 
 	// The following logic is for committing immediately.
-
 	if err != nil {
 		// ApplyMutations failed. We now want to abort the transaction,
 		// ignoring any error that might occur during the abort (the user would
