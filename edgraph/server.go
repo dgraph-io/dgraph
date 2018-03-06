@@ -305,10 +305,9 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		return resp, err
 	}
 	parseEnd := time.Now()
-	l.Parsing = time.Since(l.Start)
+	l.Parsing = parseEnd.Sub(l.Start)
 	defer func() {
 		l.Processing = time.Since(parseEnd)
-
 		resp.Latency = &api.Latency{
 			ParsingNs:    uint64(l.Parsing.Nanoseconds()),
 			ProcessingNs: uint64(l.Processing.Nanoseconds()),
