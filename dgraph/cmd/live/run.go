@@ -296,7 +296,7 @@ func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
 		zeroconn: connzero,
 	}
 
-	l.wg.Add(opts.Pending)
+	l.requestsWg.Add(opts.Pending)
 	for i := 0; i < opts.Pending; i++ {
 		go l.makeRequests()
 	}
@@ -394,7 +394,11 @@ func run() {
 	}
 
 	close(l.reqs)
-	l.wg.Wait()
+	// First we wait for requestsWg, when it is done we know all retry requests have been added
+	// to retryRequestsWg. We can't have the same waitgroup as by the time we call Wait, we can't
+	// be sure that all retry requests have been added to the waitgroup.
+	l.requestsWg.Wait()
+	l.retryRequestsWg.Wait()
 	c := l.Counter()
 	var rate uint64
 	if c.Elapsed.Seconds() < 1 {

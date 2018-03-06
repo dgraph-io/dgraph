@@ -53,29 +53,3 @@ start
 $contrib/scripts/goldendata-queries.sh
 
 quit 0
-
-echo -e "Trying to restart Dgraph and match export count"
-startZero
-start
-
-echo -e "Trying to export data."
-rm -rf export/*
-curl http://localhost:8081/admin/export
-echo -e "\nExport done."
-
-pushd dgraph &> /dev/null
-# This is count of RDF's in goldendata.rdf.gz
-dataCount="1120879"
-# Concat exported files to get total count.
-cat $(ls -t export/dgraph-1-* | head -1) $(ls -t export/dgraph-2-* | head -1) > export/dgraph-export.rdf.gz
-exportCount=$(zcat export/dgraph-export.rdf.gz | wc -l)
-popd &> /dev/null
-
-if [[ ! "$exportCount" -eq "$dataCount" ]]; then
-  echo "Export test failed. Expected: $dataCount Got: $exportCount"
-  quit 1
-else
-  echo "Export count matches"
-fi
-
-quit 0

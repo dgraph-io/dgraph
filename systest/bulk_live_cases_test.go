@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // TODO: This test was used just to make sure some really basic examples work.
@@ -262,6 +264,16 @@ func TestGoldenData(t *testing.T) {
 		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.rdf.gz"),
 	)
 	defer s.cleanup()
+
+	err := matchExportCount(matchExport{
+		expectedRDF:    1120879,
+		expectedSchema: 10,
+		dir:            s.liveCluster.dir,
+		port:           s.liveCluster.dgraphPortOffset + x.PortHTTP,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("basic", s.testCase(`
 		{pj_films(func:allofterms(name@en,"Peter Jackson")) {
