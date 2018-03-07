@@ -71,6 +71,8 @@ func parseDirective(it *lex.ItemIterator, schema *intern.SchemaUpdate, t types.T
 		}
 	case "count":
 		schema.Count = true
+	case "upsert":
+		schema.Upsert = true
 	default:
 		return x.Errorf("Invalid index specification")
 	}

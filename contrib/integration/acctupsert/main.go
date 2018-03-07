@@ -73,9 +73,9 @@ func setup(c *client.Dgraph) {
 	}))
 	x.Check(c.Alter(ctx, &api.Operation{
 		Schema: `
-			first:  string   @index(term) .
-			last:   string   @index(hash) .
-			age:    int      @index(int)  .
+			first:  string   @index(term) @upsert .
+			last:   string   @index(hash) @upsert .
+			age:    int      @index(int)  @upsert .
 			when:   int                   .
 		`,
 	}))

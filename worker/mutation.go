@@ -289,6 +289,12 @@ func checkSchema(s *intern.SchemaUpdate) error {
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}
 
+	// If schema update has upsert directive, it should have index directive.
+	if s.Upsert && len(s.Tokenizer) == 0 {
+		return x.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
+			s.Predicate)
+	}
+
 	t, err := schema.State().TypeOf(s.Predicate)
 	if err != nil {
 		// No schema previously defined, so no need to do checks about schema conversions.
@@ -521,7 +527,6 @@ func MutateOverNetwork(ctx context.Context, m *intern.Mutations) (*api.TxnContex
 			return tctx, errUnservedTablet
 		}
 		mu.StartTs = m.StartTs
-		mu.IgnoreIndexConflict = m.IgnoreIndexConflict
 		go proposeOrSend(ctx, gid, mu, resCh)
 	}
 

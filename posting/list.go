@@ -325,14 +325,15 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 		l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
 		bytes.Equal(t.Value, []byte(x.Star))
 	doAbort := hasPendingDelete || txn.StartTs < l.commitTs
-	ignoreConflict := false
+
+	checkConflict := false
+
 	if t.Attr == "_predicate_" {
 		doAbort = false
-		ignoreConflict = true
-	} else if txn.IgnoreIndexConflict && !x.Parse(l.key).IsData() {
-		doAbort = false
-		ignoreConflict = true
+	} else if x.Parse(l.key).IsData() || schema.State().HasUpsert(t.Attr) {
+		checkConflict = true
 	}
+
 	if doAbort {
 		txn.SetAbort()
 		return false, y.ErrConflict
@@ -371,7 +372,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 		}
 	}
 	l.activeTxns[txn.StartTs] = struct{}{}
-	txn.AddDelta(l.key, mpost, ignoreConflict)
+	txn.AddDelta(l.key, mpost, checkConflict)
 	return hasMutated, nil
 }
 

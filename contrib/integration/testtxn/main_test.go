@@ -96,12 +96,13 @@ func TestMain(m *testing.M) {
 	os.Exit(r)
 }
 
-// TODO - Cleanup this file so that it is more in sync with how other tests are written.
 // readTs == startTs
 func TestTxnRead1(t *testing.T) {
-	fmt.Println("TestTxnRead1")
-	txn := s.dg.NewTxn()
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, s.dg.Alter(context.Background(), op))
 
+	txn := s.dg.NewTxn()
 	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
@@ -121,14 +122,12 @@ func TestTxnRead1(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 	require.NoError(t, txn.Commit(context.Background()))
 }
 
 // readTs < commitTs
 func TestTxnRead2(t *testing.T) {
-	fmt.Println("TestTxnRead2")
 	txn := s.dg.NewTxn()
 
 	mu := &api.Mutation{}
@@ -152,7 +151,6 @@ func TestTxnRead2(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTruef(bytes.Equal(resp.Json, []byte("{\"me\":[]}")), "%s", resp.Json)
 	require.NoError(t, txn.Commit(context.Background()))
 }
@@ -169,7 +167,6 @@ func TestTxnRead3(t *testing.T) {
 		attempts++
 	}
 
-	fmt.Println("TestTxnRead3")
 	txn := s.dg.NewTxn()
 
 	mu := &api.Mutation{}
@@ -193,13 +190,11 @@ func TestTxnRead3(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 }
 
 // readTs > commitTs
 func TestTxnRead4(t *testing.T) {
-	fmt.Println("TestTxnRead4")
 	txn := s.dg.NewTxn()
 
 	mu := &api.Mutation{}
@@ -222,7 +217,6 @@ func TestTxnRead4(t *testing.T) {
 	txn3 := s.dg.NewTxn()
 	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Manish2"}`, uid))
-	fmt.Println(string(mu.SetJson))
 	assigned, err = txn3.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
@@ -232,10 +226,8 @@ func TestTxnRead4(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 
-	fmt.Println("Committing txn3")
 	require.NoError(t, txn3.Commit(context.Background()))
 
 	txn4 := s.dg.NewTxn()
@@ -248,7 +240,6 @@ func TestTxnRead4(t *testing.T) {
 }
 
 func TestTxnRead5(t *testing.T) {
-	fmt.Println("TestTxnRead5")
 	txn := s.dg.NewTxn()
 
 	mu := &api.Mutation{}
@@ -282,7 +273,6 @@ func TestTxnRead5(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 	x.AssertTrue(resp.Txn.StartTs > 0)
 
@@ -303,7 +293,6 @@ func TestTxnRead5(t *testing.T) {
 }
 
 func TestConflict(t *testing.T) {
-	fmt.Println("TestConflict")
 	op := &api.Operation{}
 	op.DropAll = true
 	require.NoError(t, s.dg.Alter(context.Background(), op))
@@ -339,12 +328,10 @@ func TestConflict(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
-	fmt.Printf("Response JSON: %q\n", resp.Json)
 	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
 }
 
 func TestConflictTimeout(t *testing.T) {
-	fmt.Println("TestConflictTimeout")
 	var uid string
 	txn := s.dg.NewTxn()
 	{
@@ -364,31 +351,26 @@ func TestConflictTimeout(t *testing.T) {
 
 	txn2 := s.dg.NewTxn()
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
-	resp, err := txn2.Query(context.Background(), q)
+	_, err := txn2.Query(context.Background(), q)
 	require.NoError(t, err)
-	fmt.Printf("Response should be empty. JSON: %q\n", resp.Json)
 
 	mu := &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Jan the man"}`, uid))
 	_, err = txn2.Mutate(context.Background(), mu)
-	fmt.Printf("txn2.mutate error: %v\n", err)
 	if err == nil {
 		require.NoError(t, txn2.Commit(context.Background()))
 	}
 
 	err = txn.Commit(context.Background())
-	fmt.Printf("This txn should fail with error. Err got: %v\n", err)
 	x.AssertTrue(err != nil)
 
 	txn3 := s.dg.NewTxn()
 	q = fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
-	resp, err = txn3.Query(context.Background(), q)
+	_, err = txn3.Query(context.Background(), q)
 	require.NoError(t, err)
-	fmt.Printf("Final Response JSON: %q\n", resp.Json)
 }
 
 func TestConflictTimeout2(t *testing.T) {
-	fmt.Println("TestConflictTimeout2")
 	var uid string
 	txn := s.dg.NewTxn()
 	{
@@ -415,13 +397,11 @@ func TestConflictTimeout2(t *testing.T) {
 	require.NoError(t, txn.Commit(context.Background()))
 	err := txn2.Commit(context.Background())
 	x.AssertTrue(err != nil)
-	fmt.Printf("This txn commit should fail with error. Err got: %v\n", err)
 
 	txn3 := s.dg.NewTxn()
 	mu = &api.Mutation{}
 	mu.SetJson = []byte(fmt.Sprintf(`{"uid": "%s", "name": "Jan the man"}`, uid))
 	assigned, err := txn3.Mutate(context.Background(), mu)
-	fmt.Printf("txn2.mutate error: %v\n", err)
 	if err == nil {
 		require.NoError(t, txn3.Commit(context.Background()))
 	}
@@ -431,13 +411,11 @@ func TestConflictTimeout2(t *testing.T) {
 
 	txn4 := s.dg.NewTxn()
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
-	resp, err := txn4.Query(context.Background(), q)
+	_, err = txn4.Query(context.Background(), q)
 	require.NoError(t, err)
-	fmt.Printf("Final Response JSON: %q\n", resp.Json)
 }
 
 func TestIgnoreIndexConflict(t *testing.T) {
-	fmt.Println("TestConflict")
 	op := &api.Operation{}
 	op.DropAll = true
 	require.NoError(t, s.dg.Alter(context.Background(), op))
@@ -449,10 +427,8 @@ func TestIgnoreIndexConflict(t *testing.T) {
 	}
 
 	txn := s.dg.NewTxn()
-
 	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
-	mu.IgnoreIndexConflict = true
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
@@ -467,7 +443,6 @@ func TestIgnoreIndexConflict(t *testing.T) {
 
 	txn2 := s.dg.NewTxn()
 	mu = &api.Mutation{}
-	mu.IgnoreIndexConflict = true
 	mu.SetJson = []byte(`{"name": "Manish"}`)
 	assigned, err = txn2.Mutate(context.Background(), mu)
 	if err != nil {
@@ -490,7 +465,6 @@ func TestIgnoreIndexConflict(t *testing.T) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	expectedResp := []byte(fmt.Sprintf(`{"me":[{"uid":"%s"},{"uid":"%s"}]}`, uid1, uid2))
-	fmt.Printf("Response JSON: %q, Expected JSON: %q\n", resp.Json, expectedResp)
 	x.AssertTrue(bytes.Equal(resp.Json, expectedResp))
 }
 
@@ -509,7 +483,6 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 
 	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
-	mu.IgnoreIndexConflict = true
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
@@ -528,7 +501,6 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	expectedResp := []byte(fmt.Sprintf(`{"me":[{"uid":"%s"}]}`, uid))
-	fmt.Printf("Response JSON: %q, Expected JSON: %q\n", resp.Json, expectedResp)
 	x.AssertTrue(bytes.Equal(resp.Json, expectedResp))
 }
 

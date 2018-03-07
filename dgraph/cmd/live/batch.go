@@ -141,7 +141,6 @@ func (l *loader) infinitelyRetry(req api.Mutation) {
 	for {
 		txn := l.dc.NewTxn()
 		req.CommitNow = true
-		req.IgnoreIndexConflict = opt.ignoreIndexConflict
 		_, err := txn.Mutate(l.opts.Ctx, &req)
 		if err == nil {
 			atomic.AddUint64(&l.rdfs, uint64(len(req.Set)))
@@ -157,7 +156,6 @@ func (l *loader) infinitelyRetry(req api.Mutation) {
 func (l *loader) request(req api.Mutation) {
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
-	req.IgnoreIndexConflict = opt.ignoreIndexConflict
 	_, err := txn.Mutate(l.opts.Ctx, &req)
 
 	if err == nil {
