@@ -534,7 +534,6 @@ func MutateOverNetwork(ctx context.Context, m *intern.Mutations) (*api.TxnContex
 			return tctx, errUnservedTablet
 		}
 		mu.StartTs = m.StartTs
-		mu.IgnoreIndexConflict = m.IgnoreIndexConflict
 		go proposeOrSend(ctx, gid, mu, resCh)
 	}
 

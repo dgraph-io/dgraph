@@ -325,9 +325,8 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 
 	m := &intern.Mutations{
-		Edges:               edges,
-		StartTs:             mu.StartTs,
-		IgnoreIndexConflict: mu.IgnoreIndexConflict,
+		Edges:   edges,
+		StartTs: mu.StartTs,
 	}
 	resp.Context, err = query.ApplyMutations(ctx, m)
 	if !mu.CommitNow {

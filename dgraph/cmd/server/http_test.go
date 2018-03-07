@@ -72,9 +72,6 @@ func mutationWithTs(m string, commitNow bool, ignoreIndexConflict bool,
 	if commitNow {
 		req.Header.Set("X-Dgraph-CommitNow", "true")
 	}
-	if ignoreIndexConflict {
-		req.Header.Set("X-Dgraph-IgnoreIndexConflict", "true")
-	}
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(mutationHandler)
 	handler.ServeHTTP(rr, req)

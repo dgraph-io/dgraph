@@ -329,7 +329,8 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	if t.Attr == "_predicate_" {
 		doAbort = false
 		ignoreConflict = true
-	} else if txn.IgnoreIndexConflict && !x.Parse(l.key).IsData() {
+	} else if !schema.State().HasUpsert(t.Attr) && x.Parse(l.key).IsIndex() {
+		// It doesn't have upsert directive and is an index key, so ignore conflict detection.
 		doAbort = false
 		ignoreConflict = true
 	}

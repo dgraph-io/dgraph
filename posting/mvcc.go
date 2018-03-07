@@ -61,8 +61,7 @@ type delta struct {
 	ignoreConflict bool // Ignore for conflict detection.
 }
 type Txn struct {
-	StartTs             uint64
-	IgnoreIndexConflict bool
+	StartTs uint64
 
 	// atomic
 	shouldAbort uint32
