@@ -472,7 +472,7 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 	for {
 		select {
 		case <-ticker.C:
-			n.trySnapshot()
+			n.trySnapshot(1000)
 
 		case <-closer.HasBeenClosed():
 			closer.Done()
@@ -481,12 +481,12 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 	}
 }
 
-func (n *node) trySnapshot() {
+func (n *node) trySnapshot(skip uint64) {
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 	si := existing.Metadata.Index
 	idx := n.server.SyncedUntil()
-	if idx <= si+1000 {
+	if idx <= si+skip {
 		return
 	}
 
