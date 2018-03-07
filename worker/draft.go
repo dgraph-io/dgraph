@@ -663,6 +663,8 @@ func (n *node) snapshot(skip uint64) {
 	s, err := n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
 	x.Checkf(err, "While creating snapshot")
 	x.Checkf(n.Store.Compact(snapshotIdx), "While compacting snapshot")
+	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", snapshotIdx,
+		n.Applied.DoneUntil())
 	x.Check(n.Wal.StoreSnapshot(n.gid, s))
 }
 
