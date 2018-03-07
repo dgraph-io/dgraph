@@ -325,13 +325,12 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 		l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
 		bytes.Equal(t.Value, []byte(x.Star))
 	doAbort := hasPendingDelete || txn.StartTs < l.commitTs
-	dataKey := x.Parse(l.key).IsData()
-	upsert := schema.State().HasUpsert(t.Attr)
+
 	checkConflict := false
 
 	if t.Attr == "_predicate_" {
 		doAbort = false
-	} else if dataKey || upsert {
+	} else if x.Parse(l.key).IsData() || schema.State().HasUpsert(t.Attr) {
 		checkConflict = true
 	}
 
