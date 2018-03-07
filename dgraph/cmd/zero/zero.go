@@ -65,6 +65,7 @@ type Server struct {
 	nextGroup      uint32
 	leaderChangeCh chan struct{}
 	shutDownCh     chan struct{} // Used to tell stream to close.
+	connectLock    sync.Mutex    // Used to serialize connect requests from servers.
 }
 
 func (s *Server) Init() {
@@ -326,6 +327,9 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 // Connect is used to connect the very first time with group zero.
 func (s *Server) Connect(ctx context.Context,
 	m *intern.Member) (resp *intern.ConnectionState, err error) {
+	// Ensures that connect requests are always serialized
+	s.connectLock.Lock()
+	defer s.connectLock.Unlock()
 	x.Printf("Got connection request: %+v\n", m)
 	defer x.Println("Connected")
 
