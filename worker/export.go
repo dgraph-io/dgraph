@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -201,10 +202,16 @@ func export(bdir string, readTs uint64) error {
 		return err
 	}
 	gid := groups().groupId()
-	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
-		time.Now().Format("2006-01-02-15-04")))
-	fspath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.schema.gz", gid,
-		time.Now().Format("2006-01-02-15-04")))
+	fpath, err := filepath.Abs(path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
+		time.Now().Format("2006-01-02-15-04"))))
+	if err != nil {
+		return err
+	}
+	fspath, err := filepath.Abs(path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.schema.gz", gid,
+		time.Now().Format("2006-01-02-15-04"))))
+	if err != nil {
+		return err
+	}
 	x.Printf("Exporting to: %v, schema at %v\n", fpath, fspath)
 	chb := make(chan []byte, 1000)
 	errChan := make(chan error, 2)

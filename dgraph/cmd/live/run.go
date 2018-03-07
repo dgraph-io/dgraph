@@ -34,7 +34,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -216,14 +215,12 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 
 		if batchSize >= opt.numRdf {
 			l.reqs <- mu
-			atomic.AddUint64(&l.rdfs, uint64(batchSize))
 			batchSize = 0
 			mu = api.Mutation{}
 		}
 	}
 	if batchSize > 0 {
 		l.reqs <- mu
-		atomic.AddUint64(&l.rdfs, uint64(batchSize))
 		mu = api.Mutation{}
 	}
 	return nil
