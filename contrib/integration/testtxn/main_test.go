@@ -472,7 +472,7 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	require.NoError(t, s.dg.Alter(context.Background(), op))
 
 	op = &api.Operation{}
-	op.Schema = `name: string @index(exact) @upsert .`
+	op.Schema = `name: string @index(exact) .`
 	if err := s.dg.Alter(context.Background(), op); err != nil {
 		log.Fatal(err)
 	}
