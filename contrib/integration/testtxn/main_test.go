@@ -96,11 +96,13 @@ func TestMain(m *testing.M) {
 	os.Exit(r)
 }
 
-// TODO - Cleanup this file so that it is more in sync with how other tests are written.
 // readTs == startTs
 func TestTxnRead1(t *testing.T) {
-	txn := s.dg.NewTxn()
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, s.dg.Alter(context.Background(), op))
 
+	txn := s.dg.NewTxn()
 	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish"}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
