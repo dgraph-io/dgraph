@@ -464,7 +464,9 @@ func TestAddMutation_gru2(t *testing.T) {
 }
 
 func TestAddAndDelMutation(t *testing.T) {
-	key := x.DataKey("question.tag", 0x01)
+	// Ensure each test uses unique key since we don't clear the postings
+	// after each test
+	key := x.DataKey("dummy_key", 0x927)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 
