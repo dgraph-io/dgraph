@@ -171,6 +171,32 @@ func TestCheckSchema(t *testing.T) {
 
 	s1 = &intern.SchemaUpdate{Predicate: "friend", ValueType: intern.Posting_UID, Directive: intern.SchemaUpdate_REVERSE}
 	require.NoError(t, checkSchema(s1))
+
+	s := `jobs: float @index(float) @upsert .`
+	su, err := schema.Parse(s)
+	require.NoError(t, err)
+	err = checkSchema(su[0])
+	require.Error(t, err)
+	require.Equal(t, "@upsert directive is only supported for int/string type. Got invalid type: [float] for: [jobs]",
+		err.Error())
+
+	s = `jobs: string @upsert .`
+	su, err = schema.Parse(s)
+	require.NoError(t, err)
+	err = checkSchema(su[0])
+	require.Error(t, err)
+	require.Equal(t, "Tokenizer is mandatory for: [jobs] when specifying @upsert directive", err.Error())
+
+	s = `
+		jobs : string @index(exact) @upsert .
+		age  : int @index(int) @upsert .
+	`
+	su, err = schema.Parse(s)
+	require.NoError(t, err)
+	err = checkSchema(su[0])
+	require.NoError(t, err)
+	err = checkSchema(su[1])
+	require.NoError(t, err)
 }
 
 func TestNeedReindexing(t *testing.T) {

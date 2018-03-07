@@ -289,6 +289,19 @@ func checkSchema(s *intern.SchemaUpdate) error {
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}
 
+	// If schema update has upsert directive.
+	// Type should be int/string.
+	// It should have index directive.
+	if s.Upsert && !(typ == types.StringID || typ == types.IntID) {
+		return x.Errorf("@upsert directive is only supported for int/string type."+
+			" Got invalid type: [%s] for: [%s]", typ.Name(), s.Predicate)
+	}
+
+	if s.Upsert && len(s.Tokenizer) == 0 {
+		return x.Errorf("Tokenizer is mandatory for: [%s] when specifying @upsert directive",
+			s.Predicate)
+	}
+
 	t, err := schema.State().TypeOf(s.Predicate)
 	if err != nil {
 		// No schema previously defined, so no need to do checks about schema conversions.

@@ -368,3 +368,12 @@ func TestParseUnderscore(t *testing.T) {
 	_, err := Parse("_share_:string @index(term) .")
 	require.NoError(t, err)
 }
+
+func TestParseUpsert(t *testing.T) {
+	reset()
+	_, err := Parse(`
+		jobs : string @index(exact) @upsert .
+		age  : int @index(int) @upsert .
+	`)
+	require.NoError(t, err)
+}
