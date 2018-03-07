@@ -465,12 +465,28 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	return err
 }
 
-func (n *node) trySnapshot() {
+func (n *node) snapshotPeriodically(closer *y.Closer) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			n.trySnapshot(1000)
+
+		case <-closer.HasBeenClosed():
+			closer.Done()
+			return
+		}
+	}
+}
+
+func (n *node) trySnapshot(skip uint64) {
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 	si := existing.Metadata.Index
 	idx := n.server.SyncedUntil()
-	if idx <= si+1000 {
+	if idx <= si+skip {
 		return
 	}
 
@@ -493,12 +509,14 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	closer := y.NewCloser(1)
+	closer := y.NewCloser(2)
+	// snapshot can cause select loop to block while deleting entries, so run
+	// it in goroutine
+	go n.snapshotPeriodically(closer)
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
 
-	loop := 0
 	for {
 		select {
 		case <-n.stop:
@@ -544,8 +562,6 @@ func (n *node) Run() {
 				n.Applied.Done(entry.Index)
 			}
 
-			loop++
-
 			// TODO: Should we move this to the top?
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
@@ -564,9 +580,6 @@ func (n *node) Run() {
 			// Need to send membership state to dgraph nodes on leader change also.
 			if rd.SoftState != nil || len(rd.CommittedEntries) > 0 {
 				n.triggerUpdates()
-			}
-			if loop%500 == 0 {
-				n.trySnapshot()
 			}
 			n.Raft().Advance()
 		}
