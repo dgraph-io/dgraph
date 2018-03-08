@@ -625,7 +625,10 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 	for {
 		select {
 		case <-ticker.C:
-			n.snapshot(Config.MaxPendingCount)
+			// Some proposals like predicate move can consume around 32MB per proposal, so keeping
+			// too many proposals would increase the memory usage so snapshot as soon as
+			// possible
+			n.snapshot(10)
 
 		case <-closer.HasBeenClosed():
 			closer.Done()

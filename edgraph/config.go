@@ -106,7 +106,6 @@ func setConfVar(conf Options) {
 	x.Conf.Set("wal_dir", newStr(conf.WALDir))
 	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
 	x.Conf.Set("tracing", newFloat(conf.Tracing))
-	x.Conf.Set("max_pending_count", newInt(int(conf.MaxPendingCount)))
 	x.Conf.Set("num_pending_proposals", newInt(conf.NumPendingProposals))
 	x.Conf.Set("expand_edge", newIntFromBool(conf.ExpandEdge))
 }
@@ -126,7 +125,6 @@ func SetConfiguration(newConfig Options) {
 	worker.Config.MyAddr = Config.MyAddr
 	worker.Config.ZeroAddr = Config.ZeroAddr
 	worker.Config.RaftId = Config.RaftId
-	worker.Config.MaxPendingCount = Config.MaxPendingCount
 	worker.Config.ExpandEdge = Config.ExpandEdge
 
 	x.Config.DebugMode = Config.DebugMode
