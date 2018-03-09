@@ -1969,6 +1969,18 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
+### Upsert directive
+
+Predicates can specify the `@upsert` directive if you want to do upsert operations against it.
+If the `@upsert` directive is specified then the index key for the predicate would be checked for
+conflict while committing a transaction, which would allow upserts.
+
+This is how you specify the upsert directive for a predicate. This replaces the `IgnoreIndexConflict`
+field which was part of the mutation object in previous releases.
+```
+email: string @index(exact) @upsert .
+```
+
 ### RDF Types
 
 Dgraph supports a number of [RDF types in mutations]({{< relref "mutations/index.md#language-and-rdf-types" >}}).

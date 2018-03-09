@@ -94,7 +94,8 @@ omitted for brevity.
 
 Schema is assumed to be:
 ```
-email: string @index(exact) . # @index(hash) would also work
+// @upsert directive is important to detect conflicts.
+email: string @index(exact) @upsert . # @index(hash) would also work
 pass: password .
 ```
 
@@ -206,3 +207,35 @@ predicate name and some function of the predicate value (e.g. its hash for the
 hash index). If two transactions modify the same key concurrently, then one
 will fail.
 {{% /notice %}}
+
+## Run Jepsen tests
+
+1. Clone the jepsen repo at [https://github.com/jepsen-io/jepsen](https://github.com/jepsen-io/jepsen).
+
+```sh
+git clone git@github.com:jepsen-io/jepsen.git
+```
+
+2. Run the following command to setup the instances from the repo.
+
+```sh
+cd docker && ./up.sh
+```
+
+This should start 5 jepsen nodes in docker containers.
+
+3. Now ssh into `jepsen-control` container and run the tests.
+
+```sh
+docker exec -it jepsen-control bash
+```
+
+```sh
+root@control:/jepsen# cd dgraph
+root@control:/jepsen/dgraph# lein run test -w upsert
+
+# Specify a --package-url
+
+root@control:/jepsen/dgraph# lein run test --force-download --package-url https://github.com/dgraph-io/dgraph/releases/download/nightly/dgraph-linux-amd64.tar.gz -w upsert
+```
+
