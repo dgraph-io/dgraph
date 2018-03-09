@@ -6,6 +6,44 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+## [1.0.4] - 2018-03-09
+
+### Added
+
+* Support for empty strings in query attributes.
+* Support GraphQL vars in first, offset and after at root.
+* Add support for query_edge_limit flag which can be used to limit number of results for shortest
+  path, recurse queries.
+* Make rebalance interval a flag in Zero.
+* Return latency information for mutation operations.
+* Support @upsert directive in schema.
+
+### Fixed
+
+* Issues with predicate deletion in a cluster.
+* Handle errors from posting.Get.
+* Correctly update commitTs while committing and startTs == deleteTs.
+* Error handling in abort http handler.
+* Get latest membership state from Zero if uid in mutation > maxLeaseId.
+* Fix bug in Mutate where mutated keys were not filled.
+* Update membership state if we can't find a leader while doing snapshot retrieval.
+* Make snapshotting more frequent, also try aborting long pending transactions.
+* Trim null character from end of strings before exporting.
+* Sort facets after parsing RDF's using bulk loader.
+* Fig bug in SyncIfDirty.
+* Fix fatal error due to TxnTooBig error.
+* Fix bug in dgraph live where some batches could be skipped on conflict error.
+* Fix a bug related to expand(_all_) queries.
+* Run cleanPredicate and proposeKeyValues sequentially.
+* Serialize connect requests in Zero.
+
+### Changed
+
+* Retry snapshot retrieval and join cluster indefinitely.
+* Make client directory optional in dgraph live.
+* Do snapshot in Zero in a goroutine so that Run loop isn't blocked.
+
+
 ## [1.0.3] - 2018-02-08
 
 ### Added
