@@ -769,7 +769,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 
 			// Add the new edge with the fingerprinted value id.
 			newEdge := &intern.DirectedEdge{
-				ValueId:   farm.Fingerprint64(mpost.Value),
+				Attr:      attr,
 				Value:     mpost.Value,
 				ValueType: mpost.ValType,
 				Op:        intern.DirectedEdge_SET,

@@ -695,7 +695,8 @@ func (l *List) rollup() error {
 			buf = buf[:0]
 		}
 
-		if p.Facets != nil || p.Value != nil || len(p.LangTag) != 0 || len(p.Label) != 0 {
+		// We want to add the posting if it has facets or has a value.
+		if p.Facets != nil || p.PostingType != intern.Posting_REF || len(p.Label) != 0 {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
