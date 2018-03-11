@@ -191,6 +191,15 @@ func TypeIDFor(f *api.Facet) types.TypeID {
 	}
 }
 
+// TryValFor tries to convert the facet to the its type from binary format. We use to validate the
+// facets set directly by user during mutation.
+func TryValFor(f *api.Facet) error {
+	val := types.Val{Tid: types.BinaryID, Value: f.Value}
+	typId := TypeIDFor(f)
+	_, err := types.Convert(val, typId)
+	return x.Wrapf(err, "Error while parsing facet: [%v]", f)
+}
+
 // ValFor converts Facet into types.Val.
 func ValFor(f *api.Facet) types.Val {
 	val := types.Val{Tid: types.BinaryID, Value: f.Value}

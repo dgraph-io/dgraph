@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos/api"
@@ -50,6 +51,7 @@ func TestSystem(t *testing.T) {
 	t.Run("empty strings with exact", wrap(EmptyNamesWithExact))
 	t.Run("empty strings with term", wrap(EmptyRoomsWithTermIndex))
 	t.Run("delete with expand all", wrap(DeleteWithExpandAll))
+	t.Run("facets using nquads", wrap(FacetsUsingNQuadsError))
 }
 
 func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
@@ -973,4 +975,43 @@ func DeleteWithExpandAll(t *testing.T, c *client.Dgraph) {
 	require.NoError(t, err)
 	json.Unmarshal(resp.Json, &r)
 	require.Equal(t, 0, len(r.Me))
+}
+
+func FacetsUsingNQuadsError(t *testing.T, c *client.Dgraph) {
+	nquads := []*api.NQuad{
+		&api.NQuad{
+			Subject:   "0x01",
+			Predicate: "friend",
+			ObjectId:  "0x02",
+			Facets: []*api.Facet{
+				{
+					Key:     "since",
+					Value:   []byte(time.Now().Format(time.RFC3339)),
+					ValType: api.Facet_DATETIME,
+				},
+			},
+		},
+	}
+	mu := &api.Mutation{Set: nquads, CommitNow: true}
+	ctx := context.Background()
+	_, err := c.NewTxn().Mutate(ctx, mu)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Error while parsing facet")
+
+	nquads[0].Facets[0].Value, err = time.Now().MarshalBinary()
+	require.NoError(t, err)
+
+	mu = &api.Mutation{Set: nquads, CommitNow: true}
+	_, err = c.NewTxn().Mutate(context.Background(), mu)
+	require.NoError(t, err)
+
+	q := `query test($id: string) {
+		  me(func: uid($id)) {
+			friend @facets
+		  }
+		}`
+
+	resp, err := c.NewTxn().QueryWithVars(ctx, q, map[string]string{"$id": "0x1"})
+	require.NoError(t, err)
+	require.Contains(t, string(resp.Json), "since")
 }
