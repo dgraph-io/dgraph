@@ -18,6 +18,8 @@ syntax = "proto3";
 
 package intern;
 
+option go_package = "github.com/dgraph-io/dgo/protos/intern";
+
 import "api.proto";
 
 message List {

@@ -2,7 +2,8 @@
 
 # You might need to go get -v github.com/gogo/protobuf/...
 
-protos=${GOPATH-$HOME/go}/src/github.com/dgraph-io/dgraph/protos
+dgraph_io=${GOPATH-$HOME/go}/src/github.com/dgraph-io
+protos=$dgraph_io/dgraph/protos
 pushd $protos > /dev/null
-protoc --gofast_out=plugins=grpc:api -I=. api.proto
-protoc --gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgraph/protos/api:intern -I=. internal.proto
+# protoc --gofast_out=plugins=grpc:api -I=. api.proto
+protoc --gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/protos/api:intern internal.proto
