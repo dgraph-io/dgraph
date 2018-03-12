@@ -10,7 +10,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +24,7 @@ func TestSystem(t *testing.T) {
 	require.NoError(t, cluster.Start())
 	defer cluster.Close()
 
-	wrap := func(fn func(*testing.T, *client.Dgraph)) func(*testing.T) {
+	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
 			require.NoError(t, cluster.client.Alter(
 				context.Background(), &api.Operation{DropAll: true}))
@@ -52,7 +52,7 @@ func TestSystem(t *testing.T) {
 	t.Run("delete with expand all", wrap(DeleteWithExpandAll))
 }
 
-func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
+func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
@@ -118,7 +118,7 @@ func ExpandAllLangTest(t *testing.T, c *client.Dgraph) {
 	`, string(resp.GetJson()))
 }
 
-func ListWithLanguagesTest(t *testing.T, c *client.Dgraph) {
+func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
@@ -177,7 +177,7 @@ func ListWithLanguagesTest(t *testing.T, c *client.Dgraph) {
 	`, string(resp.GetJson()))
 }
 
-func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
+func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
@@ -255,7 +255,7 @@ func NQuadMutationTest(t *testing.T, c *client.Dgraph) {
 	}]}`, string(resp.Json))
 }
 
-func DeleteAllReverseIndex(t *testing.T, c *client.Dgraph) {
+func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "link: uid @reverse ."}))
 	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
@@ -281,7 +281,7 @@ func DeleteAllReverseIndex(t *testing.T, c *client.Dgraph) {
 	CompareJSON(t, `{"q":[{"~link": [{"uid": "0x1"}]}]}`, string(resp.Json))
 }
 
-func ExpandAllReversePredicatesTest(t *testing.T, c *client.Dgraph) {
+func ExpandAllReversePredicatesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
@@ -384,7 +384,7 @@ func ExpandAllReversePredicatesTest(t *testing.T, c *client.Dgraph) {
 	`, string(resp.GetJson()))
 }
 
-func NormalizeEdgeCasesTest(t *testing.T, c *client.Dgraph) {
+func NormalizeEdgeCasesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "xid: string @index(exact) ."}))
 
@@ -460,7 +460,7 @@ func NormalizeEdgeCasesTest(t *testing.T, c *client.Dgraph) {
 	}
 }
 
-func FacetOrderTest(t *testing.T, c *client.Dgraph) {
+func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
@@ -529,7 +529,7 @@ func FacetOrderTest(t *testing.T, c *client.Dgraph) {
 }
 
 // Shows fix for issue #1918.
-func LangAndSortBugTest(t *testing.T, c *client.Dgraph) {
+func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "name: string @index(exact) ."}))
 
@@ -561,7 +561,7 @@ func LangAndSortBugTest(t *testing.T, c *client.Dgraph) {
 	`, string(resp.Json))
 }
 
-func SortFacetsReturnNil(t *testing.T, c *client.Dgraph) {
+func SortFacetsReturnNil(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	txn := c.NewTxn()
@@ -596,7 +596,7 @@ func SortFacetsReturnNil(t *testing.T, c *client.Dgraph) {
 		`, string(resp.Json))
 }
 
-func SchemaAfterDeleteNode(t *testing.T, c *client.Dgraph) {
+func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "married: bool ."}))
@@ -643,7 +643,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *client.Dgraph) {
 	require.JSONEq(t, `[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"friend","type":"uid"},{"predicate":"name","type":"default"}]`, string(b))
 }
 
-func FullTextEqual(t *testing.T, c *client.Dgraph) {
+func FullTextEqual(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "text: string @index(fulltext) ."}))
@@ -683,7 +683,7 @@ func FullTextEqual(t *testing.T, c *client.Dgraph) {
 	}
 }
 
-func JSONBlankNode(t *testing.T, c *client.Dgraph) {
+func JSONBlankNode(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	txn := c.NewTxn()
@@ -711,7 +711,7 @@ func JSONBlankNode(t *testing.T, c *client.Dgraph) {
 	require.JSONEq(t, `{"q":[{"name":"Michael","friend":[{"name":"Alice"}]}]}`, string(resp.Json))
 }
 
-func ScalarToList(t *testing.T, c *client.Dgraph) {
+func ScalarToList(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`}))
@@ -797,7 +797,7 @@ func ScalarToList(t *testing.T, c *client.Dgraph) {
 	require.Equal(t, `{"me":[]}`, string(resp.Json))
 }
 
-func ListToScalar(t *testing.T, c *client.Dgraph) {
+func ListToScalar(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `pred: [string] @index(exact) .`}))
@@ -811,7 +811,7 @@ func ListToScalar(t *testing.T, c *client.Dgraph) {
 	require.NoError(t, err)
 }
 
-func SetAfterDeletionListType(t *testing.T, c *client.Dgraph) {
+func SetAfterDeletionListType(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: `
@@ -860,7 +860,7 @@ func SetAfterDeletionListType(t *testing.T, c *client.Dgraph) {
 	require.Equal(t, `{"me":[{"property.test":["rewritten value"]}]}`, string(resp.Json))
 }
 
-func EmptyNamesWithExact(t *testing.T, c *client.Dgraph) {
+func EmptyNamesWithExact(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) .`})
 	require.NoError(t, err)
@@ -889,7 +889,7 @@ func EmptyNamesWithExact(t *testing.T, c *client.Dgraph) {
 	require.Equal(t, `{"names":[{"count":2}]}`, string(resp.Json))
 }
 
-func EmptyRoomsWithTermIndex(t *testing.T, c *client.Dgraph) {
+func EmptyRoomsWithTermIndex(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{}
 	op.Schema = `
 		room: string @index(term) .
@@ -922,7 +922,7 @@ func EmptyRoomsWithTermIndex(t *testing.T, c *client.Dgraph) {
 	require.Equal(t, `{"offices":[{"count(office.room)":1}]}`, string(resp.GetJson()))
 }
 
-func DeleteWithExpandAll(t *testing.T, c *client.Dgraph) {
+func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	assigned, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
