@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/y"
 )
 
 var (
@@ -288,8 +287,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return pk.Attr == in.Predicate
 	})
 	if len(tctxs) > 0 {
-		go tryAbortTransactions(tctxs)
-		return &emptyPayload, y.ErrConflict
+		tryAbortTransactions(tctxs)
 	}
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
 	n.applyAllMarks(ctx)

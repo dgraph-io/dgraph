@@ -614,7 +614,11 @@ func tryAbortTransactions(startTimestamps []uint64) {
 	for i, startTs := range startTimestamps {
 		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTimestamps[i]}
 		_, err := commitOrAbort(context.Background(), tctx)
-		for err != nil {
+		// Transaction could already have been aborted in which case it would be deleted from the
+		// transactions map and we should just continue.
+		// TODO - Make sure all other errors are transient, we don't want to be stuck in an infinite
+		// loop.
+		for err != nil && err != posting.ErrInvalidTxn {
 			// This will fail only due to badger error.
 			_, err = commitOrAbort(context.Background(), tctx)
 		}
