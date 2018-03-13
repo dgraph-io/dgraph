@@ -30,7 +30,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )

@@ -28,7 +28,7 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"

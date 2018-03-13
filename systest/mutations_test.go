@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/stretchr/testify/require"
 )
 

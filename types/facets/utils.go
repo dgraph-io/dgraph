@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"unicode"
 
-	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"

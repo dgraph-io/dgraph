@@ -28,7 +28,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 )
 
