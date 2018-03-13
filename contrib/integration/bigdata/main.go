@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/api"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -118,21 +118,21 @@ func initialData() string {
 	return rdfs
 }
 
-func makeClient() *client.Dgraph {
+func makeClient() *dgo.Dgraph {
 	var dgcs []api.DgraphClient
 	for _, addr := range strings.Split(*addrs, ",") {
 		c, err := grpc.Dial(addr, grpc.WithInsecure())
 		x.Check(err)
 		dgcs = append(dgcs, api.NewDgraphClient(c))
 	}
-	return client.NewDgraphClient(dgcs...)
+	return dgo.NewDgraphClient(dgcs...)
 }
 
 type runner struct {
-	txn *client.Txn
+	txn *dgo.Txn
 }
 
-func mutate(c *client.Dgraph) error {
+func mutate(c *dgo.Dgraph) error {
 	r := &runner{
 		txn: c.NewTxn(),
 	}
@@ -184,7 +184,7 @@ func mutate(c *client.Dgraph) error {
 	return r.txn.Commit(ctx)
 }
 
-func showNode(c *client.Dgraph) error {
+func showNode(c *dgo.Dgraph) error {
 	r := &runner{
 		txn: c.NewTxn(),
 	}

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
@@ -25,7 +25,7 @@ type DgraphCluster struct {
 	zero   *exec.Cmd
 	dgraph *exec.Cmd
 
-	client *client.Dgraph
+	client *dgo.Dgraph
 }
 
 func NewDgraphCluster(dir string) *DgraphCluster {
@@ -90,7 +90,7 @@ func (d *DgraphCluster) Start() error {
 	// reliably wait).
 	time.Sleep(time.Second * 4)
 
-	d.client = client.NewDgraphClient(api.NewDgraphClient(dgConn))
+	d.client = dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
 
 	return nil
 }

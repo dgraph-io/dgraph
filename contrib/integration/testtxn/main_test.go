@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/api"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -21,20 +21,15 @@ import (
 type state struct {
 	Commands []*exec.Cmd
 	Dirs     []string
-	dg       *client.Dgraph
+	dg       *dgo.Dgraph
 }
 
 var s state
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
-	cmd.Env = os.Environ()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
-	}
 
-	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "zero", "-w=wz")
+	zero := exec.Command(os.ExpandEnv("dgraph"), "zero", "-w=wz")
 	zero.Stdout = os.Stdout
 	zero.Stderr = os.Stderr
 	if err := zero.Start(); err != nil {
@@ -44,10 +39,10 @@ func TestMain(m *testing.M) {
 	s.Commands = append(s.Commands, zero)
 
 	time.Sleep(5 * time.Second)
-	dgraph := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+	dgraph := exec.Command(os.ExpandEnv("dgraph"),
 		"server",
 		"--memory_mb=2048",
-		fmt.Sprintf("--zero=127.0.0.1:%d", x.PortZeroGrpc),
+		fmt.Sprintf("--zero=127.0.0.1:%d", 5080),
 		"-o=1",
 	)
 	dgraph.Stdout = os.Stdout
@@ -67,7 +62,7 @@ func TestMain(m *testing.M) {
 	}
 	dc := api.NewDgraphClient(conn)
 
-	dg := client.NewDgraphClient(dc)
+	dg := dgo.NewDgraphClient(dc)
 	s.dg = dg
 	var wg sync.WaitGroup
 
@@ -524,7 +519,7 @@ func TestSPStar(t *testing.T) {
 
 	txn = s.dg.NewTxn()
 	mu = &api.Mutation{}
-	client.DeleteEdges(mu, uid1, "friend")
+	dgo.DeleteEdges(mu, uid1, "friend")
 	assigned, err = txn.Mutate(context.Background(), mu)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(assigned.Uids))
@@ -588,7 +583,7 @@ func TestSPStar2(t *testing.T) {
 
 	// Delete S P *
 	mu = &api.Mutation{}
-	client.DeleteEdges(mu, uid1, "friend")
+	dgo.DeleteEdges(mu, uid1, "friend")
 	assigned, err = txn.Mutate(context.Background(), mu)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(assigned.Uids))
@@ -613,7 +608,7 @@ func TestSPStar2(t *testing.T) {
 
 	// Delete S P *
 	mu = &api.Mutation{}
-	client.DeleteEdges(mu, uid1, "friend")
+	dgo.DeleteEdges(mu, uid1, "friend")
 	assigned, err = txn.Mutate(context.Background(), mu)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(assigned.Uids))

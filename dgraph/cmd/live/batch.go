@@ -31,12 +31,12 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
-	"github.com/dgraph-io/dgraph/y"
+	"github.com/dgraph-io/dgo/y"
 )
 
 var (
@@ -72,7 +72,7 @@ type uidProvider struct {
 type loader struct {
 	opts batchMutationOptions
 
-	dc         *client.Dgraph
+	dc         *dgo.Dgraph
 	alloc      *xidmap.XidMap
 	ticker     *time.Ticker
 	kv         *badger.DB
