@@ -35,7 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/y"
+	"github.com/dgraph-io/dgo/y"
 )
 
 var emptySortResult intern.SortResult

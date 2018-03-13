@@ -36,7 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
-	"github.com/dgraph-io/dgraph/y"
+	"github.com/dgraph-io/dgo/y"
 )
 
 var (

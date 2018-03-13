@@ -37,7 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	dy "github.com/dgraph-io/dgraph/y"
+	dy "github.com/dgraph-io/dgo/y"
 )
 
 type proposalCtx struct {

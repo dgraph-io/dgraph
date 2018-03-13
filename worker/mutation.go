@@ -36,7 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/y"
+	"github.com/dgraph-io/dgo/y"
 )
 
 var (
