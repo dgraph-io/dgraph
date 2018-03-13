@@ -174,8 +174,8 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-			err = errPredicateMoving
-			return
+			posting.TxnMarks().Done(index)
+			return errPredicateMoving
 		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only have one edge drop in one mutation call.
