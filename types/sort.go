@@ -178,7 +178,7 @@ func equal(a, b Val) bool {
 	}
 	switch a.Tid {
 	case DateTimeID:
-		return a.Value.(time.Time) == (b.Value.(time.Time))
+		return a.Value.(time.Time).Equal((b.Value.(time.Time)))
 	case IntID:
 		return (a.Value.(int64)) == (b.Value.(int64))
 	case FloatID:
