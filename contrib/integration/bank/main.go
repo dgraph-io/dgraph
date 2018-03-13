@@ -13,9 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/api"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -32,7 +32,7 @@ type Account struct {
 
 type State struct {
 	sync.RWMutex
-	dg     *client.Dgraph
+	dg     *dgo.Dgraph
 	uids   []string
 	aborts int32
 	runs   int32
@@ -174,7 +174,7 @@ func main() {
 	}
 	dc := api.NewDgraphClient(conn)
 
-	dg := client.NewDgraphClient(dc)
+	dg := dgo.NewDgraphClient(dc)
 	s := State{dg: dg}
 	s.createAccounts()
 	go s.runTotalInLoop()

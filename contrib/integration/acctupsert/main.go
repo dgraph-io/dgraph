@@ -10,10 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/api"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/y"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
 	"google.golang.org/grpc"
 )
 
@@ -58,15 +58,15 @@ func main() {
 	checkIntegrity(c)
 }
 
-func newClient() *client.Dgraph {
+func newClient() *dgo.Dgraph {
 	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
 	x.Check(err)
-	return client.NewDgraphClient(
+	return dgo.NewDgraphClient(
 		api.NewDgraphClient(d),
 	)
 }
 
-func setup(c *client.Dgraph) {
+func setup(c *dgo.Dgraph) {
 	ctx := context.Background()
 	x.Check(c.Alter(ctx, &api.Operation{
 		DropAll: true,
@@ -81,7 +81,7 @@ func setup(c *client.Dgraph) {
 	}))
 }
 
-func doUpserts(c *client.Dgraph) {
+func doUpserts(c *dgo.Dgraph) {
 	var wg sync.WaitGroup
 	wg.Add(len(accounts) * *concurr)
 	for _, acct := range accounts {
@@ -101,7 +101,7 @@ var (
 	lastStatus   time.Time
 )
 
-func upsert(c *client.Dgraph, acc account) {
+func upsert(c *dgo.Dgraph, acc account) {
 	for {
 		if time.Since(lastStatus) > 100*time.Millisecond {
 			fmt.Printf("Success: %d Retries: %d\n",
@@ -120,7 +120,7 @@ func upsert(c *client.Dgraph, acc account) {
 	}
 }
 
-func tryUpsert(c *client.Dgraph, acc account) error {
+func tryUpsert(c *dgo.Dgraph, acc account) error {
 	ctx := context.Background()
 
 	txn := c.NewTxn()
@@ -178,7 +178,7 @@ func tryUpsert(c *client.Dgraph, acc account) error {
 	return txn.Commit(ctx)
 }
 
-func checkIntegrity(c *client.Dgraph) {
+func checkIntegrity(c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	q := fmt.Sprintf(`

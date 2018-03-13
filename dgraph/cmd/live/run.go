@@ -41,8 +41,8 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bopt "github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -117,7 +117,7 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 }
 
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
+func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing %s\n", file)
 	f, err := os.Open(file)
 	x.Check(err)
@@ -260,7 +260,7 @@ func fileList(files string) []string {
 	return strings.Split(files, ",")
 }
 
-func setup(opts batchMutationOptions, dc *client.Dgraph) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	x.Check(os.MkdirAll(opt.clientDir, 0700))
 	o := badger.DefaultOptions
 	o.SyncWrites = true // So that checkpoints are persisted immediately.
@@ -338,7 +338,7 @@ func run() {
 		dc := api.NewDgraphClient(conn)
 		clients = append(clients, dc)
 	}
-	dgraphClient := client.NewDgraphClient(clients...)
+	dgraphClient := dgo.NewDgraphClient(clients...)
 
 	if len(opt.clientDir) == 0 {
 		var err error

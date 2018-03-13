@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/api"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -27,7 +27,7 @@ func main() {
 		log.Fatal(err)
 	}
 	pc := api.NewDgraphClient(conn)
-	c := client.NewDgraphClient(pc)
+	c := dgo.NewDgraphClient(pc)
 
 	// Ingest
 	if *insert {
@@ -37,7 +37,7 @@ func main() {
 	}
 }
 
-func TestInsert3Quads(ctx context.Context, c *client.Dgraph) {
+func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	// Set schema
 	op := &api.Operation{}
 	op.Schema = `name: string @index(fulltext) .`
@@ -87,7 +87,7 @@ func TestInsert3Quads(ctx context.Context, c *client.Dgraph) {
 	fmt.Println("Commit OK")
 }
 
-func TestQuery3Quads(ctx context.Context, c *client.Dgraph) {
+func TestQuery3Quads(ctx context.Context, c *dgo.Dgraph) {
 	txn := c.NewTxn()
 	q := fmt.Sprint(`{ me(func: uid(200, 300, 400)) { name }}`)
 	resp, err := txn.Query(ctx, q)

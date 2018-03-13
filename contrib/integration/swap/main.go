@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/api"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgo/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -150,15 +150,15 @@ func createSentences(n int) []string {
 	}
 }
 
-func newClient() *client.Dgraph {
+func newClient() *dgo.Dgraph {
 	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
 	x.Check(err)
-	return client.NewDgraphClient(
+	return dgo.NewDgraphClient(
 		api.NewDgraphClient(d),
 	)
 }
 
-func setup(c *client.Dgraph, sentences []string) []string {
+func setup(c *dgo.Dgraph, sentences []string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 	x.Check(c.Alter(ctx, &api.Operation{
@@ -187,7 +187,7 @@ func setup(c *client.Dgraph, sentences []string) []string {
 	return uids
 }
 
-func swapSentences(c *client.Dgraph, node1, node2 string) {
+func swapSentences(c *dgo.Dgraph, node1, node2 string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 
@@ -269,7 +269,7 @@ func swapSentences(c *client.Dgraph, node1, node2 string) {
 	atomic.AddUint64(&successCount, 1)
 }
 
-func checkInvariants(c *client.Dgraph, uids []string, sentences []string) error {
+func checkInvariants(c *dgo.Dgraph, uids []string, sentences []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
 
