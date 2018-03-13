@@ -38,17 +38,17 @@ distribution.
 
 ## Go
 
-[![GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client?status.svg)](https://godoc.org/github.com/dgraph-io/dgraph/client)
+[![GoDoc](https://godoc.org/github.com/dgraph-io/dgo?status.svg)](https://godoc.org/github.com/dgraph-io/dgo)
 
 The go client communicates with the server on the grpc port (default value 9080).
 
 The client can be obtained in the usual way via `go get`:
 
 ```sh
-go get -u -v github.com/dgraph-io/dgraph/client
+go get -u -v github.com/dgraph-io/dgo
 ```
 
-The full [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client) contains
+The full [GoDoc](https://godoc.org/github.com/dgraph-io/dgo) contains
 documentation for the client API along with examples showing how to use it.
 
 ### Create the client
@@ -57,7 +57,7 @@ To create a client, dial a connection to Dgraph's external Grpc port (typically
 9080). The following code snippet shows just one connection. You can connect to multiple Dgraph servers to distribute the workload evenly.
 
 ```go
-func newClient() *client.Dgraph {
+func newClient() *dgo.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
 	// setting up the dgraph cluster.
 	d, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
@@ -65,7 +65,7 @@ func newClient() *client.Dgraph {
 		log.Fatal(err)
 	}
 
-	return client.NewDgraphClient(
+	return dgo.NewDgraphClient(
 		api.NewDgraphClient(d),
 	)
 }
@@ -77,7 +77,7 @@ To set the schema, set it on a `api.Operation` object, and pass it down to
 the `Alter` method.
 
 ```go
-func setup(c *client.Dgraph) {
+func setup(c *dgo.Dgraph) {
 	// Install a schema into dgraph. Accounts have a `name` and a `balance`.
 	err := c.Alter(context.Background(), &api.Operation{
 		Schema: `
@@ -108,7 +108,7 @@ automatically rollback in case of errors. Calling `Discard` after `Commit` would
 be a no-op.
 
 ```go
-func runTxn(c *client.Dgraph) {
+func runTxn(c *dgo.Dgraph) {
 	txn := c.NewTxn()
 	defer txn.Discard()
 	...
@@ -191,7 +191,7 @@ returns an error in case the transaction could not be committed.
 
 ### Complete Example
 
-This is an example from the [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client). It shows how to to create a Node with name Alice, while also creating his relationships with other nodes. Note `loc` predicate is of type `geo` and can be easily marshalled and unmarshalled into a Go struct. More such examples are present as part of the GoDoc.
+This is an example from the [GoDoc](https://godoc.org/github.com/dgraph-io/dgo). It shows how to to create a Node with name Alice, while also creating his relationships with other nodes. Note `loc` predicate is of type `geo` and can be easily marshalled and unmarshalled into a Go struct. More such examples are present as part of the GoDoc.
 
 ```go
 type School struct {
@@ -225,7 +225,7 @@ if err != nil {
 defer conn.Close()
 
 dc := api.NewDgraphClient(conn)
-dg := client.NewDgraphClient(dc)
+dg := dgo.NewDgraphClient(dc)
 
 op := &api.Operation{}
 op.Schema = `
