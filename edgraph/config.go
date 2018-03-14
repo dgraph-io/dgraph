@@ -17,9 +17,12 @@
 package edgraph
 
 import (
+	"errors"
 	"expvar"
 	"fmt"
+	"net"
 	"path/filepath"
+	"regexp"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
@@ -34,6 +37,7 @@ type Options struct {
 
 	AllottedMemory float64
 
+	WhitelistedIPs      string
 	ExportPath          string
 	NumPendingProposals int
 	Tracing             float64
@@ -58,6 +62,7 @@ var DefaultConfig = Options{
 	// User must specify this.
 	AllottedMemory: -1.0,
 
+	WhitelistedIPs:      "",
 	ExportPath:          "export",
 	NumPendingProposals: 2000,
 	Tracing:             0.0,
@@ -127,6 +132,9 @@ func SetConfiguration(newConfig Options) {
 	worker.Config.RaftId = Config.RaftId
 	worker.Config.ExpandEdge = Config.ExpandEdge
 
+	ips, _ := parseIPsFromString(Config.WhitelistedIPs)
+	worker.Config.WhiteListedIPs = ips
+
 	x.Config.DebugMode = Config.DebugMode
 }
 
@@ -137,9 +145,33 @@ func (o *Options) validate() {
 	x.Check(err)
 	wd, err := filepath.Abs(o.WALDir)
 	x.Check(err)
+	_, err = parseIPsFromString(o.WhitelistedIPs)
+	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
 	x.AssertTruefNoTrace(o.AllottedMemory != DefaultConfig.AllottedMemory,
 		"Allotted memory (--memory_mb) must be specified, with value greater than 1024 MB")
 	x.AssertTruefNoTrace(o.AllottedMemory >= MinAllottedMemory,
 		"Allotted memory (--memory_mb) must be at least %.0f MB. Currently set to: %f", MinAllottedMemory, o.AllottedMemory)
+}
+
+// Parses the comma-delimited whitelist ip string passed in as an argument from
+// the command line and returns slice of []net.IP
+func parseIPsFromString(str string) ([]net.IP, error) {
+	if str == "" {
+		return []net.IP{}, nil
+	}
+
+	var ips []net.IP
+	ipStrings := regexp.MustCompile("\\s*,\\s*").Split(str, -1)
+
+	for _, s := range ipStrings {
+		ip := net.ParseIP(s)
+
+		if ip == nil {
+			return nil, errors.New(s + " is not a valid IP address")
+		} else {
+			ips = append(ips, ip)
+		}
+	}
+	return ips, nil
 }
