@@ -32,10 +32,10 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	ctask "github.com/dgraph-io/dgraph/task"
@@ -1577,6 +1577,10 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix, startKey)
 	defer it.Close()
 	for ; it.Valid(); it.Next() {
+		if it.UserMeta() == posting.BitEmptyPosting {
+			continue
+		}
+
 		pl := posting.GetLru(it.Key())
 		if pl != nil && pl.IsEmpty() {
 			// empty pl's can be present in lru

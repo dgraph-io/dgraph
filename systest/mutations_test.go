@@ -52,6 +52,7 @@ func TestSystem(t *testing.T) {
 	t.Run("empty strings with term", wrap(EmptyRoomsWithTermIndex))
 	t.Run("delete with expand all", wrap(DeleteWithExpandAll))
 	t.Run("facets using nquads", wrap(FacetsUsingNQuadsError))
+	t.Run("skip empty pl for has", wrap(SkipEmptyPLForHas))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1014,4 +1015,41 @@ func FacetsUsingNQuadsError(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewTxn().QueryWithVars(ctx, q, map[string]string{"$id": "0x1"})
 	require.NoError(t, err)
 	require.Contains(t, string(resp.Json), "since")
+}
+
+func SkipEmptyPLForHas(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:u <__user> "true" .
+			_:u <name> "u" .
+			_:u1 <__user> "true" .
+			_:u1 <name> "u1" .
+		`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	q := `{
+		  users(func: has(__user)) {
+			name
+		  }
+		}`
+	resp, err := c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"users":[{"name":"u"},{"name":"u1"}]}`, string(resp.Json))
+
+	op := &api.Operation{DropAll: true}
+	err = c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	q = `{
+		  users(func: has(__user)) {
+			uid
+			name
+		  }
+		}`
+	resp, err = c.NewTxn().Query(ctx, q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"users": []}`, string(resp.Json))
 }
