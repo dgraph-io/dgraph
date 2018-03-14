@@ -29,14 +29,14 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgo/y"
 )
 
 var (
@@ -335,7 +335,7 @@ func ValidateAndConvert(edge *intern.DirectedEdge, schemaType types.TypeID) erro
 	if edge.ValueId == 0 && !bytes.Equal(edge.Value, []byte(x.Star)) &&
 		edge.Op == intern.DirectedEdge_DEL {
 		if !schema.State().IsList(edge.Attr) {
-			return x.Errorf("Please use * with delete operation for non-list type")
+			return x.Errorf("Please use * with delete operation for non-list type: [%v]", edge.Attr)
 		}
 	}
 

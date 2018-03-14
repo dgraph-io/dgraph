@@ -527,6 +527,7 @@ type TxnPrefixIterator struct {
 	prefix     []byte
 	reverse    bool
 	curKey     []byte
+	userMeta   byte // userMeta stored as part of badger item, used to skip empty PL in has query.
 }
 
 func NewTxnPrefixIterator(txn *badger.Txn,
@@ -579,6 +580,7 @@ func (t *TxnPrefixIterator) Next() {
 		t.storeKey(t.btreeIter.Key())
 		t.btreeIter.Next()
 	} else if !t.btreeIter.Valid() {
+		t.userMeta = t.badgerIter.Item().UserMeta()
 		t.storeKey(t.badgerIter.Item().Key())
 		t.badgerIter.Next()
 	} else { // Both are valid
@@ -586,10 +588,15 @@ func (t *TxnPrefixIterator) Next() {
 			t.storeKey(t.btreeIter.Key())
 			t.btreeIter.Next()
 		} else {
+			t.userMeta = t.badgerIter.Item().UserMeta()
 			t.storeKey(t.badgerIter.Item().Key())
 			t.badgerIter.Next()
 		}
 	}
+}
+
+func (t *TxnPrefixIterator) UserMeta() byte {
+	return t.userMeta
 }
 
 func (t *TxnPrefixIterator) storeKey(key []byte) {
