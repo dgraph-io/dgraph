@@ -573,6 +573,7 @@ func (t *TxnPrefixIterator) Next() {
 		}
 	}
 
+	t.userMeta = 0 // reset it.
 	if !t.btreeIter.Valid() && !t.badgerIter.ValidForPrefix(t.prefix) {
 		t.curKey = nil
 		return
