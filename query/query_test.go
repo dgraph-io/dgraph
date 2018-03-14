@@ -39,9 +39,9 @@ import (
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 
 	"github.com/dgraph-io/dgraph/schema"
@@ -3070,7 +3070,7 @@ func TestPasswordExpandAll1(t *testing.T) {
     }
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"alive":true,"loc":{"type":"Point","coordinates":[1.1,2]},"sword_present":"true","gender":"female","power":13.250000,"graduation":["1932-01-01T00:00:00Z"],"_xid_":"mich","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","noindex_name":"Michonne's name not indexed","name":"Michonne","age":38,"full_name":"Michonne's large name for hashing","bin_data":"YmluLWRhdGE=","survival_rate":98.990000,"address":"31, 32 street, Jupiter"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"age":38,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","_xid_":"mich","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","graduation":["1932-01-01T00:00:00Z"],"dob":"1910-01-01T00:00:00Z","bin_data":"YmluLWRhdGE=","power":13.250000,"survival_rate":98.990000,"name":"Michonne","sword_present":"true","alive":true,"gender":"female","noindex_name":"Michonne's name not indexed"}]}}`, js)
 }
 
 func TestPasswordExpandAll2(t *testing.T) {
@@ -3085,7 +3085,7 @@ func TestPasswordExpandAll2(t *testing.T) {
     }
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"sword_present":"true","bin_data":"YmluLWRhdGE=","power":13.250000,"_xid_":"mich","name":"Michonne","age":38,"dob_day":"1910-01-01T00:00:00Z","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","gender":"female","noindex_name":"Michonne's name not indexed","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"graduation":["1932-01-01T00:00:00Z"],"full_name":"Michonne's large name for hashing","alive":true,"password":[{"checkpwd":false}]}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"_xid_":"mich","address":"31, 32 street, Jupiter","path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"sword_present":"true","dob_day":"1910-01-01T00:00:00Z","gender":"female","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"noindex_name":"Michonne's name not indexed","name":"Michonne","graduation":["1932-01-01T00:00:00Z"],"bin_data":"YmluLWRhdGE=","loc":{"type":"Point","coordinates":[1.1,2]},"age":38,"full_name":"Michonne's large name for hashing","alive":true,"power":13.250000,"password":[{"checkpwd":false}]}]}}`, js)
 }
 
 func TestPasswordExpandError(t *testing.T) {
@@ -7984,7 +7984,7 @@ func TestExpandVal(t *testing.T) {
 	}
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"survival_rate":98.990000,"address":"31, 32 street, Jupiter","bin_data":"YmluLWRhdGE=","power":13.250000,"gender":"female","_xid_":"mich","alive":true,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","graduation":["1932-01-01T00:00:00Z"],"age":38,"noindex_name":"Michonne's name not indexed","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","sword_present":"true","dob":"1910-01-01T00:00:00Z"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"age":38,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","power":13.250000,"noindex_name":"Michonne's name not indexed","survival_rate":98.990000,"name":"Michonne","sword_present":"true","alive":true,"dob":"1910-01-01T00:00:00Z","path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"bin_data":"YmluLWRhdGE=","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","graduation":["1932-01-01T00:00:00Z"],"gender":"female","_xid_":"mich"}]}}`, js)
 }
 
 func TestGroupByGeoCrash(t *testing.T) {
@@ -8043,7 +8043,7 @@ func TestExpandAll(t *testing.T) {
 	}
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data":{"q":[{"~friend":[{"name":"Rick Grimes"}],"survival_rate":98.990000,"_xid_":"mich","graduation":["1932-01-01T00:00:00Z"],"path":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"sword_present":"true","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"full_name":"Michonne's large name for hashing","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"power":13.250000,"loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","bin_data":"YmluLWRhdGE=","dob_day":"1910-01-01T00:00:00Z","dob":"1910-01-01T00:00:00Z","son":[{"name":"Andre"},{"name":"Helmut"}],"age":38,"school":[{"name":"School A"}],"alive":true,"gender":"female","noindex_name":"Michonne's name not indexed","address":"31, 32 street, Jupiter"}]}}`, js)
+	require.JSONEq(t, `{"data":{"q":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"power":13.250000,"_xid_":"mich","noindex_name":"Michonne's name not indexed","son":[{"name":"Andre"},{"name":"Helmut"}],"address":"31, 32 street, Jupiter","dob_day":"1910-01-01T00:00:00Z","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"name":"Michonne","path":[{"name":"Glenn Rhee","path|weight":0.200000},{"name":"Andrea","path|weight":0.100000,"path|weight1":0.200000}],"school":[{"name":"School A"}],"full_name":"Michonne's large name for hashing","alive":true,"bin_data":"YmluLWRhdGE=","gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"graduation":["1932-01-01T00:00:00Z"],"age":38,"sword_present":"true","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"~friend":[{"name":"Rick Grimes"}]}]}}`, js)
 }
 
 func TestUidWithoutDebug(t *testing.T) {

@@ -53,6 +53,7 @@ func TestSystem(t *testing.T) {
 	t.Run("delete with expand all", wrap(DeleteWithExpandAll))
 	t.Run("facets using nquads", wrap(FacetsUsingNQuadsError))
 	t.Run("skip empty pl for has", wrap(SkipEmptyPLForHas))
+	t.Run("facet expand all", wrap(FacetExpandAll))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1052,4 +1053,74 @@ func SkipEmptyPLForHas(t *testing.T, c *dgo.Dgraph) {
 	resp, err = c.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"users": []}`, string(resp.Json))
+}
+
+func FacetExpandAll(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, (c.Alter(ctx, &api.Operation{
+		Schema: `name: string @index(hash) .
+				friend: uid @reverse .`,
+	})))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "Alice" (from="US",to="Canada") .
+			_:a <friend> _:b (age=13,car="Honda") .
+			_:b <name> "Bob" (from="Toronto",to="Vancouver").
+			_:a <friend> _:c (age=15,car="Tesla") .
+			_:c <name> "Charlie" .
+		`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	const friendQuery = `
+	{
+		q(func: eq(name, "Alice")) {
+			expand(_all_) {
+				expand(_all_)
+			}
+		}
+	}`
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, friendQuery)
+	require.NoError(t, err)
+	CompareJSON(t, `{
+  "q": [
+    {
+      "friend": [
+        {
+          "friend|age": 13,
+          "friend|car": "Honda",
+          "name": "Bob",
+          "name|from": "Toronto",
+          "name|to": "Vancouver",
+          "~friend": [
+            {
+              "~friend|age": 13,
+              "~friend|car": "Honda"
+            }
+          ]
+        },
+        {
+          "friend|age": 15,
+          "friend|car": "Tesla",
+          "name": "Charlie",
+          "~friend": [
+            {
+              "~friend|age": 15,
+              "~friend|car": "Tesla"
+            }
+          ]
+        }
+      ],
+      "name": "Alice",
+      "name|from": "US",
+      "name|to": "Canada"
+    }
+  ]
+}`, string(resp.Json))
 }

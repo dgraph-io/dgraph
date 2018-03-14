@@ -30,16 +30,16 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgo/y"
 )
 
 const (
@@ -1788,6 +1788,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			temp.Params.isInternal = false
 			temp.Params.Expand = ""
+			temp.Params.Facet = &intern.FacetParams{AllKeys: true}
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
