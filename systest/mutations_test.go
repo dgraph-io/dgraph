@@ -1043,6 +1043,12 @@ func SkipEmptyPLForHas(t *testing.T, c *dgo.Dgraph) {
 	err = c.Alter(ctx, op)
 	require.NoError(t, err)
 
+	q = `{
+		  users(func: has(__user)) {
+			uid
+			name
+		  }
+		}`
 	resp, err = c.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"users": []}`, string(resp.Json))
