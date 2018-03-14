@@ -21,7 +21,7 @@ import (
 	"sync/atomic"
 )
 
-// SafeLock can be used in place of sync.RWMutex
+// SafeMutex can be used in place of sync.RWMutex
 type SafeMutex struct {
 	m       sync.RWMutex
 	wait    *SafeWait
