@@ -72,6 +72,7 @@ func NewNode(rc *intern.RaftContext) *Node {
 	store := raft.NewMemoryStorage()
 	n := &Node{
 		Id:    rc.Id,
+		MyAddr: rc.Addr,
 		Store: store,
 		Cfg: &raft.Config{
 			ID:              rc.Id,
