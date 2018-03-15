@@ -1453,8 +1453,9 @@ L:
 				return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 			}
 
+			vname := collectName(it, itemInFunc.Val)
 			// TODO - Move this to a function.
-			v := strings.Trim(itemInFunc.Val, " \t")
+			v := strings.Trim(vname, " \t")
 			var err error
 			v, err = unquoteIfQuoted(v)
 			if err != nil {

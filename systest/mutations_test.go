@@ -54,6 +54,7 @@ func TestSystem(t *testing.T) {
 	t.Run("facets using nquads", wrap(FacetsUsingNQuadsError))
 	t.Run("skip empty pl for has", wrap(SkipEmptyPLForHas))
 	t.Run("facet expand all", wrap(FacetExpandAll))
+	t.Run("has with dash", wrap(HasWithDash))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1123,4 +1124,39 @@ func FacetExpandAll(t *testing.T, c *dgo.Dgraph) {
     }
   ]
 }`, string(resp.Json))
+}
+
+func HasWithDash(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, (c.Alter(ctx, &api.Operation{
+		Schema: `name: string @index(hash) .`,
+	})))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "Alice" .
+			_:a <new-friend> _:b .
+			_:b <name> "Bob" .
+			_:a <new-friend> _:c .
+			_:c <name> "Charlie" .
+		`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	const friendQuery = `
+	{
+		q(func: eq(name, "Alice")) {
+			new-friend {
+				name
+			}
+		}
+	}`
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, friendQuery)
+	require.NoError(t, err)
+	CompareJSON(t, `{"q":[{"new-friend":[{"name":"Bob"},{"name":"Charlie"}]}]}`, string(resp.Json))
 }
