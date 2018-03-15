@@ -1148,7 +1148,7 @@ func HasWithDash(t *testing.T, c *dgo.Dgraph) {
 
 	const friendQuery = `
 	{
-		q(func: eq(name, "Alice")) {
+		q(func: has(new-friend)) {
 			new-friend {
 				name
 			}

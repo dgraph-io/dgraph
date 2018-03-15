@@ -214,15 +214,25 @@ func TestClusterSnapshot(t *testing.T) {
 	o, err := strconv.Atoi(n.offset)
 	quickCheck(err)
 
+	// Wait for snapshot to be transferred.
 	waitForNodeToBeHealthy(t, o+x.PortHTTP)
 
-	// So that n becomes leader.
-	if err := restart(cluster.dgraph); err != nil {
+	cmd := cluster.dgraph
+	cmd.Process.Signal(syscall.SIGINT)
+	if _, err := cmd.Process.Wait(); err != nil {
 		shutdownCluster()
 		log.Fatal(err)
 	}
-	// A better method would be to have a transfer leadership method.
-	time.Sleep(5 * time.Second)
+
+	// We wait so that after restart n becomes leader.
+	time.Sleep(10 * time.Second)
+
+	cmd.Process = nil
+	fmt.Println("Trying to restart Dgraph Server")
+	if err := cmd.Start(); err != nil {
+		shutdownCluster()
+		log.Fatal(err)
+	}
 
 	waitForNodeToBeHealthy(t, cluster.dgraphPortOffset+x.PortHTTP)
 	waitForNodeToBeHealthy(t, o+x.PortHTTP)
