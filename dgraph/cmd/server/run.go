@@ -35,9 +35,9 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
@@ -80,7 +80,8 @@ func init() {
 		"Don't allow mutations on this server.")
 
 	flag.String("whitelist", defaults.WhitelistedIPs,
-		"A comma separated list of ips you wish to whitelist (i.e., --whitelist 127.0.0.1, 0.0.0.4)")
+		"A comma separated list of ips ranges you wish to whitelist "+
+			"(i.e., --whitelist 127.0.0.1:127.0.0.3, 0.0.0.7:0.0.0.9)")
 	flag.String("export", defaults.ExportPath,
 		"Folder in which to store exports.")
 	flag.Int("pending_proposals", defaults.NumPendingProposals,

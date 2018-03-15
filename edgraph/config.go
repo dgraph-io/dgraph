@@ -17,12 +17,13 @@
 package edgraph
 
 import (
+	"bytes"
 	"errors"
 	"expvar"
 	"fmt"
 	"net"
 	"path/filepath"
-	"regexp"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
@@ -133,7 +134,7 @@ func SetConfiguration(newConfig Options) {
 	worker.Config.ExpandEdge = Config.ExpandEdge
 
 	ips, _ := parseIPsFromString(Config.WhitelistedIPs)
-	worker.Config.WhiteListedIPs = ips
+	worker.Config.WhiteListedIPRanges = ips
 
 	x.Config.DebugMode = Config.DebugMode
 }
@@ -154,24 +155,46 @@ func (o *Options) validate() {
 		"Allotted memory (--memory_mb) must be at least %.0f MB. Currently set to: %f", MinAllottedMemory, o.AllottedMemory)
 }
 
-// Parses the comma-delimited whitelist ip string passed in as an argument from
-// the command line and returns slice of []net.IP
-func parseIPsFromString(str string) ([]net.IP, error) {
+// Parses the comma-delimited whitelist ip-range string passed in as an argument
+// from the command line and returns slice of []IPRange
+//
+// ex. "144.142.126.222:144.124.126.400,190.59.35.57:190.59.35.99"
+func parseIPsFromString(str string) ([]worker.IPRange, error) {
 	if str == "" {
-		return []net.IP{}, nil
+		return []worker.IPRange{}, nil
 	}
 
-	var ips []net.IP
-	ipStrings := regexp.MustCompile("\\s*,\\s*").Split(str, -1)
+	var ipRanges []worker.IPRange
+	ipRangeStrings := strings.Split(str, ",")
 
-	for _, s := range ipStrings {
-		ip := net.ParseIP(s)
+	// Check that the each of the ranges are valid
+	for _, s := range ipRangeStrings {
+		ipsTuple := strings.Split(s, ":")
 
-		if ip == nil {
-			return nil, errors.New(s + " is not a valid IP address")
+		// Assert that the range consists of an upper and lower bound
+		if len(ipsTuple) != 2 {
+			return nil, errors.New(
+				`ip range must have an upper and lower bound
+				(i.e., 144.142.126.222:144.124.126.400)`,
+			)
+		}
+
+		lowerBoundIP := net.ParseIP(ipsTuple[0])
+		upperBoundIP := net.ParseIP(ipsTuple[1])
+
+		if lowerBoundIP == nil || upperBoundIP == nil {
+			// Assert that both upper and lower bound are valid IPs
+			return nil, errors.New(
+				ipsTuple[0] + " or " + ipsTuple[1] + " is not a valid IP address",
+			)
+		} else if bytes.Compare(lowerBoundIP, upperBoundIP) > 0 {
+			// Assert that both lower bound is less than the upper bound
+			return nil, errors.New(
+				ipsTuple[0] + " cannot be greater than " + ipsTuple[1],
+			)
 		} else {
-			ips = append(ips, ip)
+			ipRanges = append(ipRanges, worker.IPRange{Lower: lowerBoundIP, Upper: upperBoundIP})
 		}
 	}
-	return ips, nil
+	return ipRanges, nil
 }

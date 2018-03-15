@@ -18,6 +18,10 @@ package worker
 
 import "net"
 
+type IPRange struct {
+	Lower, Upper net.IP
+}
+
 type Options struct {
 	BaseWorkerPort      int
 	ExportPath          string
@@ -28,7 +32,7 @@ type Options struct {
 	ZeroAddr            string
 	RaftId              uint64
 	ExpandEdge          bool
-	WhiteListedIPs      []net.IP
+	WhiteListedIPRanges []IPRange
 }
 
 var Config Options
