@@ -666,9 +666,9 @@ func (n *node) snapshot(skip uint64) {
 		if applied-le > 1.5*x.ForceAbortDifference && skip != 0 {
 			x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
 				le, applied)
+			// Try aborting pending transactions here and print txn marks after the aborts.
+			n.abortOldTransactions()
 		}
-		// Try aborting pending transactions here and print txn marks after the aborts.
-		n.abortOldTransactions()
 		return
 	}
 	snapshotIdx := le - skip

@@ -348,7 +348,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 				delete(originalGroup.Tablets, p.Tablet.Predicate)
 			} else {
 				if tablet.GroupId != p.Tablet.GroupId {
-					x.Printf("Tablet for attr: [%s], gid: [%d] is being served by group: [%d]\n",
+					x.Printf("Tablet for attr: [%s], gid: [%d] is already being served by group: [%d]\n",
 						tablet.Predicate, p.Tablet.GroupId, tablet.GroupId)
 					return p.Id, errTabletAlreadyServed
 				}
