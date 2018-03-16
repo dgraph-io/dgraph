@@ -133,8 +133,14 @@ func SetConfiguration(newConfig Options) {
 	worker.Config.RaftId = Config.RaftId
 	worker.Config.ExpandEdge = Config.ExpandEdge
 
-	ips, _ := parseIPsFromString(Config.WhitelistedIPs)
-	worker.Config.WhiteListedIPRanges = ips
+	ips, err := parseIPsFromString(Config.WhitelistedIPs)
+
+	if err != nil {
+		fmt.Println("IP ranges could not be parsed from --whitelist " + Config.WhitelistedIPs)
+		worker.Config.WhiteListedIPRanges = []worker.IPRange{}
+	} else {
+		worker.Config.WhiteListedIPRanges = ips
+	}
 
 	x.Config.DebugMode = Config.DebugMode
 }
@@ -173,10 +179,7 @@ func parseIPsFromString(str string) ([]worker.IPRange, error) {
 
 		// Assert that the range consists of an upper and lower bound
 		if len(ipsTuple) != 2 {
-			return nil, errors.New(
-				`ip range must have an upper and lower bound
-				(i.e., 144.142.126.222:144.124.126.400)`,
-			)
+			return nil, errors.New("IP range must have a lower and upper bound")
 		}
 
 		lowerBoundIP := net.ParseIP(ipsTuple[0])
@@ -188,7 +191,7 @@ func parseIPsFromString(str string) ([]worker.IPRange, error) {
 				ipsTuple[0] + " or " + ipsTuple[1] + " is not a valid IP address",
 			)
 		} else if bytes.Compare(lowerBoundIP, upperBoundIP) > 0 {
-			// Assert that both lower bound is less than the upper bound
+			// Assert that the lower bound is less than the upper bound
 			return nil, errors.New(
 				ipsTuple[0] + " cannot be greater than " + ipsTuple[1],
 			)

@@ -124,6 +124,10 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
 func ipInIPWhitelistRanges(ipString string) bool {
 	ip := net.ParseIP(ipString)
 
+	if ip == nil {
+		return false
+	}
+
 	for _, ipRange := range worker.Config.WhiteListedIPRanges {
 		if bytes.Compare(ip, ipRange.Lower) >= 0 && bytes.Compare(ip, ipRange.Upper) <= 0 {
 			return true
