@@ -30,14 +30,14 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/dgo/protos/api"
+	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	dy "github.com/dgraph-io/dgo/y"
 )
 
 type proposalCtx struct {
@@ -637,6 +637,20 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 	}
 }
 
+func (n *node) abortOldTransactions() {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return
+	}
+	zc := intern.NewZeroClient(pl.Get())
+	// Aborts if not already committed.
+	startTimestamps := posting.Txns().TxnsSinceSnapshot()
+	req := &intern.TxnTimestamps{Ts: startTimestamps}
+	zc.TryAbort(context.Background(), req)
+	x.Printf("Txn watermark after trying to abort old transactions: %v\n",
+		posting.TxnMarks().DoneUntil())
+}
+
 func (n *node) snapshot(skip uint64) {
 	water := posting.TxnMarks()
 	le := water.DoneUntil()
@@ -646,13 +660,15 @@ func (n *node) snapshot(skip uint64) {
 
 	si := existing.Metadata.Index
 	if le <= si+skip {
-		// If difference grows above 100*skip we try to abort old transactions, so it shouldn't
+		// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions, so it shouldn't
 		// ideally go above 110*skip.
 		applied := n.Applied.DoneUntil()
-		if applied-le > 110*skip {
+		if applied-le > 1.5*x.ForceAbortDifference && skip != 0 {
 			x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
 				le, applied)
 		}
+		// Try aborting pending transactions here and print txn marks after the aborts.
+		n.abortOldTransactions()
 		return
 	}
 	snapshotIdx := le - skip

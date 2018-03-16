@@ -102,7 +102,7 @@ func (t *transactions) MinTs() uint64 {
 	return minTs
 }
 
-// Returns startTs of all pending transactions started upto 1000 raft log
+// Returns startTs of all pending transactions started upto 100 raft log
 // entries after last snapshot.
 func (t *transactions) TxnsSinceSnapshot() []uint64 {
 	lastSnapshotIdx := TxnMarks().DoneUntil()
@@ -111,7 +111,7 @@ func (t *transactions) TxnsSinceSnapshot() []uint64 {
 	defer t.Unlock()
 	for _, txn := range t.m {
 		index := txn.startIdx()
-		if index-lastSnapshotIdx <= 1000 {
+		if index-lastSnapshotIdx <= 0.1*x.ForceAbortDifference {
 			timestamps = append(timestamps, txn.StartTs)
 		}
 	}

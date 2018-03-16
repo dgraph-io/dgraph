@@ -91,7 +91,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	c := intern.NewWorkerClient(pl.Get())
 	stream, err := c.ReceivePredicate(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
 
 	count := 0

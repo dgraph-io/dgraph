@@ -18,6 +18,7 @@
 package zero
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -271,7 +272,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		DestGroupId:   dstGroup,
 	}
 	if _, err := c.MovePredicate(ctx, in); err != nil {
-		return err
+		return fmt.Errorf("While caling MovePredicate: %+v\n", err)
 	}
 
 	// Propose that predicate is served by dstGroup in RW.

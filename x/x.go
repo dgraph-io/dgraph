@@ -63,6 +63,9 @@ const (
 	PortInternal = 7080
 	PortHTTP     = 8080
 	PortGrpc     = 9080
+	// If the difference between AppliedUntil - TxnMarks.DoneUntil() is greater than this, we
+	// start aborting old transactions.
+	ForceAbortDifference = 1000
 )
 
 var (

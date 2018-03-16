@@ -348,6 +348,8 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 				delete(originalGroup.Tablets, p.Tablet.Predicate)
 			} else {
 				if tablet.GroupId != p.Tablet.GroupId {
+					x.Printf("Tablet for attr: [%s], gid: [%d] is being served by group: [%d]\n",
+						tablet.Predicate, p.Tablet.GroupId, tablet.GroupId)
 					return p.Id, errTabletAlreadyServed
 				}
 				// This update can come from tablet size.
@@ -552,7 +554,7 @@ func (n *node) Run() {
 
 				} else if entry.Type == raftpb.EntryNormal {
 					pid, err := n.applyProposal(entry)
-					if err != nil {
+					if err != nil && err != errTabletAlreadyServed {
 						x.Printf("While applying proposal: %v\n", err)
 					}
 					n.props.Done(pid, err)
