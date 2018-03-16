@@ -33,10 +33,10 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
-	"github.com/dgraph-io/dgo/y"
 )
 
 var (
@@ -131,7 +131,7 @@ func handleError(err error) {
 	// Irrecoverable
 	if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
 		x.Fatalf(errString)
-	} else if errString != y.ErrAborted.Error() {
+	} else if errString != y.ErrAborted.Error() && errString != y.ErrConflict.Error() {
 		x.Printf("Error while mutating %v\n", errString)
 	}
 }

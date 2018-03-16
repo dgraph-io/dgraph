@@ -637,18 +637,16 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 	}
 }
 
-func (n *node) abortOldTransactions() {
+func (n *node) abortOldTransactions(pending uint64) {
 	pl := groups().Leader(0)
 	if pl == nil {
 		return
 	}
 	zc := intern.NewZeroClient(pl.Get())
 	// Aborts if not already committed.
-	startTimestamps := posting.Txns().TxnsSinceSnapshot()
+	startTimestamps := posting.Txns().TxnsSinceSnapshot(pending)
 	req := &intern.TxnTimestamps{Ts: startTimestamps}
 	zc.TryAbort(context.Background(), req)
-	x.Printf("Txn watermark after trying to abort old transactions: %v\n",
-		posting.TxnMarks().DoneUntil())
 }
 
 func (n *node) snapshot(skip uint64) {
@@ -667,7 +665,7 @@ func (n *node) snapshot(skip uint64) {
 			x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
 				le, applied)
 			// Try aborting pending transactions here and print txn marks after the aborts.
-			n.abortOldTransactions()
+			n.abortOldTransactions(applied - le)
 		}
 		return
 	}
