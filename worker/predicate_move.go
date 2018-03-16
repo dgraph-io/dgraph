@@ -278,6 +278,8 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errNotLeader
 	}
 
+	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
+		in.SourceGroupId, in.DestGroupId)
 	// Ensures that all future mutations beyond this point are rejected.
 	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err

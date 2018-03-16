@@ -539,14 +539,15 @@ func (n *node) Run() {
 				n.SaveSnapshot(rd.Snapshot)
 			}
 
-			if len(rd.CommittedEntries) > 0 {
+			lc := len(rd.CommittedEntries)
+			if lc > 0 {
 				if tr, ok := trace.FromContext(n.ctx); ok {
 					tr.LazyPrintf("Found %d committed entries", len(rd.CommittedEntries))
 				}
 			}
 
 			// Now schedule or apply committed entries.
-			for _, entry := range rd.CommittedEntries {
+			for idx, entry := range rd.CommittedEntries {
 				// Need applied watermarks for schema mutation also for read linearazibility
 				// Applied watermarks needs to be emitted as soon as possible sequentially.
 				// If we emit Mark{4, false} and Mark{4, true} before emitting Mark{3, false}
@@ -563,6 +564,18 @@ func (n *node) Run() {
 					// Just queue up to be processed. Don't wait on them.
 					n.applyCh <- entry
 				}
+
+				// Move to debug log later.
+				// Sometimes after restart there are too many entries to replay, so log so that we
+				// know Run loop is replaying them.
+				if lc > 1e5 && idx%5000 == 0 {
+					x.Printf("In run loop applying committed entries, idx: [%v], pending: [%v]\n",
+						idx, lc-idx)
+				}
+			}
+
+			if lc > 1e5 {
+				x.Println("All committed entries sent to applyCh.")
 			}
 
 			if !leader {
