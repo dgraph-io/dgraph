@@ -223,7 +223,10 @@ Ratel's default port is 8081, so override it using -p 8000.
 
 The mutations and queries below can either be run from the command line using `curl localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
 
+### Dataset
+The dataset is a movie graph, where and the graph nodes are entities of the type directors, actors, genres, or movies.  
 
+### Storing data in the graph 
 Changing the data stored in Dgraph is a mutation.  The following mutation stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.  Running this mutation, either through the UI or on the command line, will store the data in Dgraph.
 
 
@@ -274,6 +277,7 @@ curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
 ' | python -m json.tool | less
 ```
 
+### Adding indexes
 Alter the schema to add indexes on some of the data so queries can use term matching, filtering and sorting.
 
 ```sh
@@ -285,6 +289,20 @@ curl localhost:8080/alter -XPOST -d $'
 ' | python -m json.tool | less
 ```
 
+### Get all movies 
+Run this query to get all the movies. The query works below all the movies have a starring edge
+
+```sh
+curl localhost:8080/query -XPOST -d $'
+{
+ me(func: has(starring)) {
+   name@en
+  }
+}
+' | python -m json.tool | less
+```
+
+### Get all movies released after "1980"
 Run this query to get "Star Wars" movies released after "1980".  Try it in the user interface to see the result as a graph.
 
 
