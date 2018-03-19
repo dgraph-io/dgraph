@@ -1039,7 +1039,7 @@ func SkipEmptyPLForHas(t *testing.T, c *dgo.Dgraph) {
 		}`
 	resp, err := c.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"users":[{"name":"u"},{"name":"u1"}]}`, string(resp.Json))
+	CompareJSON(t, `{"users":[{"name":"u"},{"name":"u1"}]}`, string(resp.Json))
 
 	op := &api.Operation{DropAll: true}
 	err = c.Alter(ctx, op)
