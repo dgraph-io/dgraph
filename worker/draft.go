@@ -676,7 +676,7 @@ func (n *node) snapshot(skip uint64) {
 		if applied-le > 1.5*x.ForceAbortDifference && skip != 0 {
 			// Print warning if difference grows above 3 * x.ForceAbortDifference. Shouldn't ideally
 			// happen as we abort oldest 20% when it grows above 1.5 times.
-			if applied-le > 3x.ForceAbortDifference {
+			if applied-le > 3*x.ForceAbortDifference {
 				x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
 					le, applied)
 			}
