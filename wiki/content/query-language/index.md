@@ -1969,6 +1969,10 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
+{{% notice "note" %}} If your predicate is a URI or has special characters, then you should wrap
+it with angular brackets while doing the schema mutation. E.g. `<first:name>`{{% /notice %}}
+
+
 ### Upsert directive
 
 Predicates can specify the `@upsert` directive if you want to do upsert operations against it.
