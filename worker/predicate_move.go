@@ -91,7 +91,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	c := intern.NewWorkerClient(pl.Get())
 	stream, err := c.ReceivePredicate(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
 
 	count := 0
@@ -278,6 +278,8 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errNotLeader
 	}
 
+	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
+		in.SourceGroupId, in.DestGroupId)
 	// Ensures that all future mutations beyond this point are rejected.
 	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err

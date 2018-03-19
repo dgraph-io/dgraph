@@ -457,6 +457,7 @@ func (s *Server) ShouldServe(
 		return tablet, err
 	}
 	tab = s.ServingTablet(tablet.Predicate)
+	x.AssertTrue(tab != nil)
 	return tab, nil
 }
 

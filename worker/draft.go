@@ -30,14 +30,14 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/dgo/protos/api"
+	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	dy "github.com/dgraph-io/dgo/y"
 )
 
 type proposalCtx struct {
@@ -539,14 +539,15 @@ func (n *node) Run() {
 				n.SaveSnapshot(rd.Snapshot)
 			}
 
-			if len(rd.CommittedEntries) > 0 {
+			lc := len(rd.CommittedEntries)
+			if lc > 0 {
 				if tr, ok := trace.FromContext(n.ctx); ok {
 					tr.LazyPrintf("Found %d committed entries", len(rd.CommittedEntries))
 				}
 			}
 
 			// Now schedule or apply committed entries.
-			for _, entry := range rd.CommittedEntries {
+			for idx, entry := range rd.CommittedEntries {
 				// Need applied watermarks for schema mutation also for read linearazibility
 				// Applied watermarks needs to be emitted as soon as possible sequentially.
 				// If we emit Mark{4, false} and Mark{4, true} before emitting Mark{3, false}
@@ -563,6 +564,18 @@ func (n *node) Run() {
 					// Just queue up to be processed. Don't wait on them.
 					n.applyCh <- entry
 				}
+
+				// Move to debug log later.
+				// Sometimes after restart there are too many entries to replay, so log so that we
+				// know Run loop is replaying them.
+				if lc > 1e5 && idx%5000 == 0 {
+					x.Printf("In run loop applying committed entries, idx: [%v], pending: [%v]\n",
+						idx, lc-idx)
+				}
+			}
+
+			if lc > 1e5 {
+				x.Println("All committed entries sent to applyCh.")
 			}
 
 			if !leader {
@@ -637,6 +650,18 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 	}
 }
 
+func (n *node) abortOldTransactions(pending uint64) {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return
+	}
+	zc := intern.NewZeroClient(pl.Get())
+	// Aborts if not already committed.
+	startTimestamps := posting.Txns().TxnsSinceSnapshot(pending)
+	req := &intern.TxnTimestamps{Ts: startTimestamps}
+	zc.TryAbort(context.Background(), req)
+}
+
 func (n *node) snapshot(skip uint64) {
 	water := posting.TxnMarks()
 	le := water.DoneUntil()
@@ -646,12 +671,17 @@ func (n *node) snapshot(skip uint64) {
 
 	si := existing.Metadata.Index
 	if le <= si+skip {
-		// If difference grows above 100*skip we try to abort old transactions, so it shouldn't
-		// ideally go above 110*skip.
 		applied := n.Applied.DoneUntil()
-		if applied-le > 110*skip {
-			x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
-				le, applied)
+		// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions
+		if applied-le > 1.5*x.ForceAbortDifference && skip != 0 {
+			// Print warning if difference grows above 3 * x.ForceAbortDifference. Shouldn't ideally
+			// happen as we abort oldest 20% when it grows above 1.5 times.
+			if applied-le > 3*x.ForceAbortDifference {
+				x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
+					le, applied)
+			}
+			// Try aborting pending transactions here.
+			n.abortOldTransactions(applied - le)
 		}
 		return
 	}

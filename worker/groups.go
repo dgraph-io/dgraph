@@ -26,9 +26,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -123,7 +123,6 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
 	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
-	go gr.periodicAbortOldTxns()
 	gr.proposeInitialSchema()
 }
 
@@ -155,7 +154,7 @@ func (g *groupi) proposeInitialSchema() {
 		if err == nil {
 			break
 		}
-		fmt.Println("Error while proposing initial schema: ", err)
+		x.Println("Error while proposing initial schema: ", err)
 		time.Sleep(100 * time.Millisecond)
 	}
 }
@@ -166,6 +165,8 @@ func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
 }
 
+// calculateTabletSizes iterates through badger and gets a size of the space occupied by each
+// predicate (including data and indexes). All data for a predicate forms a Tablet.
 func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchValues = false
@@ -313,7 +314,6 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 		return tablet
 	}
 
-	x.Printf("Asking if I can serve tablet for: %v\n", key)
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
 	pl := g.AnyServer(0)
@@ -331,6 +331,10 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 	g.Lock()
 	g.tablets[key] = out
 	g.Unlock()
+
+	if out.GroupId == groups().groupId() {
+		x.Printf("Serving tablet for: %v\n", key)
+	}
 	return out
 }
 
@@ -700,28 +704,4 @@ START:
 	}
 	time.Sleep(time.Second)
 	goto START
-}
-
-func (g *groupi) periodicAbortOldTxns() {
-	ticker := time.NewTicker(time.Second * 30)
-	for range ticker.C {
-		lastSnapshotIdx := posting.TxnMarks().DoneUntil()
-		water := groups().Node.Applied.DoneUntil()
-		// We try to abort transactions if difference between applied and last snapshottted is more
-		// than 10000. Ideally a snapshot should happen every 100 entries so this suggests that some
-		// transaction was left in a dangling state(not aborted or committed).
-		if water-lastSnapshotIdx < 10000 {
-			continue
-		}
-
-		pl := groups().Leader(0)
-		if pl == nil {
-			return
-		}
-		zc := intern.NewZeroClient(pl.Get())
-		// Aborts if not already committed.
-		startTimestamps := posting.Txns().TxnsSinceSnapshot()
-		req := &intern.TxnTimestamps{Ts: startTimestamps}
-		zc.TryAbort(context.Background(), req)
-	}
 }

@@ -102,16 +102,16 @@ func (t *transactions) MinTs() uint64 {
 	return minTs
 }
 
-// Returns startTs of all pending transactions started upto 1000 raft log
-// entries after last snapshot.
-func (t *transactions) TxnsSinceSnapshot() []uint64 {
+func (t *transactions) TxnsSinceSnapshot(pending uint64) []uint64 {
 	lastSnapshotIdx := TxnMarks().DoneUntil()
 	var timestamps []uint64
 	t.Lock()
 	defer t.Unlock()
 	for _, txn := range t.m {
 		index := txn.startIdx()
-		if index-lastSnapshotIdx <= 1000 {
+		// We abort oldest 20% of the transactions.
+		var oldest float64 = 0.2 * float64(pending)
+		if index-lastSnapshotIdx <= uint64(oldest) {
 			timestamps = append(timestamps, txn.StartTs)
 		}
 	}
