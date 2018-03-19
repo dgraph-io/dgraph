@@ -65,7 +65,7 @@ const (
 	PortGrpc     = 9080
 	// If the difference between AppliedUntil - TxnMarks.DoneUntil() is greater than this, we
 	// start aborting old transactions.
-	ForceAbortDifference = 1000
+	ForceAbortDifference = 5000
 )
 
 var (

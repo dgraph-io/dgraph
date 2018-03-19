@@ -671,12 +671,15 @@ func (n *node) snapshot(skip uint64) {
 
 	si := existing.Metadata.Index
 	if le <= si+skip {
-		// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions, so it shouldn't
-		// ideally go above 110*skip.
 		applied := n.Applied.DoneUntil()
+		// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions
 		if applied-le > 1.5*x.ForceAbortDifference && skip != 0 {
-			x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
-				le, applied)
+			// Print warning if difference grows above 3 * x.ForceAbortDifference. Shouldn't ideally
+			// happen as we abort oldest 20% when it grows above 1.5 times.
+			if applied-le > 3x.ForceAbortDifference {
+				x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
+					le, applied)
+			}
 			// Try aborting pending transactions here.
 			n.abortOldTransactions(applied - le)
 		}
