@@ -255,6 +255,12 @@ func (o *Oracle) storePending(ids *api.AssignedIds) {
 	}
 }
 
+func (o *Oracle) MaxPending() uint64 {
+	o.RLock()
+	defer o.RUnlock()
+	return o.maxPending
+}
+
 var errConflict = errors.New("Transaction conflict")
 
 func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {

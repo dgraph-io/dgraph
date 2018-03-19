@@ -341,6 +341,7 @@ func (s *Server) Connect(ctx context.Context,
 		// from our clients.
 		ms, err := s.latestMembershipState(ctx)
 		cs := &intern.ConnectionState{State: ms}
+		cs.MaxPending = s.orc.MaxPending()
 		return cs, err
 	}
 	if len(m.Addr) == 0 {
