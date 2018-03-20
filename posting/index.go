@@ -835,7 +835,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			return fmt.Errorf("While rebuilding list type for attr: [%v], error: [%v]", attr, err)
+			return x.Errorf("While rebuilding list type for attr: [%v], error: [%v]", attr, err)
 		}
 	}
 	return nil
