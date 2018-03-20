@@ -104,7 +104,7 @@ The environment variable names mirror the flag names as seen in the `--help`
 output. They are the concatenation of `DGRAPH`, the subcommand invoked
 (`SERVER`, `ZERO`, `LIVE`, or `BULK`), and then the name of the flag (in
 uppercase). For example, instead of using `dgraph server --lru_mb=8096`, you
-could use `DGRAPH_SERVER_MEMORY_MB=8096 dgraph server`.
+could use `DGRAPH_SERVER_LRU_MB=8096 dgraph server`.
 
 Configuration file formats supported are JSON, TOML, YAML, HCL, and Java
 properties (detected via file extension).
