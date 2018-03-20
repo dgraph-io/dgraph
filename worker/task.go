@@ -1259,6 +1259,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *intern.Query) (*intern.Re
 	}
 
 	if !groups().ServesGroup(gid) {
+		// TODO(pawan) - Log this when we have debug logs.
 		return nil, fmt.Errorf("Temporary error, attr: %q groupId: %v Request sent to wrong server",
 			q.Attr, gid)
 	}
