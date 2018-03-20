@@ -340,8 +340,10 @@ func (s *Server) Connect(ctx context.Context,
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
 		ms, err := s.latestMembershipState(ctx)
-		cs := &intern.ConnectionState{State: ms}
-		cs.MaxPending = s.orc.MaxPending()
+		cs := &intern.ConnectionState{
+			State:      ms,
+			MaxPending: s.orc.MaxPending(),
+		}
 		return cs, err
 	}
 	if len(m.Addr) == 0 {
