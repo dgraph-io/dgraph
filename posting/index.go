@@ -605,7 +605,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			errCh <- x.Errorf("While rebuilding count index for attr: [%v], error: %v", attr, err)
+			errCh <- x.Errorf("While rebuilding count index for attr: [%v], error: [%v]", attr, err)
 			return
 		}
 	}
@@ -720,7 +720,7 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error
 
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			return x.Errorf("While rebuilding reverse edges for attr: [%v], error: %v", attr, err)
+			return x.Errorf("While rebuilding reverse edges for attr: [%v], error: [%v]", attr, err)
 		}
 	}
 	return nil
