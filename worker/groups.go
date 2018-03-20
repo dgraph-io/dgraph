@@ -108,6 +108,10 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	}
 	x.Printf("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
 	Config.RaftId = connState.GetMember().GetId()
+	// This timestamp would be used for reading during snapshot after bulk load.
+	// The stream is async, we need this information before we start or else replica might
+	// not get any data.
+	posting.Oracle().SetMaxPending(connState.MaxPending)
 	gr.applyState(connState.GetState())
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)

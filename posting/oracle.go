@@ -85,6 +85,12 @@ func (o *oracle) MaxPending() uint64 {
 	return o.maxpending
 }
 
+func (o *oracle) SetMaxPending(maxPending uint64) {
+	o.Lock()
+	defer o.Unlock()
+	o.maxpending = maxPending
+}
+
 func (o *oracle) CurrentState() *intern.OracleDelta {
 	od := new(intern.OracleDelta)
 	od.Commits = make(map[uint64]uint64)

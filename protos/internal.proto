@@ -152,6 +152,7 @@ message MembershipState {
 message ConnectionState {
 	Member member = 1;
 	MembershipState state = 2;
+	uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
 }
 
 message Tablet {
