@@ -68,7 +68,6 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 				atomic.StoreInt32(&hasError, 1)
 			}
 		})
-		defer txn.Discard()
 	}
 	wg.Wait()
 	t.Stop()
@@ -108,11 +107,13 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	che := make(chan error)
 	go writeBatch(ctx, ps, kvs, che)
 
-	ikv, err := stream.Recv()
+	keyValues, err := stream.Recv()
 	if err != nil {
 		return 0, err
 	}
 
+	x.AssertTrue(len(keyValues.Kv) == 1)
+	ikv := keyValues.Kv[0]
 	// First key has the snapshot ts from the leader.
 	x.AssertTrue(bytes.Equal(ikv.Key, []byte("min_ts")))
 	n.Lock()
@@ -122,7 +123,7 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	for {
-		kv, err := stream.Recv()
+		keyValues, err = stream.Recv()
 		if err == io.EOF {
 			break
 		}
@@ -133,25 +134,27 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 			close(kvs)
 			return count, err
 		}
-		count++
+		for _, kv := range keyValues.Kv {
+			count++
 
-		// We check for errors, if there are no errors we send value to channel.
-		select {
-		case kvs <- kv:
-			// OK
-		case <-ctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Context timed out while streaming group: %v", group)
+			// We check for errors, if there are no errors we send value to channel.
+			select {
+			case kvs <- kv:
+				// OK
+			case <-ctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Context timed out while streaming group: %v", group)
+				}
+				close(kvs)
+				return 0, ctx.Err()
+			case err := <-che:
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while doing a batch write for group: %v", group)
+				}
+				close(kvs)
+				// Important: Don't put return count, err
+				return 0, err
 			}
-			close(kvs)
-			return 0, ctx.Err()
-		case err := <-che:
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while doing a batch write for group: %v", group)
-			}
-			close(kvs)
-			// Important: Don't put return count, err
-			return 0, err
 		}
 	}
 	close(kvs)
@@ -168,45 +171,38 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	return count, nil
 }
 
-func sendKV(stream intern.Worker_PredicateAndSchemaDataServer, it *badger.Iterator,
-	pk *x.ParsedKey) error {
+func toKV(it *badger.Iterator, pk *x.ParsedKey) (*intern.KV, error) {
 	item := it.Item()
 	var kv *intern.KV
-
-	if pk.IsSchema() {
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		kv = &intern.KV{
-			Key:      item.Key(),
-			Val:      val,
-			UserMeta: []byte{item.UserMeta()},
-			Version:  item.Version(),
-		}
-		if err := stream.Send(kv); err != nil {
-			return err
-		}
-		it.Next()
-		return nil
-	}
 
 	key := make([]byte, len(item.Key()))
 	// Key would be modified by ReadPostingList as it advances the iterator and changes the item.
 	copy(key, item.Key())
 
+	if pk.IsSchema() {
+		val, err := item.ValueCopy(nil)
+		if err != nil {
+			return nil, err
+		}
+		kv = &intern.KV{
+			Key:      key,
+			Val:      val,
+			UserMeta: []byte{item.UserMeta()},
+			Version:  item.Version(),
+		}
+		it.Next()
+		return kv, nil
+	}
+
 	l, err := posting.ReadPostingList(key, it)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	kv, err = l.MarshalToKv()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := stream.Send(kv); err != nil {
-		return err
-	}
-	return nil
+	return kv, nil
 }
 
 func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream intern.Worker_PredicateAndSchemaDataServer) error {
@@ -228,9 +224,11 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	min_ts := posting.Txns().MinTs()
 
 	// Send ts as first KV.
-	if err := stream.Send(&intern.KV{
-		Key:     []byte("min_ts"),
-		Version: min_ts,
+	if err := stream.Send(&intern.KVS{
+		Kv: []*intern.KV{&intern.KV{
+			Key:     []byte("min_ts"),
+			Version: min_ts,
+		}},
 	}); err != nil {
 		return err
 	}
@@ -244,8 +242,19 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	defer it.Close()
 
 	var count int
+	var size int
 	var prevKey []byte
+	kvs := &intern.KVS{}
 	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
+	var bytesSent uint64
+	t := time.NewTicker(5 * time.Second)
+	go func() {
+		now := time.Now()
+		for range t.C {
+			x.Printf("Sending SNAPSHOT: Time elapsed: %v, bytes sent: %s\n",
+				x.FixedDuration(time.Since(now)), humanize.Bytes(bytesSent))
+		}
+	}()
 	for it.Rewind(); it.Valid(); {
 		iterItem := it.Item()
 		k := iterItem.Key()
@@ -269,11 +278,29 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		}
 
 		// This key is not present in follower.
-		if err := sendKV(stream, it, pk); err != nil {
+		kv, err := toKV(it, pk)
+		if err != nil {
 			return err
 		}
+		kvs.Kv = append(kvs.Kv, kv)
+		size += len(kv.Key) + len(kv.Val)
+		bytesSent += uint64(len(kv.Key) + len(kv.Val))
 		count++
+		if size < 1024*1024 { // 1MB
+			continue
+		}
+		if err := stream.Send(kvs); err != nil {
+			return err
+		}
+		size = 0
+		kvs = &intern.KVS{}
 	} // end of iterator
+	if size > 0 {
+		if err := stream.Send(kvs); err != nil {
+			return err
+		}
+	}
+	t.Stop()
 	if tr, ok := trace.FromContext(stream.Context()); ok {
 		tr.LazyPrintf("Sent %d keys to client. Done.\n", count)
 	}
