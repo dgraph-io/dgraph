@@ -184,7 +184,9 @@ func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, s
 	}
 
 	if current.Count != old.Count {
-		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count, startTs); err != nil {
+		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count,
+			startTs); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -525,7 +525,8 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 	return nil
 }
 
-func rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh chan struct{}, startTs uint64) {
+func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error,
+	startTs uint64) {
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
@@ -601,24 +602,32 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh ch
 		}
 	}
 	close(ch)
+
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			x.Printf("Error while rebuilding count index %v\n", err)
+			errCh <- x.Errorf("While rebuilding count index for attr: [%v], error: %v", attr, err)
+			return
 		}
 	}
-	doneCh <- struct{}{}
+
+	errCh <- nil
 }
 
-func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) {
+func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
-	doneCh := make(chan struct{}, 2)
+	che := make(chan error, 2)
 	// Lets rebuild forward and reverse count indexes concurrently.
-	go rebuildCountIndex(ctx, attr, false, doneCh, startTs)
-	go rebuildCountIndex(ctx, attr, true, doneCh, startTs)
+	go rebuildCountIndex(ctx, attr, false, che, startTs)
+	go rebuildCountIndex(ctx, attr, true, che, startTs)
 
+	var err error
 	for i := 0; i < 2; i++ {
-		<-doneCh
+		if e := <-che; e != nil {
+			err = e
+		}
 	}
+
+	return err
 }
 
 type item struct {
@@ -627,7 +636,7 @@ type item struct {
 }
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
-func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) {
+func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
@@ -708,11 +717,13 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) {
 		}
 	}
 	close(ch)
+
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			x.Printf("Error while committing: %v\n", err)
+			return x.Errorf("While rebuilding reverse edges for attr: [%v], error: %v", attr, err)
 		}
 	}
+	return nil
 }
 
 func DeleteIndex(ctx context.Context, attr string) error {
@@ -824,7 +835,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			x.Printf("Error while committing: %v\n", err)
+			return fmt.Errorf("While rebuilding list type for attr: [%v], error: [%v]", attr, err)
 		}
 	}
 	return nil
@@ -832,7 +843,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 
 // RebuildIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
-func RebuildIndex(ctx context.Context, attr string, startTs uint64) {
+func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
@@ -918,9 +929,10 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) {
 	close(ch)
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			x.Printf("Error while committing: %v\n", err)
+			return x.Errorf("While rebuilding index for attr: [%v], error: [%v]", attr, err)
 		}
 	}
+	return nil
 }
 
 func DeleteAll() error {
