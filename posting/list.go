@@ -536,7 +536,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 	} else if l.markdeleteAll < readTs {
 		// Ignore all reads before this.
 		// Fixing the pl is difficult with locks.
-		// Ignore if SP* was committed with timestamp >= readTs
+		// Ignore if SP* was committed with timestamp > readTs
 		if ts := Oracle().CommitTs(l.markdeleteAll); ts < readTs {
 			deleteTs = ts
 		}
