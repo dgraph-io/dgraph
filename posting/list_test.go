@@ -216,6 +216,71 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	checkValue(t, ol, "cars", txn.StartTs)
 }
 
+func TestAddMutation_DelSet(t *testing.T) {
+	key := x.DataKey("value", 1534)
+	ol, err := Get(key)
+	require.NoError(t, err)
+
+	// DO sp*, don't commit
+	// Del a value cars and but don't merge.
+	edge := &intern.DirectedEdge{
+		Value: []byte(x.Star),
+		Op:    intern.DirectedEdge_DEL,
+	}
+	txn := &Txn{StartTs: 1}
+	_, err = ol.AddMutation(context.Background(), txn, edge)
+	require.NoError(t, err)
+
+	// Set value to newcars, commit it
+	edge = &intern.DirectedEdge{
+		Value: []byte("newcars"),
+	}
+	txn = &Txn{StartTs: 2}
+	addMutationHelper(t, ol, edge, Set, txn)
+	ol.CommitMutation(context.Background(), 2, uint64(3))
+	require.EqualValues(t, 1, ol.Length(3, 0))
+	checkValue(t, ol, "newcars", 3)
+}
+func TestAddMutation_DelRead(t *testing.T) {
+	key := x.DataKey("value", 1543)
+	ol, err := Get(key)
+	require.NoError(t, err)
+
+	// Set value to newcars, and commit it
+	edge := &intern.DirectedEdge{
+		Value: []byte("newcars"),
+	}
+	txn := &Txn{StartTs: 1}
+	addMutationHelper(t, ol, edge, Set, txn)
+	ol.CommitMutation(context.Background(), 1, uint64(2))
+	require.EqualValues(t, 1, ol.Length(2, 0))
+	checkValue(t, ol, "newcars", 2)
+
+	// DO sp*, don't commit
+	// Del a value cars and but don't merge.
+	edge = &intern.DirectedEdge{
+		Value: []byte(x.Star),
+		Op:    intern.DirectedEdge_DEL,
+	}
+	txn = &Txn{StartTs: 3}
+	_, err = ol.AddMutation(context.Background(), txn, edge)
+	require.NoError(t, err)
+
+	// Part of same transaction as sp*, so should see zero length even
+	// if not committed yet.
+	require.EqualValues(t, 0, ol.Length(3, 0))
+
+	// Commit sp* only in oracle, don't apply to pl yet
+	Oracle().commits[1] = 5
+	defer func() {
+		delete(Oracle().commits, 1)
+	}()
+
+	// This read should ignore sp*, since readts is 4 and it was committed at 5
+	require.EqualValues(t, 1, ol.Length(4, 0))
+	checkValue(t, ol, "newcars", 4)
+}
+
 func TestAddMutation_jchiu2(t *testing.T) {
 	key := x.DataKey("value", 15)
 	ol, err := Get(key)

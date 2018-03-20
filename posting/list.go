@@ -434,7 +434,8 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		// It was already committed, might be happening due to replay.
 		return nil
 	}
-	if l.markdeleteAll > 0 {
+	// Check if this commit is for sp*, markdeleteAll stores the startTs for sp*
+	if l.markdeleteAll == startTs {
 		// We need to pass startTs and commitTs, so that we can add commitTs to the postings
 		// corresponding to startTs.
 		// Otherwise a deleteAll, followed by set would not mark the set mpost as committed.
@@ -535,7 +536,10 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 	} else if l.markdeleteAll < readTs {
 		// Ignore all reads before this.
 		// Fixing the pl is difficult with locks.
-		deleteTs = Oracle().CommitTs(l.markdeleteAll)
+		// Ignore if SP* was committed with timestamp > readTs
+		if ts := Oracle().CommitTs(l.markdeleteAll); ts < readTs {
+			deleteTs = ts
+		}
 	}
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
