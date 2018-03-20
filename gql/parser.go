@@ -1070,7 +1070,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
-			return result, x.Errorf("Expecting a collon. Got: %v in %v", item, gq.Attr)
+			return result, x.Errorf("Expecting a colon. Got: %v in %v", item, gq.Attr)
 		}
 
 		// Get value.
@@ -2360,7 +2360,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			if peekIt[0].Typ == itemColon {
 				alias = val
-				it.Next() // Consume the itemCollon
+				it.Next() // Consume the itemcolon
 				continue
 			}
 
