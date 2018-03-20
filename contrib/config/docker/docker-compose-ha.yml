@@ -70,7 +70,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero_1:5080
+    command: dgraph server --my=server_1:7080 --lru_mb=2048 --zero=zero_1:5080
   server_2:
     image: dgraph/dgraph:latest
     hostname: "server_2"
@@ -86,7 +86,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero_1:5080 -o 1
+    command: dgraph server --my=server_2:7081 --lru_mb=2048 --zero=zero_1:5080 -o 1
   server_3:
     image: dgraph/dgraph:latest
     hostname: "server_3"
@@ -102,7 +102,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero_1:5080 -o 2
+    command: dgraph server --my=server_3:7082 --lru_mb=2048 --zero=zero_1:5080 -o 2
   server_4:
     image: dgraph/dgraph:latest
     hostname: "server_4"
@@ -117,7 +117,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws04
-    command: dgraph server --my=server_4:7083 --memory_mb=2048 --zero=zero_1:5080 -o 3
+    command: dgraph server --my=server_4:7083 --lru_mb=2048 --zero=zero_1:5080 -o 3
   server_5:
     image: dgraph/dgraph:latest
     hostname: "server_5"
@@ -132,7 +132,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws05
-    command: dgraph server --my=server_5:7084 --memory_mb=2048 --zero=zero_1:5080 -o 4
+    command: dgraph server --my=server_5:7084 --lru_mb=2048 --zero=zero_1:5080 -o 4
   server_6:
     image: dgraph/dgraph:latest
     hostname: "server_6"
@@ -147,7 +147,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws06
-    command: dgraph server --my=server_6:7085 --memory_mb=2048 --zero=zero_1:5080 -o 5
+    command: dgraph server --my=server_6:7085 --lru_mb=2048 --zero=zero_1:5080 -o 5
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"

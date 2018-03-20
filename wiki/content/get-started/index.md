@@ -98,7 +98,7 @@ services:
       - 8080:8080
       - 9080:9080
     restart: on-failure
-    command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080
+    command: dgraph server --my=server:7080 --lru_mb=2048 --zero=zero:5080
   ratel:
     image: dgraph/dgraph:latest
     volumes:
@@ -139,7 +139,7 @@ dgraph zero
 Run `dgraph server` to start Dgraph server.
 
 ```sh
-dgraph server --memory_mb 2048 --zero localhost:5080
+dgraph server --lru_mb 2048 --zero localhost:5080
 ```
 
 **Run Ratel**
@@ -150,7 +150,7 @@ Run 'dgraph-ratel' to start Dgraph UI. This can be used to do mutations and quer
 dgraph-ratel
 ```
 
-{{% notice "tip" %}}You need to set the estimated memory Dgraph server can take through `memory_mb` flag. This is just a hint to the Dgraph server and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
+{{% notice "tip" %}}You need to set the estimated memory Dgraph server can take through `lru_mb` flag. This is just a hint to the Dgraph server and actual usage would be higher than this. It's recommended to set lru_mb to half the available RAM.{{% /notice %}}
 
 #### Windows
 
@@ -163,7 +163,7 @@ dgraph-ratel
 **Run Dgraph data server**
 
 ```sh
-./dgraph.exe server --memory_mb 2048 --zero localhost:5080
+./dgraph.exe server --lru_mb 2048 --zero localhost:5080
 ```
 
 ```sh
@@ -180,7 +180,7 @@ mkdir -p /tmp/data
 docker run -it -p 5080:5080 -p 6080:6080 -p 8080:8080 -p 9080:9080 -p 8000:8000 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
 
 # Run Dgraph Server
-docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
+docker exec -it diggy dgraph server --lru_mb 2048 --zero localhost:5080
 
 # Run Dgraph Ratel
 docker exec -it diggy dgraph-ratel
@@ -201,7 +201,7 @@ docker create -v /dgraph --name data dgraph/dgraph
 Now if we run Dgraph container with `--volumes-from` flag and run Dgraph with the following command, then anything we write to /dgraph in Dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
 docker run -it -p 5080:5080 -p 6080:6080 --volumes-from data --name diggy dgraph/dgraph dgraph zero
-docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
+docker exec -it diggy dgraph server --lru_mb 2048 --zero localhost:5080
 
 # Run Dgraph Ratel
 docker exec -it diggy dgraph-ratel
@@ -211,7 +211,7 @@ docker exec -it diggy dgraph-ratel
 If you are using Dgraph v1.0.2 (or older) then the default ports are 7080, 8080 for zero, so when following instructions for different setup guides override zero port using `--port_offset`.
 
 ```sh
-dgraph zero --memory_mb=<typically half the RAM> --port_offset -2000
+dgraph zero --lru_mb=<typically half the RAM> --port_offset -2000
 ```
 Ratel's default port is 8081, so override it using -p 8000.
 

@@ -41,7 +41,7 @@ func TestMain(m *testing.M) {
 	time.Sleep(5 * time.Second)
 	dgraph := exec.Command(os.ExpandEnv("dgraph"),
 		"server",
-		"--memory_mb=2048",
+		"--lru_mb=2048",
 		fmt.Sprintf("--zero=127.0.0.1:%d", 5080),
 		"-o=1",
 	)
