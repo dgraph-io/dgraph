@@ -37,7 +37,9 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool,
 		return err
 	}
 	if rebuild {
-		posting.RebuildIndex(ctx, attr, startTs)
+		if err := posting.RebuildIndex(ctx, attr, startTs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -54,7 +56,9 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	}
 	if rebuild {
 		// Remove reverse edges
-		posting.RebuildReverseEdges(ctx, attr, startTs)
+		if err := posting.RebuildReverseEdges(ctx, attr, startTs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -67,7 +71,9 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 		return err
 	}
 	if rebuild {
-		posting.RebuildCountIndex(ctx, attr, startTs)
+		if err := posting.RebuildCountIndex(ctx, attr, startTs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
