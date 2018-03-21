@@ -48,8 +48,9 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 	go func() {
 		now := time.Now()
 		for range t.C {
-			x.Printf("Getting SNAPSHOT: Time elapsed: %v, bytes written: %s\n",
-				x.FixedDuration(time.Since(now)), humanize.Bytes(bytesWritten))
+			dur := time.Since(now)
+			x.Printf("Getting SNAPSHOT: Time elapsed: %v, bytes written: %s, bytes/sec %d\n",
+				x.FixedDuration(dur), humanize.Bytes(bytesWritten), bytesWritten/uint64(dur.Seconds()))
 		}
 	}()
 
@@ -57,7 +58,7 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 	var wg sync.WaitGroup // to wait for all callbacks to return
 	for i := range kv {
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		bytesWritten += uint64(len(i.Key) + len(i.Val))
+		bytesWritten += uint64(i.Size())
 		txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0])
 		wg.Add(1)
 		txn.CommitAt(i.Version, func(err error) {
@@ -153,6 +154,9 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 				}
 				close(kvs)
 				// Important: Don't put return count, err
+				// There was a compiler bug which was fixed in 1.8.1
+				// https://github.com/golang/go/issues/21722.
+				// Probably should be ok to return count, err now
 				return 0, err
 			}
 		}
@@ -242,17 +246,19 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	defer it.Close()
 
 	var count int
-	var size int
+	var batchSize int
 	var prevKey []byte
 	kvs := &intern.KVS{}
 	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
 	var bytesSent uint64
 	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
 	go func() {
 		now := time.Now()
 		for range t.C {
-			x.Printf("Sending SNAPSHOT: Time elapsed: %v, bytes sent: %s\n",
-				x.FixedDuration(time.Since(now)), humanize.Bytes(bytesSent))
+			dur := time.Since(now)
+			x.Printf("Sending SNAPSHOT: Time elapsed: %v, bytes sent: %s, bytes/sec %d\n",
+				x.FixedDuration(dur), humanize.Bytes(bytesSent), bytesSent/uint64(dur.Seconds()))
 		}
 	}()
 	for it.Rewind(); it.Valid(); {
@@ -283,24 +289,23 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 			return err
 		}
 		kvs.Kv = append(kvs.Kv, kv)
-		size += len(kv.Key) + len(kv.Val)
-		bytesSent += uint64(len(kv.Key) + len(kv.Val))
+		batchSize += kv.Size()
+		bytesSent += uint64(kv.Size())
 		count++
-		if size < 1024*1024 { // 1MB
+		if batchSize < MB { // 1MB
 			continue
 		}
 		if err := stream.Send(kvs); err != nil {
 			return err
 		}
-		size = 0
+		batchSize = 0
 		kvs = &intern.KVS{}
 	} // end of iterator
-	if size > 0 {
+	if batchSize > 0 {
 		if err := stream.Send(kvs); err != nil {
 			return err
 		}
 	}
-	t.Stop()
 	if tr, ok := trace.FromContext(stream.Context()); ok {
 		tr.LazyPrintf("Sent %d keys to client. Done.\n", count)
 	}
