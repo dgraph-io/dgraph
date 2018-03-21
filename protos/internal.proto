@@ -202,6 +202,10 @@ message Proposal {
 	string clean_predicate = 6; // Delete the predicate which was moved to other group.
 }
 
+message KVS {
+ repeated KV kv = 1;
+}
+
 message KV {
 	bytes key = 1;
 	bytes val = 2;
@@ -377,7 +381,7 @@ service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                        returns (api.TxnContext) {}
 	rpc ServeTask (Query)                         returns (Result) {}
-	rpc PredicateAndSchemaData (SnapshotMeta) returns (stream KV) {}
+	rpc PredicateAndSchemaData (SnapshotMeta) returns (stream KVS) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
 	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
 	rpc MinTxnTs (api.Payload)                    returns (Num) {}
