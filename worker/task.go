@@ -649,6 +649,11 @@ func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
+	if len(q.Langs) > 0 && !schema.State().HasLang(attr) {
+		return nil, x.Errorf("Language tags can only be used with predicates of string type"+
+			" having @lang directive in schema. Got: [%v]", attr)
+	}
+
 	typ, err := schema.State().TypeOf(attr)
 	if err != nil {
 		// All schema checks are done before this, this type is only used to
@@ -727,14 +732,9 @@ func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.
 }
 
 func needsStringFiltering(srcFn *functionContext, langs []string, attr string) bool {
-	if !srcFn.isStringFn {
-		return false
-	}
-
-	tokenizer, err := pickTokenizer(attr, srcFn.fname)
-	// If a predicate doesn't have @lang directive in schema and has a non-lossy tokenizer like
-	// exact, then we don't need to do any more filtering.
-	if err == nil && !tokenizer.IsLossy() && !schema.State().HasLang(attr) {
+	// If a predicate doesn't have @lang directive in schema, we don't need to do any string
+	// filtering.
+	if !schema.State().HasLang(attr) {
 		return false
 	}
 
@@ -1137,7 +1137,6 @@ func parseSrcFn(q *intern.Query) (*functionContext, error) {
 			}
 			fc.tokens = append(fc.tokens, tokens...)
 			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
-
 		}
 
 		// Number of index keys is more than no. of uids to filter, so its better to fetch data keys

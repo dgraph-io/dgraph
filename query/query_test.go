@@ -161,7 +161,6 @@ func populateGraph(t *testing.T) {
 	intD := types.Val{types.IntID, int64(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "age", 1, types.IntID, data.Value.([]byte), nil)
 
 	// FloatID
 	fdata := types.ValueForType(types.BinaryID)
@@ -6076,10 +6075,10 @@ geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
-royal_title                    : string @index(hash, term, fulltext) .
+royal_title                    : string @index(hash, term, fulltext) @lang .
 noindex_name                   : string .
 school                         : uid @count .
-lossy                          : string @index(term) .
+lossy                          : string @index(term) @lang .
 occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .

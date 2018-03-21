@@ -159,7 +159,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		{},
+		nil,
 		{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -181,9 +181,9 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		{},
+		nil,
 		{12},
-		{},
+		nil,
 		{10},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -212,8 +212,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	require.EqualValues(t, [][]uint64{
 		{12},
-		{},
-		{},
+		nil,
+		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
@@ -222,8 +222,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	require.EqualValues(t, [][]uint64{
 		{12},
-		{},
-		{},
+		nil,
+		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
 
@@ -237,7 +237,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		{},
+		nil,
 		{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -259,9 +259,9 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		{},
+		nil,
 		{12},
-		{},
+		nil,
 		{10},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -290,8 +290,8 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	require.EqualValues(t, [][]uint64{
 		{12},
-		{},
-		{},
+		nil,
+		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
 
