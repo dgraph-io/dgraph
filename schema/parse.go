@@ -73,6 +73,12 @@ func parseDirective(it *lex.ItemIterator, schema *intern.SchemaUpdate, t types.T
 		schema.Count = true
 	case "upsert":
 		schema.Upsert = true
+	case "lang":
+		if t != types.StringID {
+			return x.Errorf("@lang directive can only be specified for string type."+
+				" Got: [%v] for attr: [%v]", t.Name(), schema.Predicate)
+		}
+		schema.Lang = true
 	default:
 		return x.Errorf("Invalid index specification")
 	}
@@ -134,19 +140,17 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*intern.SchemaUpda
 		}
 		next = it.Item()
 	}
-	if next.Typ == itemAt {
+
+	for {
+		if next.Typ != itemAt {
+			break
+		}
 		if err := parseDirective(it, schema, t); err != nil {
 			return nil, err
 		}
 		next = it.Item()
 	}
-	// Check for another directive, we could have @count too.
-	if next.Typ == itemAt {
-		if err := parseDirective(it, schema, t); err != nil {
-			return nil, err
-		}
-		next = it.Item()
-	}
+
 	if next.Typ != itemDot {
 		return nil, x.Errorf("Invalid ending")
 	}

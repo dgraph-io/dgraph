@@ -341,6 +341,11 @@ func ValidateAndConvert(edge *intern.DirectedEdge, schemaType types.TypeID) erro
 		}
 	}
 
+	if schemaType == types.StringID && len(edge.Lang) > 0 && !schema.State().HasLang(edge.Attr) {
+		return x.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
+			edge.Attr, edge)
+	}
+
 	storageType := posting.TypeID(edge)
 	if !schemaType.IsScalar() && !storageType.IsScalar() {
 		return nil

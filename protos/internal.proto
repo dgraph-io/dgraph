@@ -311,6 +311,7 @@ message SchemaUpdate {
 	bool count = 5;
 	bool list = 6;
 	bool upsert = 8;
+	bool lang = 9;
 
 	// Deleted field:
 	reserved 7;

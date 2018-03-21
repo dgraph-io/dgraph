@@ -344,6 +344,8 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		// Check original value BEFORE any mutation actually happens.
 		if len(t.Lang) > 0 {
 			val, found, err = l.findValue(txn.StartTs, farm.Fingerprint64([]byte(t.Lang)))
+		} else if schema.State().IsList(t.Attr) {
+			val, found, err = l.findValue(txn.StartTs, farm.Fingerprint64([]byte(t.Value)))
 		} else {
 			val, found, err = l.findValue(txn.StartTs, math.MaxUint64)
 		}
@@ -402,8 +404,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *intern.DirectedEdge,
 			return err
 		}
 	}
-	// We should always set index set and we can take care of stale indexes in
-	// eventual index consistency
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {

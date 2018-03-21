@@ -61,7 +61,7 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `list: [string] .`,
+		Schema: `list: [string] @lang .`,
 	})))
 
 	txn := c.NewTxn()
@@ -127,7 +127,7 @@ func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `pred: [string] .`,
+		Schema: `pred: [string] @lang .`,
 	})))
 
 	txn := c.NewTxn()
@@ -536,7 +536,7 @@ func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 // Shows fix for issue #1918.
 func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "name: string @index(exact) ."}))
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "name: string @index(exact) @lang ."}))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{

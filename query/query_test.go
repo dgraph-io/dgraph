@@ -6060,7 +6060,7 @@ func TestSchemaBlock5(t *testing.T) {
 }
 
 const schemaStr = `
-name                           : string @index(term, exact, trigram) @count .
+name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .

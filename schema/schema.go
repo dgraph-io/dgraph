@@ -223,6 +223,15 @@ func (s *state) HasUpsert(pred string) bool {
 	return false
 }
 
+func (s *state) HasLang(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if schema, ok := s.predicate[pred]; ok {
+		return schema.Lang
+	}
+	return false
+}
+
 func Init(ps *badger.ManagedDB) {
 	pstore = ps
 	reset()

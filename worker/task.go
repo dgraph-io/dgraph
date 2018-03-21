@@ -718,7 +718,7 @@ func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.
 	}
 
 	// For string matching functions, check the language.
-	if needsStringFiltering(srcFn, q.Langs) {
+	if needsStringFiltering(srcFn, q.Langs, attr) {
 		filterStringFunction(funcArgs{q, gid, srcFn, out})
 	}
 
@@ -726,8 +726,19 @@ func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.
 	return out, nil
 }
 
-func needsStringFiltering(srcFn *functionContext, langs []string) bool {
-	return srcFn.isStringFn && langForFunc(langs) != "." &&
+func needsStringFiltering(srcFn *functionContext, langs []string, attr string) bool {
+	if !srcFn.isStringFn {
+		return false
+	}
+
+	tokenizer, err := pickTokenizer(attr, srcFn.fname)
+	// If a predicate doesn't have @lang directive in schema and has a non-lossy tokenizer like
+	// exact, then we don't need to do any more filtering.
+	if err == nil && !tokenizer.IsLossy() && !schema.State().HasLang(attr) {
+		return false
+	}
+
+	return langForFunc(langs) != "." &&
 		(srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
 			srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn)
 }
