@@ -1,2 +1,2 @@
-name: string @index(term) .
+name: string @index(term) @lang .
 initial_release_date: datetime @index(year) .

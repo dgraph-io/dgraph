@@ -82,7 +82,9 @@ func TestConvertEdgeType(t *testing.T) {
 	}
 
 	for _, testEdge := range testEdges {
-		err := ValidateAndConvert(testEdge.input, testEdge.to)
+		err := ValidateAndConvert(testEdge.input, &intern.SchemaUpdate{
+			Predicate: testEdge.to,
+		})
 		if testEdge.expectErr {
 			require.Error(t, err)
 		} else {

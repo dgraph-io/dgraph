@@ -6076,7 +6076,7 @@ geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
-royal_title                    : string @index(hash, term, fulltext) .
+royal_title                    : string @index(hash, term, fulltext) @lang .
 noindex_name                   : string .
 school                         : uid @count .
 lossy                          : string @index(term) .

@@ -60,10 +60,10 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 		return errUnservedTablet
 	}
 
-	typ, err := schema.State().TypeOf(edge.Attr)
+	su, ok := schema.State().Get(edge.Attr)
 
 	if edge.Op == intern.DirectedEdge_SET {
-		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
+		x.AssertTruef(ok, "Schema is not present for predicate %s", edge.Attr)
 	}
 
 	if deletePredicateEdge(edge) {
@@ -72,7 +72,7 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially
-	err = ValidateAndConvert(edge, typ)
+	err := ValidateAndConvert(edge, &su)
 
 	key := x.DataKey(edge.Attr, edge.Entity)
 
@@ -326,7 +326,7 @@ func checkSchema(s *intern.SchemaUpdate) error {
 
 // If storage type is specified, then check compatibility or convert to schema type
 // if no storage type is specified then convert to schema type.
-func ValidateAndConvert(edge *intern.DirectedEdge, schemaType types.TypeID) error {
+func ValidateAndConvert(edge *intern.DirectedEdge, su *intern.SchemaUpdate) error {
 	if deletePredicateEdge(edge) {
 		return nil
 	}
@@ -336,12 +336,13 @@ func ValidateAndConvert(edge *intern.DirectedEdge, schemaType types.TypeID) erro
 	// <s> <p> <o> Del on non list scalar type.
 	if edge.ValueId == 0 && !bytes.Equal(edge.Value, []byte(x.Star)) &&
 		edge.Op == intern.DirectedEdge_DEL {
-		if !schema.State().IsList(edge.Attr) {
+		if !su.List {
 			return x.Errorf("Please use * with delete operation for non-list type: [%v]", edge.Attr)
 		}
 	}
 
-	if schemaType == types.StringID && len(edge.Lang) > 0 && !schema.State().HasLang(edge.Attr) {
+	schemaType := types.TypeID(su.ValueType)
+	if schemaType == types.StringID && len(edge.Lang) > 0 && !su.Lang {
 		return x.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
 			edge.Attr, edge)
 	}

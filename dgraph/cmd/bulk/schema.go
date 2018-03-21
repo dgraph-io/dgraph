@@ -25,7 +25,6 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/intern"
-	"github.com/dgraph-io/dgraph/types"
 	wk "github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -87,8 +86,7 @@ func (s *schemaStore) validateType(de *intern.DirectedEdge, objectIsUID bool) {
 		s.Unlock()
 	}
 
-	schTyp := types.TypeID(sch.ValueType)
-	err := wk.ValidateAndConvert(de, schTyp)
+	err := wk.ValidateAndConvert(de, sch)
 	if err != nil {
 		log.Fatalf("RDF doesn't match schema: %v", err)
 	}
