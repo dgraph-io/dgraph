@@ -732,6 +732,10 @@ func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.
 }
 
 func needsStringFiltering(srcFn *functionContext, langs []string, attr string) bool {
+	if !srcFn.isStringFn {
+		return false
+	}
+
 	// If a predicate doesn't have @lang directive in schema, we don't need to do any string
 	// filtering.
 	if !schema.State().HasLang(attr) {
