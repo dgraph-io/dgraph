@@ -101,8 +101,8 @@ func (s *state) Set(pred string, schema intern.SchemaUpdate) {
 
 // Get gets the schema for given predicate
 func (s *state) Get(pred string) (intern.SchemaUpdate, bool) {
-	s.Lock()
-	defer s.Unlock()
+	s.RLock()
+	defer s.RUnlock()
 	schema, has := s.predicate[pred]
 	if !has {
 		return intern.SchemaUpdate{}, false
@@ -219,6 +219,15 @@ func (s *state) HasUpsert(pred string) bool {
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
 		return schema.Upsert
+	}
+	return false
+}
+
+func (s *state) HasLang(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if schema, ok := s.predicate[pred]; ok {
+		return schema.Lang
 	}
 	return false
 }

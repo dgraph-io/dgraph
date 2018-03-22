@@ -209,9 +209,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 				// Tablet can move by the time request reaches here.
 				return errUnservedTablet
 			}
-			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
+
+			su, ok := schema.State().Get(edge.Attr)
+			if !ok {
 				continue
-			} else if err := ValidateAndConvert(edge, typ); err != nil {
+			} else if err := ValidateAndConvert(edge, &su); err != nil {
 				return err
 			}
 		}

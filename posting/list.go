@@ -32,15 +32,15 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/bp128"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgo/y"
 )
 
 var (
@@ -309,6 +309,27 @@ func TypeID(edge *intern.DirectedEdge) types.TypeID {
 	return types.TypeID(edge.ValueType)
 }
 
+func fingerprintEdge(t *intern.DirectedEdge) uint64 {
+	// There could be a collision if the user gives us a value with Lang = "en" and later gives
+	// us a value = "en" for the same predicate. We would end up overwritting his older lang
+	// value.
+
+	// All edges with a value without LANGTAG, have the same uid. In other words,
+	// an (entity, attribute) can only have one untagged value.
+	var id uint64 = math.MaxUint64
+
+	// Value with a lang type.
+	if len(t.Lang) > 0 {
+		id = farm.Fingerprint64([]byte(t.Lang))
+	} else if schema.State().IsList(t.Attr) {
+		// TODO - When values are deleted for list type, then we should only delete the uid from
+		// index if no other values produces that index token.
+		// Value for list type.
+		id = farm.Fingerprint64(t.Value)
+	}
+	return id
+}
+
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -342,23 +363,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	mpost := NewPosting(t)
 
 	if mpost.PostingType != intern.Posting_REF {
-		// There could be a collision if the user gives us a value with Lang = "en" and later gives
-		// us a value = "en" for the same predicate. We would end up overwritting his older lang
-		// value.
-
-		// Value with a lang type.
-		if len(t.Lang) > 0 {
-			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
-		} else if schema.State().IsList(t.Attr) {
-			// TODO - When values are deleted for list type, then we should only delete the uid from
-			// index if no other values produces that index token.
-			// Value for list type.
-			t.ValueId = farm.Fingerprint64(t.Value)
-		} else {
-			// All edges with a value without LANGTAG, have the same uid. In other words,
-			// an (entity, attribute) can only have one untagged value.
-			t.ValueId = math.MaxUint64
-		}
+		t.ValueId = fingerprintEdge(t)
 	}
 
 	mpost.Uid = t.ValueId

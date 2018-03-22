@@ -28,7 +28,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
@@ -342,11 +341,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	if doUpdateIndex {
 		// Check original value BEFORE any mutation actually happens.
-		if len(t.Lang) > 0 {
-			val, found, err = l.findValue(txn.StartTs, farm.Fingerprint64([]byte(t.Lang)))
-		} else {
-			val, found, err = l.findValue(txn.StartTs, math.MaxUint64)
-		}
+		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
 		if err != nil {
 			return val, found, emptyCountParams, err
 		}
@@ -402,8 +397,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *intern.DirectedEdge,
 			return err
 		}
 	}
-	// We should always set index set and we can take care of stale indexes in
-	// eventual index consistency
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {

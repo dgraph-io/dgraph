@@ -82,7 +82,10 @@ func TestConvertEdgeType(t *testing.T) {
 	}
 
 	for _, testEdge := range testEdges {
-		err := ValidateAndConvert(testEdge.input, testEdge.to)
+		err := ValidateAndConvert(testEdge.input,
+			&intern.SchemaUpdate{
+				ValueType: intern.Posting_ValType(testEdge.to),
+			})
 		if testEdge.expectErr {
 			require.Error(t, err)
 		} else {
@@ -100,7 +103,10 @@ func TestValidateEdgeTypeError(t *testing.T) {
 		Attr:  "name",
 	}
 
-	err := ValidateAndConvert(edge, types.DateTimeID)
+	err := ValidateAndConvert(edge,
+		&intern.SchemaUpdate{
+			ValueType: intern.Posting_ValType(types.DateTimeID),
+		})
 	require.Error(t, err)
 }
 
