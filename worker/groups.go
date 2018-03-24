@@ -190,15 +190,19 @@ func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 			itr.Next()
 			continue
 		}
-		if pk.IsSchema() {
-			itr.Seek(pk.SkipSchema())
-			continue
-		}
 
+		// We should not be skipping schema keys here, otherwise if there is no data for them, they
+		// won't be added to the tablets map returned by this function and would ultimately be
+		// removed from the membership state.
 		tablet, has := tablets[pk.Attr]
 		if !has {
 			if !g.ServesTablet(pk.Attr) {
-				itr.Seek(pk.SkipPredicate())
+				if pk.IsSchema() {
+					itr.Next()
+				} else {
+					// data key for predicate we don't serve, skip it.
+					itr.Seek(pk.SkipPredicate())
+				}
 				continue
 			}
 			tablet = &intern.Tablet{GroupId: gid, Predicate: pk.Attr}

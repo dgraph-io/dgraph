@@ -329,6 +329,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		group := state.Groups[p.Tablet.GroupId]
 		if p.Tablet.Remove {
+			x.Printf("Removing tablet for attr: [%v], gid: [%v]\n", p.Tablet.Predicate, p.Tablet.GroupId)
 			if group != nil {
 				delete(group.Tablets, p.Tablet.Predicate)
 			}
