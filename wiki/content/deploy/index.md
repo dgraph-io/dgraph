@@ -1058,7 +1058,7 @@ Options present for `dgraph zero` can be seen by running `dgraph zero --help`.
 * Whenever a new machine is brought up it is assigned a group based on replication factor. If replication factor is 1 then each server node will serve different group. If replication factor is 2 and you launch 4 machines then first two machines would server group 1 and next two machines would server group 2.
 * Zero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
 
-Like Dgraph, Zero also exposes HTTP on 8080 (+ any `--port_offset`). You can query it
+Like Dgraph, Zero also exposes HTTP on 6080 (+ any `--port_offset`). You can query it
 to see useful information, like the following:
 
 * `/state` Information about the nodes that are part of the cluster. Also contains information about
