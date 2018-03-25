@@ -33,8 +33,9 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -42,7 +43,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgo/y"
 	"github.com/pkg/errors"
 )
 
@@ -470,6 +470,9 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	tctx := &api.TxnContext{}
 
+	if tc.StartTs == 0 {
+		return &api.TxnContext{}, fmt.Errorf("StartTs cannot be zero while committing a transaction.")
+	}
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == y.ErrAborted {
 		tctx.Aborted = true
