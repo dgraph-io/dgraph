@@ -120,6 +120,64 @@ func (p *proposals) Has(pid uint32) bool {
 	return has
 }
 
+var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
+
+func (n *node) WaitLinearizableRead(ctx context.Context) error {
+	// This is possible if say Zero was restarted and Server tries to connect over stream.
+	if n.Raft() == nil {
+		return errReadIndex
+	}
+	// Read Request can get rejected then we would wait idefinitely on the channel
+	// so have a timeout of 1 second.
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	ch := make(chan uint64, 1)
+	ri := n.setRead(ch)
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], ri)
+	if err := n.Raft().ReadIndex(ctx, b[:]); err != nil {
+		return err
+	}
+	select {
+	case index := <-ch:
+		if index == raft.None {
+			return errReadIndex
+		}
+		if err := n.Applied.WaitForMark(ctx, index); err != nil {
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (n *node) setRead(ch chan uint64) uint64 {
+	n.Lock()
+	defer n.Unlock()
+	if n.reads == nil {
+		n.reads = make(map[uint64]chan uint64)
+	}
+	for {
+		ri := uint64(rand.Int63())
+		if _, has := n.reads[ri]; has {
+			continue
+		}
+		n.reads[ri] = ch
+		return ri
+	}
+}
+
+func (n *node) sendReadIndex(ri, id uint64) {
+	n.Lock()
+	ch, has := n.reads[ri]
+	delete(n.reads, ri)
+	n.Unlock()
+	if has {
+		ch <- id
+	}
+}
+
 type node struct {
 	*conn.Node
 
@@ -128,6 +186,7 @@ type node struct {
 	ctx     context.Context
 	stop    chan struct{} // to send the stop signal to Run
 	done    chan struct{} // to check whether node is running or not
+	reads   map[uint64]chan uint64
 	gid     uint32
 	props   proposals
 
@@ -501,6 +560,10 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			for _, rs := range rd.ReadStates {
+				ri := binary.BigEndian.Uint64(rs.RequestCtx)
+				n.sendReadIndex(ri, rs.Index)
+			}
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
 				leader = rd.RaftState == raft.StateLeader

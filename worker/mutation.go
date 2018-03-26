@@ -410,13 +410,20 @@ func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) 
 
 func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	node := groups().Node
+	var index uint64
 	if txn := posting.Txns().Get(startTs); txn != nil {
 		txn.Fill(tctx)
+		if l := len(txn.Indices); l > 0 {
+			index = txn.Indices[l-1]
+		}
 	}
 	tctx.LinRead = &api.LinRead{
 		Ids: make(map[uint32]uint64),
 	}
-	tctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
+	if x := node.Applied.DoneUntil(); x > index {
+		index = x
+	}
+	tctx.LinRead.Ids[gid] = index
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
