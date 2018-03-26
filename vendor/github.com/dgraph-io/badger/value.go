@@ -55,6 +55,10 @@ const (
 	mi int64 = 1 << 20
 )
 
+var (
+	zeroHeader [headerBufSize]byte
+)
+
 type logFile struct {
 	path string
 	// This is a lock on the log file. It guards the fd’s value, the file’s
@@ -194,6 +198,9 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) error {
 
 	truncate := false
 	recordOffset := offset
+	maxFid := atomic.LoadUint32(&vlog.maxFid)
+	var lastCommit uint64
+	var validEndOffset uint32
 	for {
 		hash := crc32.New(y.CastagnoliCrcTable)
 		tee := io.TeeReader(reader, hash)
@@ -267,6 +274,37 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) error {
 		vp.Offset = e.offset
 		vp.Fid = lf.fid
 
+		if maxFid > lf.fid {
+			// Truncate only for last file, after punching holes we can have
+			// only some entries of a transaction then new transaction entries
+			// without bitFinTxn in files which has been garbage collected.
+		} else if e.meta&bitFinTxn > 0 {
+			txnTs, err := strconv.ParseUint(string(e.Value), 10, 64)
+			if err != nil || lastCommit != txnTs {
+				truncate = true
+				break
+			}
+			// Got the end of txn. Now we can store them.
+			lastCommit = 0
+			validEndOffset = recordOffset
+		} else if e.meta&bitTxn == 0 {
+			// We shouldn't get this entry in the middle of a transaction.
+			if lastCommit != 0 {
+				truncate = true
+				break
+			}
+			validEndOffset = recordOffset
+		} else {
+			txnTs := y.ParseTs(e.Key)
+			if lastCommit == 0 {
+				lastCommit = txnTs
+			}
+			if lastCommit != txnTs {
+				truncate = true
+				break
+			}
+		}
+
 		if err := fn(e, vp); err != nil {
 			if err == errStop {
 				break
@@ -277,7 +315,7 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) error {
 
 	if truncate && len(lf.fmap) == 0 {
 		// Only truncate if the file isn't mmaped. Otherwise, Windows would puke.
-		if err := lf.fd.Truncate(int64(recordOffset)); err != nil {
+		if err := lf.fd.Truncate(int64(validEndOffset)); err != nil {
 			return err
 		}
 	}
@@ -777,11 +815,12 @@ func (vlog *valueLog) write(reqs []*request) error {
 			}
 			p.Len = uint32(plen)
 			b.Ptrs = append(b.Ptrs, p)
-
-			if p.Offset > uint32(vlog.opt.ValueLogFileSize) {
-				if err := toDisk(); err != nil {
-					return err
-				}
+		}
+		// We write to disk here so that all entries that are part of the same transaction are
+		// written to the same vlog file.
+		if vlog.writableOffset()+uint32(vlog.buf.Len()) > uint32(vlog.opt.ValueLogFileSize) {
+			if err := toDisk(); err != nil {
+				return err
 			}
 		}
 	}
@@ -818,6 +857,8 @@ func (vlog *valueLog) Read(vp valuePointer, s *y.Slice) ([]byte, func(), error) 
 	buf, cb, err := vlog.readValueBytes(vp, s)
 	if err != nil {
 		return nil, cb, err
+	} else if bytes.Equal(buf[:headerBufSize], zeroHeader[:]) {
+		return nil, cb, y.ErrPurged
 	}
 	var h header
 	h.Decode(buf)
