@@ -1767,10 +1767,7 @@ Query Example: Predicates saved to a variable and queried with `expand()`.
   director(func: eq(name@en, "Lost in Translation")) {
     name@.
     expand(val(pred)) {
-      expand(_all_) {
-        name@.
-        uid
-      }
+      expand(_all_)
     }
   }
 }
