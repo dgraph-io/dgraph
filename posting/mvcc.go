@@ -107,10 +107,10 @@ func (t *transactions) TxnsSinceSnapshot(pending uint64) []uint64 {
 	var timestamps []uint64
 	t.Lock()
 	defer t.Unlock()
+	var oldest float64 = 0.2 * float64(pending)
 	for _, txn := range t.m {
 		index := txn.startIdx()
 		// We abort oldest 20% of the transactions.
-		var oldest float64 = 0.2 * float64(pending)
 		if index-lastSnapshotIdx <= uint64(oldest) {
 			timestamps = append(timestamps, txn.StartTs)
 		}

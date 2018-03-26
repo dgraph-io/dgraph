@@ -105,7 +105,7 @@ func (s *scheduler) waitForConflictResolution(attr string) {
 	tryAbortTransactions(tctxs)
 }
 
-func updateTxnMarks(raftIndex uint64, startTs uint64) *posting.Txn {
+func updateTxns(raftIndex uint64, startTs uint64) *posting.Txn {
 	txn := &posting.Txn{
 		StartTs: startTs,
 		Indices: []uint64{raftIndex},
@@ -182,7 +182,7 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-			updateTxnMarks(index, proposal.Mutations.StartTs)
+			updateTxns(index, proposal.Mutations.StartTs)
 			return errPredicateMoving
 		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
@@ -224,7 +224,7 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 
 	m := proposal.Mutations
 	pctx := s.n.props.pctx(proposal.Id)
-	pctx.txn = updateTxnMarks(index, m.StartTs)
+	pctx.txn = updateTxns(index, m.StartTs)
 	for _, edge := range m.Edges {
 		t := &task{
 			rid:  index,
