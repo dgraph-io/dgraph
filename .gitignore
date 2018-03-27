@@ -8,8 +8,9 @@ gql/gql-fuzz.zip
 gql/fuzz-data/crashers
 gql/fuzz-data/suppressions
 
-#goland project folder
+# goland project folder
 .idea
+dgraph.iml
 
 # Binaries for programs and plugins
 *.exe
