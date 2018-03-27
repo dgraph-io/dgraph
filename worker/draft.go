@@ -807,7 +807,6 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 			n.canCampaign = true
 		}
 	}
-
 	go n.processApplyCh()
 	go n.Run()
 	go n.BatchAndSendMessages()
