@@ -764,9 +764,17 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	n.Applied.SetDoneUntil(idx)
 	posting.TxnMarks().SetDoneUntil(idx)
 
-	// TODO - Put this in a loop.
 	if _, hasPeer := groups().MyPeer(); hasPeer {
-		restart, err = n.isMember()
+		// The node has other peers, it might have crashed after joining the cluster and before
+		// writing a snapshot. Check from leader, if it is part of the cluster. Consider this a
+		// restart if it is part of the cluster, else start a new node.
+		for {
+			if restart, err = n.isMember(); err == nil {
+				break
+			}
+			x.Printf("Error while calling hasPeer: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+		}
 	}
 
 	if restart {
