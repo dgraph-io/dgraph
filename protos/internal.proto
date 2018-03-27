@@ -369,7 +369,7 @@ service Raft {
 	rpc Echo (api.Payload)        returns (api.Payload) {}
 	rpc RaftMessage (api.Payload) returns (api.Payload) {}
 	rpc JoinCluster (RaftContext) returns (api.Payload) {}
-	rpc IsPeer (RaftContext)	    returns (PeerResponse) {}
+	rpc IsPeer (RaftContext)      returns (PeerResponse) {}
 }
 
 service Zero {
