@@ -764,7 +764,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	n.Applied.SetDoneUntil(idx)
 	posting.TxnMarks().SetDoneUntil(idx)
 
-	if _, hasPeer := groups().MyPeer(); hasPeer {
+	if _, hasPeer := groups().MyPeer(); !restart && hasPeer {
 		// The node has other peers, it might have crashed after joining the cluster and before
 		// writing a snapshot. Check from leader, if it is part of the cluster. Consider this a
 		// restart if it is part of the cluster, else start a new node.
