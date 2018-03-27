@@ -71,9 +71,9 @@ type Node struct {
 func NewNode(rc *intern.RaftContext) *Node {
 	store := raft.NewMemoryStorage()
 	n := &Node{
-		Id:    rc.Id,
+		Id:     rc.Id,
 		MyAddr: rc.Addr,
-		Store: store,
+		Store:  store,
 		Cfg: &raft.Config{
 			ID:              rc.Id,
 			ElectionTick:    100, // 200 ms if we call Tick() every 20 ms.
@@ -448,6 +448,19 @@ func (w *RaftServer) GetNode() *Node {
 type RaftServer struct {
 	nodeLock sync.RWMutex // protects Node.
 	Node     *Node
+}
+
+func (w *RaftServer) IsPeer(ctx context.Context, rc *intern.RaftContext) (*intern.PeerResponse,
+	error) {
+	node := w.GetNode()
+	if node == nil || node.Raft() == nil {
+		return &intern.PeerResponse{}, errNoNode
+	}
+
+	if addr, ok := node.peers[rc.Id]; ok && addr == rc.Addr {
+		return &intern.PeerResponse{Status: true}, nil
+	}
+	return &intern.PeerResponse{}, nil
 }
 
 func (w *RaftServer) JoinCluster(ctx context.Context,
