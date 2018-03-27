@@ -144,6 +144,7 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 		return errors.New("StartTs must be provided.")
 	}
 
+	startTs := proposal.Mutations.StartTs
 	if len(proposal.Mutations.Schema) > 0 {
 		if err = s.n.Applied.WaitForMark(s.n.ctx, index-1); err != nil {
 			posting.TxnMarks().Done(index)
