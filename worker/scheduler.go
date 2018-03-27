@@ -139,15 +139,15 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 		return err
 	}
 
+	if proposal.Mutations.StartTs == 0 {
+		posting.TxnMarks().Done(index)
+		return errors.New("StartTs must be provided.")
+	}
+
 	if len(proposal.Mutations.Schema) > 0 {
 		if err = s.n.Applied.WaitForMark(s.n.ctx, index-1); err != nil {
 			posting.TxnMarks().Done(index)
 			return err
-		}
-		startTs := proposal.Mutations.StartTs
-		if startTs == 0 {
-			posting.TxnMarks().Done(index)
-			return errors.New("StartTs must be provided.")
 		}
 		for _, supdate := range proposal.Mutations.Schema {
 			// This is neceassry to ensure that there is no race between when we start reading
@@ -204,9 +204,6 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 		if _, ok := schemaMap[edge.Attr]; !ok {
 			schemaMap[edge.Attr] = posting.TypeID(edge)
 		}
-	}
-	if proposal.Mutations.StartTs == 0 {
-		return errors.New("StartTs must be provided.")
 	}
 
 	total := len(proposal.Mutations.Edges)
