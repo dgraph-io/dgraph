@@ -388,7 +388,7 @@ service Worker {
 	rpc MinTxnTs (api.Payload)                    returns (Num) {}
 
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
-	rpc ReceivePredicate(stream KV)         returns (api.Payload) {}
+	rpc ReceivePredicate(stream KVS)         returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 }
 

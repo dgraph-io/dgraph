@@ -241,7 +241,6 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
-	iterOpts.PrefetchValues = false
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 
@@ -298,8 +297,6 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		if err := stream.Send(kvs); err != nil {
 			return err
 		}
-		batchSize = 0
-		kvs = &intern.KVS{}
 	} // end of iterator
 	if batchSize > 0 {
 		if err := stream.Send(kvs); err != nil {
