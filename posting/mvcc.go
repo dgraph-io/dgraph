@@ -37,7 +37,7 @@ import (
 var (
 	ErrTsTooOld = x.Errorf("Transaction is too old")
 	txns        *transactions
-	txnMarks    *x.WaterMark // Used to find out till which index we can snapshot.
+	txnMarks    *x.WaterMark // Used to find out till what RAFT index we can snapshot entries.
 )
 
 func init() {

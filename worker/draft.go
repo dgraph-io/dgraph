@@ -665,29 +665,28 @@ func (n *node) abortOldTransactions(pending uint64) {
 }
 
 func (n *node) snapshot(skip uint64) {
-	water := posting.TxnMarks()
-	le := water.DoneUntil()
-
+	txnWatermark := posting.TxnMarks().DoneUntil()
 	existing, err := n.Store.Snapshot()
 	x.Checkf(err, "Unable to get existing snapshot")
 
-	si := existing.Metadata.Index
-	if le <= si+skip {
-		applied := n.Applied.DoneUntil()
+	lastSnapshotIdx := existing.Metadata.Index
+	if txnWatermark <= lastSnapshotIdx+skip {
+		appliedWatermark := n.Applied.DoneUntil()
 		// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions
-		if applied-le > 1.5*x.ForceAbortDifference && skip != 0 {
+		if appliedWatermark-txnWatermark > 1.5*x.ForceAbortDifference && skip != 0 {
 			// Print warning if difference grows above 3 * x.ForceAbortDifference. Shouldn't ideally
 			// happen as we abort oldest 20% when it grows above 1.5 times.
-			if applied-le > 3*x.ForceAbortDifference {
+			if appliedWatermark-txnWatermark > 3*x.ForceAbortDifference {
 				x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
-					le, applied)
+					txnWatermark, appliedWatermark)
 			}
 			// Try aborting pending transactions here.
-			n.abortOldTransactions(applied - le)
+			n.abortOldTransactions(appliedWatermark - txnWatermark)
 		}
 		return
 	}
-	snapshotIdx := le - skip
+
+	snapshotIdx := txnWatermark - skip
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
 	}
