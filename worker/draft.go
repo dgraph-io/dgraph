@@ -278,6 +278,13 @@ func (n *node) processMutation(task *task) error {
 	}
 	rv := x.RaftValue{Group: n.gid, Index: ridx}
 	ctx = context.WithValue(ctx, "raft", rv)
+
+	// Index updates would be wrong if we don't wait.
+	// Say we do <0x1> <name> "janardhan", <0x1> <name> "pawan",
+	// while applying the second mutation we check the old value
+	// of name and delete it from "janardhan"'s index. If we don't
+	// wait for commit information then mutation won't see the value
+	posting.Oracle().WaitForTs(context.Background(), txn.StartTs)
 	if err := runMutation(ctx, edge, txn); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("process mutation: %v", err)
