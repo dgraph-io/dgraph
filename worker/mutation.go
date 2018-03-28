@@ -410,13 +410,21 @@ func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) 
 
 func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	node := groups().Node
+	var index uint64
 	if txn := posting.Txns().Get(startTs); txn != nil {
 		txn.Fill(tctx)
+		index = txn.LastIndex()
 	}
 	tctx.LinRead = &api.LinRead{
 		Ids: make(map[uint32]uint64),
 	}
-	tctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
+	// applied watermark can be less than this proposal's index so return the maximum.
+	// For some proposals like dropPredicate, we don't store them in txns map, so we
+	// don't know the raft index. For them we would return applied watermark.
+	if x := node.Applied.DoneUntil(); x > index {
+		index = x
+	}
+	tctx.LinRead.Ids[gid] = index
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to

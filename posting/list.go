@@ -345,7 +345,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	hasPendingDelete := (l.markdeleteAll != txn.StartTs) &&
 		l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
 		bytes.Equal(t.Value, []byte(x.Star))
-	doAbort := hasPendingDelete || txn.StartTs < l.commitTs
+	doAbort := hasPendingDelete
 
 	checkConflict := false
 

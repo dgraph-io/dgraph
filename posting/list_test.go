@@ -271,14 +271,16 @@ func TestAddMutation_DelRead(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(3, 0))
 
 	// Commit sp* only in oracle, don't apply to pl yet
-	Oracle().commits[1] = 5
+	Oracle().commits[3] = 5
 	defer func() {
-		delete(Oracle().commits, 1)
+		delete(Oracle().commits, 3)
 	}()
 
 	// This read should ignore sp*, since readts is 4 and it was committed at 5
 	require.EqualValues(t, 1, ol.Length(4, 0))
 	checkValue(t, ol, "newcars", 4)
+
+	require.EqualValues(t, 0, ol.Length(6, 0))
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
