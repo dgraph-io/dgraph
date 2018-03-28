@@ -413,9 +413,7 @@ func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	var index uint64
 	if txn := posting.Txns().Get(startTs); txn != nil {
 		txn.Fill(tctx)
-		if l := len(txn.Indices); l > 0 {
-			index = txn.Indices[l-1]
-		}
+		index = txn.LastIndex()
 	}
 	tctx.LinRead = &api.LinRead{
 		Ids: make(map[uint32]uint64),
