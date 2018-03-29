@@ -456,16 +456,25 @@ func (n *node) applyAllMarks(ctx context.Context) {
 	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
-func (n *node) retrieveSnapshot() error {
+func (n *node) leaderBlocking() (*conn.Pool, error) {
 	pool := groups().Leader(groups().groupId())
 	if pool == nil {
-		// retrieveSnapshot is blocking at initial start and leader election for a group might
-		// not have happened when it is called. If we can't find a leader, get latest state from
+		// Functions like retrieveSnapshot and joinPeers are blocking at initial start and
+		// leader election for a group might not have happened when it is called. If we can't
+		// find a leader, get latest state from
 		// Zero.
 		if err := UpdateMembershipState(context.Background()); err != nil {
-			return fmt.Errorf("Error while trying to update membership state: %+v", err)
+			return nil, fmt.Errorf("Error while trying to update membership state: %+v", err)
 		}
-		return fmt.Errorf("Unable to reach leader in group %d", n.gid)
+		return nil, fmt.Errorf("Unable to reach leader in group %d", n.gid)
+	}
+	return pool, nil
+}
+
+func (n *node) retrieveSnapshot() error {
+	pool, err := n.leaderBlocking()
+	if err != nil {
+		return err
 	}
 
 	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
@@ -710,13 +719,9 @@ func (n *node) snapshot(skip uint64) {
 }
 
 func (n *node) joinPeers() error {
-	// Get leader information for MY group.
-	pl := groups().Leader(n.gid)
-	if pl == nil {
-		if err := UpdateMembershipState(context.Background()); err != nil {
-			return fmt.Errorf("Error while trying to update membership state: %+v", err)
-		}
-		return x.Errorf("Unable to reach leader or any other server in group %d", n.gid)
+	pl, err := n.leaderBlocking()
+	if err != nil {
+		return err
 	}
 
 	gconn := pl.Get()
@@ -727,6 +732,24 @@ func (n *node) joinPeers() error {
 	}
 	x.Printf("Done with JoinCluster call\n")
 	return nil
+}
+
+// Checks if its a peer from the leader of the group.
+func (n *node) isMember() (bool, error) {
+	pl, err := n.leaderBlocking()
+	if err != nil {
+		return false, err
+	}
+
+	gconn := pl.Get()
+	c := intern.NewRaftClient(gconn)
+	x.Printf("Calling IsPeer")
+	pr, err := c.IsPeer(n.ctx, n.RaftContext)
+	if err != nil {
+		return false, x.Errorf("Error while joining cluster: %+v\n", err)
+	}
+	x.Printf("Done with IsPeer call\n")
+	return pr.Status, nil
 }
 
 func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
@@ -746,6 +769,19 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	x.Check(err)
 	n.Applied.SetDoneUntil(idx)
 	posting.TxnMarks().SetDoneUntil(idx)
+
+	if _, hasPeer := groups().MyPeer(); !restart && hasPeer {
+		// The node has other peers, it might have crashed after joining the cluster and before
+		// writing a snapshot. Check from leader, if it is part of the cluster. Consider this a
+		// restart if it is part of the cluster, else start a new node.
+		for {
+			if restart, err = n.isMember(); err == nil {
+				break
+			}
+			x.Printf("Error while calling hasPeer: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+		}
+	}
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
