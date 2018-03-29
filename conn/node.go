@@ -457,6 +457,10 @@ func (w *RaftServer) IsPeer(ctx context.Context, rc *intern.RaftContext) (*inter
 		return &intern.PeerResponse{}, errNoNode
 	}
 
+	if node._confState == nil {
+		return &intern.PeerResponse{}, nil
+	}
+
 	for _, raftIdx := range node._confState.Nodes {
 		if rc.Id == raftIdx {
 			return &intern.PeerResponse{Status: true}, nil
