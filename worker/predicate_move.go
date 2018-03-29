@@ -147,7 +147,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		batchSize += kv.Size()
 		bytesSent += uint64(kv.Size())
 		count++
-		if batchSize < MB {
+		if batchSize < 4*MB {
 			continue
 		}
 		if err := stream.Send(kvs); err != nil {
