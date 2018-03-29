@@ -241,6 +241,7 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
+	iterOpts.PrefetchValues = false
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 
