@@ -191,7 +191,7 @@ returns an error in case the transaction could not be committed.
 
 ### Complete Example
 
-This is an example from the [GoDoc](https://godoc.org/github.com/dgraph-io/dgo). It shows how to to create a Node with name Alice, while also creating his relationships with other nodes. Note `loc` predicate is of type `geo` and can be easily marshalled and unmarshalled into a Go struct. More such examples are present as part of the GoDoc.
+This is an example from the [GoDoc](https://godoc.org/github.com/dgraph-io/dgo). It shows how to to create a Node with name Alice, while also creating her relationships with other nodes. Note `loc` predicate is of type `geo` and can be easily marshalled and unmarshalled into a Go struct. More such examples are present as part of the GoDoc.
 
 ```go
 type School struct {
@@ -341,7 +341,7 @@ working example of how to use the Java client.
 
 ## Javascript
 
-The offical Javascipt client [can be found here](https://github.com/dgraph-io/dgraph-js)
+The official Javascript client [can be found here](https://github.com/dgraph-io/dgraph-js)
 and it fully supports Dgraph v0.9.4. Follow the instructions in the
 [README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
 
