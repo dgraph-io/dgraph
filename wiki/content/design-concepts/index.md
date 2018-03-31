@@ -25,7 +25,7 @@ them in a Raft group.
 Basing it [on this
 article](https://aphyr.com/posts/313-strong-consistency-models) by aphyr.
 
-1. **Sequential Consistency:** Different users would see updates at different times, but each user would see operations in order.
+- **Sequential Consistency:** Different users would see updates at different times, but each user would see operations in order.
 
 Dgraph has a client-side sequencing mode, which provides sequential consistency.
 
@@ -51,7 +51,7 @@ client, would never be *unseen*; in fact, they would be visible in a sequential
 order. There might be jumps though, for e.g., if a value X → Y → Z, the client
 might see X, then Z (and not see Y at all).
 
-2. **Linearizability:** Each op takes effect atomically at some point between invocation and completion. Once op is complete, it would be visible to all.
+- **Linearizability:** Each op takes effect atomically at some point between invocation and completion. Once op is complete, it would be visible to all.
 
 Dgraph supports server-side sequencing of updates, which provides
 linearizability. Unlike sequential consistency which provides sequencing per
@@ -59,9 +59,8 @@ client, this provide sequencing across all clients. This is necessary to make
 upserts work across clients. Thus, once a transaction is committed, it would be
 visible to all future readers, irrespective of client boundaries.
 
-3. **Causal consistency:** Dgraph does not have a concept of dependencies among transactions. So, does NOT order based on dependencies.
-4. **Serializable consistency:** Dgraph does NOT allow arbitrary reordering of transactions, but does provide a linear order per key.
-
+- **Causal consistency:** Dgraph does not have a concept of dependencies among transactions. So, does NOT order based on dependencies.
+- **Serializable consistency:** Dgraph does NOT allow arbitrary reordering of transactions, but does provide a linear order per key.
 
 ---
 
