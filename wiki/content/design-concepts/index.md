@@ -20,6 +20,49 @@ transaction altogether despite it having been considered committed.
 Therefore, pre-writes do have to make it to disk. And if so, better to propose
 them in a Raft group.
 
+## Consistency Models [Last updated: Mar 2018]
+
+Basing it [on this
+article](https://aphyr.com/posts/313-strong-consistency-models) by aphyr.
+
+1. **Sequential Consistency:** Different users would see updates at different times, but each user would see operations in order.
+
+Dgraph has a client-side sequencing mode, which provides sequential consistency.
+
+Here, let’s replace a “user” with a “client” (or a single process). In Dgraph, each client maintains a linearizable read map (linread map). Dgraph's data set is sharded into many "groups". Each group is a Raft group, where every write is done via a "proposal." You can think of a transaction in Dgraph, to consist of many group proposals.
+
+The leader in Raft group always has the most recent proposal, while
+replicas could be behind the leader in varying degrees. You can determine this
+by just looking at the latest applied proposal ID. A leader's proposal ID would
+be greater than or equal to some replicas' applied proposal ID.
+
+`linread` map stores a group -> max proposal ID seen, per client. If a client's
+last read had seen updates corresponding to proposal ID X, then `linread` map
+would store X for that group. The client would then use the `linread` map to
+inform future reads to ensure that the server servicing the request, has
+proposals >= X applied before servicing the read. Thus, all future reads,
+irrespective of which replica it might hit, would see updates for proposals >=
+X. Also, the `linread` map is updated continuously with max seen proposal IDs
+across all groups as reads and writes are done across transactions (within that
+client).
+
+In short, this map ensures that updates made by the client, or seen by the
+client, would never be *unseen*; in fact, they would be visible in a sequential
+order. There might be jumps though, for e.g., if a value X → Y → Z, the client
+might see X, then Z (and not see Y at all).
+
+1. **Linearizability**: Each op takes effect atomically at some point between invocation and completion. Once op is complete, it would be visible to all.
+
+Dgraph supports server-side sequencing of updates, which provides
+linearizability. Unlike sequential consistency which provides sequencing per
+client, this provide sequencing across all clients. This is necessary to make
+upserts work across clients. Thus, once a transaction is committed, it would be
+visible to all future readers, irrespective of client boundaries.
+
+1. Causal consistency: Dgraph does not have a concept of dependencies among transactions. So, does NOT order based on dependencies.
+1. Serializable consistency: Dgraph does NOT allow arbitrary reordering of transactions, but does provide a linear order per key.
+
+
 ---
 
 {{% notice "outdated" %}}Sections below this one are outdated. You will find [Tour of Dgraph](https://tour.dgraph.io) a much helpful resource.{{% /notice %}}
