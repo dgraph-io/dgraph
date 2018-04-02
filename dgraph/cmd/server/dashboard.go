@@ -76,7 +76,7 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 		"orderasc",
 		"orderdesc",
 		"recurse",
-		"regex",
+		"regexp",
 		"reverse",
 		"schema",
 		"set",
