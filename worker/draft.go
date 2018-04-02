@@ -532,7 +532,6 @@ func (n *node) readIndex(ctx context.Context) (chan uint64, error) {
 
 func (n *node) runReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
-	counter := x.NewNonceCounter()
 	requests := []linReadReq{}
 	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
 	// requestCh.
@@ -552,7 +551,8 @@ func (n *node) runReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 					break slurpLoop
 				}
 			}
-			activeRctx := counter.Generate()
+			activeRctx := make([]byte, 8)
+			binary.LittleEndian.PutUint64(activeRctx[0:8], rand.Uint64())
 			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
 			// successful response.  If we don't see one, the raft leader wasn't configured, or the
 			// raft leader didn't respond.
