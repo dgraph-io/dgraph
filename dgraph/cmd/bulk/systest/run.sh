@@ -31,7 +31,7 @@ for suite in $script_dir/suite*; do
 	sleep 2
 
 	pushd dg >/dev/null
-	$GOPATH/bin/dgraph -peer localhost:8888 -memory_mb=1024 >/dev/null 2>&1 &
+	$GOPATH/bin/dgraph -peer localhost:8888 -lru_mb=1024 >/dev/null 2>&1 &
 	dgPid=$!
 	popd >/dev/null
 	sleep 2

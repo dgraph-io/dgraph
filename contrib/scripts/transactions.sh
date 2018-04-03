@@ -13,7 +13,7 @@ set -e
 
 echo "Running transaction tests."
 
-contrib=$GOPATH/src/github.com/dgraph-io/dgo/contrib
+contrib=$GOPATH/src/github.com/dgraph-io/dgraph/contrib
 
 go test -v $contrib/integration/testtxn/main_test.go
 

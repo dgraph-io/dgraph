@@ -103,8 +103,8 @@ could be set using environment vars or flags.
 The environment variable names mirror the flag names as seen in the `--help`
 output. They are the concatenation of `DGRAPH`, the subcommand invoked
 (`SERVER`, `ZERO`, `LIVE`, or `BULK`), and then the name of the flag (in
-uppercase). For example, instead of using `dgraph server --memory_mb=8096`, you
-could use `DGRAPH_SERVER_MEMORY_MB=8096 dgraph server`.
+uppercase). For example, instead of using `dgraph server --lru_mb=8096`, you
+could use `DGRAPH_SERVER_LRU_MB=8096 dgraph server`.
 
 Configuration file formats supported are JSON, TOML, YAML, HCL, and Java
 properties (detected via file extension).
@@ -198,8 +198,8 @@ Dgraph cluster nodes use different ports to communicate over gRPC and http. User
 If you are using Dgraph v1.0.2 (or older) then the default ports are 7080, 8080 for zero, so when following instructions for different setup guides below override zero port using `--port_offset`.
 
 ```sh
-dgraph zero --idx=1 --memory_mb=<typically half the RAM> --port_offset -2000
-dgraph zero --idx=2 --memory_mb=<typically half the RAM> --port_offset -1999
+dgraph zero --idx=1 --lru_mb=<typically half the RAM> --port_offset -2000
+dgraph zero --idx=2 --lru_mb=<typically half the RAM> --port_offset -1999
 ```
 Ratel's default port is 8081, so override it using -p 8000.
 
@@ -258,8 +258,8 @@ For all other various flags, run `dgraph zero --help`.
 **Run dgraph server**
 
 ```sh
-dgraph server --memory_mb=<typically half the RAM> --my=IPADDR:7080 --zero=localhost:5080
-dgraph server --memory_mb=<typically half the RAM> --my=IPADDR:7081 --zero=localhost:5080 -o=1
+dgraph server --lru_mb=<typically half the RAM> --my=IPADDR:7080 --zero=localhost:5080
+dgraph server --lru_mb=<typically half the RAM> --my=IPADDR:7081 --zero=localhost:5080 -o=1
 ```
 Notice the use of -o for the second server to add offset to the default ports used by server. Zero automatically assigns an unique ID to each Dgraph server, which is persisted in the write ahead log (wal) directory, users can specify the index using `--idx` option. Dgraph servers use two location to persist data and wal logs and have to be different for each server if they are running on the same host. User can use `-p` and `-w` to change the location of data and WAL. For all other flags, run
 
@@ -293,11 +293,11 @@ docker run -it -p 5080:5080 -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest 
 ```sh
 mkdir ~/server1 # Or any other directory where data should be stored.
 
-docker run -it -p 7080:7080 -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
+docker run -it -p 7080:7080 -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph server --lru_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
 
 mkdir ~/server2 # Or any other directory where data should be stored.
 
-docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
+docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph server --lru_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
 ```
 Notice the use of -o for server2 to override the default ports for server2.
 
@@ -376,7 +376,7 @@ services:
       - 8080:8080
       - 9080:9080
     restart: on-failure
-    command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080
+    command: dgraph server --my=server:7080 --lru_mb=2048 --zero=zero:5080
   ratel:
     image: dgraph/dgraph:latest
     ports:
@@ -577,7 +577,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero:5080
+    command: dgraph server --my=server_1:7080 --lru_mb=2048 --zero=zero:5080
   server_2:
     image: dgraph/dgraph:latest
     hostname: "server_2"
@@ -592,7 +592,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero:5080 -o 1
+    command: dgraph server --my=server_2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
   server_3:
     image: dgraph/dgraph:latest
     hostname: "server_3"
@@ -607,7 +607,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero:5080 -o 2
+    command: dgraph server --my=server_3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"
@@ -734,7 +734,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph server --my=server_1:7080 --memory_mb=2048 --zero=zero_1:5080
+    command: dgraph server --my=server_1:7080 --lru_mb=2048 --zero=zero_1:5080
   server_2:
     image: dgraph/dgraph:latest
     hostname: "server_2"
@@ -750,7 +750,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph server --my=server_2:7081 --memory_mb=2048 --zero=zero_1:5080 -o 1
+    command: dgraph server --my=server_2:7081 --lru_mb=2048 --zero=zero_1:5080 -o 1
   server_3:
     image: dgraph/dgraph:latest
     hostname: "server_3"
@@ -766,7 +766,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph server --my=server_3:7082 --memory_mb=2048 --zero=zero_1:5080 -o 2
+    command: dgraph server --my=server_3:7082 --lru_mb=2048 --zero=zero_1:5080 -o 2
   server_4:
     image: dgraph/dgraph:latest
     hostname: "server_4"
@@ -781,7 +781,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws04
-    command: dgraph server --my=server_4:7083 --memory_mb=2048 --zero=zero_1:5080 -o 3
+    command: dgraph server --my=server_4:7083 --lru_mb=2048 --zero=zero_1:5080 -o 3
   server_5:
     image: dgraph/dgraph:latest
     hostname: "server_5"
@@ -796,7 +796,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws05
-    command: dgraph server --my=server_5:7084 --memory_mb=2048 --zero=zero_1:5080 -o 4
+    command: dgraph server --my=server_5:7084 --lru_mb=2048 --zero=zero_1:5080 -o 4
   server_6:
     image: dgraph/dgraph:latest
     hostname: "server_6"
@@ -811,7 +811,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws06
-    command: dgraph server --my=server_6:7085 --memory_mb=2048 --zero=zero_1:5080 -o 5
+    command: dgraph server --my=server_6:7085 --lru_mb=2048 --zero=zero_1:5080 -o 5
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"
@@ -1276,7 +1276,7 @@ copy over the output shards into different servers.
 
 ```sh
 $ cd out/i # i = shard number.
-$ dgraph server -zero=localhost:5080 -memory_mb=1024
+$ dgraph server -zero=localhost:5080 -lru_mb=1024
 ```
 #### Tuning & monitoring
 
@@ -1410,9 +1410,9 @@ Here are some problems that you may encounter and some solutions to try.
 
 During bulk loading of data, Dgraph can consume more memory than usual, due to high volume of writes. That's generally when you see the OOM crashes.
 
-The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can take up to 7-8 GB with the default setting `-memory_mb` set to 4096; so having the rest 8GB for desktop applications should keep your machine humming along.
+The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can take up to 7-8 GB with the default setting `-lru_mb` set to 4096; so having the rest 8GB for desktop applications should keep your machine humming along.
 
-On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `-memory_mb` to half of RAM size.
+On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `-lru_mb` to half of RAM size.
 
 ## See Also
 

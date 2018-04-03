@@ -35,9 +35,9 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
@@ -97,9 +97,9 @@ func init() {
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
 
-	flag.Float64("memory_mb", defaults.AllottedMemory,
-		"Estimated memory the process can take. "+
-			"Actual usage would be slightly more than specified here.")
+	flag.Float64("lru_mb", defaults.AllottedMemory,
+		"Estimated memory the LRU cache can take. "+
+			"Actual usage by the process would be more than specified here.")
 
 	flag.Bool("debugmode", defaults.DebugMode,
 		"enable debug mode for more debug information")
@@ -255,7 +255,7 @@ func setupServer() {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)
-	http.HandleFunc("/admin/config/memory_mb", memoryLimitHandler)
+	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/ui/keywords", keywordHandler)
@@ -287,7 +287,7 @@ func run() {
 		PostingTables:       Server.Conf.GetString("posting_tables"),
 		WALDir:              Server.Conf.GetString("wal"),
 		Nomutations:         Server.Conf.GetBool("nomutations"),
-		AllottedMemory:      Server.Conf.GetFloat64("memory_mb"),
+		AllottedMemory:      Server.Conf.GetFloat64("lru_mb"),
 		ExportPath:          Server.Conf.GetString("export"),
 		NumPendingProposals: Server.Conf.GetInt("pending_proposals"),
 		Tracing:             Server.Conf.GetFloat64("trace"),

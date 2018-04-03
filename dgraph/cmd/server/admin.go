@@ -100,7 +100,7 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if memoryMB < edgraph.MinAllottedMemory {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "memory_mb must be at least %.0f\n", edgraph.MinAllottedMemory)
+		fmt.Fprintf(w, "lru_mb must be at least %.0f\n", edgraph.MinAllottedMemory)
 		return
 	}
 
