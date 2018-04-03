@@ -140,11 +140,14 @@ type node struct {
 }
 
 func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
-	if read == nil || read.Ids == nil {
+	if read == nil {
 		return nil
 	}
 	if read.ServerLevel {
 		return n.WaitLinearizableRead(ctx)
+	}
+	if read.Ids == nil {
+		return nil
 	}
 	gid := n.RaftContext.Group
 	min := read.Ids[gid]
