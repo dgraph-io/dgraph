@@ -6054,7 +6054,9 @@ func TestSchemaBlock5(t *testing.T) {
 			Type:      "string",
 			Index:     true,
 			Tokenizer: []string{"term", "exact", "trigram"},
-			Count:     true}}
+			Count:     true,
+			Lang:      true,
+		}}
 	checkSchemaNodes(t, expected, actual)
 }
 

@@ -1358,7 +1358,11 @@ $ curl localhost:8080/admin/export
 
 This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph server instance is running.
 
-This triggers a export of all the groups spread across the entire cluster. Each server writes output in gzipped rdf to the export directory specified on startup by `--export`. If any of the groups fail, the entire export process is considered failed, and an error is returned.
+
+{{% notice "note" %}}An export file would be created on only the server which is the leader for a group
+and not on followers.{{% /notice %}}
+
+This triggers a export of all the groups spread across the entire cluster. Each server which is a leader for a group writes output in gzipped rdf to the export directory specified on startup by `--export`. If any of the groups fail, the entire export process is considered failed, and an error is returned.
 
 {{% notice "note" %}}It is up to the user to retrieve the right export files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
 
