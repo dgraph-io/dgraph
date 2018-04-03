@@ -2179,6 +2179,10 @@ schema {
   index
   reverse
   tokenizer
+  list
+  count
+  upsert
+  lang
 }
 ```
 
@@ -2190,6 +2194,10 @@ schema(pred: [name, friend]) {
   index
   reverse
   tokenizer
+  list
+  count
+  upsert
+  lang
 }
 ```
 
@@ -2797,6 +2805,12 @@ query test($a: int = 2, $b: int!, $name: string) {
   }
 }
 {{< /runnable >}}
+
+
+{{% notice "note" %}}
+If you want to input a list of uids as a GraphQL variable value, you can have the variable as string type and
+have the value surrounded by square brackets like `["13", "14"]`.
+{{% /notice %}}
 
 ## Indexing with Custom Tokenizers
 
