@@ -9,7 +9,7 @@
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
 
-Dgraph is an open source, horizontally scalable and distributed graph database, providing ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
+Dgraph is a horizontally scalable and distributed graph database, providing ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
 a rich set of queries. Being a native graph database, it tightly controls how the
 data is arranged on disk to optimize for query performance and throughput,
 reducing disk seeks and network calls in a cluster.
@@ -68,7 +68,7 @@ makes it easy to build applications with it.
 | Full Text Search | Native support | Native support | Via External Indexing System |
 | Regular Expressions | Native support | Native support | Via External Indexing System |
 | Geo Search | Native support | External support only | Via External Indexing System |
-| License | AGPL v3 for server + Apache 2.0 for client | GPL v3 | Apache 2.0 |
+| License | Apache 2.0 + Commons Clause | GPL v3 | Apache 2.0 |
 
 ## Users
 - **Dgraph official documentation is present at [docs.dgraph.io](https://docs.dgraph.io).**

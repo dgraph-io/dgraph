@@ -34,9 +34,29 @@ Here are some actual benchmarks:
 * Dgraph against Neo4J – check [this blog post](https://open.dgraph.io/post/benchmark-neo4j/)
 * Dgraph against Cayley – check [this github repo](https://github.com/ankurayadav/graphdb-benchmarks#results-of-queries-benchmark) (credit to Ankur Yadav)
 
+## Dgraph License
+
 ### How is Dgraph Licensed?
 
-The server is licensed under [AGPL v3](https://www.gnu.org/licenses/agpl-3.0.html) and the clients (Go, Java, JS etc.) are licensed under [Apache 2](https://www.apache.org/licenses/LICENSE-2.0). More details about licensing can be found [here](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md), with an explanation of why we're doing it that way [here](https://blog.dgraph.io/post/licensing/).
+Dgraph is licensed under Apache v2.0 with a Commons Clause restriction. More details about licensing can be found [here](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md).
+
+### How does Commons Clause restriction affect me?
+
+The Commons Clause restriction has NO impact on you, if:
+
+- You are using Dgraph internally within your organization.
+- You are building and/or selling a service on top of Dgraph, which is
+  substantially different from Dgraph itself.
+- You do not intend to sell Dgraph as a service, or as a product.
+- You are using a Dgraph library.
+
+The clause only applies to you, if:
+
+- You intend to sell Dgraph as a software or in the cloud, without significantly
+  modifying the codebase.
+
+If you wish to provide Dgraph as a service, [talk to
+us](mailto:contact@dgraph.io).
 
 ## Internals
 
