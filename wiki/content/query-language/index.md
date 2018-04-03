@@ -1930,6 +1930,11 @@ For all triples with a predicate of scalar types the object is a literal.
 |  `geo`      | [go-geom](https://github.com/twpayne/go-geom)    |
 |  `password` | string (encrypted) |
 
+
+{{% notice "note" %}}Dgraph supports date and time formats for `dateTime` scalar type only if they
+are RFC 3339 compatible which is different from ISO 8601(as defined in the RDF spec). You should
+convert your values to RFC 3339 format before sending them to Dgraph.{{% /notice  %}}
+
 #### UID Type
 
 The `uid` type denotes a node-node edge; internally each node is represented as a `uint64` id.
