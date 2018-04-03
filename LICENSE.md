@@ -1,6 +1,6 @@
 ## Dgraph Licensing
 
-Copyright 2018 Dgraph Labs, Inc. and Contributors
+Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ License does not grant to you, the right to Sell the Software.  For purposes of
 the foregoing, “Sell” means practicing any or all of the rights granted to you
 under the License to provide to third parties, for a fee or other consideration,
 a product or service that consists, entirely or substantially, of the Software
-or the functionality of the Software.  Any license notice or attribution
+or the functionality of the Software. Any license notice or attribution
 required by the License must also include this Commons Cause License Condition
 notice.
 

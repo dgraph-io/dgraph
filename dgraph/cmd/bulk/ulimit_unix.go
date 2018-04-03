@@ -1,3 +1,5 @@
+// +build !windows
+
 /*
  * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
