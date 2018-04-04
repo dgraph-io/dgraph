@@ -392,10 +392,10 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
 
-		for _, member := range state.Removed {
+		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
-				n.DoneConfChange(cc.ID, ErrReuseRemovedId)
+				n.DoneConfChange(cc.ID, x.ErrReuseRemovedId)
 				// Cancel configuration change.
 				cc.NodeID = raft.None
 				n.Raft().ApplyConfChange(cc)

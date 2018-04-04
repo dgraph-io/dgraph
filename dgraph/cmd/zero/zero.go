@@ -341,7 +341,7 @@ func (s *Server) Connect(ctx context.Context,
 		return &emptyConnectionState, errInvalidAddress
 	}
 
-	for _, member := range state.Removed {
+	for _, member := range s.membershipState().Removed {
 		// It is not recommended to reuse RAFT ids.
 		if member.GroupId != 0 && m.Id == member.Id {
 			return &emptyConnectionState, x.ErrReuseRemovedId
