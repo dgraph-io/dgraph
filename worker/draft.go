@@ -137,6 +137,7 @@ type node struct {
 
 	canCampaign bool
 	sch         *scheduler
+	rand        *rand.Rand
 }
 
 func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
@@ -179,6 +180,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 		sch:     new(scheduler),
+		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	n.sch.init(n)
 	return n
@@ -543,7 +545,7 @@ func (n *node) runReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		case <-closer.HasBeenClosed():
 			return
 		case <-readStateCh:
-			// Do nothing, discard ReadState info we don't have an activeRctx for
+			// Do nothing, discard ReadState as we don't have any pending ReadIndex requests.
 		case req := <-n.requestCh:
 		slurpLoop:
 			for {
@@ -555,7 +557,7 @@ func (n *node) runReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 				}
 			}
 			activeRctx := make([]byte, 8)
-			binary.LittleEndian.PutUint64(activeRctx[0:8], rand.Uint64())
+			n.rand.Read(activeRctx[:])
 			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
 			// successful response.  If we don't see one, the raft leader wasn't configured, or the
 			// raft leader didn't respond.
@@ -564,10 +566,13 @@ func (n *node) runReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			// externally.  We want equivalent functionality to time.NewTimer.
 			// TODO: Second is high, if a node gets partitioned we would have to throw error sooner.
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			// We ignore the err - it would be n.ctx cancellation (which we must ignore because
-			// it's our duty to continue until `stop` is triggered) or raft.ErrStopped (which we
-			// must ignore for the same reason).
-			_ = n.Raft().ReadIndex(ctx, activeRctx[:])
+			err := n.Raft().ReadIndex(ctx, activeRctx[:])
+			if err != nil {
+				for _, req := range requests {
+					req.indexCh <- raft.None
+				}
+				continue
+			}
 		again:
 			select {
 			case <-closer.HasBeenClosed():

@@ -348,11 +348,12 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	doAbort := false
 	if hasPendingDelete {
 		// commitOrAbort proposals are applied in goroutines and there is no
-		// fixed ordering, so do thing check to ensure we don't reject a mutation
+		// fixed ordering, so do this check to ensure we don't reject a mutation
 		// which was applied on leader.
-		// Example: We do sp*, commit and then one more sp*. Even if the commit proposal
+		// Example: We do sp*, commit and then one more sp*. Even If the commit proposal
 		// was applied on leader before second sp*, that guarantee is not true on
-		// follower scheduler doesn't care about those commitOrAbort proposals.
+		// follower, since scheduler doesn't care about commitOrAbort proposals and second
+		// sp* can be applied in memory before the commitProposal.
 		if commitTs := Oracle().CommitTs(l.markdeleteAll); commitTs > 0 {
 			l.commitMutation(ctx, l.markdeleteAll, commitTs)
 		} else if Oracle().Aborted(l.markdeleteAll) {
