@@ -237,10 +237,6 @@ func (n *node) applyMemberProposal(pmember *intern.Member) error {
 		return errInvalidAddress
 	}
 
-	if err := ValidateMemberId(n.server.state, pmember); err != nil {
-		return err
-	}
-
 	if pmember.GroupId == 0 {
 		state.Zeros[pmember.Id] = pmember
 		if pmember.Leader {
@@ -395,12 +391,16 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.Connect(rc.Id, rc.Addr)
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
-		if err := ValidateMemberId(n.server.membershipState(), m); err != nil {
-			n.DoneConfChange(cc.ID, err)
-			// Cancel configuration change.
-			cc.NodeID = raft.None
-			n.Raft().ApplyConfChange(cc)
-			return
+
+		for _, member := range state.Removed {
+			// It is not recommended to reuse RAFT ids.
+			if member.GroupId == 0 && m.Id == member.Id {
+				n.DoneConfChange(cc.ID, ErrReuseRemovedId)
+				// Cancel configuration change.
+				cc.NodeID = raft.None
+				n.Raft().ApplyConfChange(cc)
+				return
+			}
 		}
 
 		n.server.storeZero(m)
