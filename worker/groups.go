@@ -93,7 +93,8 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	var connState *intern.ConnectionState
 	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 	delay := 50 * time.Millisecond
-	for i := 0; i < 9; i++ { // Generous number of attempts.
+	maxHalfDelay := 15 * time.Second
+	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
 		var err error
 		connState, err = zc.Connect(gr.ctx, m)
 		if err == nil {
@@ -101,7 +102,9 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 		}
 		x.Printf("Error while connecting with group zero: %v", err)
 		time.Sleep(delay)
-		delay *= 2
+		if delay <= maxHalfDelay {
+			delay *= 2
+		}
 	}
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
