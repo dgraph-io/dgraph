@@ -227,6 +227,73 @@ func newGroup() *intern.Group {
 	}
 }
 
+func (n *node) applyMemberProposal(pmember *intern.Member) error {
+	n.server.AssertLock()
+
+	m := n.server.member(pmember.Addr)
+	state := n.server.state
+	// Ensures that different nodes don't have same address.
+	if m != nil && (m.Id != pmember.Id || m.GroupId != pmember.GroupId) {
+		return errInvalidAddress
+	}
+	if pmember.GroupId == 0 {
+		state.Zeros[pmember.Id] = pmember
+		if pmember.Leader {
+			// Unset leader flag for other nodes, there can be only one
+			// leader at a time.
+			for _, m := range state.Zeros {
+				if m.Id != pmember.Id {
+					m.Leader = false
+				}
+			}
+		}
+		return nil
+	}
+	group := state.Groups[pmember.GroupId]
+	if group == nil {
+		group = newGroup()
+		state.Groups[pmember.GroupId] = group
+	}
+	m, has := group.Members[pmember.Id]
+	if pmember.AmDead {
+		if has {
+			delete(group.Members, pmember.Id)
+			state.Removed = append(state.Removed, m)
+			conn.Get().Remove(m.Addr)
+		}
+		// else already removed.
+		return nil
+	}
+	if !has && len(group.Members) >= n.server.NumReplicas {
+		// We shouldn't allow more members than the number of replicas.
+		return errInvalidProposal
+	}
+
+	// Create a connection to this server.
+	go conn.Get().Connect(pmember.Addr)
+
+	group.Members[pmember.Id] = pmember
+	// Increment nextGroup when we have enough replicas
+	if pmember.GroupId == n.server.nextGroup &&
+		len(group.Members) >= n.server.NumReplicas {
+		n.server.nextGroup++
+	}
+	if pmember.Leader {
+		// Unset leader flag for other nodes, there can be only one
+		// leader at a time.
+		for _, m := range group.Members {
+			if m.Id != pmember.Id {
+				m.Leader = false
+			}
+		}
+	}
+	// On replay of logs on restart we need to set nextGroup.
+	if n.server.nextGroup <= pmember.GroupId {
+		n.server.nextGroup = pmember.GroupId + 1
+	}
+	return nil
+}
+
 func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	var p intern.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
@@ -252,65 +319,8 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		state.MaxRaftId = p.MaxRaftId
 	}
 	if p.Member != nil {
-		m := n.server.member(p.Member.Addr)
-		// Ensures that different nodes don't have same address.
-		if m != nil && (m.Id != p.Member.Id || m.GroupId != p.Member.GroupId) {
-			return p.Id, errInvalidAddress
-		}
-		if p.Member.GroupId == 0 {
-			state.Zeros[p.Member.Id] = p.Member
-			if p.Member.Leader {
-				// Unset leader flag for other nodes, there can be only one
-				// leader at a time.
-				for _, m := range state.Zeros {
-					if m.Id != p.Member.Id {
-						m.Leader = false
-					}
-				}
-			}
-			return p.Id, nil
-		}
-		group := state.Groups[p.Member.GroupId]
-		if group == nil {
-			group = newGroup()
-			state.Groups[p.Member.GroupId] = group
-		}
-		m, has := group.Members[p.Member.Id]
-		if p.Member.AmDead {
-			if has {
-				delete(group.Members, p.Member.Id)
-				state.Removed = append(state.Removed, m)
-				conn.Get().Remove(m.Addr)
-			}
-			// else already removed.
-			return p.Id, nil
-		}
-		if !has && len(group.Members) >= n.server.NumReplicas {
-			// We shouldn't allow more members than the number of replicas.
-			return p.Id, errInvalidProposal
-		}
-
-		// Create a connection to this server.
-		go conn.Get().Connect(p.Member.Addr)
-
-		group.Members[p.Member.Id] = p.Member
-		// Increment nextGroup when we have enough replicas
-		if p.Member.GroupId == n.server.nextGroup &&
-			len(group.Members) >= n.server.NumReplicas {
-			n.server.nextGroup++
-		}
-		if p.Member.Leader {
-			// Unset leader flag for other nodes, there can be only one
-			// leader at a time.
-			for _, m := range group.Members {
-				if m.Id != p.Member.Id {
-					m.Leader = false
-				}
-			}
-		}
-		// On replay of logs on restart we need to set nextGroup.
-		if n.server.nextGroup <= p.Member.GroupId {
-			n.server.nextGroup = p.Member.GroupId + 1
+		if err := n.applyMemberProposal(p.Member); err != nil {
+			return p.Id, err
 		}
 	}
 	if p.Tablet != nil {
