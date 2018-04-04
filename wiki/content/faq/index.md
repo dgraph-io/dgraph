@@ -38,7 +38,7 @@ Here are some actual benchmarks:
 
 ### How is Dgraph Licensed?
 
-Dgraph is licensed under Apache v2.0 with a Commons Clause restriction. More details about licensing can be found [here](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md).
+Dgraph is licensed under Apache v2.0 with a Commons Clause restriction. The full text of the license can be found [here](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md).
 
 ### How does Commons Clause restriction affect me?
 
