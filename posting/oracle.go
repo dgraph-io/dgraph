@@ -58,6 +58,13 @@ func (o *oracle) CommitTs(startTs uint64) uint64 {
 	return o.commits[startTs]
 }
 
+func (o *oracle) Aborted(startTs uint64) bool {
+	o.RLock()
+	defer o.RUnlock()
+	_, ok := o.aborts[startTs]
+	return ok
+}
+
 func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 	o.Lock()
 	defer o.Unlock()

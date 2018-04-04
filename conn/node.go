@@ -165,15 +165,6 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 	n.peers[pid] = addr
 }
 
-func (n *Node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
-	if read == nil || read.Ids == nil {
-		return nil
-	}
-	gid := n.RaftContext.Group
-	min := read.Ids[gid]
-	return n.Applied.WaitForMark(ctx, min)
-}
-
 func (n *Node) Send(m raftpb.Message) {
 	x.AssertTruef(n.Id != m.To, "Sending message to itself")
 	data, err := m.Marshal()
