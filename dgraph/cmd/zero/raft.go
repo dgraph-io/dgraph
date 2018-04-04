@@ -10,6 +10,7 @@ package zero
 import (
 	"encoding/binary"
 	"errors"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -450,7 +451,7 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 			errorDesc := grpc.ErrorDesc(err)
 			if errorDesc == conn.ErrDuplicateRaftId.Error() ||
 				errorDesc == x.ErrReuseRemovedId.Error() {
-				x.Fatalf("Error while joining cluster %v", err)
+				log.Fatalf("Error while joining cluster: %v", errorDesc)
 			}
 			x.Printf("Error while joining cluster %v\n", err)
 			delay *= 2

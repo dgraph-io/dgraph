@@ -105,7 +105,7 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 		time.Sleep(delay)
 		delay *= 2
 	}
-	x.AssertTruefNoTrace(err == nil, fmt.Sprintf("Unable to join cluster via dgraph zero: %v", err))
+	x.CheckfNoTrace(err)
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}

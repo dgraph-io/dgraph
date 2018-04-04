@@ -40,6 +40,12 @@ func Checkf(err error, format string, args ...interface{}) {
 	}
 }
 
+func CheckfNoTrace(err error) {
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+}
+
 // Check2 acts as convenience wrapper around Check, using the 2nd argument as error.
 func Check2(_ interface{}, err error) {
 	Check(err)

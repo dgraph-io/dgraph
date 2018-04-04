@@ -63,7 +63,7 @@ const (
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName    = regexp.MustCompile(ValidHostnameRegex)
-	ErrReuseRemovedId = errors.New("Invalid idx, can't be same as that of a removed node.")
+	ErrReuseRemovedId = errors.New("Reusing RAFT index of a removed node.")
 )
 
 // WhiteSpace Replacer removes spaces and tabs from a string.
