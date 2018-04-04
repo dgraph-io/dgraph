@@ -380,8 +380,8 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 
 func (n *node) ValidateMemberId(m *intern.Member) error {
 	// It is not recommended to reuse RAFT ids.
-	// TODO - Check if its safe to access state here.
-	for _, member := range n.server.state.Removed {
+	state := n.server.membershipState()
+	for _, member := range state.Removed {
 		if m.Id == member.Id && m.GroupId == member.GroupId {
 			return errReuseRemovedId
 		}
