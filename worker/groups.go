@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc"
+
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -94,10 +96,10 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 	delay := 50 * time.Millisecond
 	maxHalfDelay := 15 * time.Second
+	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
-		var err error
 		connState, err = zc.Connect(gr.ctx, m)
-		if err == nil {
+		if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
 			break
 		}
 		x.Printf("Error while connecting with group zero: %v", err)
@@ -106,6 +108,7 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 			delay *= 2
 		}
 	}
+	x.CheckfNoTrace(err)
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}

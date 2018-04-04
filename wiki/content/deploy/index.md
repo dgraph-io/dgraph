@@ -1069,7 +1069,7 @@ id of the Zero node.
 {{% notice "note" %}}
 Before using the api ensure that the node is down and ensure that it doesn't come back up ever again.
 
-Remember to specify the `idx` flag while replacing the dead node or else Zero might assign it a different group.
+You should not use the same `idx` as that of a node that was removed earlier.
 {{% /notice %}}
 * `/moveTablet?tablet=name&group=2` This endpoint can be used to move a tablet to a group. Zero
   already does shard rebalancing every 8 mins, this endpoint can be used to force move a tablet.
