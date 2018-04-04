@@ -236,6 +236,7 @@ func (n *node) applyMemberProposal(pmember *intern.Member) error {
 	if m != nil && (m.Id != pmember.Id || m.GroupId != pmember.GroupId) {
 		return errInvalidAddress
 	}
+
 	if pmember.GroupId == 0 {
 		state.Zeros[pmember.Id] = pmember
 		if pmember.Leader {
@@ -377,6 +378,17 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	return p.Id, nil
 }
 
+func (n *node) ValidateMemberId(m *intern.Member) error {
+	// It is not recommended to reuse RAFT ids.
+	// TODO - Check if its safe to access state here.
+	for _, member := range n.server.state.Removed {
+		if m.Id == member.Id && m.GroupId == member.GroupId {
+			return errReuseRemovedId
+		}
+	}
+	return nil
+}
+
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)
@@ -390,6 +402,14 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.Connect(rc.Id, rc.Addr)
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		if err := n.ValidateMemberId(m); err != nil {
+			n.DoneConfChange(cc.ID, errReuseRemovedId)
+			// Cancel configuration change.
+			cc.NodeID = raft.None
+			n.Raft().ApplyConfChange(cc)
+			return
+		}
+
 		n.server.storeZero(m)
 	}
 
@@ -439,10 +459,10 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 			time.Sleep(delay)
 			ctx, cancel := context.WithTimeout(n.ctx, time.Second)
 			defer cancel()
-			// JoinCluster can block idefinitely, raft ignores conf change proposal
+			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
 			_, err = c.JoinCluster(ctx, n.RaftContext)
-			if err == nil {
+			if err == nil || grpc.ErrorDesc(err) == errReuseRemovedId.Error() {
 				break
 			}
 			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
@@ -451,9 +471,7 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 			x.Printf("Error while joining cluster %v\n", err)
 			delay *= 2
 		}
-		if err != nil {
-			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
-		}
+		x.AssertTruefNoTrace(err == nil, "Max retries exceeded while trying to join cluster: %v\n", err)
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	} else {

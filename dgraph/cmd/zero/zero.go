@@ -28,6 +28,7 @@ var (
 	emptyConnectionState intern.ConnectionState
 	errInvalidId         = errors.New("Invalid server id")
 	errInvalidAddress    = errors.New("Invalid address")
+	errReuseRemovedId    = errors.New("Invalid idx, can't be same as that of a removed node.")
 	errEmptyPredicate    = errors.New("Empty predicate")
 	errInvalidGroup      = errors.New("Invalid group id")
 	errInvalidQuery      = errors.New("Invalid query")
