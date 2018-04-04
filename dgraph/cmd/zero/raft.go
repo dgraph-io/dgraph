@@ -396,7 +396,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
 		if err := ValidateMemberId(n.server.membershipState(), m); err != nil {
-			n.DoneConfChange(cc.ID, x.ErrReuseRemovedId)
+			n.DoneConfChange(cc.ID, err)
 			// Cancel configuration change.
 			cc.NodeID = raft.None
 			n.Raft().ApplyConfChange(cc)
@@ -455,16 +455,20 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
 			_, err = c.JoinCluster(ctx, n.RaftContext)
-			if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
+			if err == nil {
 				break
 			}
-			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
+			errorDesc := grpc.ErrorDesc(err)
+			if errorDesc == conn.ErrDuplicateRaftId.Error() ||
+				errorDesc == x.ErrReuseRemovedId.Error() {
 				x.Fatalf("Error while joining cluster %v", err)
 			}
 			x.Printf("Error while joining cluster %v\n", err)
 			delay *= 2
 		}
-		x.AssertTruefNoTrace(err == nil, "Max retries exceeded while trying to join cluster: %v\n", err)
+		if err != nil {
+			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
+		}
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	} else {
