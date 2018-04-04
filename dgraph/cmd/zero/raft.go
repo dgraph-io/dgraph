@@ -380,6 +380,18 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.Connect(rc.Id, rc.Addr)
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+
+		for _, member := range n.server.membershipState().Removed {
+			// It is not recommended to reuse RAFT ids.
+			if member.GroupId == 0 && m.Id == member.Id {
+				n.DoneConfChange(cc.ID, x.ErrReuseRemovedId)
+				// Cancel configuration change.
+				cc.NodeID = raft.None
+				n.Raft().ApplyConfChange(cc)
+				return
+			}
+		}
+
 		n.server.storeZero(m)
 	}
 
@@ -429,13 +441,15 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 			time.Sleep(delay)
 			ctx, cancel := context.WithTimeout(n.ctx, time.Second)
 			defer cancel()
-			// JoinCluster can block idefinitely, raft ignores conf change proposal
+			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
 			_, err = c.JoinCluster(ctx, n.RaftContext)
 			if err == nil {
 				break
 			}
-			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
+			errorDesc := grpc.ErrorDesc(err)
+			if errorDesc == conn.ErrDuplicateRaftId.Error() ||
+				errorDesc == x.ErrReuseRemovedId.Error() {
 				x.Fatalf("Error while joining cluster %v", err)
 			}
 			x.Printf("Error while joining cluster %v\n", err)

@@ -340,6 +340,14 @@ func (s *Server) Connect(ctx context.Context,
 		fmt.Println("No address provided.")
 		return &emptyConnectionState, errInvalidAddress
 	}
+
+	for _, member := range s.membershipState().Removed {
+		// It is not recommended to reuse RAFT ids.
+		if member.GroupId != 0 && m.Id == member.Id {
+			return &emptyConnectionState, x.ErrReuseRemovedId
+		}
+	}
+
 	for _, group := range s.state.Groups {
 		member, has := group.Members[m.Id]
 		if !has {
@@ -353,6 +361,7 @@ func (s *Server) Connect(ctx context.Context,
 			}
 		}
 	}
+
 	// Create a connection and check validity of the address by doing an Echo.
 	conn.Get().Connect(m.Addr)
 

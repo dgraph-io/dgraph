@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -61,7 +62,8 @@ const (
 
 var (
 	// Useful for running multiple servers on the same machine.
-	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
+	regExpHostName    = regexp.MustCompile(ValidHostnameRegex)
+	ErrReuseRemovedId = errors.New("Invalid idx, can't be same as that of a removed node.")
 )
 
 // WhiteSpace Replacer removes spaces and tabs from a string.
