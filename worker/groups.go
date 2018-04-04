@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc"
+
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -93,16 +95,17 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	var connState *intern.ConnectionState
 	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 	delay := 50 * time.Millisecond
+	var err error
 	for i := 0; i < 9; i++ { // Generous number of attempts.
-		var err error
 		connState, err = zc.Connect(gr.ctx, m)
-		if err == nil {
+		if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
 			break
 		}
 		x.Printf("Error while connecting with group zero: %v", err)
 		time.Sleep(delay)
 		delay *= 2
 	}
+	x.AssertTruefNoTrace(err == nil, fmt.Sprintf("Unable to join cluster via dgraph zero: %v", err))
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}

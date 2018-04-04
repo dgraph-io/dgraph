@@ -28,7 +28,6 @@ var (
 	emptyConnectionState intern.ConnectionState
 	errInvalidId         = errors.New("Invalid server id")
 	errInvalidAddress    = errors.New("Invalid address")
-	errReuseRemovedId    = errors.New("Invalid idx, can't be same as that of a removed node.")
 	errEmptyPredicate    = errors.New("Empty predicate")
 	errInvalidGroup      = errors.New("Invalid group id")
 	errInvalidQuery      = errors.New("Invalid query")
@@ -315,6 +314,16 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 	return s.Node.proposeAndWait(ctx, zp)
 }
 
+func ValidateMemberId(state *intern.MembershipState, m *intern.Member) error {
+	// It is not recommended to reuse RAFT ids.
+	for _, member := range state.Removed {
+		if m.Id == member.Id && m.GroupId == member.GroupId {
+			return x.ErrReuseRemovedId
+		}
+	}
+	return nil
+}
+
 // Connect is used to connect the very first time with group zero.
 func (s *Server) Connect(ctx context.Context,
 	m *intern.Member) (resp *intern.ConnectionState, err error) {
@@ -341,6 +350,7 @@ func (s *Server) Connect(ctx context.Context,
 		fmt.Println("No address provided.")
 		return &emptyConnectionState, errInvalidAddress
 	}
+
 	for _, group := range s.state.Groups {
 		member, has := group.Members[m.Id]
 		if !has {
@@ -354,6 +364,7 @@ func (s *Server) Connect(ctx context.Context,
 			}
 		}
 	}
+
 	// Create a connection and check validity of the address by doing an Echo.
 	conn.Get().Connect(m.Addr)
 

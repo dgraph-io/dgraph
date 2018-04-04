@@ -237,6 +237,10 @@ func (n *node) applyMemberProposal(pmember *intern.Member) error {
 		return errInvalidAddress
 	}
 
+	if err := ValidateMemberId(n.server.state, pmember); err != nil {
+		return err
+	}
+
 	if pmember.GroupId == 0 {
 		state.Zeros[pmember.Id] = pmember
 		if pmember.Leader {
@@ -378,17 +382,6 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	return p.Id, nil
 }
 
-func (n *node) ValidateMemberId(m *intern.Member) error {
-	// It is not recommended to reuse RAFT ids.
-	state := n.server.membershipState()
-	for _, member := range state.Removed {
-		if m.Id == member.Id && m.GroupId == member.GroupId {
-			return errReuseRemovedId
-		}
-	}
-	return nil
-}
-
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)
@@ -402,8 +395,8 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.Connect(rc.Id, rc.Addr)
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
-		if err := n.ValidateMemberId(m); err != nil {
-			n.DoneConfChange(cc.ID, errReuseRemovedId)
+		if err := ValidateMemberId(n.server.membershipState(), m); err != nil {
+			n.DoneConfChange(cc.ID, x.ErrReuseRemovedId)
 			// Cancel configuration change.
 			cc.NodeID = raft.None
 			n.Raft().ApplyConfChange(cc)
@@ -462,7 +455,7 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
 			_, err = c.JoinCluster(ctx, n.RaftContext)
-			if err == nil || grpc.ErrorDesc(err) == errReuseRemovedId.Error() {
+			if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
 				break
 			}
 			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
