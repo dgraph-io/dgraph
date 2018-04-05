@@ -56,7 +56,8 @@ type proposalCtx struct {
 
 type proposals struct {
 	sync.RWMutex
-	// They key is hex encoded version of <raft_id_of_node><random_uint64>
+	// The key is hex encoded version of <raft_id_of_node><random_uint64>
+	// This should make sure its not same across replicas.
 	ids map[string]*proposalCtx
 }
 
@@ -121,13 +122,6 @@ func (p *proposals) Done(key string, err error) {
 	// Since the tasks are executed in goroutines we need one guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
 	groups().Node.Applied.Done(pd.index)
-}
-
-func (p *proposals) Has(id uint64) bool {
-	p.RLock()
-	defer p.RUnlock()
-	_, has := p.ids[pkey(id)]
-	return has
 }
 
 type node struct {
@@ -265,7 +259,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		cnt: 1,
 	}
 	for {
-		key := pkey(rand.Uint64())
+		key := pkey(n.rand.Uint64())
 		if n.props.Store(key, pctx) {
 			proposal.Id = key
 			break
