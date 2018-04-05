@@ -61,11 +61,11 @@ type proposals struct {
 	ids map[string]*proposalCtx
 }
 
-func pkey(id uint64) string {
-	b := new(bytes.Buffer)
-	x.Check(binary.Write(b, binary.LittleEndian, Config.RaftId))
-	x.Check(binary.Write(b, binary.LittleEndian, id))
-	return hex.EncodeToString(b.Bytes())
+func uniqueKey() string {
+	b := make([]byte, 16)
+	copy(b[:8], groups().Node.raftIdBuffer)
+	groups().Node.rand.Read(b[8:])
+	return hex.EncodeToString(b)
 }
 
 func (p *proposals) Store(key string, pctx *proposalCtx) bool {
@@ -138,9 +138,10 @@ type node struct {
 	gid     uint32
 	props   proposals
 
-	canCampaign bool
-	sch         *scheduler
-	rand        *rand.Rand
+	canCampaign  bool
+	sch          *scheduler
+	rand         *rand.Rand
+	raftIdBuffer []byte
 }
 
 func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
@@ -171,6 +172,9 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		ids: make(map[string]*proposalCtx),
 	}
 
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, id)
+
 	n := &node{
 		Node:      m,
 		requestCh: make(chan linReadReq),
@@ -178,12 +182,13 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		gid:       gid,
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
-		props:   props,
-		stop:    make(chan struct{}),
-		done:    make(chan struct{}),
-		sch:     new(scheduler),
-		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
+		applyCh:      make(chan raftpb.Entry, Config.NumPendingProposals+1000),
+		props:        props,
+		stop:         make(chan struct{}),
+		done:         make(chan struct{}),
+		sch:          new(scheduler),
+		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
+		raftIdBuffer: b,
 	}
 	n.sch.init(n)
 	return n
@@ -258,13 +263,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		ctx: ctx,
 		cnt: 1,
 	}
-	for {
-		key := pkey(n.rand.Uint64())
-		if n.props.Store(key, pctx) {
-			proposal.Id = key
-			break
-		}
-	}
+
+	key := uniqueKey()
+	x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+	proposal.Id = key
 
 	sz := proposal.Size()
 	slice := make([]byte, sz)
@@ -411,7 +413,8 @@ func (n *node) processApplyCh() {
 				cnt: 1,
 			}
 			// We assert here to make sure that we do add the proposal to the map.
-			x.AssertTrue(n.props.Store(proposal.Id, pctx))
+			x.AssertTruef(n.props.Store(proposal.Id, pctx), "Found existing proposal with id: [%v]",
+				proposal.Id)
 		}
 		pctx.index = e.Index
 
