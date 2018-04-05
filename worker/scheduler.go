@@ -33,7 +33,7 @@ import (
 
 type task struct {
 	rid  uint64 // raft index corresponding to the task
-	pid  uint32 // proposal id corresponding to the task
+	pid  string // proposal id corresponding to the task
 	edge *intern.DirectedEdge
 }
 

@@ -20,6 +20,7 @@ package worker
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -55,46 +56,54 @@ type proposalCtx struct {
 
 type proposals struct {
 	sync.RWMutex
-	ids map[uint32]*proposalCtx
+	// They key is hex encoded version of <raft_id_of_node><random_uint64>
+	ids map[string]*proposalCtx
 }
 
-func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
+func pkey(id uint64) string {
+	b := new(bytes.Buffer)
+	x.Check(binary.Write(b, binary.LittleEndian, Config.RaftId))
+	x.Check(binary.Write(b, binary.LittleEndian, id))
+	return hex.EncodeToString(b.Bytes())
+}
+
+func (p *proposals) Store(key string, pctx *proposalCtx) bool {
 	p.Lock()
 	defer p.Unlock()
-	if _, has := p.ids[pid]; has {
+	if _, has := p.ids[key]; has {
 		return false
 	}
-	p.ids[pid] = pctx
+	p.ids[key] = pctx
 	return true
 }
 
-func (p *proposals) IncRef(pid uint32, count int) {
+func (p *proposals) IncRef(key string, count int) {
 	p.Lock()
 	defer p.Unlock()
-	pd, has := p.ids[pid]
+	pd, has := p.ids[key]
 	x.AssertTrue(has)
 	pd.cnt += count
 	return
 }
 
-func (p *proposals) pctx(pid uint32) *proposalCtx {
+func (p *proposals) pctx(key string) *proposalCtx {
 	p.RLock()
 	defer p.RUnlock()
-	return p.ids[pid]
+	return p.ids[key]
 }
 
-func (p *proposals) CtxAndTxn(pid uint32) (context.Context, *posting.Txn) {
+func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
 	p.RLock()
 	defer p.RUnlock()
-	pd, has := p.ids[pid]
+	pd, has := p.ids[key]
 	x.AssertTrue(has)
 	return pd.ctx, pd.txn
 }
 
-func (p *proposals) Done(pid uint32, err error) {
+func (p *proposals) Done(key string, err error) {
 	p.Lock()
 	defer p.Unlock()
-	pd, has := p.ids[pid]
+	pd, has := p.ids[key]
 	if !has {
 		return
 	}
@@ -106,7 +115,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	if pd.cnt > 0 {
 		return
 	}
-	delete(p.ids, pid)
+	delete(p.ids, key)
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
@@ -114,10 +123,10 @@ func (p *proposals) Done(pid uint32, err error) {
 	groups().Node.Applied.Done(pd.index)
 }
 
-func (p *proposals) Has(pid uint32) bool {
+func (p *proposals) Has(id uint64) bool {
 	p.RLock()
 	defer p.RUnlock()
-	_, has := p.ids[pid]
+	_, has := p.ids[pkey(id)]
 	return has
 }
 
@@ -165,7 +174,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 	m := conn.NewNode(rc)
 	props := proposals{
-		ids: make(map[uint32]*proposalCtx),
+		ids: make(map[string]*proposalCtx),
 	}
 
 	n := &node{
@@ -256,9 +265,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		cnt: 1,
 	}
 	for {
-		id := rand.Uint32()
-		if n.props.Store(id, pctx) {
-			proposal.Id = id
+		key := pkey(rand.Uint64())
+		if n.props.Store(key, pctx) {
+			proposal.Id = key
 			break
 		}
 	}
@@ -316,7 +325,7 @@ func (n *node) processMutation(task *task) error {
 	return nil
 }
 
-func (n *node) processSchemaMutations(pid uint32, index uint64,
+func (n *node) processSchemaMutations(pid string, index uint64,
 	startTs uint64, s *intern.SchemaUpdate) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
@@ -441,7 +450,7 @@ func (n *node) processApplyCh() {
 	close(kvChan)
 }
 
-func (n *node) commitOrAbort(index uint64, pid uint32, tctx *api.TxnContext) {
+func (n *node) commitOrAbort(index uint64, pid string, tctx *api.TxnContext) {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	_, err := commitOrAbort(ctx, tctx)
 	if tr, ok := trace.FromContext(ctx); ok {
@@ -455,7 +464,7 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *api.TxnContext) {
 	n.props.Done(pid, err)
 }
 
-func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
+func (n *node) deletePredicate(index uint64, pid string, predicate string) {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
@@ -464,7 +473,7 @@ func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	n.props.Done(pid, err)
 }
 
-func (n *node) processKeyValues(index uint64, pid uint32, kvs []*intern.KV) error {
+func (n *node) processKeyValues(index uint64, pid string, kvs []*intern.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)
 	posting.TxnMarks().Done(index)

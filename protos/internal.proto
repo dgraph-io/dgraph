@@ -194,7 +194,7 @@ message KeyValues {
 }
 
 message Proposal {
-	uint32 id = 1;
+	string id = 1;
 	Mutations mutations = 2;
 	api.TxnContext txn_context = 3;
 	repeated KV kv = 4;
