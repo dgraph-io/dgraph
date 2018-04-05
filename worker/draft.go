@@ -159,6 +159,23 @@ func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error 
 	return n.Applied.WaitForMark(ctx, min)
 }
 
+type lockedSource struct {
+	lk  sync.Mutex
+	src rand.Source
+}
+
+func (r *lockedSource) Int63() int64 {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	return r.src.Int63()
+}
+
+func (r *lockedSource) Seed(seed int64) {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	r.src.Seed(seed)
+}
+
 func newNode(gid uint32, id uint64, myAddr string) *node {
 	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
 
@@ -187,7 +204,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		stop:         make(chan struct{}),
 		done:         make(chan struct{}),
 		sch:          new(scheduler),
-		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
+		rand:         rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		raftIdBuffer: b,
 	}
 	n.sch.init(n)
