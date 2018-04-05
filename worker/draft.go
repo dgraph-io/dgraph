@@ -404,15 +404,16 @@ func (n *node) processApplyCh() {
 		// becomes zero.
 		pctx := n.props.pctx(proposal.Id)
 		if pctx == nil {
-			// This is during replay of logs after restart
+			// This is during replay of logs after restart or on a replica.
 			pctx = &proposalCtx{
 				ch:  make(chan error, 1),
 				ctx: n.ctx,
 				cnt: 1,
 			}
+			// We assert here to make sure that we do add the proposal to the map.
+			x.AssertTrue(n.props.Store(proposal.Id, pctx))
 		}
 		pctx.index = e.Index
-		n.props.Store(proposal.Id, pctx)
 
 		posting.TxnMarks().Begin(e.Index)
 		if proposal.Mutations != nil {
