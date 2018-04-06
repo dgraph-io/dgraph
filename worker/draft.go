@@ -283,7 +283,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 
 	key := uniqueKey()
 	x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
-	proposal.Id = key
+	proposal.Key = key
 
 	sz := proposal.Size()
 	slice := make([]byte, sz)
@@ -387,9 +387,9 @@ func (n *node) processKeyValueOrCleanProposals(
 	// them sequentially.
 	for e := range kvChan {
 		if len(e.proposal.Kv) > 0 {
-			n.processKeyValues(e.raftIdx, e.proposal.Id, e.proposal.Kv)
+			n.processKeyValues(e.raftIdx, e.proposal.Key, e.proposal.Kv)
 		} else if len(e.proposal.CleanPredicate) > 0 {
-			n.deletePredicate(e.raftIdx, e.proposal.Id, e.proposal.CleanPredicate)
+			n.deletePredicate(e.raftIdx, e.proposal.Key, e.proposal.CleanPredicate)
 		} else {
 			x.Fatalf("Unknown proposal, %+v\n", e.proposal)
 		}
@@ -419,9 +419,13 @@ func (n *node) processApplyCh() {
 			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
 
+		if proposal.Id != 0 {
+			proposal.Key = fmt.Sprint(proposal.Id)
+		}
+
 		// One final applied and synced watermark would be emitted when proposal ctx ref count
 		// becomes zero.
-		pctx := n.props.pctx(proposal.Id)
+		pctx := n.props.pctx(proposal.Key)
 		if pctx == nil {
 			// This is during replay of logs after restart or on a replica.
 			pctx = &proposalCtx{
@@ -430,8 +434,8 @@ func (n *node) processApplyCh() {
 				cnt: 1,
 			}
 			// We assert here to make sure that we do add the proposal to the map.
-			x.AssertTruef(n.props.Store(proposal.Id, pctx), "Found existing proposal with id: [%v]",
-				proposal.Id)
+			x.AssertTruef(n.props.Store(proposal.Key, pctx),
+				"Found existing proposal with key: [%v]", proposal.Key)
 		}
 		pctx.index = e.Index
 
@@ -450,14 +454,14 @@ func (n *node) processApplyCh() {
 			groups().applyState(proposal.State)
 			// When proposal is done it emits done watermarks.
 			posting.TxnMarks().Done(e.Index)
-			n.props.Done(proposal.Id, nil)
+			n.props.Done(proposal.Key, nil)
 		} else if len(proposal.CleanPredicate) > 0 {
 			kvChan <- KeyValueOrCleanProposal{
 				raftIdx:  e.Index,
 				proposal: proposal,
 			}
 		} else if proposal.TxnContext != nil {
-			go n.commitOrAbort(e.Index, proposal.Id, proposal.TxnContext)
+			go n.commitOrAbort(e.Index, proposal.Key, proposal.TxnContext)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
