@@ -20,6 +20,7 @@ package worker
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -55,46 +56,55 @@ type proposalCtx struct {
 
 type proposals struct {
 	sync.RWMutex
-	ids map[uint32]*proposalCtx
+	// The key is hex encoded version of <raft_id_of_node><random_uint64>
+	// This should make sure its not same across replicas.
+	ids map[string]*proposalCtx
 }
 
-func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
+func uniqueKey() string {
+	b := make([]byte, 16)
+	copy(b[:8], groups().Node.raftIdBuffer)
+	groups().Node.rand.Read(b[8:])
+	return hex.EncodeToString(b)
+}
+
+func (p *proposals) Store(key string, pctx *proposalCtx) bool {
 	p.Lock()
 	defer p.Unlock()
-	if _, has := p.ids[pid]; has {
+	if _, has := p.ids[key]; has {
 		return false
 	}
-	p.ids[pid] = pctx
+	p.ids[key] = pctx
 	return true
 }
 
-func (p *proposals) IncRef(pid uint32, count int) {
+func (p *proposals) IncRef(key string, count int) {
 	p.Lock()
 	defer p.Unlock()
-	pd, has := p.ids[pid]
+	pd, has := p.ids[key]
 	x.AssertTrue(has)
 	pd.cnt += count
 	return
 }
 
-func (p *proposals) pctx(pid uint32) *proposalCtx {
+func (p *proposals) pctx(key string) *proposalCtx {
 	p.RLock()
 	defer p.RUnlock()
-	return p.ids[pid]
+	return p.ids[key]
 }
 
-func (p *proposals) CtxAndTxn(pid uint32) (context.Context, *posting.Txn) {
+func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
 	p.RLock()
 	defer p.RUnlock()
-	pd, has := p.ids[pid]
+	pd, has := p.ids[key]
 	x.AssertTrue(has)
 	return pd.ctx, pd.txn
 }
 
-func (p *proposals) Done(pid uint32, err error) {
+func (p *proposals) Done(key string, err error) {
 	p.Lock()
 	defer p.Unlock()
-	pd, has := p.ids[pid]
+	pd, has := p.ids[key]
 	if !has {
 		return
 	}
@@ -106,19 +116,12 @@ func (p *proposals) Done(pid uint32, err error) {
 	if pd.cnt > 0 {
 		return
 	}
-	delete(p.ids, pid)
+	delete(p.ids, key)
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need one guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
 	groups().Node.Applied.Done(pd.index)
-}
-
-func (p *proposals) Has(pid uint32) bool {
-	p.RLock()
-	defer p.RUnlock()
-	_, has := p.ids[pid]
-	return has
 }
 
 type node struct {
@@ -135,9 +138,10 @@ type node struct {
 	gid     uint32
 	props   proposals
 
-	canCampaign bool
-	sch         *scheduler
-	rand        *rand.Rand
+	canCampaign  bool
+	sch          *scheduler
+	rand         *rand.Rand
+	raftIdBuffer []byte
 }
 
 func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
@@ -155,6 +159,23 @@ func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error 
 	return n.Applied.WaitForMark(ctx, min)
 }
 
+type lockedSource struct {
+	lk  sync.Mutex
+	src rand.Source
+}
+
+func (r *lockedSource) Int63() int64 {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	return r.src.Int63()
+}
+
+func (r *lockedSource) Seed(seed int64) {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	r.src.Seed(seed)
+}
+
 func newNode(gid uint32, id uint64, myAddr string) *node {
 	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
 
@@ -165,8 +186,11 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 	m := conn.NewNode(rc)
 	props := proposals{
-		ids: make(map[uint32]*proposalCtx),
+		ids: make(map[string]*proposalCtx),
 	}
+
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, id)
 
 	n := &node{
 		Node:      m,
@@ -175,12 +199,13 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		gid:       gid,
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
-		props:   props,
-		stop:    make(chan struct{}),
-		done:    make(chan struct{}),
-		sch:     new(scheduler),
-		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
+		applyCh:      make(chan raftpb.Entry, Config.NumPendingProposals+1000),
+		props:        props,
+		stop:         make(chan struct{}),
+		done:         make(chan struct{}),
+		sch:          new(scheduler),
+		rand:         rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
+		raftIdBuffer: b,
 	}
 	n.sch.init(n)
 	return n
@@ -255,13 +280,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		ctx: ctx,
 		cnt: 1,
 	}
-	for {
-		id := rand.Uint32()
-		if n.props.Store(id, pctx) {
-			proposal.Id = id
-			break
-		}
-	}
+
+	key := uniqueKey()
+	x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+	proposal.Key = key
 
 	sz := proposal.Size()
 	slice := make([]byte, sz)
@@ -316,7 +338,7 @@ func (n *node) processMutation(task *task) error {
 	return nil
 }
 
-func (n *node) processSchemaMutations(pid uint32, index uint64,
+func (n *node) processSchemaMutations(pid string, index uint64,
 	startTs uint64, s *intern.SchemaUpdate) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
@@ -365,9 +387,9 @@ func (n *node) processKeyValueOrCleanProposals(
 	// them sequentially.
 	for e := range kvChan {
 		if len(e.proposal.Kv) > 0 {
-			n.processKeyValues(e.raftIdx, e.proposal.Id, e.proposal.Kv)
+			n.processKeyValues(e.raftIdx, e.proposal.Key, e.proposal.Kv)
 		} else if len(e.proposal.CleanPredicate) > 0 {
-			n.deletePredicate(e.raftIdx, e.proposal.Id, e.proposal.CleanPredicate)
+			n.deletePredicate(e.raftIdx, e.proposal.Key, e.proposal.CleanPredicate)
 		} else {
 			x.Fatalf("Unknown proposal, %+v\n", e.proposal)
 		}
@@ -397,19 +419,25 @@ func (n *node) processApplyCh() {
 			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
 
+		if proposal.DeprecatedId != 0 {
+			proposal.Key = fmt.Sprint(proposal.DeprecatedId)
+		}
+
 		// One final applied and synced watermark would be emitted when proposal ctx ref count
 		// becomes zero.
-		pctx := n.props.pctx(proposal.Id)
+		pctx := n.props.pctx(proposal.Key)
 		if pctx == nil {
-			// This is during replay of logs after restart
+			// This is during replay of logs after restart or on a replica.
 			pctx = &proposalCtx{
 				ch:  make(chan error, 1),
 				ctx: n.ctx,
 				cnt: 1,
 			}
+			// We assert here to make sure that we do add the proposal to the map.
+			x.AssertTruef(n.props.Store(proposal.Key, pctx),
+				"Found existing proposal with key: [%v]", proposal.Key)
 		}
 		pctx.index = e.Index
-		n.props.Store(proposal.Id, pctx)
 
 		posting.TxnMarks().Begin(e.Index)
 		if proposal.Mutations != nil {
@@ -426,14 +454,14 @@ func (n *node) processApplyCh() {
 			groups().applyState(proposal.State)
 			// When proposal is done it emits done watermarks.
 			posting.TxnMarks().Done(e.Index)
-			n.props.Done(proposal.Id, nil)
+			n.props.Done(proposal.Key, nil)
 		} else if len(proposal.CleanPredicate) > 0 {
 			kvChan <- KeyValueOrCleanProposal{
 				raftIdx:  e.Index,
 				proposal: proposal,
 			}
 		} else if proposal.TxnContext != nil {
-			go n.commitOrAbort(e.Index, proposal.Id, proposal.TxnContext)
+			go n.commitOrAbort(e.Index, proposal.Key, proposal.TxnContext)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
@@ -441,7 +469,7 @@ func (n *node) processApplyCh() {
 	close(kvChan)
 }
 
-func (n *node) commitOrAbort(index uint64, pid uint32, tctx *api.TxnContext) {
+func (n *node) commitOrAbort(index uint64, pid string, tctx *api.TxnContext) {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	_, err := commitOrAbort(ctx, tctx)
 	if tr, ok := trace.FromContext(ctx); ok {
@@ -455,7 +483,7 @@ func (n *node) commitOrAbort(index uint64, pid uint32, tctx *api.TxnContext) {
 	n.props.Done(pid, err)
 }
 
-func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
+func (n *node) deletePredicate(index uint64, pid string, predicate string) {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
@@ -464,7 +492,7 @@ func (n *node) deletePredicate(index uint64, pid uint32, predicate string) {
 	n.props.Done(pid, err)
 }
 
-func (n *node) processKeyValues(index uint64, pid uint32, kvs []*intern.KV) error {
+func (n *node) processKeyValues(index uint64, pid string, kvs []*intern.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pid)
 	err := populateKeyValues(ctx, kvs)
 	posting.TxnMarks().Done(index)
