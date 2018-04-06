@@ -310,7 +310,7 @@ func (n *Node) BatchAndSendMessages() {
 }
 
 func (n *Node) doSendMessage(pool *Pool, data []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	client := pool.Get()
