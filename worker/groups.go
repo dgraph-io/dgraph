@@ -247,7 +247,7 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
-	if g.state != nil && g.state.Counter >= state.Counter {
+	if g.state != nil && g.state.Counter > state.Counter {
 		return
 	}
 

@@ -203,6 +203,19 @@ func (s *Server) storeZero(m *intern.Member) {
 	s.state.Zeros[m.Id] = m
 }
 
+func (s *Server) updateZeroLeader() {
+	s.Lock()
+	defer s.Unlock()
+	leader := s.Node.Raft().Status().Lead
+	for _, m := range s.state.Zeros {
+		if m.Id == leader {
+			m.Leader = true
+		} else {
+			m.Leader = false
+		}
+	}
+}
+
 func (s *Server) removeZero(nodeId uint64) {
 	s.Lock()
 	defer s.Unlock()

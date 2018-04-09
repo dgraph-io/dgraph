@@ -404,8 +404,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 func (n *node) triggerLeaderChange() {
 	n.server.triggerLeaderChange()
-	m := &intern.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
-	go n.proposeAndWait(context.Background(), &intern.ZeroProposal{Member: m})
+	n.server.updateZeroLeader()
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {
