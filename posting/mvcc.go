@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package posting
@@ -37,7 +27,7 @@ import (
 var (
 	ErrTsTooOld = x.Errorf("Transaction is too old")
 	txns        *transactions
-	txnMarks    *x.WaterMark // Used to find out till which index we can snapshot.
+	txnMarks    *x.WaterMark // Used to find out till what RAFT index we can snapshot entries.
 )
 
 func init() {
@@ -102,16 +92,16 @@ func (t *transactions) MinTs() uint64 {
 	return minTs
 }
 
-// Returns startTs of all pending transactions started upto 1000 raft log
-// entries after last snapshot.
-func (t *transactions) TxnsSinceSnapshot() []uint64 {
+func (t *transactions) TxnsSinceSnapshot(pending uint64) []uint64 {
 	lastSnapshotIdx := TxnMarks().DoneUntil()
 	var timestamps []uint64
 	t.Lock()
 	defer t.Unlock()
+	var oldest float64 = 0.2 * float64(pending)
 	for _, txn := range t.m {
 		index := txn.startIdx()
-		if index-lastSnapshotIdx <= 1000 {
+		// We abort oldest 20% of the transactions.
+		if index-lastSnapshotIdx <= uint64(oldest) {
 			timestamps = append(timestamps, txn.StartTs)
 		}
 	}

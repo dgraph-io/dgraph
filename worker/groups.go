@@ -23,12 +23,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc"
+
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -93,21 +95,29 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	var connState *intern.ConnectionState
 	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 	delay := 50 * time.Millisecond
-	for i := 0; i < 9; i++ { // Generous number of attempts.
-		var err error
+	maxHalfDelay := 15 * time.Second
+	var err error
+	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
 		connState, err = zc.Connect(gr.ctx, m)
-		if err == nil {
+		if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
 			break
 		}
 		x.Printf("Error while connecting with group zero: %v", err)
 		time.Sleep(delay)
-		delay *= 2
+		if delay <= maxHalfDelay {
+			delay *= 2
+		}
 	}
+	x.CheckfNoTrace(err)
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}
 	x.Printf("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
 	Config.RaftId = connState.GetMember().GetId()
+	// This timestamp would be used for reading during snapshot after bulk load.
+	// The stream is async, we need this information before we start or else replica might
+	// not get any data.
+	posting.Oracle().SetMaxPending(connState.MaxPending)
 	gr.applyState(connState.GetState())
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
@@ -123,7 +133,6 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
 	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
-	go gr.periodicAbortOldTxns()
 	gr.proposeInitialSchema()
 }
 
@@ -155,7 +164,7 @@ func (g *groupi) proposeInitialSchema() {
 		if err == nil {
 			break
 		}
-		fmt.Println("Error while proposing initial schema: ", err)
+		x.Println("Error while proposing initial schema: ", err)
 		time.Sleep(100 * time.Millisecond)
 	}
 }
@@ -166,6 +175,8 @@ func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
 }
 
+// calculateTabletSizes iterates through badger and gets a size of the space occupied by each
+// predicate (including data and indexes). All data for a predicate forms a Tablet.
 func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchValues = false
@@ -185,15 +196,19 @@ func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 			itr.Next()
 			continue
 		}
-		if pk.IsSchema() {
-			itr.Seek(pk.SkipSchema())
-			continue
-		}
 
+		// We should not be skipping schema keys here, otherwise if there is no data for them, they
+		// won't be added to the tablets map returned by this function and would ultimately be
+		// removed from the membership state.
 		tablet, has := tablets[pk.Attr]
 		if !has {
 			if !g.ServesTablet(pk.Attr) {
-				itr.Seek(pk.SkipPredicate())
+				if pk.IsSchema() {
+					itr.Next()
+				} else {
+					// data key for predicate we don't serve, skip it.
+					itr.Seek(pk.SkipPredicate())
+				}
 				continue
 			}
 			tablet = &intern.Tablet{GroupId: gid, Predicate: pk.Attr}
@@ -313,7 +328,6 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 		return tablet
 	}
 
-	x.Printf("Asking if I can serve tablet for: %v\n", key)
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
 	pl := g.AnyServer(0)
@@ -331,6 +345,10 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 	g.Lock()
 	g.tablets[key] = out
 	g.Unlock()
+
+	if out.GroupId == groups().groupId() {
+		x.Printf("Serving tablet for: %v\n", key)
+	}
 	return out
 }
 
@@ -634,11 +652,17 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 	if !g.Node.AmLeader() {
 		return
 	}
-	// TODO (pawan) - All servers open a stream with Zero and processDelta. Why do we still have to
-	// propose these updates then?
+
+	// Only the leader of a group proposes the commit proposal for a group after getting delta from
+	// Zero.
 	for startTs, commitTs := range oracleDelta.Commits {
+		// The leader might not have yet applied the mutation and hence may not have the txn in the
+		// map. Its ok we can just continue, processOracleDeltaStream checks the oracle map every
+		// minute and calls proposeDelta.
 		if posting.Txns().Get(startTs) == nil {
-			posting.Oracle().Done(startTs)
+			// Don't mark oracle as done here as then it would be deleted the entry from map and it
+			// won't be proposed to the group. This could eventually block snapshots from happening
+			// in a replicated cluster.
 			continue
 		}
 		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTs}
@@ -646,7 +670,6 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 	}
 	for _, startTs := range oracleDelta.Aborts {
 		if posting.Txns().Get(startTs) == nil {
-			posting.Oracle().Done(startTs)
 			continue
 		}
 		tctx := &api.TxnContext{StartTs: startTs}
@@ -700,28 +723,4 @@ START:
 	}
 	time.Sleep(time.Second)
 	goto START
-}
-
-func (g *groupi) periodicAbortOldTxns() {
-	ticker := time.NewTicker(time.Second * 30)
-	for range ticker.C {
-		lastSnapshotIdx := posting.TxnMarks().DoneUntil()
-		water := groups().Node.Applied.DoneUntil()
-		// We try to abort transactions if difference between applied and last snapshottted is more
-		// than 10000. Ideally a snapshot should happen every 100 entries so this suggests that some
-		// transaction was left in a dangling state(not aborted or committed).
-		if water-lastSnapshotIdx < 10000 {
-			continue
-		}
-
-		pl := groups().Leader(0)
-		if pl == nil {
-			return
-		}
-		zc := intern.NewZeroClient(pl.Get())
-		// Aborts if not already committed.
-		startTimestamps := posting.Txns().TxnsSinceSnapshot()
-		req := &intern.TxnTimestamps{Ts: startTimestamps}
-		zc.TryAbort(context.Background(), req)
-	}
 }

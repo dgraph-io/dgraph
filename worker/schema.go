@@ -21,8 +21,8 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -53,7 +53,8 @@ func getSchema(ctx context.Context, s *intern.SchemaRequest) (*intern.SchemaResu
 	if len(s.Fields) > 0 {
 		fields = s.Fields
 	} else {
-		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list"}
+		fields = []string{"type", "index", "tokenizer", "reverse", "count", "list", "upsert",
+			"lang"}
 	}
 
 	for _, attr := range predicates {
@@ -95,6 +96,10 @@ func populateSchema(attr string, fields []string) *api.SchemaNode {
 			schemaNode.Count = schema.State().HasCount(attr)
 		case "list":
 			schemaNode.List = schema.State().IsList(attr)
+		case "upsert":
+			schemaNode.Upsert = schema.State().HasUpsert(attr)
+		case "lang":
+			schemaNode.Lang = schema.State().HasLang(attr)
 		default:
 			//pass
 		}

@@ -152,6 +152,7 @@ message MembershipState {
 message ConnectionState {
 	Member member = 1;
 	MembershipState state = 2;
+	uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
 }
 
 message Tablet {
@@ -193,12 +194,17 @@ message KeyValues {
 }
 
 message Proposal {
-	uint32 id = 1;
+	uint32 deprecated_id = 1; // delete this field in later versions. Its for backward compatibility.
 	Mutations mutations = 2;
 	api.TxnContext txn_context = 3;
 	repeated KV kv = 4;
 	MembershipState state = 5;
 	string clean_predicate = 6; // Delete the predicate which was moved to other group.
+	string key = 7;
+}
+
+message KVS {
+ repeated KV kv = 1;
 }
 
 message KV {
@@ -306,6 +312,7 @@ message SchemaUpdate {
 	bool count = 5;
 	bool list = 6;
 	bool upsert = 8;
+	bool lang = 9;
 
 	// Deleted field:
 	reserved 7;
@@ -355,10 +362,15 @@ message TxnTimestamps {
 	repeated uint64 ts = 1;
 }
 
+message PeerResponse {
+	bool status = 1;
+}
+
 service Raft {
 	rpc Echo (api.Payload)        returns (api.Payload) {}
 	rpc RaftMessage (api.Payload) returns (api.Payload) {}
 	rpc JoinCluster (RaftContext) returns (api.Payload) {}
+	rpc IsPeer (RaftContext)      returns (PeerResponse) {}
 }
 
 service Zero {
@@ -376,13 +388,13 @@ service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                        returns (api.TxnContext) {}
 	rpc ServeTask (Query)                         returns (Result) {}
-	rpc PredicateAndSchemaData (SnapshotMeta) returns (stream KV) {}
+	rpc PredicateAndSchemaData (SnapshotMeta) returns (stream KVS) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
 	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
 	rpc MinTxnTs (api.Payload)                    returns (Num) {}
 
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
-	rpc ReceivePredicate(stream KV)         returns (api.Payload) {}
+	rpc ReceivePredicate(stream KVS)         returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 }
 

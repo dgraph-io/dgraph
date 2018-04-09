@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package posting
@@ -214,6 +204,73 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	addMutationHelper(t, ol, edge, Set, txn)
 	require.EqualValues(t, 1, ol.Length(txn.StartTs, 0))
 	checkValue(t, ol, "cars", txn.StartTs)
+}
+
+func TestAddMutation_DelSet(t *testing.T) {
+	key := x.DataKey("value", 1534)
+	ol, err := Get(key)
+	require.NoError(t, err)
+
+	// DO sp*, don't commit
+	// Del a value cars and but don't merge.
+	edge := &intern.DirectedEdge{
+		Value: []byte(x.Star),
+		Op:    intern.DirectedEdge_DEL,
+	}
+	txn := &Txn{StartTs: 1}
+	_, err = ol.AddMutation(context.Background(), txn, edge)
+	require.NoError(t, err)
+
+	// Set value to newcars, commit it
+	edge = &intern.DirectedEdge{
+		Value: []byte("newcars"),
+	}
+	txn = &Txn{StartTs: 2}
+	addMutationHelper(t, ol, edge, Set, txn)
+	ol.CommitMutation(context.Background(), 2, uint64(3))
+	require.EqualValues(t, 1, ol.Length(3, 0))
+	checkValue(t, ol, "newcars", 3)
+}
+func TestAddMutation_DelRead(t *testing.T) {
+	key := x.DataKey("value", 1543)
+	ol, err := Get(key)
+	require.NoError(t, err)
+
+	// Set value to newcars, and commit it
+	edge := &intern.DirectedEdge{
+		Value: []byte("newcars"),
+	}
+	txn := &Txn{StartTs: 1}
+	addMutationHelper(t, ol, edge, Set, txn)
+	ol.CommitMutation(context.Background(), 1, uint64(2))
+	require.EqualValues(t, 1, ol.Length(2, 0))
+	checkValue(t, ol, "newcars", 2)
+
+	// DO sp*, don't commit
+	// Del a value cars and but don't merge.
+	edge = &intern.DirectedEdge{
+		Value: []byte(x.Star),
+		Op:    intern.DirectedEdge_DEL,
+	}
+	txn = &Txn{StartTs: 3}
+	_, err = ol.AddMutation(context.Background(), txn, edge)
+	require.NoError(t, err)
+
+	// Part of same transaction as sp*, so should see zero length even
+	// if not committed yet.
+	require.EqualValues(t, 0, ol.Length(3, 0))
+
+	// Commit sp* only in oracle, don't apply to pl yet
+	Oracle().commits[3] = 5
+	defer func() {
+		delete(Oracle().commits, 3)
+	}()
+
+	// This read should ignore sp*, since readts is 4 and it was committed at 5
+	require.EqualValues(t, 1, ol.Length(4, 0))
+	checkValue(t, ol, "newcars", 4)
+
+	require.EqualValues(t, 0, ol.Length(6, 0))
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {

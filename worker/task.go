@@ -649,6 +649,11 @@ func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
+	if len(q.Langs) > 0 && !schema.State().HasLang(attr) {
+		return nil, x.Errorf("Language tags can only be used with predicates of string type"+
+			" having @lang directive in schema. Got: [%v]", attr)
+	}
+
 	typ, err := schema.State().TypeOf(attr)
 	if err != nil {
 		// All schema checks are done before this, this type is only used to
@@ -718,7 +723,7 @@ func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.
 	}
 
 	// For string matching functions, check the language.
-	if needsStringFiltering(srcFn, q.Langs) {
+	if needsStringFiltering(srcFn, q.Langs, attr) {
 		filterStringFunction(funcArgs{q, gid, srcFn, out})
 	}
 
@@ -726,8 +731,18 @@ func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.
 	return out, nil
 }
 
-func needsStringFiltering(srcFn *functionContext, langs []string) bool {
-	return srcFn.isStringFn && langForFunc(langs) != "." &&
+func needsStringFiltering(srcFn *functionContext, langs []string, attr string) bool {
+	if !srcFn.isStringFn {
+		return false
+	}
+
+	// If a predicate doesn't have @lang directive in schema, we don't need to do any string
+	// filtering.
+	if !schema.State().HasLang(attr) {
+		return false
+	}
+
+	return langForFunc(langs) != "." &&
 		(srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
 			srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn)
 }
@@ -1126,7 +1141,6 @@ func parseSrcFn(q *intern.Query) (*functionContext, error) {
 			}
 			fc.tokens = append(fc.tokens, tokens...)
 			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
-
 		}
 
 		// Number of index keys is more than no. of uids to filter, so its better to fetch data keys
@@ -1258,8 +1272,11 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *intern.Query) (*intern.Re
 		tr.LazyPrintf("Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 	}
 
-	x.AssertTruef(groups().ServesGroup(gid),
-		"attr: %q groupId: %v Request sent to wrong server.", q.Attr, gid)
+	if !groups().ServesGroup(gid) {
+		// TODO(pawan) - Log this when we have debug logs.
+		return nil, fmt.Errorf("Temporary error, attr: %q groupId: %v Request sent to wrong server",
+			q.Attr, gid)
+	}
 
 	type reply struct {
 		result *intern.Result

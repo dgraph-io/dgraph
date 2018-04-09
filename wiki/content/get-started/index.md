@@ -98,7 +98,7 @@ services:
       - 8080:8080
       - 9080:9080
     restart: on-failure
-    command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080
+    command: dgraph server --my=server:7080 --lru_mb=2048 --zero=zero:5080
   ratel:
     image: dgraph/dgraph:latest
     volumes:
@@ -139,7 +139,7 @@ dgraph zero
 Run `dgraph server` to start Dgraph server.
 
 ```sh
-dgraph server --memory_mb 2048 --zero localhost:5080
+dgraph server --lru_mb 2048 --zero localhost:5080
 ```
 
 **Run Ratel**
@@ -150,7 +150,7 @@ Run 'dgraph-ratel' to start Dgraph UI. This can be used to do mutations and quer
 dgraph-ratel
 ```
 
-{{% notice "tip" %}}You need to set the estimated memory Dgraph server can take through `memory_mb` flag. This is just a hint to the Dgraph server and actual usage would be higher than this. It's recommended to set memory_mb to half the available RAM.{{% /notice %}}
+{{% notice "tip" %}}You need to set the estimated memory Dgraph server can take through `lru_mb` flag. This is just a hint to the Dgraph server and actual usage would be higher than this. It's recommended to set lru_mb to one-third the available RAM.{{% /notice %}}
 
 #### Windows
 
@@ -163,7 +163,7 @@ dgraph-ratel
 **Run Dgraph data server**
 
 ```sh
-./dgraph.exe server --memory_mb 2048 --zero localhost:5080
+./dgraph.exe server --lru_mb 2048 --zero localhost:5080
 ```
 
 ```sh
@@ -180,7 +180,7 @@ mkdir -p /tmp/data
 docker run -it -p 5080:5080 -p 6080:6080 -p 8080:8080 -p 9080:9080 -p 8000:8000 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
 
 # Run Dgraph Server
-docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
+docker exec -it diggy dgraph server --lru_mb 2048 --zero localhost:5080
 
 # Run Dgraph Ratel
 docker exec -it diggy dgraph-ratel
@@ -201,7 +201,7 @@ docker create -v /dgraph --name data dgraph/dgraph
 Now if we run Dgraph container with `--volumes-from` flag and run Dgraph with the following command, then anything we write to /dgraph in Dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
 docker run -it -p 5080:5080 -p 6080:6080 --volumes-from data --name diggy dgraph/dgraph dgraph zero
-docker exec -it diggy dgraph server --memory_mb 2048 --zero localhost:5080
+docker exec -it diggy dgraph server --lru_mb 2048 --zero localhost:5080
 
 # Run Dgraph Ratel
 docker exec -it diggy dgraph-ratel
@@ -211,7 +211,7 @@ docker exec -it diggy dgraph-ratel
 If you are using Dgraph v1.0.2 (or older) then the default ports are 7080, 8080 for zero, so when following instructions for different setup guides override zero port using `--port_offset`.
 
 ```sh
-dgraph zero --memory_mb=<typically half the RAM> --port_offset -2000
+dgraph zero --lru_mb=<typically one-third the RAM> --port_offset -2000
 ```
 Ratel's default port is 8081, so override it using -p 8000.
 
@@ -223,7 +223,10 @@ Ratel's default port is 8081, so override it using -p 8000.
 
 The mutations and queries below can either be run from the command line using `curl localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
 
+### Dataset
+The dataset is a movie graph, where and the graph nodes are entities of the type directors, actors, genres, or movies.  
 
+### Storing data in the graph 
 Changing the data stored in Dgraph is a mutation.  The following mutation stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.  Running this mutation, either through the UI or on the command line, will store the data in Dgraph.
 
 
@@ -274,6 +277,7 @@ curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
 ' | python -m json.tool | less
 ```
 
+### Adding indexes
 Alter the schema to add indexes on some of the data so queries can use term matching, filtering and sorting.
 
 ```sh
@@ -285,6 +289,20 @@ curl localhost:8080/alter -XPOST -d $'
 ' | python -m json.tool | less
 ```
 
+### Get all movies 
+Run this query to get all the movies. The query works below all the movies have a starring edge
+
+```sh
+curl localhost:8080/query -XPOST -d $'
+{
+ me(func: has(starring)) {
+   name@en
+  }
+}
+' | python -m json.tool | less
+```
+
+### Get all movies released after "1980"
 Run this query to get "Star Wars" movies released after "1980".  Try it in the user interface to see the result as a graph.
 
 

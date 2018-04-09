@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	humanize "github.com/dustin/go-humanize"
 )
 
 var (
@@ -91,28 +93,34 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	c := intern.NewWorkerClient(pl.Get())
 	stream, err := c.ReceivePredicate(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
+
+	var bytesSent uint64
+	t := time.NewTicker(2 * time.Second)
+	defer t.Stop()
+	go func() {
+		now := time.Now()
+		for range t.C {
+			dur := time.Since(now)
+			speed := bytesSent / uint64(dur.Seconds())
+			x.Printf("Sending predicate: [%v] Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
+				predicate, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
+		}
+	}()
 
 	count := 0
-	sendPl := func(stream intern.Worker_ReceivePredicateClient, l *posting.List) error {
-		kv, err := l.MarshalToKv()
-		if err != nil {
-			return err
-		}
-		return stream.Send(kv)
-	}
-
+	batchSize := 0
+	kvs := &intern.KVS{}
+	// sends all data except schema, schema key has different prefix
+	prefix := x.PredicatePrefix(predicate)
+	var prevKey []byte
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.AllVersions = true
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
-
-	// sends all data except schema, schema key has different prefix
-	prefix := x.PredicatePrefix(predicate)
-	var prevKey []byte
 	for it.Seek(prefix); it.ValidForPrefix(prefix); {
 		item := it.Item()
 		key := item.Key()
@@ -130,10 +138,23 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		if err != nil {
 			return err
 		}
-		count++
-		if err := sendPl(stream, l); err != nil {
+
+		kv, err := l.MarshalToKv()
+		if err != nil {
 			return err
 		}
+		kvs.Kv = append(kvs.Kv, kv)
+		batchSize += kv.Size()
+		bytesSent += uint64(kv.Size())
+		count++
+		if batchSize < 4*MB {
+			continue
+		}
+		if err := stream.Send(kvs); err != nil {
+			return err
+		}
+		batchSize = 0
+		kvs = &intern.KVS{}
 	}
 
 	// send schema
@@ -155,13 +176,18 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		kv.Val = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
-		if err := stream.Send(kv); err != nil {
-			return err
-		}
+		kvs.Kv = append(kvs.Kv, kv)
+		batchSize += kv.Size()
+		bytesSent += uint64(kv.Size())
 		count++
 	}
 
-	x.Printf("Sent %d number of keys for predicate %v\n", count, predicate)
+	if batchSize > 0 {
+		if err := stream.Send(kvs); err != nil {
+			return err
+		}
+	}
+	x.Printf("Sent [%d] number of keys for predicate %v\n", count, predicate)
 
 	payload, err := stream.CloseAndRecv()
 	if err != nil {
@@ -177,33 +203,35 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	return nil
 }
 
-func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KV) error {
+func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 	n := groups().Node
 	proposal := &intern.Proposal{}
 	size := 0
 	firstKV := true
 
-	for kv := range kvs {
-		if size >= 32<<20 { // 32 MB
-			if err := n.proposeAndWait(ctx, proposal); err != nil {
-				return err
+	for kvBatch := range kvs {
+		for _, kv := range kvBatch.Kv {
+			if size >= 32<<20 { // 32 MB
+				if err := n.proposeAndWait(ctx, proposal); err != nil {
+					return err
+				}
+				proposal.Kv = proposal.Kv[:0]
+				size = 0
 			}
-			proposal.Kv = proposal.Kv[:0]
-			size = 0
-		}
 
-		if firstKV {
-			firstKV = false
-			pk := x.Parse(kv.Key)
-			// Delete on all nodes.
-			p := &intern.Proposal{CleanPredicate: pk.Attr}
-			err := groups().Node.proposeAndWait(ctx, p)
-			if err != nil {
-				x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+			if firstKV {
+				firstKV = false
+				pk := x.Parse(kv.Key)
+				// Delete on all nodes.
+				p := &intern.Proposal{CleanPredicate: pk.Attr}
+				err := groups().Node.proposeAndWait(ctx, p)
+				if err != nil {
+					x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+				}
 			}
+			proposal.Kv = append(proposal.Kv, kv)
+			size = size + len(kv.Key) + len(kv.Val)
 		}
-		proposal.Kv = append(proposal.Kv, kv)
-		size = size + len(kv.Key) + len(kv.Val)
 	}
 	if size > 0 {
 		// Propose remaining keys.
@@ -218,7 +246,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KV) error {
 // for a predicate or not.
 func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServer) error {
 	// Values can be pretty big so having less buffer is safer.
-	kvs := make(chan *intern.KV, 10)
+	kvs := make(chan *intern.KVS, 10)
 	che := make(chan error, 1)
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
@@ -230,7 +258,7 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 		che <- batchAndProposeKeyValues(ctx, kvs)
 	}()
 	for {
-		kv, err := stream.Recv()
+		kvBatch, err := stream.Recv()
 		if err == io.EOF {
 			payload.Data = []byte(fmt.Sprintf("%d", count))
 			stream.SendAndClose(payload)
@@ -240,10 +268,10 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 			x.Printf("received %d number of keys, err %v\n", count, err)
 			return err
 		}
-		count++
+		count += len(kvBatch.Kv)
 
 		select {
-		case kvs <- kv:
+		case kvs <- kvBatch:
 		case <-ctx.Done():
 			close(kvs)
 			<-che
@@ -278,6 +306,8 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errNotLeader
 	}
 
+	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
+		in.SourceGroupId, in.DestGroupId)
 	// Ensures that all future mutations beyond this point are rejected.
 	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err

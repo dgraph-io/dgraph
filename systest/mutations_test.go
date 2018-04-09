@@ -1,3 +1,10 @@
+/*
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ *
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
+ */
+
 package main
 
 import (
@@ -61,7 +68,7 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `list: [string] .`,
+		Schema: `list: [string] @lang .`,
 	})))
 
 	txn := c.NewTxn()
@@ -127,7 +134,7 @@ func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `pred: [string] .`,
+		Schema: `pred: [string] @lang .`,
 	})))
 
 	txn := c.NewTxn()
@@ -536,7 +543,7 @@ func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 // Shows fix for issue #1918.
 func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "name: string @index(exact) ."}))
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "name: string @index(exact) @lang ."}))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -1039,7 +1046,7 @@ func SkipEmptyPLForHas(t *testing.T, c *dgo.Dgraph) {
 		}`
 	resp, err := c.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"users":[{"name":"u"},{"name":"u1"}]}`, string(resp.Json))
+	CompareJSON(t, `{"users":[{"name":"u"},{"name":"u1"}]}`, string(resp.Json))
 
 	op := &api.Operation{DropAll: true}
 	err = c.Alter(ctx, op)

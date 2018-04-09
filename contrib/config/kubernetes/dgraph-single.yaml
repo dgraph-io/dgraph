@@ -84,7 +84,7 @@ spec:
           - "-c"
           - |
             set -ex
-            dgraph server --my=$(hostname -f):7080 --memory_mb 2048 --zero dgraph-0.dgraph.default.svc.cluster.local:5080
+            dgraph server --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-0.dgraph.default.svc.cluster.local:5080
       terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir

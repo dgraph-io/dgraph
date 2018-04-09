@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package query
@@ -161,7 +151,6 @@ func populateGraph(t *testing.T) {
 	intD := types.Val{types.IntID, int64(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "age", 1, types.IntID, data.Value.([]byte), nil)
 
 	// FloatID
 	fdata := types.ValueForType(types.BinaryID)
@@ -6055,12 +6044,14 @@ func TestSchemaBlock5(t *testing.T) {
 			Type:      "string",
 			Index:     true,
 			Tokenizer: []string{"term", "exact", "trigram"},
-			Count:     true}}
+			Count:     true,
+			Lang:      true,
+		}}
 	checkSchemaNodes(t, expected, actual)
 }
 
 const schemaStr = `
-name                           : string @index(term, exact, trigram) @count .
+name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .
@@ -6076,10 +6067,10 @@ geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
-royal_title                    : string @index(hash, term, fulltext) .
+royal_title                    : string @index(hash, term, fulltext) @lang .
 noindex_name                   : string .
 school                         : uid @count .
-lossy                          : string @index(term) .
+lossy                          : string @index(term) @lang .
 occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
 salary                         : float @index(float) .

@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package server
@@ -72,7 +62,7 @@ func init() {
 		"Directory to store posting lists.")
 	flag.String("posting_tables", defaults.PostingTables,
 		"Specifies how Badger LSM tree is stored. Options are loadtoram, memorymap and "+
-			"fileio; which consume most to least RAM while providing best to worst "+
+			"fileio; which consume most to least RAM while providing best to worst read"+
 			"performance respectively.")
 	flag.StringP("wal", "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")
@@ -100,9 +90,9 @@ func init() {
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
 
-	flag.Float64("memory_mb", defaults.AllottedMemory,
-		"Estimated memory the process can take. "+
-			"Actual usage would be slightly more than specified here.")
+	flag.Float64("lru_mb", defaults.AllottedMemory,
+		"Estimated memory the LRU cache can take. "+
+			"Actual usage by the process would be more than specified here.")
 
 	flag.Bool("debugmode", defaults.DebugMode,
 		"enable debug mode for more debug information")
@@ -258,7 +248,7 @@ func setupServer() {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)
-	http.HandleFunc("/admin/config/memory_mb", memoryLimitHandler)
+	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/ui/keywords", keywordHandler)
@@ -290,8 +280,8 @@ func run() {
 		PostingTables:       Server.Conf.GetString("posting_tables"),
 		WALDir:              Server.Conf.GetString("wal"),
 		Nomutations:         Server.Conf.GetBool("nomutations"),
-		AllottedMemory:      Server.Conf.GetFloat64("memory_mb"),
 		WhitelistedIPs:      Server.Conf.GetString("whitelist"),
+		AllottedMemory:      Server.Conf.GetFloat64("lru_mb"),
 		ExportPath:          Server.Conf.GetString("export"),
 		NumPendingProposals: Server.Conf.GetInt("pending_proposals"),
 		Tracing:             Server.Conf.GetFloat64("trace"),

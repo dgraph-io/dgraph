@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package posting
@@ -28,7 +18,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
@@ -342,11 +331,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	if doUpdateIndex {
 		// Check original value BEFORE any mutation actually happens.
-		if len(t.Lang) > 0 {
-			val, found, err = l.findValue(txn.StartTs, farm.Fingerprint64([]byte(t.Lang)))
-		} else {
-			val, found, err = l.findValue(txn.StartTs, math.MaxUint64)
-		}
+		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
 		if err != nil {
 			return val, found, emptyCountParams, err
 		}
@@ -402,8 +387,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *intern.DirectedEdge,
 			return err
 		}
 	}
-	// We should always set index set and we can take care of stale indexes in
-	// eventual index consistency
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
@@ -525,7 +508,8 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 	return nil
 }
 
-func rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh chan struct{}, startTs uint64) {
+func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error,
+	startTs uint64) {
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
@@ -601,24 +585,32 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, doneCh ch
 		}
 	}
 	close(ch)
+
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			x.Printf("Error while rebuilding count index %v\n", err)
+			errCh <- x.Errorf("While rebuilding count index for attr: [%v], error: [%v]", attr, err)
+			return
 		}
 	}
-	doneCh <- struct{}{}
+
+	errCh <- nil
 }
 
-func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) {
+func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
-	doneCh := make(chan struct{}, 2)
+	che := make(chan error, 2)
 	// Lets rebuild forward and reverse count indexes concurrently.
-	go rebuildCountIndex(ctx, attr, false, doneCh, startTs)
-	go rebuildCountIndex(ctx, attr, true, doneCh, startTs)
+	go rebuildCountIndex(ctx, attr, false, che, startTs)
+	go rebuildCountIndex(ctx, attr, true, che, startTs)
 
+	var err error
 	for i := 0; i < 2; i++ {
-		<-doneCh
+		if e := <-che; e != nil {
+			err = e
+		}
 	}
+
+	return err
 }
 
 type item struct {
@@ -627,7 +619,7 @@ type item struct {
 }
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
-func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) {
+func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
@@ -708,11 +700,13 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) {
 		}
 	}
 	close(ch)
+
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			x.Printf("Error while committing: %v\n", err)
+			return x.Errorf("While rebuilding reverse edges for attr: [%v], error: [%v]", attr, err)
 		}
 	}
+	return nil
 }
 
 func DeleteIndex(ctx context.Context, attr string) error {
@@ -824,7 +818,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			x.Printf("Error while committing: %v\n", err)
+			return x.Errorf("While rebuilding list type for attr: [%v], error: [%v]", attr, err)
 		}
 	}
 	return nil
@@ -832,7 +826,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 
 // RebuildIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
-func RebuildIndex(ctx context.Context, attr string, startTs uint64) {
+func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
@@ -918,9 +912,10 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) {
 	close(ch)
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			x.Printf("Error while committing: %v\n", err)
+			return x.Errorf("While rebuilding index for attr: [%v], error: [%v]", attr, err)
 		}
 	}
+	return nil
 }
 
 func DeleteAll() error {

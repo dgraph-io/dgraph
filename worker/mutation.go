@@ -60,10 +60,9 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 		return errUnservedTablet
 	}
 
-	typ, err := schema.State().TypeOf(edge.Attr)
-
+	su, ok := schema.State().Get(edge.Attr)
 	if edge.Op == intern.DirectedEdge_SET {
-		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
+		x.AssertTruef(ok, "Schema is not present for predicate %s", edge.Attr)
 	}
 
 	if deletePredicateEdge(edge) {
@@ -72,7 +71,7 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially
-	err = ValidateAndConvert(edge, typ)
+	err := ValidateAndConvert(edge, &su)
 
 	key := x.DataKey(edge.Attr, edge.Entity)
 
@@ -184,7 +183,9 @@ func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, s
 	}
 
 	if current.Count != old.Count {
-		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count, startTs); err != nil {
+		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count,
+			startTs); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -324,7 +325,7 @@ func checkSchema(s *intern.SchemaUpdate) error {
 
 // If storage type is specified, then check compatibility or convert to schema type
 // if no storage type is specified then convert to schema type.
-func ValidateAndConvert(edge *intern.DirectedEdge, schemaType types.TypeID) error {
+func ValidateAndConvert(edge *intern.DirectedEdge, su *intern.SchemaUpdate) error {
 	if deletePredicateEdge(edge) {
 		return nil
 	}
@@ -334,9 +335,15 @@ func ValidateAndConvert(edge *intern.DirectedEdge, schemaType types.TypeID) erro
 	// <s> <p> <o> Del on non list scalar type.
 	if edge.ValueId == 0 && !bytes.Equal(edge.Value, []byte(x.Star)) &&
 		edge.Op == intern.DirectedEdge_DEL {
-		if !schema.State().IsList(edge.Attr) {
+		if !su.GetList() {
 			return x.Errorf("Please use * with delete operation for non-list type: [%v]", edge.Attr)
 		}
+	}
+
+	schemaType := types.TypeID(su.ValueType)
+	if schemaType == types.StringID && len(edge.Lang) > 0 && !su.GetLang() {
+		return x.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
+			edge.Attr, edge)
 	}
 
 	storageType := posting.TypeID(edge)
@@ -403,13 +410,21 @@ func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) 
 
 func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	node := groups().Node
+	var index uint64
 	if txn := posting.Txns().Get(startTs); txn != nil {
 		txn.Fill(tctx)
+		index = txn.LastIndex()
 	}
 	tctx.LinRead = &api.LinRead{
 		Ids: make(map[uint32]uint64),
 	}
-	tctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
+	// applied watermark can be less than this proposal's index so return the maximum.
+	// For some proposals like dropPredicate, we don't store them in txns map, so we
+	// don't know the raft index. For them we would return applied watermark.
+	if x := node.Applied.DoneUntil(); x > index {
+		index = x
+	}
+	tctx.LinRead.Ids[gid] = index
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to

@@ -68,7 +68,7 @@ func (db *DB) Backup(w io.Writer, since uint64) (uint64, error) {
 
 // Load reads a protobuf-encoded list of all entries from a reader and writes
 // them to the database. This can be used to restore the database from a backup
-// made by calling DB.Dump().
+// made by calling DB.Backup().
 //
 // DB.Load() should be called on a database that is not running any other
 // concurrent transactions while it is running.
@@ -124,12 +124,17 @@ func (db *DB) Load(r io.Reader) error {
 			UserMeta:  e.UserMeta[0],
 			ExpiresAt: e.ExpiresAt,
 		})
+		// Update nextCommit, memtable stores this timestamp in badger head
+		// when flushed.
+		if e.Version >= db.orc.commitTs() {
+			db.orc.nextCommit = e.Version + 1
+		}
 
 		if len(entries) == 1000 {
 			if err := batchSetAsyncIfNoErr(entries); err != nil {
 				return err
 			}
-			entries = entries[:0]
+			entries = make([]*Entry, 0, 1000)
 		}
 	}
 
@@ -145,6 +150,7 @@ func (db *DB) Load(r io.Reader) error {
 	case err := <-errChan:
 		return err
 	default:
+		db.orc.curRead = db.orc.commitTs() - 1
 		return nil
 	}
 }

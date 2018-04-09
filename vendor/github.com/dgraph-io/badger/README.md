@@ -141,10 +141,10 @@ not checking for errors in some places for simplicity):
 updates := make(map[string]string)
 txn := db.NewTransaction(true)
 for k,v := range updates {
-  if err := txn.Set(byte[](k),byte[](v)); err == ErrTxnTooBig {
+  if err := txn.Set([]byte(k),[]byte(v)); err == ErrTxnTooBig {
     _ = txn.Commit()
     txn = db.NewTransaction(..)
-    _ = txn.Set(k,v) 
+    _ = txn.Set([]byte(k),[]byte(v)) 
   }
 }
 _ = txn.Commit()
@@ -328,6 +328,7 @@ err := db.View(func(txn *badger.Txn) error {
   opts := badger.DefaultIteratorOptions
   opts.PrefetchSize = 10
   it := txn.NewIterator(opts)
+  defer it.Close()
   for it.Rewind(); it.Valid(); it.Next() {
     item := it.Item()
     k := item.Key()
@@ -356,6 +357,7 @@ To iterate over a key prefix, you can combine `Seek()` and `ValidForPrefix()`:
 ```go
 db.View(func(txn *badger.Txn) error {
   it := txn.NewIterator(badger.DefaultIteratorOptions)
+  defer it.Close()
   prefix := []byte("1234")
   for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
     item := it.Item()
@@ -383,6 +385,7 @@ err := db.View(func(txn *badger.Txn) error {
   opts := badger.DefaultIteratorOptions
   opts.PrefetchValues = false
   it := txn.NewIterator(opts)
+  defer it.Close()
   for it.Rewind(); it.Valid(); it.Next() {
     item := it.Item()
     k := item.Key()
@@ -539,8 +542,9 @@ above).
 [badger-bench]: https://github.com/dgraph-io/badger-bench
 
 ## Other Projects Using Badger
-Below is a list of public, open source projects that use Badger:
+Below is a list of known projects that use Badger:
 
+* [Usenet Express](https://usenetexpress.com/) - Serving over 300TB of data with Badger.
 * [Dgraph](https://github.com/dgraph-io/dgraph) - Distributed graph database.
 * [go-ipfs](https://github.com/ipfs/go-ipfs) - Go client for the InterPlanetary File System (IPFS), a new hypermedia distribution protocol.
 * [0-stor](https://github.com/zero-os/0-stor) - Single device object store.
@@ -597,6 +601,11 @@ We *highly* recommend setting a high number for GOMAXPROCS, which allows Go to
 observe the full IOPS throughput provided by modern SSDs. In Dgraph, we have set
 it to 128. For more details, [see this
 thread](https://groups.google.com/d/topic/golang-nuts/jPb_h3TvlKE/discussion).
+
+-- **Are there any linux specific settings that I should use?**
+
+We *highly* recommend setting max file descriptors to a high number depending upon the expected size of
+you data.
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.

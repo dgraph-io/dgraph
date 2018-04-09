@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package posting
@@ -68,6 +58,13 @@ func (o *oracle) CommitTs(startTs uint64) uint64 {
 	return o.commits[startTs]
 }
 
+func (o *oracle) Aborted(startTs uint64) bool {
+	o.RLock()
+	defer o.RUnlock()
+	_, ok := o.aborts[startTs]
+	return ok
+}
+
 func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 	o.Lock()
 	defer o.Unlock()
@@ -83,6 +80,12 @@ func (o *oracle) MaxPending() uint64 {
 	o.RLock()
 	defer o.RUnlock()
 	return o.maxpending
+}
+
+func (o *oracle) SetMaxPending(maxPending uint64) {
+	o.Lock()
+	defer o.Unlock()
+	o.maxpending = maxPending
 }
 
 func (o *oracle) CurrentState() *intern.OracleDelta {

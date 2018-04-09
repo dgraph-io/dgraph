@@ -33,9 +33,13 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool,
 		return x.Errorf("Predicate %s index mismatch, rebuild %v", attr, rebuild)
 	}
 	// Remove index edges
-	posting.DeleteIndex(ctx, attr)
+	if err := posting.DeleteIndex(ctx, attr); err != nil {
+		return err
+	}
 	if rebuild {
-		posting.RebuildIndex(ctx, attr, startTs)
+		if err := posting.RebuildIndex(ctx, attr, startTs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -47,10 +51,14 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	if schema.State().IsReversed(attr) != rebuild {
 		return x.Errorf("Predicate %s reverse mismatch, rebuild %v", attr, rebuild)
 	}
-	posting.DeleteReverseEdges(ctx, attr)
+	if err := posting.DeleteReverseEdges(ctx, attr); err != nil {
+		return err
+	}
 	if rebuild {
 		// Remove reverse edges
-		posting.RebuildReverseEdges(ctx, attr, startTs)
+		if err := posting.RebuildReverseEdges(ctx, attr, startTs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -59,9 +67,13 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 
-	posting.DeleteCountIndex(ctx, attr)
+	if err := posting.DeleteCountIndex(ctx, attr); err != nil {
+		return err
+	}
 	if rebuild {
-		posting.RebuildCountIndex(ctx, attr, startTs)
+		if err := posting.RebuildCountIndex(ctx, attr, startTs); err != nil {
+			return err
+		}
 	}
 	return nil
 }

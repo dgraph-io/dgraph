@@ -458,6 +458,12 @@ func (db *DB) getMemTables() ([]*skl.Skiplist, func()) {
 
 // get returns the value in memtable or disk for given key.
 // Note that value will include meta byte.
+// IMPORTANT: We should never write an entry with a older timestamp for same key,
+// We need to maintain this invariant to search for latest value of a key,
+// or else we need to search in all tables and find the max version among them.
+// To maintain this invariant, we also need to ensure that all versions of a key
+// are always present in same table from level 1, because compaction can push
+// any table down.
 func (db *DB) get(key []byte) (y.ValueStruct, error) {
 	tables, decr := db.getMemTables() // Lock should be released.
 	defer decr()
@@ -575,8 +581,12 @@ func (db *DB) writeRequests(reqs []*request) error {
 			continue
 		}
 		count += len(b.Entries)
+		var i uint64
 		for err := db.ensureRoomForWrite(); err != nil; err = db.ensureRoomForWrite() {
-			db.elog.Printf("Making room for writes")
+			i++
+			if i%100 == 0 {
+				db.elog.Printf("Making room for writes")
+			}
 			// We need to poll a bit because both hasRoomForWrite and the flusher need access to s.imm.
 			// When flushChan is full and you are blocked there, and the flusher is trying to update s.imm,
 			// you will get a deadlock.
@@ -768,6 +778,8 @@ type flushTask struct {
 	vptr valuePointer
 }
 
+// TODO: Ensure that this function doesn't return, or is handled by another wrapper function.
+// Otherwise, we would have no goroutine which can flush memtables.
 func (db *DB) flushMemtable(lc *y.Closer) error {
 	defer lc.Done()
 
@@ -1137,6 +1149,16 @@ func (db *DB) Size() (lsm int64, vlog int64) {
 	lsm = y.LSMSize.Get(db.opt.Dir).(*expvar.Int).Value()
 	vlog = y.VlogSize.Get(db.opt.Dir).(*expvar.Int).Value()
 	return
+}
+
+// MagicVersion returns the version number of the on-disk data format used by
+// the current instance Badger. This is incremented occasionally, if there is a
+// change in the way data is recorded in data files by Badger.
+//
+// Badger data files with a magic number that is different from the one reported
+// by this function, will not work with the current instance of Badger.
+func (db *DB) MagicVersion() int {
+	return magicVersion
 }
 
 // Sequence represents a Badger sequence.

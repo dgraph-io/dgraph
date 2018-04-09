@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package zero
@@ -340,13 +330,24 @@ func (s *Server) Connect(ctx context.Context,
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
 		ms, err := s.latestMembershipState(ctx)
-		cs := &intern.ConnectionState{State: ms}
+		cs := &intern.ConnectionState{
+			State:      ms,
+			MaxPending: s.orc.MaxPending(),
+		}
 		return cs, err
 	}
 	if len(m.Addr) == 0 {
 		fmt.Println("No address provided.")
 		return &emptyConnectionState, errInvalidAddress
 	}
+
+	for _, member := range s.membershipState().Removed {
+		// It is not recommended to reuse RAFT ids.
+		if member.GroupId != 0 && m.Id == member.Id {
+			return &emptyConnectionState, x.ErrReuseRemovedId
+		}
+	}
+
 	for _, group := range s.state.Groups {
 		member, has := group.Members[m.Id]
 		if !has {
@@ -360,6 +361,7 @@ func (s *Server) Connect(ctx context.Context,
 			}
 		}
 	}
+
 	// Create a connection and check validity of the address by doing an Echo.
 	conn.Get().Connect(m.Addr)
 
@@ -457,6 +459,7 @@ func (s *Server) ShouldServe(
 		return tablet, err
 	}
 	tab = s.ServingTablet(tablet.Predicate)
+	x.AssertTrue(tab != nil)
 	return tab, nil
 }
 

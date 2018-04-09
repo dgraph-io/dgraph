@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package posting
@@ -32,15 +22,15 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/bp128"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgo/y"
 )
 
 var (
@@ -309,6 +299,27 @@ func TypeID(edge *intern.DirectedEdge) types.TypeID {
 	return types.TypeID(edge.ValueType)
 }
 
+func fingerprintEdge(t *intern.DirectedEdge) uint64 {
+	// There could be a collision if the user gives us a value with Lang = "en" and later gives
+	// us a value = "en" for the same predicate. We would end up overwritting his older lang
+	// value.
+
+	// All edges with a value without LANGTAG, have the same uid. In other words,
+	// an (entity, attribute) can only have one untagged value.
+	var id uint64 = math.MaxUint64
+
+	// Value with a lang type.
+	if len(t.Lang) > 0 {
+		id = farm.Fingerprint64([]byte(t.Lang))
+	} else if schema.State().IsList(t.Attr) {
+		// TODO - When values are deleted for list type, then we should only delete the uid from
+		// index if no other values produces that index token.
+		// Value for list type.
+		id = farm.Fingerprint64(t.Value)
+	}
+	return id
+}
+
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -324,7 +335,23 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	hasPendingDelete := (l.markdeleteAll != txn.StartTs) &&
 		l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
 		bytes.Equal(t.Value, []byte(x.Star))
-	doAbort := hasPendingDelete || txn.StartTs < l.commitTs
+	doAbort := false
+	if hasPendingDelete {
+		// commitOrAbort proposals are applied in goroutines and there is no
+		// fixed ordering, so do this check to ensure we don't reject a mutation
+		// which was applied on leader.
+		// Example: We do sp*, commit and then one more sp*. Even If the commit proposal
+		// was applied on leader before second sp*, that guarantee is not true on
+		// follower, since scheduler doesn't care about commitOrAbort proposals and second
+		// sp* can be applied in memory before the commitProposal.
+		if commitTs := Oracle().CommitTs(l.markdeleteAll); commitTs > 0 {
+			l.commitMutation(ctx, l.markdeleteAll, commitTs)
+		} else if Oracle().Aborted(l.markdeleteAll) {
+			l.abortTransaction(ctx, l.markdeleteAll)
+		} else {
+			doAbort = true
+		}
+	}
 
 	checkConflict := false
 
@@ -342,23 +369,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	mpost := NewPosting(t)
 
 	if mpost.PostingType != intern.Posting_REF {
-		// There could be a collision if the user gives us a value with Lang = "en" and later gives
-		// us a value = "en" for the same predicate. We would end up overwritting his older lang
-		// value.
-
-		// Value with a lang type.
-		if len(t.Lang) > 0 {
-			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
-		} else if schema.State().IsList(t.Attr) {
-			// TODO - When values are deleted for list type, then we should only delete the uid from
-			// index if no other values produces that index token.
-			// Value for list type.
-			t.ValueId = farm.Fingerprint64(t.Value)
-		} else {
-			// All edges with a value without LANGTAG, have the same uid. In other words,
-			// an (entity, attribute) can only have one untagged value.
-			t.ValueId = math.MaxUint64
-		}
+		t.ValueId = fingerprintEdge(t)
 	}
 
 	mpost.Uid = t.ValueId
@@ -434,7 +445,8 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		// It was already committed, might be happening due to replay.
 		return nil
 	}
-	if l.markdeleteAll > 0 {
+	// Check if this commit is for sp*, markdeleteAll stores the startTs for sp*
+	if l.markdeleteAll == startTs {
 		// We need to pass startTs and commitTs, so that we can add commitTs to the postings
 		// corresponding to startTs.
 		// Otherwise a deleteAll, followed by set would not mark the set mpost as committed.
@@ -535,7 +547,10 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 	} else if l.markdeleteAll < readTs {
 		// Ignore all reads before this.
 		// Fixing the pl is difficult with locks.
-		deleteTs = Oracle().CommitTs(l.markdeleteAll)
+		// Ignore if SP* was committed with timestamp > readTs
+		if ts := Oracle().CommitTs(l.markdeleteAll); ts < readTs {
+			deleteTs = ts
+		}
 	}
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)

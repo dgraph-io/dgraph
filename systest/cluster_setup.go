@@ -1,3 +1,10 @@
+/*
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ *
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
+ */
+
 package main
 
 import (
@@ -67,7 +74,7 @@ func (d *DgraphCluster) Start() error {
 
 	d.dgraph = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"server",
-		"--memory_mb=4096",
+		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
 		"--port_offset", strconv.Itoa(d.dgraphPortOffset),
 		"--custom_tokenizers", d.TokenizerPluginsArg,
@@ -104,7 +111,7 @@ func (d *DgraphCluster) AddNode(dir string) (Node, error) {
 	o := strconv.Itoa(freePort(x.PortInternal))
 	dgraph := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"server",
-		"--memory_mb=4096",
+		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
 		"--port_offset", o,
 	)

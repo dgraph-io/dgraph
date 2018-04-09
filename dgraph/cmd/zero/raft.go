@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package zero
@@ -20,6 +10,7 @@ package zero
 import (
 	"encoding/binary"
 	"errors"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -329,6 +320,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		group := state.Groups[p.Tablet.GroupId]
 		if p.Tablet.Remove {
+			x.Printf("Removing tablet for attr: [%v], gid: [%v]\n", p.Tablet.Predicate, p.Tablet.GroupId)
 			if group != nil {
 				delete(group.Tablets, p.Tablet.Predicate)
 			}
@@ -348,6 +340,8 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 				delete(originalGroup.Tablets, p.Tablet.Predicate)
 			} else {
 				if tablet.GroupId != p.Tablet.GroupId {
+					x.Printf("Tablet for attr: [%s], gid: [%d] is already being served by group: [%d]\n",
+						tablet.Predicate, p.Tablet.GroupId, tablet.GroupId)
 					return p.Id, errTabletAlreadyServed
 				}
 				// This update can come from tablet size.
@@ -387,6 +381,18 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.Connect(rc.Id, rc.Addr)
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+
+		for _, member := range n.server.membershipState().Removed {
+			// It is not recommended to reuse RAFT ids.
+			if member.GroupId == 0 && m.Id == member.Id {
+				n.DoneConfChange(cc.ID, x.ErrReuseRemovedId)
+				// Cancel configuration change.
+				cc.NodeID = raft.None
+				n.Raft().ApplyConfChange(cc)
+				return
+			}
+		}
+
 		n.server.storeZero(m)
 	}
 
@@ -436,14 +442,16 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 			time.Sleep(delay)
 			ctx, cancel := context.WithTimeout(n.ctx, time.Second)
 			defer cancel()
-			// JoinCluster can block idefinitely, raft ignores conf change proposal
+			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
 			_, err = c.JoinCluster(ctx, n.RaftContext)
 			if err == nil {
 				break
 			}
-			if grpc.ErrorDesc(err) == conn.ErrDuplicateRaftId.Error() {
-				x.Fatalf("Error while joining cluster %v", err)
+			errorDesc := grpc.ErrorDesc(err)
+			if errorDesc == conn.ErrDuplicateRaftId.Error() ||
+				errorDesc == x.ErrReuseRemovedId.Error() {
+				log.Fatalf("Error while joining cluster: %v", errorDesc)
 			}
 			x.Printf("Error while joining cluster %v\n", err)
 			delay *= 2
@@ -552,7 +560,7 @@ func (n *node) Run() {
 
 				} else if entry.Type == raftpb.EntryNormal {
 					pid, err := n.applyProposal(entry)
-					if err != nil {
+					if err != nil && err != errTabletAlreadyServed {
 						x.Printf("While applying proposal: %v\n", err)
 					}
 					n.props.Done(pid, err)
@@ -567,8 +575,8 @@ func (n *node) Run() {
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
 					n.server.updateLeases()
-					leader = true
 				}
+				leader = rd.RaftState == raft.StateLeader
 				// Oracle stream would close the stream once it steps down as leader
 				// predicate move would cancel any in progress move on stepping down.
 				n.triggerLeaderChange()

@@ -1,3 +1,10 @@
+/*
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ *
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
+ */
+
 package main_test
 
 import (
@@ -41,7 +48,7 @@ func TestMain(m *testing.M) {
 	time.Sleep(5 * time.Second)
 	dgraph := exec.Command(os.ExpandEnv("dgraph"),
 		"server",
-		"--memory_mb=2048",
+		"--lru_mb=2048",
 		fmt.Sprintf("--zero=127.0.0.1:%d", 5080),
 		"-o=1",
 	)

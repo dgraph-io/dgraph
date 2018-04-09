@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package conn
@@ -71,9 +61,9 @@ type Node struct {
 func NewNode(rc *intern.RaftContext) *Node {
 	store := raft.NewMemoryStorage()
 	n := &Node{
-		Id:    rc.Id,
+		Id:     rc.Id,
 		MyAddr: rc.Addr,
-		Store: store,
+		Store:  store,
 		Cfg: &raft.Config{
 			ID:              rc.Id,
 			ElectionTick:    100, // 200 ms if we call Tick() every 20 ms.
@@ -173,15 +163,6 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 	n.Lock()
 	defer n.Unlock()
 	n.peers[pid] = addr
-}
-
-func (n *Node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
-	if read == nil || read.Ids == nil {
-		return nil
-	}
-	gid := n.RaftContext.Group
-	min := read.Ids[gid]
-	return n.Applied.WaitForMark(ctx, min)
 }
 
 func (n *Node) Send(m raftpb.Message) {
@@ -329,7 +310,7 @@ func (n *Node) BatchAndSendMessages() {
 }
 
 func (n *Node) doSendMessage(pool *Pool, data []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	client := pool.Get()
@@ -448,6 +429,25 @@ func (w *RaftServer) GetNode() *Node {
 type RaftServer struct {
 	nodeLock sync.RWMutex // protects Node.
 	Node     *Node
+}
+
+func (w *RaftServer) IsPeer(ctx context.Context, rc *intern.RaftContext) (*intern.PeerResponse,
+	error) {
+	node := w.GetNode()
+	if node == nil || node.Raft() == nil {
+		return &intern.PeerResponse{}, errNoNode
+	}
+
+	if node._confState == nil {
+		return &intern.PeerResponse{}, nil
+	}
+
+	for _, raftIdx := range node._confState.Nodes {
+		if rc.Id == raftIdx {
+			return &intern.PeerResponse{Status: true}, nil
+		}
+	}
+	return &intern.PeerResponse{}, nil
 }
 
 func (w *RaftServer) JoinCluster(ctx context.Context,

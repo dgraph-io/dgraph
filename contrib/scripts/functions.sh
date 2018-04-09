@@ -26,10 +26,10 @@ function quit {
 function start {
   pushd dgraph &> /dev/null
   echo -e "Starting first server."
-  ./dgraph server -p $BUILD/p -w $BUILD/w --memory_mb 4096 -o 1 &
+  ./dgraph server -p $BUILD/p -w $BUILD/w --lru_mb 4096 -o 1 &
   sleep 5
   echo -e "Starting second server.\n"
-  ./dgraph server -p $BUILD/p2 -w $BUILD/w2 --memory_mb 4096 -o 2 &
+  ./dgraph server -p $BUILD/p2 -w $BUILD/w2 --lru_mb 4096 -o 2 &
   # Wait for membership sync to happen.
   sleep $sleepTime
   popd &> /dev/null

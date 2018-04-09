@@ -58,21 +58,23 @@ cp dgraph $tmp_dir
 
 popd
 
-pushd $ratel
-echo -e "\033[1;33mBuilding ratel binary for $platform\033[0m"
-go build -ldflags \
-  "-X $ratel_release=$release_version" -o dgraph-ratel
-strip -x dgraph-ratel
-checksum=$($digest_cmd dgraph-ratel | awk '{print $1}')
-echo "$checksum /usr/local/bin/dgraph-ratel" >> $checksum_file
-cp dgraph-ratel $tmp_dir
+
+if [ -d "$ratel" ]; then
+  pushd $ratel
+  echo -e "\033[1;33mBuilding ratel binary for $platform\033[0m"
+  go build -ldflags \
+    "-X $ratel_release=$release_version" -o dgraph-ratel
+  strip -x dgraph-ratel
+  checksum=$($digest_cmd dgraph-ratel | awk '{print $1}')
+  echo "$checksum /usr/local/bin/dgraph-ratel" >> $checksum_file
+  cp dgraph-ratel $tmp_dir
+  popd
+fi
 
 echo -e "\n\033[1;34mSize of files after  strip: $(du -sh $tmp_dir)\033[0m"
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
 tar_file=dgraph-"$platform"-amd64
-#popd &> /dev/null
-popd
 
 # Create a tar file with the contents of the dgraph folder (i.e the binaries)
 tar -zvcf $tar_file.tar.gz -C $tmp_dir .;

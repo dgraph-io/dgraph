@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package worker
@@ -82,7 +72,10 @@ func TestConvertEdgeType(t *testing.T) {
 	}
 
 	for _, testEdge := range testEdges {
-		err := ValidateAndConvert(testEdge.input, testEdge.to)
+		err := ValidateAndConvert(testEdge.input,
+			&intern.SchemaUpdate{
+				ValueType: intern.Posting_ValType(testEdge.to),
+			})
 		if testEdge.expectErr {
 			require.Error(t, err)
 		} else {
@@ -100,7 +93,10 @@ func TestValidateEdgeTypeError(t *testing.T) {
 		Attr:  "name",
 	}
 
-	err := ValidateAndConvert(edge, types.DateTimeID)
+	err := ValidateAndConvert(edge,
+		&intern.SchemaUpdate{
+			ValueType: intern.Posting_ValType(types.DateTimeID),
+		})
 	require.Error(t, err)
 }
 

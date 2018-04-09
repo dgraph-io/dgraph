@@ -1,19 +1,10 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
+
 package edgraph
 
 import (
@@ -56,7 +47,7 @@ var Config Options
 
 var DefaultConfig = Options{
 	PostingDir:    "p",
-	PostingTables: "loadtoram",
+	PostingTables: "memorymap",
 	WALDir:        "w",
 	Nomutations:   false,
 
@@ -156,9 +147,10 @@ func (o *Options) validate() {
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
 	x.AssertTruefNoTrace(o.AllottedMemory != DefaultConfig.AllottedMemory,
-		"Allotted memory (--memory_mb) must be specified, with value greater than 1024 MB")
+		"LRU memory (--lru_mb) must be specified, with value greater than 1024 MB")
 	x.AssertTruefNoTrace(o.AllottedMemory >= MinAllottedMemory,
-		"Allotted memory (--memory_mb) must be at least %.0f MB. Currently set to: %f", MinAllottedMemory, o.AllottedMemory)
+		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f",
+		MinAllottedMemory, o.AllottedMemory)
 }
 
 // Parses the comma-delimited whitelist ip-range string passed in as an argument

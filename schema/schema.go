@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package schema
@@ -101,8 +91,8 @@ func (s *state) Set(pred string, schema intern.SchemaUpdate) {
 
 // Get gets the schema for given predicate
 func (s *state) Get(pred string) (intern.SchemaUpdate, bool) {
-	s.Lock()
-	defer s.Unlock()
+	s.RLock()
+	defer s.RUnlock()
 	schema, has := s.predicate[pred]
 	if !has {
 		return intern.SchemaUpdate{}, false
@@ -219,6 +209,15 @@ func (s *state) HasUpsert(pred string) bool {
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
 		return schema.Upsert
+	}
+	return false
+}
+
+func (s *state) HasLang(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if schema, ok := s.predicate[pred]; ok {
+		return schema.Lang
 	}
 	return false
 }

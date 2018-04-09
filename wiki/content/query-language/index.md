@@ -1767,10 +1767,7 @@ Query Example: Predicates saved to a variable and queried with `expand()`.
   director(func: eq(name@en, "Lost in Translation")) {
     name@.
     expand(val(pred)) {
-      expand(_all_) {
-        name@.
-        uid
-      }
+      expand(_all_)
     }
   }
 }
@@ -1933,6 +1930,11 @@ For all triples with a predicate of scalar types the object is a literal.
 |  `geo`      | [go-geom](https://github.com/twpayne/go-geom)    |
 |  `password` | string (encrypted) |
 
+
+{{% notice "note" %}}Dgraph supports date and time formats for `dateTime` scalar type only if they
+are RFC 3339 compatible which is different from ISO 8601(as defined in the RDF spec). You should
+convert your values to RFC 3339 format before sending them to Dgraph.{{% /notice  %}}
+
 #### UID Type
 
 The `uid` type denotes a node-node edge; internally each node is represented as a `uint64` id.
@@ -1968,6 +1970,10 @@ If data is already stored before the mutation, existing values are not checked t
 If data exists and new indices are specified in a schema mutation, any index not in the updated list is dropped and a new index is created for every new tokenizer specified.
 
 Reverse edges are also computed if specified by a schema mutation.
+
+{{% notice "note" %}} If your predicate is a URI or has special characters, then you should wrap
+it with angular brackets while doing the schema mutation. E.g. `<first:name>`{{% /notice %}}
+
 
 ### Upsert directive
 
@@ -2178,6 +2184,10 @@ schema {
   index
   reverse
   tokenizer
+  list
+  count
+  upsert
+  lang
 }
 ```
 
@@ -2189,6 +2199,10 @@ schema(pred: [name, friend]) {
   index
   reverse
   tokenizer
+  list
+  count
+  upsert
+  lang
 }
 ```
 
@@ -2796,6 +2810,12 @@ query test($a: int = 2, $b: int!, $name: string) {
   }
 }
 {{< /runnable >}}
+
+
+{{% notice "note" %}}
+If you want to input a list of uids as a GraphQL variable value, you can have the variable as string type and
+have the value surrounded by square brackets like `["13", "14"]`.
+{{% /notice %}}
 
 ## Indexing with Custom Tokenizers
 

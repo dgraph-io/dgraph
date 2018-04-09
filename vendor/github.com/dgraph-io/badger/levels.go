@@ -580,6 +580,7 @@ func (s *levelsController) doCompact(p compactionPriority) (bool, error) {
 			return false, nil
 		}
 	}
+	defer s.cstatus.delete(cd) // Remove the ranges from compaction status.
 
 	cd.elog.LazyPrintf("Running for level: %d\n", cd.thisLevel.level)
 	s.cstatus.toLog(cd.elog)
@@ -589,8 +590,6 @@ func (s *levelsController) doCompact(p compactionPriority) (bool, error) {
 		return false, err
 	}
 
-	// Done with compaction. So, remove the ranges from compaction status.
-	s.cstatus.delete(cd)
 	s.cstatus.toLog(cd.elog)
 	cd.elog.LazyPrintf("Compaction for level: %d DONE", cd.thisLevel.level)
 	return true, nil
@@ -625,7 +624,7 @@ func (s *levelsController) addLevel0Table(t *table.Table) error {
 		// Before we unstall, we need to make sure that level 0 and 1 are healthy. Otherwise, we
 		// will very quickly fill up level 0 again and if the compaction strategy favors level 0,
 		// then level 1 is going to super full.
-		for {
+		for i := 0; ; i++ {
 			// Passing 0 for delSize to compactable means we're treating incomplete compactions as
 			// not having finished -- we wait for them to finish.  Also, it's crucial this behavior
 			// replicates pickCompactLevels' behavior in computing compactability in order to
@@ -634,6 +633,11 @@ func (s *levelsController) addLevel0Table(t *table.Table) error {
 				break
 			}
 			time.Sleep(10 * time.Millisecond)
+			if i%100 == 0 {
+				prios := s.pickCompactLevels()
+				s.elog.Printf("Waiting to add level 0 table. Compaction priorities: %+v\n", prios)
+				i = 0
+			}
 		}
 		{
 			s.elog.Printf("UNSTALLED UNSTALLED UNSTALLED UNSTALLED UNSTALLED UNSTALLED: %v\n",
