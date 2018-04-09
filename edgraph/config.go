@@ -42,7 +42,7 @@ var Config Options
 
 var DefaultConfig = Options{
 	PostingDir:    "p",
-	PostingTables: "loadtoram",
+	PostingTables: "memorymap",
 	WALDir:        "w",
 	Nomutations:   false,
 

@@ -150,7 +150,7 @@ Run 'dgraph-ratel' to start Dgraph UI. This can be used to do mutations and quer
 dgraph-ratel
 ```
 
-{{% notice "tip" %}}You need to set the estimated memory Dgraph server can take through `lru_mb` flag. This is just a hint to the Dgraph server and actual usage would be higher than this. It's recommended to set lru_mb to half the available RAM.{{% /notice %}}
+{{% notice "tip" %}}You need to set the estimated memory Dgraph server can take through `lru_mb` flag. This is just a hint to the Dgraph server and actual usage would be higher than this. It's recommended to set lru_mb to one-third the available RAM.{{% /notice %}}
 
 #### Windows
 
@@ -211,7 +211,7 @@ docker exec -it diggy dgraph-ratel
 If you are using Dgraph v1.0.2 (or older) then the default ports are 7080, 8080 for zero, so when following instructions for different setup guides override zero port using `--port_offset`.
 
 ```sh
-dgraph zero --lru_mb=<typically half the RAM> --port_offset -2000
+dgraph zero --lru_mb=<typically one-third the RAM> --port_offset -2000
 ```
 Ratel's default port is 8081, so override it using -p 8000.
 
