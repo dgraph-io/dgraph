@@ -291,11 +291,11 @@ docker run -it -p 5080:5080 -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest 
 
 **Run dgraph server**
 ```sh
-mkdir ~/sever1 # Or any other directory where data should be stored.
+mkdir ~/server1 # Or any other directory where data should be stored.
 
 docker run -it -p 7080:7080 -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
 
-mkdir ~/sever2 # Or any other directory where data should be stored.
+mkdir ~/server2 # Or any other directory where data should be stored.
 
 docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph server --memory_mb=<typically half the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
 ```
@@ -321,7 +321,7 @@ Instructions for running with TLS refer [TLS instructions](#tls-configuration).{
 
 Here we'll go through an example of deploying Dgraph zero, server and ratel on an AWS instance.
 
-* Make sure you have Docker Machine installed by following [instructions](https://docs.docker.com/machine/install-machine/), provisioning an instance on AWS is just one step away. You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) for programatic access to the Amazon API.
+* Make sure you have Docker Machine installed by following [instructions](https://docs.docker.com/machine/install-machine/), provisioning an instance on AWS is just one step away. You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) for programmatic access to the Amazon API.
 
 * Create a new docker machine.
 
@@ -1029,7 +1029,7 @@ statefulset "dgraph-server" created
 deployment "dgraph-ratel" created
 ```
 
-After this you can follow other steps from [Relicated Cluster]({{< relref "#replicated-cluster">}}) to verify
+After this you can follow other steps from [Replicated Cluster]({{< relref "#replicated-cluster">}}) to verify
 that your setup is working as expected.
 
 ## More about Dgraph
