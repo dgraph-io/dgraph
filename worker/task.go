@@ -859,6 +859,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			// then we need to filter first row..
 			rowsToFilter = 1
 		}
+		isList := schema.State().IsList(attr)
 		lang := langForFunc(arg.q.Langs)
 		for row := 0; row < rowsToFilter; row++ {
 			select {
@@ -868,6 +869,25 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			}
 			var filterErr error
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
+				if isList {
+					pl := posting.GetNoStore(x.DataKey(attr, uid))
+					svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
+					if err != nil {
+						if err != posting.ErrNoValue {
+							filterErr = err
+						}
+						return false
+					}
+					for _, sv := range svs {
+						dst, err := types.Convert(sv, typ)
+						if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
+							return true
+						}
+					}
+
+					return false
+				}
+
 				switch lang {
 				case "":
 					pl := posting.GetNoStore(x.DataKey(attr, uid))

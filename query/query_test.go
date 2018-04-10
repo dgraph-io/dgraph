@@ -7613,7 +7613,7 @@ func TestMultipleValueFilter2(t *testing.T) {
 	}
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":["1932-01-01T00:00:00Z"]}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":["1932-01-01T00:00:00Z"]},{"name":"Andrea","graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`, js)
 }
 
 func TestMultipleValueArray(t *testing.T) {
