@@ -202,8 +202,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 		return err
 	}
 
+	cctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
 	// Propose the change.
-	if err := n.Raft().Propose(ctx, data); err != nil {
+	if err := n.Raft().Propose(cctx, data); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
 
@@ -211,8 +213,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 	select {
 	case err := <-che:
 		return err
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-cctx.Done():
+		return cctx.Err()
 	}
 }
 
