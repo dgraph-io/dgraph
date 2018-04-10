@@ -293,9 +293,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		return err
 	}
 
-	// Some proposals can be stuck if leader change happens. For e.g. MsgProp proposal from follower
+	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
 	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
-	// Having a timeout here prevents the mutation being stuck forever.
+	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
+	// timeout.
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	if err = n.Raft().Propose(cctx, slice[:upto]); err != nil {
