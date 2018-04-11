@@ -788,43 +788,58 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := intern.List{}
 	uids, err := uidsForRegex(attr, arg, query, &empty)
+	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
 	if uids != nil {
 		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
-		var values []types.Val
+		filtered := &intern.List{}
 		for _, uid := range uids.Uids {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
 			}
-			key := x.DataKey(attr, uid)
-			pl, err := posting.Get(key)
+			pl, err := posting.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
 			}
-
-			var val types.Val
-			if lang != "" {
-				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
+			if isList {
+				vals, err := pl.AllUntaggedValues(arg.q.ReadTs)
+				if err == posting.ErrNoValue {
+					continue
+				} else if err != nil {
+					return err
+				}
+				for _, val := range vals {
+					// convert data from binary to appropriate format
+					strVal, err := types.Convert(val, types.StringID)
+					if err == nil && matchRegex(strVal, arg.srcFn.regex) {
+						filtered.Uids = append(filtered.Uids, uid)
+						break
+					}
+				}
 			} else {
-				val, err = pl.Value(arg.q.ReadTs)
-			}
-			if err == posting.ErrNoValue {
-				continue
-			} else if err != nil {
-				return err
-			}
+				var val types.Val
+				if lang != "" {
+					val, err = pl.ValueForTag(arg.q.ReadTs, lang)
+				} else {
+					val, err = pl.Value(arg.q.ReadTs)
+				}
+				if err == posting.ErrNoValue {
+					continue
+				} else if err != nil {
+					return err
+				}
 
-			// conver data from binary to appropriate format
-			strVal, err := types.Convert(val, types.StringID)
-			if err == nil {
-				values = append(values, strVal)
+				// convert data from binary to appropriate format
+				strVal, err := types.Convert(val, types.StringID)
+				if err == nil && matchRegex(strVal, arg.srcFn.regex) {
+					filtered.Uids = append(filtered.Uids, uid)
+				}
 			}
 		}
 
-		filtered := matchRegex(uids, values, arg.srcFn.regex)
 		for i := 0; i < len(arg.out.UidMatrix); i++ {
 			algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 		}
@@ -1041,19 +1056,8 @@ func filterStringFunction(arg funcArgs) error {
 	return nil
 }
 
-func matchRegex(uids *intern.List, values []types.Val, regex *cregexp.Regexp) *intern.List {
-	rv := &intern.List{}
-	for i := 0; i < len(values); i++ {
-		if len(values[i].Value.(string)) == 0 {
-			continue
-		}
-
-		if regex.MatchString(values[i].Value.(string), true, true) > 0 {
-			rv.Uids = append(rv.Uids, uids.Uids[i])
-		}
-	}
-
-	return rv
+func matchRegex(value types.Val, regex *cregexp.Regexp) bool {
+	return len(value.Value.(string)) > 0 && regex.MatchString(value.Value.(string), true, true) > 0
 }
 
 type functionContext struct {
