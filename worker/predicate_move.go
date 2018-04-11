@@ -134,7 +134,10 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		}
 		prevKey = prevKey[:len(key)]
 		copy(prevKey, key)
-		l, err := posting.ReadPostingList(prevKey, it)
+
+		nkey := make([]byte, len(key))
+		copy(nkey, key)
+		l, err := posting.ReadPostingList(nkey, it)
 		if err != nil {
 			return err
 		}
