@@ -397,7 +397,7 @@ func run() {
 	// previous printed line.
 	fmt.Printf("%100s\r", "")
 
-	fmt.Printf("Number of mutations run   : %d\n", c.TxnsDone)
+	fmt.Printf("Number of TXs run         : %d\n", c.TxnsDone)
 	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
 
