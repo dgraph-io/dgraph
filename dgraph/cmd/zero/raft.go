@@ -404,6 +404,8 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 func (n *node) triggerLeaderChange() {
 	n.server.triggerLeaderChange()
+	// We update leader information on each node without proposal. This
+	// function is called on all nodes on leader change.
 	n.server.updateZeroLeader()
 }
 
