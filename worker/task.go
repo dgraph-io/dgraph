@@ -819,24 +819,26 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 						break
 					}
 				}
-			} else {
-				var val types.Val
-				if lang != "" {
-					val, err = pl.ValueForTag(arg.q.ReadTs, lang)
-				} else {
-					val, err = pl.Value(arg.q.ReadTs)
-				}
-				if err == posting.ErrNoValue {
-					continue
-				} else if err != nil {
-					return err
-				}
 
-				// convert data from binary to appropriate format
-				strVal, err := types.Convert(val, types.StringID)
-				if err == nil && matchRegex(strVal, arg.srcFn.regex) {
-					filtered.Uids = append(filtered.Uids, uid)
-				}
+				continue
+			}
+
+			var val types.Val
+			if lang != "" {
+				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
+			} else {
+				val, err = pl.Value(arg.q.ReadTs)
+			}
+			if err == posting.ErrNoValue {
+				continue
+			} else if err != nil {
+				return err
+			}
+
+			// convert data from binary to appropriate format
+			strVal, err := types.Convert(val, types.StringID)
+			if err == nil && matchRegex(strVal, arg.srcFn.regex) {
+				filtered.Uids = append(filtered.Uids, uid)
 			}
 		}
 
@@ -955,26 +957,47 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 
 func filterGeoFunction(arg funcArgs) error {
 	attr := arg.q.Attr
-	var values []*intern.TaskValue
 	uids := algo.MergeSorted(arg.out.UidMatrix)
+	isList := schema.State().IsList(attr)
+	filtered := &intern.List{}
 	for _, uid := range uids.Uids {
-		key := x.DataKey(attr, uid)
-		pl, err := posting.Get(key)
+		pl, err := posting.Get(x.DataKey(attr, uid))
 		if err != nil {
 			return err
 		}
 
+		if isList {
+			vals, err := pl.AllUntaggedValues(arg.q.ReadTs)
+			if err == posting.ErrNoValue {
+				continue
+			} else if err != nil {
+				return err
+			}
+			for _, val := range vals {
+				newValue := &intern.TaskValue{ValType: val.Tid.Enum()}
+				newValue.Val = val.Value.([]byte)
+				if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
+					filtered.Uids = append(filtered.Uids, uid)
+					break
+				}
+			}
+
+			continue
+		}
+
 		val, err := pl.Value(arg.q.ReadTs)
-		newValue := &intern.TaskValue{ValType: val.Tid.Enum()}
-		if err == nil {
-			newValue.Val = val.Value.([]byte)
-		} else if err != posting.ErrNoValue {
+		if err == posting.ErrNoValue {
+			continue
+		} else if err != nil {
 			return err
 		}
-		values = append(values, newValue)
+		newValue := &intern.TaskValue{ValType: val.Tid.Enum()}
+		newValue.Val = val.Value.([]byte)
+		if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
+			filtered.Uids = append(filtered.Uids, uid)
+		}
 	}
 
-	filtered := types.FilterGeoUids(uids, values, arg.srcFn.geoQuery)
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
 		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}

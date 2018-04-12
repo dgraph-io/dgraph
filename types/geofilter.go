@@ -393,35 +393,23 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 	}
 }
 
-// FilterGeoUids filters the uids based on the corresponding values and GeoQueryData.
-// The uids are obtained through the index. This second pass ensures that the values actually
-// match the query criteria.
-func FilterGeoUids(uids *intern.List, values []*intern.TaskValue, q *GeoQueryData) *intern.List {
-	x.AssertTruef(len(values) == len(uids.Uids), "lengths not matching")
-	rv := &intern.List{}
-	for i := 0; i < len(values); i++ {
-		valBytes := values[i].Val
-		if bytes.Equal(valBytes, nil) {
-			continue
-		}
-		vType := values[i].ValType
-		if TypeID(vType) != GeoID {
-			continue
-		}
-		src := ValueForType(BinaryID)
-		src.Value = valBytes
-		gc, err := Convert(src, GeoID)
-		if err != nil {
-			continue
-		}
-		g := gc.Value.(geom.T)
-
-		if !q.MatchesFilter(g) {
-			continue
-		}
-
-		// we matched the geo filter, add the uid to the list
-		rv.Uids = append(rv.Uids, uids.Uids[i])
+// MatchGeo matches values and GeoQueryData and ensures that the value actually
+// matches the query criteria.
+func MatchGeo(value *intern.TaskValue, q *GeoQueryData) bool {
+	valBytes := value.Val
+	if bytes.Equal(valBytes, nil) {
+		return false
 	}
-	return rv
+	vType := value.ValType
+	if TypeID(vType) != GeoID {
+		return false
+	}
+	src := ValueForType(BinaryID)
+	src.Value = valBytes
+	gc, err := Convert(src, GeoID)
+	if err != nil {
+		return false
+	}
+	g := gc.Value.(geom.T)
+	return q.MatchesFilter(g)
 }
