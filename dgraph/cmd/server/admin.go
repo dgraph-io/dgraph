@@ -8,6 +8,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -30,7 +31,7 @@ func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !net.ParseIP(ip).IsLoopback() {
+	if err != nil || (!ipInIPWhitelistRanges(ip) && !net.ParseIP(ip).IsLoopback()) {
 		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
 		return false
 	}
@@ -108,4 +109,19 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
 	if _, err := fmt.Fprintln(w, memoryMB); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func ipInIPWhitelistRanges(ipString string) bool {
+	ip := net.ParseIP(ipString)
+
+	if ip == nil {
+		return false
+	}
+
+	for _, ipRange := range worker.Config.WhiteListedIPRanges {
+		if bytes.Compare(ip, ipRange.Lower) >= 0 && bytes.Compare(ip, ipRange.Upper) <= 0 {
+			return true
+		}
+	}
+	return false
 }

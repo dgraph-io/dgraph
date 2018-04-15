@@ -69,6 +69,9 @@ func init() {
 	flag.Bool("nomutations", defaults.Nomutations,
 		"Don't allow mutations on this server.")
 
+	flag.String("whitelist", defaults.WhitelistedIPs,
+		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
+			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
 	flag.String("export", defaults.ExportPath,
 		"Folder in which to store exports.")
 	flag.Int("pending_proposals", defaults.NumPendingProposals,
@@ -277,6 +280,7 @@ func run() {
 		PostingTables:       Server.Conf.GetString("posting_tables"),
 		WALDir:              Server.Conf.GetString("wal"),
 		Nomutations:         Server.Conf.GetBool("nomutations"),
+		WhitelistedIPs:      Server.Conf.GetString("whitelist"),
 		AllottedMemory:      Server.Conf.GetFloat64("lru_mb"),
 		ExportPath:          Server.Conf.GetString("export"),
 		NumPendingProposals: Server.Conf.GetInt("pending_proposals"),
