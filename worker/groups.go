@@ -224,6 +224,9 @@ func MaxLeaseId() uint64 {
 	g := groups()
 	g.RLock()
 	defer g.RUnlock()
+	if g.state == nil {
+		return 0
+	}
 	return g.state.MaxLeaseId
 }
 
@@ -358,6 +361,9 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 func (g *groupi) HasMeInState() bool {
 	g.RLock()
 	defer g.RUnlock()
+	if g.state == nil {
+		return false
+	}
 
 	group, has := g.state.Groups[g.groupId()]
 	if !has {
@@ -371,6 +377,10 @@ func (g *groupi) HasMeInState() bool {
 func (g *groupi) AnyTwoServers(gid uint32) []string {
 	g.RLock()
 	defer g.RUnlock()
+
+	if g.state == nil {
+		return []string{}
+	}
 	group, has := g.state.Groups[gid]
 	if !has {
 		return []string{}
@@ -390,6 +400,9 @@ func (g *groupi) members(gid uint32) map[uint64]*intern.Member {
 	g.RLock()
 	defer g.RUnlock()
 
+	if g.state == nil {
+		return nil
+	}
 	if gid == 0 {
 		return g.state.Zeros
 	}
@@ -445,6 +458,9 @@ func (g *groupi) Leader(gid uint32) *conn.Pool {
 func (g *groupi) KnownGroups() (gids []uint32) {
 	g.RLock()
 	defer g.RUnlock()
+	if g.state == nil {
+		return
+	}
 	for gid := range g.state.Groups {
 		gids = append(gids, gid)
 	}

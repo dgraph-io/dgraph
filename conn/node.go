@@ -550,5 +550,9 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 // Hello rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
 func (w *RaftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
+	// Ensures we don't receive requests before node is initialized.
+	if err := x.HealthCheck(); err != nil {
+		return &api.Payload{}, err
+	}
 	return &api.Payload{Data: in.Data}, nil
 }
