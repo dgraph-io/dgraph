@@ -804,7 +804,11 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			if err != nil {
 				return err
 			}
-			if isList && lang == "" {
+
+			var val types.Val
+			if lang != "" {
+				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
+			} else if isList {
 				vals, err := pl.AllUntaggedValues(arg.q.ReadTs)
 				if err == posting.ErrNoValue {
 					continue
@@ -821,14 +825,10 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 				}
 
 				continue
-			}
-
-			var val types.Val
-			if lang != "" {
-				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
 			} else {
 				val, err = pl.Value(arg.q.ReadTs)
 			}
+
 			if err == posting.ErrNoValue {
 				continue
 			} else if err != nil {
@@ -965,36 +965,34 @@ func filterGeoFunction(arg funcArgs) error {
 		if err != nil {
 			return err
 		}
-
-		if isList {
-			vals, err := pl.AllValues(arg.q.ReadTs)
+		if !isList {
+			val, err := pl.Value(arg.q.ReadTs)
 			if err == posting.ErrNoValue {
 				continue
 			} else if err != nil {
 				return err
 			}
-			for _, val := range vals {
-				newValue := &intern.TaskValue{ValType: val.Tid.Enum()}
-				newValue.Val = val.Value.([]byte)
-				if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
-					filtered.Uids = append(filtered.Uids, uid)
-					break
-				}
+			newValue := &intern.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
+			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
+				filtered.Uids = append(filtered.Uids, uid)
 			}
 
 			continue
 		}
 
-		val, err := pl.Value(arg.q.ReadTs)
+		// list type
+		vals, err := pl.AllValues(arg.q.ReadTs)
 		if err == posting.ErrNoValue {
 			continue
 		} else if err != nil {
 			return err
 		}
-		newValue := &intern.TaskValue{ValType: val.Tid.Enum()}
-		newValue.Val = val.Value.([]byte)
-		if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
-			filtered.Uids = append(filtered.Uids, uid)
+		for _, val := range vals {
+			newValue := &intern.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
+			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
+				filtered.Uids = append(filtered.Uids, uid)
+				break
+			}
 		}
 	}
 
