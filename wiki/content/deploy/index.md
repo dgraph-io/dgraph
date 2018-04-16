@@ -62,6 +62,11 @@ docker pull dgraph/dgraph:master
 
 #### Building from Source
 
+{{% notice "note" %}}
+Ratel UI is closed source right now, so you cannot build it from source. But you can connect to your Dgraph instance
+through Ratel UI installed using any of the methods listed above.
+{{% /notice %}}
+
 Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
 
 After installing Go, run
