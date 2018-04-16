@@ -62,6 +62,8 @@ func TestSystem(t *testing.T) {
 	t.Run("skip empty pl for has", wrap(SkipEmptyPLForHas))
 	t.Run("facet expand all", wrap(FacetExpandAll))
 	t.Run("has with dash", wrap(HasWithDash))
+	t.Run("list geo filter", wrap(ListGeoFilterTest))
+	t.Run("list regex filter", wrap(ListRegexFilterTest))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1166,4 +1168,98 @@ func HasWithDash(t *testing.T, c *dgo.Dgraph) {
 	resp, err := txn.Query(ctx, friendQuery)
 	require.NoError(t, err)
 	CompareJSON(t, `{"q":[{"new-friend":[{"name":"Bob"},{"name":"Charlie"}]}]}`, string(resp.Json))
+}
+
+func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(term) .
+			loc: [geo] @index(geo) .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <name> "read"  .
+			_:b <name> "write" .
+			_:c <name> "admin" .
+
+			_:a <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
+			_:b <loc> "{'type':'Point','coordinates':[-62.4220186,37.772318]}"^^<geo:geojson>  .
+			_:c <loc> "{'type':'Point','coordinates':[-62.4220186,37.772318]}"^^<geo:geojson>  .
+			_:c <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
+		`),
+	})
+	check(t, err)
+
+	resp, err := c.NewTxn().Query(context.Background(), `{
+		q(func: near(loc, [-122.4220186,37.772318], 1000)) {
+			name
+		}
+	}`)
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "read"
+			},
+			{
+				"name": "admin"
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+}
+
+func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(term) .
+			per: [string] @index(trigram) .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <name> "read"  .
+			_:b <name> "write" .
+			_:c <name> "admin" .
+
+			_:a <per> "read"  .
+			_:b <per> "write" .
+			_:c <per> "read"  .
+			_:c <per> "write" .
+		`),
+	})
+	check(t, err)
+
+	resp, err := c.NewTxn().Query(context.Background(), `{
+		q(func: regexp(per, /^rea.*$/)) {
+			name
+		}
+	}`)
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "read"
+			},
+			{
+				"name": "admin"
+			}
+		]
+	}
+	`, string(resp.GetJson()))
 }
