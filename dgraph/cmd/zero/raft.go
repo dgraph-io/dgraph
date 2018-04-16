@@ -476,6 +476,22 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	return err
 }
 
+func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			n.server.updateZeroLeader()
+
+		case <-closer.HasBeenClosed():
+			closer.Done()
+			return
+		}
+	}
+}
+
 func (n *node) snapshotPeriodically(closer *y.Closer) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -521,10 +537,11 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	closer := y.NewCloser(2)
+	closer := y.NewCloser(3)
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	go n.snapshotPeriodically(closer)
+	go n.updateZeroMembershipPeriodically(closer)
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
