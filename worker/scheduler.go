@@ -151,6 +151,17 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 			return err
 		}
 		for _, supdate := range proposal.Mutations.Schema {
+			// This is neceassry to ensure that there is no race between when we start reading
+			// from badger and new mutation getting commited via raft and getting applied.
+			// Before Moving the predicate we would flush all and wait for watermark to catch up
+			// but there might be some proposals which got proposed but not comitted yet.
+			// It's ok to reject the proposal here and same would happen on all nodes because we
+			// would have proposed membershipstate, and all nodes would have the proposed state
+			// or some state after that before reaching here.
+			if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
+				err = errPredicateMoving
+				break
+			}
 			s.waitForConflictResolution(supdate.Predicate)
 			err = s.n.processSchemaMutations(proposal.Key, index, startTs, supdate)
 			if err != nil {
@@ -171,6 +182,10 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 	// stores a map of predicate and type of first mutation for each predicate
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
+		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
+			updateTxns(index, proposal.Mutations.StartTs)
+			return errPredicateMoving
+		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only have one edge drop in one mutation call.
 			ctx, _ := s.n.props.CtxAndTxn(proposal.Key)
