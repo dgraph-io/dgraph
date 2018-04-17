@@ -112,6 +112,13 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 	return nil
 }
 
+func (o *Oracle) aborted(startTs uint64) bool {
+	o.Lock()
+	defer o.Unlock()
+	_, ok := o.aborts[startTs]
+	return ok
+}
+
 func (o *Oracle) currentState() *intern.OracleDelta {
 	o.AssertRLock()
 	resp := &intern.OracleDelta{
@@ -290,6 +297,11 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	}
 	// Propose txn should be used to set watermark as done.
 	err = s.proposeTxn(ctx, src)
+	// There might be race between this proposal trying to commit and predicate
+	// move aborting it.
+	if s.orc.aborted(src.StartTs) {
+		src.Aborted = true
+	}
 	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
 	s.orc.doneUntil.Done(src.CommitTs)
 	return err
