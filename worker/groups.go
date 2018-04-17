@@ -497,15 +497,26 @@ START:
 				}
 				return
 			}
-			g.applyState(state)
+			// In case there is no leader, we might miss this state update. So as soon as
+			// a node becomes leader it asks for fresh state.
+			if g.Node.AmLeader() {
+				go g.Node.proposeAndWait(context.Background(), &intern.Proposal{State: state})
+			}
 		}
 	}()
 
 	g.triggerMembershipSync() // Ticker doesn't start immediately
+	leader := g.Node.AmLeader()
 OUTER:
 	for {
 		select {
 		case <-g.triggerCh:
+			// If this node becomes leader, disconnect so that it can ask for fresh state.
+			if !leader && g.Node.AmLeader() {
+				stream.CloseSend()
+				break OUTER
+			}
+			leader = g.Node.AmLeader()
 			if !g.Node.AmLeader() {
 				tablets = nil
 			}
