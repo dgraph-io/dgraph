@@ -68,7 +68,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "deploy/index.md">}}">
+            <a href="/deploy">
               Deploy
             </a>
           </div>
@@ -81,7 +81,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "faq/index.md">}}">
+            <a href="/faq">
               FAQ
             </a>
           </div>
