@@ -24,7 +24,7 @@ You can see the accompanying [video here](https://www.youtube.com/watch?v=QIIdSp
 
 Dgraph can be installed from the install scripts, or run via Docker.
 
-{{% notice "note" %}}These instructions will install the latest release version.  To instead install our nightly build see [these instructions]({{< relref "deploy/index.md#nightly" >}}).{{% /notice %}}
+{{% notice "note" %}}These instructions will install the latest release version.  To instead install our nightly build see [these instructions](/deploy).{{% /notice %}}
 
 ### From Docker Image
 
@@ -62,7 +62,7 @@ looking at its output, which includes the version number.
 If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v0.x.y.tar.gz` contains the dgraph binary.
 
 ## Step 2: Run Dgraph
-{{% notice "note" %}} This is a set up involving just one machine. For multi-server setup, go to [Deploy]({{< relref "deploy/index.md" >}}). {{% /notice %}}
+{{% notice "note" %}} This is a set up involving just one machine. For multi-server setup, go to [Deploy](/deploy). {{% /notice %}}
 
 ### Docker Compose
 
@@ -224,9 +224,9 @@ Ratel's default port is 8081, so override it using -p 8000.
 The mutations and queries below can either be run from the command line using `curl localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
 
 ### Dataset
-The dataset is a movie graph, where and the graph nodes are entities of the type directors, actors, genres, or movies.  
+The dataset is a movie graph, where and the graph nodes are entities of the type directors, actors, genres, or movies.
 
-### Storing data in the graph 
+### Storing data in the graph
 Changing the data stored in Dgraph is a mutation.  The following mutation stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.  Running this mutation, either through the UI or on the command line, will store the data in Dgraph.
 
 
@@ -289,7 +289,7 @@ curl localhost:8080/alter -XPOST -d $'
 ' | python -m json.tool | less
 ```
 
-### Get all movies 
+### Get all movies
 Run this query to get all the movies. The query works below all the movies have a starring edge
 
 ```sh
@@ -388,8 +388,8 @@ and queried that data back.
 - Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
 with Dgraph from your application.
 - Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
-- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
+- A wider range of queries can also be found in the [Query Language](/query-language) reference.
+- See [Deploy](/deploy) if you wish to run Dgraph
   in a cluster.
 
 ## Need Help
