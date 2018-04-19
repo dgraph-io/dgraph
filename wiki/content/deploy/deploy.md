@@ -7,7 +7,7 @@ This page talks about running Dgraph in various deployment modes, in a distribut
 running multiple instances of Dgraph, over multiple servers in a cluster.
 
 {{% notice "tip" %}}
-For a single server setup, recommended for new users, please see [Get Started]({{< relref "get-started/index.md" >}}) page.
+For a single server setup, recommended for new users, please see [Get Started]({{< relref "get-started/get-started.md" >}}) page.
 {{% /notice %}}
 
 ## Install Dgraph
@@ -711,7 +711,7 @@ services:
       - data-volume:/dgraph
     ports:
       - 5082:5082
-      - 6082:6082      
+      - 6082:6082
     networks:
       - dgraph
     deploy:
@@ -1380,7 +1380,7 @@ This stops the server on which the command is executed and not the entire cluste
 
 ### Delete database
 
-Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).
+Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/query-language.md#delete" >}}).
 
 To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
@@ -1405,7 +1405,7 @@ These steps are necessary because Dgraph's underlying data format could have cha
 
 ### Post Installation
 
-Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec]({{< relref "query-language/index.md">}}). Also, have a look at [Frequently asked questions]({{< relref "faq/index.md" >}}).
+Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec]({{< relref "query-language/query-language.md">}}). Also, have a look at [Frequently asked questions]({{< relref "faq/faq.md" >}}).
 
 ## Troubleshooting
 Here are some problems that you may encounter and some solutions to try.

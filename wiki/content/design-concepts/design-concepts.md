@@ -79,7 +79,7 @@ Both the terminologies get used interchangeably in our code. Dgraph considers ed
 i.e. from `Subject -> Object`. This is the direction that the queries would be run.
 
 {{% notice "tip" %}}Dgraph can automatically generate a reverse edge. If the user wants to run
-queries in that direction, they would need to define the [reverse edge]({{< relref "query-language/index.md#reverse-edges" >}})
+queries in that direction, they would need to define the [reverse edge]({{< relref "query-language/query-language.md#reverse-edges" >}})
 as part of the schema.{{% /notice %}}
 
 Internally, the RDF NQuad gets parsed into this format.
@@ -192,7 +192,7 @@ Posting Lists get stored in Badger, in a key-value format, like so:
 
 ### Group
 A set of Posting Lists sharing the same `Predicate` constitute a group. Each server can serve
-multiple distinct [groups]({{< relref "deploy/index.md#data-sharding" >}}).
+multiple distinct [groups]({{< relref "deploy/deploy.md#data-sharding" >}}).
 
 A group config file is used to determine which server would serve what groups. In the future
 versions, live Dgraph server would be able to move tablets around depending upon heuristics.
@@ -217,7 +217,7 @@ Each group should typically be served by atleast 3 servers, if available. In the
 failure, other servers serving the same group can still handle the load in that case.
 
 ### New Server and Discovery
-Dgraph cluster can detect new machines allocated to the [cluster]({{< relref "deploy/index.md#cluster" >}}),
+Dgraph cluster can detect new machines allocated to the [cluster]({{< relref "deploy/deploy.md#cluster" >}}),
 establish connections, and transfer a subset of existing predicates to it based on the groups served
 by the new machine.
 
@@ -281,7 +281,7 @@ list ids / value.
 
 If the query was run via HTTP interface `/query`, this subgraph gets converted into JSON for
 replying back to the client. If the query was run via [gRPC](https://www.grpc.io/) interface using
-the language [clients]({{< relref "clients/index.md" >}}), the subgraph gets converted to
+the language [clients]({{< relref "clients/clients.md" >}}), the subgraph gets converted to
 [protocol buffer](https://developers.google.com/protocol-buffers/) format, and returned to client.
 
 ### Network Calls

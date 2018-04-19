@@ -29,7 +29,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "get-started/index.md">}}">
+            <a href="{{< relref "get-started/get-started.md">}}">
               Get Started
             </a>
           </div>
@@ -42,7 +42,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "query-language/index.md">}}">
+            <a href="{{< relref "query-language/query-language.md">}}">
               Query Language
             </a>
           </div>
@@ -55,7 +55,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "clients/index.md">}}">
+            <a href="{{< relref "clients/clients.md">}}">
               Clients
             </a>
           </div>
@@ -68,7 +68,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "deploy/index.md">}}">
+            <a href="{{< relref "deploy/deploy.md">}}">
               Deploy
             </a>
           </div>
@@ -81,7 +81,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "faq/index.md">}}">
+            <a href="{{< relref "faq/faq.md">}}">
               FAQ
             </a>
           </div>
@@ -102,7 +102,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "contribute/index.md">}}">
+            <a href="{{< relref "contribute/contribute.md">}}">
               Contribute to Dgraph
             </a>
           </div>

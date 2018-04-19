@@ -15,7 +15,7 @@ This document is the Dgraph query reference material.  It is not a tutorial.  It
 
 ### Running examples
 
-The examples in this reference use a database of 21 million triples about movies and actors.  The example queries run and return results.  The queries are executed by an instance of Dgraph running at https://play.dgraph.io/.  To run the queries locally or experiment a bit more, see the [Getting Started]({{< relref "get-started/index.md" >}}) guide, which also shows how to load the datasets used in the examples here.
+The examples in this reference use a database of 21 million triples about movies and actors.  The example queries run and return results.  The queries are executed by an instance of Dgraph running at https://play.dgraph.io/.  To run the queries locally or experiment a bit more, see the [Getting Started]({{< relref "get-started/get-started.md" >}}) guide, which also shows how to load the datasets used in the examples here.
 
 ## GraphQL+- Fundamentals
 
@@ -1989,7 +1989,7 @@ email: string @index(exact) @upsert .
 
 ### RDF Types
 
-Dgraph supports a number of [RDF types in mutations]({{< relref "mutations/index.md#language-and-rdf-types" >}}).
+Dgraph supports a number of [RDF types in mutations]({{< relref "mutations/mutations.md#language-and-rdf-types" >}}).
 
 As well as implying a schema type for a [first mutation]({{< relref "#schema" >}}), an RDF type can override a schema type for storage.
 
