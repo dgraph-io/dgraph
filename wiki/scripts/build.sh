@@ -19,8 +19,9 @@ HOST=https://docs.dgraph.io
 # append '(latest)' to the version string, and build script can place the
 # artifact in an appropriate location
 VERSIONS_ARRAY=(
-'v1.0.4'
+'v1.0.5'
 'master'
+'v1.0.4'
 'v1.0.3'
 'v1.0.2'
 'v1.0.1'
@@ -107,7 +108,7 @@ checkAndUpdate()
 	fi
 
 	folder=$(publicFolder $version)
-	if [ "$themeUpdated" = 0 ] || [ ! -d $folder ] ; then
+	if [ "$firstRun" = 1 ] [ "$themeUpdated" = 0 ] || [ ! -d $folder ] ; then
 		rebuild "$branch" "$version"
 	fi
 }
@@ -122,6 +123,7 @@ while true; do
 	pushd themes/hugo-docs > /dev/null
 	git remote update > /dev/null
 	themeUpdated=1
+	firstRun=1
 	if branchUpdated "master" ; then
 		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
 		themeUpdated=0
@@ -142,5 +144,6 @@ while true; do
 	git checkout -q "$currentBranch"
 	popd > /dev/null
 
+	firstRun=0
 	sleep 60
 done
