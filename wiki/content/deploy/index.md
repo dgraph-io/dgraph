@@ -1351,6 +1351,16 @@ Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics
 
 ## Dgraph Administration
 
+By default, admin actions can only be initiated from the machine on which the Dgraph server runs. `dgraph
+server` has an option to specify whitelisted IP addresses and ranges for hosts from which admin
+actions can be initiated.
+
+```sh
+dgraph server --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third RAM> ...
+```
+This would allow admin actions from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
+the server which has IP address as `192.168.1.1`.
+
 ### Export Database
 
 An export of all nodes is started by locally accessing the export endpoint of any server in the cluster.
@@ -1358,7 +1368,9 @@ An export of all nodes is started by locally accessing the export endpoint of an
 ```sh
 $ curl localhost:8080/admin/export
 ```
-{{% notice "warning" %}}This won't work if called from outside the server where Dgraph server is running.
+{{% notice "warning" %}}By default, this won't work if called from outside the server where Dgraph server is running.
+You can specify a list or range of whitelisted IP addresses from which export or other admin actions
+can be initiated using the `--whitelist` flag on `dgraph server`.
 {{% /notice %}}
 
 This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph server instance is running.

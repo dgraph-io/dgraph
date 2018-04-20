@@ -72,10 +72,48 @@ Run `go test` in the root folder.
 
 ## Doing a release
 
-1. Create a branch called `release/v<x.y.z>` from master. For e.g. `release/v1.0.5`. Look at the
+* Create a branch called `release/v<x.y.z>` from master. For e.g. `release/v1.0.5`. Look at the
    diff between the last release and master and make sure that `CHANGELOG.md` has all the changes
    that went in. Also make sure that any new features/changes are added to the docs under
    `wiki/content` to the relevant section.
+* Test any new features or bugfixes and then tag the final commit on the release branch like:
+
+  ```sh
+  git tag -s -a v1.0.5
+  ```
+
+* Push the release branch and the tagged commit.
+
+  ```sh
+  git push origin release/v<x.y.z>
+  git push origin v<x.y.z>
+  ```
+
+* Travis CI would run the `contrib/nightly/upload.sh` script when a new tag is pushed. This script
+  would create the binaries for `linux`, `darwin` and `windows` and also upload them to Github after
+  creating a new draft release. It would also publish a new docker image for the new release as well
+  as update the docker image with tag `latest` and upload them to docker hub.
+
+* Checkout the `master` branch and merge the tag to it and push it.
+
+  ```sh
+  git checkout master
+  git merge v<x.y.z>
+  git push origin master
+  ```
+
+* Once the draft release is published on Github by Travis, modify it to add the release notes. The release
+  notes would mostly be the same as changes for the current version in `CHANGELOG.md`. Finally publish the 
+  release and announce to users on community Slack.
+
+* To make sure that docs are added for the newly released version, add the version to
+   `wiki/scripts/build.sh`. It is also important for a release branch for the version to exist,
+   otherwise docs won't be built and published for it. SSH into the server serving the docs and pull
+   the latest version of `wiki/scripts/build.sh` from master branch and rerun it so that it can start
+   publishing docs for the latest version.
+
+* If any bugs were fixed with regards to query language or in the server then it is a good idea to
+  deploy the latest version on `play.dgraph.io`.
 
 ## Contributing
 

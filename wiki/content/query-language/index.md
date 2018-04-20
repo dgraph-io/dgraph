@@ -153,6 +153,9 @@ Query Example: Movies with either "Blade" or "Runner" in the title and released 
 
 ### Language Support
 
+{{% notice "note" %}}A `@lang` directive must be specified in the schema to query or mutate
+predicates with language tags.{{% /notice %}}
+
 Dgraph supports UTF-8 strings.
 
 In a query, for a string valued edge `edge`, the syntax
@@ -1956,6 +1959,7 @@ index for a predicate it is mandatory to specify the type of the index. For exam
 
 ```
 name: string @index(exact, fulltext) @count .
+multiname: string @lang .
 age: int @index(int) .
 friend: uid @count .
 dob: dateTime .
