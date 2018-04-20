@@ -69,7 +69,14 @@ Run `go test` in the root folder.
     ok      github.com/dgraph-io/badger/skl 0.027s
     ok      github.com/dgraph-io/badger/table       0.478s
     ok      github.com/dgraph-io/badger/y   0.004s
-    
+
+## Doing a release
+
+1. Create a branch called `release/v<x.y.z>` from master. For e.g. `release/v1.0.5`. Look at the
+   diff between the last release and master and make sure that `CHANGELOG.md` has all the changes
+   that went in. Also make sure that any new features/changes are added to the docs under
+   `wiki/content` to the relevant section.
+
 ## Contributing
 
 ### Guidelines
