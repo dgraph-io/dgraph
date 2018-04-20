@@ -8,9 +8,13 @@
 package edgraph
 
 import (
+	"bytes"
+	"errors"
 	"expvar"
 	"fmt"
+	"net"
 	"path/filepath"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
@@ -25,6 +29,7 @@ type Options struct {
 
 	AllottedMemory float64
 
+	WhitelistedIPs      string
 	ExportPath          string
 	NumPendingProposals int
 	Tracing             float64
@@ -42,13 +47,14 @@ var Config Options
 
 var DefaultConfig = Options{
 	PostingDir:    "p",
-	PostingTables: "loadtoram",
+	PostingTables: "memorymap",
 	WALDir:        "w",
 	Nomutations:   false,
 
 	// User must specify this.
 	AllottedMemory: -1.0,
 
+	WhitelistedIPs:      "",
 	ExportPath:          "export",
 	NumPendingProposals: 2000,
 	Tracing:             0.0,
@@ -118,6 +124,15 @@ func SetConfiguration(newConfig Options) {
 	worker.Config.RaftId = Config.RaftId
 	worker.Config.ExpandEdge = Config.ExpandEdge
 
+	ips, err := parseIPsFromString(Config.WhitelistedIPs)
+
+	if err != nil {
+		fmt.Println("IP ranges could not be parsed from --whitelist " + Config.WhitelistedIPs)
+		worker.Config.WhiteListedIPRanges = []worker.IPRange{}
+	} else {
+		worker.Config.WhiteListedIPRanges = ips
+	}
+
 	x.Config.DebugMode = Config.DebugMode
 }
 
@@ -128,10 +143,53 @@ func (o *Options) validate() {
 	x.Check(err)
 	wd, err := filepath.Abs(o.WALDir)
 	x.Check(err)
+	_, err = parseIPsFromString(o.WhitelistedIPs)
+	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
 	x.AssertTruefNoTrace(o.AllottedMemory != DefaultConfig.AllottedMemory,
 		"LRU memory (--lru_mb) must be specified, with value greater than 1024 MB")
 	x.AssertTruefNoTrace(o.AllottedMemory >= MinAllottedMemory,
 		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f",
 		MinAllottedMemory, o.AllottedMemory)
+}
+
+// Parses the comma-delimited whitelist ip-range string passed in as an argument
+// from the command line and returns slice of []IPRange
+//
+// ex. "144.142.126.222:144.124.126.400,190.59.35.57:190.59.35.99"
+func parseIPsFromString(str string) ([]worker.IPRange, error) {
+	if str == "" {
+		return []worker.IPRange{}, nil
+	}
+
+	var ipRanges []worker.IPRange
+	ipRangeStrings := strings.Split(str, ",")
+
+	// Check that the each of the ranges are valid
+	for _, s := range ipRangeStrings {
+		ipsTuple := strings.Split(s, ":")
+
+		// Assert that the range consists of an upper and lower bound
+		if len(ipsTuple) != 2 {
+			return nil, errors.New("IP range must have a lower and upper bound")
+		}
+
+		lowerBoundIP := net.ParseIP(ipsTuple[0])
+		upperBoundIP := net.ParseIP(ipsTuple[1])
+
+		if lowerBoundIP == nil || upperBoundIP == nil {
+			// Assert that both upper and lower bound are valid IPs
+			return nil, errors.New(
+				ipsTuple[0] + " or " + ipsTuple[1] + " is not a valid IP address",
+			)
+		} else if bytes.Compare(lowerBoundIP, upperBoundIP) > 0 {
+			// Assert that the lower bound is less than the upper bound
+			return nil, errors.New(
+				ipsTuple[0] + " cannot be greater than " + ipsTuple[1],
+			)
+		} else {
+			ipRanges = append(ipRanges, worker.IPRange{Lower: lowerBoundIP, Upper: upperBoundIP})
+		}
+	}
+	return ipRanges, nil
 }

@@ -293,8 +293,13 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		return err
 	}
 
-	// We don't timeout on a mutation which has already been proposed.
-	if err = n.Raft().Propose(ctx, slice[:upto]); err != nil {
+	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
+	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
+	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
+	// timeout.
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	if err = n.Raft().Propose(cctx, slice[:upto]); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
 
@@ -302,12 +307,17 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		tr.LazyPrintf("Waiting for the proposal.")
 	}
 
-	err = <-che
-	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Raft Propose error: %v", err)
+	select {
+	case err = <-che:
+		if err != nil {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Raft Propose error: %v", err)
+			}
 		}
+	case <-cctx.Done():
+		return fmt.Errorf("While proposing to RAFT group, err: %+v\n", cctx.Err())
 	}
+
 	return err
 }
 

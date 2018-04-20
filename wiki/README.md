@@ -51,3 +51,15 @@ Pass custom Go-GRPC example to the runnable by passing a `customExampleGoGRPC` t
 
 We cannot pass multiline string as an argument to a shortcode. Therefore, we
 have to make the whole custom example in a single line string by replacing newlines with `\n`.
+
+### Deployment
+
+Run `./scripts/build.sh` in a tmux window. The script polls `dgraph-io/dgraph` every one minute
+and pulls any new changes that have been merged to any of the branches listed in the script.
+It also rebuilds the site if there are any changes.
+
+Any new version for which docs need to be added should be added to the `VERSIONS_ARRAY` in
+`scripts/build.sh` and the script should be restarted after SSHing into the server.
+
+If for reason the site is not getting updated after pushing to the main repo, the script might have been
+terminated. SSH into the server and restart it.

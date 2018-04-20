@@ -788,19 +788,19 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := intern.List{}
 	uids, err := uidsForRegex(attr, arg, query, &empty)
+	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
 	if uids != nil {
 		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
-		var values []types.Val
+		filtered := &intern.List{}
 		for _, uid := range uids.Uids {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
 			}
-			key := x.DataKey(attr, uid)
-			pl, err := posting.Get(key)
+			pl, err := posting.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
 			}
@@ -808,23 +808,40 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			var val types.Val
 			if lang != "" {
 				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
+			} else if isList {
+				vals, err := pl.AllUntaggedValues(arg.q.ReadTs)
+				if err == posting.ErrNoValue {
+					continue
+				} else if err != nil {
+					return err
+				}
+				for _, val := range vals {
+					// convert data from binary to appropriate format
+					strVal, err := types.Convert(val, types.StringID)
+					if err == nil && matchRegex(strVal, arg.srcFn.regex) {
+						filtered.Uids = append(filtered.Uids, uid)
+						break
+					}
+				}
+
+				continue
 			} else {
 				val, err = pl.Value(arg.q.ReadTs)
 			}
+
 			if err == posting.ErrNoValue {
 				continue
 			} else if err != nil {
 				return err
 			}
 
-			// conver data from binary to appropriate format
+			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
-			if err == nil {
-				values = append(values, strVal)
+			if err == nil && matchRegex(strVal, arg.srcFn.regex) {
+				filtered.Uids = append(filtered.Uids, uid)
 			}
 		}
 
-		filtered := matchRegex(uids, values, arg.srcFn.regex)
 		for i := 0; i < len(arg.out.UidMatrix); i++ {
 			algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 		}
@@ -859,6 +876,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			// then we need to filter first row..
 			rowsToFilter = 1
 		}
+		isList := schema.State().IsList(attr)
 		lang := langForFunc(arg.q.Langs)
 		for row := 0; row < rowsToFilter; row++ {
 			select {
@@ -870,6 +888,25 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
 				switch lang {
 				case "":
+					if isList {
+						pl := posting.GetNoStore(x.DataKey(attr, uid))
+						svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
+						if err != nil {
+							if err != posting.ErrNoValue {
+								filterErr = err
+							}
+							return false
+						}
+						for _, sv := range svs {
+							dst, err := types.Convert(sv, typ)
+							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
+								return true
+							}
+						}
+
+						return false
+					}
+
 					pl := posting.GetNoStore(x.DataKey(attr, uid))
 					sv, err := pl.Value(arg.q.ReadTs)
 					if err != nil {
@@ -920,26 +957,45 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 
 func filterGeoFunction(arg funcArgs) error {
 	attr := arg.q.Attr
-	var values []*intern.TaskValue
 	uids := algo.MergeSorted(arg.out.UidMatrix)
+	isList := schema.State().IsList(attr)
+	filtered := &intern.List{}
 	for _, uid := range uids.Uids {
-		key := x.DataKey(attr, uid)
-		pl, err := posting.Get(key)
+		pl, err := posting.Get(x.DataKey(attr, uid))
 		if err != nil {
 			return err
 		}
+		if !isList {
+			val, err := pl.Value(arg.q.ReadTs)
+			if err == posting.ErrNoValue {
+				continue
+			} else if err != nil {
+				return err
+			}
+			newValue := &intern.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
+			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
+				filtered.Uids = append(filtered.Uids, uid)
+			}
 
-		val, err := pl.Value(arg.q.ReadTs)
-		newValue := &intern.TaskValue{ValType: val.Tid.Enum()}
-		if err == nil {
-			newValue.Val = val.Value.([]byte)
-		} else if err != posting.ErrNoValue {
+			continue
+		}
+
+		// list type
+		vals, err := pl.AllValues(arg.q.ReadTs)
+		if err == posting.ErrNoValue {
+			continue
+		} else if err != nil {
 			return err
 		}
-		values = append(values, newValue)
+		for _, val := range vals {
+			newValue := &intern.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
+			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
+				filtered.Uids = append(filtered.Uids, uid)
+				break
+			}
+		}
 	}
 
-	filtered := types.FilterGeoUids(uids, values, arg.srcFn.geoQuery)
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
 		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}
@@ -1021,19 +1077,8 @@ func filterStringFunction(arg funcArgs) error {
 	return nil
 }
 
-func matchRegex(uids *intern.List, values []types.Val, regex *cregexp.Regexp) *intern.List {
-	rv := &intern.List{}
-	for i := 0; i < len(values); i++ {
-		if len(values[i].Value.(string)) == 0 {
-			continue
-		}
-
-		if regex.MatchString(values[i].Value.(string), true, true) > 0 {
-			rv.Uids = append(rv.Uids, uids.Uids[i])
-		}
-	}
-
-	return rv
+func matchRegex(value types.Val, regex *cregexp.Regexp) bool {
+	return len(value.Value.(string)) > 0 && regex.MatchString(value.Value.(string), true, true) > 0
 }
 
 type functionContext struct {

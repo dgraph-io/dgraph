@@ -202,8 +202,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 		return err
 	}
 
+	cctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
 	// Propose the change.
-	if err := n.Raft().Propose(ctx, data); err != nil {
+	if err := n.Raft().Propose(cctx, data); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
 
@@ -211,8 +213,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 	select {
 	case err := <-che:
 		return err
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-cctx.Done():
+		return cctx.Err()
 	}
 }
 
@@ -404,8 +406,9 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 func (n *node) triggerLeaderChange() {
 	n.server.triggerLeaderChange()
-	m := &intern.Member{Id: n.Id, Addr: n.RaftContext.Addr, Leader: n.AmLeader()}
-	go n.proposeAndWait(context.Background(), &intern.ZeroProposal{Member: m})
+	// We update leader information on each node without proposal. This
+	// function is called on all nodes on leader change.
+	n.server.updateZeroLeader()
 }
 
 func (n *node) initAndStartNode(wal *raftwal.Wal) error {
@@ -473,6 +476,22 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 	return err
 }
 
+func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			n.server.updateZeroLeader()
+
+		case <-closer.HasBeenClosed():
+			closer.Done()
+			return
+		}
+	}
+}
+
 func (n *node) snapshotPeriodically(closer *y.Closer) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -518,10 +537,11 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	closer := y.NewCloser(2)
+	closer := y.NewCloser(3)
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	go n.snapshotPeriodically(closer)
+	go n.updateZeroMembershipPeriodically(closer)
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
