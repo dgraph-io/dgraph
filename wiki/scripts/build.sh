@@ -108,7 +108,7 @@ checkAndUpdate()
 	fi
 
 	folder=$(publicFolder $version)
-	if [ "$firstRun" = 1 ] [ "$themeUpdated" = 0 ] || [ ! -d $folder ] ; then
+	if [ "$firstRun" = 1 ] || [ "$themeUpdated" = 0 ] || [ ! -d $folder ] ; then
 		rebuild "$branch" "$version"
 	fi
 }
