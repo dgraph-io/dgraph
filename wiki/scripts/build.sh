@@ -113,6 +113,8 @@ checkAndUpdate()
 	fi
 }
 
+
+firstRun=1
 while true; do
 	# Lets move to the docs directory.
 	pushd /home/ubuntu/dgraph/wiki > /dev/null
@@ -123,7 +125,6 @@ while true; do
 	pushd themes/hugo-docs > /dev/null
 	git remote update > /dev/null
 	themeUpdated=1
-	firstRun=1
 	if branchUpdated "master" ; then
 		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
 		themeUpdated=0
