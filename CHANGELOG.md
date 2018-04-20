@@ -6,6 +6,41 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+## [1.0.5] - 2018-04-20
+
+### Added
+
+* Option to have server side sequencing.
+* Ability to specify whitelisted IP addresses for admin actions.
+
+
+### Fixed
+
+* Fix bug where predicate with string type sometimes appeared as `_:uidffffffffffffffff` in exports.
+* Validate facet value should be according to the facet type supplied when mutating using NQuads (#2074).
+* Use `time.Equal` function for comparing predicates with `datetime`(#2219).
+* Skip `BitEmptyPosting` for `has` queries.
+* Return error from query if we don't serve the group for the attribute instead of crashing (#2227).
+* Send `maxpending` in connection state to server (#2236).
+* Fix bug in SP* transactions (#2148).
+* Batch and send during snapshot to make snapshots faster.
+* Don't skip schema keys while calculating tablets served.
+* Fix the issue which could lead to snapshot getting blocked for a cluster with replicas (#2266).
+* Dgraph server retries indefinitely to connect to Zero.
+* Allow filtering and regex queries for list types with lossy tokenizers.
+* Dgraph server segfault in worker package (#2322).
+* Node crashes can lead to the loss of inserted triples (#2290).
+
+
+### Changed
+
+* Cancel pending transactions for a predicate when predicate move is initiated.
+* Move Go client to its own repo at `dgraph-io/dgo`.
+* Make `expand(_all_)` return value and uid facets.
+* Add an option to specify a `@lang` directive in schema for predicates with lang tags.
+* Flag `memory_mb` has been changed to `lru_mb`. The default recommended value for `lru_mb` is
+  one-third of the total RAM available on the server.
+
 ## [1.0.4] - 2018-03-09
 
 ### Added
