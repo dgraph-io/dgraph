@@ -64,6 +64,7 @@ func TestSystem(t *testing.T) {
 	t.Run("has with dash", wrap(HasWithDash))
 	t.Run("list geo filter", wrap(ListGeoFilterTest))
 	t.Run("list regex filter", wrap(ListRegexFilterTest))
+	t.Run("regex query vars", wrap(RegexQueryWithVars))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1249,6 +1250,54 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 			name
 		}
 	}`)
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "read"
+			},
+			{
+				"name": "admin"
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+}
+
+func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(term) .
+			per: [string] @index(trigram) .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <name> "read"  .
+			_:b <name> "write" .
+			_:c <name> "admin" .
+
+			_:a <per> "read"  .
+			_:b <per> "write" .
+			_:c <per> "read"  .
+			_:c <per> "write" .
+		`),
+	})
+	check(t, err)
+
+	resp, err := c.NewTxn().QueryWithVars(context.Background(), `
+		query search($term: string){
+			q(func: regexp(per, $term)) {
+				name
+			}
+		}`, map[string]string{"$term": "/^rea.*$/"})
 	check(t, err)
 	CompareJSON(t, `
 	{

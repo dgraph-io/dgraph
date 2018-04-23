@@ -366,6 +366,19 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			if err := substituteVar(v.Value, &gq.Func.Args[idx].Value, vmap); err != nil {
 				return err
 			}
+			if gq.Func.Name == "regexp" {
+				// Value should have been populated from the map that the user gave us in the
+				// GraphQL variable map. Let's parse the expression and flags from the variable
+				// string.
+				ra, err := parseRegexArgs(gq.Func.Args[idx].Value)
+				if err != nil {
+					return err
+				}
+				// We modify the value of this arg and add a new arg for the flags. Regex functions
+				// should have two args.
+				gq.Func.Args[idx].Value = ra.expr
+				gq.Func.Args = append(gq.Func.Args, Arg{Value: ra.flags})
+			}
 		}
 	}
 
@@ -1298,6 +1311,25 @@ func validFuncName(name string) bool {
 	return false
 }
 
+type regexArgs struct {
+	expr  string
+	flags string
+}
+
+func parseRegexArgs(val string) (regexArgs, error) {
+	end := strings.LastIndex(val, "/")
+	if end < 0 {
+		return regexArgs{}, x.Errorf("Unexpected error while parsing regex arg: %s", val)
+	}
+	expr := strings.Replace(val[1:end], "\\/", "/", -1)
+	flags := ""
+	if end+1 < len(val) {
+		flags = val[end+1:]
+	}
+
+	return regexArgs{expr, flags}, nil
+}
+
 func parseFunction(it *lex.ItemIterator, gq *GraphQuery) (*Function, error) {
 	var function *Function
 	var expectArg, seenFuncArg, expectLang, isDollar bool
@@ -1390,15 +1422,11 @@ L:
 				isDollar = true
 				continue
 			} else if itemInFunc.Typ == itemRegex {
-				end := strings.LastIndex(itemInFunc.Val, "/")
-				x.AssertTrue(end >= 0)
-				expr := strings.Replace(itemInFunc.Val[1:end], "\\/", "/", -1)
-				flags := ""
-				if end+1 < len(itemInFunc.Val) {
-					flags = itemInFunc.Val[end+1:]
+				ra, err := parseRegexArgs(itemInFunc.Val)
+				if err != nil {
+					return nil, err
 				}
-
-				function.Args = append(function.Args, Arg{Value: expr}, Arg{Value: flags})
+				function.Args = append(function.Args, Arg{Value: ra.expr}, Arg{Value: ra.flags})
 				expectArg = false
 				continue
 				// Lets reassemble the geo tokens.
