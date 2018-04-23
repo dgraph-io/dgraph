@@ -1297,7 +1297,7 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 			q(func: regexp(per, $term)) {
 				name
 			}
-		}`, map[string]string{"$term": "/rea/"})
+		}`, map[string]string{"$term": "/^rea.*$/"})
 	check(t, err)
 	CompareJSON(t, `
 	{
