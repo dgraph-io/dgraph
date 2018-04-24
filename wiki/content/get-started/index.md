@@ -59,7 +59,7 @@ looking at its output, which includes the version number.
 
 {{% notice "note" %}}Binaries for Windows are available from `v0.8.3`.{{% /notice %}}
 
-If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v0.x.y.tar.gz` contains the dgraph binary.
+If you wish to install the binaries on Windows, you can get them from the [Github releases](https://github.com/dgraph-io/dgraph/releases), extract and install them manually. The file `dgraph-windows-amd64-v1.x.y.tar.gz` contains the dgraph binary.
 
 ## Step 2: Run Dgraph
 {{% notice "note" %}} This is a set up involving just one machine. For multi-server setup, go to [Deploy](/deploy). {{% /notice %}}
@@ -151,24 +151,6 @@ dgraph-ratel
 ```
 
 {{% notice "tip" %}}You need to set the estimated memory Dgraph server can take through `lru_mb` flag. This is just a hint to the Dgraph server and actual usage would be higher than this. It's recommended to set lru_mb to one-third the available RAM.{{% /notice %}}
-
-#### Windows
-
-
-**Run Dgraph zero**
-```sh
-./dgraph.exe zero
-```
-
-**Run Dgraph data server**
-
-```sh
-./dgraph.exe server --lru_mb 2048 --zero localhost:5080
-```
-
-```sh
-./dgraph-ratel.exe
-```
 
 ### Docker on Linux
 
