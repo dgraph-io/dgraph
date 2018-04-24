@@ -1,7 +1,7 @@
 {{ $currentBranch := getenv "CURRENT_BRANCH" }}
 
 <!--
-  Getting the version here is very hacky. It assumes that $current branch is etiher:
+  Getting the version here is very hacky. It assumes that $current branch is either:
 
   1. "master"
   2. "release/vX.Y.Z"
@@ -12,10 +12,8 @@
 {{ $majorVersion := int (slicestr $version 0 1) }}
 {{ $minorVersion := int (slicestr $version 2 3) }}
 {{ $patchVersion := int (slicestr $version 4 5) }}
-{{ $versionGe090 := or (eq $currentBranch "master") (ge $majorVersion 1) (ge $minorVersion 9) }}
-{{ $versionGe093 := or (eq $currentBranch "master") (ge $majorVersion 1) (gt $minorVersion 9) (and (eq $minorVersion 9) (ge $patchVersion 3)) }}
+{{ $versionGe105 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 0)) (and (eq $majorVersion 1) (eq $minorVersion 0) (ge $patchVersion 5)) }}
 
-{{ if $versionGe090 }}
 <pre><code class="no-copy" tabindex="-1">package main
 
 import (
@@ -24,11 +22,12 @@ import (
   "fmt"
   "log"
 
-  "github.com/dgraph-io/dgraph/client"
-  {{- if $versionGe093 }}
-  "github.com/dgraph-io/dgraph/protos/api"
+  {{- if $versionGe105 }}
+  "github.com/dgraph-io/dgo"
+  "github.com/dgraph-io/dgo/protos/api"
   {{ else }}
-  "github.com/dgraph-io/dgraph/protos"
+  "github.com/dgraph-io/dgraph/client"
+  "github.com/dgraph-io/dgraph/protos/api"
   {{ end -}}
   "google.golang.org/grpc"
 )
@@ -45,7 +44,11 @@ func main() {
   }
   defer conn.Close()
 
-  dg := client.NewDgraphClient({{ if $versionGe093 }}api{{ else }}protos{{ end }}.NewDgraphClient(conn))
+  {{ if $versionGe105 }}
+  dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+  {{ else }}
+  dg := client.NewDgraphClient(api.NewDgraphClient(conn))
+  {{ end }}
   {{ if eq .Vars nil }}
   resp, err := dg.NewTxn().Query(context.Background(), `<span class="query-content">{{ .Code }}</span>`)
   {{ else }}
@@ -56,53 +59,3 @@ func main() {
   }
   fmt.Printf("Response: %s\n", resp.Json)
 }</code></pre>
-{{ else }}
-<pre><code class="no-copy" tabindex="-1">package main
-
-import (
-  "context"
-  "flag"
-  "fmt"
-  "io/ioutil"
-  "log"
-  "os"
-
-  "github.com/dgraph-io/dgraph/client"
-  "github.com/gogo/protobuf/proto"
-  "google.golang.org/grpc"
-)
-
-var (
-  dgraph = flag.String("d", "127.0.0.1:9080", "Dgraph server address")
-)
-
-func main() {
-  flag.Parse()
-  conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
-  if err != nil {
-    log.Fatal(err)
-  }
-  defer conn.Close()
-
-  // The Dgraph client needs a directory in which to write its blank node maps.
-  clientDir, err := ioutil.TempDir("", "client_")
-  if err != nil {
-    log.Fatal(err)
-  }
-  defer os.RemoveAll(clientDir)
-
-  dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
-  defer dgraphClient.Close()
-
-  req := client.Req{}
-  req.SetQuery(`<span class="query-content">{{ .Code }}</span>`)
-
-  resp, err := dgraphClient.Run(context.Background(), &req)
-  if err != nil {
-    log.Fatalf("Error in getting response from server, %s", err)
-  }
-  fmt.Printf("Response %+v\n", proto.MarshalTextString(resp))
-}</code></pre>
-
-{{ end }}
-
