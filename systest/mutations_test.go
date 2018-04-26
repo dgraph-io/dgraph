@@ -65,6 +65,7 @@ func TestSystem(t *testing.T) {
 	t.Run("list geo filter", wrap(ListGeoFilterTest))
 	t.Run("list regex filter", wrap(ListRegexFilterTest))
 	t.Run("regex query vars", wrap(RegexQueryWithVars))
+	t.Run("graphql var child", wrap(GraphQLVarChild))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1311,4 +1312,108 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 		]
 	}
 	`, string(resp.GetJson()))
+}
+
+func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(exact) .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	au, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <name> "Alice"  .
+			_:b <name> "Bob" .
+			_:c <name> "Charlie" .
+
+			_:a <friend> _:c  .
+			_:a <friend> _:b  .
+		`),
+	})
+	check(t, err)
+
+	a := au.Uids["a"]
+	b := au.Uids["b"]
+	ch := au.Uids["c"]
+
+	// Try GraphQL variable with filter at root.
+	resp, err := c.NewTxn().QueryWithVars(context.Background(), `
+	query q($alice: string){
+		q(func: eq(name, "Alice")) @filter(uid($alice)) {
+			name
+		}
+	}`, map[string]string{"$alice": a})
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "Alice"
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
+	// Try GraphQL variable with filter at child.
+	resp, err = c.NewTxn().QueryWithVars(context.Background(), `
+	query q($bob: string){
+		q(func: eq(name, "Alice")) {
+			name
+			friend @filter(uid($bob)) {
+				name
+			}
+		}
+	}`, map[string]string{"$bob": b})
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "Alice",
+				"friend": [
+					{
+						"name": "Bob"
+					}
+				]
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
+	// Try GraphQL array variable with filter at child.
+	friends := "[" + b + "," + ch + "]"
+	resp, err = c.NewTxn().QueryWithVars(context.Background(), `
+	query q($friends: string){
+		q(func: eq(name, "Alice")) {
+			name
+			friend @filter(uid($friends)) {
+				name
+			}
+		}
+	}`, map[string]string{"$friends": friends})
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "Alice",
+				"friend": [
+					{
+						"name": "Bob"
+					},
+					{
+						"name": "Charlie"
+					}
+				]
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
 }
