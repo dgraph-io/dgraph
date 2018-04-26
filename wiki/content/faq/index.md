@@ -6,13 +6,13 @@ title = "FAQ"
 ## General
 
 ### What is Dgraph?
-Dgraph is a distributed, low-latency, high throughput graph database, written in Go. It puts a lot of emphasis on good design, concurrency and minimizing network calls required to execute a query in a distributed environment.
+Dgraph is a distributed, low-latency, high throughput graph database, written in Go. Dgraph is known for it's high performance characteristics, supporting highly concurrent transactions, and minimized network calls required to execute a query in a distributed environment. 
 
 ### Why build Dgraph?
 We think graph databases are currently second class citizens. They are not considered mature enough to be run as the sole database, and get run alongside other SQL/NoSQL databases. Also, we're not happy with the design decisions of existing graph databases, which are either non-native or non-distributed, don't manage underlying data or suffer from performance issues.
 
 ### Why would I use Dgraph?
-If you're interested in a high-performance graph database with an emphasis on sound design, thoughtful implementation, resilience, and cutting edge technologies Dgraph is definitely something you should consider.
+If you're interested in a high-performance graph database with an emphasis on sound design, thoughtful implementation, resilience, and cutting edge technologies, then Dgraph is definitely something you should consider.
 
 If you're running more than five tables in a traditional relational database management system such as MySQL, SQL Server, or Oracle and your application requires five or more foreign keys, a graph database may be a better fit. If you're running a NoSQL database like MongoDB or Cassandra forcing you to do joins in the application layer, you should definitely take a look at moving to a graph database.
 
