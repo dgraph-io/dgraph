@@ -349,7 +349,11 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		if idVal == "" {
 			return x.Errorf("Id can't be empty")
 		}
-		parseID(gq, idVal)
+		uids, err := parseID(idVal)
+		if err != nil {
+			return err
+		}
+		gq.UID = append(gq.UID, uids...)
 		// Deleting it here because we don't need to fill it in query.go.
 		delete(gq.Args, "id")
 	}
@@ -402,6 +406,23 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 		}
 
 		for idx, v := range f.Func.Args {
+			if f.Func.Name == uid {
+				// This is to support GraphQL variables in uid functions.
+				idVal, ok := vmap[v.Value]
+				if !ok {
+					return x.Errorf("Couldn't find value for GraphQL variable: [%s]", v.Value)
+				}
+				if idVal.Value == "" {
+					return x.Errorf("Id can't be empty")
+				}
+				uids, err := parseID(idVal.Value)
+				if err != nil {
+					return err
+				}
+				f.Func.UID = append(f.Func.UID, uids...)
+				continue
+			}
+
 			if err := substituteVar(v.Value, &f.Func.Args[idx].Value, vmap); err != nil {
 				return err
 			}
@@ -1899,19 +1920,20 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 
 // Parses ID list. Only used for GraphQL variables.
 // TODO - Maybe get rid of this by lexing individual IDs.
-func parseID(gq *GraphQuery, val string) error {
+func parseID(val string) ([]uint64, error) {
+	var uids []uint64
 	val = x.WhiteSpace.Replace(val)
 	if val[0] != '[' {
 		uid, err := strconv.ParseUint(val, 0, 64)
 		if err != nil {
-			return err
+			return uids, err
 		}
-		gq.UID = append(gq.UID, uid)
-		return nil
+		uids = append(uids, uid)
+		return uids, nil
 	}
 
 	if val[len(val)-1] != ']' {
-		return x.Errorf("Invalid id list at root. Got: %+v", val)
+		return uids, x.Errorf("Invalid id list at root. Got: %+v", val)
 	}
 	var buf bytes.Buffer
 	for _, c := range val[1:] {
@@ -1921,18 +1943,18 @@ func parseID(gq *GraphQuery, val string) error {
 			}
 			uid, err := strconv.ParseUint(buf.String(), 0, 64)
 			if err != nil {
-				return err
+				return uids, err
 			}
-			gq.UID = append(gq.UID, uid)
+			uids = append(uids, uid)
 			buf.Reset()
 			continue
 		}
 		if c == '[' || c == ')' {
-			return x.Errorf("Invalid id list at root. Got: %+v", val)
+			return uids, x.Errorf("Invalid id list at root. Got: %+v", val)
 		}
 		buf.WriteRune(c)
 	}
-	return nil
+	return uids, nil
 }
 
 func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
