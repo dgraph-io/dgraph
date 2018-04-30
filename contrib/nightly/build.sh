@@ -82,8 +82,8 @@ echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file.tar.gz)\033[0m"
 
 mv $tmp_dir ./
 
-# Only run this locally.
-if [[ $TRAVIS != true ]]; then
+# Only run this locally, if DOCKER environment variable is set to true.
+if [[ $DOCKER == true ]]; then
   docker build -t dgraph/dgraph:master -f $GOPATH/src/github.com/dgraph-io/dgraph/contrib/nightly/Dockerfile .
 fi
 
