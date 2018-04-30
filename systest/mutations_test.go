@@ -66,6 +66,7 @@ func TestSystem(t *testing.T) {
 	t.Run("list regex filter", wrap(ListRegexFilterTest))
 	t.Run("regex query vars", wrap(RegexQueryWithVars))
 	t.Run("graphql var child", wrap(GraphQLVarChild))
+	t.Run("math ge", wrap(MathGe))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1416,4 +1417,46 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 	}
 	`, string(resp.GetJson()))
 
+}
+
+func MathGe(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(exact) .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+        _:root <name> "/" .
+        _:root <container> _:c .
+        _:c <name> "Foobar" .
+		`),
+	})
+	check(t, err)
+
+	// Try GraphQL variable with filter at root.
+	resp, err := c.NewTxn().Query(context.Background(), `
+	{
+		q(func: eq(name, "/")) {
+		    containerCount as count(container)
+			hasChildren: math(containerCount >= 1)
+		}
+	}`)
+	check(t, err)
+	CompareJSON(t, `
+		{
+		  "q": [
+		    {
+		      "count(container)": 1,
+		      "hasChildren": true
+		    }
+		  ]
+		}
+	`, string(resp.GetJson()))
 }
