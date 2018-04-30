@@ -1433,9 +1433,9 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
-        _:root <name> "/" .
-        _:root <container> _:c .
-        _:c <name> "Foobar" .
+			_:root <name> "/" .
+			_:root <container> _:c .
+			_:c <name> "Foobar" .
 		`),
 	})
 	check(t, err)
@@ -1444,7 +1444,7 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewTxn().Query(context.Background(), `
 	{
 		q(func: eq(name, "/")) {
-		    containerCount as count(container)
+			containerCount as count(container)
 			hasChildren: math(containerCount >= 1)
 		}
 	}`)
