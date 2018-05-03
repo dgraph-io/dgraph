@@ -19,9 +19,7 @@ If you're running more than five tables in a traditional relational database man
 While we absolutely believe in Dgraph it's important to remember it's still young. At this stage it's ideal for internal non-user facing projects as well as for projects that you've found impossible to realize in the past due to the complexity and computational cost imposed by classic table driven systems, endless joins, or the seemingly inescapable ''curse of dimensionality''.
 
 ### Why would I not use Dgraph?
-If you're looking for a stable, mature database, Dgraph wouldn't be the right fit for you. It is at an early stage, where a lot of functionality is still being worked on, and releases might not be backward compatible.
-
-Another thing is, if your data doesn't have graph structure, i.e., there's only one predicate, then any graph database might not be a good fit for you. A NoSQL datastore is best for key-value type storage.
+If your data doesn't have graph structure, i.e., there's only one predicate, then any graph database might not be a good fit for you. A NoSQL datastore is best for key-value type storage.
 
 ### Is Dgraph production ready?
 We recommend Dgraph to be used in production at companies. Minor releases at this stage might not be backward compatible; so we highly recommend using [frequent exports](/deploy#export).
