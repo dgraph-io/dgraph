@@ -89,6 +89,13 @@ makes it easy to build applications with it.
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
 - Please see [contributing to Dgraph](https://docs.dgraph.io/contribute/) for guidelines on contributions.
 
+## Unofficial Client Libraries
+The Dgraph team maintain a number of [officially supported client libraries](https://docs.dgraph.io/clients/).  The following libraries are contributed by the community.
+
+**C# .NET**  
+
+* [https://github.com/AlexandreDaSilva/DgraphNet](https://github.com/AlexandreDaSilva/DgraphNet)
+* [https://github.com/MichaelJCompton/Dgraph-dotnet](https://github.com/MichaelJCompton/Dgraph-dotnet)
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
