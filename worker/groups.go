@@ -717,7 +717,7 @@ START:
 	pl := g.Leader(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero server.")
+		x.Printf("WARNING: We don't have address of any dgraphzero leader.")
 		time.Sleep(time.Second)
 		goto START
 	}
