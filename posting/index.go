@@ -132,7 +132,6 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *intern.DirectedEdge,
 		return err
 	}
 	x.PredicateStats.Add("i."+edge.Attr, 1)
-	x.PredicateStats.Add(fmt.Sprintf("i.%s", edge.Attr), 1)
 	return nil
 }
 
