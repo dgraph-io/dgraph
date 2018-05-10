@@ -13,7 +13,7 @@ notice = """
 
 def addCopyright(file):
     print("Add copyright to", file)
-    f = open(file, "w")
+    f = open(file, "r+")
     lines = f.readlines()
     lines.insert(0, notice)
     f.seek(0)
