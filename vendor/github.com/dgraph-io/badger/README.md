@@ -11,7 +11,7 @@ Badger v1.0 was released in Nov 2017. Check the [Changelog] for the full details
 
 [Changelog]:https://github.com/dgraph-io/badger/blob/master/CHANGELOG.md
 
-We introduced transactions in [v0.9.0] which involved a major API change. If you have a Badger 
+We introduced transactions in [v0.9.0] which involved a major API change. If you have a Badger
 datastore prior to that, please use [v0.8.1], but we strongly urge you to upgrade. Upgrading from
 both v0.8 and v0.9 will require you to [take backups](#database-backup) and restore using the new
 version.
@@ -128,8 +128,8 @@ All database operations are allowed inside a read-write transaction.
 Always check the returned error value. If you return an error
 within your closure it will be passed through.
 
-An `ErrConflict` error will be reported in case of a conflict. Depending on the state 
-of your application, you have the option to retry the operation if you receive 
+An `ErrConflict` error will be reported in case of a conflict. Depending on the state
+of your application, you have the option to retry the operation if you receive
 this error.
 
 An `ErrTxnTooBig` will be reported in case the number of pending writes/deletes in
@@ -144,7 +144,7 @@ for k,v := range updates {
   if err := txn.Set([]byte(k),[]byte(v)); err == ErrTxnTooBig {
     _ = txn.Commit()
     txn = db.NewTransaction(..)
-    _ = txn.Set([]byte(k),[]byte(v)) 
+    _ = txn.Set([]byte(k),[]byte(v))
   }
 }
 _ = txn.Commit()
@@ -544,11 +544,12 @@ above).
 ## Other Projects Using Badger
 Below is a list of known projects that use Badger:
 
-* [Usenet Express](https://usenetexpress.com/) - Serving over 300TB of data with Badger.
-* [Dgraph](https://github.com/dgraph-io/dgraph) - Distributed graph database.
-* [go-ipfs](https://github.com/ipfs/go-ipfs) - Go client for the InterPlanetary File System (IPFS), a new hypermedia distribution protocol.
 * [0-stor](https://github.com/zero-os/0-stor) - Single device object store.
+* [Dgraph](https://github.com/dgraph-io/dgraph) - Distributed graph database.
 * [Sandglass](https://github.com/celrenheit/sandglass) - distributed, horizontally scalable, persistent, time sorted message queue.
+* [Usenet Express](https://usenetexpress.com/) - Serving over 300TB of data with Badger.
+* [go-ipfs](https://github.com/ipfs/go-ipfs) - Go client for the InterPlanetary File System (IPFS), a new hypermedia distribution protocol.
+* [gorush](https://github.com/appleboy/gorush) - A push notification server written in Go.
 
 If you are using Badger in a project please send a pull request to add it to the list.
 
@@ -589,11 +590,24 @@ get compacted to disk. The compaction would only happen once `MaxTableSize` has 
 you're doing a few writes and then checking, you might not see anything on disk. Once you `Close`
 the database, you'll see these writes on disk.
 
+- **Reverse iteration doesn't give me the right results.**
+
+Just like forward iteration goes to the first key which is equal or greater than the SEEK key, reverse iteration goes to the first key which is equal or lesser than the SEEK key. Therefore, SEEK key would not be part of the results. You can typically add a tilde (~) as a suffix to the SEEK key to include it in the results. See the following issues: [#436](https://github.com/dgraph-io/badger/issues/436) and [#347](https://github.com/dgraph-io/badger/issues/347).
+
 - **Which instances should I use for Badger?**
 
 We recommend using instances which provide local SSD storage, without any limit
 on the maximum IOPS. In AWS, these are storage optimized instances like i3. They
 provide local SSDs which clock 100K IOPS over 4KB blocks easily.
+
+- **I'm getting a closed channel error. Why?**
+
+```
+panic: close of closed channel
+panic: send on closed channel
+```
+
+If you're seeing panics like above, this would be because you're operating on a closed DB. This can happen, if you call `Close()` before sending a write, or multiple times. You should ensure that you only call `Close()` once, and all your read/write operations finish before closing.
 
 - **Are there any Go specific settings that I should use?**
 
@@ -602,10 +616,9 @@ observe the full IOPS throughput provided by modern SSDs. In Dgraph, we have set
 it to 128. For more details, [see this
 thread](https://groups.google.com/d/topic/golang-nuts/jPb_h3TvlKE/discussion).
 
--- **Are there any linux specific settings that I should use?**
+- Are there any linux specific settings that I should use?
 
-We *highly* recommend setting max file descriptors to a high number depending upon the expected size of
-you data.
+We recommend setting max file descriptors to a high number depending upon the expected size of you data.
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.

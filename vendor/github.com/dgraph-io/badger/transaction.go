@@ -30,21 +30,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-type uint64Heap []uint64
-
-func (u uint64Heap) Len() int               { return len(u) }
-func (u uint64Heap) Less(i int, j int) bool { return u[i] < u[j] }
-func (u uint64Heap) Swap(i int, j int)      { u[i], u[j] = u[j], u[i] }
-func (u *uint64Heap) Push(x interface{})    { *u = append(*u, x.(uint64)) }
-func (u *uint64Heap) Pop() interface{} {
-	old := *u
-	n := len(old)
-	x := old[n-1]
-	*u = old[0 : n-1]
-	return x
-}
-
 type oracle struct {
+	// curRead must be at the top for memory alignment. See issue #311.
 	curRead   uint64 // Managed by the mutex.
 	refCount  int64
 	isManaged bool // Does not change value, so no locking required.
@@ -52,6 +39,8 @@ type oracle struct {
 	sync.Mutex
 	writeLock  sync.Mutex
 	nextCommit uint64
+
+	readMark y.WaterMark
 
 	// commits stores a key fingerprint and latest commit counter for it.
 	// refCount is used to clear out commits map to avoid a memory blowup.
@@ -271,8 +260,19 @@ func (txn *Txn) SetWithMeta(key, val []byte, meta byte) error {
 	return txn.SetEntry(e)
 }
 
+// SetWithDiscard acts like SetWithMeta, but adds a marker to discard earlier versions of the key.
+func (txn *Txn) SetWithDiscard(key, val []byte, meta byte) error {
+	e := &Entry{
+		Key:      key,
+		Value:    val,
+		UserMeta: meta,
+		meta:     bitDiscardEarlierVersions,
+	}
+	return txn.SetEntry(e)
+}
+
 // SetWithTTL adds a key-value pair to the database, along with a time-to-live
-// (TTL) setting. A key stored with with a TTL would automatically expire after
+// (TTL) setting. A key stored with a TTL would automatically expire after
 // the time has elapsed , and be eligible for garbage collection.
 func (txn *Txn) SetWithTTL(key, val []byte, dur time.Duration) error {
 	expire := time.Now().Add(dur).Unix()
@@ -280,19 +280,16 @@ func (txn *Txn) SetWithTTL(key, val []byte, dur time.Duration) error {
 	return txn.SetEntry(e)
 }
 
-// SetEntry takes an Entry struct and adds the key-value pair in the struct, along
-// with other metadata to the database.
-func (txn *Txn) SetEntry(e *Entry) error {
-	switch {
-	case !txn.update:
+func (txn *Txn) modify(e *Entry) error {
+	if !txn.update {
 		return ErrReadOnlyTxn
-	case txn.discarded:
+	} else if txn.discarded {
 		return ErrDiscardedTxn
-	case len(e.Key) == 0:
+	} else if len(e.Key) == 0 {
 		return ErrEmptyKey
-	case len(e.Key) > maxKeySize:
+	} else if len(e.Key) > maxKeySize {
 		return exceedsMaxKeySizeError(e.Key)
-	case int64(len(e.Value)) > txn.db.opt.ValueLogFileSize:
+	} else if int64(len(e.Value)) > txn.db.opt.ValueLogFileSize {
 		return exceedsMaxValueSizeError(e.Value, txn.db.opt.ValueLogFileSize)
 	}
 	if err := txn.checkSize(e); err != nil {
@@ -305,33 +302,21 @@ func (txn *Txn) SetEntry(e *Entry) error {
 	return nil
 }
 
+// SetEntry takes an Entry struct and adds the key-value pair in the struct, along
+// with other metadata to the database.
+func (txn *Txn) SetEntry(e *Entry) error {
+	return txn.modify(e)
+}
+
 // Delete deletes a key. This is done by adding a delete marker for the key at commit timestamp.
 // Any reads happening before this timestamp would be unaffected. Any reads after this commit would
 // see the deletion.
 func (txn *Txn) Delete(key []byte) error {
-	if !txn.update {
-		return ErrReadOnlyTxn
-	} else if txn.discarded {
-		return ErrDiscardedTxn
-	} else if len(key) == 0 {
-		return ErrEmptyKey
-	} else if len(key) > maxKeySize {
-		return exceedsMaxKeySizeError(key)
-	}
-
 	e := &Entry{
 		Key:  key,
 		meta: bitDelete,
 	}
-	if err := txn.checkSize(e); err != nil {
-		return err
-	}
-
-	fp := farm.Fingerprint64(key) // Avoid dealing with byte arrays.
-	txn.writes = append(txn.writes, fp)
-
-	txn.pendingWrites[string(key)] = e
-	return nil
+	return txn.modify(e)
 }
 
 // Get looks for key and returns corresponding Item.
@@ -356,6 +341,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 			item.key = key
 			item.status = prefetched
 			item.version = txn.readTs
+			item.expiresAt = e.ExpiresAt
 			// We probably don't need to set db on item here.
 			return item, nil
 		}
@@ -384,6 +370,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 	item.db = txn.db
 	item.vptr = vs.Value
 	item.txn = txn
+	item.expiresAt = vs.ExpiresAt
 	return item, nil
 }
 
@@ -404,6 +391,7 @@ func (txn *Txn) Discard() {
 		return
 	}
 	txn.discarded = true
+	txn.db.orc.readMark.Done(txn.readTs)
 	txn.runCallbacks()
 
 	if txn.update {
@@ -511,6 +499,11 @@ func (txn *Txn) Commit(callback func(error)) error {
 //  defer txn.Discard()
 //  // Call various APIs.
 func (db *DB) NewTransaction(update bool) *Txn {
+	if db.opt.ReadOnly && update {
+		// DB is read-only, force read-only transaction.
+		update = false
+	}
+
 	txn := &Txn{
 		update: update,
 		db:     db,
@@ -518,6 +511,7 @@ func (db *DB) NewTransaction(update bool) *Txn {
 		count:  1,                       // One extra entry for BitFin.
 		size:   int64(len(txnKey) + 10), // Some buffer for the extra entry.
 	}
+	db.orc.readMark.Begin(txn.readTs)
 	if update {
 		txn.pendingWrites = make(map[string]*Entry)
 		txn.db.orc.addRef()

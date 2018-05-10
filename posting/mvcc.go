@@ -422,6 +422,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		} else {
 			x.Fatalf("unexpected meta: %d", item.UserMeta())
 		}
+		if item.DiscardEarlierVersions() {
+			break
+		}
 		it.Next()
 	}
 

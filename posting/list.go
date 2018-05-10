@@ -642,7 +642,7 @@ func (l *List) Length(readTs, afterUid uint64) int {
 func doAsyncWrite(commitTs uint64, key []byte, data []byte, meta byte, f func(error)) {
 	txn := pstore.NewTransactionAt(commitTs, true)
 	defer txn.Discard()
-	if err := txn.SetWithMeta(key, data, meta); err != nil {
+	if err := txn.SetWithDiscard(key, data, meta); err != nil {
 		f(err)
 	}
 	if err := txn.CommitAt(commitTs, f); err != nil {
@@ -814,7 +814,6 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
 			lcache.delete(l.key)
 		}
-		pstore.PurgeVersionsBelow(l.key, minTs)
 	}
 
 	doAsyncWrite(minTs, l.key, data, meta, f)
