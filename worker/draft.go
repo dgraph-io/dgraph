@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -492,11 +493,12 @@ func (n *node) deletePredicate(index uint64, pid string, predicate string) {
 	n.props.Done(pid, err)
 }
 
-func (n *node) processKeyValues(index uint64, pid string, kvs []*intern.KV) error {
-	ctx, _ := n.props.CtxAndTxn(pid)
+func (n *node) processKeyValues(index uint64, pkey string, kvs []*intern.KV) error {
+	ctx, _ := n.props.CtxAndTxn(pkey)
 	err := populateKeyValues(ctx, kvs)
+	log.Printf("populated %d keyvalues, with err: %v", len(kvs), err)
 	posting.TxnMarks().Done(index)
-	n.props.Done(pid, err)
+	n.props.Done(pkey, err)
 	return nil
 }
 

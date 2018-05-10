@@ -119,15 +119,9 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 			it.Next()
 			continue
 		}
-		if cap(prevKey) < len(key) {
-			prevKey = make([]byte, len(key))
-		}
-		prevKey = prevKey[:len(key)]
-		copy(prevKey, key)
+		prevKey = append(prevKey[:0], key...)
 
-		nkey := make([]byte, len(key))
-		copy(nkey, key)
-		l, err := posting.ReadPostingList(nkey, it)
+		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
 		if err != nil {
 			return err
 		}
@@ -180,7 +174,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 			return err
 		}
 	}
-	x.Printf("Sent [%d] number of keys for predicate %v\n", count, predicate)
+	x.Printf("Sent %d keys for predicate %v\n", count, predicate)
 
 	payload, err := stream.CloseAndRecv()
 	if err != nil {
@@ -197,6 +191,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 }
 
 func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
+	x.Println("Batching and proposing key values")
 	n := groups().Node
 	proposal := &intern.Proposal{}
 	size := 0
@@ -220,10 +215,11 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 				err := groups().Node.proposeAndWait(ctx, p)
 				if err != nil {
 					x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+					return err
 				}
 			}
 			proposal.Kv = append(proposal.Kv, kv)
-			size = size + len(kv.Key) + len(kv.Val)
+			size += len(kv.Key) + len(kv.Val)
 		}
 	}
 	if size > 0 {
@@ -258,7 +254,7 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 			break
 		}
 		if err != nil {
-			x.Printf("received %d number of keys, err %v\n", count, err)
+			x.Printf("Received %d keys. Error in loop: %v\n", count, err)
 			return err
 		}
 		count += len(kvBatch.Kv)
@@ -268,16 +264,16 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 		case <-ctx.Done():
 			close(kvs)
 			<-che
-			x.Printf("received %d number of keys, context deadline\n", count)
+			x.Printf("Received %d keys. Context deadline\n", count)
 			return ctx.Err()
 		case err := <-che:
-			x.Printf("received %d number of keys, error %v\n", count, err)
+			x.Printf("Received %d keys. Error via channel: %v\n", count, err)
 			return err
 		}
 	}
 	close(kvs)
 	err := <-che
-	x.Printf("received %d number of keys, error %v\n", count, err)
+	x.Printf("Received %d number of keys. Error: %v\n", count, err)
 	return err
 }
 
