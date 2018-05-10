@@ -2,7 +2,7 @@ files=$(find . ! -path "./vendor/*" ! -path "./bp128/*" -type f -name "*.go")
 
 cat > /tmp/notice << EOF
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
