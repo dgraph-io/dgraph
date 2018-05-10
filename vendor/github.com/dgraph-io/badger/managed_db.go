@@ -16,8 +16,6 @@
 
 package badger
 
-import "github.com/dgraph-io/badger/y"
-
 // ManagedDB allows end users to manage the transactions themselves. Transaction
 // start and commit timestamps are set by end-user.
 //
@@ -42,20 +40,6 @@ func OpenManaged(opts Options) (*ManagedDB, error) {
 		return nil, err
 	}
 	return &ManagedDB{db}, nil
-}
-
-func (db *ManagedDB) periodicUpdateGCStats(lc *y.Closer) {
-	defer lc.Done()
-	for {
-		select {
-		case t := <-db.purgeUpdateCh:
-			txn := db.NewTransactionAt(t.end, false)
-			db.updateGCStats(txn, t)
-			txn.Discard()
-		case <-lc.HasBeenClosed():
-			return
-		}
-	}
 }
 
 // NewTransaction overrides DB.NewTransaction() and panics when invoked. Use

@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"sync"
@@ -114,6 +115,7 @@ func (s *ServerState) initStorage() {
 	opt.SyncWrites = true
 	opt.Dir = Config.PostingDir
 	opt.ValueDir = Config.PostingDir
+	opt.NumVersionsToKeep = math.MaxInt32
 	switch Config.PostingTables {
 	case "memorymap":
 		opt.TableLoadingMode = options.MemoryMap

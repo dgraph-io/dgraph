@@ -81,7 +81,7 @@ func readMapOutput(filename string, mapEntryCh chan<- *intern.MapEntry) {
 		x.Check(err)
 		sz, n := binary.Uvarint(buf)
 		if n <= 0 {
-			log.Fatal("Could not read uvarint: %d", n)
+			log.Fatalf("Could not read uvarint: %d", n)
 		}
 		x.Check2(r.Discard(n))
 

@@ -131,7 +131,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *intern.DirectedEdge,
 		}
 		return err
 	}
-	x.PredicateStats.Add(fmt.Sprintf("i.%s", edge.Attr), 1)
+	x.PredicateStats.Add("i."+edge.Attr, 1)
 	return nil
 }
 
@@ -441,7 +441,7 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 
 		txn := pstore.NewTransactionAt(version, true)
 		// Purge doesn't delete anything, so write an empty pl
-		txn.SetWithMeta(nkey, nil, BitEmptyPosting)
+		txn.SetWithDiscard(nkey, nil, BitEmptyPosting)
 		wg.Add(1)
 		err := txn.CommitAt(version, func(e error) {
 			defer wg.Done()
@@ -449,7 +449,6 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 				setError(e)
 				return
 			}
-			pstore.PurgeVersionsBelow(nkey, version)
 		})
 		txn.Discard()
 		if err != nil {

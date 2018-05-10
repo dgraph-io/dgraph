@@ -163,40 +163,52 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "08AhsNJQFtD53/A8Xpk9kYcpTFo=",
+			"checksumSHA1": "VGIMVsW9bo5TN9dTS7AIC7HSsKw=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "f8d34537cea23a3d6d280251e76d41ba62cf375c",
-			"revisionTime": "2018-03-26T05:21:27Z"
+			"revision": "3ff1bfbb11c02c78c11269096669396c2d2cbbd3",
+			"revisionTime": "2018-05-09T02:00:19Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "f8d34537cea23a3d6d280251e76d41ba62cf375c",
-			"revisionTime": "2018-03-26T05:21:27Z"
+			"revision": "3ff1bfbb11c02c78c11269096669396c2d2cbbd3",
+			"revisionTime": "2018-05-09T02:00:19Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "gGTDnTVVw5kcT2P5NXZV1YSckOU=",
 			"path": "github.com/dgraph-io/badger/protos",
-			"revision": "f8d34537cea23a3d6d280251e76d41ba62cf375c",
-			"revisionTime": "2018-03-26T05:21:27Z"
+			"revision": "3ff1bfbb11c02c78c11269096669396c2d2cbbd3",
+			"revisionTime": "2018-05-09T02:00:19Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
-			"checksumSHA1": "xBLLiAouTGA/lCAcQ5qjxQiuPCc=",
+			"checksumSHA1": "00T6XbLV4d95J7hm6kTXDReaQHM=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "f8d34537cea23a3d6d280251e76d41ba62cf375c",
-			"revisionTime": "2018-03-26T05:21:27Z"
+			"revision": "3ff1bfbb11c02c78c11269096669396c2d2cbbd3",
+			"revisionTime": "2018-05-09T02:00:19Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "I33KkP2lnYqJDasvvsAlebzkeko=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "f8d34537cea23a3d6d280251e76d41ba62cf375c",
-			"revisionTime": "2018-03-26T05:21:27Z"
+			"revision": "3ff1bfbb11c02c78c11269096669396c2d2cbbd3",
+			"revisionTime": "2018-05-09T02:00:19Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
-			"checksumSHA1": "mq3Pze9PjjaqWuvxrdkYBFTyvQE=",
+			"checksumSHA1": "v2pJQ5NbS034cLP+GM1WLlGnByY=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "f8d34537cea23a3d6d280251e76d41ba62cf375c",
-			"revisionTime": "2018-03-26T05:21:27Z"
+			"revision": "3ff1bfbb11c02c78c11269096669396c2d2cbbd3",
+			"revisionTime": "2018-05-09T02:00:19Z",
+			"version": "v1.5.0",
+			"versionExact": "v1.5.0"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
@@ -259,10 +271,10 @@
 			"revisionTime": "2017-08-10T00:29:00Z"
 		},
 		{
-			"checksumSHA1": "kBeNcaKk56FguvPSUCEaH6AxpRc=",
+			"checksumSHA1": "Pyou8mceOASSFxc7GeXZuVdSMi0=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "2bba0603135d7d7f5cb73b2125beeda19c09f4ef",
-			"revisionTime": "2017-03-31T03:19:02Z"
+			"revision": "b4deda0973fb4c70b50d226b1af49f3da59f5265",
+			"revisionTime": "2018-04-30T18:52:41Z"
 		},
 		{
 			"checksumSHA1": "z4copNgeTN77OymdDKqLaIK/vSI=",
@@ -479,6 +491,24 @@
 			"path": "golang.org/x/crypto/blowfish",
 			"revision": "22ddb68eccda408bbf17759ac18d3120ce0d4f3f",
 			"revisionTime": "2017-02-07T22:51:51Z"
+		},
+		{
+			"checksumSHA1": "GtamqiJoL7PGHsN454AoffBFMa8=",
+			"path": "golang.org/x/net/context",
+			"revision": "f73e4c9ed3b7ebdd5f699a16a880c2b1994e50dd",
+			"revisionTime": "2018-05-08T00:58:03Z"
+		},
+		{
+			"checksumSHA1": "UxahDzW2v4mf/+aFxruuupaoIwo=",
+			"path": "golang.org/x/net/internal/timeseries",
+			"revision": "f73e4c9ed3b7ebdd5f699a16a880c2b1994e50dd",
+			"revisionTime": "2018-05-08T00:58:03Z"
+		},
+		{
+			"checksumSHA1": "rJn3m/27kO+2IU6KCCZ74Miby+8=",
+			"path": "golang.org/x/net/trace",
+			"revision": "f73e4c9ed3b7ebdd5f699a16a880c2b1994e50dd",
+			"revisionTime": "2018-05-08T00:58:03Z"
 		},
 		{
 			"checksumSHA1": "nf+CWRQfmxmZkdYRpxEuA8u+qwI=",
