@@ -449,6 +449,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 
 	resp.Latency = gl
 	resp.Txn.LinRead = queryRequest.LinRead
+	if Config.DebugMode {
+		x.Printf("Response: %v", resp)
+	}
 	return resp, err
 }
 

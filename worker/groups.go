@@ -501,6 +501,7 @@ START:
 				if ctx.Err() == nil {
 					cancel()
 				}
+				x.Printf("Final state: %v", state)
 				return
 			}
 			g.applyState(state)

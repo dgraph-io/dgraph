@@ -104,6 +104,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	kvs := &intern.KVS{}
 	// sends all data except schema, schema key has different prefix
 	prefix := x.PredicatePrefix(predicate)
+	x.Printf("SEND. Attr: %v", predicate)
 	var prevKey []byte
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
@@ -130,6 +131,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		if err != nil {
 			return err
 		}
+		x.Printf("SEND. Key=%X, Vlen: %d", key[len(prefix):], len(kv.Val))
 		kvs.Kv = append(kvs.Kv, kv)
 		batchSize += kv.Size()
 		bytesSent += uint64(kv.Size())
@@ -144,16 +146,15 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		kvs = &intern.KVS{}
 	}
 
-	// send schema
+	// Send schema if present.
 	schemaKey := x.SchemaKey(predicate)
 	item, err := txn.Get(schemaKey)
-	if err != nil && err != badger.ErrKeyNotFound {
+	if err == badger.ErrKeyNotFound {
+		// The predicate along with the schema could have been deleted. In that case badger would
+		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
+	} else if err != nil {
 		return err
-	}
-
-	// The predicate along with the schema could have been deleted. In that case badger would
-	// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
-	if err == nil {
+	} else {
 		val, err := item.Value()
 		if err != nil {
 			return err
@@ -191,11 +192,11 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 }
 
 func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
-	x.Println("Batching and proposing key values")
+	x.Println("Receiving predicate. Batching and proposing key values")
 	n := groups().Node
 	proposal := &intern.Proposal{}
 	size := 0
-	firstKV := true
+	var pk *x.ParsedKey
 
 	for kvBatch := range kvs {
 		for _, kv := range kvBatch.Kv {
@@ -207,17 +208,20 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 				size = 0
 			}
 
-			if firstKV {
-				firstKV = false
-				pk := x.Parse(kv.Key)
+			if pk == nil {
+				pk = x.Parse(kv.Key)
 				// Delete on all nodes.
 				p := &intern.Proposal{CleanPredicate: pk.Attr}
+				x.Printf("Predicate being received: %v", pk.Attr)
 				err := groups().Node.proposeAndWait(ctx, p)
 				if err != nil {
 					x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 					return err
 				}
+				x.Printf("RECV. Attr: %v", pk.Attr)
 			}
+			prefix := x.PredicatePrefix(pk.Attr)
+			x.Printf("RECV. Key=%X, Vlen: %d", kv.Key[len(prefix):], len(kv.Val))
 			proposal.Kv = append(proposal.Kv, kv)
 			size += len(kv.Key) + len(kv.Val)
 		}
@@ -241,6 +245,9 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 	count := 0
 	ctx := stream.Context()
 	payload := &api.Payload{}
+
+	x.Printf("Got ReceivePredicate. Group: %d. Am leader: %v",
+		groups().groupId(), groups().Node.AmLeader())
 
 	go func() {
 		// Takes care of throttling and batching.
@@ -273,7 +280,7 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 	}
 	close(kvs)
 	err := <-che
-	x.Printf("Received %d number of keys. Error: %v\n", count, err)
+	x.Printf("Proposed %d keys. Error: %v\n", count, err)
 	return err
 }
 

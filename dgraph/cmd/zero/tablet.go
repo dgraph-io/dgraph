@@ -64,6 +64,9 @@ func (s *Server) rebalanceTablets() {
 }
 
 func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
+	if !s.Node.AmLeader() {
+		return x.Errorf("Invalid movePredicate request on non-leader Zero server.")
+	}
 	tab := s.ServingTablet(predicate)
 	x.AssertTruef(tab != nil, "Tablet to be moved: [%v] should not be nil", predicate)
 	x.Printf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
@@ -81,6 +84,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 				break
 			}
 
+			x.Printf("Sleeping before we run recovery for tablet move")
 			// We might have initiated predicate move on some other node, give it some
 			// time to get cancelled. On cancellation the other node would set the predicate
 			// to write mode again and we need to be sure that it doesn't happen after we
