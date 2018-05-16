@@ -241,6 +241,8 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
+// Parse would parse the key. ParsedKey does not reuse the key slice, so the key slice can change
+// without affecting the contents of ParsedKey.
 func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 
