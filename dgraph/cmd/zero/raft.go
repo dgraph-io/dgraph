@@ -240,7 +240,6 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		return p.Id, err
 	}
 	if p.Id == 0 {
-		x.Println("Invalid proposal. Id=0")
 		return 0, errInvalidProposal
 	}
 
@@ -251,7 +250,6 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	state.Counter = e.Index
 	if p.MaxRaftId > 0 {
 		if p.MaxRaftId <= state.MaxRaftId {
-			x.Printf("proposal.MaxRaftId %d <= state.MaxRaftId %d", p.MaxRaftId, state.MaxRaftId)
 			return p.Id, errInvalidProposal
 		}
 		state.MaxRaftId = p.MaxRaftId
@@ -260,7 +258,6 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		m := n.server.member(p.Member.Addr)
 		// Ensures that different nodes don't have same address.
 		if m != nil && (m.Id != p.Member.Id || m.GroupId != p.Member.GroupId) {
-			x.Printf("Same address. Proposal: %v. Member: %v", p, m)
 			return p.Id, errInvalidAddress
 		}
 		if p.Member.GroupId == 0 {
@@ -293,7 +290,6 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		if !has && len(group.Members) >= n.server.NumReplicas {
 			// We shouldn't allow more members than the number of replicas.
-			x.Println("NumReplicas is full. Proposal: %v", p)
 			return p.Id, errInvalidProposal
 		}
 
@@ -322,7 +318,6 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	}
 	if p.Tablet != nil {
 		if p.Tablet.GroupId == 0 {
-			x.Printf("GroupId is zero. Proposal: %v", p)
 			return p.Id, errInvalidProposal
 		}
 		group := state.Groups[p.Tablet.GroupId]

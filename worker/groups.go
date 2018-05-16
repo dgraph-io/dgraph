@@ -39,8 +39,6 @@ type groupi struct {
 	tablets   map[string]*intern.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
-
-	moving map[string]bool
 }
 
 var gr *groupi
@@ -120,7 +118,6 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.Node = gr.Node.Node
 	gr.Node.InitAndStartNode(gr.wal)
-	gr.moving = make(map[string]bool)
 
 	x.UpdateHealthStatus(true)
 	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
@@ -292,23 +289,6 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 	g.RLock()
 	defer g.RUnlock()
 	return g.gid == gid
-}
-
-func (g *groupi) setMoving(pred string, moving bool) {
-	g.Lock()
-	defer g.Unlock()
-	if moving {
-		g.moving[pred] = true
-	} else {
-		delete(g.moving, pred)
-	}
-}
-
-func (g *groupi) isMoving(pred string) bool {
-	g.RLock()
-	defer g.RUnlock()
-	_, ok := g.moving[pred]
-	return ok
 }
 
 func (g *groupi) BelongsTo(key string) uint32 {
@@ -529,7 +509,6 @@ START:
 				if ctx.Err() == nil {
 					cancel()
 				}
-				x.Printf("Final state: %v", state)
 				return
 			}
 			g.applyState(state)

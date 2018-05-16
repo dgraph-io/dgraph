@@ -64,9 +64,10 @@ func (s *Server) rebalanceTablets() {
 }
 
 func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
-	// if !s.Node.AmLeader() {
-	// 	return x.Errorf("Invalid movePredicate request on non-leader Zero server.")
-	// }
+	// Typically move predicate is run only on leader. But, in this case, an external HTTP request
+	// can also trigger a predicate move. We could render them invalid here by checking if this node
+	// is actually the leader. But, I have noticed no side effects with allowing them to run, even
+	// if this node is a follower node.
 	tab := s.ServingTablet(predicate)
 	x.AssertTruef(tab != nil, "Tablet to be moved: [%v] should not be nil", predicate)
 	x.Printf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,

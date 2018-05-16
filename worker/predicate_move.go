@@ -104,7 +104,6 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	kvs := &intern.KVS{}
 	// sends all data except schema, schema key has different prefix
 	prefix := x.PredicatePrefix(predicate)
-	x.Printf("SEND. Attr: %v", predicate)
 	var prevKey []byte
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
@@ -131,7 +130,6 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		if err != nil {
 			return err
 		}
-		x.Printf("SEND. Key=%X, Vlen: %d", key[len(prefix):], len(kv.Val))
 		kvs.Kv = append(kvs.Kv, kv)
 		batchSize += kv.Size()
 		bytesSent += uint64(kv.Size())
@@ -218,10 +216,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 					x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 					return err
 				}
-				x.Printf("RECV. Attr: %v", pk.Attr)
 			}
-			prefix := x.PredicatePrefix(pk.Attr)
-			x.Printf("RECV. Key=%X, Vlen: %d", kv.Key[len(prefix):], len(kv.Val))
 			proposal.Kv = append(proposal.Kv, kv)
 			size += len(kv.Key) + len(kv.Val)
 		}
@@ -304,10 +299,6 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 
 	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
 		in.SourceGroupId, in.DestGroupId)
-
-	// Let's set this predicate as moving, to avoid a race condition.
-	groups().setMoving(in.Predicate, true)
-	defer groups().setMoving(in.Predicate, false)
 
 	// Ensures that all future mutations beyond this point are rejected.
 	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {

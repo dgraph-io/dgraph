@@ -392,9 +392,7 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	if err != nil {
 		return err
 	}
-	x.Printf("Waiting for conf change for %v", pid)
 	err = <-ch
-	x.Printf("Conf change for %v done with error: %v", pid, err)
 	return err
 }
 

@@ -12,7 +12,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -466,7 +465,6 @@ func (n *node) deletePredicate(index uint64, pid string, predicate string) {
 func (n *node) processKeyValues(index uint64, pkey string, kvs []*intern.KV) error {
 	ctx, _ := n.props.CtxAndTxn(pkey)
 	err := populateKeyValues(ctx, kvs)
-	log.Printf("Populated %d KVs, with error: %v", len(kvs), err)
 	posting.TxnMarks().Done(index)
 	n.props.Done(pkey, err)
 	return nil
@@ -839,7 +837,6 @@ func (n *node) joinPeers() error {
 	c := intern.NewRaftClient(gconn)
 	x.Printf("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
-		x.Printf("Error while joining cluster: %v", err)
 		return x.Errorf("Error while joining cluster: %+v\n", err)
 	}
 	x.Printf("Done with JoinCluster call\n")

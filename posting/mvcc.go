@@ -215,7 +215,8 @@ func (t *Txn) Fill(ctx *api.TxnContext) {
 	for i := t.nextKeyIdx; i < len(t.deltas); i++ {
 		d := t.deltas[i]
 		if d.checkConflict {
-			// fp := farm.Fingerprint64(d.key)
+			// Instead of taking a fingerprint of the keys, send the whole key to Zero. So, Zero can
+			// parse the key and check if that predicate is undergoing a move, hence avoiding #2338.
 			k := base64.StdEncoding.EncodeToString(d.key)
 			ctx.Keys = append(ctx.Keys, k)
 		}
