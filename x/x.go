@@ -145,6 +145,13 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
+func Max(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 var Nilbyte []byte
 
 // Reads a single line from a buffered reader. The line is read into the

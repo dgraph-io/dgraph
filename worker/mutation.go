@@ -415,10 +415,8 @@ func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	// applied watermark can be less than this proposal's index so return the maximum.
 	// For some proposals like dropPredicate, we don't store them in txns map, so we
 	// don't know the raft index. For them we would return applied watermark.
-	if x := node.Applied.DoneUntil(); x > index {
-		index = x
-	}
-	tctx.LinRead.Ids[gid] = index
+	doneUntil := node.Applied.DoneUntil()
+	tctx.LinRead.Ids[gid] = x.Max(index, doneUntil)
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to

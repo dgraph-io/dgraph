@@ -10,9 +10,9 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"math"
 	"sort"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,7 +21,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 )
 
 var (
@@ -216,8 +215,9 @@ func (t *Txn) Fill(ctx *api.TxnContext) {
 	for i := t.nextKeyIdx; i < len(t.deltas); i++ {
 		d := t.deltas[i]
 		if d.checkConflict {
-			fp := farm.Fingerprint64(d.key)
-			ctx.Keys = append(ctx.Keys, strconv.FormatUint(fp, 36))
+			// fp := farm.Fingerprint64(d.key)
+			k := base64.StdEncoding.EncodeToString(d.key)
+			ctx.Keys = append(ctx.Keys, k)
 		}
 	}
 	t.nextKeyIdx = len(t.deltas)

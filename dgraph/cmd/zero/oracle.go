@@ -8,7 +8,9 @@
 package zero
 
 import (
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -282,6 +284,27 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	if conflict {
 		src.Aborted = true
 		return s.proposeTxn(ctx, src)
+	}
+
+	// Check if any of these tablets is readonly.
+	preds := make(map[string]struct{})
+	for _, k := range src.Keys {
+		key, err := base64.StdEncoding.DecodeString(k)
+		if err == nil {
+			pk := x.Parse(key)
+			preds[pk.Attr] = struct{}{}
+		} else {
+			x.Printf("ERRROR while decoding string: %v", err)
+		}
+	}
+	fmt.Printf("Got preds: %v\n", preds)
+	for pred := range preds {
+		tablet := s.ServingTablet(pred)
+		if tablet == nil || tablet.GetReadOnly() {
+			fmt.Printf("MRJN: Trying to commit on a read-only tablet.")
+			src.Aborted = true
+			return s.proposeTxn(ctx, src)
+		}
 	}
 
 	var num intern.Num
