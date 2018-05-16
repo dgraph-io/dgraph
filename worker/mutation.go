@@ -49,6 +49,10 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 		// after predicate move and before snapshot.
 		return errUnservedTablet
 	}
+	tablet := groups().Tablet(edge.Attr)
+	if tablet.ReadOnly {
+		return errPredicateMoving
+	}
 
 	su, ok := schema.State().Get(edge.Attr)
 	if edge.Op == intern.DirectedEdge_SET {
