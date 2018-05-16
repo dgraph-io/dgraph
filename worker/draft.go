@@ -372,34 +372,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	groups().triggerMembershipSync()
 }
 
-type KeyValueOrCleanProposal struct {
-	raftIdx  uint64
-	proposal *intern.Proposal
-}
-
-func (n *node) processKeyValueOrCleanProposals(
-	kvChan chan KeyValueOrCleanProposal) {
-	// Run KeyValueProposals and CleanPredicate one by one always.
-	// During predicate move we first clean the predicate and then
-	// propose key values, we wait for clean predicate to be done before
-	// we propose key values. But during replay if we run these proposals
-	// in goroutine then we will have no such guarantees so always run
-	// them sequentially.
-	for e := range kvChan {
-		if len(e.proposal.Kv) > 0 {
-			n.processKeyValues(e.raftIdx, e.proposal.Key, e.proposal.Kv)
-		} else if len(e.proposal.CleanPredicate) > 0 {
-			n.deletePredicate(e.raftIdx, e.proposal.Key, e.proposal.CleanPredicate)
-		} else {
-			x.Fatalf("Unknown proposal, %+v\n", e.proposal)
-		}
-	}
-}
-
 func (n *node) processApplyCh() {
-	kvChan := make(chan KeyValueOrCleanProposal, 1000)
-	go n.processKeyValueOrCleanProposals(kvChan)
-
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
 			// This is not in the proposal map
@@ -443,11 +416,10 @@ func (n *node) processApplyCh() {
 		if proposal.Mutations != nil {
 			// syncmarks for this shouldn't be marked done until it's comitted.
 			n.sch.schedule(proposal, e.Index)
+
 		} else if len(proposal.Kv) > 0 {
-			kvChan <- KeyValueOrCleanProposal{
-				raftIdx:  e.Index,
-				proposal: proposal,
-			}
+			n.processKeyValues(e.Index, proposal.Key, proposal.Kv)
+
 		} else if proposal.State != nil {
 			// This state needn't be snapshotted in this group, on restart we would fetch
 			// a state which is latest or equal to this.
@@ -455,18 +427,16 @@ func (n *node) processApplyCh() {
 			// When proposal is done it emits done watermarks.
 			posting.TxnMarks().Done(e.Index)
 			n.props.Done(proposal.Key, nil)
+
 		} else if len(proposal.CleanPredicate) > 0 {
-			kvChan <- KeyValueOrCleanProposal{
-				raftIdx:  e.Index,
-				proposal: proposal,
-			}
+			n.deletePredicate(e.Index, proposal.Key, proposal.CleanPredicate)
+
 		} else if proposal.TxnContext != nil {
 			go n.commitOrAbort(e.Index, proposal.Key, proposal.TxnContext)
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
 	}
-	close(kvChan)
 }
 
 func (n *node) commitOrAbort(index uint64, pid string, tctx *api.TxnContext) {
@@ -492,11 +462,11 @@ func (n *node) deletePredicate(index uint64, pid string, predicate string) {
 	n.props.Done(pid, err)
 }
 
-func (n *node) processKeyValues(index uint64, pid string, kvs []*intern.KV) error {
-	ctx, _ := n.props.CtxAndTxn(pid)
+func (n *node) processKeyValues(index uint64, pkey string, kvs []*intern.KV) error {
+	ctx, _ := n.props.CtxAndTxn(pkey)
 	err := populateKeyValues(ctx, kvs)
 	posting.TxnMarks().Done(index)
-	n.props.Done(pid, err)
+	n.props.Done(pkey, err)
 	return nil
 }
 
@@ -865,7 +835,7 @@ func (n *node) joinPeers() error {
 
 	gconn := pl.Get()
 	c := intern.NewRaftClient(gconn)
-	x.Printf("Calling JoinCluster")
+	x.Printf("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
 		return x.Errorf("Error while joining cluster: %+v\n", err)
 	}
@@ -935,11 +905,11 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 		n.SetRaft(raft.RestartNode(n.Cfg))
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
-		if _, hasPeer := groups().MyPeer(); hasPeer {
+		if peerId, hasPeer := groups().MyPeer(); hasPeer {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
 
-			x.Println("Retrieving snapshot.")
+			x.Println("Retrieving snapshot from peer: %d", peerId)
 			n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
 
 			x.Println("Trying to join peers.")

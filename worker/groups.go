@@ -306,6 +306,14 @@ func (g *groupi) BelongsTo(key string) uint32 {
 	return 0
 }
 
+func (g *groupi) ServesTabletRW(key string) bool {
+	tablet := g.Tablet(key)
+	if tablet != nil && !tablet.ReadOnly && tablet.GroupId == groups().groupId() {
+		return true
+	}
+	return false
+}
+
 func (g *groupi) ServesTablet(key string) bool {
 	tablet := g.Tablet(key)
 	if tablet != nil && tablet.GroupId == groups().groupId() {

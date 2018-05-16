@@ -38,13 +38,12 @@ func deletePredicateEdge(edge *intern.DirectedEdge) bool {
 	return edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star))
 }
 
-// runMutation goes through all the edges and applies them. It returns the
-// mutations which were not applied in left.
+// runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Txn) error {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
-	if !groups().ServesTablet(edge.Attr) {
+	if !groups().ServesTabletRW(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
 		return errUnservedTablet
@@ -411,10 +410,8 @@ func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	// applied watermark can be less than this proposal's index so return the maximum.
 	// For some proposals like dropPredicate, we don't store them in txns map, so we
 	// don't know the raft index. For them we would return applied watermark.
-	if x := node.Applied.DoneUntil(); x > index {
-		index = x
-	}
-	tctx.LinRead.Ids[gid] = index
+	doneUntil := node.Applied.DoneUntil()
+	tctx.LinRead.Ids[gid] = x.Max(index, doneUntil)
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to

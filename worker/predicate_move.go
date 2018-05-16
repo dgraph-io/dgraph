@@ -119,15 +119,9 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 			it.Next()
 			continue
 		}
-		if cap(prevKey) < len(key) {
-			prevKey = make([]byte, len(key))
-		}
-		prevKey = prevKey[:len(key)]
-		copy(prevKey, key)
+		prevKey = append(prevKey[:0], key...)
 
-		nkey := make([]byte, len(key))
-		copy(nkey, key)
-		l, err := posting.ReadPostingList(nkey, it)
+		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
 		if err != nil {
 			return err
 		}
@@ -150,16 +144,15 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		kvs = &intern.KVS{}
 	}
 
-	// send schema
+	// Send schema if present.
 	schemaKey := x.SchemaKey(predicate)
 	item, err := txn.Get(schemaKey)
-	if err != nil && err != badger.ErrKeyNotFound {
+	if err == badger.ErrKeyNotFound {
+		// The predicate along with the schema could have been deleted. In that case badger would
+		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
+	} else if err != nil {
 		return err
-	}
-
-	// The predicate along with the schema could have been deleted. In that case badger would
-	// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
-	if err == nil {
+	} else {
 		val, err := item.Value()
 		if err != nil {
 			return err
@@ -180,7 +173,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 			return err
 		}
 	}
-	x.Printf("Sent [%d] number of keys for predicate %v\n", count, predicate)
+	x.Printf("Sent %d keys for predicate %v\n", count, predicate)
 
 	payload, err := stream.CloseAndRecv()
 	if err != nil {
@@ -197,10 +190,11 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 }
 
 func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
+	x.Println("Receiving predicate. Batching and proposing key values")
 	n := groups().Node
 	proposal := &intern.Proposal{}
 	size := 0
-	firstKV := true
+	var pk *x.ParsedKey
 
 	for kvBatch := range kvs {
 		for _, kv := range kvBatch.Kv {
@@ -212,18 +206,19 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 				size = 0
 			}
 
-			if firstKV {
-				firstKV = false
-				pk := x.Parse(kv.Key)
+			if pk == nil {
+				pk = x.Parse(kv.Key)
 				// Delete on all nodes.
 				p := &intern.Proposal{CleanPredicate: pk.Attr}
+				x.Printf("Predicate being received: %v", pk.Attr)
 				err := groups().Node.proposeAndWait(ctx, p)
 				if err != nil {
 					x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+					return err
 				}
 			}
 			proposal.Kv = append(proposal.Kv, kv)
-			size = size + len(kv.Key) + len(kv.Val)
+			size += len(kv.Key) + len(kv.Val)
 		}
 	}
 	if size > 0 {
@@ -246,6 +241,9 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 	ctx := stream.Context()
 	payload := &api.Payload{}
 
+	x.Printf("Got ReceivePredicate. Group: %d. Am leader: %v",
+		groups().groupId(), groups().Node.AmLeader())
+
 	go func() {
 		// Takes care of throttling and batching.
 		che <- batchAndProposeKeyValues(ctx, kvs)
@@ -258,7 +256,7 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 			break
 		}
 		if err != nil {
-			x.Printf("received %d number of keys, err %v\n", count, err)
+			x.Printf("Received %d keys. Error in loop: %v\n", count, err)
 			return err
 		}
 		count += len(kvBatch.Kv)
@@ -268,16 +266,16 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 		case <-ctx.Done():
 			close(kvs)
 			<-che
-			x.Printf("received %d number of keys, context deadline\n", count)
+			x.Printf("Received %d keys. Context deadline\n", count)
 			return ctx.Err()
 		case err := <-che:
-			x.Printf("received %d number of keys, error %v\n", count, err)
+			x.Printf("Received %d keys. Error via channel: %v\n", count, err)
 			return err
 		}
 	}
 	close(kvs)
 	err := <-che
-	x.Printf("received %d number of keys, error %v\n", count, err)
+	x.Printf("Proposed %d keys. Error: %v\n", count, err)
 	return err
 }
 
@@ -301,15 +299,20 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 
 	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
 		in.SourceGroupId, in.DestGroupId)
+
 	// Ensures that all future mutations beyond this point are rejected.
 	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
-	tctxs := posting.Txns().Iterate(func(key []byte) bool {
-		pk := x.Parse(key)
-		return pk.Attr == in.Predicate
-	})
-	if len(tctxs) > 0 {
+	for i := 0; ; i++ {
+		x.Printf("Trying to abort pending mutations. Loop: %d", i)
+		tctxs := posting.Txns().Iterate(func(key []byte) bool {
+			pk := x.Parse(key)
+			return pk.Attr == in.Predicate
+		})
+		if len(tctxs) == 0 {
+			break
+		}
 		tryAbortTransactions(tctxs)
 	}
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
