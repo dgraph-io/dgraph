@@ -313,6 +313,10 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		}
 	}
 
+	// TODO: We could take fingerprint of the keys, and store them in uint64, allowing the rowCommit
+	// map to be keyed by uint64, which would be cheaper. But, unsure about the repurcussions of
+	// that. It would save some memory. So, worth a try.
+
 	var num intern.Num
 	num.Val = 1
 	assigned, err := s.lease(ctx, &num, true)
