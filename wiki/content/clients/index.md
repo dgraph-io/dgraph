@@ -329,10 +329,10 @@ fmt.Println(string(resp.Json))
 
 ## Java
 
-The Java client is a new and fully supported client for v0.9.0.
-
-The client [can be found here](https://github.com/dgraph-io/dgraph4j).
-Follow the instructions in the README to get it up and running.
+The official Java client [can be found here](https://github.com/dgraph-io/dgraph4j)
+and it fully supports Dgraph v0.9.0. Follow the instructions in the
+[README](https://github.com/dgraph-io/dgraph4j#readme)
+to get it up and running.
 
 We also have a [DgraphJavaSample] project, which contains an end-to-end
 working example of how to use the Java client.
@@ -350,13 +350,14 @@ project, which contains an end-to-end working example of how to use the Javascri
 for Node.js >= v6.
 
 ## Python
-{{% notice "incomplete" %}}
-A lot of development has gone into the Go client and the Python client is not up to date with it.
-The Python client is not compatible with dgraph v0.9.0 and onwards.
-We are looking for help from contributors to bring it up to date.
-{{% /notice %}}
 
-The Python client can be found [here](https://github.com/dgraph-io/pydgraph).
+The official Python client [can be found here](https://github.com/dgraph-io/pydgraph)
+and it fully supports Dgraph v1.0.0 and Python versions >= 2.7 and >= 3.5. Follow the
+instructions in the [README](https://github.com/dgraph-io/pydgraph#readme) to get it
+up and running.
+
+We also have a [simple example](https://github.com/dgraph-io/pydgraph/tree/master/examples/simple)
+project, which contains an end-to-end working example of how to use the Python client.
 
 ## Raw HTTP
 
