@@ -64,9 +64,9 @@ func (s *Server) rebalanceTablets() {
 }
 
 func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
-	if !s.Node.AmLeader() {
-		return x.Errorf("Invalid movePredicate request on non-leader Zero server.")
-	}
+	// if !s.Node.AmLeader() {
+	// 	return x.Errorf("Invalid movePredicate request on non-leader Zero server.")
+	// }
 	tab := s.ServingTablet(predicate)
 	x.AssertTruef(tab != nil, "Tablet to be moved: [%v] should not be nil", predicate)
 	x.Printf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,

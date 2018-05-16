@@ -304,15 +304,24 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 
 	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
 		in.SourceGroupId, in.DestGroupId)
+
+	// Let's set this predicate as moving, to avoid a race condition.
+	groups().setMoving(in.Predicate, true)
+	defer groups().setMoving(in.Predicate, false)
+
 	// Ensures that all future mutations beyond this point are rejected.
 	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
-	tctxs := posting.Txns().Iterate(func(key []byte) bool {
-		pk := x.Parse(key)
-		return pk.Attr == in.Predicate
-	})
-	if len(tctxs) > 0 {
+	for i := 0; ; i++ {
+		x.Printf("Trying to abort pending mutations. Loop: %d", i)
+		tctxs := posting.Txns().Iterate(func(key []byte) bool {
+			pk := x.Parse(key)
+			return pk.Attr == in.Predicate
+		})
+		if len(tctxs) == 0 {
+			break
+		}
 		tryAbortTransactions(tctxs)
 	}
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.

@@ -50,8 +50,8 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 		return errUnservedTablet
 	}
 	tablet := groups().Tablet(edge.Attr)
-	if tablet.ReadOnly {
-		return errPredicateMoving
+	if tablet.ReadOnly || groups().isMoving(edge.Attr) {
+		return x.Errorf("Thou shalt not pass")
 	}
 
 	su, ok := schema.State().Get(edge.Attr)
