@@ -38,20 +38,15 @@ func deletePredicateEdge(edge *intern.DirectedEdge) bool {
 	return edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star))
 }
 
-// runMutation goes through all the edges and applies them. It returns the
-// mutations which were not applied in left.
+// runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Txn) error {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
-	if !groups().ServesTablet(edge.Attr) {
+	if !groups().ServesTabletRW(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
 		return errUnservedTablet
-	}
-	tablet := groups().Tablet(edge.Attr)
-	if tablet.ReadOnly || groups().isMoving(edge.Attr) {
-		return x.Errorf("Thou shalt not pass")
 	}
 
 	su, ok := schema.State().Get(edge.Attr)

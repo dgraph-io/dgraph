@@ -286,8 +286,16 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		return s.proposeTxn(ctx, src)
 	}
 
-	// Check if any of these tablets is readonly.
+	// Check if any of these tablets is being moved. If so, abort the transaction.
 	preds := make(map[string]struct{})
+	// _predicate_ would never be part of conflict detection, so keys corresponding to any
+	// modifications to this predicate would not be sent to Zero. But, we still need to abort
+	// transactions which are coming in, while this predicate is being moved. This means that if
+	// _predicate_ expansion is enabled, and a move for this predicate is happening, NO transactions
+	// across the entire cluster would commit. Sorry! But if we don't do this, we might lose commits
+	// which sneaked in during the move.
+	preds["_predicate_"] = struct{}{}
+
 	for _, k := range src.Keys {
 		key, err := base64.StdEncoding.DecodeString(k)
 		if err == nil {
