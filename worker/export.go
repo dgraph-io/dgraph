@@ -163,6 +163,12 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 	if s.schema.Count {
 		buf.WriteString(" @count")
 	}
+	if s.schema.Lang {
+		buf.WriteString(" @lang")
+	}
+	if s.schema.Upsert {
+		buf.WriteString(" @upsert")
+	}
 	buf.WriteString(" . \n")
 }
 
