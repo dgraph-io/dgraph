@@ -165,7 +165,12 @@ func runQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, err := mutationWithTs(m, true, false, 0)
+	_, _, err := mutationWithTs(m, false, true, false, 0)
+	return err
+}
+
+func runJsonMutation(m string) error {
+	_, _, err := mutationWithTs(m, true, true, false, 0)
 	return err
 }
 
@@ -671,7 +676,49 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	output, err := runQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
+}
 
+func TestJsonMutation(t *testing.T) {
+	var q1 = `
+	{
+		user(func: has(name)) {
+			name
+		}
+	}
+	`
+	var m1 = `
+	{
+		"set": [
+			{
+				"name": "Alice"
+			},
+			{
+				"name": "Bob"
+			}
+		]
+	}
+	`
+	var s1 = `
+            name: string @index(exact) .
+	`
+
+	schema.ParseBytes([]byte(""), 1)
+	err := alterSchemaWithRetry(s1)
+	require.NoError(t, err)
+
+	err = runJsonMutation(m1)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"},{"name":"Bob"}]}}`, output)
+
+	err = deletePredicate("name")
+	require.NoError(t, err)
+
+	output, err = runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"user":[]}}`, output)
 }
 
 func TestDeleteAll(t *testing.T) {
