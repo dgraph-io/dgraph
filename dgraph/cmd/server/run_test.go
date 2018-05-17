@@ -681,7 +681,15 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 func TestJsonMutation(t *testing.T) {
 	var q1 = `
 	{
-		user(func: has(name)) {
+		q(func: has(name)) {
+			uid
+			name
+		}
+	}
+	`
+	var q2 = `
+	{
+		q(func: has(name)) {
 			name
 		}
 	}
@@ -698,6 +706,16 @@ func TestJsonMutation(t *testing.T) {
 		]
 	}
 	`
+	var m2 = `
+	{
+		"delete": [
+			{
+				"uid": "%s",
+				"name": null
+			}
+		]
+	}
+	`
 	var s1 = `
             name: string @index(exact) .
 	`
@@ -710,15 +728,30 @@ func TestJsonMutation(t *testing.T) {
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"},{"name":"Bob"}]}}`, output)
+	q1Result := map[string]interface{}{}
+	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
+	queryResults := q1Result["data"].(map[string]interface{})["q"].([]interface{})
+	require.Equal(t, 2, len(queryResults))
 
-	err = deletePredicate("name")
+	var uid string
+	count := 0
+	for i := 0; i < 2; i++ {
+		name := queryResults[i].(map[string]interface{})["name"].(string)
+		if name == "Alice" {
+			uid = queryResults[i].(map[string]interface{})["uid"].(string)
+			count++
+		} else {
+			require.Equal(t, "Bob", name)
+		}
+	}
+	require.Equal(t, 1, count)
+
+	err = runJsonMutation(fmt.Sprintf(m2, uid))
 	require.NoError(t, err)
 
-	output, err = runQuery(q1)
+	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[]}}`, output)
+	require.JSONEq(t, `{"data": {"q":[{"name":"Bob"}]}}`, output)
 }
 
 func TestDeleteAll(t *testing.T) {
