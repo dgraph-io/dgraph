@@ -215,8 +215,10 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 	dstGroup uint32) error {
 	err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup)
 	if err == nil {
+		// If no error, then return immediately.
 		return nil
 	}
+	x.Printf("Got error during move: %v", err)
 	if !s.Node.AmLeader() {
 		s.runRecovery()
 		return err
@@ -231,8 +233,9 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 		Space:     stab.Space,
 		Force:     true,
 	}
-	if err := s.Node.proposeAndWait(context.Background(), p); err != nil {
-		x.Printf("Error while reverting group %d to RW: %+v\n", srcGroup, err)
+	if nerr := s.Node.proposeAndWait(context.Background(), p); nerr != nil {
+		x.Printf("Error while reverting group %d to RW: %+v\n", srcGroup, nerr)
+		return nerr
 	}
 	return err
 }
@@ -267,7 +270,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		DestGroupId:   dstGroup,
 	}
 	if _, err := c.MovePredicate(ctx, in); err != nil {
-		return fmt.Errorf("While caling MovePredicate: %+v\n", err)
+		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
 	}
 
 	// Propose that predicate is served by dstGroup in RW.
