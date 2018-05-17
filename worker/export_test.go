@@ -9,6 +9,7 @@ package worker
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"io/ioutil"
 	"math"
@@ -218,6 +219,49 @@ func TestExport(t *testing.T) {
 	require.NoError(t, scanner.Err())
 	// This order will be preserved due to file naming
 	require.Equal(t, 1, count)
+}
+
+func TestToSchema(t *testing.T) {
+	testCases := []struct {
+		skv      *skv
+		expected string
+	}{
+		{
+			skv: &skv{
+				attr: "Alice",
+				schema: &intern.SchemaUpdate{
+					Predicate: "mother",
+					ValueType: intern.Posting_STRING,
+					Directive: intern.SchemaUpdate_REVERSE,
+					List:      false,
+					Count:     true,
+					Upsert:    true,
+					Lang:      true,
+				},
+			},
+			expected: "Alice:string @reverse @count @lang @upsert . \n",
+		},
+		{
+			skv: &skv{
+				attr: "Alice:best",
+				schema: &intern.SchemaUpdate{
+					Predicate: "mother",
+					ValueType: intern.Posting_STRING,
+					Directive: intern.SchemaUpdate_REVERSE,
+					List:      false,
+					Count:     false,
+					Upsert:    false,
+					Lang:      true,
+				},
+			},
+			expected: "<Alice:best>:string @reverse @lang . \n",
+		},
+	}
+	for _, testCase := range testCases {
+		buf := new(bytes.Buffer)
+		toSchema(buf, testCase.skv)
+		require.Equal(t, testCase.expected, buf.String())
+	}
 }
 
 // func generateBenchValues() []kv {
