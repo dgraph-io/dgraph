@@ -393,6 +393,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
 		item := it.Item()
+		if item.IsDeletedOrExpired() {
+			it.Next()
+			continue
+		}
 		if !bytes.Equal(item.Key(), l.key) {
 			break
 		}
