@@ -165,11 +165,43 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parseStart := time.Now()
-	mu, err := gql.ParseMutation(string(m))
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
+
+	var mu *api.Mutation
+	if mType := r.Header.Get("X-Dgraph-MutationType"); mType == "json" {
+		// Parse JSON.
+		ms := make(map[string]interface{})
+		err := json.Unmarshal(m, &ms)
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+
+		mu = &api.Mutation{}
+		if setJson, ok := ms["set"]; ok {
+			bs, err := json.Marshal(setJson)
+			if err != nil {
+				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+				return
+			}
+			mu.SetJson = bs
+		}
+		if delJson, ok := ms["delete"]; ok {
+			bs, err := json.Marshal(delJson)
+			if err != nil {
+				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+				return
+			}
+			mu.DeleteJson = bs
+		}
+	} else {
+		// Parse NQuads.
+		mu, err = gql.ParseMutation(string(m))
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
 	}
+
 	parseEnd := time.Now()
 
 	// Maybe rename it so that default is CommitNow.
