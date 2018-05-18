@@ -23,8 +23,6 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
-// TODO(pawan) - Refactor code here to make it simpler.
-
 func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
 	// This happens at root.
 	if prefix == "" {
@@ -55,10 +53,23 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 				f.ValType = api.Facet_STRING
 				fv = v
 			}
-		case float64:
-			// Could be int too, but we just store it as float.
-			fv = v
-			f.ValType = api.Facet_FLOAT
+		case json.Number:
+			valn := facetVal.(json.Number)
+			if strings.Index(valn.String(), ".") >= 0 {
+				if vf, err := valn.Float64(); err != nil {
+					return nil, err
+				} else {
+					fv = vf
+					f.ValType = api.Facet_FLOAT
+				}
+			} else {
+				if vi, err := valn.Int64(); err != nil {
+					return nil, err
+				} else {
+					fv = vi
+					f.ValType = api.Facet_INT
+				}
+			}
 		case bool:
 			fv = v
 			f.ValType = api.Facet_BOOL
