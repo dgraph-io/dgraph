@@ -267,6 +267,9 @@ func export(bdir string, readTs uint64) error {
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.PrefetchValues = false
+	// We don't ask for all the versions. So, this would only return the 1 version for each key, iff
+	// that version is valid. So, we don't need to check in the iteration loop if the item is
+	// deleted or expired.
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 	prefix := new(bytes.Buffer)
@@ -297,7 +300,7 @@ func export(bdir string, readTs uint64) error {
 			continue
 		}
 
-		if pk.Attr == "_predicate_" || pk.Attr == "_dummy_" {
+		if pk.Attr == "_predicate_" {
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())
 			continue
