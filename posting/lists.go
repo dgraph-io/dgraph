@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	dummyPostingList []byte // Used for indexing.
+	emptyPostingList []byte // Used for indexing.
 	elog             trace.EventLog
 )
 
@@ -58,7 +58,7 @@ func init() {
 			Checksum: h.Sum(nil),
 		}
 		var err error
-		dummyPostingList, err = pl.Marshal()
+		emptyPostingList, err = pl.Marshal()
 		x.Check(err)
 	})
 	elog = trace.NewEventLog("Memory", "")
