@@ -305,7 +305,7 @@ func CommitLists(commit func(key []byte) bool) {
 	// use the Delete function.
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
-	x.Check(txn.Delete(x.DataKey("dummy", 1)))
+	x.Check(txn.Delete(x.DataKey("_dummy_", 1)))
 	// Nothing is being read, so there can't be an ErrConflict. This should go to disk.
 	if err := txn.CommitAt(1, nil); err != nil {
 		x.Printf("Commit unexpectedly failed with error: %v", err)
