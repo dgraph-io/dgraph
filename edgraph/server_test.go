@@ -82,7 +82,7 @@ func TestNquadsFromJson1(t *testing.T) {
 	oval := &api.Value{&api.Value_StrVal{"Alice"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 
-	oval = &api.Value{&api.Value_DoubleVal{26}}
+	oval = &api.Value{&api.Value_IntVal{26}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "age", oval))
 
 	oval = &api.Value{&api.Value_BoolVal{true}}
@@ -156,13 +156,39 @@ func TestNquadsFromJson3(t *testing.T) {
 }
 
 func TestNquadsFromJson4(t *testing.T) {
-	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123"}]`
+	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123", "age": 21, "weight": 58.7}]`
 
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(nq))
+	require.Equal(t, 5, len(nq))
 	oval := &api.Value{&api.Value_StrVal{"Alice"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
+	require.Contains(t, nq, makeNquad("_:blank-0", "age", &api.Value{&api.Value_IntVal{21}}))
+	require.Contains(t, nq, makeNquad("_:blank-0", "weight",
+		&api.Value{&api.Value_DoubleVal{58.7}}))
+}
+
+func TestJsonNumberParsing(t *testing.T) {
+	var data []string
+	data = append(data, `{"uid": "1", "key": 9223372036854775299}`)
+	data = append(data, `{"uid": "1", "key": 9223372036854775299.0}`)
+	data = append(data, `{"uid": "1", "key": 27670116110564327426}`)
+
+	var vals []*api.Value
+	vals = append(vals, &api.Value{&api.Value_IntVal{9223372036854775299}})
+	vals = append(vals, &api.Value{&api.Value_DoubleVal{9223372036854775299.0}})
+	vals = append(vals, nil)
+
+	for i, d := range data {
+		v := vals[i]
+		nqs, err := nquadsFromJson([]byte(d), set)
+		if v != nil {
+			require.NoError(t, err)
+			require.Equal(t, makeNquad("1", "key", v), nqs[0])
+		} else {
+			require.Error(t, err)
+		}
+	}
 }
 
 func TestNquadsFromJson_UidOutofRangeError(t *testing.T) {
