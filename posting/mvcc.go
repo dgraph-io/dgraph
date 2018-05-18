@@ -394,8 +394,8 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	for it.Valid() {
 		item := it.Item()
 		if item.IsDeletedOrExpired() {
-			it.Next()
-			continue
+			// Don't consider any more versions.
+			break
 		}
 		if !bytes.Equal(item.Key(), l.key) {
 			break
