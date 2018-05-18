@@ -8,6 +8,7 @@
 package edgraph
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -93,6 +94,21 @@ type mapResponse struct {
 
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 	switch v.(type) {
+	case json.Number:
+		n := v.(json.Number)
+		if strings.Index(n.String(), ".") >= 0 {
+			f, err := n.Float64()
+			if err != nil {
+				return err
+			}
+			nq.ObjectValue = &api.Value{&api.Value_DoubleVal{f}}
+			return nil
+		}
+		i, err := n.Int64()
+		if err != nil {
+			return err
+		}
+		nq.ObjectValue = &api.Value{&api.Value_IntVal{i}}
 	case string:
 		predWithLang := strings.SplitN(k, "@", 2)
 		if len(predWithLang) == 2 && predWithLang[0] != "" {
@@ -234,7 +250,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		}
 
 		switch v.(type) {
-		case string, float64, bool:
+		case string, float64, bool, json.Number:
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
 			}
@@ -283,7 +299,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				}
 
 				switch iv := item.(type) {
-				case string, float64:
+				case string, float64, json.Number:
 					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
@@ -319,11 +335,17 @@ const (
 )
 
 func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
+	buffer := bytes.NewBuffer(b)
+	dec := json.NewDecoder(buffer)
+	dec.UseNumber()
 	ms := make(map[string]interface{})
 	var list []interface{}
-	if err := json.Unmarshal(b, &ms); err != nil {
+	if err := dec.Decode(&ms); err != nil {
 		// Couldn't parse as map, lets try to parse it as a list.
-		if err = json.Unmarshal(b, &list); err != nil {
+
+		buffer.Reset()  // The previous contents are used. Reset here.
+		buffer.Write(b) // Rewrite b into buffer, so it can be consumed.
+		if err = dec.Decode(&list); err != nil {
 			return nil, err
 		}
 	}
