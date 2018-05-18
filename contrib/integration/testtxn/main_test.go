@@ -467,7 +467,7 @@ func TestIgnoreIndexConflict(t *testing.T) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	expectedResp := []byte(fmt.Sprintf(`{"me":[{"uid":"%s"},{"uid":"%s"}]}`, uid1, uid2))
-	x.AssertTrue(bytes.Equal(resp.Json, expectedResp))
+	require.Equal(t, expectedResp, resp.Json)
 }
 
 func TestReadIndexKeySameTxn(t *testing.T) {
