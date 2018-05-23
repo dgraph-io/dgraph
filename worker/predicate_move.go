@@ -31,6 +31,7 @@ import (
 var (
 	errEmptyPredicate = x.Errorf("Predicate not specified")
 	errNotLeader      = x.Errorf("Server is not leader of this group")
+	errUnableToAbort  = x.Errorf("Unable to abort pending transactions")
 	emptyPayload      = api.Payload{}
 )
 
@@ -304,16 +305,22 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
-	for i := 0; ; i++ {
+	aborted := false
+	for i := 0; i < 12; i++ {
+		// Try a dozen times, then give up.
 		x.Printf("Trying to abort pending mutations. Loop: %d", i)
 		tctxs := posting.Txns().Iterate(func(key []byte) bool {
 			pk := x.Parse(key)
 			return pk.Attr == in.Predicate
 		})
 		if len(tctxs) == 0 {
+			aborted = true
 			break
 		}
 		tryAbortTransactions(tctxs)
+	}
+	if !aborted {
+		return &emptyPayload, errUnableToAbort
 	}
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
 	n.applyAllMarks(ctx)

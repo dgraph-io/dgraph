@@ -608,6 +608,7 @@ func tryAbortTransactions(startTimestamps []uint64) {
 	req := &intern.TxnTimestamps{Ts: startTimestamps}
 	resp, err := zc.TryAbort(context.Background(), req)
 	for err != nil {
+		x.Printf("Error while trying to abort txns: %v\n", err)
 		resp, err = zc.TryAbort(context.Background(), req)
 	}
 	commitTimestamps := resp.Ts
@@ -621,6 +622,7 @@ func tryAbortTransactions(startTimestamps []uint64) {
 		// TODO - Make sure all other errors are transient, we don't want to be stuck in an infinite
 		// loop.
 		for err != nil && err != posting.ErrInvalidTxn {
+			x.Printf("Error while locally aborting txns: %v\n", err)
 			// This will fail only due to badger error.
 			_, err = commitOrAbort(context.Background(), tctx)
 		}
