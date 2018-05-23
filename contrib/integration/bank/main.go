@@ -31,10 +31,12 @@ var (
 	dur   = flag.String("dur", "1m", "How long to run the transactions.")
 )
 
+var startBal int = 10
+
 type Account struct {
 	Uid  string `json:"uid"`
-	Key  int    `json:"key"`
-	Bal  int    `json:"bal"`
+	Key  int    `json:"key,omitempty"`
+	Bal  int    `json:"bal,omitempty"`
 	Type string `json:"type"`
 }
 
@@ -61,7 +63,7 @@ func (s *State) createAccounts() {
 	for i := 0; i < *users; i++ {
 		a := Account{
 			Key:  i,
-			Bal:  100,
+			Bal:  startBal,
 			Type: "ba",
 		}
 		all = append(all, a)
@@ -111,7 +113,7 @@ func (s *State) runTotal() error {
 	for _, a := range accounts {
 		total += a.Bal
 	}
-	if total != *users*100 {
+	if total != *users*startBal {
 		log.Fatalf("Total = %d", total)
 	}
 	return nil
@@ -129,9 +131,12 @@ func (s *State) findAccount(txn *dgo.Txn, key int) Account {
 		log.Fatal(err)
 	}
 	accounts := m["q"]
-	if len(accounts) != 1 {
+	if len(accounts) > 1 {
 		log.Printf("Query: %s. Response: %s\n", query, resp.Json)
 		log.Fatal("Found multiple accounts")
+	}
+	if len(accounts) == 0 {
+		return Account{Key: key, Type: "ba"}
 	}
 	return accounts[0]
 }
@@ -154,26 +159,42 @@ func (s *State) runTransaction() error {
 		return nil
 	}
 
-	amount := rand.Intn(src.Bal + 1)
-	src.Bal -= amount
-	dst.Bal += amount
+	amount := rand.Intn(10)
+	if src.Bal-amount <= 0 {
+		dst.Bal += src.Bal
+		src.Bal = 0
+	} else {
+		src.Bal -= amount
+		dst.Bal += amount
+	}
 
 	log.Printf("Moving [$%d, %d->%d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
 	var mu api.Mutation
-	data, err := json.Marshal(src)
-	x.Check(err)
-	mu.SetJson = data
-	_, err = txn.Mutate(ctx, &mu)
+	if len(src.Uid) > 0 && src.Bal == 0 {
+		src.Key = 0
+		src.Type = "*"
+		data, err := json.Marshal(src)
+		x.Check(err)
+		mu.DeleteJson = data
+		log.Printf("Deleting: %s\n", mu.DeleteJson)
+	} else {
+		data, err := json.Marshal(src)
+		x.Check(err)
+		mu.SetJson = data
+	}
+	_, err := txn.Mutate(ctx, &mu)
 	if err != nil {
+		log.Printf("Error while mutate: %v", err)
 		return err
 	}
 
 	mu = api.Mutation{}
-	data, err = json.Marshal(dst)
+	data, err := json.Marshal(dst)
 	x.Check(err)
 	mu.SetJson = data
 	_, err = txn.Mutate(ctx, &mu)
 	if err != nil {
+		log.Printf("Error while mutate: %v", err)
 		return err
 	}
 
