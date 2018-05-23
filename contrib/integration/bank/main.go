@@ -10,12 +10,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"math/rand"
-	"strings"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,20 +26,21 @@ import (
 )
 
 var (
-	users = flag.Int("users", 100, "Number of accounts.")
-	conc  = flag.Int("txns", 10, "Number of concurrent transactions.")
-	num   = flag.Int("num", 1e3, "Number of total transactions to run.")
+	users = flag.Int("users", 10, "Number of accounts.")
+	conc  = flag.Int("txns", 5, "Number of concurrent transactions.")
+	dur   = flag.String("dur", "1m", "How long to run the transactions.")
 )
 
 type Account struct {
-	Uid string `json:"uid"`
-	Bal int    `json:"bal"`
+	Uid  string `json:"uid"`
+	Key  int    `json:"key"`
+	Bal  int    `json:"bal"`
+	Type string `json:"type"`
 }
 
 type State struct {
 	sync.RWMutex
 	dg     *dgo.Dgraph
-	uids   []string
 	aborts int32
 	runs   int32
 }
@@ -50,12 +50,21 @@ func (s *State) createAccounts() {
 	x.Check(s.dg.Alter(context.Background(), &op))
 
 	op.DropAll = false
-	op.Schema = `bal: int .`
+	op.Schema = `
+	key: int @index(int) @upsert .
+	bal: int .
+	type: string @index(exact) .
+	`
 	x.Check(s.dg.Alter(context.Background(), &op))
 
 	var all []Account
 	for i := 0; i < *users; i++ {
-		all = append(all, Account{Bal: 100})
+		a := Account{
+			Key:  i,
+			Bal:  100,
+			Type: "ba",
+		}
+		all = append(all, a)
 	}
 	data, err := json.Marshal(all)
 	x.Check(err)
@@ -64,46 +73,67 @@ func (s *State) createAccounts() {
 	defer txn.Discard(context.Background())
 	var mu api.Mutation
 	mu.SetJson = data
-	assigned, err := txn.Mutate(context.Background(), &mu)
+	log.Printf("mutation: %s\n", mu.SetJson)
+	_, err = txn.Mutate(context.Background(), &mu)
 	x.Check(err)
 	x.Check(txn.Commit(context.Background()))
-
-	s.Lock()
-	defer s.Unlock()
-	for _, uid := range assigned.GetUids() {
-		s.uids = append(s.uids, uid)
-	}
 }
 
 func (s *State) runTotal() error {
-	q := fmt.Sprintf(
-		`
+	query := `
 		{
-			var(func: uid(%s)) {
-				b as bal
-			}
-			total() {
-				bal: sum(val(b))
+			q(func: eq(type, "ba")) {
+				key
+				bal
 			}
 		}
-	`, strings.Join(s.uids, ","))
+	`
 	txn := s.dg.NewTxn()
-	resp, err := txn.Query(context.Background(), q)
+	defer txn.Discard(context.Background())
+	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\nresponse json: %q\n", resp.Json)
+
+	m := make(map[string][]Account)
+	if err := json.Unmarshal(resp.Json, &m); err != nil {
+		return err
+	}
+	accounts := m["q"]
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].Key < accounts[j].Key
+	})
+	log.Printf("Read: %v\n", accounts)
+	if len(accounts) != *users {
+		log.Fatalf("len(accounts) = %d", len(accounts))
+	}
+	var total int
+	for _, a := range accounts {
+		total += a.Bal
+	}
+	if total != *users*100 {
+		log.Fatalf("Total = %d", total)
+	}
 	return nil
 }
 
-func (s *State) runTotalInLoop() {
-	for {
-		err := s.runTotal()
-		if err != nil {
-			continue
-		}
-		time.Sleep(time.Second)
+func (s *State) findAccount(txn *dgo.Txn, key int) Account {
+	query := fmt.Sprintf(`{ q(func: eq(key, %d)) { key, uid, bal, type }}`, key)
+	// log.Printf("findACcount: %s\n", query)
+	resp, err := txn.Query(context.Background(), query)
+	if err != nil {
+		log.Fatal(err)
 	}
+	m := make(map[string][]Account)
+	if err := json.Unmarshal(resp.Json, &m); err != nil {
+		log.Fatal(err)
+	}
+	accounts := m["q"]
+	if len(accounts) != 1 {
+		log.Printf("Query: %s. Response: %s\n", query, resp.Json)
+		log.Fatal("Found multiple accounts")
+	}
+	return accounts[0]
 }
 
 func (s *State) runTransaction() error {
@@ -111,51 +141,57 @@ func (s *State) runTransaction() error {
 	s.RLock()
 	defer s.RUnlock()
 
-	var from, to string
-	for {
-		from = s.uids[rand.Intn(len(s.uids))]
-		to = s.uids[rand.Intn(len(s.uids))]
-		if from != to {
-			break
-		}
-	}
-
 	txn := s.dg.NewTxn()
 	defer txn.Discard(ctx)
 
-	fq := fmt.Sprintf(`{me(func: uid(%s, %s)) { uid, bal }}`, from, to)
-	resp, err := txn.Query(ctx, fq)
-	if err != nil {
-		return err
+	if rand.Intn(*users) < 2 {
+		return s.runTotal()
 	}
 
-	type Accounts struct {
-		Both []Account `json:"me"`
-	}
-	var a Accounts
-	if err := json.Unmarshal(resp.Json, &a); err != nil {
-		return err
-	}
-	if len(a.Both) != 2 {
-		return errors.New("Unable to find both accounts")
+	src := s.findAccount(txn, rand.Intn(*users))
+	dst := s.findAccount(txn, rand.Intn(*users))
+	if src.Key == dst.Key {
+		return nil
 	}
 
-	a.Both[0].Bal += 5
-	a.Both[1].Bal -= 5
+	amount := rand.Intn(src.Bal + 1)
+	src.Bal -= amount
+	dst.Bal += amount
 
+	log.Printf("Moving [$%d, %d->%d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
 	var mu api.Mutation
-	data, err := json.Marshal(a.Both)
+	data, err := json.Marshal(src)
 	x.Check(err)
 	mu.SetJson = data
 	_, err = txn.Mutate(ctx, &mu)
 	if err != nil {
 		return err
 	}
-	return txn.Commit(ctx)
+
+	mu = api.Mutation{}
+	data, err = json.Marshal(dst)
+	x.Check(err)
+	mu.SetJson = data
+	_, err = txn.Mutate(ctx, &mu)
+	if err != nil {
+		return err
+	}
+
+	if err := txn.Commit(ctx); err != nil {
+		return err
+	}
+	log.Printf("MOVED [$%d, %d->%d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
+	return nil
 }
 
 func (s *State) loop(wg *sync.WaitGroup) {
 	defer wg.Done()
+	dur, err := time.ParseDuration(*dur)
+	if err != nil {
+		log.Fatal(err)
+	}
+	end := time.Now().Add(dur)
+
 	for {
 		if err := s.runTransaction(); err != nil {
 			atomic.AddInt32(&s.aborts, 1)
@@ -165,7 +201,7 @@ func (s *State) loop(wg *sync.WaitGroup) {
 				a := atomic.LoadInt32(&s.aborts)
 				fmt.Printf("Runs: %d. Aborts: %d\r", r, a)
 			}
-			if int(r) >= *num {
+			if time.Now().After(end) {
 				return
 			}
 		}
@@ -184,7 +220,6 @@ func main() {
 	dg := dgo.NewDgraphClient(dc)
 	s := State{dg: dg}
 	s.createAccounts()
-	go s.runTotalInLoop()
 
 	var wg sync.WaitGroup
 	wg.Add(*conc)
