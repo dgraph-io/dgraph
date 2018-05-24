@@ -134,6 +134,7 @@ message ZeroProposal {
 	uint64 maxTxnTs = 5;
 	uint64 maxRaftId = 6;
 	api.TxnContext txn = 7;
+        string tls = 8;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -147,6 +148,7 @@ message MembershipState {
 	uint64 maxTxnTs = 5;
 	uint64 maxRaftId = 6;
 	repeated Member removed = 7;
+        bytes tlsInfo = 8;
 }
 
 message ConnectionState {
@@ -200,7 +202,7 @@ message Proposal {
 	repeated KV kv = 4;
 	MembershipState state = 5;
 	string clean_predicate = 6; // Delete the predicate which was moved to other group.
-	string key = 7;
+        string key = 7;        
 }
 
 message KVS {

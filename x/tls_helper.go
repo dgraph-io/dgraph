@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+    "encoding/json" 
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -91,53 +92,37 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 	return pool, nil
 }
 
-func parseCertificate(required bool, certPath string, certKeyPath string, certKeyPass string) (*tls.Certificate, error) {
-	if len(certKeyPath) > 0 || len(certPath) > 0 || required {
-		// Load key
-		keyFile, err := ioutil.ReadFile(certKeyPath)
-		if err != nil {
-			return nil, err
-		}
-
-		var certKey []byte
-		if block, _ := pem.Decode(keyFile); block != nil {
-			if x509.IsEncryptedPEMBlock(block) {
-				decryptKey, err := x509.DecryptPEMBlock(block, []byte(certKeyPass))
-				if err != nil {
-					return nil, err
-				}
-
-				privKey, err := x509.ParsePKCS1PrivateKey(decryptKey)
-				if err != nil {
-					return nil, err
-				}
-
-				certKey = pem.EncodeToMemory(&pem.Block{
-					Type:  "RSA PRIVATE KEY",
-					Bytes: x509.MarshalPKCS1PrivateKey(privKey),
-				})
-			} else {
-				certKey = pem.EncodeToMemory(block)
-			}
-		} else {
-			return nil, fmt.Errorf("Invalid Cert Key")
-		}
-
-		// Load cert
-		certFile, err := ioutil.ReadFile(certPath)
-		if err != nil {
-			return nil, err
-		}
-
-		// Load certificate, pair cert/key
-		certificate, err := tls.X509KeyPair(certFile, certKey)
-		if err != nil {
-			return nil, fmt.Errorf("Error reading certificate {cert: '%s', key: '%s'}\n%s", certPath, certKeyPath, err)
-		}
-
-		return &certificate, nil
-	}
-	return nil, nil
+func parseCertificate(cert []byte, certKey []byte, certKeyPass string) (*tls.Certificate, error) {
+    if block, _ := pem.Decode(certKey); block != nil {
+        if true {
+            decryptKey, err := x509.DecryptPEMBlock(block, []byte(certKeyPass))
+            if err != nil {
+                return nil, err
+            }
+            
+            privKey, err := x509.ParsePKCS1PrivateKey(decryptKey)
+            if err != nil {
+                return nil, err
+            }
+            
+            certKey = pem.EncodeToMemory(&pem.Block{
+                Type:  "RSA PRIVATE KEY",
+                Bytes: x509.MarshalPKCS1PrivateKey(privKey),
+            })
+        } else {
+            certKey = pem.EncodeToMemory(block)
+        }
+    } else {
+        return nil, fmt.Errorf("Invalid Cert Key")
+    }
+    
+    // Load certificate, pair cert/key
+    certificate, err := tls.X509KeyPair(cert, certKey)
+    if err != nil {
+        return nil, fmt.Errorf("Error installing certificates", err)
+    }
+    
+    return &certificate, nil
 }
 
 func setupVersion(cfg *tls.Config, minVersion string, maxVersion string) error {
@@ -194,27 +179,24 @@ func setupClientAuth(authType string) (tls.ClientAuthType, error) {
 // configuration provided. If the ConfigType provided in TLSHelperConfig is
 // TLSServerConfig, it's return a reload function. If any problem is found, an
 // error is returned
-func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig func(), err error) {
+
+func GenerateTLSConfigServer(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig func([]byte), err error) {
+    wrapper := new(wrapperTLSConfig)
+	tlsCfg = new(tls.Config)
+	wrapper.config = tlsCfg
+    wrapper.cert = &wrapperCert{}
+    tlsCfg.GetCertificate = wrapper.getCertificate
+    tlsCfg.VerifyPeerCertificate = wrapper.verifyPeerCertificate
+    wrapper.helperConfig = &config
+    return wrapper.config, wrapper.reloadConfigJson, nil
+}
+
+// different one for server and client
+func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig func([]byte), err error) {
 	wrapper := new(wrapperTLSConfig)
 	tlsCfg = new(tls.Config)
 	wrapper.config = tlsCfg
-
-	cert, err := parseCertificate(config.CertRequired, config.Cert, config.Key, config.KeyPassphrase)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if cert != nil {
-		switch config.ConfigType {
-		case TLSClientConfig:
-			tlsCfg.Certificates = []tls.Certificate{*cert}
-			tlsCfg.BuildNameToCertificate()
-		case TLSServerConfig:
-			wrapper.cert = &wrapperCert{cert: cert}
-			tlsCfg.GetCertificate = wrapper.getCertificate
-			tlsCfg.VerifyPeerCertificate = wrapper.verifyPeerCertificate
-		}
-	}
+    wrapper.reloadConfig()
 
 	auth, err := setupClientAuth(config.ClientAuth)
 	if err != nil {
@@ -241,6 +223,7 @@ func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig
 	}
 
 	// Configure Root CAs
+    // xxx - should never use the system certs
 	if len(config.RootCACerts) > 0 || config.UseSystemRootCACerts {
 		pool, err := generateCertPool(config.RootCACerts, config.UseSystemRootCACerts)
 		if err != nil {
@@ -272,7 +255,7 @@ func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig
 	}
 
 	wrapper.helperConfig = &config
-	return tlsCfg, wrapper.reloadConfig, nil
+	return tlsCfg, wrapper.reloadConfigJson, nil
 }
 
 type wrapperCert struct {
@@ -346,28 +329,76 @@ func (c *wrapperTLSConfig) verifyPeerCertificate(rawCerts [][]byte, verifiedChai
 	return nil
 }
 
-func (c *wrapperTLSConfig) reloadConfig() {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+// move me please, need to be visible by the populator
+type TlsInfo struct {
+    Cert string `json:"cert"` 
+    CertKey string `json:"certKey"`
+    CertKeyPassPhrase string `json:"certKeyPassPhrase"`
+}
 
-	// Loading new certificate
-	cert, err := parseCertificate(c.helperConfig.CertRequired, c.helperConfig.Cert, c.helperConfig.Key, c.helperConfig.KeyPassphrase)
-	if err != nil {
-		Printf("Error reloading certificate. %s\nUsing current certificate\n", err.Error())
-	} else if cert != nil {
-		if c.helperConfig.ConfigType == TLSServerConfig {
+func (c *wrapperTLSConfig) reloadConfigJson(jsonKeys []byte) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()    
+    ti := &TlsInfo{}
+    err := json.Unmarshal(jsonKeys, ti)
+    
+    if err != nil {
+        fmt.Println("json key unmarshal error", string(jsonKeys), ti, c.helperConfig)
+    } 
+
+    if c.helperConfig.CertRequired {    
+        cert, err := parseCertificate( []byte(ti.Cert), []byte(ti.CertKey), ti.CertKeyPassPhrase)
+        if err != nil {
+            Printf("Error reloading certificate. %s\nUsing current certificate\n", err.Error())
+        } else if cert != nil {
 			c.cert.Lock()
 			c.cert.cert = cert
 			c.cert.Unlock()
 		}
-	}
+    }
+}
 
-	// Configure Client CAs
-	if len(c.helperConfig.ClientCACerts) > 0 || c.helperConfig.UseSystemClientCACerts {
-		pool, err := generateCertPool(c.helperConfig.ClientCACerts, c.helperConfig.UseSystemClientCACerts)
-		if err != nil {
-			Printf("Error reloading CAs. %s\nUsing current Client CAs\n", err.Error())
-		} else {
+func (c *wrapperTLSConfig) reloadConfig() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+    if c.helperConfig.CertRequired {
+        // Load cert
+        certText, err := ioutil.ReadFile(c.helperConfig.Cert)
+        if err != nil {
+            // log
+            fmt.Println("couldn't load cert file")
+        }
+
+        // Load private key associated with cert
+        key, err := ioutil.ReadFile(c.helperConfig.Key)
+        if err != nil {
+            fmt.Println("couldn't load key file")
+        }
+        
+        // Loading new certificate
+        cert, err := parseCertificate(certText, key, c.helperConfig.KeyPassphrase)
+        if err != nil {
+            Printf("Error reloading certificate. %s\nUsing current certificate\n", err.Error())
+        } else if cert != nil {
+            if c.helperConfig.ConfigType == TLSServerConfig {
+                c.cert.Lock()
+                c.cert.cert = cert
+                c.cert.Unlock()
+            }
+        }
+        if c.helperConfig.ConfigType == TLSClientConfig {
+            c.config.Certificates = []tls.Certificate{*cert}
+			c.config.BuildNameToCertificate()
+        }
+    }
+    
+    // Configure Client CAs - is this server or client?
+    if len(c.helperConfig.ClientCACerts) > 0 || c.helperConfig.UseSystemClientCACerts {
+        pool, err := generateCertPool(c.helperConfig.ClientCACerts, c.helperConfig.UseSystemClientCACerts)
+        if err != nil {
+            Printf("Error reloading CAs. %s\nUsing current Client CAs\n", err.Error())
+        } else {
 			c.clientCAPool.Lock()
 			c.clientCAPool.pool = pool
 			c.clientCAPool.Unlock()

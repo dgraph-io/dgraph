@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+    "io/ioutil"
 	"net/http"
 	"strconv"
 	"sync"
@@ -149,6 +150,15 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
 	}
+}
+
+func (st *state) reKey(w http.ResponseWriter, r *http.Request) {
+    // verify that this is a post method, handle error on body read
+    jsonKeyContents, _ := ioutil.ReadAll(r.Body)
+    // what do we use the context here for?
+    st.zero.setKeys(context.Background(), jsonKeyContents)
+    // better status here?
+    w.Write([]byte{})
 }
 
 func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {

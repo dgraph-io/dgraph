@@ -39,6 +39,7 @@ type groupi struct {
 	tablets   map[string]*intern.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
+    newkeys   chan []byte
 }
 
 var gr *groupi
@@ -51,10 +52,10 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
+func StartRaftNodes(walStore *badger.ManagedDB, bindall bool, newkeys chan []byte) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
-
+    gr.newkeys = newkeys
 	if len(Config.MyAddr) == 0 {
 		Config.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
@@ -236,6 +237,8 @@ func UpdateMembershipState(ctx context.Context) error {
 	return nil
 }
 
+
+
 func (g *groupi) applyState(state *intern.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
@@ -247,6 +250,11 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 		return
 	}
 
+    if state.TlsInfo != nil {
+        fmt.Println("got new tls keys", g.newkeys)
+        g.newkeys <- state.TlsInfo
+    }
+    
 	g.state = state
 
 	// While restarting we fill Node information after retrieving initial state.

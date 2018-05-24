@@ -311,6 +311,12 @@ func (s *Server) createProposals(dst *intern.Group) ([]*intern.ZeroProposal, err
 	return res, nil
 }
 
+func (s *Server) setKeys(ctx context.Context, keyInfo []byte) error {
+    zp := &intern.ZeroProposal{}
+	zp.Tls = string(keyInfo)
+    return s.Node.proposeAndWait(ctx, zp)
+}
+
 // Its users responsibility to ensure that node doesn't come back again before calling the api.
 func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) error {
 	if groupId == 0 {

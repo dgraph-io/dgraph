@@ -110,10 +110,6 @@ func init() {
 		"Limit for the maximum number of edges that can be returned in a query."+
 			" This is only useful for shortest path queries.")
 
-	// TLS configurations
-	x.RegisterTLSFlags(flag)
-	flag.String("tls_client_auth", "", "Enable TLS client authentication")
-	flag.String("tls_ca_certs", "", "CA Certs file path.")
 	tlsConf.ConfigType = x.TLSServerConfig
 
 	//Custom plugins.
@@ -161,31 +157,22 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("</pre>"))
 }
 
-func setupListener(addr string, port int) (listener net.Listener, err error) {
-	var reload func()
+// really not lambda
+func setupListener(addr string, port int) (listener net.Listener, reload func([]byte), err error) {
+	var r func([]byte)
 	laddr := fmt.Sprintf("%s:%d", addr, port)
 	if !tlsConf.CertRequired {
 		listener, err = net.Listen("tcp", laddr)
 	} else {
 		var tlsCfg *tls.Config
-		tlsCfg, reload, err = x.GenerateTLSConfig(tlsConf)
+        // this just closes over nothing, seems wrong  
+		tlsCfg, r, err = x.GenerateTLSConfigServer(tlsConf)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		listener, err = tls.Listen("tcp", laddr, tlsCfg)
 	}
-	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGHUP)
-		for range sigChan {
-			log.Println("SIGHUP signal received")
-			if reload != nil {
-				reload()
-				log.Println("TLS certificates and CAs reloaded")
-			}
-		}
-	}()
-	return listener, err
+	return listener, r, err
 }
 
 func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
@@ -218,7 +205,7 @@ func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	}
 }
 
-func setupServer() {
+func setupServer(kchan chan []byte) {
 	go worker.RunServer(bindall) // For intern.communication.
 
 	laddr := "localhost"
@@ -226,16 +213,28 @@ func setupServer() {
 		laddr = "0.0.0.0"
 	}
 
-	httpListener, err := setupListener(laddr, httpPort())
+	httpListener, reloadKeysHttp, err := setupListener(laddr, httpPort())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	grpcListener, err := setupListener(laddr, grpcPort())
+	grpcListener, reloadKeysGRPC, err := setupListener(laddr, grpcPort())
 	if err != nil {
 		log.Fatal(err)
 	}
 
+    go func() {
+        for {
+            kinfo := <- kchan
+            if reloadKeysHttp != nil {
+                reloadKeysHttp(kinfo)
+            }
+            if reloadKeysGRPC != nil {
+                reloadKeysGRPC(kinfo)
+            }
+        }
+    } ()
+    
 	http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/query/", queryHandler)
 	http.HandleFunc("/mutate", mutationHandler)
@@ -253,7 +252,7 @@ func setupServer() {
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
-	// Initilize the servers.
+	// Initialize the servers.
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go serveGRPC(grpcListener, &wg)
@@ -295,10 +294,9 @@ func run() {
 
 	x.Config.PortOffset = Server.Conf.GetInt("port_offset")
 	bindall = Server.Conf.GetBool("bindall")
-	x.LoadTLSConfig(&tlsConf, Server.Conf)
-	tlsConf.ClientAuth = Server.Conf.GetString("tls_client_auth")
-	tlsConf.ClientCACerts = Server.Conf.GetString("tls_ca_certs")
-
+    // configure 
+    tlsConf.CertRequired = true;
+    
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
 	x.Init(edgraph.Config.DebugMode)
@@ -351,8 +349,12 @@ func run() {
 	}()
 	_ = numShutDownSig
 
+    keyupdate := make(chan []byte);
+
 	// Setup external communication.
-	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
-	setupServer()
+	go worker.StartRaftNodes(edgraph.State.WALstore, bindall, keyupdate)
+    
+    setupServer(keyupdate)
+    // setup server doesn't actually return here
 	worker.BlockingStop()
 }

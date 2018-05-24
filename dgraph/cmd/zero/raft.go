@@ -366,7 +366,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	if p.Txn != nil {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
 	}
-
+	if p.Tls != "" {
+        // lock?
+        n.server.state.TlsInfo = []byte(p.Tls)
+    }
+    
 	return p.Id, nil
 }
 
