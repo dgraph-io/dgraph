@@ -8,6 +8,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -41,10 +43,12 @@ type Account struct {
 }
 
 type State struct {
-	sync.RWMutex
+	sync.Mutex
 	dg     *dgo.Dgraph
 	aborts int32
 	runs   int32
+
+	expected []int
 }
 
 func (s *State) createAccounts() {
@@ -55,18 +59,19 @@ func (s *State) createAccounts() {
 	op.Schema = `
 	key: int @index(int) @upsert .
 	bal: int .
-	type: string @index(exact) .
+	type: string @index(exact) @upsert .
 	`
 	x.Check(s.dg.Alter(context.Background(), &op))
 
 	var all []Account
-	for i := 0; i < *users; i++ {
+	for i := 1; i <= *users; i++ {
 		a := Account{
 			Key:  i,
 			Bal:  startBal,
 			Type: "ba",
 		}
 		all = append(all, a)
+		s.expected[a.Key] = a.Bal
 	}
 	data, err := json.Marshal(all)
 	x.Check(err)
@@ -81,10 +86,21 @@ func (s *State) createAccounts() {
 	x.Check(txn.Commit(context.Background()))
 }
 
+func (s *State) printExpected() {
+	s.Lock()
+	defer s.Unlock()
+	var total int
+	for _, e := range s.expected {
+		total += e
+	}
+	log.Printf("Expected: %v. Total: %d\n", s.expected, total)
+}
+
 func (s *State) runTotal() error {
 	query := `
 		{
 			q(func: eq(type, "ba")) {
+				uid
 				key
 				bal
 			}
@@ -105,21 +121,24 @@ func (s *State) runTotal() error {
 	sort.Slice(accounts, func(i, j int) bool {
 		return accounts[i].Key < accounts[j].Key
 	})
-	log.Printf("Read: %v\n", accounts)
-	if len(accounts) != *users {
-		log.Fatalf("len(accounts) = %d", len(accounts))
-	}
 	var total int
 	for _, a := range accounts {
 		total += a.Bal
 	}
+	log.Printf("Read: %v. Total: %d\n", accounts, total)
+	if len(accounts) > *users {
+		s.printExpected()
+		log.Fatalf("len(accounts) = %d", len(accounts))
+	}
 	if total != *users*startBal {
+		s.printExpected()
 		log.Fatalf("Total = %d", total)
 	}
 	return nil
 }
 
 func (s *State) findAccount(txn *dgo.Txn, key int) Account {
+	// query := fmt.Sprintf(`{ q(func: eq(key, %d)) @filter(eq(type, "ba")) { key, uid, bal, type }}`, key)
 	query := fmt.Sprintf(`{ q(func: eq(key, %d)) { key, uid, bal, type }}`, key)
 	// log.Printf("findACcount: %s\n", query)
 	resp, err := txn.Query(context.Background(), query)
@@ -136,16 +155,20 @@ func (s *State) findAccount(txn *dgo.Txn, key int) Account {
 		log.Fatal("Found multiple accounts")
 	}
 	if len(accounts) == 0 {
+		log.Printf("Unable to find account for K_%d\n", key)
 		return Account{Key: key, Type: "ba"}
 	}
 	return accounts[0]
 }
 
-func (s *State) runTransaction() error {
-	ctx := context.Background()
-	s.RLock()
-	defer s.RUnlock()
+func (s *State) runTransaction(buf *bytes.Buffer) error {
+	w := bufio.NewWriter(buf)
+	fmt.Fprintf(w, "==>\n")
+	defer func() {
+		w.Flush()
+	}()
 
+	ctx := context.Background()
 	txn := s.dg.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -153,8 +176,20 @@ func (s *State) runTransaction() error {
 		return s.runTotal()
 	}
 
-	src := s.findAccount(txn, rand.Intn(*users))
-	dst := s.findAccount(txn, rand.Intn(*users))
+	var sk, sd int
+	for {
+		sk = rand.Intn(*users + 1)
+		sd = rand.Intn(*users + 1)
+		if sk == 0 || sd == 0 { // Don't touch zero.
+			continue
+		}
+		if sk != sd {
+			break
+		}
+	}
+
+	src := s.findAccount(txn, sk)
+	dst := s.findAccount(txn, sd)
 	if src.Key == dst.Key {
 		return nil
 	}
@@ -168,40 +203,55 @@ func (s *State) runTransaction() error {
 		dst.Bal += amount
 	}
 
-	log.Printf("Moving [$%d, %d->%d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
+	fmt.Fprintf(w, "Moving [$%d, K_%d -> K_%d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
 	var mu api.Mutation
-	if len(src.Uid) > 0 && src.Bal == 0 {
-		src.Key = 0
-		src.Type = "*"
-		data, err := json.Marshal(src)
-		x.Check(err)
-		mu.DeleteJson = data
-		log.Printf("Deleting: %s\n", mu.DeleteJson)
-	} else {
-		data, err := json.Marshal(src)
-		x.Check(err)
-		mu.SetJson = data
-	}
-	_, err := txn.Mutate(ctx, &mu)
-	if err != nil {
-		log.Printf("Error while mutate: %v", err)
-		return err
+	if len(src.Uid) > 0 {
+		// If there was no src.Uid, then don't run any mutation.
+		if src.Bal == 0 {
+			// TODO: WHAT a fucking hack.
+			d := map[string]string{"uid": src.Uid}
+			pb, err := json.Marshal(d)
+			x.Check(err)
+			mu.DeleteJson = pb
+			fmt.Fprintf(w, "Deleting: %s\n", mu.DeleteJson)
+		} else {
+			data, err := json.Marshal(src)
+			x.Check(err)
+			mu.SetJson = data
+		}
+		_, err := txn.Mutate(ctx, &mu)
+		if err != nil {
+			fmt.Fprintf(w, "Error while mutate: %v", err)
+			return err
+		}
 	}
 
 	mu = api.Mutation{}
 	data, err := json.Marshal(dst)
 	x.Check(err)
 	mu.SetJson = data
-	_, err = txn.Mutate(ctx, &mu)
+	assigned, err := txn.Mutate(ctx, &mu)
 	if err != nil {
-		log.Printf("Error while mutate: %v", err)
+		fmt.Fprintf(w, "Error while mutate: %v", err)
 		return err
 	}
 
 	if err := txn.Commit(ctx); err != nil {
 		return err
 	}
-	log.Printf("MOVED [$%d, %d->%d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
+	{
+		s.Lock()
+		s.expected[src.Key] = src.Bal
+		s.expected[dst.Key] = dst.Bal
+		s.Unlock()
+	}
+	if len(assigned.GetUids()) > 0 {
+		fmt.Fprintf(w, "CREATED: %+v for %+v\n", assigned.GetUids(), dst)
+		for _, uid := range assigned.GetUids() {
+			dst.Uid = uid
+		}
+	}
+	fmt.Fprintf(w, "MOVED [$%d, K_%d -> K_%d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
 	return nil
 }
 
@@ -213,8 +263,14 @@ func (s *State) loop(wg *sync.WaitGroup) {
 	}
 	end := time.Now().Add(dur)
 
+	var buf bytes.Buffer
 	for {
-		if err := s.runTransaction(); err != nil {
+		buf.Reset()
+		err := s.runTransaction(&buf)
+		if err == nil {
+			log.Printf("%s", buf.String())
+		}
+		if err != nil {
 			atomic.AddInt32(&s.aborts, 1)
 		} else {
 			r := atomic.AddInt32(&s.runs, 1)
@@ -239,7 +295,7 @@ func main() {
 	dc := api.NewDgraphClient(conn)
 
 	dg := dgo.NewDgraphClient(dc)
-	s := State{dg: dg}
+	s := State{dg: dg, expected: make([]int, *users+1)}
 	s.createAccounts()
 
 	var wg sync.WaitGroup
