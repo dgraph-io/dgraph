@@ -393,6 +393,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
 		item := it.Item()
+		if item.IsDeletedOrExpired() {
+			// Don't consider any more versions.
+			break
+		}
 		if !bytes.Equal(item.Key(), l.key) {
 			break
 		}
@@ -409,9 +413,11 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
-			it.Next()
+			// No need to do Next here. The outer loop can take care of skipping more versions of
+			// the same key.
 			break
-		} else if item.UserMeta()&bitDeltaPosting > 0 {
+		}
+		if item.UserMeta()&bitDeltaPosting > 0 {
 			var pl intern.PostingList
 			x.Check(pl.Unmarshal(val))
 			for _, mpost := range pl.Postings {
