@@ -909,7 +909,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
 
-			x.Println("Retrieving snapshot from peer: %d", peerId)
+			x.Printf("Retrieving snapshot from peer: %d", peerId)
 			n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
 
 			x.Println("Trying to join peers.")
