@@ -10,7 +10,6 @@ package worker
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/posting"
@@ -18,7 +17,6 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 )
 
 type task struct {
@@ -29,70 +27,25 @@ type task struct {
 
 type scheduler struct {
 	sync.Mutex
-	// stores the list of tasks per hash of subject,predicate. Even
-	// if there is collision it would create fake dependencies but
-	// the end result would be logically correct
-	tasks map[uint32][]*task
-	tch   chan *task
-
 	n *node
 }
 
 func (s *scheduler) init(n *node) {
 	s.n = n
-	s.tasks = make(map[uint32][]*task)
-	s.tch = make(chan *task, 10000)
-	for i := 0; i < 1000; i++ {
-		go s.processTasks()
-	}
 }
 
-func (s *scheduler) processTasks() {
-	n := s.n
-	for t := range s.tch {
-		nextTask := t
-		for nextTask != nil {
-			err := s.n.processMutation(nextTask)
-			if err == posting.ErrRetry {
-				continue
-			}
-			n.props.Done(nextTask.pid, err)
-			x.ActiveMutations.Add(-1)
-			nextTask = s.nextTask(nextTask)
+func (s *scheduler) waitForConflictResolution(attr string) error {
+	for i := 0; i < 10; i++ {
+		tctxs := posting.Txns().Iterate(func(key []byte) bool {
+			pk := x.Parse(key)
+			return pk.Attr == attr
+		})
+		if len(tctxs) == 0 {
+			return nil
 		}
+		tryAbortTransactions(tctxs)
 	}
-}
-
-func (t *task) key() uint32 {
-	key := fmt.Sprintf("%s|%d", t.edge.Attr, t.edge.Entity)
-	return farm.Fingerprint32([]byte(key))
-}
-
-func (s *scheduler) register(t *task) bool {
-	s.Lock()
-	defer s.Unlock()
-	key := t.key()
-
-	if tasks, ok := s.tasks[key]; ok {
-		tasks = append(tasks, t)
-		s.tasks[key] = tasks
-		return false
-	} else {
-		tasks = []*task{t}
-		s.tasks[key] = tasks
-		return true
-	}
-}
-
-func (s *scheduler) waitForConflictResolution(attr string) {
-	tctxs := posting.Txns().Iterate(func(key []byte) bool {
-		pk := x.Parse(key)
-		return pk.Attr == attr
-	})
-	if len(tctxs) == 0 {
-		return
-	}
-	tryAbortTransactions(tctxs)
+	return errors.New("Unable to abort transactions")
 }
 
 func updateTxns(raftIndex uint64, startTs uint64) *posting.Txn {
@@ -183,9 +136,11 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 				posting.TxnMarks().Done(index)
 				return
 			}
-			s.waitForConflictResolution(edge.Attr)
+			defer posting.TxnMarks().Done(index)
+			if err = s.waitForConflictResolution(edge.Attr); err != nil {
+				return err
+			}
 			err = posting.DeletePredicate(ctx, edge.Attr)
-			posting.TxnMarks().Done(index)
 			return
 		}
 		// Dont derive schema when doing deletion.
@@ -213,33 +168,20 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 	m := proposal.Mutations
 	pctx := s.n.props.pctx(proposal.Key)
 	pctx.txn = updateTxns(index, m.StartTs)
+	var t task
 	for _, edge := range m.Edges {
-		t := &task{
+		t = task{
 			rid:  index,
 			pid:  proposal.Key,
 			edge: edge,
 		}
-		if s.register(t) {
-			s.tch <- t
+		err = posting.ErrRetry
+		for err == posting.ErrRetry {
+			err = s.n.processMutation(&t)
 		}
+		s.n.props.Done(t.pid, err)
+		x.ActiveMutations.Add(-1)
 	}
 	err = nil
 	return
-}
-
-func (s *scheduler) nextTask(t *task) *task {
-	s.Lock()
-	defer s.Unlock()
-	key := t.key()
-	var nextTask *task
-	tasks, ok := s.tasks[key]
-	x.AssertTrue(ok)
-	tasks = tasks[1:]
-	if len(tasks) > 0 {
-		s.tasks[key] = tasks
-		nextTask = tasks[0]
-	} else {
-		delete(s.tasks, key)
-	}
-	return nextTask
 }

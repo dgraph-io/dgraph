@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -121,12 +122,11 @@ type node struct {
 	requestCh chan linReadReq
 
 	// Fields which are never changed after init.
-	applyCh chan raftpb.Entry
-	ctx     context.Context
-	stop    chan struct{} // to send the stop signal to Run
-	done    chan struct{} // to check whether node is running or not
-	gid     uint32
-	props   proposals
+	ctx   context.Context
+	stop  chan struct{} // to send the stop signal to Run
+	done  chan struct{} // to check whether node is running or not
+	gid   uint32
+	props proposals
 
 	canCampaign  bool
 	sch          *scheduler
@@ -183,13 +183,10 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	binary.LittleEndian.PutUint64(b, id)
 
 	n := &node{
-		Node:      m,
-		requestCh: make(chan linReadReq),
-		ctx:       context.Background(),
-		gid:       gid,
-		// processConfChange etc are not throttled so some extra delta, so that we don't
-		// block tick when applyCh is full
-		applyCh:      make(chan raftpb.Entry, Config.NumPendingProposals+1000),
+		Node:         m,
+		requestCh:    make(chan linReadReq),
+		ctx:          context.Background(),
+		gid:          gid,
 		props:        props,
 		stop:         make(chan struct{}),
 		done:         make(chan struct{}),
@@ -372,71 +369,76 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	groups().triggerMembershipSync()
 }
 
-func (n *node) processApplyCh() {
-	for e := range n.applyCh {
-		if len(e.Data) == 0 {
-			// This is not in the proposal map
-			n.Applied.Done(e.Index)
-			continue
-		}
+var errEmpty = errors.New("Empty entry data")
 
-		if e.Type == raftpb.EntryConfChange {
-			n.applyConfChange(e)
-			continue
-		}
-
-		x.AssertTrue(e.Type == raftpb.EntryNormal)
-
-		proposal := &intern.Proposal{}
-		if err := proposal.Unmarshal(e.Data); err != nil {
-			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
-		}
-
-		if proposal.DeprecatedId != 0 {
-			proposal.Key = fmt.Sprint(proposal.DeprecatedId)
-		}
-
-		// One final applied and synced watermark would be emitted when proposal ctx ref count
-		// becomes zero.
-		pctx := n.props.pctx(proposal.Key)
-		if pctx == nil {
-			// This is during replay of logs after restart or on a replica.
-			pctx = &proposalCtx{
-				ch:  make(chan error, 1),
-				ctx: n.ctx,
-				cnt: 1,
-			}
-			// We assert here to make sure that we do add the proposal to the map.
-			x.AssertTruef(n.props.Store(proposal.Key, pctx),
-				"Found existing proposal with key: [%v]", proposal.Key)
-		}
-		pctx.index = e.Index
-
-		posting.TxnMarks().Begin(e.Index)
-		if proposal.Mutations != nil {
-			// syncmarks for this shouldn't be marked done until it's comitted.
-			n.sch.schedule(proposal, e.Index)
-
-		} else if len(proposal.Kv) > 0 {
-			n.processKeyValues(e.Index, proposal.Key, proposal.Kv)
-
-		} else if proposal.State != nil {
-			// This state needn't be snapshotted in this group, on restart we would fetch
-			// a state which is latest or equal to this.
-			groups().applyState(proposal.State)
-			// When proposal is done it emits done watermarks.
-			posting.TxnMarks().Done(e.Index)
-			n.props.Done(proposal.Key, nil)
-
-		} else if len(proposal.CleanPredicate) > 0 {
-			n.deletePredicate(e.Index, proposal.Key, proposal.CleanPredicate)
-
-		} else if proposal.TxnContext != nil {
-			go n.commitOrAbort(e.Index, proposal.Key, proposal.TxnContext)
-		} else {
-			x.Fatalf("Unknown proposal")
-		}
+func (n *node) applyCommitted(e raftpb.Entry) error {
+	// defer n.Applied.Done(e.Index)
+	if len(e.Data) == 0 {
+		// This is not in the proposal map
+		n.Applied.Done(e.Index)
+		return errEmpty
 	}
+
+	if e.Type == raftpb.EntryConfChange {
+		n.applyConfChange(e)
+		return nil
+	}
+
+	x.AssertTrue(e.Type == raftpb.EntryNormal)
+
+	proposal := &intern.Proposal{}
+	if err := proposal.Unmarshal(e.Data); err != nil {
+		x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
+	}
+
+	if proposal.DeprecatedId != 0 {
+		proposal.Key = fmt.Sprint(proposal.DeprecatedId)
+	}
+
+	// TODO: We should be able to remove this.
+
+	// One final applied and synced watermark would be emitted when proposal ctx ref count
+	// becomes zero.
+	pctx := n.props.pctx(proposal.Key)
+	if pctx == nil {
+		// This is during replay of logs after restart or on a replica.
+		pctx = &proposalCtx{
+			ch:  make(chan error, 1),
+			ctx: n.ctx,
+			cnt: 1,
+		}
+		// We assert here to make sure that we do add the proposal to the map.
+		x.AssertTruef(n.props.Store(proposal.Key, pctx),
+			"Found existing proposal with key: [%v]", proposal.Key)
+	}
+	pctx.index = e.Index
+
+	// TODO: We should be able to remove this as well.
+	posting.TxnMarks().Begin(e.Index)
+
+	if proposal.Mutations != nil {
+		n.sch.schedule(proposal, e.Index)
+
+	} else if len(proposal.Kv) > 0 {
+		n.processKeyValues(e.Index, proposal.Key, proposal.Kv)
+
+	} else if proposal.State != nil {
+		// This state needn't be snapshotted in this group, on restart we would fetch
+		// a state which is latest or equal to this.
+		groups().applyState(proposal.State)
+		// When proposal is done it emits done watermarks.
+		posting.TxnMarks().Done(e.Index)
+		n.props.Done(proposal.Key, nil)
+
+	} else if len(proposal.CleanPredicate) > 0 {
+		n.deletePredicate(e.Index, proposal.Key, proposal.CleanPredicate)
+
+	} else if proposal.TxnContext != nil {
+		n.commitOrAbort(e.Index, proposal.Key, proposal.TxnContext)
+	} else {
+		x.Fatalf("Unknown proposal")
+	}
+	return nil
 }
 
 func (n *node) commitOrAbort(index uint64, pid string, tctx *api.TxnContext) {
@@ -689,7 +691,7 @@ func (n *node) Run() {
 				} else {
 					// TODO: Stop accepting requests when applyCh is full
 					// Just queue up to be processed. Don't wait on them.
-					n.applyCh <- entry
+					n.applyCommitted(entry)
 				}
 
 				// Move to debug log later.
@@ -922,7 +924,6 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 			n.canCampaign = true
 		}
 	}
-	go n.processApplyCh()
 	go n.Run()
 	go n.BatchAndSendMessages()
 }
