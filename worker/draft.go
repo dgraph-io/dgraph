@@ -656,6 +656,8 @@ func (n *node) Run() {
 				// then doneUntil would be set as 4 as soon as Mark{4,true} is done and before
 				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
 				// possible sequentially
+
+				// TODO: Remove this applied beginning.
 				n.Applied.Begin(entry.Index)
 
 				if entry.Type == raftpb.EntryConfChange {
