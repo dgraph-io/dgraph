@@ -10,7 +10,6 @@ package worker
 import (
 	"bytes"
 	"errors"
-	"sync"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/intern"
@@ -25,16 +24,7 @@ type task struct {
 	edge *intern.DirectedEdge
 }
 
-type scheduler struct {
-	sync.Mutex
-	n *node
-}
-
-func (s *scheduler) init(n *node) {
-	s.n = n
-}
-
-func (s *scheduler) waitForConflictResolution(attr string) error {
+func waitForConflictResolution(attr string) error {
 	for i := 0; i < 10; i++ {
 		tctxs := posting.Txns().Iterate(func(key []byte) bool {
 			pk := x.Parse(key)
@@ -64,20 +54,12 @@ func updateTxns(raftIndex uint64, startTs uint64) *posting.Txn {
 // processTasks calls processMutation. When all are done, then we would send back error on
 // proposal channel and finally mutation would return to the user. This ensures they are
 // applied to memory before we return.
-func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error) {
-	defer func() {
-		s.n.props.Done(proposal.Key, err)
-	}()
-
+func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	if proposal.Mutations.DropAll {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Txns().Reset()
-		if err = s.n.Applied.WaitForMark(s.n.ctx, index-1); err != nil {
-			posting.TxnMarks().Done(index)
-			return err
-		}
 		schema.State().DeleteAll()
-		err = posting.DeleteAll()
+		err := posting.DeleteAll()
 		posting.TxnMarks().Done(index)
 		return err
 	}
@@ -89,10 +71,7 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 
 	startTs := proposal.Mutations.StartTs
 	if len(proposal.Mutations.Schema) > 0 {
-		if err = s.n.Applied.WaitForMark(s.n.ctx, index-1); err != nil {
-			posting.TxnMarks().Done(index)
-			return err
-		}
+		defer posting.TxnMarks().Done(index)
 		for _, supdate := range proposal.Mutations.Schema {
 			// This is neceassry to ensure that there is no race between when we start reading
 			// from badger and new mutation getting commited via raft and getting applied.
@@ -102,17 +81,16 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 			// would have proposed membershipstate, and all nodes would have the proposed state
 			// or some state after that before reaching here.
 			if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
-				err = errPredicateMoving
-				break
+				return errPredicateMoving
 			}
-			s.waitForConflictResolution(supdate.Predicate)
-			err = s.n.processSchemaMutations(proposal.Key, index, startTs, supdate)
-			if err != nil {
-				break
+			if err := waitForConflictResolution(supdate.Predicate); err != nil {
+				return err
+			}
+			if err := n.processSchemaMutations(proposal.Key, index, startTs, supdate); err != nil {
+				return err
 			}
 		}
-		posting.TxnMarks().Done(index)
-		return
+		return nil
 	}
 
 	// Scheduler tracks tasks at subject, predicate level, so doing
@@ -131,17 +109,12 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only have one edge drop in one mutation call.
-			ctx, _ := s.n.props.CtxAndTxn(proposal.Key)
-			if err = s.n.Applied.WaitForMark(ctx, index-1); err != nil {
-				posting.TxnMarks().Done(index)
-				return
-			}
+			ctx, _ := n.props.CtxAndTxn(proposal.Key)
 			defer posting.TxnMarks().Done(index)
-			if err = s.waitForConflictResolution(edge.Attr); err != nil {
+			if err := waitForConflictResolution(edge.Attr); err != nil {
 				return err
 			}
-			err = posting.DeletePredicate(ctx, edge.Attr)
-			return
+			return posting.DeletePredicate(ctx, edge.Attr)
 		}
 		// Dont derive schema when doing deletion.
 		if edge.Op == intern.DirectedEdge_DEL {
@@ -153,7 +126,6 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 	}
 
 	total := len(proposal.Mutations.Edges)
-	s.n.props.IncRef(proposal.Key, total)
 	x.ActiveMutations.Add(int64(total))
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
@@ -166,7 +138,7 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 	}
 
 	m := proposal.Mutations
-	pctx := s.n.props.pctx(proposal.Key)
+	pctx := n.props.pctx(proposal.Key)
 	pctx.txn = updateTxns(index, m.StartTs)
 	var t task
 	for _, edge := range m.Edges {
@@ -175,13 +147,11 @@ func (s *scheduler) schedule(proposal *intern.Proposal, index uint64) (err error
 			pid:  proposal.Key,
 			edge: edge,
 		}
-		err = posting.ErrRetry
+		err := posting.ErrRetry
 		for err == posting.ErrRetry {
-			err = s.n.processMutation(&t)
+			err = n.processMutation(&t)
 		}
-		s.n.props.Done(t.pid, err)
 		x.ActiveMutations.Add(-1)
 	}
-	err = nil
-	return
+	return nil
 }

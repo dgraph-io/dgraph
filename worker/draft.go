@@ -129,7 +129,6 @@ type node struct {
 	props proposals
 
 	canCampaign  bool
-	sch          *scheduler
 	rand         *rand.Rand
 	raftIdBuffer []byte
 }
@@ -190,11 +189,9 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		props:        props,
 		stop:         make(chan struct{}),
 		done:         make(chan struct{}),
-		sch:          new(scheduler),
 		rand:         rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		raftIdBuffer: b,
 	}
-	n.sch.init(n)
 	return n
 }
 
@@ -365,37 +362,15 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	n.SetConfState(cs)
 	n.DoneConfChange(cc.ID, nil)
 	// Not present in proposal map
-	n.Applied.Done(e.Index)
 	groups().triggerMembershipSync()
 }
 
 var errEmpty = errors.New("Empty entry data")
 
-func (n *node) applyCommitted(e raftpb.Entry) error {
-	// defer n.Applied.Done(e.Index)
-	if len(e.Data) == 0 {
-		// This is not in the proposal map
-		n.Applied.Done(e.Index)
-		return errEmpty
-	}
-
-	if e.Type == raftpb.EntryConfChange {
-		n.applyConfChange(e)
-		return nil
-	}
-
-	x.AssertTrue(e.Type == raftpb.EntryNormal)
-
-	proposal := &intern.Proposal{}
-	if err := proposal.Unmarshal(e.Data); err != nil {
-		x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
-	}
-
+func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 	if proposal.DeprecatedId != 0 {
 		proposal.Key = fmt.Sprint(proposal.DeprecatedId)
 	}
-
-	// TODO: We should be able to remove this.
 
 	// One final applied and synced watermark would be emitted when proposal ctx ref count
 	// becomes zero.
@@ -411,37 +386,39 @@ func (n *node) applyCommitted(e raftpb.Entry) error {
 		x.AssertTruef(n.props.Store(proposal.Key, pctx),
 			"Found existing proposal with key: [%v]", proposal.Key)
 	}
-	pctx.index = e.Index
+	pctx.index = index
 
 	// TODO: We should be able to remove this as well.
-	posting.TxnMarks().Begin(e.Index)
+	posting.TxnMarks().Begin(index)
 
 	if proposal.Mutations != nil {
-		n.sch.schedule(proposal, e.Index)
+		return n.applyMutations(proposal, index)
 
 	} else if len(proposal.Kv) > 0 {
-		n.processKeyValues(e.Index, proposal.Key, proposal.Kv)
+		return n.processKeyValues(index, proposal.Key, proposal.Kv)
 
 	} else if proposal.State != nil {
 		// This state needn't be snapshotted in this group, on restart we would fetch
 		// a state which is latest or equal to this.
 		groups().applyState(proposal.State)
 		// When proposal is done it emits done watermarks.
-		posting.TxnMarks().Done(e.Index)
-		n.props.Done(proposal.Key, nil)
+		posting.TxnMarks().Done(index)
+		return nil
 
 	} else if len(proposal.CleanPredicate) > 0 {
-		n.deletePredicate(e.Index, proposal.Key, proposal.CleanPredicate)
+		return n.deletePredicate(index, proposal.Key, proposal.CleanPredicate)
 
 	} else if proposal.TxnContext != nil {
-		n.commitOrAbort(e.Index, proposal.Key, proposal.TxnContext)
+		return n.commitOrAbort(index, proposal.Key, proposal.TxnContext)
+
 	} else {
 		x.Fatalf("Unknown proposal")
 	}
 	return nil
 }
 
-func (n *node) commitOrAbort(index uint64, pid string, tctx *api.TxnContext) {
+func (n *node) commitOrAbort(index uint64, pid string, tctx *api.TxnContext) error {
+	defer posting.TxnMarks().Done(index)
 	ctx, _ := n.props.CtxAndTxn(pid)
 	_, err := commitOrAbort(ctx, tctx)
 	if tr, ok := trace.FromContext(ctx); ok {
@@ -451,25 +428,21 @@ func (n *node) commitOrAbort(index uint64, pid string, tctx *api.TxnContext) {
 		posting.Txns().Done(tctx.StartTs)
 		posting.Oracle().Done(tctx.StartTs)
 	}
-	posting.TxnMarks().Done(index)
-	n.props.Done(pid, err)
+	return err
 }
 
-func (n *node) deletePredicate(index uint64, pid string, predicate string) {
+func (n *node) deletePredicate(index uint64, pid string, predicate string) error {
+	defer posting.TxnMarks().Done(index)
 	ctx, _ := n.props.CtxAndTxn(pid)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
-	err := posting.DeletePredicate(ctx, predicate)
-	posting.TxnMarks().Done(index)
-	n.props.Done(pid, err)
+	return posting.DeletePredicate(ctx, predicate)
 }
 
 func (n *node) processKeyValues(index uint64, pkey string, kvs []*intern.KV) error {
+	defer posting.TxnMarks().Done(index)
 	ctx, _ := n.props.CtxAndTxn(pkey)
-	err := populateKeyValues(ctx, kvs)
-	posting.TxnMarks().Done(index)
-	n.props.Done(pkey, err)
-	return nil
+	return populateKeyValues(ctx, kvs)
 }
 
 func (n *node) applyAllMarks(ctx context.Context) {
@@ -685,14 +658,25 @@ func (n *node) Run() {
 				// possible sequentially
 				n.Applied.Begin(entry.Index)
 
-				if !leader && entry.Type == raftpb.EntryConfChange {
+				if entry.Type == raftpb.EntryConfChange {
 					// Config changes in followers must be applied straight away.
 					n.applyConfChange(entry)
+
+				} else if len(entry.Data) == 0 {
+					// TODO: Do something.
+
 				} else {
-					// TODO: Stop accepting requests when applyCh is full
-					// Just queue up to be processed. Don't wait on them.
-					n.applyCommitted(entry)
+					x.AssertTrue(entry.Type == raftpb.EntryNormal)
+
+					proposal := &intern.Proposal{}
+					if err := proposal.Unmarshal(entry.Data); err != nil {
+						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
+					}
+
+					err := n.applyCommitted(proposal, entry.Index)
+					n.props.Done(proposal.Key, err)
 				}
+				n.Applied.Done(entry.Index)
 
 				// Move to debug log later.
 				// Sometimes after restart there are too many entries to replay, so log so that we
