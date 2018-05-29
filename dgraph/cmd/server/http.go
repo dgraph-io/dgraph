@@ -169,7 +169,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	var mu *api.Mutation
 	if mType := r.Header.Get("X-Dgraph-MutationType"); mType == "json" {
 		// Parse JSON.
-		ms := make(map[string]interface{})
+		ms := make(map[string]*skipJSONUnmarshal)
 		err := json.Unmarshal(m, &ms)
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -177,21 +177,11 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mu = &api.Mutation{}
-		if setJson, ok := ms["set"]; ok {
-			bs, err := json.Marshal(setJson)
-			if err != nil {
-				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-				return
-			}
-			mu.SetJson = bs
+		if setJSON, ok := ms["set"]; ok && setJSON != nil {
+			mu.SetJson = setJSON.bs
 		}
-		if delJson, ok := ms["delete"]; ok {
-			bs, err := json.Marshal(delJson)
-			if err != nil {
-				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-				return
-			}
-			mu.DeleteJson = bs
+		if delJSON, ok := ms["delete"]; ok && delJSON != nil {
+			mu.DeleteJson = delJSON.bs
 		}
 	} else {
 		// Parse NQuads.
@@ -426,4 +416,14 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(js)
+}
+
+// skipJSONUnmarshal stores the raw bytes as is while JSON unmarshaling.
+type skipJSONUnmarshal struct {
+	bs []byte
+}
+
+func (sju *skipJSONUnmarshal) UnmarshalJSON(bs []byte) error {
+	sju.bs = bs
+	return nil
 }

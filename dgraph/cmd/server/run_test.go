@@ -754,6 +754,69 @@ func TestJsonMutation(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q":[{"name":"Bob"}]}}`, output)
 }
 
+func TestJsonMutationNumberParsing(t *testing.T) {
+	var q1 = `
+	{
+		q(func: has(n1)) {
+			n1
+			n2
+		}
+	}
+	`
+	var m1 = `
+	{
+		"set": [
+			{
+				"n1": 9007199254740995,
+				"n2": 9007199254740995.0
+			}
+		]
+	}
+	`
+
+	schema.ParseBytes([]byte(""), 1)
+	err := runJsonMutation(m1)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	var q1Result struct {
+		Data struct {
+			Q []map[string]interface{} `json:"q"`
+		} `json:"data"`
+	}
+	buffer := bytes.NewBuffer([]byte(output))
+	dec := json.NewDecoder(buffer)
+	dec.UseNumber()
+	require.NoError(t, dec.Decode(&q1Result))
+	require.Equal(t, 1, len(q1Result.Data.Q))
+
+	n1, ok := q1Result.Data.Q[0]["n1"]
+	require.True(t, ok)
+	switch n1.(type) {
+	case json.Number:
+		n := n1.(json.Number)
+		require.True(t, strings.Index(n.String(), ".") < 0)
+		i, err := n.Int64()
+		require.NoError(t, err)
+		require.Equal(t, int64(9007199254740995), i)
+	default:
+		require.Fail(t, fmt.Sprintf("expected n1 of type int64, got %v (type %T)", n1, n1))
+	}
+
+	n2, ok := q1Result.Data.Q[0]["n2"]
+	require.True(t, ok)
+	switch n2.(type) {
+	case json.Number:
+		n := n2.(json.Number)
+		require.True(t, strings.Index(n.String(), ".") >= 0)
+		f, err := n.Float64()
+		require.NoError(t, err)
+		require.Equal(t, 9007199254740995.0, f)
+	default:
+		require.Fail(t, fmt.Sprintf("expected n2 of type float64, got %v (type %T)", n2, n2))
+	}
+}
+
 func TestDeleteAll(t *testing.T) {
 	var q1 = `
 	{
