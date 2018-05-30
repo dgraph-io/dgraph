@@ -64,7 +64,7 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 	return string(output), startTs, err
 }
 
-func mutationWithTs(m string, commitNow bool, ignoreIndexConflict bool,
+func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict bool,
 	ts uint64) ([]string, uint64, error) {
 	url := "/mutate"
 	if ts != 0 {
@@ -76,6 +76,9 @@ func mutationWithTs(m string, commitNow bool, ignoreIndexConflict bool,
 		return keys, 0, err
 	}
 
+	if isJson {
+		req.Header.Set("X-Dgraph-MutationType", "json")
+	}
 	if commitNow {
 		req.Header.Set("X-Dgraph-CommitNow", "true")
 	}
@@ -158,7 +161,7 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	keys, mts, err := mutationWithTs(m1, false, true, ts)
+	keys, mts, err := mutationWithTs(m1, false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	sort.Strings(keys)

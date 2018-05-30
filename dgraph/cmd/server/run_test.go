@@ -165,7 +165,12 @@ func runQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, err := mutationWithTs(m, true, false, 0)
+	_, _, err := mutationWithTs(m, false, true, false, 0)
+	return err
+}
+
+func runJsonMutation(m string) error {
+	_, _, err := mutationWithTs(m, true, true, false, 0)
 	return err
 }
 
@@ -671,7 +676,145 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	output, err := runQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
+}
 
+func TestJsonMutation(t *testing.T) {
+	var q1 = `
+	{
+		q(func: has(name)) {
+			uid
+			name
+		}
+	}
+	`
+	var q2 = `
+	{
+		q(func: has(name)) {
+			name
+		}
+	}
+	`
+	var m1 = `
+	{
+		"set": [
+			{
+				"name": "Alice"
+			},
+			{
+				"name": "Bob"
+			}
+		]
+	}
+	`
+	var m2 = `
+	{
+		"delete": [
+			{
+				"uid": "%s",
+				"name": null
+			}
+		]
+	}
+	`
+	var s1 = `
+            name: string @index(exact) .
+	`
+
+	schema.ParseBytes([]byte(""), 1)
+	err := alterSchemaWithRetry(s1)
+	require.NoError(t, err)
+
+	err = runJsonMutation(m1)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	q1Result := map[string]interface{}{}
+	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
+	queryResults := q1Result["data"].(map[string]interface{})["q"].([]interface{})
+	require.Equal(t, 2, len(queryResults))
+
+	var uid string
+	count := 0
+	for i := 0; i < 2; i++ {
+		name := queryResults[i].(map[string]interface{})["name"].(string)
+		if name == "Alice" {
+			uid = queryResults[i].(map[string]interface{})["uid"].(string)
+			count++
+		} else {
+			require.Equal(t, "Bob", name)
+		}
+	}
+	require.Equal(t, 1, count)
+
+	err = runJsonMutation(fmt.Sprintf(m2, uid))
+	require.NoError(t, err)
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"q":[{"name":"Bob"}]}}`, output)
+}
+
+func TestJsonMutationNumberParsing(t *testing.T) {
+	var q1 = `
+	{
+		q(func: has(n1)) {
+			n1
+			n2
+		}
+	}
+	`
+	var m1 = `
+	{
+		"set": [
+			{
+				"n1": 9007199254740995,
+				"n2": 9007199254740995.0
+			}
+		]
+	}
+	`
+
+	schema.ParseBytes([]byte(""), 1)
+	err := runJsonMutation(m1)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	var q1Result struct {
+		Data struct {
+			Q []map[string]interface{} `json:"q"`
+		} `json:"data"`
+	}
+	buffer := bytes.NewBuffer([]byte(output))
+	dec := json.NewDecoder(buffer)
+	dec.UseNumber()
+	require.NoError(t, dec.Decode(&q1Result))
+	require.Equal(t, 1, len(q1Result.Data.Q))
+
+	n1, ok := q1Result.Data.Q[0]["n1"]
+	require.True(t, ok)
+	switch n1.(type) {
+	case json.Number:
+		n := n1.(json.Number)
+		require.True(t, strings.Index(n.String(), ".") < 0)
+		i, err := n.Int64()
+		require.NoError(t, err)
+		require.Equal(t, int64(9007199254740995), i)
+	default:
+		require.Fail(t, fmt.Sprintf("expected n1 of type int64, got %v (type %T)", n1, n1))
+	}
+
+	n2, ok := q1Result.Data.Q[0]["n2"]
+	require.True(t, ok)
+	switch n2.(type) {
+	case json.Number:
+		n := n2.(json.Number)
+		require.True(t, strings.Index(n.String(), ".") >= 0)
+		f, err := n.Float64()
+		require.NoError(t, err)
+		require.Equal(t, 9007199254740995.0, f)
+	default:
+		require.Fail(t, fmt.Sprintf("expected n2 of type float64, got %v (type %T)", n2, n2))
+	}
 }
 
 func TestDeleteAll(t *testing.T) {
