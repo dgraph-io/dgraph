@@ -214,6 +214,8 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *intern.DirectedEdge) 
 
 func (l *List) handleDeleteAll(ctx context.Context, t *intern.DirectedEdge,
 	txn *Txn) error {
+	// pk := x.Parse(l.key)
+	// log.Printf("handleDeleteAll. startTs: %d. Key: %+v\n", txn.StartTs, pk)
 	isReversed := schema.State().IsReversed(t.Attr)
 	isIndexed := schema.State().IsIndexed(t.Attr)
 	hasCount := schema.State().HasCount(t.Attr)

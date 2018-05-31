@@ -109,10 +109,6 @@ func (p *proposals) Done(key string, err error) {
 	}
 	delete(p.ids, key)
 	pd.ch <- pd.err
-	// We emit one pending watermark as soon as we read from rd.committedentries.
-	// Since the tasks are executed in goroutines we need one guarding watermark which
-	// is done only when all the pending sync/applied marks have been emitted.
-	groups().Node.Applied.Done(pd.index)
 }
 
 type node struct {

@@ -75,6 +75,7 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 					preds = append(preds, string(tv.Val))
 				}
 			}
+			// fmt.Printf("Got preds for uid: %X. Preds: %v\n", edge.GetEntity(), preds)
 		}
 
 		for _, pred := range preds {

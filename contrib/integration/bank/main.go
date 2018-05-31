@@ -77,6 +77,7 @@ func (s *State) createAccounts() {
 	x.Check(err)
 
 	txn := s.dg.NewTxn()
+	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(context.Background())
 	var mu api.Mutation
 	mu.SetJson = data
@@ -107,6 +108,7 @@ func (s *State) runTotal() error {
 		}
 	`
 	txn := s.dg.NewTxn()
+	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(context.Background())
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
@@ -137,13 +139,13 @@ func (s *State) runTotal() error {
 	return nil
 }
 
-func (s *State) findAccount(txn *dgo.Txn, key int) Account {
+func (s *State) findAccount(txn *dgo.Txn, key int) (Account, error) {
 	// query := fmt.Sprintf(`{ q(func: eq(key, %d)) @filter(eq(type, "ba")) { key, uid, bal, type }}`, key)
 	query := fmt.Sprintf(`{ q(func: eq(key, %d)) { key, uid, bal, type }}`, key)
 	// log.Printf("findACcount: %s\n", query)
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
-		log.Fatal(err)
+		return Account{}, err
 	}
 	m := make(map[string][]Account)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
@@ -155,10 +157,10 @@ func (s *State) findAccount(txn *dgo.Txn, key int) Account {
 		log.Fatal("Found multiple accounts")
 	}
 	if len(accounts) == 0 {
-		log.Printf("Unable to find account for K_%d\n", key)
-		return Account{Key: key, Type: "ba"}
+		log.Printf("Unable to find account for K_%02d. JSON: %s\n", key, resp.Json)
+		return Account{Key: key, Type: "ba"}, nil
 	}
-	return accounts[0]
+	return accounts[0], nil
 }
 
 func (s *State) runTransaction(buf *bytes.Buffer) error {
@@ -170,6 +172,7 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 
 	ctx := context.Background()
 	txn := s.dg.NewTxn()
+	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(ctx)
 
 	if rand.Intn(*users) < 2 {
@@ -188,8 +191,14 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 		}
 	}
 
-	src := s.findAccount(txn, sk)
-	dst := s.findAccount(txn, sd)
+	src, err := s.findAccount(txn, sk)
+	if err != nil {
+		return err
+	}
+	dst, err := s.findAccount(txn, sd)
+	if err != nil {
+		return err
+	}
 	if src.Key == dst.Key {
 		return nil
 	}
@@ -203,7 +212,8 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 		dst.Bal += amount
 	}
 
-	fmt.Fprintf(w, "Moving [$%d, K_%d -> K_%d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
+	fmt.Fprintf(w, "Txn start ts: %d\n", txn.Ts())
+	fmt.Fprintf(w, "Moving [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
 	var mu api.Mutation
 	if len(src.Uid) > 0 {
 		// If there was no src.Uid, then don't run any mutation.
@@ -213,7 +223,7 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 			pb, err := json.Marshal(d)
 			x.Check(err)
 			mu.DeleteJson = pb
-			fmt.Fprintf(w, "Deleting: %s\n", mu.DeleteJson)
+			fmt.Fprintf(w, "Deleting K_%02d: %s\n", src.Key, mu.DeleteJson)
 		} else {
 			data, err := json.Marshal(src)
 			x.Check(err)
@@ -246,12 +256,12 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 		s.Unlock()
 	}
 	if len(assigned.GetUids()) > 0 {
-		fmt.Fprintf(w, "CREATED: %+v for %+v\n", assigned.GetUids(), dst)
+		fmt.Fprintf(w, "CREATED K_%02d: %+v for %+v\n", dst.Key, assigned.GetUids(), dst)
 		for _, uid := range assigned.GetUids() {
 			dst.Uid = uid
 		}
 	}
-	fmt.Fprintf(w, "MOVED [$%d, K_%d -> K_%d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
+	fmt.Fprintf(w, "MOVED [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
 	return nil
 }
 
@@ -267,9 +277,7 @@ func (s *State) loop(wg *sync.WaitGroup) {
 	for {
 		buf.Reset()
 		err := s.runTransaction(&buf)
-		if err == nil {
-			log.Printf("%s", buf.String())
-		}
+		log.Printf("Final error: %v. %s", err, buf.String())
 		if err != nil {
 			atomic.AddInt32(&s.aborts, 1)
 		} else {
@@ -288,7 +296,7 @@ func (s *State) loop(wg *sync.WaitGroup) {
 func main() {
 	flag.Parse()
 
-	conn, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}

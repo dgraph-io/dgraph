@@ -70,6 +70,7 @@ func (w *WaterMark) Init() {
 }
 
 func (w *WaterMark) Begin(index uint64) {
+	// fmt.Printf("Begin: %s. Index: %d\n", w.Name, index)
 	atomic.StoreUint64(&w.lastIndex, index)
 	w.markCh <- mark{index: index, done: false}
 }
@@ -79,6 +80,7 @@ func (w *WaterMark) BeginMany(indices []uint64) {
 }
 
 func (w *WaterMark) Done(index uint64) {
+	// fmt.Printf("Done: %s. Index: %d\n", w.Name, index)
 	w.markCh <- mark{index: index, done: true}
 }
 func (w *WaterMark) DoneMany(indices []uint64) {
@@ -152,7 +154,7 @@ func (w *WaterMark) process() {
 		// Update mark by going through all indices in order; and checking if they have
 		// been done. Stop at the first index, which isn't done.
 		doneUntil := w.DoneUntil()
-		AssertTruef(doneUntil < index, "doneUntil: %d. Index: %d", doneUntil, index)
+		AssertTruef(doneUntil < index, "Name: %s doneUntil: %d. Index: %d", w.Name, doneUntil, index)
 
 		until := doneUntil
 		loops := 0

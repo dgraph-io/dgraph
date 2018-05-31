@@ -151,6 +151,9 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 		for err == posting.ErrRetry {
 			err = n.processMutation(&t)
 		}
+		if err != nil {
+			return err
+		}
 		x.ActiveMutations.Add(-1)
 	}
 	return nil

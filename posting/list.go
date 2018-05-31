@@ -237,6 +237,8 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *intern.Posting) bool {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 	if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
+		// pk := x.Parse(l.key)
+		// log.Printf("Start: %d. Deleting entire Posting List: %+v\n", startTs, pk)
 		l.markdeleteAll = startTs
 		// Remove all mutations done in same transaction.
 		midx := 0
@@ -266,6 +268,10 @@ func (l *List) updateMutationLayer(startTs uint64, mpost *intern.Posting) bool {
 	}
 
 	if l.mlayer[midx].Uid == mpost.Uid && l.mlayer[midx].StartTs == startTs {
+		if mpost.Op == Del {
+			pk := x.Parse(l.key)
+			fmt.Printf("Setting del mpost for Uid: %X. Parsed: %+v\n", mpost.Uid, pk)
+		}
 		l.mlayer[midx] = mpost
 		return true
 	}
@@ -433,6 +439,8 @@ func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) err
 }
 
 func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) error {
+	// pk := x.Parse(l.key)
+	// log.Printf("Commit mark: %d -> %d. Key: %+v\n", startTs, commitTs, pk)
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
@@ -447,6 +455,7 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	}
 	// Check if this commit is for sp*, markdeleteAll stores the startTs for sp*
 	if l.markdeleteAll == startTs {
+		// log.Printf("Committing delete all for start ts: %d. Key: %+v\n", startTs, pk)
 		// We need to pass startTs and commitTs, so that we can add commitTs to the postings
 		// corresponding to startTs.
 		// Otherwise a deleteAll, followed by set would not mark the set mpost as committed.

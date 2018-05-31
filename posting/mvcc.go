@@ -206,6 +206,8 @@ func (t *Txn) AddDelta(key []byte, p *intern.Posting, checkConflict bool) {
 	t.Lock()
 	defer t.Unlock()
 	t.deltas = append(t.deltas, delta{key: key, posting: p, checkConflict: checkConflict})
+	// pk := x.Parse(key)
+	// log.Printf("AddDelta. Start ts: %d. Delta for key: %+v\n", t.StartTs, pk)
 }
 
 func (t *Txn) Fill(ctx *api.TxnContext) {
@@ -316,7 +318,10 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 }
 
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
+	// log.Printf("Commit. Tx start: %d\n", tx.StartTs)
 	for _, d := range tx.deltas {
+		// pk := x.Parse(d.key)
+		// log.Printf("Commit Delta Key: %+v\n", pk)
 		plist, err := Get(d.key)
 		if err != nil {
 			return err
