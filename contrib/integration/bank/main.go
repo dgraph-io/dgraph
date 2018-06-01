@@ -164,9 +164,11 @@ func (s *State) findAccount(txn *dgo.Txn, key int) (Account, error) {
 }
 
 func (s *State) runTransaction(buf *bytes.Buffer) error {
+	// w := os.Stdout
 	w := bufio.NewWriter(buf)
 	fmt.Fprintf(w, "==>\n")
 	defer func() {
+		fmt.Fprintf(w, "---\n")
 		w.Flush()
 	}()
 

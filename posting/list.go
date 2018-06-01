@@ -237,6 +237,10 @@ func (l *List) SetForDeletion() bool {
 func (l *List) updateMutationLayer(mpost *intern.Posting) bool {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+	// pk := x.Parse(l.key)
+	// if pk.Attr == "bal" {
+	// 	x.Printf("PK: %+v. updateMutationLayer: %+v\n", pk, mpost)
+	// }
 	if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
 		plist := &intern.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
@@ -451,6 +455,18 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 }
 
 func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posting) {
+	effective := func(start, commit uint64) uint64 {
+		if commit > 0 && commit <= readTs {
+			// Has been committed and below the readTs.
+			return commit
+		}
+		if start == readTs {
+			// This mutation is by ME. So, I must be able to read it.
+			return start
+		}
+		return 0
+	}
+
 	// First pick up the postings.
 	var deleteBelow uint64
 	var posts []*intern.Posting
@@ -460,7 +476,7 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 		if pcommit == 0 {
 			commitTs := Oracle().CommitTs(startTs)
 			if commitTs > 0 {
-				x.Printf("ORACLE: Found commit ts only via Oracle. Start: %d. Commit: %d\n", startTs, commitTs)
+				// x.Printf("ORACLE: Found commit ts only via Oracle. Start: %d. Commit: %d\n", startTs, commitTs)
 				atomic.StoreUint64(&plist.Commit, commitTs)
 				for _, mpost := range plist.Postings {
 					atomic.StoreUint64(&mpost.CommitTs, commitTs)
@@ -469,13 +485,14 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 			}
 		}
 		// Pick up the transactions which are either committed, or the one which is ME.
-		effectiveTs := x.Max(startTs, pcommit)
-		if effectiveTs <= readTs && effectiveTs > deleteBelow {
+		effectiveTs := effective(startTs, pcommit)
+		if effectiveTs > deleteBelow {
+			// We're above the deleteBelow marker. We wouldn't reach here if effectiveTs is zero.
 			if len(plist.Postings) == 1 {
 				// Delete all can be the only thing in that transaction, for this PL.
 				mpost := plist.Postings[0]
 				if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
-					deleteBelow = x.Max(startTs, pcommit)
+					deleteBelow = effectiveTs
 				}
 			}
 			posts = append(posts, plist.Postings...)
@@ -489,7 +506,7 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 		result := posts[:0]
 		// Trim the posts.
 		for _, post := range posts {
-			effectiveTs := x.Max(post.StartTs, atomic.LoadUint64(&post.CommitTs))
+			effectiveTs := effective(post.StartTs, atomic.LoadUint64(&post.CommitTs))
 			if effectiveTs <= deleteBelow {
 				continue
 			}
@@ -503,8 +520,8 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 		pi := posts[i]
 		pj := posts[j]
 		if pi.Uid == pj.Uid {
-			ei := x.Max(pi.StartTs, atomic.LoadUint64(&pi.CommitTs))
-			ej := x.Max(pj.StartTs, atomic.LoadUint64(&pj.CommitTs))
+			ei := effective(pi.StartTs, atomic.LoadUint64(&pi.CommitTs))
+			ej := effective(pj.StartTs, atomic.LoadUint64(&pj.CommitTs))
 			return ei > ej // Pick the higher, so we can discard older commits for the same UID.
 		}
 		return pi.Uid < pj.Uid
@@ -516,6 +533,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 	l.AssertRLock()
 
 	plist, mposts := l.pickPostings(readTs)
+	// x.Printf("plist: %+v. pickPostings: %+v\n", plist, mposts)
 	// midx := 0
 	// var deleteTs uint64
 	// if l.markdeleteAll == 0 {
