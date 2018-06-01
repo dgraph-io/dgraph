@@ -698,8 +698,9 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 // Zero sends information about aborted/committed transactions and maxPending.
 func (g *groupi) processOracleDeltaStream() {
 	go func() {
-		// TODO (pawan) - What is this for? Comment says this is required when there is no leader
+		// Comment says this is required when there is no leader
 		// but proposeDelta returns if the current node is not leader.
+		// Reply: We still need this, because this node could become the leader later.
 
 		// In the event where there in no leader for a group, commit/abort won't get proposed.
 		// So periodically check oracle and propose

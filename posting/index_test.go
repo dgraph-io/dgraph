@@ -327,8 +327,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 			it.Next()
 			continue
 		}
-		prevKey := make([]byte, len(key))
-		copy(prevKey, key)
+		prevKey = append(prevKey[:0], key...)
 		revKeys = append(revKeys, string(key))
 		l, err := ReadPostingList(key, it)
 		require.NoError(t, err)
