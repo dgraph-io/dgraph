@@ -424,6 +424,77 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 }
 
+// Test the various mutate, commit and abort sequences.
+func TestAddMutation_mrjn2(t *testing.T) {
+	ctx := context.Background()
+	key := x.DataKey("bal", 1001)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
+	var readTs uint64
+	for readTs = 1; readTs < 10; readTs++ {
+		edge := &intern.DirectedEdge{
+			ValueId:   readTs,
+			ValueType: intern.Posting_INT,
+		}
+		txn := &Txn{StartTs: readTs}
+		addMutationHelper(t, ol, edge, Set, txn)
+	}
+	for i := 1; i < 10; i++ {
+		// Each of these txns see their own write.
+		opt := ListOptions{ReadTs: uint64(i)}
+		list, err := ol.Uids(opt)
+		require.NoError(t, err)
+		require.EqualValues(t, 1, len(list.Uids))
+		require.EqualValues(t, uint64(i), list.Uids[0])
+	}
+	require.EqualValues(t, 0, ol.Length(readTs, 0))
+	require.NoError(t, ol.AbortTransaction(ctx, uint64(1)))
+	require.NoError(t, ol.CommitMutation(ctx, 3, 4))
+	require.NoError(t, ol.CommitMutation(ctx, 6, 10))
+	require.NoError(t, ol.CommitMutation(ctx, 9, 14))
+	require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits.
+
+	{
+		edge := &intern.DirectedEdge{
+			Value: []byte(x.Star),
+			Op:    intern.DirectedEdge_DEL,
+		}
+		txn := &Txn{StartTs: 7}
+		_, err := ol.AddMutation(ctx, txn, edge)
+		require.NoError(t, err)
+		require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits should still be found.
+		require.NoError(t, ol.CommitMutation(ctx, 7, 11))
+
+		require.EqualValues(t, 2, ol.Length(10, 0)) // Two commits should be found.
+		require.EqualValues(t, 0, ol.Length(12, 0)) // No commits should be found.
+		require.EqualValues(t, 1, ol.Length(15, 0)) // Only one commit should be found.
+	}
+	{
+		edge := &intern.DirectedEdge{
+			Value: []byte(x.Star),
+			Op:    intern.DirectedEdge_DEL,
+		}
+		txn := &Txn{StartTs: 5}
+		_, err := ol.AddMutation(ctx, txn, edge)
+		require.NoError(t, err)
+		require.NoError(t, ol.CommitMutation(ctx, 5, 7))
+
+		// Commits are:
+		// 4, 7 (Delete *), 10, 11 (Delete *), 14
+		require.EqualValues(t, 1, ol.Length(8, 0)) // Nothing below 8, but consider itself.
+		require.NoError(t, ol.AbortTransaction(ctx, 8))
+		require.EqualValues(t, 0, ol.Length(8, 0))  // Nothing <= 8.
+		require.EqualValues(t, 1, ol.Length(10, 0)) // Find committed 10.
+		require.EqualValues(t, 0, ol.Length(12, 0)) // Nothing <= 12.
+		require.EqualValues(t, 1, ol.Length(15, 0)) // Find committed 14.
+		opts := ListOptions{ReadTs: 15}
+		list, err := ol.Uids(opts)
+		require.NoError(t, err)
+		uid := list.Uids[0]
+		require.EqualValues(t, 9, uid)
+	}
+}
+
 func TestAddMutation_gru(t *testing.T) {
 	key := x.DataKey("question.tag", 0x01)
 	ol, err := getNew(key, ps)

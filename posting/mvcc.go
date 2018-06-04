@@ -206,6 +206,8 @@ func (t *Txn) AddDelta(key []byte, p *intern.Posting, checkConflict bool) {
 	t.Lock()
 	defer t.Unlock()
 	t.deltas = append(t.deltas, delta{key: key, posting: p, checkConflict: checkConflict})
+	// pk := x.Parse(key)
+	// log.Printf("AddDelta. Start ts: %d. Delta for key: %+v\n", t.StartTs, pk)
 }
 
 func (t *Txn) Fill(ctx *api.TxnContext) {
@@ -316,7 +318,10 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 }
 
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
+	// log.Printf("Commit. Tx start: %d\n", tx.StartTs)
 	for _, d := range tx.deltas {
+		// pk := x.Parse(d.key)
+		// log.Printf("Commit Delta Key: %+v\n", pk)
 		plist, err := Get(d.key)
 		if err != nil {
 			return err
@@ -387,6 +392,7 @@ func unmarshalOrCopy(plist *intern.PostingList, item *badger.Item) error {
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
+	l.mutationMap = make(map[uint64]*intern.PostingList)
 	l.activeTxns = make(map[uint64]struct{})
 	l.plist = new(intern.PostingList)
 
@@ -418,14 +424,15 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			break
 		}
 		if item.UserMeta()&bitDeltaPosting > 0 {
-			var pl intern.PostingList
+			pl := &intern.PostingList{}
 			x.Check(pl.Unmarshal(val))
+			pl.Commit = item.Version()
 			for _, mpost := range pl.Postings {
 				// commitTs, startTs are meant to be only in memory, not
 				// stored on disk.
 				mpost.CommitTs = item.Version()
-				l.mlayer = append(l.mlayer, mpost)
 			}
+			l.mutationMap[pl.Commit] = pl
 		} else {
 			x.Fatalf("unexpected meta: %d", item.UserMeta())
 		}
@@ -434,20 +441,13 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		it.Next()
 	}
-
-	// Sort by Uid, Ts
-	sort.Slice(l.mlayer, func(i, j int) bool {
-		if l.mlayer[i].Uid != l.mlayer[j].Uid {
-			return l.mlayer[i].Uid < l.mlayer[j].Uid
-		}
-		return l.mlayer[i].CommitTs >= l.mlayer[j].CommitTs
-	})
 	return l, nil
 }
 
 func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	l := new(List)
 	l.key = key
+	l.mutationMap = make(map[uint64]*intern.PostingList)
 	l.activeTxns = make(map[uint64]struct{})
 	l.plist = new(intern.PostingList)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)

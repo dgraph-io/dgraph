@@ -62,24 +62,25 @@ type List struct {
 	x.SafeMutex
 	key           []byte
 	plist         *intern.PostingList
-	mlayer        []*intern.Posting // committed mutations, sorted by uid,ts
-	minTs         uint64            // commit timestamp of immutable layer, reject reads before this ts.
-	commitTs      uint64            // last commitTs of this pl
+	mutationMap   map[uint64]*intern.PostingList
+	minTs         uint64 // commit timestamp of immutable layer, reject reads before this ts.
+	commitTs      uint64 // last commitTs of this pl
 	activeTxns    map[uint64]struct{}
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
-	markdeleteAll uint64
 	estimatedSize int32
 	numCommits    int
 	onDisk        int32 // Using atomic, Was written to disk atleast once.
 }
 
-// calculateSize would give you the size estimate. Does not consider elements in mutation layer.
-// Expensive, so don't run it carefully.
+// calculateSize would give you the size estimate.
+// Expensive, so run it carefully.
 func (l *List) calculateSize() int32 {
 	sz := int(unsafe.Sizeof(l))
 	sz += l.plist.Size()
 	sz += cap(l.key)
-	sz += cap(l.mlayer) * 8
+	for _, pl := range l.mutationMap {
+		sz += 8 + pl.Size()
+	}
 	return int32(sz)
 }
 
@@ -233,46 +234,37 @@ func (l *List) SetForDeletion() bool {
 }
 
 // Ensure that you either abort the uncomitted postings or commit them before calling me.
-func (l *List) updateMutationLayer(startTs uint64, mpost *intern.Posting) bool {
+func (l *List) updateMutationLayer(mpost *intern.Posting) bool {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+	// pk := x.Parse(l.key)
+	// if pk.Attr == "bal" {
+	// 	x.Printf("PK: %+v. updateMutationLayer: %+v\n", pk, mpost)
+	// }
 	if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
-		l.markdeleteAll = startTs
+		plist := &intern.PostingList{}
+		plist.Postings = append(plist.Postings, mpost)
+		l.mutationMap[mpost.StartTs] = plist
+		// pk := x.Parse(l.key)
+		// log.Printf("Start: %d. Deleting entire Posting List: %+v\n", startTs, pk)
 		// Remove all mutations done in same transaction.
-		midx := 0
-		for _, mpost := range l.mlayer {
-			if mpost.StartTs != startTs {
-				l.mlayer[midx] = mpost
-				midx++
-			}
-		}
-		l.mlayer = l.mlayer[:midx]
 		return true
 	}
 
-	// Check the mutable layer.
-	midx := sort.Search(len(l.mlayer), func(idx int) bool {
-		mp := l.mlayer[idx]
-		if mpost.Uid != mp.Uid {
-			return mpost.Uid < mp.Uid
+	plist, ok := l.mutationMap[mpost.StartTs]
+	if !ok {
+		plist := &intern.PostingList{}
+		plist.Postings = append(plist.Postings, mpost)
+		l.mutationMap[mpost.StartTs] = plist
+		return true
+	}
+	for i, prev := range plist.Postings {
+		if prev.Uid == mpost.Uid {
+			plist.Postings[i] = mpost
+			return true
 		}
-		return mpost.StartTs >= mp.StartTs
-	})
-	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
-	if midx >= len(l.mlayer) {
-		// Add it at the end.
-		l.mlayer = append(l.mlayer, mpost)
-		return true
 	}
-
-	if l.mlayer[midx].Uid == mpost.Uid && l.mlayer[midx].StartTs == startTs {
-		l.mlayer[midx] = mpost
-		return true
-	}
-	// Otherwise, add it where midx is pointing to.
-	l.mlayer = append(l.mlayer, nil)
-	copy(l.mlayer[midx+1:], l.mlayer[midx:])
-	l.mlayer[midx] = mpost
+	plist.Postings = append(plist.Postings, mpost)
 	return true
 }
 
@@ -327,59 +319,30 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 		}
 		return false, ErrRetry
 	}
-
 	if txn.ShouldAbort() {
 		return false, y.ErrConflict
 	}
-	// We can have at max one pending <s> <p> * mutation.
-	hasPendingDelete := (l.markdeleteAll != txn.StartTs) &&
-		l.markdeleteAll > 0 && t.Op == intern.DirectedEdge_DEL &&
-		bytes.Equal(t.Value, []byte(x.Star))
-	doAbort := false
-	if hasPendingDelete {
-		// commitOrAbort proposals are applied in goroutines and there is no
-		// fixed ordering, so do this check to ensure we don't reject a mutation
-		// which was applied on leader.
-		// Example: We do sp*, commit and then one more sp*. Even If the commit proposal
-		// was applied on leader before second sp*, that guarantee is not true on
-		// follower, since scheduler doesn't care about commitOrAbort proposals and second
-		// sp* can be applied in memory before the commitProposal.
-		if commitTs := Oracle().CommitTs(l.markdeleteAll); commitTs > 0 {
-			l.commitMutation(ctx, l.markdeleteAll, commitTs)
-		} else if Oracle().Aborted(l.markdeleteAll) {
-			l.abortTransaction(ctx, l.markdeleteAll)
-		} else {
-			doAbort = true
-		}
-	}
 
 	checkConflict := false
-
 	if t.Attr == "_predicate_" {
-		doAbort = false
+		// Don't check for conflict.
 	} else if x.Parse(l.key).IsData() || schema.State().HasUpsert(t.Attr) {
 		checkConflict = true
 	}
 
-	if doAbort {
-		txn.SetAbort()
-		return false, y.ErrConflict
-	}
-
 	mpost := NewPosting(t)
-
+	mpost.StartTs = txn.StartTs
 	if mpost.PostingType != intern.Posting_REF {
 		t.ValueId = fingerprintEdge(t)
+		mpost.Uid = t.ValueId
 	}
 
-	mpost.Uid = t.ValueId
-	mpost.StartTs = txn.StartTs
 	t1 := time.Now()
-	hasMutated := l.updateMutationLayer(txn.StartTs, mpost)
+	hasMutated := l.updateMutationLayer(mpost)
 	atomic.AddInt32(&l.estimatedSize, int32(mpost.Size()+16 /* various overhead */))
 	if dur := time.Since(t1); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Uids))
+			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mutationMap), len(l.plist.Uids))
 		}
 	}
 	l.activeTxns[txn.StartTs] = struct{}{}
@@ -401,21 +364,11 @@ func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
 		return ErrRetry
 	}
 	l.AssertLock()
-	midx := 0
-	for _, mpost := range l.mlayer {
-		if mpost.StartTs != startTs {
-			l.mlayer[midx] = mpost
-			midx++
-		} else {
-			atomic.AddInt32(&l.estimatedSize, -1*int32(mpost.Size()+16 /* various overhead */))
-		}
+	if plist, ok := l.mutationMap[startTs]; ok {
+		atomic.AddInt32(&l.estimatedSize, -1*int32(plist.Size()))
 	}
-	l.mlayer = l.mlayer[:midx]
+	delete(l.mutationMap, startTs)
 	delete(l.activeTxns, startTs)
-	if l.markdeleteAll == startTs {
-		// Reset it so that other transactions can perform S P * deletion.
-		l.markdeleteAll = 0
-	}
 	return nil
 }
 
@@ -433,6 +386,8 @@ func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) err
 }
 
 func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) error {
+	// pk := x.Parse(l.key)
+	// log.Printf("Commit mark: %d -> %d. Key: %+v\n", startTs, commitTs, pk)
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
@@ -441,30 +396,24 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	}
 
 	l.AssertLock()
-	if _, ok := l.activeTxns[startTs]; !ok {
+	if plist, ok := l.mutationMap[startTs]; !ok {
 		// It was already committed, might be happening due to replay.
 		return nil
-	}
-	// Check if this commit is for sp*, markdeleteAll stores the startTs for sp*
-	if l.markdeleteAll == startTs {
-		// We need to pass startTs and commitTs, so that we can add commitTs to the postings
-		// corresponding to startTs.
-		// Otherwise a deleteAll, followed by set would not mark the set mpost as committed.
-		l.deleteHelper(ctx, startTs, commitTs)
-		l.minTs = commitTs
-		l.markdeleteAll = 0
 	} else {
-		for _, mpost := range l.mlayer {
-			if mpost.StartTs == startTs {
-				atomic.StoreUint64(&mpost.CommitTs, commitTs)
-				l.numCommits++
-			}
+		// We want to be able to access this, irrespective of whether we have the right locks or
+		// not.
+		atomic.StoreUint64(&plist.Commit, commitTs)
+		for _, mpost := range plist.Postings {
+			atomic.StoreUint64(&mpost.CommitTs, commitTs)
 		}
+		l.numCommits += len(plist.Postings)
 	}
 	if commitTs > l.commitTs {
+		// This is for rolling up the posting list.
 		l.commitTs = commitTs
 	}
 	delete(l.activeTxns, startTs)
+
 	// Calculate 5% of immutable layer
 	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
 	if numUids < 1000 {
@@ -473,24 +422,6 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 	if l.numCommits > numUids {
 		l.syncIfDirty(false)
 	}
-	return nil
-}
-
-func (l *List) deleteHelper(ctx context.Context, startTs uint64, commitTs uint64) error {
-	l.AssertLock()
-	l.plist = emptyList
-	midx := 0
-	for _, mpost := range l.mlayer {
-		if mpost.StartTs >= l.markdeleteAll {
-			if mpost.StartTs == startTs {
-				atomic.StoreUint64(&mpost.CommitTs, commitTs)
-			}
-			l.mlayer[midx] = mpost
-			midx++
-		}
-	}
-	l.mlayer = l.mlayer[:midx] // Clear the mutation layer.
-	atomic.StoreInt32(&l.estimatedSize, l.calculateSize())
 	return nil
 }
 
@@ -523,42 +454,108 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	return conflicts
 }
 
-func (l *List) inSnapshot(mpost *intern.Posting, readTs, deleteTs uint64) bool {
-	l.AssertRLock()
-	commitTs := atomic.LoadUint64(&mpost.CommitTs)
-	if commitTs == 0 {
-		commitTs = Oracle().CommitTs(mpost.StartTs)
-		atomic.StoreUint64(&mpost.CommitTs, commitTs)
+func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posting) {
+	effective := func(start, commit uint64) uint64 {
+		if commit > 0 && commit <= readTs {
+			// Has been committed and below the readTs.
+			return commit
+		}
+		if start == readTs {
+			// This mutation is by ME. So, I must be able to read it.
+			return start
+		}
+		return 0
 	}
-	if commitTs == 0 {
-		return mpost.StartTs == readTs
+
+	// First pick up the postings.
+	var deleteBelow uint64
+	var posts []*intern.Posting
+	for startTs, plist := range l.mutationMap {
+		// Iterate over the commits in order of their
+		pcommit := atomic.LoadUint64(&plist.Commit)
+		if pcommit == 0 {
+			commitTs := Oracle().CommitTs(startTs)
+			if commitTs > 0 {
+				// x.Printf("ORACLE: Found commit ts only via Oracle. Start: %d. Commit: %d\n", startTs, commitTs)
+				atomic.StoreUint64(&plist.Commit, commitTs)
+				for _, mpost := range plist.Postings {
+					atomic.StoreUint64(&mpost.CommitTs, commitTs)
+				}
+				pcommit = commitTs
+			}
+		}
+		// Pick up the transactions which are either committed, or the one which is ME.
+		effectiveTs := effective(startTs, pcommit)
+		if effectiveTs > deleteBelow {
+			// We're above the deleteBelow marker. We wouldn't reach here if effectiveTs is zero.
+			if len(plist.Postings) == 1 {
+				// Delete all can be the only thing in that transaction, for this PL.
+				mpost := plist.Postings[0]
+				if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
+					deleteBelow = effectiveTs
+				}
+			}
+			posts = append(posts, plist.Postings...)
+		}
 	}
-	return commitTs <= readTs && commitTs >= deleteTs
+
+	storedList := l.plist
+	if deleteBelow > 0 {
+		// There was a delete all marker. So, trim down the list of postings.
+		storedList = emptyList
+		result := posts[:0]
+		// Trim the posts.
+		for _, post := range posts {
+			effectiveTs := effective(post.StartTs, atomic.LoadUint64(&post.CommitTs))
+			if effectiveTs <= deleteBelow {
+				continue
+			}
+			result = append(result, post)
+		}
+		posts = result
+	}
+
+	// Sort all the postings by Uid (inc order), then by commit/startTs in dec order.
+	sort.Slice(posts, func(i, j int) bool {
+		pi := posts[i]
+		pj := posts[j]
+		if pi.Uid == pj.Uid {
+			ei := effective(pi.StartTs, atomic.LoadUint64(&pi.CommitTs))
+			ej := effective(pj.StartTs, atomic.LoadUint64(&pj.CommitTs))
+			return ei > ej // Pick the higher, so we can discard older commits for the same UID.
+		}
+		return pi.Uid < pj.Uid
+	})
+	return storedList, posts
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Posting) bool) error {
 	l.AssertRLock()
-	midx := 0
-	var deleteTs uint64
-	if l.markdeleteAll == 0 {
-	} else if l.markdeleteAll == readTs {
-		// Check if there is uncommitted sp* at current readTs.
-		deleteTs = readTs
-	} else if l.markdeleteAll < readTs {
-		// Ignore all reads before this.
-		// Fixing the pl is difficult with locks.
-		// Ignore if SP* was committed with timestamp > readTs
-		if ts := Oracle().CommitTs(l.markdeleteAll); ts < readTs {
-			deleteTs = ts
-		}
-	}
+
+	plist, mposts := l.pickPostings(readTs)
+	// x.Printf("plist: %+v. pickPostings: %+v\n", plist, mposts)
+	// midx := 0
+	// var deleteTs uint64
+	// if l.markdeleteAll == 0 {
+	// } else if l.markdeleteAll == readTs {
+	// 	// Check if there is uncommitted sp* at current readTs.
+	// 	deleteTs = readTs
+	// } else if l.markdeleteAll < readTs {
+	// 	// Ignore all reads before this.
+	// 	// Fixing the pl is difficult with locks.
+	// 	// Ignore if SP* was committed with timestamp > readTs
+	// 	if ts := Oracle().CommitTs(l.markdeleteAll); ts < readTs {
+	// 		deleteTs = ts
+	// 	}
+	// }
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
-	mlayerLen := len(l.mlayer)
+
+	midx, mlen := 0, len(mposts)
 	if afterUid > 0 {
-		midx = sort.Search(mlayerLen, func(idx int) bool {
-			mp := l.mlayer[idx]
+		midx = sort.Search(mlen, func(idx int) bool {
+			mp := mposts[idx]
 			return afterUid < mp.Uid
 		})
 	}
@@ -566,34 +563,34 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 	var mp, pp *intern.Posting
 	cont := true
 	var pitr PIterator
-	pitr.Init(l.plist, afterUid)
+	pitr.Init(plist, afterUid)
 	prevUid := uint64(0)
 	for cont {
-		if midx < mlayerLen {
-			mp = l.mlayer[midx]
-			if !l.inSnapshot(mp, readTs, deleteTs) {
-				midx++
-				continue
-			}
+		if midx < mlen {
+			mp = mposts[midx]
 		} else {
 			mp = emptyPosting
 		}
-		if l.minTs > deleteTs && pitr.Valid() {
+		if pitr.Valid() {
 			pp = pitr.Posting()
-			atomic.StoreUint64(&pp.CommitTs, l.minTs)
 		} else {
 			pp = emptyPosting
 		}
 
 		switch {
-		case prevUid != 0 && mp.Uid == prevUid:
+		case mp.Uid > 0 && mp.Uid == prevUid:
+			// Only pick the latest version of this posting.
+			// mp.Uid can be zero if it's an empty posting.
 			midx++
 		case pp.Uid == 0 && mp.Uid == 0:
+			// Reached empty posting for both iterators.
 			cont = false
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
+			// Either mp is empty, or pp is lower than mp.
 			cont = f(pp)
 			pitr.Next()
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
+			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
 				cont = f(mp)
 			}
@@ -616,7 +613,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 func (l *List) IsEmpty() bool {
 	l.RLock()
 	defer l.RUnlock()
-	return len(l.plist.Uids) == 0 && len(l.mlayer) == 0
+	return len(l.plist.Uids) == 0 && len(l.mutationMap) == 0
 }
 
 func (l *List) length(readTs, afterUid uint64) int {
@@ -729,17 +726,18 @@ func (l *List) rollup() error {
 		// TODO: Add bytes method
 		bp.WriteTo(final.Uids)
 	}
-	midx := 0
 	// Keep all uncommited Entries or postings with commitTs > l.commitTs
-	// in mutable layer.
-	for _, mpost := range l.mlayer {
-		commitTs := atomic.LoadUint64(&mpost.CommitTs)
-		if commitTs == 0 || commitTs > l.commitTs {
-			l.mlayer[midx] = mpost
-			midx++
+	// in mutation map. Discard all else.
+	for startTs, plist := range l.mutationMap {
+		cl := atomic.LoadUint64(&plist.Commit)
+		if cl == 0 || cl > l.commitTs {
+			// Keep this.
+		} else {
+			delete(l.mutationMap, startTs)
 		}
 	}
-	l.mlayer = l.mlayer[:midx]
+
+	// TODO: Might want to recalculate size.
 	l.minTs = l.commitTs
 	l.plist = final
 	l.numCommits = 0
@@ -748,9 +746,8 @@ func (l *List) rollup() error {
 
 // Merge mutation layer and immutable layer.
 func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
-	// emptyList is used to differentiate when we don't have any updates, v/s
-	// when we have explicitly deleted everything.
-	if len(l.mlayer) == 0 && l.plist != emptyList {
+	// We no longer set posting list to empty.
+	if len(l.mutationMap) == 0 {
 		return false, nil
 	}
 	if delFromCache {
@@ -758,17 +755,14 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		x.AssertTrue(len(l.activeTxns) == 0)
 	}
 
-	lmlayer := len(l.mlayer)
-	// plist is emptyList only during SP*
-	isSPStar := l.plist == emptyList
+	lmlayer := len(l.mutationMap)
 	// Merge all entries in mutation layer with commitTs <= l.commitTs
 	// into immutable layer.
 	if err := l.rollup(); err != nil {
 		return false, err
 	}
-	// Check if length of mlayer has changed after rollup, else skip writing to disk
-	// Always sync for SP*
-	if len(l.mlayer) == lmlayer && !isSPStar {
+	// Check if length of mutationMap has changed after rollup, else skip writing to disk.
+	if len(l.mutationMap) == lmlayer {
 		// There was no change in immutable layer.
 		return false, nil
 	}
@@ -838,9 +832,9 @@ func (l *List) Uids(opt ListOptions) (*intern.List, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
 	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, len(l.mlayer)+bp128.NumIntegers(l.plist.Uids))
+	res := make([]uint64, 0, len(l.mutationMap)+bp128.NumIntegers(l.plist.Uids))
 	out := &intern.List{}
-	if len(l.mlayer) == 0 && opt.Intersect != nil {
+	if len(l.mutationMap) == 0 && opt.Intersect != nil {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
 			return out, ErrTsTooOld
