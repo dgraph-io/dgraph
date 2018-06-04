@@ -501,6 +501,8 @@ func commitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Payload, error
 		return &api.Payload{}, posting.ErrInvalidTxn
 	}
 	// Ensures that we wait till prewrite is applied
+	// TODO: We don't need to do this, probably. Because, before a transaction is committed, it
+	// would have already been applied???
 	idx := txn.LastIndex()
 	groups().Node.Applied.WaitForMark(ctx, idx)
 	if tc.CommitTs == 0 {

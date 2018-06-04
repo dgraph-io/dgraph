@@ -670,6 +670,16 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 		return
 	}
 
+	repeat := func(tctx *api.TxnContext) {
+		for {
+			err := g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
+			if err == nil {
+				return
+			}
+			x.Printf("Error while proposing txn status: %+v. Error: %v", tctx, err)
+		}
+	}
+
 	// Only the leader of a group proposes the commit proposal for a group after getting delta from
 	// Zero.
 	for startTs, commitTs := range oracleDelta.Commits {
@@ -683,14 +693,14 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 			continue
 		}
 		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTs}
-		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
+		go repeat(tctx)
 	}
 	for _, startTs := range oracleDelta.Aborts {
 		if posting.Txns().Get(startTs) == nil {
 			continue
 		}
 		tctx := &api.TxnContext{StartTs: startTs}
-		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
+		go repeat(tctx)
 	}
 }
 

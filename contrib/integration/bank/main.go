@@ -127,7 +127,7 @@ func (s *State) runTotal() error {
 	for _, a := range accounts {
 		total += a.Bal
 	}
-	log.Printf("Read: %v. Total: %d\n", accounts, total)
+	log.Printf("Read (Ts=%d): %v. Total: %d\n", txn.Ts(), accounts, total)
 	if len(accounts) > *users {
 		s.printExpected()
 		log.Fatalf("len(accounts) = %d", len(accounts))
@@ -207,15 +207,12 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 
 	amount := rand.Intn(10)
 	if src.Bal-amount <= 0 {
-		dst.Bal += src.Bal
-		src.Bal = 0
-	} else {
-		src.Bal -= amount
-		dst.Bal += amount
+		amount = src.Bal
 	}
-
 	fmt.Fprintf(w, "Txn start ts: %d\n", txn.Ts())
 	fmt.Fprintf(w, "Moving [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
+	src.Bal -= amount
+	dst.Bal += amount
 	var mu api.Mutation
 	if len(src.Uid) > 0 {
 		// If there was no src.Uid, then don't run any mutation.
@@ -263,7 +260,7 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 			dst.Uid = uid
 		}
 	}
-	fmt.Fprintf(w, "MOVED [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
+	fmt.Fprintf(w, "MOVED [Commit=%d] [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n", txn.CommitTs(), amount, src.Key, dst.Key, src, dst)
 	return nil
 }
 
