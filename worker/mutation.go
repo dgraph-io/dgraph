@@ -40,6 +40,9 @@ func deletePredicateEdge(edge *intern.DirectedEdge) bool {
 
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Txn) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("%s", "In run mutations")
 	}
