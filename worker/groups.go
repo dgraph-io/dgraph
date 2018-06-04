@@ -671,7 +671,8 @@ func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
 	}
 
 	repeat := func(tctx *api.TxnContext) {
-		for {
+		for i := 0; i < 3; i++ { // Try 3 times, then give up.
+			// TODO: This needs to be looked at carefully to figure out why does this fail.
 			err := g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
 			if err == nil {
 				return

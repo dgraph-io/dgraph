@@ -4,6 +4,7 @@ services:
     image: debian:latest
     container_name: bank-dg0.1
     ports:
+      - 5080:5080
       - 6080:6080
     command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1
     volumes:
@@ -11,24 +12,24 @@ services:
         source: $HOME/go/bin
         target: /gobin
         read_only: true
-  zero2:
-    image: debian:latest
-    container_name: bank-dg0.2
-    command: /gobin/dgraph zero --my=zero2:5080 --replicas 3 --peer=zero1:5080 --idx 2
-    volumes:
-      - type: bind
-        source: $HOME/go/bin
-        target: /gobin
-        read_only: true
-  zero3:
-    image: debian:latest
-    container_name: bank-dg0.3
-    command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 3
-    volumes:
-      - type: bind
-        source: $HOME/go/bin
-        target: /gobin
-        read_only: true
+  # zero2:
+  #   image: debian:latest
+  #   container_name: bank-dg0.2
+  #   command: /gobin/dgraph zero --my=zero2:5080 --replicas 3 --peer=zero1:5080 --idx 2
+  #   volumes:
+  #     - type: bind
+  #       source: $HOME/go/bin
+  #       target: /gobin
+  #       read_only: true
+  # zero3:
+  #   image: debian:latest
+  #   container_name: bank-dg0.3
+  #   command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 3
+  #   volumes:
+  #     - type: bind
+  #       source: $HOME/go/bin
+  #       target: /gobin
+  #       read_only: true
   dg1:
     image: debian:latest
     container_name: bank-dg1
@@ -41,28 +42,28 @@ services:
       - 8180:8180
       - 9180:9180
     command: /gobin/dgraph server --my=dg1:7180 --lru_mb=2048 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0
-  dg2:
-    image: debian:latest
-    container_name: bank-dg2
-    volumes:
-      - type: bind
-        source: $HOME/go/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8181:8181
-      - 9181:9181
-    command: /gobin/dgraph server --my=dg2:7181 --lru_mb=2048 --zero=zero1:5080 -o 101 --expose_trace --trace 1.0
-  dg3:
-    image: debian:latest
-    container_name: bank-dg3
-    volumes:
-      - type: bind
-        source: $HOME/go/bin
-        target: /gobin
-        read_only: true
-    ports:
-      - 8182:8182
-      - 9182:9182
-    command: /gobin/dgraph server --my=dg3:7182 --lru_mb=2048 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0
+  # dg2:
+  #   image: debian:latest
+  #   container_name: bank-dg2
+  #   volumes:
+  #     - type: bind
+  #       source: $HOME/go/bin
+  #       target: /gobin
+  #       read_only: true
+  #   ports:
+  #     - 8181:8181
+  #     - 9181:9181
+  #   command: /gobin/dgraph server --my=dg2:7181 --lru_mb=2048 --zero=zero1:5080 -o 101 --expose_trace --trace 1.0
+  # dg3:
+  #   image: debian:latest
+  #   container_name: bank-dg3
+  #   volumes:
+  #     - type: bind
+  #       source: $HOME/go/bin
+  #       target: /gobin
+  #       read_only: true
+  #   ports:
+  #     - 8182:8182
+  #     - 9182:9182
+  #   command: /gobin/dgraph server --my=dg3:7182 --lru_mb=2048 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0
 
