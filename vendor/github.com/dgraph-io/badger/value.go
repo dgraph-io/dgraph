@@ -384,10 +384,13 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 			// allowed to rewrite an older version of key in the LSM tree, because then this older
 			// version would be at the top of the LSM tree. To work correctly, reads expect the
 			// latest versions to be at the top, and the older versions at the bottom.
-			ne.Key = append(badgerMove, e.Key...)
+			if bytes.HasPrefix(e.Key, badgerMove) {
+				ne.Key = append([]byte{}, e.Key...)
+			} else {
+				ne.Key = append(badgerMove, e.Key...)
+			}
 
-			ne.Value = make([]byte, len(e.Value))
-			copy(ne.Value, e.Value)
+			ne.Value = append([]byte{}, e.Value...)
 			wb = append(wb, ne)
 			size += int64(e.estimateSize(vlog.opt.ValueThreshold))
 			if size >= 64*mi {
@@ -1065,11 +1068,15 @@ func (vlog *valueLog) doRunGC(lf *logFile, discardRatio float64, tr trace.Trace)
 		tr.SetError()
 		return err
 	}
-	window := float64(fi.Size()) * 0.1 // 10% of the file as window.
+
+	// Set up the sampling window sizes.
+	sizeWindow := float64(fi.Size()) * 0.1                          // 10% of the file as window.
+	countWindow := int(float64(vlog.opt.ValueLogMaxEntries) * 0.01) // 1% of num entries.
+	tr.LazyPrintf("Size window: %5.2f. Count window: %d.", sizeWindow, countWindow)
 
 	// Pick a random start point for the log.
 	skipFirstM := float64(rand.Int63n(fi.Size())) // Pick a random starting location.
-	skipFirstM -= window                          // Avoid hitting EOF by moving back by window.
+	skipFirstM -= sizeWindow                      // Avoid hitting EOF by moving back by window.
 	skipFirstM /= float64(mi)                     // Convert to MBs.
 	tr.LazyPrintf("Skip first %5.2f MB of file of size: %d MB", skipFirstM, fi.Size()/mi)
 	var skipped float64
@@ -1081,18 +1088,18 @@ func (vlog *valueLog) doRunGC(lf *logFile, discardRatio float64, tr trace.Trace)
 	var numIterations int
 	err = vlog.iterate(lf, 0, func(e Entry, vp valuePointer) error {
 		numIterations++
-		esz := float64(vp.Len) / (1 << 20) // in MBs. +4 for the CAS stuff.
+		esz := float64(vp.Len) / (1 << 20) // in MBs.
 		if skipped < skipFirstM {
 			skipped += esz
 			return nil
 		}
 
-		// Sample until we reach window size or 10K entries or exceed 10 seconds.
-		if r.count > 10000 {
-			tr.LazyPrintf("Stopping sampling after 10K entries.")
+		// Sample until we reach the window sizes or exceed 10 seconds.
+		if r.count > countWindow {
+			tr.LazyPrintf("Stopping sampling after %d entries.", countWindow)
 			return errStop
 		}
-		if r.total > window {
+		if r.total > sizeWindow {
 			tr.LazyPrintf("Stopping sampling after reaching window size.")
 			return errStop
 		}
@@ -1155,8 +1162,9 @@ func (vlog *valueLog) doRunGC(lf *logFile, discardRatio float64, tr trace.Trace)
 	tr.LazyPrintf("Fid: %d. Skipped: %5.2fMB Num iterations: %d. Data status=%+v\n",
 		lf.fid, skipped, numIterations, r)
 
-	// If we sampled at least 10MB, we can make a call about rewrite.
-	if (r.count < 10000 && r.total < 10.0) || r.discard < discardRatio*r.total {
+	// If we couldn't sample at least a 1000 KV pairs or at least 75% of the window size,
+	// and what we can discard is below the threshold, we should skip the rewrite.
+	if (r.count < countWindow && r.total < sizeWindow*0.75) || r.discard < discardRatio*r.total {
 		tr.LazyPrintf("Skipping GC on fid: %d", lf.fid)
 		return ErrNoRewrite
 	}
@@ -1182,6 +1190,7 @@ func (vlog *valueLog) runGC(discardRatio float64, head valuePointer) error {
 	case vlog.garbageCh <- struct{}{}:
 		// Pick a log file for GC.
 		tr := trace.New("Badger.ValueLog", "GC")
+		tr.SetMaxEvents(100)
 		defer func() {
 			tr.Finish()
 			<-vlog.garbageCh
@@ -1189,6 +1198,10 @@ func (vlog *valueLog) runGC(discardRatio float64, head valuePointer) error {
 
 		var err error
 		files := vlog.pickLog(head, tr)
+		if len(files) == 0 {
+			tr.LazyPrintf("PickLog returned zero results.")
+			return ErrNoRewrite
+		}
 		tried := make(map[uint32]bool)
 		for _, lf := range files {
 			if _, done := tried[lf.fid]; done {

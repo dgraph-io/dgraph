@@ -140,42 +140,49 @@ func (item *Item) DiscardEarlierVersions() bool {
 }
 
 func (item *Item) yieldItemValue() ([]byte, func(), error) {
-	if !item.hasValue() {
-		return nil, nil, nil
-	}
+	key := item.Key() // No need to copy.
+	for {
+		if !item.hasValue() {
+			return nil, nil, nil
+		}
 
-	if item.slice == nil {
-		item.slice = new(y.Slice)
-	}
+		if item.slice == nil {
+			item.slice = new(y.Slice)
+		}
 
-	if (item.meta & bitValuePointer) == 0 {
-		val := item.slice.Resize(len(item.vptr))
-		copy(val, item.vptr)
-		return val, nil, nil
-	}
+		if (item.meta & bitValuePointer) == 0 {
+			val := item.slice.Resize(len(item.vptr))
+			copy(val, item.vptr)
+			return val, nil, nil
+		}
 
-	var vp valuePointer
-	vp.Decode(item.vptr)
-	result, cb, err := item.db.vlog.Read(vp, item.slice)
-	if err != ErrRetry {
-		return result, cb, err
-	}
+		var vp valuePointer
+		vp.Decode(item.vptr)
+		result, cb, err := item.db.vlog.Read(vp, item.slice)
+		if err != ErrRetry || bytes.HasPrefix(key, badgerMove) {
+			// The error is not retry, or we have already searched the move keyspace.
+			return result, cb, err
+		}
 
-	// The value pointer is pointing to a deleted value log. Look for the move key and read that
-	// instead.
-	runCallback(cb)
-	key := y.KeyWithTs(item.Key(), item.Version())
-	moveKey := append(badgerMove, key...)
-	vs, err := item.db.get(moveKey)
-	if err != nil {
-		return nil, nil, err
+		// The value pointer is pointing to a deleted value log. Look for the
+		// move key and read that instead.
+		runCallback(cb)
+		key = append(badgerMove, y.KeyWithTs(item.Key(), item.Version())...)
+		// Note that we can't set item.key to move key, because that would
+		// change the key user sees before and after this call. Also, this move
+		// logic is internal logic and should not impact the external behavior
+		// of the retrieval.
+		vs, err := item.db.get(key)
+		if err != nil {
+			return nil, nil, err
+		}
+		if vs.Version != item.Version() {
+			return nil, nil, nil
+		}
+		item.vptr = vs.Value
+		item.meta &^= bitValuePointer // Clear the value pointer bit.
+		item.meta |= vs.Meta          // This meta would only be about value pointer.
 	}
-	if vs.Version != item.Version() {
-		return nil, nil, nil
-	}
-	item.vptr = vs.Value
-	item.meta |= vs.Meta // This meta would only be about value pointer.
-	return item.yieldItemValue()
 }
 
 func runCallback(cb func()) {

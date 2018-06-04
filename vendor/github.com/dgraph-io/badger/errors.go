@@ -95,7 +95,7 @@ var (
 
 	// ErrTruncateNeeded is returned when the value log gets corrupt, and requires truncation of
 	// corrupt data to allow Badger to run properly.
-	ErrTruncateNeeded = errors.New("Data corruption detected. Value log truncate required to run DB. This would result in data loss.")
+	ErrTruncateNeeded = errors.New("Value log truncate required to run DB. This might result in data loss.")
 )
 
 // Key length can't be more than uint16, as determined by table::header.
