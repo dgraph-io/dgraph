@@ -463,7 +463,7 @@ func compareAttrAndType(key []byte, attr string, typ byte) bool {
 	return false
 }
 
-func DeleteReverseEdges(ctx context.Context, attr string) error {
+func DeleteReverseEdges(attr string) error {
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteReverse)
 	})
@@ -475,7 +475,7 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 	})
 }
 
-func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
+func deleteCountIndex(attr string, reverse bool) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.CountPrefix(reverse)
 	return deleteEntries(prefix, func(key []byte) bool {
@@ -483,7 +483,7 @@ func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
 	})
 }
 
-func DeleteCountIndex(ctx context.Context, attr string) error {
+func DeleteCountIndex(attr string) error {
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteCount)
 	})
@@ -491,10 +491,10 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 		return compareAttrAndType(key, attr, x.ByteCountRev)
 	})
 	// Delete index entries from data store.
-	if err := deleteCountIndex(ctx, attr, false); err != nil {
+	if err := deleteCountIndex(attr, false); err != nil {
 		return err
 	}
-	if err := deleteCountIndex(ctx, attr, true); err != nil { // delete reverse count indexes.
+	if err := deleteCountIndex(attr, true); err != nil { // delete reverse count indexes.
 		return err
 	}
 	return nil
@@ -701,7 +701,7 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error
 	return nil
 }
 
-func DeleteIndex(ctx context.Context, attr string) error {
+func DeleteIndex(attr string) error {
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteIndex)
 	})
@@ -944,18 +944,18 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	indexed := schema.State().IsIndexed(attr)
 	reversed := schema.State().IsReversed(attr)
 	if indexed {
-		if err := DeleteIndex(ctx, attr); err != nil {
+		if err := DeleteIndex(attr); err != nil {
 			return err
 		}
 	} else if reversed {
-		if err := DeleteReverseEdges(ctx, attr); err != nil {
+		if err := DeleteReverseEdges(attr); err != nil {
 			return err
 		}
 	}
 
 	hasCountIndex := schema.State().HasCount(attr)
 	if hasCountIndex {
-		if err := DeleteCountIndex(ctx, attr); err != nil {
+		if err := DeleteCountIndex(attr); err != nil {
 			return err
 		}
 	}

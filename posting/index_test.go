@@ -244,7 +244,7 @@ func TestRebuildIndex(t *testing.T) {
 		require.NoError(t, txn.CommitAt(1, nil))
 	}
 
-	require.NoError(t, DeleteIndex(context.Background(), "name2"))
+	require.NoError(t, DeleteIndex("name2"))
 	RebuildIndex(context.Background(), "name2", 5)
 	CommitLists(func(key []byte) bool {
 		pk := x.Parse(key)

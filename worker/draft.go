@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -29,13 +30,13 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type proposalCtx struct {
 	ch  chan error
 	ctx context.Context
-	cnt int // used for reference counting
 	// Since each proposal consists of multiple tasks we need to store
 	// non-nil error returned by task
 	err   error
@@ -48,7 +49,7 @@ type proposals struct {
 	sync.RWMutex
 	// The key is hex encoded version of <raft_id_of_node><random_uint64>
 	// This should make sure its not same across replicas.
-	ids map[string]*proposalCtx
+	keys map[string]*proposalCtx
 }
 
 func uniqueKey() string {
@@ -61,32 +62,23 @@ func uniqueKey() string {
 func (p *proposals) Store(key string, pctx *proposalCtx) bool {
 	p.Lock()
 	defer p.Unlock()
-	if _, has := p.ids[key]; has {
+	if _, has := p.keys[key]; has {
 		return false
 	}
-	p.ids[key] = pctx
+	p.keys[key] = pctx
 	return true
-}
-
-func (p *proposals) IncRef(key string, count int) {
-	p.Lock()
-	defer p.Unlock()
-	pd, has := p.ids[key]
-	x.AssertTrue(has)
-	pd.cnt += count
-	return
 }
 
 func (p *proposals) pctx(key string) *proposalCtx {
 	p.RLock()
 	defer p.RUnlock()
-	return p.ids[key]
+	return p.keys[key]
 }
 
 func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
 	p.RLock()
 	defer p.RUnlock()
-	pd, has := p.ids[key]
+	pd, has := p.keys[key]
 	x.AssertTrue(has)
 	return pd.ctx, pd.txn
 }
@@ -94,24 +86,16 @@ func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
 func (p *proposals) Done(key string, err error) {
 	p.Lock()
 	defer p.Unlock()
-	pd, has := p.ids[key]
+	pd, has := p.keys[key]
 	if !has {
 		return
 	}
-	x.AssertTrue(pd.cnt > 0 && pd.index != 0)
-	pd.cnt -= 1
+	x.AssertTrue(pd.index != 0)
 	if err != nil {
 		pd.err = err
 	}
-	if pd.cnt > 0 {
-		return
-	}
-	delete(p.ids, key)
+	delete(p.keys, key)
 	pd.ch <- pd.err
-	// We emit one pending watermark as soon as we read from rd.committedentries.
-	// Since the tasks are executed in goroutines we need one guarding watermark which
-	// is done only when all the pending sync/applied marks have been emitted.
-	groups().Node.Applied.Done(pd.index)
 }
 
 type node struct {
@@ -129,7 +113,6 @@ type node struct {
 	props   proposals
 
 	canCampaign  bool
-	sch          *scheduler
 	rand         *rand.Rand
 	raftIdBuffer []byte
 }
@@ -176,7 +159,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 	m := conn.NewNode(rc)
 	props := proposals{
-		ids: make(map[string]*proposalCtx),
+		keys: make(map[string]*proposalCtx),
 	}
 
 	b := make([]byte, 8)
@@ -193,11 +176,9 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		props:        props,
 		stop:         make(chan struct{}),
 		done:         make(chan struct{}),
-		sch:          new(scheduler),
 		rand:         rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		raftIdBuffer: b,
 	}
-	n.sch.init(n)
 	return n
 }
 
@@ -268,7 +249,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 	pctx := &proposalCtx{
 		ch:  che,
 		ctx: ctx,
-		cnt: 1,
 	}
 
 	key := uniqueKey()
@@ -305,18 +285,14 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 			}
 		}
 	case <-cctx.Done():
-		return fmt.Errorf("While proposing to RAFT group, err: %+v\n", cctx.Err())
+		return fmt.Errorf("While proposing to Raft group, err: %+v\n", cctx.Err())
 	}
 
 	return err
 }
 
-func (n *node) processMutation(task *task) error {
-	pid := task.pid
-	ridx := task.rid
-	edge := task.edge
-
-	ctx, txn := n.props.CtxAndTxn(pid)
+func (n *node) processEdge(ridx uint64, pkey string, edge *intern.DirectedEdge) error {
+	ctx, txn := n.props.CtxAndTxn(pkey)
 	if txn.ShouldAbort() {
 		return dy.ErrConflict
 	}
@@ -338,9 +314,9 @@ func (n *node) processMutation(task *task) error {
 	return nil
 }
 
-func (n *node) processSchemaMutations(pid string, index uint64,
+func (n *node) processSchemaMutations(pkey string, index uint64,
 	startTs uint64, s *intern.SchemaUpdate) error {
-	ctx, _ := n.props.CtxAndTxn(pid)
+	ctx, _ := n.props.CtxAndTxn(pkey)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runSchemaMutation(ctx, s, startTs); err != nil {
@@ -367,80 +343,194 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
 	n.DoneConfChange(cc.ID, nil)
-	// Not present in proposal map
-	n.Applied.Done(e.Index)
-	groups().triggerMembershipSync()
+}
+
+func waitForConflictResolution(attr string) error {
+	for i := 0; i < 10; i++ {
+		tctxs := posting.Txns().Iterate(func(key []byte) bool {
+			pk := x.Parse(key)
+			return pk.Attr == attr
+		})
+		if len(tctxs) == 0 {
+			return nil
+		}
+		tryAbortTransactions(tctxs)
+	}
+	return errors.New("Unable to abort transactions")
+}
+
+func updateTxns(raftIndex uint64, startTs uint64) *posting.Txn {
+	txn := &posting.Txn{
+		StartTs: startTs,
+		Indices: []uint64{raftIndex},
+	}
+	return posting.Txns().PutOrMergeIndex(txn)
+}
+
+// We don't support schema mutations across nodes in a transaction.
+// Wait for all transactions to either abort or complete and all write transactions
+// involving the predicate are aborted until schema mutations are done.
+func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
+	if proposal.Mutations.DropAll {
+		// Ensures nothing get written to disk due to commit proposals.
+		posting.Txns().Reset()
+		schema.State().DeleteAll()
+		err := posting.DeleteAll()
+		posting.TxnMarks().Done(index)
+		return err
+	}
+
+	if proposal.Mutations.StartTs == 0 {
+		posting.TxnMarks().Done(index)
+		return errors.New("StartTs must be provided.")
+	}
+
+	startTs := proposal.Mutations.StartTs
+	if len(proposal.Mutations.Schema) > 0 {
+		defer posting.TxnMarks().Done(index)
+		for _, supdate := range proposal.Mutations.Schema {
+			// This is neceassry to ensure that there is no race between when we start reading
+			// from badger and new mutation getting commited via raft and getting applied.
+			// Before Moving the predicate we would flush all and wait for watermark to catch up
+			// but there might be some proposals which got proposed but not comitted yet.
+			// It's ok to reject the proposal here and same would happen on all nodes because we
+			// would have proposed membershipstate, and all nodes would have the proposed state
+			// or some state after that before reaching here.
+			if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
+				return errPredicateMoving
+			}
+			if err := waitForConflictResolution(supdate.Predicate); err != nil {
+				return err
+			}
+			if err := n.processSchemaMutations(proposal.Key, index, startTs, supdate); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Scheduler tracks tasks at subject, predicate level, so doing
+	// schema stuff here simplies the design and we needn't worry about
+	// serializing the mutations per predicate or schema mutations
+	// We derive the schema here if it's not present
+	// Since raft committed logs are serialized, we can derive
+	// schema here without any locking
+
+	// stores a map of predicate and type of first mutation for each predicate
+	schemaMap := make(map[string]types.TypeID)
+	for _, edge := range proposal.Mutations.Edges {
+		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
+			updateTxns(index, proposal.Mutations.StartTs)
+			return errPredicateMoving
+		}
+		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+			// We should only have one edge drop in one mutation call.
+			ctx, _ := n.props.CtxAndTxn(proposal.Key)
+			defer posting.TxnMarks().Done(index)
+			if err := waitForConflictResolution(edge.Attr); err != nil {
+				return err
+			}
+			return posting.DeletePredicate(ctx, edge.Attr)
+		}
+		// Dont derive schema when doing deletion.
+		if edge.Op == intern.DirectedEdge_DEL {
+			continue
+		}
+		if _, ok := schemaMap[edge.Attr]; !ok {
+			schemaMap[edge.Attr] = posting.TypeID(edge)
+		}
+	}
+
+	total := len(proposal.Mutations.Edges)
+	x.ActiveMutations.Add(int64(total))
+	for attr, storageType := range schemaMap {
+		if _, err := schema.State().TypeOf(attr); err != nil {
+			// Schema doesn't exist
+			// Since committed entries are serialized, updateSchemaIfMissing is not
+			// needed, In future if schema needs to be changed, it would flow through
+			// raft so there won't be race conditions between read and update schema
+			updateSchemaType(attr, storageType, index)
+		}
+	}
+
+	m := proposal.Mutations
+	pctx := n.props.pctx(proposal.Key)
+	pctx.txn = updateTxns(index, m.StartTs)
+	for _, edge := range m.Edges {
+		err := posting.ErrRetry
+		for err == posting.ErrRetry {
+			err = n.processEdge(index, proposal.Key, edge)
+		}
+		if err != nil {
+			return err
+		}
+		x.ActiveMutations.Add(-1)
+	}
+	return nil
+}
+
+func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
+	if proposal.DeprecatedId != 0 {
+		proposal.Key = fmt.Sprint(proposal.DeprecatedId)
+	}
+
+	// One final applied and synced watermark would be emitted when proposal ctx ref count
+	// becomes zero.
+	pctx := n.props.pctx(proposal.Key)
+	if pctx == nil {
+		// This is during replay of logs after restart or on a replica.
+		pctx = &proposalCtx{
+			ch:  make(chan error, 1),
+			ctx: n.ctx,
+		}
+		// We assert here to make sure that we do add the proposal to the map.
+		x.AssertTruef(n.props.Store(proposal.Key, pctx),
+			"Found existing proposal with key: [%v]", proposal.Key)
+	}
+	pctx.index = index
+
+	// TODO: We should be able to remove this as well.
+	posting.TxnMarks().Begin(index)
+	if proposal.Mutations != nil {
+		// syncmarks for this shouldn't be marked done until it's comitted.
+		return n.applyMutations(proposal, index)
+	}
+
+	defer posting.TxnMarks().Done(index)
+	if len(proposal.Kv) > 0 {
+		return n.processKeyValues(proposal.Key, proposal.Kv)
+
+	} else if proposal.State != nil {
+		// This state needn't be snapshotted in this group, on restart we would fetch
+		// a state which is latest or equal to this.
+		groups().applyState(proposal.State)
+		return nil
+
+	} else if len(proposal.CleanPredicate) > 0 {
+		return n.deletePredicate(proposal.Key, proposal.CleanPredicate)
+
+	} else if proposal.TxnContext != nil {
+		return n.commitOrAbort(proposal.Key, proposal.TxnContext)
+	} else {
+		x.Fatalf("Unknown proposal")
+	}
+	return nil
 }
 
 func (n *node) processApplyCh() {
 	for e := range n.applyCh {
-		if len(e.Data) == 0 {
-			// This is not in the proposal map
-			n.Applied.Done(e.Index)
-			continue
-		}
-
-		if e.Type == raftpb.EntryConfChange {
-			n.applyConfChange(e)
-			continue
-		}
-
-		x.AssertTrue(e.Type == raftpb.EntryNormal)
-
 		proposal := &intern.Proposal{}
 		if err := proposal.Unmarshal(e.Data); err != nil {
 			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
-
-		if proposal.DeprecatedId != 0 {
-			proposal.Key = fmt.Sprint(proposal.DeprecatedId)
-		}
-
-		// One final applied and synced watermark would be emitted when proposal ctx ref count
-		// becomes zero.
-		pctx := n.props.pctx(proposal.Key)
-		if pctx == nil {
-			// This is during replay of logs after restart or on a replica.
-			pctx = &proposalCtx{
-				ch:  make(chan error, 1),
-				ctx: n.ctx,
-				cnt: 1,
-			}
-			// We assert here to make sure that we do add the proposal to the map.
-			x.AssertTruef(n.props.Store(proposal.Key, pctx),
-				"Found existing proposal with key: [%v]", proposal.Key)
-		}
-		pctx.index = e.Index
-
-		posting.TxnMarks().Begin(e.Index)
-		if proposal.Mutations != nil {
-			// syncmarks for this shouldn't be marked done until it's comitted.
-			n.sch.schedule(proposal, e.Index)
-
-		} else if len(proposal.Kv) > 0 {
-			n.processKeyValues(e.Index, proposal.Key, proposal.Kv)
-
-		} else if proposal.State != nil {
-			// This state needn't be snapshotted in this group, on restart we would fetch
-			// a state which is latest or equal to this.
-			groups().applyState(proposal.State)
-			// When proposal is done it emits done watermarks.
-			posting.TxnMarks().Done(e.Index)
-			n.props.Done(proposal.Key, nil)
-
-		} else if len(proposal.CleanPredicate) > 0 {
-			n.deletePredicate(e.Index, proposal.Key, proposal.CleanPredicate)
-
-		} else if proposal.TxnContext != nil {
-			go n.commitOrAbort(e.Index, proposal.Key, proposal.TxnContext)
-		} else {
-			x.Fatalf("Unknown proposal")
-		}
+		err := n.applyCommitted(proposal, e.Index)
+		n.props.Done(proposal.Key, err)
+		n.Applied.Done(e.Index)
 	}
 }
 
-func (n *node) commitOrAbort(index uint64, pid string, tctx *api.TxnContext) {
-	ctx, _ := n.props.CtxAndTxn(pid)
+func (n *node) commitOrAbort(pkey string, tctx *api.TxnContext) error {
+	ctx, _ := n.props.CtxAndTxn(pkey)
 	_, err := commitOrAbort(ctx, tctx)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Status of commitOrAbort %+v %v\n", tctx, err)
@@ -449,25 +539,17 @@ func (n *node) commitOrAbort(index uint64, pid string, tctx *api.TxnContext) {
 		posting.Txns().Done(tctx.StartTs)
 		posting.Oracle().Done(tctx.StartTs)
 	}
-	posting.TxnMarks().Done(index)
-	n.props.Done(pid, err)
+	return err
 }
 
-func (n *node) deletePredicate(index uint64, pid string, predicate string) {
-	ctx, _ := n.props.CtxAndTxn(pid)
-	rv := x.RaftValue{Group: n.gid, Index: index}
-	ctx = context.WithValue(ctx, "raft", rv)
-	err := posting.DeletePredicate(ctx, predicate)
-	posting.TxnMarks().Done(index)
-	n.props.Done(pid, err)
-}
-
-func (n *node) processKeyValues(index uint64, pkey string, kvs []*intern.KV) error {
+func (n *node) deletePredicate(pkey string, predicate string) error {
 	ctx, _ := n.props.CtxAndTxn(pkey)
-	err := populateKeyValues(ctx, kvs)
-	posting.TxnMarks().Done(index)
-	n.props.Done(pkey, err)
-	return nil
+	return posting.DeletePredicate(ctx, predicate)
+}
+
+func (n *node) processKeyValues(pkey string, kvs []*intern.KV) error {
+	ctx, _ := n.props.CtxAndTxn(pkey)
+	return populateKeyValues(ctx, kvs)
 }
 
 func (n *node) applyAllMarks(ctx context.Context) {
@@ -683,12 +765,18 @@ func (n *node) Run() {
 				// possible sequentially
 				n.Applied.Begin(entry.Index)
 
-				if !leader && entry.Type == raftpb.EntryConfChange {
-					// Config changes in followers must be applied straight away.
+				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
+					// Not present in proposal map.
+					n.Applied.Done(entry.Index)
+					groups().triggerMembershipSync()
+
+				} else if len(entry.Data) == 0 {
+					// TODO: Say something. Do something.
+					n.Applied.Done(entry.Index)
+
 				} else {
-					// TODO: Stop accepting requests when applyCh is full
-					// Just queue up to be processed. Don't wait on them.
+					// When applyCh fills up, this would automatically block.
 					n.applyCh <- entry
 				}
 
