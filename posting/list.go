@@ -256,14 +256,7 @@ func (l *List) updateMutationLayer(mpost *intern.Posting) {
 		l.mutationMap[mpost.StartTs] = plist
 		return
 	}
-	if len(plist.Postings) == 1 {
-		prev := plist.Postings[0]
-		if hasDeleteAll(prev) {
-			// We have a delete all present. This should be the only thing present for this
-			// transaction. Do nothing.
-			return
-		}
-	}
+	// Even if we have a delete all in this transaction, we should still pick up any updates since.
 	for i, prev := range plist.Postings {
 		if prev.Uid == mpost.Uid {
 			plist.Postings[i] = mpost
@@ -498,14 +491,13 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 		effectiveTs := effective(startTs, pcommit)
 		if effectiveTs > deleteBelow {
 			// We're above the deleteBelow marker. We wouldn't reach here if effectiveTs is zero.
-			if len(plist.Postings) == 1 {
-				// Delete all can be the only thing in that transaction, for this PL.
-				mpost := plist.Postings[0]
+			for _, mpost := range plist.Postings {
 				if hasDeleteAll(mpost) {
 					deleteBelow = effectiveTs
+					continue
 				}
+				posts = append(posts, mpost)
 			}
-			posts = append(posts, plist.Postings...)
 		}
 	}
 
@@ -517,7 +509,7 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 		// Trim the posts.
 		for _, post := range posts {
 			effectiveTs := effective(post.StartTs, atomic.LoadUint64(&post.CommitTs))
-			if effectiveTs <= deleteBelow {
+			if effectiveTs < deleteBelow { // Do pick the posts at effectiveTs == deleteBelow.
 				continue
 			}
 			result = append(result, post)
