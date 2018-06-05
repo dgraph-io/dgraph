@@ -291,7 +291,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 	return err
 }
 
-func (n *node) processMutation(ridx uint64, pkey string, edge *intern.DirectedEdge) error {
+func (n *node) processEdge(ridx uint64, pkey string, edge *intern.DirectedEdge) error {
 	ctx, txn := n.props.CtxAndTxn(pkey)
 	if txn.ShouldAbort() {
 		return dy.ErrConflict
@@ -372,7 +372,7 @@ func updateTxns(raftIndex uint64, startTs uint64) *posting.Txn {
 // involving the predicate are aborted until schema mutations are done.
 
 // 1 watermark would be done in the defer call. Rest n(number of edges) would be done when
-// processTasks calls processMutation. When all are done, then we would send back error on
+// processTasks calls processEdge. When all are done, then we would send back error on
 // proposal channel and finally mutation would return to the user. This ensures they are
 // applied to memory before we return.
 func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
@@ -464,7 +464,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	for _, edge := range m.Edges {
 		err := posting.ErrRetry
 		for err == posting.ErrRetry {
-			err = n.processMutation(index, proposal.Key, edge)
+			err = n.processEdge(index, proposal.Key, edge)
 		}
 		if err != nil {
 			return err
