@@ -475,8 +475,8 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		require.NoError(t, ol.CommitMutation(ctx, 7, 11))
 
 		require.EqualValues(t, 2, ol.Length(10, 0)) // Two commits should be found.
-		require.EqualValues(t, 0, ol.Length(12, 0)) // No commits should be found.
-		require.EqualValues(t, 1, ol.Length(15, 0)) // Only one commit should be found.
+		require.EqualValues(t, 1, ol.Length(12, 0)) // Only one commit should be found.
+		require.EqualValues(t, 2, ol.Length(15, 0)) // Only one commit should be found.
 	}
 	{
 		edge := &intern.DirectedEdge{
@@ -494,13 +494,13 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		require.NoError(t, ol.AbortTransaction(ctx, 8))
 		require.EqualValues(t, 0, ol.Length(8, 0))  // Nothing <= 8.
 		require.EqualValues(t, 1, ol.Length(10, 0)) // Find committed 10.
-		require.EqualValues(t, 0, ol.Length(12, 0)) // Nothing <= 12.
-		require.EqualValues(t, 1, ol.Length(15, 0)) // Find committed 14.
+		require.EqualValues(t, 1, ol.Length(12, 0)) // Find committed 11.
+		require.EqualValues(t, 2, ol.Length(15, 0)) // Find committed 14.
 		opts := ListOptions{ReadTs: 15}
 		list, err := ol.Uids(opts)
 		require.NoError(t, err)
-		uid := list.Uids[0]
-		require.EqualValues(t, 9, uid)
+		require.EqualValues(t, 7, list.Uids[0])
+		require.EqualValues(t, 9, list.Uids[1])
 	}
 }
 
