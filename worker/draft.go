@@ -370,11 +370,6 @@ func updateTxns(raftIndex uint64, startTs uint64) *posting.Txn {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-
-// 1 watermark would be done in the defer call. Rest n(number of edges) would be done when
-// processTasks calls processEdge. When all are done, then we would send back error on
-// proposal channel and finally mutation would return to the user. This ensures they are
-// applied to memory before we return.
 func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	if proposal.Mutations.DropAll {
 		// Ensures nothing get written to disk due to commit proposals.
@@ -771,7 +766,6 @@ func (n *node) Run() {
 				n.Applied.Begin(entry.Index)
 
 				if entry.Type == raftpb.EntryConfChange {
-					// Config changes in followers must be applied straight away.
 					n.applyConfChange(entry)
 					// Not present in proposal map.
 					n.Applied.Done(entry.Index)
