@@ -343,9 +343,6 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
 	n.DoneConfChange(cc.ID, nil)
-	// Not present in proposal map
-	n.Applied.Done(e.Index)
-	groups().triggerMembershipSync()
 }
 
 func waitForConflictResolution(attr string) error {
@@ -776,8 +773,13 @@ func (n *node) Run() {
 				if entry.Type == raftpb.EntryConfChange {
 					// Config changes in followers must be applied straight away.
 					n.applyConfChange(entry)
+					// Not present in proposal map.
+					n.Applied.Done(entry.Index)
+					groups().triggerMembershipSync()
+
 				} else if len(entry.Data) == 0 {
-					// TODO: Do something.
+					// TODO: Say something. Do something.
+					n.Applied.Done(entry.Index)
 
 				} else {
 					// When applyCh fills up, this would automatically block.
