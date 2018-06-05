@@ -49,7 +49,7 @@ type proposals struct {
 	sync.RWMutex
 	// The key is hex encoded version of <raft_id_of_node><random_uint64>
 	// This should make sure its not same across replicas.
-	ids map[string]*proposalCtx
+	keys map[string]*proposalCtx
 }
 
 func uniqueKey() string {
@@ -62,23 +62,23 @@ func uniqueKey() string {
 func (p *proposals) Store(key string, pctx *proposalCtx) bool {
 	p.Lock()
 	defer p.Unlock()
-	if _, has := p.ids[key]; has {
+	if _, has := p.keys[key]; has {
 		return false
 	}
-	p.ids[key] = pctx
+	p.keys[key] = pctx
 	return true
 }
 
 func (p *proposals) pctx(key string) *proposalCtx {
 	p.RLock()
 	defer p.RUnlock()
-	return p.ids[key]
+	return p.keys[key]
 }
 
 func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
 	p.RLock()
 	defer p.RUnlock()
-	pd, has := p.ids[key]
+	pd, has := p.keys[key]
 	x.AssertTrue(has)
 	return pd.ctx, pd.txn
 }
@@ -86,7 +86,7 @@ func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
 func (p *proposals) Done(key string, err error) {
 	p.Lock()
 	defer p.Unlock()
-	pd, has := p.ids[key]
+	pd, has := p.keys[key]
 	if !has {
 		return
 	}
@@ -94,7 +94,7 @@ func (p *proposals) Done(key string, err error) {
 	if err != nil {
 		pd.err = err
 	}
-	delete(p.ids, key)
+	delete(p.keys, key)
 	pd.ch <- pd.err
 }
 
@@ -159,7 +159,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 	m := conn.NewNode(rc)
 	props := proposals{
-		ids: make(map[string]*proposalCtx),
+		keys: make(map[string]*proposalCtx),
 	}
 
 	b := make([]byte, 8)
@@ -285,7 +285,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 			}
 		}
 	case <-cctx.Done():
-		return fmt.Errorf("While proposing to RAFT group, err: %+v\n", cctx.Err())
+		return fmt.Errorf("While proposing to Raft group, err: %+v\n", cctx.Err())
 	}
 
 	return err
@@ -314,9 +314,9 @@ func (n *node) processEdge(ridx uint64, pkey string, edge *intern.DirectedEdge) 
 	return nil
 }
 
-func (n *node) processSchemaMutations(pid string, index uint64,
+func (n *node) processSchemaMutations(pkey string, index uint64,
 	startTs uint64, s *intern.SchemaUpdate) error {
-	ctx, _ := n.props.CtxAndTxn(pid)
+	ctx, _ := n.props.CtxAndTxn(pkey)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runSchemaMutation(ctx, s, startTs); err != nil {
