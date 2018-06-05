@@ -56,7 +56,7 @@ func addMutationHelper(t *testing.T, l *List, edge *intern.DirectedEdge, op uint
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	_, err := l.AddMutation(context.Background(), txn, edge)
+	err := l.AddMutation(context.Background(), txn, edge)
 	require.NoError(t, err)
 }
 
@@ -218,7 +218,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 		Op:    intern.DirectedEdge_DEL,
 	}
 	txn := &Txn{StartTs: 1}
-	_, err = ol.AddMutation(context.Background(), txn, edge)
+	err = ol.AddMutation(context.Background(), txn, edge)
 	require.NoError(t, err)
 
 	// Set value to newcars, commit it
@@ -253,7 +253,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 		Op:    intern.DirectedEdge_DEL,
 	}
 	txn = &Txn{StartTs: 3}
-	_, err = ol.AddMutation(context.Background(), txn, edge)
+	err = ol.AddMutation(context.Background(), txn, edge)
 	require.NoError(t, err)
 
 	// Part of same transaction as sp*, so should see zero length even
@@ -460,8 +460,17 @@ func TestAddMutation_mrjn2(t *testing.T) {
 			Op:    intern.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 7}
-		_, err := ol.AddMutation(ctx, txn, edge)
+		err := ol.AddMutation(ctx, txn, edge)
 		require.NoError(t, err)
+
+		// Add edge just to test that the deletion still happens.
+		edge = &intern.DirectedEdge{
+			ValueId:   7,
+			ValueType: intern.Posting_INT,
+		}
+		err = ol.AddMutation(ctx, txn, edge)
+		require.NoError(t, err)
+
 		require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits should still be found.
 		require.NoError(t, ol.CommitMutation(ctx, 7, 11))
 
@@ -475,7 +484,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 			Op:    intern.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 5}
-		_, err := ol.AddMutation(ctx, txn, edge)
+		err := ol.AddMutation(ctx, txn, edge)
 		require.NoError(t, err)
 		require.NoError(t, ol.CommitMutation(ctx, 5, 7))
 
@@ -890,7 +899,7 @@ func BenchmarkAddMutations(b *testing.B) {
 			Op:      intern.DirectedEdge_SET,
 		}
 		txn := &Txn{StartTs: 1}
-		if _, err = l.AddMutation(ctx, txn, edge); err != nil {
+		if err = l.AddMutation(ctx, txn, edge); err != nil {
 			b.Error(err)
 		}
 	}

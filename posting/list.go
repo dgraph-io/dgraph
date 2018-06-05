@@ -72,8 +72,7 @@ type List struct {
 	onDisk        int32 // Using atomic, Was written to disk atleast once.
 }
 
-// calculateSize would give you the size estimate.
-// Expensive, so run it carefully.
+// calculateSize would give you the size estimate. This is expensive, so run it carefully.
 func (l *List) calculateSize() int32 {
 	sz := int(unsafe.Sizeof(l))
 	sz += l.plist.Size()
@@ -233,22 +232,21 @@ func (l *List) SetForDeletion() bool {
 	return true
 }
 
+func hasDeleteAll(mpost *intern.Posting) bool {
+	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star))
+}
+
 // Ensure that you either abort the uncomitted postings or commit them before calling me.
-func (l *List) updateMutationLayer(mpost *intern.Posting) bool {
+func (l *List) updateMutationLayer(mpost *intern.Posting) {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
-	// pk := x.Parse(l.key)
-	// if pk.Attr == "bal" {
-	// 	x.Printf("PK: %+v. updateMutationLayer: %+v\n", pk, mpost)
-	// }
-	if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
+
+	// If we have a delete all, then we replace the map entry with just one.
+	if hasDeleteAll(mpost) {
 		plist := &intern.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
 		l.mutationMap[mpost.StartTs] = plist
-		// pk := x.Parse(l.key)
-		// log.Printf("Start: %d. Deleting entire Posting List: %+v\n", startTs, pk)
-		// Remove all mutations done in same transaction.
-		return true
+		return
 	}
 
 	plist, ok := l.mutationMap[mpost.StartTs]
@@ -256,22 +254,30 @@ func (l *List) updateMutationLayer(mpost *intern.Posting) bool {
 		plist := &intern.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
 		l.mutationMap[mpost.StartTs] = plist
-		return true
+		return
+	}
+	if len(plist.Postings) == 1 {
+		prev := plist.Postings[0]
+		if hasDeleteAll(prev) {
+			// We have a delete all present. This should be the only thing present for this
+			// transaction. Do nothing.
+			return
+		}
 	}
 	for i, prev := range plist.Postings {
 		if prev.Uid == mpost.Uid {
 			plist.Postings[i] = mpost
-			return true
+			return
 		}
 	}
 	plist.Postings = append(plist.Postings, mpost)
-	return true
+	return
 }
 
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to BadgerDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge) error {
 	t1 := time.Now()
 	l.Lock()
 	if dur := time.Since(t1); dur > time.Millisecond {
@@ -312,17 +318,20 @@ func fingerprintEdge(t *intern.DirectedEdge) uint64 {
 	return id
 }
 
-func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge) (bool, error) {
+func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
 		}
-		return false, ErrRetry
+		return ErrRetry
 	}
 	if txn.ShouldAbort() {
-		return false, y.ErrConflict
+		return y.ErrConflict
 	}
 
+	// TODO: We should ensure that commit marks are applied to posting lists in the right
+	// order. We can do so by proposing them in the same order as received by the Oracle delta
+	// stream from Zero, instead of in goroutines.
 	checkConflict := false
 	if t.Attr == "_predicate_" {
 		// Don't check for conflict.
@@ -338,7 +347,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	}
 
 	t1 := time.Now()
-	hasMutated := l.updateMutationLayer(mpost)
+	l.updateMutationLayer(mpost)
 	atomic.AddInt32(&l.estimatedSize, int32(mpost.Size()+16 /* various overhead */))
 	if dur := time.Since(t1); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -347,7 +356,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	}
 	l.activeTxns[txn.StartTs] = struct{}{}
 	txn.AddDelta(l.key, mpost, checkConflict)
-	return hasMutated, nil
+	return nil
 }
 
 func (l *List) AbortTransaction(ctx context.Context, startTs uint64) error {
@@ -386,8 +395,6 @@ func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) err
 }
 
 func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) error {
-	// pk := x.Parse(l.key)
-	// log.Printf("Commit mark: %d -> %d. Key: %+v\n", startTs, commitTs, pk)
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
@@ -471,11 +478,14 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 	var deleteBelow uint64
 	var posts []*intern.Posting
 	for startTs, plist := range l.mutationMap {
-		// Iterate over the commits in order of their
 		pcommit := atomic.LoadUint64(&plist.Commit)
 		if pcommit == 0 {
 			commitTs := Oracle().CommitTs(startTs)
 			if commitTs > 0 {
+				// TODO: We should propose the txn status before applying them in local Oracle. In
+				// fact, we might not even need to have the local Oracle storage, if we propose them
+				// in the order we receive them.
+				// If everything is proposed upfront, this print should NOT happen.
 				// x.Printf("ORACLE: Found commit ts only via Oracle. Start: %d. Commit: %d\n", startTs, commitTs)
 				atomic.StoreUint64(&plist.Commit, commitTs)
 				for _, mpost := range plist.Postings {
@@ -491,7 +501,7 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 			if len(plist.Postings) == 1 {
 				// Delete all can be the only thing in that transaction, for this PL.
 				mpost := plist.Postings[0]
-				if mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) {
+				if hasDeleteAll(mpost) {
 					deleteBelow = effectiveTs
 				}
 			}
@@ -533,21 +543,6 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *intern.Postin
 	l.AssertRLock()
 
 	plist, mposts := l.pickPostings(readTs)
-	// x.Printf("plist: %+v. pickPostings: %+v\n", plist, mposts)
-	// midx := 0
-	// var deleteTs uint64
-	// if l.markdeleteAll == 0 {
-	// } else if l.markdeleteAll == readTs {
-	// 	// Check if there is uncommitted sp* at current readTs.
-	// 	deleteTs = readTs
-	// } else if l.markdeleteAll < readTs {
-	// 	// Ignore all reads before this.
-	// 	// Fixing the pl is difficult with locks.
-	// 	// Ignore if SP* was committed with timestamp > readTs
-	// 	if ts := Oracle().CommitTs(l.markdeleteAll); ts < readTs {
-	// 		deleteTs = ts
-	// 	}
-	// }
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
@@ -737,10 +732,10 @@ func (l *List) rollup() error {
 		}
 	}
 
-	// TODO: Might want to recalculate size.
 	l.minTs = l.commitTs
 	l.plist = final
 	l.numCommits = 0
+	atomic.StoreInt32(&l.estimatedSize, l.calculateSize())
 	return nil
 }
 
@@ -767,9 +762,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		return false, nil
 	}
 	x.AssertTrue(l.minTs > 0)
-	data, meta := marshalPostingList(l.plist)
-	atomic.StoreInt32(&l.estimatedSize, l.calculateSize())
 
+	data, meta := marshalPostingList(l.plist)
 	for {
 		pLen := atomic.LoadInt64(&x.MaxPlSz)
 		if int64(len(data)) <= pLen {
