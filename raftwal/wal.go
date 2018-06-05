@@ -193,9 +193,7 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 		defer itr.Close()
 
 		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
-			key := itr.Item().Key()
-			newk := make([]byte, len(key))
-			copy(newk, key)
+			newk := itr.Item().KeyCopy(nil)
 			if err := txn.Delete(newk); err == badger.ErrTxnTooBig {
 				if err := txn.CommitAt(1, nil); err != nil {
 					return err

@@ -194,10 +194,12 @@ func (t *transactions) PutOrMergeIndex(src *Txn) *Txn {
 	return dst
 }
 
+// TODO: This is not being called. Remove this.
 func (t *Txn) SetAbort() {
 	atomic.StoreUint32(&t.shouldAbort, 1)
 }
 
+// TODO: Remove this.
 func (t *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
@@ -224,6 +226,22 @@ func (t *Txn) Fill(ctx *api.TxnContext) {
 	t.nextKeyIdx = len(t.deltas)
 }
 
+// TODO: Do we really need this? I don't think so. We can just store the startTs -> commitTs marker,
+// and let rollup do it's thing. All this logic seems a duplicate of rollup.
+// This would cause an issue with snapshots. How do we ensure that we can take them?
+// A solution would be to iterate through entries and see what the minTs is for their corresponding
+// posting list (potentially use a fingerprint -> ts map).
+//
+// For each entry, store the start ts. Match it with the commit ts. If it is below the min ts, then we can remove that entry.
+//
+// Instead of trying to keep track of the txn deltas, etc., we can just iterate over the entries in
+// the WAL, during snapshot iteration, and call rollup on all the PLs for the mutations which have been
+// committed.
+// We have to keep track of txn deltas, to fill txn contexts. Or, maybe we could just use the
+// proposal context to keep track of the conflict keys. We'd still need to keep track of indices to
+// find the max applied or something. We actually might not need to keep track of all indices.
+// Because proposal already has the index, so it's just max of proposal index and applied.
+//
 // Don't call this for schema mutations. Directly commit them.
 func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	tx.Lock()
@@ -315,6 +333,7 @@ func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error
 	return tx.commitMutationsMemory(ctx, commitTs)
 }
 
+// TODO: No need for this as well, if we just store the start -> commit Ts markers.
 func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
 	for _, d := range tx.deltas {
 		plist, err := Get(d.key)
