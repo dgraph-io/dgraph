@@ -30,6 +30,7 @@ type Options struct {
 	GroupIds            string
 	MyAddr              string
 	ZeroAddr            string
+	MaxUIDsForTrigram   int
 	RaftId              uint64
 	ExpandEdge          bool
 	WhiteListedIPRanges []IPRange
