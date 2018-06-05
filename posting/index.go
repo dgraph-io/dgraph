@@ -123,8 +123,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *intern.DirectedEdge,
 	}
 
 	x.AssertTrue(plist != nil)
-	_, err = plist.AddMutation(ctx, txn, edge)
-	if err != nil {
+	if err = plist.AddMutation(ctx, txn, edge); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error adding/deleting %s for attr %s entity %d: %v",
 				token, edge.Attr, edge.Entity, err)
@@ -157,8 +156,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 			return emptyCountParams, ErrTsTooOld
 		}
 	}
-	_, err := plist.addMutation(ctx, txn, edge)
-	if err != nil {
+	if err := plist.addMutation(ctx, txn, edge); err != nil {
 		return emptyCountParams, err
 	}
 	if hasCountIndex {
@@ -266,8 +264,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *intern.DirectedEdge,
 
 	l.Lock()
 	defer l.Unlock()
-	_, err := l.addMutation(ctx, txn, t)
-	return err
+	return l.addMutation(ctx, txn, t)
 }
 
 func (txn *Txn) addCountMutation(ctx context.Context, t *intern.DirectedEdge, count uint32,
@@ -280,8 +277,7 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *intern.DirectedEdge, co
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	_, err = plist.AddMutation(ctx, txn, t)
-	if err != nil {
+	if err = plist.AddMutation(ctx, txn, t); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error adding/deleting count edge for attr %s count %d dst %d: %v",
 				t.Attr, count, t.ValueId, err)
@@ -343,8 +339,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			return val, found, emptyCountParams, ErrTsTooOld
 		}
 	}
-	_, err = l.addMutation(ctx, txn, t)
-	if err != nil {
+	if err = l.addMutation(ctx, txn, t); err != nil {
 		return val, found, emptyCountParams, err
 	}
 	if hasCountIndex {
@@ -753,8 +748,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 				Op:      intern.DirectedEdge_DEL,
 			}
 
-			_, err := pl.AddMutation(ctx, txn, t)
-			if err != nil {
+			if err := pl.AddMutation(ctx, txn, t); err != nil {
 				return err
 			}
 
@@ -767,8 +761,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 				Label:     mpost.Label,
 				Facets:    mpost.Facets,
 			}
-			_, err = pl.AddMutation(ctx, txn, newEdge)
-			if err != nil {
+			if err := pl.AddMutation(ctx, txn, newEdge); err != nil {
 				return err
 			}
 		}

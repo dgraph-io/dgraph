@@ -117,9 +117,8 @@ func addMutation(t *testing.T, l *List, edge *intern.DirectedEdge, op uint32,
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {
-		ok, err := l.AddMutation(context.Background(), txn, edge)
+		err := l.AddMutation(context.Background(), txn, edge)
 		require.NoError(t, err)
-		require.True(t, ok)
 	}
 	require.NoError(t, txn.CommitMutations(context.Background(), commitTs))
 }
@@ -327,8 +326,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 			it.Next()
 			continue
 		}
-		prevKey := make([]byte, len(key))
-		copy(prevKey, key)
+		prevKey = append(prevKey[:0], key...)
 		revKeys = append(revKeys, string(key))
 		l, err := ReadPostingList(key, it)
 		require.NoError(t, err)
