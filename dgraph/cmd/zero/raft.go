@@ -411,7 +411,7 @@ func (n *node) triggerLeaderChange() {
 	n.server.updateZeroLeader()
 }
 
-func (n *node) initAndStartNode(wal *raftwal.Wal) error {
+func (n *node) initAndStartNode(wal *raftwal.DiskStorage) error {
 	idx, restart, err := n.InitFromWal(wal)
 	n.Applied.SetDoneUntil(idx)
 	x.Check(err)
@@ -527,7 +527,7 @@ func (n *node) trySnapshot(skip uint64) {
 	x.Checkf(err, "While creating snapshot")
 	x.Checkf(n.Store.Compact(idx), "While compacting snapshot")
 	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
-	x.Check(n.Wal.StoreSnapshot(0, s))
+	x.Check(n.Wal.StoreSnapshot(s))
 }
 
 func (n *node) Run() {
@@ -560,7 +560,7 @@ func (n *node) Run() {
 				n.sendReadIndex(ri, rs.Index)
 			}
 			// First store the entries, then the hardstate and snapshot.
-			x.Check(n.Wal.Store(0, rd.HardState, rd.Entries))
+			x.Check(n.Wal.Store(rd.HardState, rd.Entries))
 
 			// Now store them in the in-memory store.
 			n.SaveToStorage(rd.HardState, rd.Entries)
@@ -569,7 +569,7 @@ func (n *node) Run() {
 				var state intern.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				n.server.SetMembershipState(&state)
-				x.Check(n.Wal.StoreSnapshot(0, rd.Snapshot))
+				x.Check(n.Wal.StoreSnapshot(rd.Snapshot))
 				n.SaveSnapshot(rd.Snapshot)
 			}
 

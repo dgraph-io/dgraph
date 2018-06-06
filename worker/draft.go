@@ -722,7 +722,7 @@ func (n *node) Run() {
 			}
 
 			// First store the entries, then the hardstate and snapshot.
-			x.Check(n.Wal.Store(n.gid, rd.HardState, rd.Entries))
+			x.Check(n.Wal.Store(rd.HardState, rd.Entries))
 
 			// Now store them in the in-memory store.
 			n.SaveToStorage(rd.HardState, rd.Entries)
@@ -744,7 +744,7 @@ func (n *node) Run() {
 				} else {
 					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
-				x.Check(n.Wal.StoreSnapshot(n.gid, rd.Snapshot))
+				x.Check(n.Wal.StoreSnapshot(rd.Snapshot))
 				n.SaveSnapshot(rd.Snapshot)
 			}
 
@@ -912,7 +912,7 @@ func (n *node) snapshot(skip uint64) {
 	x.Checkf(n.Store.Compact(snapshotIdx), "While compacting snapshot")
 	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", snapshotIdx,
 		n.Applied.DoneUntil())
-	x.Check(n.Wal.StoreSnapshot(n.gid, s))
+	x.Check(n.Wal.StoreSnapshot(s))
 }
 
 func (n *node) joinPeers() error {
@@ -961,7 +961,7 @@ func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
 }
 
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
-func (n *node) InitAndStartNode(wal *raftwal.Wal) {
+func (n *node) InitAndStartNode(wal *raftwal.DiskStorage) {
 	idx, restart, err := n.InitFromWal(wal)
 	x.Check(err)
 	n.Applied.SetDoneUntil(idx)

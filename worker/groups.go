@@ -32,7 +32,7 @@ type groupi struct {
 	// TODO: Is this context being used?
 	ctx       context.Context
 	cancel    context.CancelFunc
-	wal       *raftwal.Wal
+	wal       *raftwal.DiskStorage
 	state     *intern.MembershipState
 	Node      *node
 	gid       uint32
@@ -110,10 +110,10 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	posting.Oracle().SetMaxPending(connState.MaxPending)
 	gr.applyState(connState.GetState())
 
-	gr.wal = raftwal.Init(walStore, Config.RaftId)
+	gid := gr.groupId()
+	gr.wal = raftwal.Init(walStore, Config.RaftId, gid)
 	gr.triggerCh = make(chan struct{}, 1)
 	gr.delPred = make(chan struct{}, 1)
-	gid := gr.groupId()
 	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.Node = gr.Node.Node

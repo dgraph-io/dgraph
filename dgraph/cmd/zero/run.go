@@ -178,10 +178,10 @@ func run() {
 	kvOpt.Dir = opts.w
 	kvOpt.ValueDir = opts.w
 	kvOpt.TableLoadingMode = bopts.MemoryMap
-	kv, err := badger.OpenManaged(kvOpt)
+	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
-	wal := raftwal.Init(kv, opts.nodeId)
+	wal := raftwal.Init(kv, opts.nodeId, 0)
 	x.Check(st.node.initAndStartNode(wal))
 
 	sdCh := make(chan os.Signal, 1)

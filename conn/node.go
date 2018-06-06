@@ -50,7 +50,7 @@ type Node struct {
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
 	Store       *raft.MemoryStorage
-	Wal         *raftwal.Wal
+	Wal         *raftwal.DiskStorage
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
@@ -200,11 +200,11 @@ func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry) {
 	n.Store.Append(es)
 }
 
-func (n *Node) InitFromWal(wal *raftwal.Wal) (idx uint64, restart bool, rerr error) {
+func (n *Node) InitFromWal(wal *raftwal.DiskStorage) (idx uint64, restart bool, rerr error) {
 	n.Wal = wal
 
 	var sp raftpb.Snapshot
-	sp, rerr = wal.Snapshot(n.RaftContext.Group)
+	sp, rerr = wal.Snapshot()
 	if rerr != nil {
 		return
 	}
@@ -220,7 +220,7 @@ func (n *Node) InitFromWal(wal *raftwal.Wal) (idx uint64, restart bool, rerr err
 	}
 
 	var hd raftpb.HardState
-	hd, rerr = wal.HardState(n.RaftContext.Group)
+	hd, rerr = wal.HardState()
 	if rerr != nil {
 		return
 	}

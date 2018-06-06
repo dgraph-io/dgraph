@@ -40,7 +40,7 @@ var (
 
 type Server struct {
 	x.SafeMutex
-	wal  *raftwal.Wal
+	wal  *raftwal.DiskStorage
 	Node *node
 	orc  *Oracle
 
