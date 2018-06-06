@@ -75,7 +75,7 @@ func (w *DiskStorage) entryKey(idx uint64) []byte {
 	return b
 }
 
-func (w *DiskStorage) prefix() []byte {
+func (w *DiskStorage) entryPrefix() []byte {
 	b := make([]byte, 12)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
 	binary.BigEndian.PutUint32(b[8:12], w.gid)
@@ -104,22 +104,13 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 		return 0, raft.ErrCompacted
 	}
 
-	err = w.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(w.entryKey(idx))
-		if err != nil {
-			return err
-		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		return e.Unmarshal(val)
-	})
-	if err == badger.ErrKeyNotFound {
+	if err := w.seekEntry(&e, idx, false); err == errNotFound {
 		return 0, raft.ErrUnavailable
-	}
-	if err != nil {
+	} else if err != nil {
 		return 0, err
+	}
+	if idx < e.Index {
+		return 0, raft.ErrCompacted
 	}
 	return e.Term, nil
 }
@@ -127,7 +118,7 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 var errNotFound = errors.New("Unable to find raft entry")
 
 // TODO: We could optimize this by not looking up value, and parsing the key only.
-func (w *DiskStorage) seekEntry(e *raftpb.Entry, reverse bool) error {
+func (w *DiskStorage) seekEntry(e *raftpb.Entry, seekTo uint64, reverse bool) error {
 	return w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
@@ -135,12 +126,8 @@ func (w *DiskStorage) seekEntry(e *raftpb.Entry, reverse bool) error {
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		if reverse {
-			itr.Seek(w.entryKey(math.MaxUint64))
-		} else {
-			itr.Seek(w.entryKey(0))
-		}
-		if !itr.Valid() {
+		itr.Seek(w.entryKey(seekTo))
+		if !itr.ValidForPrefix(w.entryPrefix()) {
 			return errNotFound
 		}
 		item := itr.Item()
@@ -157,7 +144,7 @@ func (w *DiskStorage) seekEntry(e *raftpb.Entry, reverse bool) error {
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
 	var e raftpb.Entry
-	if err := w.seekEntry(&e, false); err != nil {
+	if err := w.seekEntry(&e, 0, false); err != nil {
 		return 0, err
 	}
 	return e.Index, nil
@@ -166,7 +153,7 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 // LastIndex returns the index of the last entry in the log.
 func (w *DiskStorage) LastIndex() (uint64, error) {
 	var e raftpb.Entry
-	if err := w.seekEntry(&e, true); err != nil {
+	if err := w.seekEntry(&e, math.MaxUint64, true); err != nil {
 		return 0, err
 	}
 	return e.Index, nil
@@ -263,7 +250,7 @@ func (w *DiskStorage) Store(h raftpb.HardState, es []raftpb.Entry) error {
 		// Ideally we should be deleting entries from previous term with index >= i,
 		// but to avoid complexity we remove them during reading from wal.
 		start := w.entryKey(i + 1)
-		prefix := w.prefix()
+		prefix := w.entryPrefix()
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
 		itr := txn.NewIterator(opt)
@@ -354,7 +341,7 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 
 		start := w.entryKey(lo)
 		end := w.entryKey(hi) // Not included in results.
-		prefix := w.prefix()
+		prefix := w.entryPrefix()
 
 		var firstIndex, lastIndex uint64
 		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
