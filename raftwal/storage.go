@@ -75,6 +75,11 @@ func (w *DiskStorage) entryKey(idx uint64) []byte {
 	return b
 }
 
+func (w *DiskStorage) parseIndex(key []byte) uint64 {
+	x.AssertTrue(len(key) == 20)
+	return binary.BigEndian.Uint64(key[12:20])
+}
+
 func (w *DiskStorage) entryPrefix() []byte {
 	b := make([]byte, 12)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
@@ -159,6 +164,59 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 	return e.Index, nil
 }
 
+func (w *DiskStorage) Compact(compactIndex uint64) error {
+	prefix := w.entryPrefix()
+	var keys []string
+	err := w.db.View(func(txn *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchValues = false
+		itr := txn.NewIterator(opt)
+		defer itr.Close()
+
+		first := true
+		var index uint64
+		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+			item := itr.Item()
+			index = w.parseIndex(item.Key())
+			if first {
+				first = false
+				if compactIndex <= index {
+					return raft.ErrCompacted
+				}
+			}
+			if index >= compactIndex {
+				break
+			}
+			keys = append(keys, string(item.Key()))
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	txn := w.db.NewTransaction(true)
+	defer txn.Discard()
+	for i, k := range keys {
+		err := txn.Delete([]byte(k))
+		if err == badger.ErrTxnTooBig {
+			if err := txn.Commit(nil); err != nil {
+				return err
+			}
+			txn = w.db.NewTransaction(true)
+			defer txn.Discard()
+			if err := txn.Delete([]byte(k)); err != nil {
+				return err
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return txn.Commit(nil)
+}
+
+// TODO: Work on this.
 func (w *DiskStorage) StoreSnapshot(s raftpb.Snapshot) error {
 	if raft.IsEmptySnap(s) {
 		return nil
@@ -335,7 +393,15 @@ func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, 
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
 func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr error) {
-	err := w.db.View(func(txn *badger.Txn) error {
+	first, err := w.FirstIndex()
+	if err != nil {
+		return es, err
+	}
+	if lo <= first {
+		return nil, raft.ErrCompacted
+	}
+
+	err = w.db.View(func(txn *badger.Txn) error {
 		itr := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer itr.Close()
 
@@ -371,14 +437,17 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 			// removed when storing anyway.
 			es = append(es[:e.Index-firstIndex], e)
 		}
-		if firstIndex == 0 || lo < firstIndex {
+		if firstIndex == 0 {
 			return raft.ErrCompacted
 		}
-		if hi > lastIndex {
+		if hi > lastIndex+1 {
 			return raft.ErrUnavailable
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	// TODO: This could be optimized to do a rough processing within.
 	es = limitSize(es, maxSize)
 	return es, err

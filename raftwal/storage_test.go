@@ -18,7 +18,9 @@ package raftwal
 
 import (
 	"io/ioutil"
+	"math"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/coreos/etcd/raft"
@@ -61,7 +63,6 @@ func TestStorageTerm(t *testing.T) {
 
 	for i, tt := range tests {
 		require.NoError(t, ds.Store(pb.HardState{}, ents))
-		// s := &raft.MemoryStorage{ents: ents}
 
 		func() {
 			defer func() {
@@ -83,85 +84,110 @@ func TestStorageTerm(t *testing.T) {
 	}
 }
 
-//func TestStorageEntries(t *testing.T) {
-//	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
-//	tests := []struct {
-//		lo, hi, maxsize uint64
+func TestStorageEntries(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
 
-//		werr     error
-//		wentries []pb.Entry
-//	}{
-//		{2, 6, math.MaxUint64, raft.ErrCompacted, nil},
-//		{3, 4, math.MaxUint64, raft.ErrCompacted, nil},
-//		{4, 5, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}}},
-//		{4, 6, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
-//		{4, 7, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
-//		// even if maxsize is zero, the first entry should be returned
-//		{4, 7, 0, nil, []pb.Entry{{Index: 4, Term: 4}}},
-//		// limit to 2
-//		{4, 7, uint64(ents[1].Size() + ents[2].Size()), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
-//		// limit to 2
-//		{4, 7, uint64(ents[1].Size() + ents[2].Size() + ents[3].Size()/2), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
-//		{4, 7, uint64(ents[1].Size() + ents[2].Size() + ents[3].Size() - 1), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
-//		// all
-//		{4, 7, uint64(ents[1].Size() + ents[2].Size() + ents[3].Size()), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
-//	}
+	db, err := openBadger(dir)
+	require.NoError(t, err)
+	ds := Init(db, 0, 0)
 
-//	for i, tt := range tests {
-//		s := &raft.MemoryStorage{ents: ents}
-//		entries, err := s.Entries(tt.lo, tt.hi, tt.maxsize)
-//		if err != tt.werr {
-//			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-//		}
-//		if !reflect.DeepEqual(entries, tt.wentries) {
-//			t.Errorf("#%d: entries = %v, want %v", i, entries, tt.wentries)
-//		}
-//	}
-//}
+	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
+	tests := []struct {
+		lo, hi, maxsize uint64
 
-//func TestStorageLastIndex(t *testing.T) {
-//	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-//	s := &raft.MemoryStorage{ents: ents}
+		werr     error
+		wentries []pb.Entry
+	}{
+		{2, 6, math.MaxUint64, raft.ErrCompacted, nil},
+		{3, 4, math.MaxUint64, raft.ErrCompacted, nil},
+		{4, 5, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}}},
+		{4, 6, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		{4, 7, math.MaxUint64, nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
+		// even if maxsize is zero, the first entry should be returned
+		{4, 7, 0, nil, []pb.Entry{{Index: 4, Term: 4}}},
+		// limit to 2
+		{4, 7, uint64(ents[1].Size() + ents[2].Size()), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		// limit to 2
+		{4, 7, uint64(ents[1].Size() + ents[2].Size() + ents[3].Size()/2), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		{4, 7, uint64(ents[1].Size() + ents[2].Size() + ents[3].Size() - 1), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}}},
+		// all
+		{4, 7, uint64(ents[1].Size() + ents[2].Size() + ents[3].Size()), nil, []pb.Entry{{Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}},
+	}
 
-//	last, err := s.LastIndex()
-//	if err != nil {
-//		t.Errorf("err = %v, want nil", err)
-//	}
-//	if last != 5 {
-//		t.Errorf("term = %d, want %d", last, 5)
-//	}
+	for i, tt := range tests {
+		require.NoError(t, ds.Store(pb.HardState{}, ents))
 
-//	s.Append([]pb.Entry{{Index: 6, Term: 5}})
-//	last, err = s.LastIndex()
-//	if err != nil {
-//		t.Errorf("err = %v, want nil", err)
-//	}
-//	if last != 6 {
-//		t.Errorf("last = %d, want %d", last, 5)
-//	}
-//}
+		entries, err := ds.Entries(tt.lo, tt.hi, tt.maxsize)
+		if err != tt.werr {
+			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
+		}
+		if !reflect.DeepEqual(entries, tt.wentries) {
+			t.Errorf("#%d: entries = %v, want %v", i, entries, tt.wentries)
+		}
+	}
+}
 
-//func TestStorageFirstIndex(t *testing.T) {
-//	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-//	s := &raft.MemoryStorage{ents: ents}
+func TestStorageLastIndex(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
 
-//	first, err := s.FirstIndex()
-//	if err != nil {
-//		t.Errorf("err = %v, want nil", err)
-//	}
-//	if first != 4 {
-//		t.Errorf("first = %d, want %d", first, 4)
-//	}
+	db, err := openBadger(dir)
+	require.NoError(t, err)
+	ds := Init(db, 0, 0)
 
-//	s.Compact(4)
-//	first, err = s.FirstIndex()
-//	if err != nil {
-//		t.Errorf("err = %v, want nil", err)
-//	}
-//	if first != 5 {
-//		t.Errorf("first = %d, want %d", first, 5)
-//	}
-//}
+	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	require.NoError(t, ds.Store(pb.HardState{}, ents))
+
+	last, err := ds.LastIndex()
+	if err != nil {
+		t.Errorf("err = %v, want nil", err)
+	}
+	if last != 5 {
+		t.Errorf("term = %d, want %d", last, 5)
+	}
+
+	ds.Store(pb.HardState{}, []pb.Entry{{Index: 6, Term: 5}})
+	last, err = ds.LastIndex()
+	if err != nil {
+		t.Errorf("err = %v, want nil", err)
+	}
+	if last != 6 {
+		t.Errorf("last = %d, want %d", last, 5)
+	}
+}
+
+func TestStorageFirstIndex(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	db, err := openBadger(dir)
+	require.NoError(t, err)
+	ds := Init(db, 0, 0)
+
+	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	require.NoError(t, ds.Store(pb.HardState{}, ents))
+
+	first, err := ds.FirstIndex()
+	if err != nil {
+		t.Errorf("err = %v, want nil", err)
+	}
+	if first != 4 {
+		t.Errorf("first = %d, want %d", first, 4)
+	}
+
+	s.Compact(4)
+	first, err = s.FirstIndex()
+	if err != nil {
+		t.Errorf("err = %v, want nil", err)
+	}
+	if first != 5 {
+		t.Errorf("first = %d, want %d", first, 5)
+	}
+}
 
 //func TestStorageCompact(t *testing.T) {
 //	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
