@@ -62,6 +62,9 @@ func RaftId(db *badger.DB) (uint64, error) {
 		id = binary.BigEndian.Uint64(val)
 		return nil
 	})
+	if err == badger.ErrKeyNotFound {
+		return 0, nil
+	}
 	return id, err
 }
 

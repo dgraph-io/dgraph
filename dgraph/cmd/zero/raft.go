@@ -10,6 +10,7 @@ package zero
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -204,6 +205,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 	cctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	// Propose the change.
+	fmt.Printf("proposing to raft: %+v\n", proposal)
 	if err := n.Raft().Propose(cctx, data); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
@@ -555,6 +557,7 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			fmt.Println("raft ready in zero")
 			for _, rs := range rd.ReadStates {
 				ri := binary.BigEndian.Uint64(rs.RequestCtx)
 				n.sendReadIndex(ri, rs.Index)

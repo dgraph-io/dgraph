@@ -176,18 +176,19 @@ func (n *Node) Send(m raftpb.Message) {
 }
 
 func (n *Node) SaveSnapshot(s raftpb.Snapshot) {
-	if !raft.IsEmptySnap(s) {
-		le, err := n.Store.LastIndex()
-		if err != nil {
-			log.Fatalf("While retrieving last index: %v\n", err)
-		}
-		if s.Metadata.Index <= le {
-			return
-		}
+	if raft.IsEmptySnap(s) {
+		return
+	}
+	le, err := n.Store.LastIndex()
+	if err != nil {
+		log.Fatalf("While retrieving last index: %v\n", err)
+	}
+	if s.Metadata.Index <= le {
+		return
+	}
 
-		if err := n.Store.ApplySnapshot(s); err != nil {
-			log.Fatalf("Applying snapshot: %v", err)
-		}
+	if err := n.Store.ApplySnapshot(s); err != nil {
+		log.Fatalf("Applying snapshot: %v", err)
 	}
 }
 
