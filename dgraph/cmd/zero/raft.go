@@ -523,11 +523,12 @@ func (n *node) trySnapshot(skip uint64) {
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
 	}
-	s, err := n.Store.CreateSnapshot(idx, n.ConfState(), data)
+	_, err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
 	x.Checkf(err, "While creating snapshot")
 	x.Checkf(n.Store.Compact(idx), "While compacting snapshot")
 	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
-	x.Check(n.Wal.StoreSnapshot(s))
+	// TODO: Work on this.
+	// x.Check(n.Wal.StoreSnapshot(s))
 }
 
 func (n *node) Run() {
@@ -569,7 +570,8 @@ func (n *node) Run() {
 				var state intern.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				n.server.SetMembershipState(&state)
-				x.Check(n.Wal.StoreSnapshot(rd.Snapshot))
+				// TODO: Work on this.
+				// x.Check(n.Wal.StoreSnapshot(rd.Snapshot))
 				n.SaveSnapshot(rd.Snapshot)
 			}
 

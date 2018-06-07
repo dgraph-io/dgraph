@@ -61,9 +61,12 @@ func TestStorageTerm(t *testing.T) {
 		{6, raft.ErrUnavailable, 0, false},
 	}
 
-	for i, tt := range tests {
-		require.NoError(t, ds.Store(pb.HardState{}, ents))
+	var snap pb.Snapshot
+	snap.Metadata.Index = 3
+	snap.Metadata.Term = 3
 
+	require.NoError(t, ds.Store(pb.HardState{}, ents))
+	for i, tt := range tests {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -179,8 +182,8 @@ func TestStorageFirstIndex(t *testing.T) {
 		t.Errorf("first = %d, want %d", first, 4)
 	}
 
-	s.Compact(4)
-	first, err = s.FirstIndex()
+	ds.Compact(4)
+	first, err = ds.FirstIndex()
 	if err != nil {
 		t.Errorf("err = %v, want nil", err)
 	}
@@ -189,145 +192,181 @@ func TestStorageFirstIndex(t *testing.T) {
 	}
 }
 
-//func TestStorageCompact(t *testing.T) {
-//	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-//	tests := []struct {
-//		i uint64
+func TestStorageCompact(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
 
-//		werr   error
-//		windex uint64
-//		wterm  uint64
-//		wlen   int
-//	}{
-//		{2, ErrCompacted, 3, 3, 3},
-//		{3, ErrCompacted, 3, 3, 3},
-//		{4, nil, 4, 4, 2},
-//		{5, nil, 5, 5, 1},
-//	}
+	db, err := openBadger(dir)
+	require.NoError(t, err)
+	ds := Init(db, 0, 0)
 
-//	for i, tt := range tests {
-//		s := &raft.MemoryStorage{ents: ents}
-//		err := s.Compact(tt.i)
-//		if err != tt.werr {
-//			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-//		}
-//		if s.ents[0].Index != tt.windex {
-//			t.Errorf("#%d: index = %d, want %d", i, s.ents[0].Index, tt.windex)
-//		}
-//		if s.ents[0].Term != tt.wterm {
-//			t.Errorf("#%d: term = %d, want %d", i, s.ents[0].Term, tt.wterm)
-//		}
-//		if len(s.ents) != tt.wlen {
-//			t.Errorf("#%d: len = %d, want %d", i, len(s.ents), tt.wlen)
-//		}
-//	}
-//}
+	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	require.NoError(t, ds.Store(pb.HardState{}, ents))
 
-//func TestStorageCreateSnapshot(t *testing.T) {
-//	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-//	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
-//	data := []byte("data")
+	tests := []struct {
+		i uint64
 
-//	tests := []struct {
-//		i uint64
+		werr   error
+		windex uint64
+		wterm  uint64
+		wlen   int
+	}{
+		{2, raft.ErrCompacted, 3, 3, 3},
+		{3, raft.ErrCompacted, 3, 3, 3},
+		{4, nil, 4, 4, 2},
+		{5, nil, 5, 5, 1},
+	}
 
-//		werr  error
-//		wsnap pb.Snapshot
-//	}{
-//		{4, nil, pb.Snapshot{Data: data, Metadata: pb.SnapshotMetadata{Index: 4, Term: 4, ConfState: *cs}}},
-//		{5, nil, pb.Snapshot{Data: data, Metadata: pb.SnapshotMetadata{Index: 5, Term: 5, ConfState: *cs}}},
-//	}
+	for i, tt := range tests {
+		err := ds.Compact(tt.i)
+		if err != tt.werr {
+			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
+		}
+		index, err := ds.FirstIndex()
+		require.NoError(t, err)
+		// Do the minus one here to get the index of the snapshot.
+		if index-1 != tt.windex {
+			t.Errorf("#%d: index = %d, want %d", i, index, tt.windex)
+		}
 
-//	for i, tt := range tests {
-//		s := &raft.MemoryStorage{ents: ents}
-//		snap, err := s.CreateSnapshot(tt.i, cs, data)
-//		if err != tt.werr {
-//			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-//		}
-//		if !reflect.DeepEqual(snap, tt.wsnap) {
-//			t.Errorf("#%d: snap = %+v, want %+v", i, snap, tt.wsnap)
-//		}
-//	}
-//}
+		all, err := ds.allEntries(0, math.MaxUint64, math.MaxUint64)
+		require.NoError(t, err)
+		if len(all) != tt.wlen {
+			t.Errorf("#%d: len = %d, want %d", i, len(all), tt.wlen)
+		}
+	}
+}
 
-//func TestStorageAppend(t *testing.T) {
-//	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-//	tests := []struct {
-//		entries []pb.Entry
+func TestStorageCreateSnapshot(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
 
-//		werr     error
-//		wentries []pb.Entry
-//	}{
-//		{
-//			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}},
-//			nil,
-//			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}},
-//		},
-//		{
-//			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 6}, {Index: 5, Term: 6}},
-//			nil,
-//			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 6}, {Index: 5, Term: 6}},
-//		},
-//		{
-//			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 5}},
-//			nil,
-//			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 5}},
-//		},
-//		// truncate incoming entries, truncate the existing entries and append
-//		{
-//			[]pb.Entry{{Index: 2, Term: 3}, {Index: 3, Term: 3}, {Index: 4, Term: 5}},
-//			nil,
-//			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 5}},
-//		},
-//		// truncate the existing entries and append
-//		{
-//			[]pb.Entry{{Index: 4, Term: 5}},
-//			nil,
-//			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 5}},
-//		},
-//		// direct append
-//		{
-//			[]pb.Entry{{Index: 6, Term: 5}},
-//			nil,
-//			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 5}},
-//		},
-//	}
+	db, err := openBadger(dir)
+	require.NoError(t, err)
+	ds := Init(db, 0, 0)
 
-//	for i, tt := range tests {
-//		s := &raft.MemoryStorage{ents: ents}
-//		err := s.Append(tt.entries)
-//		if err != tt.werr {
-//			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
-//		}
-//		if !reflect.DeepEqual(s.ents, tt.wentries) {
-//			t.Errorf("#%d: entries = %v, want %v", i, s.ents, tt.wentries)
-//		}
-//	}
-//}
+	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
+	data := []byte("data")
 
-//func TestStorageApplySnapshot(t *testing.T) {
-//	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
-//	data := []byte("data")
+	tests := []struct {
+		i uint64
 
-//	tests := []pb.Snapshot{{Data: data, Metadata: pb.SnapshotMetadata{Index: 4, Term: 4, ConfState: *cs}},
-//		{Data: data, Metadata: pb.SnapshotMetadata{Index: 3, Term: 3, ConfState: *cs}},
-//	}
+		werr  error
+		wsnap pb.Snapshot
+	}{
+		{4, nil, pb.Snapshot{Data: data, Metadata: pb.SnapshotMetadata{Index: 4, Term: 4, ConfState: *cs}}},
+		{5, nil, pb.Snapshot{Data: data, Metadata: pb.SnapshotMetadata{Index: 5, Term: 5, ConfState: *cs}}},
+	}
 
-//	s := NewMemoryStorage()
+	for i, tt := range tests {
+		require.NoError(t, ds.Store(pb.HardState{}, ents))
+		snap, err := ds.CreateSnapshot(tt.i, cs, data)
+		if err != tt.werr {
+			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
+		}
+		if !reflect.DeepEqual(snap, tt.wsnap) {
+			t.Errorf("#%d: snap = %+v, want %+v", i, snap, tt.wsnap)
+		}
+	}
+}
 
-//	//Apply Snapshot successful
-//	i := 0
-//	tt := tests[i]
-//	err := s.ApplySnapshot(tt)
-//	if err != nil {
-//		t.Errorf("#%d: err = %v, want %v", i, err, nil)
-//	}
+func TestStorageAppend(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
 
-//	//Apply Snapshot fails due to ErrSnapOutOfDate
-//	i = 1
-//	tt = tests[i]
-//	err = s.ApplySnapshot(tt)
-//	if err != ErrSnapOutOfDate {
-//		t.Errorf("#%d: err = %v, want %v", i, err, ErrSnapOutOfDate)
-//	}
-//}
+	db, err := openBadger(dir)
+	require.NoError(t, err)
+	ds := Init(db, 0, 0)
+
+	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	tests := []struct {
+		entries []pb.Entry
+
+		werr     error
+		wentries []pb.Entry
+	}{
+		{
+			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}},
+			nil,
+			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}},
+		},
+		{
+			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 6}, {Index: 5, Term: 6}},
+			nil,
+			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 6}, {Index: 5, Term: 6}},
+		},
+		{
+			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 5}},
+			nil,
+			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 5}},
+		},
+		// truncate incoming entries, truncate the existing entries and append
+		{
+			[]pb.Entry{{Index: 2, Term: 3}, {Index: 3, Term: 3}, {Index: 4, Term: 5}},
+			nil,
+			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 5}},
+		},
+		// truncate the existing entries and append
+		{
+			[]pb.Entry{{Index: 4, Term: 5}},
+			nil,
+			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 5}},
+		},
+		// direct append
+		{
+			[]pb.Entry{{Index: 6, Term: 5}},
+			nil,
+			[]pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 5}},
+		},
+	}
+
+	for i, tt := range tests {
+		require.NoError(t, ds.Store(pb.HardState{}, ents))
+		err := ds.Append(tt.entries)
+		if err != tt.werr {
+			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
+		}
+		all, err := ds.allEntries(0, math.MaxUint64, math.MaxUint64)
+		require.NoError(t, err)
+		if !reflect.DeepEqual(all, tt.wentries) {
+			t.Errorf("#%d: entries = %v, want %v", i, all, tt.wentries)
+		}
+	}
+}
+
+func TestStorageApplySnapshot(t *testing.T) {
+	dir, err := ioutil.TempDir("", "badger")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	db, err := openBadger(dir)
+	require.NoError(t, err)
+	ds := Init(db, 0, 0)
+
+	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
+	data := []byte("data")
+
+	tests := []pb.Snapshot{{Data: data, Metadata: pb.SnapshotMetadata{Index: 4, Term: 4, ConfState: *cs}},
+		{Data: data, Metadata: pb.SnapshotMetadata{Index: 3, Term: 3, ConfState: *cs}},
+	}
+
+	//Apply Snapshot successful
+	i := 0
+	tt := tests[i]
+	err = ds.ApplySnapshot(tt)
+	if err != nil {
+		t.Errorf("#%d: err = %v, want %v", i, err, nil)
+	}
+
+	//Apply Snapshot fails due to ErrSnapOutOfDate
+	i = 1
+	tt = tests[i]
+	err = ds.ApplySnapshot(tt)
+	if err != raft.ErrSnapOutOfDate {
+		t.Errorf("#%d: err = %v, want %v", i, err, raft.ErrSnapOutOfDate)
+	}
+}
