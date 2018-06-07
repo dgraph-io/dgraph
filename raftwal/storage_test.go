@@ -65,7 +65,7 @@ func TestStorageTerm(t *testing.T) {
 	snap.Metadata.Index = 3
 	snap.Metadata.Term = 3
 
-	require.NoError(t, ds.Store(pb.HardState{}, ents))
+	require.NoError(t, ds.reset(ents))
 	for i, tt := range tests {
 		func() {
 			defer func() {
@@ -120,7 +120,7 @@ func TestStorageEntries(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		require.NoError(t, ds.Store(pb.HardState{}, ents))
+		require.NoError(t, ds.reset(ents))
 
 		entries, err := ds.Entries(tt.lo, tt.hi, tt.maxsize)
 		if err != tt.werr {
@@ -142,7 +142,7 @@ func TestStorageLastIndex(t *testing.T) {
 	ds := Init(db, 0, 0)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-	require.NoError(t, ds.Store(pb.HardState{}, ents))
+	require.NoError(t, ds.reset(ents))
 
 	last, err := ds.LastIndex()
 	if err != nil {
@@ -152,7 +152,7 @@ func TestStorageLastIndex(t *testing.T) {
 		t.Errorf("term = %d, want %d", last, 5)
 	}
 
-	ds.Store(pb.HardState{}, []pb.Entry{{Index: 6, Term: 5}})
+	ds.reset([]pb.Entry{{Index: 6, Term: 5}})
 	last, err = ds.LastIndex()
 	if err != nil {
 		t.Errorf("err = %v, want nil", err)
@@ -172,7 +172,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	ds := Init(db, 0, 0)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-	require.NoError(t, ds.Store(pb.HardState{}, ents))
+	require.NoError(t, ds.reset(ents))
 
 	first, err := ds.FirstIndex()
 	if err != nil {
@@ -202,7 +202,7 @@ func TestStorageCompact(t *testing.T) {
 	ds := Init(db, 0, 0)
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
-	require.NoError(t, ds.Store(pb.HardState{}, ents))
+	require.NoError(t, ds.reset(ents))
 
 	tests := []struct {
 		i uint64
@@ -262,7 +262,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		require.NoError(t, ds.Store(pb.HardState{}, ents))
+		require.NoError(t, ds.reset(ents))
 		snap, err := ds.CreateSnapshot(tt.i, cs, data)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
@@ -325,7 +325,7 @@ func TestStorageAppend(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		require.NoError(t, ds.Store(pb.HardState{}, ents))
+		require.NoError(t, ds.reset(ents))
 		err := ds.Append(tt.entries)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)

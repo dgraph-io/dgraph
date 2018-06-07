@@ -29,6 +29,20 @@ type DiskStorage struct {
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	w := &DiskStorage{db: db, id: id, gid: gid}
 	x.Check(w.StoreRaftId(id))
+
+	snap, err := w.Snapshot()
+	x.Check(err)
+	if !raft.IsEmptySnap(snap) {
+		return w
+	}
+
+	_, err = w.FirstIndex()
+	if err == errNotFound {
+		ents := make([]pb.Entry, 1)
+		x.Check(w.reset(ents))
+	} else {
+		x.Check(err)
+	}
 	return w
 }
 
@@ -100,15 +114,15 @@ func (w *DiskStorage) StoreRaftId(id uint64) error {
 // FirstIndex is retained for matching purposes even though the
 // rest of that entry may not be available.
 func (w *DiskStorage) Term(idx uint64) (uint64, error) {
-	snap, err := w.Snapshot()
+	first, err := w.seekEntry(nil, 0, false)
 	if err != nil {
 		return 0, err
 	}
-	var e pb.Entry
-	if idx <= snap.Metadata.Index {
+	if idx < first {
 		return 0, raft.ErrCompacted
 	}
 
+	var e pb.Entry
 	if _, err := w.seekEntry(&e, idx, false); err == errNotFound {
 		return 0, raft.ErrUnavailable
 	} else if err != nil {
@@ -211,7 +225,16 @@ func (w *DiskStorage) setSnapshot(s pb.Snapshot) error {
 		return x.Wrapf(err, "wal.Store: While marshal snapshot")
 	}
 	return w.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(w.snapshotKey(), data)
+		if err := txn.Set(w.snapshotKey(), data); err != nil {
+			return err
+		}
+		return nil
+		// e := pb.Entry{Term: s.Metadata.Term, Index: s.Metadata.Index}
+		// data, err = e.Marshal()
+		// if err != nil {
+		// 	return err
+		// }
+		// return txn.Set(w.entryKey(e.Index), data)
 	})
 }
 
@@ -242,14 +265,17 @@ func (w *DiskStorage) SetHardState(st pb.HardState) error {
 	})
 }
 
-// Store stores the hardstate and entries for a given RAFT group.
-func (w *DiskStorage) Store(h pb.HardState, es []pb.Entry) error {
+// reset resets the entries. Used for testing.
+func (w *DiskStorage) reset(es []pb.Entry) error {
+	// Clean out the state.
+	if err := w.deleteEntries(0); err != nil {
+		return err
+	}
+
 	txn := w.db.NewTransaction(true)
 	defer txn.Discard()
 
-	var t, i uint64
 	for _, e := range es {
-		t, i = e.Term, e.Index
 		data, err := e.Marshal()
 		if err != nil {
 			return x.Wrapf(err, "wal.Store: While marshal entry")
@@ -266,49 +292,6 @@ func (w *DiskStorage) Store(h pb.HardState, es []pb.Entry) error {
 			}
 		} else if err != nil {
 			return err
-		}
-	}
-
-	if !raft.IsEmptyHardState(h) {
-		data, err := h.Marshal()
-		if err != nil {
-			return x.Wrapf(err, "wal.Store: While marshal hardstate")
-		}
-		if err := txn.Set(w.hardStateKey(), data); err != nil {
-			return err
-		}
-	}
-
-	// If we get no entries, then the default value of t and i would be zero. That would
-	// end up deleting all the previous valid raft entry logs. This check avoids that.
-	if t > 0 || i > 0 {
-		// When writing an Entry with Index i, any previously-persisted entries
-		// with Index >= i must be discarded.
-		// Ideally we should be deleting entries from previous term with index >= i,
-		// but to avoid complexity we remove them during reading from wal.
-		start := w.entryKey(i + 1)
-		prefix := w.entryPrefix()
-		opt := badger.DefaultIteratorOptions
-		opt.PrefetchValues = false
-		itr := txn.NewIterator(opt)
-		defer itr.Close()
-
-		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
-			key := itr.Item().Key()
-			newk := make([]byte, len(key))
-			copy(newk, key)
-			if err := txn.Delete(newk); err == badger.ErrTxnTooBig {
-				if err := txn.Commit(nil); err != nil {
-					return err
-				}
-				txn = w.db.NewTransaction(true)
-				defer txn.Discard()
-				if err := txn.Delete(newk); err != nil {
-					return err
-				}
-			} else if err != nil {
-				return err
-			}
 		}
 	}
 	return txn.Commit(nil)
