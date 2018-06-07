@@ -417,6 +417,24 @@ func (w *DiskStorage) InitialState() (hs pb.HardState, cs pb.ConfState, err erro
 	return hs, snap.Metadata.ConfState, nil
 }
 
+func (w *DiskStorage) NumEntries() (int, error) {
+	var count int
+	err := w.db.View(func(txn *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchValues = false
+		itr := txn.NewIterator(opt)
+		defer itr.Close()
+
+		start := w.entryKey(0)
+		prefix := w.entryPrefix()
+		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+			count++
+		}
+		return nil
+	})
+	return count, err
+}
+
 func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error) {
 	err := w.db.View(func(txn *badger.Txn) error {
 		itr := txn.NewIterator(badger.DefaultIteratorOptions)

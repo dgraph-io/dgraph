@@ -88,14 +88,14 @@ type state struct {
 	zero *Server
 }
 
-func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
+func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.DiskStorage) {
 	s := grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
 
 	rc := intern.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
-	m := conn.NewNode(&rc)
+	m := conn.NewNode(&rc, store)
 	st.rs = &conn.RaftServer{Node: m}
 
 	st.node = &node{Node: m, ctx: context.Background(), stop: make(chan struct{})}
@@ -160,17 +160,6 @@ func run() {
 		log.Fatal(err)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(3)
-	// Initialize the servers.
-	var st state
-	st.serveGRPC(grpcListener, &wg)
-	st.serveHTTP(httpListener, &wg)
-
-	http.HandleFunc("/state", st.getState)
-	http.HandleFunc("/removeNode", st.removeNode)
-	http.HandleFunc("/moveTablet", st.moveTablet)
-
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.DefaultOptions
@@ -181,8 +170,20 @@ func run() {
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
-	wal := raftwal.Init(kv, opts.nodeId, 0)
-	x.Check(st.node.initAndStartNode(wal))
+	store := raftwal.Init(kv, opts.nodeId, 0)
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	// Initialize the servers.
+	var st state
+	st.serveGRPC(grpcListener, &wg, store)
+	st.serveHTTP(httpListener, &wg)
+
+	http.HandleFunc("/state", st.getState)
+	http.HandleFunc("/removeNode", st.removeNode)
+	http.HandleFunc("/moveTablet", st.moveTablet)
+
+	x.Check(st.node.initAndStartNode())
 
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)

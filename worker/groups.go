@@ -32,7 +32,6 @@ type groupi struct {
 	// TODO: Is this context being used?
 	ctx       context.Context
 	cancel    context.CancelFunc
-	wal       *raftwal.DiskStorage
 	state     *intern.MembershipState
 	Node      *node
 	gid       uint32
@@ -111,13 +110,16 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.applyState(connState.GetState())
 
 	gid := gr.groupId()
-	gr.wal = raftwal.Init(walStore, Config.RaftId, gid)
 	gr.triggerCh = make(chan struct{}, 1)
 	gr.delPred = make(chan struct{}, 1)
-	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
+
+	// Initialize DiskStorage and pass it along.
+	store := raftwal.Init(walStore, Config.RaftId, gid)
+	gr.Node = newNode(store, gid, Config.RaftId, Config.MyAddr)
+
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.Node = gr.Node.Node
-	gr.Node.InitAndStartNode(gr.wal)
+	gr.Node.InitAndStartNode()
 
 	x.UpdateHealthStatus(true)
 	go gr.periodicMembershipUpdate() // Now set it to be run periodically.

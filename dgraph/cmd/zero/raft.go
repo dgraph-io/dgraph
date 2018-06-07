@@ -22,7 +22,6 @@ import (
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/intern"
-	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -411,8 +410,8 @@ func (n *node) triggerLeaderChange() {
 	n.server.updateZeroLeader()
 }
 
-func (n *node) initAndStartNode(wal *raftwal.DiskStorage) error {
-	idx, restart, err := n.InitFromWal(wal)
+func (n *node) initAndStartNode() error {
+	idx, restart, err := n.PastLife()
 	n.Applied.SetDoneUntil(idx)
 	x.Check(err)
 
@@ -560,10 +559,8 @@ func (n *node) Run() {
 				ri := binary.BigEndian.Uint64(rs.RequestCtx)
 				n.sendReadIndex(ri, rs.Index)
 			}
-			// First store the entries, then the hardstate and snapshot.
-			x.Check(n.Wal.Store(rd.HardState, rd.Entries))
 
-			// Now store them in the in-memory store.
+			// Store the hardstate and entries.
 			n.SaveToStorage(rd.HardState, rd.Entries)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {

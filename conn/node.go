@@ -49,8 +49,7 @@ type Node struct {
 	confChanges map[uint64]chan error
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
-	Store       *raft.MemoryStorage
-	Wal         *raftwal.DiskStorage
+	Store       *raftwal.DiskStorage
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
@@ -58,8 +57,7 @@ type Node struct {
 	Applied x.WaterMark
 }
 
-func NewNode(rc *intern.RaftContext) *Node {
-	store := raft.NewMemoryStorage()
+func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 	n := &Node{
 		Id:     rc.Id,
 		MyAddr: rc.Addr,
@@ -200,49 +198,37 @@ func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry) {
 	n.Store.Append(es)
 }
 
-func (n *Node) InitFromWal(wal *raftwal.DiskStorage) (idx uint64, restart bool, rerr error) {
-	n.Wal = wal
+func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
+	var sp raftpb.Snapshot
+	sp, rerr = n.Store.Snapshot()
+	if rerr != nil {
+		return
+	}
+	if !raft.IsEmptySnap(sp) {
+		x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
+		restart = true
+		idx = sp.Metadata.Index
+	}
 
-	// TODO: Work on this.
-	// var sp raftpb.Snapshot
-	// sp, rerr = wal.Snapshot()
-	// if rerr != nil {
-	// 	return
-	// }
-	// var term uint64
-	// if !raft.IsEmptySnap(sp) {
-	// 	x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
-	// 	restart = true
-	// 	if rerr = n.Store.ApplySnapshot(sp); rerr != nil {
-	// 		return
-	// 	}
-	// 	term = sp.Metadata.Term
-	// 	idx = sp.Metadata.Index
-	// }
+	var hd raftpb.HardState
+	hd, rerr = n.Store.HardState()
+	if rerr != nil {
+		return
+	}
+	if !raft.IsEmptyHardState(hd) {
+		x.Printf("Found hardstate: %+v\n", hd)
+		restart = true
+	}
 
-	// var hd raftpb.HardState
-	// hd, rerr = wal.HardState()
-	// if rerr != nil {
-	// 	return
-	// }
-	// if !raft.IsEmptyHardState(hd) {
-	// 	x.Printf("Found hardstate: %+v\n", hd)
-	// 	restart = true
-	// 	if rerr = n.Store.SetHardState(hd); rerr != nil {
-	// 		return
-	// 	}
-	// }
-
-	// var es []raftpb.Entry
-	// es, rerr = wal.Entries(n.RaftContext.Group, term, idx)
-	// if rerr != nil {
-	// 	return
-	// }
-	// x.Printf("Group %d found %d entries\n", n.RaftContext.Group, len(es))
-	// if len(es) > 0 {
-	// 	restart = true
-	// }
-	// rerr = n.Store.Append(es)
+	var num int
+	num, rerr = n.Store.NumEntries()
+	if rerr != nil {
+		return
+	}
+	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
+	if num > 0 {
+		restart = true
+	}
 	return
 }
 
