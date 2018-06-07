@@ -109,7 +109,7 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 		return 0, raft.ErrCompacted
 	}
 
-	if err := w.seekEntry(&e, idx, false); err == errNotFound {
+	if _, err := w.seekEntry(&e, idx, false); err == errNotFound {
 		return 0, raft.ErrUnavailable
 	} else if err != nil {
 		return 0, err
@@ -122,9 +122,9 @@ func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 
 var errNotFound = errors.New("Unable to find raft entry")
 
-// TODO: We could optimize this by not looking up value, and parsing the key only.
-func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) error {
-	return w.db.View(func(txn *badger.Txn) error {
+func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint64, error) {
+	var index uint64
+	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
 		opt.Reverse = reverse
@@ -135,6 +135,10 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) error 
 		if !itr.ValidForPrefix(w.entryPrefix()) {
 			return errNotFound
 		}
+		index = w.parseIndex(itr.Item().Key())
+		if e == nil {
+			return nil
+		}
 		item := itr.Item()
 		val, err := item.Value()
 		if err != nil {
@@ -142,26 +146,20 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) error 
 		}
 		return e.Unmarshal(val)
 	})
+	return index, err
 }
 
 // FirstIndex returns the index of the first log entry that is
 // possibly available via Entries (older entries have been incorporated
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
-	var e pb.Entry
-	if err := w.seekEntry(&e, 0, false); err != nil {
-		return 0, err
-	}
-	return e.Index + 1, nil
+	index, err := w.seekEntry(nil, 0, false)
+	return index + 1, err
 }
 
 // LastIndex returns the index of the last entry in the log.
 func (w *DiskStorage) LastIndex() (uint64, error) {
-	var e pb.Entry
-	if err := w.seekEntry(&e, math.MaxUint64, true); err != nil {
-		return 0, err
-	}
-	return e.Index, nil
+	return w.seekEntry(nil, math.MaxUint64, true)
 }
 
 // Compact discards all log entries prior to compactIndex. It would keep the entry at the
@@ -507,7 +505,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) (p
 	}
 
 	var e pb.Entry
-	if err := w.seekEntry(&e, i, false); err != nil {
+	if _, err := w.seekEntry(&e, i, false); err != nil {
 		return pb.Snapshot{}, err
 	}
 	if e.Index != i {
