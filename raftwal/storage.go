@@ -342,29 +342,6 @@ func (w *DiskStorage) setSnapshot(u *txnUnifier, s pb.Snapshot) error {
 	return nil
 }
 
-// ApplySnapshot overwrites the contents of this Storage object with
-// those of the given snapshot.
-func (w *DiskStorage) ApplySnapshot(snap pb.Snapshot) error {
-	w.elog.Printf("ApplySnapshot")
-	defer w.elog.Printf("Done")
-	prev, err := w.Snapshot()
-	if err != nil {
-		return err
-	}
-	if prev.Metadata.Index >= snap.Metadata.Index {
-		return raft.ErrSnapOutOfDate
-	}
-	u := w.newUnifier()
-	defer u.Cancel()
-	if err := w.setSnapshot(u, snap); err != nil {
-		return err
-	}
-	if err := w.deleteFrom(u, snap.Metadata.Index+1); err != nil {
-		return err
-	}
-	return u.Done()
-}
-
 // SetHardState saves the current HardState.
 func (w *DiskStorage) setHardState(u *txnUnifier, st pb.HardState) error {
 	if raft.IsEmptyHardState(st) {

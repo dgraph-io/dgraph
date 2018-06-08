@@ -345,36 +345,3 @@ func TestStorageAppend(t *testing.T) {
 		}
 	}
 }
-
-func TestStorageApplySnapshot(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	db, err := openBadger(dir)
-	require.NoError(t, err)
-	ds := Init(db, 0, 0)
-
-	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
-	data := []byte("data")
-
-	tests := []pb.Snapshot{{Data: data, Metadata: pb.SnapshotMetadata{Index: 4, Term: 4, ConfState: *cs}},
-		{Data: data, Metadata: pb.SnapshotMetadata{Index: 3, Term: 3, ConfState: *cs}},
-	}
-
-	//Apply Snapshot successful
-	i := 0
-	tt := tests[i]
-	err = ds.ApplySnapshot(tt)
-	if err != nil {
-		t.Errorf("#%d: err = %v, want %v", i, err, nil)
-	}
-
-	//Apply Snapshot fails due to ErrSnapOutOfDate
-	i = 1
-	tt = tests[i]
-	err = ds.ApplySnapshot(tt)
-	if err != raft.ErrSnapOutOfDate {
-		t.Errorf("#%d: err = %v, want %v", i, err, raft.ErrSnapOutOfDate)
-	}
-}

@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -172,23 +171,6 @@ func (n *Node) Send(m raftpb.Message) {
 		// pass
 	default:
 		// ignore
-	}
-}
-
-func (n *Node) SaveSnapshot(s raftpb.Snapshot) {
-	if raft.IsEmptySnap(s) {
-		return
-	}
-	le, err := n.Store.LastIndex()
-	if err != nil {
-		log.Fatalf("While retrieving last index: %v\n", err)
-	}
-	if s.Metadata.Index <= le {
-		return
-	}
-
-	if err := n.Store.ApplySnapshot(s); err != nil {
-		log.Fatalf("Applying snapshot: %v", err)
 	}
 }
 
