@@ -236,6 +236,10 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint6
 // possibly available via Entries (older entries have been incorporated
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
+	snap := w.cache.snapshot()
+	if !raft.IsEmptySnap(snap) {
+		return snap.Metadata.Index + 1, nil
+	}
 	index, err := w.seekEntry(nil, 0, false)
 	return index + 1, err
 }
