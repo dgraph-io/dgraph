@@ -183,7 +183,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	}
 
 	u := ds.newUnifier()
-	require.NoError(t, ds.compact(u, 4))
+	require.NoError(t, ds.deleteUntil(u, 4))
 	require.NoError(t, u.Done())
 	first, err = ds.FirstIndex()
 	if err != nil {
@@ -222,7 +222,7 @@ func TestStorageCompact(t *testing.T) {
 
 	for i, tt := range tests {
 		u := ds.newUnifier()
-		err := ds.compact(u, tt.i)
+		err := ds.deleteUntil(u, tt.i)
 		require.NoError(t, u.Done())
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)

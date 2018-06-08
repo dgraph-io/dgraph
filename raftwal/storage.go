@@ -245,13 +245,11 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 	return w.seekEntry(nil, math.MaxUint64, true)
 }
 
-// Compact discards all log entries prior to compactIndex. It would keep the entry at the
-// compactIndex.
-// Delete all entries before this snapshot to save disk space.
+// Delete all entries from [0, until), i.e. excluding until.
 // Keep the entry at the snapshot index, for simplification of logic.
-// It is the application's responsibility to not attempt to compact an index
+// It is the application's responsibility to not attempt to deleteUntil an index
 // greater than raftLog.applied.
-func (w *DiskStorage) compact(u *txnUnifier, compactIndex uint64) error {
+func (w *DiskStorage) deleteUntil(u *txnUnifier, until uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
@@ -268,11 +266,11 @@ func (w *DiskStorage) compact(u *txnUnifier, compactIndex uint64) error {
 			index = w.parseIndex(item.Key())
 			if first {
 				first = false
-				if compactIndex <= index {
+				if until <= index {
 					return raft.ErrCompacted
 				}
 			}
-			if index >= compactIndex {
+			if index >= until {
 				break
 			}
 			keys = append(keys, string(item.Key()))
@@ -357,7 +355,7 @@ func (w *DiskStorage) ApplySnapshot(snap pb.Snapshot) error {
 	if err := w.setSnapshot(u, snap); err != nil {
 		return err
 	}
-	if err := w.deleteEntries(u, snap.Metadata.Index+1); err != nil {
+	if err := w.deleteFrom(u, snap.Metadata.Index+1); err != nil {
 		return err
 	}
 	return u.Done()
@@ -381,7 +379,7 @@ func (w *DiskStorage) reset(es []pb.Entry) error {
 	u := w.newUnifier()
 	defer u.Cancel()
 
-	if err := w.deleteEntries(u, 0); err != nil {
+	if err := w.deleteFrom(u, 0); err != nil {
 		return err
 	}
 
@@ -412,7 +410,7 @@ func (w *DiskStorage) deleteKeys(u *txnUnifier, keys []string) error {
 }
 
 // Delete entries in the range of index [from, inf).
-func (w *DiskStorage) deleteEntries(u *txnUnifier, from uint64) error {
+func (w *DiskStorage) deleteFrom(u *txnUnifier, from uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		start := w.entryKey(from)
@@ -598,7 +596,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 	if err := w.setSnapshot(u, snap); err != nil {
 		return err
 	}
-	if err := w.compact(u, snap.Metadata.Index+1); err != nil {
+	if err := w.deleteUntil(u, snap.Metadata.Index); err != nil {
 		return err
 	}
 	return u.Done()
@@ -658,7 +656,7 @@ func (w *DiskStorage) addEntries(u *txnUnifier, entries []pb.Entry) error {
 	}
 	laste := entries[len(entries)-1].Index
 	if laste < last {
-		return w.deleteEntries(u, laste+1)
+		return w.deleteFrom(u, laste+1)
 	}
 	return nil
 }
