@@ -698,12 +698,17 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	go n.runReadIndexLoop(closer, readStateCh)
 
+	elog := trace.NewEventLog("Dgraph", "RunLoop")
+	defer elog.Finish()
+
+	var timer x.Timer
 	for {
 		select {
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			timer.Start()
 			for _, rs := range rd.ReadStates {
 				readStateCh <- rs
 			}
@@ -720,9 +725,11 @@ func (n *node) Run() {
 					n.Send(msg)
 				}
 			}
+			timer.Record() // Index 0.
 
 			// Store the hardstate and entries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			timer.Record() // Index 1.
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
@@ -742,6 +749,7 @@ func (n *node) Run() {
 					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
 			}
+			timer.Record() // Index 2.
 
 			lc := len(rd.CommittedEntries)
 			if lc > 0 {
@@ -783,6 +791,7 @@ func (n *node) Run() {
 						idx, lc-idx)
 				}
 			}
+			timer.Record() // Index 3.
 
 			if lc > 1e5 {
 				x.Println("All committed entries sent to applyCh.")
@@ -800,6 +809,11 @@ func (n *node) Run() {
 			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
+			}
+
+			timer.Record() // Index 4.
+			if total := timer.Total(); total >= 100*time.Millisecond {
+				elog.Printf("Timer Total: %v. All: %+v.", total, timer.All())
 			}
 
 		case <-n.stop:
