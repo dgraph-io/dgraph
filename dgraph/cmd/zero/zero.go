@@ -17,7 +17,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/intern"
-	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 )
@@ -39,7 +38,6 @@ var (
 
 type Server struct {
 	x.SafeMutex
-	wal  *raftwal.DiskStorage
 	Node *node
 	orc  *Oracle
 

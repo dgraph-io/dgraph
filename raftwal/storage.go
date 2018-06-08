@@ -183,11 +183,11 @@ func (w *DiskStorage) StoreRaftId(id uint64) error {
 func (w *DiskStorage) Term(idx uint64) (uint64, error) {
 	w.elog.Printf("Term: %d", idx)
 	defer w.elog.Printf("Done")
-	first, err := w.seekEntry(nil, 0, false)
+	first, err := w.FirstIndex()
 	if err != nil {
 		return 0, err
 	}
-	if idx < first {
+	if idx < first-1 {
 		return 0, raft.ErrCompacted
 	}
 
