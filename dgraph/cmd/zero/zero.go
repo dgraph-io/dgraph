@@ -9,7 +9,6 @@ package zero
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -350,7 +349,6 @@ func (s *Server) Connect(ctx context.Context,
 		return cs, err
 	}
 	if len(m.Addr) == 0 {
-		fmt.Println("No address provided.")
 		return &emptyConnectionState, errInvalidAddress
 	}
 
@@ -377,7 +375,6 @@ func (s *Server) Connect(ctx context.Context,
 
 	// Create a connection and check validity of the address by doing an Echo.
 	conn.Get().Connect(m.Addr)
-	fmt.Printf("Connecting to %s", m.Addr)
 
 	createProposal := func() *intern.ZeroProposal {
 		s.Lock()
@@ -435,7 +432,6 @@ func (s *Server) Connect(ctx context.Context,
 
 	proposal := createProposal()
 	if proposal != nil {
-		fmt.Printf("prosing: %+v\n", proposal)
 		if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
 			return &emptyConnectionState, err
 		}

@@ -37,7 +37,6 @@ func (n *Node) run(wg *sync.WaitGroup) {
 		case rd := <-n.Raft().Ready():
 			n.SaveToStorage(rd.HardState, rd.Entries)
 			n.SaveSnapshot(rd.Snapshot)
-			fmt.Printf("Got committed: %d\n", len(rd.CommittedEntries))
 			for _, entry := range rd.CommittedEntries {
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange

@@ -319,7 +319,6 @@ func (w *DiskStorage) setSnapshot(u *txnUnifier, s pb.Snapshot) error {
 	if raft.IsEmptySnap(s) {
 		return nil
 	}
-
 	data, err := s.Marshal()
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal snapshot")
@@ -532,21 +531,6 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error
 	return w.allEntries(lo, hi, maxSize)
 }
 
-func limitSize(ents []pb.Entry, maxSize uint64) []pb.Entry {
-	if len(ents) == 0 {
-		return ents
-	}
-	size := ents[0].Size()
-	var limit int
-	for limit = 1; limit < len(ents); limit++ {
-		size += ents[limit].Size()
-		if uint64(size) > maxSize {
-			break
-		}
-	}
-	return ents[:limit]
-}
-
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) error {
 	first, err := w.FirstIndex()
 	if err != nil {
@@ -583,17 +567,21 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 	return u.Done()
 }
 
+// Save would write Entries, HardState and Snapshot to persistent storage in order, i.e. Entries
+// first, then HardState and Snapshot if they are not empty. If persistent storage supports atomic
+// writes then all of them can be written together. Note that when writing an Entry with Index i,
+// any previously-persisted entries with Index >= i must be discarded.
 func (w *DiskStorage) Save(h pb.HardState, es []pb.Entry, snap pb.Snapshot) error {
 	u := w.newUnifier()
 	defer u.Cancel()
 
+	if err := w.addEntries(u, es); err != nil {
+		return err
+	}
 	if err := w.setHardState(u, h); err != nil {
 		return err
 	}
 	if err := w.setSnapshot(u, snap); err != nil {
-		return err
-	}
-	if err := w.addEntries(u, es); err != nil {
 		return err
 	}
 	return u.Done()
