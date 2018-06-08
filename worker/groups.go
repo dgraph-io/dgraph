@@ -32,7 +32,6 @@ type groupi struct {
 	// TODO: Is this context being used?
 	ctx       context.Context
 	cancel    context.CancelFunc
-	wal       *raftwal.Wal
 	state     *intern.MembershipState
 	Node      *node
 	gid       uint32
@@ -51,7 +50,7 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
+func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -110,14 +109,17 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	posting.Oracle().SetMaxPending(connState.MaxPending)
 	gr.applyState(connState.GetState())
 
-	gr.wal = raftwal.Init(walStore, Config.RaftId)
+	gid := gr.groupId()
 	gr.triggerCh = make(chan struct{}, 1)
 	gr.delPred = make(chan struct{}, 1)
-	gid := gr.groupId()
-	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
+
+	// Initialize DiskStorage and pass it along.
+	store := raftwal.Init(walStore, Config.RaftId, gid)
+	gr.Node = newNode(store, gid, Config.RaftId, Config.MyAddr)
+
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.Node = gr.Node.Node
-	gr.Node.InitAndStartNode(gr.wal)
+	gr.Node.InitAndStartNode()
 
 	x.UpdateHealthStatus(true)
 	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
@@ -485,10 +487,11 @@ START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero server.")
+		x.Printf("WARNING: We don't have address of any Zero server.")
 		time.Sleep(time.Second)
 		goto START
 	}
+	x.Printf("Got address of a Zero server: %s", pl.Addr)
 
 	c := intern.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())

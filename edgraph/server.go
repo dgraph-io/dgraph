@@ -43,7 +43,7 @@ type ServerState struct {
 	ShutdownCh chan struct{} // channel to signal shutdown.
 
 	Pstore   *badger.ManagedDB
-	WALstore *badger.ManagedDB
+	WALstore *badger.DB
 
 	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
 	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
@@ -73,6 +73,15 @@ func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
 	_, lastVlogSize := store.Size()
 	const GB = int64(1 << 30)
 
+	runGC := func() {
+		var err error
+		for err == nil {
+			// If a GC is successful, immediately run it again.
+			err = store.RunValueLogGC(0.7)
+		}
+		_, lastVlogSize = store.Size()
+	}
+
 	for {
 		select {
 		case <-s.vlogTicker.C:
@@ -80,16 +89,9 @@ func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
 			if currentVlogSize < lastVlogSize+GB {
 				continue
 			}
-
-			// If size increased by 3.5 GB, then we run this 3 times.
-			numTimes := (currentVlogSize - lastVlogSize) / GB
-			for i := 0; i < int(numTimes); i++ {
-				store.RunValueLogGC(0.5)
-			}
-			_, lastVlogSize = store.Size()
-
+			runGC()
 		case <-s.mandatoryVlogTicker.C:
-			store.RunValueLogGC(0.5)
+			runGC()
 		}
 	}
 }
@@ -104,7 +106,7 @@ func (s *ServerState) initStorage() {
 	kvOpt.TableLoadingMode = options.MemoryMap
 
 	var err error
-	s.WALstore, err = badger.OpenManaged(kvOpt)
+	s.WALstore, err = badger.Open(kvOpt)
 	x.Checkf(err, "Error while creating badger KV WAL store")
 
 	// Postings directory
@@ -131,7 +133,9 @@ func (s *ServerState) initStorage() {
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
 	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
 	go s.runVlogGC(s.Pstore)
-	go s.runVlogGC(s.WALstore)
+
+	wrapper := &badger.ManagedDB{DB: s.WALstore}
+	go s.runVlogGC(wrapper)
 }
 
 func (s *ServerState) Dispose() error {

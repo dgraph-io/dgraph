@@ -149,7 +149,7 @@ func (r *lockedSource) Seed(seed int64) {
 	r.src.Seed(seed)
 }
 
-func newNode(gid uint32, id uint64, myAddr string) *node {
+func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
 	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
 
 	rc := &intern.RaftContext{
@@ -157,7 +157,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		Group: gid,
 		Id:    id,
 	}
-	m := conn.NewNode(rc)
+	m := conn.NewNode(rc, store)
 	props := proposals{
 		keys: make(map[string]*proposalCtx),
 	}
@@ -721,11 +721,8 @@ func (n *node) Run() {
 				}
 			}
 
-			// First store the entries, then the hardstate and snapshot.
-			x.Check(n.Wal.Store(n.gid, rd.HardState, rd.Entries))
-
-			// Now store them in the in-memory store.
-			n.SaveToStorage(rd.HardState, rd.Entries)
+			// Store the hardstate and entries.
+			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
@@ -744,8 +741,6 @@ func (n *node) Run() {
 				} else {
 					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
-				x.Check(n.Wal.StoreSnapshot(n.gid, rd.Snapshot))
-				n.SaveSnapshot(rd.Snapshot)
 			}
 
 			lc := len(rd.CommittedEntries)
@@ -907,12 +902,10 @@ func (n *node) snapshot(skip uint64) {
 	rc, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	s, err := n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
+	err = n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
 	x.Checkf(err, "While creating snapshot")
-	x.Checkf(n.Store.Compact(snapshotIdx), "While compacting snapshot")
 	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", snapshotIdx,
 		n.Applied.DoneUntil())
-	x.Check(n.Wal.StoreSnapshot(n.gid, s))
 }
 
 func (n *node) joinPeers() error {
@@ -961,8 +954,8 @@ func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
 }
 
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
-func (n *node) InitAndStartNode(wal *raftwal.Wal) {
-	idx, restart, err := n.InitFromWal(wal)
+func (n *node) InitAndStartNode() {
+	idx, restart, err := n.PastLife()
 	x.Check(err)
 	n.Applied.SetDoneUntil(idx)
 	posting.TxnMarks().SetDoneUntil(idx)
