@@ -437,10 +437,8 @@ func (s *Server) Connect(ctx context.Context,
 	if proposal != nil {
 		fmt.Printf("prosing: %+v\n", proposal)
 		if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
-			fmt.Printf("Err with proposal: %+v\n", err)
 			return &emptyConnectionState, err
 		}
-		fmt.Printf("Err with proposal: %+v\n", err)
 	}
 	resp = &intern.ConnectionState{
 		State:  s.membershipState(),

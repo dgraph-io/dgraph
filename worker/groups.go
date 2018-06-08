@@ -487,10 +487,11 @@ START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero server.")
+		x.Printf("WARNING: We don't have address of any Zero server.")
 		time.Sleep(time.Second)
 		goto START
 	}
+	x.Printf("Got address of a Zero server: %s", pl.Addr)
 
 	c := intern.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())

@@ -290,8 +290,6 @@ func (w *DiskStorage) compact(u *txnUnifier, compactIndex uint64) error {
 // so raft state machine could know that Storage needs some time to prepare
 // snapshot and call Snapshot later.
 func (w *DiskStorage) Snapshot() (snap pb.Snapshot, rerr error) {
-	w.elog.Printf("Snapshot")
-	defer w.elog.Printf("Done")
 	if s := w.cache.snapshot(); !raft.IsEmptySnap(s) {
 		return s, nil
 	}
@@ -571,8 +569,6 @@ func limitSize(ents []pb.Entry, maxSize uint64) []pb.Entry {
 }
 
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) error {
-	w.elog.Printf("CreateSnapshot: %d", i)
-	defer w.elog.Printf("Done")
 	first, err := w.FirstIndex()
 	if err != nil {
 		return err
@@ -609,8 +605,6 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 }
 
 func (w *DiskStorage) Save(h pb.HardState, es []pb.Entry, snap pb.Snapshot) error {
-	w.elog.Printf("Save. Num entries: %d", len(es))
-	defer w.elog.Printf("Done")
 	u := w.newUnifier()
 	defer u.Cancel()
 
