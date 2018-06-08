@@ -10,7 +10,6 @@ package zero
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -205,7 +204,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 	cctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	// Propose the change.
-	fmt.Printf("proposing to raft: %+v\n", proposal)
 	if err := n.Raft().Propose(cctx, data); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
@@ -524,12 +522,9 @@ func (n *node) trySnapshot(skip uint64) {
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
 	}
-	_, err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
+	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
 	x.Checkf(err, "While creating snapshot")
-	x.Checkf(n.Store.Compact(idx), "While compacting snapshot")
 	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
-	// TODO: Work on this.
-	// x.Check(n.Wal.StoreSnapshot(s))
 }
 
 func (n *node) Run() {
@@ -557,22 +552,17 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			fmt.Println("raft ready in zero")
 			for _, rs := range rd.ReadStates {
 				ri := binary.BigEndian.Uint64(rs.RequestCtx)
 				n.sendReadIndex(ri, rs.Index)
 			}
 
-			// Store the hardstate and entries.
-			n.SaveToStorage(rd.HardState, rd.Entries)
+			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state intern.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				n.server.SetMembershipState(&state)
-				// TODO: Work on this.
-				// x.Check(n.Wal.StoreSnapshot(rd.Snapshot))
-				n.SaveSnapshot(rd.Snapshot)
 			}
 
 			for _, entry := range rd.CommittedEntries {

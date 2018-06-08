@@ -722,7 +722,7 @@ func (n *node) Run() {
 			}
 
 			// Store the hardstate and entries.
-			n.SaveToStorage(rd.HardState, rd.Entries)
+			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
@@ -741,7 +741,6 @@ func (n *node) Run() {
 				} else {
 					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
-				n.SaveSnapshot(rd.Snapshot)
 			}
 
 			lc := len(rd.CommittedEntries)
@@ -903,13 +902,10 @@ func (n *node) snapshot(skip uint64) {
 	rc, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	_, err = n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
+	err = n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
 	x.Checkf(err, "While creating snapshot")
-	x.Checkf(n.Store.Compact(snapshotIdx), "While compacting snapshot")
 	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", snapshotIdx,
 		n.Applied.DoneUntil())
-	// TODO: Work on this.
-	// x.Check(n.Wal.StoreSnapshot(s))
 }
 
 func (n *node) joinPeers() error {

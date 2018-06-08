@@ -192,11 +192,8 @@ func (n *Node) SaveSnapshot(s raftpb.Snapshot) {
 	}
 }
 
-func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry) {
-	if !raft.IsEmptyHardState(h) {
-		n.Store.SetHardState(h)
-	}
-	n.Store.Append(es)
+func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
+	x.Check(n.Store.Save(h, es, s))
 }
 
 func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
@@ -227,7 +224,8 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 		return
 	}
 	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
-	if num > 0 {
+	// We'll always have at least one entry.
+	if num > 1 {
 		restart = true
 	}
 	return

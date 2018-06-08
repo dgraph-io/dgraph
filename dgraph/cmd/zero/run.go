@@ -102,6 +102,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}
 	st.zero.Init()
 	st.node.server = st.zero
+	x.Check(st.node.initAndStartNode())
 
 	intern.RegisterZeroServer(s, st.zero)
 	intern.RegisterRaftServer(s, st.rs)
@@ -166,7 +167,7 @@ func run() {
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = opts.w
 	kvOpt.ValueDir = opts.w
-	kvOpt.TableLoadingMode = bopts.MemoryMap
+	kvOpt.ValueLogLoadingMode = bopts.FileIO
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
@@ -182,8 +183,6 @@ func run() {
 	http.HandleFunc("/state", st.getState)
 	http.HandleFunc("/removeNode", st.removeNode)
 	http.HandleFunc("/moveTablet", st.moveTablet)
-
-	x.Check(st.node.initAndStartNode())
 
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
