@@ -70,6 +70,8 @@ func less(lhs, rhs *intern.MapEntry) bool {
 }
 
 func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
+	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
+
 	buf := entriesBuf
 	var entries []*intern.MapEntry
 	for len(buf) > 0 {
@@ -105,7 +107,6 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	)
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
-	m.shards[shardIdx].mu.Unlock() // Locked by caller.
 }
 
 func (m *mapper) run() {

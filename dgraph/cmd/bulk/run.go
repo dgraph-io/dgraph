@@ -151,7 +151,8 @@ func run() {
 		mergeMapShardsIntoReduceShards(opt)
 	}
 	loader.reduceStage()
-	loader.writeSchema()
+	// loader.writeSchema() // This is the issue. We need to find the predicates and only write
+	// schemas for those in the corresponding DB.
 	loader.cleanup()
 }
 

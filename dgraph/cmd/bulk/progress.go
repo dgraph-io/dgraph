@@ -55,7 +55,7 @@ func (p *progress) setPhase(ph phase) {
 func (p *progress) report() {
 	for {
 		select {
-		case <-time.After(time.Second):
+		case <-time.After(10 * time.Second):
 			p.reportOnce()
 		case <-p.shutdown:
 			p.shutdown <- struct{}{}

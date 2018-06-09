@@ -36,12 +36,12 @@ func (s *shuffler) run() {
 	thr := x.NewThrottle(s.opt.NumShufflers)
 	for i := 0; i < s.opt.ReduceShards; i++ {
 		thr.Start()
-		go func(i int, db *badger.ManagedDB) {
-			mapFiles := filenamesInTree(shardDirs[i])
+		go func(shardId int, db *badger.ManagedDB) {
+			mapFiles := filenamesInTree(shardDirs[shardId])
 			shuffleInputChs := make([]chan *intern.MapEntry, len(mapFiles))
 			for i, mapFile := range mapFiles {
 				shuffleInputChs[i] = make(chan *intern.MapEntry, 1000)
-				go readMapOutput(mapFile, shuffleInputChs[i])
+				go readMapOutput(shardId, mapFile, shuffleInputChs[i])
 			}
 
 			ci := &countIndexer{state: s.state, db: db}
@@ -66,7 +66,7 @@ func (s *shuffler) createBadger(i int) *badger.ManagedDB {
 	return db
 }
 
-func readMapOutput(filename string, mapEntryCh chan<- *intern.MapEntry) {
+func readMapOutput(shard int, filename string, mapEntryCh chan<- *intern.MapEntry) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	defer fd.Close()
@@ -98,7 +98,6 @@ func readMapOutput(filename string, mapEntryCh chan<- *intern.MapEntry) {
 }
 
 func (s *shuffler) shufflePostings(mapEntryChs []chan *intern.MapEntry, ci *countIndexer) {
-
 	var ph postingHeap
 	for _, ch := range mapEntryChs {
 		heap.Push(&ph, heapNode{mapEntry: <-ch, ch: ch})
