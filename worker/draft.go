@@ -805,15 +805,19 @@ func (n *node) Run() {
 					n.Send(msg)
 				}
 			}
+			timer.Record() // Index 4.
+
 			n.Raft().Advance()
 			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
 
-			timer.Record() // Index 4.
-			if total := timer.Total(); total >= 100*time.Millisecond {
-				elog.Printf("Timer Total: %v. All: %+v.", total, timer.All())
+			timer.Record() // Index 5. Largely tracks Raft().Advance().
+			total := timer.Total()
+			all := timer.All()
+			if total >= 100*time.Millisecond || all[3] >= 10*time.Millisecond {
+				elog.Printf("Timer Total: %v. All: %+v.", total, all)
 			}
 
 		case <-n.stop:
