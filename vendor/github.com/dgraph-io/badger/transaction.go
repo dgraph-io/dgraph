@@ -408,6 +408,9 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 }
 
 func (txn *Txn) runCallbacks() {
+	if txn.callbacks == nil {
+		return
+	}
 	for _, cb := range txn.callbacks {
 		cb()
 	}

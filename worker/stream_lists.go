@@ -65,9 +65,7 @@ func (sl *streamLists) orchestrate(ctx context.Context, prefix string, txn *badg
 	go func() {
 		kvErr <- sl.streamKVs(ctx, prefix, kvChan)
 	}()
-	x.Printf("waiting for produce and stream\n")
-	wg.Wait() // Wait for produceKVs to be over.
-	x.Printf("Closing kvchan\n")
+	wg.Wait()     // Wait for produceKVs to be over.
 	close(kvChan) // Now we can close kvChan.
 
 	select {
@@ -108,7 +106,6 @@ func (sl *streamLists) produceRanges(ctx context.Context, txn *badger.Txn, keyCh
 		if size > 4*MB {
 			kr := keyRange{start: start, end: item.KeyCopy(nil)}
 			keyCh <- kr
-			x.Printf("Output keyRange: %v of size: %d\n", kr, size)
 			start = item.KeyCopy(nil)
 			size = 0
 		}
@@ -196,7 +193,6 @@ func (sl *streamLists) streamKVs(ctx context.Context, prefix string, kvChan chan
 				x.AssertTrue(kvs != nil)
 				batch.Kv = append(batch.Kv, kvs.Kv...)
 			default:
-				x.Printf("Breaking loop at default\n")
 				break loop
 			}
 		}
@@ -207,7 +203,7 @@ func (sl *streamLists) streamKVs(ctx context.Context, prefix string, kvChan chan
 		if err := sl.stream.Send(batch); err != nil {
 			return err
 		}
-		x.Printf("Sent batch of size: %d in %v.\n", sz, time.Since(t))
+		x.Printf("Sent batch of size: %s in %v.\n", humanize.Bytes(sz), time.Since(t))
 		return nil
 	}
 

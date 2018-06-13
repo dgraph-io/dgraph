@@ -40,8 +40,9 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *inte
 		now := time.Now()
 		for range t.C {
 			dur := time.Since(now)
-			x.Printf("Getting SNAPSHOT: Time elapsed: %v, bytes written: %s, bytes/sec %d\n",
-				x.FixedDuration(dur), humanize.Bytes(bytesWritten), bytesWritten/uint64(dur.Seconds()))
+			speed := bytesWritten / uint64(dur.Seconds())
+			x.Printf("Getting SNAPSHOT: Time elapsed: %v, bytes written: %s, %s/s\n",
+				x.FixedDuration(dur), humanize.Bytes(bytesWritten), humanize.Bytes(speed))
 		}
 	}()
 
