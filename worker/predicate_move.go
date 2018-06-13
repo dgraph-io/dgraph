@@ -76,6 +76,108 @@ func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
 	return schema.Load(predicate)
 }
 
+func produceKeys(ctx context.Context, txn *badger.Txn, predicate string, keys chan string) {
+	prefix := x.PredicatePrefix(predicate)
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.PrefetchValues = false
+	it := txn.NewIterator(iterOpts)
+	defer it.Close()
+
+	var prevKey []byte
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		item := it.Item()
+		key := item.Key()
+
+		if bytes.Equal(key, prevKey) {
+			continue
+		}
+		prevKey = append(prevKey[:0], key...)
+		keys <- string(key)
+	}
+	close(keys)
+}
+
+func produceKVs(ctx context.Context, txn *badger.Txn, keys chan string,
+	kvChan chan *intern.KV) error {
+	for {
+		select {
+		case key, ok := <-keys:
+			if !ok {
+				// Done with the keys.
+				return nil
+			}
+			iterOpts := badger.DefaultIteratorOptions
+			// We don't know how many values do we really need to read this PL. We could stop at
+			// just one. So, let's not get more than necessary.
+			iterOpts.PrefetchValues = false
+			iterOpts.AllVersions = true
+			it := txn.NewIterator(iterOpts)
+			it.Seek([]byte(key))
+			l, err := posting.ReadPostingList([]byte(key), it)
+			it.Close()
+			if err != nil {
+				return err
+			}
+			kv, err := l.MarshalToKv()
+			if err != nil {
+				return err
+			}
+			kvChan <- kv
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func streamKVs(ctx context.Context, predicate string, kvChan chan *intern.KV,
+	stream intern.Worker_ReceivePredicateClient) error {
+	var count, batchSize int
+	var bytesSent uint64
+	kvs := &intern.KVS{}
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	now := time.Now()
+
+outer:
+	for {
+		select {
+		case kv, ok := <-kvChan:
+			if !ok {
+				break outer
+			}
+			kvs.Kv = append(kvs.Kv, kv)
+			batchSize += kv.Size()
+			bytesSent += uint64(kv.Size())
+			count++
+			if batchSize < 4*MB {
+				continue
+			}
+			if err := stream.Send(kvs); err != nil {
+				return err
+			}
+			kvs = &intern.KVS{}
+			batchSize = 0
+
+		case <-t.C:
+			dur := time.Since(now)
+			speed := bytesSent / uint64(dur.Seconds())
+			x.Printf("Sending predicate: [%v] Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
+				predicate, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
+
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	if len(kvs.Kv) > 0 {
+		if err := stream.Send(kvs); err != nil {
+			return err
+		}
+	}
+	x.Printf("Sent %d (+1 maybe for schema) keys for predicate %v\n", count, predicate)
+	return nil
+}
+
 func movePredicateHelper(ctx context.Context, predicate string, gid uint32) error {
 	pl := groups().Leader(gid)
 	if pl == nil {
@@ -87,65 +189,52 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
 
-	var bytesSent uint64
-	t := time.NewTicker(2 * time.Second)
-	defer t.Stop()
-	go func() {
-		now := time.Now()
-		for range t.C {
-			dur := time.Since(now)
-			speed := bytesSent / uint64(dur.Seconds())
-			x.Printf("Sending predicate: [%v] Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
-				predicate, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
-		}
-	}()
-
-	count := 0
-	batchSize := 0
-	kvs := &intern.KVS{}
 	// sends all data except schema, schema key has different prefix
-	prefix := x.PredicatePrefix(predicate)
-	var prevKey []byte
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	it := txn.NewIterator(iterOpts)
-	defer it.Close()
-	for it.Seek(prefix); it.ValidForPrefix(prefix); {
-		item := it.Item()
-		key := item.Key()
 
-		if bytes.Equal(key, prevKey) {
-			it.Next()
-			continue
-		}
-		prevKey = append(prevKey[:0], key...)
+	keysCh := make(chan string, 1000)     // Contains keys for posting lists.
+	kvChan := make(chan *intern.KV, 1000) // Contains marshaled posting lists.
+	errCh := make(chan error, 1)          // Stores error by consumeKeys.
 
-		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
-		if err != nil {
-			return err
-		}
+	// Read the predicate keys and stream to keysCh.
+	go produceKeys(ctx, txn, predicate, keysCh)
 
-		kv, err := l.MarshalToKv()
-		if err != nil {
-			return err
-		}
-		kvs.Kv = append(kvs.Kv, kv)
-		batchSize += kv.Size()
-		bytesSent += uint64(kv.Size())
-		count++
-		if batchSize < 4*MB {
-			continue
-		}
-		if err := stream.Send(kvs); err != nil {
-			return err
-		}
-		batchSize = 0
-		kvs = &intern.KVS{}
+	// Read the posting lists corresponding to keys and send to kvChan.
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := produceKVs(ctx, txn, keysCh, kvChan); err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+			}
+		}()
 	}
 
-	// Send schema if present.
+	// Pick up key-values from kvChan and send to stream.
+	kvErr := make(chan error, 1)
+	go func() {
+		kvErr <- streamKVs(ctx, predicate, kvChan, stream)
+	}()
+	wg.Wait()     // Wait for produceKVs to be over.
+	close(kvChan) // Now we can close kvChan.
+
+	select {
+	case err := <-errCh: // Check error from produceKVs.
+		return err
+	default:
+	}
+
+	// Wait for key streaming to be over.
+	if err := <-kvErr; err != nil {
+		return err
+	}
+
+	// Send schema (if present) now after all keys have been transferred over.
 	schemaKey := x.SchemaKey(predicate)
 	item, err := txn.Get(schemaKey)
 	if err == badger.ErrKeyNotFound {
@@ -158,23 +247,17 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		if err != nil {
 			return err
 		}
+		kvs := &intern.KVS{}
 		kv := &intern.KV{}
 		kv.Key = schemaKey
 		kv.Val = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		kvs.Kv = append(kvs.Kv, kv)
-		batchSize += kv.Size()
-		bytesSent += uint64(kv.Size())
-		count++
-	}
-
-	if batchSize > 0 {
 		if err := stream.Send(kvs); err != nil {
 			return err
 		}
 	}
-	x.Printf("Sent %d keys for predicate %v\n", count, predicate)
 
 	payload, err := stream.CloseAndRecv()
 	if err != nil {
@@ -184,9 +267,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if err != nil {
 		return err
 	}
-	if recvCount != count {
-		return x.Errorf("Sent count %d doesn't match with received %d", count, recvCount)
-	}
+	x.Printf("Received %d keys\n", recvCount)
 	return nil
 }
 

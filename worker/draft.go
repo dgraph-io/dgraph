@@ -998,7 +998,10 @@ func (n *node) InitAndStartNode() {
 		if !raft.IsEmptySnap(sp) {
 			members := groups().members(n.gid)
 			for _, id := range sp.Metadata.ConfState.Nodes {
-				n.Connect(id, members[id].Addr)
+				m, ok := members[id]
+				if ok {
+					n.Connect(id, m.Addr)
+				}
 			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
