@@ -32,9 +32,10 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to BadgerDB.
-func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.KV, che chan error) {
+func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *intern.KV, che chan error) {
 	var bytesWritten uint64
 	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
 	go func() {
 		now := time.Now()
 		for range t.C {
@@ -46,22 +47,27 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.K
 
 	var hasError int32
 	var wg sync.WaitGroup // to wait for all callbacks to return
-	for i := range kv {
+	for i := range kvChan {
+		if i.Version == 0 {
+			// Ignore this one. Otherwise, we'll get ErrManagedDB back, because every Commit in
+			// managed DB must have a valid commit ts.
+			continue
+		}
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
 		bytesWritten += uint64(i.Size())
-		txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0])
+		x.Check(txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0]))
 		wg.Add(1)
-		txn.CommitAt(i.Version, func(err error) {
+		rerr := txn.CommitAt(i.Version, func(err error) {
 			// We don't care about exact error
-			wg.Done()
+			defer wg.Done()
 			if err != nil {
 				x.Printf("Error while committing kv to badger %v\n", err)
 				atomic.StoreInt32(&hasError, 1)
 			}
 		})
+		x.Check(rerr)
 	}
 	wg.Wait()
-	t.Stop()
 
 	if hasError == 0 {
 		che <- nil
@@ -94,10 +100,6 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 		tr.LazyPrintf("Streaming data for group: %v", group)
 	}
 
-	kvs := make(chan *intern.KV, 1000)
-	che := make(chan error)
-	go writeBatch(ctx, ps, kvs, che)
-
 	keyValues, err := stream.Recv()
 	if err != nil {
 		return 0, err
@@ -111,38 +113,46 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	n.RaftContext.SnapshotTs = ikv.Version
 	n.Unlock()
 
+	kvChan := make(chan *intern.KV, 1000)
+	che := make(chan error, 1)
+	go writeBatch(ctx, ps, kvChan, che)
+
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	for {
 		keyValues, err = stream.Recv()
 		if err == io.EOF {
+			x.Printf("EOF has been reached\n")
 			break
 		}
 		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
-			close(kvs)
+			close(kvChan)
 			return count, err
 		}
 		for _, kv := range keyValues.Kv {
 			count++
+			if count%100000 == 0 {
+				x.Printf("Got %d keys\n", count)
+			}
 
 			// We check for errors, if there are no errors we send value to channel.
 			select {
-			case kvs <- kv:
+			case kvChan <- kv:
 				// OK
 			case <-ctx.Done():
 				if tr, ok := trace.FromContext(ctx); ok {
 					tr.LazyPrintf("Context timed out while streaming group: %v", group)
 				}
-				close(kvs)
+				close(kvChan)
 				return 0, ctx.Err()
 			case err := <-che:
 				if tr, ok := trace.FromContext(ctx); ok {
 					tr.LazyPrintf("Error while doing a batch write for group: %v", group)
 				}
-				close(kvs)
+				close(kvChan)
 				// Important: Don't put return count, err
 				// There was a compiler bug which was fixed in 1.8.1
 				// https://github.com/golang/go/issues/21722.
@@ -151,7 +161,7 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 			}
 		}
 	}
-	close(kvs)
+	close(kvChan)
 
 	if err := <-che; err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -162,6 +172,7 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Streaming complete for group: %v", group)
 	}
+	x.Printf("Got %d keys. DONE.\n", count)
 	return count, nil
 }
 
@@ -282,6 +293,9 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		batchSize += kv.Size()
 		bytesSent += uint64(kv.Size())
 		count++
+		if count%100000 == 0 {
+			x.Printf("Sent %d keys\n", count)
+		}
 		if batchSize < MB { // 1MB
 			continue
 		}
@@ -296,8 +310,10 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 			return err
 		}
 	}
+	x.Printf("Sent %d keys. Done.\n", count)
+
 	if tr, ok := trace.FromContext(stream.Context()); ok {
-		tr.LazyPrintf("Sent %d keys to client. Done.\n", count)
+		tr.LazyPrintf("Sent %d keys. Done.\n", count)
 	}
 	return nil
 }
