@@ -408,13 +408,10 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 }
 
 func (txn *Txn) runCallbacks() {
-	if txn.callbacks == nil {
-		return
-	}
 	for _, cb := range txn.callbacks {
 		cb()
 	}
-	txn.callbacks = nil
+	txn.callbacks = txn.callbacks[:0]
 }
 
 // Discard discards a created transaction. This method is very important and must be called. Commit
