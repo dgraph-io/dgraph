@@ -23,6 +23,7 @@ type kvStream interface {
 	Send(*intern.KVS) error
 }
 
+// TODO: Write tests.
 type streamLists struct {
 	stream    kvStream
 	predicate string
@@ -95,14 +96,11 @@ func (sl *streamLists) produceRanges(ctx context.Context, txn *badger.Txn, keyCh
 	var size int64
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		item := it.Item()
-		key := item.Key()
 		if len(start) == 0 {
 			start = item.KeyCopy(nil)
 		}
 
-		if sl.chooseKey == nil || sl.chooseKey(key, item.Version()) {
-			size += item.EstimatedSize()
-		}
+		size += item.EstimatedSize()
 		if size > 4*MB {
 			kr := keyRange{start: start, end: item.KeyCopy(nil)}
 			keyCh <- kr
@@ -144,6 +142,10 @@ func (sl *streamLists) produceKVs(ctx context.Context, txn *badger.Txn,
 			// Check if we reached the end of the key range.
 			if len(kr.end) > 0 && bytes.Compare(item.Key(), kr.end) >= 0 {
 				break
+			}
+			// Check if we should pick this key.
+			if sl.chooseKey != nil && !sl.chooseKey(item.Key(), item.Version()) {
+				continue
 			}
 
 			// Now convert to key value.
