@@ -143,7 +143,7 @@ outer:
 			batchSize += kv.Size()
 			bytesSent += uint64(kv.Size())
 			count++
-			if batchSize < 32*MB {
+			if batchSize < 16*MB {
 				continue
 			}
 			if err := sl.stream.Send(kvs); err != nil {
