@@ -8,6 +8,7 @@
 package worker
 
 import (
+	"bytes"
 	"sync"
 	"time"
 
@@ -26,16 +27,23 @@ type streamLists struct {
 	stream    kvStream
 	predicate string
 	chooseKey func(key []byte, version uint64) bool
-	itemToKv  func(key string, itr *badger.Iterator) (*intern.KV, error)
+	itemToKv  func(key []byte, itr *badger.Iterator) (*intern.KV, error)
+}
+
+// keyRange is [start, end), including start, excluding end. Do ensure that the start,
+// end byte slices are owned by keyRange struct.
+type keyRange struct {
+	start []byte
+	end   []byte
 }
 
 func (sl *streamLists) orchestrate(ctx context.Context, prefix string, txn *badger.Txn) error {
-	keysCh := make(chan string, 1000)     // Contains keys for posting lists.
-	kvChan := make(chan *intern.KV, 1000) // Contains marshaled posting lists.
+	keyCh := make(chan keyRange, 100)     // Contains keys for posting lists.
+	kvChan := make(chan *intern.KVS, 100) // Contains marshaled posting lists.
 	errCh := make(chan error, 1)          // Stores error by consumeKeys.
 
 	// Read the predicate keys and stream to keysCh.
-	go sl.produceKeys(ctx, txn, keysCh)
+	go sl.produceRanges(ctx, txn, keyCh)
 
 	// Read the posting lists corresponding to keys and send to kvChan.
 	var wg sync.WaitGroup
@@ -43,7 +51,7 @@ func (sl *streamLists) orchestrate(ctx context.Context, prefix string, txn *badg
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := sl.produceKVs(ctx, txn, keysCh, kvChan); err != nil {
+			if err := sl.produceKVs(ctx, txn, keyCh, kvChan); err != nil {
 				select {
 				case errCh <- err:
 				default:
@@ -73,11 +81,7 @@ func (sl *streamLists) orchestrate(ctx context.Context, prefix string, txn *badg
 	return nil
 }
 
-// TODO: Change this so the first phase generates a key range, and passes it onto the second phase.
-// The 2nd phase would then use the iterator to iterate over that key range, generating the PLs, and
-// sending them over to kvChan. That way we reduce the Iterator::Seeks significantly, and can use
-// prefetch as well.
-func (sl *streamLists) produceKeys(ctx context.Context, txn *badger.Txn, keys chan string) {
+func (sl *streamLists) produceRanges(ctx context.Context, txn *badger.Txn, keyCh chan keyRange) {
 	var prefix []byte
 	if len(sl.predicate) > 0 {
 		prefix = x.PredicatePrefix(sl.predicate)
@@ -87,40 +91,84 @@ func (sl *streamLists) produceKeys(ctx context.Context, txn *badger.Txn, keys ch
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 
+	var start []byte
+	var size int64
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		item := it.Item()
 		key := item.Key()
+		if len(start) == 0 {
+			start = item.KeyCopy(nil)
+		}
 
 		if sl.chooseKey == nil || sl.chooseKey(key, item.Version()) {
-			keys <- string(key)
+			size += item.EstimatedSize()
+		}
+		if size > 4*MB {
+			kr := keyRange{start: start, end: item.KeyCopy(nil)}
+			keyCh <- kr
+			x.Printf("Output keyRange: %v of size: %d\n", kr, size)
+			start = item.KeyCopy(nil)
+			size = 0
 		}
 	}
-	close(keys)
+	if len(start) > 0 {
+		keyCh <- keyRange{start: start}
+	}
+	close(keyCh)
 }
 
 func (sl *streamLists) produceKVs(ctx context.Context, txn *badger.Txn,
-	keys chan string, kvChan chan *intern.KV) error {
+	keyCh chan keyRange, kvChan chan *intern.KVS) error {
+	var prefix []byte
+	if len(sl.predicate) > 0 {
+		prefix = x.PredicatePrefix(sl.predicate)
+	}
+
+	iterate := func(kr keyRange) error {
+		iterOpts := badger.DefaultIteratorOptions
+		// iterOpts.PrefetchSize = 10
+		iterOpts.AllVersions = true
+		iterOpts.PrefetchValues = false
+		it := txn.NewIterator(iterOpts)
+		defer it.Close()
+
+		kvs := new(intern.KVS)
+		var prevKey []byte
+		for it.Seek(kr.start); it.ValidForPrefix(prefix); {
+			item := it.Item()
+			if bytes.Equal(item.Key(), prevKey) {
+				it.Next()
+				continue
+			}
+			prevKey = append(prevKey[:0], item.Key()...)
+
+			// Check if we reached the end of the key range.
+			if len(kr.end) > 0 && bytes.Compare(item.Key(), kr.end) >= 0 {
+				break
+			}
+
+			// Now convert to key value.
+			kv, err := sl.itemToKv(item.KeyCopy(nil), it)
+			if err != nil {
+				return err
+			}
+			kvs.Kv = append(kvs.Kv, kv)
+		}
+		if kvs.Size() > 0 {
+			kvChan <- kvs
+		}
+		return nil
+	}
+
 	for {
 		select {
-		case key, ok := <-keys:
+		case kr, ok := <-keyCh:
 			if !ok {
 				// Done with the keys.
 				return nil
 			}
-			iterOpts := badger.DefaultIteratorOptions
-			// We don't know how many values do we really need to read this PL. We could stop at
-			// just one. So, let's not get more than necessary.
-			iterOpts.PrefetchValues = false
-			iterOpts.AllVersions = true
-			it := txn.NewIterator(iterOpts)
-			it.Seek([]byte(key))
-			if it.Valid() {
-				kv, err := sl.itemToKv(key, it)
-				it.Close()
-				if err != nil {
-					return err
-				}
-				kvChan <- kv
+			if err := iterate(kr); err != nil {
+				return err
 			}
 		case <-ctx.Done():
 			return ctx.Err()
@@ -128,33 +176,38 @@ func (sl *streamLists) produceKVs(ctx context.Context, txn *badger.Txn,
 	}
 }
 
-func (sl *streamLists) streamKVs(ctx context.Context, prefix string, kvChan chan *intern.KV) error {
-	var count, batchSize int
+func (sl *streamLists) streamKVs(ctx context.Context, prefix string, kvChan chan *intern.KVS) error {
+	var count int
 	var bytesSent uint64
-	kvs := &intern.KVS{}
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	now := time.Now()
 
+	slurp := func(batch *intern.KVS) error {
+		for {
+			select {
+			case kvs := <-kvChan:
+				batch.Kv = append(batch.Kv, kvs.Kv...)
+			default:
+				sz := uint64(batch.Size())
+				bytesSent += sz
+				count += len(batch.Kv)
+				t := time.Now()
+				if err := sl.stream.Send(batch); err != nil {
+					return err
+				}
+				x.Printf("Sent batch of size: %d in %v.\n", sz, time.Since(t))
+				return nil
+			}
+		}
+	}
+
 outer:
 	for {
+		var batch *intern.KVS
 		select {
-		case kv, ok := <-kvChan:
-			if !ok {
-				break outer
-			}
-			kvs.Kv = append(kvs.Kv, kv)
-			batchSize += kv.Size()
-			bytesSent += uint64(kv.Size())
-			count++
-			if batchSize < 16*MB {
-				continue
-			}
-			if err := sl.stream.Send(kvs); err != nil {
-				return err
-			}
-			kvs = &intern.KVS{}
-			batchSize = 0
+		case <-ctx.Done():
+			return ctx.Err()
 
 		case <-t.C:
 			dur := time.Since(now)
@@ -162,16 +215,17 @@ outer:
 			x.Printf("%s Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
 				prefix, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
 
-		case <-ctx.Done():
-			return ctx.Err()
+		case kvs, ok := <-kvChan:
+			if !ok {
+				break outer
+			}
+			batch = kvs
+			if err := slurp(batch); err != nil {
+				return err
+			}
 		}
 	}
 
-	if len(kvs.Kv) > 0 {
-		if err := sl.stream.Send(kvs); err != nil {
-			return err
-		}
-	}
 	x.Printf("%s Sent %d (+1 maybe for schema) keys\n", prefix, count)
 	return nil
 }

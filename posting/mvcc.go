@@ -384,6 +384,9 @@ func unmarshalOrCopy(plist *intern.PostingList, item *badger.Item) error {
 
 // constructs the posting list from the disk using the passed iterator.
 // Use forward iterator with allversions enabled in iter options.
+//
+// key would now be owned by the posting list. So, ensure that it isn't reused
+// elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key

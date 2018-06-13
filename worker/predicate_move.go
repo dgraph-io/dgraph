@@ -90,8 +90,8 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 
 	// Read the predicate keys and stream to keysCh.
 	sl := streamLists{stream: stream, predicate: predicate}
-	sl.itemToKv = func(key string, itr *badger.Iterator) (*intern.KV, error) {
-		l, err := posting.ReadPostingList([]byte(key), itr)
+	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
+		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
 		}

@@ -192,7 +192,31 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	// Any commit which happens in the future will have commitTs greater than
 	// this.
 	// TODO: Ensure all deltas have made to disk and read in memory before checking disk.
-	min_ts := posting.Txns().MinTs()
+	// BUG: There's a bug here due to which a node which doesn't see any transactions, but has real
+	// data fails to send that over, because of min_ts.
+	min_ts := posting.Txns().MinTs() // Why are we not using last snapshot ts?
+	x.Printf("Got min_ts: %d\n", min_ts)
+	// snap, err := groups().Node.Snapshot()
+	// if err != nil {
+	// 	return err
+	// }
+	// index := snap.Metadata.Index
+
+	// TODO: Why are we using MinTs() in the place when we should be using
+	// snapshot index? This is wrong.
+
+	// TODO: We are not using the snapshot time, because we don't store the
+	// transaction timestamp in the snapshot. If we did, we'd just use that
+	// instead of this. This causes issues if the server had received a snapshot
+	// to begin with, but had no active transactions. Then mints is always zero,
+	// hence nothing is read or sent in the stream.
+
+	// UPDATE: This doesn't look too bad. So, we're keeping track of the
+	// transaction timestamps on the side. And we're using those to figure out
+	// what to stream here. The snapshot index is not really being used for
+	// anything here.
+	// This whole transaction tracking business is complex and must be
+	// simplified to its essence.
 
 	// Send ts as first KV.
 	if err := stream.Send(&intern.KVS{
@@ -209,23 +233,23 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		pk := x.Parse(key)
 		return version > clientTs || pk.IsSchema()
 	}
-	sl.itemToKv = func(key string, itr *badger.Iterator) (*intern.KV, error) {
+	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
 		item := itr.Item()
-		pk := x.Parse([]byte(key))
+		pk := x.Parse(key)
 		if pk.IsSchema() {
 			val, err := item.ValueCopy(nil)
 			if err != nil {
 				return nil, err
 			}
 			kv := &intern.KV{
-				Key:      []byte(key),
+				Key:      key,
 				Val:      val,
 				UserMeta: []byte{item.UserMeta()},
 				Version:  item.Version(),
 			}
 			return kv, nil
 		}
-		l, err := posting.ReadPostingList([]byte(key), itr)
+		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
 		}
