@@ -65,7 +65,9 @@ func (sl *streamLists) orchestrate(ctx context.Context, prefix string, txn *badg
 	go func() {
 		kvErr <- sl.streamKVs(ctx, prefix, kvChan)
 	}()
-	wg.Wait()     // Wait for produceKVs to be over.
+	x.Printf("waiting for produce and stream\n")
+	wg.Wait() // Wait for produceKVs to be over.
+	x.Printf("Closing kvchan\n")
 	close(kvChan) // Now we can close kvChan.
 
 	select {
@@ -154,7 +156,7 @@ func (sl *streamLists) produceKVs(ctx context.Context, txn *badger.Txn,
 			}
 			kvs.Kv = append(kvs.Kv, kv)
 		}
-		if kvs.Size() > 0 {
+		if len(kvs.Kv) > 0 {
 			kvChan <- kvs
 		}
 		return nil
@@ -184,22 +186,29 @@ func (sl *streamLists) streamKVs(ctx context.Context, prefix string, kvChan chan
 	now := time.Now()
 
 	slurp := func(batch *intern.KVS) error {
+	loop:
 		for {
 			select {
-			case kvs := <-kvChan:
+			case kvs, ok := <-kvChan:
+				if !ok {
+					break loop
+				}
+				x.AssertTrue(kvs != nil)
 				batch.Kv = append(batch.Kv, kvs.Kv...)
 			default:
-				sz := uint64(batch.Size())
-				bytesSent += sz
-				count += len(batch.Kv)
-				t := time.Now()
-				if err := sl.stream.Send(batch); err != nil {
-					return err
-				}
-				x.Printf("Sent batch of size: %d in %v.\n", sz, time.Since(t))
-				return nil
+				x.Printf("Breaking loop at default\n")
+				break loop
 			}
 		}
+		sz := uint64(batch.Size())
+		bytesSent += sz
+		count += len(batch.Kv)
+		t := time.Now()
+		if err := sl.stream.Send(batch); err != nil {
+			return err
+		}
+		x.Printf("Sent batch of size: %d in %v.\n", sz, time.Since(t))
+		return nil
 	}
 
 outer:
@@ -219,6 +228,7 @@ outer:
 			if !ok {
 				break outer
 			}
+			x.AssertTrue(kvs != nil)
 			batch = kvs
 			if err := slurp(batch); err != nil {
 				return err
