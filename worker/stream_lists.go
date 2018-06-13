@@ -73,6 +73,10 @@ func (sl *streamLists) orchestrate(ctx context.Context, prefix string, txn *badg
 	return nil
 }
 
+// TODO: Change this so the first phase generates a key range, and passes it onto the second phase.
+// The 2nd phase would then use the iterator to iterate over that key range, generating the PLs, and
+// sending them over to kvChan. That way we reduce the Iterator::Seeks significantly, and can use
+// prefetch as well.
 func (sl *streamLists) produceKeys(ctx context.Context, txn *badger.Txn, keys chan string) {
 	var prefix []byte
 	if len(sl.predicate) > 0 {
