@@ -97,7 +97,8 @@ func produceKeys(ctx context.Context, txn *badger.Txn, predicate string, keys ch
 	close(keys)
 }
 
-func produceKVs(ctx context.Context, txn *badger.Txn, keys chan string, kvChan chan *intern.KV) error {
+func produceKVs(ctx context.Context, txn *badger.Txn, keys chan string,
+	kvChan chan *intern.KV) error {
 	for {
 		select {
 		case key, ok := <-keys:
@@ -128,7 +129,8 @@ func produceKVs(ctx context.Context, txn *badger.Txn, keys chan string, kvChan c
 	}
 }
 
-func streamKVs(ctx context.Context, predicate string, kvChan chan *intern.KV, stream intern.Worker_ReceivePredicateClient) error {
+func streamKVs(ctx context.Context, predicate string, kvChan chan *intern.KV,
+	stream intern.Worker_ReceivePredicateClient) error {
 	var count, batchSize int
 	var bytesSent uint64
 	kvs := &intern.KVS{}
