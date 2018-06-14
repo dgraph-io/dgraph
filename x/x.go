@@ -325,3 +325,29 @@ func (b *BytesBuffer) TruncateBy(n int) {
 	b.sz -= n
 	AssertTrue(b.off >= 0 && b.sz >= 0)
 }
+
+type Timer struct {
+	start   time.Time
+	last    time.Time
+	records []time.Duration
+}
+
+func (t *Timer) Start() {
+	t.start = time.Now()
+	t.last = t.start
+	t.records = t.records[:0]
+}
+
+func (t *Timer) Record() {
+	now := time.Now()
+	t.records = append(t.records, now.Sub(t.last))
+	t.last = now
+}
+
+func (t *Timer) Total() time.Duration {
+	return time.Since(t.start)
+}
+
+func (t *Timer) All() []time.Duration {
+	return t.records
+}

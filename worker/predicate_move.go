@@ -8,14 +8,12 @@
 package worker
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"math"
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -25,7 +23,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	humanize "github.com/dustin/go-humanize"
 )
 
 var (
@@ -87,65 +84,26 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
 
-	var bytesSent uint64
-	t := time.NewTicker(2 * time.Second)
-	defer t.Stop()
-	go func() {
-		now := time.Now()
-		for range t.C {
-			dur := time.Since(now)
-			speed := bytesSent / uint64(dur.Seconds())
-			x.Printf("Sending predicate: [%v] Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
-				predicate, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
-		}
-	}()
-
-	count := 0
-	batchSize := 0
-	kvs := &intern.KVS{}
 	// sends all data except schema, schema key has different prefix
-	prefix := x.PredicatePrefix(predicate)
-	var prevKey []byte
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	it := txn.NewIterator(iterOpts)
-	defer it.Close()
-	for it.Seek(prefix); it.ValidForPrefix(prefix); {
-		item := it.Item()
-		key := item.Key()
 
-		if bytes.Equal(key, prevKey) {
-			it.Next()
-			continue
-		}
-		prevKey = append(prevKey[:0], key...)
-
-		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
+	// Read the predicate keys and stream to keysCh.
+	sl := streamLists{stream: stream, predicate: predicate}
+	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
+		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		kv, err := l.MarshalToKv()
-		if err != nil {
-			return err
-		}
-		kvs.Kv = append(kvs.Kv, kv)
-		batchSize += kv.Size()
-		bytesSent += uint64(kv.Size())
-		count++
-		if batchSize < 4*MB {
-			continue
-		}
-		if err := stream.Send(kvs); err != nil {
-			return err
-		}
-		batchSize = 0
-		kvs = &intern.KVS{}
+		return l.MarshalToKv()
 	}
 
-	// Send schema if present.
+	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
+	if err := sl.orchestrate(ctx, prefix, txn); err != nil {
+		return err
+	}
+
+	// Send schema (if present) now after all keys have been transferred over.
 	schemaKey := x.SchemaKey(predicate)
 	item, err := txn.Get(schemaKey)
 	if err == badger.ErrKeyNotFound {
@@ -158,23 +116,17 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		if err != nil {
 			return err
 		}
+		kvs := &intern.KVS{}
 		kv := &intern.KV{}
 		kv.Key = schemaKey
 		kv.Val = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		kvs.Kv = append(kvs.Kv, kv)
-		batchSize += kv.Size()
-		bytesSent += uint64(kv.Size())
-		count++
-	}
-
-	if batchSize > 0 {
 		if err := stream.Send(kvs); err != nil {
 			return err
 		}
 	}
-	x.Printf("Sent %d keys for predicate %v\n", count, predicate)
 
 	payload, err := stream.CloseAndRecv()
 	if err != nil {
@@ -184,9 +136,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if err != nil {
 		return err
 	}
-	if recvCount != count {
-		return x.Errorf("Sent count %d doesn't match with received %d", count, recvCount)
-	}
+	x.Printf("Received %d keys\n", recvCount)
 	return nil
 }
 

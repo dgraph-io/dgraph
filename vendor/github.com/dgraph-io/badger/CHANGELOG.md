@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.5.1] - 2018-06-04
+Bug Fixes:
+* Fix for infinite yieldItemValue recursion. #503
+* Fix recursive addition of `badgerMove` prefix. https://github.com/dgraph-io/badger/commit/2e3a32f0ccac3066fb4206b28deb39c210c5266f
+* Use file size based window size for sampling, instead of fixing it to 10MB. #501
+
+Cleanup:
+* Clarify comments and documentation.
+* Move badger tool one directory level up.
+
 ## [1.5.0] - 2018-05-08
 * Introduce `NumVersionsToKeep` option. This option is used to discard many
   versions of the same key, which saves space.
@@ -28,7 +38,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 * Introduce new `LSMOnlyOptions`, to make Badger act like a typical LSM based DB.
 
 Bug fix:
-* [Temporary] Check max version across all tables in Get (removed in next
+* (Temporary) Check max version across all tables in Get (removed in next
   release).
 * Update commit and read ts while loading from backup.
 * Ensure all transaction entries are part of the same value log file.
@@ -61,7 +71,10 @@ Bug fix:
 ## [1.0.1] - 2017-11-06
 * Fix an uint16 overflow when resizing key slice
 
-[Unreleased]: https://github.com/dgraph-io/badger/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/dgraph-io/badger/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/dgraph-io/badger/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/dgraph-io/badger/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/dgraph-io/badger/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/dgraph-io/badger/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/dgraph-io/badger/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/dgraph-io/badger/compare/v1.1.0...v1.1.1

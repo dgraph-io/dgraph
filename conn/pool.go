@@ -81,7 +81,7 @@ func (p *Pools) Remove(addr string) {
 	}
 	delete(p.all, addr)
 	p.Unlock()
-	pool.close()
+	pool.shutdown()
 }
 
 func (p *Pools) Connect(addr string) *Pool {
@@ -124,6 +124,9 @@ func NewPool(addr string) (*Pool, error) {
 	}
 	pl := &Pool{conn: conn, Addr: addr, lastEcho: time.Now()}
 	pl.UpdateHealthStatus()
+
+	// Initialize ticker before running monitor health.
+	pl.ticker = time.NewTicker(echoDuration)
 	go pl.MonitorHealth()
 	return pl, nil
 }
@@ -135,7 +138,7 @@ func (p *Pool) Get() *grpc.ClientConn {
 	return p.conn
 }
 
-func (p *Pool) close() {
+func (p *Pool) shutdown() {
 	p.ticker.Stop()
 	p.conn.Close()
 }
@@ -164,7 +167,6 @@ func (p *Pool) UpdateHealthStatus() {
 
 // MonitorHealth monitors the health of the connection via Echo. This function blocks forever.
 func (p *Pool) MonitorHealth() {
-	p.ticker = time.NewTicker(echoDuration)
 	for range p.ticker.C {
 		p.UpdateHealthStatus()
 	}

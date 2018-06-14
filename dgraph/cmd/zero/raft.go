@@ -22,7 +22,6 @@ import (
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/intern"
-	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -411,8 +410,8 @@ func (n *node) triggerLeaderChange() {
 	n.server.updateZeroLeader()
 }
 
-func (n *node) initAndStartNode(wal *raftwal.Wal) error {
-	idx, restart, err := n.InitFromWal(wal)
+func (n *node) initAndStartNode() error {
+	idx, restart, err := n.PastLife()
 	n.Applied.SetDoneUntil(idx)
 	x.Check(err)
 
@@ -440,10 +439,9 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		gconn := p.Get()
 		c := intern.NewRaftClient(gconn)
 		err = errJoinCluster
-		delay := 50 * time.Millisecond
-		for i := 0; i < 8 && err != nil; i++ {
-			time.Sleep(delay)
-			ctx, cancel := context.WithTimeout(n.ctx, time.Second)
+		timeout := 8 * time.Second
+		for i := 0; err != nil; i++ {
+			ctx, cancel := context.WithTimeout(n.ctx, timeout)
 			defer cancel()
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
@@ -457,7 +455,11 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 				log.Fatalf("Error while joining cluster: %v", errorDesc)
 			}
 			x.Printf("Error while joining cluster %v\n", err)
-			delay *= 2
+			timeout *= 2
+			if timeout > 32*time.Second {
+				timeout = 32 * time.Second
+			}
+			time.Sleep(timeout) // This is useful because JoinCluster can exit immediately.
 		}
 		if err != nil {
 			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
@@ -523,11 +525,9 @@ func (n *node) trySnapshot(skip uint64) {
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
 	}
-	s, err := n.Store.CreateSnapshot(idx, n.ConfState(), data)
+	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
 	x.Checkf(err, "While creating snapshot")
-	x.Checkf(n.Store.Compact(idx), "While compacting snapshot")
 	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
-	x.Check(n.Wal.StoreSnapshot(0, s))
 }
 
 func (n *node) Run() {
@@ -559,18 +559,13 @@ func (n *node) Run() {
 				ri := binary.BigEndian.Uint64(rs.RequestCtx)
 				n.sendReadIndex(ri, rs.Index)
 			}
-			// First store the entries, then the hardstate and snapshot.
-			x.Check(n.Wal.Store(0, rd.HardState, rd.Entries))
 
-			// Now store them in the in-memory store.
-			n.SaveToStorage(rd.HardState, rd.Entries)
+			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state intern.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				n.server.SetMembershipState(&state)
-				x.Check(n.Wal.StoreSnapshot(0, rd.Snapshot))
-				n.SaveSnapshot(rd.Snapshot)
 			}
 
 			for _, entry := range rd.CommittedEntries {

@@ -6162,7 +6162,7 @@ func TestMain(m *testing.M) {
 	kvOpt.Dir = dir2
 	kvOpt.ValueDir = dir2
 	kvOpt.TableLoadingMode = options.LoadToRAM
-	walStore, err := badger.OpenManaged(kvOpt)
+	walStore, err := badger.Open(kvOpt)
 	x.Check(err)
 
 	worker.StartRaftNodes(walStore, false)

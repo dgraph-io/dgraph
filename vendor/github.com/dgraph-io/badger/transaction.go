@@ -411,7 +411,7 @@ func (txn *Txn) runCallbacks() {
 	for _, cb := range txn.callbacks {
 		cb()
 	}
-	txn.callbacks = nil
+	txn.callbacks = txn.callbacks[:0]
 }
 
 // Discard discards a created transaction. This method is very important and must be called. Commit

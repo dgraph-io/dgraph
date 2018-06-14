@@ -10,8 +10,8 @@ package conn
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -49,8 +49,7 @@ type Node struct {
 	confChanges map[uint64]chan error
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
-	Store       *raft.MemoryStorage
-	Wal         *raftwal.Wal
+	Store       *raftwal.DiskStorage
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
@@ -58,8 +57,7 @@ type Node struct {
 	Applied x.WaterMark
 }
 
-func NewNode(rc *intern.RaftContext) *Node {
-	store := raft.NewMemoryStorage()
+func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 	n := &Node{
 		Id:     rc.Id,
 		MyAddr: rc.Addr,
@@ -177,71 +175,49 @@ func (n *Node) Send(m raftpb.Message) {
 	}
 }
 
-func (n *Node) SaveSnapshot(s raftpb.Snapshot) {
-	if !raft.IsEmptySnap(s) {
-		le, err := n.Store.LastIndex()
-		if err != nil {
-			log.Fatalf("While retrieving last index: %v\n", err)
-		}
-		if s.Metadata.Index <= le {
-			return
-		}
-
-		if err := n.Store.ApplySnapshot(s); err != nil {
-			log.Fatalf("Applying snapshot: %v", err)
-		}
+func (n *Node) Snapshot() (raftpb.Snapshot, error) {
+	if n == nil || n.Store == nil {
+		return raftpb.Snapshot{}, errors.New("Uninitialized node or raft store.")
 	}
+	return n.Store.Snapshot()
 }
 
-func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry) {
-	if !raft.IsEmptyHardState(h) {
-		n.Store.SetHardState(h)
-	}
-	n.Store.Append(es)
+func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
+	x.Check(n.Store.Save(h, es, s))
 }
 
-func (n *Node) InitFromWal(wal *raftwal.Wal) (idx uint64, restart bool, rerr error) {
-	n.Wal = wal
-
+func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 	var sp raftpb.Snapshot
-	sp, rerr = wal.Snapshot(n.RaftContext.Group)
+	sp, rerr = n.Store.Snapshot()
 	if rerr != nil {
 		return
 	}
-	var term uint64
 	if !raft.IsEmptySnap(sp) {
 		x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
 		restart = true
-		if rerr = n.Store.ApplySnapshot(sp); rerr != nil {
-			return
-		}
-		term = sp.Metadata.Term
 		idx = sp.Metadata.Index
 	}
 
 	var hd raftpb.HardState
-	hd, rerr = wal.HardState(n.RaftContext.Group)
+	hd, rerr = n.Store.HardState()
 	if rerr != nil {
 		return
 	}
 	if !raft.IsEmptyHardState(hd) {
 		x.Printf("Found hardstate: %+v\n", hd)
 		restart = true
-		if rerr = n.Store.SetHardState(hd); rerr != nil {
-			return
-		}
 	}
 
-	var es []raftpb.Entry
-	es, rerr = wal.Entries(n.RaftContext.Group, term, idx)
+	var num int
+	num, rerr = n.Store.NumEntries()
 	if rerr != nil {
 		return
 	}
-	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, len(es))
-	if len(es) > 0 {
+	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
+	// We'll always have at least one entry.
+	if num > 1 {
 		restart = true
 	}
-	rerr = n.Store.Append(es)
 	return
 }
 
