@@ -218,7 +218,11 @@ outer:
 
 		case <-t.C:
 			dur := time.Since(now)
-			speed := bytesSent / uint64(dur.Seconds())
+			durSec := uint64(dur.Seconds())
+			if durSec == 0 {
+				continue
+			}
+			speed := bytesSent / durSec
 			x.Printf("%s Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
 				prefix, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
 
