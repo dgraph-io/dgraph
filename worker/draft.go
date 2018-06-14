@@ -172,7 +172,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		gid:       gid,
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		applyCh:      make(chan raftpb.Entry, Config.NumPendingProposals+1000),
+		applyCh:      make(chan raftpb.Entry, Config.NumPendingProposals),
 		props:        props,
 		stop:         make(chan struct{}),
 		done:         make(chan struct{}),
@@ -462,6 +462,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 			err = n.processEdge(index, proposal.Key, edge)
 		}
 		if err != nil {
+			x.Printf("Error while processing Edge: %v. Error: %v\n", edge, err)
 			return err
 		}
 		x.ActiveMutations.Add(-1)

@@ -56,7 +56,7 @@ var DefaultConfig = Options{
 
 	WhitelistedIPs:      "",
 	ExportPath:          "export",
-	NumPendingProposals: 2000,
+	NumPendingProposals: 1000,
 	Tracing:             0.0,
 	MyAddr:              "",
 	ZeroAddr:            fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
