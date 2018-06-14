@@ -176,7 +176,8 @@ func (sl *streamLists) produceKVs(ctx context.Context, txn *badger.Txn,
 	}
 }
 
-func (sl *streamLists) streamKVs(ctx context.Context, prefix string, kvChan chan *intern.KVS) error {
+func (sl *streamLists) streamKVs(ctx context.Context, prefix string,
+	kvChan chan *intern.KVS) error {
 	var count int
 	var bytesSent uint64
 	t := time.NewTicker(time.Second)
