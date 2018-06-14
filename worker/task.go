@@ -879,7 +879,11 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 				switch lang {
 				case "":
 					if isList {
-						pl := posting.GetNoStore(x.DataKey(attr, uid))
+						pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+						if err != nil {
+							filterErr = err
+							return false
+						}
 						svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
 						if err != nil {
 							if err != posting.ErrNoValue {
@@ -897,7 +901,11 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 						return false
 					}
 
-					pl := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					if err != nil {
+						filterErr = err
+						return false
+					}
 					sv, err := pl.Value(arg.q.ReadTs)
 					if err != nil {
 						if err != posting.ErrNoValue {
@@ -909,7 +917,11 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					return err == nil &&
 						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
 				case ".":
-					pl := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					if err != nil {
+						filterErr = err
+						return false
+					}
 					values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
 					if err != nil {
 						filterErr = err
