@@ -167,7 +167,9 @@ func (item *Item) yieldItemValue() ([]byte, func(), error) {
 		// The value pointer is pointing to a deleted value log. Look for the
 		// move key and read that instead.
 		runCallback(cb)
-		key = append(badgerMove, y.KeyWithTs(item.Key(), item.Version())...)
+		// Do not put badgerMove on the left in append. It seems to cause some sort of manipulation.
+		key = append([]byte{}, badgerMove...)
+		key = append(key, y.KeyWithTs(item.Key(), item.Version())...)
 		// Note that we can't set item.key to move key, because that would
 		// change the key user sees before and after this call. Also, this move
 		// logic is internal logic and should not impact the external behavior

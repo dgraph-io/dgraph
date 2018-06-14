@@ -10,6 +10,7 @@ package conn
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -172,6 +173,13 @@ func (n *Node) Send(m raftpb.Message) {
 	default:
 		// ignore
 	}
+}
+
+func (n *Node) Snapshot() (raftpb.Snapshot, error) {
+	if n == nil || n.Store == nil {
+		return raftpb.Snapshot{}, errors.New("Uninitialized node or raft store.")
+	}
+	return n.Store.Snapshot()
 }
 
 func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
