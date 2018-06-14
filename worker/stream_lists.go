@@ -23,7 +23,6 @@ type kvStream interface {
 	Send(*intern.KVS) error
 }
 
-// TODO: Write tests.
 type streamLists struct {
 	stream    kvStream
 	predicate string
