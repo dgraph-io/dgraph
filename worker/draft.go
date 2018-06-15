@@ -304,6 +304,8 @@ func (n *node) processEdge(ridx uint64, pkey string, edge *intern.DirectedEdge) 
 	// while applying the second mutation we check the old value
 	// of name and delete it from "janardhan"'s index. If we don't
 	// wait for commit information then mutation won't see the value
+
+	// TODO: This is too broad. We should make this a lot more specific.
 	posting.Oracle().WaitForTs(context.Background(), txn.StartTs)
 	if err := runMutation(ctx, edge, txn); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -490,7 +492,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 	}
 	pctx.index = index
 
-	// TODO: We should be able to remove this as well.
+	// TODO: These should begin when we start a mutation, not here.
 	posting.TxnMarks().Begin(index)
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.

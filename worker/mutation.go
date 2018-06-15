@@ -501,8 +501,11 @@ func commitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Payload, error
 		return &api.Payload{}, posting.ErrInvalidTxn
 	}
 	// Ensures that we wait till prewrite is applied
-	idx := txn.LastIndex()
-	groups().Node.Applied.WaitForMark(ctx, idx)
+	// We don't need to wait for applied mark here, because commit or abort proposal would only
+	// happen after the prewrites have already been proposed. So, even if a follower is behind, it
+	// would see this update after having applied all the prewrites.
+	// Also note that blocking for WaitForMark here would block the application of committed
+	// entries, which happen serially.
 	if tc.CommitTs == 0 {
 		err := txn.AbortMutations(ctx)
 		return &api.Payload{}, err
