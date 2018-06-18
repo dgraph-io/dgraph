@@ -698,17 +698,18 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	go n.runReadIndexLoop(closer, readStateCh)
 
-	elog := trace.NewEventLog("Dgraph", "RunLoop")
-	defer elog.Finish()
-
-	var timer x.Timer
 	for {
 		select {
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			timer.Start()
+			var tr trace.Trace
+			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) || !raft.IsEmptyHardState(rd.HardState) {
+				// Optionally, trace this run.
+				tr = trace.New("Dgraph", "RunLoop")
+			}
+
 			for _, rs := range rd.ReadStates {
 				readStateCh <- rs
 			}
@@ -725,11 +726,16 @@ func (n *node) Run() {
 					n.Send(msg)
 				}
 			}
-			timer.Record() // Index 0.
+			if tr != nil {
+				tr.LazyPrintf("Handled ReadStates and SoftState.")
+			}
 
 			// Store the hardstate and entries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-			timer.Record() // Index 1.
+			if tr != nil {
+				tr.LazyPrintf("Saved %d entries. Empty Snapshot? %v. Empty HardState? %v.",
+					len(rd.Entries), raft.IsEmptySnap(rd.Snapshot), raft.IsEmptyHardState(rd.HardState))
+			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
@@ -749,13 +755,8 @@ func (n *node) Run() {
 					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
 			}
-			timer.Record() // Index 2.
-
-			lc := len(rd.CommittedEntries)
-			if lc > 0 {
-				if tr, ok := trace.FromContext(n.ctx); ok {
-					tr.LazyPrintf("Found %d committed entries", len(rd.CommittedEntries))
-				}
+			if tr != nil {
+				tr.LazyPrintf("Applied or retrieved snapshot.")
 			}
 
 			// Now schedule or apply committed entries.
@@ -786,15 +787,12 @@ func (n *node) Run() {
 				// Move to debug log later.
 				// Sometimes after restart there are too many entries to replay, so log so that we
 				// know Run loop is replaying them.
-				if lc > 1e5 && idx%5000 == 0 {
-					x.Printf("In run loop applying committed entries, idx: [%v], pending: [%v]\n",
-						idx, lc-idx)
+				if tr != nil && idx%5000 == 4999 {
+					tr.LazyPrintf("Handling committed entries. At idx: [%v]\n", idx)
 				}
 			}
-			timer.Record() // Index 3.
-
-			if lc > 1e5 {
-				x.Println("All committed entries sent to applyCh.")
+			if tr != nil {
+				tr.LazyPrintf("Handled %d committed entries.", len(rd.CommittedEntries))
 			}
 
 			if !leader {
@@ -805,19 +803,18 @@ func (n *node) Run() {
 					n.Send(msg)
 				}
 			}
-			timer.Record() // Index 4.
+			if tr != nil {
+				tr.LazyPrintf("Follower queued messages.")
+			}
 
 			n.Raft().Advance()
 			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
-
-			timer.Record() // Index 5. Largely tracks Raft().Advance().
-			total := timer.Total()
-			all := timer.All()
-			if total >= 100*time.Millisecond || all[3] >= 10*time.Millisecond {
-				elog.Printf("Timer Total: %v. All: %+v.", total, all)
+			if tr != nil {
+				tr.LazyPrintf("Advanced Raft. Done.")
+				tr.Finish()
 			}
 
 		case <-n.stop:

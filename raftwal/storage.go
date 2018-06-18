@@ -510,7 +510,7 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
 func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error) {
-	w.elog.Printf("Entries: [%d, %d) size:%d", lo, hi, maxSize)
+	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	defer w.elog.Printf("Done")
 	first, err := w.FirstIndex()
 	if err != nil {
