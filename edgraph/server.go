@@ -118,6 +118,7 @@ func (s *ServerState) initStorage() {
 	opt.Dir = Config.PostingDir
 	opt.ValueDir = Config.PostingDir
 	opt.NumVersionsToKeep = math.MaxInt32
+	opt.ValueLogLoadingMode = options.FileIO
 	switch Config.PostingTables {
 	case "memorymap":
 		opt.TableLoadingMode = options.MemoryMap
