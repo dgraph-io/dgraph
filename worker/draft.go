@@ -730,11 +730,13 @@ func (n *node) Run() {
 				tr.LazyPrintf("Handled ReadStates and SoftState.")
 			}
 
-			// Store the hardstate and entries.
+			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 			if tr != nil {
-				tr.LazyPrintf("Saved %d entries. Empty Snapshot? %v. Empty HardState? %v.",
-					len(rd.Entries), raft.IsEmptySnap(rd.Snapshot), raft.IsEmptyHardState(rd.HardState))
+				tr.LazyPrintf("Saved %d entries. Snapshot, HardState empty? (%v, %v)",
+					len(rd.Entries),
+					raft.IsEmptySnap(rd.Snapshot),
+					raft.IsEmptyHardState(rd.HardState))
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
