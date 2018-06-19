@@ -32,7 +32,7 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to BadgerDB.
-func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *intern.KV, che chan error) {
+func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *intern.KVS, che chan error) {
 	var bytesWritten uint64
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -52,29 +52,31 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *inte
 
 	var hasError int32
 	var wg sync.WaitGroup // to wait for all callbacks to return
-	for i := range kvChan {
-		if i.Version == 0 {
-			// Ignore this one. Otherwise, we'll get ErrManagedDB back, because every Commit in
-			// managed DB must have a valid commit ts.
-			continue
-		}
-		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		bytesWritten += uint64(i.Size())
-		x.Check(txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0]))
-		wg.Add(1)
-		rerr := txn.CommitAt(i.Version, func(err error) {
-			// We don't care about exact error
-			defer wg.Done()
-			if err != nil {
-				x.Printf("Error while committing kv to badger %v\n", err)
-				atomic.StoreInt32(&hasError, 1)
+	for kvs := range kvChan {
+		for _, kv := range kvs.Kv {
+			if kv.Version == 0 {
+				// Ignore this one. Otherwise, we'll get ErrManagedDB back, because every Commit in
+				// managed DB must have a valid commit ts.
+				continue
 			}
-		})
-		x.Check(rerr)
+			txn := pstore.NewTransactionAt(math.MaxUint64, true)
+			bytesWritten += uint64(kv.Size())
+			x.Check(txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]))
+			wg.Add(1)
+			rerr := txn.CommitAt(kv.Version, func(err error) {
+				// We don't care about exact error
+				defer wg.Done()
+				if err != nil {
+					x.Printf("Error while committing kv to badger %v\n", err)
+					atomic.StoreInt32(&hasError, 1)
+				}
+			})
+			x.Check(rerr)
+		}
 	}
 	wg.Wait()
 
-	if hasError == 0 {
+	if atomic.LoadInt32(&hasError) == 0 {
 		che <- nil
 	} else {
 		che <- x.Errorf("Error while writing to badger")
@@ -105,27 +107,27 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 		tr.LazyPrintf("Streaming data for group: %v", group)
 	}
 
-	keyValues, err := stream.Recv()
+	kvs, err := stream.Recv()
 	if err != nil {
 		return 0, err
 	}
 
-	x.AssertTrue(len(keyValues.Kv) == 1)
-	ikv := keyValues.Kv[0]
+	x.AssertTrue(len(kvs.Kv) == 1)
+	ikv := kvs.Kv[0]
 	// First key has the snapshot ts from the leader.
 	x.AssertTrue(bytes.Equal(ikv.Key, []byte("min_ts")))
 	n.Lock()
 	n.RaftContext.SnapshotTs = ikv.Version
 	n.Unlock()
 
-	kvChan := make(chan *intern.KV, 1000)
+	kvChan := make(chan *intern.KVS, 1000)
 	che := make(chan error, 1)
 	go writeBatch(ctx, ps, kvChan, che)
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	for {
-		keyValues, err = stream.Recv()
+		kvs, err = stream.Recv()
 		if err == io.EOF {
 			x.Printf("EOF has been reached\n")
 			break
@@ -137,33 +139,27 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 			close(kvChan)
 			return count, err
 		}
-		for _, kv := range keyValues.Kv {
-			count++
-			if count%100000 == 0 {
-				x.Printf("Got %d keys\n", count)
+		// We check for errors, if there are no errors we send value to channel.
+		select {
+		case kvChan <- kvs:
+			count += len(kvs.Kv)
+			// OK
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context timed out while streaming group: %v", group)
 			}
-
-			// We check for errors, if there are no errors we send value to channel.
-			select {
-			case kvChan <- kv:
-				// OK
-			case <-ctx.Done():
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Context timed out while streaming group: %v", group)
-				}
-				close(kvChan)
-				return 0, ctx.Err()
-			case err := <-che:
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while doing a batch write for group: %v", group)
-				}
-				close(kvChan)
-				// Important: Don't put return count, err
-				// There was a compiler bug which was fixed in 1.8.1
-				// https://github.com/golang/go/issues/21722.
-				// Probably should be ok to return count, err now
-				return 0, err
+			close(kvChan)
+			return 0, ctx.Err()
+		case err := <-che:
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while doing a batch write for group: %v", group)
 			}
+			close(kvChan)
+			// Important: Don't put return count, err
+			// There was a compiler bug which was fixed in 1.8.1
+			// https://github.com/golang/go/issues/21722.
+			// Probably should be ok to return count, err now
+			return 0, err
 		}
 	}
 	close(kvChan)
@@ -233,7 +229,7 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		return err
 	}
 
-	sl := streamLists{stream: stream}
+	sl := streamLists{stream: stream, db: pstore}
 	sl.chooseKey = func(key []byte, version uint64) bool {
 		pk := x.Parse(key)
 		return version > clientTs || pk.IsSchema()
@@ -261,9 +257,7 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		return l.MarshalToKv()
 	}
 
-	txn := pstore.NewTransactionAt(min_ts, false)
-	defer txn.Discard()
-	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", txn); err != nil {
+	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", min_ts); err != nil {
 		return err
 	}
 

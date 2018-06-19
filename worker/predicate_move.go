@@ -85,11 +85,8 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	}
 
 	// sends all data except schema, schema key has different prefix
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-
 	// Read the predicate keys and stream to keysCh.
-	sl := streamLists{stream: stream, predicate: predicate}
+	sl := streamLists{stream: stream, predicate: predicate, db: pstore}
 	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
@@ -99,10 +96,12 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	}
 
 	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
-	if err := sl.orchestrate(ctx, prefix, txn); err != nil {
+	if err := sl.orchestrate(ctx, prefix, math.MaxUint64); err != nil {
 		return err
 	}
 
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
 	// Send schema (if present) now after all keys have been transferred over.
 	schemaKey := x.SchemaKey(predicate)
 	item, err := txn.Get(schemaKey)
