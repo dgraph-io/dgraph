@@ -229,7 +229,7 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		return err
 	}
 
-	sl := streamLists{stream: stream}
+	sl := streamLists{stream: stream, db: pstore}
 	sl.chooseKey = func(key []byte, version uint64) bool {
 		pk := x.Parse(key)
 		return version > clientTs || pk.IsSchema()
@@ -257,9 +257,7 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		return l.MarshalToKv()
 	}
 
-	txn := pstore.NewTransactionAt(min_ts, false)
-	defer txn.Discard()
-	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", txn); err != nil {
+	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", min_ts); err != nil {
 		return err
 	}
 

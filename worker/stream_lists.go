@@ -26,6 +26,7 @@ type kvStream interface {
 type streamLists struct {
 	stream    kvStream
 	predicate string
+	db        *badger.ManagedDB
 	chooseKey func(key []byte, version uint64) bool
 	itemToKv  func(key []byte, itr *badger.Iterator) (*intern.KV, error)
 }
@@ -37,13 +38,13 @@ type keyRange struct {
 	end   []byte
 }
 
-func (sl *streamLists) orchestrate(ctx context.Context, prefix string, txn *badger.Txn) error {
+func (sl *streamLists) orchestrate(ctx context.Context, prefix string, ts uint64) error {
 	keyCh := make(chan keyRange, 100)     // Contains keys for posting lists.
 	kvChan := make(chan *intern.KVS, 100) // Contains marshaled posting lists.
 	errCh := make(chan error, 1)          // Stores error by consumeKeys.
 
 	// Read the predicate keys and stream to keysCh.
-	go sl.produceRanges(ctx, txn, keyCh)
+	go sl.produceRanges(ctx, ts, keyCh)
 
 	// Read the posting lists corresponding to keys and send to kvChan.
 	var wg sync.WaitGroup
@@ -51,7 +52,7 @@ func (sl *streamLists) orchestrate(ctx context.Context, prefix string, txn *badg
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := sl.produceKVs(ctx, txn, keyCh, kvChan); err != nil {
+			if err := sl.produceKVs(ctx, ts, keyCh, kvChan); err != nil {
 				select {
 				case errCh <- err:
 				default:
@@ -81,11 +82,13 @@ func (sl *streamLists) orchestrate(ctx context.Context, prefix string, txn *badg
 	return nil
 }
 
-func (sl *streamLists) produceRanges(ctx context.Context, txn *badger.Txn, keyCh chan keyRange) {
+func (sl *streamLists) produceRanges(ctx context.Context, ts uint64, keyCh chan keyRange) {
 	var prefix []byte
 	if len(sl.predicate) > 0 {
 		prefix = x.PredicatePrefix(sl.predicate)
 	}
+	txn := sl.db.NewTransactionAt(ts, false)
+	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.PrefetchValues = false
 	it := txn.NewIterator(iterOpts)
@@ -113,13 +116,15 @@ func (sl *streamLists) produceRanges(ctx context.Context, txn *badger.Txn, keyCh
 	close(keyCh)
 }
 
-func (sl *streamLists) produceKVs(ctx context.Context, txn *badger.Txn,
+func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
 	keyCh chan keyRange, kvChan chan *intern.KVS) error {
 	var prefix []byte
 	if len(sl.predicate) > 0 {
 		prefix = x.PredicatePrefix(sl.predicate)
 	}
 
+	txn := sl.db.NewTransactionAt(ts, false)
+	defer txn.Discard()
 	iterate := func(kr keyRange) error {
 		iterOpts := badger.DefaultIteratorOptions
 		// iterOpts.PrefetchSize = 10
