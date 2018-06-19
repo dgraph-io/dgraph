@@ -60,8 +60,12 @@ var rdfTypeMap = map[types.TypeID]string{
 }
 
 func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
-	l := posting.GetNoStore(item.key)
-	err := l.Iterate(readTs, 0, func(p *intern.Posting) bool {
+	l, err := posting.GetNoStore(item.key)
+	if err != nil {
+		x.Printf("Error while retrieving list for key %X. Error: %v\n", item.key, err)
+		return
+	}
+	err = l.Iterate(readTs, 0, func(p *intern.Posting) bool {
 		buf.WriteString(item.prefix)
 		if p.PostingType != intern.Posting_REF {
 			// Value posting
@@ -222,6 +226,7 @@ func export(bdir string, readTs uint64) error {
 			buf := new(bytes.Buffer)
 			buf.Grow(50000)
 			for item := range chkv {
+				// TODO: Add error handling in toRDF.
 				toRDF(buf, item, readTs)
 				if buf.Len() >= 40000 {
 					tmp := make([]byte, buf.Len())

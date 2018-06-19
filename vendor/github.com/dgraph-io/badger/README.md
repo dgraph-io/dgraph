@@ -415,7 +415,22 @@ the following methods, which can be invoked at an appropriate time:
   LSM-tree compactions to pick files that are likely to lead to maximum space
   reclamation.
 
-  It is recommended that this method be called regularly.
+It is recommended that this method be called during periods of low activity in
+your system, or periodically. One call would only result in removal of at max
+one log file. As an optimization, you could also immediately re-run it whenever
+it returns nil error (indicating a successful value log GC).
+
+```go
+ticker := time.NewTicker(5 * time.Minute)
+defer ticker.Stop()
+for range ticker.C {
+again:
+  err := db.RunValueLogGC(0.7)
+  if err == nil {
+    goto again
+  }
+}
+```
 
 ### Database backup
 There are two public API methods `DB.Backup()` and `DB.Load()` which can be

@@ -32,38 +32,51 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to BadgerDB.
-func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kv chan *intern.KV, che chan error) {
+func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *intern.KVS, che chan error) {
 	var bytesWritten uint64
-	t := time.NewTicker(5 * time.Second)
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
 	go func() {
 		now := time.Now()
 		for range t.C {
 			dur := time.Since(now)
-			x.Printf("Getting SNAPSHOT: Time elapsed: %v, bytes written: %s, bytes/sec %d\n",
-				x.FixedDuration(dur), humanize.Bytes(bytesWritten), bytesWritten/uint64(dur.Seconds()))
+			durSec := uint64(dur.Seconds())
+			if durSec == 0 {
+				continue
+			}
+			speed := bytesWritten / durSec
+			x.Printf("Getting SNAPSHOT: Time elapsed: %v, bytes written: %s, %s/s\n",
+				x.FixedDuration(dur), humanize.Bytes(bytesWritten), humanize.Bytes(speed))
 		}
 	}()
 
 	var hasError int32
 	var wg sync.WaitGroup // to wait for all callbacks to return
-	for i := range kv {
-		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		bytesWritten += uint64(i.Size())
-		txn.SetWithMeta(i.Key, i.Val, i.UserMeta[0])
-		wg.Add(1)
-		txn.CommitAt(i.Version, func(err error) {
-			// We don't care about exact error
-			wg.Done()
-			if err != nil {
-				x.Printf("Error while committing kv to badger %v\n", err)
-				atomic.StoreInt32(&hasError, 1)
+	for kvs := range kvChan {
+		for _, kv := range kvs.Kv {
+			if kv.Version == 0 {
+				// Ignore this one. Otherwise, we'll get ErrManagedDB back, because every Commit in
+				// managed DB must have a valid commit ts.
+				continue
 			}
-		})
+			txn := pstore.NewTransactionAt(math.MaxUint64, true)
+			bytesWritten += uint64(kv.Size())
+			x.Check(txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]))
+			wg.Add(1)
+			rerr := txn.CommitAt(kv.Version, func(err error) {
+				// We don't care about exact error
+				defer wg.Done()
+				if err != nil {
+					x.Printf("Error while committing kv to badger %v\n", err)
+					atomic.StoreInt32(&hasError, 1)
+				}
+			})
+			x.Check(rerr)
+		}
 	}
 	wg.Wait()
-	t.Stop()
 
-	if hasError == 0 {
+	if atomic.LoadInt32(&hasError) == 0 {
 		che <- nil
 	} else {
 		che <- x.Errorf("Error while writing to badger")
@@ -94,64 +107,62 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 		tr.LazyPrintf("Streaming data for group: %v", group)
 	}
 
-	kvs := make(chan *intern.KV, 1000)
-	che := make(chan error)
-	go writeBatch(ctx, ps, kvs, che)
-
-	keyValues, err := stream.Recv()
+	kvs, err := stream.Recv()
 	if err != nil {
 		return 0, err
 	}
 
-	x.AssertTrue(len(keyValues.Kv) == 1)
-	ikv := keyValues.Kv[0]
+	x.AssertTrue(len(kvs.Kv) == 1)
+	ikv := kvs.Kv[0]
 	// First key has the snapshot ts from the leader.
 	x.AssertTrue(bytes.Equal(ikv.Key, []byte("min_ts")))
 	n.Lock()
 	n.RaftContext.SnapshotTs = ikv.Version
 	n.Unlock()
 
+	kvChan := make(chan *intern.KVS, 1000)
+	che := make(chan error, 1)
+	go writeBatch(ctx, ps, kvChan, che)
+
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	for {
-		keyValues, err = stream.Recv()
+		kvs, err = stream.Recv()
 		if err == io.EOF {
+			x.Printf("EOF has been reached\n")
 			break
 		}
 		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
-			close(kvs)
+			close(kvChan)
 			return count, err
 		}
-		for _, kv := range keyValues.Kv {
-			count++
-
-			// We check for errors, if there are no errors we send value to channel.
-			select {
-			case kvs <- kv:
-				// OK
-			case <-ctx.Done():
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Context timed out while streaming group: %v", group)
-				}
-				close(kvs)
-				return 0, ctx.Err()
-			case err := <-che:
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while doing a batch write for group: %v", group)
-				}
-				close(kvs)
-				// Important: Don't put return count, err
-				// There was a compiler bug which was fixed in 1.8.1
-				// https://github.com/golang/go/issues/21722.
-				// Probably should be ok to return count, err now
-				return 0, err
+		// We check for errors, if there are no errors we send value to channel.
+		select {
+		case kvChan <- kvs:
+			count += len(kvs.Kv)
+			// OK
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context timed out while streaming group: %v", group)
 			}
+			close(kvChan)
+			return 0, ctx.Err()
+		case err := <-che:
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while doing a batch write for group: %v", group)
+			}
+			close(kvChan)
+			// Important: Don't put return count, err
+			// There was a compiler bug which was fixed in 1.8.1
+			// https://github.com/golang/go/issues/21722.
+			// Probably should be ok to return count, err now
+			return 0, err
 		}
 	}
-	close(kvs)
+	close(kvChan)
 
 	if err := <-che; err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -162,41 +173,8 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Streaming complete for group: %v", group)
 	}
+	x.Printf("Got %d keys. DONE.\n", count)
 	return count, nil
-}
-
-func toKV(it *badger.Iterator, pk *x.ParsedKey) (*intern.KV, error) {
-	item := it.Item()
-	var kv *intern.KV
-
-	key := make([]byte, len(item.Key()))
-	// Key would be modified by ReadPostingList as it advances the iterator and changes the item.
-	copy(key, item.Key())
-
-	if pk.IsSchema() {
-		val, err := item.ValueCopy(nil)
-		if err != nil {
-			return nil, err
-		}
-		kv = &intern.KV{
-			Key:      key,
-			Val:      val,
-			UserMeta: []byte{item.UserMeta()},
-			Version:  item.Version(),
-		}
-		it.Next()
-		return kv, nil
-	}
-
-	l, err := posting.ReadPostingList(key, it)
-	if err != nil {
-		return nil, err
-	}
-	kv, err = l.MarshalToKv()
-	if err != nil {
-		return nil, err
-	}
-	return kv, nil
 }
 
 func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream intern.Worker_PredicateAndSchemaDataServer) error {
@@ -215,7 +193,31 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	// Any commit which happens in the future will have commitTs greater than
 	// this.
 	// TODO: Ensure all deltas have made to disk and read in memory before checking disk.
-	min_ts := posting.Txns().MinTs()
+	// BUG: There's a bug here due to which a node which doesn't see any transactions, but has real
+	// data fails to send that over, because of min_ts.
+	min_ts := posting.Txns().MinTs() // Why are we not using last snapshot ts?
+	x.Printf("Got min_ts: %d\n", min_ts)
+	// snap, err := groups().Node.Snapshot()
+	// if err != nil {
+	// 	return err
+	// }
+	// index := snap.Metadata.Index
+
+	// TODO: Why are we using MinTs() in the place when we should be using
+	// snapshot index? This is wrong.
+
+	// TODO: We are not using the snapshot time, because we don't store the
+	// transaction timestamp in the snapshot. If we did, we'd just use that
+	// instead of this. This causes issues if the server had received a snapshot
+	// to begin with, but had no active transactions. Then mints is always zero,
+	// hence nothing is read or sent in the stream.
+
+	// UPDATE: This doesn't look too bad. So, we're keeping track of the
+	// transaction timestamps on the side. And we're using those to figure out
+	// what to stream here. The snapshot index is not really being used for
+	// anything here.
+	// This whole transaction tracking business is complex and must be
+	// simplified to its essence.
 
 	// Send ts as first KV.
 	if err := stream.Send(&intern.KVS{
@@ -227,77 +229,40 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		return err
 	}
 
-	txn := pstore.NewTransactionAt(min_ts, false)
-	defer txn.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	iterOpts.PrefetchValues = false
-	it := txn.NewIterator(iterOpts)
-	defer it.Close()
-
-	var count int
-	var batchSize int
-	var prevKey []byte
-	kvs := &intern.KVS{}
-	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
-	var bytesSent uint64
-	t := time.NewTicker(5 * time.Second)
-	defer t.Stop()
-	go func() {
-		now := time.Now()
-		for range t.C {
-			dur := time.Since(now)
-			x.Printf("Sending SNAPSHOT: Time elapsed: %v, bytes sent: %s, bytes/sec %d\n",
-				x.FixedDuration(dur), humanize.Bytes(bytesSent), bytesSent/uint64(dur.Seconds()))
-		}
-	}()
-	for it.Rewind(); it.Valid(); {
-		iterItem := it.Item()
-		k := iterItem.Key()
-		if bytes.Equal(k, prevKey) {
-			it.Next()
-			continue
-		}
-
-		if cap(prevKey) < len(k) {
-			prevKey = make([]byte, len(k))
-		} else {
-			prevKey = prevKey[:len(k)]
-		}
-		copy(prevKey, k)
-
-		pk := x.Parse(prevKey)
-		// Schema keys always have version 1. So we send it irrespective of the timestamp.
-		if iterItem.Version() <= clientTs && !pk.IsSchema() {
-			it.Next()
-			continue
-		}
-
-		// This key is not present in follower.
-		kv, err := toKV(it, pk)
-		if err != nil {
-			return err
-		}
-		kvs.Kv = append(kvs.Kv, kv)
-		batchSize += kv.Size()
-		bytesSent += uint64(kv.Size())
-		count++
-		if batchSize < MB { // 1MB
-			continue
-		}
-		if err := stream.Send(kvs); err != nil {
-			return err
-		}
-		batchSize = 0
-		kvs = &intern.KVS{}
-	} // end of iterator
-	if batchSize > 0 {
-		if err := stream.Send(kvs); err != nil {
-			return err
-		}
+	sl := streamLists{stream: stream, db: pstore}
+	sl.chooseKey = func(key []byte, version uint64) bool {
+		pk := x.Parse(key)
+		return version > clientTs || pk.IsSchema()
 	}
+	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
+		item := itr.Item()
+		pk := x.Parse(key)
+		if pk.IsSchema() {
+			val, err := item.ValueCopy(nil)
+			if err != nil {
+				return nil, err
+			}
+			kv := &intern.KV{
+				Key:      key,
+				Val:      val,
+				UserMeta: []byte{item.UserMeta()},
+				Version:  item.Version(),
+			}
+			return kv, nil
+		}
+		l, err := posting.ReadPostingList(key, itr)
+		if err != nil {
+			return nil, err
+		}
+		return l.MarshalToKv()
+	}
+
+	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", min_ts); err != nil {
+		return err
+	}
+
 	if tr, ok := trace.FromContext(stream.Context()); ok {
-		tr.LazyPrintf("Sent %d keys to client. Done.\n", count)
+		tr.LazyPrintf("Sent keys. Done.\n")
 	}
 	return nil
 }

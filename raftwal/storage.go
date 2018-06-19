@@ -468,6 +468,23 @@ func (w *DiskStorage) NumEntries() (int, error) {
 
 func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error) {
 	err := w.db.View(func(txn *badger.Txn) error {
+		if hi-lo == 1 { // We only need one entry.
+			item, err := txn.Get(w.entryKey(lo))
+			if err != nil {
+				return err
+			}
+			val, err := item.Value()
+			if err != nil {
+				return err
+			}
+			var e pb.Entry
+			if err = e.Unmarshal(val); err != nil {
+				return err
+			}
+			es = append(es, e)
+			return nil
+		}
+
 		itr := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer itr.Close()
 
@@ -510,7 +527,7 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
 func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error) {
-	w.elog.Printf("Entries: [%d, %d) size:%d", lo, hi, maxSize)
+	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	defer w.elog.Printf("Done")
 	first, err := w.FirstIndex()
 	if err != nil {

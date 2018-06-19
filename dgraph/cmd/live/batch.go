@@ -128,7 +128,7 @@ func handleError(err error) {
 
 func (l *loader) infinitelyRetry(req api.Mutation) {
 	defer l.retryRequestsWg.Done()
-	for {
+	for i := time.Millisecond; ; i *= 2 {
 		txn := l.dc.NewTxn()
 		req.CommitNow = true
 		_, err := txn.Mutate(l.opts.Ctx, &req)
@@ -139,7 +139,10 @@ func (l *loader) infinitelyRetry(req api.Mutation) {
 		}
 		handleError(err)
 		atomic.AddUint64(&l.aborts, 1)
-		time.Sleep(10 * time.Millisecond)
+		if i >= 10*time.Second {
+			i = 10 * time.Second
+		}
+		time.Sleep(i)
 	}
 }
 

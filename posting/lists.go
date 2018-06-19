@@ -261,13 +261,12 @@ func GetLru(key []byte) *List {
 
 // GetNoStore takes a key. It checks if the in-memory map has an updated value and returns it if it exists
 // or it gets from the store and DOES NOT ADD to lru cache.
-func GetNoStore(key []byte) (rlist *List) {
+func GetNoStore(key []byte) (*List, error) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
-		return lp
+		return lp, nil
 	}
-	lp, _ = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
-	return lp
+	return getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 }
 
 // This doesn't sync, so call this only when you don't care about dirty posting lists in // memory(for example before populating snapshot) or after calling syncAllMarks

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/options"
@@ -167,7 +168,9 @@ func (item *Item) yieldItemValue() ([]byte, func(), error) {
 		// The value pointer is pointing to a deleted value log. Look for the
 		// move key and read that instead.
 		runCallback(cb)
-		key = append(badgerMove, y.KeyWithTs(item.Key(), item.Version())...)
+		// Do not put badgerMove on the left in append. It seems to cause some sort of manipulation.
+		key = append([]byte{}, badgerMove...)
+		key = append(key, y.KeyWithTs(item.Key(), item.Version())...)
 		// Note that we can't set item.key to move key, because that would
 		// change the key user sees before and after this call. Also, this move
 		// logic is internal logic and should not impact the external behavior
@@ -314,6 +317,10 @@ type Iterator struct {
 // Using prefetch is highly recommended if you're doing a long running iteration.
 // Avoid long running iterations in update transactions.
 func (txn *Txn) NewIterator(opt IteratorOptions) *Iterator {
+	if atomic.AddInt32(&txn.numIterators, 1) > 1 {
+		panic("Only one iterator can be active at one time.")
+	}
+
 	tables, decr := txn.db.getMemTables()
 	defer decr()
 	txn.db.vlog.incrIteratorCount()
@@ -380,6 +387,7 @@ func (it *Iterator) Close() {
 
 	// TODO: We could handle this error.
 	_ = it.txn.db.vlog.decrIteratorCount()
+	atomic.AddInt32(&it.txn.numIterators, -1)
 }
 
 // Next would advance the iterator by one. Always check it.Valid() after a Next()

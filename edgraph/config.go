@@ -23,7 +23,9 @@ import (
 
 type Options struct {
 	PostingDir    string
-	PostingTables string
+	BadgerTables  string
+	BadgerVlog    string
+	BadgerOptions string
 	WALDir        string
 	Nomutations   bool
 
@@ -47,7 +49,9 @@ var Config Options
 
 var DefaultConfig = Options{
 	PostingDir:    "p",
-	PostingTables: "memorymap",
+	BadgerTables:  "mmap",
+	BadgerVlog:    "mmap",
+	BadgerOptions: "default",
 	WALDir:        "w",
 	Nomutations:   false,
 
@@ -98,8 +102,12 @@ func setConfVar(conf Options) {
 		return v
 	}
 
+	// This is so we can find these options in /debug/vars.
+	x.Conf.Set("badger.tables", newStr(conf.BadgerTables))
+	x.Conf.Set("badger.vlog", newStr(conf.BadgerVlog))
+	x.Conf.Set("badger.options", newStr(conf.BadgerOptions))
+
 	x.Conf.Set("posting_dir", newStr(conf.PostingDir))
-	x.Conf.Set("posting_tables", newStr(conf.PostingTables))
 	x.Conf.Set("wal_dir", newStr(conf.WALDir))
 	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
 	x.Conf.Set("tracing", newFloat(conf.Tracing))

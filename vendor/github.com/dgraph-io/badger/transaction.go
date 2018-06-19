@@ -149,8 +149,9 @@ type Txn struct {
 	callbacks []func()
 	discarded bool
 
-	size  int64
-	count int64
+	size         int64
+	count        int64
+	numIterators int32
 }
 
 type pendingWritesIterator struct {
@@ -411,7 +412,7 @@ func (txn *Txn) runCallbacks() {
 	for _, cb := range txn.callbacks {
 		cb()
 	}
-	txn.callbacks = nil
+	txn.callbacks = txn.callbacks[:0]
 }
 
 // Discard discards a created transaction. This method is very important and must be called. Commit
@@ -423,10 +424,12 @@ func (txn *Txn) Discard() {
 	if txn.discarded { // Avoid a re-run.
 		return
 	}
+	if atomic.LoadInt32(&txn.numIterators) > 0 {
+		panic("Unclosed iterator at time of Txn.Discard.")
+	}
 	txn.discarded = true
 	txn.db.orc.readMark.Done(txn.readTs)
 	txn.runCallbacks()
-
 	if txn.update {
 		txn.db.orc.decrRef()
 	}
