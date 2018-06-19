@@ -53,6 +53,8 @@ func (db *DB) Backup(w io.Writer, since uint64) (uint64, error) {
 		opts := DefaultIteratorOptions
 		opts.AllVersions = true
 		it := txn.NewIterator(opts)
+		defer it.Close()
+
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			if item.Version() < since {
