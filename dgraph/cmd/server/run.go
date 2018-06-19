@@ -60,13 +60,18 @@ func init() {
 	flag := Server.Cmd.Flags()
 	flag.StringP("postings", "p", defaults.PostingDir,
 		"Directory to store posting lists.")
-	flag.String("posting_tables", defaults.PostingTables,
-		"Specifies how Badger LSM tree is stored. Options are loadtoram, memorymap and "+
-			"fileio; which consume most to least RAM while providing best to worst read"+
+
+	// Options around how to set up Badger.
+	flag.String("badger.tables", defaults.BadgerTables,
+		"Specifies how Badger LSM tree is stored. Options are ram, mmap and "+
+			"disk; which consume most to least RAM while providing best to worst read"+
 			"performance respectively.")
-	flag.String("posting_vlog", defaults.PostingVlog,
-		"Specifies how Badger Value log is stored. Options are memorymap and fileio."+
-			" memorymap consumes more RAM, but provides better performance in some cases.")
+	flag.String("badger.vlog", defaults.BadgerVlog,
+		"Specifies how Badger Value log is stored. Options are mmap and disk."+
+			" mmap consumes more RAM, but provides better performance in some cases.")
+	flag.String("badger.options", defaults.BadgerOptions,
+		"Specifies which Badger options to use. Choices are default and lsmonly.")
+
 	flag.StringP("wal", "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")
 	flag.Bool("nomutations", defaults.Nomutations,
@@ -93,7 +98,7 @@ func init() {
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
 
-	flag.Float64("lru_mb", defaults.AllottedMemory,
+	flag.Float64P("lru_mb", "l", defaults.AllottedMemory,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
 
@@ -279,10 +284,13 @@ var sdCh chan os.Signal
 
 func run() {
 	config := edgraph.Options{
-		PostingDir:          Server.Conf.GetString("postings"),
-		PostingTables:       Server.Conf.GetString("posting_tables"),
-		PostingVlog:         Server.Conf.GetString("posting_vlog"),
-		WALDir:              Server.Conf.GetString("wal"),
+		BadgerTables:  Server.Conf.GetString("badger.tables"),
+		BadgerVlog:    Server.Conf.GetString("badger.vlog"),
+		BadgerOptions: Server.Conf.GetString("badger.options"),
+
+		PostingDir: Server.Conf.GetString("postings"),
+		WALDir:     Server.Conf.GetString("wal"),
+
 		Nomutations:         Server.Conf.GetBool("nomutations"),
 		WhitelistedIPs:      Server.Conf.GetString("whitelist"),
 		AllottedMemory:      Server.Conf.GetFloat64("lru_mb"),
