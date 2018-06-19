@@ -24,6 +24,7 @@ import (
 type Options struct {
 	PostingDir    string
 	PostingTables string
+	PostingVlog   string
 	WALDir        string
 	Nomutations   bool
 
@@ -48,6 +49,7 @@ var Config Options
 var DefaultConfig = Options{
 	PostingDir:    "p",
 	PostingTables: "memorymap",
+	PostingVlog:   "memorymap",
 	WALDir:        "w",
 	Nomutations:   false,
 
@@ -100,6 +102,7 @@ func setConfVar(conf Options) {
 
 	x.Conf.Set("posting_dir", newStr(conf.PostingDir))
 	x.Conf.Set("posting_tables", newStr(conf.PostingTables))
+	x.Conf.Set("posting_vlog", newStr(conf.PostingVlog))
 	x.Conf.Set("wal_dir", newStr(conf.WALDir))
 	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
 	x.Conf.Set("tracing", newFloat(conf.Tracing))

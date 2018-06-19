@@ -64,6 +64,9 @@ func init() {
 		"Specifies how Badger LSM tree is stored. Options are loadtoram, memorymap and "+
 			"fileio; which consume most to least RAM while providing best to worst read"+
 			"performance respectively.")
+	flag.String("posting_vlog", defaults.PostingVlog,
+		"Specifies how Badger Value log is stored. Options are memorymap and fileio."+
+			" memorymap consumes more RAM, but provides better performance in some cases.")
 	flag.StringP("wal", "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")
 	flag.Bool("nomutations", defaults.Nomutations,
@@ -278,6 +281,7 @@ func run() {
 	config := edgraph.Options{
 		PostingDir:          Server.Conf.GetString("postings"),
 		PostingTables:       Server.Conf.GetString("posting_tables"),
+		PostingVlog:         Server.Conf.GetString("posting_vlog"),
 		WALDir:              Server.Conf.GetString("wal"),
 		Nomutations:         Server.Conf.GetBool("nomutations"),
 		WhitelistedIPs:      Server.Conf.GetString("whitelist"),

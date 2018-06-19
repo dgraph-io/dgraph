@@ -118,7 +118,8 @@ func (s *ServerState) initStorage() {
 	opt.Dir = Config.PostingDir
 	opt.ValueDir = Config.PostingDir
 	opt.NumVersionsToKeep = math.MaxInt32
-	opt.ValueLogLoadingMode = options.FileIO
+
+	x.Printf("Setting posting table load option: %s", Config.PostingTables)
 	switch Config.PostingTables {
 	case "memorymap":
 		opt.TableLoadingMode = options.MemoryMap
@@ -129,6 +130,17 @@ func (s *ServerState) initStorage() {
 	default:
 		x.Fatalf("Invalid Posting Tables options")
 	}
+
+	x.Printf("Setting posting value log load option: %s", Config.PostingVlog)
+	switch Config.PostingVlog {
+	case "memorymap":
+		opt.ValueLogLoadingMode = options.MemoryMap
+	case "fileio":
+		opt.ValueLogLoadingMode = options.FileIO
+	default:
+		x.Fatalf("Invalid Posting Value log options")
+	}
+
 	s.Pstore, err = badger.OpenManaged(opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
