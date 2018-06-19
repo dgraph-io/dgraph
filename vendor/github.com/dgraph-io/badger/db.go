@@ -1121,6 +1121,8 @@ func (op *MergeOperator) iterateAndMerge(txn *Txn) (val []byte, err error) {
 	opt := DefaultIteratorOptions
 	opt.AllVersions = true
 	it := txn.NewIterator(opt)
+	defer it.Close()
+
 	var numVersions int
 	for it.Rewind(); it.ValidForPrefix(op.key); it.Next() {
 		item := it.Item()
