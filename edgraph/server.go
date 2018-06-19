@@ -113,21 +113,44 @@ func (s *ServerState) initStorage() {
 	// All the writes to posting store should be synchronous. We use batched writers
 	// for posting lists, so the cost of sync writes is amortized.
 	x.Check(os.MkdirAll(Config.PostingDir, 0700))
-	opt := badger.DefaultOptions
+	x.Printf("Setting Badger option: %s", Config.BadgerOptions)
+	var opt badger.Options
+	switch Config.BadgerOptions {
+	case "default":
+		opt = badger.DefaultOptions
+	case "lsmonly":
+		opt = badger.LSMOnlyOptions
+	default:
+		x.Fatalf("Invalid Badger options")
+	}
 	opt.SyncWrites = true
 	opt.Dir = Config.PostingDir
 	opt.ValueDir = Config.PostingDir
 	opt.NumVersionsToKeep = math.MaxInt32
-	switch Config.PostingTables {
-	case "memorymap":
+
+	x.Printf("Setting Badger table load option: %s", Config.BadgerTables)
+	switch Config.BadgerTables {
+	case "mmap":
 		opt.TableLoadingMode = options.MemoryMap
-	case "loadtoram":
+	case "ram":
 		opt.TableLoadingMode = options.LoadToRAM
-	case "fileio":
+	case "disk":
 		opt.TableLoadingMode = options.FileIO
 	default:
-		x.Fatalf("Invalid Posting Tables options")
+		x.Fatalf("Invalid Badger Tables options")
 	}
+
+	x.Printf("Setting Badger value log load option: %s", Config.BadgerVlog)
+	switch Config.BadgerVlog {
+	case "mmap":
+		opt.ValueLogLoadingMode = options.MemoryMap
+	case "disk":
+		opt.ValueLogLoadingMode = options.FileIO
+	default:
+		x.Fatalf("Invalid Badger Value log options")
+	}
+
+	x.Printf("Opening postings Badger DB with options: %+v\n", opt)
 	s.Pstore, err = badger.OpenManaged(opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
