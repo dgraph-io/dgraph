@@ -99,7 +99,7 @@ func prepare() (dir1, dir2 string, rerr error) {
 	}
 
 	edgraph.Config.PostingDir = dir1
-	edgraph.Config.PostingTables = "loadtoram"
+	edgraph.Config.BadgerTables = "ram"
 	edgraph.Config.WALDir = dir2
 	edgraph.InitServerState()
 
