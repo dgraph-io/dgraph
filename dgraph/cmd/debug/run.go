@@ -36,6 +36,15 @@ func init() {
 	flag.BoolP("readonly", "o", true, "Open in read only mode.")
 }
 
+type Stats struct {
+	Data    int
+	Index   int
+	Schema  int
+	Reverse int
+	Count   int
+	Total   int
+}
+
 func run() {
 	opts := badger.DefaultOptions
 	opts.Dir = Debug.Conf.GetString("postings")
@@ -59,28 +68,53 @@ func run() {
 		defer itr.Close()
 
 		var loop int
-		m := make(map[string]int)
+		m := make(map[string]*Stats)
 		for itr.Rewind(); itr.Valid(); itr.Next() {
 			item := itr.Item()
 			pk := x.Parse(item.Key())
-			m[pk.Attr] += 1
+			stats, ok := m[pk.Attr]
+			if !ok {
+				stats = new(Stats)
+				m[pk.Attr] = stats
+			}
+			stats.Total += 1
+			// Don't use a switch case here. Because multiple of these can be true. In particular,
+			// IsSchema can be true alongside IsData.
+			if pk.IsData() {
+				stats.Data += 1
+			}
+			if pk.IsIndex() {
+				stats.Index += 1
+			}
+			if pk.IsCount() {
+				stats.Count += 1
+			}
+			if pk.IsSchema() {
+				stats.Schema += 1
+			}
+			if pk.IsReverse() {
+				stats.Reverse += 1
+			}
 			loop++
 		}
 
 		type C struct {
 			pred  string
-			count int
+			stats *Stats
 		}
 
 		var counts []C
-		for pred, count := range m {
-			counts = append(counts, C{pred, count})
+		for pred, stats := range m {
+			counts = append(counts, C{pred, stats})
 		}
 		sort.Slice(counts, func(i, j int) bool {
-			return counts[i].count > counts[j].count
+			return counts[i].stats.Total > counts[j].stats.Total
 		})
 		for _, c := range counts {
-			fmt.Printf("Count: %10d Predicate: %-20s\n", c.count, c.pred)
+			st := c.stats
+			fmt.Printf("Total: %-8d. Predicate: %-20s\n", st.Total, c.pred)
+			fmt.Printf("  Data: %d Index: %d Reverse: %d Schema: %d Count: %d Predicate: %s\n\n",
+				st.Data, st.Index, st.Reverse, st.Schema, st.Count, c.pred)
 		}
 		fmt.Printf("Found %d keys\n", loop)
 		return
