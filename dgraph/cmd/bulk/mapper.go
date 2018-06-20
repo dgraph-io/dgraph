@@ -122,7 +122,7 @@ func (m *mapper) run() {
 			}
 			rdf = strings.TrimSpace(rdf)
 
-			x.Check(m.parseRDF(rdf))
+			x.Check(m.processRDF(rdf))
 			atomic.AddInt64(&m.prog.rdfCount, 1)
 			for i := range m.shards {
 				sh := &m.shards[i]
@@ -163,7 +163,7 @@ func (m *mapper) addMapEntry(key []byte, p *intern.Posting, shard int) {
 	x.Check(err)
 }
 
-func (m *mapper) parseRDF(rdfLine string) error {
+func (m *mapper) processRDF(rdfLine string) error {
 	nq, err := parseNQuad(rdfLine)
 	if err != nil {
 		if err == rdf.ErrEmpty {
@@ -200,14 +200,14 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 		key = x.ReverseKey(nq.Predicate, oid)
 		m.addMapEntry(key, rev, shard)
 	}
+	m.addIndexMapEntries(nq, de)
 
 	if m.opt.ExpandEdges {
+		shard := m.state.shards.shardFor("_predicate_")
 		key = x.DataKey("_predicate_", sid)
 		pp := m.createPredicatePosting(nq.Predicate)
 		m.addMapEntry(key, pp, shard)
 	}
-
-	m.addIndexMapEntries(nq, de)
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
@@ -288,9 +288,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *intern.DirectedEdge) {
 	}
 
 	sch := m.schema.getSchema(nq.GetPredicate())
-
 	for _, tokerName := range sch.GetTokenizer() {
-
 		// Find tokeniser.
 		toker, ok := tok.GetTokenizer(tokerName)
 		if !ok {
