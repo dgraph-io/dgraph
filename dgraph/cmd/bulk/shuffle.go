@@ -41,7 +41,7 @@ func (s *shuffler) run() {
 			shuffleInputChs := make([]chan *intern.MapEntry, len(mapFiles))
 			for i, mapFile := range mapFiles {
 				shuffleInputChs[i] = make(chan *intern.MapEntry, 1000)
-				go readMapOutput(shardId, mapFile, shuffleInputChs[i])
+				go readMapOutput(mapFile, shuffleInputChs[i])
 			}
 
 			ci := &countIndexer{state: s.state, db: db}
@@ -66,7 +66,7 @@ func (s *shuffler) createBadger(i int) *badger.ManagedDB {
 	return db
 }
 
-func readMapOutput(shard int, filename string, mapEntryCh chan<- *intern.MapEntry) {
+func readMapOutput(filename string, mapEntryCh chan<- *intern.MapEntry) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	defer fd.Close()
