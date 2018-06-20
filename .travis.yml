@@ -1,7 +1,7 @@
 matrix:
   include:
     - os: linux
-      go: 1.9.x
+      go: 1.10.x
       language: go
 
 install: contrib/scripts/install.sh
