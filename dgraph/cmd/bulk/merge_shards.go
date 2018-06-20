@@ -31,8 +31,10 @@ func mergeMapShardsIntoReduceShards(opt options) {
 	// until there are no more map shards left. Should be a good approximation.
 	for _, shard := range mapShards {
 		sortBySize(reduceShards)
-		x.Check(os.Rename(shard, filepath.Join(
-			reduceShards[len(reduceShards)-1], filepath.Base(shard))))
+		reduceShard := filepath.Join(
+			reduceShards[len(reduceShards)-1], filepath.Base(shard))
+		x.Printf("Shard %s -> Reduce %s\n", shard, reduceShard)
+		x.Check(os.Rename(shard, reduceShard))
 	}
 }
 

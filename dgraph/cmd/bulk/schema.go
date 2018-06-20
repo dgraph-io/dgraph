@@ -10,6 +10,7 @@ package bulk
 import (
 	"fmt"
 	"log"
+	"math"
 	"sync"
 
 	"github.com/dgraph-io/badger"
@@ -82,11 +83,43 @@ func (s *schemaStore) validateType(de *intern.DirectedEdge, objectIsUID bool) {
 	}
 }
 
+func (s *schemaStore) getPredicates(db *badger.ManagedDB) []string {
+	txn := db.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
+
+	opts := badger.DefaultIteratorOptions
+	opts.PrefetchValues = false
+	itr := txn.NewIterator(opts)
+	defer itr.Close()
+
+	m := make(map[string]struct{})
+	for itr.Rewind(); itr.Valid(); {
+		item := itr.Item()
+		pk := x.Parse(item.Key())
+		m[pk.Attr] = struct{}{}
+		itr.Seek(pk.SkipPredicate())
+		continue
+	}
+
+	var preds []string
+	for pred := range m {
+		preds = append(preds, pred)
+	}
+	return preds
+}
+
 func (s *schemaStore) write(db *badger.ManagedDB) {
 	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
 	// if bulk loader was restarted or other similar scenarios.
-	txn := db.NewTransactionAt(1, true)
-	for pred, sch := range s.m {
+	preds := s.getPredicates(db)
+
+	txn := db.NewTransactionAt(math.MaxUint64, true)
+	defer txn.Discard()
+	for _, pred := range preds {
+		sch, ok := s.m[pred]
+		if !ok {
+			continue
+		}
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
