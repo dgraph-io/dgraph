@@ -122,7 +122,7 @@ func handleError(err error) {
 	if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
 		x.Fatalf(errString)
 	} else if errString != y.ErrAborted.Error() && errString != y.ErrConflict.Error() {
-		x.Printf("Error while mutating %v\n", errString)
+		fmt.Printf("Error while mutating %v\n", errString)
 	}
 }
 
