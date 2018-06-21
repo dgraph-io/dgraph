@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	dgraAddr = flag.String("d", "localhost:9081", "dgraph address")
-	concurr  = flag.Int("c", 5, "number of concurrent upserts per account")
+	addr    = flag.String("addr", "localhost:9080", "dgraph address")
+	concurr = flag.Int("c", 5, "number of concurrent upserts per account")
 )
 
 var (
@@ -66,7 +66,7 @@ func main() {
 }
 
 func newClient() *dgo.Dgraph {
-	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
+	d, err := grpc.Dial(*addr, grpc.WithInsecure())
 	x.Check(err)
 	return dgo.NewDgraphClient(
 		api.NewDgraphClient(d),
