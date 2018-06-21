@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source $GOPATH/src/github.com/dgraph-io/dgraph/contrib/scripts/functions.sh
-
 pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/scripts/queries &> /dev/null
 
 function run_index_test {
@@ -17,7 +15,7 @@ function run_index_test {
   while (( $attempt < $max_attempts ))
   do
     set +e
-    N=`curl -s localhost:8081/query -XPOST -d @${X}.in`
+    N=`curl -s localhost:8180/query -XPOST -d @${X}.in`
     exitCode=$?
 
     set -e
@@ -35,8 +33,8 @@ function run_index_test {
 
   NUM=$(echo $N | python -m json.tool | grep $GREPFOR | wc -l)
   if [[ ! "$NUM" -eq "$ANS" ]]; then
-    echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM, Resp: $N"
-    quit 1
+    echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM"
+    exit 1
   else
     echo -e "Index test passed: ${X}\n"
   fi
