@@ -589,6 +589,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 
 // Remove reverse edge
 func TestSchemaMutationReverseRemove(t *testing.T) {
+	t.Skip("Skipping for the release")
 	var q1 = `
 	{
 		user(func: uid(0x3)) {
