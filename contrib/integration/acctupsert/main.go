@@ -61,7 +61,9 @@ func main() {
 	flag.Parse()
 	c := newClient()
 	setup(c)
+	fmt.Println("Doing upserts")
 	doUpserts(c)
+	fmt.Println("Checking integrity")
 	checkIntegrity(c)
 }
 
@@ -119,15 +121,20 @@ func upsert(c *dgo.Dgraph, acc account) {
 		if err == nil {
 			atomic.AddUint64(&successCount, 1)
 			return
-		}
-		if err != y.ErrAborted {
-			x.Check(err)
+		} else if err == y.ErrAborted {
+			// pass
+		} else {
+			fmt.Errorf("ERROR: %v", err)
 		}
 		atomic.AddUint64(&retryCount, 1)
 	}
 }
 
 func tryUpsert(c *dgo.Dgraph, acc account) error {
+	// TODO: This deadline here makes these upserts work. Otherwise, they block forever.
+	// Investigate this.
+	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// defer cancel()
 	ctx := context.Background()
 
 	txn := c.NewTxn()
