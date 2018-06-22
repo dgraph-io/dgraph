@@ -10,4 +10,5 @@ function runCluster {
   popd
   $basedir/contrib/wait-for-it.sh localhost:6080
   $basedir/contrib/wait-for-it.sh localhost:9180
+  sleep 10 # Sleep 10 seconds to get things ready.
 }
