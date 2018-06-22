@@ -15,7 +15,7 @@ Clients can communicate with the server in two different ways:
 - **Via [gRPC](http://www.grpc.io/).** Internally this uses [Protocol
   Buffers](https://developers.google.com/protocol-buffers) (the proto file
 used by Dgraph is located at
-[api.proto](https://github.com/dgraph-io/dgraph/blob/master/protos/api.proto)).
+[api.proto](https://github.com/dgraph-io/dgo/blob/master/protos/api.proto)).
 
 - **Via HTTP.** There are various endpoints, each accepting and returning JSON.
   There is a one to one correspondence between the HTTP endpoints and the gRPC
