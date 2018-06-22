@@ -16,3 +16,7 @@ for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki|customtok'); do
 	echo "Running test for $PKG"
 	run $PKG
 done
+
+echo
+echo "Running load-test.sh"
+./contrib/scripts/load-test.sh
