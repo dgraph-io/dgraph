@@ -330,7 +330,7 @@ fmt.Println(string(resp.Json))
 ## Java
 
 The official Java client [can be found here](https://github.com/dgraph-io/dgraph4j)
-and it fully supports Dgraph v0.9.0. Follow the instructions in the
+and it fully supports Dgraph v1.0.x. Follow the instructions in the
 [README](https://github.com/dgraph-io/dgraph4j#readme)
 to get it up and running.
 
@@ -342,7 +342,7 @@ working example of how to use the Java client.
 ## Javascript
 
 The official Javascript client [can be found here](https://github.com/dgraph-io/dgraph-js)
-and it fully supports Dgraph v0.9.4. Follow the instructions in the
+and it fully supports Dgraph v1.0.x. Follow the instructions in the
 [README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
 
 We also have a [simple example](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple)
@@ -352,7 +352,7 @@ for Node.js >= v6.
 ## Python
 
 The official Python client [can be found here](https://github.com/dgraph-io/pydgraph)
-and it fully supports Dgraph v1.0.0 and Python versions >= 2.7 and >= 3.5. Follow the
+and it fully supports Dgraph v1.0.x and Python versions >= 2.7 and >= 3.5. Follow the
 instructions in the [README](https://github.com/dgraph-io/pydgraph#readme) to get it
 up and running.
 
