@@ -13,7 +13,7 @@ services:
     command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --bindall
     volumes:
       - type: bind
-        source: $HOME/go/bin
+        source: $GOPATH/bin
         target: /gobin
         read_only: true
   # zero2:
@@ -22,7 +22,7 @@ services:
   #   command: /gobin/dgraph zero --my=zero2:5080 --replicas 3 --peer=zero1:5080 --idx 2
   #   volumes:
   #     - type: bind
-  #       source: $HOME/go/bin
+  #       source: $GOPATH/bin
   #       target: /gobin
   #       read_only: true
   # zero3:
@@ -31,7 +31,7 @@ services:
   #   command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 3
   #   volumes:
   #     - type: bind
-  #       source: $HOME/go/bin
+  #       source: $GOPATH/bin
   #       target: /gobin
   #       read_only: true
   dg1:
@@ -39,7 +39,7 @@ services:
     container_name: bank-dg1
     volumes:
       - type: bind
-        source: $HOME/go/bin
+        source: $GOPATH/bin
         target: /gobin
         read_only: true
     ports:
@@ -51,7 +51,7 @@ services:
     container_name: bank-dg2
     volumes:
       - type: bind
-        source: $HOME/go/bin
+        source: $GOPATH/bin
         target: /gobin
         read_only: true
     ports:
@@ -63,7 +63,7 @@ services:
     container_name: bank-dg3
     volumes:
       - type: bind
-        source: $HOME/go/bin
+        source: $GOPATH/bin
         target: /gobin
         read_only: true
     ports:
