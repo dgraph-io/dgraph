@@ -50,11 +50,29 @@ type Node struct {
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
 	Store       *raftwal.DiskStorage
+	Rand        *rand.Rand
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to BadgerDB).
 	Applied x.WaterMark
+}
+
+type lockedSource struct {
+	lk  sync.Mutex
+	src rand.Source
+}
+
+func (r *lockedSource) Int63() int64 {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	return r.src.Int63()
+}
+
+func (r *lockedSource) Seed(seed int64) {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	r.src.Seed(seed)
 }
 
 func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
@@ -85,6 +103,7 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
 		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 	}
 	n.Applied.Init()
 	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.

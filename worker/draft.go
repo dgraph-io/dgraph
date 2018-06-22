@@ -9,11 +9,10 @@ package worker
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -54,9 +53,9 @@ type proposals struct {
 
 func uniqueKey() string {
 	b := make([]byte, 16)
-	copy(b[:8], groups().Node.raftIdBuffer)
-	groups().Node.rand.Read(b[8:])
-	return hex.EncodeToString(b)
+	binary.BigEndian.PutUint64(b[:8], groups().Node.Id)
+	groups().Node.Rand.Read(b[8:])
+	return base64.StdEncoding.EncodeToString(b)
 }
 
 func (p *proposals) Store(key string, pctx *proposalCtx) bool {
@@ -113,7 +112,6 @@ type node struct {
 	props   proposals
 
 	canCampaign  bool
-	rand         *rand.Rand
 	raftIdBuffer []byte
 }
 
@@ -130,23 +128,6 @@ func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error 
 	gid := n.RaftContext.Group
 	min := read.Ids[gid]
 	return n.Applied.WaitForMark(ctx, min)
-}
-
-type lockedSource struct {
-	lk  sync.Mutex
-	src rand.Source
-}
-
-func (r *lockedSource) Int63() int64 {
-	r.lk.Lock()
-	defer r.lk.Unlock()
-	return r.src.Int63()
-}
-
-func (r *lockedSource) Seed(seed int64) {
-	r.lk.Lock()
-	defer r.lk.Unlock()
-	r.src.Seed(seed)
 }
 
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
@@ -176,7 +157,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		props:        props,
 		stop:         make(chan struct{}),
 		done:         make(chan struct{}),
-		rand:         rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		raftIdBuffer: b,
 	}
 	return n
@@ -637,7 +617,7 @@ func (n *node) runReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 				}
 			}
 			activeRctx := make([]byte, 8)
-			x.Check2(n.rand.Read(activeRctx[:]))
+			x.Check2(n.Rand.Read(activeRctx[:]))
 			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
 			// successful response.  If we don't see one, the raft leader wasn't configured, or the
 			// raft leader didn't respond.

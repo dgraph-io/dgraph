@@ -8,8 +8,10 @@
 package zero
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -34,33 +36,37 @@ type proposalCtx struct {
 
 type proposals struct {
 	sync.RWMutex
-	ids map[uint32]*proposalCtx
+	all map[string]*proposalCtx
 }
 
-func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
-	if pid == 0 {
+func (p *proposals) Store(key string, pctx *proposalCtx) bool {
+	if len(key) == 0 {
 		return false
 	}
 	p.Lock()
 	defer p.Unlock()
-	if p.ids == nil {
-		p.ids = make(map[uint32]*proposalCtx)
+	if p.all == nil {
+		p.all = make(map[string]*proposalCtx)
 	}
-	if _, has := p.ids[pid]; has {
+	if _, has := p.all[key]; has {
 		return false
 	}
-	p.ids[pid] = pctx
+	p.all[key] = pctx
 	return true
 }
 
-func (p *proposals) Done(pid uint32, err error) {
-	p.Lock()
-	defer p.Unlock()
-	pd, has := p.ids[pid]
-	if !has {
+func (p *proposals) Done(key string, err error) {
+	if len(key) == 0 {
 		return
 	}
-	delete(p.ids, pid)
+	p.Lock()
+	defer p.Unlock()
+	pd, has := p.all[key]
+	x.AssertTruef(has, "Unable to find key: %s", key)
+	// if !has {
+	// 	return
+	// }
+	delete(p.all, key)
 	pd.ch <- err
 }
 
@@ -175,6 +181,13 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
+func (n *node) uniqueKey() string {
+	b := make([]byte, 16)
+	binary.BigEndian.PutUint64(b[:8], n.Id)
+	n.Rand.Read(b[8:])
+	return base64.StdEncoding.EncodeToString(b)
+}
+
 func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet.")
@@ -184,25 +197,26 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 		return ctx.Err()
 	}
 
+	cctx := ctx
+	// cctx, cancel := context.WithTimeout(ctx, time.Minute)
+	// defer cancel()
+
 	che := make(chan error, 1)
 	pctx := &proposalCtx{
 		ch:  che,
-		ctx: ctx,
+		ctx: cctx, // Don't use the original context, because that's not what we're passing to Raft.
 	}
-	for {
-		id := rand.Uint32() + 1
-		if n.props.Store(id, pctx) {
-			proposal.Id = id
-			break
-		}
+	key := n.uniqueKey()
+	x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+	proposal.Key = key
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Proposing with key: %X", key)
 	}
 	data, err := proposal.Marshal()
 	if err != nil {
 		return err
 	}
 
-	cctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
 	// Propose the change.
 	if err := n.Raft().Propose(cctx, data); err != nil {
 		return x.Wrapf(err, "While proposing")
@@ -229,17 +243,20 @@ func newGroup() *intern.Group {
 	}
 }
 
-func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
+func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	var p intern.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
 	if len(e.Data) == 0 {
-		return p.Id, nil
+		return p.Key, nil
 	}
 	if err := p.Unmarshal(e.Data); err != nil {
-		return p.Id, err
+		return p.Key, err
 	}
-	if p.Id == 0 {
-		return 0, errInvalidProposal
+	if p.DeprecatedId != 0 {
+		p.Key = fmt.Sprint(p.DeprecatedId)
+	}
+	if len(p.Key) == 0 {
+		return p.Key, errInvalidProposal
 	}
 
 	n.server.Lock()
@@ -249,7 +266,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	state.Counter = e.Index
 	if p.MaxRaftId > 0 {
 		if p.MaxRaftId <= state.MaxRaftId {
-			return p.Id, errInvalidProposal
+			return p.Key, errInvalidProposal
 		}
 		state.MaxRaftId = p.MaxRaftId
 	}
@@ -257,7 +274,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		m := n.server.member(p.Member.Addr)
 		// Ensures that different nodes don't have same address.
 		if m != nil && (m.Id != p.Member.Id || m.GroupId != p.Member.GroupId) {
-			return p.Id, errInvalidAddress
+			return p.Key, errInvalidAddress
 		}
 		if p.Member.GroupId == 0 {
 			state.Zeros[p.Member.Id] = p.Member
@@ -270,7 +287,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 					}
 				}
 			}
-			return p.Id, nil
+			return p.Key, nil
 		}
 		group := state.Groups[p.Member.GroupId]
 		if group == nil {
@@ -285,11 +302,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 				conn.Get().Remove(m.Addr)
 			}
 			// else already removed.
-			return p.Id, nil
+			return p.Key, nil
 		}
 		if !has && len(group.Members) >= n.server.NumReplicas {
 			// We shouldn't allow more members than the number of replicas.
-			return p.Id, errInvalidProposal
+			return p.Key, errInvalidProposal
 		}
 
 		// Create a connection to this server.
@@ -317,7 +334,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	}
 	if p.Tablet != nil {
 		if p.Tablet.GroupId == 0 {
-			return p.Id, errInvalidProposal
+			return p.Key, errInvalidProposal
 		}
 		group := state.Groups[p.Tablet.GroupId]
 		if p.Tablet.Remove {
@@ -325,7 +342,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			if group != nil {
 				delete(group.Tablets, p.Tablet.Predicate)
 			}
-			return p.Id, nil
+			return p.Key, nil
 		}
 		if group == nil {
 			group = newGroup()
@@ -343,7 +360,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 				if tablet.GroupId != p.Tablet.GroupId {
 					x.Printf("Tablet for attr: [%s], gid: [%d] is already being served by group: [%d]\n",
 						tablet.Predicate, p.Tablet.GroupId, tablet.GroupId)
-					return p.Id, errTabletAlreadyServed
+					return p.Key, errTabletAlreadyServed
 				}
 				// This update can come from tablet size.
 				p.Tablet.ReadOnly = tablet.ReadOnly
@@ -366,7 +383,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
 	}
 
-	return p.Id, nil
+	return p.Key, nil
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -574,11 +591,11 @@ func (n *node) Run() {
 					n.applyConfChange(entry)
 
 				} else if entry.Type == raftpb.EntryNormal {
-					pid, err := n.applyProposal(entry)
+					key, err := n.applyProposal(entry)
 					if err != nil && err != errTabletAlreadyServed {
 						x.Printf("While applying proposal: %v\n", err)
 					}
-					n.props.Done(pid, err)
+					n.props.Done(key, err)
 
 				} else {
 					x.Printf("Unhandled entry: %+v\n", entry)

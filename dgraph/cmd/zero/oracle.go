@@ -17,6 +17,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 )
 
 type syncMark struct {
@@ -273,6 +274,9 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	if src.Aborted {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Proposing abort txn")
+		}
 		return s.proposeTxn(ctx, src)
 	}
 
@@ -282,6 +286,9 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	s.orc.RUnlock()
 	if conflict {
 		src.Aborted = true
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Aborted due to conflict. Proposing.")
+		}
 		return s.proposeTxn(ctx, src)
 	}
 
@@ -350,7 +357,10 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 	if !s.Node.AmLeader() {
 		return nil, x.Errorf("Only leader can decide to commit or abort")
 	}
-	err := s.commit(ctx, src)
+	tr := trace.New("Zero", "CommitOrAbort")
+	defer tr.Finish()
+	cctx := trace.NewContext(ctx, tr)
+	err := s.commit(cctx, src)
 	return src, err
 }
 

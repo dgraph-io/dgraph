@@ -109,11 +109,6 @@ func init() {
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
-	flag.Bool("bindall", true,
-		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	flag.Bool("expose_trace", false,
-		"Allow trace endpoint to be accessible from remote")
-
 	flag.Uint64("query_edge_limit", 1e6,
 		"Limit for the maximum number of edges that can be returned in a query."+
 			" This is only useful for shortest path queries.")
