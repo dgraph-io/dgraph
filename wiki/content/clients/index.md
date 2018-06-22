@@ -15,7 +15,7 @@ Clients can communicate with the server in two different ways:
 - **Via [gRPC](http://www.grpc.io/).** Internally this uses [Protocol
   Buffers](https://developers.google.com/protocol-buffers) (the proto file
 used by Dgraph is located at
-[api.proto](https://github.com/dgraph-io/dgraph/blob/master/protos/api.proto)).
+[api.proto](https://github.com/dgraph-io/dgo/blob/master/protos/api.proto)).
 
 - **Via HTTP.** There are various endpoints, each accepting and returning JSON.
   There is a one to one correspondence between the HTTP endpoints and the gRPC
@@ -399,10 +399,10 @@ client's initial `lin_read` is should be an empty map.
        client level `lin_read`). Any `lin_read` maps received in server
 responses *associated with the transaction* should be merged into the
 transactions `lin_read` map.
-  
+
     2. A start timestamp (`start_ts`). This uniquely identifies a transaction,
        and doesn't change over the transaction lifecycle.
-  
+
     3. The set of keys modified by the transaction (`keys`). This aids in
        transaction conflict detection.
 
