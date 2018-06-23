@@ -77,6 +77,9 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	x.Printf("purging below ts:%d, len(o.commits):%d, len(o.aborts):%d"+
 		", len(o.rowCommit):%d\n",
 		minTs, len(o.commits), len(o.aborts), len(o.rowCommit))
+	x.Printf("Skipping purging")
+	return
+
 	o.Lock()
 	defer o.Unlock()
 

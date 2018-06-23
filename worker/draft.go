@@ -9,11 +9,11 @@ package worker
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -51,11 +51,14 @@ type proposals struct {
 	keys map[string]*proposalCtx
 }
 
+var counter uint64
+
 func uniqueKey() string {
-	b := make([]byte, 16)
-	binary.BigEndian.PutUint64(b[:8], groups().Node.Id)
-	groups().Node.Rand.Read(b[8:])
-	return base64.StdEncoding.EncodeToString(b)
+	return fmt.Sprintf("%d-%d", groups().Node.Id, atomic.AddUint64(&counter, 1))
+	// b := make([]byte, 16)
+	// binary.BigEndian.PutUint64(b[:8], groups().Node.Id)
+	// groups().Node.Rand.Read(b[8:])
+	// return base64.StdEncoding.EncodeToString(b)
 }
 
 func (p *proposals) Store(key string, pctx *proposalCtx) bool {
@@ -83,12 +86,13 @@ func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
 }
 
 func (p *proposals) Done(key string, err error) {
+	if len(key) == 0 {
+		return
+	}
 	p.Lock()
 	defer p.Unlock()
 	pd, has := p.keys[key]
-	if !has {
-		return
-	}
+	x.AssertTruef(has, "Missing proposal with key: %s", key)
 	x.AssertTrue(pd.index != 0)
 	if err != nil {
 		pd.err = err
@@ -111,8 +115,8 @@ type node struct {
 	gid     uint32
 	props   proposals
 
-	canCampaign  bool
-	raftIdBuffer []byte
+	canCampaign bool
+	elog        trace.EventLog
 }
 
 func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
@@ -143,9 +147,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		keys: make(map[string]*proposalCtx),
 	}
 
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, id)
-
 	n := &node{
 		Node:      m,
 		requestCh: make(chan linReadReq),
@@ -153,11 +154,11 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		gid:       gid,
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		applyCh:      make(chan raftpb.Entry, Config.NumPendingProposals+1000),
-		props:        props,
-		stop:         make(chan struct{}),
-		done:         make(chan struct{}),
-		raftIdBuffer: b,
+		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
+		props:   props,
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
 	}
 	return n
 }
@@ -225,46 +226,55 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		}
 	}
 
+	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
+	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
+	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
+	// timeout.
+	cctx := ctx
+	// TODO: HACK
+	// cctx, cancel := context.WithTimeout(ctx, time.Minute)
+	// defer cancel()
+
 	che := make(chan error, 1)
 	pctx := &proposalCtx{
 		ch:  che,
-		ctx: ctx,
+		ctx: cctx,
 	}
 
 	key := uniqueKey()
 	x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 	proposal.Key = key
 
-	sz := proposal.Size()
-	slice := make([]byte, sz)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Proposing data with key: %s", key)
+	}
 
-	upto, err := proposal.MarshalTo(slice)
+	data, err := proposal.Marshal()
+	// sz := proposal.Size()
+	// slice := make([]byte, sz)
+	// upto, err := proposal.MarshalTo(slice)
 	if err != nil {
+		n.props.Done(key, err)
 		return err
 	}
 
-	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
-	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
-	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
-	// timeout.
-	cctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-	if err = n.Raft().Propose(cctx, slice[:upto]); err != nil {
+	if err = n.Raft().Propose(cctx, data); err != nil {
+		n.props.Done(key, err)
 		return x.Wrapf(err, "While proposing")
 	}
-
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Waiting for the proposal.")
 	}
 
 	select {
 	case err = <-che:
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Raft Propose error: %v", err)
-			}
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Done with error: %v", err)
 		}
 	case <-cctx.Done():
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Context timed out with error: ", cctx.Err())
+		}
 		return fmt.Errorf("While proposing to Raft group, err: %+v\n", cctx.Err())
 	}
 
@@ -284,7 +294,11 @@ func (n *node) processEdge(ridx uint64, pkey string, edge *intern.DirectedEdge) 
 	// while applying the second mutation we check the old value
 	// of name and delete it from "janardhan"'s index. If we don't
 	// wait for commit information then mutation won't see the value
-	posting.Oracle().WaitForTs(context.Background(), txn.StartTs)
+
+	// TODO: HACK HACK HACK. Let's not wait for now.
+	// n.elog.Printf("Waiting for Ts: %d", txn.StartTs)
+	// posting.Oracle().WaitForTs(context.Background(), txn.StartTs)
+	// n.elog.Printf("Done waiting for Ts: %d", txn.StartTs)
 	if err := runMutation(ctx, edge, txn); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("process mutation: %v", err)
@@ -473,6 +487,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 	posting.TxnMarks().Begin(index)
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.
+		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
 		return n.applyMutations(proposal, index)
 	}
 
@@ -481,6 +496,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return n.processKeyValues(proposal.Key, proposal.Kv)
 
 	} else if proposal.State != nil {
+		n.elog.Printf("Applying state for key: %s", proposal.Key)
 		// This state needn't be snapshotted in this group, on restart we would fetch
 		// a state which is latest or equal to this.
 		groups().applyState(proposal.State)
@@ -490,6 +506,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return n.deletePredicate(proposal.Key, proposal.CleanPredicate)
 
 	} else if proposal.TxnContext != nil {
+		n.elog.Printf("Applying txncontext for key: %s", proposal.Key)
 		return n.commitOrAbort(proposal.Key, proposal.TxnContext)
 	} else {
 		x.Fatalf("Unknown proposal")
@@ -504,6 +521,7 @@ func (n *node) processApplyCh() {
 			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
 		err := n.applyCommitted(proposal, e.Index)
+		n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v", proposal.Key, e.Index, err)
 		n.props.Done(proposal.Key, err)
 		n.Applied.Done(e.Index)
 	}
@@ -678,8 +696,14 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	go n.runReadIndexLoop(closer, readStateCh)
 
+	logTicker := time.NewTicker(10 * time.Second)
+	defer logTicker.Stop()
+
 	for {
 		select {
+		case <-logTicker.C:
+			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
+
 		case <-ticker.C:
 			n.Raft().Tick()
 
@@ -759,6 +783,8 @@ func (n *node) Run() {
 
 				} else if len(entry.Data) == 0 {
 					// TODO: Say something. Do something.
+					tr.LazyPrintf("Found empty data at index: %d", entry.Index)
+					tr.SetError()
 					n.Applied.Done(entry.Index)
 
 				} else {
@@ -870,39 +896,43 @@ func (n *node) abortOldTransactions(pending uint64) {
 }
 
 func (n *node) snapshot(skip uint64) {
-	txnWatermark := posting.TxnMarks().DoneUntil()
-	existing, err := n.Store.Snapshot()
-	x.Checkf(err, "Unable to get existing snapshot")
+	x.Printf("Taking snapshot with skip=%d\n", skip)
+	return // TODO: HACK.
 
-	lastSnapshotIdx := existing.Metadata.Index
-	if txnWatermark <= lastSnapshotIdx+skip {
-		appliedWatermark := n.Applied.DoneUntil()
-		// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions
-		if appliedWatermark-txnWatermark > 1.5*x.ForceAbortDifference && skip != 0 {
-			// Print warning if difference grows above 3 * x.ForceAbortDifference. Shouldn't ideally
-			// happen as we abort oldest 20% when it grows above 1.5 times.
-			if appliedWatermark-txnWatermark > 3*x.ForceAbortDifference {
-				x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
-					txnWatermark, appliedWatermark)
-			}
-			// Try aborting pending transactions here.
-			n.abortOldTransactions(appliedWatermark - txnWatermark)
-		}
-		return
-	}
+	// txnWatermark := posting.TxnMarks().DoneUntil()
+	// existing, err := n.Store.Snapshot()
+	// x.Checkf(err, "Unable to get existing snapshot")
 
-	snapshotIdx := txnWatermark - skip
-	if tr, ok := trace.FromContext(n.ctx); ok {
-		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
-	}
+	// lastSnapshotIdx := existing.Metadata.Index
+	// if txnWatermark <= lastSnapshotIdx+skip {
+	// 	appliedWatermark := n.Applied.DoneUntil()
+	// 	// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions
+	// 	if appliedWatermark-txnWatermark > 1.5*x.ForceAbortDifference && skip != 0 {
+	// 		// Print warning if difference grows above 3 * x.ForceAbortDifference. Shouldn't ideally
+	// 		// happen as we abort oldest 20% when it grows above 1.5 times.
+	// 		if appliedWatermark-txnWatermark > 3*x.ForceAbortDifference {
+	// 			x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
+	// 				txnWatermark, appliedWatermark)
+	// 		}
+	// 		// Try aborting pending transactions here.
+	// 		x.Printf("Aborting pending txns: %d", appliedWatermark-txnWatermark)
+	// 		n.abortOldTransactions(appliedWatermark - txnWatermark)
+	// 	}
+	// 	return
+	// }
 
-	rc, err := n.RaftContext.Marshal()
-	x.Check(err)
+	// snapshotIdx := txnWatermark - skip
+	// if tr, ok := trace.FromContext(n.ctx); ok {
+	// 	tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
+	// }
 
-	err = n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
-	x.Checkf(err, "While creating snapshot")
-	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", snapshotIdx,
-		n.Applied.DoneUntil())
+	// rc, err := n.RaftContext.Marshal()
+	// x.Check(err)
+
+	// err = n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
+	// x.Checkf(err, "While creating snapshot")
+	// x.Printf("Writing snapshot at index: %d, applied mark: %d\n", snapshotIdx,
+	// 	n.Applied.DoneUntil())
 }
 
 func (n *node) joinPeers() error {

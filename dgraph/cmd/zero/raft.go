@@ -528,23 +528,24 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 }
 
 func (n *node) trySnapshot(skip uint64) {
-	existing, err := n.Store.Snapshot()
-	x.Checkf(err, "Unable to get existing snapshot")
-	si := existing.Metadata.Index
-	idx := n.server.SyncedUntil()
-	if idx <= si+skip {
-		return
-	}
+	return
+	// existing, err := n.Store.Snapshot()
+	// x.Checkf(err, "Unable to get existing snapshot")
+	// si := existing.Metadata.Index
+	// idx := n.server.SyncedUntil()
+	// if idx <= si+skip {
+	// 	return
+	// }
 
-	data, err := n.server.MarshalMembershipState()
-	x.Check(err)
+	// data, err := n.server.MarshalMembershipState()
+	// x.Check(err)
 
-	if tr, ok := trace.FromContext(n.ctx); ok {
-		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
-	}
-	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
-	x.Checkf(err, "While creating snapshot")
-	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
+	// if tr, ok := trace.FromContext(n.ctx); ok {
+	// 	tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
+	// }
+	// err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
+	// x.Checkf(err, "While creating snapshot")
+	// x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
 }
 
 func (n *node) Run() {

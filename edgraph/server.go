@@ -308,7 +308,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 	if rand.Float64() < worker.Config.Tracing {
 		var tr trace.Trace
-		tr, ctx = x.NewTrace("GrpcMutate", ctx)
+		tr, ctx = x.NewTrace("Server.Mutate", ctx)
 		defer tr.Finish()
 	}
 

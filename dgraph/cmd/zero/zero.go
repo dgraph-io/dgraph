@@ -71,7 +71,7 @@ func (s *Server) Init() {
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.shutDownCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
-	go s.purgeOracle()
+	// go s.purgeOracle() // TODO: HACK HACK HACK
 }
 
 func (s *Server) triggerLeaderChange() {

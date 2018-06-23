@@ -532,6 +532,9 @@ func MutateOverNetwork(ctx context.Context, m *intern.Mutations) (*api.TxnContex
 		go proposeOrSend(ctx, gid, mu, resCh)
 	}
 
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("mutationmap: %+v", mutationMap)
+	}
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
 	var e error
@@ -589,7 +592,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 	node := groups().Node
 	if rand.Float64() < Config.Tracing {
 		var tr trace.Trace
-		tr, ctx = x.NewTrace("GrpcMutate", ctx)
+		tr, ctx = x.NewTrace("grpcWorker.Mutate", ctx)
 		defer tr.Finish()
 	}
 

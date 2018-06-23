@@ -49,8 +49,9 @@ type Node struct {
 	confChanges map[uint64]chan error
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
-	Store       *raftwal.DiskStorage
-	Rand        *rand.Rand
+	// Store       *raftwal.DiskStorage
+	Store *raft.MemoryStorage
+	Rand  *rand.Rand
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
@@ -75,7 +76,8 @@ func (r *lockedSource) Seed(seed int64) {
 	r.src.Seed(seed)
 }
 
-func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
+func NewNode(rc *intern.RaftContext, _ *raftwal.DiskStorage) *Node {
+	store := raft.NewMemoryStorage()
 	n := &Node{
 		Id:     rc.Id,
 		MyAddr: rc.Addr,
@@ -202,41 +204,48 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 }
 
 func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
-	x.Check(n.Store.Save(h, es, s))
+	x.Check(n.Store.Append(es))
+	if !raft.IsEmptyHardState(h) {
+		x.Check(n.Store.SetHardState(h))
+	}
+	if !raft.IsEmptySnap(s) {
+		x.Check(n.Store.ApplySnapshot(s))
+	}
+	// x.Check(n.Store.Save(h, es, s))
 }
 
 func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
-	var sp raftpb.Snapshot
-	sp, rerr = n.Store.Snapshot()
-	if rerr != nil {
-		return
-	}
-	if !raft.IsEmptySnap(sp) {
-		x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
-		restart = true
-		idx = sp.Metadata.Index
-	}
+	// var sp raftpb.Snapshot
+	// sp, rerr = n.Store.Snapshot()
+	// if rerr != nil {
+	// 	return
+	// }
+	// if !raft.IsEmptySnap(sp) {
+	// 	x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
+	// 	restart = true
+	// 	idx = sp.Metadata.Index
+	// }
 
-	var hd raftpb.HardState
-	hd, rerr = n.Store.HardState()
-	if rerr != nil {
-		return
-	}
-	if !raft.IsEmptyHardState(hd) {
-		x.Printf("Found hardstate: %+v\n", hd)
-		restart = true
-	}
+	// var hd raftpb.HardState
+	// hd, rerr = n.Store.HardState()
+	// if rerr != nil {
+	// 	return
+	// }
+	// if !raft.IsEmptyHardState(hd) {
+	// 	x.Printf("Found hardstate: %+v\n", hd)
+	// 	restart = true
+	// }
 
-	var num int
-	num, rerr = n.Store.NumEntries()
-	if rerr != nil {
-		return
-	}
-	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
-	// We'll always have at least one entry.
-	if num > 1 {
-		restart = true
-	}
+	// var num int
+	// num, rerr = n.Store.NumEntries()
+	// if rerr != nil {
+	// 	return
+	// }
+	// x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
+	// // We'll always have at least one entry.
+	// if num > 1 {
+	// 	restart = true
+	// }
 	return
 }
 
@@ -289,7 +298,8 @@ func (n *Node) BatchAndSendMessages() {
 				if exists := failedConn[to]; !exists {
 					// So that we print error only the first time we are not able to connect.
 					// Otherwise, the log is polluted with multiple errors.
-					x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
+					x.Printf("No healthy connection found to node Id: %d addr: [%s], err: %v\n",
+						to, addr, err)
 					failedConn[to] = true
 				}
 				continue
@@ -305,7 +315,10 @@ func (n *Node) BatchAndSendMessages() {
 }
 
 func (n *Node) doSendMessage(pool *Pool, data []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	if len(data) > 100 {
+		x.Printf("Sending message to [%s]. Data size: %d", pool.Addr, len(data))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	client := pool.Get()
@@ -514,6 +527,9 @@ func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error
 }
 func (w *RaftServer) RaftMessage(ctx context.Context,
 	query *api.Payload) (*api.Payload, error) {
+	if len(query.Data) > 100 {
+		x.Printf("Received message at %d. Data size: %d", w.GetNode().Id, len(query.Data))
+	}
 	if ctx.Err() != nil {
 		return &api.Payload{}, ctx.Err()
 	}
