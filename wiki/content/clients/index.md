@@ -399,10 +399,10 @@ client's initial `lin_read` is should be an empty map.
        client level `lin_read`). Any `lin_read` maps received in server
 responses *associated with the transaction* should be merged into the
 transactions `lin_read` map.
-  
+
     2. A start timestamp (`start_ts`). This uniquely identifies a transaction,
        and doesn't change over the transaction lifecycle.
-  
+
     3. The set of keys modified by the transaction (`keys`). This aids in
        transaction conflict detection.
 
