@@ -113,7 +113,7 @@ var (
 func upsert(c *dgo.Dgraph, acc account) {
 	for {
 		if time.Since(lastStatus) > 100*time.Millisecond {
-			fmt.Printf("Now: %v. Success: %d Retries: %d\n", time.Now(),
+			fmt.Printf("[%v] Success: %d Retries: %d\n", time.Now(),
 				atomic.LoadUint64(&successCount), atomic.LoadUint64(&retryCount))
 			lastStatus = time.Now()
 		}
@@ -131,10 +131,6 @@ func upsert(c *dgo.Dgraph, acc account) {
 }
 
 func tryUpsert(c *dgo.Dgraph, acc account) error {
-	// TODO: This deadline here makes these upserts work. Otherwise, they block forever.
-	// Investigate this.
-	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	// defer cancel()
 	ctx := context.Background()
 
 	txn := c.NewTxn()

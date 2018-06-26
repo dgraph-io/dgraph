@@ -532,9 +532,6 @@ func MutateOverNetwork(ctx context.Context, m *intern.Mutations) (*api.TxnContex
 		go proposeOrSend(ctx, gid, mu, resCh)
 	}
 
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("mutationmap: %+v", mutationMap)
-	}
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
 	var e error

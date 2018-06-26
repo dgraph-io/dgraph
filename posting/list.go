@@ -686,7 +686,8 @@ func (l *List) rollup() error {
 	x.AssertTrue(l.minTs <= l.commitTs)
 	err := l.iterate(l.commitTs, 0, func(p *intern.Posting) bool {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
-		// So, we don't need to do any filtering here.
+		// So, we don't need to do any filtering here. In fact, doing filtering here could result
+                // in a bug.
 		buf = append(buf, p.Uid)
 		if len(buf) == bp128.BlockSize {
 			bp.PackAppend(buf)

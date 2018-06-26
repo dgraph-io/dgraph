@@ -312,10 +312,8 @@ func (n *node) processEdge(ridx uint64, pkey string, edge *intern.DirectedEdge) 
 	// of name and delete it from "janardhan"'s index. If we don't
 	// wait for commit information then mutation won't see the value
 
-	// TODO: HACK HACK HACK. Let's not wait for now.
-	// n.elog.Printf("Waiting for Ts: %d", txn.StartTs)
-	// posting.Oracle().WaitForTs(context.Background(), txn.StartTs)
-	// n.elog.Printf("Done waiting for Ts: %d", txn.StartTs)
+	// TODO: We should propose Oracle via Raft, and not wait here.
+	posting.Oracle().WaitForTs(context.Background(), txn.StartTs)
 	if err := runMutation(ctx, edge, txn); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("process mutation: %v", err)
@@ -713,7 +711,7 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	go n.runReadIndexLoop(closer, readStateCh)
 
-	logTicker := time.NewTicker(10 * time.Second)
+	logTicker := time.NewTicker(time.Minute)
 	defer logTicker.Stop()
 
 	for {
@@ -913,43 +911,39 @@ func (n *node) abortOldTransactions(pending uint64) {
 }
 
 func (n *node) snapshot(skip uint64) {
-	x.Printf("Taking snapshot with skip=%d\n", skip)
-	return // TODO: HACK.
+	txnWatermark := posting.TxnMarks().DoneUntil()
+	existing, err := n.Store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
 
-	// txnWatermark := posting.TxnMarks().DoneUntil()
-	// existing, err := n.Store.Snapshot()
-	// x.Checkf(err, "Unable to get existing snapshot")
+	lastSnapshotIdx := existing.Metadata.Index
+	if txnWatermark <= lastSnapshotIdx+skip {
+		appliedWatermark := n.Applied.DoneUntil()
+		// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions
+		if appliedWatermark-txnWatermark > 1.5*x.ForceAbortDifference && skip != 0 {
+			// Print warning if difference grows above 3 * x.ForceAbortDifference. Shouldn't ideally
+			// happen as we abort oldest 20% when it grows above 1.5 times.
+			if appliedWatermark-txnWatermark > 3*x.ForceAbortDifference {
+				x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
+					txnWatermark, appliedWatermark)
+			}
+			// Try aborting pending transactions here.
+			n.abortOldTransactions(appliedWatermark - txnWatermark)
+		}
+		return
+	}
 
-	// lastSnapshotIdx := existing.Metadata.Index
-	// if txnWatermark <= lastSnapshotIdx+skip {
-	// 	appliedWatermark := n.Applied.DoneUntil()
-	// 	// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions
-	// 	if appliedWatermark-txnWatermark > 1.5*x.ForceAbortDifference && skip != 0 {
-	// 		// Print warning if difference grows above 3 * x.ForceAbortDifference. Shouldn't ideally
-	// 		// happen as we abort oldest 20% when it grows above 1.5 times.
-	// 		if appliedWatermark-txnWatermark > 3*x.ForceAbortDifference {
-	// 			x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
-	// 				txnWatermark, appliedWatermark)
-	// 		}
-	// 		// Try aborting pending transactions here.
-	// 		x.Printf("Aborting pending txns: %d", appliedWatermark-txnWatermark)
-	// 		n.abortOldTransactions(appliedWatermark - txnWatermark)
-	// 	}
-	// 	return
-	// }
+	snapshotIdx := txnWatermark - skip
+	if tr, ok := trace.FromContext(n.ctx); ok {
+		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
+	}
 
-	// snapshotIdx := txnWatermark - skip
-	// if tr, ok := trace.FromContext(n.ctx); ok {
-	// 	tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
-	// }
+	rc, err := n.RaftContext.Marshal()
+	x.Check(err)
 
-	// rc, err := n.RaftContext.Marshal()
-	// x.Check(err)
-
-	// err = n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
-	// x.Checkf(err, "While creating snapshot")
-	// x.Printf("Writing snapshot at index: %d, applied mark: %d\n", snapshotIdx,
-	// 	n.Applied.DoneUntil())
+	err = n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
+	x.Checkf(err, "While creating snapshot")
+	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", snapshotIdx,
+		n.Applied.DoneUntil())
 }
 
 func (n *node) joinPeers() error {

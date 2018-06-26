@@ -17,7 +17,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 )
 
 type syncMark struct {
@@ -77,9 +76,6 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	x.Printf("purging below ts:%d, len(o.commits):%d, len(o.aborts):%d"+
 		", len(o.rowCommit):%d\n",
 		minTs, len(o.commits), len(o.aborts), len(o.rowCommit))
-	x.Printf("Skipping purging")
-	return
-
 	o.Lock()
 	defer o.Unlock()
 
@@ -277,9 +273,6 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	if src.Aborted {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Proposing abort txn")
-		}
 		return s.proposeTxn(ctx, src)
 	}
 
@@ -289,9 +282,6 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	s.orc.RUnlock()
 	if conflict {
 		src.Aborted = true
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Aborted due to conflict. Proposing.")
-		}
 		return s.proposeTxn(ctx, src)
 	}
 
@@ -360,10 +350,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 	if !s.Node.AmLeader() {
 		return nil, x.Errorf("Only leader can decide to commit or abort")
 	}
-	tr := trace.New("Zero", "CommitOrAbort")
-	defer tr.Finish()
-	cctx := trace.NewContext(ctx, tr)
-	err := s.commit(cctx, src)
+	err := s.commit(ctx, src)
 	return src, err
 }
 

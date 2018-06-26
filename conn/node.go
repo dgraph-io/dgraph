@@ -49,8 +49,7 @@ type Node struct {
 	confChanges map[uint64]chan error
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
-	// Store       *raftwal.DiskStorage
-	Store *raft.MemoryStorage
+	Store       *raftwal.DiskStorage
 	Rand  *rand.Rand
 
 	// applied is used to keep track of the applied RAFT proposals.
@@ -76,8 +75,7 @@ func (r *lockedSource) Seed(seed int64) {
 	r.src.Seed(seed)
 }
 
-func NewNode(rc *intern.RaftContext, _ *raftwal.DiskStorage) *Node {
-	store := raft.NewMemoryStorage()
+func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 	n := &Node{
 		Id:     rc.Id,
 		MyAddr: rc.Addr,
@@ -213,48 +211,41 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 }
 
 func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
-	x.Check(n.Store.Append(es))
-	if !raft.IsEmptyHardState(h) {
-		x.Check(n.Store.SetHardState(h))
-	}
-	if !raft.IsEmptySnap(s) {
-		x.Check(n.Store.ApplySnapshot(s))
-	}
-	// x.Check(n.Store.Save(h, es, s))
+	x.Check(n.Store.Save(h, es, s))
 }
 
 func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
-	// var sp raftpb.Snapshot
-	// sp, rerr = n.Store.Snapshot()
-	// if rerr != nil {
-	// 	return
-	// }
-	// if !raft.IsEmptySnap(sp) {
-	// 	x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
-	// 	restart = true
-	// 	idx = sp.Metadata.Index
-	// }
+	var sp raftpb.Snapshot
+	sp, rerr = n.Store.Snapshot()
+	if rerr != nil {
+		return
+	}
+	if !raft.IsEmptySnap(sp) {
+		x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
+		restart = true
+		idx = sp.Metadata.Index
+	}
 
-	// var hd raftpb.HardState
-	// hd, rerr = n.Store.HardState()
-	// if rerr != nil {
-	// 	return
-	// }
-	// if !raft.IsEmptyHardState(hd) {
-	// 	x.Printf("Found hardstate: %+v\n", hd)
-	// 	restart = true
-	// }
+	var hd raftpb.HardState
+	hd, rerr = n.Store.HardState()
+	if rerr != nil {
+		return
+	}
+	if !raft.IsEmptyHardState(hd) {
+		x.Printf("Found hardstate: %+v\n", hd)
+		restart = true
+	}
 
-	// var num int
-	// num, rerr = n.Store.NumEntries()
-	// if rerr != nil {
-	// 	return
-	// }
-	// x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
-	// // We'll always have at least one entry.
-	// if num > 1 {
-	// 	restart = true
-	// }
+	var num int
+	num, rerr = n.Store.NumEntries()
+	if rerr != nil {
+		return
+	}
+	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
+	// We'll always have at least one entry.
+	if num > 1 {
+		restart = true
+	}
 	return
 }
 

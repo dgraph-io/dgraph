@@ -63,9 +63,6 @@ func (p *proposals) Done(key string, err error) {
 	defer p.Unlock()
 	pd, has := p.all[key]
 	x.AssertTruef(has, "Unable to find key: %s", key)
-	// if !has {
-	// 	return
-	// }
 	delete(p.all, key)
 	pd.ch <- err
 }
@@ -528,24 +525,23 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 }
 
 func (n *node) trySnapshot(skip uint64) {
-	return
-	// existing, err := n.Store.Snapshot()
-	// x.Checkf(err, "Unable to get existing snapshot")
-	// si := existing.Metadata.Index
-	// idx := n.server.SyncedUntil()
-	// if idx <= si+skip {
-	// 	return
-	// }
+	existing, err := n.Store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
+	si := existing.Metadata.Index
+	idx := n.server.SyncedUntil()
+	if idx <= si+skip {
+		return
+	}
 
-	// data, err := n.server.MarshalMembershipState()
-	// x.Check(err)
+	data, err := n.server.MarshalMembershipState()
+	x.Check(err)
 
-	// if tr, ok := trace.FromContext(n.ctx); ok {
-	// 	tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
-	// }
-	// err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
-	// x.Checkf(err, "While creating snapshot")
-	// x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
+	if tr, ok := trace.FromContext(n.ctx); ok {
+		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
+	}
+	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
+	x.Checkf(err, "While creating snapshot")
+	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
 }
 
 func (n *node) Run() {
