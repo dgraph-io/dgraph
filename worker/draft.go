@@ -48,8 +48,6 @@ type proposals struct {
 	all map[string]*proposalCtx
 }
 
-var counter uint64
-
 // uniqueKey is meant to be unique across all the replicas.
 func uniqueKey() string {
 	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
