@@ -8,7 +8,6 @@
 package zero
 
 import (
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -55,6 +54,15 @@ func (p *proposals) Store(key string, pctx *proposalCtx) bool {
 	return true
 }
 
+func (p *proposals) Delete(key string) {
+	if len(key) == 0 {
+		return
+	}
+	p.Lock()
+	defer p.Unlock()
+	delete(p.all, key)
+}
+
 func (p *proposals) Done(key string, err error) {
 	if len(key) == 0 {
 		return
@@ -62,7 +70,12 @@ func (p *proposals) Done(key string, err error) {
 	p.Lock()
 	defer p.Unlock()
 	pd, has := p.all[key]
-	x.AssertTruef(has, "Unable to find key: %s", key)
+	if !has {
+		// If we assert here, there would be a race condition between a context
+		// timing out, and a proposal getting applied immediately after. That
+		// would cause assert to fail. So, don't assert.
+		return
+	}
 	delete(p.all, key)
 	pd.ch <- err
 }
@@ -179,53 +192,68 @@ func (n *node) AmLeader() bool {
 }
 
 func (n *node) uniqueKey() string {
-	b := make([]byte, 16)
-	binary.BigEndian.PutUint64(b[:8], n.Id)
-	n.Rand.Read(b[8:])
-	return base64.StdEncoding.EncodeToString(b)
+	return fmt.Sprintf("z-%d", n.Rand.Uint64())
 }
+
+var errInternalRetry = errors.New("Retry Raft proposal internally")
 
 func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet.")
 	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	cctx := ctx
-	// cctx, cancel := context.WithTimeout(ctx, time.Minute)
-	// defer cancel()
+	propose := func() error {
+		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
 
-	che := make(chan error, 1)
-	pctx := &proposalCtx{
-		ch:  che,
-		ctx: cctx, // Don't use the original context, because that's not what we're passing to Raft.
-	}
-	key := n.uniqueKey()
-	x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
-	proposal.Key = key
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Proposing with key: %X", key)
-	}
-	data, err := proposal.Marshal()
-	if err != nil {
-		return err
+		che := make(chan error, 1)
+		pctx := &proposalCtx{
+			ch:  che,
+			ctx: cctx, // Don't use the original context, because that's not what we're passing to Raft.
+		}
+		key := n.uniqueKey()
+		x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		defer n.props.Delete(key)
+		proposal.Key = key
+
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Proposing with key: %X", key)
+		}
+
+		data, err := proposal.Marshal()
+		if err != nil {
+			return err
+		}
+
+		// Propose the change.
+		if err := n.Raft().Propose(cctx, data); err != nil {
+			return x.Wrapf(err, "While proposing")
+		}
+
+		// Wait for proposal to be applied or timeout.
+		select {
+		case err := <-che:
+			// We arrived here by a call to n.props.Done().
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-cctx.Done():
+			return errInternalRetry
+		}
 	}
 
-	// Propose the change.
-	if err := n.Raft().Propose(cctx, data); err != nil {
-		return x.Wrapf(err, "While proposing")
+	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
+	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
+	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
+	// timeout. We should always try with a timeout and optionally retry.
+	err := errInternalRetry
+	for err == errInternalRetry {
+		err = propose()
 	}
-
-	// Wait for proposal to be applied or timeout.
-	select {
-	case err := <-che:
-		return err
-	case <-cctx.Done():
-		return cctx.Err()
-	}
+	return err
 }
 
 var (

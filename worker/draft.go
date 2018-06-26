@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -46,28 +45,23 @@ type proposalCtx struct {
 
 type proposals struct {
 	sync.RWMutex
-	// The key is hex encoded version of <raft_id_of_node><random_uint64>
-	// This should make sure its not same across replicas.
-	keys map[string]*proposalCtx
+	all map[string]*proposalCtx
 }
 
 var counter uint64
 
+// uniqueKey is meant to be unique across all the replicas.
 func uniqueKey() string {
-	return fmt.Sprintf("%d-%d", groups().Node.Id, atomic.AddUint64(&counter, 1))
-	// b := make([]byte, 16)
-	// binary.BigEndian.PutUint64(b[:8], groups().Node.Id)
-	// groups().Node.Rand.Read(b[8:])
-	// return base64.StdEncoding.EncodeToString(b)
+	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
 }
 
 func (p *proposals) Store(key string, pctx *proposalCtx) bool {
 	p.Lock()
 	defer p.Unlock()
-	if _, has := p.keys[key]; has {
+	if _, has := p.all[key]; has {
 		return false
 	}
-	p.keys[key] = pctx
+	p.all[key] = pctx
 	return true
 }
 
@@ -77,20 +71,26 @@ func (p *proposals) Delete(key string) {
 	}
 	p.Lock()
 	defer p.Unlock()
-	delete(p.keys, key)
+	delete(p.all, key)
 }
 
 func (p *proposals) pctx(key string) *proposalCtx {
 	p.RLock()
 	defer p.RUnlock()
-	return p.keys[key]
+	if pctx := p.all[key]; pctx != nil {
+		return pctx
+	}
+	return new(proposalCtx)
 }
 
 func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
 	p.RLock()
 	defer p.RUnlock()
-	pd, has := p.keys[key]
-	x.AssertTrue(has)
+	pd, has := p.all[key]
+	if !has {
+		// See the race condition note in Done.
+		return context.Background(), new(posting.Txn)
+	}
 	return pd.ctx, pd.txn
 }
 
@@ -100,13 +100,18 @@ func (p *proposals) Done(key string, err error) {
 	}
 	p.Lock()
 	defer p.Unlock()
-	pd, has := p.keys[key]
-	x.AssertTruef(has, "Missing proposal with key: %s", key)
+	pd, has := p.all[key]
+	if !has {
+		// If we assert here, there would be a race condition between a context
+		// timing out, and a proposal getting applied immediately after. That
+		// would cause assert to fail. So, don't assert.
+		return
+	}
 	x.AssertTrue(pd.index != 0)
 	if err != nil {
 		pd.err = err
 	}
-	delete(p.keys, key)
+	delete(p.all, key)
 	pd.ch <- pd.err
 }
 
@@ -153,7 +158,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	}
 	m := conn.NewNode(rc, store)
 	props := proposals{
-		keys: make(map[string]*proposalCtx),
+		all: make(map[string]*proposalCtx),
 	}
 
 	n := &node{
