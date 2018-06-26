@@ -50,7 +50,7 @@ type Node struct {
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
 	Store       *raftwal.DiskStorage
-	Rand  *rand.Rand
+	Rand        *rand.Rand
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->

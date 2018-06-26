@@ -192,7 +192,7 @@ func (n *node) AmLeader() bool {
 }
 
 func (n *node) uniqueKey() string {
-	return fmt.Sprintf("z-%d", n.Rand.Uint64())
+	return fmt.Sprintf("z%d-%d", n.Id, n.Rand.Uint64())
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
@@ -211,8 +211,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 
 		che := make(chan error, 1)
 		pctx := &proposalCtx{
-			ch:  che,
-			ctx: cctx, // Don't use the original context, because that's not what we're passing to Raft.
+			ch: che,
+			// Don't use the original context, because that's not what we're passing to Raft.
+			ctx: cctx,
 		}
 		key := n.uniqueKey()
 		x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)

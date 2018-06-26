@@ -113,7 +113,7 @@ var (
 func upsert(c *dgo.Dgraph, acc account) {
 	for {
 		if time.Since(lastStatus) > 100*time.Millisecond {
-			fmt.Printf("[%v] Success: %d Retries: %d\n", time.Now(),
+			fmt.Printf("[%s] Success: %d Retries: %d\n", time.Now().Format(time.Stamp),
 				atomic.LoadUint64(&successCount), atomic.LoadUint64(&retryCount))
 			lastStatus = time.Now()
 		}
