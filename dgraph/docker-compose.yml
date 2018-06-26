@@ -7,7 +7,7 @@ services:
   zero1:
     image: debian:latest
     container_name: bank-dg0.1
-    working_dir: /data/0.1
+    working_dir: /data/dg0.1
     ports:
       - 5080:5080
       - 6080:6080
@@ -18,7 +18,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: ./data
+        source: "${DATA}"
         target: /data
   # zero2:
   #   image: debian:latest
@@ -41,14 +41,14 @@ services:
   dg1:
     image: debian:latest
     container_name: bank-dg1
-    working_dir: /data/1
+    working_dir: /data/dg1
     volumes:
       - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
       - type: bind
-        source: ./data
+        source: "${DATA}"
         target: /data
     ports:
       - 8180:8180
@@ -57,14 +57,14 @@ services:
   dg2:
     image: debian:latest
     container_name: bank-dg2
-    working_dir: /data/2
+    working_dir: /data/dg2
     volumes:
       - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
       - type: bind
-        source: ./data
+        source: "${DATA}"
         target: /data
     ports:
       - 8181:8181
@@ -74,14 +74,14 @@ services:
   dg3:
     image: debian:latest
     container_name: bank-dg3
-    working_dir: /data/3
+    working_dir: /data/dg3
     volumes:
       - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
       - type: bind
-        source: ./data
+        source: "${DATA}"
         target: /data
     ports:
       - 8182:8182
