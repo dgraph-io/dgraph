@@ -188,12 +188,21 @@ func (n *Node) Send(m raftpb.Message) {
 	x.AssertTruef(n.Id != m.To, "Sending message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
-	select {
-	case n.messages <- sendmsg{to: m.To, data: data}:
-		// pass
-	default:
-		// ignore
-	}
+
+	// As long as leadership is stable, any attempted Propose() calls should be reflected in the
+	// next raft.Ready.Messages. Leaders will send MsgApps to the followers; followers will send
+	// MsgProp to the leader. It is up to the transport layer to get those messages to their
+	// destination. If a MsgApp gets dropped by the transport layer, it will get retried by raft
+	// (i.e. it will appear in a future Ready.Messages), but MsgProp will only be sent once. During
+	// leadership transitions, proposals may get dropped even if the network is reliable.
+	//
+	// We can't do a select default here. The messages must be sent to the channel, otherwise we
+	// should block until the channel can accept these messages. BatchAndSendMessages would take
+	// care of dropping messages which can't be sent due to network issues to the corresponding
+	// node. But, we shouldn't take the liberty to do that here. It would take us more time to
+	// repropose these dropped messages anyway, than to block here a bit waiting for the messages
+	// channel to clear out.
+	n.messages <- sendmsg{to: m.To, data: data}
 }
 
 func (n *Node) Snapshot() (raftpb.Snapshot, error) {
@@ -315,9 +324,6 @@ func (n *Node) BatchAndSendMessages() {
 }
 
 func (n *Node) doSendMessage(pool *Pool, data []byte) {
-	if len(data) > 100 {
-		x.Printf("Sending message to [%s]. Data size: %d", pool.Addr, len(data))
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -527,9 +533,6 @@ func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error
 }
 func (w *RaftServer) RaftMessage(ctx context.Context,
 	query *api.Payload) (*api.Payload, error) {
-	if len(query.Data) > 100 {
-		x.Printf("Received message at %d. Data size: %d", w.GetNode().Id, len(query.Data))
-	}
 	if ctx.Err() != nil {
 		return &api.Payload{}, ctx.Err()
 	}

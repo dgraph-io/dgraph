@@ -71,6 +71,15 @@ func (p *proposals) Store(key string, pctx *proposalCtx) bool {
 	return true
 }
 
+func (p *proposals) Delete(key string) {
+	if len(key) == 0 {
+		return
+	}
+	p.Lock()
+	defer p.Unlock()
+	delete(p.keys, key)
+}
+
 func (p *proposals) pctx(key string) *proposalCtx {
 	p.RLock()
 	defer p.RUnlock()
@@ -184,6 +193,8 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
+var errInternalRetry = errors.New("Retry Raft proposal internally")
+
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
 func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) error {
@@ -226,58 +237,64 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		}
 	}
 
+	propose := func() error {
+		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		che := make(chan error, 1)
+		pctx := &proposalCtx{
+			ch:  che,
+			ctx: cctx,
+		}
+		key := uniqueKey()
+		x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		defer n.props.Delete(key) // Ensure that it gets deleted on return.
+		proposal.Key = key
+
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Proposing data with key: %s", key)
+		}
+
+		data, err := proposal.Marshal()
+		if err != nil {
+			return err
+		}
+
+		if err = n.Raft().Propose(cctx, data); err != nil {
+			return x.Wrapf(err, "While proposing")
+		}
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal.")
+		}
+
+		select {
+		case err = <-che:
+			// We arrived here by a call to n.props.Done().
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Done with error: %v", err)
+			}
+			return err
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("External context timed out with error: %v.", ctx.Err())
+			}
+			return ctx.Err()
+		case <-cctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Internal context timed out with error: %v. Retrying...", cctx.Err())
+			}
+			return errInternalRetry
+		}
+	}
+
 	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
 	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
-	// timeout.
-	cctx := ctx
-	// TODO: HACK
-	// cctx, cancel := context.WithTimeout(ctx, time.Minute)
-	// defer cancel()
-
-	che := make(chan error, 1)
-	pctx := &proposalCtx{
-		ch:  che,
-		ctx: cctx,
+	// timeout. We should always try with a timeout and optionally retry.
+	err := errInternalRetry
+	for err == errInternalRetry {
+		err = propose()
 	}
-
-	key := uniqueKey()
-	x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
-	proposal.Key = key
-
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Proposing data with key: %s", key)
-	}
-
-	data, err := proposal.Marshal()
-	// sz := proposal.Size()
-	// slice := make([]byte, sz)
-	// upto, err := proposal.MarshalTo(slice)
-	if err != nil {
-		n.props.Done(key, err)
-		return err
-	}
-
-	if err = n.Raft().Propose(cctx, data); err != nil {
-		n.props.Done(key, err)
-		return x.Wrapf(err, "While proposing")
-	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Waiting for the proposal.")
-	}
-
-	select {
-	case err = <-che:
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Done with error: %v", err)
-		}
-	case <-cctx.Done():
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Context timed out with error: ", cctx.Err())
-		}
-		return fmt.Errorf("While proposing to Raft group, err: %+v\n", cctx.Err())
-	}
-
 	return err
 }
 
