@@ -589,7 +589,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 	node := groups().Node
 	if rand.Float64() < Config.Tracing {
 		var tr trace.Trace
-		tr, ctx = x.NewTrace("GrpcMutate", ctx)
+		tr, ctx = x.NewTrace("grpcWorker.Mutate", ctx)
 		defer tr.Finish()
 	}
 

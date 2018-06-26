@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
@@ -62,8 +63,6 @@ instances to achieve high-availability.
 	Zero.EnvPrefix = "DGRAPH_ZERO"
 
 	flag := Zero.Cmd.Flags()
-	flag.Bool("bindall", true,
-		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	flag.IntP("port_offset", "o", 0,
@@ -142,6 +141,11 @@ func run() {
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 	}
 
+	if Zero.Conf.GetBool("expose_trace") {
+		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
+			return true, true
+		}
+	}
 	grpc.EnableTracing = false
 
 	addr := "localhost"

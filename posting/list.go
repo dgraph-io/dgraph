@@ -455,6 +455,7 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 }
 
 func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posting) {
+	// This function would return zero ts for entries above readTs.
 	effective := func(start, commit uint64) uint64 {
 		if commit > 0 && commit <= readTs {
 			// Has been committed and below the readTs.
@@ -684,10 +685,9 @@ func (l *List) rollup() error {
 	// Pick all committed entries
 	x.AssertTrue(l.minTs <= l.commitTs)
 	err := l.iterate(l.commitTs, 0, func(p *intern.Posting) bool {
-		commitTs := atomic.LoadUint64(&p.CommitTs)
-		if commitTs == 0 || commitTs > l.commitTs {
-			return true
-		}
+		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
+		// So, we don't need to do any filtering here. In fact, doing filtering here could result
+		// in a bug.
 		buf = append(buf, p.Uid)
 		if len(buf) == bp128.BlockSize {
 			bp.PackAppend(buf)

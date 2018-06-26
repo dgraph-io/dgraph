@@ -56,6 +56,10 @@ func init() {
 	RootCmd.PersistentFlags().String("config", "",
 		"Configuration file. Takes precedence over default values, but is "+
 			"overridden to values set with environment variables and flags.")
+	RootCmd.PersistentFlags().Bool("bindall", true,
+		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
+	RootCmd.PersistentFlags().Bool("expose_trace", false,
+		"Allow trace endpoint to be accessible from remote")
 	rootConf.BindPFlags(RootCmd.PersistentFlags())
 
 	var subcommands = []*x.SubCommand{

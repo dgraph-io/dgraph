@@ -6125,6 +6125,7 @@ func TestMain(m *testing.M) {
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"--wal", zw,
+		"-o", "10",
 	)
 	zero.Stdout = os.Stdout
 	zero.Stderr = os.Stdout
@@ -6145,7 +6146,7 @@ func TestMain(m *testing.M) {
 	worker.Config.RaftId = 1
 	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
-	worker.Config.ZeroAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc)
+	worker.Config.ZeroAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+10)
 	worker.Config.RaftId = 1
 	worker.Config.MyAddr = "localhost:12345"
 	worker.Config.ExpandEdge = true
