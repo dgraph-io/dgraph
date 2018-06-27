@@ -158,4 +158,5 @@ createTar darwin
 createTar linux
 
 echo "Release $TAG is ready."
+docker run -it dgraph/dgraph:v1.0.6 dgraph
 ls -alh $TMP
