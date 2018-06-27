@@ -1168,7 +1168,7 @@ Docker file to be used for TLS Authentication:
 version: "3.2"
 services:
   zero:
-    image: dgraph/dgraph:v1.0.5
+    image: dgraph/dgraph:latest
     volumes:
       - type: volume
         source: dgraph
@@ -1181,8 +1181,8 @@ services:
     restart: on-failure
     command: dgraph zero --my=zero:5080
   server:
-    image: dgraph/dgraph:v1.0.5
-    hostname: dgraph-test
+    image: dgraph/dgraph:latest
+    hostname: dgraph
     volumes:
       - /Users/Dgraph/Downloads/ssl2:/etc/ssl/private
     ports:
