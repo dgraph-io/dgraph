@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -241,6 +241,8 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
+// Parse would parse the key. ParsedKey does not reuse the key slice, so the key slice can change
+// without affecting the contents of ParsedKey.
 func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 

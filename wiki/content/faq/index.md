@@ -16,12 +16,8 @@ If you're interested in a high-performance graph database with an emphasis on so
 
 If you're running more than five tables in a traditional relational database management system such as MySQL, SQL Server, or Oracle and your application requires five or more foreign keys, a graph database may be a better fit. If you're running a NoSQL database like MongoDB or Cassandra forcing you to do joins in the application layer, you should definitely take a look at moving to a graph database.
 
-While we absolutely believe in Dgraph it's important to remember it's still young. At this stage it's ideal for internal non-user facing projects as well as for projects that you've found impossible to realize in the past due to the complexity and computational cost imposed by classic table driven systems, endless joins, or the seemingly inescapable ''curse of dimensionality''.
-
 ### Why would I not use Dgraph?
-If you're looking for a stable, mature database, Dgraph wouldn't be the right fit for you. It is at an early stage, where a lot of functionality is still being worked on, and releases might not be backward compatible.
-
-Another thing is, if your data doesn't have graph structure, i.e., there's only one predicate, then any graph database might not be a good fit for you. A NoSQL datastore is best for key-value type storage.
+If your data doesn't have graph structure, i.e., there's only one predicate, then any graph database might not be a good fit for you. A NoSQL datastore is best for key-value type storage.
 
 ### Is Dgraph production ready?
 We recommend Dgraph to be used in production at companies. Minor releases at this stage might not be backward compatible; so we highly recommend using [frequent exports](/deploy#export).
@@ -42,18 +38,16 @@ Dgraph is licensed under Apache v2.0 with a Commons Clause restriction. The full
 
 ### How does Commons Clause restriction affect me?
 
-The Commons Clause restriction has NO impact on you, if:
+The Commons Clause restriction allows you to do everything below:
 
-- You are using Dgraph internally within your organization.
-- You are building and/or selling a service on top of Dgraph, which is
-  substantially different from Dgraph itself.
-- You do not intend to sell Dgraph as a service, or as a product.
-- You are using a Dgraph library.
+- Using Dgraph internally within your organization to support your own processing.
+- Build or sell a service on top of Dgraph, which adds substantial value to Dgraph. For e.g., building a proprietary recommendation engine service which uses Dgraph internally.
+- Use a specific Dgraph library in your application.
 
-The clause only applies to you, if:
+The Commons Clause restriction prohibits you from:
 
-- You intend to sell Dgraph as a software or in the cloud, without significantly
-  modifying the codebase.
+- Selling access to Dgraph as a software or in the cloud, without adding
+  substantial value to it.
 
 If you wish to provide Dgraph as a service, [talk to
 us](mailto:contact@dgraph.io).

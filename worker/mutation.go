@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package worker
@@ -48,13 +38,12 @@ func deletePredicateEdge(edge *intern.DirectedEdge) bool {
 	return edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star))
 }
 
-// runMutation goes through all the edges and applies them. It returns the
-// mutations which were not applied in left.
+// runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Txn) error {
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("In run mutations")
+		tr.LazyPrintf("In run mutation")
 	}
-	if !groups().ServesTablet(edge.Attr) {
+	if !groups().ServesTabletRW(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
 		return errUnservedTablet
@@ -421,10 +410,8 @@ func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	// applied watermark can be less than this proposal's index so return the maximum.
 	// For some proposals like dropPredicate, we don't store them in txns map, so we
 	// don't know the raft index. For them we would return applied watermark.
-	if x := node.Applied.DoneUntil(); x > index {
-		index = x
-	}
-	tctx.LinRead.Ids[gid] = index
+	doneUntil := node.Applied.DoneUntil()
+	tctx.LinRead.Ids[gid] = x.Max(index, doneUntil)
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
@@ -602,7 +589,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 	node := groups().Node
 	if rand.Float64() < Config.Tracing {
 		var tr trace.Trace
-		tr, ctx = x.NewTrace("GrpcMutate", ctx)
+		tr, ctx = x.NewTrace("grpcWorker.Mutate", ctx)
 		defer tr.Finish()
 	}
 
@@ -621,6 +608,7 @@ func tryAbortTransactions(startTimestamps []uint64) {
 	req := &intern.TxnTimestamps{Ts: startTimestamps}
 	resp, err := zc.TryAbort(context.Background(), req)
 	for err != nil {
+		x.Printf("Error while trying to abort txns: %v\n", err)
 		resp, err = zc.TryAbort(context.Background(), req)
 	}
 	commitTimestamps := resp.Ts
@@ -634,6 +622,7 @@ func tryAbortTransactions(startTimestamps []uint64) {
 		// TODO - Make sure all other errors are transient, we don't want to be stuck in an infinite
 		// loop.
 		for err != nil && err != posting.ErrInvalidTxn {
+			x.Printf("Error while locally aborting txns: %v\n", err)
 			// This will fail only due to badger error.
 			_, err = commitOrAbort(context.Background(), tctx)
 		}

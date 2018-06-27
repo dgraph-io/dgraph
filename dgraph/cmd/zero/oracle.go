@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -8,6 +8,7 @@
 package zero
 
 import (
+	"encoding/base64"
 	"errors"
 	"math/rand"
 	"time"
@@ -284,6 +285,38 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		return s.proposeTxn(ctx, src)
 	}
 
+	// Check if any of these tablets is being moved. If so, abort the transaction.
+	preds := make(map[string]struct{})
+	// _predicate_ would never be part of conflict detection, so keys corresponding to any
+	// modifications to this predicate would not be sent to Zero. But, we still need to abort
+	// transactions which are coming in, while this predicate is being moved. This means that if
+	// _predicate_ expansion is enabled, and a move for this predicate is happening, NO transactions
+	// across the entire cluster would commit. Sorry! But if we don't do this, we might lose commits
+	// which sneaked in during the move.
+	preds["_predicate_"] = struct{}{}
+
+	for _, k := range src.Keys {
+		key, err := base64.StdEncoding.DecodeString(k)
+		if err != nil {
+			continue
+		}
+		pk := x.Parse(key)
+		if pk != nil {
+			preds[pk.Attr] = struct{}{}
+		}
+	}
+	for pred := range preds {
+		tablet := s.ServingTablet(pred)
+		if tablet == nil || tablet.GetReadOnly() {
+			src.Aborted = true
+			return s.proposeTxn(ctx, src)
+		}
+	}
+
+	// TODO: We could take fingerprint of the keys, and store them in uint64, allowing the rowCommit
+	// map to be keyed by uint64, which would be cheaper. But, unsure about the repurcussions of
+	// that. It would save some memory. So, worth a try.
+
 	var num intern.Num
 	num.Val = 1
 	assigned, err := s.lease(ctx, &num, true)
@@ -297,9 +330,11 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	}
 	// Propose txn should be used to set watermark as done.
 	err = s.proposeTxn(ctx, src)
-	// TODO: Ideally proposal should throw error if it was already aborted due to race.
 	// There might be race between this proposal trying to commit and predicate
-	// move aborting it.
+	// move aborting it. A predicate move, triggered by Zero, would abort all pending transactions.
+	// At the same time, a client which has already done mutations, can proceed to commit it. A race
+	// condition can happen here, with both proposing their respective states, only one can succeed
+	// after the proposal is done. So, check again to see the fate of the transaction here.
 	if s.orc.aborted(src.StartTs) {
 		src.Aborted = true
 	}

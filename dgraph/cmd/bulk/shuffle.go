@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -36,8 +36,8 @@ func (s *shuffler) run() {
 	thr := x.NewThrottle(s.opt.NumShufflers)
 	for i := 0; i < s.opt.ReduceShards; i++ {
 		thr.Start()
-		go func(i int, db *badger.ManagedDB) {
-			mapFiles := filenamesInTree(shardDirs[i])
+		go func(shardId int, db *badger.ManagedDB) {
+			mapFiles := filenamesInTree(shardDirs[shardId])
 			shuffleInputChs := make([]chan *intern.MapEntry, len(mapFiles))
 			for i, mapFile := range mapFiles {
 				shuffleInputChs[i] = make(chan *intern.MapEntry, 1000)
@@ -81,7 +81,7 @@ func readMapOutput(filename string, mapEntryCh chan<- *intern.MapEntry) {
 		x.Check(err)
 		sz, n := binary.Uvarint(buf)
 		if n <= 0 {
-			log.Fatal("Could not read uvarint: %d", n)
+			log.Fatalf("Could not read uvarint: %d", n)
 		}
 		x.Check2(r.Discard(n))
 
@@ -98,7 +98,6 @@ func readMapOutput(filename string, mapEntryCh chan<- *intern.MapEntry) {
 }
 
 func (s *shuffler) shufflePostings(mapEntryChs []chan *intern.MapEntry, ci *countIndexer) {
-
 	var ph postingHeap
 	for _, ch := range mapEntryChs {
 		heap.Push(&ph, heapNode{mapEntry: <-ch, ch: ch})

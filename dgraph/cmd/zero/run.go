@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
@@ -62,8 +63,6 @@ instances to achieve high-availability.
 	Zero.EnvPrefix = "DGRAPH_ZERO"
 
 	flag := Zero.Cmd.Flags()
-	flag.Bool("bindall", true,
-		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	flag.IntP("port_offset", "o", 0,
@@ -88,14 +87,14 @@ type state struct {
 	zero *Server
 }
 
-func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
+func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.DiskStorage) {
 	s := grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
 
 	rc := intern.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
-	m := conn.NewNode(&rc)
+	m := conn.NewNode(&rc, store)
 	st.rs = &conn.RaftServer{Node: m}
 
 	st.node = &node{Node: m, ctx: context.Background(), stop: make(chan struct{})}
@@ -142,6 +141,11 @@ func run() {
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 	}
 
+	if Zero.Conf.GetBool("expose_trace") {
+		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
+			return true, true
+		}
+	}
 	grpc.EnableTracing = false
 
 	addr := "localhost"
@@ -160,29 +164,31 @@ func run() {
 		log.Fatal(err)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(3)
-	// Initialize the servers.
-	var st state
-	st.serveGRPC(grpcListener, &wg)
-	st.serveHTTP(httpListener, &wg)
-
-	http.HandleFunc("/state", st.getState)
-	http.HandleFunc("/removeNode", st.removeNode)
-	http.HandleFunc("/moveTablet", st.moveTablet)
-
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.DefaultOptions
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = opts.w
 	kvOpt.ValueDir = opts.w
-	kvOpt.TableLoadingMode = bopts.MemoryMap
-	kv, err := badger.OpenManaged(kvOpt)
+	kvOpt.ValueLogLoadingMode = bopts.FileIO
+	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
-	wal := raftwal.Init(kv, opts.nodeId)
-	x.Check(st.node.initAndStartNode(wal))
+	store := raftwal.Init(kv, opts.nodeId, 0)
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	// Initialize the servers.
+	var st state
+	st.serveGRPC(grpcListener, &wg, store)
+	st.serveHTTP(httpListener, &wg)
+
+	http.HandleFunc("/state", st.getState)
+	http.HandleFunc("/removeNode", st.removeNode)
+	http.HandleFunc("/moveTablet", st.moveTablet)
+
+	// This must be here. It does not work if placed before Grpc init.
+	x.Check(st.node.initAndStartNode())
 
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)

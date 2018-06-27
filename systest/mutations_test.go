@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -64,6 +64,9 @@ func TestSystem(t *testing.T) {
 	t.Run("has with dash", wrap(HasWithDash))
 	t.Run("list geo filter", wrap(ListGeoFilterTest))
 	t.Run("list regex filter", wrap(ListRegexFilterTest))
+	t.Run("regex query vars", wrap(RegexQueryWithVars))
+	t.Run("graphql var child", wrap(GraphQLVarChild))
+	t.Run("math ge", wrap(MathGe))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1261,5 +1264,199 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 			}
 		]
 	}
+	`, string(resp.GetJson()))
+}
+
+func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(term) .
+			per: [string] @index(trigram) .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <name> "read"  .
+			_:b <name> "write" .
+			_:c <name> "admin" .
+
+			_:a <per> "read"  .
+			_:b <per> "write" .
+			_:c <per> "read"  .
+			_:c <per> "write" .
+		`),
+	})
+	check(t, err)
+
+	resp, err := c.NewTxn().QueryWithVars(context.Background(), `
+		query search($term: string){
+			q(func: regexp(per, $term)) {
+				name
+			}
+		}`, map[string]string{"$term": "/^rea.*$/"})
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "read"
+			},
+			{
+				"name": "admin"
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+}
+
+func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(exact) .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	au, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <name> "Alice"  .
+			_:b <name> "Bob" .
+			_:c <name> "Charlie" .
+
+			_:a <friend> _:c  .
+			_:a <friend> _:b  .
+		`),
+	})
+	check(t, err)
+
+	a := au.Uids["a"]
+	b := au.Uids["b"]
+	ch := au.Uids["c"]
+
+	// Try GraphQL variable with filter at root.
+	resp, err := c.NewTxn().QueryWithVars(context.Background(), `
+	query q($alice: string){
+		q(func: eq(name, "Alice")) @filter(uid($alice)) {
+			name
+		}
+	}`, map[string]string{"$alice": a})
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "Alice"
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
+	// Try GraphQL variable with filter at child.
+	resp, err = c.NewTxn().QueryWithVars(context.Background(), `
+	query q($bob: string){
+		q(func: eq(name, "Alice")) {
+			name
+			friend @filter(uid($bob)) {
+				name
+			}
+		}
+	}`, map[string]string{"$bob": b})
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "Alice",
+				"friend": [
+					{
+						"name": "Bob"
+					}
+				]
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
+	// Try GraphQL array variable with filter at child.
+	friends := "[" + b + "," + ch + "]"
+	resp, err = c.NewTxn().QueryWithVars(context.Background(), `
+	query q($friends: string){
+		q(func: eq(name, "Alice")) {
+			name
+			friend @filter(uid($friends)) {
+				name
+			}
+		}
+	}`, map[string]string{"$friends": friends})
+	check(t, err)
+	CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "Alice",
+				"friend": [
+					{
+						"name": "Bob"
+					},
+					{
+						"name": "Charlie"
+					}
+				]
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
+}
+
+func MathGe(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(exact) .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:root <name> "/" .
+			_:root <container> _:c .
+			_:c <name> "Foobar" .
+		`),
+	})
+	check(t, err)
+
+	// Try GraphQL variable with filter at root.
+	resp, err := c.NewTxn().Query(context.Background(), `
+	{
+		q(func: eq(name, "/")) {
+			containerCount as count(container)
+			hasChildren: math(containerCount >= 1)
+		}
+	}`)
+	check(t, err)
+	CompareJSON(t, `
+		{
+		  "q": [
+		    {
+		      "count(container)": 1,
+		      "hasChildren": true
+		    }
+		  ]
+		}
 	`, string(resp.GetJson()))
 }

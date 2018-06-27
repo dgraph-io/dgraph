@@ -1435,6 +1435,8 @@ The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can t
 
 On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `-lru_mb` to one-third of RAM size.
 
+You could also decrease memory usage of Dgraph by setting `--badger.vlog=disk`.
+
 ## See Also
 
 * [Product Roadmap to v1.0](https://github.com/dgraph-io/dgraph/issues/1)

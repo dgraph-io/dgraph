@@ -1,6 +1,6 @@
 ## Dgraph Licensing
 
-Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+Copyright 2016-2018 Dgraph Labs, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License") and the Commons
 Clause Restriction; you may not use this file except in compliance with the

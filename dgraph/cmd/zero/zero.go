@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -9,7 +9,6 @@ package zero
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/intern"
-	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 )
@@ -40,7 +38,6 @@ var (
 
 type Server struct {
 	x.SafeMutex
-	wal  *raftwal.Wal
 	Node *node
 	orc  *Oracle
 
@@ -350,7 +347,6 @@ func (s *Server) Connect(ctx context.Context,
 		return cs, err
 	}
 	if len(m.Addr) == 0 {
-		fmt.Println("No address provided.")
 		return &emptyConnectionState, errInvalidAddress
 	}
 

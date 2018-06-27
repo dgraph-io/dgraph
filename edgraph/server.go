@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"sync"
@@ -42,7 +43,7 @@ type ServerState struct {
 	ShutdownCh chan struct{} // channel to signal shutdown.
 
 	Pstore   *badger.ManagedDB
-	WALstore *badger.ManagedDB
+	WALstore *badger.DB
 
 	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
 	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
@@ -72,6 +73,15 @@ func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
 	_, lastVlogSize := store.Size()
 	const GB = int64(1 << 30)
 
+	runGC := func() {
+		var err error
+		for err == nil {
+			// If a GC is successful, immediately run it again.
+			err = store.RunValueLogGC(0.7)
+		}
+		_, lastVlogSize = store.Size()
+	}
+
 	for {
 		select {
 		case <-s.vlogTicker.C:
@@ -79,16 +89,9 @@ func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
 			if currentVlogSize < lastVlogSize+GB {
 				continue
 			}
-
-			// If size increased by 3.5 GB, then we run this 3 times.
-			numTimes := (currentVlogSize - lastVlogSize) / GB
-			for i := 0; i < int(numTimes); i++ {
-				store.RunValueLogGC(0.5)
-			}
-			_, lastVlogSize = store.Size()
-
+			runGC()
 		case <-s.mandatoryVlogTicker.C:
-			store.RunValueLogGC(0.5)
+			runGC()
 		}
 	}
 }
@@ -103,33 +106,59 @@ func (s *ServerState) initStorage() {
 	kvOpt.TableLoadingMode = options.MemoryMap
 
 	var err error
-	s.WALstore, err = badger.OpenManaged(kvOpt)
+	s.WALstore, err = badger.Open(kvOpt)
 	x.Checkf(err, "Error while creating badger KV WAL store")
 
 	// Postings directory
 	// All the writes to posting store should be synchronous. We use batched writers
 	// for posting lists, so the cost of sync writes is amortized.
 	x.Check(os.MkdirAll(Config.PostingDir, 0700))
-	opt := badger.DefaultOptions
+	x.Printf("Setting Badger option: %s", Config.BadgerOptions)
+	var opt badger.Options
+	switch Config.BadgerOptions {
+	case "default":
+		opt = badger.DefaultOptions
+	case "lsmonly":
+		opt = badger.LSMOnlyOptions
+	default:
+		x.Fatalf("Invalid Badger options")
+	}
 	opt.SyncWrites = true
 	opt.Dir = Config.PostingDir
 	opt.ValueDir = Config.PostingDir
-	switch Config.PostingTables {
-	case "memorymap":
+	opt.NumVersionsToKeep = math.MaxInt32
+
+	x.Printf("Setting Badger table load option: %s", Config.BadgerTables)
+	switch Config.BadgerTables {
+	case "mmap":
 		opt.TableLoadingMode = options.MemoryMap
-	case "loadtoram":
+	case "ram":
 		opt.TableLoadingMode = options.LoadToRAM
-	case "fileio":
+	case "disk":
 		opt.TableLoadingMode = options.FileIO
 	default:
-		x.Fatalf("Invalid Posting Tables options")
+		x.Fatalf("Invalid Badger Tables options")
 	}
+
+	x.Printf("Setting Badger value log load option: %s", Config.BadgerVlog)
+	switch Config.BadgerVlog {
+	case "mmap":
+		opt.ValueLogLoadingMode = options.MemoryMap
+	case "disk":
+		opt.ValueLogLoadingMode = options.FileIO
+	default:
+		x.Fatalf("Invalid Badger Value log options")
+	}
+
+	x.Printf("Opening postings Badger DB with options: %+v\n", opt)
 	s.Pstore, err = badger.OpenManaged(opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
 	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
 	go s.runVlogGC(s.Pstore)
-	go s.runVlogGC(s.WALstore)
+
+	wrapper := &badger.ManagedDB{DB: s.WALstore}
+	go s.runVlogGC(wrapper)
 }
 
 func (s *ServerState) Dispose() error {
@@ -279,7 +308,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 	if rand.Float64() < worker.Config.Tracing {
 		var tr trace.Trace
-		tr, ctx = x.NewTrace("GrpcMutate", ctx)
+		tr, ctx = x.NewTrace("Server.Mutate", ctx)
 		defer tr.Finish()
 	}
 

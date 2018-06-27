@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.5.1] - 2018-06-04
+Bug Fixes:
+* Fix for infinite yieldItemValue recursion. #503
+* Fix recursive addition of `badgerMove` prefix. https://github.com/dgraph-io/badger/commit/2e3a32f0ccac3066fb4206b28deb39c210c5266f
+* Use file size based window size for sampling, instead of fixing it to 10MB. #501
+
+Cleanup:
+* Clarify comments and documentation.
+* Move badger tool one directory level up.
+
+## [1.5.0] - 2018-05-08
+* Introduce `NumVersionsToKeep` option. This option is used to discard many
+  versions of the same key, which saves space.
+* Add a new `SetWithDiscard` method, which would indicate that all the older
+  versions of the key are now invalid. Those versions would be discarded during
+  compactions.
+* Value log GC moves are now bound to another keyspace to ensure latest versions
+  of data are always at the top in LSM tree.
+* Introduce `ValueLogMaxEntries` to restrict the number of key-value pairs per
+  value log file. This helps bound the time it takes to garbage collect one
+  file.
+
+## [1.4.0] - 2018-05-04
+* Make mmap-ing of value log optional.
+* Run GC multiple times, based on recorded discard statistics.
+* Add MergeOperator.
+* Force compact L0 on clsoe (#439).
+* Add truncate option to warn about data loss (#452).
+* Discard key versions during compaction (#464).
+* Introduce new `LSMOnlyOptions`, to make Badger act like a typical LSM based DB.
+
+Bug fix:
+* (Temporary) Check max version across all tables in Get (removed in next
+  release).
+* Update commit and read ts while loading from backup.
+* Ensure all transaction entries are part of the same value log file.
+* On commit, run unlock callbacks before doing writes (#413).
+* Wait for goroutines to finish before closing iterators (#421).
+
 ## [1.3.0] - 2017-12-12
 * Add `DB.NextSequence()` method to generate monotonically increasing integer
   sequences.
@@ -32,7 +71,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [1.0.1] - 2017-11-06
 * Fix an uint16 overflow when resizing key slice
 
-[Unreleased]: https://github.com/dgraph-io/badger/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/dgraph-io/badger/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/dgraph-io/badger/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/dgraph-io/badger/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/dgraph-io/badger/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/dgraph-io/badger/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/dgraph-io/badger/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/dgraph-io/badger/compare/v1.1.0...v1.1.1

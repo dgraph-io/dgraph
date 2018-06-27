@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -8,6 +8,7 @@
 package edgraph
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -21,8 +22,6 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
-
-// TODO(pawan) - Refactor code here to make it simpler.
 
 func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
 	// This happens at root.
@@ -54,10 +53,23 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 				f.ValType = api.Facet_STRING
 				fv = v
 			}
-		case float64:
-			// Could be int too, but we just store it as float.
-			fv = v
-			f.ValType = api.Facet_FLOAT
+		case json.Number:
+			valn := facetVal.(json.Number)
+			if strings.Index(valn.String(), ".") >= 0 {
+				if vf, err := valn.Float64(); err != nil {
+					return nil, err
+				} else {
+					fv = vf
+					f.ValType = api.Facet_FLOAT
+				}
+			} else {
+				if vi, err := valn.Int64(); err != nil {
+					return nil, err
+				} else {
+					fv = vi
+					f.ValType = api.Facet_INT
+				}
+			}
 		case bool:
 			fv = v
 			f.ValType = api.Facet_BOOL
@@ -93,6 +105,21 @@ type mapResponse struct {
 
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 	switch v.(type) {
+	case json.Number:
+		n := v.(json.Number)
+		if strings.Index(n.String(), ".") >= 0 {
+			f, err := n.Float64()
+			if err != nil {
+				return err
+			}
+			nq.ObjectValue = &api.Value{&api.Value_DoubleVal{f}}
+			return nil
+		}
+		i, err := n.Int64()
+		if err != nil {
+			return err
+		}
+		nq.ObjectValue = &api.Value{&api.Value_IntVal{i}}
 	case string:
 		predWithLang := strings.SplitN(k, "@", 2)
 		if len(predWithLang) == 2 && predWithLang[0] != "" {
@@ -160,12 +187,21 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 	// Check field in map.
 	if uidVal, ok := m["uid"]; ok {
 		var uid uint64
-		if id, ok := uidVal.(float64); ok {
-			uid = uint64(id)
-			// We need to check for length of id as empty string would give an error while
-			// calling ParseUint. We should assign a new uid if len == 0.
-		} else if id, ok := uidVal.(string); ok && len(id) > 0 {
-			if ok := strings.HasPrefix(id, "_:"); ok {
+
+		switch uidVal.(type) {
+		case json.Number:
+			uidn := uidVal.(json.Number)
+			ui, err := uidn.Int64()
+			if err != nil {
+				return mr, err
+			}
+			uid = uint64(ui)
+
+		case string:
+			id := uidVal.(string)
+			if len(id) == 0 {
+				uid = 0
+			} else if ok := strings.HasPrefix(id, "_:"); ok {
 				mr.uid = id
 			} else if u, err := strconv.ParseUint(id, 0, 64); err != nil {
 				return mr, err
@@ -173,11 +209,9 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				uid = u
 			}
 		}
-
 		if uid > 0 {
 			mr.uid = fmt.Sprintf("%d", uid)
 		}
-
 	}
 
 	if len(mr.uid) == 0 {
@@ -234,7 +268,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		}
 
 		switch v.(type) {
-		case string, float64, bool:
+		case string, json.Number, bool:
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
 			}
@@ -283,7 +317,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				}
 
 				switch iv := item.(type) {
-				case string, float64:
+				case string, float64, json.Number:
 					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
@@ -319,11 +353,17 @@ const (
 )
 
 func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
+	buffer := bytes.NewBuffer(b)
+	dec := json.NewDecoder(buffer)
+	dec.UseNumber()
 	ms := make(map[string]interface{})
 	var list []interface{}
-	if err := json.Unmarshal(b, &ms); err != nil {
+	if err := dec.Decode(&ms); err != nil {
 		// Couldn't parse as map, lets try to parse it as a list.
-		if err = json.Unmarshal(b, &list); err != nil {
+
+		buffer.Reset()  // The previous contents are used. Reset here.
+		buffer.Write(b) // Rewrite b into buffer, so it can be consumed.
+		if err = dec.Decode(&list); err != nil {
 			return nil, err
 		}
 	}

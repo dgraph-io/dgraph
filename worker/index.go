@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package worker
@@ -33,7 +23,7 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool,
 		return x.Errorf("Predicate %s index mismatch, rebuild %v", attr, rebuild)
 	}
 	// Remove index edges
-	if err := posting.DeleteIndex(ctx, attr); err != nil {
+	if err := posting.DeleteIndex(attr); err != nil {
 		return err
 	}
 	if rebuild {
@@ -51,7 +41,7 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	if schema.State().IsReversed(attr) != rebuild {
 		return x.Errorf("Predicate %s reverse mismatch, rebuild %v", attr, rebuild)
 	}
-	if err := posting.DeleteReverseEdges(ctx, attr); err != nil {
+	if err := posting.DeleteReverseEdges(attr); err != nil {
 		return err
 	}
 	if rebuild {
@@ -67,7 +57,7 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 
-	if err := posting.DeleteCountIndex(ctx, attr); err != nil {
+	if err := posting.DeleteCountIndex(attr); err != nil {
 		return err
 	}
 	if rebuild {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/x"
 	"google.golang.org/grpc"
 )
 
@@ -30,6 +30,7 @@ var (
 	users = flag.Int("users", 100, "Number of accounts.")
 	conc  = flag.Int("txns", 10, "Number of concurrent transactions.")
 	num   = flag.Int("num", 1e3, "Number of total transactions to run.")
+	addr  = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
 )
 
 type Account struct {
@@ -175,7 +176,7 @@ func (s *State) loop(wg *sync.WaitGroup) {
 func main() {
 	flag.Parse()
 
-	conn, err := grpc.Dial("localhost:9081", grpc.WithInsecure())
+	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}

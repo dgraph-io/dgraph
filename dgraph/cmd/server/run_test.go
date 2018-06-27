@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -10,33 +10,25 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httptest"
 	"os"
-	"os/exec"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	context "golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var q0 = `
@@ -69,54 +61,6 @@ func (c *raftServer) RaftMessage(ctx context.Context, in *api.Payload) (*api.Pay
 
 func (c *raftServer) JoinCluster(ctx context.Context, in *intern.RaftContext) (*api.Payload, error) {
 	return &api.Payload{}, nil
-}
-
-func prepare() (dir1, dir2 string, rerr error) {
-	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
-	cmd.Env = os.Environ()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
-	}
-	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"zero",
-		"-w=wz",
-	)
-	zero.Stdout = os.Stdout
-	zero.Stderr = os.Stdout
-	if err := zero.Start(); err != nil {
-		return "", "", err
-	}
-
-	var err error
-	dir1, err = ioutil.TempDir("", "storetest_")
-	if err != nil {
-		return "", "", err
-	}
-
-	dir2, err = ioutil.TempDir("", "wal_")
-	if err != nil {
-		return dir1, "", err
-	}
-
-	edgraph.Config.PostingDir = dir1
-	edgraph.Config.PostingTables = "loadtoram"
-	edgraph.Config.WALDir = dir2
-	edgraph.InitServerState()
-
-	posting.Init(edgraph.State.Pstore)
-	schema.Init(edgraph.State.Pstore)
-	worker.Init(edgraph.State.Pstore)
-	worker.Config.ZeroAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc)
-	x.Config.PortOffset = 1
-	worker.Config.RaftId = 1
-	go worker.RunServer(false)
-	worker.StartRaftNodes(edgraph.State.WALstore, false)
-	return dir1, dir2, nil
-}
-
-func closeAll(dir1, dir2 string) {
-	os.RemoveAll(dir1)
-	os.RemoveAll(dir2)
 }
 
 func childAttrs(sg *query.SubGraph) []string {
@@ -165,28 +109,22 @@ func runQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, err := mutationWithTs(m, true, false, 0)
+	_, _, err := mutationWithTs(m, false, true, false, 0)
+	return err
+}
+
+func runJsonMutation(m string) error {
+	_, _, err := mutationWithTs(m, true, true, false, 0)
 	return err
 }
 
 func alterSchema(s string) error {
-	req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(s))
+	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(s))
 	if err != nil {
 		return err
 	}
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(alterHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		return fmt.Errorf("Unexpected status code: %v", status)
-	}
-	var qr x.QueryResWithData
-	json.Unmarshal(rr.Body.Bytes(), &qr)
-	if len(qr.Errors) == 0 {
-		return nil
-	}
-	return errors.New(qr.Errors[0].Message)
+	_, _, err = runRequest(req)
+	return err
 }
 
 func alterSchemaWithRetry(s string) error {
@@ -195,44 +133,22 @@ func alterSchemaWithRetry(s string) error {
 
 func dropAll() error {
 	op := `{"drop_all": true}`
-	req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(op))
+	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(op))
 	if err != nil {
 		return err
 	}
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(alterHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		return fmt.Errorf("Unexpected status code: %v", status)
-	}
-	var qr x.QueryResWithData
-	json.Unmarshal(rr.Body.Bytes(), &qr)
-	if len(qr.Errors) == 0 {
-		return nil
-	}
-	return x.Errorf("Got error while trying to drop all", qr.Errors)
+	_, _, err = runRequest(req)
+	return err
 }
 
 func deletePredicate(pred string) error {
 	op := `{"drop_attr": "` + pred + `"}`
-	req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(op))
+	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(op))
 	if err != nil {
 		return err
 	}
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(alterHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		return fmt.Errorf("Unexpected status code: %v", status)
-	}
-	var qr x.QueryResWithData
-	json.Unmarshal(rr.Body.Bytes(), &qr)
-	if len(qr.Errors) == 0 {
-		return nil
-	}
-	return x.Errorf("Got error while trying to delete predicate", qr.Errors)
+	_, _, err = runRequest(req)
+	return err
 }
 
 func TestDeletePredicate(t *testing.T) {
@@ -287,7 +203,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	var q5 = `
 		{
-			user(func: uid( 0x3)) {
+			user(func: uid(0x3)) {
 				age
 				friend {
 					name
@@ -305,6 +221,7 @@ func TestDeletePredicate(t *testing.T) {
 	friend: string @index(term) .
 	`
 
+	require.NoError(t, dropAll())
 	schema.ParseBytes([]byte(""), 1)
 	err := alterSchemaWithRetry(s1)
 	require.NoError(t, err)
@@ -363,7 +280,19 @@ func TestDeletePredicate(t *testing.T) {
 	require.NoError(t, err)
 }
 
+type S struct {
+	Predicate string   `json:"predicate"`
+	Type      string   `json:"type"`
+	Index     bool     `json:"index"`
+	Tokenizer []string `json:"tokenizer"`
+}
+
+type Received struct {
+	Schema []S `json:"schema"`
+}
+
 func TestSchemaMutation(t *testing.T) {
+	require.NoError(t, dropAll())
 	var m = `
 			name:string @index(term, exact) .
 			alias:string @index(exact, term) .
@@ -376,29 +305,37 @@ func TestSchemaMutation(t *testing.T) {
 			age           : int .
 			shadow_deep   : int .
 			friend:uid @reverse .
-			geometry:geo @index(geo) .
+			geometry:geo @index(geo) . `
 
-` // reset schema
-	schema.ParseBytes([]byte(""), 1)
-	expected := map[string]*intern.SchemaUpdate{
-		"name": {
-			Predicate: "name",
-			Tokenizer: []string{"term", "exact"},
-			ValueType: intern.Posting_ValType(types.StringID),
-			Directive: intern.SchemaUpdate_INDEX,
-		},
+	expected := S{
+		Predicate: "name",
+		Type:      "string",
+		Index:     true,
+		Tokenizer: []string{"term", "exact"},
 	}
 
 	err := alterSchemaWithRetry(m)
 	require.NoError(t, err)
-	for k, v := range expected {
-		s, ok := schema.State().Get(k)
-		require.True(t, ok)
-		require.Equal(t, *v, s)
+
+	output, err := runQuery("schema {}")
+	require.NoError(t, err)
+	got := make(map[string]Received)
+	require.NoError(t, json.Unmarshal([]byte(output), &got))
+	received, ok := got["data"]
+	require.True(t, ok)
+
+	var found bool
+	for _, s := range received.Schema {
+		if s.Predicate == "name" {
+			found = true
+			require.Equal(t, expected, s)
+		}
 	}
+	require.True(t, found)
 }
 
 func TestSchemaMutation1(t *testing.T) {
+	require.NoError(t, dropAll())
 	var m = `
 	{
 		set {
@@ -407,26 +344,28 @@ func TestSchemaMutation1(t *testing.T) {
 		}
 	}
 
-` // reset schema
-	schema.ParseBytes([]byte(""), 1)
-	expected := map[string]*intern.SchemaUpdate{
-		"pred1": {
-			ValueType: intern.Posting_ValType(types.StringID),
-			Predicate: "pred1",
-		},
-		"pred2": {
-			ValueType: intern.Posting_ValType(types.DefaultID),
-			Predicate: "pred2",
-		},
-	}
-
+`
 	err := runMutation(m)
 	require.NoError(t, err)
-	for k, v := range expected {
-		s, ok := schema.State().Get(k)
-		require.True(t, ok)
-		require.Equal(t, *v, s)
+
+	output, err := runQuery("schema {}")
+	require.NoError(t, err)
+	got := make(map[string]Received)
+	require.NoError(t, json.Unmarshal([]byte(output), &got))
+	received, ok := got["data"]
+	require.True(t, ok)
+
+	var count int
+	for _, s := range received.Schema {
+		if s.Predicate == "pred1" {
+			require.Equal(t, "string", s.Type)
+			count++
+		} else if s.Predicate == "pred2" {
+			require.Equal(t, "default", s.Type)
+			count++
+		}
 	}
+	require.Equal(t, 2, count)
 }
 
 // reverse on scalar type
@@ -671,7 +610,147 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	output, err := runQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
+}
 
+func TestJsonMutation(t *testing.T) {
+	var q1 = `
+	{
+		q(func: has(name)) {
+			uid
+			name
+		}
+	}
+	`
+	var q2 = `
+	{
+		q(func: has(name)) {
+			name
+		}
+	}
+	`
+	var m1 = `
+	{
+		"set": [
+			{
+				"name": "Alice"
+			},
+			{
+				"name": "Bob"
+			}
+		]
+	}
+	`
+	var m2 = `
+	{
+		"delete": [
+			{
+				"uid": "%s",
+				"name": null
+			}
+		]
+	}
+	`
+	var s1 = `
+            name: string @index(exact) .
+	`
+
+	require.NoError(t, dropAll())
+	schema.ParseBytes([]byte(""), 1)
+	err := alterSchemaWithRetry(s1)
+	require.NoError(t, err)
+
+	err = runJsonMutation(m1)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	q1Result := map[string]interface{}{}
+	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
+	queryResults := q1Result["data"].(map[string]interface{})["q"].([]interface{})
+	require.Equal(t, 2, len(queryResults))
+
+	var uid string
+	count := 0
+	for i := 0; i < 2; i++ {
+		name := queryResults[i].(map[string]interface{})["name"].(string)
+		if name == "Alice" {
+			uid = queryResults[i].(map[string]interface{})["uid"].(string)
+			count++
+		} else {
+			require.Equal(t, "Bob", name)
+		}
+	}
+	require.Equal(t, 1, count)
+
+	err = runJsonMutation(fmt.Sprintf(m2, uid))
+	require.NoError(t, err)
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"q":[{"name":"Bob"}]}}`, output)
+}
+
+func TestJsonMutationNumberParsing(t *testing.T) {
+	var q1 = `
+	{
+		q(func: has(n1)) {
+			n1
+			n2
+		}
+	}
+	`
+	var m1 = `
+	{
+		"set": [
+			{
+				"n1": 9007199254740995,
+				"n2": 9007199254740995.0
+			}
+		]
+	}
+	`
+
+	require.NoError(t, dropAll())
+	schema.ParseBytes([]byte(""), 1)
+	err := runJsonMutation(m1)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	var q1Result struct {
+		Data struct {
+			Q []map[string]interface{} `json:"q"`
+		} `json:"data"`
+	}
+	buffer := bytes.NewBuffer([]byte(output))
+	dec := json.NewDecoder(buffer)
+	dec.UseNumber()
+	require.NoError(t, dec.Decode(&q1Result))
+	require.Equal(t, 1, len(q1Result.Data.Q))
+
+	n1, ok := q1Result.Data.Q[0]["n1"]
+	require.True(t, ok)
+	switch n1.(type) {
+	case json.Number:
+		n := n1.(json.Number)
+		require.True(t, strings.Index(n.String(), ".") < 0)
+		i, err := n.Int64()
+		require.NoError(t, err)
+		require.Equal(t, int64(9007199254740995), i)
+	default:
+		require.Fail(t, fmt.Sprintf("expected n1 of type int64, got %v (type %T)", n1, n1))
+	}
+
+	n2, ok := q1Result.Data.Q[0]["n2"]
+	require.True(t, ok)
+	switch n2.(type) {
+	case json.Number:
+		n := n2.(json.Number)
+		require.True(t, strings.Index(n.String(), ".") >= 0)
+		f, err := n.Float64()
+		require.NoError(t, err)
+		require.Equal(t, 9007199254740995.0, f)
+	default:
+		require.Fail(t, fmt.Sprintf("expected n2 of type float64, got %v (type %T)", n2, n2))
+	}
 }
 
 func TestDeleteAll(t *testing.T) {
@@ -879,14 +958,8 @@ var q1 = `
 }
 `
 
+// TODO: This might not work. Fix it later, if needed.
 func BenchmarkQuery(b *testing.B) {
-	dir1, dir2, err := prepare()
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	defer closeAll(dir1, dir2)
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		processToFastJSON(q1)
@@ -1118,6 +1191,7 @@ func TestMultipleValues(t *testing.T) {
 }
 
 func TestListTypeSchemaChange(t *testing.T) {
+	require.NoError(t, dropAll())
 	schema.ParseBytes([]byte(""), 1)
 	m := `
 			occupations: [string] @index(term) .
@@ -1345,26 +1419,16 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	dc := edgraph.DefaultConfig
-	dc.AllottedMemory = 2048.0
-	edgraph.SetConfiguration(dc)
-	x.Init(true)
-
-	dir1, dir2, err := prepare()
-	if err != nil {
-		log.Fatal(err)
-	}
-	time.Sleep(10 * time.Millisecond)
-
 	// Increment lease, so that mutations work.
-	_, err = worker.AssignUidsOverNetwork(context.Background(), &intern.Num{Val: 10e6})
+	conn, err := grpc.Dial("localhost:5080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Parse GQL into intern.query representation.
+	zc := intern.NewZeroClient(conn)
+	if _, err := zc.AssignUids(context.Background(), &intern.Num{Val: 1e6}); err != nil {
+		log.Fatal(err)
+	}
+
 	r := m.Run()
-	closeAll(dir1, dir2)
-	exec.Command("killall", "-9", "dgraph").Run()
-	os.RemoveAll("wz")
 	os.Exit(r)
 }

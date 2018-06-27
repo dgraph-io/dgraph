@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package worker
@@ -604,17 +594,17 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Result, error) {
 	n := groups().Node
-	if err := n.WaitForMinProposal(ctx, q.LinRead); err != nil {
-		return &emptyResult, err
-	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Done waiting for applied watermark attr %q\n", q.Attr)
-	}
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Done waiting for maxPending to catch up for Attr %q, readTs: %d\n", q.Attr, q.ReadTs)
+	}
+	if err := n.WaitForMinProposal(ctx, q.LinRead); err != nil {
+		return &emptyResult, err
+	}
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Done waiting for applied watermark attr %q\n", q.Attr)
 	}
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it
 	// wouldn't know that this group is no longer serving this predicate.
@@ -889,7 +879,11 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 				switch lang {
 				case "":
 					if isList {
-						pl := posting.GetNoStore(x.DataKey(attr, uid))
+						pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+						if err != nil {
+							filterErr = err
+							return false
+						}
 						svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
 						if err != nil {
 							if err != posting.ErrNoValue {
@@ -907,7 +901,11 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 						return false
 					}
 
-					pl := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					if err != nil {
+						filterErr = err
+						return false
+					}
 					sv, err := pl.Value(arg.q.ReadTs)
 					if err != nil {
 						if err != posting.ErrNoValue {
@@ -919,7 +917,11 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					return err == nil &&
 						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
 				case ".":
-					pl := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					if err != nil {
+						filterErr = err
+						return false
+					}
 					values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
 					if err != nil {
 						filterErr = err

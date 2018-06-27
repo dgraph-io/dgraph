@@ -226,6 +226,12 @@ This should start 5 jepsen nodes in docker containers.
 
 3. Now ssh into `jepsen-control` container and run the tests.
 
+{{% notice "note" %}}
+You can use the [transfer](https://github.com/dgraph-io/dgraph/blob/master/contrib/nightly/transfer.sh) script to build the Dgraph binary and upload the tarball to https://transfer.sh, which gives you a url that can then be used in the Jepsen tests (using --package-url flag).
+{{% /notice %}}
+
+
+
 ```sh
 docker exec -it jepsen-control bash
 ```

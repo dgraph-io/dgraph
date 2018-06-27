@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package worker
@@ -489,7 +479,10 @@ func intersectBucket(ctx context.Context, ts *intern.SortMessage, token string,
 
 	key := x.IndexKey(order.Attr, token)
 	// Don't put the Index keys in memory.
-	pl := posting.GetNoStore(key)
+	pl, err := posting.GetNoStore(key)
+	if err != nil {
+		return err
+	}
 	var vals []types.Val
 
 	// For each UID list, we need to intersect with the index bucket.
@@ -648,7 +641,10 @@ func sortByValue(ctx context.Context, ts *intern.SortMessage, ul *intern.List,
 func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID,
 	readTs uint64) (types.Val, error) {
 	// Don't put the values in memory
-	pl := posting.GetNoStore(x.DataKey(attr, uid))
+	pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+	if err != nil {
+		return types.Val{}, err
+	}
 
 	src, err := pl.ValueFor(readTs, langs)
 

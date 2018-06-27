@@ -1,31 +1,19 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package worker
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"math"
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -35,12 +23,12 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	humanize "github.com/dustin/go-humanize"
 )
 
 var (
 	errEmptyPredicate = x.Errorf("Predicate not specified")
 	errNotLeader      = x.Errorf("Server is not leader of this group")
+	errUnableToAbort  = x.Errorf("Unable to abort pending transactions")
 	emptyPayload      = api.Payload{}
 )
 
@@ -96,101 +84,48 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
 
-	var bytesSent uint64
-	t := time.NewTicker(2 * time.Second)
-	defer t.Stop()
-	go func() {
-		now := time.Now()
-		for range t.C {
-			dur := time.Since(now)
-			speed := bytesSent / uint64(dur.Seconds())
-			x.Printf("Sending predicate: [%v] Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
-				predicate, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
-		}
-	}()
-
-	count := 0
-	batchSize := 0
-	kvs := &intern.KVS{}
 	// sends all data except schema, schema key has different prefix
-	prefix := x.PredicatePrefix(predicate)
-	var prevKey []byte
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	it := txn.NewIterator(iterOpts)
-	defer it.Close()
-	for it.Seek(prefix); it.ValidForPrefix(prefix); {
-		item := it.Item()
-		key := item.Key()
-
-		if bytes.Equal(key, prevKey) {
-			it.Next()
-			continue
-		}
-		if cap(prevKey) < len(key) {
-			prevKey = make([]byte, len(key))
-		}
-		prevKey = prevKey[:len(key)]
-		copy(prevKey, key)
-
-		nkey := make([]byte, len(key))
-		copy(nkey, key)
-		l, err := posting.ReadPostingList(nkey, it)
+	// Read the predicate keys and stream to keysCh.
+	sl := streamLists{stream: stream, predicate: predicate, db: pstore}
+	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
+		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		kv, err := l.MarshalToKv()
-		if err != nil {
-			return err
-		}
-		kvs.Kv = append(kvs.Kv, kv)
-		batchSize += kv.Size()
-		bytesSent += uint64(kv.Size())
-		count++
-		if batchSize < 4*MB {
-			continue
-		}
-		if err := stream.Send(kvs); err != nil {
-			return err
-		}
-		batchSize = 0
-		kvs = &intern.KVS{}
+		return l.MarshalToKv()
 	}
 
-	// send schema
-	schemaKey := x.SchemaKey(predicate)
-	item, err := txn.Get(schemaKey)
-	if err != nil && err != badger.ErrKeyNotFound {
+	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
+	if err := sl.orchestrate(ctx, prefix, math.MaxUint64); err != nil {
 		return err
 	}
 
-	// The predicate along with the schema could have been deleted. In that case badger would
-	// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
-	if err == nil {
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
+	// Send schema (if present) now after all keys have been transferred over.
+	schemaKey := x.SchemaKey(predicate)
+	item, err := txn.Get(schemaKey)
+	if err == badger.ErrKeyNotFound {
+		// The predicate along with the schema could have been deleted. In that case badger would
+		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
+	} else if err != nil {
+		return err
+	} else {
 		val, err := item.Value()
 		if err != nil {
 			return err
 		}
+		kvs := &intern.KVS{}
 		kv := &intern.KV{}
 		kv.Key = schemaKey
 		kv.Val = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		kvs.Kv = append(kvs.Kv, kv)
-		batchSize += kv.Size()
-		bytesSent += uint64(kv.Size())
-		count++
-	}
-
-	if batchSize > 0 {
 		if err := stream.Send(kvs); err != nil {
 			return err
 		}
 	}
-	x.Printf("Sent [%d] number of keys for predicate %v\n", count, predicate)
 
 	payload, err := stream.CloseAndRecv()
 	if err != nil {
@@ -200,17 +135,16 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if err != nil {
 		return err
 	}
-	if recvCount != count {
-		return x.Errorf("Sent count %d doesn't match with received %d", count, recvCount)
-	}
+	x.Printf("Received %d keys\n", recvCount)
 	return nil
 }
 
 func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
+	x.Println("Receiving predicate. Batching and proposing key values")
 	n := groups().Node
 	proposal := &intern.Proposal{}
 	size := 0
-	firstKV := true
+	var pk *x.ParsedKey
 
 	for kvBatch := range kvs {
 		for _, kv := range kvBatch.Kv {
@@ -222,18 +156,19 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 				size = 0
 			}
 
-			if firstKV {
-				firstKV = false
-				pk := x.Parse(kv.Key)
+			if pk == nil {
+				pk = x.Parse(kv.Key)
 				// Delete on all nodes.
 				p := &intern.Proposal{CleanPredicate: pk.Attr}
+				x.Printf("Predicate being received: %v", pk.Attr)
 				err := groups().Node.proposeAndWait(ctx, p)
 				if err != nil {
 					x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+					return err
 				}
 			}
 			proposal.Kv = append(proposal.Kv, kv)
-			size = size + len(kv.Key) + len(kv.Val)
+			size += len(kv.Key) + len(kv.Val)
 		}
 	}
 	if size > 0 {
@@ -256,6 +191,9 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 	ctx := stream.Context()
 	payload := &api.Payload{}
 
+	x.Printf("Got ReceivePredicate. Group: %d. Am leader: %v",
+		groups().groupId(), groups().Node.AmLeader())
+
 	go func() {
 		// Takes care of throttling and batching.
 		che <- batchAndProposeKeyValues(ctx, kvs)
@@ -268,7 +206,7 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 			break
 		}
 		if err != nil {
-			x.Printf("received %d number of keys, err %v\n", count, err)
+			x.Printf("Received %d keys. Error in loop: %v\n", count, err)
 			return err
 		}
 		count += len(kvBatch.Kv)
@@ -278,16 +216,16 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 		case <-ctx.Done():
 			close(kvs)
 			<-che
-			x.Printf("received %d number of keys, context deadline\n", count)
+			x.Printf("Received %d keys. Context deadline\n", count)
 			return ctx.Err()
 		case err := <-che:
-			x.Printf("received %d number of keys, error %v\n", count, err)
+			x.Printf("Received %d keys. Error via channel: %v\n", count, err)
 			return err
 		}
 	}
 	close(kvs)
 	err := <-che
-	x.Printf("received %d number of keys, error %v\n", count, err)
+	x.Printf("Proposed %d keys. Error: %v\n", count, err)
 	return err
 }
 
@@ -311,16 +249,27 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 
 	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
 		in.SourceGroupId, in.DestGroupId)
+
 	// Ensures that all future mutations beyond this point are rejected.
 	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
-	tctxs := posting.Txns().Iterate(func(key []byte) bool {
-		pk := x.Parse(key)
-		return pk.Attr == in.Predicate
-	})
-	if len(tctxs) > 0 {
+	aborted := false
+	for i := 0; i < 12; i++ {
+		// Try a dozen times, then give up.
+		x.Printf("Trying to abort pending mutations. Loop: %d", i)
+		tctxs := posting.Txns().Iterate(func(key []byte) bool {
+			pk := x.Parse(key)
+			return pk.Attr == in.Predicate
+		})
+		if len(tctxs) == 0 {
+			aborted = true
+			break
+		}
 		tryAbortTransactions(tctxs)
+	}
+	if !aborted {
+		return &emptyPayload, errUnableToAbort
 	}
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
 	n.applyAllMarks(ctx)

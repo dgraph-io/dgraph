@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -165,11 +165,33 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parseStart := time.Now()
-	mu, err := gql.ParseMutation(string(m))
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
+
+	var mu *api.Mutation
+	if mType := r.Header.Get("X-Dgraph-MutationType"); mType == "json" {
+		// Parse JSON.
+		ms := make(map[string]*skipJSONUnmarshal)
+		err := json.Unmarshal(m, &ms)
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+
+		mu = &api.Mutation{}
+		if setJSON, ok := ms["set"]; ok && setJSON != nil {
+			mu.SetJson = setJSON.bs
+		}
+		if delJSON, ok := ms["delete"]; ok && delJSON != nil {
+			mu.DeleteJson = delJSON.bs
+		}
+	} else {
+		// Parse NQuads.
+		mu, err = gql.ParseMutation(string(m))
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
 	}
+
 	parseEnd := time.Now()
 
 	// Maybe rename it so that default is CommitNow.
@@ -394,4 +416,14 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(js)
+}
+
+// skipJSONUnmarshal stores the raw bytes as is while JSON unmarshaling.
+type skipJSONUnmarshal struct {
+	bs []byte
+}
+
+func (sju *skipJSONUnmarshal) UnmarshalJSON(bs []byte) error {
+	sju.bs = bs
+	return nil
 }

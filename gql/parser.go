@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -349,7 +349,11 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		if idVal == "" {
 			return x.Errorf("Id can't be empty")
 		}
-		parseID(gq, idVal)
+		uids, err := parseID(idVal)
+		if err != nil {
+			return err
+		}
+		gq.UID = append(gq.UID, uids...)
 		// Deleting it here because we don't need to fill it in query.go.
 		delete(gq.Args, "id")
 	}
@@ -365,6 +369,19 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			}
 			if err := substituteVar(v.Value, &gq.Func.Args[idx].Value, vmap); err != nil {
 				return err
+			}
+			if gq.Func.Name == "regexp" {
+				// Value should have been populated from the map that the user gave us in the
+				// GraphQL variable map. Let's parse the expression and flags from the variable
+				// string.
+				ra, err := parseRegexArgs(gq.Func.Args[idx].Value)
+				if err != nil {
+					return err
+				}
+				// We modify the value of this arg and add a new arg for the flags. Regex functions
+				// should have two args.
+				gq.Func.Args[idx].Value = ra.expr
+				gq.Func.Args = append(gq.Func.Args, Arg{Value: ra.flags})
 			}
 		}
 	}
@@ -389,6 +406,23 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 		}
 
 		for idx, v := range f.Func.Args {
+			if f.Func.Name == uid {
+				// This is to support GraphQL variables in uid functions.
+				idVal, ok := vmap[v.Value]
+				if !ok {
+					return x.Errorf("Couldn't find value for GraphQL variable: [%s]", v.Value)
+				}
+				if idVal.Value == "" {
+					return x.Errorf("Id can't be empty")
+				}
+				uids, err := parseID(idVal.Value)
+				if err != nil {
+					return err
+				}
+				f.Func.UID = append(f.Func.UID, uids...)
+				continue
+			}
+
 			if err := substituteVar(v.Value, &f.Func.Args[idx].Value, vmap); err != nil {
 				return err
 			}
@@ -663,7 +697,7 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 		key = strings.ToLower(item.Val)
 
 		if ok := trySkipItemTyp(it, itemColon); !ok {
-			return fmt.Errorf("Expected colon(:) after %s")
+			return fmt.Errorf("Expected colon(:) after %s", key)
 		}
 
 		if item, ok = tryParseItemType(it, itemName); !ok {
@@ -1298,6 +1332,25 @@ func validFuncName(name string) bool {
 	return false
 }
 
+type regexArgs struct {
+	expr  string
+	flags string
+}
+
+func parseRegexArgs(val string) (regexArgs, error) {
+	end := strings.LastIndex(val, "/")
+	if end < 0 {
+		return regexArgs{}, x.Errorf("Unexpected error while parsing regex arg: %s", val)
+	}
+	expr := strings.Replace(val[1:end], "\\/", "/", -1)
+	flags := ""
+	if end+1 < len(val) {
+		flags = val[end+1:]
+	}
+
+	return regexArgs{expr, flags}, nil
+}
+
 func parseFunction(it *lex.ItemIterator, gq *GraphQuery) (*Function, error) {
 	var function *Function
 	var expectArg, seenFuncArg, expectLang, isDollar bool
@@ -1390,15 +1443,11 @@ L:
 				isDollar = true
 				continue
 			} else if itemInFunc.Typ == itemRegex {
-				end := strings.LastIndex(itemInFunc.Val, "/")
-				x.AssertTrue(end >= 0)
-				expr := strings.Replace(itemInFunc.Val[1:end], "\\/", "/", -1)
-				flags := ""
-				if end+1 < len(itemInFunc.Val) {
-					flags = itemInFunc.Val[end+1:]
+				ra, err := parseRegexArgs(itemInFunc.Val)
+				if err != nil {
+					return nil, err
 				}
-
-				function.Args = append(function.Args, Arg{Value: expr}, Arg{Value: flags})
+				function.Args = append(function.Args, Arg{Value: ra.expr}, Arg{Value: ra.flags})
 				expectArg = false
 				continue
 				// Lets reassemble the geo tokens.
@@ -1871,19 +1920,20 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 
 // Parses ID list. Only used for GraphQL variables.
 // TODO - Maybe get rid of this by lexing individual IDs.
-func parseID(gq *GraphQuery, val string) error {
+func parseID(val string) ([]uint64, error) {
+	var uids []uint64
 	val = x.WhiteSpace.Replace(val)
 	if val[0] != '[' {
 		uid, err := strconv.ParseUint(val, 0, 64)
 		if err != nil {
-			return err
+			return uids, err
 		}
-		gq.UID = append(gq.UID, uid)
-		return nil
+		uids = append(uids, uid)
+		return uids, nil
 	}
 
 	if val[len(val)-1] != ']' {
-		return x.Errorf("Invalid id list at root. Got: %+v", val)
+		return uids, x.Errorf("Invalid id list at root. Got: %+v", val)
 	}
 	var buf bytes.Buffer
 	for _, c := range val[1:] {
@@ -1893,18 +1943,18 @@ func parseID(gq *GraphQuery, val string) error {
 			}
 			uid, err := strconv.ParseUint(buf.String(), 0, 64)
 			if err != nil {
-				return err
+				return uids, err
 			}
-			gq.UID = append(gq.UID, uid)
+			uids = append(uids, uid)
 			buf.Reset()
 			continue
 		}
 		if c == '[' || c == ')' {
-			return x.Errorf("Invalid id list at root. Got: %+v", val)
+			return uids, x.Errorf("Invalid id list at root. Got: %+v", val)
 		}
 		buf.WriteRune(c)
 	}
-	return nil
+	return uids, nil
 }
 
 func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {

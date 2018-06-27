@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -10,6 +10,7 @@ package zero
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -22,7 +23,6 @@ import (
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/intern"
-	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -35,33 +35,48 @@ type proposalCtx struct {
 
 type proposals struct {
 	sync.RWMutex
-	ids map[uint32]*proposalCtx
+	all map[string]*proposalCtx
 }
 
-func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
-	if pid == 0 {
+func (p *proposals) Store(key string, pctx *proposalCtx) bool {
+	if len(key) == 0 {
 		return false
 	}
 	p.Lock()
 	defer p.Unlock()
-	if p.ids == nil {
-		p.ids = make(map[uint32]*proposalCtx)
+	if p.all == nil {
+		p.all = make(map[string]*proposalCtx)
 	}
-	if _, has := p.ids[pid]; has {
+	if _, has := p.all[key]; has {
 		return false
 	}
-	p.ids[pid] = pctx
+	p.all[key] = pctx
 	return true
 }
 
-func (p *proposals) Done(pid uint32, err error) {
-	p.Lock()
-	defer p.Unlock()
-	pd, has := p.ids[pid]
-	if !has {
+func (p *proposals) Delete(key string) {
+	if len(key) == 0 {
 		return
 	}
-	delete(p.ids, pid)
+	p.Lock()
+	defer p.Unlock()
+	delete(p.all, key)
+}
+
+func (p *proposals) Done(key string, err error) {
+	if len(key) == 0 {
+		return
+	}
+	p.Lock()
+	defer p.Unlock()
+	pd, has := p.all[key]
+	if !has {
+		// If we assert here, there would be a race condition between a context
+		// timing out, and a proposal getting applied immediately after. That
+		// would cause assert to fail. So, don't assert.
+		return
+	}
+	delete(p.all, key)
 	pd.ch <- err
 }
 
@@ -176,46 +191,70 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
+func (n *node) uniqueKey() string {
+	return fmt.Sprintf("z%d-%d", n.Id, n.Rand.Uint64())
+}
+
+var errInternalRetry = errors.New("Retry Raft proposal internally")
+
 func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet.")
 	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	che := make(chan error, 1)
-	pctx := &proposalCtx{
-		ch:  che,
-		ctx: ctx,
-	}
-	for {
-		id := rand.Uint32() + 1
-		if n.props.Store(id, pctx) {
-			proposal.Id = id
-			break
+	propose := func() error {
+		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		che := make(chan error, 1)
+		pctx := &proposalCtx{
+			ch: che,
+			// Don't use the original context, because that's not what we're passing to Raft.
+			ctx: cctx,
+		}
+		key := n.uniqueKey()
+		x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		defer n.props.Delete(key)
+		proposal.Key = key
+
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Proposing with key: %X", key)
+		}
+
+		data, err := proposal.Marshal()
+		if err != nil {
+			return err
+		}
+
+		// Propose the change.
+		if err := n.Raft().Propose(cctx, data); err != nil {
+			return x.Wrapf(err, "While proposing")
+		}
+
+		// Wait for proposal to be applied or timeout.
+		select {
+		case err := <-che:
+			// We arrived here by a call to n.props.Done().
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-cctx.Done():
+			return errInternalRetry
 		}
 	}
-	data, err := proposal.Marshal()
-	if err != nil {
-		return err
-	}
 
-	cctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	// Propose the change.
-	if err := n.Raft().Propose(cctx, data); err != nil {
-		return x.Wrapf(err, "While proposing")
+	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
+	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
+	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
+	// timeout. We should always try with a timeout and optionally retry.
+	err := errInternalRetry
+	for err == errInternalRetry {
+		err = propose()
 	}
-
-	// Wait for proposal to be applied or timeout.
-	select {
-	case err := <-che:
-		return err
-	case <-cctx.Done():
-		return cctx.Err()
-	}
+	return err
 }
 
 var (
@@ -230,17 +269,20 @@ func newGroup() *intern.Group {
 	}
 }
 
-func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
+func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	var p intern.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
 	if len(e.Data) == 0 {
-		return p.Id, nil
+		return p.Key, nil
 	}
 	if err := p.Unmarshal(e.Data); err != nil {
-		return p.Id, err
+		return p.Key, err
 	}
-	if p.Id == 0 {
-		return 0, errInvalidProposal
+	if p.DeprecatedId != 0 {
+		p.Key = fmt.Sprint(p.DeprecatedId)
+	}
+	if len(p.Key) == 0 {
+		return p.Key, errInvalidProposal
 	}
 
 	n.server.Lock()
@@ -250,7 +292,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	state.Counter = e.Index
 	if p.MaxRaftId > 0 {
 		if p.MaxRaftId <= state.MaxRaftId {
-			return p.Id, errInvalidProposal
+			return p.Key, errInvalidProposal
 		}
 		state.MaxRaftId = p.MaxRaftId
 	}
@@ -258,7 +300,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		m := n.server.member(p.Member.Addr)
 		// Ensures that different nodes don't have same address.
 		if m != nil && (m.Id != p.Member.Id || m.GroupId != p.Member.GroupId) {
-			return p.Id, errInvalidAddress
+			return p.Key, errInvalidAddress
 		}
 		if p.Member.GroupId == 0 {
 			state.Zeros[p.Member.Id] = p.Member
@@ -271,7 +313,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 					}
 				}
 			}
-			return p.Id, nil
+			return p.Key, nil
 		}
 		group := state.Groups[p.Member.GroupId]
 		if group == nil {
@@ -286,11 +328,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 				conn.Get().Remove(m.Addr)
 			}
 			// else already removed.
-			return p.Id, nil
+			return p.Key, nil
 		}
 		if !has && len(group.Members) >= n.server.NumReplicas {
 			// We shouldn't allow more members than the number of replicas.
-			return p.Id, errInvalidProposal
+			return p.Key, errInvalidProposal
 		}
 
 		// Create a connection to this server.
@@ -318,7 +360,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 	}
 	if p.Tablet != nil {
 		if p.Tablet.GroupId == 0 {
-			return p.Id, errInvalidProposal
+			return p.Key, errInvalidProposal
 		}
 		group := state.Groups[p.Tablet.GroupId]
 		if p.Tablet.Remove {
@@ -326,7 +368,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 			if group != nil {
 				delete(group.Tablets, p.Tablet.Predicate)
 			}
-			return p.Id, nil
+			return p.Key, nil
 		}
 		if group == nil {
 			group = newGroup()
@@ -344,7 +386,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 				if tablet.GroupId != p.Tablet.GroupId {
 					x.Printf("Tablet for attr: [%s], gid: [%d] is already being served by group: [%d]\n",
 						tablet.Predicate, p.Tablet.GroupId, tablet.GroupId)
-					return p.Id, errTabletAlreadyServed
+					return p.Key, errTabletAlreadyServed
 				}
 				// This update can come from tablet size.
 				p.Tablet.ReadOnly = tablet.ReadOnly
@@ -367,7 +409,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		n.server.orc.updateCommitStatus(e.Index, p.Txn)
 	}
 
-	return p.Id, nil
+	return p.Key, nil
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -411,8 +453,8 @@ func (n *node) triggerLeaderChange() {
 	n.server.updateZeroLeader()
 }
 
-func (n *node) initAndStartNode(wal *raftwal.Wal) error {
-	idx, restart, err := n.InitFromWal(wal)
+func (n *node) initAndStartNode() error {
+	idx, restart, err := n.PastLife()
 	n.Applied.SetDoneUntil(idx)
 	x.Check(err)
 
@@ -440,10 +482,9 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 		gconn := p.Get()
 		c := intern.NewRaftClient(gconn)
 		err = errJoinCluster
-		delay := 50 * time.Millisecond
-		for i := 0; i < 8 && err != nil; i++ {
-			time.Sleep(delay)
-			ctx, cancel := context.WithTimeout(n.ctx, time.Second)
+		timeout := 8 * time.Second
+		for i := 0; err != nil; i++ {
+			ctx, cancel := context.WithTimeout(n.ctx, timeout)
 			defer cancel()
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
@@ -457,7 +498,11 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 				log.Fatalf("Error while joining cluster: %v", errorDesc)
 			}
 			x.Printf("Error while joining cluster %v\n", err)
-			delay *= 2
+			timeout *= 2
+			if timeout > 32*time.Second {
+				timeout = 32 * time.Second
+			}
+			time.Sleep(timeout) // This is useful because JoinCluster can exit immediately.
 		}
 		if err != nil {
 			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
@@ -523,11 +568,9 @@ func (n *node) trySnapshot(skip uint64) {
 	if tr, ok := trace.FromContext(n.ctx); ok {
 		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
 	}
-	s, err := n.Store.CreateSnapshot(idx, n.ConfState(), data)
+	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
 	x.Checkf(err, "While creating snapshot")
-	x.Checkf(n.Store.Compact(idx), "While compacting snapshot")
 	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
-	x.Check(n.Wal.StoreSnapshot(0, s))
 }
 
 func (n *node) Run() {
@@ -559,18 +602,13 @@ func (n *node) Run() {
 				ri := binary.BigEndian.Uint64(rs.RequestCtx)
 				n.sendReadIndex(ri, rs.Index)
 			}
-			// First store the entries, then the hardstate and snapshot.
-			x.Check(n.Wal.Store(0, rd.HardState, rd.Entries))
 
-			// Now store them in the in-memory store.
-			n.SaveToStorage(rd.HardState, rd.Entries)
+			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state intern.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				n.server.SetMembershipState(&state)
-				x.Check(n.Wal.StoreSnapshot(0, rd.Snapshot))
-				n.SaveSnapshot(rd.Snapshot)
 			}
 
 			for _, entry := range rd.CommittedEntries {
@@ -579,11 +617,11 @@ func (n *node) Run() {
 					n.applyConfChange(entry)
 
 				} else if entry.Type == raftpb.EntryNormal {
-					pid, err := n.applyProposal(entry)
+					key, err := n.applyProposal(entry)
 					if err != nil && err != errTabletAlreadyServed {
 						x.Printf("While applying proposal: %v\n", err)
 					}
-					n.props.Done(pid, err)
+					n.props.Done(key, err)
 
 				} else {
 					x.Printf("Unhandled entry: %+v\n", entry)

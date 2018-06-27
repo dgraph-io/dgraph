@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -6125,6 +6125,7 @@ func TestMain(m *testing.M) {
 	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"zero",
 		"--wal", zw,
+		"-o", "10",
 	)
 	zero.Stdout = os.Stdout
 	zero.Stderr = os.Stdout
@@ -6145,7 +6146,7 @@ func TestMain(m *testing.M) {
 	worker.Config.RaftId = 1
 	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
-	worker.Config.ZeroAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc)
+	worker.Config.ZeroAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+10)
 	worker.Config.RaftId = 1
 	worker.Config.MyAddr = "localhost:12345"
 	worker.Config.ExpandEdge = true
@@ -6162,7 +6163,7 @@ func TestMain(m *testing.M) {
 	kvOpt.Dir = dir2
 	kvOpt.ValueDir = dir2
 	kvOpt.TableLoadingMode = options.LoadToRAM
-	walStore, err := badger.OpenManaged(kvOpt)
+	walStore, err := badger.Open(kvOpt)
 	x.Check(err)
 
 	worker.StartRaftNodes(walStore, false)

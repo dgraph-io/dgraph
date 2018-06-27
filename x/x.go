@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -102,8 +102,8 @@ func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers",
 		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, "+
-			"Cache-Control, X-Requested-With, X-Dgraph-CommitNow, X-Dgraph-LinRead, X-Dgraph-Vars"+
-			"X-Dgraph-IgnoreIndexConflict")
+			"Cache-Control, X-Requested-With, X-Dgraph-CommitNow, X-Dgraph-LinRead, X-Dgraph-Vars, "+
+			"X-Dgraph-MutationType, X-Dgraph-IgnoreIndexConflict")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
@@ -143,6 +143,13 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+func Max(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 var Nilbyte []byte
@@ -317,4 +324,30 @@ func (b *BytesBuffer) TruncateBy(n int) {
 	b.off -= n
 	b.sz -= n
 	AssertTrue(b.off >= 0 && b.sz >= 0)
+}
+
+type Timer struct {
+	start   time.Time
+	last    time.Time
+	records []time.Duration
+}
+
+func (t *Timer) Start() {
+	t.start = time.Now()
+	t.last = t.start
+	t.records = t.records[:0]
+}
+
+func (t *Timer) Record() {
+	now := time.Now()
+	t.records = append(t.records, now.Sub(t.last))
+	t.last = now
+}
+
+func (t *Timer) Total() time.Duration {
+	return time.Since(t.start)
+}
+
+func (t *Timer) All() []time.Duration {
+	return t.records
 }

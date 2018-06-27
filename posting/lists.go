@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	dummyPostingList []byte // Used for indexing.
+	emptyPostingList []byte // Used for indexing.
 	elog             trace.EventLog
 )
 
@@ -58,7 +58,7 @@ func init() {
 			Checksum: h.Sum(nil),
 		}
 		var err error
-		dummyPostingList, err = pl.Marshal()
+		emptyPostingList, err = pl.Marshal()
 		x.Check(err)
 	})
 	elog = trace.NewEventLog("Memory", "")
@@ -261,13 +261,12 @@ func GetLru(key []byte) *List {
 
 // GetNoStore takes a key. It checks if the in-memory map has an updated value and returns it if it exists
 // or it gets from the store and DOES NOT ADD to lru cache.
-func GetNoStore(key []byte) (rlist *List) {
+func GetNoStore(key []byte) (*List, error) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
-		return lp
+		return lp, nil
 	}
-	lp, _ = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
-	return lp
+	return getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 }
 
 // This doesn't sync, so call this only when you don't care about dirty posting lists in // memory(for example before populating snapshot) or after calling syncAllMarks
@@ -300,12 +299,14 @@ func CommitLists(commit func(key []byte) bool) {
 	close(workChan)
 	wg.Wait()
 
-	// Consider using sync in syncIfDirty instead of async.
-	// Hacky solution for now, ensures that everything is flushed to disk before we return.
+	// The following hack ensures that all the asynchrously run commits above would have been done
+	// before this completes. Badger now actually gets rid of keys, which are deleted. So, we can
+	// use the Delete function.
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
-	// Code is written with assumption that nothing is deleted in dgraph, so don't
-	// use delete
-	txn.SetWithMeta(x.DataKey("dummy", 1), nil, BitEmptyPosting)
-	txn.CommitAt(1, nil)
+	x.Check(txn.Delete(x.DataKey("_dummy_", 1)))
+	// Nothing is being read, so there can't be an ErrConflict. This should go to disk.
+	if err := txn.CommitAt(1, nil); err != nil {
+		x.Printf("Commit unexpectedly failed with error: %v", err)
+	}
 }

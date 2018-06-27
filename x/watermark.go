@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -152,7 +152,9 @@ func (w *WaterMark) process() {
 		// Update mark by going through all indices in order; and checking if they have
 		// been done. Stop at the first index, which isn't done.
 		doneUntil := w.DoneUntil()
-		AssertTrue(doneUntil < index)
+		if doneUntil > index {
+			AssertTruef(false, "Name: %s doneUntil: %d. Index: %d", w.Name, doneUntil, index)
+		}
 
 		until := doneUntil
 		loops := 0

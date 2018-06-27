@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -73,7 +73,14 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 		}
 	}
 	isLess, err = types.Less(va, vb)
+	if err != nil {
+		return false, err
+	}
 	isMore, err := types.Less(vb, va)
+	if err != nil {
+		return false, err
+	}
+	isEqual, err := types.Equal(va, vb)
 	if err != nil {
 		return false, err
 	}
@@ -83,13 +90,13 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 	case ">":
 		return isMore, nil
 	case "<=":
-		return isLess && !isMore, nil
+		return isLess || isEqual, nil
 	case ">=":
-		return isMore && !isLess, nil
+		return isMore || isEqual, nil
 	case "==":
-		return !isMore && !isLess, nil
+		return isEqual, nil
 	case "!=":
-		return isMore || isLess, nil
+		return !isEqual, nil
 	default:
 		return false, x.Errorf("Invalid compare function %v", ag)
 	}

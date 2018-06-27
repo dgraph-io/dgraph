@@ -268,7 +268,7 @@ upload_docker_image() {
 	echo "Pushing the image"
 	echo -e "Pushing image with tag $DOCKER_TAG"
 	docker push dgraph/dgraph:$DOCKER_TAG
-	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
+	if [[ $DOCKER_TAG != "master" ]]; then
 		echo -e "Pushing latest image"
 		docker push dgraph/dgraph:latest
 	fi

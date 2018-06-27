@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -10,9 +10,9 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"math"
 	"sort"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,7 +21,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 )
 
 var (
@@ -200,6 +199,9 @@ func (t *Txn) SetAbort() {
 }
 
 func (t *Txn) ShouldAbort() bool {
+	if t == nil {
+		return false
+	}
 	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
 
@@ -216,8 +218,10 @@ func (t *Txn) Fill(ctx *api.TxnContext) {
 	for i := t.nextKeyIdx; i < len(t.deltas); i++ {
 		d := t.deltas[i]
 		if d.checkConflict {
-			fp := farm.Fingerprint64(d.key)
-			ctx.Keys = append(ctx.Keys, strconv.FormatUint(fp, 36))
+			// Instead of taking a fingerprint of the keys, send the whole key to Zero. So, Zero can
+			// parse the key and check if that predicate is undergoing a move, hence avoiding #2338.
+			k := base64.StdEncoding.EncodeToString(d.key)
+			ctx.Keys = append(ctx.Keys, k)
 		}
 	}
 	t.nextKeyIdx = len(t.deltas)
@@ -383,15 +387,23 @@ func unmarshalOrCopy(plist *intern.PostingList, item *badger.Item) error {
 
 // constructs the posting list from the disk using the passed iterator.
 // Use forward iterator with allversions enabled in iter options.
+//
+// key would now be owned by the posting list. So, ensure that it isn't reused
+// elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
+	l.mutationMap = make(map[uint64]*intern.PostingList)
 	l.activeTxns = make(map[uint64]struct{})
 	l.plist = new(intern.PostingList)
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
 		item := it.Item()
+		if item.IsDeletedOrExpired() {
+			// Don't consider any more versions.
+			break
+		}
 		if !bytes.Equal(item.Key(), l.key) {
 			break
 		}
@@ -408,36 +420,35 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
-			it.Next()
+			// No need to do Next here. The outer loop can take care of skipping more versions of
+			// the same key.
 			break
-		} else if item.UserMeta()&bitDeltaPosting > 0 {
-			var pl intern.PostingList
+		}
+		if item.UserMeta()&bitDeltaPosting > 0 {
+			pl := &intern.PostingList{}
 			x.Check(pl.Unmarshal(val))
+			pl.Commit = item.Version()
 			for _, mpost := range pl.Postings {
 				// commitTs, startTs are meant to be only in memory, not
 				// stored on disk.
 				mpost.CommitTs = item.Version()
-				l.mlayer = append(l.mlayer, mpost)
 			}
+			l.mutationMap[pl.Commit] = pl
 		} else {
 			x.Fatalf("unexpected meta: %d", item.UserMeta())
 		}
+		if item.DiscardEarlierVersions() {
+			break
+		}
 		it.Next()
 	}
-
-	// Sort by Uid, Ts
-	sort.Slice(l.mlayer, func(i, j int) bool {
-		if l.mlayer[i].Uid != l.mlayer[j].Uid {
-			return l.mlayer[i].Uid < l.mlayer[j].Uid
-		}
-		return l.mlayer[i].CommitTs >= l.mlayer[j].CommitTs
-	})
 	return l, nil
 }
 
 func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	l := new(List)
 	l.key = key
+	l.mutationMap = make(map[uint64]*intern.PostingList)
 	l.activeTxns = make(map[uint64]struct{})
 	l.plist = new(intern.PostingList)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)

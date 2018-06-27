@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -117,9 +117,8 @@ func addMutation(t *testing.T, l *List, edge *intern.DirectedEdge, op uint32,
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {
-		ok, err := l.AddMutation(context.Background(), txn, edge)
+		err := l.AddMutation(context.Background(), txn, edge)
 		require.NoError(t, err)
-		require.True(t, ok)
 	}
 	require.NoError(t, txn.CommitMutations(context.Background(), commitTs))
 }
@@ -245,7 +244,7 @@ func TestRebuildIndex(t *testing.T) {
 		require.NoError(t, txn.CommitAt(1, nil))
 	}
 
-	require.NoError(t, DeleteIndex(context.Background(), "name2"))
+	require.NoError(t, DeleteIndex("name2"))
 	RebuildIndex(context.Background(), "name2", 5)
 	CommitLists(func(key []byte) bool {
 		pk := x.Parse(key)
@@ -327,8 +326,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 			it.Next()
 			continue
 		}
-		prevKey := make([]byte, len(key))
-		copy(prevKey, key)
+		prevKey = append(prevKey[:0], key...)
 		revKeys = append(revKeys, string(key))
 		l, err := ReadPostingList(key, it)
 		require.NoError(t, err)

@@ -1,55 +1,42 @@
 #!/bin/bash
 
-contrib=$GOPATH/src/github.com/dgraph-io/dgraph/contrib
-source $contrib/scripts/functions.sh
-
-SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
-
-BUILD=$1
-# If build variable is empty then we set it.
-if [ -z "$1" ]; then
-  BUILD=$SRC/build
-fi
-
-mkdir -p $BUILD
-
+basedir=$GOPATH/src/github.com/dgraph-io/dgraph
 set -e
 
-pushd $BUILD &> /dev/null
+source $basedir/contrib/scripts/functions.sh
+runCluster
+
+# Create a temporary directory to use for running live loader.
+mkdir -p tmp
+pushd tmp
+echo "Inside `pwd`"
+rm -f *
+
 if [ ! -f "goldendata.rdf.gz" ]; then
-  cp $GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.rdf.gz .
+  cp $basedir/systest/data/goldendata.rdf.gz .
 fi
 
 # log file size.
 ls -la goldendata.rdf.gz
 
-benchmark=$(pwd)
-popd &> /dev/null
-
-startZero
-# Start Dgraph
-start
-
-#Set Schema
-curl -X PUT  -d '
-    name: string @index(term) @lang .
-    initial_release_date: datetime @index(year) .
-' "http://localhost:8081/alter"
+echo "Setting schema."
+while true; do
+  curl -s -XPOST --output alter.txt -d '
+      name: string @index(term) @lang .
+      initial_release_date: datetime @index(year) .
+  ' "http://localhost:8180/alter"
+  cat alter.txt
+  echo
+  cat alter.txt | grep -iq "success" && break
+  echo "Retrying..."
+  sleep 3
+done
+rm -f alter.txt
 
 echo -e "\nRunning dgraph live."
-# Delete client directory to clear xidmap.
+dgraph live -r goldendata.rdf.gz -d "127.0.0.1:9180" -z "127.0.0.1:5080" -c 1 -b 1000
+popd
+rm -Rf tmp
 
-rm -rf $BUILD/xiddir
-pushd dgraph &> /dev/null
-./dgraph live -r $benchmark/goldendata.rdf.gz -d "127.0.0.1:9081,127.0.0.1:9082" -z "127.0.0.1:5080" -c 100 -b 1000 -x $BUILD/xiddir
-popd &> /dev/null
-
-# Restart Dgraph so that we are sure that index keys are persisted.
-quit 0
-
-startZero
-start
-
-$contrib/scripts/goldendata-queries.sh
-
-quit 0
+echo "Running queries"
+$basedir/contrib/scripts/goldendata-queries.sh

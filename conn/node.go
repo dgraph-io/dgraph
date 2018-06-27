@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -10,8 +10,8 @@ package conn
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -49,8 +49,8 @@ type Node struct {
 	confChanges map[uint64]chan error
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
-	Store       *raft.MemoryStorage
-	Wal         *raftwal.Wal
+	Store       *raftwal.DiskStorage
+	Rand        *rand.Rand
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
@@ -58,8 +58,24 @@ type Node struct {
 	Applied x.WaterMark
 }
 
-func NewNode(rc *intern.RaftContext) *Node {
-	store := raft.NewMemoryStorage()
+type lockedSource struct {
+	lk  sync.Mutex
+	src rand.Source
+}
+
+func (r *lockedSource) Int63() int64 {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	return r.src.Int63()
+}
+
+func (r *lockedSource) Seed(seed int64) {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	r.src.Seed(seed)
+}
+
+func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 	n := &Node{
 		Id:     rc.Id,
 		MyAddr: rc.Addr,
@@ -87,6 +103,7 @@ func NewNode(rc *intern.RaftContext) *Node {
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
 		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 	}
 	n.Applied.Init()
 	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.
@@ -169,79 +186,66 @@ func (n *Node) Send(m raftpb.Message) {
 	x.AssertTruef(n.Id != m.To, "Sending message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
-	select {
-	case n.messages <- sendmsg{to: m.To, data: data}:
-		// pass
-	default:
-		// ignore
-	}
+
+	// As long as leadership is stable, any attempted Propose() calls should be reflected in the
+	// next raft.Ready.Messages. Leaders will send MsgApps to the followers; followers will send
+	// MsgProp to the leader. It is up to the transport layer to get those messages to their
+	// destination. If a MsgApp gets dropped by the transport layer, it will get retried by raft
+	// (i.e. it will appear in a future Ready.Messages), but MsgProp will only be sent once. During
+	// leadership transitions, proposals may get dropped even if the network is reliable.
+	//
+	// We can't do a select default here. The messages must be sent to the channel, otherwise we
+	// should block until the channel can accept these messages. BatchAndSendMessages would take
+	// care of dropping messages which can't be sent due to network issues to the corresponding
+	// node. But, we shouldn't take the liberty to do that here. It would take us more time to
+	// repropose these dropped messages anyway, than to block here a bit waiting for the messages
+	// channel to clear out.
+	n.messages <- sendmsg{to: m.To, data: data}
 }
 
-func (n *Node) SaveSnapshot(s raftpb.Snapshot) {
-	if !raft.IsEmptySnap(s) {
-		le, err := n.Store.LastIndex()
-		if err != nil {
-			log.Fatalf("While retrieving last index: %v\n", err)
-		}
-		if s.Metadata.Index <= le {
-			return
-		}
-
-		if err := n.Store.ApplySnapshot(s); err != nil {
-			log.Fatalf("Applying snapshot: %v", err)
-		}
+func (n *Node) Snapshot() (raftpb.Snapshot, error) {
+	if n == nil || n.Store == nil {
+		return raftpb.Snapshot{}, errors.New("Uninitialized node or raft store.")
 	}
+	return n.Store.Snapshot()
 }
 
-func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry) {
-	if !raft.IsEmptyHardState(h) {
-		n.Store.SetHardState(h)
-	}
-	n.Store.Append(es)
+func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
+	x.Check(n.Store.Save(h, es, s))
 }
 
-func (n *Node) InitFromWal(wal *raftwal.Wal) (idx uint64, restart bool, rerr error) {
-	n.Wal = wal
-
+func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 	var sp raftpb.Snapshot
-	sp, rerr = wal.Snapshot(n.RaftContext.Group)
+	sp, rerr = n.Store.Snapshot()
 	if rerr != nil {
 		return
 	}
-	var term uint64
 	if !raft.IsEmptySnap(sp) {
 		x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
 		restart = true
-		if rerr = n.Store.ApplySnapshot(sp); rerr != nil {
-			return
-		}
-		term = sp.Metadata.Term
 		idx = sp.Metadata.Index
 	}
 
 	var hd raftpb.HardState
-	hd, rerr = wal.HardState(n.RaftContext.Group)
+	hd, rerr = n.Store.HardState()
 	if rerr != nil {
 		return
 	}
 	if !raft.IsEmptyHardState(hd) {
 		x.Printf("Found hardstate: %+v\n", hd)
 		restart = true
-		if rerr = n.Store.SetHardState(hd); rerr != nil {
-			return
-		}
 	}
 
-	var es []raftpb.Entry
-	es, rerr = wal.Entries(n.RaftContext.Group, term, idx)
+	var num int
+	num, rerr = n.Store.NumEntries()
 	if rerr != nil {
 		return
 	}
-	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, len(es))
-	if len(es) > 0 {
+	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
+	// We'll always have at least one entry.
+	if num > 1 {
 		restart = true
 	}
-	rerr = n.Store.Append(es)
 	return
 }
 
@@ -294,7 +298,8 @@ func (n *Node) BatchAndSendMessages() {
 				if exists := failedConn[to]; !exists {
 					// So that we print error only the first time we are not able to connect.
 					// Otherwise, the log is polluted with multiple errors.
-					x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
+					x.Printf("No healthy connection found to node Id: %d addr: [%s], err: %v\n",
+						to, addr, err)
 					failedConn[to] = true
 				}
 				continue
@@ -310,7 +315,7 @@ func (n *Node) BatchAndSendMessages() {
 }
 
 func (n *Node) doSendMessage(pool *Pool, data []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	client := pool.Get()

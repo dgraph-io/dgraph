@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package worker
@@ -70,8 +60,12 @@ var rdfTypeMap = map[types.TypeID]string{
 }
 
 func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
-	l := posting.GetNoStore(item.key)
-	err := l.Iterate(readTs, 0, func(p *intern.Posting) bool {
+	l, err := posting.GetNoStore(item.key)
+	if err != nil {
+		x.Printf("Error while retrieving list for key %X. Error: %v\n", item.key, err)
+		return
+	}
+	err = l.Iterate(readTs, 0, func(p *intern.Posting) bool {
 		buf.WriteString(item.prefix)
 		if p.PostingType != intern.Posting_REF {
 			// Value posting
@@ -163,6 +157,12 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 	if s.schema.Count {
 		buf.WriteString(" @count")
 	}
+	if s.schema.Lang {
+		buf.WriteString(" @lang")
+	}
+	if s.schema.Upsert {
+		buf.WriteString(" @upsert")
+	}
 	buf.WriteString(" . \n")
 }
 
@@ -232,6 +232,7 @@ func export(bdir string, readTs uint64) error {
 			buf := new(bytes.Buffer)
 			buf.Grow(50000)
 			for item := range chkv {
+				// TODO: Add error handling in toRDF.
 				toRDF(buf, item, readTs)
 				if buf.Len() >= 40000 {
 					tmp := make([]byte, buf.Len())
@@ -277,6 +278,9 @@ func export(bdir string, readTs uint64) error {
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.PrefetchValues = false
+	// We don't ask for all the versions. So, this would only return the 1 version for each key, iff
+	// that version is valid. So, we don't need to check in the iteration loop if the item is
+	// deleted or expired.
 	it := txn.NewIterator(iterOpts)
 	defer it.Close()
 	prefix := new(bytes.Buffer)
@@ -307,7 +311,7 @@ func export(bdir string, readTs uint64) error {
 			continue
 		}
 
-		if pk.Attr == "_predicate_" || pk.Attr == "_dummy_" {
+		if pk.Attr == "_predicate_" {
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())
 			continue

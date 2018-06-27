@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -202,15 +202,6 @@ func (ld *loader) mapStage() {
 		LRUSize:   1 << 19,
 	})
 
-	var mapperWg sync.WaitGroup
-	mapperWg.Add(len(ld.mappers))
-	for _, m := range ld.mappers {
-		go func(m *mapper) {
-			m.run()
-			mapperWg.Done()
-		}(m)
-	}
-
 	var readers []*bufio.Reader
 	for _, rdfFile := range findRDFFiles(ld.opt.RDFDir) {
 		f, err := os.Open(rdfFile)
@@ -230,6 +221,16 @@ func (ld *loader) mapStage() {
 		os.Exit(1)
 	}
 
+	var mapperWg sync.WaitGroup
+	mapperWg.Add(len(ld.mappers))
+	for _, m := range ld.mappers {
+		go func(m *mapper) {
+			m.run()
+			mapperWg.Done()
+		}(m)
+	}
+
+	// This is the main map loop.
 	thr := x.NewThrottle(ld.opt.NumGoroutines)
 	for _, r := range readers {
 		thr.Start()

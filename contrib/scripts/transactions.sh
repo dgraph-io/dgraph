@@ -1,45 +1,29 @@
 #!/bin/bash
 
-SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
-
-BUILD=$1
-# If build variable is empty then we set it.
-if [ -z "$1" ]; then
-  BUILD=$SRC/build
-fi
-mkdir -p $BUILD
-
+basedir=$GOPATH/src/github.com/dgraph-io/dgraph
+contrib=$basedir/contrib
 set -e
 
-echo "Running transaction tests."
-
-contrib=$GOPATH/src/github.com/dgraph-io/dgraph/contrib
-
-go test -v $contrib/integration/testtxn/main_test.go
+# go test -v $contrib/integration/testtxn/main_test.go
 
 source $contrib/scripts/functions.sh
+runCluster
 
-rm -rf $BUILD/p* $BUILD/w*
+echo "*  Running transaction tests."
 
-startZero
+echo "*  Running bank tests"
+go run $contrib/integration/bank/main.go --addr=localhost:9180
 
-start
+echo "*  Running account upsert tests"
+go run $contrib/integration/acctupsert/main.go --addr=localhost:9180
 
-echo "\n\nRunning bank tests"
-go run $contrib/integration/bank/main.go
-
-echo "\n\nRunning account upsert tests"
-go run $contrib/integration/acctupsert/main.go
-
-echo "\n\n Running sentence swap tests"
+echo "*  Running sentence swap tests"
 pushd $contrib/integration/swap
-go build . && ./swap
+go build . && ./swap --addr=localhost:9180
 popd
 
-echo "\n\n Running mutate from #1750."
+echo "*  Running mutate from #1750."
 pushd $contrib/integration/mutates
-go build . && ./mutates --add
-./mutates
+go build . && ./mutates --add --addr=localhost:9180
+./mutates --addr=localhost:9180
 popd
-
-quit 0

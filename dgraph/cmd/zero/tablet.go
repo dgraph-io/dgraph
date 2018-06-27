@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -64,6 +64,10 @@ func (s *Server) rebalanceTablets() {
 }
 
 func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
+	// Typically move predicate is run only on leader. But, in this case, an external HTTP request
+	// can also trigger a predicate move. We could render them invalid here by checking if this node
+	// is actually the leader. But, I have noticed no side effects with allowing them to run, even
+	// if this node is a follower node.
 	tab := s.ServingTablet(predicate)
 	x.AssertTruef(tab != nil, "Tablet to be moved: [%v] should not be nil", predicate)
 	x.Printf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
@@ -81,6 +85,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 				break
 			}
 
+			x.Printf("Sleeping before we run recovery for tablet move")
 			// We might have initiated predicate move on some other node, give it some
 			// time to get cancelled. On cancellation the other node would set the predicate
 			// to write mode again and we need to be sure that it doesn't happen after we
@@ -210,8 +215,10 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 	dstGroup uint32) error {
 	err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup)
 	if err == nil {
+		// If no error, then return immediately.
 		return nil
 	}
+	x.Printf("Got error during move: %v", err)
 	if !s.Node.AmLeader() {
 		s.runRecovery()
 		return err
@@ -226,8 +233,9 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 		Space:     stab.Space,
 		Force:     true,
 	}
-	if err := s.Node.proposeAndWait(context.Background(), p); err != nil {
-		x.Printf("Error while reverting group %d to RW: %+v\n", srcGroup, err)
+	if nerr := s.Node.proposeAndWait(context.Background(), p); nerr != nil {
+		x.Printf("Error while reverting group %d to RW: %+v\n", srcGroup, nerr)
+		return nerr
 	}
 	return err
 }
@@ -262,7 +270,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		DestGroupId:   dstGroup,
 	}
 	if _, err := c.MovePredicate(ctx, in); err != nil {
-		return fmt.Errorf("While caling MovePredicate: %+v\n", err)
+		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
 	}
 
 	// Propose that predicate is served by dstGroup in RW.

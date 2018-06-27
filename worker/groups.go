@@ -1,18 +1,8 @@
 /*
- * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2018 Dgraph Labs, Inc.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This file is available under the Apache License, Version 2.0,
+ * with the Commons Clause restriction.
  */
 
 package worker
@@ -42,7 +32,6 @@ type groupi struct {
 	// TODO: Is this context being used?
 	ctx       context.Context
 	cancel    context.CancelFunc
-	wal       *raftwal.Wal
 	state     *intern.MembershipState
 	Node      *node
 	gid       uint32
@@ -61,7 +50,7 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
+func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -120,14 +109,17 @@ func StartRaftNodes(walStore *badger.ManagedDB, bindall bool) {
 	posting.Oracle().SetMaxPending(connState.MaxPending)
 	gr.applyState(connState.GetState())
 
-	gr.wal = raftwal.Init(walStore, Config.RaftId)
+	gid := gr.groupId()
 	gr.triggerCh = make(chan struct{}, 1)
 	gr.delPred = make(chan struct{}, 1)
-	gid := gr.groupId()
-	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
+
+	// Initialize DiskStorage and pass it along.
+	store := raftwal.Init(walStore, Config.RaftId, gid)
+	gr.Node = newNode(store, gid, Config.RaftId, Config.MyAddr)
+
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.Node = gr.Node.Node
-	gr.Node.InitAndStartNode(gr.wal)
+	gr.Node.InitAndStartNode()
 
 	x.UpdateHealthStatus(true)
 	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
@@ -316,6 +308,14 @@ func (g *groupi) BelongsTo(key string) uint32 {
 	return 0
 }
 
+func (g *groupi) ServesTabletRW(key string) bool {
+	tablet := g.Tablet(key)
+	if tablet != nil && !tablet.ReadOnly && tablet.GroupId == groups().groupId() {
+		return true
+	}
+	return false
+}
+
 func (g *groupi) ServesTablet(key string) bool {
 	tablet := g.Tablet(key)
 	if tablet != nil && tablet.GroupId == groups().groupId() {
@@ -487,10 +487,11 @@ START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero server.")
+		x.Printf("WARNING: We don't have address of any Zero server.")
 		time.Sleep(time.Second)
 		goto START
 	}
+	x.Printf("Got address of a Zero server: %s", pl.Addr)
 
 	c := intern.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -717,7 +718,7 @@ START:
 	pl := g.Leader(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero server.")
+		x.Printf("WARNING: We don't have address of any dgraphzero leader.")
 		time.Sleep(time.Second)
 		goto START
 	}

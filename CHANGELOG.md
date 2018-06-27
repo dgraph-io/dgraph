@@ -6,6 +6,39 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [Unreleased]
 
+## [1.0.6] - 2018-06-20
+
+### Added
+
+* Support GraphQL vars as args for Regexp function. #2353
+* Support GraphQL vars with filters. #2359
+* Add JSON mutations to raw HTTP. #2396
+
+### Fixed
+
+* Fix math >= evaluation. #2365
+* Avoid race condition between mutation commit and predicate move. #2392
+* Ability to correctly distinguish float from int in JSON. #2398
+* Remove _dummy_ data key. #2401
+* Serialize applying of Raft proposals. Concurrent application was complex and
+    cause of multiple bugs. #2428.
+* Improve Zero connections.
+* Fix bugs in snapshot move, refactor code and improve performance significantly. #2440, #2442
+* Add error handling to GetNoStore. Fixes #2373.
+* Fix bugs in Bulk loader. #2449
+* Posting List and Raft bug fixes. #2457
+
+### Changed
+
+* Pull in Badger v1.5.2.
+* Raft storage is now done entirely via Badger. This reduces RAM
+    consumption by previously used MemoryStorage. #2433
+* Trace how node.Run loop performs.
+* Allow tweaking Badger options.
+
+**Note:** This change modifies some flag names. In particular, Badger options
+are now exposed via flags named with `--badger.` prefix.
+
 ## [1.0.5] - 2018-04-20
 
 ### Added
@@ -275,13 +308,13 @@ Users can set `port_offset` flag, to modify these fixed ports.
 ```
 * Facets response structure has been modified and is a lot flatter. Facet key is now `predicate|facet_name`.
 Examples for [Go client](https://godoc.org/github.com/dgraph-io/dgraph/client#example-Txn-Mutate-Facets) and [HTTP](https://docs.dgraph.io/query-language/#facets-edge-attributes).
-* Query latency is now returned as numeric (ns) instead of string. 
+* Query latency is now returned as numeric (ns) instead of string.
 * [`Recurse`](https://docs.dgraph.io/query-language/#recurse-query) is now a directive. So queries with `recurse` keyword at root won't work anymore.
 * Syntax for [`count` at root](https://docs.dgraph.io/query-language/#count) has changed. You need to ask for `count(uid)`, instead of `count()`.
 
 #### Mutations
 
-* Mutations can only be done via `Mutate` Grpc endpoint or via [`/mutate` HTTP handler](https://docs.dgraph.io/clients/#transactions). 
+* Mutations can only be done via `Mutate` Grpc endpoint or via [`/mutate` HTTP handler](https://docs.dgraph.io/clients/#transactions).
 * `Mutate` Grpc endpoint can be used to set/ delete JSON, or set/ delete a list of NQuads and set/ delete raw RDF strings.
 * Mutation blocks don't require the mutation keyword anymore. Here is an example of the new syntax.
 ```
@@ -304,8 +337,8 @@ Examples for [Go client](https://godoc.org/github.com/dgraph-io/dgraph/client#ex
 
 * `Query` Grpc endpoint returns response in JSON under `Json` field instead of protocol buffer. `client.Unmarshal` method also goes away from the Go client. Users can use `json.Unmarshal` for unmarshalling the response.
 * Response for predicate of type `geo` can be unmarshalled into a struct. Example [here](https://godoc.org/github.com/dgraph-io/dgraph/client#example-package--SetObject).
-* `Node` and `Edge` structs go away along with the `SetValue...` methods. We recommend using [`SetJson`](https://godoc.org/github.com/dgraph-io/dgraph/client#example-package--SetObject) and `DeleteJson` fields to do mutations. 
-* Examples of how to use transactions using the client can be found at https://docs.dgraph.io/clients/#go. 
+* `Node` and `Edge` structs go away along with the `SetValue...` methods. We recommend using [`SetJson`](https://godoc.org/github.com/dgraph-io/dgraph/client#example-package--SetObject) and `DeleteJson` fields to do mutations.
+* Examples of how to use transactions using the client can be found at https://docs.dgraph.io/clients/#go.
 
 ### Removed
 - Embedded dgraph goes away. We haven’t seen much usage of this feature. And it adds unnecessary maintenance overhead to the code.

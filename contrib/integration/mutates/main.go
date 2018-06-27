@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -15,13 +15,12 @@ import (
 	"log"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/x"
 	"google.golang.org/grpc"
 )
 
-const targetAddr = "localhost:9081"
-
+var addr = flag.String("addr", "localhost:9080", "Dgraph server addr")
 var insert = flag.Bool("add", false, "Insert")
 
 func main() {
@@ -29,7 +28,7 @@ func main() {
 
 	// Setup dgraph client
 	ctx := context.Background()
-	conn, err := grpc.Dial(targetAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}

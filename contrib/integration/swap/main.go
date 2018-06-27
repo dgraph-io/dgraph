@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
@@ -20,13 +20,13 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/x"
 	"google.golang.org/grpc"
 )
 
 var (
-	dgraAddr  = flag.String("d", "localhost:9081", "dgraph address")
+	addr      = flag.String("addr", "localhost:9080", "Dgraph server address")
 	timeout   = flag.Int("timeout", 60, "query/mutation timeout")
 	numSents  = flag.Int("sentences", 100, "number of sentences")
 	numSwaps  = flag.Int("swaps", 1000, "number of swaps to attempt")
@@ -158,7 +158,7 @@ func createSentences(n int) []string {
 }
 
 func newClient() *dgo.Dgraph {
-	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
+	d, err := grpc.Dial(*addr, grpc.WithInsecure())
 	x.Check(err)
 	return dgo.NewDgraphClient(
 		api.NewDgraphClient(d),
