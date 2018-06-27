@@ -29,6 +29,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const maxUidsForTrigram = 1000000
+
 var regexTooWideErr = errors.New("Regular expression is too wide-ranging and can't be executed efficiently.")
 
 func uidsForRegex(attr string, arg funcArgs,
@@ -66,7 +68,7 @@ func uidsForRegex(attr string, arg funcArgs,
 
 			if results.Size() == 0 {
 				return results, nil
-			} else if results.Size() > Config.MaxUIDsForTrigram {
+			} else if results.Size() > maxUidsForTrigram {
 				return nil, regexTooWideErr
 			}
 		}
@@ -82,7 +84,7 @@ func uidsForRegex(attr string, arg funcArgs,
 			}
 			if results.Size() == 0 {
 				return results, nil
-			} else if results.Size() > Config.MaxUIDsForTrigram {
+			} else if results.Size() > maxUidsForTrigram {
 				return nil, regexTooWideErr
 			}
 		}
@@ -106,7 +108,7 @@ func uidsForRegex(attr string, arg funcArgs,
 				return nil, err
 			}
 			results = algo.MergeSorted([]*intern.List{results, subUids})
-			if results.Size() > Config.MaxUIDsForTrigram {
+			if results.Size() > maxUidsForTrigram {
 				return nil, regexTooWideErr
 			}
 		}

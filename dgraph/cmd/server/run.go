@@ -94,9 +94,6 @@ func init() {
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
 
-	flag.Int("max_uids_for_trigrams", defaults.MaxUIDsForTrigram,
-		"Max number of trigrams that can be matched by a regex query.")
-
 	flag.Bool("debugmode", defaults.DebugMode,
 		"enable debug mode for more debug information")
 
@@ -284,7 +281,6 @@ func run() {
 		WALDir:              Server.Conf.GetString("wal"),
 		Nomutations:         Server.Conf.GetBool("nomutations"),
 		WhitelistedIPs:      Server.Conf.GetString("whitelist"),
-		MaxUIDsForTrigram:   Server.Conf.GetInt("max_uids_for_trigrams"),
 		AllottedMemory:      Server.Conf.GetFloat64("lru_mb"),
 		ExportPath:          Server.Conf.GetString("export"),
 		NumPendingProposals: Server.Conf.GetInt("pending_proposals"),

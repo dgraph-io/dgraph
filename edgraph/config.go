@@ -29,7 +29,6 @@ type Options struct {
 
 	AllottedMemory float64
 
-	MaxUIDsForTrigram   int
 	WhitelistedIPs      string
 	ExportPath          string
 	NumPendingProposals int
@@ -55,7 +54,6 @@ var DefaultConfig = Options{
 	// User must specify this.
 	AllottedMemory: -1.0,
 
-	MaxUIDsForTrigram:   1000000,
 	WhitelistedIPs:      "",
 	ExportPath:          "export",
 	NumPendingProposals: 2000,
@@ -103,7 +101,6 @@ func setConfVar(conf Options) {
 	x.Conf.Set("posting_dir", newStr(conf.PostingDir))
 	x.Conf.Set("posting_tables", newStr(conf.PostingTables))
 	x.Conf.Set("wal_dir", newStr(conf.WALDir))
-	x.Conf.Set("max_uids_for_trigrams", newInt(conf.MaxUIDsForTrigram))
 	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
 	x.Conf.Set("tracing", newFloat(conf.Tracing))
 	x.Conf.Set("num_pending_proposals", newInt(conf.NumPendingProposals))
@@ -120,7 +117,6 @@ func SetConfiguration(newConfig Options) {
 	posting.Config.Mu.Unlock()
 
 	worker.Config.ExportPath = Config.ExportPath
-	worker.Config.MaxUIDsForTrigram = Config.MaxUIDsForTrigram
 	worker.Config.NumPendingProposals = Config.NumPendingProposals
 	worker.Config.Tracing = Config.Tracing
 	worker.Config.MyAddr = Config.MyAddr
