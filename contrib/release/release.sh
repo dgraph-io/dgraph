@@ -1,15 +1,24 @@
 #!/bin/bash
 
+# Don't use standard GOPATH. Create a new one.
+GOPATH="/tmp/go"
+rm -Rf $GOPATH
+mkdir $GOPATH
+
 TAG=$1
 TMP="/tmp/build"
-echo $TMP
 rm -Rf $TMP
 mkdir $TMP
 
+if [ -z "$TAG" ]; then
+  echo "Must specify which tag to build for."
+  exit 1
+fi
 echo "Building Dgraph for tag: $TAG"
 
 # Stop on first failure.
 set -e
+set -o xtrace
 
 # Check for existence of strip tool.
 type strip
@@ -26,13 +35,22 @@ go version
 
 go get -u github.com/jteeuwen/go-bindata/...
 go get -d -u golang.org/x/net/context
-go get -d -u google.golang.org/grpc
+go get -d google.golang.org/grpc
 go get -u github.com/prometheus/client_golang/prometheus
 go get -u github.com/dgraph-io/dgo
 # go get github.com/stretchr/testify/require
 go get -u github.com/karalabe/xgo
 
+pushd $GOPATH/src/google.golang.org/grpc
+  git checkout v1.13.0
+popd
+
 basedir=$GOPATH/src/github.com/dgraph-io
+# Clone Dgraph repo.
+pushd $basedir
+  git clone git@github.com:dgraph-io/dgraph.git
+popd
+
 pushd $basedir/dgraph
   git pull
   git checkout $TAG
@@ -41,6 +59,11 @@ pushd $basedir/dgraph
   gitBranch=$(git rev-parse --abbrev-ref HEAD)
   lastCommitTime=$(git log -1 --format=%ci)
   release_version=$(git describe --abbrev=0);
+popd
+
+# Clone ratel repo.
+pushd $basedir
+  git clone git@github.com:dgraph-io/ratel.git
 popd
 
 pushd $basedir/ratel
@@ -119,4 +142,4 @@ createTar darwin
 createTar linux
 
 echo "Release $TAG is ready."
-tree $TMP
+ls -alh $TMP
