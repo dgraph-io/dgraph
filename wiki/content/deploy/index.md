@@ -1206,6 +1206,7 @@ volumes:
   dgraph:
 ```
 
+-
 ## Cluster Checklist
 
 In setting up a cluster be sure the check the following.
