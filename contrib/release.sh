@@ -137,9 +137,11 @@ createSum darwin
 createSum linux
 
 # Create Docker image.
-pushd $basedir/dgraph/contrib
+cp $basedir/dgraph/contrib/Dockerfile $TMP
+pushd $TMP
   docker build -t dgraph/dgraph:$TAG .
 popd
+rm $TMP/Dockerfile
 
 # Create the tars and delete the binaries.
 createTar () {
