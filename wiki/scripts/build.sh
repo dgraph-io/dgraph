@@ -19,8 +19,9 @@ HOST=https://docs.dgraph.io
 # append '(latest)' to the version string, and build script can place the
 # artifact in an appropriate location
 VERSIONS_ARRAY=(
-'v1.0.5'
 'master'
+'v1.0.6'
+'v1.0.5'
 'v1.0.4'
 'v1.0.3'
 'v1.0.2'
