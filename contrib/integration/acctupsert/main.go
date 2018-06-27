@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	dgraAddr = flag.String("d", "localhost:9081", "dgraph address")
-	concurr  = flag.Int("c", 5, "number of concurrent upserts per account")
+	addr    = flag.String("addr", "localhost:9080", "dgraph address")
+	concurr = flag.Int("c", 5, "number of concurrent upserts per account")
 )
 
 var (
@@ -61,12 +61,14 @@ func main() {
 	flag.Parse()
 	c := newClient()
 	setup(c)
+	fmt.Println("Doing upserts")
 	doUpserts(c)
+	fmt.Println("Checking integrity")
 	checkIntegrity(c)
 }
 
 func newClient() *dgo.Dgraph {
-	d, err := grpc.Dial(*dgraAddr, grpc.WithInsecure())
+	d, err := grpc.Dial(*addr, grpc.WithInsecure())
 	x.Check(err)
 	return dgo.NewDgraphClient(
 		api.NewDgraphClient(d),
@@ -111,7 +113,7 @@ var (
 func upsert(c *dgo.Dgraph, acc account) {
 	for {
 		if time.Since(lastStatus) > 100*time.Millisecond {
-			fmt.Printf("Success: %d Retries: %d\n",
+			fmt.Printf("[%s] Success: %d Retries: %d\n", time.Now().Format(time.Stamp),
 				atomic.LoadUint64(&successCount), atomic.LoadUint64(&retryCount))
 			lastStatus = time.Now()
 		}
@@ -119,9 +121,10 @@ func upsert(c *dgo.Dgraph, acc account) {
 		if err == nil {
 			atomic.AddUint64(&successCount, 1)
 			return
-		}
-		if err != y.ErrAborted {
-			x.Check(err)
+		} else if err == y.ErrAborted {
+			// pass
+		} else {
+			fmt.Errorf("ERROR: %v", err)
 		}
 		atomic.AddUint64(&retryCount, 1)
 	}

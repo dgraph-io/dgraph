@@ -10,10 +10,8 @@ package worker
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -47,54 +45,71 @@ type proposalCtx struct {
 
 type proposals struct {
 	sync.RWMutex
-	// The key is hex encoded version of <raft_id_of_node><random_uint64>
-	// This should make sure its not same across replicas.
-	keys map[string]*proposalCtx
+	all map[string]*proposalCtx
 }
 
+// uniqueKey is meant to be unique across all the replicas.
 func uniqueKey() string {
-	b := make([]byte, 16)
-	copy(b[:8], groups().Node.raftIdBuffer)
-	groups().Node.rand.Read(b[8:])
-	return hex.EncodeToString(b)
+	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
 }
 
 func (p *proposals) Store(key string, pctx *proposalCtx) bool {
 	p.Lock()
 	defer p.Unlock()
-	if _, has := p.keys[key]; has {
+	if _, has := p.all[key]; has {
 		return false
 	}
-	p.keys[key] = pctx
+	p.all[key] = pctx
 	return true
+}
+
+func (p *proposals) Delete(key string) {
+	if len(key) == 0 {
+		return
+	}
+	p.Lock()
+	defer p.Unlock()
+	delete(p.all, key)
 }
 
 func (p *proposals) pctx(key string) *proposalCtx {
 	p.RLock()
 	defer p.RUnlock()
-	return p.keys[key]
+	if pctx := p.all[key]; pctx != nil {
+		return pctx
+	}
+	return new(proposalCtx)
 }
 
 func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
 	p.RLock()
 	defer p.RUnlock()
-	pd, has := p.keys[key]
-	x.AssertTrue(has)
+	pd, has := p.all[key]
+	if !has {
+		// See the race condition note in Done.
+		return context.Background(), new(posting.Txn)
+	}
 	return pd.ctx, pd.txn
 }
 
 func (p *proposals) Done(key string, err error) {
+	if len(key) == 0 {
+		return
+	}
 	p.Lock()
 	defer p.Unlock()
-	pd, has := p.keys[key]
+	pd, has := p.all[key]
 	if !has {
+		// If we assert here, there would be a race condition between a context
+		// timing out, and a proposal getting applied immediately after. That
+		// would cause assert to fail. So, don't assert.
 		return
 	}
 	x.AssertTrue(pd.index != 0)
 	if err != nil {
 		pd.err = err
 	}
-	delete(p.keys, key)
+	delete(p.all, key)
 	pd.ch <- pd.err
 }
 
@@ -112,9 +127,8 @@ type node struct {
 	gid     uint32
 	props   proposals
 
-	canCampaign  bool
-	rand         *rand.Rand
-	raftIdBuffer []byte
+	canCampaign bool
+	elog        trace.EventLog
 }
 
 func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
@@ -132,23 +146,6 @@ func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error 
 	return n.Applied.WaitForMark(ctx, min)
 }
 
-type lockedSource struct {
-	lk  sync.Mutex
-	src rand.Source
-}
-
-func (r *lockedSource) Int63() int64 {
-	r.lk.Lock()
-	defer r.lk.Unlock()
-	return r.src.Int63()
-}
-
-func (r *lockedSource) Seed(seed int64) {
-	r.lk.Lock()
-	defer r.lk.Unlock()
-	r.src.Seed(seed)
-}
-
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
 	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
 
@@ -159,11 +156,8 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	}
 	m := conn.NewNode(rc, store)
 	props := proposals{
-		keys: make(map[string]*proposalCtx),
+		all: make(map[string]*proposalCtx),
 	}
-
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, id)
 
 	n := &node{
 		Node:      m,
@@ -172,12 +166,11 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		gid:       gid,
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		applyCh:      make(chan raftpb.Entry, Config.NumPendingProposals+1000),
-		props:        props,
-		stop:         make(chan struct{}),
-		done:         make(chan struct{}),
-		rand:         rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
-		raftIdBuffer: b,
+		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
+		props:   props,
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
 	}
 	return n
 }
@@ -202,6 +195,8 @@ func (h *header) Decode(in []byte) {
 	h.proposalId = binary.LittleEndian.Uint32(in[0:4])
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
+
+var errInternalRetry = errors.New("Retry Raft proposal internally")
 
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
@@ -245,49 +240,64 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		}
 	}
 
-	che := make(chan error, 1)
-	pctx := &proposalCtx{
-		ch:  che,
-		ctx: ctx,
-	}
+	propose := func() error {
+		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
 
-	key := uniqueKey()
-	x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
-	proposal.Key = key
+		che := make(chan error, 1)
+		pctx := &proposalCtx{
+			ch:  che,
+			ctx: cctx,
+		}
+		key := uniqueKey()
+		x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		defer n.props.Delete(key) // Ensure that it gets deleted on return.
+		proposal.Key = key
 
-	sz := proposal.Size()
-	slice := make([]byte, sz)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Proposing data with key: %s", key)
+		}
 
-	upto, err := proposal.MarshalTo(slice)
-	if err != nil {
-		return err
+		data, err := proposal.Marshal()
+		if err != nil {
+			return err
+		}
+
+		if err = n.Raft().Propose(cctx, data); err != nil {
+			return x.Wrapf(err, "While proposing")
+		}
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal.")
+		}
+
+		select {
+		case err = <-che:
+			// We arrived here by a call to n.props.Done().
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Done with error: %v", err)
+			}
+			return err
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("External context timed out with error: %v.", ctx.Err())
+			}
+			return ctx.Err()
+		case <-cctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Internal context timed out with error: %v. Retrying...", cctx.Err())
+			}
+			return errInternalRetry
+		}
 	}
 
 	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
 	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
-	// timeout.
-	cctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-	if err = n.Raft().Propose(cctx, slice[:upto]); err != nil {
-		return x.Wrapf(err, "While proposing")
+	// timeout. We should always try with a timeout and optionally retry.
+	err := errInternalRetry
+	for err == errInternalRetry {
+		err = propose()
 	}
-
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Waiting for the proposal.")
-	}
-
-	select {
-	case err = <-che:
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Raft Propose error: %v", err)
-			}
-		}
-	case <-cctx.Done():
-		return fmt.Errorf("While proposing to Raft group, err: %+v\n", cctx.Err())
-	}
-
 	return err
 }
 
@@ -304,6 +314,8 @@ func (n *node) processEdge(ridx uint64, pkey string, edge *intern.DirectedEdge) 
 	// while applying the second mutation we check the old value
 	// of name and delete it from "janardhan"'s index. If we don't
 	// wait for commit information then mutation won't see the value
+
+	// TODO: We should propose Oracle via Raft, and not wait here.
 	posting.Oracle().WaitForTs(context.Background(), txn.StartTs)
 	if err := runMutation(ctx, edge, txn); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -493,6 +505,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 	posting.TxnMarks().Begin(index)
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.
+		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
 		return n.applyMutations(proposal, index)
 	}
 
@@ -501,6 +514,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return n.processKeyValues(proposal.Key, proposal.Kv)
 
 	} else if proposal.State != nil {
+		n.elog.Printf("Applying state for key: %s", proposal.Key)
 		// This state needn't be snapshotted in this group, on restart we would fetch
 		// a state which is latest or equal to this.
 		groups().applyState(proposal.State)
@@ -510,6 +524,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return n.deletePredicate(proposal.Key, proposal.CleanPredicate)
 
 	} else if proposal.TxnContext != nil {
+		n.elog.Printf("Applying txncontext for key: %s", proposal.Key)
 		return n.commitOrAbort(proposal.Key, proposal.TxnContext)
 	} else {
 		x.Fatalf("Unknown proposal")
@@ -524,6 +539,7 @@ func (n *node) processApplyCh() {
 			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
 		err := n.applyCommitted(proposal, e.Index)
+		n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v", proposal.Key, e.Index, err)
 		n.props.Done(proposal.Key, err)
 		n.Applied.Done(e.Index)
 	}
@@ -637,7 +653,7 @@ func (n *node) runReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 				}
 			}
 			activeRctx := make([]byte, 8)
-			x.Check2(n.rand.Read(activeRctx[:]))
+			x.Check2(n.Rand.Read(activeRctx[:]))
 			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
 			// successful response.  If we don't see one, the raft leader wasn't configured, or the
 			// raft leader didn't respond.
@@ -698,8 +714,14 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	go n.runReadIndexLoop(closer, readStateCh)
 
+	logTicker := time.NewTicker(time.Minute)
+	defer logTicker.Stop()
+
 	for {
 		select {
+		case <-logTicker.C:
+			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
+
 		case <-ticker.C:
 			n.Raft().Tick()
 
@@ -779,6 +801,8 @@ func (n *node) Run() {
 
 				} else if len(entry.Data) == 0 {
 					// TODO: Say something. Do something.
+					tr.LazyPrintf("Found empty data at index: %d", entry.Index)
+					tr.SetError()
 					n.Applied.Done(entry.Index)
 
 				} else {

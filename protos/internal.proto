@@ -127,13 +127,14 @@ message Group {
 }
 
 message ZeroProposal {
-	uint32 id = 1;
+	uint32 deprecated_id = 1; // delete this field in later versions.
 	Member member = 2;
 	Tablet tablet = 3;
 	uint64 maxLeaseId = 4;
 	uint64 maxTxnTs = 5;
 	uint64 maxRaftId = 6;
 	api.TxnContext txn = 7;
+	string key = 8;  // Used as unique identifier for proposal id.
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes

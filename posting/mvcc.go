@@ -199,6 +199,9 @@ func (t *Txn) SetAbort() {
 }
 
 func (t *Txn) ShouldAbort() bool {
+	if t == nil {
+		return false
+	}
 	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
 

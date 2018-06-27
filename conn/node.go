@@ -50,11 +50,29 @@ type Node struct {
 	messages    chan sendmsg
 	RaftContext *intern.RaftContext
 	Store       *raftwal.DiskStorage
+	Rand        *rand.Rand
 
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to BadgerDB).
 	Applied x.WaterMark
+}
+
+type lockedSource struct {
+	lk  sync.Mutex
+	src rand.Source
+}
+
+func (r *lockedSource) Int63() int64 {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	return r.src.Int63()
+}
+
+func (r *lockedSource) Seed(seed int64) {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	r.src.Seed(seed)
 }
 
 func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
@@ -85,6 +103,7 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
 		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 	}
 	n.Applied.Init()
 	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.
@@ -167,12 +186,21 @@ func (n *Node) Send(m raftpb.Message) {
 	x.AssertTruef(n.Id != m.To, "Sending message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
-	select {
-	case n.messages <- sendmsg{to: m.To, data: data}:
-		// pass
-	default:
-		// ignore
-	}
+
+	// As long as leadership is stable, any attempted Propose() calls should be reflected in the
+	// next raft.Ready.Messages. Leaders will send MsgApps to the followers; followers will send
+	// MsgProp to the leader. It is up to the transport layer to get those messages to their
+	// destination. If a MsgApp gets dropped by the transport layer, it will get retried by raft
+	// (i.e. it will appear in a future Ready.Messages), but MsgProp will only be sent once. During
+	// leadership transitions, proposals may get dropped even if the network is reliable.
+	//
+	// We can't do a select default here. The messages must be sent to the channel, otherwise we
+	// should block until the channel can accept these messages. BatchAndSendMessages would take
+	// care of dropping messages which can't be sent due to network issues to the corresponding
+	// node. But, we shouldn't take the liberty to do that here. It would take us more time to
+	// repropose these dropped messages anyway, than to block here a bit waiting for the messages
+	// channel to clear out.
+	n.messages <- sendmsg{to: m.To, data: data}
 }
 
 func (n *Node) Snapshot() (raftpb.Snapshot, error) {
@@ -270,7 +298,8 @@ func (n *Node) BatchAndSendMessages() {
 				if exists := failedConn[to]; !exists {
 					// So that we print error only the first time we are not able to connect.
 					// Otherwise, the log is polluted with multiple errors.
-					x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
+					x.Printf("No healthy connection found to node Id: %d addr: [%s], err: %v\n",
+						to, addr, err)
 					failedConn[to] = true
 				}
 				continue
@@ -286,7 +315,7 @@ func (n *Node) BatchAndSendMessages() {
 }
 
 func (n *Node) doSendMessage(pool *Pool, data []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	client := pool.Get()
