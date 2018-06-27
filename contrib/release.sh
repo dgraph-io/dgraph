@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Script to do Dgraph release. This script would output the built binaries in
+# $TMP.  This script should NOT be responsible for doing any testing, or
+# uploading to any server.  The sole task of this script is to build the
+# binaries and prepare them such that any human or script can then pick these up
+# and use them as they deem fit.
+
 # Don't use standard GOPATH. Create a new one.
 GOPATH="/tmp/go"
 rm -Rf $GOPATH
