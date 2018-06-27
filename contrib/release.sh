@@ -12,6 +12,8 @@ rm -Rf $GOPATH
 mkdir $GOPATH
 
 TAG=$1
+
+# DO NOT change the /tmp/build directory, because Dockerfile also picks up binaries from there.
 TMP="/tmp/build"
 rm -Rf $TMP
 mkdir $TMP
@@ -134,6 +136,12 @@ createSum () {
 createSum darwin
 createSum linux
 
+# Create Docker image.
+pushd $basedir/dgraph/contrib
+  docker build -t dgraph/dgraph:$TAG .
+popd
+
+# Create the tars and delete the binaries.
 createTar () {
   os=$1
   echo "Creating tar for $os"
