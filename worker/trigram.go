@@ -18,8 +18,6 @@
 package worker
 
 import (
-	"errors"
-
 	cindex "github.com/google/codesearch/index"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -28,10 +26,6 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 )
-
-const maxUidsForTrigram = 1000000
-
-var regexTooWideErr = errors.New("Regular expression is too wide-ranging and can't be executed efficiently.")
 
 func uidsForRegex(attr string, arg funcArgs,
 	query *cindex.Query, intersect *intern.List) (*intern.List, error) {
@@ -68,8 +62,6 @@ func uidsForRegex(attr string, arg funcArgs,
 
 			if results.Size() == 0 {
 				return results, nil
-			} else if results.Size() > maxUidsForTrigram {
-				return nil, regexTooWideErr
 			}
 		}
 		for _, sub := range query.Sub {
@@ -84,8 +76,6 @@ func uidsForRegex(attr string, arg funcArgs,
 			}
 			if results.Size() == 0 {
 				return results, nil
-			} else if results.Size() > maxUidsForTrigram {
-				return nil, regexTooWideErr
 			}
 		}
 	case cindex.QOr:
@@ -108,9 +98,6 @@ func uidsForRegex(attr string, arg funcArgs,
 				return nil, err
 			}
 			results = algo.MergeSorted([]*intern.List{results, subUids})
-			if results.Size() > maxUidsForTrigram {
-				return nil, regexTooWideErr
-			}
 		}
 	default:
 		return nil, regexTooWideErr
