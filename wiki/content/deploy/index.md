@@ -1081,76 +1081,130 @@ You should not use the same `idx` as that of a node that was removed earlier.
 
 
 ## TLS configuration
+Use TLS client authentication to encrypt the communication between the clients and the server. The Dgraph server assumes that, if --tls_on is set, then the server has a certificate and key loaded. This will be used to authenticate that the server used is correct.
+
+The flag ``` --tls_client_auth == REQUIREANDVERIFY ``` makes sure that the server requires and verifies a certificate.
+
 Connections between client and server can be secured with TLS.
 Both encrypted (password protected) and unencrypted private keys are supported.
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
-Following configuration options are available for the server:
+Create a self-signed CA & client certificate with OpenSSL:
 
+{{% notice "note" %}}Make sure that the common name is your server name and don't set a password challenge, email or optional company name.{{% /notice %}}
+
+Generate CA key & certificate:
+
+```
+$ openssl genrsa -out MyRootCA.key 2048
+$ openssl req -x509 -new -nodes -key MyRootCA.key -sha256 -days 1024 -out MyRootCA.pem
+```
+
+Generate server key & certificate signing request:
+```
+$ openssl genrsa -out MyServer.key 2048
+$ openssl req -new -key MyServer.key -out MyServer.csr
+```
+
+Generate server certificate based on our own CA certificate:
+```
+$ openssl x509 -req -in MyServer.csr -CA MyRootCA.pem -CAkey MyRootCA.key -CAcreateserial -out MyServer.pem -days 1024 -sha256
+```
+
+Generate client key & certificate signing request:
+```
+$ openssl genrsa -out MyClient.key 2048
+$ openssl req -new -key MyClient.key -out MyClient.csr
+```
+
+Generate client certificate based on our own CA certificate:
+```
+$ openssl x509 -req -in MyClient.csr -CA MyRootCA.pem -CAkey MyRootCA.key -CAcreateserial -out MyClient.pem -days 1024 -sha256
+```
+
+Results Obtained:
 ```sh
-# Use TLS connections with clients.
-tls_on
-
-# CA Certs file path.
-tls_ca_certs string
-
-# Include System CA into CA Certs.
-tls_use_system_ca
-
-# Certificate file path.
-tls_cert string
-
-# Certificate key file path.
-tls_cert_key string
-
-# Certificate key passphrase.
-tls_cert_key_passphrase string
-
-# Enable TLS client authentication
-tls_client_auth string
-
-# TLS max version. (default "TLS12")
-tls_max_version string
-
-# TLS min version. (default "TLS11")
-tls_min_version string
+MyRootCA.srl
+MyRootCA.key
+MyRootCA.pem
+MyServer.csr
+MyServer.key
+MyServer.pem
+MyClient.csr
+MyClient.key
+MyClient.pem
 ```
 
 Dgraph loader can be configured with following options:
 
+If you want to use TLS client authentication you have to set, ```tls_client_auth to true``` and ```set cacertfile, certfied and keyfile ``` to the correct paths
+Following configuration options are available for the server:
 ```sh
-# Use TLS connections.
-tls_on
+#Set the hostname.
+hostname: 'localhost',
 
-# CA Certs file path.
-tls_ca_certs string
+#Set TLS client authentication to true.
+tls_client_auth: true,
 
-# Include System CA into CA Certs.
-tls_use_system_ca
+#set path the the cacert file.
+cacertfile: '/path/to/MyRootCA.pem'
 
-# Certificate file path.
-tls_cert string
+#set path the the cert file.
+certfile: '/path/to/MyClient.pem',
 
-# Certificate key file path.
-tls_cert_key string
-
-# Certificate key passphrase.
-tls_cert_key_passphrase string
-
-# Server name.
-tls_server_name string
-
-# Skip certificate validation (insecure)
-tls_insecure
-
-# TLS max version. (default "TLS12")
-tls_max_version string
-
-# TLS min version. (default "TLS11")
-tls_min_version string
+#set path the the key file.
+keyfile: '/path/to/MyClient.key'
 ```
 
+You also have to provide the respective server certificate and the key to the server and start it with the following options:
+
+```
+command: dgraph server --my=server:7080 --memory_mb=2048 --zero=zero:5080 --tls_on --tls_ca_certs=/path/to/cert/in/container/MyRootCA.pem --tls_cert=/path/to/cert/in/container/MyServer.pem --tls_cert_key=/path/to/cert/in/container/MyServer.key --tls_client_auth=REQUIREANDVERIFY
+```
+
+Docker file to be used for TLS Authentication:
+```sh
+version: "3.2"
+services:
+  zero:
+    image: dgraph/dgraph:v1.0.5
+    volumes:
+      - type: volume
+        source: dgraph
+        target: /dgraph
+        volume:
+          nocopy: true
+    ports:
+      - 5080:5080
+      - 6080:6080
+    restart: on-failure
+    command: dgraph zero --my=zero:5080
+  server:
+    image: dgraph/dgraph:v1.0.5
+    hostname: dgraph-test
+    volumes:
+      - /Users/Dgraph/Downloads/ssl2:/etc/ssl/private
+    ports:
+      - 8080:8080
+      - 9080:9080
+    restart: on-failure
+    command: dgraph server --my=server:7080 --lru_mb=2048 --zero=zero:5080 --tls_on --tls_ca_certs /etc/ssl/private/MyRootCA.pem --tls_cert /etc/ssl/private/MyServer.pem --tls_cert_key /etc/ssl/private/MyServer.key --tls_client_auth REQUIREANDVERIFY
+  ratel:
+    image: dgraph/dgraph:latest
+    volumes:
+      - type: volume
+        source: dgraph
+        target: /dgraph
+        volume:
+          nocopy: true
+    ports:
+      - 8000:8000
+    command: dgraph-ratel
+
+volumes:
+  dgraph:
+```
 
 ## Cluster Checklist
 
