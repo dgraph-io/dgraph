@@ -523,9 +523,20 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 	} else if len(proposal.CleanPredicate) > 0 {
 		return n.deletePredicate(proposal.Key, proposal.CleanPredicate)
 
-	} else if proposal.TxnContext != nil {
+	} else if proposal.DeprecatedTxnContext != nil {
 		n.elog.Printf("Applying txncontext for key: %s", proposal.Key)
-		return n.commitOrAbort(proposal.Key, proposal.TxnContext)
+		delta := &intern.OracleDelta{}
+		tctx := proposal.DeprecatedTxnContext
+		if tctx.CommitTs == 0 {
+			delta.Aborts = append(delta.Aborts, tctx.StartTs)
+		} else {
+			delta.Commits = make(map[uint64]uint64)
+			delta.Commits[tctx.StartTs] = tctx.CommitTs
+		}
+		return n.commitOrAbort(proposal.Key, delta)
+	} else if proposal.Delta != nil {
+		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
+		return n.commitOrAbort(proposal.Key, proposal.Delta)
 	} else {
 		x.Fatalf("Unknown proposal")
 	}
@@ -545,15 +556,17 @@ func (n *node) processApplyCh() {
 	}
 }
 
-func (n *node) commitOrAbort(pkey string, tctx *api.TxnContext) error {
+func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	ctx, _ := n.props.CtxAndTxn(pkey)
-	_, err := commitOrAbort(ctx, tctx)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Status of commitOrAbort %+v %v\n", tctx, err)
-	}
-	if err == nil {
-		posting.Txns().Done(tctx.StartTs)
-		posting.Oracle().Done(tctx.StartTs)
+	for startTs, commitTs := range delta.GetCommits() {
+		_, err := commitOrAbort(ctx, tctx)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Status of commitOrAbort %+v %v\n", tctx, err)
+		}
+		if err == nil {
+			posting.Txns().Done(tctx.StartTs)
+			posting.Oracle().Done(tctx.StartTs)
+		}
 	}
 	return err
 }

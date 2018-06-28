@@ -495,19 +495,19 @@ func populateMutationMap(src *intern.Mutations) map[uint32]*intern.Mutations {
 	return mm
 }
 
-func commitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Payload, error) {
-	txn := posting.Txns().Get(tc.StartTs)
+func commitOrAbort(ctx context.Context, startTs, commitTs uint64) (*api.Payload, error) {
+	txn := posting.Txns().Get(startTs)
 	if txn == nil {
 		return &api.Payload{}, posting.ErrInvalidTxn
 	}
 	// Ensures that we wait till prewrite is applied
 	idx := txn.LastIndex()
 	groups().Node.Applied.WaitForMark(ctx, idx)
-	if tc.CommitTs == 0 {
+	if commitTs == 0 {
 		err := txn.AbortMutations(ctx)
 		return &api.Payload{}, err
 	}
-	err := txn.CommitMutations(ctx, tc.CommitTs)
+	err := txn.CommitMutations(ctx, commitTs)
 	return &api.Payload{}, err
 }
 
