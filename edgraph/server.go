@@ -450,6 +450,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 		LinRead:  req.LinRead,
 	}
 
+	// Core processing happens here.
 	var er query.ExecuteResult
 	if er, err = queryRequest.Process(ctx); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {

@@ -106,6 +106,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	d := r.URL.Query().Get("debug")
 	ctx := context.WithValue(context.Background(), "debug", d)
+
+	// Core processing happens here.
 	resp, err := (&edgraph.Server{}).Query(ctx, &req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())

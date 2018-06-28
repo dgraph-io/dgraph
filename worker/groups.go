@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -668,88 +669,93 @@ func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
 	return stream.Send(group)
 }
 
-func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
-	if !g.Node.AmLeader() {
-		return
-	}
+// func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
+// 	if !g.Node.AmLeader() {
+// 		return
+// 	}
 
-	// Only the leader of a group proposes the commit proposal for a group after getting delta from
-	// Zero.
-	for startTs, commitTs := range oracleDelta.Commits {
-		// The leader might not have yet applied the mutation and hence may not have the txn in the
-		// map. Its ok we can just continue, processOracleDeltaStream checks the oracle map every
-		// minute and calls proposeDelta.
-		if posting.Txns().Get(startTs) == nil {
-			// Don't mark oracle as done here as then it would be deleted the entry from map and it
-			// won't be proposed to the group. This could eventually block snapshots from happening
-			// in a replicated cluster.
-			continue
-		}
-		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTs}
-		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
-	}
-	for _, startTs := range oracleDelta.Aborts {
-		if posting.Txns().Get(startTs) == nil {
-			continue
-		}
-		tctx := &api.TxnContext{StartTs: startTs}
-		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
-	}
-}
+// 	// Only the leader needs to propose the oracleDelta retrieved from Zero.
+// 	// The leader and the followers would not directly apply or use the
+// 	// oracleDelta streaming in from Zero. They would wait for the proposal to
+// 	// go through and be applied via node.Run.  This saves us from many edge
+// 	// cases around network partitions and race conditions between prewrites and
+// 	// commits, etc.
+// 	g.Node.proposeAndWait(context.Background(), &intern.Proposal{Delta: oracleDelta})
+// }
 
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
 // Zero sends information about aborted/committed transactions and maxPending.
 func (g *groupi) processOracleDeltaStream() {
-	go func() {
-		// TODO (pawan) - What is this for? Comment says this is required when there is no leader
-		// but proposeDelta returns if the current node is not leader.
+	blockingReceiveAndPropose := func() {
+		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
+		defer elog.Finish()
+		elog.Printf("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
+			g.Node.Id, g.groupId())
 
-		// In the event where there in no leader for a group, commit/abort won't get proposed.
-		// So periodically check oracle and propose
-		// Ticker time should be long enough so that same startTs
-		// doesn't get proposed again and again.
-
-		// TODO: We DO NOT need this. Remove.
-		ticker := time.NewTicker(time.Minute)
-		for range ticker.C {
-			g.proposeDelta(posting.Oracle().CurrentState())
+		pl := g.Leader(0)
+		// We should always have some connection to dgraphzero.
+		if pl == nil {
+			x.Printf("WARNING: We don't have address of any dgraphzero leader.")
+			elog.Errorf("Dgraph zero leader address unknown")
+			time.Sleep(time.Second)
+			return
 		}
-	}()
 
+		c := intern.NewZeroClient(pl.Get())
+		// The first entry send by Zero contains the entire state of transactions. Zero periodically
+		// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
+		// safe way to get the status of all the transactions.
+		stream, err := c.Oracle(context.Background(), &api.Payload{})
+		if err != nil {
+			x.Printf("Error while calling Oracle %v\n", err)
+			elog.Errorf("Error while calling Oracle %v", err)
+			time.Sleep(time.Second)
+			return
+		}
+		defer stream.CloseSend()
+
+		for {
+			oracleDelta, err := stream.Recv()
+			if err != nil || oracleDelta == nil {
+				x.Printf("Error in oracle delta stream. Error: %v", err)
+				return
+			}
+			// TODO: We should be getting rid of the local Oracle. All the transaction application
+			// should be done via Raft proposals. Only Zero should have an oracle.
+
+			// Only the leader needs to propose the oracleDelta retrieved from Zero.
+			// The leader and the followers would not directly apply or use the
+			// oracleDelta streaming in from Zero. They would wait for the proposal to
+			// go through and be applied via node.Run.  This saves us from many edge
+			// cases around network partitions and race conditions between prewrites and
+			// commits, etc.
+			if !g.Node.AmLeader() {
+				elog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
+				return
+			}
+			elog.Printf("Proposing Delta of size %d", oracleDelta.Size())
+			// ctx := context.WithTimeout(context.Background(), time.Minute)
+
+			// Block forever trying to propose this.
+			g.Node.proposeAndWait(context.Background(), &intern.Proposal{Delta: oracleDelta})
+		}
+	}
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 START:
-	pl := g.Leader(0)
-	// We should always have some connection to dgraphzero.
-	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero leader.")
-		time.Sleep(time.Second)
-		goto START
-	}
-
-	c := intern.NewZeroClient(pl.Get())
-	// The first entry send by Zero contains the entire state of transactions. Zero periodically
-	// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
-	// safe way to get the status of all the transactions.
-	stream, err := c.Oracle(context.Background(), &api.Payload{})
-	if err != nil {
-		x.Printf("Error while calling Oracle %v\n", err)
-		time.Sleep(time.Second)
-		goto START
-	}
-
 	for {
-		oracleDelta, err := stream.Recv()
-		if err != nil || oracleDelta == nil {
-			x.Printf("Error in oracle delta stream. Error: %v", err)
-			break
+		select {
+		case <-g.Node.stop:
+			return
+		case <-ticker.C:
+			// Only the leader needs to connect to Zero and get transaction
+			// updates.
+			if g.Node.AmLeader() {
+				break START
+			}
 		}
-		// TODO: We should be getting rid of the local Oracle. All the transaction application
-		// should be done via Raft proposals. Only Zero should have an oracle.
-		// TODO: Check what happens if this group does not talk to Zero for a while. Would Zero
-		// stream out all the transaction updates since the last chat?
-		posting.Oracle().ProcessOracleDelta(oracleDelta)
-		// Do Immediately so that index keys are written.
-		g.proposeDelta(oracleDelta)
 	}
-	time.Sleep(time.Second)
+	blockingReceiveAndPropose()
 	goto START
 }

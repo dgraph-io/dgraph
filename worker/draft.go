@@ -315,8 +315,10 @@ func (n *node) processEdge(ridx uint64, pkey string, edge *intern.DirectedEdge) 
 	// of name and delete it from "janardhan"'s index. If we don't
 	// wait for commit information then mutation won't see the value
 
-	// TODO: We should propose Oracle via Raft, and not wait here.
-	posting.Oracle().WaitForTs(context.Background(), txn.StartTs)
+	// We used to Oracle().WaitForTs here.
+	// TODO: Need to ensure that keys which hold values can only keep one pending txn at a
+	// time. Otherwise, their index generated would be wrong.
+
 	if err := runMutation(ctx, edge, txn); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("process mutation: %v", err)
@@ -558,17 +560,35 @@ func (n *node) processApplyCh() {
 
 func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	ctx, _ := n.props.CtxAndTxn(pkey)
-	for startTs, commitTs := range delta.GetCommits() {
-		_, err := commitOrAbort(ctx, tctx)
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Status of commitOrAbort %+v %v\n", tctx, err)
+
+	applyStatus := func(startTs, commitTs uint64) {
+		var err error
+		for i := 0; i < 3; i++ {
+			err = commitOrAbort(ctx, startTs, commitTs)
+			if err == nil || err == posting.ErrInvalidTxn {
+				break
+			}
+			x.Printf("Error while applying txn status (%d -> %d): %v", startTs, commitTs, err)
 		}
-		if err == nil {
-			posting.Txns().Done(tctx.StartTs)
-			posting.Oracle().Done(tctx.StartTs)
+		// TODO: Even after multiple tries, if we're unable to apply the status of a transaction,
+		// what should we do? Maybe do a printf, and let them know that there might be a disk issue.
+		posting.Txns().Done(startTs)
+		posting.Oracle().Done(startTs)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Status of commitOrAbort startTs %d: %v\n", startTs, err)
 		}
 	}
-	return err
+
+	for startTs, commitTs := range delta.GetCommits() {
+		applyStatus(startTs, commitTs)
+	}
+	for _, startTs := range delta.GetAborts() {
+		applyStatus(startTs, 0)
+	}
+	// TODO: Use MaxPending to track the txn watermark. That's the only thing we need really.
+	// delta.GetMaxPending
+	posting.Oracle().ProcessOracleDelta(delta)
+	return nil
 }
 
 func (n *node) deletePredicate(pkey string, predicate string) error {

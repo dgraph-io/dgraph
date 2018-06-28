@@ -44,6 +44,9 @@ func Txns() *transactions {
 	return txns
 }
 
+// This structure is useful to keep track of which keys were updated, and whether they should be
+// used for conflict detection or not. When a txn is marked committed or aborted, this is what we
+// use to go fetch the posting lists and update the txn status in them.
 type delta struct {
 	key           []byte
 	posting       *intern.Posting
