@@ -708,6 +708,8 @@ func (g *groupi) processOracleDeltaStream() {
 		// So periodically check oracle and propose
 		// Ticker time should be long enough so that same startTs
 		// doesn't get proposed again and again.
+
+		// TODO: We DO NOT need this. Remove.
 		ticker := time.NewTicker(time.Minute)
 		for range ticker.C {
 			g.proposeDelta(posting.Oracle().CurrentState())
@@ -724,6 +726,9 @@ START:
 	}
 
 	c := intern.NewZeroClient(pl.Get())
+	// The first entry send by Zero contains the entire state of transactions. Zero periodically
+	// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
+	// safe way to get the status of all the transactions.
 	stream, err := c.Oracle(context.Background(), &api.Payload{})
 	if err != nil {
 		x.Printf("Error while calling Oracle %v\n", err)
@@ -737,6 +742,10 @@ START:
 			x.Printf("Error in oracle delta stream. Error: %v", err)
 			break
 		}
+		// TODO: We should be getting rid of the local Oracle. All the transaction application
+		// should be done via Raft proposals. Only Zero should have an oracle.
+		// TODO: Check what happens if this group does not talk to Zero for a while. Would Zero
+		// stream out all the transaction updates since the last chat?
 		posting.Oracle().ProcessOracleDelta(oracleDelta)
 		// Do Immediately so that index keys are written.
 		g.proposeDelta(oracleDelta)
