@@ -84,6 +84,24 @@ multi-node clusters. The second approach will also result in an increased
 transaction abortion rate, since every typed node creation would result in
 writing to the `type` index.
 
+## Count the Number of Node
+If you want to check the total number of nodes present in your database,
+you can count it by using the `has` function to check for the predicates: `has (_predicate_)`.
+Use `count(uid)` inside the `has` function to count the number of `uid` assigned
+to the nodes.
+
+This will return the total count for the nodes present in data.
+
+Query to count for the total number of nodes:
+```json
+#count: Return the total count of nodes
+{
+  total (func: has (_predicate_) ) {
+    count(uid) 
+  }
+} 
+``` 
+
 ## A Simple Login System
 
 {{% notice "note" %}}
