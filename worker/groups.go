@@ -701,7 +701,6 @@ func (g *groupi) processOracleDeltaStream() {
 		if err != nil {
 			x.Printf("Error while calling Oracle %v\n", err)
 			elog.Errorf("Error while calling Oracle %v", err)
-			cancel()
 			time.Sleep(time.Second)
 			return
 		}
@@ -783,7 +782,6 @@ func (g *groupi) processOracleDeltaStream() {
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-START:
 	for {
 		select {
 		case <-g.Node.stop:
@@ -792,10 +790,8 @@ START:
 			// Only the leader needs to connect to Zero and get transaction
 			// updates.
 			if g.Node.AmLeader() {
-				break START
+				blockingReceiveAndPropose()
 			}
 		}
 	}
-	blockingReceiveAndPropose()
-	goto START
 }
