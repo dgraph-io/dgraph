@@ -221,7 +221,7 @@ func (s *Server) removeZero(nodeId uint64) {
 		return
 	}
 	delete(s.state.Zeros, nodeId)
-	conn.Get().Remove(m.Addr)
+	go conn.Get().Remove(m.Addr)
 	s.state.Removed = append(s.state.Removed, m)
 }
 

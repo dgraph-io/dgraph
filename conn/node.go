@@ -37,6 +37,8 @@ type sendmsg struct {
 type Node struct {
 	x.SafeMutex
 
+	joinLock sync.Mutex
+
 	// SafeMutex is for fields which can be changed after init.
 	_confState *raftpb.ConfState
 	_raft      raft.Node
@@ -375,6 +377,36 @@ func (n *Node) DeletePeer(pid uint64) {
 	delete(n.peers, pid)
 }
 
+var errInternalRetry = errors.New("Retry proposal again")
+
+func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) error {
+	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	ch := make(chan error, 1)
+	id := n.storeConfChange(ch)
+	// TODO: Delete id from the map.
+	pb.ID = id
+	if err := n.Raft().ProposeConfChange(cctx, pb); err != nil {
+		if cctx.Err() != nil {
+			return errInternalRetry
+		}
+		x.Printf("Error while proposing conf change: %v", err)
+		return err
+	}
+	select {
+	case err := <-ch:
+		x.Errorf("====> Got error from channel: %v. ConfChange: %+v", err, pb)
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-cctx.Done():
+		x.Errorf("====> While trying to propose conf change. Temporary error: %v", cctx.Err())
+		return errInternalRetry
+	}
+	return nil
+}
+
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr, ok := n.Peer(pid)
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
@@ -386,18 +418,17 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	rcBytes, err := rc.Marshal()
 	x.Check(err)
 
-	ch := make(chan error, 1)
-	id := n.storeConfChange(ch)
-	err = n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
-		ID:      id,
+	cc := raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
 		Context: rcBytes,
-	})
-	if err != nil {
-		return err
 	}
-	err = <-ch
+	err = errInternalRetry
+	for err == errInternalRetry {
+		x.Printf("Trying to add %d to cluster. Addr: %v\n", pid, addr)
+		x.Printf("Current confstate at %d: %+v\n", n.Id, n.ConfState())
+		err = n.proposeConfChange(ctx, cc)
+	}
 	return err
 }
 
@@ -408,17 +439,14 @@ func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 	if _, ok := n.Peer(id); !ok && id != n.RaftContext.Id {
 		return x.Errorf("Node %d not part of group", id)
 	}
-	ch := make(chan error, 1)
-	pid := n.storeConfChange(ch)
-	err := n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
-		ID:     pid,
+	cc := raftpb.ConfChange{
 		Type:   raftpb.ConfChangeRemoveNode,
 		NodeID: id,
-	})
-	if err != nil {
-		return err
 	}
-	err = <-ch
+	err := errInternalRetry
+	for err == errInternalRetry {
+		err = n.proposeConfChange(ctx, cc)
+	}
 	return err
 }
 
@@ -466,6 +494,8 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	if node == nil || node.Raft() == nil {
 		return nil, errNoNode
 	}
+	// Only process one JoinCluster request at a time.
+
 	// Check that the new node is from the same group as me.
 	if rc.Group != node.RaftContext.Group {
 		return nil, x.Errorf("Raft group mismatch")
@@ -474,8 +504,12 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	if rc.Id == node.RaftContext.Id {
 		return nil, ErrDuplicateRaftId
 	}
+
 	// Check that the new node is not already part of the group.
-	if addr, ok := node.peers[rc.Id]; ok && rc.Addr != addr {
+	if _, ok := node.Peer(rc.Id); ok {
+		x.Printf("Node %d already part of group: %d\n", node.Id, node.RaftContext.Group)
+	}
+	if addr, ok := node.Peer(rc.Id); ok && rc.Addr != addr {
 		Get().Connect(addr)
 		// There exists a healthy connection to server with same id.
 		if _, err := Get().Get(addr); err == nil {
@@ -484,15 +518,22 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	}
 	node.Connect(rc.Id, rc.Addr)
 
-	c := make(chan error, 1)
-	go func() { c <- node.AddToCluster(ctx, rc.Id) }()
+	node.joinLock.Lock()
+	go func() {
+		err := node.AddToCluster(context.Background(), rc.Id)
+		x.Printf("-----> Done adding to cluster: %d. Err: %v", rc.Id, err)
+		node.joinLock.Unlock()
+	}()
+	return &api.Payload{}, nil
+	// c := make(chan error, 1)
+	// go func() { c <- node.AddToCluster(ctx, rc.Id) }()
 
-	select {
-	case <-ctx.Done():
-		return &api.Payload{}, ctx.Err()
-	case err := <-c:
-		return &api.Payload{}, err
-	}
+	// select {
+	// case <-ctx.Done():
+	// 	return &api.Payload{}, ctx.Err()
+	// case err := <-c:
+	// 	return &api.Payload{}, err
+	// }
 }
 
 var (

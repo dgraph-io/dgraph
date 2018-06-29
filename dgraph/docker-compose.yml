@@ -20,72 +20,91 @@ services:
       # - type: bind
       #   source: "${DATA}"
       #   target: /data
-  # zero2:
-  #   image: debian:latest
-  #   container_name: bank-dg0.2
-  #   command: /gobin/dgraph zero --my=zero2:5080 --replicas 3 --peer=zero1:5080 --idx 2
-  #   volumes:
-  #     - type: bind
-  #       source: $GOPATH/bin
-  #       target: /gobin
-  #       read_only: true
-  # zero3:
-  #   image: debian:latest
-  #   container_name: bank-dg0.3
-  #   command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 3
-  #   volumes:
-  #     - type: bind
-  #       source: $GOPATH/bin
-  #       target: /gobin
-  #       read_only: true
-  dg1:
+  zero2:
     image: debian:latest
-    container_name: bank-dg1
-    working_dir: /data/dg1
+    container_name: bank-dg0.2
+    command: /gobin/dgraph zero --my=zero2:5080 --replicas 3 --peer=zero1:5080 --idx 2
     volumes:
       - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      # - type: bind
-      #   source: "${DATA}"
-      #   target: /data
-    ports:
-      - 8180:8180
-      - 9180:9180
-    command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
-  dg2:
+  zero3:
     image: debian:latest
-    container_name: bank-dg2
-    working_dir: /data/dg2
+    container_name: bank-dg0.3
+    command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 3
     volumes:
       - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      # - type: bind
-      #   source: "${DATA}"
-      #   target: /data
-    ports:
-      - 8181:8181
-      - 9181:9181
-    command: /gobin/dgraph server --my=dg2:7181 --lru_mb=1024 --zero=zero1:5080 -o 101 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
+  zero4:
+    image: debian:latest
+    container_name: bank-dg0.4
+    command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 4
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+  zero5:
+    image: debian:latest
+    container_name: bank-dg0.5
+    command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 5
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
 
-  dg3:
-    image: debian:latest
-    container_name: bank-dg3
-    working_dir: /data/dg3
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
-      # - type: bind
-      #   source: "${DATA}"
-      #   target: /data
-    ports:
-      - 8182:8182
-      - 9182:9182
-    command: /gobin/dgraph server --my=dg3:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10
+  # dg1:
+  #   image: debian:latest
+  #   container_name: bank-dg1
+  #   working_dir: /data/dg1
+  #   volumes:
+  #     - type: bind
+  #       source: $GOPATH/bin
+  #       target: /gobin
+  #       read_only: true
+  #     # - type: bind
+  #     #   source: "${DATA}"
+  #     #   target: /data
+  #   ports:
+  #     - 8180:8180
+  #     - 9180:9180
+  #   command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
+  # dg2:
+  #   image: debian:latest
+  #   container_name: bank-dg2
+  #   working_dir: /data/dg2
+  #   volumes:
+  #     - type: bind
+  #       source: $GOPATH/bin
+  #       target: /gobin
+  #       read_only: true
+  #     # - type: bind
+  #     #   source: "${DATA}"
+  #     #   target: /data
+  #   ports:
+  #     - 8181:8181
+  #     - 9181:9181
+  #   command: /gobin/dgraph server --my=dg2:7181 --lru_mb=1024 --zero=zero1:5080 -o 101 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
+
+  # dg3:
+  #   image: debian:latest
+  #   container_name: bank-dg3
+  #   working_dir: /data/dg3
+  #   volumes:
+  #     - type: bind
+  #       source: $GOPATH/bin
+  #       target: /gobin
+  #       read_only: true
+  #     # - type: bind
+  #     #   source: "${DATA}"
+  #     #   target: /data
+  #   ports:
+  #     - 8182:8182
+  #     - 9182:9182
+  #   command: /gobin/dgraph server --my=dg3:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10
 
 

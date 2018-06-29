@@ -415,20 +415,23 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)
+	x.Printf("Got applyConfChange at %d: %+v\n", n.Id, cc)
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		n.DeletePeer(cc.NodeID)
 		n.server.removeZero(cc.NodeID)
+
 	} else if len(cc.Context) > 0 {
 		var rc intern.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
-		n.Connect(rc.Id, rc.Addr)
+		// TODO: We don't need because this was already done during JoinCluster.
+		// go n.Connect(rc.Id, rc.Addr)
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
-
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
+				x.Errorf("Reusing removed id: %d. Canceling config change.\n", m.Id)
 				n.DoneConfChange(cc.ID, x.ErrReuseRemovedId)
 				// Cancel configuration change.
 				cc.NodeID = raft.None
@@ -443,6 +446,9 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
 	n.DoneConfChange(cc.ID, nil)
+
+	// The following doesn't really trigger leader change. It's just capturing a leader change
+	// event. The naming is poor. TODO: Fix naming.
 	n.triggerLeaderChange()
 }
 
@@ -481,7 +487,7 @@ func (n *node) initAndStartNode() error {
 
 		gconn := p.Get()
 		c := intern.NewRaftClient(gconn)
-		err = errJoinCluster
+		err := errJoinCluster
 		timeout := 8 * time.Second
 		for i := 0; err != nil; i++ {
 			ctx, cancel := context.WithTimeout(n.ctx, timeout)
@@ -497,7 +503,7 @@ func (n *node) initAndStartNode() error {
 				errorDesc == x.ErrReuseRemovedId.Error() {
 				log.Fatalf("Error while joining cluster: %v", errorDesc)
 			}
-			x.Printf("Error while joining cluster %v\n", err)
+			x.Printf("Error while joining cluster: %v\n", err)
 			timeout *= 2
 			if timeout > 32*time.Second {
 				timeout = 32 * time.Second
@@ -507,6 +513,7 @@ func (n *node) initAndStartNode() error {
 		if err != nil {
 			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
 		}
+		x.Printf("---------> raft.StartNode for %d\n", n.Id)
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	} else {
@@ -518,7 +525,7 @@ func (n *node) initAndStartNode() error {
 
 	go n.Run()
 	go n.BatchAndSendMessages()
-	return err
+	return nil
 }
 
 func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
@@ -615,6 +622,7 @@ func (n *node) Run() {
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
+					x.Printf("Done applying conf change at %d", n.Id)
 
 				} else if entry.Type == raftpb.EntryNormal {
 					key, err := n.applyProposal(entry)
