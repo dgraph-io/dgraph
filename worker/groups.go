@@ -669,20 +669,6 @@ func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
 	return stream.Send(group)
 }
 
-// func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
-// 	if !g.Node.AmLeader() {
-// 		return
-// 	}
-
-// 	// Only the leader needs to propose the oracleDelta retrieved from Zero.
-// 	// The leader and the followers would not directly apply or use the
-// 	// oracleDelta streaming in from Zero. They would wait for the proposal to
-// 	// go through and be applied via node.Run.  This saves us from many edge
-// 	// cases around network partitions and race conditions between prewrites and
-// 	// commits, etc.
-// 	g.Node.proposeAndWait(context.Background(), &intern.Proposal{Delta: oracleDelta})
-// }
-
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
 // Zero sends information about aborted/committed transactions and maxPending.
 func (g *groupi) processOracleDeltaStream() {
@@ -693,7 +679,6 @@ func (g *groupi) processOracleDeltaStream() {
 			g.Node.Id, g.groupId())
 
 		pl := g.Leader(0)
-		// We should always have some connection to dgraphzero.
 		if pl == nil {
 			x.Printf("WARNING: We don't have address of any dgraphzero leader.")
 			elog.Errorf("Dgraph zero leader address unknown")
@@ -701,27 +686,84 @@ func (g *groupi) processOracleDeltaStream() {
 			return
 		}
 
+		// The following code creates a stream. Then runs a goroutine to pick up events from the
+		// stream and pushes them to a channel. The main loop loops over the channel, doing smart
+		// batching. Once a batch is created, it gets proposed. Thus, we can reduce the number of
+		// times proposals happen, which is a great optimization to have (and a common one in our
+		// code base).
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		c := intern.NewZeroClient(pl.Get())
 		// The first entry send by Zero contains the entire state of transactions. Zero periodically
 		// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
 		// safe way to get the status of all the transactions.
-		stream, err := c.Oracle(context.Background(), &api.Payload{})
+		stream, err := c.Oracle(ctx, &api.Payload{})
 		if err != nil {
 			x.Printf("Error while calling Oracle %v\n", err)
 			elog.Errorf("Error while calling Oracle %v", err)
+			cancel()
 			time.Sleep(time.Second)
 			return
 		}
-		defer stream.CloseSend()
+
+		deltaCh := make(chan *intern.OracleDelta, 100)
+		go func() {
+			// This would exit when either a Recv() returns error. Or, cancel() is called by
+			// something outside of this goroutine.
+			defer stream.CloseSend()
+			defer close(deltaCh)
+
+			for {
+				delta, err := stream.Recv()
+				if err != nil || delta == nil {
+					x.Printf("Error in oracle delta stream. Error: %v", err)
+					return
+				}
+
+				select {
+				case deltaCh <- delta:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
 
 		for {
-			oracleDelta, err := stream.Recv()
-			if err != nil || oracleDelta == nil {
-				x.Printf("Error in oracle delta stream. Error: %v", err)
+			var delta *intern.OracleDelta
+			var batch int
+			select {
+			case delta = <-deltaCh:
+				if delta == nil {
+					return
+				}
+				batch++
+			case <-ctx.Done():
 				return
 			}
-			// TODO: We should be getting rid of the local Oracle. All the transaction application
-			// should be done via Raft proposals. Only Zero should have an oracle.
+
+		SLURP:
+			for {
+				select {
+				case more := <-deltaCh:
+					if more == nil {
+						return
+					}
+					batch++
+					if delta.Commits == nil {
+						delta.Commits = make(map[uint64]uint64)
+					}
+					// Merge more with delta.
+					for start, commit := range more.GetCommits() {
+						delta.Commits[start] = commit
+					}
+					delta.Aborts = append(delta.Aborts, more.Aborts...)
+					if delta.MaxPending < more.MaxPending {
+						delta.MaxPending = more.MaxPending
+					}
+				default:
+					break SLURP
+				}
+			}
 
 			// Only the leader needs to propose the oracleDelta retrieved from Zero.
 			// The leader and the followers would not directly apply or use the
@@ -733,11 +775,9 @@ func (g *groupi) processOracleDeltaStream() {
 				elog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
 				return
 			}
-			elog.Printf("Proposing Delta of size %d", oracleDelta.Size())
-			// ctx := context.WithTimeout(context.Background(), time.Minute)
-
 			// Block forever trying to propose this.
-			g.Node.proposeAndWait(context.Background(), &intern.Proposal{Delta: oracleDelta})
+			elog.Printf("Batched %d updates. Proposing Delta of size: %d.", batch, delta.Size())
+			g.Node.proposeAndWait(context.Background(), &intern.Proposal{Delta: delta})
 		}
 	}
 

@@ -561,7 +561,7 @@ func (n *node) processApplyCh() {
 func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	ctx, _ := n.props.CtxAndTxn(pkey)
 
-	applyStatus := func(startTs, commitTs uint64) {
+	applyTxnStatus := func(startTs, commitTs uint64) {
 		var err error
 		for i := 0; i < 3; i++ {
 			err = commitOrAbort(ctx, startTs, commitTs)
@@ -580,10 +580,10 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	}
 
 	for startTs, commitTs := range delta.GetCommits() {
-		applyStatus(startTs, commitTs)
+		applyTxnStatus(startTs, commitTs)
 	}
 	for _, startTs := range delta.GetAborts() {
-		applyStatus(startTs, 0)
+		applyTxnStatus(startTs, 0)
 	}
 	// TODO: Use MaxPending to track the txn watermark. That's the only thing we need really.
 	// delta.GetMaxPending
