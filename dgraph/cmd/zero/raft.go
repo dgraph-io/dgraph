@@ -124,14 +124,14 @@ func (n *node) WaitLinearizableRead(ctx context.Context) error {
 		return errReadIndex
 	}
 	// Read Request can get rejected then we would wait idefinitely on the channel
-	// so have a timeout of 1 second.
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	// so have a timeout.
+	cctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	ch := make(chan uint64, 1)
 	ri := n.setRead(ch)
 	var b [8]byte
 	binary.BigEndian.PutUint64(b[:], ri)
-	if err := n.Raft().ReadIndex(ctx, b[:]); err != nil {
+	if err := n.Raft().ReadIndex(cctx, b[:]); err != nil {
 		return err
 	}
 	select {
@@ -139,11 +139,13 @@ func (n *node) WaitLinearizableRead(ctx context.Context) error {
 		if index == raft.None {
 			return errReadIndex
 		}
+		// Use the original context here.
 		if err := n.Applied.WaitForMark(ctx, index); err != nil {
 			return err
 		}
 		return nil
 	case <-ctx.Done():
+		x.Errorf("While waiting for lin read: %v\n", ctx.Err())
 		return ctx.Err()
 	}
 }

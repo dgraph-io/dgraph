@@ -334,12 +334,15 @@ func (s *Server) Connect(ctx context.Context,
 	defer x.Println("Connected")
 
 	if ctx.Err() != nil {
+		x.Errorf("Context has error: %v\n", ctx.Err())
 		return &emptyConnectionState, ctx.Err()
 	}
 	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
+		x.Printf("\n---------> GETTING latest membership state\n")
 		ms, err := s.latestMembershipState(ctx)
+		x.Printf("\n---------> GOTTEN latest membership state with err: %v\n", err)
 		cs := &intern.ConnectionState{
 			State:      ms,
 			MaxPending: s.orc.MaxPending(),
