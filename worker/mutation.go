@@ -40,9 +40,6 @@ func deletePredicateEdge(edge *intern.DirectedEdge) bool {
 
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Txn) error {
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("In run mutation")
-	}
 	if !groups().ServesTabletRW(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
