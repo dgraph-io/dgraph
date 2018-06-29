@@ -90,13 +90,18 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
+			// TODO: We don't need lease based reads for now at least.
+			// Let's achieve correctness, then we achieve performance. Plus, for the Dgraph servers,
+			// we'll be soon relying only on Timestamps for blocking reads and achieving
+			// linearizability, than checking quorums (Zero would still check quorums).
+
 			// We use lease-based linearizable ReadIndex for performance, at the cost of
 			// correctness.  With it, communication goes follower->leader->follower, instead of
 			// follower->leader->majority_of_followers->leader->follower.  We lose correctness
 			// because the Raft ticker might not arrive promptly, in which case the leader would
 			// falsely believe that its lease is still good.
-			CheckQuorum:    true,
-			ReadOnlyOption: raft.ReadOnlyLeaseBased,
+			// CheckQuorum:    true,
+			// ReadOnlyOption: raft.ReadOnlyLeaseBased,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
@@ -387,6 +392,7 @@ func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) erro
 	id := n.storeConfChange(ch)
 	// TODO: Delete id from the map.
 	pb.ID = id
+	x.Printf("==== ??? Proposing pb: %+v\n", pb)
 	if err := n.Raft().ProposeConfChange(cctx, pb); err != nil {
 		if cctx.Err() != nil {
 			return errInternalRetry
@@ -495,6 +501,8 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 		return nil, errNoNode
 	}
 	// Only process one JoinCluster request at a time.
+	node.joinLock.Lock()
+	defer node.joinLock.Unlock()
 
 	// Check that the new node is from the same group as me.
 	if rc.Group != node.RaftContext.Group {
@@ -518,12 +526,8 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	}
 	node.Connect(rc.Id, rc.Addr)
 
-	node.joinLock.Lock()
-	go func() {
-		err := node.AddToCluster(context.Background(), rc.Id)
-		x.Printf("-----> Done adding to cluster: %d. Err: %v", rc.Id, err)
-		node.joinLock.Unlock()
-	}()
+	err := node.AddToCluster(context.Background(), rc.Id)
+	x.Printf("-----> Done adding to cluster: %d. Err: %v", rc.Id, err)
 	return &api.Payload{}, nil
 	// c := make(chan error, 1)
 	// go func() { c <- node.AddToCluster(ctx, rc.Id) }()

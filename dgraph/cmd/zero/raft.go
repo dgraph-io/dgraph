@@ -443,6 +443,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.server.storeZero(m)
 	}
 
+	x.Printf("=== ### [%d] Applying conf change from within Run loop: %+v\n", n.Id, cc)
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
 	n.DoneConfChange(cc.ID, nil)
@@ -494,8 +495,10 @@ func (n *node) initAndStartNode() error {
 			defer cancel()
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
+			x.Printf("---------> %d trying to join cluster\n", n.Id)
 			_, err = c.JoinCluster(ctx, n.RaftContext)
 			if err == nil {
+				x.Printf("---------> %d DONE with joining cluster\n", n.Id)
 				break
 			}
 			errorDesc := grpc.ErrorDesc(err)

@@ -41,7 +41,7 @@ services:
   zero4:
     image: debian:latest
     container_name: bank-dg0.4
-    command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 4
+    command: /gobin/dgraph zero --my=zero4:5080 --replicas 3 --peer=zero1:5080 --idx 4
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -50,7 +50,7 @@ services:
   zero5:
     image: debian:latest
     container_name: bank-dg0.5
-    command: /gobin/dgraph zero --my=zero3:5080 --replicas 3 --peer=zero1:5080 --idx 5
+    command: /gobin/dgraph zero --my=zero5:5080 --replicas 3 --peer=zero1:5080 --idx 5
     volumes:
       - type: bind
         source: $GOPATH/bin
