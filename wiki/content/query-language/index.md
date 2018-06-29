@@ -2735,6 +2735,7 @@ curl localhost:8080/query -XPOST -d $'{
 
 
 ## shortest() Query with depth parameter
+
 This query lets you traverse a set of predicates (with filter, facets, etc.) until we reach the destination node with the shortest path with depth which is specified by the depth parameter.
 
 ```
