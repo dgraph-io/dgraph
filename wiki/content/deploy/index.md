@@ -1081,9 +1081,10 @@ You should not use the same `idx` as that of a node that was removed earlier.
 
 
 ## TLS configuration
+
 Use TLS client authentication to encrypt the communication between the clients and the server. The Dgraph server assumes that, if --tls_on is set, then the server has a certificate and key loaded. This will be used to authenticate that the server used is correct.
 
-The flag ``` --tls_client_auth == REQUIREANDVERIFY ``` makes sure that the server requires and verifies a certificate.
+The flag ` --tls_client_auth == REQUIREANDVERIFY ` makes sure that the server requires and verifies a certificate.
 
 Connections between client and server can be secured with TLS.
 Both encrypted (password protected) and unencrypted private keys are supported.
@@ -1138,7 +1139,7 @@ MyClient.pem
 
 Dgraph loader can be configured with following options:
 
-If you want to use TLS client authentication you have to set, ```tls_client_auth to true``` and ```set cacertfile, certfied and keyfile ``` to the correct paths
+If you want to use TLS client authentication you have to set, `tls_client_auth to true` and `set cacertfile, certfied and keyfile ` to the correct paths
 Following configuration options are available for the server:
 ```sh
 #Set the hostname.
