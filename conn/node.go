@@ -102,6 +102,7 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 			// falsely believe that its lease is still good.
 			// CheckQuorum:    true,
 			// ReadOnlyOption: raft.ReadOnlyLeaseBased,
+			ReadOnlyOption: raft.ReadOnlySafe,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full

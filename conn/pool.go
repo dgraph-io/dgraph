@@ -105,7 +105,7 @@ func (p *Pools) Connect(addr string) *Pool {
 		p.Unlock()
 		return existingPool
 	}
-	x.Printf("== CONNECT ==> Setting %v\n", addr)
+	x.Printf("== CONNECTED ==> Setting %v\n", addr)
 	p.all[addr] = pool
 	p.Unlock()
 	return pool

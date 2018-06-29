@@ -123,31 +123,48 @@ func (n *node) WaitLinearizableRead(ctx context.Context) error {
 	if n.Raft() == nil {
 		return errReadIndex
 	}
-	// Read Request can get rejected then we would wait idefinitely on the channel
-	// so have a timeout.
-	cctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	ch := make(chan uint64, 1)
-	ri := n.setRead(ch)
-	var b [8]byte
-	binary.BigEndian.PutUint64(b[:], ri)
-	if err := n.Raft().ReadIndex(cctx, b[:]); err != nil {
-		return err
-	}
-	select {
-	case index := <-ch:
-		if index == raft.None {
-			return errReadIndex
-		}
-		// Use the original context here.
-		if err := n.Applied.WaitForMark(ctx, index); err != nil {
+	wait := func() error {
+		// Read Request can get rejected then we would wait idefinitely on the channel
+		// so have a timeout.
+		cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+
+		ch := make(chan uint64, 1)
+		ri := n.setRead(ch) // Store ch so we can get a callback.
+		var b [8]byte
+		binary.BigEndian.PutUint64(b[:], ri)
+		// Store the uint64 as data.
+		if err := n.Raft().ReadIndex(cctx, b[:]); err != nil {
 			return err
 		}
-		return nil
-	case <-ctx.Done():
-		x.Errorf("While waiting for lin read: %v\n", ctx.Err())
-		return ctx.Err()
+		x.Printf("[%d] Waiting for READ with ri=%d\n", n.Id, ri)
+		if err := n.Raft().Propose(cctx, nil); err != nil {
+			x.Errorf("Couldn't propose empty. Error: %v\n", err)
+		}
+
+		select {
+		case index := <-ch:
+			if index == raft.None {
+				return errReadIndex
+			}
+			// Use the original context here.
+			if err := n.Applied.WaitForMark(ctx, index); err != nil {
+				return err
+			}
+			return nil
+		case <-ctx.Done():
+			x.Errorf("While waiting for lin read: %v\n", ctx.Err())
+			return ctx.Err()
+		case <-cctx.Done():
+			x.Printf("Need to retry for lin read\n")
+			return errInternalRetry
+		}
 	}
+	err := errInternalRetry
+	for err == errInternalRetry {
+		err = wait()
+	}
+	return err
 }
 
 func (n *node) RegisterForUpdates(ch chan struct{}) uint32 {
@@ -613,6 +630,7 @@ func (n *node) Run() {
 			for _, rs := range rd.ReadStates {
 				ri := binary.BigEndian.Uint64(rs.RequestCtx)
 				n.sendReadIndex(ri, rs.Index)
+				x.Printf("READ.GOT ri=%d. index=%d\n", ri, rs.Index)
 			}
 
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)

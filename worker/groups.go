@@ -88,7 +88,9 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	maxHalfDelay := 3 * time.Second
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+		x.Printf("Connecting with Zero: %+v\n", m)
 		connState, err = zc.Connect(gr.ctx, m)
+		x.Printf("Got connState response from Zero\n")
 		if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
 			break
 		}
