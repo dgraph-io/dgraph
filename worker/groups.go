@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -668,79 +669,133 @@ func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
 	return stream.Send(group)
 }
 
-func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
-	if !g.Node.AmLeader() {
-		return
-	}
-
-	// Only the leader of a group proposes the commit proposal for a group after getting delta from
-	// Zero.
-	for startTs, commitTs := range oracleDelta.Commits {
-		// The leader might not have yet applied the mutation and hence may not have the txn in the
-		// map. Its ok we can just continue, processOracleDeltaStream checks the oracle map every
-		// minute and calls proposeDelta.
-		if posting.Txns().Get(startTs) == nil {
-			// Don't mark oracle as done here as then it would be deleted the entry from map and it
-			// won't be proposed to the group. This could eventually block snapshots from happening
-			// in a replicated cluster.
-			continue
-		}
-		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTs}
-		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
-	}
-	for _, startTs := range oracleDelta.Aborts {
-		if posting.Txns().Get(startTs) == nil {
-			continue
-		}
-		tctx := &api.TxnContext{StartTs: startTs}
-		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
-	}
-}
-
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
 // Zero sends information about aborted/committed transactions and maxPending.
 func (g *groupi) processOracleDeltaStream() {
-	go func() {
-		// TODO (pawan) - What is this for? Comment says this is required when there is no leader
-		// but proposeDelta returns if the current node is not leader.
+	blockingReceiveAndPropose := func() {
+		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
+		defer elog.Finish()
+		elog.Printf("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
+			g.Node.Id, g.groupId())
 
-		// In the event where there in no leader for a group, commit/abort won't get proposed.
-		// So periodically check oracle and propose
-		// Ticker time should be long enough so that same startTs
-		// doesn't get proposed again and again.
-		ticker := time.NewTicker(time.Minute)
-		for range ticker.C {
-			g.proposeDelta(posting.Oracle().CurrentState())
+		pl := g.Leader(0)
+		if pl == nil {
+			x.Printf("WARNING: We don't have address of any dgraphzero leader.")
+			elog.Errorf("Dgraph zero leader address unknown")
+			time.Sleep(time.Second)
+			return
 		}
-	}()
 
+		// The following code creates a stream. Then runs a goroutine to pick up events from the
+		// stream and pushes them to a channel. The main loop loops over the channel, doing smart
+		// batching. Once a batch is created, it gets proposed. Thus, we can reduce the number of
+		// times proposals happen, which is a great optimization to have (and a common one in our
+		// code base).
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		c := intern.NewZeroClient(pl.Get())
+		// The first entry send by Zero contains the entire state of transactions. Zero periodically
+		// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
+		// safe way to get the status of all the transactions.
+		stream, err := c.Oracle(ctx, &api.Payload{})
+		if err != nil {
+			x.Printf("Error while calling Oracle %v\n", err)
+			elog.Errorf("Error while calling Oracle %v", err)
+			cancel()
+			time.Sleep(time.Second)
+			return
+		}
+
+		deltaCh := make(chan *intern.OracleDelta, 100)
+		go func() {
+			// This would exit when either a Recv() returns error. Or, cancel() is called by
+			// something outside of this goroutine.
+			defer stream.CloseSend()
+			defer close(deltaCh)
+
+			for {
+				delta, err := stream.Recv()
+				if err != nil || delta == nil {
+					x.Printf("Error in oracle delta stream. Error: %v", err)
+					return
+				}
+
+				select {
+				case deltaCh <- delta:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+
+		for {
+			var delta *intern.OracleDelta
+			var batch int
+			select {
+			case delta = <-deltaCh:
+				if delta == nil {
+					return
+				}
+				batch++
+			case <-ctx.Done():
+				return
+			}
+
+		SLURP:
+			for {
+				select {
+				case more := <-deltaCh:
+					if more == nil {
+						return
+					}
+					batch++
+					if delta.Commits == nil {
+						delta.Commits = make(map[uint64]uint64)
+					}
+					// Merge more with delta.
+					for start, commit := range more.GetCommits() {
+						delta.Commits[start] = commit
+					}
+					delta.Aborts = append(delta.Aborts, more.Aborts...)
+					if delta.MaxPending < more.MaxPending {
+						delta.MaxPending = more.MaxPending
+					}
+				default:
+					break SLURP
+				}
+			}
+
+			// Only the leader needs to propose the oracleDelta retrieved from Zero.
+			// The leader and the followers would not directly apply or use the
+			// oracleDelta streaming in from Zero. They would wait for the proposal to
+			// go through and be applied via node.Run.  This saves us from many edge
+			// cases around network partitions and race conditions between prewrites and
+			// commits, etc.
+			if !g.Node.AmLeader() {
+				elog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
+				return
+			}
+			// Block forever trying to propose this.
+			elog.Printf("Batched %d updates. Proposing Delta of size: %d.", batch, delta.Size())
+			g.Node.proposeAndWait(context.Background(), &intern.Proposal{Delta: delta})
+		}
+	}
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 START:
-	pl := g.Leader(0)
-	// We should always have some connection to dgraphzero.
-	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero leader.")
-		time.Sleep(time.Second)
-		goto START
-	}
-
-	c := intern.NewZeroClient(pl.Get())
-	stream, err := c.Oracle(context.Background(), &api.Payload{})
-	if err != nil {
-		x.Printf("Error while calling Oracle %v\n", err)
-		time.Sleep(time.Second)
-		goto START
-	}
-
 	for {
-		oracleDelta, err := stream.Recv()
-		if err != nil || oracleDelta == nil {
-			x.Printf("Error in oracle delta stream. Error: %v", err)
-			break
+		select {
+		case <-g.Node.stop:
+			return
+		case <-ticker.C:
+			// Only the leader needs to connect to Zero and get transaction
+			// updates.
+			if g.Node.AmLeader() {
+				break START
+			}
 		}
-		posting.Oracle().ProcessOracleDelta(oracleDelta)
-		// Do Immediately so that index keys are written.
-		g.proposeDelta(oracleDelta)
 	}
-	time.Sleep(time.Second)
+	blockingReceiveAndPropose()
 	goto START
 }

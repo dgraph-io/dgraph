@@ -40,9 +40,6 @@ func deletePredicateEdge(edge *intern.DirectedEdge) bool {
 
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Txn) error {
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("In run mutation")
-	}
 	if !groups().ServesTabletRW(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
@@ -495,20 +492,20 @@ func populateMutationMap(src *intern.Mutations) map[uint32]*intern.Mutations {
 	return mm
 }
 
-func commitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Payload, error) {
-	txn := posting.Txns().Get(tc.StartTs)
+func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
+	txn := posting.Txns().Get(startTs)
 	if txn == nil {
-		return &api.Payload{}, posting.ErrInvalidTxn
+		return posting.ErrInvalidTxn
 	}
 	// Ensures that we wait till prewrite is applied
 	idx := txn.LastIndex()
 	groups().Node.Applied.WaitForMark(ctx, idx)
-	if tc.CommitTs == 0 {
+	if commitTs == 0 {
 		err := txn.AbortMutations(ctx)
-		return &api.Payload{}, err
+		return err
 	}
-	err := txn.CommitMutations(ctx, tc.CommitTs)
-	return &api.Payload{}, err
+	err := txn.CommitMutations(ctx, commitTs)
+	return err
 }
 
 type res struct {
@@ -616,7 +613,7 @@ func tryAbortTransactions(startTimestamps []uint64) {
 
 	for i, startTs := range startTimestamps {
 		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTimestamps[i]}
-		_, err := commitOrAbort(context.Background(), tctx)
+		err := commitOrAbort(context.Background(), tctx.StartTs, tctx.CommitTs)
 		// Transaction could already have been aborted in which case it would be deleted from the
 		// transactions map and we should just continue.
 		// TODO - Make sure all other errors are transient, we don't want to be stuck in an infinite
@@ -624,7 +621,7 @@ func tryAbortTransactions(startTimestamps []uint64) {
 		for err != nil && err != posting.ErrInvalidTxn {
 			x.Printf("Error while locally aborting txns: %v\n", err)
 			// This will fail only due to badger error.
-			_, err = commitOrAbort(context.Background(), tctx)
+			err = commitOrAbort(context.Background(), tctx.StartTs, tctx.CommitTs)
 		}
 	}
 }

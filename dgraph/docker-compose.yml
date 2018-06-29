@@ -17,9 +17,9 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: "${DATA}"
-        target: /data
+      # - type: bind
+      #   source: "${DATA}"
+      #   target: /data
   # zero2:
   #   image: debian:latest
   #   container_name: bank-dg0.2
@@ -47,9 +47,9 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: "${DATA}"
-        target: /data
+      # - type: bind
+      #   source: "${DATA}"
+      #   target: /data
     ports:
       - 8180:8180
       - 9180:9180
@@ -63,9 +63,9 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: "${DATA}"
-        target: /data
+      # - type: bind
+      #   source: "${DATA}"
+      #   target: /data
     ports:
       - 8181:8181
       - 9181:9181
@@ -80,9 +80,9 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: "${DATA}"
-        target: /data
+      # - type: bind
+      #   source: "${DATA}"
+      #   target: /data
     ports:
       - 8182:8182
       - 9182:9182

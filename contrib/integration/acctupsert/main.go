@@ -26,7 +26,7 @@ import (
 
 var (
 	addr    = flag.String("addr", "localhost:9080", "dgraph address")
-	concurr = flag.Int("c", 5, "number of concurrent upserts per account")
+	concurr = flag.Int("c", 3, "number of concurrent upserts per account")
 )
 
 var (

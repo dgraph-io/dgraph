@@ -128,7 +128,13 @@ func alterSchema(s string) error {
 }
 
 func alterSchemaWithRetry(s string) error {
-	return alterSchema(s)
+	var err error
+	for i := 0; i < 3; i++ {
+		if err = alterSchema(s); err == nil {
+			return nil
+		}
+	}
+	return err
 }
 
 func dropAll() error {
