@@ -622,6 +622,10 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
 
+	logTick := time.NewTicker(5 * time.Second)
+	defer logTick.Stop()
+
+	var loops, valid uint64
 	for {
 		select {
 		case <-n.stop:
@@ -629,8 +633,11 @@ func (n *node) Run() {
 			return
 		case <-ticker.C:
 			n.Raft().Tick()
+		case <-logTick.C:
+			x.Printf("[%d] Run loop count: %d. Committed: %d\n", n.Id, loops, valid)
 
 		case rd := <-n.Raft().Ready():
+			loops++
 			for _, rs := range rd.ReadStates {
 				x.Printf("[%d] Received rs: %+v", n.Id, rs)
 				readStateCh <- rs
@@ -645,6 +652,7 @@ func (n *node) Run() {
 			}
 
 			for _, entry := range rd.CommittedEntries {
+				valid++
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)

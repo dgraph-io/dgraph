@@ -168,7 +168,7 @@ func (p *Pool) UpdateHealthStatus(printError bool) error {
 func (p *Pool) MonitorHealth() {
 	var lastErr error
 	for range p.ticker.C {
-		err := p.UpdateHealthStatus(lastErr == nil)
+		err := p.UpdateHealthStatus(true)
 		if lastErr != nil && err == nil {
 			x.Printf("Connection established with %v\n", p.Addr)
 		}

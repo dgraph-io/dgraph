@@ -505,9 +505,9 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		}
 
 		// TODO: Ascertain if we really need to propose to ensure that ReadStates are populated.
-		x.Printf("[%d] Waiting for READ\n", n.Id)
+		x.Printf("@@@@@@@@@@@@@ [%d] Waiting for READ with activectx: %v\n", n.Id, activeRctx)
 		// var d []byte
-		// if err := n.Raft().Propose(ctx, d); err != nil {
+		// if err := n.Raft().Propose(ctx, nil); err != nil {
 		// 	x.Errorf("Couldn't propose empty. Error: %v\n", err)
 		// 	// No need to return.
 		// }
@@ -520,7 +520,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			if !bytes.Equal(activeRctx[:], rs.RequestCtx) {
 				goto again
 			}
-			x.Printf("[%d] Received read index: %d", n.Id, rs.Index)
+			x.Printf("@@@@@@@@@@ [%d] Received read index: %d", n.Id, rs.Index)
 			return rs.Index, nil
 		case <-ctx.Done():
 			x.Errorf("[%d] Read index context timed out\n")
