@@ -26,6 +26,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Fix bugs in snapshot move, refactor code and improve performance significantly. #2440, #2442
 * Add error handling to GetNoStore. Fixes #2373.
 * Fix bugs in Bulk loader. #2449
+* Posting List and Raft bug fixes. #2457
 
 ### Changed
 
@@ -35,7 +36,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Trace how node.Run loop performs.
 * Allow tweaking Badger options.
 
-*Warning: This change modifies some flag names. In particular, Badger options
+**Note:** This change modifies some flag names. In particular, Badger options
 are now exposed via flags named with `--badger.` prefix.
 
 ## [1.0.5] - 2018-04-20
