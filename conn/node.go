@@ -18,6 +18,7 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -38,6 +39,9 @@ type Node struct {
 	x.SafeMutex
 
 	joinLock sync.Mutex
+
+	// Used to keep track of lin read requests.
+	requestCh chan linReadReq
 
 	// SafeMutex is for fields which can be changed after init.
 	_confState *raftpb.ConfState
@@ -106,17 +110,19 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		peers:       make(map[uint64]string),
-		confChanges: make(map[uint64]chan error),
-		RaftContext: rc,
-		messages:    make(chan sendmsg, 100),
 		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		RaftContext: rc,
 		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
+		confChanges: make(map[uint64]chan error),
+		messages:    make(chan sendmsg, 100),
+		peers:       make(map[uint64]string),
+		requestCh:   make(chan linReadReq),
 	}
 	n.Applied.Init()
 	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.
 	// This can happen once we get rid of groups.
 	n_ = n
+
 	return n
 }
 
@@ -455,6 +461,109 @@ func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 		err = n.proposeConfChange(ctx, cc)
 	}
 	return err
+}
+
+type linReadReq struct {
+	// A one-shot chan which we send a raft index upon
+	indexCh chan<- uint64
+}
+
+var errReadIndex = x.Errorf("cannot get linearized read (time expired or no configured leader)")
+
+func (n *Node) WaitLinearizableRead(ctx context.Context) error {
+	indexCh := make(chan uint64, 1)
+	select {
+	case n.requestCh <- linReadReq{indexCh: indexCh}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	select {
+	case index := <-indexCh:
+		if index == 0 {
+			return errReadIndex
+		}
+		return n.Applied.WaitForMark(ctx, index)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
+	defer closer.Done()
+	readIndex := func() (uint64, error) {
+		// Read Request can get rejected then we would wait idefinitely on the channel
+		// so have a timeout.
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		activeRctx := make([]byte, 8)
+		x.Check2(n.Rand.Read(activeRctx[:]))
+		if err := n.Raft().ReadIndex(ctx, activeRctx[:]); err != nil {
+			x.Errorf("Error while trying to call ReadIndex: %v\n", err)
+			return 0, err
+		}
+
+		// TODO: Ascertain if we really need to propose to ensure that ReadStates are populated.
+		x.Printf("[%d] Waiting for READ\n", n.Id)
+		// var d []byte
+		// if err := n.Raft().Propose(ctx, d); err != nil {
+		// 	x.Errorf("Couldn't propose empty. Error: %v\n", err)
+		// 	// No need to return.
+		// }
+
+	again:
+		select {
+		case <-closer.HasBeenClosed():
+			return 0, errors.New("closer has been called")
+		case rs := <-readStateCh:
+			if !bytes.Equal(activeRctx[:], rs.RequestCtx) {
+				goto again
+			}
+			x.Printf("[%d] Received read index: %d", n.Id, rs.Index)
+			return rs.Index, nil
+		case <-ctx.Done():
+			x.Errorf("[%d] Read index context timed out\n")
+			return 0, errInternalRetry
+		}
+	}
+
+	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
+	// requestCh.
+	requests := []linReadReq{}
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return
+		case rs := <-readStateCh:
+			// Do nothing, discard ReadState as we don't have any pending ReadIndex requests.
+			x.Errorf("Received a read state unexpectedly: %+v\n", rs)
+		case req := <-n.requestCh:
+		slurpLoop:
+			for {
+				requests = append(requests, req)
+				select {
+				case req = <-n.requestCh:
+				default:
+					break slurpLoop
+				}
+			}
+			for {
+				index, err := readIndex()
+				if err == errInternalRetry {
+					continue
+				}
+				if err != nil {
+					index = 0
+					x.Errorf("[%d] While trying to do lin read index: %v", n.Id, err)
+				}
+				for _, req := range requests {
+					req.indexCh <- index
+				}
+			}
+			requests = requests[:0]
+		}
+	}
 }
 
 // TODO: Get rid of this in the upcoming changes.

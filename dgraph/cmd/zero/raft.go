@@ -8,7 +8,6 @@
 package zero
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -90,82 +89,84 @@ type node struct {
 	stop        chan struct{} // to send stop signal to Run
 }
 
-func (n *node) setRead(ch chan uint64) uint64 {
-	n.Lock()
-	defer n.Unlock()
-	if n.reads == nil {
-		n.reads = make(map[uint64]chan uint64)
-	}
-	for {
-		ri := uint64(rand.Int63())
-		if _, has := n.reads[ri]; has {
-			continue
-		}
-		n.reads[ri] = ch
-		return ri
-	}
-}
+// TODO: Remove these two.
+// func (n *node) setRead(ch chan uint64) uint64 {
+// 	n.Lock()
+// 	defer n.Unlock()
+// 	if n.reads == nil {
+// 		n.reads = make(map[uint64]chan uint64)
+// 	}
+// 	for {
+// 		ri := uint64(rand.Int63())
+// 		if _, has := n.reads[ri]; has {
+// 			continue
+// 		}
+// 		n.reads[ri] = ch
+// 		return ri
+// 	}
+// }
 
-func (n *node) sendReadIndex(ri, id uint64) {
-	n.Lock()
-	ch, has := n.reads[ri]
-	delete(n.reads, ri)
-	n.Unlock()
-	if has {
-		ch <- id
-	}
-}
+// // TODO: Remove this.
+// func (n *node) sendReadIndex(ri, id uint64) {
+// 	n.Lock()
+// 	ch, has := n.reads[ri]
+// 	delete(n.reads, ri)
+// 	n.Unlock()
+// 	if has {
+// 		ch <- id
+// 	}
+// }
 
 var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
 
-func (n *node) WaitLinearizableRead(ctx context.Context) error {
-	// This is possible if say Zero was restarted and Server tries to connect over stream.
-	if n.Raft() == nil {
-		return errReadIndex
-	}
-	wait := func() error {
-		// Read Request can get rejected then we would wait idefinitely on the channel
-		// so have a timeout.
-		cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		defer cancel()
+// func (n *node) WaitLinearizableRead(ctx context.Context) error {
+// 	// This is possible if say Zero was restarted and Server tries to connect over stream.
+// 	if n.Raft() == nil {
+// 		return errReadIndex
+// 	}
+// 	wait := func() error {
+// 		// Read Request can get rejected then we would wait idefinitely on the channel
+// 		// so have a timeout.
+// 		cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+// 		defer cancel()
 
-		ch := make(chan uint64, 1)
-		ri := n.setRead(ch) // Store ch so we can get a callback.
-		var b [8]byte
-		binary.BigEndian.PutUint64(b[:], ri)
-		// Store the uint64 as data.
-		if err := n.Raft().ReadIndex(cctx, b[:]); err != nil {
-			return err
-		}
-		x.Printf("[%d] Waiting for READ with ri=%d\n", n.Id, ri)
-		if err := n.Raft().Propose(cctx, nil); err != nil {
-			x.Errorf("Couldn't propose empty. Error: %v\n", err)
-		}
+// 		ch := make(chan uint64, 1)
+// 		ri := n.setRead(ch) // Store ch so we can get a callback.
+// 		var b [8]byte
+// 		binary.BigEndian.PutUint64(b[:], ri)
+// 		// Store the uint64 as data.
+// 		if err := n.Raft().ReadIndex(cctx, b[:]); err != nil {
+// 			return err
+// 		}
+// 		x.Printf("[%d] Waiting for READ with ri=%d\n", n.Id, ri)
+// 		if err := n.Raft().Propose(cctx, nil); err != nil {
+// 			x.Errorf("Couldn't propose empty. Error: %v\n", err)
+// 		}
 
-		select {
-		case index := <-ch:
-			if index == raft.None {
-				return errReadIndex
-			}
-			// Use the original context here.
-			if err := n.Applied.WaitForMark(ctx, index); err != nil {
-				return err
-			}
-			return nil
-		case <-ctx.Done():
-			x.Errorf("While waiting for lin read: %v\n", ctx.Err())
-			return ctx.Err()
-		case <-cctx.Done():
-			x.Printf("Need to retry for lin read\n")
-			return errInternalRetry
-		}
-	}
-	err := errInternalRetry
-	for err == errInternalRetry {
-		err = wait()
-	}
-	return err
-}
+// 		select {
+// 		case index := <-ch:
+// 			if index == raft.None {
+// 				return errReadIndex
+// 			}
+// 			// Use the original context here.
+// 			if err := n.Applied.WaitForMark(ctx, index); err != nil {
+// 				return err
+// 			}
+// 			return nil
+// 		case <-ctx.Done():
+// 			x.Errorf("While waiting for lin read: %v\n", ctx.Err())
+// 			return ctx.Err()
+// 		case <-cctx.Done():
+// 			x.Printf("Need to retry for lin read\n")
+// 			return errInternalRetry
+// 		}
+// 	}
+// 	err := errInternalRetry
+// 	for err == errInternalRetry {
+// 		err = wait()
+// 	}
+// 	return err
+// }
 
 func (n *node) RegisterForUpdates(ch chan struct{}) uint32 {
 	n.Lock()
@@ -609,11 +610,14 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	closer := y.NewCloser(3)
+	closer := y.NewCloser(4)
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	go n.snapshotPeriodically(closer)
 	go n.updateZeroMembershipPeriodically(closer)
+
+	readStateCh := make(chan raft.ReadState, 10)
+	go n.RunReadIndexLoop(closer, readStateCh)
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
@@ -628,9 +632,8 @@ func (n *node) Run() {
 
 		case rd := <-n.Raft().Ready():
 			for _, rs := range rd.ReadStates {
-				ri := binary.BigEndian.Uint64(rs.RequestCtx)
-				n.sendReadIndex(ri, rs.Index)
-				x.Printf("READ.GOT ri=%d. index=%d\n", ri, rs.Index)
+				x.Printf("[%d] Received rs: %+v", n.Id, rs)
+				readStateCh <- rs
 			}
 
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
