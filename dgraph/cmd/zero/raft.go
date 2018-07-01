@@ -89,84 +89,7 @@ type node struct {
 	stop        chan struct{} // to send stop signal to Run
 }
 
-// TODO: Remove these two.
-// func (n *node) setRead(ch chan uint64) uint64 {
-// 	n.Lock()
-// 	defer n.Unlock()
-// 	if n.reads == nil {
-// 		n.reads = make(map[uint64]chan uint64)
-// 	}
-// 	for {
-// 		ri := uint64(rand.Int63())
-// 		if _, has := n.reads[ri]; has {
-// 			continue
-// 		}
-// 		n.reads[ri] = ch
-// 		return ri
-// 	}
-// }
-
-// // TODO: Remove this.
-// func (n *node) sendReadIndex(ri, id uint64) {
-// 	n.Lock()
-// 	ch, has := n.reads[ri]
-// 	delete(n.reads, ri)
-// 	n.Unlock()
-// 	if has {
-// 		ch <- id
-// 	}
-// }
-
 var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
-
-// func (n *node) WaitLinearizableRead(ctx context.Context) error {
-// 	// This is possible if say Zero was restarted and Server tries to connect over stream.
-// 	if n.Raft() == nil {
-// 		return errReadIndex
-// 	}
-// 	wait := func() error {
-// 		// Read Request can get rejected then we would wait idefinitely on the channel
-// 		// so have a timeout.
-// 		cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-// 		defer cancel()
-
-// 		ch := make(chan uint64, 1)
-// 		ri := n.setRead(ch) // Store ch so we can get a callback.
-// 		var b [8]byte
-// 		binary.BigEndian.PutUint64(b[:], ri)
-// 		// Store the uint64 as data.
-// 		if err := n.Raft().ReadIndex(cctx, b[:]); err != nil {
-// 			return err
-// 		}
-// 		x.Printf("[%d] Waiting for READ with ri=%d\n", n.Id, ri)
-// 		if err := n.Raft().Propose(cctx, nil); err != nil {
-// 			x.Errorf("Couldn't propose empty. Error: %v\n", err)
-// 		}
-
-// 		select {
-// 		case index := <-ch:
-// 			if index == raft.None {
-// 				return errReadIndex
-// 			}
-// 			// Use the original context here.
-// 			if err := n.Applied.WaitForMark(ctx, index); err != nil {
-// 				return err
-// 			}
-// 			return nil
-// 		case <-ctx.Done():
-// 			x.Errorf("While waiting for lin read: %v\n", ctx.Err())
-// 			return ctx.Err()
-// 		case <-cctx.Done():
-// 			x.Printf("Need to retry for lin read\n")
-// 			return errInternalRetry
-// 		}
-// 	}
-// 	err := errInternalRetry
-// 	for err == errInternalRetry {
-// 		err = wait()
-// 	}
-// 	return err
-// }
 
 func (n *node) RegisterForUpdates(ch chan struct{}) uint32 {
 	n.Lock()
@@ -435,7 +358,6 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(e.Data)
-	x.Printf("Got applyConfChange at %d: %+v\n", n.Id, cc)
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		n.DeletePeer(cc.NodeID)
@@ -444,8 +366,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	} else if len(cc.Context) > 0 {
 		var rc intern.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
-		// TODO: We don't need because this was already done during JoinCluster.
-		// go n.Connect(rc.Id, rc.Addr)
+		go n.Connect(rc.Id, rc.Addr)
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
 		for _, member := range n.server.membershipState().Removed {
@@ -463,13 +384,13 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.server.storeZero(m)
 	}
 
-	x.Printf("=== ### [%d] Applying conf change from within Run loop: %+v\n", n.Id, cc)
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
 	n.DoneConfChange(cc.ID, nil)
 
 	// The following doesn't really trigger leader change. It's just capturing a leader change
-	// event. The naming is poor. TODO: Fix naming.
+	// event. The naming is poor. TODO: Fix naming, and see if we can simplify this leader change
+	// logic.
 	n.triggerLeaderChange()
 }
 
@@ -515,10 +436,8 @@ func (n *node) initAndStartNode() error {
 			defer cancel()
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
-			x.Printf("---------> %d trying to join cluster\n", n.Id)
 			_, err = c.JoinCluster(ctx, n.RaftContext)
 			if err == nil {
-				x.Printf("---------> %d DONE with joining cluster\n", n.Id)
 				break
 			}
 			errorDesc := grpc.ErrorDesc(err)
@@ -536,7 +455,7 @@ func (n *node) initAndStartNode() error {
 		if err != nil {
 			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
 		}
-		x.Printf("---------> raft.StartNode for %d\n", n.Id)
+		x.Printf("[%d] Starting node\n", n.Id)
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	} else {
@@ -622,10 +541,6 @@ func (n *node) Run() {
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
 
-	logTick := time.NewTicker(5 * time.Second)
-	defer logTick.Stop()
-
-	var loops, valid uint64
 	for {
 		select {
 		case <-n.stop:
@@ -633,12 +548,8 @@ func (n *node) Run() {
 			return
 		case <-ticker.C:
 			n.Raft().Tick()
-		case <-logTick.C:
-			x.Printf("[%d] Run loop count: %d. Committed: %d\n", n.Id, loops, valid)
 		case rd := <-n.Raft().Ready():
-			loops++
 			for _, rs := range rd.ReadStates {
-				x.Printf("[%d] Received rs: %+v", n.Id, rs)
 				readStateCh <- rs
 			}
 
@@ -651,7 +562,6 @@ func (n *node) Run() {
 			}
 
 			for _, entry := range rd.CommittedEntries {
-				valid++
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)

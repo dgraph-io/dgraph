@@ -331,7 +331,7 @@ func (s *Server) Connect(ctx context.Context,
 	s.connectLock.Lock()
 	defer s.connectLock.Unlock()
 	x.Printf("Got connection request: %+v\n", m)
-	defer x.Println("Connected")
+	defer x.Printf("Connected: %+v\n", m)
 
 	if ctx.Err() != nil {
 		x.Errorf("Context has error: %v\n", ctx.Err())
@@ -340,9 +340,7 @@ func (s *Server) Connect(ctx context.Context,
 	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
-		x.Printf("\n---------> GETTING latest membership state\n")
 		ms, err := s.latestMembershipState(ctx)
-		x.Printf("\n---------> GOTTEN latest membership state with err: %v\n", err)
 		cs := &intern.ConnectionState{
 			State:      ms,
 			MaxPending: s.orc.MaxPending(),
@@ -566,8 +564,8 @@ func (s *Server) Update(stream intern.Zero_UpdateServer) error {
 }
 
 func (s *Server) latestMembershipState(ctx context.Context) (*intern.MembershipState, error) {
-	// TODO: Bring lin read for Zero back, once Etcd folks can tell me why ReadStates are not being
-	// populated. This is important.
+	// TODO: Bring lin read for Zero back, once Etcd folks can tell why ReadStates are not being
+	// populated. NOTE: This is important to fix quickly.
 	// if err := s.Node.WaitLinearizableRead(ctx); err != nil {
 	// 	return nil, err
 	// }

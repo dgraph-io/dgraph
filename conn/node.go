@@ -94,18 +94,13 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
-			// TODO: We don't need lease based reads for now at least.
-			// Let's achieve correctness, then we achieve performance. Plus, for the Dgraph servers,
-			// we'll be soon relying only on Timestamps for blocking reads and achieving
-			// linearizability, than checking quorums (Zero would still check quorums).
-
-			// We use lease-based linearizable ReadIndex for performance, at the cost of
-			// correctness.  With it, communication goes follower->leader->follower, instead of
-			// follower->leader->majority_of_followers->leader->follower.  We lose correctness
-			// because the Raft ticker might not arrive promptly, in which case the leader would
-			// falsely believe that its lease is still good.
-			// CheckQuorum:    true,
-			// ReadOnlyOption: raft.ReadOnlyLeaseBased,
+			// We don't need lease based reads. They cause issues because they require CheckQuorum
+			// to be true, and that causes a lot of issues for us during cluster bootstrapping and
+			// later. A seemingly healthy cluster would just cause leader to step down due to
+			// "inactive" quorum, and then disallow anyone from becoming leader. So, let's stick to
+			// default options.  Let's achieve correctness, then we achieve performance. Plus, for
+			// the Dgraph servers, we'll be soon relying only on Timestamps for blocking reads and
+			// achieving linearizability, than checking quorums (Zero would still check quorums).
 			ReadOnlyOption: raft.ReadOnlySafe,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
@@ -399,7 +394,6 @@ func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) erro
 	id := n.storeConfChange(ch)
 	// TODO: Delete id from the map.
 	pb.ID = id
-	x.Printf("==== ??? Proposing pb: %+v\n", pb)
 	if err := n.Raft().ProposeConfChange(cctx, pb); err != nil {
 		if cctx.Err() != nil {
 			return errInternalRetry
@@ -409,12 +403,10 @@ func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) erro
 	}
 	select {
 	case err := <-ch:
-		x.Errorf("====> Got error from channel: %v. ConfChange: %+v", err, pb)
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-cctx.Done():
-		x.Errorf("====> While trying to propose conf change. Temporary error: %v", cctx.Err())
 		return errInternalRetry
 	}
 	return nil
@@ -504,14 +496,6 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			return 0, err
 		}
 
-		// TODO: Ascertain if we really need to propose to ensure that ReadStates are populated.
-		x.Printf("@@@@@@@@@@@@@ [%d] Waiting for READ with activectx: %v\n", n.Id, activeRctx)
-		// var d []byte
-		// if err := n.Raft().Propose(ctx, nil); err != nil {
-		// 	x.Errorf("Couldn't propose empty. Error: %v\n", err)
-		// 	// No need to return.
-		// }
-
 	again:
 		select {
 		case <-closer.HasBeenClosed():
@@ -520,7 +504,6 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			if !bytes.Equal(activeRctx[:], rs.RequestCtx) {
 				goto again
 			}
-			x.Printf("@@@@@@@@@@ [%d] Received read index: %d", n.Id, rs.Index)
 			return rs.Index, nil
 		case <-ctx.Done():
 			x.Errorf("[%d] Read index context timed out\n")
@@ -624,11 +607,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	}
 
 	// Check that the new node is not already part of the group.
-	if _, ok := node.Peer(rc.Id); ok {
-		x.Printf("Node %d already part of group: %d\n", node.Id, node.RaftContext.Group)
-	}
 	if addr, ok := node.Peer(rc.Id); ok && rc.Addr != addr {
-		Get().Connect(addr)
 		// There exists a healthy connection to server with same id.
 		if _, err := Get().Get(addr); err == nil {
 			return &api.Payload{}, ErrDuplicateRaftId
@@ -637,17 +616,8 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	node.Connect(rc.Id, rc.Addr)
 
 	err := node.AddToCluster(context.Background(), rc.Id)
-	x.Printf("-----> Done adding to cluster: %d. Err: %v", rc.Id, err)
-	return &api.Payload{}, nil
-	// c := make(chan error, 1)
-	// go func() { c <- node.AddToCluster(ctx, rc.Id) }()
-
-	// select {
-	// case <-ctx.Done():
-	// 	return &api.Payload{}, ctx.Err()
-	// case err := <-c:
-	// 	return &api.Payload{}, err
-	// }
+	x.Printf("[%d] Done joining cluster with err: %v", rc.Id, err)
+	return &api.Payload{}, err
 }
 
 var (
