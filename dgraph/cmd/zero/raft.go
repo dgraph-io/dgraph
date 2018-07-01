@@ -8,7 +8,6 @@
 package zero
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -90,63 +89,7 @@ type node struct {
 	stop        chan struct{} // to send stop signal to Run
 }
 
-func (n *node) setRead(ch chan uint64) uint64 {
-	n.Lock()
-	defer n.Unlock()
-	if n.reads == nil {
-		n.reads = make(map[uint64]chan uint64)
-	}
-	for {
-		ri := uint64(rand.Int63())
-		if _, has := n.reads[ri]; has {
-			continue
-		}
-		n.reads[ri] = ch
-		return ri
-	}
-}
-
-func (n *node) sendReadIndex(ri, id uint64) {
-	n.Lock()
-	ch, has := n.reads[ri]
-	delete(n.reads, ri)
-	n.Unlock()
-	if has {
-		ch <- id
-	}
-}
-
 var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
-
-func (n *node) WaitLinearizableRead(ctx context.Context) error {
-	// This is possible if say Zero was restarted and Server tries to connect over stream.
-	if n.Raft() == nil {
-		return errReadIndex
-	}
-	// Read Request can get rejected then we would wait idefinitely on the channel
-	// so have a timeout of 1 second.
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	ch := make(chan uint64, 1)
-	ri := n.setRead(ch)
-	var b [8]byte
-	binary.BigEndian.PutUint64(b[:], ri)
-	if err := n.Raft().ReadIndex(ctx, b[:]); err != nil {
-		return err
-	}
-	select {
-	case index := <-ch:
-		if index == raft.None {
-			return errReadIndex
-		}
-		if err := n.Applied.WaitForMark(ctx, index); err != nil {
-			return err
-		}
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
 
 func (n *node) RegisterForUpdates(ch chan struct{}) uint32 {
 	n.Lock()
@@ -419,16 +362,17 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		n.DeletePeer(cc.NodeID)
 		n.server.removeZero(cc.NodeID)
+
 	} else if len(cc.Context) > 0 {
 		var rc intern.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
-		n.Connect(rc.Id, rc.Addr)
+		go n.Connect(rc.Id, rc.Addr)
 
 		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
-
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
+				x.Errorf("Reusing removed id: %d. Canceling config change.\n", m.Id)
 				n.DoneConfChange(cc.ID, x.ErrReuseRemovedId)
 				// Cancel configuration change.
 				cc.NodeID = raft.None
@@ -443,6 +387,10 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
 	n.DoneConfChange(cc.ID, nil)
+
+	// The following doesn't really trigger leader change. It's just capturing a leader change
+	// event. The naming is poor. TODO: Fix naming, and see if we can simplify this leader change
+	// logic.
 	n.triggerLeaderChange()
 }
 
@@ -481,7 +429,7 @@ func (n *node) initAndStartNode() error {
 
 		gconn := p.Get()
 		c := intern.NewRaftClient(gconn)
-		err = errJoinCluster
+		err := errJoinCluster
 		timeout := 8 * time.Second
 		for i := 0; err != nil; i++ {
 			ctx, cancel := context.WithTimeout(n.ctx, timeout)
@@ -497,7 +445,7 @@ func (n *node) initAndStartNode() error {
 				errorDesc == x.ErrReuseRemovedId.Error() {
 				log.Fatalf("Error while joining cluster: %v", errorDesc)
 			}
-			x.Printf("Error while joining cluster %v\n", err)
+			x.Printf("Error while joining cluster: %v\n", err)
 			timeout *= 2
 			if timeout > 32*time.Second {
 				timeout = 32 * time.Second
@@ -507,6 +455,7 @@ func (n *node) initAndStartNode() error {
 		if err != nil {
 			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
 		}
+		x.Printf("[%d] Starting node\n", n.Id)
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	} else {
@@ -518,7 +467,7 @@ func (n *node) initAndStartNode() error {
 
 	go n.Run()
 	go n.BatchAndSendMessages()
-	return err
+	return nil
 }
 
 func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
@@ -580,11 +529,14 @@ func (n *node) Run() {
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
-	closer := y.NewCloser(3)
+	closer := y.NewCloser(4)
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	go n.snapshotPeriodically(closer)
 	go n.updateZeroMembershipPeriodically(closer)
+
+	readStateCh := make(chan raft.ReadState, 10)
+	go n.RunReadIndexLoop(closer, readStateCh)
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 	defer closer.SignalAndWait()
@@ -596,11 +548,9 @@ func (n *node) Run() {
 			return
 		case <-ticker.C:
 			n.Raft().Tick()
-
 		case rd := <-n.Raft().Ready():
 			for _, rs := range rd.ReadStates {
-				ri := binary.BigEndian.Uint64(rs.RequestCtx)
-				n.sendReadIndex(ri, rs.Index)
+				readStateCh <- rs
 			}
 
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
@@ -615,6 +565,7 @@ func (n *node) Run() {
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
+					x.Printf("Done applying conf change at %d", n.Id)
 
 				} else if entry.Type == raftpb.EntryNormal {
 					key, err := n.applyProposal(entry)

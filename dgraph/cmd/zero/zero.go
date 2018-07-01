@@ -221,7 +221,7 @@ func (s *Server) removeZero(nodeId uint64) {
 		return
 	}
 	delete(s.state.Zeros, nodeId)
-	conn.Get().Remove(m.Addr)
+	go conn.Get().Remove(m.Addr)
 	s.state.Removed = append(s.state.Removed, m)
 }
 
@@ -331,9 +331,10 @@ func (s *Server) Connect(ctx context.Context,
 	s.connectLock.Lock()
 	defer s.connectLock.Unlock()
 	x.Printf("Got connection request: %+v\n", m)
-	defer x.Println("Connected")
+	defer x.Printf("Connected: %+v\n", m)
 
 	if ctx.Err() != nil {
+		x.Errorf("Context has error: %v\n", ctx.Err())
 		return &emptyConnectionState, ctx.Err()
 	}
 	if m.ClusterInfoOnly {
@@ -563,8 +564,10 @@ func (s *Server) Update(stream intern.Zero_UpdateServer) error {
 }
 
 func (s *Server) latestMembershipState(ctx context.Context) (*intern.MembershipState, error) {
-	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
-		return nil, err
-	}
+	// TODO: Bring lin read for Zero back, once Etcd folks can tell why ReadStates are not being
+	// populated. NOTE: This is important to fix quickly.
+	// if err := s.Node.WaitLinearizableRead(ctx); err != nil {
+	// 	return nil, err
+	// }
 	return s.membershipState(), nil
 }

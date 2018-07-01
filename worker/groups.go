@@ -85,7 +85,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	var connState *intern.ConnectionState
 	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 	delay := 50 * time.Millisecond
-	maxHalfDelay := 15 * time.Second
+	maxHalfDelay := 3 * time.Second
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
 		connState, err = zc.Connect(gr.ctx, m)
