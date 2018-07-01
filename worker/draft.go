@@ -132,9 +132,11 @@ func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error 
 	if read == nil {
 		return nil
 	}
-	if read.Sequencing == api.LinRead_SERVER_SIDE {
-		return n.WaitLinearizableRead(ctx)
-	}
+	// TODO: Now that we apply txn updates via Raft, waiting based on Txn timestamps is sufficient.
+	// It ensures that we have seen all applied mutations before a txn commit proposal is applied.
+	// if read.Sequencing == api.LinRead_SERVER_SIDE {
+	// 	return n.WaitLinearizableRead(ctx)
+	// }
 	if read.Ids == nil {
 		return nil
 	}
@@ -658,15 +660,6 @@ func (n *node) Run() {
 	closer := y.NewCloser(2)
 	go n.snapshotPeriodically(closer)
 
-	// This chan could have capacity zero, because runReadIndexLoop never blocks without selecting
-	// on readStateCh.  It's 2 so that sending rarely blocks (so the Go runtime doesn't have to
-	// switch threads as much.)
-	readStateCh := make(chan raft.ReadState, 10)
-
-	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
-	// That way we know sending to readStateCh will not deadlock.
-	go n.RunReadIndexLoop(closer, readStateCh)
-
 	logTicker := time.NewTicker(time.Minute)
 	defer logTicker.Stop()
 
@@ -683,10 +676,6 @@ func (n *node) Run() {
 			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) || !raft.IsEmptyHardState(rd.HardState) {
 				// Optionally, trace this run.
 				tr = trace.New("Dgraph", "RunLoop")
-			}
-
-			for _, rs := range rd.ReadStates {
-				readStateCh <- rs
 			}
 
 			if rd.SoftState != nil {

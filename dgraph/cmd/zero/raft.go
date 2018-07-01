@@ -635,7 +635,6 @@ func (n *node) Run() {
 			n.Raft().Tick()
 		case <-logTick.C:
 			x.Printf("[%d] Run loop count: %d. Committed: %d\n", n.Id, loops, valid)
-
 		case rd := <-n.Raft().Ready():
 			loops++
 			for _, rs := range rd.ReadStates {
