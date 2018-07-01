@@ -93,8 +93,11 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 			// follower->leader->majority_of_followers->leader->follower.  We lose correctness
 			// because the Raft ticker might not arrive promptly, in which case the leader would
 			// falsely believe that its lease is still good.
-			CheckQuorum:    true,
-			ReadOnlyOption: raft.ReadOnlyLeaseBased,
+
+			// Remove both of these, to allow default behavior.
+			// CheckQuorum causes a lot of network disruption. I'm seeing this with v1.0.6.
+			// CheckQuorum:    true,
+			// ReadOnlyOption: raft.ReadOnlyLeaseBased,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
