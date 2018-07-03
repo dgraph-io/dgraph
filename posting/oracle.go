@@ -27,6 +27,9 @@ func init() {
 
 type oracle struct {
 	x.SafeMutex
+
+	// TODO: Remove commits and aborts map from here. We don't need this, if we're doing transaction
+	// tracking correctly and applying the txn status back to posting lists correctly.
 	commits map[uint64]uint64   // startTs => commitTs map
 	aborts  map[uint64]struct{} // key is startTs
 
