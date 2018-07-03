@@ -138,6 +138,13 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := st.node.WaitLinearizableRead(ctx); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
 	mstate := st.zero.membershipState()
 	if mstate == nil {
 		x.SetStatus(w, x.ErrorNoData, "No membership state found.")

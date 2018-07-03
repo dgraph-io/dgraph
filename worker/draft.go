@@ -653,8 +653,6 @@ func (n *node) Run() {
 	// See also our configuration of HeartbeatTick and ElectionTick.
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
-	rcBytes, err := n.RaftContext.Marshal()
-	x.Check(err)
 
 	// Ensure we don't exit unless any snapshot in progress in done.
 	closer := y.NewCloser(2)
@@ -686,7 +684,6 @@ func (n *node) Run() {
 				// Leader can send messages in parallel with writing to disk.
 				for _, msg := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
-					msg.Context = rcBytes
 					n.Send(msg)
 				}
 			}
@@ -767,7 +764,6 @@ func (n *node) Run() {
 				// Followers should send messages later.
 				for _, msg := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
-					msg.Context = rcBytes
 					n.Send(msg)
 				}
 			}

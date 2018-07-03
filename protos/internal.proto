@@ -369,9 +369,14 @@ message PeerResponse {
 	bool status = 1;
 }
 
+message RaftBatch {
+	RaftContext context = 1;
+	api.Payload payload = 2;
+}
+
 service Raft {
 	rpc Echo (api.Payload)        returns (api.Payload) {}
-	rpc RaftMessage (api.Payload) returns (api.Payload) {}
+	rpc RaftMessage (RaftBatch)   returns (api.Payload) {}
 	rpc JoinCluster (RaftContext) returns (api.Payload) {}
 	rpc IsPeer (RaftContext)      returns (PeerResponse) {}
 }
