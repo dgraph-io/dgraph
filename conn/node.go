@@ -331,10 +331,14 @@ func (n *Node) doSendMessage(pool *Pool, data []byte) {
 
 	c := intern.NewRaftClient(client)
 	p := &api.Payload{Data: data}
+	batch := &intern.RaftBatch{
+		Context: n.RaftContext,
+		Payload: p,
+	}
 
 	ch := make(chan error, 1)
 	go func() {
-		_, err := c.RaftMessage(ctx, p)
+		_, err := c.RaftMessage(ctx, batch)
 		if err != nil {
 			x.Printf("Error while sending message to node with addr: %s, err: %v\n", pool.Addr, err)
 		}
@@ -464,6 +468,7 @@ var errReadIndex = x.Errorf("cannot get linearized read (time expired or no conf
 
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	indexCh := make(chan uint64, 1)
+
 	select {
 	case n.requestCh <- linReadReq{indexCh: indexCh}:
 	case <-ctx.Done():
@@ -489,7 +494,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
-		activeRctx := make([]byte, 8)
+		var activeRctx [8]byte
 		x.Check2(n.Rand.Read(activeRctx[:]))
 		if err := n.Raft().ReadIndex(ctx, activeRctx[:]); err != nil {
 			x.Errorf("Error while trying to call ReadIndex: %v\n", err)
@@ -543,6 +548,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 				for _, req := range requests {
 					req.indexCh <- index
 				}
+				break
 			}
 			requests = requests[:0]
 		}
@@ -625,17 +631,10 @@ var (
 )
 
 func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error {
-	var rc intern.RaftContext
-	x.Check(rc.Unmarshal(msg.Context))
-
 	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
 		return errNoNode
 	}
-	if rc.Group != node.RaftContext.Group {
-		return errNoNode
-	}
-	node.Connect(msg.From, rc.Addr)
 
 	c := make(chan error, 1)
 	go func() { c <- node.Raft().Step(ctx, msg) }()
@@ -648,24 +647,33 @@ func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error
 	}
 }
 func (w *RaftServer) RaftMessage(ctx context.Context,
-	query *api.Payload) (*api.Payload, error) {
+	batch *intern.RaftBatch) (*api.Payload, error) {
 	if ctx.Err() != nil {
 		return &api.Payload{}, ctx.Err()
 	}
 
-	for idx := 0; idx < len(query.Data); {
-		x.AssertTruef(len(query.Data[idx:]) >= 4,
-			"Slice left of size: %v. Expected at least 4.", len(query.Data[idx:]))
+	rc := batch.GetContext()
+	if rc != nil {
+		w.GetNode().Connect(rc.Id, rc.Addr)
+	}
+	if batch.GetPayload() == nil {
+		return &api.Payload{}, nil
+	}
+	data := batch.Payload.Data
 
-		sz := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
+	for idx := 0; idx < len(data); {
+		x.AssertTruef(len(data[idx:]) >= 4,
+			"Slice left of size: %v. Expected at least 4.", len(data[idx:]))
+
+		sz := int(binary.LittleEndian.Uint32(data[idx : idx+4]))
 		idx += 4
 		msg := raftpb.Message{}
-		if idx+sz > len(query.Data) {
+		if idx+sz > len(data) {
 			return &api.Payload{}, x.Errorf(
 				"Invalid query. Specified size %v overflows slice [%v,%v)\n",
-				sz, idx, len(query.Data))
+				sz, idx, len(data))
 		}
-		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
+		if err := msg.Unmarshal(data[idx : idx+sz]); err != nil {
 			x.Check(err)
 		}
 		if err := w.applyMessage(ctx, msg); err != nil {

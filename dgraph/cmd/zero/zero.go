@@ -564,10 +564,8 @@ func (s *Server) Update(stream intern.Zero_UpdateServer) error {
 }
 
 func (s *Server) latestMembershipState(ctx context.Context) (*intern.MembershipState, error) {
-	// TODO: Bring lin read for Zero back, once Etcd folks can tell why ReadStates are not being
-	// populated. NOTE: This is important to fix quickly.
-	// if err := s.Node.WaitLinearizableRead(ctx); err != nil {
-	// 	return nil, err
-	// }
+	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
+		return nil, err
+	}
 	return s.membershipState(), nil
 }
