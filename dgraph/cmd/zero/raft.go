@@ -526,8 +526,6 @@ func (n *node) Run() {
 	var leader bool
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
-	rcBytes, err := n.RaftContext.Marshal()
-	x.Check(err)
 
 	closer := y.NewCloser(4)
 	// snapshot can cause select loop to block while deleting entries, so run
@@ -592,7 +590,6 @@ func (n *node) Run() {
 			}
 
 			for _, msg := range rd.Messages {
-				msg.Context = rcBytes
 				n.Send(msg)
 			}
 			// Need to send membership state to dgraph nodes on leader change also.
