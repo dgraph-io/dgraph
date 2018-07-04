@@ -756,8 +756,8 @@ func (g *groupi) processOracleDeltaStream() {
 						delta.Commits[start] = commit
 					}
 					delta.Aborts = append(delta.Aborts, more.Aborts...)
-					if delta.MaxPending < more.MaxPending {
-						delta.MaxPending = more.MaxPending
+					if delta.MaxAssigned < more.MaxAssigned {
+						delta.MaxAssigned = more.MaxAssigned
 					}
 				default:
 					break SLURP

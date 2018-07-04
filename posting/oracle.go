@@ -33,9 +33,8 @@ type oracle struct {
 	commits map[uint64]uint64   // startTs => commitTs map
 	aborts  map[uint64]struct{} // key is startTs
 
-	// We know for sure that transactions with startTs <= maxpending have either been
-	// aborted/committed.
-	maxpending uint64
+	// max start ts given out by Zero.
+	maxAssigned uint64
 
 	// Used for waiting logic for transactions with startTs > maxpending so that we don't read an
 	// uncommitted transaction.
@@ -71,7 +70,7 @@ func (o *oracle) Aborted(startTs uint64) bool {
 func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 	o.Lock()
 	defer o.Unlock()
-	if o.maxpending >= startTs {
+	if o.maxAssigned >= startTs {
 		return nil, false
 	}
 	ch := make(chan struct{})
@@ -82,13 +81,13 @@ func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 func (o *oracle) MaxPending() uint64 {
 	o.RLock()
 	defer o.RUnlock()
-	return o.maxpending
+	return o.maxAssigned
 }
 
 func (o *oracle) SetMaxPending(maxPending uint64) {
 	o.Lock()
 	defer o.Unlock()
-	o.maxpending = maxPending
+	o.maxAssigned = maxPending
 }
 
 func (o *oracle) CurrentState() *intern.OracleDelta {
@@ -127,11 +126,11 @@ func (o *oracle) ProcessOracleDelta(od *intern.OracleDelta) {
 	for _, startTs := range od.Aborts {
 		o.aborts[startTs] = struct{}{}
 	}
-	if od.MaxPending <= o.maxpending {
+	if od.MaxAssigned <= o.maxAssigned {
 		return
 	}
 	for startTs, toNotify := range o.waiters {
-		if startTs > od.MaxPending {
+		if startTs > od.MaxAssigned {
 			continue
 		}
 		for _, ch := range toNotify {
@@ -139,5 +138,5 @@ func (o *oracle) ProcessOracleDelta(od *intern.OracleDelta) {
 		}
 		delete(o.waiters, startTs)
 	}
-	o.maxpending = od.MaxPending
+	o.maxAssigned = od.MaxAssigned
 }
