@@ -9,6 +9,8 @@ package posting
 
 import (
 	"context"
+	"math"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
@@ -36,6 +38,13 @@ type oracle struct {
 	// max start ts given out by Zero.
 	maxAssigned uint64
 
+	// Keeps track of all the startTs we have seen so far, based on the mutations. Then as
+	// transactions are committed or aborted, we delete entries from the startTs map. When taking a
+	// snapshot, we need to know the minimum start ts present in the map, which represents a
+	// mutation which has not yet been committed or aborted.  As we iterate over entries, we should
+	// only discard those whose StartTs is below this minimum pending start ts.
+	pendingStartTs map[uint64]time.Time
+
 	// Used for waiting logic for transactions with startTs > maxpending so that we don't read an
 	// uncommitted transaction.
 	waiters map[uint64][]chan struct{}
@@ -45,6 +54,7 @@ func (o *oracle) init() {
 	o.commits = make(map[uint64]uint64)
 	o.aborts = make(map[uint64]struct{})
 	o.waiters = make(map[uint64][]chan struct{})
+	o.pendingStartTs = make(map[uint64]time.Time)
 }
 
 func (o *oracle) Done(startTs uint64) {
@@ -65,6 +75,38 @@ func (o *oracle) Aborted(startTs uint64) bool {
 	defer o.RUnlock()
 	_, ok := o.aborts[startTs]
 	return ok
+}
+
+func (o *oracle) RegisterStartTs(ts uint64) {
+	o.Lock()
+	defer o.Unlock()
+	o.pendingStartTs[ts] = time.Now()
+}
+
+// MinPendingStartTs returns the min start ts which is currently pending a commit or abort decision.
+func (o *oracle) MinPendingStartTs() uint64 {
+	o.RLock()
+	defer o.RUnlock()
+	min := uint64(math.MaxUint64)
+	for ts := range o.pendingStartTs {
+		if ts < min {
+			min = ts
+		}
+	}
+	return min
+}
+
+func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {
+	o.RLock()
+	defer o.RUnlock()
+
+	cutoff := time.Now().Add(-dur)
+	for startTs, clockTs := range o.pendingStartTs {
+		if clockTs.Before(cutoff) {
+			res = append(res, startTs)
+		}
+	}
+	return res
 }
 
 func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
@@ -117,20 +159,28 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	}
 }
 
-func (o *oracle) ProcessOracleDelta(od *intern.OracleDelta) {
+func (o *oracle) ProcessOracleDelta(delta *intern.OracleDelta) {
 	o.Lock()
 	defer o.Unlock()
-	for startTs, commitTs := range od.Commits {
+	for startTs, commitTs := range delta.Commits {
 		o.commits[startTs] = commitTs
+		delete(o.pendingStartTs, startTs)
 	}
-	for _, startTs := range od.Aborts {
+	for _, startTs := range delta.Aborts {
 		o.aborts[startTs] = struct{}{}
+		delete(o.pendingStartTs, startTs)
 	}
-	if od.MaxAssigned <= o.maxAssigned {
+	// We should always be moving forward with Zero and with Raft logs. A move
+	// back should not be possible, unless there's a bigger issue in
+	// understanding or the codebase.
+	if delta.MaxAssigned == 0 {
 		return
 	}
+	x.AssertTruef(delta.MaxAssigned >= o.maxAssigned, "delta: %+v. o.MaxAssigned: %d", delta, o.maxAssigned)
+
+	// Notify the waiting cattle.
 	for startTs, toNotify := range o.waiters {
-		if startTs > od.MaxAssigned {
+		if startTs > delta.MaxAssigned {
 			continue
 		}
 		for _, ch := range toNotify {
@@ -138,5 +188,5 @@ func (o *oracle) ProcessOracleDelta(od *intern.OracleDelta) {
 		}
 		delete(o.waiters, startTs)
 	}
-	o.maxAssigned = od.MaxAssigned
+	o.maxAssigned = delta.MaxAssigned
 }

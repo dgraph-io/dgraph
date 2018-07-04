@@ -55,7 +55,7 @@ func commitTs(startTs uint64) uint64 {
 		Commits: map[uint64]uint64{
 			startTs: commit,
 		},
-		MaxPending: atomic.LoadUint64(&ts),
+		MaxAssigned: atomic.LoadUint64(&ts),
 	}
 	posting.Oracle().ProcessOracleDelta(od)
 	return commit
@@ -6100,7 +6100,7 @@ func (c *raftServer) JoinCluster(ctx context.Context, in *intern.RaftContext) (*
 func updateMaxPending() {
 	for mp := range maxPendingCh {
 		posting.Oracle().ProcessOracleDelta(&intern.OracleDelta{
-			MaxPending: mp,
+			MaxAssigned: mp,
 		})
 	}
 

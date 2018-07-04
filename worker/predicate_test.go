@@ -50,7 +50,7 @@ func commitTs(startTs uint64) uint64 {
 		Commits: map[uint64]uint64{
 			startTs: commit,
 		},
-		MaxPending: atomic.LoadUint64(&ts),
+		MaxAssigned: atomic.LoadUint64(&ts),
 	}
 	posting.Oracle().ProcessOracleDelta(od)
 	return commit

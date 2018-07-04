@@ -108,5 +108,5 @@ func BlockingStop() {
 	workerServer.GracefulStop() // blocking stop server
 	groups().Node.applyAllMarks(ctx)
 	posting.StopLRUEviction()
-	groups().Node.snapshot(0)
+	// groups().Node.snapshot(0)
 }
