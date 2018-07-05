@@ -21,7 +21,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -506,7 +505,8 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 	}
 
 	if len(proposal.Kv) > 0 {
-		return n.processKeyValues(proposal.Key, proposal.Kv)
+		ctx, _ := n.props.CtxAndTxn(proposal.Key)
+		return populateKeyValues(ctx, proposal.Kv)
 
 	} else if proposal.State != nil {
 		n.elog.Printf("Applying state for key: %s", proposal.Key)
@@ -516,7 +516,8 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return nil
 
 	} else if len(proposal.CleanPredicate) > 0 {
-		return n.deletePredicate(proposal.Key, proposal.CleanPredicate)
+		ctx, _ := n.props.CtxAndTxn(proposal.Key)
+		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
 
 	} else if proposal.DeprecatedTxnContext != nil {
 		n.elog.Printf("Applying txncontext for key: %s", proposal.Key)
@@ -533,6 +534,16 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 	} else if proposal.Delta != nil {
 		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
 		return n.commitOrAbort(proposal.Key, proposal.Delta)
+
+	} else if proposal.Snapshot != nil {
+		snap := proposal.Snapshot
+		n.elog.Printf("Creating snapshot: %+v", snap)
+		x.Printf("Creating snapshot at index: %d. MinPendingStartTs: %d.\n",
+			snap.Index, snap.MinPendingStartTs)
+		data, err := snap.Marshal()
+		x.Check(err)
+		return n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+
 	} else {
 		x.Fatalf("Unknown proposal")
 	}
@@ -583,16 +594,6 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	// delta.GetMaxPending
 	posting.Oracle().ProcessOracleDelta(delta)
 	return nil
-}
-
-func (n *node) deletePredicate(pkey string, predicate string) error {
-	ctx, _ := n.props.CtxAndTxn(pkey)
-	return posting.DeletePredicate(ctx, predicate)
-}
-
-func (n *node) processKeyValues(pkey string, kvs []*intern.KV) error {
-	ctx, _ := n.props.CtxAndTxn(pkey)
-	return populateKeyValues(ctx, kvs)
 }
 
 func (n *node) applyAllMarks(ctx context.Context) {
@@ -657,17 +658,22 @@ func (n *node) Run() {
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 
-	// Ensure we don't exit unless any snapshot in progress in done.
-	closer := y.NewCloser(2)
-	go n.snapshotPeriodically(closer)
-
-	logTicker := time.NewTicker(time.Minute)
-	defer logTicker.Stop()
+	slowTicker := time.NewTicker(time.Minute)
+	defer slowTicker.Stop()
 
 	for {
 		select {
-		case <-logTicker.C:
+		case <-slowTicker.C:
 			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
+			if leader {
+				// We use disk based storage for Raft. So, we're not too concerned about snapshotting.
+				// We just need to do enough, so that we don't have a huge backlog of entries to process
+				// on a restart.
+				if err := n.proposeSnapshot(1000); err != nil {
+					x.Errorf("While taking snapshot: %v\n", err)
+				}
+				go n.abortOldTransactions()
+			}
 
 		case <-ticker.C:
 			n.Raft().Tick()
@@ -707,9 +713,10 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var rc intern.RaftContext
-				x.Check(rc.Unmarshal(rd.Snapshot.Data))
-				x.AssertTrue(rc.Group == n.gid)
+				var snap intern.Snapshot
+				x.Check(snap.Unmarshal(rd.Snapshot.Data))
+				rc := snap.GetContext()
+				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
 					// NOTE: Retrieving snapshot here is OK, after storing it above in WAL, because
 					// rc.Id != n.Id.
@@ -799,12 +806,10 @@ func (n *node) Run() {
 						}
 					}
 					n.Raft().Stop()
-					closer.SignalAndWait()
 					close(n.done)
 				}()
 			} else {
 				n.Raft().Stop()
-				closer.SignalAndWait()
 				close(n.done)
 			}
 		case <-n.done:
@@ -821,28 +826,6 @@ func (n *node) Stop() {
 		return
 	}
 	<-n.done // wait for Run to respond.
-}
-
-func (n *node) snapshotPeriodically(closer *y.Closer) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// We use disk based storage for Raft. So, we're not too concerned about snapshotting.
-			// We just need to do enough, so that we don't have a huge backlog of entries to process
-			// on a restart.
-			if err := n.betterSnapshot(1000); err != nil {
-				x.Errorf("While doing snapshot: %v\n", err)
-			}
-			n.abortOldTransactions()
-
-		case <-closer.HasBeenClosed():
-			closer.Done()
-			return
-		}
-	}
 }
 
 func (n *node) abortOldTransactions() {
@@ -869,8 +852,8 @@ func (n *node) abortOldTransactions() {
 // 3. If we have a pending mutation, which hasn't been committed or aborted.
 // 4. If we're not discarding enough entries.
 // 5. If all checks out and we're up to date, we should have at least keepN entries.
-func (n *node) betterSnapshot(keepN int) error {
-	tr := trace.New("Dgraph.Internal", "Snapshot")
+func (n *node) proposeSnapshot(keepN int) error {
+	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
 	defer tr.Finish()
 
 	// Each member of the Raft group is taking snapshots independently, as mentioned in Section 7 of
@@ -942,15 +925,24 @@ func (n *node) betterSnapshot(keepN int) error {
 		return nil
 	}
 
-	rc, err := n.RaftContext.Marshal()
+	snap := &intern.Snapshot{
+		Context:           n.RaftContext,
+		Index:             snapshotIdx,
+		MinPendingStartTs: minPending,
+	}
+	proposal := &intern.Proposal{
+		Snapshot: snap,
+	}
+	tr.LazyPrintf("Proposing snapshot: %+v\n", snap)
+
+	data, err := proposal.Marshal()
 	x.Check(err)
-	if err := n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc); err != nil {
+	if err := n.Raft().Propose(context.Background(), data); err != nil {
 		tr.LazyPrintf("Error: %v", err)
 		tr.SetError()
 		return err
 	}
-	tr.LazyPrintf("Create snapshot successful")
-	x.Printf("Writing snapshot at index: %d. Min pending StartTs: %d\n", snapshotIdx, minPending)
+	tr.LazyPrintf("Done best-effort proposing.")
 	return nil
 }
 
