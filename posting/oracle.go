@@ -176,7 +176,7 @@ func (o *oracle) ProcessOracleDelta(delta *intern.OracleDelta) {
 	if delta.MaxAssigned == 0 {
 		return
 	}
-	x.AssertTruef(delta.MaxAssigned >= o.maxAssigned, "delta: %+v. o.MaxAssigned: %d", delta, o.maxAssigned)
+	x.AssertTrue(delta.MaxAssigned >= o.maxAssigned)
 
 	// Notify the waiting cattle.
 	for startTs, toNotify := range o.waiters {
