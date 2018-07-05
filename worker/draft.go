@@ -634,10 +634,8 @@ func (n *node) retrieveSnapshot() error {
 	//
 	// We can safely evict posting lists from memory. Because, all the updates corresponding to txn
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
-	// stop at the txn commit marker, instead of at a pending mutation. So, all pending mutations
-	// TODO: This operation looks dubious. When a txn commit happens, all the entries are written to
-	// pstore. So, the lists would contain uncommitted txn entries, which really should remain in
-	// memory.
+	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
+	// logs are replayed.
 	posting.EvictLRU()
 	if _, err := n.populateShard(pstore, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
@@ -669,7 +667,7 @@ func (n *node) Run() {
 				// We use disk based storage for Raft. So, we're not too concerned about snapshotting.
 				// We just need to do enough, so that we don't have a huge backlog of entries to process
 				// on a restart.
-				if err := n.proposeSnapshot(1000); err != nil {
+				if err := n.calculateSnapshot(1000); err != nil {
 					x.Errorf("While taking snapshot: %v\n", err)
 				}
 				go n.abortOldTransactions()
@@ -853,13 +851,19 @@ func (n *node) abortOldTransactions() {
 	x.Printf("Aborted txns with start ts: %v. Error: %v\n", startTimestamps, err)
 }
 
-// TODO: Add tests. Should be easy to add. Test for:
-// 1. If we have few entries.
-// 2. If our applied is less than last.
-// 3. If we have a pending mutation, which hasn't been committed or aborted.
-// 4. If we're not discarding enough entries.
-// 5. If all checks out and we're up to date, we should have at least keepN entries.
-func (n *node) proposeSnapshot(keepN int) error {
+// calculateSnapshot would calculate a snapshot index. It would consider these factors:
+// - We still keep at least keepN number of Raft entries. If we cut too short, then the chances that
+// a crashed follower needs to retrieve the entire state from leader increases. So, we keep a buffer
+// to allow a follower to catch up.
+// - We can discard at least half of keepN number of entries.
+// - We are not overshooting the max applied entry. That is, we're not removing Raft entries before
+// they get applied.
+// - We are considering the minimum start ts that has yet to be committed or aborted. This way, we
+// still keep all the mutations corresponding to this start ts in the Raft logs. This is important,
+// because we don't persist pre-writes to disk in pstore.
+// - Finally, this function would propose this snapshot index, so the entire group can apply it to
+// their Raft stores.
+func (n *node) calculateSnapshot(keepN int) error {
 	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
 	defer tr.Finish()
 
