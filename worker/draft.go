@@ -828,6 +828,13 @@ func (n *node) Stop() {
 	<-n.done // wait for Run to respond.
 }
 
+// abortOldTransactions would find txns which have done pre-writes, but have been pending for a
+// while. The time that is used is based on the last pre-write seen, so if a txn is doing a
+// pre-write multiple times, we'll pick the timestamp of the last pre-write. Thus, this function
+// would only act on the txns which have not been active in the last N minutes, and send them for
+// abort. Note that only the leader runs this function.
+// NOTE: We might need to get the results of TryAbort and propose them. But, it's unclear if we need
+// to, because Zero should stream out the aborts anyway.
 func (n *node) abortOldTransactions() {
 	pl := groups().Leader(0)
 	if pl == nil {
