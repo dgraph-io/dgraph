@@ -28,9 +28,9 @@ type Oracle struct {
 	x.SafeMutex
 	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
-	rowCommit  map[string]uint64   // fp(key) -> commitTs. Used to detect conflict.
-	aborts     map[uint64]struct{} // key is startTs
-	maxPending uint64              // max transaction startTs given out by us.
+	rowCommit   map[string]uint64   // fp(key) -> commitTs. Used to detect conflict.
+	aborts      map[uint64]struct{} // key is startTs
+	maxAssigned uint64              // max transaction assigned by us.
 
 	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
 	tmax uint64
@@ -131,7 +131,7 @@ func (o *Oracle) currentState() *intern.OracleDelta {
 	for abort := range o.aborts {
 		resp.Aborts = append(resp.Aborts, abort)
 	}
-	resp.MaxPending = o.maxPending
+	resp.MaxAssigned = o.maxAssigned
 	return resp
 }
 
@@ -169,8 +169,8 @@ func (o *Oracle) sendDeltasToSubscribers() {
 	slurp_loop:
 		for {
 			// Consume tctx.
-			if update.MaxPending > delta.MaxPending {
-				delta.MaxPending = update.MaxPending
+			if update.MaxAssigned > delta.MaxAssigned {
+				delta.MaxAssigned = update.MaxAssigned
 			}
 			for _, startTs := range update.Aborts {
 				delta.Aborts = append(delta.Aborts, startTs)
@@ -244,19 +244,19 @@ func (o *Oracle) storePending(ids *api.AssignedIds) {
 	// Wait to finish up processing everything before start id.
 	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
 	// Now send it out to updates.
-	o.updates <- &intern.OracleDelta{MaxPending: ids.EndId}
+	o.updates <- &intern.OracleDelta{MaxAssigned: ids.EndId}
 	o.Lock()
 	defer o.Unlock()
 	max := ids.EndId
-	if o.maxPending < max {
-		o.maxPending = max
+	if o.maxAssigned < max {
+		o.maxAssigned = max
 	}
 }
 
 func (o *Oracle) MaxPending() uint64 {
 	o.RLock()
 	defer o.RUnlock()
-	return o.maxPending
+	return o.maxAssigned
 }
 
 var errConflict = errors.New("Transaction conflict")
@@ -317,8 +317,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	// map to be keyed by uint64, which would be cheaper. But, unsure about the repurcussions of
 	// that. It would save some memory. So, worth a try.
 
-	var num intern.Num
-	num.Val = 1
+	num := intern.Num{Val: 1}
 	assigned, err := s.lease(ctx, &num, true)
 	if err != nil {
 		return err

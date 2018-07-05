@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -20,7 +21,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -388,18 +388,15 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 		posting.Txns().Reset()
 		schema.State().DeleteAll()
 		err := posting.DeleteAll()
-		posting.TxnMarks().Done(index)
 		return err
 	}
 
 	if proposal.Mutations.StartTs == 0 {
-		posting.TxnMarks().Done(index)
 		return errors.New("StartTs must be provided.")
 	}
 
 	startTs := proposal.Mutations.StartTs
 	if len(proposal.Mutations.Schema) > 0 {
-		defer posting.TxnMarks().Done(index)
 		for _, supdate := range proposal.Mutations.Schema {
 			// This is neceassry to ensure that there is no race between when we start reading
 			// from badger and new mutation getting commited via raft and getting applied.
@@ -438,7 +435,6 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only have one edge drop in one mutation call.
 			ctx, _ := n.props.CtxAndTxn(proposal.Key)
-			defer posting.TxnMarks().Done(index)
 			if err := waitForConflictResolution(edge.Attr); err != nil {
 				return err
 			}
@@ -466,6 +462,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	}
 
 	m := proposal.Mutations
+	posting.Oracle().RegisterStartTs(m.StartTs)
 	pctx := n.props.pctx(proposal.Key)
 	pctx.txn = updateTxns(index, m.StartTs)
 	for _, edge := range m.Edges {
@@ -501,17 +498,15 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 	}
 	pctx.index = index
 
-	// TODO: We should be able to remove this as well.
-	posting.TxnMarks().Begin(index)
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.
 		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
 		return n.applyMutations(proposal, index)
 	}
 
-	defer posting.TxnMarks().Done(index)
 	if len(proposal.Kv) > 0 {
-		return n.processKeyValues(proposal.Key, proposal.Kv)
+		ctx, _ := n.props.CtxAndTxn(proposal.Key)
+		return populateKeyValues(ctx, proposal.Kv)
 
 	} else if proposal.State != nil {
 		n.elog.Printf("Applying state for key: %s", proposal.Key)
@@ -521,7 +516,8 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return nil
 
 	} else if len(proposal.CleanPredicate) > 0 {
-		return n.deletePredicate(proposal.Key, proposal.CleanPredicate)
+		ctx, _ := n.props.CtxAndTxn(proposal.Key)
+		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
 
 	} else if proposal.DeprecatedTxnContext != nil {
 		n.elog.Printf("Applying txncontext for key: %s", proposal.Key)
@@ -534,9 +530,20 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 			delta.Commits[tctx.StartTs] = tctx.CommitTs
 		}
 		return n.commitOrAbort(proposal.Key, delta)
+
 	} else if proposal.Delta != nil {
 		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
 		return n.commitOrAbort(proposal.Key, proposal.Delta)
+
+	} else if proposal.Snapshot != nil {
+		snap := proposal.Snapshot
+		n.elog.Printf("Creating snapshot: %+v", snap)
+		x.Printf("Creating snapshot at index: %d. MinPendingStartTs: %d.\n",
+			snap.Index, snap.MinPendingStartTs)
+		data, err := snap.Marshal()
+		x.Check(err)
+		return n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+
 	} else {
 		x.Fatalf("Unknown proposal")
 	}
@@ -589,16 +596,6 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	return nil
 }
 
-func (n *node) deletePredicate(pkey string, predicate string) error {
-	ctx, _ := n.props.CtxAndTxn(pkey)
-	return posting.DeletePredicate(ctx, predicate)
-}
-
-func (n *node) processKeyValues(pkey string, kvs []*intern.KV) error {
-	ctx, _ := n.props.CtxAndTxn(pkey)
-	return populateKeyValues(ctx, kvs)
-}
-
 func (n *node) applyAllMarks(ctx context.Context) {
 	// Get index of last committed.
 	lastIndex := n.Applied.LastIndex()
@@ -634,6 +631,11 @@ func (n *node) retrieveSnapshot() error {
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
+	//
+	// We can safely evict posting lists from memory. Because, all the updates corresponding to txn
+	// commits up until then have already been written to pstore. And the way we take snapshots, we
+	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
+	// logs are replayed.
 	posting.EvictLRU()
 	if _, err := n.populateShard(pstore, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
@@ -654,17 +656,22 @@ func (n *node) Run() {
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 
-	// Ensure we don't exit unless any snapshot in progress in done.
-	closer := y.NewCloser(2)
-	go n.snapshotPeriodically(closer)
-
-	logTicker := time.NewTicker(time.Minute)
-	defer logTicker.Stop()
+	slowTicker := time.NewTicker(time.Minute)
+	defer slowTicker.Stop()
 
 	for {
 		select {
-		case <-logTicker.C:
+		case <-slowTicker.C:
 			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
+			if leader {
+				// We use disk based storage for Raft. So, we're not too concerned about
+				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
+				// entries to process on a restart.
+				if err := n.calculateSnapshot(1000); err != nil {
+					x.Errorf("While taking snapshot: %v\n", err)
+				}
+				go n.abortOldTransactions()
+			}
 
 		case <-ticker.C:
 			n.Raft().Tick()
@@ -704,9 +711,10 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var rc intern.RaftContext
-				x.Check(rc.Unmarshal(rd.Snapshot.Data))
-				x.AssertTrue(rc.Group == n.gid)
+				var snap intern.Snapshot
+				x.Check(snap.Unmarshal(rd.Snapshot.Data))
+				rc := snap.GetContext()
+				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
 					// NOTE: Retrieving snapshot here is OK, after storing it above in WAL, because
 					// rc.Id != n.Id.
@@ -796,12 +804,10 @@ func (n *node) Run() {
 						}
 					}
 					n.Raft().Stop()
-					closer.SignalAndWait()
 					close(n.done)
 				}()
 			} else {
 				n.Raft().Stop()
-				closer.SignalAndWait()
 				close(n.done)
 			}
 		case <-n.done:
@@ -820,71 +826,136 @@ func (n *node) Stop() {
 	<-n.done // wait for Run to respond.
 }
 
-func (n *node) snapshotPeriodically(closer *y.Closer) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// Some proposals like predicate move can consume around 32MB per proposal, so keeping
-			// too many proposals would increase the memory usage so snapshot as soon as
-			// possible
-			n.snapshot(10)
-
-		case <-closer.HasBeenClosed():
-			closer.Done()
-			return
-		}
-	}
-}
-
-func (n *node) abortOldTransactions(pending uint64) {
+// abortOldTransactions would find txns which have done pre-writes, but have been pending for a
+// while. The time that is used is based on the last pre-write seen, so if a txn is doing a
+// pre-write multiple times, we'll pick the timestamp of the last pre-write. Thus, this function
+// would only act on the txns which have not been active in the last N minutes, and send them for
+// abort. Note that only the leader runs this function.
+// NOTE: We might need to get the results of TryAbort and propose them. But, it's unclear if we need
+// to, because Zero should stream out the aborts anyway.
+func (n *node) abortOldTransactions() {
 	pl := groups().Leader(0)
 	if pl == nil {
 		return
 	}
 	zc := intern.NewZeroClient(pl.Get())
 	// Aborts if not already committed.
-	startTimestamps := posting.Txns().TxnsSinceSnapshot(pending)
-	req := &intern.TxnTimestamps{Ts: startTimestamps}
-	zc.TryAbort(context.Background(), req)
-}
-
-func (n *node) snapshot(skip uint64) {
-	txnWatermark := posting.TxnMarks().DoneUntil()
-	existing, err := n.Store.Snapshot()
-	x.Checkf(err, "Unable to get existing snapshot")
-
-	lastSnapshotIdx := existing.Metadata.Index
-	if txnWatermark <= lastSnapshotIdx+skip {
-		appliedWatermark := n.Applied.DoneUntil()
-		// If difference grows above 1.5 * ForceAbortDifference we try to abort old transactions
-		if appliedWatermark-txnWatermark > 1.5*x.ForceAbortDifference && skip != 0 {
-			// Print warning if difference grows above 3 * x.ForceAbortDifference. Shouldn't ideally
-			// happen as we abort oldest 20% when it grows above 1.5 times.
-			if appliedWatermark-txnWatermark > 3*x.ForceAbortDifference {
-				x.Printf("Couldn't take snapshot, txn watermark: [%d], applied watermark: [%d]\n",
-					txnWatermark, appliedWatermark)
-			}
-			// Try aborting pending transactions here.
-			n.abortOldTransactions(appliedWatermark - txnWatermark)
-		}
+	startTimestamps := posting.Oracle().TxnOlderThan(5 * time.Minute)
+	if len(startTimestamps) == 0 {
 		return
 	}
+	req := &intern.TxnTimestamps{Ts: startTimestamps}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := zc.TryAbort(ctx, req)
+	x.Printf("Aborted txns with start ts: %v. Error: %v\n", startTimestamps, err)
+}
 
-	snapshotIdx := txnWatermark - skip
-	if tr, ok := trace.FromContext(n.ctx); ok {
-		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
+// calculateSnapshot would calculate a snapshot index, considering these factors:
+// - We still keep at least keepN number of Raft entries. If we cut too short,
+// then the chances that a crashed follower needs to retrieve the entire state
+// from leader increases. So, we keep a buffer to allow a follower to catch up.
+// - We can discard at least half of keepN number of entries.
+// - We are not overshooting the max applied entry. That is, we're not removing
+// Raft entries before they get applied.
+// - We are considering the minimum start ts that has yet to be committed or
+// aborted. This way, we still keep all the mutations corresponding to this
+// start ts in the Raft logs. This is important, because we don't persist
+// pre-writes to disk in pstore.
+// - Finally, this function would propose this snapshot index, so the entire
+// group can apply it to their Raft stores.
+func (n *node) calculateSnapshot(keepN int) error {
+	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
+	defer tr.Finish()
+
+	// Each member of the Raft group is taking snapshots independently, as mentioned in Section 7 of
+	// Raft paper. We want to avoid taking snapshots too close to the LastIndex, so that in case the
+	// leader changes, and the followers haven't yet caught up to this index, they would need to
+	// retrieve the entire state (snapshot) of the DB. So, we should always wait to accumulate skip
+	// entries before we start taking a snapshot.
+	count, err := n.Store.NumEntries()
+	if err != nil {
+		tr.LazyPrintf("Error: %v", err)
+		tr.SetError()
+		return err
+	}
+	tr.LazyPrintf("Found Raft entries: %d", count)
+	if count < 2*keepN {
+		// We wait to build up at least 2*keepN entries, and then discard keepN entries.
+		tr.LazyPrintf("Skipping due to insufficient entries")
+		return nil
+	}
+	discard := count - keepN
+
+	first, err := n.Store.FirstIndex()
+	if err != nil {
+		tr.LazyPrintf("Error: %v", err)
+		tr.SetError()
+		return err
+	}
+	tr.LazyPrintf("First index: %d", first)
+	last := first + uint64(discard)
+	if last > n.Applied.DoneUntil() {
+		tr.LazyPrintf("Skipping because last index: %d > applied", last)
+		return nil
+	}
+	entries, err := n.Store.Entries(first, last, math.MaxUint64)
+	if err != nil {
+		tr.LazyPrintf("Error: %v", err)
+		tr.SetError()
+		return err
 	}
 
-	rc, err := n.RaftContext.Marshal()
-	x.Check(err)
+	// We find the minimum start ts for which a decision to commit or abort is still pending. We
+	// should not discard mutations corresponding to this start ts, because we don't persist
+	// mutations until they are committed.
+	minPending := posting.Oracle().MinPendingStartTs()
+	tr.LazyPrintf("Found min pending start ts: %d", minPending)
+	var snapshotIdx uint64
+	for _, entry := range entries {
+		if entry.Type != raftpb.EntryNormal {
+			continue
+		}
+		var proposal intern.Proposal
+		if err := proposal.Unmarshal(entry.Data); err != nil {
+			tr.LazyPrintf("Error: %v", err)
+			tr.SetError()
+			return err
+		}
+		mu := proposal.Mutations
+		if mu != nil && mu.StartTs >= minPending {
+			break
+		}
+		snapshotIdx = entry.Index
+	}
+	tr.LazyPrintf("Got snapshotIdx: %d. Discarding: %d", snapshotIdx, snapshotIdx-first)
+	// We should discard at least half of keepN. Otherwise, why bother.
+	if int(snapshotIdx-first) < int(float64(keepN)*0.5) {
+		tr.LazyPrintf("Skipping snapshot because insufficient discard entries")
+		x.Printf("Skipping snapshot. Insufficient discard entries: %d. MinPendingStartTs: %d\n",
+			snapshotIdx-first, minPending)
+		return nil
+	}
 
-	err = n.Store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
-	x.Checkf(err, "While creating snapshot")
-	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", snapshotIdx,
-		n.Applied.DoneUntil())
+	snap := &intern.Snapshot{
+		Context:           n.RaftContext,
+		Index:             snapshotIdx,
+		MinPendingStartTs: minPending,
+	}
+	proposal := &intern.Proposal{
+		Snapshot: snap,
+	}
+	tr.LazyPrintf("Proposing snapshot: %+v\n", snap)
+
+	data, err := proposal.Marshal()
+	x.Check(err)
+	if err := n.Raft().Propose(context.Background(), data); err != nil {
+		tr.LazyPrintf("Error: %v", err)
+		tr.SetError()
+		return err
+	}
+	tr.LazyPrintf("Done best-effort proposing.")
+	return nil
 }
 
 func (n *node) joinPeers() error {
@@ -937,7 +1008,6 @@ func (n *node) InitAndStartNode() {
 	idx, restart, err := n.PastLife()
 	x.Check(err)
 	n.Applied.SetDoneUntil(idx)
-	posting.TxnMarks().SetDoneUntil(idx)
 
 	if _, hasPeer := groups().MyPeer(); !restart && hasPeer {
 		// The node has other peers, it might have crashed after joining the cluster and before

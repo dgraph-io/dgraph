@@ -14,11 +14,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"testing"
-	"time"
 )
 
+// TODO: Convert this to Docker based test.
 func TestLoaderXidmap(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	check(t, err)
@@ -60,18 +59,18 @@ func TestLoaderXidmap(t *testing.T) {
 	}
 
 	// Restart Dgraph before taking an export.
-	cluster.dgraph.Process.Signal(syscall.SIGINT)
-	if _, err = cluster.dgraph.Process.Wait(); err != nil {
-		cluster.Close()
-		t.Fatalf("Error while waiting for Dgraph process to be killed: %v", err)
-	}
+	// cluster.dgraph.Process.Signal(syscall.SIGINT)
+	// if _, err = cluster.dgraph.Process.Wait(); err != nil {
+	// 	cluster.Close()
+	// 	t.Fatalf("Error while waiting for Dgraph process to be killed: %v", err)
+	// }
 
-	cluster.dgraph.Process = nil
-	if err := cluster.dgraph.Start(); err != nil {
-		cluster.Close()
-		t.Fatalf("Couldn't start Dgraph server again: %v\n", err)
-	}
-	time.Sleep(5 * time.Second)
+	// cluster.dgraph.Process = nil
+	// if err := cluster.dgraph.Start(); err != nil {
+	// 	cluster.Close()
+	// 	t.Fatalf("Couldn't start Dgraph server again: %v\n", err)
+	// }
+	// time.Sleep(5 * time.Second)
 
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", cluster.dgraphPortOffset+8080))
 	if err != nil {

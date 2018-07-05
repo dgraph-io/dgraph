@@ -29,17 +29,15 @@ var (
 	txnMarks    *x.WaterMark // Used to find out till what RAFT index we can snapshot entries.
 )
 
+type transactions struct {
+	x.SafeMutex
+	m map[uint64]*Txn
+}
+
 func init() {
 	txns = new(transactions)
 	txns.m = make(map[uint64]*Txn)
-	txnMarks = &x.WaterMark{Name: "Transaction watermark"}
-	txnMarks.Init()
 }
-
-func TxnMarks() *x.WaterMark {
-	return txnMarks
-}
-
 func Txns() *transactions {
 	return txns
 }
@@ -52,6 +50,8 @@ type delta struct {
 	posting       *intern.Posting
 	checkConflict bool // Check conflict detection.
 }
+
+// TODO: This structure can be merged back into Oracle.
 type Txn struct {
 	StartTs uint64
 
@@ -66,11 +66,7 @@ type Txn struct {
 	nextKeyIdx int
 }
 
-type transactions struct {
-	x.SafeMutex
-	m map[uint64]*Txn
-}
-
+// TODO: What is this for?
 func (t *transactions) MinTs() uint64 {
 	t.Lock()
 	var minTs uint64
@@ -94,28 +90,9 @@ func (t *transactions) MinTs() uint64 {
 	return minTs
 }
 
-func (t *transactions) TxnsSinceSnapshot(pending uint64) []uint64 {
-	lastSnapshotIdx := TxnMarks().DoneUntil()
-	var timestamps []uint64
-	t.Lock()
-	defer t.Unlock()
-	var oldest float64 = 0.2 * float64(pending)
-	for _, txn := range t.m {
-		index := txn.startIdx()
-		// We abort oldest 20% of the transactions.
-		if index-lastSnapshotIdx <= uint64(oldest) {
-			timestamps = append(timestamps, txn.StartTs)
-		}
-	}
-	return timestamps
-}
-
 func (t *transactions) Reset() {
 	t.Lock()
 	defer t.Unlock()
-	for _, txn := range t.m {
-		txn.done()
-	}
 	t.m = make(map[uint64]*Txn)
 }
 
@@ -158,19 +135,7 @@ func (t *transactions) Get(startTs uint64) *Txn {
 func (t *transactions) Done(startTs uint64) {
 	t.Lock()
 	defer t.Unlock()
-	txn, ok := t.m[startTs]
-	if !ok {
-		return
-	}
-	txn.done()
 	delete(t.m, startTs)
-}
-
-func (t *Txn) done() {
-	t.Lock()
-	defer t.Unlock()
-	// All indices should have been added by now.
-	TxnMarks().DoneMany(t.Indices)
 }
 
 // LastIndex returns the index of last prewrite proposal associated with
