@@ -371,14 +371,6 @@ func waitForConflictResolution(attr string) error {
 	return errors.New("Unable to abort transactions")
 }
 
-func updateTxns(raftIndex uint64, startTs uint64) *posting.Txn {
-	txn := &posting.Txn{
-		StartTs: startTs,
-		Indices: []uint64{raftIndex},
-	}
-	return posting.Txns().PutOrMergeIndex(txn)
-}
-
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
@@ -429,7 +421,6 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-			updateTxns(index, proposal.Mutations.StartTs)
 			return errPredicateMoving
 		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
@@ -463,8 +454,6 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 
 	m := proposal.Mutations
 	posting.Oracle().RegisterStartTs(m.StartTs)
-	pctx := n.props.pctx(proposal.Key)
-	pctx.txn = updateTxns(index, m.StartTs)
 	for _, edge := range m.Edges {
 		err := posting.ErrRetry
 		for err == posting.ErrRetry {

@@ -58,13 +58,6 @@ func (t *transactions) Iterate(ok func(key []byte) bool) []uint64 {
 	return timestamps
 }
 
-func (t *Txn) startIdx() uint64 {
-	t.Lock()
-	defer t.Unlock()
-	x.AssertTrue(len(t.Indices) > 0)
-	return t.Indices[0]
-}
-
 func (t *Txn) conflicts(ok func(key []byte) bool) bool {
 	t.Lock()
 	defer t.Unlock()
@@ -86,30 +79,6 @@ func (t *transactions) Done(startTs uint64) {
 	t.Lock()
 	defer t.Unlock()
 	delete(t.m, startTs)
-}
-
-// LastIndex returns the index of last prewrite proposal associated with
-// the transaction.
-func (t *Txn) LastIndex() uint64 {
-	t.Lock()
-	defer t.Unlock()
-	if l := len(t.Indices); l > 0 {
-		return t.Indices[l-1]
-	}
-	return 0
-}
-
-func (t *transactions) PutOrMergeIndex(src *Txn) *Txn {
-	t.Lock()
-	defer t.Unlock()
-	dst := t.m[src.StartTs]
-	if dst == nil {
-		t.m[src.StartTs] = src
-		return src
-	}
-	x.AssertTrue(src.StartTs == dst.StartTs)
-	dst.Indices = append(dst.Indices, src.Indices...)
-	return dst
 }
 
 func (t *Txn) SetAbort() {

@@ -132,7 +132,7 @@ func (o *oracle) PurgeTs() uint64 {
 	// records that haven't yet reached us. So, we also consider MaxAssigned
 	// that we have received so far, so new records since the MaxAssigned we
 	// have seen won't be purged.
-	return x.Min(o.MinPendingStartTs() - 1, o.MaxAssigned()
+	return x.Min(o.MinPendingStartTs()-1, o.MaxAssigned())
 }
 
 func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {

@@ -396,19 +396,18 @@ func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) 
 
 func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	node := groups().Node
-	var index uint64
 	if txn := posting.Txns().Get(startTs); txn != nil {
 		txn.Fill(tctx)
-		index = txn.LastIndex()
 	}
 	tctx.LinRead = &api.LinRead{
 		Ids: make(map[uint32]uint64),
 	}
-	// applied watermark can be less than this proposal's index so return the maximum.
-	// For some proposals like dropPredicate, we don't store them in txns map, so we
-	// don't know the raft index. For them we would return applied watermark.
-	doneUntil := node.Applied.DoneUntil()
-	tctx.LinRead.Ids[gid] = x.Max(index, doneUntil)
+	// This previously used to pick up max of txn indices as well. Why should applied watermark be
+	// lower than proposal index? We apply all mutations via proposeAndWait. Wait would only return
+	// if the proposal gets applied, not before.
+	// TODO: Do we need this linread mechanism anymore? A txn start ts should be sufficient to wait
+	// for to achieve lin reads.
+	tctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
@@ -498,14 +497,10 @@ func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
 		return posting.ErrInvalidTxn
 	}
 	// Ensures that we wait till prewrite is applied
-	idx := txn.LastIndex()
-	groups().Node.Applied.WaitForMark(ctx, idx)
 	if commitTs == 0 {
-		err := txn.AbortMutations(ctx)
-		return err
+		return txn.AbortMutations(ctx)
 	}
-	err := txn.CommitMutations(ctx, commitTs)
-	return err
+	return txn.CommitMutations(ctx, commitTs)
 }
 
 type res struct {
