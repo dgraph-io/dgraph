@@ -167,9 +167,6 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	if err := p.Unmarshal(e.Data); err != nil {
 		return p.Key, err
 	}
-	if p.DeprecatedId != 0 {
-		p.Key = fmt.Sprint(p.DeprecatedId)
-	}
 	if len(p.Key) == 0 {
 		return p.Key, errInvalidProposal
 	}

@@ -126,8 +126,7 @@ func (o *oracle) MinPendingStartTs() uint64 {
 func (o *oracle) PurgeTs() uint64 {
 	// o.MinPendingStartTs can be inf, but we don't want Zero to delete new
 	// records that haven't yet reached us. So, we also consider MaxAssigned
-	// that we have received so far, so new records since the MaxAssigned we
-	// have seen won't be purged.
+	// that we have received so far, so only records below MaxAssigned are purged.
 	return x.Min(o.MinPendingStartTs()-1, o.MaxAssigned())
 }
 

@@ -357,22 +357,6 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 }
 
 func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
-	if proposal.DeprecatedId != 0 {
-		proposal.Key = fmt.Sprint(proposal.DeprecatedId)
-	}
-
-	pctx := n.Proposals.Get(proposal.Key)
-	if pctx == nil {
-		// This is during replay of logs after restart or on a replica.
-		pctx = &conn.ProposalCtx{
-			Ch:  make(chan error, 1),
-			Ctx: n.ctx,
-		}
-		// We assert here to make sure that we do add the proposal to the map.
-		x.AssertTruef(n.Proposals.Store(proposal.Key, pctx),
-			"Found existing proposal with key: [%v]", proposal.Key)
-	}
-
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.
 		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
@@ -391,19 +375,8 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return nil
 
 	} else if len(proposal.CleanPredicate) > 0 {
+		n.elog.Printf("Cleaning predicate: %s", proposal.CleanPredicate)
 		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
-
-	} else if proposal.DeprecatedTxnContext != nil {
-		n.elog.Printf("Applying txncontext for key: %s", proposal.Key)
-		delta := &intern.OracleDelta{}
-		tctx := proposal.DeprecatedTxnContext
-		if tctx.CommitTs == 0 {
-			delta.Aborts = append(delta.Aborts, tctx.StartTs)
-		} else {
-			delta.Commits = make(map[uint64]uint64)
-			delta.Commits[tctx.StartTs] = tctx.CommitTs
-		}
-		return n.commitOrAbort(proposal.Key, delta)
 
 	} else if proposal.Delta != nil {
 		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
@@ -430,6 +403,7 @@ func (n *node) processApplyCh() {
 		if err := proposal.Unmarshal(e.Data); err != nil {
 			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
+
 		err := n.applyCommitted(proposal, e.Index)
 		n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v", proposal.Key, e.Index, err)
 		n.Proposals.Done(proposal.Key, err)

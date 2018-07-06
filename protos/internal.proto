@@ -127,7 +127,6 @@ message Group {
 }
 
 message ZeroProposal {
-	uint32 deprecated_id = 1; // delete this field in later versions.
 	Member member = 2;
 	Tablet tablet = 3;
 	uint64 maxLeaseId = 4;
@@ -201,9 +200,6 @@ message Snapshot {
 }
 
 message Proposal {
-	uint32 deprecated_id                  = 1; // delete this field in later versions. Its for backward compatibility.
-	api.TxnContext deprecated_txn_context = 3;
-
 	Mutations mutations                   = 2;
 	repeated KV kv                        = 4;
 	MembershipState state                 = 5;
