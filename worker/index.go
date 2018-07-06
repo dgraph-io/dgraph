@@ -16,9 +16,6 @@ import (
 )
 
 func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool, startTs uint64) error {
-	rv := ctx.Value("raft").(x.RaftValue)
-	x.AssertTrue(rv.Group == n.gid)
-
 	if schema.State().IsIndexed(attr) != rebuild {
 		return x.Errorf("Predicate %s index mismatch, rebuild %v", attr, rebuild)
 	}
@@ -35,9 +32,6 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool,
 }
 
 func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild bool, startTs uint64) error {
-	rv := ctx.Value("raft").(x.RaftValue)
-	x.AssertTrue(rv.Group == n.gid)
-
 	if schema.State().IsReversed(attr) != rebuild {
 		return x.Errorf("Predicate %s reverse mismatch, rebuild %v", attr, rebuild)
 	}
@@ -54,9 +48,6 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 }
 
 func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild bool, startTs uint64) error {
-	rv := ctx.Value("raft").(x.RaftValue)
-	x.AssertTrue(rv.Group == n.gid)
-
 	if err := posting.DeleteCountIndex(attr); err != nil {
 		return err
 	}

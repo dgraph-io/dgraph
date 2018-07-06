@@ -40,17 +40,16 @@ type delta struct {
 type Txn struct {
 	StartTs uint64
 
-	// lastUpdate time.Time
-
 	// atomic
 	shouldAbort uint32
 	// Fields which can changed after init
 	sync.Mutex
-	deltas []delta
-	// Stores list of proposal indexes belonging to the transaction, the watermark would
-	// be marked as done only when it's committed.
-	Indices    []uint64
+	deltas     []delta
 	nextKeyIdx int
+
+	// Keeps track of last update wall clock. We use this fact later to
+	// determine unhealthy, stale txns.
+	lastUpdate time.Time
 }
 
 type oracle struct {
@@ -64,15 +63,12 @@ type oracle struct {
 	// max start ts given out by Zero.
 	maxAssigned uint64
 
-	pendingTxns map[uint64]*Txn
-
-	// TODO: Merge this with Txn map.
 	// Keeps track of all the startTs we have seen so far, based on the mutations. Then as
 	// transactions are committed or aborted, we delete entries from the startTs map. When taking a
 	// snapshot, we need to know the minimum start ts present in the map, which represents a
 	// mutation which has not yet been committed or aborted.  As we iterate over entries, we should
 	// only discard those whose StartTs is below this minimum pending start ts.
-	pendingStartTs map[uint64]time.Time
+	pendingTxns map[uint64]*Txn
 
 	// Used for waiting logic for transactions with startTs > maxpending so that we don't read an
 	// uncommitted transaction.
@@ -83,16 +79,7 @@ func (o *oracle) init() {
 	o.commits = make(map[uint64]uint64)
 	o.aborts = make(map[uint64]struct{})
 	o.waiters = make(map[uint64][]chan struct{})
-	o.pendingStartTs = make(map[uint64]time.Time)
 	o.pendingTxns = make(map[uint64]*Txn)
-}
-
-func (o *oracle) Done(startTs uint64) {
-	o.Lock()
-	defer o.Unlock()
-	delete(o.commits, startTs)
-	delete(o.aborts, startTs)
-	delete(o.pendingTxns, startTs)
 }
 
 func (o *oracle) CommitTs(startTs uint64) uint64 {
@@ -108,10 +95,17 @@ func (o *oracle) Aborted(startTs uint64) bool {
 	return ok
 }
 
-func (o *oracle) RegisterStartTs(ts uint64) {
+func (o *oracle) RegisterStartTs(ts uint64) *Txn {
 	o.Lock()
 	defer o.Unlock()
-	o.pendingStartTs[ts] = time.Now()
+	txn, ok := o.pendingTxns[ts]
+	if ok {
+		txn.lastUpdate = time.Now()
+	} else {
+		txn = &Txn{StartTs: ts, lastUpdate: time.Now()}
+		o.pendingTxns[ts] = txn
+	}
+	return txn
 }
 
 // MinPendingStartTs returns the min start ts which is currently pending a commit or abort decision.
@@ -119,7 +113,7 @@ func (o *oracle) MinPendingStartTs() uint64 {
 	o.RLock()
 	defer o.RUnlock()
 	min := uint64(math.MaxUint64)
-	for ts := range o.pendingStartTs {
+	for ts := range o.pendingTxns {
 		if ts < min {
 			min = ts
 		}
@@ -142,8 +136,8 @@ func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {
 	defer o.RUnlock()
 
 	cutoff := time.Now().Add(-dur)
-	for startTs, clockTs := range o.pendingStartTs {
-		if clockTs.Before(cutoff) {
+	for startTs, txn := range o.pendingTxns {
+		if txn.lastUpdate.Before(cutoff) {
 			res = append(res, startTs)
 		}
 	}
@@ -200,16 +194,20 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	}
 }
 
+func (o *oracle) done(startTs uint64) {
+	delete(o.commits, startTs)
+	delete(o.aborts, startTs)
+	delete(o.pendingTxns, startTs)
+}
+
 func (o *oracle) ProcessOracleDelta(delta *intern.OracleDelta) {
 	o.Lock()
 	defer o.Unlock()
-	for startTs, commitTs := range delta.Commits {
-		o.commits[startTs] = commitTs
-		delete(o.pendingStartTs, startTs)
+	for startTs := range delta.Commits {
+		o.done(startTs)
 	}
 	for _, startTs := range delta.Aborts {
-		o.aborts[startTs] = struct{}{}
-		delete(o.pendingStartTs, startTs)
+		o.done(startTs)
 	}
 	// We should always be moving forward with Zero and with Raft logs. A move
 	// back should not be possible, unless there's a bigger issue in

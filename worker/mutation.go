@@ -59,9 +59,8 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 	// present, some invalid entries might be written initially
 	err := ValidateAndConvert(edge, &su)
 
-	key := x.DataKey(edge.Attr, edge.Entity)
-
 	t := time.Now()
+	key := x.DataKey(edge.Attr, edge.Entity)
 	plist, err := posting.Get(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -94,8 +93,8 @@ func runSchemaMutation(ctx context.Context, update *intern.SchemaUpdate, startTs
 		return false
 	})
 	// Write schema to disk.
-	rv := ctx.Value("raft").(x.RaftValue)
-	updateSchema(update.Predicate, *update, rv.Index)
+	// rv := ctx.Value("raft").(x.RaftValue)
+	updateSchema(update.Predicate, *update)
 	return nil
 }
 
@@ -206,7 +205,7 @@ func needReindexing(old intern.SchemaUpdate, current intern.SchemaUpdate) bool {
 
 // We commit schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateSchema(attr string, s intern.SchemaUpdate, index uint64) error {
+func updateSchema(attr string, s intern.SchemaUpdate) error {
 	schema.State().Set(attr, s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
@@ -227,7 +226,7 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 	} else {
 		s = intern.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
 	}
-	updateSchema(attr, s, index)
+	updateSchema(attr, s)
 }
 
 func hasEdges(attr string, startTs uint64) bool {
