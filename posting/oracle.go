@@ -10,6 +10,7 @@ package posting
 import (
 	"context"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/intern"
@@ -27,6 +28,31 @@ func init() {
 	o.init()
 }
 
+// This structure is useful to keep track of which keys were updated, and whether they should be
+// used for conflict detection or not. When a txn is marked committed or aborted, this is what we
+// use to go fetch the posting lists and update the txn status in them.
+type delta struct {
+	key           []byte
+	posting       *intern.Posting
+	checkConflict bool // Check conflict detection.
+}
+
+type Txn struct {
+	StartTs uint64
+
+	// lastUpdate time.Time
+
+	// atomic
+	shouldAbort uint32
+	// Fields which can changed after init
+	sync.Mutex
+	deltas []delta
+	// Stores list of proposal indexes belonging to the transaction, the watermark would
+	// be marked as done only when it's committed.
+	Indices    []uint64
+	nextKeyIdx int
+}
+
 type oracle struct {
 	x.SafeMutex
 
@@ -38,6 +64,9 @@ type oracle struct {
 	// max start ts given out by Zero.
 	maxAssigned uint64
 
+	pendingTxns map[uint64]*Txn
+
+	// TODO: Merge this with Txn map.
 	// Keeps track of all the startTs we have seen so far, based on the mutations. Then as
 	// transactions are committed or aborted, we delete entries from the startTs map. When taking a
 	// snapshot, we need to know the minimum start ts present in the map, which represents a
@@ -96,6 +125,16 @@ func (o *oracle) MinPendingStartTs() uint64 {
 	return min
 }
 
+// PurgeTs gives a start ts, below which all entries can be purged by Zero,
+// because their status has been successfully applied to Raft group.
+func (o *oracle) PurgeTs() uint64 {
+	// o.MinPendingStartTs can be inf, but we don't want Zero to delete new
+	// records that haven't yet reached us. So, we also consider MaxAssigned
+	// that we have received so far, so new records since the MaxAssigned we
+	// have seen won't be purged.
+	return x.Min(o.MinPendingStartTs() - 1, o.MaxAssigned()
+}
+
 func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {
 	o.RLock()
 	defer o.RUnlock()
@@ -120,7 +159,7 @@ func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 	return ch, true
 }
 
-func (o *oracle) MaxPending() uint64 {
+func (o *oracle) MaxAssigned() uint64 {
 	o.RLock()
 	defer o.RUnlock()
 	return o.maxAssigned

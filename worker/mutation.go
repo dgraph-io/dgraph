@@ -566,10 +566,10 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	return tctx.CommitTs, nil
 }
 
-func (w *grpcWorker) MinTxnTs(ctx context.Context,
+func (w *grpcWorker) PurgeTs(ctx context.Context,
 	payload *api.Payload) (*intern.Num, error) {
 	n := &intern.Num{}
-	n.Val = posting.Txns().MinTs()
+	n.Val = posting.Oracle().PurgeTs()
 	return n, nil
 }
 

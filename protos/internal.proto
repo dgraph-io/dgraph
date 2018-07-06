@@ -406,7 +406,7 @@ service Worker {
 	rpc PredicateAndSchemaData (SnapshotMeta) returns (stream KVS) {}
 	rpc Sort (SortMessage)                        returns (SortResult) {}
 	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
-	rpc MinTxnTs (api.Payload)                    returns (Num) {}
+	rpc PurgeTs (api.Payload)                    returns (Num) {}
 
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
 	rpc ReceivePredicate(stream KVS)         returns (api.Payload) {}

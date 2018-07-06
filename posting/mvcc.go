@@ -13,7 +13,6 @@ import (
 	"encoding/base64"
 	"math"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,7 +25,6 @@ import (
 var (
 	ErrTsTooOld = x.Errorf("Transaction is too old")
 	txns        *transactions
-	txnMarks    *x.WaterMark // Used to find out till what RAFT index we can snapshot entries.
 )
 
 type transactions struct {
@@ -40,54 +38,6 @@ func init() {
 }
 func Txns() *transactions {
 	return txns
-}
-
-// This structure is useful to keep track of which keys were updated, and whether they should be
-// used for conflict detection or not. When a txn is marked committed or aborted, this is what we
-// use to go fetch the posting lists and update the txn status in them.
-type delta struct {
-	key           []byte
-	posting       *intern.Posting
-	checkConflict bool // Check conflict detection.
-}
-
-// TODO: This structure can be merged back into Oracle.
-type Txn struct {
-	StartTs uint64
-
-	// atomic
-	shouldAbort uint32
-	// Fields which can changed after init
-	sync.Mutex
-	deltas []delta
-	// Stores list of proposal indexes belonging to the transaction, the watermark would
-	// be marked as done only when it's committed.
-	Indices    []uint64
-	nextKeyIdx int
-}
-
-// TODO: What is this for?
-func (t *transactions) MinTs() uint64 {
-	t.Lock()
-	var minTs uint64
-	for ts := range t.m {
-		if ts < minTs || minTs == 0 {
-			minTs = ts
-		}
-	}
-	t.Unlock()
-	maxPending := Oracle().MaxPending()
-	if minTs == 0 {
-		// maxPending gives the guarantee that all commits with timestamp
-		// less than maxPending should have been done and since nothing
-		// is present in map, all transactions with commitTs below maxPending
-		// have been written to disk.
-		return maxPending
-	} else if maxPending < minTs {
-		// Not sure if needed, but just for safety
-		return maxPending
-	}
-	return minTs
 }
 
 func (t *transactions) Reset() {

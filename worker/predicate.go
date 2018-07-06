@@ -117,6 +117,7 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	// First key has the snapshot ts from the leader.
 	x.AssertTrue(bytes.Equal(ikv.Key, []byte("min_ts")))
 	n.Lock()
+	// TODO: Fix up all this min ts logic. It's wrong.
 	n.RaftContext.SnapshotTs = ikv.Version
 	n.Unlock()
 
@@ -195,7 +196,9 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	// TODO: Ensure all deltas have made to disk and read in memory before checking disk.
 	// BUG: There's a bug here due to which a node which doesn't see any transactions, but has real
 	// data fails to send that over, because of min_ts.
-	min_ts := posting.Txns().MinTs() // Why are we not using last snapshot ts?
+
+	// TODO: This min_ts makes no sense. Let's fix this.
+	min_ts := posting.Oracle().PurgeTs()
 	x.Printf("Got min_ts: %d\n", min_ts)
 	// snap, err := groups().Node.Snapshot()
 	// if err != nil {
