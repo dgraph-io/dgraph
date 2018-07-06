@@ -92,8 +92,6 @@ func runSchemaMutation(ctx context.Context, update *intern.SchemaUpdate, startTs
 		}
 		return false
 	})
-	// Write schema to disk.
-	// rv := ctx.Value("raft").(x.RaftValue)
 	updateSchema(update.Predicate, *update)
 	return nil
 }

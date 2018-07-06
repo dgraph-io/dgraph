@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -32,72 +31,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type proposalCtx struct {
-	ch  chan error
-	ctx context.Context
-	// Since each proposal consists of multiple tasks we need to store
-	// non-nil error returned by task
-	err   error
-	index uint64 // RAFT index for the proposal.
-}
-
-type proposals struct {
-	sync.RWMutex
-	all map[string]*proposalCtx
-}
-
 // uniqueKey is meant to be unique across all the replicas.
 func uniqueKey() string {
 	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
-}
-
-func (p *proposals) Store(key string, pctx *proposalCtx) bool {
-	p.Lock()
-	defer p.Unlock()
-	if _, has := p.all[key]; has {
-		return false
-	}
-	p.all[key] = pctx
-	return true
-}
-
-func (p *proposals) Delete(key string) {
-	if len(key) == 0 {
-		return
-	}
-	p.Lock()
-	defer p.Unlock()
-	delete(p.all, key)
-}
-
-func (p *proposals) pctx(key string) *proposalCtx {
-	p.RLock()
-	defer p.RUnlock()
-	if pctx := p.all[key]; pctx != nil {
-		return pctx
-	}
-	return new(proposalCtx)
-}
-
-func (p *proposals) Done(key string, err error) {
-	if len(key) == 0 {
-		return
-	}
-	p.Lock()
-	defer p.Unlock()
-	pd, has := p.all[key]
-	if !has {
-		// If we assert here, there would be a race condition between a context
-		// timing out, and a proposal getting applied immediately after. That
-		// would cause assert to fail. So, don't assert.
-		return
-	}
-	x.AssertTrue(pd.index != 0)
-	if err != nil {
-		pd.err = err
-	}
-	delete(p.all, key)
-	pd.ch <- pd.err
 }
 
 type node struct {
@@ -109,7 +45,6 @@ type node struct {
 	stop    chan struct{} // to send the stop signal to Run
 	done    chan struct{} // to check whether node is running or not
 	gid     uint32
-	props   proposals
 
 	canCampaign bool
 	elog        trace.EventLog
@@ -141,9 +76,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		Id:    id,
 	}
 	m := conn.NewNode(rc, store)
-	props := proposals{
-		all: make(map[string]*proposalCtx),
-	}
 
 	n := &node{
 		Node: m,
@@ -152,7 +84,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
 		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
-		props:   props,
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
@@ -230,13 +161,13 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		defer cancel()
 
 		che := make(chan error, 1)
-		pctx := &proposalCtx{
-			ch:  che,
-			ctx: cctx,
+		pctx := &conn.ProposalCtx{
+			Ch:  che,
+			Ctx: cctx,
 		}
 		key := uniqueKey()
-		x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
-		defer n.props.Delete(key) // Ensure that it gets deleted on return.
+		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
 		proposal.Key = key
 
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -257,7 +188,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 
 		select {
 		case err = <-che:
-			// We arrived here by a call to n.props.Done().
+			// We arrived here by a call to n.Proposals.Done().
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Done with error: %v", err)
 			}
@@ -287,14 +218,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 }
 
 func (n *node) Ctx(key string) context.Context {
-	var ctx context.Context
-	if pctx := n.props.pctx(key); pctx == nil {
-		ctx = context.Background()
+	ctx := context.Background()
+	if pctx := n.Proposals.Get(key); pctx != nil {
+		ctx = pctx.Ctx
 	}
 	return ctx
-	// TODO: Do we need this?
-	// rv := x.RaftValue{Group: n.gid, Index: proposalIdx}
-	// return context.WithValue(ctx, "raft", rv), txn
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -433,20 +361,17 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		proposal.Key = fmt.Sprint(proposal.DeprecatedId)
 	}
 
-	// One final applied and synced watermark would be emitted when proposal ctx ref count
-	// becomes zero.
-	pctx := n.props.pctx(proposal.Key)
+	pctx := n.Proposals.Get(proposal.Key)
 	if pctx == nil {
 		// This is during replay of logs after restart or on a replica.
-		pctx = &proposalCtx{
-			ch:  make(chan error, 1),
-			ctx: n.ctx,
+		pctx = &conn.ProposalCtx{
+			Ch:  make(chan error, 1),
+			Ctx: n.ctx,
 		}
 		// We assert here to make sure that we do add the proposal to the map.
-		x.AssertTruef(n.props.Store(proposal.Key, pctx),
+		x.AssertTruef(n.Proposals.Store(proposal.Key, pctx),
 			"Found existing proposal with key: [%v]", proposal.Key)
 	}
-	pctx.index = index
 
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.
@@ -507,7 +432,7 @@ func (n *node) processApplyCh() {
 		}
 		err := n.applyCommitted(proposal, e.Index)
 		n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v", proposal.Key, e.Index, err)
-		n.props.Done(proposal.Key, err)
+		n.Proposals.Done(proposal.Key, err)
 		n.Applied.Done(e.Index)
 	}
 }

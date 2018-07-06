@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -27,63 +26,10 @@ import (
 	"golang.org/x/net/trace"
 )
 
-type proposalCtx struct {
-	ch  chan error
-	ctx context.Context
-}
-
-type proposals struct {
-	sync.RWMutex
-	all map[string]*proposalCtx
-}
-
-func (p *proposals) Store(key string, pctx *proposalCtx) bool {
-	if len(key) == 0 {
-		return false
-	}
-	p.Lock()
-	defer p.Unlock()
-	if p.all == nil {
-		p.all = make(map[string]*proposalCtx)
-	}
-	if _, has := p.all[key]; has {
-		return false
-	}
-	p.all[key] = pctx
-	return true
-}
-
-func (p *proposals) Delete(key string) {
-	if len(key) == 0 {
-		return
-	}
-	p.Lock()
-	defer p.Unlock()
-	delete(p.all, key)
-}
-
-func (p *proposals) Done(key string, err error) {
-	if len(key) == 0 {
-		return
-	}
-	p.Lock()
-	defer p.Unlock()
-	pd, has := p.all[key]
-	if !has {
-		// If we assert here, there would be a race condition between a context
-		// timing out, and a proposal getting applied immediately after. That
-		// would cause assert to fail. So, don't assert.
-		return
-	}
-	delete(p.all, key)
-	pd.ch <- err
-}
-
 type node struct {
 	*conn.Node
 	server      *Server
 	ctx         context.Context
-	props       proposals
 	reads       map[uint64]chan uint64
 	subscribers map[uint32]chan struct{}
 	stop        chan struct{} // to send stop signal to Run
@@ -153,14 +99,14 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 		defer cancel()
 
 		che := make(chan error, 1)
-		pctx := &proposalCtx{
-			ch: che,
+		pctx := &conn.ProposalCtx{
+			Ch: che,
 			// Don't use the original context, because that's not what we're passing to Raft.
-			ctx: cctx,
+			Ctx: cctx,
 		}
 		key := n.uniqueKey()
-		x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
-		defer n.props.Delete(key)
+		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		defer n.Proposals.Delete(key)
 		proposal.Key = key
 
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -570,7 +516,7 @@ func (n *node) Run() {
 					if err != nil && err != errTabletAlreadyServed {
 						x.Printf("While applying proposal: %v\n", err)
 					}
-					n.props.Done(key, err)
+					n.Proposals.Done(key, err)
 
 				} else {
 					x.Printf("Unhandled entry: %+v\n", entry)

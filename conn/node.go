@@ -35,6 +35,81 @@ type sendmsg struct {
 	data []byte
 }
 
+type lockedSource struct {
+	lk  sync.Mutex
+	src rand.Source
+}
+
+func (r *lockedSource) Int63() int64 {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	return r.src.Int63()
+}
+
+func (r *lockedSource) Seed(seed int64) {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	r.src.Seed(seed)
+}
+
+type ProposalCtx struct {
+	Ch  chan error
+	Ctx context.Context
+}
+
+type proposals struct {
+	sync.RWMutex
+	all map[string]*ProposalCtx
+}
+
+func (p *proposals) Store(key string, pctx *ProposalCtx) bool {
+	if len(key) == 0 {
+		return false
+	}
+	p.Lock()
+	defer p.Unlock()
+	if p.all == nil {
+		p.all = make(map[string]*ProposalCtx)
+	}
+	if _, has := p.all[key]; has {
+		return false
+	}
+	p.all[key] = pctx
+	return true
+}
+
+func (p *proposals) Get(key string) *ProposalCtx {
+	p.RLock()
+	defer p.RUnlock()
+	return p.all[key]
+}
+
+func (p *proposals) Delete(key string) {
+	if len(key) == 0 {
+		return
+	}
+	p.Lock()
+	defer p.Unlock()
+	delete(p.all, key)
+}
+
+func (p *proposals) Done(key string, err error) {
+	if len(key) == 0 {
+		return
+	}
+	p.Lock()
+	defer p.Unlock()
+	pd, has := p.all[key]
+	if !has {
+		// If we assert here, there would be a race condition between a context
+		// timing out, and a proposal getting applied immediately after. That
+		// would cause assert to fail. So, don't assert.
+		return
+	}
+	delete(p.all, key)
+	pd.Ch <- err
+}
+
 type Node struct {
 	x.SafeMutex
 
@@ -58,27 +133,11 @@ type Node struct {
 	Store       *raftwal.DiskStorage
 	Rand        *rand.Rand
 
+	Proposals proposals
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to BadgerDB).
 	Applied x.WaterMark
-}
-
-type lockedSource struct {
-	lk  sync.Mutex
-	src rand.Source
-}
-
-func (r *lockedSource) Int63() int64 {
-	r.lk.Lock()
-	defer r.lk.Unlock()
-	return r.src.Int63()
-}
-
-func (r *lockedSource) Seed(seed int64) {
-	r.lk.Lock()
-	defer r.lk.Unlock()
-	r.src.Seed(seed)
 }
 
 func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
