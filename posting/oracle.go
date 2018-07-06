@@ -84,6 +84,7 @@ func (o *oracle) init() {
 	o.aborts = make(map[uint64]struct{})
 	o.waiters = make(map[uint64][]chan struct{})
 	o.pendingStartTs = make(map[uint64]time.Time)
+	o.pendingTxns = make(map[uint64]*Txn)
 }
 
 func (o *oracle) Done(startTs uint64) {
@@ -91,6 +92,7 @@ func (o *oracle) Done(startTs uint64) {
 	defer o.Unlock()
 	delete(o.commits, startTs)
 	delete(o.aborts, startTs)
+	delete(o.pendingTxns, startTs)
 }
 
 func (o *oracle) CommitTs(startTs uint64) uint64 {
@@ -228,4 +230,41 @@ func (o *oracle) ProcessOracleDelta(delta *intern.OracleDelta) {
 		delete(o.waiters, startTs)
 	}
 	o.maxAssigned = delta.MaxAssigned
+}
+
+func (o *oracle) ResetTxns() {
+	o.Lock()
+	defer o.Unlock()
+	o.pendingTxns = make(map[uint64]*Txn)
+}
+
+func (o *oracle) GetTxn(startTs uint64) *Txn {
+	o.RLock()
+	defer o.RUnlock()
+	return o.pendingTxns[startTs]
+}
+
+func (t *Txn) matchesDelta(ok func(key []byte) bool) bool {
+	t.Lock()
+	defer t.Unlock()
+	for _, d := range t.deltas {
+		if ok(d.key) {
+			return true
+		}
+	}
+	return false
+}
+
+// IterateTxns returns a list of start timestamps for currently pending transactions, which match
+// the provided function.
+func (o *oracle) IterateTxns(ok func(key []byte) bool) []uint64 {
+	o.RLock()
+	defer o.RUnlock()
+	var timestamps []uint64
+	for startTs, txn := range o.pendingTxns {
+		if txn.matchesDelta(ok) {
+			timestamps = append(timestamps, startTs)
+		}
+	}
+	return timestamps
 }

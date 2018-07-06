@@ -359,7 +359,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 func waitForConflictResolution(attr string) error {
 	for i := 0; i < 10; i++ {
-		tctxs := posting.Txns().Iterate(func(key []byte) bool {
+		tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
 			pk := x.Parse(key)
 			return pk.Attr == attr
 		})
@@ -377,10 +377,9 @@ func waitForConflictResolution(attr string) error {
 func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	if proposal.Mutations.DropAll {
 		// Ensures nothing get written to disk due to commit proposals.
-		posting.Txns().Reset()
+		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
-		err := posting.DeleteAll()
-		return err
+		return posting.DeleteAll()
 	}
 
 	if proposal.Mutations.StartTs == 0 {
@@ -566,7 +565,6 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 		}
 		// TODO: Even after multiple tries, if we're unable to apply the status of a transaction,
 		// what should we do? Maybe do a printf, and let them know that there might be a disk issue.
-		posting.Txns().Done(startTs)
 		posting.Oracle().Done(startTs)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Status of commitOrAbort startTs %d: %v\n", startTs, err)

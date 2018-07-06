@@ -24,62 +24,7 @@ import (
 
 var (
 	ErrTsTooOld = x.Errorf("Transaction is too old")
-	txns        *transactions
 )
-
-type transactions struct {
-	x.SafeMutex
-	m map[uint64]*Txn
-}
-
-func init() {
-	txns = new(transactions)
-	txns.m = make(map[uint64]*Txn)
-}
-func Txns() *transactions {
-	return txns
-}
-
-func (t *transactions) Reset() {
-	t.Lock()
-	defer t.Unlock()
-	t.m = make(map[uint64]*Txn)
-}
-
-func (t *transactions) Iterate(ok func(key []byte) bool) []uint64 {
-	t.RLock()
-	defer t.RUnlock()
-	var timestamps []uint64
-	for _, txn := range t.m {
-		if txn.conflicts(ok) {
-			timestamps = append(timestamps, txn.StartTs)
-		}
-	}
-	return timestamps
-}
-
-func (t *Txn) conflicts(ok func(key []byte) bool) bool {
-	t.Lock()
-	defer t.Unlock()
-	for _, d := range t.deltas {
-		if ok(d.key) {
-			return true
-		}
-	}
-	return false
-}
-
-func (t *transactions) Get(startTs uint64) *Txn {
-	t.RLock()
-	defer t.RUnlock()
-	return t.m[startTs]
-}
-
-func (t *transactions) Done(startTs uint64) {
-	t.Lock()
-	defer t.Unlock()
-	delete(t.m, startTs)
-}
 
 func (t *Txn) SetAbort() {
 	atomic.StoreUint32(&t.shouldAbort, 1)

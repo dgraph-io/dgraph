@@ -396,7 +396,7 @@ func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) 
 
 func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	node := groups().Node
-	if txn := posting.Txns().Get(startTs); txn != nil {
+	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
 		txn.Fill(tctx)
 	}
 	tctx.LinRead = &api.LinRead{
@@ -492,7 +492,7 @@ func populateMutationMap(src *intern.Mutations) map[uint32]*intern.Mutations {
 }
 
 func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
-	txn := posting.Txns().Get(startTs)
+	txn := posting.Oracle().GetTxn(startTs)
 	if txn == nil {
 		return posting.ErrInvalidTxn
 	}

@@ -258,7 +258,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	for i := 0; i < 12; i++ {
 		// Try a dozen times, then give up.
 		x.Printf("Trying to abort pending mutations. Loop: %d", i)
-		tctxs := posting.Txns().Iterate(func(key []byte) bool {
+		tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
 			pk := x.Parse(key)
 			return pk.Attr == in.Predicate
 		})
