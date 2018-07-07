@@ -438,7 +438,7 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	}
 	// TODO: Use MaxPending to track the txn watermark. That's the only thing we need really.
 	// delta.GetMaxPending
-	posting.Oracle().ProcessOracleDelta(delta)
+	posting.Oracle().ProcessDelta(delta)
 	return nil
 }
 

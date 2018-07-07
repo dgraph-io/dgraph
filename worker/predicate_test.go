@@ -52,16 +52,13 @@ func commitTs(startTs uint64) uint64 {
 		},
 		MaxAssigned: atomic.LoadUint64(&ts),
 	}
-	posting.Oracle().ProcessOracleDelta(od)
+	posting.Oracle().ProcessDelta(od)
 	return commit
 }
 
 func commitTransaction(t *testing.T, edge *intern.DirectedEdge, l *posting.List) {
 	startTs := timestamp()
-	txn := &posting.Txn{
-		StartTs: startTs,
-	}
-	txn = posting.Txns().PutOrMergeIndex(txn)
+	txn := posting.Oracle().RegisterStartTs(startTs)
 	err := l.AddMutationWithIndex(context.Background(), edge, txn)
 	require.NoError(t, err)
 

@@ -14,7 +14,6 @@ import (
 	"io"
 	"os"
 	"sort"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -62,17 +61,17 @@ func addEdge(t *testing.T, attr string, src uint64, edge *intern.DirectedEdge) {
 	l, err := posting.Get(x.DataKey(attr, src))
 	require.NoError(t, err)
 	startTs := timestamp()
-	txn := &posting.Txn{
-		StartTs: startTs,
-		Indices: []uint64{atomic.AddUint64(&index, 1)},
-	}
+	txn := posting.Oracle().RegisterStartTs(startTs)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, txn))
 
-	commit := commitTs(startTs)
-	go func() {
-		require.NoError(t, txn.CommitMutations(context.Background(), commit))
-	}()
+	commit := timestamp()
+	require.NoError(t, txn.CommitMutations(context.Background(), commit))
+	delta := &intern.OracleDelta{}
+	delta.Commits = make(map[uint64]uint64)
+	delta.Commits[startTs] = commit
+	delta.MaxAssigned = commit
+	posting.Oracle().ProcessDelta(delta)
 }
 
 func makeFacets(facetKVs map[string]string) (fs []*api.Facet, err error) {

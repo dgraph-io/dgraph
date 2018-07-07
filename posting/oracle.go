@@ -199,7 +199,7 @@ func (o *oracle) done(startTs uint64) {
 	delete(o.pendingTxns, startTs)
 }
 
-func (o *oracle) ProcessOracleDelta(delta *intern.OracleDelta) {
+func (o *oracle) ProcessDelta(delta *intern.OracleDelta) {
 	o.Lock()
 	defer o.Unlock()
 	for startTs := range delta.Commits {
