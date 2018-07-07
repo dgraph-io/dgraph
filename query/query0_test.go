@@ -15,7 +15,6 @@ import (
 	"os/exec"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	context "golang.org/x/net/context"
 
@@ -1684,7 +1683,6 @@ func TestMain(m *testing.M) {
 	// Load schema after nodes have started
 
 	populateGraph(&testing.T{})
-	time.Sleep(10 * time.Second)
 	go updateMaxPending()
 	r := m.Run()
 

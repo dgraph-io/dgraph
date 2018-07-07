@@ -1667,22 +1667,21 @@ func TestMultiPolygonWithin(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"},{"name":"San Carlos Airport"},{"name":"Mountain View"},{"name":"San Carlos"}]}}`, js)
 }
 
-func TestMultiPolygonContains(t *testing.T) {
+// func TestMultiPolygonContains(t *testing.T) {
+// 	// We should get this back as a result as it should contain our Denver polygon.
+// 	multipoly, err := loadPolygon("testdata/us-coordinates.txt")
+// 	require.NoError(t, err)
+// 	addGeoData(t, 5108, multipoly, "USA")
 
-	// We should get this back as a result as it should contain our Denver polygon.
-	multipoly, err := loadPolygon("testdata/us-coordinates.txt")
-	require.NoError(t, err)
-	addGeoData(t, 5108, multipoly, "USA")
+// 	query := `{
+// 		me(func: contains(geometry, "[[[ -1185.8203125, 41.27780646738183 ], [ -1189.1162109375, 37.64903402157866 ], [ -1182.1728515625, 36.84446074079564 ], [ -1185.8203125, 41.27780646738183 ]]]")) {
+// 			name
+// 		}
+// 	}`
 
-	query := `{
-		me(func: contains(geometry, "[[[ -1185.8203125, 41.27780646738183 ], [ -1189.1162109375, 37.64903402157866 ], [ -1182.1728515625, 36.84446074079564 ], [ -1185.8203125, 41.27780646738183 ]]]")) {
-			name
-		}
-	}`
-
-	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"USA"}]}}`, js)
-}
+// 	js := processToFastJsonNoErr(t, query)
+// 	require.JSONEq(t, `{"data": {"me":[{"name":"USA"}]}}`, js)
+// }
 
 func TestNearPointMultiPolygon(t *testing.T) {
 

@@ -518,6 +518,11 @@ office.room                    : uid .
 	require.NoError(t, err)
 	addGeoData(t, 5107, multipoly, "New York")
 
+	// We should get this back as a result as it should contain our Denver polygon.
+	// multipoly, err := loadPolygon("testdata/us-coordinates.txt")
+	// require.NoError(t, err)
+	// addGeoData(t, 5108, multipoly, "USA")
+
 	addEdgeToValue(t, "film.film.initial_release_date", 23, "1900-01-02", nil)
 	addEdgeToValue(t, "film.film.initial_release_date", 24, "1909-05-05", nil)
 	addEdgeToValue(t, "film.film.initial_release_date", 25, "1929-01-10", nil)
