@@ -196,7 +196,11 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 
 	rc := batch.GetContext()
 	if rc != nil {
-		w.GetNode().Connect(rc.Id, rc.Addr)
+		n := w.GetNode()
+		if n == nil {
+			return &api.Payload{}, errNoNode
+		}
+		n.Connect(rc.Id, rc.Addr)
 	}
 	if batch.GetPayload() == nil {
 		return &api.Payload{}, nil

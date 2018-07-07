@@ -8,6 +8,7 @@ function runCluster {
     sudo rm -Rf /tmp/dg
     sudo mkdir /tmp/dg
     go build . && go install . && md5sum dgraph $GOPATH/bin/dgraph
+    docker-compose down
     DATA="/tmp/dg" docker-compose up --force-recreate --remove-orphans --detach
   popd
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6080
