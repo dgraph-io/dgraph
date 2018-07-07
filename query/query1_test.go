@@ -19,47 +19,8 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/intern"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
-
-func TestSchemaBlock1(t *testing.T) {
-	// reseting schema, because mutations that assing ids change it.
-	err := schema.ParseBytes([]byte(schemaStr), 1)
-	x.Check(err)
-
-	query := `
-		schema {
-			type
-		}
-	`
-	actual := processSchemaQuery(t, query)
-	expected := []*api.SchemaNode{{Predicate: "genre", Type: "uid"},
-		{Predicate: "age", Type: "int"}, {Predicate: "name", Type: "string"},
-		{Predicate: "film.film.initial_release_date", Type: "datetime"},
-		{Predicate: "loc", Type: "geo"}, {Predicate: "alive", Type: "bool"},
-		{Predicate: "shadow_deep", Type: "int"}, {Predicate: "friend", Type: "uid"},
-		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
-		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
-		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
-		{Predicate: "nick_name", Type: "string"},
-		{Predicate: "royal_title", Type: "string"},
-		{Predicate: "noindex_name", Type: "string"},
-		{Predicate: "lossy", Type: "string"},
-		{Predicate: "school", Type: "uid"},
-		{Predicate: "dob_day", Type: "datetime"},
-		{Predicate: "graduation", Type: "datetime"},
-		{Predicate: "occupations", Type: "string"},
-		{Predicate: "_predicate_", Type: "string"},
-		{Predicate: "salary", Type: "float"},
-		{Predicate: "password", Type: "password"},
-		{Predicate: "symbol", Type: "string"},
-		{Predicate: "room", Type: "string"},
-		{Predicate: "office.room", Type: "uid"},
-	}
-	checkSchemaNodes(t, expected, actual)
-}
 
 func TestSchemaBlock2(t *testing.T) {
 	query := `
@@ -137,36 +98,6 @@ func TestSchemaBlock5(t *testing.T) {
 	checkSchemaNodes(t, expected, actual)
 }
 
-const schemaStr = `
-name                           : string @index(term, exact, trigram) @count @lang .
-alias                          : string @index(exact, term, fulltext) .
-dob                            : dateTime @index(year) .
-dob_day                        : dateTime @index(day) .
-film.film.initial_release_date : dateTime @index(year) .
-loc                            : geo @index(geo) .
-genre                          : uid @reverse .
-survival_rate                  : float .
-alive                          : bool @index(bool) .
-age                            : int @index(int) .
-shadow_deep                    : int .
-friend                         : uid @reverse @count .
-geometry                       : geo @index(geo) .
-value                          : string @index(trigram) .
-full_name                      : string @index(hash) .
-nick_name                      : string @index(term) .
-royal_title                    : string @index(hash, term, fulltext) @lang .
-noindex_name                   : string .
-school                         : uid @count .
-lossy                          : string @index(term) @lang .
-occupations                    : [string] @index(term) .
-graduation                     : [dateTime] @index(year) @count .
-salary                         : float @index(float) .
-password                       : password .
-symbol                         : string @index(exact) .
-room                           : string @index(term) .
-office.room                    : uid .
-`
-
 // Duplicate implemention as in cmd/dgraph/main_test.go
 // TODO: Change the implementation in cmd/dgraph to test for network failure
 type raftServer struct {
@@ -194,7 +125,7 @@ func updateMaxPending() {
 }
 
 func TestFilterNonIndexedPredicateFail(t *testing.T) {
-	populateGraph(t)
+
 	// filtering on non indexing predicate fails
 	query := `
 		{
@@ -212,7 +143,7 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 }
 
 func TestMultipleSamePredicateInBlockFail(t *testing.T) {
-	populateGraph(t)
+
 	// name is asked for two times..
 	query := `
 		{
@@ -230,7 +161,7 @@ func TestMultipleSamePredicateInBlockFail(t *testing.T) {
 }
 
 func TestMultipleSamePredicateInBlockFail2(t *testing.T) {
-	populateGraph(t)
+
 	// age is asked for two times..
 	query := `
 		{
@@ -248,7 +179,7 @@ func TestMultipleSamePredicateInBlockFail2(t *testing.T) {
 }
 
 func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
-	populateGraph(t)
+
 	// friend is asked for two times..
 	query := `
 		{
@@ -268,7 +199,7 @@ func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
 }
 
 func TestXidInvalidJSON(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -294,7 +225,7 @@ func TestXidInvalidJSON(t *testing.T) {
 }
 
 func TestToJSONReverseNegativeFirst(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: allofterms(name, "Andrea")) {
@@ -313,7 +244,7 @@ func TestToJSONReverseNegativeFirst(t *testing.T) {
 }
 
 func TestToFastJSONOrderLang(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -331,7 +262,7 @@ func TestToFastJSONOrderLang(t *testing.T) {
 }
 
 func TestBoolIndexEqRoot1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: eq(alive, true)) {
@@ -347,7 +278,7 @@ func TestBoolIndexEqRoot1(t *testing.T) {
 }
 
 func TestBoolIndexEqRoot2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: eq(alive, false)) {
@@ -363,7 +294,7 @@ func TestBoolIndexEqRoot2(t *testing.T) {
 }
 
 func TestBoolIndexgeRoot(t *testing.T) {
-	populateGraph(t)
+
 	q := `
 		{
 			me(func: ge(alive, true)) {
@@ -381,7 +312,7 @@ func TestBoolIndexgeRoot(t *testing.T) {
 }
 
 func TestBoolIndexEqChild(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: eq(alive, true)) {
@@ -401,7 +332,7 @@ func TestBoolIndexEqChild(t *testing.T) {
 }
 
 func TestBoolSort(t *testing.T) {
-	populateGraph(t)
+
 	q := `
 		{
 			me(func: anyofterms(name, "Michonne Andrea Rick"), orderasc: alive) {
@@ -416,7 +347,7 @@ func TestBoolSort(t *testing.T) {
 }
 
 func TestStringEscape(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(2301)) {
@@ -431,7 +362,7 @@ func TestStringEscape(t *testing.T) {
 }
 
 func TestJSONQueryVariables(t *testing.T) {
-	populateGraph(t)
+
 	q := `query test ($a: int = 1) {
 		me(func: uid(0x01)) {
 			name
@@ -447,7 +378,7 @@ func TestJSONQueryVariables(t *testing.T) {
 }
 
 func TestOrderDescFilterCount(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -465,7 +396,7 @@ func TestOrderDescFilterCount(t *testing.T) {
 }
 
 func TestHashTokEq(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: eq(full_name, "Michonne's large name for hashing")) {
@@ -484,7 +415,7 @@ func TestHashTokEq(t *testing.T) {
 }
 
 func TestHashTokGeqErr(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: ge(full_name, "Michonne's large name for hashing")) {
@@ -503,7 +434,7 @@ func TestHashTokGeqErr(t *testing.T) {
 }
 
 func TestNameNotIndexed(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: eq(noindex_name, "Michonne's name not indexed")) {
@@ -522,7 +453,7 @@ func TestNameNotIndexed(t *testing.T) {
 }
 
 func TestMultipleMinMax(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -543,7 +474,7 @@ func TestMultipleMinMax(t *testing.T) {
 }
 
 func TestDuplicateAlias(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -561,7 +492,7 @@ func TestDuplicateAlias(t *testing.T) {
 }
 
 func TestGraphQLId(t *testing.T) {
-	populateGraph(t)
+
 	q := `query test ($a: string = 1) {
 		me(func: uid($a)) {
 			name
@@ -577,7 +508,7 @@ func TestGraphQLId(t *testing.T) {
 }
 
 func TestDebugUid(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -600,7 +531,7 @@ func TestDebugUid(t *testing.T) {
 }
 
 func TestUidAlias(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1)) {
@@ -620,7 +551,7 @@ func TestUidAlias(t *testing.T) {
 }
 
 func TestCountAtRoot(t *testing.T) {
-	populateGraph(t)
+
 	query := `
         {
             me(func: gt(count(friend), 0)) {
@@ -633,7 +564,7 @@ func TestCountAtRoot(t *testing.T) {
 }
 
 func TestCountAtRoot2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
         {
                 me(func: anyofterms(name, "Michonne Rick Andrea")) {
@@ -646,7 +577,7 @@ func TestCountAtRoot2(t *testing.T) {
 }
 
 func TestCountAtRoot3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
         {
 		me(func:anyofterms(name, "Michonne Rick Daryl")) {
@@ -665,7 +596,7 @@ func TestCountAtRoot3(t *testing.T) {
 }
 
 func TestCountAtRootWithAlias4(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
                 me(func:anyofterms(name, "Michonne Rick Daryl")) @filter(le(count(friend), 2)) {
@@ -678,7 +609,7 @@ func TestCountAtRootWithAlias4(t *testing.T) {
 }
 
 func TestCountAtRoot5(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(1)) {
@@ -698,7 +629,7 @@ func TestCountAtRoot5(t *testing.T) {
 }
 
 func TestHasFuncAtRoot(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: has(friend)) {
@@ -715,7 +646,7 @@ func TestHasFuncAtRoot(t *testing.T) {
 }
 
 func TestHasFuncAtRootWithAfter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: has(friend), after: 0x01) {
@@ -733,7 +664,7 @@ func TestHasFuncAtRootWithAfter(t *testing.T) {
 }
 
 func TestHasFuncAtRootFilter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: anyofterms(name, "Michonne Rick Daryl")) @filter(has(friend)) {
@@ -750,7 +681,7 @@ func TestHasFuncAtRootFilter(t *testing.T) {
 }
 
 func TestHasFuncAtChild1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: has(school)) {
@@ -767,7 +698,7 @@ func TestHasFuncAtChild1(t *testing.T) {
 }
 
 func TestHasFuncAtChild2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: has(school)) {
@@ -785,7 +716,7 @@ func TestHasFuncAtChild2(t *testing.T) {
 }
 
 func TestHasFuncAtRoot2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: has(name@en)) {
@@ -980,7 +911,7 @@ func TestGetAllPredicatesGroupby(t *testing.T) {
 }
 
 func TestMathVarCrash(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			f(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -999,7 +930,7 @@ func TestMathVarCrash(t *testing.T) {
 }
 
 func TestMathVarAlias(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			f(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1013,7 +944,7 @@ func TestMathVarAlias(t *testing.T) {
 }
 
 func TestMathVarAlias2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			f as me(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1031,7 +962,7 @@ func TestMathVarAlias2(t *testing.T) {
 }
 
 func TestMathVar3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			f as me(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1049,7 +980,7 @@ func TestMathVar3(t *testing.T) {
 }
 
 func TestMultipleEquality(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: eq(name, ["Rick Grimes"])) {
@@ -1067,7 +998,7 @@ func TestMultipleEquality(t *testing.T) {
 }
 
 func TestMultipleEquality2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: eq(name, ["Badger", "Bobby", "Matt"])) {
@@ -1084,7 +1015,7 @@ func TestMultipleEquality2(t *testing.T) {
 }
 
 func TestMultipleEquality3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {
@@ -1101,7 +1032,7 @@ func TestMultipleEquality3(t *testing.T) {
 }
 
 func TestMultipleEquality4(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {
@@ -1118,7 +1049,7 @@ func TestMultipleEquality4(t *testing.T) {
 }
 
 func TestMultipleEquality5(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: eq(name@en, ["Honey badger", "Honey bee"])) {
@@ -1132,7 +1063,7 @@ func TestMultipleEquality5(t *testing.T) {
 }
 
 func TestMultipleGtError(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: gt(name, ["Badger", "Bobby"])) {
@@ -1153,7 +1084,7 @@ func TestMultipleGtError(t *testing.T) {
 }
 
 func TestMultipleEqQuote(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: eq(name, ["Alice\"", "Michonne"])) {
@@ -1169,7 +1100,7 @@ func TestMultipleEqQuote(t *testing.T) {
 }
 
 func TestMultipleEqInt(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: eq(age, [15, 17, 38])) {
@@ -1185,7 +1116,7 @@ func TestMultipleEqInt(t *testing.T) {
 }
 
 func TestUidFunction(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(23, 1, 24, 25, 31)) {
@@ -1197,7 +1128,7 @@ func TestUidFunction(t *testing.T) {
 }
 
 func TestUidFunctionInFilter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(23, 1, 24, 25, 31))  @filter(uid(1, 24)) {
@@ -1209,7 +1140,7 @@ func TestUidFunctionInFilter(t *testing.T) {
 }
 
 func TestUidFunctionInFilter2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(23, 1, 24, 25, 31)) {
@@ -1225,7 +1156,7 @@ func TestUidFunctionInFilter2(t *testing.T) {
 }
 
 func TestUidFunctionInFilter3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: anyofterms(name, "Michonne Andrea")) @filter(uid(1)) {
@@ -1237,7 +1168,7 @@ func TestUidFunctionInFilter3(t *testing.T) {
 }
 
 func TestUidFunctionInFilter4(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: anyofterms(name, "Michonne Andrea")) @filter(not uid(1, 31)) {
@@ -1249,7 +1180,7 @@ func TestUidFunctionInFilter4(t *testing.T) {
 }
 
 func TestUidInFunction(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(1, 23, 24)) @filter(uid_in(friend, 23)) {
@@ -1261,7 +1192,7 @@ func TestUidInFunction(t *testing.T) {
 }
 
 func TestUidInFunction1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: UID(1, 23, 24)) @filter(uid_in(school, 5000)) {
@@ -1273,7 +1204,7 @@ func TestUidInFunction1(t *testing.T) {
 }
 
 func TestUidInFunction2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(1, 23, 24)) {
@@ -1288,7 +1219,7 @@ func TestUidInFunction2(t *testing.T) {
 }
 
 func TestUidInFunctionAtRoot(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid_in(school, 5000)) {
@@ -1306,7 +1237,7 @@ func TestUidInFunctionAtRoot(t *testing.T) {
 }
 
 func TestBinaryJSON(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(1)) {
@@ -1319,7 +1250,7 @@ func TestBinaryJSON(t *testing.T) {
 }
 
 func TestReflexive(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func:anyofterms(name, "Michonne Rick Daryl")) @ignoreReflex {
@@ -1337,7 +1268,7 @@ func TestReflexive(t *testing.T) {
 }
 
 func TestReflexive2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func:anyofterms(name, "Michonne Rick Daryl")) @IGNOREREFLEX {
@@ -1355,7 +1286,7 @@ func TestReflexive2(t *testing.T) {
 }
 
 func TestReflexive3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func:anyofterms(name, "Michonne Rick Daryl")) @IGNOREREFLEX @normalize {
@@ -1373,7 +1304,7 @@ func TestReflexive3(t *testing.T) {
 }
 
 func TestCascadeUid(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) @cascade {
@@ -1397,7 +1328,7 @@ func TestCascadeUid(t *testing.T) {
 }
 
 func TestUseVariableBeforeDefinitionError(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 {
 	me(func: anyofterms(name, "Michonne Daryl Andrea"), orderasc: val(avgAge)) {
@@ -1414,7 +1345,7 @@ func TestUseVariableBeforeDefinitionError(t *testing.T) {
 }
 
 func TestAggregateRoot1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1431,7 +1362,7 @@ func TestAggregateRoot1(t *testing.T) {
 }
 
 func TestAggregateRoot2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1450,7 +1381,7 @@ func TestAggregateRoot2(t *testing.T) {
 }
 
 func TestAggregateRoot3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me1(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1467,7 +1398,7 @@ func TestAggregateRoot3(t *testing.T) {
 }
 
 func TestAggregateRoot4(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1486,7 +1417,7 @@ func TestAggregateRoot4(t *testing.T) {
 }
 
 func TestAggregateRoot5(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1504,7 +1435,7 @@ func TestAggregateRoot5(t *testing.T) {
 }
 
 func TestAggregateRootError(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1530,7 +1461,7 @@ func TestFilterLang(t *testing.T) {
 	// This tests the fix for #1334. While getting uids for filter, we fetch data keys when number
 	// of uids is less than number of tokens. Lang tag was not passed correctly while fetching these
 	// data keys.
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001, 0x1002, 0x1003)) @filter(ge(name@en, "D"))  {
@@ -1544,7 +1475,7 @@ func TestFilterLang(t *testing.T) {
 }
 
 func TestMathCeil1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me as var(func: eq(name, "Xyz"))
@@ -1566,7 +1497,7 @@ func TestMathCeil1(t *testing.T) {
 }
 
 func TestMathCeil2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me as var(func: eq(name, "Michonne"))
@@ -1589,7 +1520,7 @@ func TestMathCeil2(t *testing.T) {
 
 func TestAppendDummyValuesPanic(t *testing.T) {
 	// This is a fix for #1359. We should check that SrcUIDs is not nil before accessing Uids.
-	populateGraph(t)
+
 	query := `
 	{
 		n(func:ge(uid, 0)) {
@@ -1602,7 +1533,7 @@ func TestAppendDummyValuesPanic(t *testing.T) {
 }
 
 func TestMultipleValueFilter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: ge(graduation, "1930")) {
@@ -1616,7 +1547,7 @@ func TestMultipleValueFilter(t *testing.T) {
 }
 
 func TestMultipleValueFilter2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: le(graduation, "1933")) {
@@ -1630,7 +1561,7 @@ func TestMultipleValueFilter2(t *testing.T) {
 }
 
 func TestMultipleValueArray(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(1)) {
@@ -1644,7 +1575,7 @@ func TestMultipleValueArray(t *testing.T) {
 }
 
 func TestMultipleValueArray2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(1)) {
@@ -1658,7 +1589,7 @@ func TestMultipleValueArray2(t *testing.T) {
 }
 
 func TestMultipleValueHasAndCount(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: has(graduation)) {
@@ -1673,7 +1604,7 @@ func TestMultipleValueHasAndCount(t *testing.T) {
 }
 
 func TestMultipleValueSortError(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: anyofterms(name, "Michonne Rick"), orderdesc: graduation) {
@@ -1690,7 +1621,7 @@ func TestMultipleValueSortError(t *testing.T) {
 
 func TestMultipleValueGroupByError(t *testing.T) {
 	t.Skip()
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(1)) {
@@ -1707,7 +1638,6 @@ func TestMultipleValueGroupByError(t *testing.T) {
 }
 
 func TestMultiPolygonIntersects(t *testing.T) {
-	populateGraph(t)
 
 	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
@@ -1723,7 +1653,6 @@ func TestMultiPolygonIntersects(t *testing.T) {
 }
 
 func TestMultiPolygonWithin(t *testing.T) {
-	populateGraph(t)
 
 	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
 	require.NoError(t, err)
@@ -1739,7 +1668,6 @@ func TestMultiPolygonWithin(t *testing.T) {
 }
 
 func TestMultiPolygonContains(t *testing.T) {
-	populateGraph(t)
 
 	// We should get this back as a result as it should contain our Denver polygon.
 	multipoly, err := loadPolygon("testdata/us-coordinates.txt")
@@ -1757,7 +1685,6 @@ func TestMultiPolygonContains(t *testing.T) {
 }
 
 func TestNearPointMultiPolygon(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		me(func: near(loc, [1.0, 1.0], 1)) {
@@ -1770,7 +1697,7 @@ func TestNearPointMultiPolygon(t *testing.T) {
 }
 
 func TestMultiSort1(t *testing.T) {
-	populateGraph(t)
+
 	time.Sleep(10 * time.Millisecond)
 
 	query := `{
@@ -1785,7 +1712,6 @@ func TestMultiSort1(t *testing.T) {
 }
 
 func TestMultiSort2(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderdesc: age) {
@@ -1799,7 +1725,6 @@ func TestMultiSort2(t *testing.T) {
 }
 
 func TestMultiSort3(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: age, orderdesc: name) {
@@ -1813,7 +1738,6 @@ func TestMultiSort3(t *testing.T) {
 }
 
 func TestMultiSort4(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: salary) {
@@ -1828,7 +1752,6 @@ func TestMultiSort4(t *testing.T) {
 }
 
 func TestMultiSort5(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderdesc: salary) {
@@ -1843,7 +1766,6 @@ func TestMultiSort5(t *testing.T) {
 }
 
 func TestMultiSort6Paginate(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderdesc: age, first: 7) {
@@ -1857,7 +1779,6 @@ func TestMultiSort6Paginate(t *testing.T) {
 }
 
 func TestMultiSort7Paginate(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 7) {
@@ -1871,7 +1792,6 @@ func TestMultiSort7Paginate(t *testing.T) {
 }
 
 func TestFilterRootOverride(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		a as var(func: eq(name, "Michonne")) @filter(eq(name, "Rick Grimes"))
@@ -1887,7 +1807,6 @@ func TestFilterRootOverride(t *testing.T) {
 }
 
 func TestFilterRoot(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		me(func: eq(name, "Michonne")) @filter(eq(name, "Rick Grimes")) {
@@ -1901,7 +1820,6 @@ func TestFilterRoot(t *testing.T) {
 }
 
 func TestMathAlias(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		me(func:allofterms(name, "Michonne")) {
@@ -1916,7 +1834,6 @@ func TestMathAlias(t *testing.T) {
 }
 
 func TestUidVariable(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		var(func:allofterms(name, "Michonne")) {
@@ -1935,7 +1852,6 @@ func TestUidVariable(t *testing.T) {
 }
 
 func TestMultipleValueVarError(t *testing.T) {
-	populateGraph(t)
 
 	query := `{
 		var(func:ge(graduation, "1930")) {
@@ -1954,7 +1870,7 @@ func TestMultipleValueVarError(t *testing.T) {
 }
 
 func TestReturnEmptyBlock(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:allofterms(name, "Michonne")) @filter(eq(name, "Rick Grimes")) {
 		}
@@ -1971,11 +1887,7 @@ func TestReturnEmptyBlock(t *testing.T) {
 }
 
 func TestExpandVal(t *testing.T) {
-	err := schema.ParseBytes([]byte(schemaStr), 1)
-	x.Check(err)
-	addPassword(t, 1, "password", "123456")
 	// We ignore password in expand(_all_)
-	populateGraph(t)
 	query := `
 	{
 		var(func: uid(1)) {
@@ -1992,7 +1904,7 @@ func TestExpandVal(t *testing.T) {
 }
 
 func TestGroupByGeoCrash(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 	  q(func: uid(1, 23, 24, 25, 31)) @groupby(loc) {
@@ -2005,7 +1917,7 @@ func TestGroupByGeoCrash(t *testing.T) {
 }
 
 func TestPasswordError(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		q(func: uid(1)) {
@@ -2021,7 +1933,7 @@ func TestPasswordError(t *testing.T) {
 }
 
 func TestCountPanic(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		q(func: uid(1, 300)) {
@@ -2036,7 +1948,7 @@ func TestCountPanic(t *testing.T) {
 }
 
 func TestExpandAll(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		q(func: uid(1)) {
@@ -2051,7 +1963,7 @@ func TestExpandAll(t *testing.T) {
 }
 
 func TestUidWithoutDebug(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		q(func: uid(1, 24)) {
@@ -2065,7 +1977,7 @@ func TestUidWithoutDebug(t *testing.T) {
 }
 
 func TestUidWithoutDebug2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		q(func: uid(1)) {
@@ -2081,7 +1993,6 @@ func TestUidWithoutDebug2(t *testing.T) {
 }
 
 func TestExpandAll_empty_panic(t *testing.T) {
-	populateGraph(t)
 
 	query := `
 		{

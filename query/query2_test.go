@@ -23,7 +23,7 @@ import (
 )
 
 func TestToFastJSONFilterUID(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -43,7 +43,7 @@ func TestToFastJSONFilterUID(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrUID(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -64,7 +64,7 @@ func TestToFastJSONFilterOrUID(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrCount(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -85,7 +85,7 @@ func TestToFastJSONFilterOrCount(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrFirst(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -105,7 +105,7 @@ func TestToFastJSONFilterOrFirst(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrOffset(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -125,7 +125,7 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 }
 
 func TestToFastJSONFiltergeName(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -143,7 +143,7 @@ func TestToFastJSONFiltergeName(t *testing.T) {
 }
 
 func TestToFastJSONFilterLtAlias(t *testing.T) {
-	populateGraph(t)
+
 	// We shouldn't get Zambo Alice.
 	query := `
 		{
@@ -162,7 +162,7 @@ func TestToFastJSONFilterLtAlias(t *testing.T) {
 }
 
 func TestToFastJSONFilterge1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -182,7 +182,7 @@ func TestToFastJSONFilterge1(t *testing.T) {
 }
 
 func TestToFastJSONFilterge2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -202,7 +202,7 @@ func TestToFastJSONFilterge2(t *testing.T) {
 }
 
 func TestToFastJSONFilterGt(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -222,7 +222,7 @@ func TestToFastJSONFilterGt(t *testing.T) {
 }
 
 func TestToFastJSONFilterle(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -242,7 +242,7 @@ func TestToFastJSONFilterle(t *testing.T) {
 }
 
 func TestToFastJSONFilterLt(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -262,7 +262,7 @@ func TestToFastJSONFilterLt(t *testing.T) {
 }
 
 func TestToFastJSONFilterEqualNoHit(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -281,7 +281,7 @@ func TestToFastJSONFilterEqualNoHit(t *testing.T) {
 		js)
 }
 func TestToFastJSONFilterEqualName(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -301,7 +301,7 @@ func TestToFastJSONFilterEqualName(t *testing.T) {
 }
 
 func TestToFastJSONFilterEqualNameNoHit(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -321,7 +321,7 @@ func TestToFastJSONFilterEqualNameNoHit(t *testing.T) {
 }
 
 func TestToFastJSONFilterEqual(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -341,7 +341,7 @@ func TestToFastJSONFilterEqual(t *testing.T) {
 }
 
 func TestToFastJSONOrderName(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -360,7 +360,7 @@ func TestToFastJSONOrderName(t *testing.T) {
 }
 
 func TestToFastJSONOrderNameDesc(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -379,7 +379,7 @@ func TestToFastJSONOrderNameDesc(t *testing.T) {
 }
 
 func TestToFastJSONOrderName1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -398,7 +398,7 @@ func TestToFastJSONOrderName1(t *testing.T) {
 }
 
 func TestToFastJSONOrderNameError(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -414,7 +414,7 @@ func TestToFastJSONOrderNameError(t *testing.T) {
 }
 
 func TestToFastJSONFilterleOrder(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -434,7 +434,7 @@ func TestToFastJSONFilterleOrder(t *testing.T) {
 }
 
 func TestToFastJSONFiltergeNoResult(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -453,7 +453,7 @@ func TestToFastJSONFiltergeNoResult(t *testing.T) {
 }
 
 func TestToFastJSONFirstOffsetOutOfBound(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -474,7 +474,7 @@ func TestToFastJSONFirstOffsetOutOfBound(t *testing.T) {
 
 // No filter. Just to test first and offset.
 func TestToFastJSONFirstOffset(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -494,7 +494,7 @@ func TestToFastJSONFirstOffset(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -514,7 +514,7 @@ func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
 }
 
 func TestToFastJSONFilterleFirstOffset(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -534,7 +534,7 @@ func TestToFastJSONFilterleFirstOffset(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -552,7 +552,7 @@ func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
-	populateGraph(t)
+
 	// When negative first/count is specified, we ignore offset and returns the last
 	// few number of items.
 	query := `
@@ -574,7 +574,7 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 }
 
 func TestToFastJSONFilterNot1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -593,7 +593,7 @@ func TestToFastJSONFilterNot1(t *testing.T) {
 }
 
 func TestToFastJSONFilterNot2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -612,7 +612,7 @@ func TestToFastJSONFilterNot2(t *testing.T) {
 }
 
 func TestToFastJSONFilterNot3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -631,7 +631,7 @@ func TestToFastJSONFilterNot3(t *testing.T) {
 }
 
 func TestToFastJSONFilterNot4(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -657,7 +657,7 @@ func TestToFastJSONFilterNot4(t *testing.T) {
 // It's commented out, because it's too slow for everyday testing.
 /*
 func TestToFastJSONFilterNot4x1000000(t *testing.T) {
-	populateGraph(t)
+
 	for i := 0; i < 1000000; i++ {
 		query := `
 		{
@@ -683,7 +683,7 @@ func TestToFastJSONFilterNot4x1000000(t *testing.T) {
 */
 
 func TestToFastJSONFilterAnd(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -702,7 +702,7 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 }
 
 func TestCountReverseFunc(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: ge(count(~friend), 2)) {
@@ -718,7 +718,7 @@ func TestCountReverseFunc(t *testing.T) {
 }
 
 func TestCountReverseFilter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: anyofterms(name, "Glenn Michonne Rick")) @filter(ge(count(~friend), 2)) {
@@ -734,7 +734,7 @@ func TestCountReverseFilter(t *testing.T) {
 }
 
 func TestCountReverse(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x18)) {
@@ -750,7 +750,7 @@ func TestCountReverse(t *testing.T) {
 }
 
 func TestToFastJSONReverse(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x18)) {
@@ -770,7 +770,7 @@ func TestToFastJSONReverse(t *testing.T) {
 }
 
 func TestToFastJSONReverseFilter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x18)) {
@@ -790,7 +790,7 @@ func TestToFastJSONReverseFilter(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrder(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -812,7 +812,7 @@ func TestToFastJSONOrder(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderDesc1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -833,7 +833,7 @@ func TestToFastJSONOrderDesc1(t *testing.T) {
 }
 
 func TestToFastJSONOrderDesc2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -855,7 +855,7 @@ func TestToFastJSONOrderDesc2(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderDesc_pawan(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -877,7 +877,7 @@ func TestToFastJSONOrderDesc_pawan(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderDedup(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -899,7 +899,7 @@ func TestToFastJSONOrderDedup(t *testing.T) {
 
 // Test sorting / ordering by dob and count.
 func TestToFastJSONOrderDescCount(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -918,7 +918,7 @@ func TestToFastJSONOrderDescCount(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderOffset(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -939,7 +939,7 @@ func TestToFastJSONOrderOffset(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderOffsetCount(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1015,7 +1015,7 @@ func rootSg(uidMatrix []*intern.List, srcUids *intern.List, names []string, ages
 }
 
 func TestSchema1(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
@@ -1039,7 +1039,7 @@ func TestSchema1(t *testing.T) {
 }
 
 func TestMultiQuery(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:anyofterms(name, "Michonne")) {
@@ -1057,7 +1057,7 @@ func TestMultiQuery(t *testing.T) {
 }
 
 func TestMultiQueryError1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne")) {
@@ -1074,7 +1074,7 @@ func TestMultiQueryError1(t *testing.T) {
 }
 
 func TestMultiQueryError2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
       me(anyofterms(name, "Michonne")) {
@@ -1093,7 +1093,7 @@ func TestMultiQueryError2(t *testing.T) {
 }
 
 func TestGenerator(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne")) {
@@ -1107,7 +1107,7 @@ func TestGenerator(t *testing.T) {
 }
 
 func TestGeneratorMultiRootMultiQueryRootval(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			friend as var(func:anyofterms(name, "Michonne Rick Glenn")) {
@@ -1124,7 +1124,7 @@ func TestGeneratorMultiRootMultiQueryRootval(t *testing.T) {
 }
 
 func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			f as var(func:anyofterms(name, "Michonne Rick Glenn")) {
@@ -1143,7 +1143,7 @@ func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
 }
 
 func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			friend as var(func:anyofterms(name, "Michonne Rick Glenn")) {
@@ -1159,7 +1159,7 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 }
 
 func TestGeneratorMultiRootMultiQuery(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne Rick Glenn")) {
@@ -1176,7 +1176,7 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 }
 
 func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			L as var(func:anyofterms(name, "Michonne Rick Glenn"), orderasc: dob, offset:2) {
@@ -1193,7 +1193,7 @@ func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
 }
 
 func TestGeneratorMultiRootVarOrderOffset1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne Rick Glenn"), orderasc: dob, offset:2) {
@@ -1206,7 +1206,7 @@ func TestGeneratorMultiRootVarOrderOffset1(t *testing.T) {
 }
 
 func TestGeneratorMultiRootOrderOffset(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			L as var(func:anyofterms(name, "Michonne Rick Glenn")) {
@@ -1222,7 +1222,7 @@ func TestGeneratorMultiRootOrderOffset(t *testing.T) {
 }
 
 func TestGeneratorMultiRootOrderdesc(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne Rick Glenn"), orderdesc: dob) {
@@ -1235,7 +1235,7 @@ func TestGeneratorMultiRootOrderdesc(t *testing.T) {
 }
 
 func TestGeneratorMultiRootOrder(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne Rick Glenn"), orderasc: dob) {
@@ -1248,7 +1248,7 @@ func TestGeneratorMultiRootOrder(t *testing.T) {
 }
 
 func TestGeneratorMultiRootOffset(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne Rick Glenn"), offset: 1) {
@@ -1261,7 +1261,7 @@ func TestGeneratorMultiRootOffset(t *testing.T) {
 }
 
 func TestGeneratorMultiRoot(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne Rick Glenn")) {
@@ -1274,7 +1274,7 @@ func TestGeneratorMultiRoot(t *testing.T) {
 }
 
 func TestRootList(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 	me(func: uid(1, 23, 24)) {
 		name
@@ -1285,7 +1285,7 @@ func TestRootList(t *testing.T) {
 }
 
 func TestRootList1(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 	me(func: uid(0x01, 23, 24, 110)) {
 		name
@@ -1296,7 +1296,7 @@ func TestRootList1(t *testing.T) {
 }
 
 func TestRootList2(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 	me(func: uid(0x01, 23, 110, 24)) {
 		name
@@ -1307,7 +1307,7 @@ func TestRootList2(t *testing.T) {
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Daryl Rick Glenn")) @filter(le(dob, "1909-01-10")) {
@@ -1320,7 +1320,7 @@ func TestGeneratorMultiRootFilter1(t *testing.T) {
 }
 
 func TestGeneratorMultiRootFilter2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(ge(dob, "1909-01-10")) {
@@ -1333,7 +1333,7 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
 }
 
 func TestGeneratorMultiRootFilter3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and ge(dob, "1909-01-10")) {
@@ -1346,7 +1346,7 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountGt(t *testing.T) {
-	populateGraph(t)
+
 	query := `
                 {
                         me(func:anyofterms(name, "Michonne Rick")) @filter(gt(count(friend), 2)) {
@@ -1362,7 +1362,7 @@ func TestGeneratorRootFilterOnCountGt(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountle(t *testing.T) {
-	populateGraph(t)
+
 	query := `
                 {
                         me(func:anyofterms(name, "Michonne Rick")) @filter(le(count(friend), 2)) {
@@ -1378,7 +1378,7 @@ func TestGeneratorRootFilterOnCountle(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountChildLevel(t *testing.T) {
-	populateGraph(t)
+
 	query := `
                 {
                         me(func: uid(23)) {
@@ -1397,7 +1397,7 @@ func TestGeneratorRootFilterOnCountChildLevel(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountWithAnd(t *testing.T) {
-	populateGraph(t)
+
 	query := `
                 {
                         me(func: uid(23)) {
@@ -1416,7 +1416,7 @@ func TestGeneratorRootFilterOnCountWithAnd(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountError1(t *testing.T) {
-	populateGraph(t)
+
 	// only cmp(count(attr), int) is valid, 'max'/'min'/'sum' not supported
 	query := `
                 {
@@ -1431,7 +1431,7 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountError2(t *testing.T) {
-	populateGraph(t)
+
 	// missing digits
 	query := `
                 {
@@ -1446,7 +1446,7 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountError3(t *testing.T) {
-	populateGraph(t)
+
 	// to much args
 	query := `
                 {
@@ -1461,7 +1461,7 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 }
 
 func TestNearGenerator(t *testing.T) {
-	populateGraph(t)
+
 	time.Sleep(10 * time.Millisecond)
 	query := `{
 		me(func:near(loc, [1.1,2.0], 5.001)) @filter(not uid(25)) {
@@ -1475,7 +1475,7 @@ func TestNearGenerator(t *testing.T) {
 }
 
 func TestNearGeneratorFilter(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:near(loc, [1.1,2.0], 5.001)) @filter(allofterms(name, "Michonne")) {
 			name
@@ -1488,7 +1488,7 @@ func TestNearGeneratorFilter(t *testing.T) {
 }
 
 func TestNearGeneratorError(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:near(loc, [1.1,2.0], -5.0)) {
 			name
@@ -1510,7 +1510,7 @@ func TestNearGeneratorError(t *testing.T) {
 }
 
 func TestNearGeneratorErrorMissDist(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:near(loc, [1.1,2.0])) {
 			name
@@ -1532,7 +1532,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 }
 
 func TestWithinGeneratorError(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:within(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]], 12.2)) {
 			name
@@ -1554,7 +1554,7 @@ func TestWithinGeneratorError(t *testing.T) {
 }
 
 func TestWithinGenerator(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:within(loc,  [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) @filter(not uid(25)) {
 			name
@@ -1566,7 +1566,7 @@ func TestWithinGenerator(t *testing.T) {
 }
 
 func TestContainsGenerator(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:contains(loc, [2.0,0.0])) {
 			name
@@ -1578,7 +1578,7 @@ func TestContainsGenerator(t *testing.T) {
 }
 
 func TestContainsGenerator2(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:contains(loc,  [[[1.0,1.0], [1.9,1.0], [1.9, 1.9], [1.0, 1.9], [1.0, 1.0]]])) {
 			name
@@ -1590,7 +1590,7 @@ func TestContainsGenerator2(t *testing.T) {
 }
 
 func TestIntersectsGeneratorError(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:intersects(loc, [0.0,0.0])) {
 			name
@@ -1611,7 +1611,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 }
 
 func TestIntersectsGenerator(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func:intersects(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) @filter(not uid(25)) {
 			name
@@ -1625,7 +1625,6 @@ func TestIntersectsGenerator(t *testing.T) {
 // this test is failing when executed alone, but pass when executed after other tests
 // TODO: find and remove the dependency
 func TestNormalizeDirective(t *testing.T) {
-	populateGraph(t)
 	query := `
 		{
 			me(func: uid(0x01)) @normalize {
@@ -1652,7 +1651,7 @@ func TestNormalizeDirective(t *testing.T) {
 }
 
 func TestNearPoint(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func: near(geometry, [-122.082506, 37.4249518], 1)) {
 			name
@@ -1665,7 +1664,7 @@ func TestNearPoint(t *testing.T) {
 }
 
 func TestWithinPolygon(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func: within(geometry, [[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]])) {
 			name
@@ -1677,7 +1676,7 @@ func TestWithinPolygon(t *testing.T) {
 }
 
 func TestContainsPoint(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func: contains(geometry, [-122.082506, 37.4249518])) {
 			name
@@ -1690,7 +1689,7 @@ func TestContainsPoint(t *testing.T) {
 }
 
 func TestNearPoint2(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func: near(geometry, [-122.082506, 37.4249518], 1000)) {
 			name
@@ -1703,7 +1702,7 @@ func TestNearPoint2(t *testing.T) {
 }
 
 func TestIntersectsPolygon1(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func: intersects(geometry, [[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]])) {
 			name
@@ -1717,7 +1716,7 @@ func TestIntersectsPolygon1(t *testing.T) {
 }
 
 func TestIntersectsPolygon2(t *testing.T) {
-	populateGraph(t)
+
 	query := `{
 		me(func: intersects(geometry,[[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]])) {
 			name
@@ -1732,7 +1731,7 @@ func TestIntersectsPolygon2(t *testing.T) {
 }
 
 func TestNotExistObject(t *testing.T) {
-	populateGraph(t)
+
 	// we haven't set genre(type:uid) for 0x01, should just be ignored
 	query := `
                 {
@@ -1751,7 +1750,7 @@ func TestNotExistObject(t *testing.T) {
 }
 
 func TestLangDefault(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001)) {
@@ -1766,7 +1765,7 @@ func TestLangDefault(t *testing.T) {
 }
 
 func TestLangMultiple_Alias(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001)) {
@@ -1783,7 +1782,7 @@ func TestLangMultiple_Alias(t *testing.T) {
 }
 
 func TestLangMultiple(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001)) {
@@ -1799,7 +1798,7 @@ func TestLangMultiple(t *testing.T) {
 }
 
 func TestLangSingle(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001)) {
@@ -1814,7 +1813,7 @@ func TestLangSingle(t *testing.T) {
 }
 
 func TestLangSingleFallback(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001)) {
@@ -1827,7 +1826,7 @@ func TestLangSingleFallback(t *testing.T) {
 }
 
 func TestLangMany1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001)) {
@@ -1842,7 +1841,7 @@ func TestLangMany1(t *testing.T) {
 }
 
 func TestLangMany2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001)) {
@@ -1857,7 +1856,7 @@ func TestLangMany2(t *testing.T) {
 }
 
 func TestLangMany3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001)) {
@@ -1872,7 +1871,7 @@ func TestLangMany3(t *testing.T) {
 }
 
 func TestLangManyFallback(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001)) {
@@ -1885,7 +1884,7 @@ func TestLangManyFallback(t *testing.T) {
 }
 
 func TestLangNoFallbackNoDefault(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1004)) {
@@ -1898,7 +1897,7 @@ func TestLangNoFallbackNoDefault(t *testing.T) {
 }
 
 func TestLangSingleNoFallbackNoDefault(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1004)) {
@@ -1911,7 +1910,7 @@ func TestLangSingleNoFallbackNoDefault(t *testing.T) {
 }
 
 func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1004)) {
@@ -1924,7 +1923,7 @@ func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
 }
 
 func TestLangOnlyForcedFallbackNoDefault(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1004)) {
@@ -1940,7 +1939,7 @@ func TestLangOnlyForcedFallbackNoDefault(t *testing.T) {
 }
 
 func TestLangSingleForcedFallbackNoDefault(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1004)) {
@@ -1956,7 +1955,7 @@ func TestLangSingleForcedFallbackNoDefault(t *testing.T) {
 }
 
 func TestLangMultipleForcedFallbackNoDefault(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1004)) {
@@ -1972,7 +1971,7 @@ func TestLangMultipleForcedFallbackNoDefault(t *testing.T) {
 }
 
 func TestLangFilterMatch1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:allofterms(name@pl, "Europejski borsuk"))  {
@@ -1987,7 +1986,7 @@ func TestLangFilterMatch1(t *testing.T) {
 }
 
 func TestLangFilterMismatch1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:allofterms(name@pl, "European Badger"))  {
@@ -2000,7 +1999,7 @@ func TestLangFilterMismatch1(t *testing.T) {
 }
 
 func TestLangFilterMismatch2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1, 0x2, 0x3, 0x1001)) @filter(anyofterms(name@pl, "Badger is cool")) {
@@ -2013,7 +2012,7 @@ func TestLangFilterMismatch2(t *testing.T) {
 }
 
 func TestLangFilterMismatch3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1, 0x2, 0x3, 0x1001)) @filter(allofterms(name@pl, "European borsuk")) {
@@ -2026,7 +2025,7 @@ func TestLangFilterMismatch3(t *testing.T) {
 }
 
 func TestLangFilterMismatch5(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:anyofterms(name@en, "european honey")) {
@@ -2041,7 +2040,7 @@ func TestLangFilterMismatch5(t *testing.T) {
 }
 
 func TestLangFilterMismatch6(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x1001, 0x1002, 0x1003)) @filter(lt(name@en, "D"))  {
@@ -2054,7 +2053,7 @@ func TestLangFilterMismatch6(t *testing.T) {
 }
 
 func TestEqWithTerm(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:eq(nick_name, "Two Terms")) {
@@ -2069,7 +2068,7 @@ func TestEqWithTerm(t *testing.T) {
 }
 
 func TestLangLossyIndex1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:eq(lossy, "Badger")) {
@@ -2085,7 +2084,7 @@ func TestLangLossyIndex1(t *testing.T) {
 }
 
 func TestLangLossyIndex2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:eq(lossy@ru, "Барсук")) {
@@ -2101,7 +2100,7 @@ func TestLangLossyIndex2(t *testing.T) {
 }
 
 func TestLangLossyIndex3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:eq(lossy@fr, "Blaireau")) {
@@ -2115,7 +2114,7 @@ func TestLangLossyIndex3(t *testing.T) {
 }
 
 func TestLangLossyIndex4(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:eq(value, "mission")) {
@@ -2129,7 +2128,7 @@ func TestLangLossyIndex4(t *testing.T) {
 
 // Test for bug #1295
 func TestLangBug1295(t *testing.T) {
-	populateGraph(t)
+
 	// query for Canadian (French) version of the royal_title, then show English one
 	// this case is not trivial, because farmhash of "en" is less than farmhash of "fr"
 	// so we need to iterate over values in all languages to find a match
@@ -2165,7 +2164,7 @@ func TestLangBug1295(t *testing.T) {
 }
 
 func TestLangDotInFunction(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:anyofterms(name@., "europejski honey")) {

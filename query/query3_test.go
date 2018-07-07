@@ -16,12 +16,11 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRecurseError(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) @recurse(loop: true) {
@@ -38,7 +37,7 @@ func TestRecurseError(t *testing.T) {
 }
 
 func TestRecurseQuery(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) @recurse {
@@ -53,7 +52,7 @@ func TestRecurseQuery(t *testing.T) {
 }
 
 func TestRecurseQueryOrder(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) @recurse {
@@ -69,7 +68,7 @@ func TestRecurseQueryOrder(t *testing.T) {
 }
 
 func TestRecurseQueryAllowLoop(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) @recurse {
@@ -83,7 +82,7 @@ func TestRecurseQueryAllowLoop(t *testing.T) {
 }
 
 func TestRecurseQueryAllowLoop2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) @recurse(depth: 4,loop: true) {
@@ -97,7 +96,7 @@ func TestRecurseQueryAllowLoop2(t *testing.T) {
 }
 
 func TestRecurseQueryLimitDepth1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) @recurse(depth: 2) {
@@ -111,7 +110,7 @@ func TestRecurseQueryLimitDepth1(t *testing.T) {
 }
 
 func TestRecurseQueryLimitDepth2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) @recurse(depth: 2) {
@@ -127,7 +126,7 @@ func TestRecurseQueryLimitDepth2(t *testing.T) {
 }
 
 func TestRecurseVariable(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 			{
 				var(func: uid(0x01)) @recurse {
@@ -145,7 +144,7 @@ func TestRecurseVariable(t *testing.T) {
 }
 
 func TestRecurseVariableUid(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 			{
 				var(func: uid(0x01)) @recurse {
@@ -164,7 +163,7 @@ func TestRecurseVariableUid(t *testing.T) {
 }
 
 func TestRecurseVariableVar(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 			{
 				var(func: uid(0x01)) @recurse {
@@ -184,7 +183,6 @@ func TestRecurseVariableVar(t *testing.T) {
 }
 
 func TestRecurseVariable2(t *testing.T) {
-	populateGraph(t)
 
 	query := `
 			{
@@ -208,7 +206,7 @@ func TestRecurseVariable2(t *testing.T) {
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:0x01, to:101) {
@@ -225,7 +223,7 @@ func TestShortestPath_ExpandError(t *testing.T) {
 }
 
 func TestShortestPath_NoPath(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:0x01, to:101) {
@@ -242,7 +240,7 @@ func TestShortestPath_NoPath(t *testing.T) {
 }
 
 func TestKShortestPath_NoPath(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:0x01, to:101, numpaths: 2) {
@@ -260,7 +258,7 @@ func TestKShortestPath_NoPath(t *testing.T) {
 }
 
 func TestKShortestPathWeighted(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			shortest(from: 1, to:1001, numpaths: 4) {
@@ -275,7 +273,7 @@ func TestKShortestPathWeighted(t *testing.T) {
 }
 
 func TestKShortestPathWeighted_LimitDepth(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			shortest(from: 1, to:1001, depth:1, numpaths: 4) {
@@ -290,7 +288,7 @@ func TestKShortestPathWeighted_LimitDepth(t *testing.T) {
 }
 
 func TestKShortestPathWeighted1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			shortest(from: 1, to:1003, numpaths: 3) {
@@ -304,7 +302,7 @@ func TestKShortestPathWeighted1(t *testing.T) {
 }
 
 func TestTwoShortestPath(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from: 1, to:1002, numpaths: 2) {
@@ -322,7 +320,7 @@ func TestTwoShortestPath(t *testing.T) {
 }
 
 func TestShortestPath(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:0x01, to:31) {
@@ -340,7 +338,7 @@ func TestShortestPath(t *testing.T) {
 }
 
 func TestShortestPathRev(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:23, to:1) {
@@ -358,7 +356,7 @@ func TestShortestPathRev(t *testing.T) {
 }
 
 func TestFacetVarRetrieval(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: uid(1)) {
@@ -376,7 +374,7 @@ func TestFacetVarRetrieval(t *testing.T) {
 }
 
 func TestFacetVarRetrieveOrder(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: uid(1)) {
@@ -396,7 +394,7 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 }
 
 func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
@@ -413,7 +411,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 }
 
 func TestShortestPathWeights(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
@@ -431,7 +429,7 @@ func TestShortestPathWeights(t *testing.T) {
 }
 
 func TestShortestPath2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:0x01, to:1000) {
@@ -450,7 +448,7 @@ func TestShortestPath2(t *testing.T) {
 }
 
 func TestShortestPath4(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:1, to:1003) {
@@ -469,7 +467,7 @@ func TestShortestPath4(t *testing.T) {
 }
 
 func TestShortestPath_filter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
@@ -488,7 +486,7 @@ func TestShortestPath_filter(t *testing.T) {
 }
 
 func TestShortestPath_filter2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
@@ -505,7 +503,7 @@ func TestShortestPath_filter2(t *testing.T) {
 }
 
 func TestUseVarsFilterMultiId(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: uid(0x01)) {
@@ -530,7 +528,7 @@ func TestUseVarsFilterMultiId(t *testing.T) {
 }
 
 func TestUseVarsMultiFilterId(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: uid(0x01)) {
@@ -553,7 +551,7 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 }
 
 func TestUseVarsCascade(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: uid(0x01)) @cascade {
@@ -574,7 +572,7 @@ func TestUseVarsCascade(t *testing.T) {
 }
 
 func TestUseVars(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			var(func: uid(0x01)) {
@@ -593,7 +591,7 @@ func TestUseVars(t *testing.T) {
 }
 
 func TestGetUIDCount(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -612,7 +610,6 @@ func TestGetUIDCount(t *testing.T) {
 }
 
 func TestDebug1(t *testing.T) {
-	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -639,7 +636,6 @@ func TestDebug1(t *testing.T) {
 }
 
 func TestDebug2(t *testing.T) {
-	populateGraph(t)
 
 	query := `
 		{
@@ -662,7 +658,6 @@ func TestDebug2(t *testing.T) {
 }
 
 func TestDebug3(t *testing.T) {
-	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -688,7 +683,6 @@ func TestDebug3(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -708,7 +702,6 @@ func TestCount(t *testing.T) {
 		js)
 }
 func TestCountAlias(t *testing.T) {
-	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -783,7 +776,7 @@ func TestCountError3(t *testing.T) {
 }
 
 func TestMultiCountSort(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
@@ -804,7 +797,7 @@ func TestMultiCountSort(t *testing.T) {
 }
 
 func TestMultiLevelAgg(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
@@ -824,7 +817,7 @@ func TestMultiLevelAgg(t *testing.T) {
 }
 
 func TestMultiLevelAgg1(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
@@ -848,7 +841,7 @@ func TestMultiLevelAgg1(t *testing.T) {
 }
 
 func TestMultiLevelAgg1Error(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
@@ -870,7 +863,7 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 }
 
 func TestMultiAggSort(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
@@ -901,7 +894,7 @@ func TestMultiAggSort(t *testing.T) {
 }
 
 func TestMinMulti(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
@@ -922,7 +915,7 @@ func TestMinMulti(t *testing.T) {
 }
 
 func TestMinMultiAlias(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
@@ -943,7 +936,7 @@ func TestMinMultiAlias(t *testing.T) {
 }
 
 func TestMinSchema(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
                 {
@@ -972,7 +965,7 @@ func TestMinSchema(t *testing.T) {
 }
 
 func TestAvg(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 	{
 		me(func: uid(0x01)) {
@@ -993,7 +986,7 @@ func TestAvg(t *testing.T) {
 }
 
 func TestSum(t *testing.T) {
-	populateGraph(t)
+
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -1014,9 +1007,7 @@ func TestSum(t *testing.T) {
 }
 
 func TestQueryPassword(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
-	addPassword(t, 1, "password", "123456")
+
 	// Password is not fetchable
 	query := `
                 {
@@ -1031,10 +1022,6 @@ func TestQueryPassword(t *testing.T) {
 }
 
 func TestPasswordExpandAll1(t *testing.T) {
-	err := schema.ParseBytes([]byte(schemaStr), 1)
-	x.Check(err)
-	populateGraph(t)
-	addPassword(t, 1, "password", "123456")
 	// We ignore password in expand(_all_)
 	query := `
     {
@@ -1048,8 +1035,6 @@ func TestPasswordExpandAll1(t *testing.T) {
 }
 
 func TestPasswordExpandAll2(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 1, "password", "123456")
 	query := `
     {
         me(func: uid(0x01)) {
@@ -1063,8 +1048,6 @@ func TestPasswordExpandAll2(t *testing.T) {
 }
 
 func TestPasswordExpandError(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 1, "password", "123456")
 	query := `
     {
         me(func: uid(0x01)) {
@@ -1079,8 +1062,6 @@ func TestPasswordExpandError(t *testing.T) {
 }
 
 func TestCheckPassword(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -1096,9 +1077,6 @@ func TestCheckPassword(t *testing.T) {
 }
 
 func TestCheckPasswordIncorrect(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
-	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -1115,9 +1093,6 @@ func TestCheckPasswordIncorrect(t *testing.T) {
 
 // ensure, that old and deprecated form is not allowed
 func TestCheckPasswordParseError(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
-	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -1131,9 +1106,7 @@ func TestCheckPasswordParseError(t *testing.T) {
 }
 
 func TestCheckPasswordDifferentAttr1(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
-	addPassword(t, 1, "password", "123456")
+
 	query := `
                 {
                         me(func: uid(23)) {
@@ -1147,9 +1120,7 @@ func TestCheckPasswordDifferentAttr1(t *testing.T) {
 }
 
 func TestCheckPasswordDifferentAttr2(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
-	addPassword(t, 1, "password", "123456")
+
 	query := `
                 {
                         me(func: uid(23)) {
@@ -1163,9 +1134,7 @@ func TestCheckPasswordDifferentAttr2(t *testing.T) {
 }
 
 func TestCheckPasswordInvalidAttr(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
-	addPassword(t, 1, "password", "123456")
+
 	query := `
                 {
                         me(func: uid(0x1)) {
@@ -1181,9 +1150,7 @@ func TestCheckPasswordInvalidAttr(t *testing.T) {
 
 // test for old version of checkpwd with hardcoded attribute name
 func TestCheckPasswordQuery1(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
-	addPassword(t, 1, "password", "123456")
+
 	query := `
                 {
                         me(func: uid(0x1)) {
@@ -1198,9 +1165,7 @@ func TestCheckPasswordQuery1(t *testing.T) {
 
 // test for improved version of checkpwd with custom attribute name
 func TestCheckPasswordQuery2(t *testing.T) {
-	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
-	addPassword(t, 1, "password", "123456")
+
 	query := `
                 {
                         me(func: uid(23)) {
@@ -1320,7 +1285,7 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
 }
 
 func TestToFastJSON(t *testing.T) {
-	populateGraph(t)
+
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
@@ -1342,7 +1307,6 @@ func TestToFastJSON(t *testing.T) {
 }
 
 func TestFieldAlias(t *testing.T) {
-	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -1365,7 +1329,7 @@ func TestFieldAlias(t *testing.T) {
 }
 
 func TestToFastJSONFilter(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1385,7 +1349,7 @@ func TestToFastJSONFilter(t *testing.T) {
 }
 
 func TestToFastJSONFilterMissBrac(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1402,7 +1366,7 @@ func TestToFastJSONFilterMissBrac(t *testing.T) {
 }
 
 func TestToFastJSONFilterallofterms(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1422,7 +1386,7 @@ func TestToFastJSONFilterallofterms(t *testing.T) {
 
 func TestInvalidStringIndex(t *testing.T) {
 	// no FTS index defined for name
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1441,7 +1405,7 @@ func TestInvalidStringIndex(t *testing.T) {
 
 func TestValidFulltextIndex(t *testing.T) {
 	// no FTS index defined for name
-	populateGraph(t)
+
 	query := `
 		{
 			me(func: uid(0x01)) {
@@ -1460,7 +1424,7 @@ func TestValidFulltextIndex(t *testing.T) {
 
 // dob (date of birth) is not a string
 func TestFilterRegexError(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1477,7 +1441,7 @@ func TestFilterRegexError(t *testing.T) {
 }
 
 func TestFilterRegex1(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1494,7 +1458,7 @@ func TestFilterRegex1(t *testing.T) {
 }
 
 func TestFilterRegex2(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1511,7 +1475,7 @@ func TestFilterRegex2(t *testing.T) {
 }
 
 func TestFilterRegex3(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1529,7 +1493,7 @@ func TestFilterRegex3(t *testing.T) {
 }
 
 func TestFilterRegex4(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1547,7 +1511,7 @@ func TestFilterRegex4(t *testing.T) {
 }
 
 func TestFilterRegex5(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
       me(func: uid(0x01)) {
@@ -1565,7 +1529,6 @@ func TestFilterRegex5(t *testing.T) {
 }
 
 func TestFilterRegex6(t *testing.T) {
-	populateGraph(t)
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1582,7 +1545,7 @@ func TestFilterRegex6(t *testing.T) {
 }
 
 func TestFilterRegex7(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1599,7 +1562,7 @@ func TestFilterRegex7(t *testing.T) {
 }
 
 func TestFilterRegex8(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1616,7 +1579,7 @@ func TestFilterRegex8(t *testing.T) {
 }
 
 func TestFilterRegex9(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1633,7 +1596,7 @@ func TestFilterRegex9(t *testing.T) {
 }
 
 func TestFilterRegex10(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1650,7 +1613,7 @@ func TestFilterRegex10(t *testing.T) {
 }
 
 func TestFilterRegex11(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1669,7 +1632,7 @@ func TestFilterRegex11(t *testing.T) {
 // case insensitive mode may be turned on with modifier:
 // http://www.regular-expressions.info/modifiers.html - this is completely legal
 func TestFilterRegex12(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1688,7 +1651,7 @@ func TestFilterRegex12(t *testing.T) {
 // case insensitive mode may be turned on and off with modifier:
 // http://www.regular-expressions.info/modifiers.html - this is completely legal
 func TestFilterRegex13(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1706,7 +1669,7 @@ func TestFilterRegex13(t *testing.T) {
 
 // invalid regexp modifier
 func TestFilterRegex14(t *testing.T) {
-	populateGraph(t)
+
 	query := `
     {
 	  me(func: uid(0x1234)) {
@@ -1723,7 +1686,7 @@ func TestFilterRegex14(t *testing.T) {
 
 // multi-lang - simple
 func TestFilterRegex15(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:regexp(name@ru, /Барсук/)) {
@@ -1739,7 +1702,7 @@ func TestFilterRegex15(t *testing.T) {
 
 // multi-lang - test for bug (#945) - multi-byte runes
 func TestFilterRegex16(t *testing.T) {
-	populateGraph(t)
+
 	query := `
 		{
 			me(func:regexp(name@ru, /^артём/i)) {
