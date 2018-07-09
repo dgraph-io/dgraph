@@ -194,7 +194,8 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 	if src.Bal-amount <= 0 {
 		amount = src.Bal
 	}
-	fmt.Fprintf(w, "Moving [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
+	fmt.Fprintf(w, "Moving [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n",
+		amount, src.Key, dst.Key, src, dst)
 	src.Bal -= amount
 	dst.Bal += amount
 	var mu api.Mutation
@@ -238,7 +239,8 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 			dst.Uid = uid
 		}
 	}
-	fmt.Fprintf(w, "MOVED [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n", amount, src.Key, dst.Key, src, dst)
+	fmt.Fprintf(w, "MOVED [$%d, K_%02d -> K_%02d]. Src:%+v. Dst: %+v\n",
+		amount, src.Key, dst.Key, src, dst)
 	return nil
 }
 
