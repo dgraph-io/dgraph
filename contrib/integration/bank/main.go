@@ -44,12 +44,9 @@ type Account struct {
 }
 
 type State struct {
-	sync.Mutex
 	dg     *dgo.Dgraph
 	aborts int32
 	runs   int32
-
-	expected []int
 }
 
 func (s *State) createAccounts() {
@@ -72,7 +69,6 @@ func (s *State) createAccounts() {
 			Type: "ba",
 		}
 		all = append(all, a)
-		s.expected[a.Key] = a.Bal
 	}
 	data, err := json.Marshal(all)
 	x.Check(err)
@@ -86,16 +82,6 @@ func (s *State) createAccounts() {
 	_, err = txn.Mutate(context.Background(), &mu)
 	x.Check(err)
 	x.Check(txn.Commit(context.Background()))
-}
-
-func (s *State) printExpected() {
-	s.Lock()
-	defer s.Unlock()
-	var total int
-	for _, e := range s.expected {
-		total += e
-	}
-	log.Printf("Expected: %v. Total: %d\n", s.expected, total)
 }
 
 func (s *State) runTotal() error {
@@ -130,11 +116,9 @@ func (s *State) runTotal() error {
 	}
 	log.Printf("Read: %v. Total: %d\n", accounts, total)
 	if len(accounts) > *users {
-		s.printExpected()
 		log.Fatalf("len(accounts) = %d", len(accounts))
 	}
 	if total != *users*startBal {
-		s.printExpected()
 		log.Fatalf("Total = %d", total)
 	}
 	return nil
@@ -248,12 +232,6 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 	if err := txn.Commit(ctx); err != nil {
 		return err
 	}
-	{
-		s.Lock()
-		s.expected[src.Key] = src.Bal
-		s.expected[dst.Key] = dst.Bal
-		s.Unlock()
-	}
 	if len(assigned.GetUids()) > 0 {
 		fmt.Fprintf(w, "CREATED K_%02d: %+v for %+v\n", dst.Key, assigned.GetUids(), dst)
 		for _, uid := range assigned.GetUids() {
@@ -302,7 +280,7 @@ func main() {
 	dc := api.NewDgraphClient(conn)
 
 	dg := dgo.NewDgraphClient(dc)
-	s := State{dg: dg, expected: make([]int, *users+1)}
+	s := State{dg: dg}
 	s.createAccounts()
 
 	var wg sync.WaitGroup
