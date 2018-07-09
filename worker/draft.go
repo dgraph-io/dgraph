@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -32,85 +31,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type proposalCtx struct {
-	ch  chan error
-	ctx context.Context
-	// Since each proposal consists of multiple tasks we need to store
-	// non-nil error returned by task
-	err   error
-	index uint64 // RAFT index for the proposal.
-	// Used for writing all deltas at end
-	txn *posting.Txn
-}
-
-type proposals struct {
-	sync.RWMutex
-	all map[string]*proposalCtx
-}
-
 // uniqueKey is meant to be unique across all the replicas.
 func uniqueKey() string {
 	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
-}
-
-func (p *proposals) Store(key string, pctx *proposalCtx) bool {
-	p.Lock()
-	defer p.Unlock()
-	if _, has := p.all[key]; has {
-		return false
-	}
-	p.all[key] = pctx
-	return true
-}
-
-func (p *proposals) Delete(key string) {
-	if len(key) == 0 {
-		return
-	}
-	p.Lock()
-	defer p.Unlock()
-	delete(p.all, key)
-}
-
-func (p *proposals) pctx(key string) *proposalCtx {
-	p.RLock()
-	defer p.RUnlock()
-	if pctx := p.all[key]; pctx != nil {
-		return pctx
-	}
-	return new(proposalCtx)
-}
-
-func (p *proposals) CtxAndTxn(key string) (context.Context, *posting.Txn) {
-	p.RLock()
-	defer p.RUnlock()
-	pd, has := p.all[key]
-	if !has {
-		// See the race condition note in Done.
-		return context.Background(), new(posting.Txn)
-	}
-	return pd.ctx, pd.txn
-}
-
-func (p *proposals) Done(key string, err error) {
-	if len(key) == 0 {
-		return
-	}
-	p.Lock()
-	defer p.Unlock()
-	pd, has := p.all[key]
-	if !has {
-		// If we assert here, there would be a race condition between a context
-		// timing out, and a proposal getting applied immediately after. That
-		// would cause assert to fail. So, don't assert.
-		return
-	}
-	x.AssertTrue(pd.index != 0)
-	if err != nil {
-		pd.err = err
-	}
-	delete(p.all, key)
-	pd.ch <- pd.err
 }
 
 type node struct {
@@ -122,7 +45,6 @@ type node struct {
 	stop    chan struct{} // to send the stop signal to Run
 	done    chan struct{} // to check whether node is running or not
 	gid     uint32
-	props   proposals
 
 	canCampaign bool
 	elog        trace.EventLog
@@ -154,9 +76,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		Id:    id,
 	}
 	m := conn.NewNode(rc, store)
-	props := proposals{
-		all: make(map[string]*proposalCtx),
-	}
 
 	n := &node{
 		Node: m,
@@ -165,7 +84,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
 		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
-		props:   props,
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
@@ -243,13 +161,13 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		defer cancel()
 
 		che := make(chan error, 1)
-		pctx := &proposalCtx{
-			ch:  che,
-			ctx: cctx,
+		pctx := &conn.ProposalCtx{
+			Ch:  che,
+			Ctx: cctx,
 		}
 		key := uniqueKey()
-		x.AssertTruef(n.props.Store(key, pctx), "Found existing proposal with key: [%v]", key)
-		defer n.props.Delete(key) // Ensure that it gets deleted on return.
+		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
+		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
 		proposal.Key = key
 
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -270,7 +188,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 
 		select {
 		case err = <-che:
-			// We arrived here by a call to n.props.Done().
+			// We arrived here by a call to n.Proposals.Done().
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Done with error: %v", err)
 			}
@@ -299,45 +217,12 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 	return err
 }
 
-func (n *node) processEdge(ridx uint64, pkey string, edge *intern.DirectedEdge) error {
-	ctx, txn := n.props.CtxAndTxn(pkey)
-	if txn.ShouldAbort() {
-		return dy.ErrConflict
+func (n *node) Ctx(key string) context.Context {
+	ctx := context.Background()
+	if pctx := n.Proposals.Get(key); pctx != nil {
+		ctx = pctx.Ctx
 	}
-	rv := x.RaftValue{Group: n.gid, Index: ridx}
-	ctx = context.WithValue(ctx, "raft", rv)
-
-	// Index updates would be wrong if we don't wait.
-	// Say we do <0x1> <name> "janardhan", <0x1> <name> "pawan",
-	// while applying the second mutation we check the old value
-	// of name and delete it from "janardhan"'s index. If we don't
-	// wait for commit information then mutation won't see the value
-
-	// We used to Oracle().WaitForTs here.
-	// TODO: Need to ensure that keys which hold values can only keep one pending txn at a
-	// time. Otherwise, their index generated would be wrong.
-
-	if err := runMutation(ctx, edge, txn); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("process mutation: %v", err)
-		}
-		return err
-	}
-	return nil
-}
-
-func (n *node) processSchemaMutations(pkey string, index uint64,
-	startTs uint64, s *intern.SchemaUpdate) error {
-	ctx, _ := n.props.CtxAndTxn(pkey)
-	rv := x.RaftValue{Group: n.gid, Index: index}
-	ctx = context.WithValue(ctx, "raft", rv)
-	if err := runSchemaMutation(ctx, s, startTs); err != nil {
-		if tr, ok := trace.FromContext(n.ctx); ok {
-			tr.LazyPrintf(err.Error())
-		}
-		return err
-	}
-	return nil
+	return ctx
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -359,7 +244,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 func waitForConflictResolution(attr string) error {
 	for i := 0; i < 10; i++ {
-		tctxs := posting.Txns().Iterate(func(key []byte) bool {
+		tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
 			pk := x.Parse(key)
 			return pk.Attr == attr
 		})
@@ -371,24 +256,15 @@ func waitForConflictResolution(attr string) error {
 	return errors.New("Unable to abort transactions")
 }
 
-func updateTxns(raftIndex uint64, startTs uint64) *posting.Txn {
-	txn := &posting.Txn{
-		StartTs: startTs,
-		Indices: []uint64{raftIndex},
-	}
-	return posting.Txns().PutOrMergeIndex(txn)
-}
-
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
 func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	if proposal.Mutations.DropAll {
 		// Ensures nothing get written to disk due to commit proposals.
-		posting.Txns().Reset()
+		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
-		err := posting.DeleteAll()
-		return err
+		return posting.DeleteAll()
 	}
 
 	if proposal.Mutations.StartTs == 0 {
@@ -396,6 +272,8 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	}
 
 	startTs := proposal.Mutations.StartTs
+	ctx := n.Ctx(proposal.Key)
+
 	if len(proposal.Mutations.Schema) > 0 {
 		for _, supdate := range proposal.Mutations.Schema {
 			// This is neceassry to ensure that there is no race between when we start reading
@@ -411,7 +289,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 			if err := waitForConflictResolution(supdate.Predicate); err != nil {
 				return err
 			}
-			if err := n.processSchemaMutations(proposal.Key, index, startTs, supdate); err != nil {
+			if err := runSchemaMutation(ctx, supdate, startTs); err != nil {
 				return err
 			}
 		}
@@ -429,12 +307,10 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-			updateTxns(index, proposal.Mutations.StartTs)
 			return errPredicateMoving
 		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only have one edge drop in one mutation call.
-			ctx, _ := n.props.CtxAndTxn(proposal.Key)
 			if err := waitForConflictResolution(edge.Attr); err != nil {
 				return err
 			}
@@ -451,6 +327,8 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 
 	total := len(proposal.Mutations.Edges)
 	x.ActiveMutations.Add(int64(total))
+	defer x.ActiveMutations.Add(-int64(total))
+
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
 			// Schema doesn't exist
@@ -462,50 +340,31 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	}
 
 	m := proposal.Mutations
-	posting.Oracle().RegisterStartTs(m.StartTs)
-	pctx := n.props.pctx(proposal.Key)
-	pctx.txn = updateTxns(index, m.StartTs)
+	txn := posting.Oracle().RegisterStartTs(m.StartTs)
+	if txn.ShouldAbort() {
+		return dy.ErrConflict
+	}
 	for _, edge := range m.Edges {
 		err := posting.ErrRetry
 		for err == posting.ErrRetry {
-			err = n.processEdge(index, proposal.Key, edge)
+			err = runMutation(ctx, edge, txn)
 		}
 		if err != nil {
 			return err
 		}
-		x.ActiveMutations.Add(-1)
 	}
 	return nil
 }
 
 func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
-	if proposal.DeprecatedId != 0 {
-		proposal.Key = fmt.Sprint(proposal.DeprecatedId)
-	}
-
-	// One final applied and synced watermark would be emitted when proposal ctx ref count
-	// becomes zero.
-	pctx := n.props.pctx(proposal.Key)
-	if pctx == nil {
-		// This is during replay of logs after restart or on a replica.
-		pctx = &proposalCtx{
-			ch:  make(chan error, 1),
-			ctx: n.ctx,
-		}
-		// We assert here to make sure that we do add the proposal to the map.
-		x.AssertTruef(n.props.Store(proposal.Key, pctx),
-			"Found existing proposal with key: [%v]", proposal.Key)
-	}
-	pctx.index = index
-
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.
 		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
 		return n.applyMutations(proposal, index)
 	}
 
+	ctx := n.Ctx(proposal.Key)
 	if len(proposal.Kv) > 0 {
-		ctx, _ := n.props.CtxAndTxn(proposal.Key)
 		return populateKeyValues(ctx, proposal.Kv)
 
 	} else if proposal.State != nil {
@@ -516,20 +375,8 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return nil
 
 	} else if len(proposal.CleanPredicate) > 0 {
-		ctx, _ := n.props.CtxAndTxn(proposal.Key)
+		n.elog.Printf("Cleaning predicate: %s", proposal.CleanPredicate)
 		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
-
-	} else if proposal.DeprecatedTxnContext != nil {
-		n.elog.Printf("Applying txncontext for key: %s", proposal.Key)
-		delta := &intern.OracleDelta{}
-		tctx := proposal.DeprecatedTxnContext
-		if tctx.CommitTs == 0 {
-			delta.Aborts = append(delta.Aborts, tctx.StartTs)
-		} else {
-			delta.Commits = make(map[uint64]uint64)
-			delta.Commits[tctx.StartTs] = tctx.CommitTs
-		}
-		return n.commitOrAbort(proposal.Key, delta)
 
 	} else if proposal.Delta != nil {
 		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
@@ -556,15 +403,16 @@ func (n *node) processApplyCh() {
 		if err := proposal.Unmarshal(e.Data); err != nil {
 			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
+
 		err := n.applyCommitted(proposal, e.Index)
 		n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v", proposal.Key, e.Index, err)
-		n.props.Done(proposal.Key, err)
+		n.Proposals.Done(proposal.Key, err)
 		n.Applied.Done(e.Index)
 	}
 }
 
 func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
-	ctx, _ := n.props.CtxAndTxn(pkey)
+	ctx := n.Ctx(pkey)
 
 	applyTxnStatus := func(startTs, commitTs uint64) {
 		var err error
@@ -577,8 +425,6 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 		}
 		// TODO: Even after multiple tries, if we're unable to apply the status of a transaction,
 		// what should we do? Maybe do a printf, and let them know that there might be a disk issue.
-		posting.Txns().Done(startTs)
-		posting.Oracle().Done(startTs)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Status of commitOrAbort startTs %d: %v\n", startTs, err)
 		}
@@ -592,7 +438,7 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	}
 	// TODO: Use MaxPending to track the txn watermark. That's the only thing we need really.
 	// delta.GetMaxPending
-	posting.Oracle().ProcessOracleDelta(delta)
+	posting.Oracle().ProcessDelta(delta)
 	return nil
 }
 

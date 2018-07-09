@@ -486,6 +486,9 @@ func (s *Server) receiveUpdates(stream intern.Zero_UpdateServer) error {
 		}
 		proposals, err := s.createProposals(group)
 		if err != nil {
+			// Sleep here so the caller doesn't keep on retrying indefinitely, creating a busy
+			// wait.
+			time.Sleep(time.Second)
 			x.Printf("Error while creating proposals in stream %v\n", err)
 			return err
 		}

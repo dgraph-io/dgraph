@@ -421,7 +421,7 @@ OUTER:
 				goto OUTER
 			}
 			c := intern.NewWorkerClient(pl.Get())
-			num, err := c.MinTxnTs(context.Background(), &api.Payload{})
+			num, err := c.PurgeTs(context.Background(), &api.Payload{})
 			if err != nil {
 				x.Printf("Error while fetching minTs from group %d, err: %v\n", group, err)
 				goto OUTER

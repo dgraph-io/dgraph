@@ -29,14 +29,6 @@ func (u *uint64Heap) Pop() interface{} {
 	return x
 }
 
-// RaftValue contains the raft group and the raft proposal id.
-// This is attached to the context, so the information could be passed
-// down to the many posting lists, involved in mutations.
-type RaftValue struct {
-	Group uint32
-	Index uint64
-}
-
 // mark contains raft proposal id and a done boolean. It is used to
 // update the WaterMark struct about the status of a proposal.
 type mark struct {

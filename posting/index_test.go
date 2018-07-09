@@ -109,11 +109,7 @@ func addMutation(t *testing.T, l *List, edge *intern.DirectedEdge, op uint32,
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	txn := &Txn{
-		StartTs: startTs,
-		Indices: []uint64{1},
-	}
-	txn = Txns().PutOrMergeIndex(txn)
+	txn := Oracle().RegisterStartTs(startTs)
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {

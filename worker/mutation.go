@@ -59,9 +59,8 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 	// present, some invalid entries might be written initially
 	err := ValidateAndConvert(edge, &su)
 
-	key := x.DataKey(edge.Attr, edge.Entity)
-
 	t := time.Now()
+	key := x.DataKey(edge.Attr, edge.Entity)
 	plist, err := posting.Get(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -93,9 +92,7 @@ func runSchemaMutation(ctx context.Context, update *intern.SchemaUpdate, startTs
 		}
 		return false
 	})
-	// Write schema to disk.
-	rv := ctx.Value("raft").(x.RaftValue)
-	updateSchema(update.Predicate, *update, rv.Index)
+	updateSchema(update.Predicate, *update)
 	return nil
 }
 
@@ -206,7 +203,7 @@ func needReindexing(old intern.SchemaUpdate, current intern.SchemaUpdate) bool {
 
 // We commit schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateSchema(attr string, s intern.SchemaUpdate, index uint64) error {
+func updateSchema(attr string, s intern.SchemaUpdate) error {
 	schema.State().Set(attr, s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
@@ -227,7 +224,7 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 	} else {
 		s = intern.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
 	}
-	updateSchema(attr, s, index)
+	updateSchema(attr, s)
 }
 
 func hasEdges(attr string, startTs uint64) bool {
@@ -396,19 +393,18 @@ func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) 
 
 func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
 	node := groups().Node
-	var index uint64
-	if txn := posting.Txns().Get(startTs); txn != nil {
+	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
 		txn.Fill(tctx)
-		index = txn.LastIndex()
 	}
 	tctx.LinRead = &api.LinRead{
 		Ids: make(map[uint32]uint64),
 	}
-	// applied watermark can be less than this proposal's index so return the maximum.
-	// For some proposals like dropPredicate, we don't store them in txns map, so we
-	// don't know the raft index. For them we would return applied watermark.
-	doneUntil := node.Applied.DoneUntil()
-	tctx.LinRead.Ids[gid] = x.Max(index, doneUntil)
+	// This previously used to pick up max of txn indices as well. Why should applied watermark be
+	// lower than proposal index? We apply all mutations via proposeAndWait. Wait would only return
+	// if the proposal gets applied, not before.
+	// TODO: Do we need this linread mechanism anymore? A txn start ts should be sufficient to wait
+	// for to achieve lin reads.
+	tctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
@@ -493,19 +489,15 @@ func populateMutationMap(src *intern.Mutations) map[uint32]*intern.Mutations {
 }
 
 func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
-	txn := posting.Txns().Get(startTs)
+	txn := posting.Oracle().GetTxn(startTs)
 	if txn == nil {
 		return posting.ErrInvalidTxn
 	}
 	// Ensures that we wait till prewrite is applied
-	idx := txn.LastIndex()
-	groups().Node.Applied.WaitForMark(ctx, idx)
 	if commitTs == 0 {
-		err := txn.AbortMutations(ctx)
-		return err
+		return txn.AbortMutations(ctx)
 	}
-	err := txn.CommitMutations(ctx, commitTs)
-	return err
+	return txn.CommitMutations(ctx, commitTs)
 }
 
 type res struct {
@@ -566,10 +558,10 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	return tctx.CommitTs, nil
 }
 
-func (w *grpcWorker) MinTxnTs(ctx context.Context,
+func (w *grpcWorker) PurgeTs(ctx context.Context,
 	payload *api.Payload) (*intern.Num, error) {
 	n := &intern.Num{}
-	n.Val = posting.Txns().MinTs()
+	n.Val = posting.Oracle().PurgeTs()
 	return n, nil
 }
 
