@@ -107,7 +107,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
 	// not get any data.
-	posting.Oracle().SetMaxPending(connState.MaxPending)
+	// TODO: Do we really need this?
+	// posting.Oracle().SetMaxPending(connState.MaxPending)
 	gr.applyState(connState.GetState())
 
 	gid := gr.groupId()
@@ -748,17 +749,8 @@ func (g *groupi) processOracleDeltaStream() {
 						return
 					}
 					batch++
-					if delta.Commits == nil {
-						delta.Commits = make(map[uint64]uint64)
-					}
-					// Merge more with delta.
-					for start, commit := range more.GetCommits() {
-						delta.Commits[start] = commit
-					}
-					delta.Aborts = append(delta.Aborts, more.Aborts...)
-					if delta.MaxAssigned < more.MaxAssigned {
-						delta.MaxAssigned = more.MaxAssigned
-					}
+					delta.Txns = append(delta.Txns, more.Txns...)
+					delta.MaxAssigned = x.Max(delta.MaxAssigned, more.MaxAssigned)
 				default:
 					break SLURP
 				}

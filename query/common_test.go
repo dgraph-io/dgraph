@@ -67,10 +67,8 @@ func addEdge(t *testing.T, attr string, src uint64, edge *intern.DirectedEdge) {
 
 	commit := timestamp()
 	require.NoError(t, txn.CommitMutations(context.Background(), commit))
-	delta := &intern.OracleDelta{}
-	delta.Commits = make(map[uint64]uint64)
-	delta.Commits[startTs] = commit
-	delta.MaxAssigned = commit
+	delta := &intern.OracleDelta{MaxAssigned: commit}
+	delta.Txns = append(delta.Txns, &intern.TxnStatus{StartTs: startTs, CommitTs: commit})
 	posting.Oracle().ProcessDelta(delta)
 }
 

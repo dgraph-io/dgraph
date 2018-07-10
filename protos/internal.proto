@@ -357,10 +357,14 @@ message ExportPayload {
 	uint64 read_ts = 4;
 }
 
+message TxnStatus {
+	uint64 start_ts = 1;
+	uint64 commit_ts = 2;
+}
+
 message OracleDelta {
-	map<uint64, uint64> commits = 1;
-	repeated uint64 aborts = 2;
-	uint64 max_assigned = 3;
+	repeated TxnStatus txns = 1;
+	uint64 max_assigned = 2;
 	// implement tmax.
 }
 

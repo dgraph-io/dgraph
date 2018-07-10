@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -120,16 +121,22 @@ func (o *Oracle) aborted(startTs uint64) bool {
 	return ok
 }
 
+func sortTxns(delta *intern.OracleDelta) {
+	sort.Slice(delta.Txns, func(i, j int) bool {
+		return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
+	})
+}
+
 func (o *Oracle) currentState() *intern.OracleDelta {
 	o.AssertRLock()
-	resp := &intern.OracleDelta{
-		Commits: make(map[uint64]uint64, len(o.commits)),
-	}
+	resp := &intern.OracleDelta{}
 	for start, commit := range o.commits {
-		resp.Commits[start] = commit
+		resp.Txns = append(resp.Txns,
+			&intern.TxnStatus{StartTs: start, CommitTs: commit})
 	}
 	for abort := range o.aborts {
-		resp.Aborts = append(resp.Aborts, abort)
+		resp.Txns = append(resp.Txns,
+			&intern.TxnStatus{StartTs: abort, CommitTs: 0})
 	}
 	resp.MaxAssigned = o.maxAssigned
 	return resp
@@ -158,9 +165,7 @@ func (o *Oracle) removeSubscriber(id int) {
 }
 
 func (o *Oracle) sendDeltasToSubscribers() {
-	delta := &intern.OracleDelta{
-		Commits: make(map[uint64]uint64),
-	}
+	delta := &intern.OracleDelta{}
 	for {
 		update, open := <-o.updates
 		if !open {
@@ -168,16 +173,8 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		}
 	slurp_loop:
 		for {
-			// Consume tctx.
-			if update.MaxAssigned > delta.MaxAssigned {
-				delta.MaxAssigned = update.MaxAssigned
-			}
-			for _, startTs := range update.Aborts {
-				delta.Aborts = append(delta.Aborts, startTs)
-			}
-			for startTs, commitTs := range update.Commits {
-				delta.Commits[startTs] = commitTs
-			}
+			delta.MaxAssigned = x.Max(delta.MaxAssigned, update.MaxAssigned)
+			delta.Txns = append(delta.Txns, update.Txns...)
 			select {
 			case update, open = <-o.updates:
 				if !open {
@@ -187,6 +184,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 				break slurp_loop
 			}
 		}
+		sortTxns(delta) // Sort them in increasing order of CommitTs.
 		o.Lock()
 		for id, ch := range o.subscribers {
 			select {
@@ -197,9 +195,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			}
 		}
 		o.Unlock()
-		delta = &intern.OracleDelta{
-			Commits: make(map[uint64]uint64),
-		}
+		delta = &intern.OracleDelta{}
 	}
 }
 
@@ -225,10 +221,11 @@ func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
 	if o.updateCommitStatusHelper(index, src) {
 		delta := new(intern.OracleDelta)
 		if src.Aborted {
-			delta.Aborts = append(delta.Aborts, src.StartTs)
+			delta.Txns = append(delta.Txns,
+				&intern.TxnStatus{StartTs: src.StartTs, CommitTs: 0})
 		} else {
-			delta.Commits = make(map[uint64]uint64)
-			delta.Commits[src.StartTs] = src.CommitTs
+			delta.Txns = append(delta.Txns,
+				&intern.TxnStatus{StartTs: src.StartTs, CommitTs: src.CommitTs})
 		}
 		o.updates <- delta
 	}
