@@ -430,11 +430,8 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 		}
 	}
 
-	for startTs, commitTs := range delta.GetCommits() {
-		applyTxnStatus(startTs, commitTs)
-	}
-	for _, startTs := range delta.GetAborts() {
-		applyTxnStatus(startTs, 0)
+	for _, txn := range delta.Txns {
+		applyTxnStatus(txn.StartTs, txn.CommitTs)
 	}
 	// TODO: Use MaxPending to track the txn watermark. That's the only thing we need really.
 	// delta.GetMaxPending
@@ -776,10 +773,10 @@ func (n *node) calculateSnapshot(keepN int) error {
 	}
 	tr.LazyPrintf("Got snapshotIdx: %d. Discarding: %d", snapshotIdx, snapshotIdx-first)
 	// We should discard at least half of keepN. Otherwise, why bother.
-	if int(snapshotIdx-first) < int(float64(keepN)*0.5) {
+	if snapshotIdx == 0 || int(snapshotIdx-first) < int(float64(keepN)*0.5) {
 		tr.LazyPrintf("Skipping snapshot because insufficient discard entries")
-		x.Printf("Skipping snapshot. Insufficient discard entries: %d. MinPendingStartTs: %d\n",
-			snapshotIdx-first, minPending)
+		x.Printf("Skipping snapshot at index: %d. Insufficient discard entries: %d. MinPendingStartTs: %d\n",
+			snapshotIdx, snapshotIdx-first, minPending)
 		return nil
 	}
 

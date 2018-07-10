@@ -55,11 +55,6 @@ type Txn struct {
 type oracle struct {
 	x.SafeMutex
 
-	// TODO: Remove commits and aborts map from here. We don't need this, if we're doing transaction
-	// tracking correctly and applying the txn status back to posting lists correctly.
-	commits map[uint64]uint64   // startTs => commitTs map
-	aborts  map[uint64]struct{} // key is startTs
-
 	// max start ts given out by Zero.
 	maxAssigned uint64
 
@@ -76,23 +71,8 @@ type oracle struct {
 }
 
 func (o *oracle) init() {
-	o.commits = make(map[uint64]uint64)
-	o.aborts = make(map[uint64]struct{})
 	o.waiters = make(map[uint64][]chan struct{})
 	o.pendingTxns = make(map[uint64]*Txn)
-}
-
-func (o *oracle) CommitTs(startTs uint64) uint64 {
-	o.RLock()
-	defer o.RUnlock()
-	return o.commits[startTs]
-}
-
-func (o *oracle) Aborted(startTs uint64) bool {
-	o.RLock()
-	defer o.RUnlock()
-	_, ok := o.aborts[startTs]
-	return ok
 }
 
 func (o *oracle) RegisterStartTs(ts uint64) *Txn {
@@ -160,26 +140,6 @@ func (o *oracle) MaxAssigned() uint64 {
 	return o.maxAssigned
 }
 
-func (o *oracle) SetMaxPending(maxPending uint64) {
-	o.Lock()
-	defer o.Unlock()
-	o.maxAssigned = maxPending
-}
-
-func (o *oracle) CurrentState() *intern.OracleDelta {
-	od := new(intern.OracleDelta)
-	od.Commits = make(map[uint64]uint64)
-	o.RLock()
-	defer o.RUnlock()
-	for startTs := range o.aborts {
-		od.Aborts = append(od.Aborts, startTs)
-	}
-	for startTs, commitTs := range o.commits {
-		od.Commits[startTs] = commitTs
-	}
-	return od
-}
-
 func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	ch, ok := o.addToWaiters(startTs)
 	if !ok {
@@ -193,28 +153,15 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	}
 }
 
-func (o *oracle) done(startTs uint64) {
-	delete(o.commits, startTs)
-	delete(o.aborts, startTs)
-	delete(o.pendingTxns, startTs)
-}
-
 func (o *oracle) ProcessDelta(delta *intern.OracleDelta) {
 	o.Lock()
 	defer o.Unlock()
-	for startTs := range delta.Commits {
-		o.done(startTs)
+	for _, txn := range delta.Txns {
+		delete(o.pendingTxns, txn.StartTs)
 	}
-	for _, startTs := range delta.Aborts {
-		o.done(startTs)
-	}
-	// We should always be moving forward with Zero and with Raft logs. A move
-	// back should not be possible, unless there's a bigger issue in
-	// understanding or the codebase.
-	if delta.MaxAssigned == 0 {
+	if delta.MaxAssigned < o.maxAssigned {
 		return
 	}
-	x.AssertTrue(delta.MaxAssigned >= o.maxAssigned)
 
 	// Notify the waiting cattle.
 	for startTs, toNotify := range o.waiters {

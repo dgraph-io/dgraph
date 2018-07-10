@@ -400,14 +400,13 @@ func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) err
 		// It was already committed, might be happening due to replay.
 		return nil
 	} else {
-		// We want to be able to access this, irrespective of whether we have the right locks or
-		// not.
-		atomic.StoreUint64(&plist.Commit, commitTs)
+		plist.Commit = commitTs
 		for _, mpost := range plist.Postings {
-			atomic.StoreUint64(&mpost.CommitTs, commitTs)
+			mpost.CommitTs = commitTs
 		}
 		l.numCommits += len(plist.Postings)
 	}
+
 	if commitTs > l.commitTs {
 		// This is for rolling up the posting list.
 		l.commitTs = commitTs
@@ -472,24 +471,8 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 	var deleteBelow uint64
 	var posts []*intern.Posting
 	for startTs, plist := range l.mutationMap {
-		pcommit := atomic.LoadUint64(&plist.Commit)
-		if pcommit == 0 {
-			commitTs := Oracle().CommitTs(startTs)
-			if commitTs > 0 {
-				// TODO: We should propose the txn status before applying them in local Oracle. In
-				// fact, we might not even need to have the local Oracle storage, if we propose them
-				// in the order we receive them.
-				// If everything is proposed upfront, this print should NOT happen.
-				// x.Printf("ORACLE: Found commit ts only via Oracle. Start: %d. Commit: %d\n", startTs, commitTs)
-				atomic.StoreUint64(&plist.Commit, commitTs)
-				for _, mpost := range plist.Postings {
-					atomic.StoreUint64(&mpost.CommitTs, commitTs)
-				}
-				pcommit = commitTs
-			}
-		}
 		// Pick up the transactions which are either committed, or the one which is ME.
-		effectiveTs := effective(startTs, pcommit)
+		effectiveTs := effective(startTs, plist.Commit)
 		if effectiveTs > deleteBelow {
 			// We're above the deleteBelow marker. We wouldn't reach here if effectiveTs is zero.
 			for _, mpost := range plist.Postings {
@@ -509,7 +492,7 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 		result := posts[:0]
 		// Trim the posts.
 		for _, post := range posts {
-			effectiveTs := effective(post.StartTs, atomic.LoadUint64(&post.CommitTs))
+			effectiveTs := effective(post.StartTs, post.CommitTs)
 			if effectiveTs < deleteBelow { // Do pick the posts at effectiveTs == deleteBelow.
 				continue
 			}
@@ -523,8 +506,8 @@ func (l *List) pickPostings(readTs uint64) (*intern.PostingList, []*intern.Posti
 		pi := posts[i]
 		pj := posts[j]
 		if pi.Uid == pj.Uid {
-			ei := effective(pi.StartTs, atomic.LoadUint64(&pi.CommitTs))
-			ej := effective(pj.StartTs, atomic.LoadUint64(&pj.CommitTs))
+			ei := effective(pi.StartTs, pi.CommitTs)
+			ej := effective(pj.StartTs, pj.CommitTs)
 			return ei > ej // Pick the higher, so we can discard older commits for the same UID.
 		}
 		return pi.Uid < pj.Uid
@@ -635,12 +618,6 @@ func doAsyncWrite(commitTs uint64, key []byte, data []byte, meta byte, f func(er
 	}
 }
 
-func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
-	l.Lock()
-	defer l.Unlock()
-	return l.syncIfDirty(delFromCache)
-}
-
 func (l *List) MarshalToKv() (*intern.KV, error) {
 	l.Lock()
 	defer l.Unlock()
@@ -716,7 +693,7 @@ func (l *List) rollup() error {
 	// Keep all uncommited Entries or postings with commitTs > l.commitTs
 	// in mutation map. Discard all else.
 	for startTs, plist := range l.mutationMap {
-		cl := atomic.LoadUint64(&plist.Commit)
+		cl := plist.Commit
 		if cl == 0 || cl > l.commitTs {
 			// Keep this.
 		} else {
@@ -729,6 +706,12 @@ func (l *List) rollup() error {
 	l.numCommits = 0
 	atomic.StoreInt32(&l.estimatedSize, l.calculateSize())
 	return nil
+}
+
+func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
+	l.Lock()
+	defer l.Unlock()
+	return l.syncIfDirty(delFromCache)
 }
 
 // Merge mutation layer and immutable layer.
