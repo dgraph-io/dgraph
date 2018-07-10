@@ -195,8 +195,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			}
 		}
 		o.Unlock()
-		// Let's keep the MaxAssigned, so we don't jump back accidentally.
-		delta.Txns = delta.Txns[:0]
+		delta = &intern.OracleDelta{}
 	}
 }
 
