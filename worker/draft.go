@@ -775,8 +775,8 @@ func (n *node) calculateSnapshot(keepN int) error {
 	// We should discard at least half of keepN. Otherwise, why bother.
 	if snapshotIdx == 0 || int(snapshotIdx-first) < int(float64(keepN)*0.5) {
 		tr.LazyPrintf("Skipping snapshot because insufficient discard entries")
-		x.Printf("Skipping snapshot at index: %d. Insufficient discard entries: %d. MinPendingStartTs: %d\n",
-			snapshotIdx, snapshotIdx-first, minPending)
+		x.Printf("Skipping snapshot at index: %d. Insufficient discard entries: %d."+
+			" MinPendingStartTs: %d\n", snapshotIdx, snapshotIdx-first, minPending)
 		return nil
 	}
 
