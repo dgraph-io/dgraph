@@ -131,12 +131,12 @@ func (o *Oracle) currentState() *intern.OracleDelta {
 	o.AssertRLock()
 	resp := &intern.OracleDelta{}
 	for start, commit := range o.commits {
-		ts := &intern.TxnStatus{StartTs: start, CommitTs: commit}
-		resp.Txns = append(resp.Txns, ts)
+		resp.Txns = append(resp.Txns,
+			&intern.TxnStatus{StartTs: start, CommitTs: commit})
 	}
 	for abort := range o.aborts {
-		ts := &intern.TxnStatus{StartTs: abort, CommitTs: 0}
-		resp.Txns = append(resp.Txns, ts)
+		resp.Txns = append(resp.Txns,
+			&intern.TxnStatus{StartTs: abort, CommitTs: 0})
 	}
 	resp.MaxAssigned = o.maxAssigned
 	return resp
