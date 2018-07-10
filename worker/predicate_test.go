@@ -47,11 +47,9 @@ func checkShard(ps *badger.ManagedDB) (int, []byte) {
 func commitTs(startTs uint64) uint64 {
 	commit := timestamp()
 	od := &intern.OracleDelta{
-		Commits: map[uint64]uint64{
-			startTs: commit,
-		},
 		MaxAssigned: atomic.LoadUint64(&ts),
 	}
+	od.Txns = append(od.Txns, &intern.TxnStatus{startTs, commit})
 	posting.Oracle().ProcessDelta(od)
 	return commit
 }
