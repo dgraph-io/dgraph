@@ -861,6 +861,11 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 			var err error
 			txn := &Txn{StartTs: startTs}
 			for it := range ch {
+				// TODO: One way to solve this problem is to keep adding postings to txn, until
+				// txn.deltas grows to a certain size. And then do a CommitMutations to disk.
+				// That way, we can use different start->commit timestamps, to keep the deltas
+				// staggered in terms of versioning. And once we're done, we can run the rollup
+				// system to generate the final posting lists.
 				addPostingsToIndex(it.uid, it.list, txn)
 				// NOTE: This has to be in memory for performance.
 				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
