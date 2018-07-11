@@ -77,3 +77,10 @@ func (txn *Txn) CommitAt(commitTs uint64, callback func(error)) error {
 func (db *ManagedDB) GetSequence(_ []byte, _ uint64) (*Sequence, error) {
 	panic("Cannot use GetSequence for ManagedDB.")
 }
+
+// SetDiscardTs sets a timestamp at or below which, any invalid or deleted
+// versions can be discarded from the LSM tree, and thence from the value log to
+// reclaim disk space.
+func (db *ManagedDB) SetDiscardTs(ts uint64) {
+	db.orc.setDiscardTs(ts)
+}

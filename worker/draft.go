@@ -389,6 +389,8 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 			snap.Index, snap.MinPendingStartTs)
 		data, err := snap.Marshal()
 		x.Check(err)
+		// We can now discard all invalid versions of keys below this ts.
+		pstore.SetDiscardTs(snap.MinPendingStartTs - 1)
 		return n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
 
 	} else {
