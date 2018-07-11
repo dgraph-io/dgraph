@@ -136,14 +136,15 @@ func (c *listCache) removeOldest() {
 			ele = ele.Prev()
 			continue
 		}
-		// If length of mutation layer is zero, then we won't call pstore.SetAsync and the
-		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
-		if committed, err := e.pl.SyncIfDirty(true); err != nil {
-			ele = ele.Prev()
-			continue
-		} else if !committed {
-			delete(c.cache, e.key)
-		}
+		delete(c.cache, e.key)
+		// // If length of mutation layer is zero, then we won't call pstore.SetAsync and the
+		// // key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
+		// if committed, err := e.pl.SyncIfDirty(true); err != nil {
+		// 	ele = ele.Prev()
+		// 	continue
+		// } else if !committed {
+		// delete(c.cache, e.key)
+		// }
 
 		// ele gets Reset once it's passed to Remove, so store the prev.
 		prev := ele.Prev()

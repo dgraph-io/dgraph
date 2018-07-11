@@ -233,7 +233,7 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 	}
 
 	sl := streamLists{stream: stream, db: pstore}
-	sl.chooseKey = func(key []byte, version uint64) bool {
+	sl.chooseKey = func(key []byte, version uint64, _ byte) bool {
 		pk := x.Parse(key)
 		return version > clientTs || pk.IsSchema()
 	}

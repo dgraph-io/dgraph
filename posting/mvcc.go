@@ -119,7 +119,7 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 				copy(pl.Postings[midx+1:], pl.Postings[midx:])
 				pl.Postings[midx] = d.posting
 			}
-			meta = bitDeltaPosting
+			meta = BitDeltaPosting
 		}
 
 		// delta postings are pointers to the postings present in the Pl present in lru.
@@ -219,66 +219,6 @@ func unmarshalOrCopy(plist *intern.PostingList, item *badger.Item) error {
 		x.Check(plist.Unmarshal(val))
 	}
 	return nil
-}
-
-// constructs the posting list from the disk using the passed iterator.
-// Use forward iterator with allversions enabled in iter options.
-//
-// key would now be owned by the posting list. So, ensure that it isn't reused
-// elsewhere.
-func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
-	l := new(List)
-	l.key = key
-	l.mutationMap = make(map[uint64]*intern.PostingList)
-	l.activeTxns = make(map[uint64]struct{})
-	l.plist = new(intern.PostingList)
-
-	// Iterates from highest Ts to lowest Ts
-	for it.Valid() {
-		item := it.Item()
-		if item.IsDeletedOrExpired() {
-			// Don't consider any more versions.
-			break
-		}
-		if !bytes.Equal(item.Key(), l.key) {
-			break
-		}
-		if l.commitTs == 0 {
-			l.commitTs = item.Version()
-		}
-
-		val, err := item.Value()
-		if err != nil {
-			return nil, err
-		}
-		if item.UserMeta()&BitCompletePosting > 0 {
-			if err := unmarshalOrCopy(l.plist, item); err != nil {
-				return nil, err
-			}
-			l.minTs = item.Version()
-			// No need to do Next here. The outer loop can take care of skipping more versions of
-			// the same key.
-			break
-		}
-		if item.UserMeta()&bitDeltaPosting > 0 {
-			pl := &intern.PostingList{}
-			x.Check(pl.Unmarshal(val))
-			pl.Commit = item.Version()
-			for _, mpost := range pl.Postings {
-				// commitTs, startTs are meant to be only in memory, not
-				// stored on disk.
-				mpost.CommitTs = item.Version()
-			}
-			l.mutationMap[pl.Commit] = pl
-		} else {
-			x.Fatalf("unexpected meta: %d", item.UserMeta())
-		}
-		if item.DiscardEarlierVersions() {
-			break
-		}
-		it.Next()
-	}
-	return l, nil
 }
 
 func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
