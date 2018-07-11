@@ -100,7 +100,7 @@ func replayFunction(out *DB) func(Entry, valuePointer) error {
 	first := true
 	return func(e Entry, vp valuePointer) error { // Function for replaying.
 		if first {
-			out.elog.Printf("First key=%s\n", e.Key)
+			out.elog.Printf("First key=%q\n", e.Key)
 		}
 		first = false
 

@@ -182,9 +182,13 @@ func (item *Item) yieldItemValue() ([]byte, func(), error) {
 		if vs.Version != item.Version() {
 			return nil, nil, nil
 		}
-		item.vptr = vs.Value
+		// Bug fix: Always copy the vs.Value into vptr here. Otherwise, when item is reused this
+		// slice gets overwritten.
+		item.vptr = y.SafeCopy(item.vptr, vs.Value)
 		item.meta &^= bitValuePointer // Clear the value pointer bit.
-		item.meta |= vs.Meta          // This meta would only be about value pointer.
+		if vs.Meta&bitValuePointer > 0 {
+			item.meta |= bitValuePointer // This meta would only be about value pointer.
+		}
 	}
 }
 
