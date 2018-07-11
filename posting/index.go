@@ -862,6 +862,7 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 			txn := &Txn{StartTs: startTs}
 			for it := range ch {
 				addPostingsToIndex(it.uid, it.list, txn)
+				// NOTE: This has to be in memory for performance.
 				err = txn.CommitMutationsMemory(ctx, txn.StartTs)
 				if err != nil {
 					txn.AbortMutations(ctx)

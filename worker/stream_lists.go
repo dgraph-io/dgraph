@@ -27,7 +27,7 @@ type streamLists struct {
 	stream    kvStream
 	predicate string
 	db        *badger.ManagedDB
-	chooseKey func(key []byte, version uint64) bool
+	chooseKey func(key []byte, version uint64, userMeta byte) bool
 	itemToKv  func(key []byte, itr *badger.Iterator) (*intern.KV, error)
 }
 
@@ -148,7 +148,7 @@ func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
 				break
 			}
 			// Check if we should pick this key.
-			if sl.chooseKey != nil && !sl.chooseKey(item.Key(), item.Version()) {
+			if sl.chooseKey != nil && !sl.chooseKey(item.Key(), item.Version(), item.UserMeta()) {
 				continue
 			}
 

@@ -389,7 +389,11 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 			snap.Index, snap.MinPendingStartTs)
 		data, err := snap.Marshal()
 		x.Check(err)
-		return n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+		if err := n.Store.CreateSnapshot(snap.Index, n.ConfState(), data); err != nil {
+			return err
+		}
+		// Now roll up all posting lists.
+		return rollupPostingLists(snap.MinPendingStartTs - 1)
 
 	} else {
 		x.Fatalf("Unknown proposal")
