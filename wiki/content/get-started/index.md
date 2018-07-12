@@ -12,7 +12,7 @@ Dgraph cluster consists of different nodes (zero, server & ratel) and each node 
 
 **Dgraph Ratel** serves the UI to run queries, mutations & altering schema.
 
-You need atleast need one Dgraph zero and one Dgraph Server to get started.
+You need atleast one Dgraph zero and one Dgraph Server to get started.
 
 **Here's a 3 step tutorial to get you up and running.**
 
