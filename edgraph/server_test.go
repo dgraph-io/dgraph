@@ -279,11 +279,11 @@ func TestNquadsFromJsonError1(t *testing.T) {
 }
 
 func TestNquadsFromJsonList(t *testing.T) {
-	json := `{"address":["Riley Street","Redfern"],"phone_number":[123,9876]}`
+	json := `{"address":["Riley Street","Redfern"],"phone_number":[123,9876],"points":[{"type":"Point", "coordinates":[1.1,2.0]},{"type":"Point", "coordinates":[2.0,1.1]}]}`
 
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
-	require.Equal(t, 4, len(nq))
+	require.Equal(t, 6, len(nq))
 }
 
 func TestNquadsFromJsonDelete(t *testing.T) {

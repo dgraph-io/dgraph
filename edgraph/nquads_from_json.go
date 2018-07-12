@@ -323,6 +323,26 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 					}
 					mr.nquads = append(mr.nquads, &nq)
 				case map[string]interface{}:
+					// map[string]interface{} can mean geojson or a connecting entity.
+					val := item.(map[string]interface{})
+					_, hasType := val["type"]
+					_, hasCoordinates := val["coordinates"]
+					if len(val) == 2 && hasType && hasCoordinates {
+						b, err := json.Marshal(val)
+						if err != nil {
+							return mr, x.Errorf("Error while trying to parse "+
+								"value: %+v as geo val", val)
+						}
+						ok, err := tryParseAsGeo(b, &nq)
+						if err != nil {
+							return mr, err
+						}
+						if ok {
+							mr.nquads = append(mr.nquads, &nq)
+							continue
+						}
+					}
+
 					cr, err := mapToNquads(iv, idx, op, pred)
 					if err != nil {
 						return mr, err
