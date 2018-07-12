@@ -93,26 +93,23 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
-	// TODO: Before we write anything, we should drop all the data stored in ps.
 	stream, err := c.StreamSnapshot(ctx, snap)
 	if err != nil {
 		return 0, err
 	}
-
-	kvs, err := stream.Recv()
-	if err != nil {
+	// Before we write anything, we should drop all the data stored in ps.
+	if err := ps.DropAll(); err != nil {
 		return 0, err
 	}
 
-	kvChan := make(chan *intern.KVS, 1000)
+	kvChan := make(chan *intern.KVS, 100)
 	che := make(chan error, 1)
 	go writeBatch(ctx, ps, kvChan, che)
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	for {
-		kvs, err = stream.Recv()
+		kvs, err := stream.Recv()
 		if err == io.EOF {
 			x.Printf("EOF has been reached\n")
 			break

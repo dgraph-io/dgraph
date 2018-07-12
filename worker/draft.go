@@ -719,6 +719,10 @@ func (n *node) abortOldTransactions() {
 // pre-writes to disk in pstore.
 // - Finally, this function would propose this snapshot index, so the entire
 // group can apply it to their Raft stores.
+//
+// TODO: We must also consider the max commit timestamp, that should form the basis of snapshot
+// reads.. And if we're using a MinPendingStartTs then, we need to come up to the Raft entry, which
+// absolutely has that StartTs.
 func (n *node) calculateSnapshot(keepN int) error {
 	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
 	defer tr.Finish()
