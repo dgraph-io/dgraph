@@ -401,12 +401,12 @@ service Zero {
 
 service Worker {
 	// Data serving RPCs.
-	rpc Mutate (Mutations)                        returns (api.TxnContext) {}
-	rpc ServeTask (Query)                         returns (Result) {}
-	rpc PredicateAndSchemaData (SnapshotMeta) returns (stream KVS) {}
-	rpc Sort (SortMessage)                        returns (SortResult) {}
-	rpc Schema (SchemaRequest)                    returns (SchemaResult) {}
-	rpc PurgeTs (api.Payload)                    returns (Num) {}
+	rpc Mutate (Mutations)                    returns (api.TxnContext) {}
+	rpc ServeTask (Query)                     returns (Result) {}
+	rpc StreamSnapshot (Snapshot)             returns (stream KVS) {}
+	rpc Sort (SortMessage)                    returns (SortResult) {}
+	rpc Schema (SchemaRequest)                returns (SchemaResult) {}
+	rpc PurgeTs (api.Payload)                 returns (Num) {}
 
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
 	rpc ReceivePredicate(stream KVS)         returns (api.Payload) {}

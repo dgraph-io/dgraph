@@ -28,6 +28,7 @@ import (
 
 var (
 	ErrDuplicateRaftId = x.Errorf("Node is already part of group")
+	ErrNoNode          = fmt.Errorf("No node has been set up yet")
 )
 
 type Node struct {
@@ -418,7 +419,7 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 
 func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 	if n.Raft() == nil {
-		return errNoNode
+		return ErrNoNode
 	}
 	if _, ok := n.Peer(id); !ok && id != n.RaftContext.Id {
 		return x.Errorf("Node %d not part of group", id)

@@ -462,16 +462,26 @@ func (n *node) leaderBlocking() (*conn.Pool, error) {
 	return pool, nil
 }
 
+func (n *node) Snapshot() (*intern.Snapshot, error) {
+	if n == nil || n.Store == nil {
+		return nil, conn.ErrNoNode
+	}
+	snap, err := n.Store.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	res := &intern.Snapshot{}
+	if err := res.Unmarshal(snap.Data); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (n *node) retrieveSnapshot() error {
 	pool, err := n.leaderBlocking()
 	if err != nil {
 		return err
 	}
-
-	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
-	// the values might get overwritten
-	// Safe to keep this line
-	n.applyAllMarks(n.ctx)
 
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
@@ -883,12 +893,16 @@ func (n *node) InitAndStartNode() {
 		n.SetRaft(raft.RestartNode(n.Cfg))
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
-		if peerId, hasPeer := groups().MyPeer(); hasPeer {
+		if _, hasPeer := groups().MyPeer(); hasPeer {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
 
-			x.Printf("Retrieving snapshot from peer: %d", peerId)
-			n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
+			// TODO: This is an optimization, which adds complexity because it requires us to
+			// understand the Raft state of the node. Let's instead have the node retrieve the
+			// snapshot as needed after joining the group, instead of us forcing one upfront.
+			//
+			// x.Printf("Retrieving snapshot from peer: %d", peerId)
+			// n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
 
 			x.Println("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
