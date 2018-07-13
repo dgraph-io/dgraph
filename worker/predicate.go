@@ -156,7 +156,7 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot, stream intern.Work
 		return err
 	}
 	x.Printf("Got StreamSnapshot request. Mine: %+v. Requested: %+v\n", snap, reqSnap)
-	if snap.Index != reqSnap.Index || snap.MinPendingStartTs != reqSnap.MinPendingStartTs {
+	if snap.Index != reqSnap.Index || snap.ReadTs != reqSnap.ReadTs {
 		return errors.New("Mismatching snapshot request")
 	}
 
@@ -205,8 +205,7 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot, stream intern.Work
 		return l.MarshalToKv()
 	}
 
-	readTs := snap.MinPendingStartTs - 1
-	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", readTs); err != nil {
+	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
 		return err
 	}
 

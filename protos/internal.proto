@@ -194,9 +194,9 @@ message KeyValues {
 }
 
 message Snapshot {
-	RaftContext context         = 1;
-	uint64 index                = 2;
-	uint64 min_pending_start_ts = 3;
+	RaftContext context = 1;
+	uint64 index        = 2;
+	uint64 read_ts      = 3;
 }
 
 message Proposal {
