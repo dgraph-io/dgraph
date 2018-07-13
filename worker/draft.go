@@ -768,7 +768,7 @@ func (n *node) calculateSnapshot(discardN int) error {
 
 	// This map holds a start ts as key, and Raft index as value.
 	startToIdx := make(map[uint64]uint64)
-	var maxCommitTs uint64
+	var maxCommitTs, snapshotIdx uint64
 	for _, entry := range entries {
 		if entry.Type != raftpb.EntryNormal {
 			continue
@@ -789,13 +789,16 @@ func (n *node) calculateSnapshot(discardN int) error {
 				delete(startToIdx, txn.StartTs)
 				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 			}
+			snapshotIdx = entry.Index
 		}
 	}
 	if maxCommitTs == 0 {
 		tr.LazyPrintf("maxCommitTs is zero")
 		return nil
 	}
-	var minPendingTs, snapshotIdx uint64 = math.MaxUint64, 0
+	var minPendingTs uint64 = math.MaxUint64
+	// It is possible that this loop doesn't execute, because all transactions have been committed.
+	// In that case, we'll default to snapshotIdx value from above.
 	for startTs, index := range startToIdx {
 		if minPendingTs < startTs {
 			continue
@@ -804,10 +807,6 @@ func (n *node) calculateSnapshot(discardN int) error {
 		// deduct one so that the Raft entry can be picked fully during replay.
 		// This becomes our snapshotIdx.
 		minPendingTs, snapshotIdx = startTs, index-1
-	}
-	if minPendingTs == math.MaxUint64 {
-		tr.LazyPrintf("Unable to find min pending ts")
-		return nil
 	}
 
 	numDiscarding := snapshotIdx - first
