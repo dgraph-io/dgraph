@@ -740,7 +740,7 @@ func (n *node) abortOldTransactions() {
 // Txn4  |    |    |    |    |    |    | S4
 // Index | i1 | i2 | i3 | i4 | i5 | i6 | i7
 //
-// At i7, min pending start ts = S3, therefore snapshotIdx = i5.
+// At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
 // At i7, max commit ts = C1, therefore readTs = C1.
 func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")

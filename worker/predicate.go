@@ -144,7 +144,8 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	return count, nil
 }
 
-func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot, stream intern.Worker_StreamSnapshotServer) error {
+func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot,
+	stream intern.Worker_StreamSnapshotServer) error {
 	n := groups().Node
 	if !x.IsTestRun() {
 		if !n.AmLeader() {
