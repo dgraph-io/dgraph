@@ -503,6 +503,20 @@ func (n *node) retrieveSnapshot() error {
 	return nil
 }
 
+func (n *node) proposeSnapshot() error {
+	snap, err := n.calculateSnapshot(1000)
+	if err != nil || snap == nil {
+		return err
+	}
+	proposal := &intern.Proposal{
+		Snapshot: snap,
+	}
+	n.elog.Printf("Proposing snapshot: %+v\n", snap)
+	data, err := proposal.Marshal()
+	x.Check(err)
+	return n.Raft().Propose(n.ctx, data)
+}
+
 func (n *node) Run() {
 	firstRun := true
 	var leader bool
@@ -521,8 +535,8 @@ func (n *node) Run() {
 				// We use disk based storage for Raft. So, we're not too concerned about
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
-				if err := n.calculateSnapshot(1000); err != nil {
-					x.Errorf("While taking snapshot: %v\n", err)
+				if err := n.proposeSnapshot(); err != nil {
+					x.Errorf("While calculating and proposing snapshot: %v", err)
 				}
 				go n.abortOldTransactions()
 			}
@@ -728,7 +742,7 @@ func (n *node) abortOldTransactions() {
 //
 // At i7, min pending start ts = S3, therefore snapshotIdx = i5.
 // At i7, max commit ts = C1, therefore readTs = C1.
-func (n *node) calculateSnapshot(discardN int) error {
+func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
 	defer tr.Finish()
 
@@ -736,22 +750,22 @@ func (n *node) calculateSnapshot(discardN int) error {
 	if err != nil {
 		tr.LazyPrintf("Error: %v", err)
 		tr.SetError()
-		return err
+		return nil, err
 	}
 	tr.LazyPrintf("First index: %d", first)
 
 	last := n.Applied.DoneUntil()
 	if int(last-first) < discardN {
 		tr.LazyPrintf("Skipping due to insufficient entries")
-		return nil
+		return nil, nil
 	}
 	tr.LazyPrintf("Found Raft entries: %d", last-first)
 
-	entries, err := n.Store.Entries(first, last, math.MaxUint64)
+	entries, err := n.Store.Entries(first, last+1, math.MaxUint64)
 	if err != nil {
 		tr.LazyPrintf("Error: %v", err)
 		tr.SetError()
-		return err
+		return nil, err
 	}
 
 	// We iterate over Raft entries, parsing them to Proposals. We do two
@@ -777,7 +791,7 @@ func (n *node) calculateSnapshot(discardN int) error {
 		if err := proposal.Unmarshal(entry.Data); err != nil {
 			tr.LazyPrintf("Error: %v", err)
 			tr.SetError()
-			return err
+			return nil, err
 		}
 		if proposal.Mutations != nil {
 			ts := proposal.Mutations.StartTs
@@ -794,7 +808,7 @@ func (n *node) calculateSnapshot(discardN int) error {
 	}
 	if maxCommitTs == 0 {
 		tr.LazyPrintf("maxCommitTs is zero")
-		return nil
+		return nil, nil
 	}
 	var minPendingTs uint64 = math.MaxUint64
 	// It is possible that this loop doesn't execute, because all transactions have been committed.
@@ -809,14 +823,14 @@ func (n *node) calculateSnapshot(discardN int) error {
 		minPendingTs, snapshotIdx = startTs, index-1
 	}
 
-	numDiscarding := snapshotIdx - first
+	numDiscarding := snapshotIdx - first + 1
 	tr.LazyPrintf("Got snapshotIdx: %d. MaxCommitTs: %d. Discarding: %d",
 		snapshotIdx, maxCommitTs, numDiscarding)
 	if int(numDiscarding) < discardN {
 		tr.LazyPrintf("Skipping snapshot because insufficient discard entries")
 		x.Printf("Skipping snapshot at index: %d. Insufficient discard entries: %d."+
 			" MinPendingStartTs: %d\n", snapshotIdx, numDiscarding, minPendingTs)
-		return nil
+		return nil, nil
 	}
 
 	snap := &intern.Snapshot{
@@ -824,20 +838,8 @@ func (n *node) calculateSnapshot(discardN int) error {
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
 	}
-	proposal := &intern.Proposal{
-		Snapshot: snap,
-	}
-	tr.LazyPrintf("Proposing snapshot: %+v\n", snap)
-
-	data, err := proposal.Marshal()
-	x.Check(err)
-	if err := n.Raft().Propose(context.Background(), data); err != nil {
-		tr.LazyPrintf("Error: %v", err)
-		tr.SetError()
-		return err
-	}
-	tr.LazyPrintf("Done best-effort proposing.")
-	return nil
+	tr.LazyPrintf("Got snapshot: %+v", snap)
+	return snap, nil
 }
 
 func (n *node) joinPeers() error {
