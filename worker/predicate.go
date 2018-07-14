@@ -150,7 +150,11 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot,
 	if n == nil {
 		return conn.ErrNoNode
 	}
-	// Indicate that we're streaming right now. Used to cancel calculateSnapshot.
+	// Indicate that we're streaming right now. Used to cancel
+	// calculateSnapshot.  However, this logic isn't foolproof. A leader might
+	// have already proposed a snapshot, which it can apply while this streaming
+	// is going on. That can happen after the reqSnap check we're doing below.
+	// However, I don't think we need to tackle this edge case for now.
 	atomic.AddInt32(&n.streaming, 1)
 	defer atomic.AddInt32(&n.streaming, -1)
 
