@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -45,6 +46,8 @@ type node struct {
 	stop    chan struct{} // to send the stop signal to Run
 	done    chan struct{} // to check whether node is running or not
 	gid     uint32
+
+	streaming int32 // Used to avoid calculating snapshot
 
 	canCampaign bool
 	elog        trace.EventLog
@@ -745,6 +748,11 @@ func (n *node) abortOldTransactions() {
 func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
 	defer tr.Finish()
+
+	if atomic.LoadInt32(&n.streaming) == 1 {
+		tr.LazyPrintf("Skipping calculateSnapshot due to streaming")
+		return nil, nil
+	}
 
 	first, err := n.Store.FirstIndex()
 	if err != nil {

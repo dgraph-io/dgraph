@@ -147,6 +147,13 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot,
 	stream intern.Worker_StreamSnapshotServer) error {
 	n := groups().Node
+	if n == nil {
+		return conn.ErrNoNode
+	}
+	// Indicate that we're streaming right now. Used to cancel calculateSnapshot.
+	atomic.StoreInt32(&n.streaming, 1)
+	defer atomic.StoreInt32(&n.streaming, 0)
+
 	if !x.IsTestRun() {
 		if !n.AmLeader() {
 			return errNotLeader
