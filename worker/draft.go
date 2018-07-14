@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -45,6 +46,8 @@ type node struct {
 	stop    chan struct{} // to send the stop signal to Run
 	done    chan struct{} // to check whether node is running or not
 	gid     uint32
+
+	streaming int32 // Used to avoid calculating snapshot
 
 	canCampaign bool
 	elog        trace.EventLog
@@ -385,12 +388,11 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 	} else if proposal.Snapshot != nil {
 		snap := proposal.Snapshot
 		n.elog.Printf("Creating snapshot: %+v", snap)
-		x.Printf("Creating snapshot at index: %d. MinPendingStartTs: %d.\n",
-			snap.Index, snap.MinPendingStartTs)
+		x.Printf("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
 		data, err := snap.Marshal()
 		x.Check(err)
 		// We can now discard all invalid versions of keys below this ts.
-		pstore.SetDiscardTs(snap.MinPendingStartTs - 1)
+		pstore.SetDiscardTs(snap.ReadTs)
 		return n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
 
 	} else {
@@ -462,16 +464,26 @@ func (n *node) leaderBlocking() (*conn.Pool, error) {
 	return pool, nil
 }
 
+func (n *node) Snapshot() (*intern.Snapshot, error) {
+	if n == nil || n.Store == nil {
+		return nil, conn.ErrNoNode
+	}
+	snap, err := n.Store.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	res := &intern.Snapshot{}
+	if err := res.Unmarshal(snap.Data); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (n *node) retrieveSnapshot() error {
 	pool, err := n.leaderBlocking()
 	if err != nil {
 		return err
 	}
-
-	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
-	// the values might get overwritten
-	// Safe to keep this line
-	n.applyAllMarks(n.ctx)
 
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
@@ -494,6 +506,20 @@ func (n *node) retrieveSnapshot() error {
 	return nil
 }
 
+func (n *node) proposeSnapshot() error {
+	snap, err := n.calculateSnapshot(1000)
+	if err != nil || snap == nil {
+		return err
+	}
+	proposal := &intern.Proposal{
+		Snapshot: snap,
+	}
+	n.elog.Printf("Proposing snapshot: %+v\n", snap)
+	data, err := proposal.Marshal()
+	x.Check(err)
+	return n.Raft().Propose(n.ctx, data)
+}
+
 func (n *node) Run() {
 	firstRun := true
 	var leader bool
@@ -512,8 +538,8 @@ func (n *node) Run() {
 				// We use disk based storage for Raft. So, we're not too concerned about
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
-				if err := n.calculateSnapshot(1000); err != nil {
-					x.Errorf("While taking snapshot: %v\n", err)
+				if err := n.proposeSnapshot(); err != nil {
+					x.Errorf("While calculating and proposing snapshot: %v", err)
 				}
 				go n.abortOldTransactions()
 			}
@@ -697,66 +723,74 @@ func (n *node) abortOldTransactions() {
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
-// - We still keep at least keepN number of Raft entries. If we cut too short,
-// then the chances that a crashed follower needs to retrieve the entire state
-// from leader increases. So, we keep a buffer to allow a follower to catch up.
-// - We can discard at least half of keepN number of entries.
+// - We only start discarding once we have at least discardN entries.
 // - We are not overshooting the max applied entry. That is, we're not removing
 // Raft entries before they get applied.
 // - We are considering the minimum start ts that has yet to be committed or
 // aborted. This way, we still keep all the mutations corresponding to this
 // start ts in the Raft logs. This is important, because we don't persist
 // pre-writes to disk in pstore.
+// - Considering the above, find the maximum commit timestamp that we have seen.
+// That would tell us about the maximum timestamp used to do any commits. This
+// ts is what we can use for future reads of this snapshot.
 // - Finally, this function would propose this snapshot index, so the entire
 // group can apply it to their Raft stores.
-func (n *node) calculateSnapshot(keepN int) error {
+//
+// Txn0  | S0 |    |    | C0 |    |    |
+// Txn1  |    | S1 |    |    |    | C1 |
+// Txn2  |    |    | S2 | C2 |    |    |
+// Txn3  |    |    |    |    | S3 |    |
+// Txn4  |    |    |    |    |    |    | S4
+// Index | i1 | i2 | i3 | i4 | i5 | i6 | i7
+//
+// At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
+// At i7, max commit ts = C1, therefore readTs = C1.
+func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
 	defer tr.Finish()
 
-	// Each member of the Raft group is taking snapshots independently, as mentioned in Section 7 of
-	// Raft paper. We want to avoid taking snapshots too close to the LastIndex, so that in case the
-	// leader changes, and the followers haven't yet caught up to this index, they would need to
-	// retrieve the entire state (snapshot) of the DB. So, we should always wait to accumulate skip
-	// entries before we start taking a snapshot.
-	count, err := n.Store.NumEntries()
-	if err != nil {
-		tr.LazyPrintf("Error: %v", err)
-		tr.SetError()
-		return err
+	if atomic.LoadInt32(&n.streaming) > 0 {
+		tr.LazyPrintf("Skipping calculateSnapshot due to streaming")
+		return nil, nil
 	}
-	tr.LazyPrintf("Found Raft entries: %d", count)
-	if count < 2*keepN {
-		// We wait to build up at least 2*keepN entries, and then discard keepN entries.
-		tr.LazyPrintf("Skipping due to insufficient entries")
-		return nil
-	}
-	discard := count - keepN
 
 	first, err := n.Store.FirstIndex()
 	if err != nil {
 		tr.LazyPrintf("Error: %v", err)
 		tr.SetError()
-		return err
+		return nil, err
 	}
 	tr.LazyPrintf("First index: %d", first)
-	last := first + uint64(discard)
-	if last > n.Applied.DoneUntil() {
-		tr.LazyPrintf("Skipping because last index: %d > applied", last)
-		return nil
+
+	last := n.Applied.DoneUntil()
+	if int(last-first) < discardN {
+		tr.LazyPrintf("Skipping due to insufficient entries")
+		return nil, nil
 	}
-	entries, err := n.Store.Entries(first, last, math.MaxUint64)
+	tr.LazyPrintf("Found Raft entries: %d", last-first)
+
+	entries, err := n.Store.Entries(first, last+1, math.MaxUint64)
 	if err != nil {
 		tr.LazyPrintf("Error: %v", err)
 		tr.SetError()
-		return err
+		return nil, err
 	}
 
-	// We find the minimum start ts for which a decision to commit or abort is still pending. We
-	// should not discard mutations corresponding to this start ts, because we don't persist
-	// mutations until they are committed.
-	minPending := posting.Oracle().MinPendingStartTs()
-	tr.LazyPrintf("Found min pending start ts: %d", minPending)
-	var snapshotIdx uint64
+	// We iterate over Raft entries, parsing them to Proposals. We do two
+	// things:
+	// 1. Create a start timestamp -> first raft index map.
+	// 2. We find the max commit timestamp present, as maxCommitTs (/ ReadTs).
+	// As we see transaction commits, we remove the entries from the startToIdx
+	// map, so that by the end of iteration, we only keep the entries in map,
+	// which correspond to mutations which haven't yet been committed, aka
+	// pending mutations. We pick the lowest start ts, and the index
+	// corresponding to that becomes our snapshotIdx. We keep all the Raft
+	// entries including this one, so that on a replay, we can pick all the
+	// mutations correctly.
+
+	// This map holds a start ts as key, and Raft index as value.
+	startToIdx := make(map[uint64]uint64)
+	var maxCommitTs, snapshotIdx uint64
 	for _, entry := range entries {
 		if entry.Type != raftpb.EntryNormal {
 			continue
@@ -765,42 +799,55 @@ func (n *node) calculateSnapshot(keepN int) error {
 		if err := proposal.Unmarshal(entry.Data); err != nil {
 			tr.LazyPrintf("Error: %v", err)
 			tr.SetError()
-			return err
+			return nil, err
 		}
-		mu := proposal.Mutations
-		if mu != nil && mu.StartTs >= minPending {
-			break
+		if proposal.Mutations != nil {
+			ts := proposal.Mutations.StartTs
+			if _, has := startToIdx[ts]; !has {
+				startToIdx[ts] = entry.Index
+			}
+		} else if proposal.Delta != nil {
+			for _, txn := range proposal.Delta.GetTxns() {
+				delete(startToIdx, txn.StartTs)
+				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
+			}
+			snapshotIdx = entry.Index
 		}
-		snapshotIdx = entry.Index
 	}
-	tr.LazyPrintf("Got snapshotIdx: %d. Discarding: %d", snapshotIdx, snapshotIdx-first)
-	// We should discard at least half of keepN. Otherwise, why bother.
-	if snapshotIdx == 0 || int(snapshotIdx-first) < int(float64(keepN)*0.5) {
+	if maxCommitTs == 0 {
+		tr.LazyPrintf("maxCommitTs is zero")
+		return nil, nil
+	}
+	var minPendingTs uint64 = math.MaxUint64
+	// It is possible that this loop doesn't execute, because all transactions have been committed.
+	// In that case, we'll default to snapshotIdx value from above.
+	for startTs, index := range startToIdx {
+		if minPendingTs < startTs {
+			continue
+		}
+		// Pick the lowest startTs, and the corresponding Raft index - 1. We
+		// deduct one so that the Raft entry can be picked fully during replay.
+		// This becomes our snapshotIdx.
+		minPendingTs, snapshotIdx = startTs, index-1
+	}
+
+	numDiscarding := snapshotIdx - first + 1
+	tr.LazyPrintf("Got snapshotIdx: %d. MaxCommitTs: %d. Discarding: %d",
+		snapshotIdx, maxCommitTs, numDiscarding)
+	if int(numDiscarding) < discardN {
 		tr.LazyPrintf("Skipping snapshot because insufficient discard entries")
 		x.Printf("Skipping snapshot at index: %d. Insufficient discard entries: %d."+
-			" MinPendingStartTs: %d\n", snapshotIdx, snapshotIdx-first, minPending)
-		return nil
+			" MinPendingStartTs: %d\n", snapshotIdx, numDiscarding, minPendingTs)
+		return nil, nil
 	}
 
 	snap := &intern.Snapshot{
-		Context:           n.RaftContext,
-		Index:             snapshotIdx,
-		MinPendingStartTs: minPending,
+		Context: n.RaftContext,
+		Index:   snapshotIdx,
+		ReadTs:  maxCommitTs,
 	}
-	proposal := &intern.Proposal{
-		Snapshot: snap,
-	}
-	tr.LazyPrintf("Proposing snapshot: %+v\n", snap)
-
-	data, err := proposal.Marshal()
-	x.Check(err)
-	if err := n.Raft().Propose(context.Background(), data); err != nil {
-		tr.LazyPrintf("Error: %v", err)
-		tr.SetError()
-		return err
-	}
-	tr.LazyPrintf("Done best-effort proposing.")
-	return nil
+	tr.LazyPrintf("Got snapshot: %+v", snap)
+	return snap, nil
 }
 
 func (n *node) joinPeers() error {
@@ -883,12 +930,16 @@ func (n *node) InitAndStartNode() {
 		n.SetRaft(raft.RestartNode(n.Cfg))
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
-		if peerId, hasPeer := groups().MyPeer(); hasPeer {
+		if _, hasPeer := groups().MyPeer(); hasPeer {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
 
-			x.Printf("Retrieving snapshot from peer: %d", peerId)
-			n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
+			// TODO: This is an optimization, which adds complexity because it requires us to
+			// understand the Raft state of the node. Let's instead have the node retrieve the
+			// snapshot as needed after joining the group, instead of us forcing one upfront.
+			//
+			// x.Printf("Retrieving snapshot from peer: %d", peerId)
+			// n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
 
 			x.Println("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)

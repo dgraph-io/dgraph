@@ -8,8 +8,8 @@
 package worker
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"io"
 	"math"
 	"sync"
@@ -88,55 +88,33 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
 	c := intern.NewWorkerClient(conn)
 
-	n.RLock()
 	ctx := n.ctx
-	group := n.gid
-	stream, err := c.PredicateAndSchemaData(ctx,
-		&intern.SnapshotMeta{
-			ClientTs: n.RaftContext.SnapshotTs,
-			GroupId:  group,
-		})
-	n.RUnlock()
-	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
-		}
-		return 0, err
-	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Streaming data for group: %v", group)
-	}
-
-	kvs, err := stream.Recv()
+	snap, err := n.Snapshot()
 	if err != nil {
 		return 0, err
 	}
+	stream, err := c.StreamSnapshot(ctx, snap)
+	if err != nil {
+		return 0, err
+	}
+	// Before we write anything, we should drop all the data stored in ps.
+	if err := ps.DropAll(); err != nil {
+		return 0, err
+	}
 
-	x.AssertTrue(len(kvs.Kv) == 1)
-	ikv := kvs.Kv[0]
-	// First key has the snapshot ts from the leader.
-	x.AssertTrue(bytes.Equal(ikv.Key, []byte("min_ts")))
-	n.Lock()
-	// TODO: Fix up all this min ts logic. It's wrong.
-	n.RaftContext.SnapshotTs = ikv.Version
-	n.Unlock()
-
-	kvChan := make(chan *intern.KVS, 1000)
+	kvChan := make(chan *intern.KVS, 100)
 	che := make(chan error, 1)
 	go writeBatch(ctx, ps, kvChan, che)
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	for {
-		kvs, err = stream.Recv()
+		kvs, err := stream.Recv()
 		if err == io.EOF {
 			x.Printf("EOF has been reached\n")
 			break
 		}
 		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(err.Error())
-			}
 			close(kvChan)
 			return count, err
 		}
@@ -146,15 +124,9 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 			count += len(kvs.Kv)
 			// OK
 		case <-ctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Context timed out while streaming group: %v", group)
-			}
 			close(kvChan)
 			return 0, ctx.Err()
 		case err := <-che:
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while doing a batch write for group: %v", group)
-			}
 			close(kvChan)
 			// Important: Don't put return count, err
 			// There was a compiler bug which was fixed in 1.8.1
@@ -166,76 +138,57 @@ func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
 	close(kvChan)
 
 	if err := <-che; err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while doing a batch write for group: %v", group)
-		}
 		return count, err
-	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Streaming complete for group: %v", group)
 	}
 	x.Printf("Got %d keys. DONE.\n", count)
 	return count, nil
 }
 
-func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream intern.Worker_PredicateAndSchemaDataServer) error {
-	clientTs := m.ClientTs
+func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot,
+	stream intern.Worker_StreamSnapshotServer) error {
+	n := groups().Node
+	if n == nil {
+		return conn.ErrNoNode
+	}
+	// Indicate that we're streaming right now. Used to cancel
+	// calculateSnapshot.  However, this logic isn't foolproof. A leader might
+	// have already proposed a snapshot, which it can apply while this streaming
+	// is going on. That can happen after the reqSnap check we're doing below.
+	// However, I don't think we need to tackle this edge case for now.
+	atomic.AddInt32(&n.streaming, 1)
+	defer atomic.AddInt32(&n.streaming, -1)
 
 	if !x.IsTestRun() {
-		if !groups().ServesGroup(m.GroupId) {
-			return x.Errorf("Group %d not served.", m.GroupId)
-		}
-		n := groups().Node
 		if !n.AmLeader() {
-			return x.Errorf("Not leader of group: %d", m.GroupId)
+			return errNotLeader
 		}
 	}
+	snap, err := n.Snapshot()
+	if err != nil {
+		return err
+	}
+	x.Printf("Got StreamSnapshot request. Mine: %+v. Requested: %+v\n", snap, reqSnap)
+	if snap.Index != reqSnap.Index || snap.ReadTs != reqSnap.ReadTs {
+		return errors.New("Mismatching snapshot request")
+	}
 
-	// Any commit which happens in the future will have commitTs greater than
-	// this.
-	// TODO: Ensure all deltas have made to disk and read in memory before checking disk.
+	// We have matched the requested snapshot with what this node, the leader of the group, has.
+	// Now, we read all the posting lists stored below MinPendingStartTs, and stream them over the
+	// wire. The MinPendingStartTs stored as part of creation of Snapshot, tells us the readTs to
+	// use to read from the store. Anything below this timestamp, we should pick up.
+	//
+	// TODO: This would also pick up schema updates done "after" the snapshot index. Guess that
+	// might be OK. Otherwise, we'd want to version the schemas as well. Currently, they're stored
+	// at timestamp=1.
+
+	// TODO: Confirm that the bug is now over.
 	// BUG: There's a bug here due to which a node which doesn't see any transactions, but has real
 	// data fails to send that over, because of min_ts.
 
-	// TODO: This min_ts makes no sense. Let's fix this.
-	min_ts := posting.Oracle().PurgeTs()
-	x.Printf("Got min_ts: %d\n", min_ts)
-	// snap, err := groups().Node.Snapshot()
-	// if err != nil {
-	// 	return err
-	// }
-	// index := snap.Metadata.Index
-
-	// TODO: Why are we using MinTs() in the place when we should be using
-	// snapshot index? This is wrong.
-
-	// TODO: We are not using the snapshot time, because we don't store the
-	// transaction timestamp in the snapshot. If we did, we'd just use that
-	// instead of this. This causes issues if the server had received a snapshot
-	// to begin with, but had no active transactions. Then mints is always zero,
-	// hence nothing is read or sent in the stream.
-
-	// UPDATE: This doesn't look too bad. So, we're keeping track of the
-	// transaction timestamps on the side. And we're using those to figure out
-	// what to stream here. The snapshot index is not really being used for
-	// anything here.
-	// This whole transaction tracking business is complex and must be
-	// simplified to its essence.
-
-	// Send ts as first KV.
-	if err := stream.Send(&intern.KVS{
-		Kv: []*intern.KV{&intern.KV{
-			Key:     []byte("min_ts"),
-			Version: min_ts,
-		}},
-	}); err != nil {
-		return err
-	}
-
 	sl := streamLists{stream: stream, db: pstore}
 	sl.chooseKey = func(key []byte, version uint64) bool {
-		pk := x.Parse(key)
-		return version > clientTs || pk.IsSchema()
+		// Pick all keys.
+		return true
 	}
 	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
 		item := itr.Item()
@@ -253,6 +206,10 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 			}
 			return kv, nil
 		}
+		// We should keep reading the posting list instead of copying the key-value pairs directly,
+		// to consolidate the read logic in one place. This is more robust than trying to replicate
+		// a simplified key-value copy logic here, which still understands the BitCompletePosting
+		// and other bits about the way we store posting lists.
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -260,7 +217,7 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		return l.MarshalToKv()
 	}
 
-	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", min_ts); err != nil {
+	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
 		return err
 	}
 

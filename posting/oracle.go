@@ -88,8 +88,8 @@ func (o *oracle) RegisterStartTs(ts uint64) *Txn {
 	return txn
 }
 
-// MinPendingStartTs returns the min start ts which is currently pending a commit or abort decision.
-func (o *oracle) MinPendingStartTs() uint64 {
+// minPendingStartTs returns the min start ts which is currently pending a commit or abort decision.
+func (o *oracle) minPendingStartTs() uint64 {
 	o.RLock()
 	defer o.RUnlock()
 	min := uint64(math.MaxUint64)
@@ -107,7 +107,7 @@ func (o *oracle) PurgeTs() uint64 {
 	// o.MinPendingStartTs can be inf, but we don't want Zero to delete new
 	// records that haven't yet reached us. So, we also consider MaxAssigned
 	// that we have received so far, so only records below MaxAssigned are purged.
-	return x.Min(o.MinPendingStartTs()-1, o.MaxAssigned())
+	return x.Min(o.minPendingStartTs()-1, o.MaxAssigned())
 }
 
 func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {

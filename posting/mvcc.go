@@ -74,6 +74,10 @@ func (tx *Txn) CommitMutations(ctx context.Context, commitTs uint64) error {
 	sort.SliceStable(tx.deltas, func(i, j int) bool {
 		return bytes.Compare(tx.deltas[i].key, tx.deltas[j].key) < 0
 	})
+	// TODO: Simplify this. All we need to do is to get the PL for the key, and if it has the
+	// postings for the startTs, we commit them. Otherwise, we skip.
+	// Also, if the snapshot read ts is above the commit ts, then we just delete the postings from
+	// memory, instead of writing them back again.
 	var prevKey []byte
 	var pl *intern.PostingList
 	var plist *List

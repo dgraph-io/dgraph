@@ -269,7 +269,8 @@ func GetNoStore(key []byte) (*List, error) {
 	return getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 }
 
-// This doesn't sync, so call this only when you don't care about dirty posting lists in // memory(for example before populating snapshot) or after calling syncAllMarks
+// This doesn't sync, so call this only when you don't care about dirty posting lists in
+// memory(for example before populating snapshot) or after calling syncAllMarks
 func EvictLRU() {
 	lcache.Reset()
 }

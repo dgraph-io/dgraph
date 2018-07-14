@@ -10,7 +10,6 @@ package conn
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"math/rand"
 	"sync"
 
@@ -115,7 +114,7 @@ func (w *RaftServer) IsPeer(ctx context.Context, rc *intern.RaftContext) (*inter
 	error) {
 	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
-		return &intern.PeerResponse{}, errNoNode
+		return &intern.PeerResponse{}, ErrNoNode
 	}
 
 	if node._confState == nil {
@@ -139,7 +138,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	// TODO: Uncomment this after groups is removed.
 	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
-		return nil, errNoNode
+		return nil, ErrNoNode
 	}
 	// Only process one JoinCluster request at a time.
 	node.joinLock.Lock()
@@ -168,14 +167,12 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	return &api.Payload{}, err
 }
 
-var (
-	errNoNode = fmt.Errorf("No node has been set up yet")
-)
+var ()
 
 func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error {
 	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
-		return errNoNode
+		return ErrNoNode
 	}
 
 	c := make(chan error, 1)
@@ -198,7 +195,7 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 	if rc != nil {
 		n := w.GetNode()
 		if n == nil {
-			return &api.Payload{}, errNoNode
+			return &api.Payload{}, ErrNoNode
 		}
 		n.Connect(rc.Id, rc.Addr)
 	}
