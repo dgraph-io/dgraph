@@ -151,8 +151,8 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot,
 		return conn.ErrNoNode
 	}
 	// Indicate that we're streaming right now. Used to cancel calculateSnapshot.
-	atomic.StoreInt32(&n.streaming, 1)
-	defer atomic.StoreInt32(&n.streaming, 0)
+	atomic.AddInt32(&n.streaming, 1)
+	defer atomic.AddInt32(&n.streaming, -1)
 
 	if !x.IsTestRun() {
 		if !n.AmLeader() {

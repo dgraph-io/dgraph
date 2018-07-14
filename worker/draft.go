@@ -749,7 +749,7 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
 	defer tr.Finish()
 
-	if atomic.LoadInt32(&n.streaming) == 1 {
+	if atomic.LoadInt32(&n.streaming) > 0 {
 		tr.LazyPrintf("Skipping calculateSnapshot due to streaming")
 		return nil, nil
 	}
