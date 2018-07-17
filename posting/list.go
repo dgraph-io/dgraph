@@ -348,7 +348,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mutationMap), len(l.plist.Uids))
 		}
 	}
-	txn.AddDelta(l.key, mpost, checkConflict)
+	txn.AddDelta(l.key, checkConflict)
 	return nil
 }
 

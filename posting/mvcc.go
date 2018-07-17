@@ -9,7 +9,6 @@ package posting
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"math"
 	"sync/atomic"
@@ -36,10 +35,12 @@ func (t *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
 
-// TODO: Remove the middle arg.
-func (t *Txn) AddDelta(key []byte, _ *intern.Posting, checkConflict bool) {
+func (t *Txn) AddDelta(key []byte, checkConflict bool) {
 	t.Lock()
 	defer t.Unlock()
+	if t.deltas == nil {
+		t.deltas = make(map[string]bool)
+	}
 	t.deltas[string(key)] = checkConflict
 }
 
@@ -66,10 +67,6 @@ func (tx *Txn) CommitToDisk(writer *x.TxnWriter, commitTs uint64) error {
 	tx.Lock()
 	defer tx.Unlock()
 
-	// // Sort by keys so that we have all postings for same pl side by side.
-	// sort.SliceStable(tx.deltas, func(i, j int) bool {
-	// 	return bytes.Compare(tx.deltas[i].key, tx.deltas[j].key) < 0
-	// })
 	// TODO: Simplify this. All we need to do is to get the PL for the key, and if it has the
 	// postings for the startTs, we commit them. Otherwise, we skip.
 	// Also, if the snapshot read ts is above the commit ts, then we just delete the postings from
@@ -89,93 +86,16 @@ func (tx *Txn) CommitToDisk(writer *x.TxnWriter, commitTs uint64) error {
 		}
 	}
 	return nil
-	// for _, delta := range tx.deltas {
-	// }
-
-	// var prevKey []byte
-	// var pl *intern.PostingList
-	// var plist *List
-	// var err error
-	// i := 0
-	// for i < len(tx.deltas) {
-	// 	d := tx.deltas[i]
-	// 	if !bytes.Equal(prevKey, d.key) {
-	// 		plist, err = Get(d.key)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 		if plist.AlreadyCommitted(tx.StartTs) {
-	// 			// Delta already exists, so skip the key
-	// 			// There won't be any race from lru eviction, because we don't
-	// 			// commit in memory unless we write delta to disk.
-	// 			i++
-	// 			for i < len(tx.deltas) && bytes.Equal(tx.deltas[i].key, d.key) {
-	// 				i++
-	// 			}
-	// 			continue
-	// 		}
-	// 		pl = new(intern.PostingList)
-	// 	}
-	// 	prevKey = d.key
-	// 	var meta byte
-	// 	if d.posting.Op == Del && bytes.Equal(d.posting.Value, []byte(x.Star)) {
-	// 		pl.Postings = pl.Postings[:0]
-	// 		// Indicates that this is the full posting list.
-	// 		meta = BitEmptyPosting
-	// 	} else {
-	// 		midx := sort.Search(len(pl.Postings), func(idx int) bool {
-	// 			mp := pl.Postings[idx]
-	// 			return d.posting.Uid <= mp.Uid
-	// 		})
-	// 		if midx >= len(pl.Postings) {
-	// 			pl.Postings = append(pl.Postings, d.posting)
-	// 		} else if pl.Postings[midx].Uid == d.posting.Uid {
-	// 			// Replace
-	// 			pl.Postings[midx] = d.posting
-	// 		} else {
-	// 			pl.Postings = append(pl.Postings, nil)
-	// 			copy(pl.Postings[midx+1:], pl.Postings[midx:])
-	// 			pl.Postings[midx] = d.posting
-	// 		}
-	// 		meta = bitDeltaPosting
-	// 	}
-
-	// delta postings are pointers to the postings present in the Pl present in lru.
-	// commitTs is accessed using RLock & atomics except in marshal so no RLock.
-	// TODO: Fix this hack later
-	// plist.Lock()
-	// val, err := pl.Marshal()
-	// plist.Unlock()
-	// x.Check(err)
-	// if err = txn.SetWithMeta([]byte(d.key), val, meta); err == badger.ErrTxnTooBig {
-	// 	if err := txn.CommitAt(commitTs, nil); err != nil {
-	// 		return err
-	// 	}
-	// 	txn = pstore.NewTransactionAt(commitTs, true)
-	// 	if err := txn.SetWithMeta([]byte(d.key), val, meta); err != nil {
-	// 		return err
-	// 	}
-	// } else if err != nil {
-	// 	return err
-	// }
-	// i++
-	// }
-	// if err := txn.CommitAt(commitTs, nil); err != nil {
-	// 	return err
-	// }
-	// return tx.commitMutationsMemory(ctx, commitTs)
 }
 
-func (tx *Txn) CommitMutationsMemory(ctx context.Context, commitTs uint64) error {
+func (tx *Txn) CommitToMemory(commitTs uint64) error {
 	tx.Lock()
 	defer tx.Unlock()
-	defer func() {
-		atomic.StoreUint32(&tx.shouldAbort, 1)
-	}()
-	return tx.commitMutationsMemory(ctx, commitTs)
-}
-
-func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error {
+	// TODO: Figure out what shouldAbort is for, and use it correctly. This should really be
+	// shouldDiscard.
+	// defer func() {
+	// 	atomic.StoreUint32(&tx.shouldAbort, 1)
+	// }()
 	for key := range tx.deltas {
 		for {
 			plist, err := Get([]byte(key))
@@ -187,9 +107,11 @@ func (tx *Txn) commitMutationsMemory(ctx context.Context, commitTs uint64) error
 				time.Sleep(5 * time.Millisecond)
 				continue
 			}
-			if err != nil {
-				return err
+			if err == nil {
+				break
 			}
+			x.Errorf("While commiting to memory: %v\n", err)
+			return err
 		}
 	}
 	return nil

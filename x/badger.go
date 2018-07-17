@@ -33,6 +33,7 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 	if err := txn.SetWithMeta(key, val, meta); err != nil {
 		return err
 	}
+	w.wg.Add(1)
 	return txn.CommitAt(ts, w.cb)
 }
 

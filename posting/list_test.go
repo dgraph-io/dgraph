@@ -101,7 +101,7 @@ func TestAddMutation(t *testing.T) {
 	edge.ValueId = 9
 	edge.Label = "anti-testing"
 	addMutationHelper(t, l, edge, Set, txn)
-	l.CommitMutation(context.Background(), 1, 2)
+	l.CommitMutation(1, 2)
 
 	uids := []uint64{9, 69, 81}
 	checkUids(t, l, uids, 3)
@@ -144,7 +144,7 @@ func TestAddMutation_Value(t *testing.T) {
 	checkValue(t, ol, "oh hey there", txn.StartTs)
 
 	// Run the same check after committing.
-	ol.CommitMutation(context.Background(), txn.StartTs, txn.StartTs+1)
+	ol.CommitMutation(txn.StartTs, txn.StartTs+1)
 	_, err = ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	checkValue(t, ol, "oh hey there", uint64(3))
@@ -168,7 +168,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(context.Background(), 1, uint64(2))
+	ol.CommitMutation(1, uint64(2))
 	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
@@ -227,7 +227,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 	}
 	txn = &Txn{StartTs: 2}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(context.Background(), 2, uint64(3))
+	ol.CommitMutation(2, uint64(3))
 	require.EqualValues(t, 1, ol.Length(3, 0))
 	checkValue(t, ol, "newcars", 3)
 }
@@ -242,7 +242,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(context.Background(), 1, uint64(2))
+	ol.CommitMutation(1, uint64(2))
 	require.EqualValues(t, 1, ol.Length(2, 0))
 	checkValue(t, ol, "newcars", 2)
 
@@ -261,7 +261,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(3, 0))
 
 	// Commit sp* only in oracle, don't apply to pl yet
-	ol.CommitMutation(context.Background(), 3, 5)
+	ol.CommitMutation(3, 5)
 
 	// This read should ignore sp*, since readts is 4 and it was committed at 5
 	require.EqualValues(t, 1, ol.Length(4, 0))
@@ -306,7 +306,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Del, txn)
-	ol.CommitMutation(context.Background(), 1, uint64(2))
+	ol.CommitMutation(1, uint64(2))
 	require.EqualValues(t, 0, ol.Length(uint64(3), 0))
 
 	// Set value to newcars, but don't merge yet.
@@ -316,7 +316,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	}
 	txn = &Txn{StartTs: 3}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(context.Background(), 3, uint64(4))
+	ol.CommitMutation(3, uint64(4))
 	require.EqualValues(t, 1, ol.Length(5, 0))
 	checkValue(t, ol, "newcars", 5)
 }
@@ -333,7 +333,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(context.Background(), 1, uint64(2))
+	ol.CommitMutation(1, uint64(2))
 	require.Equal(t, 1, ol.Length(uint64(3), 0))
 	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
@@ -380,7 +380,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(context.Background(), 1, uint64(2))
+	ol.CommitMutation(1, uint64(2))
 	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
@@ -422,7 +422,6 @@ func TestAddMutation_mrjn1(t *testing.T) {
 }
 
 func TestMillion(t *testing.T) {
-	ctx := context.Background()
 	key := x.DataKey("bal", 1331)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
@@ -434,7 +433,7 @@ func TestMillion(t *testing.T) {
 		}
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.CommitMutation(ctx, uint64(i), uint64(i)+1))
+		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
 		commits++
 	}
 	opt := ListOptions{ReadTs: uint64(N) + 1}
@@ -470,10 +469,10 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		require.EqualValues(t, uint64(i), list.Uids[0])
 	}
 	require.EqualValues(t, 0, ol.Length(readTs, 0))
-	require.NoError(t, ol.AbortTransaction(ctx, uint64(1)))
-	require.NoError(t, ol.CommitMutation(ctx, 3, 4))
-	require.NoError(t, ol.CommitMutation(ctx, 6, 10))
-	require.NoError(t, ol.CommitMutation(ctx, 9, 14))
+	require.NoError(t, ol.CommitMutation(1, 0))
+	require.NoError(t, ol.CommitMutation(3, 4))
+	require.NoError(t, ol.CommitMutation(6, 10))
+	require.NoError(t, ol.CommitMutation(9, 14))
 	require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits.
 
 	{
@@ -494,7 +493,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		require.NoError(t, err)
 
 		require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits should still be found.
-		require.NoError(t, ol.CommitMutation(ctx, 7, 11))
+		require.NoError(t, ol.CommitMutation(7, 11))
 
 		require.EqualValues(t, 2, ol.Length(10, 0)) // Two commits should be found.
 		require.EqualValues(t, 1, ol.Length(12, 0)) // Only one commit should be found.
@@ -508,12 +507,12 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		txn := &Txn{StartTs: 5}
 		err := ol.AddMutation(ctx, txn, edge)
 		require.NoError(t, err)
-		require.NoError(t, ol.CommitMutation(ctx, 5, 7))
+		require.NoError(t, ol.CommitMutation(5, 7))
 
 		// Commits are:
 		// 4, 7 (Delete *), 10, 11 (Delete *), 14
 		require.EqualValues(t, 1, ol.Length(8, 0)) // Nothing below 8, but consider itself.
-		require.NoError(t, ol.AbortTransaction(ctx, 8))
+		require.NoError(t, ol.CommitMutation(8, 0))
 		require.EqualValues(t, 0, ol.Length(8, 0))  // Nothing <= 8.
 		require.EqualValues(t, 1, ol.Length(10, 0)) // Find committed 10.
 		require.EqualValues(t, 1, ol.Length(12, 0)) // Find committed 11.
@@ -544,7 +543,7 @@ func TestAddMutation_gru(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
-		ol.CommitMutation(context.Background(), 1, uint64(2))
+		ol.CommitMutation(1, uint64(2))
 		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
@@ -562,7 +561,7 @@ func TestAddMutation_gru(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Del, txn)
-		ol.CommitMutation(context.Background(), 3, uint64(4))
+		ol.CommitMutation(3, uint64(4))
 		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
@@ -588,7 +587,7 @@ func TestAddMutation_gru2(t *testing.T) {
 		}
 		txn = &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
-		ol.CommitMutation(context.Background(), 1, uint64(2))
+		ol.CommitMutation(1, uint64(2))
 		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
@@ -614,7 +613,7 @@ func TestAddMutation_gru2(t *testing.T) {
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
 
-		ol.CommitMutation(context.Background(), 3, uint64(4))
+		ol.CommitMutation(3, uint64(4))
 	}
 
 	// Posting list should just have the new tag.
@@ -637,7 +636,7 @@ func TestAddAndDelMutation(t *testing.T) {
 		}
 		txn := &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
-		ol.CommitMutation(context.Background(), 1, uint64(2))
+		ol.CommitMutation(1, uint64(2))
 		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
@@ -652,7 +651,7 @@ func TestAddAndDelMutation(t *testing.T) {
 		txn := &Txn{StartTs: 3}
 		addMutationHelper(t, ol, edge, Del, txn)
 		addMutationHelper(t, ol, edge, Del, txn)
-		ol.CommitMutation(context.Background(), 3, uint64(4))
+		ol.CommitMutation(3, uint64(4))
 
 		checkUids(t, ol, []uint64{}, 5)
 
@@ -786,7 +785,7 @@ func TestDelete(t *testing.T) {
 	edge.Value = []byte(x.Star)
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 0))
-	ol.CommitMutation(context.Background(), txn.StartTs, txn.StartTs+1)
+	ol.CommitMutation(txn.StartTs, txn.StartTs+1)
 	commited, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, commited)
@@ -814,7 +813,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 400))
 
 	// Commit to database.
-	ol.CommitMutation(context.Background(), txn.StartTs, txn.StartTs+1)
+	ol.CommitMutation(txn.StartTs, txn.StartTs+1)
 	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
