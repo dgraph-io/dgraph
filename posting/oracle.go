@@ -33,7 +33,6 @@ func init() {
 // use to go fetch the posting lists and update the txn status in them.
 type delta struct {
 	key           []byte
-	posting       *intern.Posting
 	checkConflict bool // Check conflict detection.
 }
 
@@ -44,8 +43,9 @@ type Txn struct {
 	shouldAbort uint32
 	// Fields which can changed after init
 	sync.Mutex
-	deltas     []delta
-	nextKeyIdx int
+	// Deltas keeps track of the posting list keys, and whether they should be considered for
+	// conflict detection or not.
+	deltas map[string]bool
 
 	// Keeps track of last update wall clock. We use this fact later to
 	// determine unhealthy, stale txns.
@@ -191,8 +191,8 @@ func (o *oracle) GetTxn(startTs uint64) *Txn {
 func (t *Txn) matchesDelta(ok func(key []byte) bool) bool {
 	t.Lock()
 	defer t.Unlock()
-	for _, d := range t.deltas {
-		if ok(d.key) {
+	for key := range t.deltas {
+		if ok([]byte(key)) {
 			return true
 		}
 	}
