@@ -416,8 +416,6 @@ func (n *node) processApplyCh() {
 }
 
 func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
-	ctx := n.Ctx(pkey)
-
 	// First let's commit all mutations to disk.
 	writer := x.TxnWriter{DB: pstore}
 	toDisk := func(start, commit uint64) {
@@ -426,7 +424,8 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 			return
 		}
 		for err := txn.CommitToDisk(&writer, commit); err != nil; {
-			x.Errorf("Error while commiting to disk: %v", err)
+			x.Printf("Error while applying txn status to disk (%d -> %d): %v",
+				start, commit, err)
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
@@ -439,24 +438,20 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	}
 
 	// Now let's commit all mutations to memory.
-	applyTxnStatus := func(startTs, commitTs uint64) {
-		var err error
-		for i := 0; i < 3; i++ {
-			err = commitOrAbort(ctx, startTs, commitTs)
-			if err == nil {
-				break
-			}
-			x.Printf("Error while applying txn status (%d -> %d): %v", startTs, commitTs, err)
+	toMemory := func(start, commit uint64) {
+		txn := posting.Oracle().GetTxn(start)
+		if txn == nil {
+			return
 		}
-		// TODO: Even after multiple tries, if we're unable to apply the status of a transaction,
-		// what should we do? Maybe do a printf, and let them know that there might be a disk issue.
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Status of commitOrAbort startTs %d: %v\n", startTs, err)
+		for err := txn.CommitToMemory(commit); err != nil; {
+			x.Printf("Error while applying txn status to memory (%d -> %d): %v",
+				start, commit, err)
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 
 	for _, txn := range delta.Txns {
-		applyTxnStatus(txn.StartTs, txn.CommitTs)
+		toMemory(txn.StartTs, txn.CommitTs)
 	}
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)

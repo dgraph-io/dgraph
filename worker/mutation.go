@@ -494,7 +494,7 @@ func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
 		return nil
 	}
 	// Ensures that we wait till prewrite is applied
-	return txn.CommitMutationsMemory(ctx, commitTs)
+	return txn.CommitToMemory(commitTs)
 }
 
 type res struct {
