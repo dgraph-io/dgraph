@@ -418,11 +418,32 @@ func (n *node) processApplyCh() {
 func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	ctx := n.Ctx(pkey)
 
+	// First let's commit all mutations to disk.
+	writer := x.TxnWriter{DB: pstore}
+	toDisk := func(start, commit uint64) {
+		txn := posting.Oracle().GetTxn(start)
+		if txn == nil {
+			return
+		}
+		for err := txn.CommitToDisk(&writer, commit); err != nil; {
+			x.Errorf("Error while commiting to disk: %v", err)
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	for _, status := range delta.Txns {
+		toDisk(status.StartTs, status.CommitTs)
+	}
+	if err := writer.Flush(); err != nil {
+		x.Errorf("Error while flushing to disk: %v", err)
+		return err
+	}
+
+	// Now let's commit all mutations to memory.
 	applyTxnStatus := func(startTs, commitTs uint64) {
 		var err error
 		for i := 0; i < 3; i++ {
 			err = commitOrAbort(ctx, startTs, commitTs)
-			if err == nil || err == posting.ErrInvalidTxn {
+			if err == nil {
 				break
 			}
 			x.Printf("Error while applying txn status (%d -> %d): %v", startTs, commitTs, err)
@@ -437,8 +458,7 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 	for _, txn := range delta.Txns {
 		applyTxnStatus(txn.StartTs, txn.CommitTs)
 	}
-	// TODO: Use MaxPending to track the txn watermark. That's the only thing we need really.
-	// delta.GetMaxPending
+	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
 }

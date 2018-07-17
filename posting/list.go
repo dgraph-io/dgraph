@@ -21,7 +21,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgryski/go-farm"
-	"github.com/gogo/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
@@ -353,11 +352,14 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	return nil
 }
 
-func (l *List) GetMutation(startTs uint64) *intern.PostingList {
+// GetMutation returns a marshaled version of posting list mutation stored internally.
+func (l *List) GetMutation(startTs uint64) []byte {
 	l.RLock()
 	defer l.RUnlock()
 	if pl, ok := l.mutationMap[startTs]; ok {
-		return proto.Clone(pl).(*intern.PostingList)
+		data, err := pl.Marshal()
+		x.Check(err)
+		return data
 	}
 	return nil
 }
@@ -369,17 +371,14 @@ func (l *List) GetMutation(startTs uint64) *intern.PostingList {
 // 	return !ok
 // }
 
-func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) error {
+func (l *List) CommitMutation(startTs, commitTs uint64) error {
 	l.Lock()
 	defer l.Unlock()
-	return l.commitMutation(ctx, startTs, commitTs)
+	return l.commitMutation(startTs, commitTs)
 }
 
-func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) error {
+func (l *List) commitMutation(startTs, commitTs uint64) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("DELETEME set to true. Temporary error.")
-		}
 		return ErrRetry
 	}
 

@@ -491,13 +491,10 @@ func populateMutationMap(src *intern.Mutations) map[uint32]*intern.Mutations {
 func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
 	txn := posting.Oracle().GetTxn(startTs)
 	if txn == nil {
-		return posting.ErrInvalidTxn
+		return nil
 	}
 	// Ensures that we wait till prewrite is applied
-	if commitTs == 0 {
-		return txn.AbortMutations(ctx)
-	}
-	return txn.CommitMutations(ctx, commitTs)
+	return txn.CommitMutationsMemory(ctx, commitTs)
 }
 
 type res struct {
