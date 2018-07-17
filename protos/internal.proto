@@ -396,7 +396,7 @@ service Zero {
 	rpc AssignUids (Num)               returns (api.AssignedIds) {}
 	rpc Timestamps (Num)               returns (api.AssignedIds) {}
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
-	rpc TryAbort (TxnTimestamps)       returns (TxnTimestamps) {}
+	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
 }
 
 service Worker {

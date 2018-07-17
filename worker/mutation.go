@@ -585,32 +585,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 }
 
 func tryAbortTransactions(startTimestamps []uint64) {
-	pl := groups().Leader(0)
-	if pl == nil {
-		return
-	}
-	zc := intern.NewZeroClient(pl.Get())
 	// Aborts if not already committed.
 	req := &intern.TxnTimestamps{Ts: startTimestamps}
-	resp, err := zc.TryAbort(context.Background(), req)
-	for err != nil {
-		x.Printf("Error while trying to abort txns: %v\n", err)
-		resp, err = zc.TryAbort(context.Background(), req)
-	}
-	commitTimestamps := resp.Ts
-	x.AssertTrue(len(startTimestamps) == len(commitTimestamps))
 
-	for i, startTs := range startTimestamps {
-		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTimestamps[i]}
-		err := commitOrAbort(context.Background(), tctx.StartTs, tctx.CommitTs)
-		// Transaction could already have been aborted in which case it would be deleted from the
-		// transactions map and we should just continue.
-		// TODO - Make sure all other errors are transient, we don't want to be stuck in an infinite
-		// loop.
-		for err != nil && err != posting.ErrInvalidTxn {
-			x.Printf("Error while locally aborting txns: %v\n", err)
-			// This will fail only due to badger error.
-			err = commitOrAbort(context.Background(), tctx.StartTs, tctx.CommitTs)
-		}
-	}
+	err := groups().Node.blockingAbort(req)
+	x.Printf("tryAbortTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }

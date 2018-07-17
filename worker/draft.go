@@ -712,29 +712,44 @@ func (n *node) Stop() {
 	<-n.done // wait for Run to respond.
 }
 
+var errConnection = errors.New("No connection exists")
+
+func (n *node) blockingAbort(req *intern.TxnTimestamps) error {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return errConnection
+	}
+	zc := intern.NewZeroClient(pl.Get())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	delta, err := zc.TryAbort(ctx, req)
+	x.Printf("Aborted txns with start ts: %v. Error: %v\n", req.Ts, err)
+	if err != nil || len(delta.Txns) == 0 {
+		return err
+	}
+
+	// Let's propose the txn updates received from Zero. This is important because there are edge
+	// cases where a txn status might have been missed by the group.
+	n.elog.Printf("Proposing abort txn delta: %+v\n", delta)
+	proposal := &intern.Proposal{Delta: delta}
+	return n.proposeAndWait(n.ctx, proposal)
+}
+
 // abortOldTransactions would find txns which have done pre-writes, but have been pending for a
 // while. The time that is used is based on the last pre-write seen, so if a txn is doing a
 // pre-write multiple times, we'll pick the timestamp of the last pre-write. Thus, this function
 // would only act on the txns which have not been active in the last N minutes, and send them for
 // abort. Note that only the leader runs this function.
-// NOTE: We might need to get the results of TryAbort and propose them. But, it's unclear if we need
-// to, because Zero should stream out the aborts anyway.
 func (n *node) abortOldTransactions() {
-	pl := groups().Leader(0)
-	if pl == nil {
-		return
-	}
-	zc := intern.NewZeroClient(pl.Get())
 	// Aborts if not already committed.
 	startTimestamps := posting.Oracle().TxnOlderThan(5 * time.Minute)
 	if len(startTimestamps) == 0 {
 		return
 	}
 	req := &intern.TxnTimestamps{Ts: startTimestamps}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_, err := zc.TryAbort(ctx, req)
-	x.Printf("Aborted txns with start ts: %v. Error: %v\n", startTimestamps, err)
+	err := n.blockingAbort(req)
+	x.Printf("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
