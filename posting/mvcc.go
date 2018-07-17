@@ -64,6 +64,9 @@ func (t *Txn) Fill(ctx *api.TxnContext) {
 // last Snapshot Ts, to determine how much of the PL to rollup. We only want to roll up the deltas,
 // with commit ts <= snapshot ts, and not above.
 func (tx *Txn) CommitToDisk(writer *x.TxnWriter, commitTs uint64) error {
+	if commitTs == 0 {
+		return nil
+	}
 	tx.Lock()
 	defer tx.Unlock()
 
