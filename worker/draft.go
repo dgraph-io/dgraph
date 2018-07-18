@@ -743,11 +743,12 @@ func (n *node) blockingAbort(req *intern.TxnTimestamps) error {
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
 	// Aborts if not already committed.
-	startTimestamps := posting.Oracle().TxnOlderThan(5 * time.Minute)
-	if len(startTimestamps) == 0 {
+	starts := posting.Oracle().TxnOlderThan(5 * time.Minute)
+	if len(starts) == 0 {
 		return
 	}
-	req := &intern.TxnTimestamps{Ts: startTimestamps}
+	x.Printf("Found %d old transactions. Acting to abort them.\n", len(starts))
+	req := &intern.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
 	x.Printf("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
@@ -820,6 +821,7 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 
 	// This map holds a start ts as key, and Raft index as value.
 	startToIdx := make(map[uint64]uint64)
+	done := make(map[uint64]struct{})
 	var maxCommitTs, snapshotIdx uint64
 	for _, entry := range entries {
 		if entry.Type != raftpb.EntryNormal {
@@ -831,14 +833,22 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 			tr.SetError()
 			return nil, err
 		}
-		if proposal.Mutations != nil {
+		// We only track the mutations which contain edges. Not the mutations
+		// which have schema, or dropall, etc.
+		if proposal.Mutations != nil && len(proposal.Mutations.Edges) > 0 {
 			ts := proposal.Mutations.StartTs
 			if _, has := startToIdx[ts]; !has {
 				startToIdx[ts] = entry.Index
 			}
+			if _, has := done[ts]; has {
+				x.Errorf("Found a mutation after txn was done: %d. Ignoring.\n", ts)
+			}
 		} else if proposal.Delta != nil {
 			for _, txn := range proposal.Delta.GetTxns() {
-				delete(startToIdx, txn.StartTs)
+				// This mutation is done. We use done map, instead of deleting from startToIdx map,
+				// so that if we have a mutation which came after an abort of a transaction, we can
+				// still mark it as done, and not get stuck with that mutation forever.
+				done[txn.StartTs] = struct{}{}
 				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 			}
 			snapshotIdx = entry.Index
@@ -852,6 +862,9 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 	// It is possible that this loop doesn't execute, because all transactions have been committed.
 	// In that case, we'll default to snapshotIdx value from above.
 	for startTs, index := range startToIdx {
+		if _, ok := done[startTs]; ok {
+			continue
+		}
 		if minPendingTs < startTs {
 			continue
 		}
