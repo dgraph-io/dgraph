@@ -364,13 +364,6 @@ func (l *List) GetMutation(startTs uint64) []byte {
 	return nil
 }
 
-// func (l *List) AlreadyCommitted(startTs uint64) bool {
-// 	l.RLock()
-// 	defer l.RUnlock()
-// 	_, ok := l.activeTxns[startTs]
-// 	return !ok
-// }
-
 func (l *List) CommitMutation(startTs, commitTs uint64) error {
 	l.Lock()
 	defer l.Unlock()
