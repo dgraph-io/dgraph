@@ -29,9 +29,8 @@ type Oracle struct {
 	x.SafeMutex
 	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
-	rowCommit   map[string]uint64   // fp(key) -> commitTs. Used to detect conflict.
-	aborts      map[uint64]struct{} // key is startTs
-	maxAssigned uint64              // max transaction assigned by us.
+	rowCommit   map[string]uint64 // fp(key) -> commitTs. Used to detect conflict.
+	maxAssigned uint64            // max transaction assigned by us.
 
 	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
 	tmax uint64
@@ -46,7 +45,6 @@ type Oracle struct {
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	o.rowCommit = make(map[string]uint64)
-	o.aborts = make(map[uint64]struct{})
 	o.subscribers = make(map[int]chan *intern.OracleDelta)
 	o.updates = make(chan *intern.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init()
@@ -74,9 +72,6 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 }
 
 func (o *Oracle) purgeBelow(minTs uint64) {
-	x.Printf("purging below ts:%d, len(o.commits):%d, len(o.aborts):%d"+
-		", len(o.rowCommit):%d\n",
-		minTs, len(o.commits), len(o.aborts), len(o.rowCommit))
 	o.Lock()
 	defer o.Unlock()
 
@@ -84,11 +79,6 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	for ts := range o.commits {
 		if ts < minTs {
 			delete(o.commits, ts)
-		}
-	}
-	for ts := range o.aborts {
-		if ts < minTs {
-			delete(o.aborts, ts)
 		}
 	}
 	// There is no transaction running with startTs less than minTs
@@ -99,6 +89,9 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 		}
 	}
 	o.tmax = minTs
+	x.Printf("Purged below ts:%d, len(o.commits):%d"+
+		", len(o.rowCommit):%d\n",
+		minTs, len(o.commits), len(o.rowCommit))
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
@@ -114,13 +107,6 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 	return nil
 }
 
-func (o *Oracle) aborted(startTs uint64) bool {
-	o.Lock()
-	defer o.Unlock()
-	_, ok := o.aborts[startTs]
-	return ok
-}
-
 func sortTxns(delta *intern.OracleDelta) {
 	sort.Slice(delta.Txns, func(i, j int) bool {
 		return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
@@ -133,10 +119,6 @@ func (o *Oracle) currentState() *intern.OracleDelta {
 	for start, commit := range o.commits {
 		resp.Txns = append(resp.Txns,
 			&intern.TxnStatus{StartTs: start, CommitTs: commit})
-	}
-	for abort := range o.aborts {
-		resp.Txns = append(resp.Txns,
-			&intern.TxnStatus{StartTs: abort, CommitTs: 0})
 	}
 	resp.MaxAssigned = o.maxAssigned
 	return resp
@@ -205,11 +187,8 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 	if _, ok := o.commits[src.StartTs]; ok {
 		return false
 	}
-	if _, ok := o.aborts[src.StartTs]; ok {
-		return false
-	}
 	if src.Aborted {
-		o.aborts[src.StartTs] = struct{}{}
+		o.commits[src.StartTs] = 0
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
@@ -220,13 +199,10 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
 	if o.updateCommitStatusHelper(index, src) {
 		delta := new(intern.OracleDelta)
-		if src.Aborted {
-			delta.Txns = append(delta.Txns,
-				&intern.TxnStatus{StartTs: src.StartTs, CommitTs: 0})
-		} else {
-			delta.Txns = append(delta.Txns,
-				&intern.TxnStatus{StartTs: src.StartTs, CommitTs: src.CommitTs})
-		}
+		delta.Txns = append(delta.Txns, &intern.TxnStatus{
+			StartTs:  src.StartTs,
+			CommitTs: o.commitTs(src.StartTs),
+		})
 		o.updates <- delta
 	}
 }
@@ -258,6 +234,8 @@ func (o *Oracle) MaxPending() uint64 {
 
 var errConflict = errors.New("Transaction conflict")
 
+// proposeTxn proposes a txn update, and then updates src to reflect the state
+// of the commit after proposal is run.
 func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 	var zp intern.ZeroProposal
 	zp.Txn = &api.TxnContext{
@@ -265,11 +243,24 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 		CommitTs: src.CommitTs,
 		Aborted:  src.Aborted,
 	}
-	return s.Node.proposeAndWait(ctx, &zp)
+	if err := s.Node.proposeAndWait(ctx, &zp); err != nil {
+		return err
+	}
+
+	// There might be race between this proposal trying to commit and predicate
+	// move aborting it. A predicate move, triggered by Zero, would abort all
+	// pending transactions.  At the same time, a client which has already done
+	// mutations, can proceed to commit it. A race condition can happen here,
+	// with both proposing their respective states, only one can succeed after
+	// the proposal is done. So, check again to see the fate of the transaction
+	// here.
+	src.CommitTs = s.orc.commitTs(src.StartTs)
+	if src.CommitTs == 0 {
+		src.Aborted = true
+	}
+	return nil
 }
 
-// TODO: This function implies that src has been modified to represent the latest status of the
-// transaction. I don't think that's happening properly.
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
@@ -328,16 +319,9 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	}
 	// Propose txn should be used to set watermark as done.
 	err = s.proposeTxn(ctx, src)
-	// There might be race between this proposal trying to commit and predicate
-	// move aborting it. A predicate move, triggered by Zero, would abort all pending transactions.
-	// At the same time, a client which has already done mutations, can proceed to commit it. A race
-	// condition can happen here, with both proposing their respective states, only one can succeed
-	// after the proposal is done. So, check again to see the fate of the transaction here.
-	if s.orc.aborted(src.StartTs) {
-		src.Aborted = true
-	}
 	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
 	s.orc.doneUntil.Done(src.CommitTs)
+	x.Printf("propose txn: %v\n", err)
 	return err
 }
 
@@ -404,7 +388,7 @@ func (s *Server) SyncedUntil() uint64 {
 }
 
 func (s *Server) purgeOracle() {
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 30)
 	defer ticker.Stop()
 
 	var lastPurgeTs uint64
