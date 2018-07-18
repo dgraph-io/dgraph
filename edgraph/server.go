@@ -355,8 +355,11 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		// ApplyMutations failed. We now want to abort the transaction,
 		// ignoring any error that might occur during the abort (the user would
 		// care more about the previous error).
-		ctxn := &api.TxnContext{StartTs: mu.StartTs, Aborted: true}
-		_, _ = worker.CommitOverNetwork(ctx, ctxn)
+		if resp.Context == nil {
+			resp.Context = &api.TxnContext{StartTs: mu.StartTs}
+		}
+		resp.Context.Aborted = true
+		_, _ = worker.CommitOverNetwork(ctx, resp.Context)
 
 		if err == y.ErrConflict {
 			// We have already aborted the transaction, so the error message should reflect that.
