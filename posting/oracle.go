@@ -28,14 +28,6 @@ func init() {
 	o.init()
 }
 
-// This structure is useful to keep track of which keys were updated, and whether they should be
-// used for conflict detection or not. When a txn is marked committed or aborted, this is what we
-// use to go fetch the posting lists and update the txn status in them.
-type delta struct {
-	key           []byte
-	checkConflict bool // Check conflict detection.
-}
-
 type Txn struct {
 	StartTs uint64
 
@@ -44,7 +36,8 @@ type Txn struct {
 	// Fields which can changed after init
 	sync.Mutex
 	// Deltas keeps track of the posting list keys, and whether they should be considered for
-	// conflict detection or not.
+	// conflict detection or not. When a txn is marked committed or aborted, we use the keys stored
+	// here to determine which posting lists to get and update.
 	deltas map[string]bool
 
 	// Keeps track of last update wall clock. We use this fact later to

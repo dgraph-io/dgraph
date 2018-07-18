@@ -437,7 +437,8 @@ OUTER:
 	}
 }
 
-func (s *Server) TryAbort(ctx context.Context, txns *intern.TxnTimestamps) (*intern.OracleDelta, error) {
+func (s *Server) TryAbort(ctx context.Context,
+	txns *intern.TxnTimestamps) (*intern.OracleDelta, error) {
 	delta := &intern.OracleDelta{}
 	for _, startTs := range txns.Ts {
 		// Do via proposals to avoid race
