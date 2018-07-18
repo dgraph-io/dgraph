@@ -416,29 +416,44 @@ func (n *node) processApplyCh() {
 }
 
 func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
-	ctx := n.Ctx(pkey)
-
-	applyTxnStatus := func(startTs, commitTs uint64) {
-		var err error
-		for i := 0; i < 3; i++ {
-			err = commitOrAbort(ctx, startTs, commitTs)
-			if err == nil || err == posting.ErrInvalidTxn {
-				break
-			}
-			x.Printf("Error while applying txn status (%d -> %d): %v", startTs, commitTs, err)
+	// First let's commit all mutations to disk.
+	writer := x.TxnWriter{DB: pstore}
+	toDisk := func(start, commit uint64) {
+		txn := posting.Oracle().GetTxn(start)
+		if txn == nil {
+			return
 		}
-		// TODO: Even after multiple tries, if we're unable to apply the status of a transaction,
-		// what should we do? Maybe do a printf, and let them know that there might be a disk issue.
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Status of commitOrAbort startTs %d: %v\n", startTs, err)
+		for err := txn.CommitToDisk(&writer, commit); err != nil; {
+			x.Printf("Error while applying txn status to disk (%d -> %d): %v",
+				start, commit, err)
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	for _, status := range delta.Txns {
+		toDisk(status.StartTs, status.CommitTs)
+	}
+	if err := writer.Flush(); err != nil {
+		x.Errorf("Error while flushing to disk: %v", err)
+		return err
+	}
+
+	// Now let's commit all mutations to memory.
+	toMemory := func(start, commit uint64) {
+		txn := posting.Oracle().GetTxn(start)
+		if txn == nil {
+			return
+		}
+		for err := txn.CommitToMemory(commit); err != nil; {
+			x.Printf("Error while applying txn status to memory (%d -> %d): %v",
+				start, commit, err)
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 
 	for _, txn := range delta.Txns {
-		applyTxnStatus(txn.StartTs, txn.CommitTs)
+		toMemory(txn.StartTs, txn.CommitTs)
 	}
-	// TODO: Use MaxPending to track the txn watermark. That's the only thing we need really.
-	// delta.GetMaxPending
+	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
 }
@@ -697,29 +712,44 @@ func (n *node) Stop() {
 	<-n.done // wait for Run to respond.
 }
 
+var errConnection = errors.New("No connection exists")
+
+func (n *node) blockingAbort(req *intern.TxnTimestamps) error {
+	pl := groups().Leader(0)
+	if pl == nil {
+		return errConnection
+	}
+	zc := intern.NewZeroClient(pl.Get())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	delta, err := zc.TryAbort(ctx, req)
+	x.Printf("Aborted txns with start ts: %v. Error: %v\n", req.Ts, err)
+	if err != nil || len(delta.Txns) == 0 {
+		return err
+	}
+
+	// Let's propose the txn updates received from Zero. This is important because there are edge
+	// cases where a txn status might have been missed by the group.
+	n.elog.Printf("Proposing abort txn delta: %+v\n", delta)
+	proposal := &intern.Proposal{Delta: delta}
+	return n.proposeAndWait(n.ctx, proposal)
+}
+
 // abortOldTransactions would find txns which have done pre-writes, but have been pending for a
 // while. The time that is used is based on the last pre-write seen, so if a txn is doing a
 // pre-write multiple times, we'll pick the timestamp of the last pre-write. Thus, this function
 // would only act on the txns which have not been active in the last N minutes, and send them for
 // abort. Note that only the leader runs this function.
-// NOTE: We might need to get the results of TryAbort and propose them. But, it's unclear if we need
-// to, because Zero should stream out the aborts anyway.
 func (n *node) abortOldTransactions() {
-	pl := groups().Leader(0)
-	if pl == nil {
-		return
-	}
-	zc := intern.NewZeroClient(pl.Get())
 	// Aborts if not already committed.
 	startTimestamps := posting.Oracle().TxnOlderThan(5 * time.Minute)
 	if len(startTimestamps) == 0 {
 		return
 	}
 	req := &intern.TxnTimestamps{Ts: startTimestamps}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_, err := zc.TryAbort(ctx, req)
-	x.Printf("Aborted txns with start ts: %v. Error: %v\n", startTimestamps, err)
+	err := n.blockingAbort(req)
+	x.Printf("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:

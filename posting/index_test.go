@@ -116,7 +116,11 @@ func addMutation(t *testing.T, l *List, edge *intern.DirectedEdge, op uint32,
 		err := l.AddMutation(context.Background(), txn, edge)
 		require.NoError(t, err)
 	}
-	require.NoError(t, txn.CommitMutations(context.Background(), commitTs))
+
+	writer := &x.TxnWriter{DB: pstore}
+	require.NoError(t, txn.CommitToDisk(writer, commitTs))
+	require.NoError(t, writer.Flush())
+	require.NoError(t, txn.CommitToMemory(commitTs))
 }
 
 const schemaVal = `
@@ -225,7 +229,7 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 		StartTs: startTs,
 	}
 	txn.addReverseMutation(context.Background(), edge)
-	require.NoError(t, txn.CommitMutations(context.Background(), commitTs))
+	require.NoError(t, txn.CommitToMemory(commitTs))
 }
 
 func TestRebuildIndex(t *testing.T) {

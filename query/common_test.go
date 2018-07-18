@@ -66,7 +66,7 @@ func addEdge(t *testing.T, attr string, src uint64, edge *intern.DirectedEdge) {
 		l.AddMutationWithIndex(context.Background(), edge, txn))
 
 	commit := timestamp()
-	require.NoError(t, txn.CommitMutations(context.Background(), commit))
+	require.NoError(t, txn.CommitToMemory(commit))
 	delta := &intern.OracleDelta{MaxAssigned: commit}
 	delta.Txns = append(delta.Txns, &intern.TxnStatus{StartTs: startTs, CommitTs: commit})
 	posting.Oracle().ProcessDelta(delta)

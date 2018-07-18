@@ -61,7 +61,11 @@ func commitTransaction(t *testing.T, edge *intern.DirectedEdge, l *posting.List)
 	require.NoError(t, err)
 
 	commit := commitTs(startTs)
-	require.NoError(t, txn.CommitMutations(context.Background(), commit))
+
+	writer := &x.TxnWriter{DB: pstore}
+	require.NoError(t, txn.CommitToDisk(writer, commit))
+	require.NoError(t, writer.Flush())
+	require.NoError(t, txn.CommitToMemory(commit))
 }
 
 // Hacky tests change laster

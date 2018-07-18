@@ -268,6 +268,8 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 	return s.Node.proposeAndWait(ctx, &zp)
 }
 
+// TODO: This function implies that src has been modified to represent the latest status of the
+// transaction. I don't think that's happening properly.
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
@@ -435,18 +437,21 @@ OUTER:
 	}
 }
 
-func (s *Server) TryAbort(ctx context.Context, txns *intern.TxnTimestamps) (*intern.TxnTimestamps, error) {
-	commitTimestamps := new(intern.TxnTimestamps)
+func (s *Server) TryAbort(ctx context.Context,
+	txns *intern.TxnTimestamps) (*intern.OracleDelta, error) {
+	delta := &intern.OracleDelta{}
 	for _, startTs := range txns.Ts {
 		// Do via proposals to avoid race
 		tctx := &api.TxnContext{StartTs: startTs, Aborted: true}
 		if err := s.proposeTxn(ctx, tctx); err != nil {
-			return commitTimestamps, err
+			return delta, err
 		}
 		// Txn should be aborted if not already committed.
-		commitTimestamps.Ts = append(commitTimestamps.Ts, s.orc.commitTs(startTs))
+		delta.Txns = append(delta.Txns, &intern.TxnStatus{
+			StartTs:  startTs,
+			CommitTs: s.orc.commitTs(startTs)})
 	}
-	return commitTimestamps, nil
+	return delta, nil
 }
 
 // Timestamps is used to assign startTs for a new transaction

@@ -65,8 +65,7 @@ type List struct {
 	mutationMap   map[uint64]*intern.PostingList
 	minTs         uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	commitTs      uint64 // last commitTs of this pl
-	activeTxns    map[uint64]struct{}
-	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
+	deleteMe      int32  // Using atomic for this, to avoid expensive SetForDeletion operation.
 	estimatedSize int32
 	numCommits    int
 	onDisk        int32 // Using atomic, Was written to disk atleast once.
@@ -225,8 +224,10 @@ func (l *List) EstimatedSize() int32 {
 func (l *List) SetForDeletion() bool {
 	l.Lock()
 	defer l.Unlock()
-	if len(l.activeTxns) > 0 {
-		return false
+	for _, plist := range l.mutationMap {
+		if plist.Commit == 0 {
+			return false
+		}
 	}
 	atomic.StoreInt32(&l.deleteMe, 1)
 	return true
@@ -347,71 +348,57 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mutationMap), len(l.plist.Uids))
 		}
 	}
-	l.activeTxns[txn.StartTs] = struct{}{}
-	txn.AddDelta(l.key, mpost, checkConflict)
+	txn.AddDelta(l.key, checkConflict)
 	return nil
 }
 
-func (l *List) AbortTransaction(ctx context.Context, startTs uint64) error {
-	l.Lock()
-	defer l.Unlock()
-	return l.abortTransaction(ctx, startTs)
-}
-
-func (l *List) abortTransaction(ctx context.Context, startTs uint64) error {
-	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("DELETEME set to true. Temporary error.")
-		}
-		return ErrRetry
-	}
-	l.AssertLock()
-	if plist, ok := l.mutationMap[startTs]; ok {
-		atomic.AddInt32(&l.estimatedSize, -1*int32(plist.Size()))
-	}
-	delete(l.mutationMap, startTs)
-	delete(l.activeTxns, startTs)
-	return nil
-}
-
-func (l *List) AlreadyCommitted(startTs uint64) bool {
+// GetMutation returns a marshaled version of posting list mutation stored internally.
+func (l *List) GetMutation(startTs uint64) []byte {
 	l.RLock()
 	defer l.RUnlock()
-	_, ok := l.activeTxns[startTs]
-	return !ok
+	if pl, ok := l.mutationMap[startTs]; ok {
+		data, err := pl.Marshal()
+		x.Check(err)
+		return data
+	}
+	return nil
 }
 
-func (l *List) CommitMutation(ctx context.Context, startTs, commitTs uint64) error {
+func (l *List) CommitMutation(startTs, commitTs uint64) error {
 	l.Lock()
 	defer l.Unlock()
-	return l.commitMutation(ctx, startTs, commitTs)
+	return l.commitMutation(startTs, commitTs)
 }
 
-func (l *List) commitMutation(ctx context.Context, startTs, commitTs uint64) error {
+func (l *List) commitMutation(startTs, commitTs uint64) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("DELETEME set to true. Temporary error.")
-		}
 		return ErrRetry
 	}
 
 	l.AssertLock()
-	if plist, ok := l.mutationMap[startTs]; !ok {
+	plist, ok := l.mutationMap[startTs]
+	if !ok {
 		// It was already committed, might be happening due to replay.
 		return nil
-	} else {
-		plist.Commit = commitTs
-		for _, mpost := range plist.Postings {
-			mpost.CommitTs = commitTs
-		}
-		l.numCommits += len(plist.Postings)
 	}
+	if commitTs == 0 {
+		// Abort mutation.
+		atomic.AddInt32(&l.estimatedSize, -1*int32(plist.Size()))
+		delete(l.mutationMap, startTs)
+		return nil
+	}
+
+	// We have a valid commit.
+	plist.Commit = commitTs
+	for _, mpost := range plist.Postings {
+		mpost.CommitTs = commitTs
+	}
+	l.numCommits += len(plist.Postings)
 
 	if commitTs > l.commitTs {
 		// This is for rolling up the posting list.
 		l.commitTs = commitTs
 	}
-	delete(l.activeTxns, startTs)
 
 	// Calculate 5% of immutable layer
 	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
@@ -445,7 +432,10 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	l.RLock()
 	defer l.RUnlock()
 	var conflicts []uint64
-	for ts := range l.activeTxns {
+	for ts, pl := range l.mutationMap {
+		if pl.Commit > 0 {
+			continue
+		}
 		if ts < readTs {
 			conflicts = append(conflicts, ts)
 		}
@@ -621,7 +611,6 @@ func doAsyncWrite(commitTs uint64, key []byte, data []byte, meta byte, f func(er
 func (l *List) MarshalToKv() (*intern.KV, error) {
 	l.Lock()
 	defer l.Unlock()
-	x.AssertTrue(len(l.activeTxns) == 0)
 	if err := l.rollup(); err != nil {
 		return nil, err
 	}
@@ -714,6 +703,16 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	return l.syncIfDirty(delFromCache)
 }
 
+func (l *List) hasPendingTxn() bool {
+	l.AssertRLock()
+	for _, pl := range l.mutationMap {
+		if pl.Commit == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Merge mutation layer and immutable layer.
 func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	// We no longer set posting list to empty.
@@ -722,7 +721,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	}
 	if delFromCache {
 		// Don't evict if there is pending transaction.
-		x.AssertTrue(len(l.activeTxns) == 0)
+		x.AssertTrue(!l.hasPendingTxn())
 	}
 
 	lmlayer := len(l.mutationMap)

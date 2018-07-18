@@ -9,6 +9,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -160,7 +161,12 @@ func TestTransactionBasic(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	sort.Strings(keys)
-	require.Equal(t, 4, len(keys))
+	for _, k := range keys {
+		kb, err := base64.StdEncoding.DecodeString(k)
+		require.NoError(t, err)
+		_ = x.Parse(kb) // Ensure that we can parse the key.
+	}
+	require.Equal(t, 3, len(keys))
 
 	data, _, err := queryWithTs(q1, 0)
 	require.NoError(t, err)
