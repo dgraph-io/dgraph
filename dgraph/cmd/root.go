@@ -27,7 +27,7 @@ var RootCmd = &cobra.Command{
 	Use:   "dgraph",
 	Short: "Dgraph: Distributed Graph Database",
 	Long: `
-Dgraph is an open source, horizontally scalable and distributed graph database,
+Dgraph is a horizontally scalable and distributed graph database,
 providing ACID transactions, consistent replication and linearizable reads.
 It's built from ground up to perform for a rich set of queries. Being a native
 graph database, it tightly controls how the data is arranged on disk to optimize

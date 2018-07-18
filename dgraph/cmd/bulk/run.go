@@ -98,7 +98,8 @@ func run() {
 	}
 
 	if opt.Version {
-		x.PrintVersionOnly()
+		x.PrintVersion()
+		os.Exit(0)
 	}
 	if opt.RDFDir == "" || opt.SchemaFile == "" {
 		flag.Usage()

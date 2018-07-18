@@ -311,6 +311,7 @@ func run() {
 	x.Init(edgraph.Config.DebugMode)
 	x.Config.QueryEdgeLimit = cast.ToUint64(Server.Conf.GetString("query_edge_limit"))
 
+	x.PrintVersion()
 	edgraph.InitServerState()
 	defer func() {
 		x.Check(edgraph.State.Dispose())

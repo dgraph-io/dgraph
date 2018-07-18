@@ -9,7 +9,6 @@ package x
 
 import (
 	"fmt"
-	"os"
 )
 
 var (
@@ -67,9 +66,8 @@ Licensed under Apache 2.0 + Commons Clause. Copyright 2015-2018 Dgraph Labs, Inc
 }
 
 // PrintVersionOnly prints version and other helpful information if --version.
-func PrintVersionOnly() {
+func PrintVersion() {
 	fmt.Println(BuildDetails())
-	os.Exit(0)
 }
 
 func Version() string {
