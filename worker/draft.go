@@ -807,7 +807,7 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 		return nil, err
 	}
 
-	// We can't rely upon the Raft entries to determine the minPendingTs,
+	// We can't rely upon the Raft entries to determine the minPendingStart,
 	// because there are many cases during mutations where we don't commit or
 	// abort the transaction. This might happen due to an early error thrown.
 	// Only the mutations which make it to Zero for a commit/abort decision have
@@ -819,7 +819,7 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
 	minPendingStart := posting.Oracle().MinPendingStartTs()
-	var maxCommitTs, snapshotIdx, lastCommitIdx uint64
+	var maxCommitTs, snapshotIdx, maxCommitIdx uint64
 	for _, entry := range entries {
 		if entry.Type != raftpb.EntryNormal {
 			continue
@@ -840,7 +840,7 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 			for _, txn := range proposal.Delta.GetTxns() {
 				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 			}
-			lastCommitIdx = entry.Index
+			maxCommitIdx = entry.Index
 		}
 	}
 	if maxCommitTs == 0 {
@@ -850,8 +850,8 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 	if snapshotIdx <= 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
-		tr.LazyPrintf("Using lastCommitIdx as snapshotIdx: %d", lastCommitIdx)
-		snapshotIdx = lastCommitIdx
+		tr.LazyPrintf("Using maxCommitIdx as snapshotIdx: %d", maxCommitIdx)
+		snapshotIdx = maxCommitIdx
 	}
 
 	numDiscarding := snapshotIdx - first + 1
