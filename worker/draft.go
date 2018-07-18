@@ -862,8 +862,8 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 	}
 
 	numDiscarding := snapshotIdx - first + 1
-	tr.LazyPrintf("Got snapshotIdx: %d. MaxCommitTs: %d. Discarding: %d",
-		snapshotIdx, maxCommitTs, numDiscarding)
+	tr.LazyPrintf("Got snapshotIdx: %d. MaxCommitTs: %d. Discarding: %d. MinPendingStartTs: %d",
+		snapshotIdx, maxCommitTs, numDiscarding, minPendingTs)
 	if int(numDiscarding) < discardN {
 		tr.LazyPrintf("Skipping snapshot because insufficient discard entries")
 		x.Printf("Skipping snapshot at index: %d. Insufficient discard entries: %d."+
