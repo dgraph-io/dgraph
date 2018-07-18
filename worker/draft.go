@@ -761,7 +761,7 @@ func (n *node) abortOldTransactions() {
 // aborted. This way, we still keep all the mutations corresponding to this
 // start ts in the Raft logs. This is important, because we don't persist
 // pre-writes to disk in pstore.
-// - Considering the above, find the maximum commit timestamp that we have seen.
+// - Find the maximum commit timestamp that we have seen.
 // That would tell us about the maximum timestamp used to do any commits. This
 // ts is what we can use for future reads of this snapshot.
 // - Finally, this function would propose this snapshot index, so the entire
@@ -807,22 +807,19 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 		return nil, err
 	}
 
-	// We iterate over Raft entries, parsing them to Proposals. We do two
-	// things:
-	// 1. Create a start timestamp -> first raft index map.
-	// 2. We find the max commit timestamp present, as maxCommitTs (/ ReadTs).
-	// As we see transaction commits, we remove the entries from the startToIdx
-	// map, so that by the end of iteration, we only keep the entries in map,
-	// which correspond to mutations which haven't yet been committed, aka
-	// pending mutations. We pick the lowest start ts, and the index
-	// corresponding to that becomes our snapshotIdx. We keep all the Raft
-	// entries including this one, so that on a replay, we can pick all the
-	// mutations correctly.
-
-	// This map holds a start ts as key, and Raft index as value.
-	startToIdx := make(map[uint64]uint64)
-	done := make(map[uint64]struct{})
-	var maxCommitTs, snapshotIdx uint64
+	// We can't rely upon the Raft entries to determine the minPendingTs,
+	// because there are many cases during mutations where we don't commit or
+	// abort the transaction. This might happen due to an early error thrown.
+	// Only the mutations which make it to Zero for a commit/abort decision have
+	// corresponding Delta entries. So, instead of replicating all that logic
+	// here, we just use the MinPendingStartTs tracked by the Oracle, and look
+	// for that in the logs.
+	//
+	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
+	// snapshotIdx. In any case, we continue picking up txn updates, to generate
+	// a maxCommitTs, which would become the readTs for the snapshot.
+	minPendingStart := posting.Oracle().MinPendingStartTs()
+	var maxCommitTs, snapshotIdx, lastCommitIdx uint64
 	for _, entry := range entries {
 		if entry.Type != raftpb.EntryNormal {
 			continue
@@ -833,54 +830,37 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 			tr.SetError()
 			return nil, err
 		}
-		// We only track the mutations which contain edges. Not the mutations
-		// which have schema, or dropall, etc.
-		if proposal.Mutations != nil && len(proposal.Mutations.Edges) > 0 {
-			ts := proposal.Mutations.StartTs
-			if _, has := startToIdx[ts]; !has {
-				startToIdx[ts] = entry.Index
+		if proposal.Mutations != nil {
+			start := proposal.Mutations.StartTs
+			if start >= minPendingStart && snapshotIdx == 0 {
+				snapshotIdx = entry.Index - 1
 			}
-			if _, has := done[ts]; has {
-				x.Errorf("Found a mutation after txn was done: %d. Ignoring.\n", ts)
-			}
-		} else if proposal.Delta != nil {
+		}
+		if proposal.Delta != nil {
 			for _, txn := range proposal.Delta.GetTxns() {
-				// This mutation is done. We use done map, instead of deleting from startToIdx map,
-				// so that if we have a mutation which came after an abort of a transaction, we can
-				// still mark it as done, and not get stuck with that mutation forever.
-				done[txn.StartTs] = struct{}{}
 				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 			}
-			snapshotIdx = entry.Index
+			lastCommitIdx = entry.Index
 		}
 	}
 	if maxCommitTs == 0 {
 		tr.LazyPrintf("maxCommitTs is zero")
 		return nil, nil
 	}
-	var minPendingTs uint64 = math.MaxUint64
-	// It is possible that this loop doesn't execute, because all transactions have been committed.
-	// In that case, we'll default to snapshotIdx value from above.
-	for startTs, index := range startToIdx {
-		if _, ok := done[startTs]; ok {
-			continue
-		}
-		if minPendingTs < startTs {
-			continue
-		}
-		// Pick the lowest startTs, and the corresponding Raft index - 1. We
-		// deduct one so that the Raft entry can be picked fully during replay.
-		// This becomes our snapshotIdx.
-		minPendingTs, snapshotIdx = startTs, index-1
+	if snapshotIdx <= 0 {
+		// It is possible that there are no pending transactions. In that case,
+		// snapshotIdx would be zero.
+		tr.LazyPrintf("Using lastCommitIdx as snapshotIdx: %d", lastCommitIdx)
+		snapshotIdx = lastCommitIdx
 	}
 
 	numDiscarding := snapshotIdx - first + 1
 	tr.LazyPrintf("Got snapshotIdx: %d. MaxCommitTs: %d. Discarding: %d. MinPendingStartTs: %d",
-		snapshotIdx, maxCommitTs, numDiscarding, minPendingTs)
+		snapshotIdx, maxCommitTs, numDiscarding, minPendingStart)
 	if int(numDiscarding) < discardN {
 		tr.LazyPrintf("Skipping snapshot because insufficient discard entries")
 		x.Printf("Skipping snapshot at index: %d. Insufficient discard entries: %d."+
-			" MinPendingStartTs: %d\n", snapshotIdx, numDiscarding, minPendingTs)
+			" MinPendingStartTs: %d\n", snapshotIdx, numDiscarding, minPendingStart)
 		return nil, nil
 	}
 
