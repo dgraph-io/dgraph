@@ -313,16 +313,14 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		return err
 	}
 	src.CommitTs = assigned.StartId
+	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
+	defer s.orc.doneUntil.Done(src.CommitTs)
 
 	if err := s.orc.commit(src); err != nil {
 		src.Aborted = true
 	}
 	// Propose txn should be used to set watermark as done.
-	err = s.proposeTxn(ctx, src)
-	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
-	s.orc.doneUntil.Done(src.CommitTs)
-	x.Printf("propose txn: %v\n", err)
-	return err
+	return s.proposeTxn(ctx, src)
 }
 
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
