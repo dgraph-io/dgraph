@@ -7,6 +7,7 @@ import (
 
 	pb "github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -58,10 +59,11 @@ func TestCalculateSnapshot(t *testing.T) {
 	entries = append(entries, getEntryForCommit(5, 1, 5))
 	require.NoError(t, n.Store.Save(pb.HardState{}, entries, pb.Snapshot{}))
 	n.Applied.SetDoneUntil(5)
+	posting.Oracle().RegisterStartTs(2)
 	snap, err := n.calculateSnapshot(1)
 	require.NoError(t, err)
 	require.Equal(t, uint64(5), snap.ReadTs)
-	require.Equal(t, uint64(2), snap.Index)
+	require.Equal(t, uint64(1), snap.Index)
 
 	// Check state of Raft store.
 	err = n.Store.CreateSnapshot(snap.Index, nil, nil)
@@ -69,7 +71,7 @@ func TestCalculateSnapshot(t *testing.T) {
 
 	first, err := n.Store.FirstIndex()
 	require.NoError(t, err)
-	require.Equal(t, uint64(3), first)
+	require.Equal(t, uint64(2), first)
 
 	last, err := n.Store.LastIndex()
 	require.NoError(t, err)
@@ -84,6 +86,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	entries = append(entries, getEntryForCommit(8, 2, 9))
 	require.NoError(t, n.Store.Save(pb.HardState{}, entries, pb.Snapshot{}))
 	n.Applied.SetDoneUntil(8)
+	posting.Oracle().ResetTxns()
 	snap, err = n.calculateSnapshot(1)
 	require.NoError(t, err)
 	require.Equal(t, uint64(9), snap.ReadTs)
