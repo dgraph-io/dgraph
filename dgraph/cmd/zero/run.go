@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
-	bopts "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -167,11 +166,10 @@ func run() {
 
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.DefaultOptions
+	kvOpt := badger.LSMOnlyOptions
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = opts.w
 	kvOpt.ValueDir = opts.w
-	kvOpt.ValueLogLoadingMode = bopts.FileIO
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()

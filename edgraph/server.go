@@ -99,7 +99,7 @@ func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
 func (s *ServerState) initStorage() {
 	// Write Ahead Log directory
 	x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.DefaultOptions
+	kvOpt := badger.LSMOnlyOptions
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = Config.WALDir
 	kvOpt.ValueDir = Config.WALDir
@@ -116,9 +116,9 @@ func (s *ServerState) initStorage() {
 	x.Printf("Setting Badger option: %s", Config.BadgerOptions)
 	var opt badger.Options
 	switch Config.BadgerOptions {
-	case "default":
+	case "ssd":
 		opt = badger.DefaultOptions
-	case "lsmonly":
+	case "hdd":
 		opt = badger.LSMOnlyOptions
 	default:
 		x.Fatalf("Invalid Badger options")
@@ -130,6 +130,7 @@ func (s *ServerState) initStorage() {
 
 	x.Printf("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
+	case "none": // Use default based on BadgerOptions.
 	case "mmap":
 		opt.TableLoadingMode = options.MemoryMap
 	case "ram":
@@ -142,6 +143,7 @@ func (s *ServerState) initStorage() {
 
 	x.Printf("Setting Badger value log load option: %s", Config.BadgerVlog)
 	switch Config.BadgerVlog {
+	case "none": // Use default based on BadgerOptions.
 	case "mmap":
 		opt.ValueLogLoadingMode = options.MemoryMap
 	case "disk":

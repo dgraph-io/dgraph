@@ -62,15 +62,16 @@ func init() {
 		"Directory to store posting lists.")
 
 	// Options around how to set up Badger.
+	flag.String("badger.options", defaults.BadgerOptions,
+		"[ssd, hdd] Specifies which Badger options to use. SSD decreases write amplification"+
+			" and increases read IOPS. HDD does the opposite.")
 	flag.String("badger.tables", defaults.BadgerTables,
-		"Specifies how Badger LSM tree is stored. Options are ram, mmap and "+
-			"disk; which consume most to least RAM while providing best to worst read"+
+		"[none, ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
+			"Option sequence consume most to least RAM while providing best to worst read "+
 			"performance respectively.")
 	flag.String("badger.vlog", defaults.BadgerVlog,
-		"Specifies how Badger Value log is stored. Options are mmap and disk."+
+		"[none, mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance in some cases.")
-	flag.String("badger.options", defaults.BadgerOptions,
-		"Specifies which Badger options to use. Choices are default and lsmonly.")
 
 	flag.StringP("wal", "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")

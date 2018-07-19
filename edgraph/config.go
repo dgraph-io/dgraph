@@ -50,8 +50,8 @@ var Config Options
 var DefaultConfig = Options{
 	PostingDir:    "p",
 	BadgerTables:  "mmap",
-	BadgerVlog:    "mmap",
-	BadgerOptions: "default",
+	BadgerVlog:    "none",
+	BadgerOptions: "ssd",
 	WALDir:        "w",
 	Nomutations:   false,
 
