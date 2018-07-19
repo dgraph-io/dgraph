@@ -74,14 +74,23 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
-			// We don't need lease based reads. They cause issues because they require CheckQuorum
-			// to be true, and that causes a lot of issues for us during cluster bootstrapping and
-			// later. A seemingly healthy cluster would just cause leader to step down due to
-			// "inactive" quorum, and then disallow anyone from becoming leader. So, let's stick to
-			// default options.  Let's achieve correctness, then we achieve performance. Plus, for
-			// the Dgraph servers, we'll be soon relying only on Timestamps for blocking reads and
-			// achieving linearizability, than checking quorums (Zero would still check quorums).
+			// We don't need lease based reads. They cause issues because they
+			// require CheckQuorum to be true, and that causes a lot of issues
+			// for us during cluster bootstrapping and later. A seemingly
+			// healthy cluster would just cause leader to step down due to
+			// "inactive" quorum, and then disallow anyone from becoming leader.
+			// So, let's stick to default options.  Let's achieve correctness,
+			// then we achieve performance. Plus, for the Dgraph servers, we'll
+			// be soon relying only on Timestamps for blocking reads and
+			// achieving linearizability, than checking quorums (Zero would
+			// still check quorums).
 			ReadOnlyOption: raft.ReadOnlySafe,
+			// When a disconnected node joins back, it forces a leader change,
+			// as it starts with a higher term, as described in Raft thesis (not
+			// the paper) in section 9.6. This setting can avoid that by only
+			// increasing the term, if the node has a good chance of becoming
+			// the leader.
+			PreVote: true,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
