@@ -640,6 +640,9 @@ func (n *node) Run() {
 
 				} else {
 					// When applyCh fills up, this would automatically block.
+					// TODO: Instead of sending each entry, we should just send
+					// the whole array of CommittedEntries. It would avoid
+					// blocking this loop.
 					n.applyCh <- entry
 				}
 
