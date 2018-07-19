@@ -20,6 +20,7 @@ HOST=https://docs.dgraph.io
 # artifact in an appropriate location
 VERSIONS_ARRAY=(
 'master'
+'v1.0.7'
 'v1.0.6'
 'v1.0.5'
 'v1.0.4'
