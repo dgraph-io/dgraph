@@ -403,8 +403,8 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 		l.commitTs = commitTs
 	}
 
-	// Calculate 5% of immutable layer
-	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
+	// Calculate 10% of immutable layer
+	numUids := (bp128.NumIntegers(l.plist.Uids) * 10) / 100
 	if numUids < 1000 {
 		numUids = 1000
 	}
