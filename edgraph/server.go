@@ -100,7 +100,7 @@ func (s *ServerState) initStorage() {
 	// Write Ahead Log directory
 	x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions
-	kvOpt.SyncWrites = true
+	kvOpt.SyncWrites = false // TODO: Should we keep it async?
 	kvOpt.Dir = Config.WALDir
 	kvOpt.ValueDir = Config.WALDir
 	kvOpt.TableLoadingMode = options.MemoryMap
