@@ -128,7 +128,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *intern.Query) (*intern.Resul
 	attr := q.Attr
 	gid := groups().BelongsTo(attr)
 	if gid == 0 {
-		return &intern.Result{}, errUnservedTablet
+		return &intern.Result{}, ErrUnservedTablet
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("attr: %v groupId: %v, readTs: %d", attr, gid, q.ReadTs)
@@ -611,7 +611,7 @@ func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Resu
 	// There's no issue if a we are serving a particular tablet and we get partitioned away from
 	// group zero as long as it's not removed.
 	if !groups().ServesTablet(q.Attr) {
-		return &emptyResult, errUnservedTablet
+		return &emptyResult, ErrUnservedTablet
 	}
 	out, err := helpProcessTask(ctx, q, gid)
 	if err != nil {

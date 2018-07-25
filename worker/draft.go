@@ -136,10 +136,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
 			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
+				return ErrPredicateMoving
 			} else if tablet.GroupId != groups().groupId() {
 				// Tablet can move by the time request reaches here.
-				return errUnservedTablet
+				return ErrUnservedTablet
 			}
 
 			su, ok := schema.State().Get(edge.Attr)
@@ -151,7 +151,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		}
 		for _, schema := range proposal.Mutations.Schema {
 			if tablet := groups().Tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
+				return ErrPredicateMoving
 			}
 			if err := checkSchema(schema); err != nil {
 				return err
@@ -287,7 +287,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 			// would have proposed membershipstate, and all nodes would have the proposed state
 			// or some state after that before reaching here.
 			if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
+				return ErrPredicateMoving
 			}
 			if err := waitForConflictResolution(supdate.Predicate); err != nil {
 				return err
@@ -310,7 +310,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-			return errPredicateMoving
+			return ErrPredicateMoving
 		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only have one edge drop in one mutation call.

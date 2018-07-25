@@ -30,8 +30,8 @@ import (
 )
 
 var (
-	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
-	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
+	ErrUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
+	ErrPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
 )
 
 func deletePredicateEdge(edge *intern.DirectedEdge) bool {
@@ -43,7 +43,7 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 	if !groups().ServesTabletRW(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
-		return errUnservedTablet
+		return ErrUnservedTablet
 	}
 
 	su, ok := schema.State().Get(edge.Attr)
@@ -99,7 +99,7 @@ func runSchemaMutation(ctx context.Context, update *intern.SchemaUpdate, startTs
 func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, startTs uint64) error {
 	n := groups().Node
 	if !groups().ServesTablet(update.Predicate) {
-		return errUnservedTablet
+		return ErrUnservedTablet
 	}
 	if err := checkSchema(update); err != nil {
 		return err
@@ -512,7 +512,7 @@ func MutateOverNetwork(ctx context.Context, m *intern.Mutations) (*api.TxnContex
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
-			return tctx, errUnservedTablet
+			return tctx, ErrUnservedTablet
 		}
 		mu.StartTs = m.StartTs
 		go proposeOrSend(ctx, gid, mu, resCh)
