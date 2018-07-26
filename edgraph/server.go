@@ -101,6 +101,7 @@ func (s *ServerState) initStorage() {
 	x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions
 	kvOpt.SyncWrites = true
+	kvOpt.Truncate = true
 	kvOpt.Dir = Config.WALDir
 	kvOpt.ValueDir = Config.WALDir
 	kvOpt.TableLoadingMode = options.MemoryMap
@@ -124,6 +125,7 @@ func (s *ServerState) initStorage() {
 		x.Fatalf("Invalid Badger options")
 	}
 	opt.SyncWrites = true
+	opt.Truncate = true
 	opt.Dir = Config.PostingDir
 	opt.ValueDir = Config.PostingDir
 	opt.NumVersionsToKeep = math.MaxInt32
