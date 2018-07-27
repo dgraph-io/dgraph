@@ -74,39 +74,39 @@ services:
       - 9180:9180
     command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
 
-  # dg2:
-  #   image: debian:latest
-  #   container_name: bank-dg2
-  #   working_dir: /data/dg2
-  #   volumes:
-  #     - type: bind
-  #       source: $GOPATH/bin
-  #       target: /gobin
-  #       read_only: true
-  #     # - type: bind
-  #     #   source: "${DATA}"
-  #     #   target: /data
-  #   ports:
-  #     - 8182:8182
-  #     - 9182:9182
-  #   command: /gobin/dgraph server --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
+  dg2:
+    image: debian:latest
+    container_name: bank-dg2
+    working_dir: /data/dg2
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      # - type: bind
+      #   source: "${DATA}"
+      #   target: /data
+    ports:
+      - 8182:8182
+      - 9182:9182
+    command: /gobin/dgraph server --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
 
-  # dg3:
-  #   image: debian:latest
-  #   container_name: bank-dg3
-  #   working_dir: /data/dg3
-  #   volumes:
-  #     - type: bind
-  #       source: $GOPATH/bin
-  #       target: /gobin
-  #       read_only: true
-  #     # - type: bind
-  #     #   source: "${DATA}"
-  #     #   target: /data
-  #   ports:
-  #     - 8183:8183
-  #     - 9183:9183
-  #   command: /gobin/dgraph server --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10
+  dg3:
+    image: debian:latest
+    container_name: bank-dg3
+    working_dir: /data/dg3
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      # - type: bind
+      #   source: "${DATA}"
+      #   target: /data
+    ports:
+      - 8183:8183
+      - 9183:9183
+    command: /gobin/dgraph server --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10
 
 
   # dg4:
