@@ -247,21 +247,21 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	n.DoneConfChange(cc.ID, nil)
 }
 
-// TODO: We CAN NOT wait here. This would deadlock, because we're applying all
-// mutations in serial order. If there are pending transactions, we should just
-// error out, instead of trying to abort.
-func waitForConflictResolution(attr string) error {
-	for i := 0; i < 10; i++ {
-		tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
-			pk := x.Parse(key)
-			return pk.Attr == attr
-		})
-		if len(tctxs) == 0 {
-			return nil
-		}
-		tryAbortTransactions(tctxs)
+var errHasPendingTxns = errors.New("Pending transactions found. Please retry operation")
+
+// We must not wait here. Previously, we used to block until we have aborted the
+// transactions. We're now applying all updates serially, so blocking for one
+// operation is not an option.
+func detectPendingTxns(attr string) error {
+	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
+		pk := x.Parse(key)
+		return pk.Attr == attr
+	})
+	if len(tctxs) == 0 {
+		return nil
 	}
-	return errors.New("Unable to abort transactions")
+	go tryAbortTransactions(tctxs)
+	return errHasPendingTxns
 }
 
 // We don't support schema mutations across nodes in a transaction.
@@ -298,7 +298,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 			if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
 			}
-			if err := waitForConflictResolution(supdate.Predicate); err != nil {
+			if err := detectPendingTxns(supdate.Predicate); err != nil {
 				return err
 			}
 			if err := runSchemaMutation(ctx, supdate, startTs); err != nil {
@@ -327,7 +327,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 			// We should only drop the predicate if there is no pending
 			// transaction.
 			tr.LazyPrintf("Waiting for conflict resolution to delete predicate")
-			if err := waitForConflictResolution(edge.Attr); err != nil {
+			if err := detectPendingTxns(edge.Attr); err != nil {
 				return err
 			}
 			tr.LazyPrintf("Deleting predicate")

@@ -72,7 +72,7 @@ services:
     ports:
       - 8180:8180
       - 9180:9180
-    command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --pending_proposals 100
+    command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
 
   # dg2:
   #   image: debian:latest
