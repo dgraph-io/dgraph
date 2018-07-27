@@ -68,15 +68,19 @@ func (tx *Txn) CommitToDisk(writer *x.TxnWriter, commitTs uint64) error {
 	if commitTs == 0 {
 		return nil
 	}
+	var keys []string
 	tx.Lock()
-	defer tx.Unlock()
+	for key := range tx.deltas {
+		keys = append(keys, key)
+	}
+	tx.Unlock()
 
 	// TODO: Simplify this. All we need to do is to get the PL for the key, and if it has the
 	// postings for the startTs, we commit them. Otherwise, we skip.
 	// Also, if the snapshot read ts is above the commit ts, then we just delete the postings from
 	// memory, instead of writing them back again.
 
-	for key := range tx.deltas {
+	for _, key := range keys {
 		plist, err := Get([]byte(key))
 		if err != nil {
 			return err

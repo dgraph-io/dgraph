@@ -20,6 +20,10 @@ type SafeMutex struct {
 	readers int32
 }
 
+func (s *SafeMutex) AlreadyLocked() bool {
+	return atomic.LoadInt32(&s.writer) > 0
+}
+
 func (s *SafeMutex) Lock() {
 	s.m.Lock()
 	AssertTrue(atomic.AddInt32(&s.writer, 1) == 1)
@@ -31,7 +35,7 @@ func (s *SafeMutex) Unlock() {
 }
 
 func (s *SafeMutex) AssertLock() {
-	AssertTrue(atomic.LoadInt32(&s.writer) == 1)
+	AssertTrue(s.AlreadyLocked())
 }
 
 func (s *SafeMutex) RLock() {

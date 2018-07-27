@@ -94,8 +94,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 		return ctx.Err()
 	}
 
-	propose := func() error {
-		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	propose := func(timeout time.Duration) error {
+		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
 		che := make(chan error, 1)
@@ -140,8 +140,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
 	// timeout. We should always try with a timeout and optionally retry.
 	err := errInternalRetry
+	timeout := 4 * time.Second
 	for err == errInternalRetry {
-		err = propose()
+		err = propose(timeout)
+		timeout *= 2 // Exponential backoff
 	}
 	return err
 }

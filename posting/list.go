@@ -222,8 +222,11 @@ func (l *List) EstimatedSize() int32 {
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
 func (l *List) SetForDeletion() bool {
-	l.Lock()
-	defer l.Unlock()
+	if l.AlreadyLocked() {
+		return false
+	}
+	l.RLock()
+	defer l.RUnlock()
 	for _, plist := range l.mutationMap {
 		if plist.Commit == 0 {
 			return false
@@ -400,8 +403,8 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 		l.commitTs = commitTs
 	}
 
-	// Calculate 5% of immutable layer
-	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
+	// Calculate 10% of immutable layer
+	numUids := (bp128.NumIntegers(l.plist.Uids) * 10) / 100
 	if numUids < 1000 {
 		numUids = 1000
 	}

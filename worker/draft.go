@@ -159,8 +159,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		}
 	}
 
-	propose := func() error {
-		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	propose := func(timeout time.Duration) error {
+		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
 		che := make(chan error, 1)
@@ -174,7 +174,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 		proposal.Key = key
 
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Proposing data with key: %s", key)
+			tr.LazyPrintf("Proposing data with key: %s. Timeout: %v", key, timeout)
 		}
 
 		data, err := proposal.Marshal()
@@ -214,8 +214,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
 	// timeout. We should always try with a timeout and optionally retry.
 	err := errInternalRetry
+	timeout := 4 * time.Second
 	for err == errInternalRetry {
-		err = propose()
+		err = propose(timeout)
+		timeout *= 2 // Exponential backoff
 	}
 	return err
 }
@@ -245,24 +247,30 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	n.DoneConfChange(cc.ID, nil)
 }
 
-func waitForConflictResolution(attr string) error {
-	for i := 0; i < 10; i++ {
-		tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
-			pk := x.Parse(key)
-			return pk.Attr == attr
-		})
-		if len(tctxs) == 0 {
-			return nil
-		}
-		tryAbortTransactions(tctxs)
+var errHasPendingTxns = errors.New("Pending transactions found. Please retry operation.")
+
+// We must not wait here. Previously, we used to block until we have aborted the
+// transactions. We're now applying all updates serially, so blocking for one
+// operation is not an option.
+func detectPendingTxns(attr string) error {
+	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
+		pk := x.Parse(key)
+		return pk.Attr == attr
+	})
+	if len(tctxs) == 0 {
+		return nil
 	}
-	return errors.New("Unable to abort transactions")
+	go tryAbortTransactions(tctxs)
+	return errHasPendingTxns
 }
 
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
 func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
+	tr := trace.New("Dgraph.Node", "ApplyMutations")
+	defer tr.Finish()
+
 	if proposal.Mutations.DropAll {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
@@ -278,6 +286,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	ctx := n.Ctx(proposal.Key)
 
 	if len(proposal.Mutations.Schema) > 0 {
+		tr.LazyPrintf("Applying Schema")
 		for _, supdate := range proposal.Mutations.Schema {
 			// This is neceassry to ensure that there is no race between when we start reading
 			// from badger and new mutation getting commited via raft and getting applied.
@@ -289,7 +298,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 			if tablet := groups().Tablet(supdate.Predicate); tablet != nil && tablet.ReadOnly {
 				return errPredicateMoving
 			}
-			if err := waitForConflictResolution(supdate.Predicate); err != nil {
+			if err := detectPendingTxns(supdate.Predicate); err != nil {
 				return err
 			}
 			if err := runSchemaMutation(ctx, supdate, startTs); err != nil {
@@ -310,13 +319,19 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
+			tr.LazyPrintf("Predicate Moving")
+			tr.SetError()
 			return errPredicateMoving
 		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
-			// We should only have one edge drop in one mutation call.
-			if err := waitForConflictResolution(edge.Attr); err != nil {
+			// We should only drop the predicate if there is no pending
+			// transaction.
+			if err := detectPendingTxns(edge.Attr); err != nil {
+				tr.LazyPrintf("Found pending transactions which obstruct operation.")
+				tr.SetError()
 				return err
 			}
+			tr.LazyPrintf("Deleting predicate")
 			return posting.DeletePredicate(ctx, edge.Attr)
 		}
 		// Dont derive schema when doing deletion.
@@ -345,17 +360,22 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	m := proposal.Mutations
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
+		tr.LazyPrintf("Should Abort")
+		tr.SetError()
 		return dy.ErrConflict
 	}
+	tr.LazyPrintf("Applying %d edges", len(m.Edges))
 	for _, edge := range m.Edges {
 		err := posting.ErrRetry
 		for err == posting.ErrRetry {
 			err = runMutation(ctx, edge, txn)
 		}
 		if err != nil {
+			tr.SetError()
 			return err
 		}
 	}
+	tr.LazyPrintf("Done applying %d edges", len(m.Edges))
 	return nil
 }
 
@@ -566,7 +586,7 @@ func (n *node) Run() {
 			var tr trace.Trace
 			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) || !raft.IsEmptyHardState(rd.HardState) {
 				// Optionally, trace this run.
-				tr = trace.New("Dgraph", "RunLoop")
+				tr = trace.New("Dgraph.Raft", "RunLoop")
 			}
 
 			if rd.SoftState != nil {
@@ -727,7 +747,7 @@ func (n *node) blockingAbort(req *intern.TxnTimestamps) error {
 	defer cancel()
 
 	delta, err := zc.TryAbort(ctx, req)
-	x.Printf("Aborted txns with start ts: %v. Error: %v\n", req.Ts, err)
+	x.Printf("TryAbort %d txns with start ts. Error: %v\n", len(req.Ts), err)
 	if err != nil || len(delta.Txns) == 0 {
 		return err
 	}
