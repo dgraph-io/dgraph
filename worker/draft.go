@@ -247,7 +247,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	n.DoneConfChange(cc.ID, nil)
 }
 
-var errHasPendingTxns = errors.New("Pending transactions found. Please retry operation")
+var errHasPendingTxns = errors.New("Pending transactions found. Please retry operation.")
 
 // We must not wait here. Previously, we used to block until we have aborted the
 // transactions. We're now applying all updates serially, so blocking for one
