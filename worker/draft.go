@@ -326,8 +326,9 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only drop the predicate if there is no pending
 			// transaction.
-			tr.LazyPrintf("Waiting for conflict resolution to delete predicate")
 			if err := detectPendingTxns(edge.Attr); err != nil {
+				tr.LazyPrintf("Found pending transactions which obstruct operation.")
+				tr.SetError()
 				return err
 			}
 			tr.LazyPrintf("Deleting predicate")
