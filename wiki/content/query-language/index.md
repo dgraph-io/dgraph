@@ -703,7 +703,7 @@ Here is how you would add a `Point`.
 {
   set {
     <_:0xeb1dde9c> <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
-    <_:0xf15448e2> <name> "Hamon Tower" .
+    <_:0xeb1dde9c> <name> "Hamon Tower" .
   }
 }
 ```
