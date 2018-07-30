@@ -47,7 +47,7 @@
     </script>
 
     <title>
-      {{.Section | humanize}} — {{ .Site.Title }}
+      {{.Section | default "Dgraph Documentation" | humanize}} — {{ .Site.Title }}
     </title>
 
     <link href="{{ .Site.BaseURL }}/css/theme.css?{{ now }}" rel="stylesheet" />
