@@ -273,7 +273,7 @@ multiple RDFs that are then processed as normal.
 Each JSON object represents a single node in the graph.
 
 {{% notice "note" %}}
-JSON mutations are available via gRPC clients, such as the Go client, JS client, Java client. And are available now with dgraph-js-http and cURL. See more about cULR [here]({{< relref "#using-json-operations-via-curl>}})
+JSON mutations are available via gRPC clients such as the Go client, JS client, and Java client, and are available to HTTP clients with [dgraph-js-http](https://github.com/dgraph-io/dgraph-js-http) and cURL. See more about cURL [here]({{< relref "#using-json-operations-via-curl" >}})
 {{% /notice %}}
 
 ### Setting literal values
@@ -402,7 +402,7 @@ Deletion mutations can also be sent in JSON format. To send a delete mutation,
 use the `delete_json` field instead of the `set_json` field in the `Mutation`
 message.
 
-{{% notice "note" %}} In case of you're using dgraph-js-http client or Ratel UI check this  [topic]({{< relref "#djson-syntax-using-raw-http-or-ratel-ui">}}) too, about syntax {{% /notice %}}
+{{% notice "note" %}} Check the [JSON Syntax using Raw HTTP or Ratel UI]({{< relref "#json-syntax-using-raw-http-or-ratel-ui">}}) section if you're using the dgraph-js-http client or Ratel UI. {{% /notice %}}
 
 When using delete mutations, an existing node always has to be referenced. So
 the `"uid"` field for each JSON object must be present. Predicates that should
@@ -488,7 +488,7 @@ testList: [string] .
 }
 ```
 
-Let’s then remove our Apple from this list (Remember, It’s case sensitive):
+Let’s then remove "Apple" from this list (Remember, it’s case sensitive):
 
 ```JSON
 {  
@@ -497,7 +497,8 @@ Let’s then remove our Apple from this list (Remember, It’s case sensitive):
 }
 ```
 
-{{% notice "note" %}} In case of you're using dgraph-js-http client or Ratel UI check this  [topic]({{< relref "#djson-syntax-using-raw-http-or-ratel-ui">}}) too, about syntax {{% /notice %}}
+{{% notice "note" %}} Check the [JSON Syntax using Raw HTTP or Ratel UI]({{< relref "#json-syntax-using-raw-http-or-ratel-ui">}}) section if you're using the dgraph-js-http client or Ratel UI. {{% /notice %}}
+
 
 Add another fruit:
 
@@ -527,7 +528,7 @@ with a `name`:
 
 This syntax can be used in the most current version of Ratel, in the [dgraph-js-http](https://github.com/dgraph-io/dgraph-js-http) client or even via cURL.
 
-You can also [download Ratel UI](https://discuss.dgraph.io/t/ratel-installer-for-linux-macos-and-windows-preview-version-ratel-update-from-v1-0-6/2884/) for installation.
+You can also [download the Ratel UI for Linux, macOS, or Windows](https://discuss.dgraph.io/t/ratel-installer-for-linux-macos-and-windows-preview-version-ratel-update-from-v1-0-6/2884/).
 
 Mutate:
 ```JSON
@@ -540,7 +541,7 @@ Mutate:
       {
          # Another JSON obj in here for multiple operations
       }
-         ]
+  ]
 }
 
 ```
@@ -559,7 +560,7 @@ Deletion operations are the same as [Deleting literal values]({{< relref "#delet
       {
          # Another JSON obj in here for multiple operations
       }
-         ]
+  ]
 }
 
 ```
@@ -573,8 +574,7 @@ First you have to configure the Headers. There are two in this case. One to info
 -H 'X-Dgraph-CommitNow: true'
 ```
 
->Ps. In order to use jq you need the jq package. In Fedora OS for example you can install it with
-" sudo dnf install jq ".
+>Ps. In order to use `jq` you need the `jq` package. See the [`jq` downloads](https://stedolan.github.io/jq/download/) page for installation details.
 
 ```BASH
 curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
