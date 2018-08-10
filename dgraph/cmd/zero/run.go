@@ -141,10 +141,11 @@ func run() {
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 	}
 
-	if opts.numReplicas % 2 == 0 {
-		log.Fatalf("Invalid flag value --replicas=%d - number of replicas cannot be divisible by 2", opts.numReplicas)
+	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
+		log.Fatalf("ERROR: Number of replicas must be odd for consensus. Found: %d",
+			opts.numReplicas)
 	}
-	
+
 	if Zero.Conf.GetBool("expose_trace") {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
