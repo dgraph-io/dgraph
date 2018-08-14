@@ -166,6 +166,26 @@ func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
 	}
 }
 
+func handleGeoType(val map[string]interface{}, nq *api.NQuad) (bool, error) {
+	_, hasType := val["type"]
+	_, hasCoordinates := val["coordinates"]
+	if len(val) == 2 && hasType && hasCoordinates {
+		b, err := json.Marshal(val)
+		if err != nil {
+			return false, x.Errorf("Error while trying to parse "+
+				"value: %+v as geo val", val)
+		}
+		ok, err := tryParseAsGeo(b, nq)
+		if err != nil && ok {
+			return true, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 	var g geom.T
 	err := geojson.Unmarshal(b, &g)
@@ -279,23 +299,13 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				continue
 			}
 
-			// Geojson geometry should have type and coordinates.
-			_, hasType := val["type"]
-			_, hasCoordinates := val["coordinates"]
-			if len(val) == 2 && hasType && hasCoordinates {
-				b, err := json.Marshal(val)
-				if err != nil {
-					return mr, x.Errorf("Error while trying to parse "+
-						"value: %+v as geo val", val)
-				}
-				ok, err := tryParseAsGeo(b, &nq)
-				if err != nil {
-					return mr, err
-				}
-				if ok {
-					mr.nquads = append(mr.nquads, &nq)
-					continue
-				}
+			ok, err := handleGeoType(val, &nq)
+			if  err != nil {
+				return mr, err
+			}
+			if ok {
+				mr.nquads = append(mr.nquads, &nq)
+				continue
 			}
 
 			cr, err := mapToNquads(v.(map[string]interface{}), idx, op, pred)
@@ -323,6 +333,16 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 					}
 					mr.nquads = append(mr.nquads, &nq)
 				case map[string]interface{}:
+					// map[string]interface{} can mean geojson or a connecting entity.
+					ok, err := handleGeoType(item.(map[string]interface{}), &nq)
+					if  err != nil {
+						return mr, err
+					}
+					if ok {
+						mr.nquads = append(mr.nquads, &nq)
+						continue
+					}
+
 					cr, err := mapToNquads(iv, idx, op, pred)
 					if err != nil {
 						return mr, err
