@@ -11,6 +11,8 @@ about: Create a report to help us improve
 <!-- Suggestion: Have you tried reproducing the issue with latest release? -->
 <!-- Fill out below. -->
 
+## Bug report
+
 **Desktop (please complete the following information):**
  - OS: <!-- [e.g. Linux + distro + kernel] -->
  - Browser: <!-- [e.g. chrome, safari] -->

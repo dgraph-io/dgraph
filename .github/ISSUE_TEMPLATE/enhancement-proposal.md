@@ -9,6 +9,8 @@ about: Proposing Changes to Dgraph code base. And why. (Advanced for golang devs
 
 <!--  Any abstract idea you can use the main Feature request template.  -->
 
+## Enhancement proposal
+
 **Header**
 <!--  Define the references of your proposal. [e.g. A specific path, links, books, papers, discuss thread, Open issues]  -->
 

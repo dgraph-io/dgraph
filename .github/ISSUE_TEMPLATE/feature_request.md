@@ -15,11 +15,13 @@ about: Suggest an idea for this project
 
 <!-- Fill out below. -->
 
-## Header
-<!-- Fill in, any references information here. As "KV" structure. -->
-Feature for:  <!-- e.g. Ratel, Dgraph, other --> <!-- Warning, if it is a feature for BadgerDB, please do it in it's repository. -->
+## Feature request
 
-## Questions
+### Header
+<!-- Fill in, any references information here. As "KV" structure. -->
+Feature for:  Dgraph <!-- e.g. Ratel, Dgraph, other --> <!-- Warning, if it is a feature for BadgerDB, please do it in it's repository. -->
+
+### Questions
 <!-- You are not required to answer the questionnaire. 
 Please delete the questionnaire for this request if it is the case.-->
 
