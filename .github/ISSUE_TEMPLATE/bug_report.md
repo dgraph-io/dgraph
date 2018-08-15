@@ -6,14 +6,17 @@ about: Create a report to help us improve
 
 <!-- Please search existing issues to avoid creating duplicates. -->
 <!-- You can search for more info on https://discuss.dgraph.io too. -->
-<!-- Also please test using the latest Dgraph Version. -->
 <!-- Thank you for being part of Dgraph Community, cheers. -->
+
+<!-- Suggestion: Have you tried reproducing the issue with latest release? -->
+<!-- Fill out below. -->
 
 **Desktop (please complete the following information):**
  - OS: <!-- [e.g. Linux + distro + kernel] -->
  - Browser: <!-- [e.g. chrome, safari] -->
  - Dgraph Version: <!-- [e.g. v1.0.7-RC4] -->
  - RAM available: <!-- [e.g. 32GB with "lru_mb 2048" for each Dgraph Server instance ]  -->
+ - Storage Type: <!-- [e.g. SSD, SSD-E, HDD, Cloud Storage (...)] -->
  - Dgraph Client: <!-- [e.g. Dgo, Dgraph-js, dgraph4j, pydgraph] -->
 
 <!--  If you are not using Containerization, please delete this question snippet -->
@@ -40,6 +43,6 @@ Steps to reproduce the behavior:
 <!-- If applicable, add screenshots to help explain your problem. -->
 
 **Additional context**
-- Have you tried reproducing the issue with latest release?
+<!-- It can be references, unforeseen or unusual settings, personal statement, hypotheses and so on.    -->
 
 <!-- Add any other context about the problem here. -->
