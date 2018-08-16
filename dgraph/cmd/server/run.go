@@ -200,8 +200,10 @@ func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		grpc.MaxConcurrentStreams(1000))
 	api.RegisterDgraphServer(s, &edgraph.Server{})
 	err := s.Serve(l)
-	log.Printf("gRpc server stopped : %s", err.Error())
-	s.GracefulStop()
+	log.Printf("GRPC server stopped : %s", err.Error())
+	s.Stop()
+	// s.GracefulStop()
+	log.Println("GRPC server stop done.")
 }
 
 func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
@@ -268,7 +270,9 @@ func setupServer() {
 		<-sdCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		grpcListener.Close()
+		fmt.Println("grpc listener closed")
 		httpListener.Close()
+		fmt.Println("http listener closed")
 	}()
 
 	log.Println("gRPC server started.  Listening on port", grpcPort())
@@ -363,5 +367,7 @@ func run() {
 	// Setup external communication.
 	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
 	setupServer()
+	log.Println("GRPC and HTTP listeners stopped.")
 	worker.BlockingStop()
+	log.Println("Worker stopped. Bye!")
 }

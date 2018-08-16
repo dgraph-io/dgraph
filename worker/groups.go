@@ -9,6 +9,7 @@ package worker
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"sync/atomic"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -39,6 +41,7 @@ type groupi struct {
 	tablets   map[string]*intern.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
+	closer    *y.Closer
 }
 
 var gr *groupi
@@ -124,6 +127,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.Node.InitAndStartNode()
 
 	x.UpdateHealthStatus(true)
+	gr.closer = y.NewCloser(3)       // Match CLOSER:1 in this file.
 	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
 	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
@@ -479,6 +483,9 @@ func (g *groupi) triggerMembershipSync() {
 }
 
 func (g *groupi) periodicMembershipUpdate() {
+	defer log.Println("periodicMembershipUpdate")
+	defer g.closer.Done() // CLOSER:1
+
 	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
 	ticker := time.NewTicker(time.Minute * 5)
 	// Node might not be the leader when we are calculating size.
@@ -486,6 +493,11 @@ func (g *groupi) periodicMembershipUpdate() {
 	tablets := g.calculateTabletSizes()
 
 START:
+	select {
+	case <-g.closer.HasBeenClosed():
+		return
+	default:
+	}
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
@@ -524,6 +536,13 @@ START:
 OUTER:
 	for {
 		select {
+		case <-g.closer.HasBeenClosed():
+			stream.CloseSend()
+			break OUTER
+		case <-ctx.Done():
+			stream.CloseSend()
+			break OUTER
+
 		case <-g.triggerCh:
 			if !g.Node.AmLeader() {
 				tablets = nil
@@ -568,9 +587,6 @@ OUTER:
 				stream.CloseSend()
 				break OUTER
 			}
-		case <-ctx.Done():
-			stream.CloseSend()
-			break OUTER
 		}
 	}
 	goto START
@@ -602,8 +618,15 @@ func (g *groupi) hasReadOnlyTablets() bool {
 }
 
 func (g *groupi) cleanupTablets() {
+	defer log.Println("cleanupTablets")
+	defer g.closer.Done() // CLOSER:1
+
 	ticker := time.NewTimer(time.Minute * 10)
+	defer ticker.Stop()
+
 	select {
+	case <-g.closer.HasBeenClosed():
+		return
 	case <-ticker.C:
 		func() {
 			opt := badger.DefaultIteratorOptions
@@ -673,6 +696,9 @@ func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
 // Zero sends information about aborted/committed transactions and maxPending.
 func (g *groupi) processOracleDeltaStream() {
+	defer log.Println("processOracleDeltaStream")
+	defer g.closer.Done() // CLOSER:1
+
 	blockingReceiveAndPropose := func() {
 		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
 		defer elog.Finish()
@@ -739,6 +765,8 @@ func (g *groupi) processOracleDeltaStream() {
 				batch++
 			case <-ctx.Done():
 				return
+			case <-g.closer.HasBeenClosed():
+				return
 			}
 
 		SLURP:
@@ -776,7 +804,7 @@ func (g *groupi) processOracleDeltaStream() {
 	defer ticker.Stop()
 	for {
 		select {
-		case <-g.Node.stop:
+		case <-g.closer.HasBeenClosed():
 			return
 		case <-ticker.C:
 			// Only the leader needs to connect to Zero and get transaction
