@@ -496,6 +496,7 @@ START:
 		return
 	default:
 	}
+
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
