@@ -45,10 +45,8 @@ type node struct {
 	// Fields which are never changed after init.
 	applyCh chan raftpb.Entry
 	ctx     context.Context
-	// stop    chan struct{} // to send the stop signal to Run
-	// done    chan struct{} // to check whether node is running or not
-	gid    uint32
-	closer *y.Closer
+	gid     uint32
+	closer  *y.Closer
 
 	streaming int32 // Used to avoid calculating snapshot
 
@@ -90,10 +88,8 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
 		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
-		// stop:    make(chan struct{}),
-		// done:    make(chan struct{}),
-		elog:   trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer: y.NewCloser(2), // Matches CLOSER:1
+		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:  y.NewCloser(2), // Matches CLOSER:1
 	}
 	return n
 }
@@ -588,7 +584,7 @@ func (n *node) Run() {
 	for {
 		select {
 		case <-done:
-			log.Println("Node done")
+			log.Println("Raft node done.")
 			return
 
 		case <-slowTicker.C:
@@ -662,7 +658,6 @@ func (n *node) Run() {
 
 			// Now schedule or apply committed entries.
 			for idx, entry := range rd.CommittedEntries {
-				log.Printf("Looping through CE: idx: %d\n", idx)
 				// Need applied watermarks for schema mutation also for read linearazibility
 				// Applied watermarks needs to be emitted as soon as possible sequentially.
 				// If we emit Mark{4, false} and Mark{4, true} before emitting Mark{3, false}

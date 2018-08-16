@@ -97,10 +97,6 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	// Sleep for 5 seconds to ensure that commit/abort is proposed.
-	// time.Sleep(5 * time.Second)
-	// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	// defer cancel()
 	log.Println("Stopping group...")
 	groups().closer.SignalAndWait()
 
@@ -110,11 +106,6 @@ func BlockingStop() {
 	log.Printf("Stopping worker server...")
 	workerServer.Stop()
 
-	// workerServer.GracefulStop() // blocking stop server
-	// TODO: Is this required?
-	// log.Println("Applying marks...")
-	// groups().Node.applyAllMarks(ctx)
-	log.Println("Applied all marks")
-
+	// TODO: What is this for?
 	posting.StopLRUEviction()
 }

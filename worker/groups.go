@@ -9,7 +9,6 @@ package worker
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"sync/atomic"
 	"time"
@@ -483,7 +482,6 @@ func (g *groupi) triggerMembershipSync() {
 }
 
 func (g *groupi) periodicMembershipUpdate() {
-	defer log.Println("periodicMembershipUpdate")
 	defer g.closer.Done() // CLOSER:1
 
 	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
@@ -618,7 +616,6 @@ func (g *groupi) hasReadOnlyTablets() bool {
 }
 
 func (g *groupi) cleanupTablets() {
-	defer log.Println("cleanupTablets")
 	defer g.closer.Done() // CLOSER:1
 
 	ticker := time.NewTimer(time.Minute * 10)
@@ -696,7 +693,6 @@ func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
 // Zero sends information about aborted/committed transactions and maxPending.
 func (g *groupi) processOracleDeltaStream() {
-	defer log.Println("processOracleDeltaStream")
 	defer g.closer.Done() // CLOSER:1
 
 	blockingReceiveAndPropose := func() {
