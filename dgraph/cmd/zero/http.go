@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 )
@@ -38,6 +39,37 @@ func intFromQueryParam(w http.ResponseWriter, r *http.Request, name string) (uin
 		return 0, false
 	}
 	return val, true
+}
+
+func (st *state) assignUids(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+	val, ok := intFromQueryParam(w, r, "num")
+	if !ok {
+		return
+	}
+	num := &intern.Num{Val: uint64(val)}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	ids, err := st.zero.AssignUids(ctx, num)
+	if err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	m := jsonpb.Marshaler{}
+	if err := m.Marshal(w, ids); err != nil {
+		x.SetStatus(w, x.ErrorNoData, err.Error())
+		return
+	}
 }
 
 // removeNode can be used to remove a node from the cluster. It takes in the RAFT id of the node

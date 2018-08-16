@@ -1068,6 +1068,9 @@ to see useful information, like the following:
 
 * `/state` Information about the nodes that are part of the cluster. Also contains information about
   size of predicates and groups they belong to.
+* `/assignIds?num=100` This would allocate `num` ids and return a JSON map
+containing `startId` and `endId`, both inclusive. This id range can be safely assigned
+externally to new nodes, during data ingestion.
 * `/removeNode?id=3&group=2` If a replica goes down and can't be recovered, you can remove it and add a new node to the quorum.
 This endpoint can be used to remove a dead Zero or Dgraph server node. To remove dead Zero nodes, just pass `group=0` and the
 id of the Zero node.
