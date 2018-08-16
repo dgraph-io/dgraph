@@ -20,3 +20,5 @@ Thank you for being part of the Dgraph community, Cheers.
 ### What you actually did
 
 ### Why that wasn't great, with examples
+
+### Any external references to support your case
