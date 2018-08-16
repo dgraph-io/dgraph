@@ -33,10 +33,22 @@ about: Create a report to help us improve
 
 **To Reproduce**
 Steps to reproduce the behavior:
-1. Command/config used to run Dgraph. 
+
+<!-- Tips:
+e.g. 1 {
+If applicable, always start with:
+1. A mutation example relative to your original mutation.
+2. Queries close to actual use.
+3. So paste the approximate result in JSON
+4. Explain why it is not the desired result in "Expected behavior". Or if this action harms other things in the normal use of the Dgraph.
+}
+e.g. 2 {
+1. Command/config used to run Dgraph. (Important to know if it could be a bad instance configuration)
 2. Exec '....'
 3. "Ratel UI shows" '....'
-4. See error
+4. See error }
+-->
+
 
 **Expected behavior**
 <!-- A clear and concise description of what you expected to happen. -->
