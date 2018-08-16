@@ -571,7 +571,6 @@ func (n *node) Run() {
 	done := make(chan struct{})
 	go func() {
 		<-n.closer.HasBeenClosed()
-		log.Println("Got stop signal at node")
 		if peerId, has := groups().MyPeer(); has && n.AmLeader() {
 			n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 			time.Sleep(time.Second) // Let transfer happen.
