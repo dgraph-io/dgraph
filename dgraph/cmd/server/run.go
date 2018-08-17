@@ -200,8 +200,8 @@ func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		grpc.MaxConcurrentStreams(1000))
 	api.RegisterDgraphServer(s, &edgraph.Server{})
 	err := s.Serve(l)
-	log.Printf("gRpc server stopped : %s", err.Error())
-	s.GracefulStop()
+	log.Printf("GRPC listener canceled: %s\n", err.Error())
+	s.Stop()
 }
 
 func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
@@ -215,9 +215,7 @@ func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
 	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 	defer cancel()
-	err = srv.Shutdown(ctx)
-	log.Printf("All http(s) requests finished.")
-	if err != nil {
+	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("Http(s) shutdown err: %v", err.Error())
 	}
 }
@@ -265,7 +263,7 @@ func setupServer() {
 
 	go func() {
 		defer wg.Done()
-		<-sdCh
+		<-shutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		grpcListener.Close()
 		httpListener.Close()
@@ -276,7 +274,7 @@ func setupServer() {
 	wg.Wait()
 }
 
-var sdCh chan os.Signal
+var shutdownCh chan struct{}
 
 func run() {
 	config := edgraph.Options{
@@ -332,7 +330,9 @@ func run() {
 	worker.Init(edgraph.State.Pstore)
 
 	// setup shutdown os signal handler
-	sdCh = make(chan os.Signal, 3)
+	sdCh := make(chan os.Signal, 3)
+	shutdownCh = make(chan struct{})
+
 	var numShutDownSig int
 	defer func() {
 		signal.Stop(sdCh)
@@ -347,11 +347,14 @@ func run() {
 				if !ok {
 					return
 				}
+				select {
+				case <-shutdownCh:
+				default:
+					close(shutdownCh)
+				}
 				numShutDownSig++
 				x.Println("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
-				if numShutDownSig == 1 {
-					shutdownServer()
-				} else if numShutDownSig == 3 {
+				if numShutDownSig == 3 {
 					x.Println("Signaled thrice. Aborting!")
 					os.Exit(1)
 				}
@@ -363,5 +366,7 @@ func run() {
 	// Setup external communication.
 	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
 	setupServer()
+	log.Println("GRPC and HTTP stopped.")
 	worker.BlockingStop()
+	log.Println("Server shutdown. Bye!")
 }

@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -43,9 +45,8 @@ type node struct {
 	// Fields which are never changed after init.
 	applyCh chan raftpb.Entry
 	ctx     context.Context
-	stop    chan struct{} // to send the stop signal to Run
-	done    chan struct{} // to check whether node is running or not
 	gid     uint32
+	closer  *y.Closer
 
 	streaming int32 // Used to avoid calculating snapshot
 
@@ -87,9 +88,8 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
 		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
-		stop:    make(chan struct{}),
-		done:    make(chan struct{}),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:  y.NewCloser(2), // Matches CLOSER:1
 	}
 	return n
 }
@@ -422,6 +422,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 }
 
 func (n *node) processApplyCh() {
+	defer n.closer.Done() // CLOSER:1
 	for e := range n.applyCh {
 		proposal := &intern.Proposal{}
 		if err := proposal.Unmarshal(e.Data); err != nil {
@@ -556,6 +557,8 @@ func (n *node) proposeSnapshot() error {
 }
 
 func (n *node) Run() {
+	defer n.closer.Done() // CLOSER: 1
+
 	firstRun := true
 	var leader bool
 	// See also our configuration of HeartbeatTick and ElectionTick.
@@ -565,8 +568,24 @@ func (n *node) Run() {
 	slowTicker := time.NewTicker(time.Minute)
 	defer slowTicker.Stop()
 
+	done := make(chan struct{})
+	go func() {
+		<-n.closer.HasBeenClosed()
+		if peerId, has := groups().MyPeer(); has && n.AmLeader() {
+			n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
+			time.Sleep(time.Second) // Let transfer happen.
+		}
+		n.Raft().Stop()
+		close(n.applyCh)
+		close(done)
+	}()
+
 	for {
 		select {
+		case <-done:
+			log.Println("Raft node done.")
+			return
+
 		case <-slowTicker.C:
 			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
 			if leader {
@@ -697,42 +716,8 @@ func (n *node) Run() {
 				tr.LazyPrintf("Advanced Raft. Done.")
 				tr.Finish()
 			}
-
-		case <-n.stop:
-			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
-				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
-				go func() {
-					select {
-					case <-n.ctx.Done(): // time out
-						if tr, ok := trace.FromContext(n.ctx); ok {
-							tr.LazyPrintf("context timed out while transfering leadership")
-						}
-					case <-time.After(1 * time.Second):
-						if tr, ok := trace.FromContext(n.ctx); ok {
-							tr.LazyPrintf("Timed out transfering leadership")
-						}
-					}
-					n.Raft().Stop()
-					close(n.done)
-				}()
-			} else {
-				n.Raft().Stop()
-				close(n.done)
-			}
-		case <-n.done:
-			return
 		}
 	}
-}
-
-func (n *node) Stop() {
-	select {
-	case n.stop <- struct{}{}:
-	case <-n.done:
-		// already stopped.
-		return
-	}
-	<-n.done // wait for Run to respond.
 }
 
 var errConnection = errors.New("No connection exists")

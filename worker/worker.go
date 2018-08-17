@@ -15,9 +15,6 @@ import (
 	"math"
 	"net"
 	"sync"
-	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
@@ -100,12 +97,15 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	// Sleep for 5 seconds to ensure that commit/abort is proposed.
-	time.Sleep(5 * time.Second)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	groups().Node.Stop()        // blocking stop raft node.
-	workerServer.GracefulStop() // blocking stop server
-	groups().Node.applyAllMarks(ctx)
+	log.Println("Stopping group...")
+	groups().closer.SignalAndWait()
+
+	log.Println("Stopping node...")
+	groups().Node.closer.SignalAndWait()
+
+	log.Printf("Stopping worker server...")
+	workerServer.Stop()
+
+	// TODO: What is this for?
 	posting.StopLRUEviction()
 }
