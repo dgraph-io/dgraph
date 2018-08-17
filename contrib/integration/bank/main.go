@@ -17,6 +17,7 @@ import (
 	"log"
 	"math/rand"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,10 +29,11 @@ import (
 )
 
 var (
-	users = flag.Int("users", 100, "Number of accounts.")
-	conc  = flag.Int("txns", 10, "Number of concurrent transactions.")
-	dur   = flag.String("dur", "1m", "How long to run the transactions.")
-	addr  = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
+	users   = flag.Int("users", 100, "Number of accounts.")
+	conc    = flag.Int("txns", 10, "Number of concurrent transactions.")
+	dur     = flag.String("dur", "1m", "How long to run the transactions.")
+	addr    = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
+	verbose = flag.Bool("verbose", true, "Output all logs in verbose mode.")
 )
 
 var startBal int = 10
@@ -44,14 +46,13 @@ type Account struct {
 }
 
 type State struct {
-	dg     *dgo.Dgraph
 	aborts int32
 	runs   int32
 }
 
-func (s *State) createAccounts() {
+func (s *State) createAccounts(dg *dgo.Dgraph) {
 	op := api.Operation{DropAll: true}
-	x.Check(s.dg.Alter(context.Background(), &op))
+	x.Check(dg.Alter(context.Background(), &op))
 
 	op.DropAll = false
 	op.Schema = `
@@ -59,7 +60,7 @@ func (s *State) createAccounts() {
 	bal: int .
 	type: string @index(exact) @upsert .
 	`
-	x.Check(s.dg.Alter(context.Background(), &op))
+	x.Check(dg.Alter(context.Background(), &op))
 
 	var all []Account
 	for i := 1; i <= *users; i++ {
@@ -73,18 +74,20 @@ func (s *State) createAccounts() {
 	data, err := json.Marshal(all)
 	x.Check(err)
 
-	txn := s.dg.NewTxn()
+	txn := dg.NewTxn()
 	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(context.Background())
 	var mu api.Mutation
 	mu.SetJson = data
-	log.Printf("mutation: %s\n", mu.SetJson)
+	if *verbose {
+		log.Printf("mutation: %s\n", mu.SetJson)
+	}
 	_, err = txn.Mutate(context.Background(), &mu)
 	x.Check(err)
 	x.Check(txn.Commit(context.Background()))
 }
 
-func (s *State) runTotal() error {
+func (s *State) runTotal(dg *dgo.Dgraph) error {
 	query := `
 		{
 			q(func: eq(type, "ba")) {
@@ -94,7 +97,7 @@ func (s *State) runTotal() error {
 			}
 		}
 	`
-	txn := s.dg.NewTxn()
+	txn := dg.NewTxn()
 	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(context.Background())
 	resp, err := txn.Query(context.Background(), query)
@@ -114,7 +117,9 @@ func (s *State) runTotal() error {
 	for _, a := range accounts {
 		total += a.Bal
 	}
-	log.Printf("Read: %v. Total: %d\n", accounts, total)
+	if *verbose {
+		log.Printf("Read: %v. Total: %d\n", accounts, total)
+	}
 	if len(accounts) > *users {
 		log.Fatalf("len(accounts) = %d", len(accounts))
 	}
@@ -142,13 +147,15 @@ func (s *State) findAccount(txn *dgo.Txn, key int) (Account, error) {
 		log.Fatal("Found multiple accounts")
 	}
 	if len(accounts) == 0 {
-		log.Printf("Unable to find account for K_%02d. JSON: %s\n", key, resp.Json)
+		if *verbose {
+			log.Printf("Unable to find account for K_%02d. JSON: %s\n", key, resp.Json)
+		}
 		return Account{Key: key, Type: "ba"}, nil
 	}
 	return accounts[0], nil
 }
 
-func (s *State) runTransaction(buf *bytes.Buffer) error {
+func (s *State) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 	// w := os.Stdout
 	w := bufio.NewWriter(buf)
 	fmt.Fprintf(w, "==>\n")
@@ -158,13 +165,9 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 	}()
 
 	ctx := context.Background()
-	txn := s.dg.NewTxn()
+	txn := dg.NewTxn()
 	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(ctx)
-
-	if rand.Intn(*users) < 2 {
-		return s.runTotal()
-	}
 
 	var sk, sd int
 	for {
@@ -244,7 +247,7 @@ func (s *State) runTransaction(buf *bytes.Buffer) error {
 	return nil
 }
 
-func (s *State) loop(wg *sync.WaitGroup) {
+func (s *State) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
 	defer wg.Done()
 	dur, err := time.ParseDuration(*dur)
 	if err != nil {
@@ -253,17 +256,26 @@ func (s *State) loop(wg *sync.WaitGroup) {
 	end := time.Now().Add(dur)
 
 	var buf bytes.Buffer
-	for {
+	for i := 0; ; i++ {
+		if i%5 == 0 {
+			if err := s.runTotal(dg); err != nil {
+				log.Printf("Error while runTotal: %v", err)
+			}
+			continue
+		}
+
 		buf.Reset()
-		err := s.runTransaction(&buf)
-		log.Printf("Final error: %v. %s", err, buf.String())
+		err := s.runTransaction(dg, &buf)
+		if *verbose {
+			log.Printf("Final error: %v. %s", err, buf.String())
+		}
 		if err != nil {
 			atomic.AddInt32(&s.aborts, 1)
 		} else {
 			r := atomic.AddInt32(&s.runs, 1)
 			if r%100 == 0 {
 				a := atomic.LoadInt32(&s.aborts)
-				fmt.Printf("Runs: %d. Aborts: %d\r", r, a)
+				fmt.Printf("Runs: %d. Aborts: %d\n", r, a)
 			}
 			if time.Now().After(end) {
 				return
@@ -275,24 +287,31 @@ func (s *State) loop(wg *sync.WaitGroup) {
 func main() {
 	flag.Parse()
 
-	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
-	if err != nil {
-		log.Fatal(err)
-	}
-	dc := api.NewDgraphClient(conn)
+	all := strings.Split(*addr, ",")
+	x.AssertTrue(len(all) > 0)
 
-	dg := dgo.NewDgraphClient(dc)
-	s := State{dg: dg}
-	s.createAccounts()
+	var clients []*dgo.Dgraph
+	for _, one := range all {
+		conn, err := grpc.Dial(one, grpc.WithInsecure())
+		if err != nil {
+			log.Fatal(err)
+		}
+		dc := api.NewDgraphClient(conn)
+		dg := dgo.NewDgraphClient(dc)
+		clients = append(clients, dg)
+	}
+
+	s := State{}
+	s.createAccounts(clients[0])
 
 	var wg sync.WaitGroup
-	wg.Add(*conc)
-	for i := 0; i < *conc; i++ {
-		go s.loop(&wg)
+	for _, dg := range clients {
+		wg.Add(1)
+		go s.loop(dg, &wg)
 	}
 	wg.Wait()
 	fmt.Println()
 	fmt.Println("Total aborts", s.aborts)
 	fmt.Println("Total success", s.runs)
-	s.runTotal()
+	s.runTotal(clients[0])
 }

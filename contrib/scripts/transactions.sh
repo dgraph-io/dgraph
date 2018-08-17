@@ -12,7 +12,7 @@ runCluster
 echo "*  Running transaction tests."
 
 echo "*  Running bank tests"
-go run $contrib/integration/bank/main.go --addr=localhost:9180
+go run $contrib/integration/bank/main.go --addr=localhost:9180,localhost:9182,localhost:9183 --verbose=false
 
 echo "*  Running account upsert tests"
 go run $contrib/integration/acctupsert/main.go --addr=localhost:9180
