@@ -14,7 +14,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -43,14 +42,9 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shutdownServer()
+	close(shutdownCh)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`))
-}
-
-func shutdownServer() {
-	x.Printf("Got clean exit request")
-	sdCh <- os.Interrupt
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {

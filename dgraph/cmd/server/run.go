@@ -263,7 +263,7 @@ func setupServer() {
 
 	go func() {
 		defer wg.Done()
-		<-sdCh
+		<-shutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		grpcListener.Close()
 		httpListener.Close()
@@ -274,7 +274,7 @@ func setupServer() {
 	wg.Wait()
 }
 
-var sdCh chan os.Signal
+var shutdownCh chan struct{}
 
 func run() {
 	config := edgraph.Options{
@@ -330,7 +330,9 @@ func run() {
 	worker.Init(edgraph.State.Pstore)
 
 	// setup shutdown os signal handler
-	sdCh = make(chan os.Signal, 3)
+	sdCh := make(chan os.Signal, 3)
+	shutdownCh = make(chan struct{})
+
 	var numShutDownSig int
 	defer func() {
 		signal.Stop(sdCh)
@@ -345,11 +347,14 @@ func run() {
 				if !ok {
 					return
 				}
+				select {
+				case <-shutdownCh:
+				default:
+					close(shutdownCh)
+				}
 				numShutDownSig++
 				x.Println("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
-				if numShutDownSig == 1 {
-					shutdownServer()
-				} else if numShutDownSig == 3 {
+				if numShutDownSig == 3 {
 					x.Println("Signaled thrice. Aborting!")
 					os.Exit(1)
 				}
