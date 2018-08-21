@@ -8,6 +8,7 @@
 package cmd
 
 import (
+	goflag "flag"
 	"fmt"
 	"os"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -40,6 +42,7 @@ cluster.
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	goflag.Parse()
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -61,6 +64,7 @@ func init() {
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
 	rootConf.BindPFlags(RootCmd.PersistentFlags())
+	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 
 	var subcommands = []*x.SubCommand{
 		&bulk.Bulk, &live.Live, &server.Server, &zero.Zero, &version.Version, &debug.Debug,

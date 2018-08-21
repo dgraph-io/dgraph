@@ -10,11 +10,14 @@ package x
 import (
 	"sync"
 	"sync/atomic"
+
+	deadlock "github.com/sasha-s/go-deadlock"
 )
 
 // SafeMutex can be used in place of sync.RWMutex
 type SafeMutex struct {
-	m       sync.RWMutex
+	m deadlock.RWMutex
+	// m       sync.RWMutex
 	wait    *SafeWait
 	writer  int32
 	readers int32

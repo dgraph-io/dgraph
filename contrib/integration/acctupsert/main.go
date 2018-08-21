@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,6 +34,7 @@ var (
 	firsts = []string{"Paul", "Eric", "Jack", "John", "Martin"}
 	lasts  = []string{"Brown", "Smith", "Robinson", "Waters", "Taylor"}
 	ages   = []int{20, 25, 30, 35}
+	types  = []string{"CEO", "COO", "CTO", "CFO"}
 )
 
 type account struct {
@@ -135,10 +137,12 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
+	// expand(_all_) {uid}
 	q := fmt.Sprintf(`
 		{
 			get(func: eq(first, %q)) @filter(eq(last, %q) AND eq(age, %d)) {
 				uid
+				expand(_all_) {uid}
 			}
 		}
 	`, acc.first, acc.last, acc.age)
@@ -153,6 +157,10 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 	x.Check(json.Unmarshal(resp.GetJson(), &decode))
 
 	x.AssertTrue(len(decode.Get) <= 1)
+	s := rand.NewSource(time.Now().Unix())
+	r := rand.New(s) // initialize local pseudorandom generator
+	t := r.Intn(len(types))
+
 	var uid string
 	if len(decode.Get) == 1 {
 		x.AssertTrue(decode.Get[0].Uid != nil)
@@ -162,8 +170,9 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 			_:acct <first> %q .
 			_:acct <last>  %q .
 			_:acct <age>   "%d"^^<xs:int> .
-		`,
-			acc.first, acc.last, acc.age,
+			_:acct <%s> "" .
+		 `,
+			acc.first, acc.last, acc.age, types[t],
 		)
 		mu := &api.Mutation{SetNquads: []byte(nqs)}
 		assigned, err := txn.Mutate(ctx, mu)
@@ -172,7 +181,6 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 		}
 		uid = assigned.GetUids()["acct"]
 		x.AssertTrue(uid != "")
-
 	}
 
 	nq := fmt.Sprintf(`

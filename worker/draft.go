@@ -19,6 +19,7 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -365,10 +366,12 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 		return dy.ErrConflict
 	}
 	tr.LazyPrintf("Applying %d edges", len(m.Edges))
-	for _, edge := range m.Edges {
+	for idx, edge := range m.Edges {
 		err := posting.ErrRetry
 		for err == posting.ErrRetry {
+			tr.LazyPrintf("Applying edge=%+v\n", edge)
 			err = runMutation(ctx, edge, txn)
+			tr.LazyPrintf("Applying idx=%d . Err=%v", idx, err)
 		}
 		if err != nil {
 			tr.SetError()
@@ -411,7 +414,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		x.Printf("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
 		data, err := snap.Marshal()
 		x.Check(err)
-		// We can now discard all invalid versions of keys below this ts.
+		//	We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
 
@@ -959,6 +962,9 @@ func (n *node) InitAndStartNode() {
 			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
+		if glog.V(2) {
+			glog.Infof("Restart node complete")
+		}
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
 		if _, hasPeer := groups().MyPeer(); hasPeer {

@@ -914,6 +914,8 @@ func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 // If list consists of one or more languages, first available value is returned; if no language
 // from list match the values, processing is the same as for empty list.
 func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error) {
+	l.RLock()
+	defer l.RUnlock()
 	p, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return rval, err
@@ -922,8 +924,7 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 }
 
 func (l *List) postingFor(readTs uint64, langs []string) (p *intern.Posting, rerr error) {
-	l.RLock()
-	defer l.RUnlock()
+	l.AssertRLock()
 	return l.postingForLangs(readTs, langs)
 }
 
