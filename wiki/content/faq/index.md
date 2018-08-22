@@ -81,8 +81,13 @@ Please see Dgraph [product roadmap](https://github.com/dgraph-io/dgraph/issues/1
 
 ## Long Term Plans
 
-### Will Dgraph remain open source?
-Yes. We have 2 versions of Dgraph: Community, which is under open source license. And enterprise, which is closed-source. Unlike other databases, we include running Dgraph distributedly in our community version; because we aim our open source version at young startups, who need to scale as demand grows.
+### Is Dgraph open-core?
+Yes. The main core of Dgraph is [liberally
+licensed](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md), under
+Apache License modified with [Commons Clause](https://commonsclause.com/)
+restriction. Later, we plan to have enterprise features. Unlike other databases,
+we include running Dgraph distributedly under liberal license; because we want
+all our users to be able to scale as demand grows.
 
 ### Would Dgraph be well supported?
 Yes. We're VC funded and plan to use the funds for development. We have a dedicated team of really smart engineers working on this as their full-time job. And of course, we're always open to contributions from the wider community.
