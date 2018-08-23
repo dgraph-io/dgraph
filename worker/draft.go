@@ -124,6 +124,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")
 	}
+
 	// TODO: Should be based on number of edges (amount of work)
 	pendingProposals <- struct{}{}
 	x.PendingProposals.Add(1)
@@ -183,8 +184,14 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 			return err
 		}
 
+		if glog.V(3) {
+			glog.Infof("Proposing: %+v", proposal)
+		}
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return x.Wrapf(err, "While proposing")
+		}
+		if glog.V(3) {
+			glog.Infof("Raft propose done. Waiting for application...")
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Waiting for the proposal.")
@@ -409,7 +416,18 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return n.commitOrAbort(proposal.Key, proposal.Delta)
 
 	} else if proposal.Snapshot != nil {
+		existing, err := n.Store.Snapshot()
+		if err != nil {
+			return err
+		}
 		snap := proposal.Snapshot
+		if existing.Metadata.Index >= snap.Index {
+			log := fmt.Sprintf("Skipping snapshot at %d, because found one at %d",
+				snap.Index, existing.Metadata.Index)
+			n.elog.Printf(log)
+			glog.Info(log)
+			return nil
+		}
 		n.elog.Printf("Creating snapshot: %+v", snap)
 		x.Printf("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
 		data, err := snap.Marshal()
@@ -574,6 +592,7 @@ func (n *node) Run() {
 	done := make(chan struct{})
 	go func() {
 		<-n.closer.HasBeenClosed()
+		glog.Infof("Stopping node.Run")
 		if peerId, has := groups().MyPeer(); has && n.AmLeader() {
 			n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 			time.Sleep(time.Second) // Let transfer happen.
@@ -583,7 +602,7 @@ func (n *node) Run() {
 		close(done)
 	}()
 
-	for {
+	for i := 0; ; i++ {
 		select {
 		case <-done:
 			log.Println("Raft node done.")
@@ -602,6 +621,10 @@ func (n *node) Run() {
 			}
 
 		case <-ticker.C:
+			if glog.V(2) && i%1000 == 0 {
+				glog.Infof("n.Raft().Tick() called")
+				i = 0
+			}
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
@@ -685,7 +708,8 @@ func (n *node) Run() {
 					// TODO: Instead of sending each entry, we should just send
 					// the whole array of CommittedEntries. It would avoid
 					// blocking this loop.
-					n.applyCh <- entry
+					// HACK
+					// n.applyCh <- entry
 				}
 
 				// Move to debug log later.
@@ -712,6 +736,7 @@ func (n *node) Run() {
 
 			n.Raft().Advance()
 			if firstRun && n.canCampaign {
+				glog.Infoln("Try to campaign")
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
@@ -962,6 +987,7 @@ func (n *node) InitAndStartNode() {
 			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
+		// n.canCampaign = true
 		if glog.V(2) {
 			glog.Infof("Restart node complete")
 		}

@@ -310,6 +310,7 @@ func (n *node) run(r *raft) {
 			lead = r.lead
 		}
 
+		// glog.Infoln("Selecting over etcd raft")
 		select {
 		// TODO: maybe buffer the config propose if there exists one (the way
 		// described in raft dissertation)
@@ -351,6 +352,7 @@ func (n *node) run(r *raft) {
 			case <-n.done:
 			}
 		case <-n.tickc:
+			// glog.Infof("Picked from tick. Size of recvc: %d", len(n.recvc))
 			r.tick()
 		case readyc <- rd:
 			if rd.SoftState != nil {

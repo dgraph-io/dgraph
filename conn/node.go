@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
@@ -90,7 +91,7 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 			// the paper) in section 9.6. This setting can avoid that by only
 			// increasing the term, if the node has a good chance of becoming
 			// the leader.
-			PreVote: true,
+			// PreVote: true,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
@@ -126,7 +127,7 @@ func (n *Node) Raft() raft.Node {
 func (n *Node) SetConfState(cs *raftpb.ConfState) {
 	n.Lock()
 	defer n.Unlock()
-	x.Printf("Setting conf state to %+v\n", cs)
+	glog.Infof("Setting conf state to %+v\n", cs)
 	n._confState = cs
 }
 
@@ -215,7 +216,7 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptySnap(sp) {
-		x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
+		glog.Infof("Found Snapshot, Metadata: %+v\n", sp.Metadata)
 		restart = true
 		idx = sp.Metadata.Index
 	}
@@ -226,7 +227,7 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptyHardState(hd) {
-		x.Printf("Found hardstate: %+v\n", hd)
+		glog.Infof("Found hardstate: %+v\n", hd)
 		restart = true
 	}
 
@@ -235,7 +236,7 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 	if rerr != nil {
 		return
 	}
-	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
+	glog.Infof("Group %d found %d entries\n", n.RaftContext.Group, num)
 	// We'll always have at least one entry.
 	if num > 1 {
 		restart = true
@@ -292,7 +293,7 @@ func (n *Node) BatchAndSendMessages() {
 				if exists := failedConn[to]; !exists {
 					// So that we print error only the first time we are not able to connect.
 					// Otherwise, the log is polluted with multiple errors.
-					x.Printf("No healthy connection found to node Id: %d addr: [%s], err: %v\n",
+					glog.Infof("No healthy connection found to node Id: %d addr: [%s], err: %v\n",
 						to, addr, err)
 					failedConn[to] = true
 				}
@@ -325,7 +326,7 @@ func (n *Node) doSendMessage(pool *Pool, data []byte) {
 	go func() {
 		_, err := c.RaftMessage(ctx, batch)
 		if err != nil {
-			x.Printf("Error while sending message to node with addr: %s, err: %v\n", pool.Addr, err)
+			glog.Infof("Error while sending message to node with addr: %s, err: %v\n", pool.Addr, err)
 		}
 		ch <- err
 	}()
@@ -356,7 +357,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 	// a nil *pool.
 	if addr == n.MyAddr {
 		// TODO: Note this fact in more general peer health info somehow.
-		x.Printf("Peer %d claims same host as me\n", pid)
+		glog.Infof("Peer %d claims same host as me\n", pid)
 		n.SetPeer(pid, addr)
 		return
 	}
@@ -387,7 +388,7 @@ func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) erro
 		if cctx.Err() != nil {
 			return errInternalRetry
 		}
-		x.Printf("Error while proposing conf change: %v", err)
+		glog.Infof("Error while proposing conf change: %v", err)
 		return err
 	}
 	select {
@@ -419,8 +420,8 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	}
 	err = errInternalRetry
 	for err == errInternalRetry {
-		x.Printf("Trying to add %d to cluster. Addr: %v\n", pid, addr)
-		x.Printf("Current confstate at %d: %+v\n", n.Id, n.ConfState())
+		glog.Infof("Trying to add %d to cluster. Addr: %v\n", pid, addr)
+		glog.Infof("Current confstate at %d: %+v\n", n.Id, n.ConfState())
 		err = n.proposeConfChange(ctx, cc)
 	}
 	return err

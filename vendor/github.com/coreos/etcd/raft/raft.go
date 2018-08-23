@@ -26,6 +26,7 @@ import (
 	"time"
 
 	pb "github.com/coreos/etcd/raft/raftpb"
+	"github.com/golang/glog"
 )
 
 // None is a placeholder node ID used when there is no leader.
@@ -431,6 +432,7 @@ func (r *raft) sendHeartbeat(to uint64, ctx []byte) {
 	// or it might not have all the committed entries.
 	// The leader MUST NOT forward the follower's commit to
 	// an unmatched index.
+	glog.Infof("sendHeartbeat to: %d", to)
 	commit := min(r.prs[to].Match, r.raftLog.committed)
 	m := pb.Message{
 		To:      to,
@@ -525,8 +527,12 @@ func (r *raft) appendEntry(es ...pb.Entry) {
 // tickElection is run by followers and candidates after r.electionTimeout.
 func (r *raft) tickElection() {
 	r.electionElapsed++
+	if r.promotable() {
+		glog.Infoln("can be promoted")
+	}
 
 	if r.promotable() && r.pastElectionTimeout() {
+		glog.Infof("election timeout")
 		r.electionElapsed = 0
 		r.Step(pb.Message{From: r.id, Type: pb.MsgHup})
 	}
@@ -534,6 +540,7 @@ func (r *raft) tickElection() {
 
 // tickHeartbeat is run by leaders to send a MsgBeat after r.heartbeatTimeout.
 func (r *raft) tickHeartbeat() {
+	glog.Infof("tickHeartbeat")
 	r.heartbeatElapsed++
 	r.electionElapsed++
 
@@ -559,6 +566,7 @@ func (r *raft) tickHeartbeat() {
 }
 
 func (r *raft) becomeFollower(term uint64, lead uint64) {
+	glog.Infof("becomeFollower")
 	r.step = stepFollower
 	r.reset(term)
 	r.tick = r.tickElection
@@ -568,6 +576,7 @@ func (r *raft) becomeFollower(term uint64, lead uint64) {
 }
 
 func (r *raft) becomeCandidate() {
+	glog.Infof("becomeCandidate")
 	// TODO(xiangli) remove the panic when the raft implementation is stable
 	if r.state == StateLeader {
 		panic("invalid transition [leader -> candidate]")
@@ -581,6 +590,7 @@ func (r *raft) becomeCandidate() {
 }
 
 func (r *raft) becomePreCandidate() {
+	glog.Infof("becomePreCandidate")
 	// TODO(xiangli) remove the panic when the raft implementation is stable
 	if r.state == StateLeader {
 		panic("invalid transition [leader -> pre-candidate]")
@@ -595,6 +605,7 @@ func (r *raft) becomePreCandidate() {
 }
 
 func (r *raft) becomeLeader() {
+	glog.Infof("becomeLeader")
 	// TODO(xiangli) remove the panic when the raft implementation is stable
 	if r.state == StateFollower {
 		panic("invalid transition [follower -> leader]")
@@ -622,6 +633,7 @@ func (r *raft) becomeLeader() {
 }
 
 func (r *raft) campaign(t CampaignType) {
+	glog.Infof("campaign")
 	var term uint64
 	var voteMsg pb.MessageType
 	if t == campaignPreElection {
@@ -986,6 +998,7 @@ func stepLeader(r *raft, m pb.Message) {
 // stepCandidate is shared by StateCandidate and StatePreCandidate; the difference is
 // whether they respond to MsgVoteResp or MsgPreVoteResp.
 func stepCandidate(r *raft, m pb.Message) {
+	glog.Infoln("step Candidate")
 	// Only handle vote responses corresponding to our candidacy (while in
 	// StateCandidate, we may get stale MsgPreVoteResp messages in this term from
 	// our pre-candidate state).
@@ -1028,6 +1041,7 @@ func stepCandidate(r *raft, m pb.Message) {
 }
 
 func stepFollower(r *raft, m pb.Message) {
+	glog.Infoln("step Follower")
 	switch m.Type {
 	case pb.MsgProp:
 		if r.lead == None {

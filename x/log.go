@@ -22,9 +22,15 @@ var (
 // Let's add Printf to "x" and include "x" almost everywhere. Caution: Do remember
 // to call x.Init. For tests, you need a TestMain that calls x.Init.
 func Printf(format string, args ...interface{}) {
+	// if glog.V(2) {
+	// 	glog.Info(fmt.Sprintf(format, args...))
+	// }
 	Logger.Output(2, fmt.Sprintf(format, args...))
 }
 
 func Println(args ...interface{}) {
+	// if glog.V(2) {
+	// 	glog.Info(fmt.Sprintln(args...))
+	// }
 	Logger.Output(2, fmt.Sprintln(args...))
 }

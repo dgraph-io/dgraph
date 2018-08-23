@@ -19,6 +19,7 @@ import (
 	"log"
 
 	pb "github.com/coreos/etcd/raft/raftpb"
+	"github.com/golang/glog"
 )
 
 type raftLog struct {
@@ -51,10 +52,12 @@ func newLog(storage Storage, logger Logger) *raftLog {
 		logger:  logger,
 	}
 	firstIndex, err := storage.FirstIndex()
+	glog.Infof("NEWLOG. First: %d\n", firstIndex)
 	if err != nil {
 		panic(err) // TODO(bdarnell)
 	}
 	lastIndex, err := storage.LastIndex()
+	glog.Infof("NEWLOG. LastIndex: %d\n", lastIndex)
 	if err != nil {
 		panic(err) // TODO(bdarnell)
 	}

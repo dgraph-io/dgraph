@@ -575,6 +575,7 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error
 	if hi > last+1 {
 		return nil, raft.ErrUnavailable
 	}
+	w.elog.Printf("Returning [%d, %d)", lo, hi)
 
 	return w.allEntries(lo, hi, maxSize)
 }
