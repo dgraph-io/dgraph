@@ -66,7 +66,8 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.Equal(t, uint64(1), snap.Index)
 
 	// Check state of Raft store.
-	err = n.Store.CreateSnapshot(snap.Index, nil, nil)
+	var cs pb.ConfState
+	err = n.Store.CreateSnapshot(snap.Index, &cs, nil)
 	require.NoError(t, err)
 
 	first, err := n.Store.FirstIndex()
@@ -93,7 +94,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	require.Equal(t, uint64(8), snap.Index)
 
 	// Check state of Raft store.
-	err = n.Store.CreateSnapshot(snap.Index, nil, nil)
+	err = n.Store.CreateSnapshot(snap.Index, &cs, nil)
 	require.NoError(t, err)
 	first, err = n.Store.FirstIndex()
 	require.NoError(t, err)
