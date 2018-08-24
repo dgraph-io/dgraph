@@ -356,6 +356,9 @@ func (n *node) initAndStartNode() error {
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
 		if !raft.IsEmptySnap(sp) {
+			// It is important that we pick up the conf state here.
+			n.SetConfState(&sp.Metadata.ConfState)
+
 			var state intern.MembershipState
 			x.Check(state.Unmarshal(sp.Data))
 			n.server.SetMembershipState(&state)
