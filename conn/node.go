@@ -293,7 +293,7 @@ func (n *Node) BatchAndSendMessages() {
 				if exists := failedConn[to]; !exists {
 					// So that we print error only the first time we are not able to connect.
 					// Otherwise, the log is polluted with multiple errors.
-					glog.Warningf("No healthy connection found to node Id: %d addr: [%s], err: %v\n",
+					glog.Warningf("No healthy connection to node Id: %d addr: [%s], err: %v\n",
 						to, addr, err)
 					failedConn[to] = true
 				}
