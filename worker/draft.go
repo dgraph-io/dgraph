@@ -603,7 +603,7 @@ func (n *node) Run() {
 		close(done)
 	}()
 
-	for i := 0; ; i++ {
+	for {
 		select {
 		case <-done:
 			log.Println("Raft node done.")
@@ -622,10 +622,6 @@ func (n *node) Run() {
 			}
 
 		case <-ticker.C:
-			if glog.V(2) && i%1000 == 0 {
-				glog.Infof("n.Raft().Tick() called")
-				i = 0
-			}
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
@@ -736,7 +732,6 @@ func (n *node) Run() {
 
 			n.Raft().Advance()
 			if firstRun && n.canCampaign {
-				glog.Infoln("Try to campaign")
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
@@ -978,7 +973,13 @@ func (n *node) InitAndStartNode() {
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
 		if !raft.IsEmptySnap(sp) {
+			// It is important that we pick up the conf state here.
+			// Otherwise, we'll lose the store conf state, and it would get
+			// overwritten with an empty state when a new snapshot is taken.
+			// This causes a node to just hang on restart, because it finds a
+			// zero-member Raft group.
 			n.SetConfState(&sp.Metadata.ConfState)
+
 			members := groups().members(n.gid)
 			for _, id := range sp.Metadata.ConfState.Nodes {
 				m, ok := members[id]
@@ -988,12 +989,9 @@ func (n *node) InitAndStartNode() {
 			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
-		// n.canCampaign = true
-		if glog.V(2) {
-			glog.Infof("Restart node complete")
-		}
+		glog.V(2).Infoln("Restart node complete")
 	} else {
-		x.Printf("New Node for group: %d\n", n.gid)
+		glog.Infof("New Node for group: %d\n", n.gid)
 		if _, hasPeer := groups().MyPeer(); hasPeer {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.

@@ -594,9 +594,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Result, error) {
 	n := groups().Node
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Attr: %v. Waiting for Oracle waitForTs: %d", q.Attr, q.ReadTs)
-	}
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}

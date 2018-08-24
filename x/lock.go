@@ -14,7 +14,7 @@ import (
 
 // SafeMutex can be used in place of sync.RWMutex
 type SafeMutex struct {
-	// m deadlock.RWMutex // Useful for detecting locking issues.
+	// m deadlock.RWMutex // Very useful for detecting locking issues.
 	m       sync.RWMutex
 	wait    *SafeWait
 	writer  int32
