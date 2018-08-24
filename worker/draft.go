@@ -184,14 +184,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 			return err
 		}
 
-		if glog.V(3) {
-			glog.Infof("Proposing: %+v", proposal)
-		}
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return x.Wrapf(err, "While proposing")
-		}
-		if glog.V(3) {
-			glog.Infof("Raft propose done. Waiting for application...")
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Waiting for the proposal.")
@@ -251,7 +245,6 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	}
 
 	cs := n.Raft().ApplyConfChange(cc)
-	glog.Infof("----------> Set conf state: %+v", cs)
 	n.SetConfState(cs)
 	n.DoneConfChange(cc.ID, nil)
 }
@@ -374,12 +367,10 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 		return dy.ErrConflict
 	}
 	tr.LazyPrintf("Applying %d edges", len(m.Edges))
-	for idx, edge := range m.Edges {
+	for _, edge := range m.Edges {
 		err := posting.ErrRetry
 		for err == posting.ErrRetry {
-			tr.LazyPrintf("Applying edge=%+v\n", edge)
 			err = runMutation(ctx, edge, txn)
-			tr.LazyPrintf("Applying idx=%d . Err=%v", idx, err)
 		}
 		if err != nil {
 			tr.SetError()
@@ -430,7 +421,7 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 			return nil
 		}
 		n.elog.Printf("Creating snapshot: %+v", snap)
-		x.Printf("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
+		glog.Infof("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
 		data, err := snap.Marshal()
 		x.Check(err)
 		//	We can now discard all invalid versions of keys below this ts.
