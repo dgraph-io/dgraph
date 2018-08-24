@@ -14,10 +14,14 @@ function runAll {
   # go test -v .
   # popd
 
+  local testsFailed=0
   for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki|customtok'); do
     echo "Running test for $PKG"
-    run $PKG
+    run $PKG || {
+        testsFailed=$((testsFailed+1))
+    }
   done
+  return $testsFailed
 }
 
 # For piped commands return non-zero status if any command
@@ -25,7 +29,7 @@ function runAll {
 set -o pipefail
 echo
 echo "Running tests. Ignoring vendor folder."
-runAll
+runAll || exit $?
 
 echo
 echo "Running load-test.sh"
