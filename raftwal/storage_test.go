@@ -185,6 +185,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	u := ds.newUnifier()
 	require.NoError(t, ds.deleteUntil(u, 4))
 	require.NoError(t, u.Done())
+	ds.cache.firstIndex = 0
 	first, err = ds.FirstIndex()
 	if err != nil {
 		t.Errorf("err = %v, want nil", err)
@@ -227,6 +228,7 @@ func TestStorageCompact(t *testing.T) {
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
+		ds.cache.firstIndex = 0
 		index, err := ds.FirstIndex()
 		require.NoError(t, err)
 		// Do the minus one here to get the index of the snapshot.
