@@ -1352,6 +1352,50 @@ Raw data exported by Prometheus is available via `/debug/prometheus_metrics` end
 
 Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**.
 
+## Metrics
+
+Dgraph metrics follow the [metric and label conventions for Prometheus](https://prometheus.io/docs/practices/naming/).
+
+ Metrics                          | Description
+ -------                          | -----------
+ `badger_disk_reads_total`        | Total count of disk reads in Badger.
+ `badger_disk_writes_total`       | Total count of disk writes in Badger.
+ `badger_gets_total`              | Total count of calls to Badger's `get`.
+ `badger_memtable_gets_total`     | Total count of memtable accesses to Badger's `get`.
+ `badger_puts_total`              | Total count of calls to Badger's `put`.
+ `badger_read_bytes`              | Total bytes read from Badger.
+ `badger_written_bytes`           | Total bytes written to Badger.
+ `dgraph_active_mutations_total`  | Total number of mutations currently running.
+ `dgraph_cache_hits_total`        | Total number of cache hits for posting lists in Dgraph.
+ `dgraph_cache_miss_total`        | Total number of cache misses for posting lists in Dgraph.
+ `dgraph_cache_race_total`        | Total number of cache races when getting posting lists in Dgraph.
+ `dgraph_dirtymap_keys_total`     | Unused.
+ `dgraph_evicted_lists_total`     | Total number of posting lists evicted from LRU cache. A large number here could indicate a large posting list.
+ `dgraph_goroutines_total`        | Total number of Goroutines currently running in Dgraph.
+ `dgraph_heap_idle_bytes`         | Equivalent to Go's `go_memstats_heap_idle_bytes` metric.
+ `dgraph_lcache_capacity_bytes`   | Current size of the LRU cache. The max value should be close to the size specified by `--lru_mb`.
+ `dgraph_lcache_keys_total`       | Total number of keys in the LRU cache.
+ `dgraph_lcache_size_bytes`       | Size in bytes of the LRU cache.
+ `dgraph_max_list_bytes`          | Max posting list size in bytes.
+ `dgraph_max_list_length`         | Max posting list size of the number.
+ `dgraph_memory_inuse_bytes`      | Total memory usage in bytes (sum of heap usage and stack usage).
+ `dgraph_num_queries_total`       | Total number of queries run in Dgraph.
+ `dgraph_pending_proposals_total` | Total pending Raft proposals.
+ `dgraph_pending_quoeries_total`  | Total number of queries in progress.
+ `dgraph_posting_reads_total`     | Unused.
+ `dgraph_posting_writes_total`    | Total number of posting list writes to disk.
+ `dgraph_proc_memory_bytes`       | Total memory usage in bytes of the Dgraph process.
+ `dgraph_read_bytes_total`        | Total bytes read from Dgraph.
+ `dgraph_server_health_status`    | Value is 1 when the server is ready to accept requests; otherwise 0. Only applicable to Dgraph Server.
+
+Go's built-in metrics may also be useful to measure:
+
+ Metrics                        | Description
+ -------                        | -----------
+ `go_memstats_gc_cpu_fraction`  | The fraction of this program's available CPU time used by the GC since the program started.
+ `go_memstats_heap_idle_bytes`  | Number of heap bytes waiting to be used.
+ `go_memstats_heap_inuse_bytes` | Number of heap bytes that are in use.
+
 ## Dgraph Administration
 
 By default, admin actions can only be initiated from the machine on which the Dgraph server runs. `dgraph
