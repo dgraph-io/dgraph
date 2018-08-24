@@ -127,7 +127,7 @@ func (n *Node) Raft() raft.Node {
 func (n *Node) SetConfState(cs *raftpb.ConfState) {
 	n.Lock()
 	defer n.Unlock()
-	glog.Infof("Setting conf state to %+v\n", cs)
+	glog.Infof("-----> Setting conf state to %+v\n", cs)
 	n._confState = cs
 }
 

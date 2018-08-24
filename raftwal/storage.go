@@ -582,7 +582,7 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error
 
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) error {
 	if glog.V(2) {
-		glog.Info("CreateSnapshot i=%d.", i)
+		glog.Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
 	}
 	first, err := w.FirstIndex()
 	if err != nil {
@@ -606,9 +606,8 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 	var snap pb.Snapshot
 	snap.Metadata.Index = i
 	snap.Metadata.Term = e.Term
-	if cs != nil {
-		snap.Metadata.ConfState = *cs
-	}
+	x.AssertTrue(cs != nil)
+	snap.Metadata.ConfState = *cs
 	snap.Data = data
 
 	u := w.newUnifier()

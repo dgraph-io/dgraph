@@ -270,6 +270,7 @@ func newRaft(c *Config) *raft {
 	}
 	raftlog := newLog(c.Storage, c.Logger)
 	hs, cs, err := c.Storage.InitialState()
+	glog.Infof("hs, cs, err: %+v %+v %v", hs, cs, err)
 	if err != nil {
 		panic(err) // TODO(bdarnell)
 	}
@@ -298,6 +299,7 @@ func newRaft(c *Config) *raft {
 		readOnly:         newReadOnly(c.ReadOnlyOption),
 	}
 	for _, p := range peers {
+		glog.Infof("XXXXXXXXXXX Peers: %+v", p)
 		r.prs[p] = &Progress{Next: 1, ins: newInflights(r.maxInflight)}
 	}
 	if !isHardStateEqual(hs, emptyState) {
@@ -540,7 +542,7 @@ func (r *raft) tickElection() {
 
 // tickHeartbeat is run by leaders to send a MsgBeat after r.heartbeatTimeout.
 func (r *raft) tickHeartbeat() {
-	glog.Infof("tickHeartbeat")
+	// glog.Infof("tickHeartbeat")
 	r.heartbeatElapsed++
 	r.electionElapsed++
 

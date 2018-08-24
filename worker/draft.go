@@ -251,6 +251,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	}
 
 	cs := n.Raft().ApplyConfChange(cc)
+	glog.Infof("----------> Set conf state: %+v", cs)
 	n.SetConfState(cs)
 	n.DoneConfChange(cc.ID, nil)
 }
@@ -708,8 +709,7 @@ func (n *node) Run() {
 					// TODO: Instead of sending each entry, we should just send
 					// the whole array of CommittedEntries. It would avoid
 					// blocking this loop.
-					// HACK
-					// n.applyCh <- entry
+					n.applyCh <- entry
 				}
 
 				// Move to debug log later.
@@ -978,6 +978,7 @@ func (n *node) InitAndStartNode() {
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
 		if !raft.IsEmptySnap(sp) {
+			n.SetConfState(&sp.Metadata.ConfState)
 			members := groups().members(n.gid)
 			for _, id := range sp.Metadata.ConfState.Nodes {
 				m, ok := members[id]

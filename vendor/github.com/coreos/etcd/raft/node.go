@@ -18,6 +18,7 @@ import (
 	"errors"
 
 	pb "github.com/coreos/etcd/raft/raftpb"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
@@ -216,6 +217,7 @@ func StartNode(c *Config, peers []Peer) Node {
 // If the caller has an existing state machine, pass in the last log index that
 // has been applied to it; otherwise use zero.
 func RestartNode(c *Config) Node {
+	glog.Infof("Restart node with config: %+v", c)
 	r := newRaft(c)
 
 	n := newNode()
