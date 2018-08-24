@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -235,6 +236,10 @@ func (s *ServerState) getTimestamp() uint64 {
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	if glog.V(2) {
+		glog.Infof("Received ALTER op: %+v", op)
+		defer glog.Infof("ALTER op: %+v done", op)
+	}
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
@@ -397,6 +402,9 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Response, err error) {
+	if glog.V(3) {
+		glog.Infof("Got a query: %+v", req)
+	}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)

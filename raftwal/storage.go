@@ -17,6 +17,7 @@ import (
 	"github.com/coreos/etcd/raft"
 	pb "github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -65,13 +66,27 @@ func (u *txnUnifier) Cancel() {
 
 type localCache struct {
 	sync.RWMutex
-	snap pb.Snapshot
+	firstIndex uint64
+	snap       pb.Snapshot
+}
+
+func (c *localCache) setFirst(first uint64) {
+	c.Lock()
+	defer c.Unlock()
+	c.firstIndex = first
+}
+
+func (c *localCache) first() uint64 {
+	c.RLock()
+	defer c.RUnlock()
+	return c.firstIndex
 }
 
 func (c *localCache) setSnapshot(s pb.Snapshot) {
 	c.Lock()
 	defer c.Unlock()
 	c.snap = s
+	c.firstIndex = 0 // Reset firstIndex.
 }
 
 func (c *localCache) snapshot() pb.Snapshot {
@@ -240,7 +255,16 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 	if !raft.IsEmptySnap(snap) {
 		return snap.Metadata.Index + 1, nil
 	}
+	if first := w.cache.first(); first > 0 {
+		return first, nil
+	}
 	index, err := w.seekEntry(nil, 0, false)
+	if err == nil {
+		glog.V(2).Infof("Setting first index: %d", index+1)
+		w.cache.setFirst(index + 1)
+	} else {
+		glog.Errorf("While seekEntry. Error: %v", err)
+	}
 	return index + 1, err
 }
 
@@ -549,11 +573,13 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error
 }
 
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) error {
+	glog.V(2).Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
 	first, err := w.FirstIndex()
 	if err != nil {
 		return err
 	}
 	if i < first {
+		glog.Errorf("i=%d<first=%d, ErrSnapOutOfDate", i, first)
 		return raft.ErrSnapOutOfDate
 	}
 
@@ -568,9 +594,8 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 	var snap pb.Snapshot
 	snap.Metadata.Index = i
 	snap.Metadata.Term = e.Term
-	if cs != nil {
-		snap.Metadata.ConfState = *cs
-	}
+	x.AssertTrue(cs != nil)
+	snap.Metadata.ConfState = *cs
 	snap.Data = data
 
 	u := w.newUnifier()

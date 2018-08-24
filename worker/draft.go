@@ -19,6 +19,7 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -123,6 +124,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) er
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")
 	}
+
 	// TODO: Should be based on number of edges (amount of work)
 	pendingProposals <- struct{}{}
 	x.PendingProposals.Add(1)
@@ -406,12 +408,23 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		return n.commitOrAbort(proposal.Key, proposal.Delta)
 
 	} else if proposal.Snapshot != nil {
+		existing, err := n.Store.Snapshot()
+		if err != nil {
+			return err
+		}
 		snap := proposal.Snapshot
+		if existing.Metadata.Index >= snap.Index {
+			log := fmt.Sprintf("Skipping snapshot at %d, because found one at %d",
+				snap.Index, existing.Metadata.Index)
+			n.elog.Printf(log)
+			glog.Info(log)
+			return nil
+		}
 		n.elog.Printf("Creating snapshot: %+v", snap)
-		x.Printf("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
+		glog.Infof("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
 		data, err := snap.Marshal()
 		x.Check(err)
-		// We can now discard all invalid versions of keys below this ts.
+		//	We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
 
@@ -571,6 +584,7 @@ func (n *node) Run() {
 	done := make(chan struct{})
 	go func() {
 		<-n.closer.HasBeenClosed()
+		glog.Infof("Stopping node.Run")
 		if peerId, has := groups().MyPeer(); has && n.AmLeader() {
 			n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 			time.Sleep(time.Second) // Let transfer happen.
@@ -950,6 +964,13 @@ func (n *node) InitAndStartNode() {
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
 		if !raft.IsEmptySnap(sp) {
+			// It is important that we pick up the conf state here.
+			// Otherwise, we'll lose the store conf state, and it would get
+			// overwritten with an empty state when a new snapshot is taken.
+			// This causes a node to just hang on restart, because it finds a
+			// zero-member Raft group.
+			n.SetConfState(&sp.Metadata.ConfState)
+
 			members := groups().members(n.gid)
 			for _, id := range sp.Metadata.ConfState.Nodes {
 				m, ok := members[id]
@@ -959,8 +980,9 @@ func (n *node) InitAndStartNode() {
 			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
+		glog.V(2).Infoln("Restart node complete")
 	} else {
-		x.Printf("New Node for group: %d\n", n.gid)
+		glog.Infof("New Node for group: %d\n", n.gid)
 		if _, hasPeer := groups().MyPeer(); hasPeer {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
