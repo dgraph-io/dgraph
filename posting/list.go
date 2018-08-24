@@ -914,7 +914,7 @@ func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 // If list consists of one or more languages, first available value is returned; if no language
 // from list match the values, processing is the same as for empty list.
 func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error) {
-	l.RLock()
+	l.RLock() // All public methods should acquire locks, while private ones should assert them.
 	defer l.RUnlock()
 	p, err := l.postingFor(readTs, langs)
 	if err != nil {
@@ -924,7 +924,7 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 }
 
 func (l *List) postingFor(readTs uint64, langs []string) (p *intern.Posting, rerr error) {
-	l.AssertRLock()
+	l.AssertRLock() // Avoid recursive locking by asserting a lock here.
 	return l.postingForLangs(readTs, langs)
 }
 

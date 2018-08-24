@@ -112,9 +112,6 @@ func (pr *Progress) becomeSnapshot(snapshoti uint64) {
 // maybeUpdate returns false if the given n index comes from an outdated message.
 // Otherwise it updates the progress and returns true.
 func (pr *Progress) maybeUpdate(n uint64) bool {
-	if pr == nil {
-		return false
-	}
 	var updated bool
 	if pr.Match < n {
 		pr.Match = n

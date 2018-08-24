@@ -137,7 +137,6 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
-	// expand(_all_) {uid}
 	q := fmt.Sprintf(`
 		{
 			get(func: eq(first, %q)) @filter(eq(last, %q) AND eq(age, %d)) {
@@ -157,9 +156,7 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 	x.Check(json.Unmarshal(resp.GetJson(), &decode))
 
 	x.AssertTrue(len(decode.Get) <= 1)
-	s := rand.NewSource(time.Now().Unix())
-	r := rand.New(s) // initialize local pseudorandom generator
-	t := r.Intn(len(types))
+	t := rand.Intn(len(types))
 
 	var uid string
 	if len(decode.Get) == 1 {

@@ -86,6 +86,7 @@ func (c *localCache) setSnapshot(s pb.Snapshot) {
 	c.Lock()
 	defer c.Unlock()
 	c.snap = s
+	c.firstIndex = 0 // Reset firstIndex.
 }
 
 func (c *localCache) snapshot() pb.Snapshot {
@@ -252,22 +253,14 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint6
 func (w *DiskStorage) FirstIndex() (uint64, error) {
 	snap := w.cache.snapshot()
 	if !raft.IsEmptySnap(snap) {
-		if glog.V(3) {
-			glog.Infof("Cached. Snapshot index: %d", snap.Metadata.Index)
-		}
 		return snap.Metadata.Index + 1, nil
 	}
 	if first := w.cache.first(); first > 0 {
-		if glog.V(3) {
-			glog.Infof("Cached. First: %d", first)
-		}
 		return first, nil
 	}
 	index, err := w.seekEntry(nil, 0, false)
 	if err == nil {
-		if glog.V(2) {
-			glog.Infof("Setting first index: %d", index+1)
-		}
+		glog.V(2).Infof("Setting first index: %d", index+1)
 		w.cache.setFirst(index + 1)
 	} else {
 		glog.Errorf("While seekEntry. Error: %v", err)
@@ -575,23 +568,18 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error
 	if hi > last+1 {
 		return nil, raft.ErrUnavailable
 	}
-	w.elog.Printf("Returning [%d, %d)", lo, hi)
 
 	return w.allEntries(lo, hi, maxSize)
 }
 
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) error {
-	if glog.V(2) {
-		glog.Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
-	}
+	glog.V(2).Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
 	first, err := w.FirstIndex()
 	if err != nil {
 		return err
 	}
 	if i < first {
-		if glog.V(2) {
-			glog.Errorf("i=%d<first=%d, ErrSnapOutOfDate", i, first)
-		}
+		glog.Errorf("i=%d<first=%d, ErrSnapOutOfDate", i, first)
 		return raft.ErrSnapOutOfDate
 	}
 
