@@ -22,6 +22,8 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/google/uuid"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 )
@@ -178,6 +180,12 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 
 	state := n.server.state
 	state.Counter = e.Index
+	if len(p.Uuid) > 0 {
+		if len(state.Uuid) > 0 {
+			return p.Key, errInvalidProposal
+		}
+		state.Uuid = p.Uuid
+	}
 	if p.MaxRaftId > 0 {
 		if p.MaxRaftId <= state.MaxRaftId {
 			return p.Key, errInvalidProposal
@@ -411,6 +419,23 @@ func (n *node) initAndStartNode() error {
 		x.Check(err)
 		peers := []raft.Peer{{ID: n.Id, Context: data}}
 		n.SetRaft(raft.StartNode(n.Cfg, peers))
+
+		go func() {
+			// This is a new cluster. So, propose a new UUID for the cluster.
+			for {
+				id := uuid.New().String()
+				err := n.proposeAndWait(context.Background(), &intern.ZeroProposal{Uuid: id})
+				if err == nil {
+					glog.Infof("UUID set for cluster: %v", id)
+					return
+				}
+				if err == errInvalidProposal {
+					return
+				}
+				glog.Errorf("While proposing UUID: %v. Retrying...", err)
+				time.Sleep(3 * time.Second)
+			}
+		}()
 	}
 
 	go n.Run()

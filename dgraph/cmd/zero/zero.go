@@ -19,6 +19,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
 )
 
 var (
@@ -72,6 +73,41 @@ func (s *Server) Init() {
 	s.shutDownCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
 	go s.purgeOracle()
+}
+
+func (s *Server) periodicallyPostTelemetry() {
+	glog.V(2).Infof("Starting telemetry data collection...")
+	start := time.Now()
+	// TODO: Switch this to an hour.
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	var count int
+	for range ticker.C {
+		count++
+		if !s.Node.AmLeader() {
+			continue
+		}
+		// if count == 1 {
+		// 	continue // Only get pings after the first tick.
+		// }
+		ms := s.membershipState()
+		t := Telemetry{
+			Uuid:       ms.GetUuid(),
+			NumGroups:  len(ms.GetGroups()),
+			NumZeros:   len(ms.GetZeros()),
+			SinceHours: int(time.Since(start).Hours()),
+			Version:    x.Version(),
+		}
+		for _, g := range ms.GetGroups() {
+			t.NumAlphas += len(g.GetMembers())
+		}
+		t.ClusterSize = t.NumAlphas + t.NumZeros
+		glog.V(2).Infof("Posting Telemetry data: %+v", t)
+
+		err := t.post()
+		glog.V(2).Infof("Telemetry data posted with error: %v", err)
+	}
 }
 
 func (s *Server) triggerLeaderChange() {
