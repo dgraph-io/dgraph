@@ -78,19 +78,22 @@ func (s *Server) Init() {
 func (s *Server) periodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection...")
 	start := time.Now()
-	// TODO: Switch this to an hour.
+
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	var count int
+	var lastPostedAt time.Time
 	for range ticker.C {
-		count++
 		if !s.Node.AmLeader() {
 			continue
 		}
-		// if count == 1 {
-		// 	continue // Only get pings after the first tick.
-		// }
+		if time.Since(lastPostedAt) < time.Hour {
+			continue
+		}
+		if time.Since(start) < time.Minute {
+			// Give it a minute to gather nodes.
+			continue
+		}
 		ms := s.membershipState()
 		t := Telemetry{
 			Uuid:       ms.GetUuid(),
@@ -107,6 +110,9 @@ func (s *Server) periodicallyPostTelemetry() {
 
 		err := t.post()
 		glog.V(2).Infof("Telemetry data posted with error: %v", err)
+		if err == nil {
+			lastPostedAt = time.Now()
+		}
 	}
 }
 

@@ -26,12 +26,16 @@ type Telemetry struct {
 	Version     string
 }
 
-var url = "https://api.keen.io/3.0/projects/5b809dfac9e77c0001783ad0/events/pings"
+var keenUrl = "https://api.keen.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
 
 func (t *Telemetry) post() error {
 	data, err := json.Marshal(t)
 	if err != nil {
 		return err
+	}
+	url := keenUrl + "/dev"
+	if len(t.Version) > 0 {
+		url = keenUrl + "/pings"
 	}
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
