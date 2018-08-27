@@ -17,7 +17,7 @@ import (
 )
 
 type Telemetry struct {
-	Uuid        string
+	Cid         string
 	NumGroups   int
 	NumZeros    int
 	NumAlphas   int

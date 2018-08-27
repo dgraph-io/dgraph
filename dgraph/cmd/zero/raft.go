@@ -180,11 +180,11 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 
 	state := n.server.state
 	state.Counter = e.Index
-	if len(p.Uuid) > 0 {
-		if len(state.Uuid) > 0 {
+	if len(p.Cid) > 0 {
+		if len(state.Cid) > 0 {
 			return p.Key, errInvalidProposal
 		}
-		state.Uuid = p.Uuid
+		state.Cid = p.Cid
 	}
 	if p.MaxRaftId > 0 {
 		if p.MaxRaftId <= state.MaxRaftId {
@@ -424,7 +424,7 @@ func (n *node) initAndStartNode() error {
 			// This is a new cluster. So, propose a new UUID for the cluster.
 			for {
 				id := uuid.New().String()
-				err := n.proposeAndWait(context.Background(), &intern.ZeroProposal{Uuid: id})
+				err := n.proposeAndWait(context.Background(), &intern.ZeroProposal{Cid: id})
 				if err == nil {
 					glog.Infof("UUID set for cluster: %v", id)
 					return

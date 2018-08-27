@@ -90,13 +90,13 @@ func (s *Server) periodicallyPostTelemetry() {
 		if time.Since(lastPostedAt) < time.Hour {
 			continue
 		}
-		if time.Since(start) < time.Minute {
-			// Give it a minute to gather nodes.
+		ms := s.membershipState()
+		if len(ms.Cid) == 0 {
+			glog.V(2).Infoln("No CID found yet")
 			continue
 		}
-		ms := s.membershipState()
 		t := Telemetry{
-			Uuid:       ms.GetUuid(),
+			Cid:        ms.Cid,
 			NumGroups:  len(ms.GetGroups()),
 			NumZeros:   len(ms.GetZeros()),
 			SinceHours: int(time.Since(start).Hours()),
