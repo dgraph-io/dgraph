@@ -426,13 +426,13 @@ func (n *node) initAndStartNode() error {
 				id := uuid.New().String()
 				err := n.proposeAndWait(context.Background(), &intern.ZeroProposal{Cid: id})
 				if err == nil {
-					glog.Infof("UUID set for cluster: %v", id)
+					glog.Infof("CID set for cluster: %v", id)
 					return
 				}
 				if err == errInvalidProposal {
 					return
 				}
-				glog.Errorf("While proposing UUID: %v. Retrying...", err)
+				glog.Errorf("While proposing CID: %v. Retrying...", err)
 				time.Sleep(3 * time.Second)
 			}
 		}()
