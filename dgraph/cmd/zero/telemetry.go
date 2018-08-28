@@ -52,9 +52,10 @@ func newTelemetry(ms *intern.MembershipState) *Telemetry {
 		t.NumAlphas += len(g.GetMembers())
 		for _, tablet := range g.GetTablets() {
 			t.NumTablets++
-			t.DiskUsageMB += tablet.GetSpace() / (1 << 20)
+			t.DiskUsageMB += tablet.GetSpace()
 		}
 	}
+	t.DiskUsageMB /= (1 << 20)
 	t.ClusterSize = t.NumAlphas + t.NumZeros
 	glog.V(2).Infof("Posting Telemetry data: %+v", t)
 	return t
