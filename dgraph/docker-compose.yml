@@ -5,13 +5,13 @@
 version: "3.5"
 services:
   zero1:
-    image: debian:latest
+    image: dgraph/dgraph:latest
     container_name: bank-dg0.1
     working_dir: /data/dg0.1
     ports:
       - 5080:5080
       - 6080:6080
-    command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10
+    command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -22,7 +22,7 @@ services:
       #   target: /data
 
   zero2:
-    image: debian:latest
+    image: dgraph/dgraph:latest
     container_name: bank-dg0.2
     command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --peer=zero1:5080 --idx 2
     ports:
@@ -35,7 +35,7 @@ services:
         read_only: true
 
   zero3:
-    image: debian:latest
+    image: dgraph/dgraph:latest
     container_name: bank-dg0.3
     command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --peer=zero1:5080 --idx 3
     ports:
@@ -49,6 +49,7 @@ services:
 
   # zero4:
   #   image: debian:latest
+    # image: dgraph/dgraph:latest
   #   container_name: bank-dg0.4
   #   command: /gobin/dgraph zero --my=zero4:5080 --replicas 3 --peer=zero1:5080 --idx 4
   #   volumes:
@@ -59,6 +60,7 @@ services:
 
   # zero5:
   #   image: debian:latest
+    # image: dgraph/dgraph:latest
   #   container_name: bank-dg0.5
   #   command: /gobin/dgraph zero --my=zero5:5080 --replicas 3 --peer=zero1:5080 --idx 5
   #   volumes:
@@ -68,7 +70,7 @@ services:
   #       read_only: true
 
   dg1:
-    image: debian:latest
+    image: dgraph/dgraph:latest
     container_name: bank-dg1
     working_dir: /data/dg1
     volumes:
@@ -85,7 +87,7 @@ services:
     command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
 
   dg2:
-    image: debian:latest
+    image: dgraph/dgraph:latest
     container_name: bank-dg2
     working_dir: /data/dg2
     volumes:
@@ -102,7 +104,7 @@ services:
     command: /gobin/dgraph server --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
 
   dg3:
-    image: debian:latest
+    image: dgraph/dgraph:latest
     container_name: bank-dg3
     working_dir: /data/dg3
     volumes:
@@ -120,6 +122,7 @@ services:
 
   # dg4:
   #   image: debian:latest
+    # image: dgraph/dgraph:latest
   #   container_name: bank-dg4
   #   working_dir: /data/dg4
   #   volumes:
@@ -137,6 +140,7 @@ services:
 
   # dg5:
   #   image: debian:latest
+    # image: dgraph/dgraph:latest
   #   container_name: bank-dg5
   #   working_dir: /data/dg5
   #   volumes:

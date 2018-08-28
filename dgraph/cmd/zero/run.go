@@ -72,6 +72,7 @@ instances to achieve high-availability.
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
+	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -195,6 +196,10 @@ func run() {
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
+
+	if Zero.Conf.GetBool("telemetry") {
+		go st.zero.periodicallyPostTelemetry()
+	}
 
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)

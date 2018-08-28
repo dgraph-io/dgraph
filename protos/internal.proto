@@ -134,6 +134,7 @@ message ZeroProposal {
 	uint64 maxRaftId = 6;
 	api.TxnContext txn = 7;
 	string key = 8;  // Used as unique identifier for proposal id.
+	string cid = 9; // Used as unique identifier for the cluster.
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -147,6 +148,7 @@ message MembershipState {
 	uint64 maxTxnTs = 5;
 	uint64 maxRaftId = 6;
 	repeated Member removed = 7;
+	string cid = 8; // Used to uniquely identify the Dgraph cluster.
 }
 
 message ConnectionState {

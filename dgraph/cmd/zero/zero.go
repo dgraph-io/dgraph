@@ -19,6 +19,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
 )
 
 var (
@@ -72,6 +73,37 @@ func (s *Server) Init() {
 	s.shutDownCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
 	go s.purgeOracle()
+}
+
+func (s *Server) periodicallyPostTelemetry() {
+	glog.V(2).Infof("Starting telemetry data collection...")
+	start := time.Now()
+
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	var lastPostedAt time.Time
+	for range ticker.C {
+		if !s.Node.AmLeader() {
+			continue
+		}
+		if time.Since(lastPostedAt) < time.Hour {
+			continue
+		}
+		ms := s.membershipState()
+		t := newTelemetry(ms)
+		if t == nil {
+			continue
+		}
+		t.SinceHours = int(time.Since(start).Hours())
+		glog.V(2).Infof("Posting Telemetry data: %+v", t)
+
+		err := t.post()
+		glog.V(2).Infof("Telemetry data posted with error: %v", err)
+		if err == nil {
+			lastPostedAt = time.Now()
+		}
+	}
 }
 
 func (s *Server) triggerLeaderChange() {
