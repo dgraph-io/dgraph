@@ -12,21 +12,53 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"runtime"
 
+	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
 type Telemetry struct {
+	Arch        string
 	Cid         string
-	NumGroups   int
-	NumZeros    int
-	NumAlphas   int
 	ClusterSize int
+	DiskUsageMB int64
+	NumAlphas   int
+	NumGroups   int
+	NumTablets  int
+	NumZeros    int
+	OS          string
 	SinceHours  int
 	Version     string
 }
 
 var keenUrl = "https://api.keen.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
+
+func newTelemetry(ms *intern.MembershipState) *Telemetry {
+	if len(ms.Cid) == 0 {
+		glog.V(2).Infoln("No CID found yet")
+		return nil
+	}
+	t := &Telemetry{
+		Cid:       ms.Cid,
+		NumGroups: len(ms.GetGroups()),
+		NumZeros:  len(ms.GetZeros()),
+		Version:   x.Version(),
+		OS:        runtime.GOOS,
+		Arch:      runtime.GOARCH,
+	}
+	for _, g := range ms.GetGroups() {
+		t.NumAlphas += len(g.GetMembers())
+		for _, tablet := range g.GetTablets() {
+			t.NumTablets++
+			t.DiskUsageMB += tablet.GetSpace() / (1 << 20)
+		}
+	}
+	t.ClusterSize = t.NumAlphas + t.NumZeros
+	glog.V(2).Infof("Posting Telemetry data: %+v", t)
+	return t
+}
 
 func (t *Telemetry) post() error {
 	data, err := json.Marshal(t)

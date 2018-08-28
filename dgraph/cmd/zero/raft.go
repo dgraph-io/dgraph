@@ -421,7 +421,7 @@ func (n *node) initAndStartNode() error {
 		n.SetRaft(raft.StartNode(n.Cfg, peers))
 
 		go func() {
-			// This is a new cluster. So, propose a new UUID for the cluster.
+			// This is a new cluster. So, propose a new ID for the cluster.
 			for {
 				id := uuid.New().String()
 				err := n.proposeAndWait(context.Background(), &intern.ZeroProposal{Cid: id})

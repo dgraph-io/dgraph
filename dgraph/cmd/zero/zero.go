@@ -91,21 +91,11 @@ func (s *Server) periodicallyPostTelemetry() {
 			continue
 		}
 		ms := s.membershipState()
-		if len(ms.Cid) == 0 {
-			glog.V(2).Infoln("No CID found yet")
+		t := newTelemetry(ms)
+		if t == nil {
 			continue
 		}
-		t := Telemetry{
-			Cid:        ms.Cid,
-			NumGroups:  len(ms.GetGroups()),
-			NumZeros:   len(ms.GetZeros()),
-			SinceHours: int(time.Since(start).Hours()),
-			Version:    x.Version(),
-		}
-		for _, g := range ms.GetGroups() {
-			t.NumAlphas += len(g.GetMembers())
-		}
-		t.ClusterSize = t.NumAlphas + t.NumZeros
+		t.SinceHours = int(time.Since(start).Hours())
 		glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
 		err := t.post()
