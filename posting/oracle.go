@@ -40,7 +40,11 @@ type Txn struct {
 	// Deltas keeps track of the posting list keys, and whether they should be considered for
 	// conflict detection or not. When a txn is marked committed or aborted, we use the keys stored
 	// here to determine which posting lists to get and update.
-	deltas map[string]bool
+	deltas map[string]struct{}
+
+	// Keeps track of conflict keys that should be used to determine if this
+	// transaction conflicts with another.
+	conflicts map[string]struct{}
 
 	// Keeps track of last update wall clock. We use this fact later to
 	// determine unhealthy, stale txns.

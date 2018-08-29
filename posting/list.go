@@ -326,14 +326,40 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 		return y.ErrConflict
 	}
 
-	// TODO: We should ensure that commit marks are applied to posting lists in the right
+	getKey := func(key []byte, uid uint64) string {
+		return fmt.Sprintf("%s|%s", key, uid)
+	}
+
+	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
-	checkConflict := false
+	var conflictKey string
 	if t.Attr == "_predicate_" {
 		// Don't check for conflict.
-	} else if x.Parse(l.key).IsData() || schema.State().HasUpsert(t.Attr) {
-		checkConflict = true
+
+	} else if schema.State().HasUpsert(t.Attr) {
+		// Consider checking to see if a email id is unique. A user adds:
+		// <uid> <email> "email@email.org", and there's a string equal tokenizer
+		// and upsert directive on the schema.
+		// Then keys are "<email> <uid>" and "<email> email@email.org"
+		// The first key won't conflict, because two different uids can try to
+		// get the same email id. But, the second key would. Thus, we ensure
+		// that two users don't set the same email id.
+		conflictKey = getKey(l.key, 0)
+
+	} else if x.Parse(l.key).IsData() {
+		// Unless upsert is specified, we don't check for index conflicts, only
+		// data conflicts.
+		// If the data is of type UID, then we use SPO for conflict detection.
+		// Otherwise, we use SP (for string, date, int, etc.).
+		typ, err := schema.State().TypeOf(t.Attr)
+		if err != nil {
+			// Don't check for conflict.
+		} else if typ == types.UidID {
+			conflictKey = getKey(l.key, t.ValueId)
+		} else {
+			conflictKey = getKey(l.key, 0)
+		}
 	}
 
 	mpost := NewPosting(t)
@@ -351,7 +377,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mutationMap), len(l.plist.Uids))
 		}
 	}
-	txn.AddDelta(l.key, checkConflict)
+	txn.AddKeys(string(l.key), conflictKey)
 	return nil
 }
 

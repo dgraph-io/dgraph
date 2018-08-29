@@ -8,7 +8,6 @@
 package zero
 
 import (
-	"encoding/base64"
 	"errors"
 	"math/rand"
 	"sort"
@@ -29,7 +28,7 @@ type Oracle struct {
 	x.SafeMutex
 	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
-	rowCommit   map[string]uint64 // fp(key) -> commitTs. Used to detect conflict.
+	keyCommit   map[string]uint64 // fp(key) -> commitTs. Used to detect conflict.
 	maxAssigned uint64            // max transaction assigned by us.
 
 	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
@@ -44,7 +43,7 @@ type Oracle struct {
 
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	o.rowCommit = make(map[string]uint64)
+	o.keyCommit = make(map[string]uint64)
 	o.subscribers = make(map[int]chan *intern.OracleDelta)
 	o.updates = make(chan *intern.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init()
@@ -55,7 +54,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
 	o.startTxnTs = ts
-	o.rowCommit = make(map[string]uint64)
+	o.keyCommit = make(map[string]uint64)
 }
 
 func (o *Oracle) hasConflict(src *api.TxnContext) bool {
@@ -64,7 +63,7 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 		return true
 	}
 	for _, k := range src.Keys {
-		if last := o.rowCommit[k]; last > src.StartTs {
+		if last := o.keyCommit[k]; last > src.StartTs {
 			return true
 		}
 	}
@@ -83,15 +82,15 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	}
 	// There is no transaction running with startTs less than minTs
 	// So we can delete everything from rowCommit whose commitTs < minTs
-	for key, ts := range o.rowCommit {
+	for key, ts := range o.keyCommit {
 		if ts < minTs {
-			delete(o.rowCommit, key)
+			delete(o.keyCommit, key)
 		}
 	}
 	o.tmax = minTs
 	x.Printf("Purged below ts:%d, len(o.commits):%d"+
 		", len(o.rowCommit):%d\n",
-		minTs, len(o.commits), len(o.rowCommit))
+		minTs, len(o.commits), len(o.keyCommit))
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
@@ -102,7 +101,7 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 		return errConflict
 	}
 	for _, k := range src.Keys {
-		o.rowCommit[k] = src.CommitTs // CommitTs is handed out before calling this func.
+		o.keyCommit[k] = src.CommitTs // CommitTs is handed out before calling this func.
 	}
 	return nil
 }
@@ -197,6 +196,7 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 }
 
 func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
+	// TODO: We should check if the tablet is in read-only status here.
 	if o.updateCommitStatusHelper(index, src) {
 		delta := new(intern.OracleDelta)
 		delta.Txns = append(delta.Txns, &intern.TxnStatus{
@@ -285,15 +285,8 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	// which sneaked in during the move.
 	preds["_predicate_"] = struct{}{}
 
-	for _, k := range src.Keys {
-		key, err := base64.StdEncoding.DecodeString(k)
-		if err != nil {
-			continue
-		}
-		pk := x.Parse(key)
-		if pk != nil {
-			preds[pk.Attr] = struct{}{}
-		}
+	for _, k := range src.Preds {
+		preds[k] = struct{}{}
 	}
 	for pred := range preds {
 		tablet := s.ServingTablet(pred)
@@ -302,10 +295,6 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 			return s.proposeTxn(ctx, src)
 		}
 	}
-
-	// TODO: We could take fingerprint of the keys, and store them in uint64, allowing the rowCommit
-	// map to be keyed by uint64, which would be cheaper. But, unsure about the repurcussions of
-	// that. It would save some memory. So, worth a try.
 
 	num := intern.Num{Val: 1}
 	assigned, err := s.lease(ctx, &num, true)

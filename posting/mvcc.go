@@ -9,8 +9,8 @@ package posting
 
 import (
 	"bytes"
-	"encoding/base64"
 	"math"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -18,6 +18,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 )
 
 var (
@@ -35,25 +36,36 @@ func (t *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&t.shouldAbort) > 0
 }
 
-func (t *Txn) AddDelta(key []byte, checkConflict bool) {
+func (t *Txn) AddKeys(key, conflictKey string) {
 	t.Lock()
 	defer t.Unlock()
-	if t.deltas == nil {
-		t.deltas = make(map[string]bool)
+	if t.deltas == nil || t.conflicts == nil {
+		t.deltas = make(map[string]struct{})
+		t.conflicts = make(map[string]struct{})
 	}
-	t.deltas[string(key)] = checkConflict
+	t.deltas[key] = struct{}{}
+	if len(conflictKey) > 0 {
+		t.conflicts[conflictKey] = struct{}{}
+	}
 }
 
 func (t *Txn) Fill(ctx *api.TxnContext) {
 	t.Lock()
 	defer t.Unlock()
 	ctx.StartTs = t.StartTs
-	for key, checkConflict := range t.deltas {
-		if checkConflict {
-			// Instead of taking a fingerprint of the keys, send the whole key to Zero. So, Zero can
-			// parse the key and check if that predicate is undergoing a move, hence avoiding #2338.
-			k := base64.StdEncoding.EncodeToString([]byte(key))
-			ctx.Keys = append(ctx.Keys, k)
+	for key := range t.conflicts {
+		// We don't need to send the whole conflict key to Zero. Solving #2338
+		// should be done by sending a list of mutating predicates to Zero,
+		// along with the keys to be used for conflict detection.
+		fps := strconv.FormatUint(farm.Fingerprint64([]byte(key)), 36)
+		if !x.HasString(ctx.Keys, fps) {
+			ctx.Keys = append(ctx.Keys, fps)
+		}
+	}
+	for key := range t.deltas {
+		pk := x.Parse([]byte(key))
+		if !x.HasString(ctx.Preds, pk.Attr) {
+			ctx.Preds = append(ctx.Preds, pk.Attr)
 		}
 	}
 }
