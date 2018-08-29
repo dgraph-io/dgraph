@@ -327,7 +327,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 	}
 
 	getKey := func(key []byte, uid uint64) string {
-		return fmt.Sprintf("%s|%s", key, uid)
+		return fmt.Sprintf("%s|%d", key, uid)
 	}
 
 	// We ensure that commit marks are applied to posting lists in the right
