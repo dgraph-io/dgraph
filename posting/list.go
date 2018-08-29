@@ -21,6 +21,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
@@ -354,6 +355,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *intern.DirectedEdge
 		// Otherwise, we use SP (for string, date, int, etc.).
 		typ, err := schema.State().TypeOf(t.Attr)
 		if err != nil {
+			glog.V(2).Infof("Unable to find type of attr: %s. Err: %v", t.Attr, err)
 			// Don't check for conflict.
 		} else if typ == types.UidID {
 			conflictKey = getKey(l.key, t.ValueId)
