@@ -18,6 +18,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -450,6 +451,106 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	}
 	expectedResp := []byte(fmt.Sprintf(`{"me":[{"uid":"%s"}]}`, uid))
 	x.AssertTrue(bytes.Equal(resp.Json, expectedResp))
+}
+
+func TestEmailUpsert(t *testing.T) {
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, s.dg.Alter(context.Background(), op))
+
+	op = &api.Operation{}
+	op.Schema = `email: string @index(exact) @upsert .`
+	if err := s.dg.Alter(context.Background(), op); err != nil {
+		log.Fatal(err)
+	}
+
+	txn1 := s.dg.NewTxn()
+	mu := &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "_:user1", "email": "email@email.org"}`)
+	_, err := txn1.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn2 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "_:user2", "email": "email@email.org"}`)
+	_, err = txn2.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn3 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "_:user3", "email": "email3@email.org"}`)
+	_, err = txn3.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	require.NoError(t, txn1.Commit(context.Background()))
+	require.NotNil(t, txn2.Commit(context.Background()))
+	require.NoError(t, txn3.Commit(context.Background()))
+}
+
+// TestFriendList tests that we are not able to set a node to node edge between
+// the same nodes concurrently.
+func TestFriendList(t *testing.T) {
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, s.dg.Alter(context.Background(), op))
+
+	op = &api.Operation{}
+	op.Schema = `
+	friend: uid @reverse .`
+	if err := s.dg.Alter(context.Background(), op); err != nil {
+		log.Fatal(err)
+	}
+
+	txn1 := s.dg.NewTxn()
+	mu := &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "friend": [{"uid": "0x02"}]}`)
+	_, err := txn1.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn2 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "friend": [{"uid": "0x02"}]}`)
+	_, err = txn2.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn3 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "friend": [{"uid": "0x03"}]}`)
+	_, err = txn3.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	require.NoError(t, txn1.Commit(context.Background()))
+	require.NotNil(t, txn2.Commit(context.Background()))
+	require.NoError(t, txn3.Commit(context.Background()))
+}
+
+// TestNameSet tests that we are not able to set a property edge for the same
+// subject id concurrently.
+func TestNameSet(t *testing.T) {
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, s.dg.Alter(context.Background(), op))
+
+	op = &api.Operation{}
+	op.Schema = `name: string .`
+	if err := s.dg.Alter(context.Background(), op); err != nil {
+		log.Fatal(err)
+	}
+
+	txn1 := s.dg.NewTxn()
+	mu := &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "name": "manish"}`)
+	_, err := txn1.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn2 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "name": "contributor"}`)
+	_, err = txn2.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	require.NoError(t, txn1.Commit(context.Background()))
+	require.NotNil(t, txn2.Commit(context.Background()))
 }
 
 func TestSPStar(t *testing.T) {
