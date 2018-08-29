@@ -9,14 +9,12 @@ package server
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"strconv"
 	"testing"
 
@@ -160,12 +158,6 @@ func TestTransactionBasic(t *testing.T) {
 	keys, mts, err := mutationWithTs(m1, false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	sort.Strings(keys)
-	for _, k := range keys {
-		kb, err := base64.StdEncoding.DecodeString(k)
-		require.NoError(t, err)
-		_ = x.Parse(kb) // Ensure that we can parse the key.
-	}
 	require.Equal(t, 3, len(keys))
 
 	data, _, err := queryWithTs(q1, 0)

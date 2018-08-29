@@ -37,7 +37,7 @@ type Res3 struct {
 	Root Res2 `json:"data"`
 }
 
-func TestShare(t *testing.T) {
+func DONOTRUN_TestShare(t *testing.T) {
 	dgraphServer := "http://localhost:8081/share?debug=true"
 	client := new(http.Client)
 	q := `%7B%0A%20%20me(func:%20eq(name,%20%22Steven%20Spielberg%22))%20%7B%0A%09%09name%0A%09%09director.film%20%7B%0A%09%09%09name%0A%09%09%7D%0A%20%20%7D%0A%7D`

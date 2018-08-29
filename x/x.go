@@ -159,6 +159,15 @@ func Max(a, b uint64) uint64 {
 	return b
 }
 
+func HasString(a []string, b string) bool {
+	for _, k := range a {
+		if k == b {
+			return true
+		}
+	}
+	return false
+}
+
 var Nilbyte []byte
 
 // Reads a single line from a buffered reader. The line is read into the

@@ -15,7 +15,7 @@ function runAll {
   # popd
 
   local testsFailed=0
-  for PKG in $(go list ./...|grep -v -E 'vendor|contrib|wiki|customtok'); do
+  for PKG in $(go list ./...|grep -v -E 'vendor|wiki|customtok'); do
     echo "Running test for $PKG"
     run $PKG || {
         testsFailed=$((testsFailed+1))

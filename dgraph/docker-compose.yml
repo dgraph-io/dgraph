@@ -24,7 +24,7 @@ services:
   zero2:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.2
-    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --peer=zero1:5080 --idx 2
+    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --peer=zero1:5080 --idx 2 --logtostderr -v=2
     ports:
       - 5082:5082
       - 6082:6082
@@ -37,7 +37,7 @@ services:
   zero3:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.3
-    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --peer=zero1:5080 --idx 3
+    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --peer=zero1:5080 --idx 3 --logtostderr -v=2
     ports:
       - 5083:5083
       - 6083:6083
@@ -84,7 +84,7 @@ services:
     ports:
       - 8180:8180
       - 9180:9180
-    command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
+    command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
 
   dg2:
     image: dgraph/dgraph:latest
@@ -101,7 +101,7 @@ services:
     ports:
       - 8182:8182
       - 9182:9182
-    command: /gobin/dgraph server --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10
+    command: /gobin/dgraph server --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
 
   dg3:
     image: dgraph/dgraph:latest
@@ -118,7 +118,7 @@ services:
     ports:
       - 8183:8183
       - 9183:9183
-    command: /gobin/dgraph server --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10
+    command: /gobin/dgraph server --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
 
   # dg4:
   #   image: debian:latest

@@ -57,7 +57,6 @@ func newTelemetry(ms *intern.MembershipState) *Telemetry {
 	}
 	t.DiskUsageMB /= (1 << 20)
 	t.ClusterSize = t.NumAlphas + t.NumZeros
-	glog.V(2).Infof("Posting Telemetry data: %+v", t)
 	return t
 }
 
