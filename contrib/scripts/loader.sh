@@ -34,7 +34,7 @@ done
 rm -f alter.txt
 
 echo -e "\nRunning dgraph live."
-dgraph live -r goldendata.rdf.gz -d "127.0.0.1:9180" -z "127.0.0.1:5080"
+dgraph live -r goldendata.rdf.gz -d "127.0.0.1:9180" -z "127.0.0.1:5080" -c 10
 popd
 rm -Rf tmp
 
