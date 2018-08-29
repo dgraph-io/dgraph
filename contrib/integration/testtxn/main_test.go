@@ -13,10 +13,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -26,75 +23,24 @@ import (
 )
 
 type state struct {
-	Commands []*exec.Cmd
-	Dirs     []string
-	dg       *dgo.Dgraph
+	dg *dgo.Dgraph
 }
 
 var s state
+var addr string = "localhost:9180"
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	zero := exec.Command(os.ExpandEnv("dgraph"), "zero", "-w=wz")
-	zero.Stdout = os.Stdout
-	zero.Stderr = os.Stderr
-	if err := zero.Start(); err != nil {
-		log.Fatal(err)
-	}
-	s.Dirs = append(s.Dirs, "wz")
-	s.Commands = append(s.Commands, zero)
-
-	time.Sleep(5 * time.Second)
-	dgraph := exec.Command(os.ExpandEnv("dgraph"),
-		"server",
-		"--lru_mb=2048",
-		fmt.Sprintf("--zero=127.0.0.1:%d", 5080),
-		"-o=1",
-	)
-	dgraph.Stdout = os.Stdout
-	dgraph.Stderr = os.Stderr
-
-	if err := dgraph.Start(); err != nil {
-		log.Fatal(err)
-	}
-	time.Sleep(5 * time.Second)
-
-	s.Commands = append(s.Commands, dgraph)
-	s.Dirs = append(s.Dirs, "p", "w")
-
-	conn, err := grpc.Dial("localhost:9081", grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
 	dc := api.NewDgraphClient(conn)
-
 	dg := dgo.NewDgraphClient(dc)
 	s.dg = dg
-	var wg sync.WaitGroup
-
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			s.dg.NewTxn()
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-
-	op := &api.Operation{}
-	op.Schema = `name: string @index(fulltext) .`
-	if err := s.dg.Alter(context.Background(), op); err != nil {
-		log.Fatal(err)
-	}
 
 	r := m.Run()
-	for _, cmd := range s.Commands {
-		cmd.Process.Kill()
-	}
-	for _, dir := range s.Dirs {
-		os.RemoveAll(dir)
-	}
 	os.Exit(r)
 }
 
@@ -265,7 +211,7 @@ func TestTxnRead5(t *testing.T) {
 		Query: q,
 	}
 
-	conn, err := grpc.Dial("localhost:9081", grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
