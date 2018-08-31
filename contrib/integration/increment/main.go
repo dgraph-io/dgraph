@@ -26,8 +26,9 @@ import (
 var addr = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
 
 type Counter struct {
-	Uid string `json:"uid"`
-	Val int    `json:"val"`
+	Uid  string `json:"uid"`
+	Val  int    `json:"val"`
+	Type string `json:"type.counter"`
 }
 
 func increment(dg *dgo.Dgraph) (int, error) {
@@ -35,7 +36,7 @@ func increment(dg *dgo.Dgraph) (int, error) {
 	defer cancel()
 
 	txn := dg.NewTxn()
-	resp, err := txn.Query(ctx, `{ q(func: uid(0x01)) { uid, val }}`)
+	resp, err := txn.Query(ctx, `{ q(func: has(type.counter)) { uid, val }}`)
 	if err != nil {
 		return 0, err
 	}
@@ -45,7 +46,7 @@ func increment(dg *dgo.Dgraph) (int, error) {
 	}
 	var counter Counter
 	if len(m["q"]) == 0 {
-		counter.Uid = "0x01"
+		// Do nothing.
 	} else if len(m["q"]) == 1 {
 		counter = m["q"][0]
 	} else {
