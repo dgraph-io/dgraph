@@ -278,7 +278,7 @@ Run this query to get all the movies. The query works below all the movies have 
 curl localhost:8080/query -XPOST -d $'
 {
  me(func: has(starring)) {
-   name@en
+   name
   }
 }
 ' | python -m json.tool | less
