@@ -32,7 +32,7 @@ set -o xtrace
 type strip
 type shasum
 
-# ratel_release="github.com/dgraph-io/ratel/server.ratelVersion"
+ratel_release="github.com/dgraph-io/ratel/server.ratelVersion"
 release="github.com/dgraph-io/dgraph/x.dgraphVersion"
 branch="github.com/dgraph-io/dgraph/x.gitBranch"
 commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
@@ -70,16 +70,16 @@ pushd $basedir/dgraph
 popd
 
 # Clone ratel repo.
-# pushd $basedir
-#   git clone git@github.com:dgraph-io/ratel.git
-# popd
+pushd $basedir
+  git clone git@github.com:dgraph-io/ratel.git
+popd
 
-# pushd $basedir/ratel
-#   git pull
-#   source ~/.nvm/nvm.sh
-#   nvm install --lts
-#   ./scripts/build.prod.sh
-# popd
+pushd $basedir/ratel
+  git pull
+  source ~/.nvm/nvm.sh
+  nvm install --lts
+  ./scripts/build.prod.sh
+popd
 
 # Build Windows.
 pushd $basedir/dgraph/dgraph
@@ -89,10 +89,10 @@ pushd $basedir/dgraph/dgraph
   mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
 popd
 
-# pushd $basedir/ratel
-# 	xgo --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
-# 	mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
-# popd
+pushd $basedir/ratel
+	xgo --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
+	mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
+popd
 
 # Build Darwin.
 pushd $basedir/dgraph/dgraph
@@ -102,10 +102,10 @@ pushd $basedir/dgraph/dgraph
   mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
 popd
 
-# pushd $basedir/ratel
-# 	xgo --targets=darwin-10.9/amd64 -ldflags "-X $ratel_release=$release_version" .
-# 	mv ratel-darwin-10.9-amd64 $TMP/darwin/dgraph-ratel
-# popd
+pushd $basedir/ratel
+	xgo --targets=darwin-10.9/amd64 -ldflags "-X $ratel_release=$release_version" .
+	mv ratel-darwin-10.9-amd64 $TMP/darwin/dgraph-ratel
+popd
 
 # Build Linux.
 pushd $basedir/dgraph/dgraph
@@ -116,11 +116,11 @@ pushd $basedir/dgraph/dgraph
   mv dgraph-linux-amd64 $TMP/linux/dgraph
 popd
 
-# pushd $basedir/ratel
-# 	xgo --targets=linux/amd64 -ldflags "-X $ratel_release=$release_version" .
-#   strip -x ratel-linux-amd64
-# 	mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
-# popd
+pushd $basedir/ratel
+	xgo --targets=linux/amd64 -ldflags "-X $ratel_release=$release_version" .
+  strip -x ratel-linux-amd64
+	mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
+popd
 
 createSum () {
   os=$1
@@ -128,8 +128,8 @@ createSum () {
   pushd $TMP/$os
     csum=$(shasum -a 256 dgraph | awk '{print $1}')
     echo $csum /usr/local/bin/dgraph >> ../dgraph-checksum-$os-amd64.sha256
-    # csum=$(shasum -a 256 dgraph-ratel | awk '{print $1}')
-    # echo $csum /usr/local/bin/dgraph-ratel >> ../dgraph-checksum-$os-amd64.sha256
+    csum=$(shasum -a 256 dgraph-ratel | awk '{print $1}')
+    echo $csum /usr/local/bin/dgraph-ratel >> ../dgraph-checksum-$os-amd64.sha256
   popd
 }
 
