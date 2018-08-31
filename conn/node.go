@@ -322,24 +322,16 @@ func (n *Node) doSendMessage(pool *Pool, data []byte) {
 		Payload: p,
 	}
 
-	ch := make(chan error, 1)
-	go func() {
-		_, err := c.RaftMessage(ctx, batch)
-		if err != nil {
-			glog.Warningf("Error while sending message to node with addr: %s, err: %v\n",
-				pool.Addr, err)
-		}
-		ch <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return
-	case <-ch:
-		// We don't need to do anything if we receive any error while sending message.
-		// RAFT would automatically retry.
-		return
+	// We don't need to run this in a goroutine, because doSendMessage is
+	// already being run in one.
+	_, err := c.RaftMessage(ctx, batch)
+	if err != nil {
+		glog.V(3).Infof("Error while sending Raft message to node with addr: %s, err: %v\n",
+			pool.Addr, err)
 	}
+	// We don't need to do anything if we receive any error while sending message.
+	// RAFT would automatically retry.
+	return
 }
 
 // Connects the node and makes its peerPool refer to the constructed pool and address
