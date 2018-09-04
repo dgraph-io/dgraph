@@ -12,6 +12,7 @@ import (
 	"context"
 	"math"
 	"sync"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -261,12 +262,20 @@ func (temp *SubGraph) copyFiltersRecurse(sg *SubGraph) {
 	}
 }
 
-func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
+func KShortestPath(parentCtx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
+	var ctx context.Context
 	if sg.Params.Alias != "shortest" {
 		return nil, x.Errorf("Invalid shortest path query")
 	}
-
+	// setting timeout context
+	if sg.Params.Timeout > 0 {
+		var cacel func()
+		ctx, cacel = context.WithTimeout(parentCtx, time.Duration(sg.Params.Timeout)*time.Millisecond)
+		defer cacel()
+	} else {
+		ctx = parentCtx
+	}
 	numPaths := sg.Params.numPaths
 	var kroutes []route
 	pq := make(priorityQueue, 0)
