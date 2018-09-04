@@ -123,6 +123,7 @@ type params struct {
 
 	From           uint64
 	To             uint64
+	Timeout        uint64
 	Facet          *intern.FacetParams
 	FacetOrder     string
 	FacetOrderDesc bool
@@ -797,6 +798,13 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			return err
 		}
 		args.numPaths = int(numPaths)
+	}
+	if v, ok := gq.Args["timeout"]; ok && args.Alias == "shortest" {
+		timeout, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.Timeout = uint64(timeout)
 	}
 	if v, ok := gq.Args["from"]; ok && args.Alias == "shortest" {
 		from, err := strconv.ParseUint(v, 0, 64)
@@ -2303,7 +2311,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth":
+	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth", "timeout":
 		return true
 	}
 	return false

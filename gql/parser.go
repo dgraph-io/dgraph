@@ -2104,7 +2104,7 @@ func validKeyAtRoot(k string) bool {
 	switch k {
 	case "func", "orderasc", "orderdesc", "first", "offset", "after":
 		return true
-	case "from", "to", "numpaths":
+	case "from", "to", "numpaths", "timeout":
 		// Specific to shortest path
 		return true
 	case "depth":
