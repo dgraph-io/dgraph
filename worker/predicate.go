@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/conn"
@@ -52,6 +53,7 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *inte
 
 	var hasError int32
 	var wg sync.WaitGroup // to wait for all callbacks to return
+OUTER:
 	for kvs := range kvChan {
 		for _, kv := range kvs.Kv {
 			if kv.Version == 0 {
@@ -59,19 +61,28 @@ func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *inte
 				// managed DB must have a valid commit ts.
 				continue
 			}
+			// Encountered an issue, no need to process the kv.
+			if atomic.LoadInt32(&hasError) > 0 {
+				break OUTER
+			}
+
 			txn := pstore.NewTransactionAt(math.MaxUint64, true)
 			bytesWritten += uint64(kv.Size())
 			x.Check(txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]))
 			wg.Add(1)
-			rerr := txn.CommitAt(kv.Version, func(err error) {
+			err := txn.CommitAt(kv.Version, func(err error) {
 				// We don't care about exact error
 				defer wg.Done()
 				if err != nil {
-					x.Printf("Error while committing kv to badger %v\n", err)
+					glog.Warningf("Issue while writing kv to Badger: %v", err)
 					atomic.StoreInt32(&hasError, 1)
 				}
 			})
-			x.Check(rerr)
+			// rerr can return error if the DB DropAll is still going on.
+			if err != nil {
+				glog.Warningf("Issue while writing kv to Badger: %v", err)
+				atomic.StoreInt32(&hasError, 1)
+			}
 		}
 	}
 	wg.Wait()
