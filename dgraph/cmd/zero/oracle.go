@@ -46,6 +46,7 @@ func (o *Oracle) Init() {
 	o.keyCommit = make(map[string]uint64)
 	o.subscribers = make(map[int]chan *intern.OracleDelta)
 	o.updates = make(chan *intern.OracleDelta, 100000) // Keeping 1 second worth of updates.
+	o.doneUntil = x.WaterMark{Name: "zero_oracle"}
 	o.doneUntil.Init()
 	go o.sendDeltasToSubscribers()
 }
