@@ -70,18 +70,21 @@ OUTER:
 			bytesWritten += uint64(kv.Size())
 			x.Check(txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]))
 			wg.Add(1)
-			err := txn.CommitAt(kv.Version, func(err error) {
-				// We don't care about exact error
-				defer wg.Done()
-				if err != nil {
-					glog.Warningf("Issue while writing kv to Badger: %v", err)
-					atomic.StoreInt32(&hasError, 1)
+			for { // Retry indefinitely.
+				err := txn.CommitAt(kv.Version, func(err error) {
+					// We don't care about exact error
+					defer wg.Done()
+					if err != nil {
+						glog.Warningf("Issue while writing kv to Badger: %v", err)
+						atomic.StoreInt32(&hasError, 1)
+					}
+				})
+				if err == nil {
+					break
 				}
-			})
-			// rerr can return error if the DB DropAll is still going on.
-			if err != nil {
-				glog.Warningf("Issue while writing kv to Badger: %v", err)
-				atomic.StoreInt32(&hasError, 1)
+				// CommitAt can return error if DB DropAll is still going on.
+				glog.Warningf("Issue while committing kv to Badger: %v. Retrying...", err)
+				time.Sleep(time.Second)
 			}
 		}
 	}
