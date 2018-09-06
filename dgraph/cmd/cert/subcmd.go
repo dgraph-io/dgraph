@@ -14,16 +14,14 @@ import (
 )
 
 const (
-	defaultCertDir      = "tls"
-	defaultClientCAKey  = "ca-client.key"
-	defaultClientCACert = "ca-client.crt"
-	defaultCADuration   = defaultDuration * 10
-	defaultCAKey        = "ca.key"
-	defaultCACert       = "ca.crt"
-	defaultDuration     = time.Hour * 24 * 366
-	defaultKeySize      = 2048
-	defaultNodeKey      = "node.key"
-	defaultNodeCert     = "node.crt"
+	defaultCertDir    = "tls"
+	defaultCADuration = defaultDuration * 10
+	defaultCAKey      = "ca.key"
+	defaultCACert     = "ca.crt"
+	defaultDuration   = time.Hour * 24 * 366
+	defaultKeySize    = 2048
+	defaultNodeKey    = "node.key"
+	defaultNodeCert   = "node.crt"
 )
 
 var certOpt struct {
