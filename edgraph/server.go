@@ -14,6 +14,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -603,17 +604,21 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res.Set = append(res.Set, mu.Set...)
 	res.Del = append(res.Del, mu.Del...)
 
-	return res, validWildcards(res.Set, res.Del)
+	return res, validateNQuads(res.Set, res.Del)
 }
 
-func validWildcards(set, del []*api.NQuad) error {
+func validateNQuads(set, del []*api.NQuad) error {
 	for _, nq := range set {
 		var ostar bool
 		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
 			ostar = o.DefaultVal == x.Star
 		}
-		if nq.Subject == x.Star || nq.Predicate == x.Star || ostar {
+		switch {
+		case nq.Subject == x.Star || nq.Predicate == x.Star || ostar:
 			return x.Errorf("Cannot use star in set n-quad: %+v", nq)
+
+		case strings.HasPrefix(nq.Predicate, "~"):
+			return x.Errorf("Cannot use ~ in predicate: %+v", nq)
 		}
 	}
 	for _, nq := range del {
