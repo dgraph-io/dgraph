@@ -14,43 +14,28 @@ import (
 )
 
 type Info struct {
-	Type string
-	File string
-	Exp  time.Time
-	Err  error
+	Name    string
+	Expires time.Time
+	Err     error
 }
 
 func certInfo(fn string) *Info {
 	var i Info
 
-	i.File = fn
-
 	switch {
 	case strings.HasSuffix(fn, ".crt"):
 		cert, _ := readCert(fn)
-		i.Exp = cert.NotAfter
-
-		switch {
-		case cert.IsCA && strings.HasPrefix(fn, "ca."):
-			i.Type = "CA Cert"
-		case cert.IsCA && strings.HasPrefix(fn, "ca-client"):
-			i.Type = "Client CA Cert"
-		case strings.HasPrefix(fn, "node"):
-			i.Type = "Node Cert"
-		case strings.HasPrefix(fn, "client-"):
-			i.Type = "Client CA Cert"
-		}
+		i.Expires = cert.NotAfter
+		i.Name = cert.Subject.CommonName
 
 	case strings.HasSuffix(fn, ".key"):
 		switch {
 		case strings.HasPrefix(fn, "ca."):
-			i.Type = "CA Key"
-		case strings.HasPrefix(fn, "ca-client"):
-			i.Type = "Client CA Key"
-		case strings.HasPrefix(fn, "node"):
-			i.Type = "Node Key"
-		case strings.HasPrefix(fn, "client-"):
-			i.Type = "Client CA Key"
+			i.Name = dnOrganization + " CA Key"
+		case strings.HasPrefix(fn, "node."):
+			i.Name = dnOrganization + " Node Key"
+		case strings.HasPrefix(fn, "client."):
+			i.Name = dnOrganization + " Client Key"
 		}
 	}
 
@@ -65,16 +50,13 @@ func (i *Info) Format(f fmt.State, c rune) {
 
 	switch c {
 	case 't':
-		str = i.Type
-
-	case 'f':
-		str = i.File
+		str = i.Name
 
 	case 'x':
-		if i.Exp.IsZero() {
+		if i.Expires.IsZero() {
 			break
 		}
-		str = i.Exp.Format(time.RFC822)
+		str = i.Expires.Format(time.RFC822)
 
 	case 'e':
 		if i.Err != nil {

@@ -24,25 +24,25 @@ import (
 // file fn. If force is true, the file is replaced.
 // Returns the RSA private key, or error otherwise.
 func makeKey(fn string, bitSize int, force bool) (*rsa.PrivateKey, error) {
-	if _, err := os.Stat(fn); os.IsExist(err) && !force {
-		return readKey(fn)
-	}
-
-	key, err := rsa.GenerateKey(rand.Reader, bitSize)
-	if err != nil {
-		return nil, err
-	}
-
 	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	if !force {
 		flag |= os.O_EXCL
 	}
 
-	f, err := os.OpenFile(fn, flag, 0600)
+	f, err := os.OpenFile(fn, flag, 0400)
 	if err != nil {
+		// reuse the existing key, if possible.
+		if os.IsExist(err) {
+			return readKey(fn)
+		}
 		return nil, err
 	}
 	defer f.Close()
+
+	key, err := rsa.GenerateKey(rand.Reader, bitSize)
+	if err != nil {
+		return nil, err
+	}
 
 	err = pem.Encode(f, &pem.Block{
 		Type:  "RSA PRIVATE KEY",
@@ -152,5 +152,37 @@ func createNodePair(certsDir, keyPath, certFile string, keySize int, d time.Dura
 	return r.GeneratePair(
 		filepath.Join(certsDir, defaultNodeKey),
 		filepath.Join(certsDir, defaultNodeCert),
+	)
+}
+
+// createClientPair creates a client certificate and key pair. The key file is created only
+// if it doesn't already exist or we force it. The key path can differ from the certsDir
+// which case the path must already exist and be writable.
+// Returns nil on success, or an error otherwise.
+func createClientPair(certsDir, keyPath, certFile string, keySize int, d time.Duration, force bool, user string) error {
+	if err := os.MkdirAll(certsDir, 0700); err != nil {
+		return err
+	}
+
+	// no path then save it in certsDir.
+	if path.Base(keyPath) == keyPath {
+		keyPath = filepath.Join(certsDir, keyPath)
+	}
+
+	r, err := NewRequest(
+		cfParent(filepath.Join(certsDir, defaultCACert)),
+		cfSignKey(keyPath),
+		cfDuration(d),
+		cfKeySize(keySize),
+		cfOverwrite(force),
+		cfUser(user),
+	)
+	if err != nil {
+		return err
+	}
+
+	return r.GeneratePair(
+		filepath.Join(certsDir, fmt.Sprint("client.", user, ".key")),
+		filepath.Join(certsDir, fmt.Sprint("client.", user, ".crt")),
 	)
 }

@@ -12,6 +12,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"math"
@@ -23,19 +24,20 @@ import (
 
 const (
 	dnOrganization  = "Dgraph"
-	caCommonName    = dnOrganization + " CA"
 	keySizeTooSmall = 512 // XXX: Microsoft is using 1024
 	keySizeTooLarge = 4096
+	validNotBefore  = time.Hour * -24
 )
 
 type config struct {
 	parent  *x509.Certificate
 	sign    crypto.Signer
-	d       time.Duration
-	isCA    bool
+	until   time.Duration
+	ca      bool
 	keySize int
 	force   bool
 	hosts   []string
+	user    string
 }
 
 type configFunc func(*config) error
@@ -74,7 +76,7 @@ func cfSignKey(s string) configFunc {
 // cfDuration sets the duration of cert validity
 func cfDuration(d time.Duration) configFunc {
 	return func(c *config) error {
-		c.d = d
+		c.until = d
 		return nil
 	}
 }
@@ -82,7 +84,7 @@ func cfDuration(d time.Duration) configFunc {
 // cfCA sets that this is a CA cert
 func cfCA(t bool) configFunc {
 	return func(c *config) error {
-		c.isCA = t
+		c.ca = t
 		return nil
 	}
 }
@@ -121,6 +123,16 @@ func cfHosts(h ...string) configFunc {
 			return errors.New("the hosts list is empty")
 		}
 		c.hosts = h
+		c.ca = false
+		return nil
+	}
+}
+
+// cfUser sets the user for a client certificate, using the Subject CommonName field.
+func cfUser(s string) configFunc {
+	return func(c *config) error {
+		c.user = s
+		c.ca = false
 		return nil
 	}
 }
@@ -158,23 +170,26 @@ func (r *Request) GeneratePair(keyFile, crtFile string) error {
 	template := &x509.Certificate{
 		Subject: pkix.Name{
 			Organization: []string{dnOrganization},
+			SerialNumber: hex.EncodeToString(sn.Bytes()[:3]),
 		},
 		SerialNumber:          sn,
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(r.c.d),
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		NotBefore:             time.Now().Add(validNotBefore),
+		NotAfter:              time.Now().Add(r.c.until),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		BasicConstraintsValid: true,
-		IsCA:                  r.c.isCA,
-		MaxPathLenZero:        true,
+		IsCA:                  r.c.ca,
+		MaxPathLenZero:        r.c.ca,
 	}
 
 	switch {
-	case r.c.isCA:
-		template.KeyUsage |= x509.KeyUsageCertSign
-		template.Subject.CommonName = caCommonName
+	case r.c.ca:
+		template.Subject.CommonName = dnOrganization + " Root CA"
+		template.KeyUsage |= x509.KeyUsageContentCommitment | x509.KeyUsageCertSign
 
 	case r.c.hosts != nil:
+		template.Subject.CommonName = dnOrganization + " Node"
+		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+
 		for _, h := range r.c.hosts {
 			if ip := net.ParseIP(h); ip != nil {
 				template.IPAddresses = append(template.IPAddresses, ip)
@@ -182,6 +197,10 @@ func (r *Request) GeneratePair(keyFile, crtFile string) error {
 				template.DNSNames = append(template.DNSNames, h)
 			}
 		}
+
+	case r.c.user != "":
+		template.Subject.CommonName = r.c.user
+		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
 	}
 
 	if r.c.sign == nil {
@@ -192,8 +211,8 @@ func (r *Request) GeneratePair(keyFile, crtFile string) error {
 		r.c.parent = template
 	}
 
-	der, err := x509.CreateCertificate(
-		rand.Reader, template, r.c.parent, key.Public(), r.c.sign)
+	der, err := x509.CreateCertificate(rand.Reader,
+		template, r.c.parent, key.Public(), r.c.sign)
 	if err != nil {
 		return err
 	}
