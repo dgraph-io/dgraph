@@ -5,7 +5,7 @@
  * with the Commons Clause restriction.
  */
 
-package cert
+package cm
 
 import (
 	"crypto"
@@ -32,7 +32,7 @@ const (
 type config struct {
 	parent  *x509.Certificate
 	sign    crypto.Signer
-	until   time.Duration
+	until   int
 	ca      bool
 	keySize int
 	force   bool
@@ -74,9 +74,9 @@ func cfSignKey(s string) configFunc {
 }
 
 // cfDuration sets the duration of cert validity
-func cfDuration(d time.Duration) configFunc {
+func cfDuration(i int) configFunc {
 	return func(c *config) error {
-		c.until = d
+		c.until = i
 		return nil
 	}
 }
@@ -173,8 +173,8 @@ func (r *Request) GeneratePair(keyFile, crtFile string) error {
 			SerialNumber: hex.EncodeToString(sn.Bytes()[:3]),
 		},
 		SerialNumber:          sn,
-		NotBefore:             time.Now().Add(validNotBefore),
-		NotAfter:              time.Now().Add(r.c.until),
+		NotBefore:             time.Now().AddDate(0, 0, -1),
+		NotAfter:              time.Now().AddDate(0, 0, r.c.until),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		BasicConstraintsValid: true,
 		IsCA:                  r.c.ca,

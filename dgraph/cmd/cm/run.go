@@ -5,7 +5,7 @@
  * with the Commons Clause restriction.
  */
 
-package cert
+package cm
 
 import (
 	"errors"
@@ -24,8 +24,8 @@ func init() {
 	flagInit()
 
 	Cert.Cmd = &cobra.Command{
-		Use:   "cert",
-		Short: "Dgraph TLS cert management",
+		Use:   "cm",
+		Short: "Dgraph certificate management",
 	}
 	Cert.Cmd.AddCommand(subcmds...)
 	Cert.EnvPrefix = "DGRAPH_CERT"
@@ -33,44 +33,44 @@ func init() {
 
 func runCreateCA() error {
 	return createCAPair(
-		certOpt.CertsDir,
-		certOpt.CAKey,
+		opt.Dir,
+		opt.CAKey,
 		defaultCACert,
-		certOpt.KeySize,
-		certOpt.CADuration,
-		certOpt.Force,
+		opt.KeySize,
+		opt.Days,
+		opt.Force,
 	)
 }
 
 func runCreateNode() error {
-	if certOpt.Nodes == nil || len(certOpt.Nodes) == 0 {
+	if opt.Nodes == nil || len(opt.Nodes) == 0 {
 		return errors.New("required at least one node (ip address or host)")
 	}
 
 	return createNodePair(
-		certOpt.CertsDir,
-		certOpt.CAKey,
+		opt.Dir,
+		opt.CAKey,
 		defaultNodeCert,
-		certOpt.KeySize,
-		certOpt.Duration,
-		certOpt.Force,
-		certOpt.Nodes,
+		opt.KeySize,
+		opt.Days,
+		opt.Force,
+		opt.Nodes,
 	)
 }
 
 func runCreateClient() error {
-	if certOpt.User == "" {
+	if opt.User == "" {
 		return errors.New("a user name is required")
 	}
 
 	return createClientPair(
-		certOpt.CertsDir,
-		certOpt.CAKey,
-		defaultNodeCert,
-		certOpt.KeySize,
-		certOpt.Duration,
-		certOpt.Force,
-		certOpt.User,
+		opt.Dir,
+		opt.CAKey,
+		"",
+		opt.KeySize,
+		opt.Days,
+		opt.Force,
+		opt.User,
 	)
 }
 
@@ -78,7 +78,7 @@ func runList() error {
 	var fileList [][4]string
 	var widths [4]int
 
-	if err := os.Chdir(certOpt.CertsDir); err != nil {
+	if err := os.Chdir(opt.Dir); err != nil {
 		return err
 	}
 
@@ -89,7 +89,7 @@ func runList() error {
 		return b
 	}
 
-	fmt.Printf("Scanning: %s ...\n\n", certOpt.CertsDir)
+	fmt.Printf("Scanning: %s ...\n\n", opt.Dir)
 
 	err := filepath.Walk(".",
 		func(path string, info os.FileInfo, err error) error {

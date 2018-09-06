@@ -5,7 +5,7 @@
  * with the Commons Clause restriction.
  */
 
-package cert
+package cm
 
 import (
 	"crypto/rand"
@@ -17,7 +17,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"time"
 )
 
 // makeKey generates an RSA private key of bitSize length, storing it in the
@@ -97,7 +96,7 @@ func readCert(fn string) (*x509.Certificate, error) {
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
-func createCAPair(certsDir, keyPath, certFile string, keySize int, d time.Duration, force bool) error {
+func createCAPair(certsDir, keyPath, certFile string, keySize int, days int, force bool) error {
 	if err := os.MkdirAll(certsDir, 0700); err != nil {
 		return err
 	}
@@ -109,7 +108,7 @@ func createCAPair(certsDir, keyPath, certFile string, keySize int, d time.Durati
 
 	r, err := NewRequest(
 		cfCA(true),
-		cfDuration(d),
+		cfDuration(days),
 		cfKeySize(keySize),
 		cfOverwrite(force),
 	)
@@ -127,7 +126,7 @@ func createCAPair(certsDir, keyPath, certFile string, keySize int, d time.Durati
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
-func createNodePair(certsDir, keyPath, certFile string, keySize int, d time.Duration, force bool, nodes []string) error {
+func createNodePair(certsDir, keyPath, certFile string, keySize int, days int, force bool, nodes []string) error {
 	if err := os.MkdirAll(certsDir, 0700); err != nil {
 		return err
 	}
@@ -140,7 +139,7 @@ func createNodePair(certsDir, keyPath, certFile string, keySize int, d time.Dura
 	r, err := NewRequest(
 		cfParent(filepath.Join(certsDir, defaultCACert)),
 		cfSignKey(keyPath),
-		cfDuration(d),
+		cfDuration(days),
 		cfKeySize(keySize),
 		cfOverwrite(force),
 		cfHosts(nodes...),
@@ -159,7 +158,7 @@ func createNodePair(certsDir, keyPath, certFile string, keySize int, d time.Dura
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
-func createClientPair(certsDir, keyPath, certFile string, keySize int, d time.Duration, force bool, user string) error {
+func createClientPair(certsDir, keyPath, certFile string, keySize int, days int, force bool, user string) error {
 	if err := os.MkdirAll(certsDir, 0700); err != nil {
 		return err
 	}
@@ -172,7 +171,7 @@ func createClientPair(certsDir, keyPath, certFile string, keySize int, d time.Du
 	r, err := NewRequest(
 		cfParent(filepath.Join(certsDir, defaultCACert)),
 		cfSignKey(keyPath),
-		cfDuration(d),
+		cfDuration(days),
 		cfKeySize(keySize),
 		cfOverwrite(force),
 		cfUser(user),
