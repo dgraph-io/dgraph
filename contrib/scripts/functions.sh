@@ -1,8 +1,6 @@
 #!/bin/bash
 
-sleepTime=11
-
-function runCluster {
+function startCluster {
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph
     sudo rm -Rf /tmp/dg
@@ -14,4 +12,11 @@ function runCluster {
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6080
   $basedir/contrib/wait-for-it.sh -t 60 localhost:9180
   sleep 10 # Sleep 10 seconds to get things ready.
+}
+
+function stopCluster {
+  basedir=$GOPATH/src/github.com/dgraph-io/dgraph
+  pushd $basedir/dgraph
+    docker-compose down
+  popd
 }

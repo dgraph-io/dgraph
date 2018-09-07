@@ -7,7 +7,7 @@ set -e
 # go test -v $contrib/integration/testtxn/main_test.go
 
 source $contrib/scripts/functions.sh
-runCluster
+startCluster
 
 echo "*  Running transaction tests."
 
