@@ -392,19 +392,11 @@ func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) 
 }
 
 func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
-	node := groups().Node
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
 		txn.Fill(tctx)
 	}
-	tctx.LinRead = &api.LinRead{
-		Ids: make(map[uint32]uint64),
-	}
-	// This previously used to pick up max of txn indices as well. Why should applied watermark be
-	// lower than proposal index? We apply all mutations via proposeAndWait. Wait would only return
-	// if the proposal gets applied, not before.
-	// TODO: Do we need this linread mechanism anymore? A txn start ts should be sufficient to wait
-	// for to achieve lin reads.
-	tctx.LinRead.Ids[gid] = node.Applied.DoneUntil()
+	// We do not need to fill linread mechanism anymore, because transaction
+	// start ts is sufficient to wait for, to achieve lin reads.
 }
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
@@ -506,7 +498,6 @@ type res struct {
 // according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *intern.Mutations) (*api.TxnContext, error) {
 	tctx := &api.TxnContext{StartTs: m.StartTs}
-	tctx.LinRead = &api.LinRead{Ids: make(map[uint32]uint64)}
 	mutationMap := populateMutationMap(m)
 
 	resCh := make(chan res, len(mutationMap))
@@ -530,7 +521,6 @@ func MutateOverNetwork(ctx context.Context, m *intern.Mutations) (*api.TxnContex
 			}
 		}
 		if res.ctx != nil {
-			y.MergeLinReads(tctx.LinRead, res.ctx.LinRead)
 			tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
 		}
 	}

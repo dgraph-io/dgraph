@@ -17,8 +17,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/intern"
@@ -290,7 +288,6 @@ func multiSort(ctx context.Context, r *sortresult, ts *intern.SortMessage) error
 			Attr:    ts.Order[i].Attr,
 			UidList: dest,
 			Langs:   ts.Order[i].Langs,
-			LinRead: ts.LinRead,
 			ReadTs:  ts.ReadTs,
 		}
 		go fetchValues(ctx, in, i, och)
@@ -326,7 +323,6 @@ func multiSort(ctx context.Context, r *sortresult, ts *intern.SortMessage) error
 			}
 			sortVals[i][or.idx] = sv
 		}
-		y.MergeLinReads(r.reply.LinRead, result.LinRead)
 	}
 
 	if oerr != nil {
@@ -367,8 +363,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *intern.SortMessage) error
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
 func processSort(ctx context.Context, ts *intern.SortMessage) (*intern.SortResult, error) {
-	n := groups().Node
-	if err := n.WaitForMinProposal(ctx, ts.LinRead); err != nil {
+	if err := posting.Oracle().WaitForTs(ctx, ts.ReadTs); err != nil {
 		return &emptySortResult, err
 	}
 	if ts.Count < 0 {
@@ -413,12 +408,6 @@ func processSort(ctx context.Context, ts *intern.SortMessage) (*intern.SortResul
 	if r.err != nil {
 		return nil, r.err
 	}
-	if r.reply.LinRead == nil {
-		r.reply.LinRead = &api.LinRead{
-			Ids: make(map[uint32]uint64),
-		}
-	}
-	r.reply.LinRead.Ids[n.RaftContext.Group] = n.Applied.DoneUntil()
 	// If request didn't have multiple attributes we return.
 	if len(ts.Order) <= 1 {
 		return r.reply, nil

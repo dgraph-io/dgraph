@@ -75,7 +75,6 @@ func (s *State) createAccounts(dg *dgo.Dgraph) {
 	x.Check(err)
 
 	txn := dg.NewTxn()
-	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(context.Background())
 	var mu api.Mutation
 	mu.SetJson = data
@@ -98,7 +97,6 @@ func (s *State) runTotal(dg *dgo.Dgraph) error {
 		}
 	`
 	txn := dg.NewTxn()
-	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(context.Background())
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
@@ -166,7 +164,6 @@ func (s *State) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 
 	ctx := context.Background()
 	txn := dg.NewTxn()
-	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(ctx)
 
 	var sk, sd int

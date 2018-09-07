@@ -593,19 +593,14 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Result, error) {
-	n := groups().Node
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Done waiting for maxPending to catch up for Attr %q, readTs: %d\n", q.Attr, q.ReadTs)
+		tr.LazyPrintf("Done waiting for maxPending to catch up for Attr %q, readTs: %d\n",
+			q.Attr, q.ReadTs)
 	}
-	if err := n.WaitForMinProposal(ctx, q.LinRead); err != nil {
-		return &emptyResult, err
-	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Done waiting for applied watermark attr %q\n", q.Attr)
-	}
+
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it
 	// wouldn't know that this group is no longer serving this predicate.
 	// There's no issue if a we are serving a particular tablet and we get partitioned away from
@@ -617,8 +612,6 @@ func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Resu
 	if err != nil {
 		return &emptyResult, err
 	}
-	out.LinRead = &api.LinRead{Ids: make(map[uint32]uint64)}
-	out.LinRead.Ids[n.RaftContext.Group] = n.Applied.DoneUntil()
 	return out, nil
 }
 

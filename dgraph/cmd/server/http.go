@@ -74,19 +74,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	req.StartTs = ts
 
-	linRead := r.Header.Get("X-Dgraph-LinRead")
-	if linRead != "" {
-		lr := make(map[uint32]uint64)
-		if err := json.Unmarshal([]byte(linRead), &lr); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while unmarshalling LinRead header into map")
-			return
-		}
-		req.LinRead = &api.LinRead{
-			Ids: lr,
-		}
-	}
-
 	if vars := r.Header.Get("X-Dgraph-Vars"); vars != "" {
 		req.Vars = map[string]string{}
 		if err := json.Unmarshal([]byte(vars), &req.Vars); err != nil {
