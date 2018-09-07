@@ -1074,6 +1074,8 @@ Results can be sorted in ascending, `orderasc` or decending `orderdesc` order by
 
 For sorting on predicates with [sortable indices]({{< relref "#sortable-indices">}}), Dgraph sorts on the values and with the index in parallel and returns whichever result is computed first.
 
+Sorted queries retrieve up to 1000 results by default. This can be changed with [first]({{< relref "#first#>}}).
+
 
 Query Example: French director Jean-Pierre Jeunet's movies sorted by release date.
 
