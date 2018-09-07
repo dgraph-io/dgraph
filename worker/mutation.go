@@ -391,7 +391,7 @@ func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) 
 	return c.Timestamps(ctx, num)
 }
 
-func fillTxnContext(tctx *api.TxnContext, gid uint32, startTs uint64) {
+func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
 		txn.Fill(tctx)
 	}
@@ -408,7 +408,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *intern.Mutations, chr cha
 		// we don't timeout after proposing
 		res.err = node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
 		res.ctx = &api.TxnContext{}
-		fillTxnContext(res.ctx, gid, m.StartTs)
+		fillTxnContext(res.ctx, m.StartTs)
 		chr <- res
 		return
 	}
@@ -570,7 +570,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 	}
 
 	err := node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
-	fillTxnContext(txnCtx, m.GroupId, m.StartTs)
+	fillTxnContext(txnCtx, m.StartTs)
 	return txnCtx, err
 }
 
