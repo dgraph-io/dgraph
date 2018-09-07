@@ -133,11 +133,6 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
-		// Block using ~ in mutation predicate values
-		if op == set && strings.HasPrefix(v.(string), "~") {
-			return x.Errorf("Unexpected ~ for val for attr: %s", k)
-		}
-
 		nq.ObjectValue = &api.Value{&api.Value_StrVal{v.(string)}}
 	case float64:
 		if v == 0 && op == delete {
