@@ -30,7 +30,7 @@ import (
 
 var (
 	users   = flag.Int("users", 100, "Number of accounts.")
-	conc    = flag.Int("txns", 10, "Number of concurrent transactions.")
+	conc    = flag.Int("txns", 3, "Number of concurrent transactions per client.")
 	dur     = flag.String("dur", "1m", "How long to run the transactions.")
 	addr    = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
 	verbose = flag.Bool("verbose", true, "Output all logs in verbose mode.")
@@ -75,7 +75,6 @@ func (s *State) createAccounts(dg *dgo.Dgraph) {
 	x.Check(err)
 
 	txn := dg.NewTxn()
-	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(context.Background())
 	var mu api.Mutation
 	mu.SetJson = data
@@ -98,7 +97,6 @@ func (s *State) runTotal(dg *dgo.Dgraph) error {
 		}
 	`
 	txn := dg.NewTxn()
-	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(context.Background())
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
@@ -166,7 +164,6 @@ func (s *State) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 
 	ctx := context.Background()
 	txn := dg.NewTxn()
-	txn.Sequencing(api.LinRead_SERVER_SIDE)
 	defer txn.Discard(ctx)
 
 	var sk, sd int
@@ -305,9 +302,11 @@ func main() {
 	s.createAccounts(clients[0])
 
 	var wg sync.WaitGroup
-	for _, dg := range clients {
-		wg.Add(1)
-		go s.loop(dg, &wg)
+	for i := 0; i < *conc; i++ {
+		for _, dg := range clients {
+			wg.Add(1)
+			go s.loop(dg, &wg)
+		}
 	}
 	wg.Wait()
 	fmt.Println()

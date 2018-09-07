@@ -55,7 +55,6 @@ message Query {
 	bool expand_all = 10; // expand all language variants.
 
 	uint64 read_ts = 13;
-	api.LinRead lin_read = 14;
 }
 
 message ValueList {
@@ -74,8 +73,6 @@ message Result {
 	repeated FacetsList facet_matrix = 5;
 	repeated LangList lang_matrix = 6;
 	bool list = 7;
-
-	api.LinRead lin_read = 14;
 }
 
 message Order {
@@ -91,13 +88,10 @@ message SortMessage {
 	int32 offset = 4;  // Skip this many elements.
 
 	uint64 read_ts = 13;
-	api.LinRead lin_read = 14;
 }
 
 message SortResult {
 	repeated List uid_matrix = 1;
-
-	api.LinRead lin_read = 14;
 }
 
 message RaftContext {

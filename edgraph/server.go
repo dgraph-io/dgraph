@@ -461,7 +461,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 		Latency:  &l,
 		GqlQuery: &parsedReq,
 		ReadTs:   req.StartTs,
-		LinRead:  req.LinRead,
 	}
 
 	// Core processing happens here.
@@ -490,7 +489,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}
 
 	resp.Latency = gl
-	resp.Txn.LinRead = queryRequest.LinRead
 	return resp, err
 }
 
