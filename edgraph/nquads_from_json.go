@@ -300,7 +300,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			}
 
 			ok, err := handleGeoType(val, &nq)
-			if  err != nil {
+			if err != nil {
 				return mr, err
 			}
 			if ok {
@@ -335,7 +335,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				case map[string]interface{}:
 					// map[string]interface{} can mean geojson or a connecting entity.
 					ok, err := handleGeoType(item.(map[string]interface{}), &nq)
-					if  err != nil {
+					if err != nil {
 						return mr, err
 					}
 					if ok {

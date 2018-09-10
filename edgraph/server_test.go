@@ -328,3 +328,18 @@ func TestParseNQuadsDelete(t *testing.T) {
 		makeNquad("_:a", x.Star, &api.Value{&api.Value_DefaultVal{x.Star}}),
 	}, nqs)
 }
+
+func TestValidateNQuads(t *testing.T) {
+	nquads := `
+		_:a <~preA> _:b .
+		_:a <preA> _:b .
+	`
+	nqs, err := parseNQuads([]byte(nquads))
+	require.NoError(t, err)
+
+	require.Contains(t, nqs, makeNquadEdge("_:a", "~preA", "_:b"))
+	require.Contains(t, nqs, makeNquadEdge("_:a", "preA", "_:b"))
+
+	err = validateNQuads(nqs, nil)
+	require.Error(t, err)
+}
