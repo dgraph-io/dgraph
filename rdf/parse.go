@@ -201,8 +201,8 @@ func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {
 			return x.Errorf("Expected key but found %v.", item.Val)
 		}
 		facetKey := strings.TrimSpace(item.Val)
-		if len(facetKey) == 0 {
-			return x.Errorf("Empty facetKeys not allowed.")
+		if err := validateFacetKey(facetKey); err != nil {
+			return err
 		}
 		// parse =
 		if !it.Next() {
@@ -258,17 +258,29 @@ func isNewline(r rune) bool {
 	return r == '\n' || r == '\r'
 }
 
+func validateFacetKey(fk string) error {
+	switch {
+	case len(fk) == 0:
+		return x.Errorf("Empty facetKeys not allowed.")
+	case strings.ContainsAny(fk, "~"):
+		return x.Errorf("Invalid tilde in facetKeys")
+	case strings.IndexFunc(fk, unicode.IsSpace) != -1:
+		return x.Errorf("facetKeys must not contain spaces.")
+	}
+	return nil
+}
+
 var typeMap = map[string]types.TypeID{
-	"xs:string":                                        types.StringID,
-	"xs:date":                                          types.DateTimeID,
-	"xs:dateTime":                                      types.DateTimeID,
-	"xs:int":                                           types.IntID,
-	"xs:positiveInteger":                               types.IntID,
-	"xs:boolean":                                       types.BoolID,
-	"xs:double":                                        types.FloatID,
-	"xs:float":                                         types.FloatID,
-	"xs:base64Binary":                                  types.BinaryID,
-	"geo:geojson":                                      types.GeoID,
+	"xs:string":          types.StringID,
+	"xs:date":            types.DateTimeID,
+	"xs:dateTime":        types.DateTimeID,
+	"xs:int":             types.IntID,
+	"xs:positiveInteger": types.IntID,
+	"xs:boolean":         types.BoolID,
+	"xs:double":          types.FloatID,
+	"xs:float":           types.FloatID,
+	"xs:base64Binary":    types.BinaryID,
+	"geo:geojson":        types.GeoID,
 	"http://www.w3.org/2001/XMLSchema#string":          types.StringID,
 	"http://www.w3.org/2001/XMLSchema#dateTime":        types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#date":            types.DateTimeID,

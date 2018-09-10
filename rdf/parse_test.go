@@ -805,6 +805,22 @@ var testNQuads = []struct {
 		input:       `<alice> <age> "13"^^<xs:double> (salary=NaN) .`,
 		expectedErr: true,
 	},
+	{
+		input:       `_:alice <knows> "stuff" ( "key 1" = 12 ) .`,
+		expectedErr: true,
+	},
+	{
+		input:       "_:alice <knows> \"stuff\" ( \"key\t1\" = 12 ) .",
+		expectedErr: true,
+	},
+	{
+		input:       `_:alice <knows> "stuff" ( ~key = 12 ) .`,
+		expectedErr: true,
+	},
+	{
+		input:       `_:alice <knows> "stuff" ( "~key" = 12 ) .`,
+		expectedErr: true,
+	},
 }
 
 func TestLex(t *testing.T) {
