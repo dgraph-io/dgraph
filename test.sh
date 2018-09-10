@@ -26,7 +26,7 @@ function runAll {
 # For piped commands return non-zero status if any command
 # in the pipe returns a non-zero status
 set -o pipefail
-startCluster
+restartCluster
 echo
 echo "Running tests. Ignoring vendor folder."
 runAll || exit $?

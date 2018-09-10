@@ -1,6 +1,6 @@
 #!/bin/bash
 
-function startCluster {
+function restartCluster {
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph
     sudo rm -Rf /tmp/dg
