@@ -24,7 +24,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger/y"
-	"github.com/dgraph-io/dgo/protos/api"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -55,22 +54,8 @@ type node struct {
 	elog        trace.EventLog
 }
 
-func (n *node) WaitForMinProposal(ctx context.Context, read *api.LinRead) error {
-	if read == nil {
-		return nil
-	}
-	// TODO: Now that we apply txn updates via Raft, waiting based on Txn timestamps is sufficient.
-	// It ensures that we have seen all applied mutations before a txn commit proposal is applied.
-	// if read.Sequencing == api.LinRead_SERVER_SIDE {
-	// 	return n.WaitLinearizableRead(ctx)
-	// }
-	if read.Ids == nil {
-		return nil
-	}
-	gid := n.RaftContext.Group
-	min := read.Ids[gid]
-	return n.Applied.WaitForMark(ctx, min)
-}
+// Now that we apply txn updates via Raft, waiting based on Txn timestamps is
+// sufficient. We don't need to wait for proposals to be applied.
 
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
 	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)

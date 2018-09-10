@@ -21,7 +21,6 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/intern"
@@ -154,7 +153,6 @@ type Function struct {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	ReadTs       uint64
-	LinRead      *api.LinRead
 	Attr         string
 	Params       params
 	counts       []uint32
@@ -985,7 +983,6 @@ func createTaskQuery(sg *SubGraph) (*intern.Query, error) {
 	}
 	out := &intern.Query{
 		ReadTs:       sg.ReadTs,
-		LinRead:      sg.LinRead,
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
@@ -1714,7 +1711,6 @@ func recursiveCopy(dst *SubGraph, src *SubGraph) {
 
 	dst.copyFiltersRecurse(src)
 	dst.ReadTs = src.ReadTs
-	dst.LinRead = src.LinRead
 
 	for _, c := range src.Children {
 		copyChild := new(SubGraph)
@@ -1766,9 +1762,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 		for _, pred := range preds {
 			temp := &SubGraph{
-				ReadTs:  sg.ReadTs,
-				LinRead: sg.LinRead,
-				Attr:    pred,
+				ReadTs: sg.ReadTs,
+				Attr:   pred,
 			}
 			temp.Params = child.Params
 			temp.Params.expandAll = child.Params.Expand == "_all_"
@@ -1895,7 +1890,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.valueMatrix = result.ValueMatrix
 			sg.facetsMatrix = result.FacetMatrix
 			sg.counts = result.Counts
-			sg.LinRead = result.LinRead
 			sg.LangTags = result.LangMatrix
 			sg.List = result.List
 
@@ -2056,9 +2050,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for _, it := range sg.Params.groupbyAttrs {
 			// TODO - Throw error if Attr is of list type.
 			sg.Children = append(sg.Children, &SubGraph{
-				Attr:    it.Attr,
-				ReadTs:  sg.ReadTs,
-				LinRead: sg.LinRead,
+				Attr:   it.Attr,
+				ReadTs: sg.ReadTs,
 				Params: params{
 					Alias:        it.Alias,
 					ignoreResult: true,
@@ -2155,7 +2148,6 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
 		ReadTs:    sg.ReadTs,
-		LinRead:   sg.LinRead,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
@@ -2344,7 +2336,6 @@ func getNodePredicates(ctx context.Context, sg *SubGraph) ([]*intern.ValueList, 
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = sg.DestUIDs
 	temp.ReadTs = sg.ReadTs
-	temp.LinRead = sg.LinRead
 	taskQuery, err := createTaskQuery(temp)
 	if err != nil {
 		return nil, err
@@ -2411,8 +2402,6 @@ type QueryRequest struct {
 	Subgraphs []*SubGraph
 
 	vars map[string]varValue
-
-	LinRead *api.LinRead
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2440,7 +2429,6 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 		}
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs
-			sg.LinRead = req.LinRead
 		})
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Query parsed")
@@ -2563,15 +2551,6 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 	if len(shortestSg) != 0 {
 		req.Subgraphs = append(req.Subgraphs, shortestSg...)
 	}
-
-	// Generate lin read response.
-	dst := &api.LinRead{}
-	for _, sg := range req.Subgraphs {
-		sg.recurse(func(s *SubGraph) {
-			y.MergeLinReads(dst, s.LinRead)
-		})
-	}
-	req.LinRead = dst
 	return nil
 }
 

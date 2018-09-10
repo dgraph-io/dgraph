@@ -23,7 +23,11 @@ import (
 	"google.golang.org/grpc"
 )
 
-var addr = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
+var (
+	addr = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
+	num  = flag.Int("num", 1, "How many times to run.")
+	wait = flag.String("wait", "0", "How long to wait.")
+)
 
 type Counter struct {
 	Uid string `json:"uid"`
@@ -76,7 +80,12 @@ func main() {
 	dc := api.NewDgraphClient(conn)
 	dg := dgo.NewDgraphClient(dc)
 
-	for {
+	waitDur, err := time.ParseDuration(*wait)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for *num > 0 {
 		val, err := increment(dg)
 		if err != nil {
 			fmt.Printf("While trying to increment counter: %v. Retrying...\n", err)
@@ -84,6 +93,7 @@ func main() {
 			continue
 		}
 		fmt.Printf("Counter SET OK: %d\n", val)
-		return
+		*num -= 1
+		time.Sleep(waitDur)
 	}
 }
