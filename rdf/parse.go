@@ -201,11 +201,8 @@ func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {
 			return x.Errorf("Expected key but found %v.", item.Val)
 		}
 		facetKey := strings.TrimSpace(item.Val)
-		switch {
-		case len(facetKey) == 0:
-			return x.Errorf("Empty facetKeys not allowed.")
-		case strings.IndexFunc(facetKey, unicode.IsSpace) != -1:
-			return x.Errorf("facetKeys must not contain spaces.")
+		if err := validateFacetKey(facetKey); err != nil {
+			return err
 		}
 		// parse =
 		if !it.Next() {
@@ -259,6 +256,18 @@ func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {
 
 func isNewline(r rune) bool {
 	return r == '\n' || r == '\r'
+}
+
+func validateFacetKey(fk string) error {
+	switch {
+	case len(fk) == 0:
+		return x.Errorf("Empty facetKeys not allowed.")
+	case strings.ContainsAny(fk, "~"):
+		return x.Errorf("Invalid tilde in facetKeys")
+	case strings.IndexFunc(fk, unicode.IsSpace) != -1:
+		return x.Errorf("facetKeys must not contain spaces.")
+	}
+	return nil
 }
 
 var typeMap = map[string]types.TypeID{

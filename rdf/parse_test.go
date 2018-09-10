@@ -724,29 +724,6 @@ var testNQuads = []struct {
 		},
 	},
 	// failing tests for facets
-	// Should fail parsing facetKeys with unnecessary spaces
-	{
-		input: `_:alice <knows> "stuff" ( "key 1" = 12 , "key\t2" = "value2" ) .`,
-		nq: api.NQuad{
-			Subject:     "_:alice",
-			Predicate:   "knows",
-			ObjectId:    "",
-			ObjectValue: &api.Value{&api.Value_DefaultVal{"stuff"}},
-			Facets: []*api.Facet{
-				{" key 1",
-					[]byte("\014\000\000\000\000\000\000\000"),
-					facets.ValTypeForTypeID(facets.IntID),
-					nil,
-					"",
-				},
-				{"key\t2",
-					[]byte("value2"),
-					facets.ValTypeForTypeID(facets.StringID),
-					[]string{"\001value2"}, ""},
-			},
-		},
-		expectedErr: true,
-	},
 	{
 		input:       `_:alice <knows> "stuff" (key1="val1",key2) .`,
 		expectedErr: true, // should fail because of no '=' after key2
@@ -826,6 +803,22 @@ var testNQuads = []struct {
 	},
 	{
 		input:       `<alice> <age> "13"^^<xs:double> (salary=NaN) .`,
+		expectedErr: true,
+	},
+	{
+		input:       `_:alice <knows> "stuff" ( "key 1" = 12 ) .`,
+		expectedErr: true,
+	},
+	{
+		input:       "_:alice <knows> \"stuff\" ( \"key\t1\" = 12 ) .",
+		expectedErr: true,
+	},
+	{
+		input:       `_:alice <knows> "stuff" ( ~key = 12 ) .`,
+		expectedErr: true,
+	},
+	{
+		input:       `_:alice <knows> "stuff" ( "~key" = 12 ) .`,
 		expectedErr: true,
 	},
 }
