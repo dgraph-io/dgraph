@@ -4,7 +4,7 @@ basedir=$GOPATH/src/github.com/dgraph-io/dgraph
 set -e
 
 source $basedir/contrib/scripts/functions.sh
-runCluster
+restartCluster
 
 # Create a temporary directory to use for running live loader.
 mkdir -p tmp

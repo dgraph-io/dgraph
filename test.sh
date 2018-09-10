@@ -9,7 +9,6 @@ function run {
 }
 
 function runAll {
-  runCluster
   # pushd dgraph/cmd/server
   # go test -v .
   # popd
@@ -27,6 +26,7 @@ function runAll {
 # For piped commands return non-zero status if any command
 # in the pipe returns a non-zero status
 set -o pipefail
+restartCluster
 echo
 echo "Running tests. Ignoring vendor folder."
 runAll || exit $?
@@ -34,3 +34,5 @@ runAll || exit $?
 echo
 echo "Running load-test.sh"
 ./contrib/scripts/load-test.sh
+
+stopCluster
