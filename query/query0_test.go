@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -1634,7 +1635,14 @@ func TestMain(m *testing.M) {
 	zw, err := ioutil.TempDir("", "wal_")
 	x.Check(err)
 
-	zero := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+	var exists bool
+	var goPath string
+
+	if goPath, exists = os.LookupEnv("GOPATH"); !exists {
+		goPath = os.ExpandEnv("$HOME/go")
+	}
+
+	zero := exec.Command(filepath.Join(goPath, "/bin/dgraph"),
 		"zero",
 		"--wal", zw,
 		"-o", "10",
