@@ -95,7 +95,7 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:     x.WaterMark{Name: "applied"},
+		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
 		RaftContext: rc,
 		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		confChanges: make(map[uint64]chan error),

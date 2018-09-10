@@ -10,8 +10,6 @@ package x
 import (
 	"container/heap"
 	"context"
-	"expvar"
-	"fmt"
 	"sync/atomic"
 
 	"golang.org/x/net/trace"
@@ -120,7 +118,6 @@ func (w *WaterMark) process() {
 	pending := make(map[uint64]int)
 	waiters := make(map[uint64][]chan struct{})
 
-	doneUntilVar := expvar.NewInt(fmt.Sprintf("dgraph_watermark_%s", w.Name))
 	heap.Init(&indices)
 	var loop uint64
 
@@ -173,7 +170,6 @@ func (w *WaterMark) process() {
 		if until != doneUntil {
 			AssertTrue(atomic.CompareAndSwapUint64(&w.doneUntil, doneUntil, until))
 			w.elog.Printf("%s: Done until %d. Loops: %d\n", w.Name, until, loops)
-			doneUntilVar.Set(int64(until))
 		}
 	}
 
