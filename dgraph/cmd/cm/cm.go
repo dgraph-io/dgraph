@@ -112,6 +112,8 @@ func readCert(fn string) (*x509.Certificate, error) {
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
 func createCAPair(opt options) error {
+	var err error
+
 	cc := certConfig{
 		isCA:    true,
 		until:   defaultCADays,
@@ -119,7 +121,13 @@ func createCAPair(opt options) error {
 		force:   (opt.force & forceCA) != 0,
 	}
 
-	return cc.generatePair(opt.caKey, opt.caCert)
+	err = cc.generatePair(opt.caKey, opt.caCert)
+	if err != nil {
+		return err
+	}
+
+	// secure CA key
+	return os.Chmod(opt.caKey, 0400)
 }
 
 // createNodePair creates a node certificate and key pair. The key file is created only

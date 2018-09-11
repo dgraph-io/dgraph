@@ -32,7 +32,7 @@ var opt options
 func init() {
 	CM.Cmd = &cobra.Command{
 		Use:   "cm",
-		Short: "Dgraph certificate management",
+		Short: "Dgraph TLS certificate management",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(CM.Conf).Stop()
@@ -47,7 +47,7 @@ func init() {
 	flag := CM.Cmd.Flags()
 	flag.StringP("dir", "d", defaultDir, "directory containing TLS certs and keys")
 	flag.StringP("ca_key", "k", defaultCAKey, "path to the CA private key")
-	flag.Int("keysize", defaultKeySize, "RSA key bit size")
+	flag.Int("keysize", defaultKeySize, "RSA key bit size for creating new keys")
 	flag.Int("duration", defaultDays, "duration of cert validity in days")
 	flag.StringSliceP("nodes", "n", nil, "creates cert/key pair for nodes: node0 ... nodeN (ipaddr | host)")
 	flag.StringP("user", "u", "", "create cert/key pair for a user name")
@@ -55,7 +55,7 @@ func init() {
 	flag.Bool("force_ca", false, "overwrite any CA key and cert (warning: invalidates existing signed certs)")
 	flag.Bool("force_node", false, "overwrite any node key and cert")
 	flag.Bool("force_client", false, "overwrite any client key and cert")
-	flag.Bool("verify", true, "verify certs against root CA")
+	flag.Bool("verify", true, "verify certs against root CA when creating")
 
 	cmdList := &cobra.Command{
 		Use:   "list",
@@ -95,7 +95,7 @@ func run() {
 	}
 
 	if err := createCerts(opt); err != nil {
-		fmt.Fprint(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
