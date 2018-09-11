@@ -25,8 +25,8 @@ func certInfo(fn string) *Info {
 	switch {
 	case strings.HasSuffix(fn, ".crt"):
 		cert, _ := readCert(fn)
-		i.Expires = cert.NotAfter
 		i.Name = cert.Subject.CommonName
+		i.Expires = cert.NotAfter
 
 	case strings.HasSuffix(fn, ".key"):
 		switch {
@@ -37,6 +37,8 @@ func certInfo(fn string) *Info {
 		case strings.HasPrefix(fn, "client."):
 			i.Name = dnOrganization + " Client Key"
 		}
+	default:
+		return nil
 	}
 
 	return &i

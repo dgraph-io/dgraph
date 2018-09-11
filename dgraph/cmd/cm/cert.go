@@ -42,7 +42,7 @@ type certConfig struct {
 // will do a best guess of the cert to create based on the certConfig values.
 // It will generate two files, a key and cert, upon success.
 // Returns nil on success, or an error otherwise.
-func (c *certConfig) generatePair(keyFile, crtFile string) error {
+func (c *certConfig) generatePair(keyFile, certFile string) error {
 	key, err := makeKey(keyFile, c.keySize, c.force)
 	if err != nil {
 		return err
@@ -96,7 +96,7 @@ func (c *certConfig) generatePair(keyFile, crtFile string) error {
 	if c.parent == nil {
 		c.parent = template
 	} else if template.NotAfter.After(c.parent.NotAfter) {
-		return fmt.Errorf("Certificate expiration date '%s' exceeds parent '%s'",
+		return fmt.Errorf("--duration: certificate expiration date '%s' exceeds parent '%s'",
 			template.NotAfter, c.parent.NotAfter)
 	}
 
@@ -106,18 +106,15 @@ func (c *certConfig) generatePair(keyFile, crtFile string) error {
 		return err
 	}
 
-	f, err := safeCreate(crtFile, c.force, 0666)
+	f, err := safeCreate(certFile, c.force, 0666)
 	if err != nil {
 		// check the existing cert.
 		if os.IsExist(err) {
-			fmt.Printf("Using existing certificate: %s\n", crtFile)
-			_, err = readCert(crtFile)
+			_, err = readCert(certFile)
 		}
 		return err
 	}
 	defer f.Close()
-
-	fmt.Printf("Creating new certificate: %s\n", crtFile)
 
 	err = pem.Encode(f, &pem.Block{
 		Type:  "CERTIFICATE",
@@ -129,4 +126,38 @@ func (c *certConfig) generatePair(keyFile, crtFile string) error {
 
 	_, err = x509.ParseCertificate(der)
 	return err
+}
+
+// verifyCert loads a X509 certificate and verifies it against a parent cert (CA).
+// If the cert is mapping hosts, it will verify each host individually.
+// Returns nil on success, an error otherwise.
+func (c *certConfig) verifyCert(certFile string) error {
+	cert, err := readCert(certFile)
+	if err != nil {
+		return err
+	}
+
+	if c.isCA || c.parent == nil {
+		return nil
+	}
+
+	roots := x509.NewCertPool()
+	roots.AddCert(c.parent)
+
+	opts := x509.VerifyOptions{Roots: roots}
+
+	if c.hosts != nil {
+		for i := range c.hosts {
+			if err := cert.VerifyHostname(c.hosts[i]); err != nil {
+				return err
+			}
+		}
+	}
+
+	_, err = cert.Verify(opts)
+	if err != nil {
+		return fmt.Errorf("%s: verification failed: %s", certFile, err)
+	}
+
+	return nil
 }

@@ -24,6 +24,7 @@ type options struct {
 	force                    int
 	keySize, days            int
 	nodes                    []string
+	verify                   bool
 }
 
 var opt options
@@ -33,9 +34,9 @@ func init() {
 		Use:   "cm",
 		Short: "Dgraph certificate management",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(CM.Conf).Stop()
-			return run()
+			run()
 		},
 	}
 
@@ -54,6 +55,7 @@ func init() {
 	flag.Bool("force-ca", false, "overwrite any CA key and cert (warning: invalidates existing signed certs)")
 	flag.Bool("force-node", false, "overwrite any node key and cert")
 	flag.Bool("force-client", false, "overwrite any client key and cert")
+	flag.Bool("verify", true, "verify certs against root CA")
 
 	cmdList := &cobra.Command{
 		Use:   "list",
@@ -67,7 +69,7 @@ func init() {
 	CM.Cmd.AddCommand(cmdList)
 }
 
-func run() error {
+func run() {
 	opt = options{
 		dir:     CM.Conf.GetString("dir"),
 		caKey:   CM.Conf.GetString("ca-key"),
@@ -75,6 +77,7 @@ func run() error {
 		keySize: CM.Conf.GetInt("key-size"),
 		days:    CM.Conf.GetInt("duration"),
 		nodes:   CM.Conf.GetStringSlice("nodes"),
+		verify:  CM.Conf.GetBool("verify"),
 	}
 
 	if CM.Conf.GetBool("force") {
@@ -91,7 +94,10 @@ func run() error {
 		}
 	}
 
-	return createCerts(opt)
+	if err := createCerts(opt); err != nil {
+		fmt.Fprint(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 func runList() error {
@@ -127,7 +133,7 @@ func runList() error {
 			}
 
 			ci := certInfo(path)
-			if ci.Name == "" {
+			if ci == nil {
 				return nil
 			}
 

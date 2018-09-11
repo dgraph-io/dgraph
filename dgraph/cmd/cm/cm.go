@@ -47,7 +47,6 @@ func makeKey(fn string, bitSize int, force bool) (*rsa.PrivateKey, error) {
 	if err != nil {
 		// reuse the existing key, if possible.
 		if os.IsExist(err) {
-			fmt.Printf("Using existing key file: %s\n", fn)
 			return readKey(fn)
 		}
 		return nil, err
@@ -58,8 +57,6 @@ func makeKey(fn string, bitSize int, force bool) (*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("Creating new key file: %s\n", fn)
 
 	err = pem.Encode(f, &pem.Block{
 		Type:  "RSA PRIVATE KEY",
@@ -153,10 +150,15 @@ func createNodePair(opt options) error {
 		return err
 	}
 
-	return cc.generatePair(
-		filepath.Join(opt.dir, defaultNodeKey),
-		filepath.Join(opt.dir, defaultNodeCert),
-	)
+	certFile := filepath.Join(opt.dir, defaultNodeCert)
+	keyFile := filepath.Join(opt.dir, defaultNodeKey)
+
+	err = cc.generatePair(keyFile, certFile)
+	if err != nil || !opt.verify {
+		return err
+	}
+
+	return cc.verifyCert(certFile)
 }
 
 // createClientPair creates a client certificate and key pair. The key file is created only
@@ -187,10 +189,15 @@ func createClientPair(opt options) error {
 		return err
 	}
 
-	return cc.generatePair(
-		filepath.Join(opt.dir, fmt.Sprint("client.", opt.user, ".key")),
-		filepath.Join(opt.dir, fmt.Sprint("client.", opt.user, ".crt")),
-	)
+	certFile := filepath.Join(opt.dir, fmt.Sprint("client.", opt.user, ".crt"))
+	keyFile := filepath.Join(opt.dir, fmt.Sprint("client.", opt.user, ".key"))
+
+	err = cc.generatePair(keyFile, certFile)
+	if err != nil || !opt.verify {
+		return err
+	}
+
+	return cc.verifyCert(certFile)
 }
 
 func createCerts(opt options) error {
@@ -201,12 +208,7 @@ func createCerts(opt options) error {
 	}
 
 	err = os.Mkdir(opt.dir, 0700)
-	switch {
-	case err == nil:
-		fmt.Printf("Created new dir: %s\n", opt.dir)
-	case os.IsExist(err):
-		fmt.Printf("Using existing dir: %s\n", opt.dir)
-	default:
+	if err != nil && !os.IsExist(err) {
 		return err
 	}
 
