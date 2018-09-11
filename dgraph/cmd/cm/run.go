@@ -46,15 +46,15 @@ func init() {
 
 	flag := CM.Cmd.Flags()
 	flag.StringP("dir", "d", defaultDir, "directory containing TLS certs and keys")
-	flag.StringP("ca-key", "k", defaultCAKey, "path to the CA private key")
-	flag.Int("key-size", defaultKeySize, "RSA key bit size")
+	flag.StringP("ca_key", "k", defaultCAKey, "path to the CA private key")
+	flag.Int("keysize", defaultKeySize, "RSA key bit size")
 	flag.Int("duration", defaultDays, "duration of cert validity in days")
 	flag.StringSliceP("nodes", "n", nil, "creates cert/key pair for nodes: node0 ... nodeN (ipaddr | host)")
 	flag.StringP("user", "u", "", "create cert/key pair for a user name")
 	flag.Bool("force", false, "overwrite any existing key and cert")
-	flag.Bool("force-ca", false, "overwrite any CA key and cert (warning: invalidates existing signed certs)")
-	flag.Bool("force-node", false, "overwrite any node key and cert")
-	flag.Bool("force-client", false, "overwrite any client key and cert")
+	flag.Bool("force_ca", false, "overwrite any CA key and cert (warning: invalidates existing signed certs)")
+	flag.Bool("force_node", false, "overwrite any node key and cert")
+	flag.Bool("force_client", false, "overwrite any client key and cert")
 	flag.Bool("verify", true, "verify certs against root CA")
 
 	cmdList := &cobra.Command{
@@ -72,9 +72,9 @@ func init() {
 func run() {
 	opt = options{
 		dir:     CM.Conf.GetString("dir"),
-		caKey:   CM.Conf.GetString("ca-key"),
+		caKey:   CM.Conf.GetString("ca_key"),
 		user:    CM.Conf.GetString("user"),
-		keySize: CM.Conf.GetInt("key-size"),
+		keySize: CM.Conf.GetInt("keysize"),
 		days:    CM.Conf.GetInt("duration"),
 		nodes:   CM.Conf.GetStringSlice("nodes"),
 		verify:  CM.Conf.GetBool("verify"),
@@ -83,13 +83,13 @@ func run() {
 	if CM.Conf.GetBool("force") {
 		opt.force = forceCA | forceNode | forceClient
 	} else {
-		if CM.Conf.GetBool("force-ca") {
+		if CM.Conf.GetBool("force_ca") {
 			opt.force |= forceCA
 		}
-		if CM.Conf.GetBool("force-client") {
+		if CM.Conf.GetBool("force_client") {
 			opt.force |= forceClient
 		}
-		if CM.Conf.GetBool("force-node") {
+		if CM.Conf.GetBool("force_node") {
 			opt.force |= forceNode
 		}
 	}
