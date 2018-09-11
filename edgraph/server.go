@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -611,12 +612,11 @@ func validateNQuads(set, del []*api.NQuad) error {
 		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
 			ostar = o.DefaultVal == x.Star
 		}
-		switch {
-		case nq.Subject == x.Star || nq.Predicate == x.Star || ostar:
+		if nq.Subject == x.Star || nq.Predicate == x.Star || ostar {
 			return x.Errorf("Cannot use star in set n-quad: %+v", nq)
-
-		case strings.HasPrefix(nq.Predicate, "~"):
-			return x.Errorf("Cannot use ~ in predicate: %+v", nq)
+		}
+		if err := validateKeys(nq); err != nil {
+			return x.Errorf("Key error: %s: %+v", err, nq)
 		}
 	}
 	for _, nq := range del {
@@ -626,6 +626,35 @@ func validateNQuads(set, del []*api.NQuad) error {
 		}
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return x.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
+		}
+		if err := validateKeys(nq); err != nil {
+			return x.Errorf("Key error: %s: %+v", err, nq)
+		}
+	}
+	return nil
+}
+
+func validateKey(key string) error {
+	switch {
+	case strings.ContainsAny(key, "~"):
+		return x.Errorf("has invalid tilde")
+	case strings.IndexFunc(key, unicode.IsSpace) != -1:
+		return x.Errorf("must not contain spaces")
+	}
+	return nil
+}
+
+// validateKeys checks predicate and facet keys in Nquad for syntax errors.
+func validateKeys(nq *api.NQuad) error {
+	err := validateKey(nq.Predicate)
+	if err != nil {
+		return x.Errorf("predicate %q %s", nq.Predicate, err)
+	}
+	if nq.Facets != nil {
+		for i := range nq.Facets {
+			if err = validateKey(nq.Facets[i].Key); err != nil {
+				return x.Errorf("facet %q, %s", nq.Facets[i].Key, err)
+			}
 		}
 	}
 	return nil

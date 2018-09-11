@@ -329,17 +329,18 @@ func TestParseNQuadsDelete(t *testing.T) {
 	}, nqs)
 }
 
-func TestValidateNQuads(t *testing.T) {
+func TestValidateKeys(t *testing.T) {
 	nquads := `
 		_:a <~preA> _:b .
-		_:a <preA> _:b .
+		_:alice <knows> "stuff" ( "key 1" = 12 ) .
+		_:alice <knows> "stuff" ( "key	1" = 12 ) .
+		_:alice <knows> "stuff" ( ~key = 12 ) .
+		_:alice <knows> "stuff" ( "~key" = 12 ) .
 	`
 	nqs, err := parseNQuads([]byte(nquads))
 	require.NoError(t, err)
 
-	require.Contains(t, nqs, makeNquadEdge("_:a", "~preA", "_:b"))
-	require.Contains(t, nqs, makeNquadEdge("_:a", "preA", "_:b"))
-
-	err = validateNQuads(nqs, nil)
-	require.Error(t, err)
+	for i := range nqs {
+		require.Error(t, validateKeys(nqs[i]), "No error for: %+v", nqs[i])
+	}
 }
