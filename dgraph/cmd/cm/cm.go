@@ -23,6 +23,7 @@ import (
 const (
 	defaultDir      = "tls"
 	defaultDays     = 1826
+	defaultCADays   = 3651
 	defaultCACert   = "ca.crt"
 	defaultCAKey    = "ca.key"
 	defaultKeySize  = 2048
@@ -42,12 +43,7 @@ const (
 // file fn. If force is true, the file is replaced.
 // Returns the RSA private key, or error otherwise.
 func makeKey(fn string, bitSize int, force bool) (*rsa.PrivateKey, error) {
-	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-	if !force {
-		flag |= os.O_EXCL
-	}
-
-	f, err := os.OpenFile(fn, flag, 0600)
+	f, err := safeCreate(fn, force, 0600)
 	if err != nil {
 		// reuse the existing key, if possible.
 		if os.IsExist(err) {
@@ -121,7 +117,7 @@ func readCert(fn string) (*x509.Certificate, error) {
 func createCAPair(opt options) error {
 	cc := certConfig{
 		isCA:    true,
-		until:   opt.days,
+		until:   defaultCADays,
 		keySize: opt.keySize,
 		force:   (opt.force & forceCA) != 0,
 	}
@@ -241,4 +237,12 @@ func createCerts(opt options) error {
 	}
 
 	return nil
+}
+
+func safeCreate(fn string, overwrite bool, perm os.FileMode) (*os.File, error) {
+	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	if !overwrite {
+		flag |= os.O_EXCL
+	}
+	return os.OpenFile(fn, flag, perm)
 }

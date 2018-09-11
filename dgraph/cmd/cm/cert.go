@@ -95,6 +95,9 @@ func (c *certConfig) generatePair(keyFile, crtFile string) error {
 
 	if c.parent == nil {
 		c.parent = template
+	} else if template.NotAfter.After(c.parent.NotAfter) {
+		return fmt.Errorf("Certificate expiration date '%s' exceeds parent '%s'",
+			template.NotAfter, c.parent.NotAfter)
 	}
 
 	der, err := x509.CreateCertificate(rand.Reader,
@@ -103,12 +106,7 @@ func (c *certConfig) generatePair(keyFile, crtFile string) error {
 		return err
 	}
 
-	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-	if !c.force {
-		flag |= os.O_EXCL
-	}
-
-	f, err := os.OpenFile(crtFile, flag, 0666)
+	f, err := safeCreate(crtFile, c.force, 0666)
 	if err != nil {
 		// check the existing cert.
 		if os.IsExist(err) {
