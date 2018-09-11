@@ -68,7 +68,7 @@ func init() {
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 
 	var subcommands = []*x.SubCommand{
-		&bulk.Bulk, &cm.Cert, &live.Live, &server.Server, &zero.Zero, &version.Version, &debug.Debug,
+		&bulk.Bulk, &cm.CM, &live.Live, &server.Server, &zero.Zero, &version.Version, &debug.Debug,
 	}
 	for _, sc := range subcommands {
 		RootCmd.AddCommand(sc.Cmd)

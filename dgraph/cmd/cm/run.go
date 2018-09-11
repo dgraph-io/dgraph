@@ -8,7 +8,6 @@
 package cm
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,67 +17,93 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var Cert x.SubCommand
+var CM x.SubCommand
+
+type options struct {
+	dir, caKey, caCert, user string
+	force                    int
+	keySize, days            int
+	nodes                    []string
+}
+
+var opt options
 
 func init() {
-	flagInit()
-
-	Cert.Cmd = &cobra.Command{
+	CM.Cmd = &cobra.Command{
 		Use:   "cm",
 		Short: "Dgraph certificate management",
-	}
-	Cert.Cmd.AddCommand(subcmds...)
-	Cert.EnvPrefix = "DGRAPH_CERT"
-}
-
-func runCreateCA() error {
-	return createCAPair(
-		opt.Dir,
-		opt.CAKey,
-		defaultCACert,
-		opt.KeySize,
-		opt.Days,
-		opt.Force,
-	)
-}
-
-func runCreateNode() error {
-	if opt.Nodes == nil || len(opt.Nodes) == 0 {
-		return errors.New("required at least one node (ip address or host)")
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			defer x.StartProfile(CM.Conf).Stop()
+			return run()
+		},
 	}
 
-	return createNodePair(
-		opt.Dir,
-		opt.CAKey,
-		defaultNodeCert,
-		opt.KeySize,
-		opt.Days,
-		opt.Force,
-		opt.Nodes,
-	)
+	CM.EnvPrefix = "DGRAPH_CERT"
+
+	CM.Cmd.AddCommand()
+
+	flag := CM.Cmd.Flags()
+	flag.StringP("dir", "d", defaultDir, "directory containing TLS certs and keys")
+	flag.StringP("ca-key", "k", defaultCAKey, "path to the CA private key")
+	flag.Int("key-size", defaultKeySize, "RSA key bit size")
+	flag.Int("duration", defaultDays, "duration of cert validity in days")
+	flag.StringSliceP("nodes", "n", nil, "creates cert/key pair for nodes: node0 ... nodeN (ipaddr | host)")
+	flag.StringP("user", "u", "", "create cert/key pair for a user name")
+	flag.Bool("force", false, "overwrite any existing key and cert")
+	flag.Bool("force-ca", false, "overwrite any CA key and cert (warning: invalidates existing signed certs)")
+	flag.Bool("force-node", false, "overwrite any node key and cert")
+	flag.Bool("force-client", false, "overwrite any client key and cert")
+
+	cmdList := &cobra.Command{
+		Use:   "list",
+		Short: "list certificates and keys",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runList()
+		},
+	}
+	cmdList.Flags().AddFlag(CM.Cmd.Flag("dir"))
+	CM.Cmd.AddCommand(cmdList)
 }
 
-func runCreateClient() error {
-	if opt.User == "" {
-		return errors.New("a user name is required")
+func run() error {
+	opt = options{
+		dir:     CM.Conf.GetString("dir"),
+		caKey:   CM.Conf.GetString("ca-key"),
+		user:    CM.Conf.GetString("user"),
+		keySize: CM.Conf.GetInt("key-size"),
+		days:    CM.Conf.GetInt("duration"),
+		nodes:   CM.Conf.GetStringSlice("nodes"),
 	}
 
-	return createClientPair(
-		opt.Dir,
-		opt.CAKey,
-		"",
-		opt.KeySize,
-		opt.Days,
-		opt.Force,
-		opt.User,
-	)
+	if CM.Conf.GetBool("force") {
+		opt.force = forceCA | forceNode | forceClient
+	} else {
+		if CM.Conf.GetBool("force-ca") {
+			opt.force |= forceCA
+		}
+		if CM.Conf.GetBool("force-client") {
+			opt.force |= forceClient
+		}
+		if CM.Conf.GetBool("force-node") {
+			opt.force |= forceNode
+		}
+	}
+
+	return createCerts(opt)
 }
 
 func runList() error {
-	var fileList [][4]string
-	var widths [4]int
+	var (
+		fileList [][4]string
+		widths   [4]int
+		dir      string
+	)
 
-	if err := os.Chdir(opt.Dir); err != nil {
+	dir = CM.Conf.GetString("dir")
+
+	if err := os.Chdir(dir); err != nil {
 		return err
 	}
 
@@ -89,7 +114,7 @@ func runList() error {
 		return b
 	}
 
-	fmt.Printf("Scanning: %s ...\n\n", opt.Dir)
+	fmt.Printf("Scanning: %s ...\n\n", dir)
 
 	err := filepath.Walk(".",
 		func(path string, info os.FileInfo, err error) error {
@@ -102,6 +127,10 @@ func runList() error {
 			}
 
 			ci := certInfo(path)
+			if ci.Name == "" {
+				return nil
+			}
+
 			dexp, mode := fmt.Sprintf("%x", ci), info.Mode().String()
 
 			fileList = append(fileList, [4]string{
@@ -117,6 +146,11 @@ func runList() error {
 		})
 	if err != nil {
 		return err
+	}
+
+	if len(fileList) == 0 {
+		fmt.Println("Directory is empty:", dir)
+		return nil
 	}
 
 	fmt.Printf("%-[2]*[1]s | %-[4]*[3]s | %-[6]*[5]s | %-[8]*[7]s\n",

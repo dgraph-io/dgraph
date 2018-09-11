@@ -8,180 +8,127 @@
 package cm
 
 import (
+	"crypto"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
+	"math"
+	"math/big"
+	"net"
 	"os"
-	"path"
-	"path/filepath"
+	"time"
 )
 
-// makeKey generates an RSA private key of bitSize length, storing it in the
-// file fn. If force is true, the file is replaced.
-// Returns the RSA private key, or error otherwise.
-func makeKey(fn string, bitSize int, force bool) (*rsa.PrivateKey, error) {
+const (
+	dnOrganization = "Dgraph"
+	validNotBefore = time.Hour * -24
+)
+
+type certConfig struct {
+	parent  *x509.Certificate
+	signer  crypto.Signer
+	until   int
+	isCA    bool
+	keySize int
+	force   bool
+	hosts   []string
+	user    string
+}
+
+// generatePair makes a new key/cert pair from a request. This function
+// will do a best guess of the cert to create based on the certConfig values.
+// It will generate two files, a key and cert, upon success.
+// Returns nil on success, or an error otherwise.
+func (c *certConfig) generatePair(keyFile, crtFile string) error {
+	key, err := makeKey(keyFile, c.keySize, c.force)
+	if err != nil {
+		return err
+	}
+
+	sn, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
+	if err != nil {
+		return err
+	}
+
+	template := &x509.Certificate{
+		Subject: pkix.Name{
+			Organization: []string{dnOrganization},
+			SerialNumber: hex.EncodeToString(sn.Bytes()[:3]),
+		},
+		SerialNumber:          sn,
+		NotBefore:             time.Now().AddDate(0, 0, -1),
+		NotAfter:              time.Now().AddDate(0, 0, c.until),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		BasicConstraintsValid: true,
+		IsCA:                  c.isCA,
+		MaxPathLenZero:        c.isCA,
+	}
+
+	switch {
+	case c.isCA:
+		template.Subject.CommonName = dnOrganization + " Root CA"
+		template.KeyUsage |= x509.KeyUsageContentCommitment | x509.KeyUsageCertSign
+
+	case c.hosts != nil:
+		template.Subject.CommonName = dnOrganization + " Node"
+		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+
+		for _, h := range c.hosts {
+			if ip := net.ParseIP(h); ip != nil {
+				template.IPAddresses = append(template.IPAddresses, ip)
+			} else {
+				template.DNSNames = append(template.DNSNames, h)
+			}
+		}
+
+	case c.user != "":
+		template.Subject.CommonName = c.user
+		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+	}
+
+	if c.signer == nil {
+		c.signer = key
+	}
+
+	if c.parent == nil {
+		c.parent = template
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader,
+		template, c.parent, key.Public(), c.signer)
+	if err != nil {
+		return err
+	}
+
 	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-	if !force {
+	if !c.force {
 		flag |= os.O_EXCL
 	}
 
-	f, err := os.OpenFile(fn, flag, 0400)
+	f, err := os.OpenFile(crtFile, flag, 0666)
 	if err != nil {
-		// reuse the existing key, if possible.
+		// check the existing cert.
 		if os.IsExist(err) {
-			return readKey(fn)
+			fmt.Printf("Using existing certificate: %s\n", crtFile)
+			_, err = readCert(crtFile)
 		}
-		return nil, err
+		return err
 	}
 	defer f.Close()
 
-	key, err := rsa.GenerateKey(rand.Reader, bitSize)
-	if err != nil {
-		return nil, err
-	}
+	fmt.Printf("Creating new certificate: %s\n", crtFile)
 
 	err = pem.Encode(f, &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
+		Type:  "CERTIFICATE",
+		Bytes: der,
 	})
 	if err != nil {
-		return nil, err
-	}
-
-	return key, nil
-}
-
-// readKey tries to read and decode the contents of a private key at fn.
-// Returns the RSA private key, or error otherwise.
-func readKey(fn string) (*rsa.PrivateKey, error) {
-	b, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return nil, err
-	}
-
-	block, _ := pem.Decode(b)
-	switch {
-	case block == nil:
-		return nil, fmt.Errorf("failed to read key block")
-	case block.Type != "RSA PRIVATE KEY":
-		return nil, fmt.Errorf("unknown PEM type: %s", block.Type)
-	}
-
-	return x509.ParsePKCS1PrivateKey(block.Bytes)
-}
-
-// readCert tries to read and decode the contents of an RSA-signed cert at fn.
-// Returns the x509v3 cert, or error otherwise.
-func readCert(fn string) (*x509.Certificate, error) {
-	b, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return nil, err
-	}
-
-	block, _ := pem.Decode(b)
-	switch {
-	case block == nil:
-		return nil, fmt.Errorf("failed to read cert block")
-	case block.Type != "CERTIFICATE":
-		return nil, fmt.Errorf("unknown PEM type: %s", block.Type)
-	}
-
-	return x509.ParseCertificate(block.Bytes)
-}
-
-// createCAPair creates a CA certificate and key pair. The key file is created only
-// if it doesn't already exist or we force it. The key path can differ from the certsDir
-// which case the path must already exist and be writable.
-// Returns nil on success, or an error otherwise.
-func createCAPair(certsDir, keyPath, certFile string, keySize int, days int, force bool) error {
-	if err := os.MkdirAll(certsDir, 0700); err != nil {
 		return err
 	}
 
-	// no path then save it in certsDir.
-	if path.Base(keyPath) == keyPath {
-		keyPath = filepath.Join(certsDir, keyPath)
-	}
-
-	r, err := NewRequest(
-		cfCA(true),
-		cfDuration(days),
-		cfKeySize(keySize),
-		cfOverwrite(force),
-	)
-	if err != nil {
-		return err
-	}
-
-	return r.GeneratePair(
-		keyPath,
-		filepath.Join(certsDir, certFile),
-	)
-}
-
-// createNodePair creates a node certificate and key pair. The key file is created only
-// if it doesn't already exist or we force it. The key path can differ from the certsDir
-// which case the path must already exist and be writable.
-// Returns nil on success, or an error otherwise.
-func createNodePair(certsDir, keyPath, certFile string, keySize int, days int, force bool, nodes []string) error {
-	if err := os.MkdirAll(certsDir, 0700); err != nil {
-		return err
-	}
-
-	// no path then save it in certsDir.
-	if path.Base(keyPath) == keyPath {
-		keyPath = filepath.Join(certsDir, keyPath)
-	}
-
-	r, err := NewRequest(
-		cfParent(filepath.Join(certsDir, defaultCACert)),
-		cfSignKey(keyPath),
-		cfDuration(days),
-		cfKeySize(keySize),
-		cfOverwrite(force),
-		cfHosts(nodes...),
-	)
-	if err != nil {
-		return err
-	}
-
-	return r.GeneratePair(
-		filepath.Join(certsDir, defaultNodeKey),
-		filepath.Join(certsDir, defaultNodeCert),
-	)
-}
-
-// createClientPair creates a client certificate and key pair. The key file is created only
-// if it doesn't already exist or we force it. The key path can differ from the certsDir
-// which case the path must already exist and be writable.
-// Returns nil on success, or an error otherwise.
-func createClientPair(certsDir, keyPath, certFile string, keySize int, days int, force bool, user string) error {
-	if err := os.MkdirAll(certsDir, 0700); err != nil {
-		return err
-	}
-
-	// no path then save it in certsDir.
-	if path.Base(keyPath) == keyPath {
-		keyPath = filepath.Join(certsDir, keyPath)
-	}
-
-	r, err := NewRequest(
-		cfParent(filepath.Join(certsDir, defaultCACert)),
-		cfSignKey(keyPath),
-		cfDuration(days),
-		cfKeySize(keySize),
-		cfOverwrite(force),
-		cfUser(user),
-	)
-	if err != nil {
-		return err
-	}
-
-	return r.GeneratePair(
-		filepath.Join(certsDir, fmt.Sprint("client.", user, ".key")),
-		filepath.Join(certsDir, fmt.Sprint("client.", user, ".crt")),
-	)
+	_, err = x509.ParseCertificate(der)
+	return err
 }
