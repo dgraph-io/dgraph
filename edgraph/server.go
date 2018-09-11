@@ -636,6 +636,8 @@ func validateNQuads(set, del []*api.NQuad) error {
 
 func validateKey(key string) error {
 	switch {
+	case len(key) == 0:
+		return x.Errorf("has zero length")
 	case strings.ContainsAny(key, "~"):
 		return x.Errorf("has invalid tilde")
 	case strings.IndexFunc(key, unicode.IsSpace) != -1:
