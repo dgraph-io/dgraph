@@ -24,7 +24,11 @@ func certInfo(fn string) *Info {
 
 	switch {
 	case strings.HasSuffix(fn, ".crt"):
-		cert, _ := readCert(fn)
+		cert, err := readCert(fn)
+		if err != nil {
+			i.Err = err
+			return &i
+		}
 		i.Name = cert.Subject.CommonName
 		i.Expires = cert.NotAfter
 
