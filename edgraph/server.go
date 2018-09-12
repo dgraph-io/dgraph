@@ -652,11 +652,12 @@ func validateKeys(nq *api.NQuad) error {
 	if err != nil {
 		return x.Errorf("predicate %q %s", nq.Predicate, err)
 	}
-	if nq.Facets != nil {
-		for i := range nq.Facets {
-			if err = validateKey(nq.Facets[i].Key); err != nil {
-				return x.Errorf("facet %q, %s", nq.Facets[i].Key, err)
-			}
+	for i := range nq.Facets {
+		if nq.Facets[i] == nil {
+			continue
+		}
+		if err = validateKey(nq.Facets[i].Key); err != nil {
+			return x.Errorf("facet %q, %s", nq.Facets[i].Key, err)
 		}
 	}
 	return nil

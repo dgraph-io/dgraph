@@ -331,11 +331,18 @@ func TestParseNQuadsDelete(t *testing.T) {
 
 func TestValidateKeys(t *testing.T) {
 	nquads := `
-		_:a <~preA> _:b .
 		_:alice <knows> "stuff" ( "key 1" = 12 ) .
 		_:alice <knows> "stuff" ( "key	1" = 12 ) .
-		_:alice <knows> "stuff" ( ~key = 12 ) .
-		_:alice <knows> "stuff" ( "~key" = 12 ) .
+		_:alice <knows> "stuff" ( ~key1 = 12 ) .
+		_:alice <knows> "stuff" ( "~key1" = 12 ) .
+		_:alice <~knows> "stuff" ( "key 1" = 12 ) .
+		_:alice <~knows> "stuff" ( "key	1" = 12 ) .
+		_:alice <~knows> "stuff" ( key1 = 12 ) .
+		_:alice <~knows> "stuff" ( "key1" = 12 ) .
+		_:alice <~knows> "stuff" ( "key	1" = 12 ) .
+		_:alice <knows> "stuff" ( key1 = 12 , "key 2" = 13 ) .
+		_:alice <knows> "stuff" ( "key1" = 12, key2 = 13 , "key	3" = "a b" ) .
+		_:alice <knows~> "stuff" ( key1 = 12 ) .
 	`
 	nqs, err := parseNQuads([]byte(nquads))
 	require.NoError(t, err)
