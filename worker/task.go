@@ -8,6 +8,7 @@
 package worker
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -1612,40 +1613,84 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 // TODO - Check meta for empty PL and skip it.
 // This is not transactionally isolated, add to docs
 func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result) error {
-	tlist := &intern.List{}
-
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
 
-	itOpt := badger.DefaultIteratorOptions
-	itOpt.PrefetchValues = false
-
-	pk := x.ParsedKey{
+	initKey := x.ParsedKey{
 		Attr: q.Attr,
 	}
+	fmt.Printf("q: %+v\n", q)
 	startKey := x.DataKey(q.Attr, q.AfterUid+1)
-	prefix := pk.DataPrefix()
+	prefix := initKey.DataPrefix()
 	if q.Reverse {
 		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
-		prefix = pk.ReversePrefix()
+		prefix = initKey.ReversePrefix()
 	}
 
 	w := 0
-	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix, startKey)
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.PrefetchValues = false
+	itOpt.AllVersions = true
+	it := txn.NewIterator(itOpt)
 	defer it.Close()
-	for ; it.Valid(); it.Next() {
-		if it.UserMeta() == posting.BitEmptyPosting {
+
+	cachedList := &intern.List{}
+	bitr := &posting.BTreeIterator{
+		Reverse: q.Reverse,
+		Prefix:  prefix,
+	}
+	bitr.Seek(startKey)
+	for bitr.Seek(startKey); bitr.Valid(); bitr.Next() {
+		key := bitr.Key()
+		pl := posting.GetLru(key)
+		if pl == nil {
 			continue
+		}
+		pk := x.Parse(key)
+		fmt.Printf("cachedList. pk=%+v\n", pk)
+		var num int
+		if err := pl.Iterate(q.ReadTs, 0, func(_ *intern.Posting) bool {
+			num++
+			return false
+		}); err != nil {
+			return err
+		}
+		if num > 0 {
+			cachedList.Uids = append(cachedList.Uids, pk.Uid)
+		}
+	}
+
+	diskList := &intern.List{}
+	var prevKey []byte
+	for it.Seek(startKey); it.ValidForPrefix(prefix); {
+		item := it.Item()
+		if bytes.Equal(item.Key(), prevKey) {
+			it.Next()
+			continue
+		}
+		prevKey = append(prevKey[:0], item.Key()...)
+
+		// Parse the key upfront, otherwise ReadPostingList would advance the
+		// iterator.
+		pk := x.Parse(item.Key())
+		// We do need to copy over the key for ReadPostingList.
+		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
+		if err != nil {
+			return err
+		}
+		var num int
+		if err = l.Iterate(q.ReadTs, 0, func(_ *intern.Posting) bool {
+			num++
+			return false
+		}); err != nil {
+			return err
+		}
+		fmt.Printf("num=%d. pk: %+v\n", num, pk)
+		if num > 0 {
+			diskList.Uids = append(diskList.Uids, pk.Uid)
+			w++
 		}
 
-		pl := posting.GetLru(it.Key())
-		if pl != nil && pl.IsEmpty() {
-			// empty pl's can be present in lru
-			// We merge the keys on badger and the keys present in memory so
-			// we need to skip empty pls
-			continue
-		}
-		pk := x.Parse(it.Key())
 		if w%1000 == 0 {
 			select {
 			case <-ctx.Done():
@@ -1657,9 +1702,49 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 				}
 			}
 		}
-		w++
-		tlist.Uids = append(tlist.Uids, pk.Uid)
 	}
+
+	var tlist *intern.List
+	if len(cachedList.Uids) > 0 {
+		tlist = algo.MergeSorted([]*intern.List{cachedList, diskList})
+	} else {
+		tlist = diskList
+	}
+	fmt.Printf("cachedList=%+v\n", cachedList)
+	fmt.Printf("diskList=%+v\n", diskList)
+	fmt.Printf("tlist=%+v\n", tlist)
+
+	// it := posting.NewTxnPrefixIterator(txn, itOpt, prefix, startKey)
+	// defer it.Close()
+	// for ; it.Valid(); it.Next() {
+	// 	if it.UserMeta() == posting.BitEmptyPosting {
+	// 		continue
+	// 	}
+
+	// 	pl := posting.GetLru(it.Key())
+	// 	if pl != nil && pl.IsEmpty() {
+	// 		fmt.Printf("Returning from cache: %s", it.Key())
+	// 		// empty pl's can be present in lru
+	// 		// We merge the keys on badger and the keys present in memory so
+	// 		// we need to skip empty pls
+	// 		continue
+	// 	}
+	// 	pk := x.Parse(it.Key())
+	// 	if w%1000 == 0 {
+	// 		select {
+	// 		case <-ctx.Done():
+	// 			return ctx.Err()
+	// 		default:
+	// 			if tr, ok := trace.FromContext(ctx); ok {
+	// 				tr.LazyPrintf("handleHasFunction:"+
+	// 					" key: %v:%v", pk.Attr, pk.Uid)
+	// 			}
+	// 		}
+	// 	}
+	// 	fmt.Printf("Returning from disk: %+v. UserMeta: %b\n", pk, it.UserMeta())
+	// 	w++
+	// 	tlist.Uids = append(tlist.Uids, pk.Uid)
+	// }
 
 	out.UidMatrix = append(out.UidMatrix, tlist)
 	return nil

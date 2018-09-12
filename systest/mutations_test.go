@@ -1483,24 +1483,31 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	}
 	sort.Strings(ids)
 
-	txn = c.NewTxn()
-	defer txn.Discard(ctx)
-
-	resp, err := txn.Query(ctx, `{ me(func: has(end)) { uid } }`)
-	check(t, err)
-	t.Logf("resp: %s\n", resp.GetJson())
-
 	type U struct {
 		Uid string `json:"uid"`
 	}
 
-	m := make(map[string][]U)
-	err = json.Unmarshal(resp.GetJson(), &m)
-	check(t, err)
-	uids := m["me"]
+	getUids := func(txn *dgo.Txn) []string {
+		resp, err := txn.Query(ctx, `{ me(func: has(end)) { uid } }`)
+		check(t, err)
+		t.Logf("resp: %s\n", resp.GetJson())
+		m := make(map[string][]U)
+		err = json.Unmarshal(resp.GetJson(), &m)
+		check(t, err)
+		uids := m["me"]
+		var result []string
+		for _, uid := range uids {
+			result = append(result, uid.Uid)
+		}
+		return result
+	}
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	uids := getUids(txn)
 	require.Equal(t, 3, len(uids))
 	for _, uid := range uids {
-		require.Contains(t, ids, uid.Uid)
+		require.Contains(t, ids, uid)
 	}
 
 	deleteMu := &api.Mutation{
@@ -1508,24 +1515,37 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	}
 	deleteMu.DelNquads = []byte(fmt.Sprintf(`
 		<%s> <end> * .
-	`, ids[0]))
+	`, ids[len(ids)-1]))
 	t.Logf("deleteMu: %+v\n", deleteMu)
 	_, err = txn.Mutate(ctx, deleteMu)
 	check(t, err)
 
 	txn = c.NewTxn()
 	defer txn.Discard(ctx)
-
-	resp, err = txn.Query(ctx, `{ me(func: has(end)) { uid } }`)
-	check(t, err)
-	t.Logf("resp: %s\n", resp.GetJson())
-
-	m = make(map[string][]U)
-	err = json.Unmarshal(resp.GetJson(), &m)
-	check(t, err)
-	uids = m["me"]
+	uids = getUids(txn)
 	require.Equal(t, 2, len(uids))
 	for _, uid := range uids {
-		require.Contains(t, ids, uid.Uid)
+		require.Contains(t, ids, uid)
+	}
+	// Remove the last entry from ids.
+	ids = ids[:len(ids)-1]
+
+	// This time we didn't commit the txn.
+	assigned, err = txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:d <end> "" .
+		`),
+	})
+	check(t, err)
+
+	require.Equal(t, 1, len(assigned.Uids))
+	for _, uid := range assigned.Uids {
+		ids = append(ids, uid)
+	}
+
+	uids = getUids(txn)
+	require.Equal(t, 3, len(uids))
+	for _, uid := range uids {
+		require.Contains(t, ids, uid)
 	}
 }
