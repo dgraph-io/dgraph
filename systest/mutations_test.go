@@ -12,61 +12,61 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
+// TestSystem uses the externally run Dgraph cluster for testing. Most other
+// tests in this package are using a suite struct system, which runs Dgraph and
+// loads data with bulk and live loader.
 func TestSystem(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	cluster := NewDgraphCluster(dir)
-	require.NoError(t, cluster.Start())
-	defer cluster.Close()
-
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			require.NoError(t, cluster.client.Alter(
+			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+			x.Check(err)
+			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))
-			fn(t, cluster.client)
+			fn(t, dg)
 		}
 	}
 
-	t.Run("n-quad mutation", wrap(NQuadMutationTest))
-	t.Run("expand all lang test", wrap(ExpandAllLangTest))
-	t.Run("list with languages", wrap(ListWithLanguagesTest))
-	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
-	t.Run("expand all with reverse predicates", wrap(ExpandAllReversePredicatesTest))
-	t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
-	t.Run("facets with order", wrap(FacetOrderTest))
-	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
-	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
-	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
-	t.Run("fulltext equal", wrap(FullTextEqual))
-	t.Run("json blank node", wrap(JSONBlankNode))
-	t.Run("scalar to list", wrap(ScalarToList))
-	t.Run("list to scalar", wrap(ListToScalar))
-	t.Run("set after delete for list", wrap(SetAfterDeletionListType))
-	t.Run("empty strings with exact", wrap(EmptyNamesWithExact))
-	t.Run("empty strings with term", wrap(EmptyRoomsWithTermIndex))
-	t.Run("delete with expand all", wrap(DeleteWithExpandAll))
-	t.Run("facets using nquads", wrap(FacetsUsingNQuadsError))
-	t.Run("skip empty pl for has", wrap(SkipEmptyPLForHas))
-	t.Run("facet expand all", wrap(FacetExpandAll))
-	t.Run("has with dash", wrap(HasWithDash))
-	t.Run("list geo filter", wrap(ListGeoFilterTest))
-	t.Run("list regex filter", wrap(ListRegexFilterTest))
-	t.Run("regex query vars", wrap(RegexQueryWithVars))
-	t.Run("graphql var child", wrap(GraphQLVarChild))
-	t.Run("math ge", wrap(MathGe))
+	// t.Run("n-quad mutation", wrap(NQuadMutationTest))
+	// t.Run("expand all lang test", wrap(ExpandAllLangTest))
+	// t.Run("list with languages", wrap(ListWithLanguagesTest))
+	// t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
+	// t.Run("expand all with reverse predicates", wrap(ExpandAllReversePredicatesTest))
+	// t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
+	// t.Run("facets with order", wrap(FacetOrderTest))
+	// t.Run("lang and sort bug", wrap(LangAndSortBugTest))
+	// t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
+	// t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
+	// t.Run("fulltext equal", wrap(FullTextEqual))
+	// t.Run("json blank node", wrap(JSONBlankNode))
+	// t.Run("scalar to list", wrap(ScalarToList))
+	// t.Run("list to scalar", wrap(ListToScalar))
+	// t.Run("set after delete for list", wrap(SetAfterDeletionListType))
+	// t.Run("empty strings with exact", wrap(EmptyNamesWithExact))
+	// t.Run("empty strings with term", wrap(EmptyRoomsWithTermIndex))
+	// t.Run("delete with expand all", wrap(DeleteWithExpandAll))
+	// t.Run("facets using nquads", wrap(FacetsUsingNQuadsError))
+	// t.Run("skip empty pl for has", wrap(SkipEmptyPLForHas))
+	// t.Run("facet expand all", wrap(FacetExpandAll))
+	// t.Run("has with dash", wrap(HasWithDash))
+	// t.Run("list geo filter", wrap(ListGeoFilterTest))
+	// t.Run("list regex filter", wrap(ListRegexFilterTest))
+	// t.Run("regex query vars", wrap(RegexQueryWithVars))
+	// t.Run("graphql var child", wrap(GraphQLVarChild))
+	// t.Run("math ge", wrap(MathGe))
+	t.Run("has should not have deleted edge", wrap(HasDeletedEdge))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1459,4 +1459,73 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 		  ]
 		}
 	`, string(resp.GetJson()))
+}
+
+func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <end> "" .
+			_:b <end> "" .
+			_:c <end> "" .
+		`),
+	})
+	check(t, err)
+
+	var ids []string
+	for _, uid := range assigned.Uids {
+		ids = append(ids, uid)
+	}
+	sort.Strings(ids)
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+
+	resp, err := txn.Query(ctx, `{ me(func: has(end)) { uid } }`)
+	check(t, err)
+	t.Logf("resp: %s\n", resp.GetJson())
+
+	type U struct {
+		Uid string `json:"uid"`
+	}
+
+	m := make(map[string][]U)
+	err = json.Unmarshal(resp.GetJson(), &m)
+	check(t, err)
+	uids := m["me"]
+	require.Equal(t, 3, len(uids))
+	for _, uid := range uids {
+		require.Contains(t, ids, uid.Uid)
+	}
+
+	deleteMu := &api.Mutation{
+		CommitNow: true,
+	}
+	deleteMu.DelNquads = []byte(fmt.Sprintf(`
+		<%s> <end> * .
+	`, ids[0]))
+	t.Logf("deleteMu: %+v\n", deleteMu)
+	_, err = txn.Mutate(ctx, deleteMu)
+	check(t, err)
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+
+	resp, err = txn.Query(ctx, `{ me(func: has(end)) { uid } }`)
+	check(t, err)
+	t.Logf("resp: %s\n", resp.GetJson())
+
+	m = make(map[string][]U)
+	err = json.Unmarshal(resp.GetJson(), &m)
+	check(t, err)
+	uids = m["me"]
+	require.Equal(t, 2, len(uids))
+	for _, uid := range uids {
+		require.Contains(t, ids, uid.Uid)
+	}
 }
