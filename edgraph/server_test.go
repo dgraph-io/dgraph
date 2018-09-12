@@ -330,24 +330,37 @@ func TestParseNQuadsDelete(t *testing.T) {
 }
 
 func TestValidateKeys(t *testing.T) {
-	nquads := `
-		_:alice <knows> "stuff" ( "key 1" = 12 ) .
-		_:alice <knows> "stuff" ( "key	1" = 12 ) .
-		_:alice <knows> "stuff" ( ~key1 = 12 ) .
-		_:alice <knows> "stuff" ( "~key1" = 12 ) .
-		_:alice <~knows> "stuff" ( "key 1" = 12 ) .
-		_:alice <~knows> "stuff" ( "key	1" = 12 ) .
-		_:alice <~knows> "stuff" ( key1 = 12 ) .
-		_:alice <~knows> "stuff" ( "key1" = 12 ) .
-		_:alice <~knows> "stuff" ( "key	1" = 12 ) .
-		_:alice <knows> "stuff" ( key1 = 12 , "key 2" = 13 ) .
-		_:alice <knows> "stuff" ( "key1" = 12, key2 = 13 , "key	3" = "a b" ) .
-		_:alice <knows~> "stuff" ( key1 = 12 ) .
-	`
-	nqs, err := parseNQuads([]byte(nquads))
-	require.NoError(t, err)
+	tests := []struct {
+		name    string
+		nquad   string
+		noError bool
+	}{
+		{name: "test 1", nquad: `_:alice <knows> "stuff" ( "key 1" = 12 ) .`, noError: false},
+		{name: "test 2", nquad: `_:alice <knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
+		{name: "test 3", nquad: `_:alice <knows> "stuff" ( ~key1 = 12 ) .`, noError: false},
+		{name: "test 4", nquad: `_:alice <knows> "stuff" ( "~key1" = 12 ) .`, noError: false},
+		{name: "test 5", nquad: `_:alice <~knows> "stuff" ( "key 1" = 12 ) .`, noError: false},
+		{name: "test 6", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
+		{name: "test 7", nquad: `_:alice <~knows> "stuff" ( key1 = 12 ) .`, noError: false},
+		{name: "test 8", nquad: `_:alice <~knows> "stuff" ( "key1" = 12 ) .`, noError: false},
+		{name: "test 9", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
+		{name: "test 10", nquad: `_:alice <knows> "stuff" ( key1 = 12 , "key 2" = 13 ) .`, noError: false},
+		{name: "test 11", nquad: `_:alice <knows> "stuff" ( "key1" = 12, key2 = 13 , "key	3" = "a b" ) .`, noError: false},
+		{name: "test 12", nquad: `_:alice <knows~> "stuff" ( key1 = 12 ) .`, noError: false},
+		{name: "test 13", nquad: `_:alice <knows> "stuff" ( key1 = 12 ) .`, noError: true},
+	}
 
-	for i := range nqs {
-		require.Error(t, validateKeys(nqs[i]), "No error for: %+v", nqs[i])
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			nq, err := parseNQuads([]byte(tc.nquad))
+			require.NoError(t, err)
+
+			err = validateKeys(nq[0])
+			if tc.noError {
+				require.NoError(t, err, "Unexpected error for: %+v", nq)
+			} else {
+				require.Error(t, err, "Expected an error: %+v", nq)
+			}
+		})
 	}
 }
