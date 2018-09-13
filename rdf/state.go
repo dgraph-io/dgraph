@@ -169,8 +169,8 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 	}
 
 	in := l.Input[l.Start:l.Pos]
-	if _, err := strconv.ParseUint(in[:], 0, 64); err != nil {
-		return l.Errorf("Unable to convert '%v' to UID", in[:])
+	if _, err := strconv.ParseUint(in, 0, 64); err != nil {
+		return l.Errorf("Unable to convert '%v' to UID", in)
 	}
 
 	if isSpace(r) {
