@@ -36,7 +36,7 @@ type Item struct {
 
 func (i Item) String() string {
 	switch i.Typ {
-	case 0:
+	case ItemEOF:
 		return "EOF"
 	}
 	return fmt.Sprintf("lex.Item [%v] %q", i.Typ, i.Val)
