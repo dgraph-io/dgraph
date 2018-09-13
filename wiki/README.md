@@ -4,7 +4,7 @@ If you are looking for Dgraph documentation, you might find https://docs.dgraph.
 
 ## Contributing
 
-We use [Hugo](https://gohugo.io/s) for our documentation.
+We use [Hugo](https://gohugo.io/) for our documentation.
 
 ### Running locally
 
