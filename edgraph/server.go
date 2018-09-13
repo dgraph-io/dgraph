@@ -14,8 +14,10 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -601,10 +603,10 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res.Set = append(res.Set, mu.Set...)
 	res.Del = append(res.Del, mu.Del...)
 
-	return res, validWildcards(res.Set, res.Del)
+	return res, validateNQuads(res.Set, res.Del)
 }
 
-func validWildcards(set, del []*api.NQuad) error {
+func validateNQuads(set, del []*api.NQuad) error {
 	for _, nq := range set {
 		var ostar bool
 		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
@@ -612,6 +614,9 @@ func validWildcards(set, del []*api.NQuad) error {
 		}
 		if nq.Subject == x.Star || nq.Predicate == x.Star || ostar {
 			return x.Errorf("Cannot use star in set n-quad: %+v", nq)
+		}
+		if err := validateKeys(nq); err != nil {
+			return x.Errorf("Key error: %s: %+v", err, nq)
 		}
 	}
 	for _, nq := range del {
@@ -621,6 +626,38 @@ func validWildcards(set, del []*api.NQuad) error {
 		}
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return x.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
+		}
+		if err := validateKeys(nq); err != nil {
+			return x.Errorf("Key error: %s: %+v", err, nq)
+		}
+	}
+	return nil
+}
+
+func validateKey(key string) error {
+	switch {
+	case len(key) == 0:
+		return x.Errorf("has zero length")
+	case strings.ContainsAny(key, "~"):
+		return x.Errorf("has invalid tilde")
+	case strings.IndexFunc(key, unicode.IsSpace) != -1:
+		return x.Errorf("must not contain spaces")
+	}
+	return nil
+}
+
+// validateKeys checks predicate and facet keys in Nquad for syntax errors.
+func validateKeys(nq *api.NQuad) error {
+	err := validateKey(nq.Predicate)
+	if err != nil {
+		return x.Errorf("predicate %q %s", nq.Predicate, err)
+	}
+	for i := range nq.Facets {
+		if nq.Facets[i] == nil {
+			continue
+		}
+		if err = validateKey(nq.Facets[i].Key); err != nil {
+			return x.Errorf("facet %q, %s", nq.Facets[i].Key, err)
 		}
 	}
 	return nil
