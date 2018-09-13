@@ -1154,7 +1154,7 @@ func parseSrcFn(q *intern.Query) (*functionContext, error) {
 		args := q.SrcFunc.Args
 		// Only eq can have multiple args. It should have atleast one.
 		if fc.fname == eq {
-			if len(args) <= 0 {
+			if len(args) < 1 {
 				return nil, x.Errorf("eq expects atleast 1 argument.")
 			}
 		} else { // Others can have only 1 arg.
