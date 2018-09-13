@@ -127,7 +127,6 @@ func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
 	defer txn.Discard()
 	iterate := func(kr keyRange) error {
 		iterOpts := badger.DefaultIteratorOptions
-		// iterOpts.PrefetchSize = 10
 		iterOpts.AllVersions = true
 		iterOpts.PrefetchValues = false
 		it := txn.NewIterator(iterOpts)

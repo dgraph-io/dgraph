@@ -208,7 +208,6 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 		}
 		idx += sz
 	}
-	// fmt.Printf("Got %d messages\n", count)
 	return &api.Payload{}, nil
 }
 
