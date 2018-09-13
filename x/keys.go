@@ -32,7 +32,7 @@ func writeAttr(buf []byte, attr string) []byte {
 	binary.BigEndian.PutUint16(buf[:2], uint16(len(attr)))
 
 	rest := buf[2:]
-	AssertTrue(len(attr) == copy(rest, attr[:]))
+	AssertTrue(len(attr) == copy(rest, attr))
 
 	return rest[len(attr):]
 }
@@ -84,7 +84,7 @@ func IndexKey(attr, term string) []byte {
 	rest[0] = ByteIndex
 
 	rest = rest[1:]
-	AssertTrue(len(term) == copy(rest, term[:]))
+	AssertTrue(len(term) == copy(rest, term))
 	return buf
 }
 
