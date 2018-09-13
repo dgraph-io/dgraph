@@ -541,7 +541,11 @@ func (n *node) retrieveSnapshot() error {
 }
 
 func (n *node) proposeSnapshot() error {
-	snap, err := n.calculateSnapshot(1000)
+	// Setting calculateSnapshot min entries to 10, so that we calculate
+	// snapshots more frequently. This avoids the scenario where after bringing
+	// up an Alpha, and doing a hundred schema updates, we don't take any
+	// snapshots, which then really slows down restarts.
+	snap, err := n.calculateSnapshot(10)
 	if err != nil || snap == nil {
 		return err
 	}
@@ -563,7 +567,7 @@ func (n *node) Run() {
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 
-	slowTicker := time.NewTicker(time.Minute)
+	slowTicker := time.NewTicker(3 * time.Minute)
 	defer slowTicker.Stop()
 
 	done := make(chan struct{})
