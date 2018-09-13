@@ -1,3 +1,7 @@
+# This configuration creates 1 Dgraph Zero and 3 Dgraph Servers with 3
+# replicas. The Dgraph cluster will still be available to service
+# requests even when a total of one Dgraph Server is down.
+#
 # There are 4 public services exposed, users can use:
 #       dgraph-zero-public - To load data using Live & Bulk Loaders
 #       dgraph-server-public - To connect clients and for HTTP APIs
