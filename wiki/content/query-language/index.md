@@ -2688,31 +2688,19 @@ curl localhost:8080/query -XPOST -d $'{
         "friend": [
           {
             "uid": "0x3",
+            "friend|weight": 0.1,
             "friend": [
               {
                 "uid": "0x4",
+                "friend|weight": 0.2,
                 "friend": [
                   {
                     "uid": "0x5",
-                    "@facets": {
-                      "_": {
-                        "weight": 0.3
-                      }
-                    }
+                    "friend|weight": 0.3
                   }
-                ],
-                "@facets": {
-                  "_": {
-                    "weight": 0.2
-                  }
-                }
+                ]
               }
-            ],
-            "@facets": {
-              "_": {
-                "weight": 0.1
-              }
-            }
+            ]
           }
         ]
       }
