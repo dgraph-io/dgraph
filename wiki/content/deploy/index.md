@@ -1381,7 +1381,7 @@ Dgraph metrics follow the [metric and label conventions for Prometheus](https://
  `dgraph_memory_inuse_bytes`      | Total memory usage in bytes (sum of heap usage and stack usage).
  `dgraph_num_queries_total`       | Total number of queries run in Dgraph.
  `dgraph_pending_proposals_total` | Total pending Raft proposals.
- `dgraph_pending_quoeries_total`  | Total number of queries in progress.
+ `dgraph_pending_queries_total`  | Total number of queries in progress.
  `dgraph_posting_reads_total`     | Unused.
  `dgraph_posting_writes_total`    | Total number of posting list writes to disk.
  `dgraph_proc_memory_bytes`       | Total memory usage in bytes of the Dgraph process. On Linux/macOS, this metric is equivalent to resident set size. On Windows, this metric is equivalent to [Go's runtime.ReadMemStats](https://golang.org/pkg/runtime/#ReadMemStats).
