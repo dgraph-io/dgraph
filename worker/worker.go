@@ -81,7 +81,6 @@ func RunServer(bindall bool) {
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, workerPort()))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
-		return
 	}
 	x.Printf("Worker listening at address: %v", ln.Addr())
 
