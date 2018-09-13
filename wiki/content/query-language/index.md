@@ -3076,7 +3076,7 @@ understand how `Tokens` method should be implemented.
 
 When Dgraph sees new edges that are to be indexed by your tokenizer, it
 will tokenize the value. The resultant tokens are used as keys for posting
-lists. The edge subject is then added to the posting list for each each token.
+lists. The edge subject is then added to the posting list for each token.
 
 When a query root search occurs, the search value is tokenized. The result of
 the search is all of the nodes in the union or intersection of the correponding
