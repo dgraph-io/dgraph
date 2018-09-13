@@ -33,7 +33,6 @@ type certInfo struct {
 
 func getFileInfo(file string) *certInfo {
 	var info certInfo
-
 	info.fileName = file
 
 	switch {
@@ -59,7 +58,8 @@ func getFileInfo(file string) *certInfo {
 			}
 
 		case strings.HasPrefix(file, "client."):
-			info.commonName = fmt.Sprintf("%s client certificate: %s", dnCommonNamePrefix, cert.Subject.CommonName)
+			info.commonName = fmt.Sprintf("%s client certificate: %s",
+				dnCommonNamePrefix, cert.Subject.CommonName)
 
 		default:
 			info.err = fmt.Errorf("unsupported certificate")
@@ -119,12 +119,11 @@ func getFileInfo(file string) *certInfo {
 // getDirFiles walks dir and collects information about the files contained.
 // Returns the list of files, or an error otherwise.
 func getDirFiles(dir string) ([]*certInfo, error) {
-	var files []*certInfo
-
 	if err := os.Chdir(dir); err != nil {
 		return nil, err
 	}
 
+	var files []*certInfo
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

@@ -134,8 +134,6 @@ func createCAPair(opt options) error {
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
 func createNodePair(opt options) error {
-	var err error
-
 	if opt.nodes == nil || len(opt.nodes) == 0 {
 		return nil
 	}
@@ -146,6 +144,8 @@ func createNodePair(opt options) error {
 		force:   opt.force,
 		hosts:   opt.nodes,
 	}
+
+	var err error
 
 	cc.parent, err = readCert(opt.caCert)
 	if err != nil {
@@ -172,8 +172,6 @@ func createNodePair(opt options) error {
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
 func createClientPair(opt options) error {
-	var err error
-
 	if opt.client == "" {
 		return nil
 	}
@@ -184,6 +182,8 @@ func createClientPair(opt options) error {
 		force:   opt.force,
 		client:  opt.client,
 	}
+
+	var err error
 
 	cc.parent, err = readCert(opt.caCert)
 	if err != nil {
@@ -206,13 +206,11 @@ func createClientPair(opt options) error {
 }
 
 func createCerts(opt options) error {
-	var err error
-
 	if opt.dir == "" {
 		return errors.New("invalid TLS directory")
 	}
 
-	err = os.Mkdir(opt.dir, 0700)
+	err := os.Mkdir(opt.dir, 0700)
 	if err != nil && !os.IsExist(err) {
 		return err
 	}
@@ -242,6 +240,5 @@ func createCerts(opt options) error {
 	if err := createClientPair(opt); err != nil {
 		return err
 	}
-
 	return nil
 }
