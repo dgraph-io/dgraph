@@ -98,7 +98,7 @@ func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 			return 0, 0, p.ctx.Err()
 		}
 		if factor < 256*time.Second {
-			factor = factor * 2
+			factor *= 2
 		}
 	}
 }

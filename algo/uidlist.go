@@ -180,9 +180,9 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 			k++
 			i++
 		} else if k+jump < m && uid > v[k+jump] {
-			k = k + jump
+			k += jump
 		} else if i+jump < n && vid > u[i+jump] {
-			i = i + jump
+			i += jump
 		} else if uid > vid {
 			for k = k + 1; k < m && v[k] < uid; k++ {
 			}

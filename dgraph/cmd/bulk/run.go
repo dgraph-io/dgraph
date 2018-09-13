@@ -117,7 +117,7 @@ func run() {
 		os.Exit(1)
 	}
 
-	opt.MapBufSize = opt.MapBufSize << 20 // Convert from MB to B.
+	opt.MapBufSize <<= 20 // Convert from MB to B.
 
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")
 	x.Check(err)
