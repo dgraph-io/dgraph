@@ -104,18 +104,17 @@ type mapResponse struct {
 }
 
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
-	switch v.(type) {
+	switch v := v.(type) {
 	case json.Number:
-		n := v.(json.Number)
-		if strings.Index(n.String(), ".") >= 0 {
-			f, err := n.Float64()
+		if strings.Index(v.String(), ".") >= 0 {
+			f, err := v.Float64()
 			if err != nil {
 				return err
 			}
 			nq.ObjectValue = &api.Value{&api.Value_DoubleVal{f}}
 			return nil
 		}
-		i, err := n.Int64()
+		i, err := v.Int64()
 		if err != nil {
 			return err
 		}
@@ -133,21 +132,21 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
-		nq.ObjectValue = &api.Value{&api.Value_StrVal{v.(string)}}
+		nq.ObjectValue = &api.Value{&api.Value_StrVal{v}}
 	case float64:
 		if v == 0 && op == delete {
 			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
 			return nil
 		}
 
-		nq.ObjectValue = &api.Value{&api.Value_DoubleVal{v.(float64)}}
+		nq.ObjectValue = &api.Value{&api.Value_DoubleVal{v}}
 	case bool:
 		if v == false && op == delete {
 			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
 			return nil
 		}
 
-		nq.ObjectValue = &api.Value{&api.Value_BoolVal{v.(bool)}}
+		nq.ObjectValue = &api.Value{&api.Value_BoolVal{v}}
 	default:
 		return x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 	}
@@ -208,22 +207,20 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 	if uidVal, ok := m["uid"]; ok {
 		var uid uint64
 
-		switch uidVal.(type) {
+		switch uidVal := uidVal.(type) {
 		case json.Number:
-			uidn := uidVal.(json.Number)
-			ui, err := uidn.Int64()
+			ui, err := uidVal.Int64()
 			if err != nil {
 				return mr, err
 			}
 			uid = uint64(ui)
 
 		case string:
-			id := uidVal.(string)
-			if len(id) == 0 {
+			if len(uidVal) == 0 {
 				uid = 0
-			} else if ok := strings.HasPrefix(id, "_:"); ok {
-				mr.uid = id
-			} else if u, err := strconv.ParseUint(id, 0, 64); err != nil {
+			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
+				mr.uid = uidVal
+			} else if u, err := strconv.ParseUint(uidVal, 0, 64); err != nil {
 				return mr, err
 			} else {
 				uid = u
@@ -287,20 +284,19 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			continue
 		}
 
-		switch v.(type) {
+		switch v := v.(type) {
 		case string, json.Number, bool:
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
 			}
 			mr.nquads = append(mr.nquads, &nq)
 		case map[string]interface{}:
-			val := v.(map[string]interface{})
-			if len(val) == 0 {
+			if len(v) == 0 {
 				continue
 			}
 
-			ok, err := handleGeoType(val, &nq)
-			if  err != nil {
+			ok, err := handleGeoType(v, &nq)
+			if err != nil {
 				return mr, err
 			}
 			if ok {
@@ -308,7 +304,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				continue
 			}
 
-			cr, err := mapToNquads(v.(map[string]interface{}), idx, op, pred)
+			cr, err := mapToNquads(v, idx, op, pred)
 			if err != nil {
 				return mr, err
 			}
@@ -320,7 +316,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			// Add the nquads that we got for the connecting entity.
 			mr.nquads = append(mr.nquads, cr.nquads...)
 		case []interface{}:
-			for _, item := range v.([]interface{}) {
+			for _, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,
 					Predicate: pred,
@@ -335,7 +331,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				case map[string]interface{}:
 					// map[string]interface{} can mean geojson or a connecting entity.
 					ok, err := handleGeoType(item.(map[string]interface{}), &nq)
-					if  err != nil {
+					if err != nil {
 						return mr, err
 					}
 					if ok {
