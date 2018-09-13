@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -1624,21 +1625,13 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	startKey := x.DataKey(q.Attr, q.AfterUid+1)
 	prefix := initKey.DataPrefix()
 	if q.Reverse {
-		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
-		prefix = initKey.ReversePrefix()
+		glog.Warningln("has function does not handle reverse iteration.")
 	}
-
-	w := 0
-	itOpt := badger.DefaultIteratorOptions
-	itOpt.PrefetchValues = false
-	itOpt.AllVersions = true
-	it := txn.NewIterator(itOpt)
-	defer it.Close()
 
 	var cachedUids []uint64
 	bitr := &posting.BTreeIterator{
-		Reverse: q.Reverse,
-		Prefix:  prefix,
+		// Reverse: q.Reverse, // We don't handle reverse iteration.
+		Prefix: prefix,
 	}
 	for bitr.Seek(startKey); bitr.Valid(); bitr.Next() {
 		key := bitr.Key()
@@ -1661,7 +1654,13 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 
 	result := &intern.List{}
 	var prevKey []byte
-	var cidx int
+	var cidx, w int
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.PrefetchValues = false
+	itOpt.AllVersions = true
+	it := txn.NewIterator(itOpt)
+	defer it.Close()
+
 	for it.Seek(startKey); it.ValidForPrefix(prefix); {
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
