@@ -12,31 +12,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
+// TestSystem uses the externally run Dgraph cluster for testing. Most other
+// tests in this package are using a suite struct system, which runs Dgraph and
+// loads data with bulk and live loader.
 func TestSystem(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	cluster := NewDgraphCluster(dir)
-	require.NoError(t, cluster.Start())
-	defer cluster.Close()
-
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			require.NoError(t, cluster.client.Alter(
+			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+			x.Check(err)
+			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))
-			fn(t, cluster.client)
+			fn(t, dg)
 		}
 	}
 
@@ -67,6 +67,7 @@ func TestSystem(t *testing.T) {
 	t.Run("regex query vars", wrap(RegexQueryWithVars))
 	t.Run("graphql var child", wrap(GraphQLVarChild))
 	t.Run("math ge", wrap(MathGe))
+	t.Run("has should not have deleted edge", wrap(HasDeletedEdge))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1459,4 +1460,100 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 		  ]
 		}
 	`, string(resp.GetJson()))
+}
+
+func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <end> "" .
+			_:b <end> "" .
+			_:c <end> "" .
+			_:d <start> "" .
+			_:d2 <start> "" .
+		`),
+	})
+	check(t, err)
+
+	var ids []string
+	for key, uid := range assigned.Uids {
+		if !strings.HasPrefix(key, "d") {
+			ids = append(ids, uid)
+		}
+	}
+	sort.Strings(ids)
+
+	type U struct {
+		Uid string `json:"uid"`
+	}
+
+	getUids := func(txn *dgo.Txn) []string {
+		resp, err := txn.Query(ctx, `{
+			me(func: has(end)) { uid }
+			you(func: has(end)) { count(uid) }
+		}`)
+		check(t, err)
+		t.Logf("resp: %s\n", resp.GetJson())
+		m := make(map[string][]U)
+		err = json.Unmarshal(resp.GetJson(), &m)
+		check(t, err)
+		uids := m["me"]
+		var result []string
+		for _, uid := range uids {
+			result = append(result, uid.Uid)
+		}
+		return result
+	}
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	uids := getUids(txn)
+	require.Equal(t, 3, len(uids))
+	for _, uid := range uids {
+		require.Contains(t, ids, uid)
+	}
+
+	deleteMu := &api.Mutation{
+		CommitNow: true,
+	}
+	deleteMu.DelNquads = []byte(fmt.Sprintf(`
+		<%s> <end> * .
+	`, ids[len(ids)-1]))
+	t.Logf("deleteMu: %+v\n", deleteMu)
+	_, err = txn.Mutate(ctx, deleteMu)
+	check(t, err)
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	uids = getUids(txn)
+	require.Equal(t, 2, len(uids))
+	for _, uid := range uids {
+		require.Contains(t, ids, uid)
+	}
+	// Remove the last entry from ids.
+	ids = ids[:len(ids)-1]
+
+	// This time we didn't commit the txn.
+	assigned, err = txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:d <end> "" .
+		`),
+	})
+	check(t, err)
+
+	require.Equal(t, 1, len(assigned.Uids))
+	for _, uid := range assigned.Uids {
+		ids = append(ids, uid)
+	}
+
+	uids = getUids(txn)
+	require.Equal(t, 3, len(uids))
+	for _, uid := range uids {
+		require.Contains(t, ids, uid)
+	}
 }

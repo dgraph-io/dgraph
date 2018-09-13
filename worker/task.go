@@ -8,6 +8,7 @@
 package worker
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -19,6 +20,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -1609,43 +1611,98 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 	return nil
 }
 
-// TODO - Check meta for empty PL and skip it.
-// This is not transactionally isolated, add to docs
+// handleHasFunction looks at both the inmemory btree populated by
+// posting/lists.go, and Badger. Thus, it can capture both committed
+// transactions and in-progress transactions. It also accounts for transaction
+// start ts.
 func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result) error {
-	tlist := &intern.List{}
-
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
 
-	itOpt := badger.DefaultIteratorOptions
-	itOpt.PrefetchValues = false
-
-	pk := x.ParsedKey{
+	initKey := x.ParsedKey{
 		Attr: q.Attr,
 	}
 	startKey := x.DataKey(q.Attr, q.AfterUid+1)
-	prefix := pk.DataPrefix()
+	prefix := initKey.DataPrefix()
 	if q.Reverse {
-		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
-		prefix = pk.ReversePrefix()
+		glog.Warningln("has function does not handle reverse iteration.")
 	}
 
-	w := 0
-	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix, startKey)
+	var cachedUids []uint64
+	bitr := &posting.BTreeIterator{
+		// Reverse: q.Reverse, // We don't handle reverse iteration.
+		Prefix: prefix,
+	}
+	for bitr.Seek(startKey); bitr.Valid(); bitr.Next() {
+		key := bitr.Key()
+		pl := posting.GetLru(key)
+		if pl == nil {
+			continue
+		}
+		pk := x.Parse(key)
+		var num int
+		if err := pl.Iterate(q.ReadTs, 0, func(_ *intern.Posting) bool {
+			num++
+			return false
+		}); err != nil {
+			return err
+		}
+		if num > 0 {
+			cachedUids = append(cachedUids, pk.Uid)
+		}
+	}
+
+	result := &intern.List{}
+	var prevKey []byte
+	var cidx, w int
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.PrefetchValues = false
+	itOpt.AllVersions = true
+	it := txn.NewIterator(itOpt)
 	defer it.Close()
-	for ; it.Valid(); it.Next() {
-		if it.UserMeta() == posting.BitEmptyPosting {
+
+	for it.Seek(startKey); it.ValidForPrefix(prefix); {
+		item := it.Item()
+		if bytes.Equal(item.Key(), prevKey) {
+			it.Next()
+			continue
+		}
+		prevKey = append(prevKey[:0], item.Key()...)
+
+		// Parse the key upfront, otherwise ReadPostingList would advance the
+		// iterator.
+		pk := x.Parse(item.Key())
+
+		// Pick up all the uids found in the Btree, which are <= this Uid.
+		for cidx < len(cachedUids) && cachedUids[cidx] < pk.Uid {
+			result.Uids = append(result.Uids, pk.Uid)
+			cidx++
+		}
+		if cidx < len(cachedUids) && cachedUids[cidx] == pk.Uid {
+			// No need to check this key on disk. We already found it in the
+			// Btree.
+			result.Uids = append(result.Uids, pk.Uid)
+			cidx++
 			continue
 		}
 
-		pl := posting.GetLru(it.Key())
-		if pl != nil && pl.IsEmpty() {
-			// empty pl's can be present in lru
-			// We merge the keys on badger and the keys present in memory so
-			// we need to skip empty pls
-			continue
+		// We do need to copy over the key for ReadPostingList.
+		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
+		if err != nil {
+			return err
 		}
-		pk := x.Parse(it.Key())
+		var num int
+		if err = l.Iterate(q.ReadTs, 0, func(_ *intern.Posting) bool {
+			num++
+			return false
+		}); err != nil {
+			return err
+		}
+		if num > 0 {
+			result.Uids = append(result.Uids, pk.Uid)
+			w++
+		}
+
 		if w%1000 == 0 {
 			select {
 			case <-ctx.Done():
@@ -1657,10 +1714,12 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 				}
 			}
 		}
-		w++
-		tlist.Uids = append(tlist.Uids, pk.Uid)
+	}
+	// Pick up any remaining UIDs from the Btree.
+	if cidx < len(cachedUids) {
+		result.Uids = append(result.Uids, cachedUids[cidx:]...)
 	}
 
-	out.UidMatrix = append(out.UidMatrix, tlist)
+	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }

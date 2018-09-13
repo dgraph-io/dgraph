@@ -257,35 +257,39 @@ func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
 	return l, nil
 }
 
-type bTreeIterator struct {
+type BTreeIterator struct {
 	keys    [][]byte
 	idx     int
-	reverse bool
-	prefix  []byte
+	Reverse bool
+	Prefix  []byte
 }
 
-func (bi *bTreeIterator) Next() {
+func (bi *BTreeIterator) Next() {
 	bi.idx++
 }
 
-func (bi *bTreeIterator) Key() []byte {
+func (bi *BTreeIterator) Key() []byte {
 	x.AssertTrue(bi.Valid())
 	return bi.keys[bi.idx]
 }
 
-func (bi *bTreeIterator) Valid() bool {
+func (bi *BTreeIterator) Valid() bool {
+	// No need to check HasPrefix here, because we are only picking those keys
+	// which have the right prefix in Seek.
 	return bi.idx < len(bi.keys)
 }
 
-func (bi *bTreeIterator) Seek(key []byte) {
+func (bi *BTreeIterator) Seek(key []byte) {
+	bi.keys = bi.keys[:0]
+	bi.idx = 0
 	cont := func(key []byte) bool {
-		if !bytes.HasPrefix(key, bi.prefix) {
+		if !bytes.HasPrefix(key, bi.Prefix) {
 			return false
 		}
 		bi.keys = append(bi.keys, key)
 		return true
 	}
-	if !bi.reverse {
+	if !bi.Reverse {
 		btree.AscendGreaterOrEqual(key, cont)
 	} else {
 		btree.DescendLessOrEqual(key, cont)
@@ -293,7 +297,7 @@ func (bi *bTreeIterator) Seek(key []byte) {
 }
 
 type TxnPrefixIterator struct {
-	btreeIter  *bTreeIterator
+	btreeIter  *BTreeIterator
 	badgerIter *badger.Iterator
 	prefix     []byte
 	reverse    bool
@@ -307,9 +311,9 @@ func NewTxnPrefixIterator(txn *badger.Txn,
 	txnIt := new(TxnPrefixIterator)
 	txnIt.reverse = iterOpts.Reverse
 	txnIt.prefix = prefix
-	txnIt.btreeIter = &bTreeIterator{
-		reverse: iterOpts.Reverse,
-		prefix:  prefix,
+	txnIt.btreeIter = &BTreeIterator{
+		Reverse: iterOpts.Reverse,
+		Prefix:  prefix,
 	}
 	txnIt.btreeIter.Seek(key)
 	// Create iterator only after copying the keys from btree, or else there could
