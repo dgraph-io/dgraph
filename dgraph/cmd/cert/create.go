@@ -1,11 +1,11 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
  */
 
-package cm
+package cert
 
 import (
 	"crypto/rand"
@@ -31,12 +31,6 @@ const (
 	defaultNodeKey  = "node.key"
 	keySizeTooSmall = 512
 	keySizeTooLarge = 4096
-)
-
-const (
-	forceCA = 1 << iota
-	forceClient
-	forceNode
 )
 
 // makeKey generates an RSA private key of bitSize length, storing it in the
@@ -112,17 +106,13 @@ func readCert(fn string) (*x509.Certificate, error) {
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
 func createCAPair(opt options) error {
-	var err error
-
 	cc := certConfig{
 		isCA:    true,
 		until:   defaultCADays,
 		keySize: opt.keySize,
-		force:   (opt.force & forceCA) != 0,
+		force:   opt.force,
 	}
-
-	err = cc.generatePair(opt.caKey, opt.caCert)
-	if err != nil {
+	if err := cc.generatePair(opt.caKey, opt.caCert); err != nil {
 		return err
 	}
 
@@ -144,7 +134,7 @@ func createNodePair(opt options) error {
 	cc := certConfig{
 		until:   opt.days,
 		keySize: opt.keySize,
-		force:   (opt.force & forceNode) != 0,
+		force:   opt.force,
 		hosts:   opt.nodes,
 	}
 
@@ -160,7 +150,6 @@ func createNodePair(opt options) error {
 
 	certFile := filepath.Join(opt.dir, defaultNodeCert)
 	keyFile := filepath.Join(opt.dir, defaultNodeKey)
-
 	err = cc.generatePair(keyFile, certFile)
 	if err != nil || !opt.verify {
 		return err
@@ -176,15 +165,15 @@ func createNodePair(opt options) error {
 func createClientPair(opt options) error {
 	var err error
 
-	if opt.user == "" {
+	if opt.client == "" {
 		return nil
 	}
 
 	cc := certConfig{
 		until:   opt.days,
 		keySize: opt.keySize,
-		force:   (opt.force & forceClient) != 0,
-		user:    opt.user,
+		force:   opt.force,
+		client:  opt.client,
 	}
 
 	cc.parent, err = readCert(opt.caCert)
@@ -197,9 +186,8 @@ func createClientPair(opt options) error {
 		return err
 	}
 
-	certFile := filepath.Join(opt.dir, fmt.Sprint("client.", opt.user, ".crt"))
-	keyFile := filepath.Join(opt.dir, fmt.Sprint("client.", opt.user, ".key"))
-
+	certFile := filepath.Join(opt.dir, fmt.Sprint("client.", opt.client, ".crt"))
+	keyFile := filepath.Join(opt.dir, fmt.Sprint("client.", opt.client, ".key"))
 	err = cc.generatePair(keyFile, certFile)
 	if err != nil || !opt.verify {
 		return err

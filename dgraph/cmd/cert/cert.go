@@ -1,11 +1,11 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2018 Dgraph Labs, Inc.
  *
  * This file is available under the Apache License, Version 2.0,
  * with the Commons Clause restriction.
  */
 
-package cm
+package cert
 
 import (
 	"crypto"
@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	dnOrganization = "Dgraph"
-	validNotBefore = time.Hour * -24
+	dnOrganization     = "Dgraph Labs, Inc."
+	dnCommonNamePrefix = "Dgraph"
+	validNotBefore     = time.Hour * -24
 )
 
 type certConfig struct {
@@ -35,7 +36,7 @@ type certConfig struct {
 	keySize int
 	force   bool
 	hosts   []string
-	user    string
+	client  string
 }
 
 // generatePair makes a new key/cert pair from a request. This function
@@ -62,19 +63,20 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 		NotBefore:             time.Now().AddDate(0, 0, -1),
 		NotAfter:              time.Now().AddDate(0, 0, c.until),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		BasicConstraintsValid: true,
+		BasicConstraintsValid: c.isCA,
 		IsCA:                  c.isCA,
 		MaxPathLenZero:        c.isCA,
 	}
 
 	switch {
 	case c.isCA:
-		template.Subject.CommonName = dnOrganization + " Root CA"
+		template.Subject.CommonName = dnCommonNamePrefix + " Root CA"
 		template.KeyUsage |= x509.KeyUsageContentCommitment | x509.KeyUsageCertSign
 
 	case c.hosts != nil:
-		template.Subject.CommonName = dnOrganization + " Node"
-		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+		template.Subject.CommonName = dnCommonNamePrefix + " Node"
+		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth,
+			x509.ExtKeyUsageClientAuth}
 
 		for _, h := range c.hosts {
 			if ip := net.ParseIP(h); ip != nil {
@@ -84,8 +86,9 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 			}
 		}
 
-	case c.user != "":
-		template.Subject.CommonName = c.user
+	case c.client != "":
+		template.Subject.CommonName = c.client
+		template.KeyUsage = x509.KeyUsageDigitalSignature
 		template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
 	}
 
@@ -143,15 +146,19 @@ func (c *certConfig) verifyCert(certFile string) error {
 
 	roots := x509.NewCertPool()
 	roots.AddCert(c.parent)
-
 	opts := x509.VerifyOptions{Roots: roots}
 
 	if c.hosts != nil {
+		opts.KeyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth,
+			x509.ExtKeyUsageClientAuth}
 		for i := range c.hosts {
 			if err := cert.VerifyHostname(c.hosts[i]); err != nil {
 				return err
 			}
 		}
+	}
+	if c.client != "" {
+		opts.KeyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
 	}
 
 	_, err = cert.Verify(opts)
