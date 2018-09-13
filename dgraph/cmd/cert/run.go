@@ -94,6 +94,7 @@ func run() {
 //   - File name
 //   - MD5 checksum
 //
+// TODO: Add support to other type of keys.
 func listCerts() error {
 	dir := Cert.Conf.GetString("dir")
 	files, err := getDirFiles(dir)
@@ -106,36 +107,28 @@ func listCerts() error {
 		return nil
 	}
 
-	/*
-			type certInfo struct {
-			fileName     string
-			commonName   string
-			serialNumber string
-			verified     bool
-			checksum     string
-			keyFile      string
-			expires      time.Time
-			hosts        []string
-			fileMode     string
-			err          error
-		}
-	*/
 	for _, f := range files {
 		if f.err != nil {
-			fmt.Printf("%-20s | %s\n", f.fileName, f.err)
+			fmt.Printf("❌ %s: Error: %s\n\n", f.fileName, f.err)
 			continue
 		}
-		fmt.Printf("%-20s | Name: %s\n", f.fileName, f.commonName)
-		if f.serialNumber != "" {
-			fmt.Printf("%-20s | S/N: %s\n", "", f.serialNumber)
+		fmt.Printf("%s %s - %s\n", f.fileMode, f.fileName, f.commonName)
+		if f.issuerName != "" {
+			fmt.Printf("%10s: %s\n", "Issuer", f.issuerName)
 		}
-		if !f.expires.IsZero() {
-			fmt.Printf("%-20s | Valid until: %x\n", "", f)
+		if f.verifiedCA != "" {
+			fmt.Printf("%10s: %s\n", "CA Verify", f.verifiedCA)
+		}
+		if f.serialNumber != "" {
+			fmt.Printf("%10s: %s\n", "S/N", f.serialNumber)
+		}
+		if !f.expireDate.IsZero() {
+			fmt.Printf("%10s: %x\n", "Expiration", f)
 		}
 		if f.hosts != nil {
-			fmt.Printf("%-20s | Hosts: %s\n", "", strings.Join(f.hosts, ", "))
+			fmt.Printf("%10s: %s\n", "Hosts", strings.Join(f.hosts, ", "))
 		}
-		fmt.Printf("%-20s | %s\n\n", "", f.md5sum)
+		fmt.Printf("%10s: %s\n\n", "MD5 hash", f.md5sum)
 	}
 
 	return nil

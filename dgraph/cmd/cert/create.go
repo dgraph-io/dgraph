@@ -101,6 +101,15 @@ func readCert(fn string) (*x509.Certificate, error) {
 	return x509.ParseCertificate(block.Bytes)
 }
 
+// safeCreate only creates a file if it doesn't exist or we force overwrite.
+func safeCreate(fn string, overwrite bool, perm os.FileMode) (*os.File, error) {
+	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	if !overwrite {
+		flag |= os.O_EXCL
+	}
+	return os.OpenFile(fn, flag, perm)
+}
+
 // createCAPair creates a CA certificate and key pair. The key file is created only
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.

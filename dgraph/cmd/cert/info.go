@@ -8,6 +8,8 @@
 package cert
 
 import (
+	"crypto/md5"
+	"crypto/rsa"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -18,13 +20,12 @@ import (
 
 type certInfo struct {
 	fileName     string
-	issuer       string
+	issuerName   string
 	commonName   string
 	serialNumber string
-	verified     bool
+	verifiedCA   string
 	md5sum       string
-	keyFile      string
-	expires      time.Time
+	expireDate   time.Time
 	hosts        []string
 	fileMode     string
 	err          error
@@ -42,17 +43,14 @@ func getFileInfo(file string) *certInfo {
 			info.err = err
 			return &info
 		}
-		info.commonName = cert.Subject.CommonName
-		info.issuer = cert.Issuer.CommonName
+		info.commonName = cert.Subject.CommonName + " certificate"
+		info.issuerName = strings.Join(cert.Issuer.Organization, ", ")
 		info.serialNumber = hex.EncodeToString(cert.SerialNumber.Bytes())
-		info.expires = cert.NotAfter
+		info.expireDate = cert.NotAfter
 
 		switch {
 		case file == defaultCACert:
-			info.keyFile = defaultCAKey
-
 		case file == defaultNodeCert:
-			info.keyFile = defaultNodeKey
 			for _, ip := range cert.IPAddresses {
 				info.hosts = append(info.hosts, ip.String())
 			}
@@ -60,19 +58,56 @@ func getFileInfo(file string) *certInfo {
 				info.hosts = append(info.hosts, name)
 			}
 
+		case strings.HasPrefix(file, "client."):
+			info.commonName = fmt.Sprintf("%s client certificate: %s", dnCommonNamePrefix, cert.Subject.CommonName)
+
 		default:
 			info.err = fmt.Errorf("unsupported certificate")
+			return &info
+		}
+
+		if key, ok := cert.PublicKey.(*rsa.PublicKey); ok {
+			h := md5.Sum(key.N.Bytes())
+			info.md5sum = fmt.Sprintf("%X", h[:])
+		} else {
+			info.md5sum = "Invalid RSA public key"
+		}
+
+		if file != defaultCACert {
+			parent, err := readCert(defaultCACert)
+			if err != nil {
+				info.err = fmt.Errorf("could not read parent cert: %s", err)
+				return &info
+			}
+			if err := cert.CheckSignatureFrom(parent); err != nil {
+				info.verifiedCA = "FAILED"
+			}
+			info.verifiedCA = "PASSED"
 		}
 
 	case strings.HasSuffix(file, ".key"):
 		switch {
 		case file == defaultCAKey:
-			info.commonName = dnOrganization + " Root CA key"
+			info.commonName = dnCommonNamePrefix + " Root CA key"
+
 		case file == defaultNodeKey:
-			info.commonName = dnOrganization + " Node key"
+			info.commonName = dnCommonNamePrefix + " Node key"
+
+		case strings.HasPrefix(file, "client."):
+			info.commonName = dnCommonNamePrefix + " Client key"
+
 		default:
 			info.err = fmt.Errorf("unsupported key")
+			return &info
 		}
+
+		key, err := readKey(file)
+		if err != nil {
+			info.err = err
+			return &info
+		}
+		h := md5.Sum(key.PublicKey.N.Bytes())
+		info.md5sum = fmt.Sprintf("%X", h[:])
 
 	default:
 		info.err = fmt.Errorf("unsupported file")
@@ -128,10 +163,10 @@ func (i *certInfo) Format(f fmt.State, c rune) {
 		str = i.commonName
 
 	case 'x':
-		if i.expires.IsZero() {
+		if i.expireDate.IsZero() {
 			break
 		}
-		str = i.expires.Format(time.RFC822)
+		str = i.expireDate.Format(time.RFC822)
 
 	case 'e':
 		if i.err != nil {

@@ -168,12 +168,3 @@ func (c *certConfig) verifyCert(certFile string) error {
 
 	return nil
 }
-
-// safeCreate only creates a file if it doesn't exist or we force overwrite.
-func safeCreate(fn string, overwrite bool, perm os.FileMode) (*os.File, error) {
-	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-	if !overwrite {
-		flag |= os.O_EXCL
-	}
-	return os.OpenFile(fn, flag, perm)
-}
