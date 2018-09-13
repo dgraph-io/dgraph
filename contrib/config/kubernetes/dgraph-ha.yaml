@@ -1,6 +1,7 @@
-# This highly available config creates 3 Dgraph Zeros and 3 Dgraph
-# Servers with 3 replicas. The Dgraph cluster will still be available
-# to service requests even when one Zero and/or one Server are down.
+# This highly available config creates 3 Dgraph Zeros, 3 Dgraph
+# Servers with 3 replicas, and 1 Ratel UI client. The Dgraph cluster
+# will still be available to service requests even when one Zero
+# and/or one Server are down.
 #
 # There are 4 public services exposed, users can use:
 #       dgraph-zero-public - To load data using Live & Bulk Loaders
