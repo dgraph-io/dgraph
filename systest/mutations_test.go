@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -1473,13 +1474,17 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 			_:a <end> "" .
 			_:b <end> "" .
 			_:c <end> "" .
+			_:d <start> "" .
+			_:d2 <start> "" .
 		`),
 	})
 	check(t, err)
 
 	var ids []string
-	for _, uid := range assigned.Uids {
-		ids = append(ids, uid)
+	for key, uid := range assigned.Uids {
+		if !strings.HasPrefix(key, "d") {
+			ids = append(ids, uid)
+		}
 	}
 	sort.Strings(ids)
 
@@ -1488,7 +1493,10 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	}
 
 	getUids := func(txn *dgo.Txn) []string {
-		resp, err := txn.Query(ctx, `{ me(func: has(end)) { uid } }`)
+		resp, err := txn.Query(ctx, `{
+			me(func: has(end)) { uid }
+			you(func: has(end)) { count(uid) }
+		}`)
 		check(t, err)
 		t.Logf("resp: %s\n", resp.GetJson())
 		m := make(map[string][]U)

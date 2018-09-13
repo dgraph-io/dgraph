@@ -1610,8 +1610,10 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 	return nil
 }
 
-// TODO - Check meta for empty PL and skip it.
-// This is not transactionally isolated, add to docs
+// handleHasFunction looks at both the inmemory btree populated by
+// posting/lists.go, and Badger. Thus, it can capture both committed
+// transactions and in-progress transactions. It also accounts for transaction
+// start ts.
 func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result) error {
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
@@ -1619,7 +1621,6 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	initKey := x.ParsedKey{
 		Attr: q.Attr,
 	}
-	fmt.Printf("q: %+v\n", q)
 	startKey := x.DataKey(q.Attr, q.AfterUid+1)
 	prefix := initKey.DataPrefix()
 	if q.Reverse {
@@ -1634,12 +1635,11 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 	it := txn.NewIterator(itOpt)
 	defer it.Close()
 
-	cachedList := &intern.List{}
+	var cachedUids []uint64
 	bitr := &posting.BTreeIterator{
 		Reverse: q.Reverse,
 		Prefix:  prefix,
 	}
-	bitr.Seek(startKey)
 	for bitr.Seek(startKey); bitr.Valid(); bitr.Next() {
 		key := bitr.Key()
 		pl := posting.GetLru(key)
@@ -1647,7 +1647,6 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 			continue
 		}
 		pk := x.Parse(key)
-		fmt.Printf("cachedList. pk=%+v\n", pk)
 		var num int
 		if err := pl.Iterate(q.ReadTs, 0, func(_ *intern.Posting) bool {
 			num++
@@ -1656,12 +1655,13 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 			return err
 		}
 		if num > 0 {
-			cachedList.Uids = append(cachedList.Uids, pk.Uid)
+			cachedUids = append(cachedUids, pk.Uid)
 		}
 	}
 
-	diskList := &intern.List{}
+	result := &intern.List{}
 	var prevKey []byte
+	var cidx int
 	for it.Seek(startKey); it.ValidForPrefix(prefix); {
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
@@ -1673,6 +1673,20 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 		// Parse the key upfront, otherwise ReadPostingList would advance the
 		// iterator.
 		pk := x.Parse(item.Key())
+
+		// Pick up all the uids found in the Btree, which are <= this Uid.
+		for cidx < len(cachedUids) && cachedUids[cidx] < pk.Uid {
+			result.Uids = append(result.Uids, pk.Uid)
+			cidx++
+		}
+		if cidx < len(cachedUids) && cachedUids[cidx] == pk.Uid {
+			// No need to check this key on disk. We already found it in the
+			// Btree.
+			result.Uids = append(result.Uids, pk.Uid)
+			cidx++
+			continue
+		}
+
 		// We do need to copy over the key for ReadPostingList.
 		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
 		if err != nil {
@@ -1685,9 +1699,8 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 		}); err != nil {
 			return err
 		}
-		fmt.Printf("num=%d. pk: %+v\n", num, pk)
 		if num > 0 {
-			diskList.Uids = append(diskList.Uids, pk.Uid)
+			result.Uids = append(result.Uids, pk.Uid)
 			w++
 		}
 
@@ -1703,49 +1716,11 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 			}
 		}
 	}
-
-	var tlist *intern.List
-	if len(cachedList.Uids) > 0 {
-		tlist = algo.MergeSorted([]*intern.List{cachedList, diskList})
-	} else {
-		tlist = diskList
+	// Pick up any remaining UIDs from the Btree.
+	if cidx < len(cachedUids) {
+		result.Uids = append(result.Uids, cachedUids[cidx:]...)
 	}
-	fmt.Printf("cachedList=%+v\n", cachedList)
-	fmt.Printf("diskList=%+v\n", diskList)
-	fmt.Printf("tlist=%+v\n", tlist)
 
-	// it := posting.NewTxnPrefixIterator(txn, itOpt, prefix, startKey)
-	// defer it.Close()
-	// for ; it.Valid(); it.Next() {
-	// 	if it.UserMeta() == posting.BitEmptyPosting {
-	// 		continue
-	// 	}
-
-	// 	pl := posting.GetLru(it.Key())
-	// 	if pl != nil && pl.IsEmpty() {
-	// 		fmt.Printf("Returning from cache: %s", it.Key())
-	// 		// empty pl's can be present in lru
-	// 		// We merge the keys on badger and the keys present in memory so
-	// 		// we need to skip empty pls
-	// 		continue
-	// 	}
-	// 	pk := x.Parse(it.Key())
-	// 	if w%1000 == 0 {
-	// 		select {
-	// 		case <-ctx.Done():
-	// 			return ctx.Err()
-	// 		default:
-	// 			if tr, ok := trace.FromContext(ctx); ok {
-	// 				tr.LazyPrintf("handleHasFunction:"+
-	// 					" key: %v:%v", pk.Attr, pk.Uid)
-	// 			}
-	// 		}
-	// 	}
-	// 	fmt.Printf("Returning from disk: %+v. UserMeta: %b\n", pk, it.UserMeta())
-	// 	w++
-	// 	tlist.Uids = append(tlist.Uids, pk.Uid)
-	// }
-
-	out.UidMatrix = append(out.UidMatrix, tlist)
+	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }

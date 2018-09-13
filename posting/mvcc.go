@@ -278,6 +278,8 @@ func (bi *BTreeIterator) Valid() bool {
 }
 
 func (bi *BTreeIterator) Seek(key []byte) {
+	bi.keys = bi.keys[:0]
+	bi.idx = 0
 	cont := func(key []byte) bool {
 		if !bytes.HasPrefix(key, bi.Prefix) {
 			return false
