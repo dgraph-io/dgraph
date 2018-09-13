@@ -274,7 +274,9 @@ func (bi *BTreeIterator) Key() []byte {
 }
 
 func (bi *BTreeIterator) Valid() bool {
-	return bi.idx < len(bi.keys) && bytes.HasPrefix(bi.keys[bi.idx], bi.Prefix)
+	// No need to check HasPrefix here, because we are only picking those keys
+	// which have the right prefix in Seek.
+	return bi.idx < len(bi.keys)
 }
 
 func (bi *BTreeIterator) Seek(key []byte) {
