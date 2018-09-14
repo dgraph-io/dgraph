@@ -1,3 +1,9 @@
+---
+name: Bug Report
+about: File a bug report.
+
+---
+
 If you suspect this could be a bug, follow the template.
 
 - What version of Dgraph are you using?
@@ -13,5 +19,4 @@ If you suspect this could be a bug, follow the template.
 
 
 - Expected behaviour and actual result.
-
 
