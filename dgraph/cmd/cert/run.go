@@ -109,7 +109,7 @@ func listCerts() error {
 
 	for _, f := range files {
 		if f.err != nil {
-			fmt.Printf("❌ %s: Error: %s\n\n", f.fileName, f.err)
+			fmt.Printf("%s: error: %s\n\n", f.fileName, f.err)
 			continue
 		}
 		fmt.Printf("%s %s - %s\n", f.fileMode, f.fileName, f.commonName)

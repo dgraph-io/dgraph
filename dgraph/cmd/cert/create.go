@@ -146,12 +146,10 @@ func createNodePair(opt options) error {
 	}
 
 	var err error
-
 	cc.parent, err = readCert(opt.caCert)
 	if err != nil {
 		return err
 	}
-
 	cc.signer, err = readKey(opt.caKey)
 	if err != nil {
 		return err
@@ -184,12 +182,10 @@ func createClientPair(opt options) error {
 	}
 
 	var err error
-
 	cc.parent, err = readCert(opt.caCert)
 	if err != nil {
 		return err
 	}
-
 	cc.signer, err = readKey(opt.caKey)
 	if err != nil {
 		return err
@@ -228,7 +224,6 @@ func createCerts(opt options) error {
 	if path.Base(opt.caKey) == opt.caKey {
 		opt.caKey = filepath.Join(opt.dir, opt.caKey)
 	}
-
 	opt.caCert = filepath.Join(opt.dir, defaultCACert)
 
 	if err := createCAPair(opt); err != nil {
