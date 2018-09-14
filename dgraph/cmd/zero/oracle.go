@@ -283,7 +283,14 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	// _predicate_ expansion is enabled, and a move for this predicate is happening, NO transactions
 	// across the entire cluster would commit. Sorry! But if we don't do this, we might lose commits
 	// which sneaked in during the move.
-	preds["_predicate_"] = struct{}{}
+
+	// Ensure that we only consider checking _predicate_, if expand_edge flag is
+	// set to true, i.e. we are actually serving _predicate_. Otherwise, the
+	// code below, which checks if a tablet is present or is readonly, causes
+	// ALL txns to abort. See #2547.
+	if tablet := s.ServingTablet("_predicate_"); tablet != nil {
+		preds["_predicate_"] = struct{}{}
+	}
 
 	for _, k := range src.Preds {
 		preds[k] = struct{}{}
