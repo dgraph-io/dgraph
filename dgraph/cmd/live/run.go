@@ -61,7 +61,9 @@ func init() {
 		Short: "Run Dgraph live loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Live.Conf).Stop()
-			run()
+			if err := run(); err != nil {
+				os.Exit(1)
+			}
 		},
 	}
 	Live.EnvPrefix = "DGRAPH_LIVE"
@@ -292,7 +294,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	return l
 }
 
-func run() {
+func run() error {
 	opt = options{
 		files:               Live.Conf.GetString("rdfs"),
 		schemaFile:          Live.Conf.GetString("schema"),
@@ -346,10 +348,10 @@ func run() {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
 			if err == context.Canceled {
 				log.Println("Interrupted while processing schema file")
-			} else {
-				log.Println(err)
+				return nil
 			}
-			return
+			log.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
+			return err
 		}
 		x.Printf("Processed schema file")
 	}
@@ -402,4 +404,6 @@ func run() {
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
 
 	fmt.Printf("RDFs processed per second : %d\n", rate)
+
+	return nil
 }
