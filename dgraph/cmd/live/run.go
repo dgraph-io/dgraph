@@ -347,7 +347,7 @@ func run() {
 			if err == context.Canceled {
 				log.Println("Interrupted while processing schema file")
 			} else {
-				log.Println(err)
+				x.Checkf(err, "Error while processing schema file")
 			}
 			return
 		}
