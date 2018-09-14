@@ -19,6 +19,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo"
@@ -117,12 +118,14 @@ type Counter struct {
 }
 
 func handleError(err error) {
-	errString := grpc.ErrorDesc(err)
-	// Irrecoverable
-	if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
-		x.Fatalf(errString)
-	} else if errString != y.ErrAborted.Error() && errString != y.ErrConflict.Error() {
-		x.Printf("Error while mutating %v\n", errString)
+	s := status.Convert(err)
+	switch {
+	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
+		x.Fatalf(s.Message())
+	case strings.Contains(s.Message(), "x509"):
+		x.Fatalf(s.Message())
+	case err != y.ErrAborted && err != y.ErrConflict:
+		x.Printf("Error while mutating %v\n", s.Message())
 	}
 }
 

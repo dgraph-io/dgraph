@@ -39,6 +39,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	tlsLiveCert = "client.live.crt"
+	tlsLiveKey  = "client.live.key"
+)
+
 type options struct {
 	files               string
 	schemaFile          string
@@ -81,9 +86,7 @@ func init() {
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
-	flag.Bool("tls_insecure", false, "Skip certificate validation (insecure)")
-	flag.String("tls_ca_certs", "", "CA Certs file path.")
-	flag.String("tls_server_name", "", "Server name.")
+	flag.String("tls_server_name", "", "Used to verify the server hostname.")
 }
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -228,7 +231,8 @@ func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
 	}
 
 	tlsConf.ConfigType = x.TLSClientConfig
-	tlsConf.CertRequired = false
+	tlsConf.Cert = filepath.Join(tlsConf.CertDir, tlsLiveCert)
+	tlsConf.Key = filepath.Join(tlsConf.CertDir, tlsLiveKey)
 	tlsCfg, _, err := x.GenerateTLSConfig(tlsConf)
 	if err != nil {
 		return nil, err
@@ -304,8 +308,6 @@ func run() {
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf)
-	tlsConf.Insecure = Live.Conf.GetBool("tls_insecure")
-	tlsConf.RootCACerts = Live.Conf.GetString("tls_ca_certs")
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
 	go http.ListenAndServe("localhost:6060", nil)

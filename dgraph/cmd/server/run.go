@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -116,8 +117,7 @@ func init() {
 
 	// TLS configurations
 	x.RegisterTLSFlags(flag)
-	flag.String("tls_client_auth", "", "Enable TLS client authentication")
-	flag.String("tls_ca_certs", "", "CA Certs file path.")
+	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
 	tlsConf.ConfigType = x.TLSServerConfig
 
 	//Custom plugins.
@@ -165,53 +165,53 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("</pre>"))
 }
 
-func setupListener(addr string, port int) (listener net.Listener, err error) {
-	var reload func()
-	laddr := fmt.Sprintf("%s:%d", addr, port)
-	if !tlsConf.CertRequired {
-		listener, err = net.Listen("tcp", laddr)
-	} else {
-		var tlsCfg *tls.Config
-		tlsCfg, reload, err = x.GenerateTLSConfig(tlsConf)
-		if err != nil {
-			return nil, err
-		}
-		listener, err = tls.Listen("tcp", laddr, tlsCfg)
-	}
-	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGHUP)
-		for range sigChan {
-			log.Println("SIGHUP signal received")
-			if reload != nil {
+func setupListener(addr string, port int, reload func()) (net.Listener, error) {
+	if reload != nil {
+		go func() {
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, syscall.SIGHUP)
+			for range sigChan {
+				log.Println("SIGHUP signal received")
 				reload()
 				log.Println("TLS certificates and CAs reloaded")
 			}
-		}
-	}()
-	return listener, err
+		}()
+	}
+	return net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 }
 
-func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
+func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	defer wg.Done()
-	s := grpc.NewServer(
+	opt := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
-		grpc.MaxConcurrentStreams(1000))
+		grpc.MaxConcurrentStreams(1000),
+	}
+	if tlsCfg != nil {
+		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
+	}
+	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
 	err := s.Serve(l)
 	log.Printf("GRPC listener canceled: %s\n", err.Error())
 	s.Stop()
 }
 
-func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
+func serveHTTP(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	defer wg.Done()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
 		IdleTimeout:  2 * time.Minute,
 	}
-	err := srv.Serve(l)
+	var err error
+	switch {
+	case tlsCfg != nil:
+		srv.TLSConfig = tlsCfg
+		err = srv.ServeTLS(l, "", "")
+	default:
+		err = srv.Serve(l)
+	}
 	log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
 	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 	defer cancel()
@@ -228,12 +228,24 @@ func setupServer() {
 		laddr = "0.0.0.0"
 	}
 
-	httpListener, err := setupListener(laddr, httpPort())
+	var (
+		tlsCfg *tls.Config
+		reload func()
+	)
+	if tlsConf.CertRequired {
+		var err error
+		tlsCfg, reload, err = x.GenerateTLSConfig(tlsConf)
+		if err != nil {
+			log.Fatalf("Failed to setup TLS: %s\n", err)
+		}
+	}
+
+	httpListener, err := setupListener(laddr, httpPort(), reload)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	grpcListener, err := setupListener(laddr, grpcPort())
+	grpcListener, err := setupListener(laddr, grpcPort(), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -258,8 +270,8 @@ func setupServer() {
 	// Initilize the servers.
 	var wg sync.WaitGroup
 	wg.Add(3)
-	go serveGRPC(grpcListener, &wg)
-	go serveHTTP(httpListener, &wg)
+	go serveGRPC(grpcListener, tlsCfg, &wg)
+	go serveHTTP(httpListener, tlsCfg, &wg)
 
 	go func() {
 		defer wg.Done()
@@ -303,7 +315,6 @@ func run() {
 	bindall = Server.Conf.GetBool("bindall")
 	x.LoadTLSConfig(&tlsConf, Server.Conf)
 	tlsConf.ClientAuth = Server.Conf.GetString("tls_client_auth")
-	tlsConf.ClientCACerts = Server.Conf.GetString("tls_ca_certs")
 
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
