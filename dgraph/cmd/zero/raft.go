@@ -355,8 +355,7 @@ func (n *node) triggerLeaderChange() {
 }
 
 func (n *node) initAndStartNode() error {
-	idx, restart, err := n.PastLife()
-	n.Applied.SetDoneUntil(idx)
+	_, restart, err := n.PastLife()
 	x.Check(err)
 
 	if restart {
