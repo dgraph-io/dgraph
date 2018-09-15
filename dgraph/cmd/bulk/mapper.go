@@ -122,7 +122,14 @@ func (m *mapper) run() {
 			}
 			rdf = strings.TrimSpace(rdf)
 
-			x.Check(m.processRDF(rdf))
+			// process RDF line
+			if err := m.processRDF(rdf); err != nil {
+				atomic.AddInt64(&m.prog.errCount, 1)
+				if !m.opt.IgnoreErrors {
+					x.Check(err)
+				}
+			}
+
 			atomic.AddInt64(&m.prog.rdfCount, 1)
 			for i := range m.shards {
 				sh := &m.shards[i]
