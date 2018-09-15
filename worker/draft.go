@@ -931,9 +931,8 @@ func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
 
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
 func (n *node) InitAndStartNode() {
-	idx, restart, err := n.PastLife()
+	_, restart, err := n.PastLife()
 	x.Check(err)
-	n.Applied.SetDoneUntil(idx)
 
 	if _, hasPeer := groups().MyPeer(); !restart && hasPeer {
 		// The node has other peers, it might have crashed after joining the cluster and before
