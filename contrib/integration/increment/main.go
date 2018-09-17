@@ -27,11 +27,12 @@ var (
 	addr = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
 	num  = flag.Int("num", 1, "How many times to run.")
 	wait = flag.String("wait", "0", "How long to wait.")
+	pred = flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
 )
 
 type Counter struct {
 	Uid string `json:"uid"`
-	Val int    `json:"counter.val"`
+	Val int    `json:"val"`
 }
 
 func increment(dg *dgo.Dgraph) (int, error) {
@@ -39,7 +40,8 @@ func increment(dg *dgo.Dgraph) (int, error) {
 	defer cancel()
 
 	txn := dg.NewTxn()
-	resp, err := txn.Query(ctx, `{ q(func: has(counter.val)) { uid, counter.val }}`)
+	query := fmt.Sprintf("{ q(func: has(%s)) { uid, val: %s }}", *pred, *pred)
+	resp, err := txn.Query(ctx, query)
 	if err != nil {
 		return 0, err
 	}
@@ -58,11 +60,10 @@ func increment(dg *dgo.Dgraph) (int, error) {
 	counter.Val += 1
 
 	var mu api.Mutation
-	data, err := json.Marshal(counter)
-	if err != nil {
-		return 0, err
+	if len(counter.Uid) == 0 {
+		counter.Uid = "_:new"
 	}
-	mu.SetJson = data
+	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, *pred, counter.Val))
 	_, err = txn.Mutate(ctx, &mu)
 	if err != nil {
 		return 0, err
