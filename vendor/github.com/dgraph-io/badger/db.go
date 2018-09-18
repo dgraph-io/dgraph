@@ -916,7 +916,6 @@ func (db *DB) calculateSize() {
 		_, vlogSize = totalSize(db.opt.ValueDir)
 	}
 	y.VlogSize.Set(db.opt.Dir, newInt(vlogSize))
-
 }
 
 func (db *DB) updateSize(lc *y.Closer) {
@@ -1090,6 +1089,16 @@ func (db *DB) GetSequence(key []byte, bandwidth uint64) (*Sequence, error) {
 
 func (db *DB) Tables() []TableInfo {
 	return db.lc.getTableInfo()
+}
+
+// MaxBatchCount returns max possible entries in batch
+func (db *DB) MaxBatchCount() int64 {
+	return db.opt.maxBatchCount
+}
+
+// MaxBatchCount returns max possible batch size
+func (db *DB) MaxBatchSize() int64 {
+	return db.opt.maxBatchSize
 }
 
 // MergeOperator represents a Badger merge operator.
