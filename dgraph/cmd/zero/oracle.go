@@ -213,7 +213,7 @@ func (o *Oracle) commitTs(startTs uint64) uint64 {
 	return o.commits[startTs]
 }
 
-func (o *Oracle) storePending(ids *api.AssignedIds) {
+func (o *Oracle) storePending(ids *intern.AssignedIds) {
 	// Wait to finish up processing everything before start id.
 	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
 	// Now send it out to updates.
@@ -433,14 +433,14 @@ func (s *Server) TryAbort(ctx context.Context,
 }
 
 // Timestamps is used to assign startTs for a new transaction
-func (s *Server) Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) {
+func (s *Server) Timestamps(ctx context.Context, num *intern.Num) (*intern.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}
 
 	reply, err := s.lease(ctx, num, true)
 	if err == nil {
-		s.orc.doneUntil.Done(reply.EndId)
+		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(reply)
 	}
 	return reply, err

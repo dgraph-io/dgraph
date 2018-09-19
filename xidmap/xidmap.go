@@ -41,7 +41,7 @@ type XidMap struct {
 	shards    []shard
 	kv        *badger.DB
 	opt       Options
-	newRanges chan *api.AssignedIds
+	newRanges chan *intern.AssignedIds
 
 	noMapMu sync.Mutex
 	noMap   block // block for allocating uids without an xid to uid mapping
