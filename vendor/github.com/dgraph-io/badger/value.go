@@ -263,12 +263,7 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) error {
 	truncate := false
 	var lastCommit uint64
 	var validEndOffset uint32
-	var count int
 	for {
-		count++
-		if count%2000 == 0 {
-			log.Printf("Replaying log file: %d. Running count: %d\n", lf.fid, count)
-		}
 		e, err := read.Entry(reader)
 		if err == io.EOF {
 			break
@@ -472,7 +467,7 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 	return nil
 }
 
-func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) {
+func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) error {
 	db := vlog.kv
 	var result []*Entry
 	var count, pointers uint64
@@ -503,7 +498,7 @@ func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) {
 	if err != nil {
 		tr.LazyPrintf("Got error while iterating move keys: %v", err)
 		tr.SetError()
-		return
+		return err
 	}
 	tr.LazyPrintf("Num total move keys: %d. Num pointers: %d", count, pointers)
 	tr.LazyPrintf("Number of invalid move keys found: %d", len(result))
@@ -521,12 +516,12 @@ func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) {
 			}
 			tr.LazyPrintf("Error while doing batchSet: %v", err)
 			tr.SetError()
-			return
+			return err
 		}
 		i += batchSize
 	}
 	tr.LazyPrintf("Move keys deletion done.")
-	return
+	return nil
 }
 
 func (vlog *valueLog) incrIteratorCount() {
@@ -1220,8 +1215,7 @@ func (vlog *valueLog) runGC(discardRatio float64, head valuePointer) error {
 			tried[lf.fid] = true
 			err = vlog.doRunGC(lf, discardRatio, tr)
 			if err == nil {
-				vlog.deleteMoveKeysFor(lf.fid, tr)
-				return nil
+				return vlog.deleteMoveKeysFor(lf.fid, tr)
 			}
 		}
 		return err

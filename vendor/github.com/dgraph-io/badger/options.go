@@ -83,9 +83,10 @@ type Options struct {
 	// Number of compaction workers to run concurrently.
 	NumCompactors int
 
-	// Transaction start and commit timestamps are manaVgedTxns by end-user. This
-	// is a private option used by ManagedDB.
-	managedTxns bool
+	// Transaction start and commit timestamps are managed by end-user.
+	// This is only useful for databases built on top of Badger (like Dgraph).
+	// Not recommended for most users.
+	ManagedTxns bool
 
 	// 4. Flags for testing purposes
 	// ------------------------------
