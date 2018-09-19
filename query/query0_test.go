@@ -41,7 +41,7 @@ func timestamp() uint64 {
 	return atomic.AddUint64(&ts, 1)
 }
 
-var ps *badger.ManagedDB
+var ps *badger.DB
 
 func TestGetUID(t *testing.T) {
 	query := `

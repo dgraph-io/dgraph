@@ -332,7 +332,7 @@ func TestParseScalarListError4(t *testing.T) {
 	require.Contains(t, err.Error(), "Unsupported type for list: [bool]")
 }
 
-var ps *badger.ManagedDB
+var ps *badger.DB
 
 func TestMain(m *testing.M) {
 	x.Init(true)
