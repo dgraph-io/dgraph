@@ -25,7 +25,6 @@ import (
 const (
 	dnOrganization     = "Dgraph Labs, Inc."
 	dnCommonNamePrefix = "Dgraph"
-	validNotBefore     = time.Hour * -24
 )
 
 type certConfig struct {
@@ -60,8 +59,8 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 			SerialNumber: hex.EncodeToString(sn.Bytes()[:3]),
 		},
 		SerialNumber:          sn,
-		NotBefore:             time.Now().AddDate(0, 0, -1),
-		NotAfter:              time.Now().AddDate(0, 0, c.until),
+		NotBefore:             time.Now().AddDate(0, 0, -1).UTC(),
+		NotAfter:              time.Now().AddDate(0, 0, c.until).UTC(),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		BasicConstraintsValid: c.isCA,
 		IsCA:                  c.isCA,

@@ -49,7 +49,7 @@ type TLSHelperConfig struct {
 
 func RegisterTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
-	flag.Bool("tls_use_system_ca", false, "Include System CA into CA Certs.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 }
 
 func LoadTLSConfig(conf *TLSHelperConfig, v *viper.Viper) {
