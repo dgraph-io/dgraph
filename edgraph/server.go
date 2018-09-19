@@ -45,7 +45,7 @@ type ServerState struct {
 	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
 	ShutdownCh chan struct{} // channel to signal shutdown.
 
-	Pstore   *badger.ManagedDB
+	Pstore   *badger.DB
 	WALstore *badger.DB
 
 	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
@@ -71,7 +71,7 @@ func InitServerState() {
 	go State.fillTimestampRequests()
 }
 
-func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
+func (s *ServerState) runVlogGC(store *badger.DB) {
 	// Get initial size on start.
 	_, lastVlogSize := store.Size()
 	const GB = int64(1 << 30)
@@ -162,10 +162,9 @@ func (s *ServerState) initStorage() {
 	x.Checkf(err, "Error while creating badger KV posting store")
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
 	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
-	go s.runVlogGC(s.Pstore)
 
-	wrapper := &badger.ManagedDB{DB: s.WALstore}
-	go s.runVlogGC(wrapper)
+	go s.runVlogGC(s.Pstore)
+	go s.runVlogGC(s.WALstore)
 }
 
 func (s *ServerState) Dispose() error {

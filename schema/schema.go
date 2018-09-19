@@ -23,7 +23,7 @@ import (
 
 var (
 	pstate *state
-	pstore *badger.ManagedDB
+	pstore *badger.DB
 )
 
 func (s *state) init() {
@@ -222,7 +222,7 @@ func (s *state) HasLang(pred string) bool {
 	return false
 }
 
-func Init(ps *badger.ManagedDB) {
+func Init(ps *badger.DB) {
 	pstore = ps
 	reset()
 }

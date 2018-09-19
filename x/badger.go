@@ -8,7 +8,7 @@ import (
 )
 
 type TxnWriter struct {
-	DB  *badger.ManagedDB
+	DB  *badger.DB
 	wg  sync.WaitGroup
 	che chan error
 }

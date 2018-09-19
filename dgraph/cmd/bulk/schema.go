@@ -83,7 +83,7 @@ func (s *schemaStore) validateType(de *intern.DirectedEdge, objectIsUID bool) {
 	}
 }
 
-func (s *schemaStore) getPredicates(db *badger.ManagedDB) []string {
+func (s *schemaStore) getPredicates(db *badger.DB) []string {
 	txn := db.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 
@@ -108,7 +108,7 @@ func (s *schemaStore) getPredicates(db *badger.ManagedDB) []string {
 	return preds
 }
 
-func (s *schemaStore) write(db *badger.ManagedDB) {
+func (s *schemaStore) write(db *badger.DB) {
 	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
 	// if bulk loader was restarted or other similar scenarios.
 	preds := s.getPredicates(db)
