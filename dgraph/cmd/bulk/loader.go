@@ -62,7 +62,7 @@ type state struct {
 	shards     *shardMap
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	dbs        []*badger.ManagedDB
+	dbs        []*badger.DB
 	writeTs    uint64 // All badger writes use this timestamp
 }
 
@@ -265,7 +265,7 @@ func (ld *loader) mapStage() {
 }
 
 type shuffleOutput struct {
-	db         *badger.ManagedDB
+	db         *badger.DB
 	mapEntries []*intern.MapEntry
 }
 

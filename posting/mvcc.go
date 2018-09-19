@@ -216,7 +216,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-func getNew(key []byte, pstore *badger.ManagedDB) (*List, error) {
+func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.mutationMap = make(map[uint64]*intern.PostingList)

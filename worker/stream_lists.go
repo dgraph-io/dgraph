@@ -26,7 +26,7 @@ type kvStream interface {
 type streamLists struct {
 	stream    kvStream
 	predicate string
-	db        *badger.ManagedDB
+	db        *badger.DB
 	chooseKey func(key []byte, version uint64) bool
 	itemToKv  func(key []byte, itr *badger.Iterator) (*intern.KV, error)
 }

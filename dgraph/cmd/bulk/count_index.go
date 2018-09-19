@@ -25,7 +25,7 @@ type current struct {
 
 type countIndexer struct {
 	*state
-	db     *badger.ManagedDB
+	db     *badger.DB
 	cur    current
 	counts map[int][]uint64
 	wg     sync.WaitGroup
