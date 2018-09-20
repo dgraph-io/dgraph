@@ -103,7 +103,7 @@ func setBadgerOptions(opt badger.Options, dir string) badger.Options {
 	opt.Dir = dir
 	opt.ValueDir = dir
 
-	x.Printf("Setting Badger table load option: %s", Config.BadgerTables)
+	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
 	case "mmap":
 		opt.TableLoadingMode = options.MemoryMap
@@ -115,7 +115,7 @@ func setBadgerOptions(opt badger.Options, dir string) badger.Options {
 		x.Fatalf("Invalid Badger Tables options")
 	}
 
-	x.Printf("Setting Badger value log load option: %s", Config.BadgerVlog)
+	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
 	switch Config.BadgerVlog {
 	case "mmap":
 		opt.ValueLogLoadingMode = options.MemoryMap
@@ -128,28 +128,32 @@ func setBadgerOptions(opt badger.Options, dir string) badger.Options {
 }
 
 func (s *ServerState) initStorage() {
-	// Write Ahead Log directory
-	x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.LSMOnlyOptions
-	kvOpt.ValueLogMaxEntries = 1000 // Allow for easy space reclamation.
-	kvOpt = setBadgerOptions(kvOpt, Config.WALDir)
-
 	var err error
-	s.WALstore, err = badger.Open(kvOpt)
-	x.Checkf(err, "Error while creating badger KV WAL store")
+	{
+		// Write Ahead Log directory
+		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
+		opt := badger.LSMOnlyOptions
+		opt.ValueLogMaxEntries = 1000 // Allow for easy space reclamation.
+		opt = setBadgerOptions(opt, Config.WALDir)
 
-	// Postings directory
-	// All the writes to posting store should be synchronous. We use batched writers
-	// for posting lists, so the cost of sync writes is amortized.
-	x.Check(os.MkdirAll(Config.PostingDir, 0700))
-	opt := badger.DefaultOptions
-	opt.ValueThreshold = 1 << 10 // 1KB
-	opt.NumVersionsToKeep = math.MaxInt32
-	opt = setBadgerOptions(opt, Config.PostingDir)
+		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
+		s.WALstore, err = badger.Open(opt)
+		x.Checkf(err, "Error while creating badger KV WAL store")
+	}
+	{
+		// Postings directory
+		// All the writes to posting store should be synchronous. We use batched writers
+		// for posting lists, so the cost of sync writes is amortized.
+		x.Check(os.MkdirAll(Config.PostingDir, 0700))
+		opt := badger.DefaultOptions
+		opt.ValueThreshold = 1 << 10 // 1KB
+		opt.NumVersionsToKeep = math.MaxInt32
+		opt = setBadgerOptions(opt, Config.PostingDir)
 
-	x.Printf("Opening postings Badger DB with options: %+v\n", opt)
-	s.Pstore, err = badger.OpenManaged(opt)
-	x.Checkf(err, "Error while creating badger KV posting store")
+		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
+		s.Pstore, err = badger.OpenManaged(opt)
+		x.Checkf(err, "Error while creating badger KV posting store")
+	}
 
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
 	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
