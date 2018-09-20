@@ -46,6 +46,7 @@ type options struct {
 	StoreXids     bool
 	ZeroAddr      string
 	HttpAddr      string
+	IgnoreErrors  bool
 
 	MapShards    int
 	ReduceShards int
@@ -201,17 +202,17 @@ func (ld *loader) mapStage() {
 		LRUSize:   1 << 19,
 	})
 
-	var readers []*bufio.Reader
+	readers := make(map[string]*bufio.Reader)
 	for _, rdfFile := range findRDFFiles(ld.opt.RDFDir) {
 		f, err := os.Open(rdfFile)
 		x.Check(err)
 		defer f.Close()
 		if !strings.HasSuffix(rdfFile, ".gz") {
-			readers = append(readers, bufio.NewReaderSize(f, 1<<20))
+			readers[rdfFile] = bufio.NewReaderSize(f, 1<<20)
 		} else {
 			gzr, err := gzip.NewReader(f)
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
-			readers = append(readers, bufio.NewReader(gzr))
+			readers[rdfFile] = bufio.NewReader(gzr)
 		}
 	}
 
@@ -231,8 +232,11 @@ func (ld *loader) mapStage() {
 
 	// This is the main map loop.
 	thr := x.NewThrottle(ld.opt.NumGoroutines)
-	for _, r := range readers {
+	var fileCount int
+	for rdfFile, r := range readers {
 		thr.Start()
+		fileCount++
+		fmt.Printf("processing file (%d out of %d): %s\n", fileCount, len(readers), rdfFile)
 		go func(r *bufio.Reader) {
 			defer thr.Done()
 			for {
