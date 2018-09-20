@@ -47,6 +47,7 @@ type Server struct {
 
 	nextLeaseId uint64
 	nextTxnTs   uint64
+	readOnlyTs  uint64
 	leaseLock   sync.Mutex // protects nextLeaseId, nextTxnTs and corresponding proposals.
 
 	// groupMap    map[uint32]*Group

@@ -153,7 +153,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 
 	num.Val = uint64(len(newUids))
 	if int(num.Val) > 0 {
-		var res *api.AssignedIds
+		var res *intern.AssignedIds
 		// TODO: Optimize later by prefetching. Also consolidate all the UID requests into a single
 		// pending request from this server to zero.
 		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {

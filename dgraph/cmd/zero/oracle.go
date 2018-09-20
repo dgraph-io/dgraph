@@ -16,6 +16,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
@@ -213,17 +214,16 @@ func (o *Oracle) commitTs(startTs uint64) uint64 {
 	return o.commits[startTs]
 }
 
-func (o *Oracle) storePending(ids *api.AssignedIds) {
+func (o *Oracle) storePending(ids *intern.AssignedIds) {
 	// Wait to finish up processing everything before start id.
-	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
+	max := x.Max(ids.EndId, ids.ReadOnly)
+	o.doneUntil.WaitForMark(context.Background(), max)
 	// Now send it out to updates.
-	o.updates <- &intern.OracleDelta{MaxAssigned: ids.EndId}
+	o.updates <- &intern.OracleDelta{MaxAssigned: max}
+
 	o.Lock()
 	defer o.Unlock()
-	max := ids.EndId
-	if o.maxAssigned < max {
-		o.maxAssigned = max
-	}
+	o.maxAssigned = x.Max(o.maxAssigned, max)
 }
 
 func (o *Oracle) MaxPending() uint64 {
@@ -433,15 +433,22 @@ func (s *Server) TryAbort(ctx context.Context,
 }
 
 // Timestamps is used to assign startTs for a new transaction
-func (s *Server) Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) {
+func (s *Server) Timestamps(ctx context.Context, num *intern.Num) (*intern.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}
 
 	reply, err := s.lease(ctx, num, true)
 	if err == nil {
-		s.orc.doneUntil.Done(reply.EndId)
+		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(reply)
+
+	} else if err == servedFromMemory {
+		// Avoid calling doneUntil.Done, and storePending.
+		err = nil
+
+	} else {
+		glog.Errorf("Got error: %v while leasing timestamps: %+v", err, num)
 	}
 	return reply, err
 }

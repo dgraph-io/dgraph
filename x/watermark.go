@@ -96,6 +96,7 @@ func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
 	}
 	waitCh := make(chan struct{})
 	w.markCh <- mark{index: index, waiter: waitCh}
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -153,9 +154,11 @@ func (w *WaterMark) process() {
 
 		for len(indices) > 0 {
 			min := indices[0]
-			if done := pending[min]; done != 0 {
+			if done := pending[min]; done > 0 {
 				break // len(indices) will be > 0.
 			}
+			// Even if done is called multiple times causing it to become
+			// negative, we should still pop the index.
 			heap.Pop(&indices)
 			delete(pending, min)
 			until = min

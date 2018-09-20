@@ -452,7 +452,7 @@ func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 }
 
 type linReadReq struct {
-	// A one-shot chan which we send a raft index upon
+	// A one-shot chan which we send a raft index upon.
 	indexCh chan<- uint64
 }
 

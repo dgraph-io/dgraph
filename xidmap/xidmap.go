@@ -17,7 +17,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
@@ -41,7 +40,7 @@ type XidMap struct {
 	shards    []shard
 	kv        *badger.DB
 	opt       Options
-	newRanges chan *api.AssignedIds
+	newRanges chan *intern.AssignedIds
 
 	noMapMu sync.Mutex
 	noMap   block // block for allocating uids without an xid to uid mapping
@@ -68,7 +67,7 @@ type block struct {
 	start, end uint64
 }
 
-func (b *block) assign(ch <-chan *api.AssignedIds) uint64 {
+func (b *block) assign(ch <-chan *intern.AssignedIds) uint64 {
 	if b.end == 0 || b.start > b.end {
 		newRange := <-ch
 		b.start, b.end = newRange.StartId, newRange.EndId
@@ -87,7 +86,7 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		shards:    make([]shard, opt.NumShards),
 		kv:        kv,
 		opt:       opt,
-		newRanges: make(chan *api.AssignedIds),
+		newRanges: make(chan *intern.AssignedIds),
 	}
 	for i := range xm.shards {
 		xm.shards[i].elems = make(map[string]*list.Element)

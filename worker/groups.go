@@ -792,7 +792,7 @@ func (g *groupi) processOracleDeltaStream() {
 				return
 			}
 			// Block forever trying to propose this.
-			elog.Printf("Batched %d updates. Proposing Delta of size: %d.", batch, delta.Size())
+			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
 			g.Node.proposeAndWait(context.Background(), &intern.Proposal{Delta: delta})
 		}
 	}
