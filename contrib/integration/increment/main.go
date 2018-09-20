@@ -24,16 +24,18 @@ import (
 )
 
 var (
-	addr     = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
-	num      = flag.Int("num", 1, "How many times to run.")
-	readonly = flag.Bool("ro", false, "Only read the counter value, don't update it.")
-	wait     = flag.String("wait", "0", "How long to wait.")
-	pred     = flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
+	addr = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
+	num  = flag.Int("num", 1, "How many times to run.")
+	ro   = flag.Bool("ro", false, "Only read the counter value, don't update it.")
+	wait = flag.String("wait", "0", "How long to wait.")
+	pred = flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
 )
 
 type Counter struct {
 	Uid string `json:"uid"`
 	Val int    `json:"val"`
+
+	startTs uint64 // Only used for internal testing.
 }
 
 func queryCounter(txn *dgo.Txn) (Counter, error) {
@@ -55,23 +57,24 @@ func queryCounter(txn *dgo.Txn) (Counter, error) {
 	} else if len(m["q"]) == 1 {
 		counter = m["q"][0]
 	} else {
-		log.Fatalf("Invalid response: %q", resp.Json)
+		panic(fmt.Sprintf("Invalid response: %q", resp.Json))
 	}
+	counter.startTs = resp.GetTxn().GetStartTs()
 	return counter, nil
 }
 
-func process(dg *dgo.Dgraph) (int, error) {
-	if *readonly {
+func process(dg *dgo.Dgraph, readOnly bool) (Counter, error) {
+	if readOnly {
 		txn := dg.NewReadOnlyTxn()
 		defer txn.Discard(nil)
 		counter, err := queryCounter(txn)
-		return counter.Val, err
+		return counter, err
 	}
 
 	txn := dg.NewTxn()
 	counter, err := queryCounter(txn)
 	if err != nil {
-		return 0, err
+		return Counter{}, err
 	}
 	counter.Val += 1
 
@@ -85,9 +88,9 @@ func process(dg *dgo.Dgraph) (int, error) {
 	defer cancel()
 	_, err = txn.Mutate(ctx, &mu)
 	if err != nil {
-		return 0, err
+		return Counter{}, err
 	}
-	return counter.Val, txn.Commit(ctx)
+	return counter, txn.Commit(ctx)
 }
 
 func main() {
@@ -106,13 +109,13 @@ func main() {
 	}
 
 	for *num > 0 {
-		val, err := process(dg)
+		cnt, err := process(dg, *ro)
 		if err != nil {
 			fmt.Printf("While trying to process counter: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 			continue
 		}
-		fmt.Printf("Counter VAL: %d\n", val)
+		fmt.Printf("Counter VAL: %d   [ Ts: %d ]\n", cnt.Val, cnt.startTs)
 		*num -= 1
 		time.Sleep(waitDur)
 	}

@@ -52,7 +52,6 @@ type ServerState struct {
 
 	mu     sync.Mutex
 	needTs chan tsReq
-	// notify chan struct{}
 }
 
 // TODO(tzdybal) - remove global
@@ -63,7 +62,6 @@ func InitServerState() {
 
 	State.FinishCh = make(chan struct{})
 	State.ShutdownCh = make(chan struct{})
-	// State.notify = make(chan struct{}, 1)
 	State.needTs = make(chan tsReq, 100)
 
 	State.initStorage()

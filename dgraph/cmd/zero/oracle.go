@@ -442,6 +442,11 @@ func (s *Server) Timestamps(ctx context.Context, num *intern.Num) (*intern.Assig
 	if err == nil {
 		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(reply)
+
+	} else if err == servedFromMemory {
+		// Avoid calling doneUntil.Done, and storePending.
+		err = nil
+
 	} else {
 		glog.Errorf("Got error: %v while leasing timestamps: %+v", err, num)
 	}

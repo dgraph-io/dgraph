@@ -48,6 +48,8 @@ func (s *Server) maxTxnTs() uint64 {
 	return s.state.MaxTxnTs
 }
 
+var servedFromMemory = errors.New("Lease was served from memory.")
+
 // lease would either allocate ids or timestamps.
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the leasemanager
@@ -80,7 +82,7 @@ func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*intern.
 					s.readOnlyTs, s.nextTxnTs)
 			}
 			if s.readOnlyTs > 0 && s.readOnlyTs == s.nextTxnTs-1 {
-				return &intern.AssignedIds{ReadOnly: s.readOnlyTs}, nil
+				return &intern.AssignedIds{ReadOnly: s.readOnlyTs}, servedFromMemory
 			}
 		}
 		// We couldn't service it. So, let's request an extra timestamp for
