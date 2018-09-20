@@ -237,7 +237,7 @@ func (s *ServerState) fillTimestampRequests() {
 				offset++
 			}
 		}
-		x.AssertTrue(ts.StartId+offset-1 == ts.EndId)
+		x.AssertTrue(ts.StartId == 0 || ts.StartId+offset-1 == ts.EndId)
 		reqs = reqs[:0]
 	}
 }
@@ -458,7 +458,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	var l query.Latency
 	l.Start = time.Now()
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
+		tr.LazyPrintf("Query request received: %v", req)
 	}
 
 	parsedReq, err := gql.Parse(gql.Request{

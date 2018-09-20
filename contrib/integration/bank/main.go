@@ -96,7 +96,7 @@ func (s *State) runTotal(dg *dgo.Dgraph) error {
 			}
 		}
 	`
-	txn := dg.NewTxn()
+	txn := dg.NewReadOnlyTxn()
 	defer txn.Discard(context.Background())
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {

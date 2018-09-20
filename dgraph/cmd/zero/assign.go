@@ -14,6 +14,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 var (
@@ -63,6 +64,9 @@ func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*intern.
 	if num.Val == 0 && !num.ReadOnly {
 		return &emptyAssignedIds, x.Errorf("Nothing to be leased")
 	}
+	if glog.V(3) {
+		glog.Infof("Got lease request for txn: %v. Num: %+v\n", txn, num)
+	}
 
 	s.leaseLock.Lock()
 	defer s.leaseLock.Unlock()
@@ -71,7 +75,11 @@ func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*intern.
 		if num.Val == 0 && num.ReadOnly {
 			// If we're only asking for a readonly timestamp, we can potentially
 			// service it directly.
-			if s.readOnlyTs > 0 && s.readOnlyTs == s.nextLeaseId-1 {
+			if glog.V(3) {
+				glog.Infof("Attempting to serve read only txn ts [%d, %d]",
+					s.readOnlyTs, s.nextTxnTs)
+			}
+			if s.readOnlyTs > 0 && s.readOnlyTs == s.nextTxnTs-1 {
 				return &intern.AssignedIds{ReadOnly: s.readOnlyTs}, nil
 			}
 		}
@@ -117,9 +125,11 @@ func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*intern.
 
 	out := &intern.AssignedIds{}
 	if txn {
-		out.StartId = s.nextTxnTs
-		out.EndId = out.StartId + num.Val - 1
-		s.nextTxnTs = out.EndId + 1
+		if num.Val > 0 {
+			out.StartId = s.nextTxnTs
+			out.EndId = out.StartId + num.Val - 1
+			s.nextTxnTs = out.EndId + 1
+		}
 		if num.ReadOnly {
 			s.readOnlyTs = s.nextTxnTs
 			s.nextTxnTs++

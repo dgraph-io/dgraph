@@ -24,10 +24,11 @@ import (
 )
 
 var (
-	addr = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
-	num  = flag.Int("num", 1, "How many times to run.")
-	wait = flag.String("wait", "0", "How long to wait.")
-	pred = flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
+	addr     = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
+	num      = flag.Int("num", 1, "How many times to run.")
+	readonly = flag.Bool("ro", false, "Only read the counter value, don't update it.")
+	wait     = flag.String("wait", "0", "How long to wait.")
+	pred     = flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
 )
 
 type Counter struct {
@@ -35,27 +36,42 @@ type Counter struct {
 	Val int    `json:"val"`
 }
 
-func increment(dg *dgo.Dgraph) (int, error) {
+func queryCounter(txn *dgo.Txn) (Counter, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	txn := dg.NewTxn()
+	var counter Counter
 	query := fmt.Sprintf("{ q(func: has(%s)) { uid, val: %s }}", *pred, *pred)
 	resp, err := txn.Query(ctx, query)
 	if err != nil {
-		return 0, err
+		return counter, err
 	}
 	m := make(map[string][]Counter)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
-		return 0, err
+		return counter, err
 	}
-	var counter Counter
 	if len(m["q"]) == 0 {
 		// Do nothing.
 	} else if len(m["q"]) == 1 {
 		counter = m["q"][0]
 	} else {
 		log.Fatalf("Invalid response: %q", resp.Json)
+	}
+	return counter, nil
+}
+
+func process(dg *dgo.Dgraph) (int, error) {
+	if *readonly {
+		txn := dg.NewReadOnlyTxn()
+		defer txn.Discard(nil)
+		counter, err := queryCounter(txn)
+		return counter.Val, err
+	}
+
+	txn := dg.NewTxn()
+	counter, err := queryCounter(txn)
+	if err != nil {
+		return 0, err
 	}
 	counter.Val += 1
 
@@ -64,6 +80,9 @@ func increment(dg *dgo.Dgraph) (int, error) {
 		counter.Uid = "_:new"
 	}
 	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, *pred, counter.Val))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	_, err = txn.Mutate(ctx, &mu)
 	if err != nil {
 		return 0, err
@@ -87,13 +106,13 @@ func main() {
 	}
 
 	for *num > 0 {
-		val, err := increment(dg)
+		val, err := process(dg)
 		if err != nil {
-			fmt.Printf("While trying to increment counter: %v. Retrying...\n", err)
+			fmt.Printf("While trying to process counter: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 			continue
 		}
-		fmt.Printf("Counter SET OK: %d\n", val)
+		fmt.Printf("Counter VAL: %d\n", val)
 		*num -= 1
 		time.Sleep(waitDur)
 	}
