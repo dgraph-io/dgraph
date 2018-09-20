@@ -49,7 +49,7 @@ var Config Options
 var DefaultConfig = Options{
 	PostingDir:   "p",
 	BadgerTables: "mmap",
-	BadgerVlog:   "none",
+	BadgerVlog:   "mmap",
 	WALDir:       "w",
 	Nomutations:  false,
 

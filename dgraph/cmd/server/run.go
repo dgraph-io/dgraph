@@ -63,12 +63,12 @@ func init() {
 
 	// Options around how to set up Badger.
 	flag.String("badger.tables", defaults.BadgerTables,
-		"[none, ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
+		"[ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
 			"Option sequence consume most to least RAM while providing best to worst read "+
 			"performance respectively.")
 	flag.String("badger.vlog", defaults.BadgerVlog,
-		"[none, mmap, disk] Specifies how Badger Value log is stored."+
-			" mmap consumes more RAM, but provides better performance in some cases.")
+		"[mmap, disk] Specifies how Badger Value log is stored."+
+			" mmap consumes more RAM, but provides better performance.")
 
 	flag.StringP("wal", "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")
