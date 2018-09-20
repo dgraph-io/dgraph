@@ -412,7 +412,7 @@ You can look at the logs using `docker-compose logs`.
 
 ### Using Docker Swarm
 
-#### Cluster setup using Docker Swarm
+#### Cluster Setup Using Docker Swarm
 
 {{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
 Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
@@ -911,12 +911,12 @@ Stop the cluster. If you used `kops` you can run the following command.
 kops delete cluster ${NAME} --yes
 ```
 
-### Replicated Cluster
+### HA Cluster Setup Using Kubernetes
 
-In this setup, we are going to deploy 1 Zero node and 3 Server nodes. We start Zero with `--replicas
-3` flag, so all data would be replicated on each of the 3 Server nodes.
+This setup allows you to run 3 Dgraph Servers and 3 Zero Servers. We start Zero with `--replicas
+3` flag, so all data would be replicated on 3 Servers and form 1 server group.
 
-{{% notice "note" %}} Ideally you should have atleast three worker nodes as part of your Kubernetes
+{{% notice "note" %}} Ideally you should have at least three worker nodes as part of your Kubernetes
 cluster so that each Dgraph Server runs on a separate node.{{% /notice %}}
 
 * Check the nodes that are part of the Kubernetes cluster.
@@ -934,16 +934,16 @@ ip-172-20-59-116.us-west-2.compute.internal   Ready     node      4m        v1.8
 ip-172-20-61-88.us-west-2.compute.internal    Ready     node      5m        v1.8.4
 ```
 
-Once your kubernetes cluster is up, you can use [dgraph-multi.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-multi.yaml) to start the cluster.
+Once your Kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha.yaml) to start the cluster.
 
 * From your machine, run the following command to start the cluster.
 
 ```sh
-kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-multi.yaml
+kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha.yaml
 ```
 
 Output:
-```
+```sh
 service "dgraph-zero-public" created
 service "dgraph-server-public" created
 service "dgraph-server-0-http-public" created
@@ -967,8 +967,10 @@ NAME                   READY     STATUS    RESTARTS   AGE
 dgraph-ratel-<pod-id>  1/1       Running   0          9s
 dgraph-server-0        1/1       Running   0          2m
 dgraph-server-1        1/1       Running   0          2m
-dgraph-server-2        1/1       Running   0          1m
+dgraph-server-2        1/1       Running   0          2m
 dgraph-zero-0          1/1       Running   0          2m
+dgraph-zero-1          1/1       Running   0          2m
+dgraph-zero-2          1/1       Running   0          2m
 
 ```
 
@@ -1003,39 +1005,6 @@ Stop the cluster. If you used `kops` you can run the following command.
 ```sh
 kops delete cluster ${NAME} --yes
 ```
-
-### HA Cluster Setup using Kubernetes
-
-This setup allows you to run 15 Dgraph Servers and 3 Zero Servers. The instructions are similar to
-[replicated cluster]({{< relref "#replicated-cluster">}}) setup. We start Zero with `--replicas
-5` flag, so all data would be replicated on 15 Servers and forms 3 server groups to distribute predicates.
-
-{{% notice "note" %}} Ideally you should have atleast three worker nodes as part of your Kubernetes
-cluster so that each Dgraph Server runs on a separate node.{{% /notice %}}
-
-Once your kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha.yaml) to start the cluster.
-
-* From your machine, run the following command to start the cluster.
-
-```sh
-kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha.yaml
-```
-
-Output:
-```sh
-service "dgraph-zero-public" created
-service "dgraph-server-public" created
-service "dgraph-server-0-http-public" created
-service "dgraph-ratel-public" created
-service "dgraph-zero" created
-service "dgraph-server" created
-statefulset "dgraph-zero" created
-statefulset "dgraph-server" created
-deployment "dgraph-ratel" created
-```
-
-After this you can follow other steps from [Replicated Cluster]({{< relref "#replicated-cluster">}}) to verify
-that your setup is working as expected.
 
 ## More about Dgraph
 
