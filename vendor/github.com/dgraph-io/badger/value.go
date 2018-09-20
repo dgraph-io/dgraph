@@ -583,7 +583,7 @@ type valueLog struct {
 	numActiveIterators int32
 
 	kv                *DB
-	maxFid            uint32
+	maxFid            uint32 // accessed via atomics.
 	writableLogOffset uint32
 	numEntriesWritten uint32
 	opt               Options
@@ -715,7 +715,8 @@ func (vlog *valueLog) Close() error {
 			err = munmapErr
 		}
 
-		if !vlog.opt.ReadOnly && id == vlog.maxFid {
+		maxFid := atomic.LoadUint32(&vlog.maxFid)
+		if !vlog.opt.ReadOnly && id == maxFid {
 			// truncate writable log file to correct offset.
 			if truncErr := f.fd.Truncate(
 				int64(vlog.writableLogOffset)); truncErr != nil && err == nil {
@@ -813,7 +814,8 @@ func (vlog *valueLog) sync() error {
 		vlog.filesLock.RUnlock()
 		return nil
 	}
-	curlf := vlog.filesMap[vlog.maxFid]
+	maxFid := atomic.LoadUint32(&vlog.maxFid)
+	curlf := vlog.filesMap[maxFid]
 	curlf.lock.RLock()
 	vlog.filesLock.RUnlock()
 
@@ -835,7 +837,8 @@ func (vlog *valueLog) writableOffset() uint32 {
 // write is thread-unsafe by design and should not be called concurrently.
 func (vlog *valueLog) write(reqs []*request) error {
 	vlog.filesLock.RLock()
-	curlf := vlog.filesMap[vlog.maxFid]
+	maxFid := atomic.LoadUint32(&vlog.maxFid)
+	curlf := vlog.filesMap[maxFid]
 	vlog.filesLock.RUnlock()
 
 	toDisk := func() error {
@@ -929,7 +932,8 @@ func (vlog *valueLog) getFileRLocked(fid uint32) (*logFile, error) {
 // TODO: Make this read private.
 func (vlog *valueLog) Read(vp valuePointer, s *y.Slice) ([]byte, func(), error) {
 	// Check for valid offset if we are reading to writable log.
-	if vp.Fid == vlog.maxFid && vp.Offset >= vlog.writableOffset() {
+	maxFid := atomic.LoadUint32(&vlog.maxFid)
+	if vp.Fid == maxFid && vp.Offset >= vlog.writableOffset() {
 		return nil, nil, errors.Errorf(
 			"Invalid value pointer offset: %d greater than current offset: %d",
 			vp.Offset, vlog.writableOffset())
