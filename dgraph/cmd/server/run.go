@@ -62,9 +62,6 @@ func init() {
 		"Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.options", defaults.BadgerOptions,
-		"[ssd, hdd] Specifies which Badger options to use. SSD decreases write amplification"+
-			" and increases read IOPS. HDD does the opposite.")
 	flag.String("badger.tables", defaults.BadgerTables,
 		"[none, ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
 			"Option sequence consume most to least RAM while providing best to worst read "+
@@ -278,9 +275,8 @@ var shutdownCh chan struct{}
 
 func run() {
 	config := edgraph.Options{
-		BadgerTables:  Server.Conf.GetString("badger.tables"),
-		BadgerVlog:    Server.Conf.GetString("badger.vlog"),
-		BadgerOptions: Server.Conf.GetString("badger.options"),
+		BadgerTables: Server.Conf.GetString("badger.tables"),
+		BadgerVlog:   Server.Conf.GetString("badger.vlog"),
 
 		PostingDir: Server.Conf.GetString("postings"),
 		WALDir:     Server.Conf.GetString("wal"),
