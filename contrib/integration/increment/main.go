@@ -67,8 +67,7 @@ func process(dg *dgo.Dgraph, readOnly bool) (Counter, error) {
 	if readOnly {
 		txn := dg.NewReadOnlyTxn()
 		defer txn.Discard(nil)
-		counter, err := queryCounter(txn)
-		return counter, err
+		return queryCounter(txn)
 	}
 
 	txn := dg.NewTxn()
