@@ -133,7 +133,7 @@ func (s *ServerState) initStorage() {
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
 		opt := badger.LSMOnlyOptions
-		opt.ValueLogMaxEntries = 1000 // Allow for easy space reclamation.
+		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
 		opt = setBadgerOptions(opt, Config.WALDir)
 
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
