@@ -1,0 +1,7 @@
+go-farm: Google's FarmHash in pure Go
+
+This is a (mechanical) translation of the non-SSE4/non-AESNI hash functions from FarmHash.
+
+For more information on FarmHash, please see https://code.google.com/p/farmhash
+
+For a cgo library wrapping the C++ one, please see https://github.com/dgryski/go-farmhash

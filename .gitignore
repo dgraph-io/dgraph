@@ -2,8 +2,6 @@
 /installs
 /coverage.out
 /dgraph-bulk-loader
-/vendor/*
-!/vendor/vendor.json
 
 # fuzzing output
 gql/gql-fuzz.zip
