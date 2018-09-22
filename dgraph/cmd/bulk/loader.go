@@ -24,7 +24,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -102,10 +102,10 @@ func newLoader(opt options) *loader {
 }
 
 func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
-	client := intern.NewZeroClient(zero)
+	client := pb.NewZeroClient(zero)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
+		ts, err := client.Timestamps(ctx, &pb.Num{Val: 1})
 		cancel()
 		if err == nil {
 			return ts.GetStartId()
@@ -115,7 +115,7 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
-func readSchema(filename string) []*intern.SchemaUpdate {
+func readSchema(filename string) []*pb.SchemaUpdate {
 	f, err := os.Open(filename)
 	x.Check(err)
 	defer f.Close()
@@ -180,7 +180,7 @@ func findRDFFiles(dir string) []string {
 }
 
 type uidRangeResponse struct {
-	uids *intern.AssignedIds
+	uids *pb.AssignedIds
 	err  error
 }
 
@@ -269,7 +269,7 @@ func (ld *loader) mapStage() {
 
 type shuffleOutput struct {
 	db         *badger.DB
-	mapEntries []*intern.MapEntry
+	mapEntries []*pb.MapEntry
 }
 
 func (ld *loader) reduceStage() {

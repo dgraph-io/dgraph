@@ -18,7 +18,7 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -959,14 +959,14 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 }
 
 // Mocking Subgraph and Testing fast-json with it.
-func ageSg(uidMatrix []*intern.List, srcUids *intern.List, ages []uint64) *SubGraph {
-	var as []*intern.ValueList
+func ageSg(uidMatrix []*pb.List, srcUids *pb.List, ages []uint64) *SubGraph {
+	var as []*pb.ValueList
 	for _, a := range ages {
 		bs := make([]byte, 4)
 		binary.LittleEndian.PutUint64(bs, a)
-		as = append(as, &intern.ValueList{
-			Values: []*intern.TaskValue{
-				&intern.TaskValue{[]byte(bs), 2},
+		as = append(as, &pb.ValueList{
+			Values: []*pb.TaskValue{
+				&pb.TaskValue{[]byte(bs), 2},
 			},
 		})
 	}
@@ -979,10 +979,10 @@ func ageSg(uidMatrix []*intern.List, srcUids *intern.List, ages []uint64) *SubGr
 		Params:      params{GetUid: true},
 	}
 }
-func nameSg(uidMatrix []*intern.List, srcUids *intern.List, names []string) *SubGraph {
-	var ns []*intern.ValueList
+func nameSg(uidMatrix []*pb.List, srcUids *pb.List, names []string) *SubGraph {
+	var ns []*pb.ValueList
 	for _, n := range names {
-		ns = append(ns, &intern.ValueList{Values: []*intern.TaskValue{{[]byte(n), 0}}})
+		ns = append(ns, &pb.ValueList{Values: []*pb.TaskValue{{[]byte(n), 0}}})
 	}
 	return &SubGraph{
 		Attr:        "name",
@@ -993,7 +993,7 @@ func nameSg(uidMatrix []*intern.List, srcUids *intern.List, names []string) *Sub
 	}
 
 }
-func friendsSg(uidMatrix []*intern.List, srcUids *intern.List, friends []*SubGraph) *SubGraph {
+func friendsSg(uidMatrix []*pb.List, srcUids *pb.List, friends []*SubGraph) *SubGraph {
 	return &SubGraph{
 		Attr:      "friend",
 		uidMatrix: uidMatrix,
@@ -1002,7 +1002,7 @@ func friendsSg(uidMatrix []*intern.List, srcUids *intern.List, friends []*SubGra
 		Children:  friends,
 	}
 }
-func rootSg(uidMatrix []*intern.List, srcUids *intern.List, names []string, ages []uint64) *SubGraph {
+func rootSg(uidMatrix []*pb.List, srcUids *pb.List, names []string, ages []uint64) *SubGraph {
 	nameSg := nameSg(uidMatrix, srcUids, names)
 	ageSg := ageSg(uidMatrix, srcUids, ages)
 

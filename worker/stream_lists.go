@@ -12,15 +12,16 @@ import (
 	"sync"
 	"time"
 
+	"context"
+
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
-	"golang.org/x/net/context"
 )
 
 type kvStream interface {
-	Send(*intern.KVS) error
+	Send(*pb.KVS) error
 }
 
 type streamLists struct {
@@ -28,7 +29,7 @@ type streamLists struct {
 	predicate string
 	db        *badger.DB
 	chooseKey func(key []byte, version uint64) bool
-	itemToKv  func(key []byte, itr *badger.Iterator) (*intern.KV, error)
+	itemToKv  func(key []byte, itr *badger.Iterator) (*pb.KV, error)
 }
 
 // keyRange is [start, end), including start, excluding end. Do ensure that the start,
@@ -39,9 +40,9 @@ type keyRange struct {
 }
 
 func (sl *streamLists) orchestrate(ctx context.Context, prefix string, ts uint64) error {
-	keyCh := make(chan keyRange, 100)     // Contains keys for posting lists.
-	kvChan := make(chan *intern.KVS, 100) // Contains marshaled posting lists.
-	errCh := make(chan error, 1)          // Stores error by consumeKeys.
+	keyCh := make(chan keyRange, 100) // Contains keys for posting lists.
+	kvChan := make(chan *pb.KVS, 100) // Contains marshaled posting lists.
+	errCh := make(chan error, 1)      // Stores error by consumeKeys.
 
 	// Read the predicate keys and stream to keysCh.
 	go sl.produceRanges(ctx, ts, keyCh)
@@ -117,7 +118,7 @@ func (sl *streamLists) produceRanges(ctx context.Context, ts uint64, keyCh chan 
 }
 
 func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
-	keyCh chan keyRange, kvChan chan *intern.KVS) error {
+	keyCh chan keyRange, kvChan chan *pb.KVS) error {
 	var prefix []byte
 	if len(sl.predicate) > 0 {
 		prefix = x.PredicatePrefix(sl.predicate)
@@ -132,7 +133,7 @@ func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
 		it := txn.NewIterator(iterOpts)
 		defer it.Close()
 
-		kvs := new(intern.KVS)
+		kvs := new(pb.KVS)
 		var prevKey []byte
 		for it.Seek(kr.start); it.ValidForPrefix(prefix); {
 			item := it.Item()
@@ -181,14 +182,14 @@ func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
 }
 
 func (sl *streamLists) streamKVs(ctx context.Context, prefix string,
-	kvChan chan *intern.KVS) error {
+	kvChan chan *pb.KVS) error {
 	var count int
 	var bytesSent uint64
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	now := time.Now()
 
-	slurp := func(batch *intern.KVS) error {
+	slurp := func(batch *pb.KVS) error {
 	loop:
 		for {
 			select {
@@ -215,7 +216,7 @@ func (sl *streamLists) streamKVs(ctx context.Context, prefix string,
 
 outer:
 	for {
-		var batch *intern.KVS
+		var batch *pb.KVS
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

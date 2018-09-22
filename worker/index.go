@@ -8,7 +8,7 @@
 package worker
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"

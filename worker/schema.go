@@ -8,31 +8,32 @@
 package worker
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	emptySchemaResult intern.SchemaResult
+	emptySchemaResult pb.SchemaResult
 )
 
 type resultErr struct {
-	result *intern.SchemaResult
+	result *pb.SchemaResult
 	err    error
 }
 
 // getSchema iterates over all predicates and populates the asked fields, if list of
 // predicates is not specified, then all the predicates belonging to the group
 // are returned
-func getSchema(ctx context.Context, s *intern.SchemaRequest) (*intern.SchemaResult, error) {
-	var result intern.SchemaResult
+func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, error) {
+	var result pb.SchemaResult
 	var predicates []string
 	var fields []string
 	if len(s.Predicates) > 0 {
@@ -99,12 +100,12 @@ func populateSchema(attr string, fields []string) *api.SchemaNode {
 
 // addToSchemaMap groups the predicates by group id, if list of predicates is
 // empty then it adds all known groups
-func addToSchemaMap(schemaMap map[uint32]*intern.SchemaRequest, schema *intern.SchemaRequest) {
+func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaRequest) {
 	for _, attr := range schema.Predicates {
 		gid := groups().BelongsTo(attr)
 		s := schemaMap[gid]
 		if s == nil {
-			s = &intern.SchemaRequest{GroupId: gid}
+			s = &pb.SchemaRequest{GroupId: gid}
 			s.Fields = schema.Fields
 			schemaMap[gid] = s
 		}
@@ -122,7 +123,7 @@ func addToSchemaMap(schemaMap map[uint32]*intern.SchemaRequest, schema *intern.S
 		}
 		s := schemaMap[gid]
 		if s == nil {
-			s = &intern.SchemaRequest{GroupId: gid}
+			s = &pb.SchemaRequest{GroupId: gid}
 			s.Fields = schema.Fields
 			schemaMap[gid] = s
 		}
@@ -132,7 +133,7 @@ func addToSchemaMap(schemaMap map[uint32]*intern.SchemaRequest, schema *intern.S
 // If the current node serves the group serve the schema or forward
 // to relevant node
 // TODO: Janardhan - if read fails try other servers serving same group
-func getSchemaOverNetwork(ctx context.Context, gid uint32, s *intern.SchemaRequest, ch chan resultErr) {
+func getSchemaOverNetwork(ctx context.Context, gid uint32, s *pb.SchemaRequest, ch chan resultErr) {
 	if groups().ServesGroup(gid) {
 		schema, e := getSchema(ctx, s)
 		ch <- resultErr{result: schema, err: e}
@@ -145,14 +146,14 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *intern.SchemaReque
 		return
 	}
 	conn := pl.Get()
-	c := intern.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(conn)
 	schema, e := c.Schema(ctx, s)
 	ch <- resultErr{result: schema, err: e}
 }
 
 // GetSchemaOverNetwork checks which group should be serving the schema
 // according to fingerprint of the predicate and sends it to that instance.
-func GetSchemaOverNetwork(ctx context.Context, schema *intern.SchemaRequest) ([]*api.SchemaNode, error) {
+func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) ([]*api.SchemaNode, error) {
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
@@ -161,7 +162,7 @@ func GetSchemaOverNetwork(ctx context.Context, schema *intern.SchemaRequest) ([]
 	}
 
 	// Map of groupd id => Predicates for that group.
-	schemaMap := make(map[uint32]*intern.SchemaRequest)
+	schemaMap := make(map[uint32]*pb.SchemaRequest)
 	addToSchemaMap(schemaMap, schema)
 
 	results := make(chan resultErr, len(schemaMap))
@@ -193,7 +194,7 @@ func GetSchemaOverNetwork(ctx context.Context, schema *intern.SchemaRequest) ([]
 }
 
 // Schema is used to get schema information over the network on other instances.
-func (w *grpcWorker) Schema(ctx context.Context, s *intern.SchemaRequest) (*intern.SchemaResult, error) {
+func (w *grpcWorker) Schema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, error) {
 	if ctx.Err() != nil {
 		return &emptySchemaResult, ctx.Err()
 	}

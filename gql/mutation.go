@@ -13,7 +13,7 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -106,13 +106,13 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 	return 0, x.Errorf("uid not found/generated for xid %s\n", subject)
 }
 
-var emptyEdge intern.DirectedEdge
+var emptyEdge pb.DirectedEdge
 
-func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*intern.DirectedEdge, error) {
+func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*pb.DirectedEdge, error) {
 	var err error
 	var objectUid uint64
 
-	out := &intern.DirectedEdge{
+	out := &pb.DirectedEdge{
 		Entity: subjectUid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
@@ -138,8 +138,8 @@ func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*inte
 	return out, nil
 }
 
-func (nq NQuad) createEdgePrototype(subjectUid uint64) *intern.DirectedEdge {
-	return &intern.DirectedEdge{
+func (nq NQuad) createEdgePrototype(subjectUid uint64) *pb.DirectedEdge {
+	return &pb.DirectedEdge{
 		Entity: subjectUid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
@@ -148,13 +148,13 @@ func (nq NQuad) createEdgePrototype(subjectUid uint64) *intern.DirectedEdge {
 	}
 }
 
-func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *intern.DirectedEdge {
+func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *pb.DirectedEdge {
 	out := nq.createEdgePrototype(subjectUid)
 	out.ValueId = objectUid
 	return out
 }
 
-func (nq NQuad) CreateValueEdge(subjectUid uint64) (*intern.DirectedEdge, error) {
+func (nq NQuad) CreateValueEdge(subjectUid uint64) (*pb.DirectedEdge, error) {
 	var err error
 
 	out := nq.createEdgePrototype(subjectUid)
@@ -164,12 +164,12 @@ func (nq NQuad) CreateValueEdge(subjectUid uint64) (*intern.DirectedEdge, error)
 	return out, nil
 }
 
-func (nq NQuad) ToDeletePredEdge() (*intern.DirectedEdge, error) {
+func (nq NQuad) ToDeletePredEdge() (*pb.DirectedEdge, error) {
 	if nq.Subject != x.Star && nq.ObjectValue.String() != x.Star {
 		return &emptyEdge, x.Errorf("Subject and object both should be *. Got: %+v", nq)
 	}
 
-	out := &intern.DirectedEdge{
+	out := &pb.DirectedEdge{
 		// This along with edge.ObjectValue == x.Star would indicate
 		// that we want to delete the predicate.
 		Entity: 0,
@@ -177,7 +177,7 @@ func (nq NQuad) ToDeletePredEdge() (*intern.DirectedEdge, error) {
 		Label:  nq.Label,
 		Lang:   nq.Lang,
 		Facets: nq.Facets,
-		Op:     intern.DirectedEdge_DEL,
+		Op:     pb.DirectedEdge_DEL,
 	}
 
 	if err := copyValue(out, nq); err != nil {
@@ -188,8 +188,8 @@ func (nq NQuad) ToDeletePredEdge() (*intern.DirectedEdge, error) {
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
-func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*intern.DirectedEdge, error) {
-	var edge *intern.DirectedEdge
+func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*pb.DirectedEdge, error) {
+	var edge *pb.DirectedEdge
 	sUid, err := toUid(nq.Subject, newToUid)
 	if err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*intern.DirectedEdge, e
 	return edge, nil
 }
 
-func copyValue(out *intern.DirectedEdge, nq NQuad) error {
+func copyValue(out *pb.DirectedEdge, nq NQuad) error {
 	var err error
 	var t types.TypeID
 	if out.Value, t, err = byteVal(nq); err != nil {

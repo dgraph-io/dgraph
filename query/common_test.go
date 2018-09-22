@@ -23,7 +23,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -39,7 +39,7 @@ func childAttrs(sg *SubGraph) []string {
 	return out
 }
 
-func taskValues(t *testing.T, v []*intern.ValueList) []string {
+func taskValues(t *testing.T, v []*pb.ValueList) []string {
 	out := make([]string, len(v))
 	for i, tv := range v {
 		out[i] = string(tv.Values[0].Val)
@@ -49,11 +49,11 @@ func taskValues(t *testing.T, v []*intern.ValueList) []string {
 
 var index uint64
 
-func addEdge(t *testing.T, attr string, src uint64, edge *intern.DirectedEdge) {
+func addEdge(t *testing.T, attr string, src uint64, edge *pb.DirectedEdge) {
 	// Mutations don't go through normal flow, so default schema for predicate won't be present.
 	// Lets add it.
 	if _, ok := schema.State().Get(attr); !ok {
-		schema.State().Set(attr, intern.SchemaUpdate{
+		schema.State().Set(attr, pb.SchemaUpdate{
 			Predicate: attr,
 			ValueType: edge.ValueType,
 		})
@@ -67,8 +67,8 @@ func addEdge(t *testing.T, attr string, src uint64, edge *intern.DirectedEdge) {
 
 	commit := timestamp()
 	require.NoError(t, txn.CommitToMemory(commit))
-	delta := &intern.OracleDelta{MaxAssigned: commit}
-	delta.Txns = append(delta.Txns, &intern.TxnStatus{StartTs: startTs, CommitTs: commit})
+	delta := &pb.OracleDelta{MaxAssigned: commit}
+	delta.Txns = append(delta.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commit})
 	posting.Oracle().ProcessDelta(delta)
 }
 
@@ -94,10 +94,10 @@ func makeFacets(facetKVs map[string]string) (fs []*api.Facet, err error) {
 
 func addPredicateEdge(t *testing.T, attr string, src uint64) {
 	if worker.Config.ExpandEdge {
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			Value: []byte(attr),
 			Attr:  "_predicate_",
-			Op:    intern.DirectedEdge_SET,
+			Op:    pb.DirectedEdge_SET,
 		}
 		addEdge(t, "_predicate_", src, edge)
 	}
@@ -113,13 +113,13 @@ func addEdgeToLangValue(t *testing.T, attr string, src uint64,
 	value, lang string, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value:  []byte(value),
 		Lang:   lang,
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     intern.DirectedEdge_SET,
+		Op:     pb.DirectedEdge_SET,
 		Facets: fs,
 	}
 	addEdge(t, attr, src, edge)
@@ -130,13 +130,13 @@ func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 	typ types.TypeID, value []byte, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value:     value,
-		ValueType: intern.Posting_ValType(typ),
+		ValueType: pb.Posting_ValType(typ),
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
-		Op:        intern.DirectedEdge_SET,
+		Op:        pb.DirectedEdge_SET,
 		Facets:    fs,
 	}
 	addEdge(t, attr, src, edge)
@@ -147,15 +147,15 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 	dst uint64, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		ValueId: dst,
 		// This is used to set uid schema type for pred for the purpose of tests. Actual mutation
 		// won't set ValueType to types.UidID.
-		ValueType: intern.Posting_ValType(types.UidID),
+		ValueType: pb.Posting_ValType(types.UidID),
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
-		Op:        intern.DirectedEdge_SET,
+		Op:        pb.DirectedEdge_SET,
 		Facets:    fs,
 	}
 	addEdge(t, attr, src, edge)
@@ -163,25 +163,25 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 }
 
 func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
-	edge := &intern.DirectedEdge{
-		ValueType: intern.Posting_ValType(types.UidID),
+	edge := &pb.DirectedEdge{
+		ValueType: pb.Posting_ValType(types.UidID),
 		ValueId:   dst,
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
-		Op:        intern.DirectedEdge_DEL,
+		Op:        pb.DirectedEdge_DEL,
 	}
 	addEdge(t, attr, src, edge)
 }
 
 func delEdgeToLangValue(t *testing.T, attr string, src uint64, value, lang string) {
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value:  []byte(value),
 		Lang:   lang,
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     intern.DirectedEdge_DEL,
+		Op:     pb.DirectedEdge_DEL,
 	}
 	addEdge(t, attr, src, edge)
 }

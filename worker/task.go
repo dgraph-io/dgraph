@@ -21,14 +21,14 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
+	"context"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	ctask "github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/tok"
@@ -41,13 +41,13 @@ import (
 )
 
 var (
-	emptyUIDList   intern.List
-	emptyResult    intern.Result
-	emptyValueList = intern.ValueList{Values: []*intern.TaskValue{}}
+	emptyUIDList   pb.List
+	emptyResult    pb.Result
+	emptyValueList = pb.ValueList{Values: []*pb.TaskValue{}}
 )
 
 func invokeNetworkRequest(
-	ctx context.Context, addr string, f func(context.Context, intern.WorkerClient) (interface{}, error)) (interface{}, error) {
+	ctx context.Context, addr string, f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.Get().Get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
@@ -57,7 +57,7 @@ func invokeNetworkRequest(
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)
 	}
-	c := intern.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(conn)
 	return f(ctx, c)
 }
 
@@ -67,7 +67,7 @@ const backupRequestGracePeriod = time.Second
 func processWithBackupRequest(
 	ctx context.Context,
 	gid uint32,
-	f func(context.Context, intern.WorkerClient) (interface{}, error)) (interface{}, error) {
+	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {
 		return nil, errors.New("no network connection")
@@ -126,11 +126,11 @@ func processWithBackupRequest(
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
-func ProcessTaskOverNetwork(ctx context.Context, q *intern.Query) (*intern.Result, error) {
+func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
 	gid := groups().BelongsTo(attr)
 	if gid == 0 {
-		return &intern.Result{}, errUnservedTablet
+		return &pb.Result{}, errUnservedTablet
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("attr: %v groupId: %v, readTs: %d", attr, gid, q.ReadTs)
@@ -141,7 +141,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *intern.Query) (*intern.Resul
 		return processTask(ctx, q, gid)
 	}
 
-	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c intern.WorkerClient) (interface{}, error) {
+	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
 		if tr, ok := trace.FromContext(ctx); ok {
 			id := fmt.Sprintf("%d", rand.Int())
 			tr.LazyPrintf("Sending request to server, id: %s", id)
@@ -155,7 +155,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *intern.Query) (*intern.Resul
 		}
 		return nil, err
 	}
-	reply := result.(*intern.Result)
+	reply := result.(*pb.Result)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
 	}
@@ -178,8 +178,8 @@ func convertValue(attr, data string) (types.Val, error) {
 }
 
 // Returns nil byte on error
-func convertToType(v types.Val, typ types.TypeID) (*intern.TaskValue, error) {
-	result := &intern.TaskValue{ValType: typ.Enum(), Val: x.Nilbyte}
+func convertToType(v types.Val, typ types.TypeID) (*pb.TaskValue, error) {
+	result := &pb.TaskValue{ValType: typ.Enum(), Val: x.Nilbyte}
 	if v.Tid == typ {
 		result.Val = v.Value.([]byte)
 		return result, nil
@@ -217,7 +217,7 @@ const (
 	StandardFn = 100
 )
 
-func parseFuncType(srcFunc *intern.SrcFunction) (FuncType, string) {
+func parseFuncType(srcFunc *pb.SrcFunction) (FuncType, string) {
 	if srcFunc == nil {
 		return NotAFunction, ""
 	}
@@ -277,10 +277,10 @@ type result struct {
 }
 
 type funcArgs struct {
-	q     *intern.Query
+	q     *pb.Query
 	gid   uint32
 	srcFn *functionContext
-	out   *intern.Result
+	out   *pb.Result
 }
 
 // The function tells us whether we want to fetch value posting lists or uid posting lists.
@@ -365,10 +365,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				out.Counts = append(out.Counts, 0)
 			} else {
 				out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
-				out.FacetMatrix = append(out.FacetMatrix, &intern.FacetsList{})
+				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				if q.ExpandAll {
 					// To keep the cardinality same as that of ValueMatrix.
-					out.LangMatrix = append(out.LangMatrix, &intern.LangList{})
+					out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
 				}
 			}
 			continue
@@ -381,13 +381,13 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			if err != nil {
 				return err
 			}
-			out.LangMatrix = append(out.LangMatrix, &intern.LangList{langTags})
+			out.LangMatrix = append(out.LangMatrix, &pb.LangList{langTags})
 		}
 
 		valTid := vals[0].Tid
-		newValue := &intern.TaskValue{ValType: valTid.Enum(), Val: x.Nilbyte}
-		uidList := new(intern.List)
-		var vl intern.ValueList
+		newValue := &pb.TaskValue{ValType: valTid.Enum(), Val: x.Nilbyte}
+		uidList := new(pb.List)
+		var vl pb.ValueList
 		for _, val := range vals {
 			newValue, err = convertToType(val, srcFn.atype)
 			if err != nil {
@@ -423,7 +423,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				fs = []*api.Facet{}
 			}
 			out.FacetMatrix = append(out.FacetMatrix,
-				&intern.FacetsList{[]*intern.Facets{{fs}}})
+				&pb.FacetsList{[]*pb.Facets{{fs}}})
 		}
 
 		switch {
@@ -509,7 +509,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		var perr error
 		filteredRes = make([]*result, 0)
-		err = pl.Postings(opts, func(p *intern.Posting) bool {
+		err = pl.Postings(opts, func(p *pb.Posting) bool {
 			res := true
 			res, perr = applyFacetsTree(p.Facets, facetsTree)
 			if perr != nil {
@@ -530,11 +530,11 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		// add facets to result.
 		if q.FacetParam != nil {
-			var fcsList []*intern.Facets
+			var fcsList []*pb.Facets
 			for _, fres := range filteredRes {
-				fcsList = append(fcsList, &intern.Facets{fres.facets})
+				fcsList = append(fcsList, &pb.Facets{fres.facets})
 			}
-			out.FacetMatrix = append(out.FacetMatrix, &intern.FacetsList{fcsList})
+			out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{fcsList})
 		}
 
 		switch {
@@ -553,7 +553,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			count := int64(len)
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &intern.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == HasFn:
@@ -563,11 +563,11 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			count := int64(len)
 			if EvalCompare("gt", count, 0) {
-				tlist := &intern.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == UidInFn:
-			reqList := &intern.List{[]uint64{srcFn.uidPresent}}
+			reqList := &pb.List{[]uint64{srcFn.uidPresent}}
 			topts := posting.ListOptions{
 				ReadTs:    args.q.ReadTs,
 				AfterUID:  0,
@@ -578,12 +578,12 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				return err
 			}
 			if len(plist.Uids) > 0 {
-				tlist := &intern.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		default:
 			// The more usual case: Getting the UIDs.
-			uidList := new(intern.List)
+			uidList := new(pb.List)
 			for _, fres := range filteredRes {
 				uidList.Uids = append(uidList.Uids, fres.uid)
 			}
@@ -594,7 +594,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 }
 
 // processTask processes the query, accumulates and returns the result.
-func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Result, error) {
+func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}
@@ -617,8 +617,8 @@ func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Resu
 	return out, nil
 }
 
-func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Result, error) {
-	out := new(intern.Result)
+func helpProcessTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
+	out := new(pb.Result)
 	attr := q.Attr
 
 	srcFn, err := parseSrcFn(q)
@@ -771,14 +771,14 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 	}
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
-	empty := intern.List{}
+	empty := pb.List{}
 	uids, err := uidsForRegex(attr, arg, query, &empty)
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
 	if uids != nil {
 		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
-		filtered := &intern.List{}
+		filtered := &pb.List{}
 		for _, uid := range uids.Uids {
 			select {
 			case <-ctx.Done():
@@ -956,7 +956,7 @@ func filterGeoFunction(arg funcArgs) error {
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	isList := schema.State().IsList(attr)
-	filtered := &intern.List{}
+	filtered := &pb.List{}
 	for _, uid := range uids.Uids {
 		pl, err := posting.Get(x.DataKey(attr, uid))
 		if err != nil {
@@ -969,7 +969,7 @@ func filterGeoFunction(arg funcArgs) error {
 			} else if err != nil {
 				return err
 			}
-			newValue := &intern.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
+			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
 			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
 				filtered.Uids = append(filtered.Uids, uid)
 			}
@@ -985,7 +985,7 @@ func filterGeoFunction(arg funcArgs) error {
 			return err
 		}
 		for _, val := range vals {
-			newValue := &intern.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
+			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
 			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
 				filtered.Uids = append(filtered.Uids, uid)
 				break
@@ -1046,7 +1046,7 @@ func filterStringFunction(arg funcArgs) error {
 		}
 	}
 
-	filtered := &intern.List{Uids: filteredUids}
+	filtered := &pb.List{Uids: filteredUids}
 	filter := stringFilter{
 		funcName: arg.srcFn.fname,
 		funcType: arg.srcFn.fnType,
@@ -1100,7 +1100,7 @@ const (
 	eq = "eq" // equal
 )
 
-func ensureArgsCount(srcFunc *intern.SrcFunction, expected int) error {
+func ensureArgsCount(srcFunc *pb.SrcFunction, expected int) error {
 	if len(srcFunc.Args) != expected {
 		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
 			srcFunc.Name, expected, len(srcFunc.Args), srcFunc.Args)
@@ -1108,7 +1108,7 @@ func ensureArgsCount(srcFunc *intern.SrcFunction, expected int) error {
 	return nil
 }
 
-func checkRoot(q *intern.Query, fc *functionContext) {
+func checkRoot(q *pb.Query, fc *functionContext) {
 	if q.UidList == nil {
 		// Fetch Uids from Store and populate in q.UidList.
 		fc.n = 0
@@ -1127,7 +1127,7 @@ func langForFunc(langs []string) string {
 	return langs[0]
 }
 
-func parseSrcFn(q *intern.Query) (*functionContext, error) {
+func parseSrcFn(q *pb.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
 	fc := &functionContext{fnType: fnType, fname: f}
@@ -1300,7 +1300,7 @@ func parseSrcFn(q *intern.Query) (*functionContext, error) {
 }
 
 // ServeTask is used to respond to a query.
-func (w *grpcWorker) ServeTask(ctx context.Context, q *intern.Query) (*intern.Result, error) {
+func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	if ctx.Err() != nil {
 		return &emptyResult, ctx.Err()
 	}
@@ -1321,7 +1321,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *intern.Query) (*intern.Re
 	}
 
 	type reply struct {
-		result *intern.Result
+		result *pb.Result
 		err    error
 	}
 	c := make(chan reply, 1)
@@ -1465,7 +1465,7 @@ type facetsTree struct {
 	function *facetsFunc
 }
 
-func preprocessFilter(tree *intern.FilterTree) (*facetsTree, error) {
+func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 	if tree == nil {
 		return nil, nil
 	}
@@ -1537,7 +1537,7 @@ type countParams struct {
 	fn      string // function name
 }
 
-func (cp *countParams) evaluate(out *intern.Result) error {
+func (cp *countParams) evaluate(out *pb.Result) error {
 	count := cp.count
 	var illegal bool
 	switch cp.fn {
@@ -1615,7 +1615,7 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 // posting/lists.go, and Badger. Thus, it can capture both committed
 // transactions and in-progress transactions. It also accounts for transaction
 // start ts.
-func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result) error {
+func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
 
@@ -1641,7 +1641,7 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 		}
 		pk := x.Parse(key)
 		var num int
-		if err := pl.Iterate(q.ReadTs, 0, func(_ *intern.Posting) bool {
+		if err := pl.Iterate(q.ReadTs, 0, func(_ *pb.Posting) bool {
 			num++
 			return false
 		}); err != nil {
@@ -1652,7 +1652,7 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 		}
 	}
 
-	result := &intern.List{}
+	result := &pb.List{}
 	var prevKey []byte
 	var cidx, w int
 	itOpt := badger.DefaultIteratorOptions
@@ -1692,7 +1692,7 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 			return err
 		}
 		var num int
-		if err = l.Iterate(q.ReadTs, 0, func(_ *intern.Posting) bool {
+		if err = l.Iterate(q.ReadTs, 0, func(_ *pb.Posting) bool {
 			num++
 			return false
 		}); err != nil {

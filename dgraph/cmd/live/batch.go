@@ -24,7 +24,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 )
@@ -53,7 +53,7 @@ var defaultOptions = batchMutationOptions{
 }
 
 type uidProvider struct {
-	zero intern.ZeroClient
+	zero pb.ZeroClient
 	ctx  context.Context
 }
 
@@ -87,7 +87,7 @@ type loader struct {
 func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 	factor := time.Second
 	for {
-		assignedIds, err := p.zero.AssignUids(context.Background(), &intern.Num{Val: 1000})
+		assignedIds, err := p.zero.AssignUids(context.Background(), &pb.Num{Val: 1000})
 		if err == nil {
 			return assignedIds.StartId, assignedIds.EndId, nil
 		}

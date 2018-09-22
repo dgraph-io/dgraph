@@ -16,15 +16,16 @@ import (
 
 	"google.golang.org/grpc"
 
+	"context"
+
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 )
 
@@ -88,7 +89,7 @@ func (n *node) uniqueKey() string {
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
 
-func (n *node) proposeAndWait(ctx context.Context, proposal *intern.ZeroProposal) error {
+func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet.")
 	}
@@ -155,15 +156,15 @@ var (
 	errTabletAlreadyServed = errors.New("Tablet is already being served")
 )
 
-func newGroup() *intern.Group {
-	return &intern.Group{
-		Members: make(map[uint64]*intern.Member),
-		Tablets: make(map[string]*intern.Tablet),
+func newGroup() *pb.Group {
+	return &pb.Group{
+		Members: make(map[uint64]*pb.Member),
+		Tablets: make(map[string]*pb.Tablet),
 	}
 }
 
 func (n *node) applyProposal(e raftpb.Entry) (string, error) {
-	var p intern.ZeroProposal
+	var p pb.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
 	if len(e.Data) == 0 {
 		return p.Key, nil
@@ -317,11 +318,11 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.server.removeZero(cc.NodeID)
 
 	} else if len(cc.Context) > 0 {
-		var rc intern.RaftContext
+		var rc pb.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		go n.Connect(rc.Id, rc.Addr)
 
-		m := &intern.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		m := &pb.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
@@ -366,7 +367,7 @@ func (n *node) initAndStartNode() error {
 			// It is important that we pick up the conf state here.
 			n.SetConfState(&sp.Metadata.ConfState)
 
-			var state intern.MembershipState
+			var state pb.MembershipState
 			x.Check(state.Unmarshal(sp.Data))
 			n.server.SetMembershipState(&state)
 			for _, id := range sp.Metadata.ConfState.Nodes {
@@ -383,7 +384,7 @@ func (n *node) initAndStartNode() error {
 		}
 
 		gconn := p.Get()
-		c := intern.NewRaftClient(gconn)
+		c := pb.NewRaftClient(gconn)
 		err := errJoinCluster
 		timeout := 8 * time.Second
 		for i := 0; err != nil; i++ {
@@ -423,7 +424,7 @@ func (n *node) initAndStartNode() error {
 			// This is a new cluster. So, propose a new ID for the cluster.
 			for {
 				id := uuid.New().String()
-				err := n.proposeAndWait(context.Background(), &intern.ZeroProposal{Cid: id})
+				err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 				if err == nil {
 					glog.Infof("CID set for cluster: %v", id)
 					return
@@ -526,7 +527,7 @@ func (n *node) Run() {
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state intern.MembershipState
+				var state pb.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				n.server.SetMembershipState(&state)
 			}
