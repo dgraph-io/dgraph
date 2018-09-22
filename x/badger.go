@@ -1,6 +1,7 @@
 package x
 
 import (
+	"math"
 	"sync"
 
 	"github.com/dgraph-io/badger"
@@ -25,7 +26,7 @@ func (w *TxnWriter) cb(err error) {
 }
 
 func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
-	txn := w.DB.NewTransactionAt(ts, true)
+	txn := w.DB.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 
 	// We do a Get to ensure that we don't end up overwriting an already
@@ -35,11 +36,12 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 	} else if err != nil {
 		return err
 
-	} else if item.Version() == ts {
-		// Found an existing value there. So, skip writing.
+	} else if item.Version() >= ts {
+		// Found an existing commit at an equal or higher timestamp. So, skip writing.
 		if glog.V(2) {
 			pk := Parse(key)
-			glog.Warning("Skipping write to key: %+v. Found existing version at: %d", pk, ts)
+			glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
+				item.Version(), ts, pk)
 		}
 		return nil
 	}

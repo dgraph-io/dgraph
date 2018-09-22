@@ -463,7 +463,7 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 			return
 		}
 		for err := txn.CommitToDisk(&writer, commit); err != nil; {
-			x.Printf("Error while applying txn status to disk (%d -> %d): %v",
+			glog.Warningf("Error while applying txn status to disk (%d -> %d): %v",
 				start, commit, err)
 			time.Sleep(10 * time.Millisecond)
 		}
