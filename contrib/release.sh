@@ -42,7 +42,7 @@ echo "Using Go version"
 go version
 
 go get -u github.com/jteeuwen/go-bindata/...
-go get -d -u golang.org/x/net/context
+go get -d -u context
 go get -d google.golang.org/grpc
 go get -u github.com/prometheus/client_golang/prometheus
 go get -u github.com/dgraph-io/dgo

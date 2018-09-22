@@ -13,29 +13,30 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
 	"github.com/dgraph-io/badger"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var emptySortResult intern.SortResult
+var emptySortResult pb.SortResult
 
 type sortresult struct {
-	reply *intern.SortResult
+	reply *pb.SortResult
 	vals  [][]types.Val
 	err   error
 }
 
 // SortOverNetwork sends sort query over the network.
-func SortOverNetwork(ctx context.Context, q *intern.SortMessage) (*intern.SortResult, error) {
+func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, error) {
 	gid := groups().BelongsTo(q.Order[0].Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Order[0].Attr, gid)
@@ -46,7 +47,7 @@ func SortOverNetwork(ctx context.Context, q *intern.SortMessage) (*intern.SortRe
 		return processSort(ctx, q)
 	}
 
-	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c intern.WorkerClient) (interface{}, error) {
+	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
 		return c.Sort(ctx, q)
 	})
 	if err != nil {
@@ -55,11 +56,11 @@ func SortOverNetwork(ctx context.Context, q *intern.SortMessage) (*intern.SortRe
 		}
 		return nil, err
 	}
-	return result.(*intern.SortResult), nil
+	return result.(*pb.SortResult), nil
 }
 
 // Sort is used to sort given UID matrix.
-func (w *grpcWorker) Sort(ctx context.Context, s *intern.SortMessage) (*intern.SortResult, error) {
+func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResult, error) {
 	if ctx.Err() != nil {
 		return &emptySortResult, ctx.Err()
 	}
@@ -69,7 +70,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *intern.SortMessage) (*intern.S
 		tr.LazyPrintf("Sorting: Attribute: %q groupId: %v Sort", s.Order[0].Attr, gid)
 	}
 
-	var reply *intern.SortResult
+	var reply *pb.SortResult
 	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", s.Order[0].Attr, gid)
 
@@ -93,9 +94,9 @@ var (
 	errDone     = x.Errorf("Done processing buckets")
 )
 
-func sortWithoutIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
+func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	n := len(ts.UidMatrix)
-	r := new(intern.SortResult)
+	r := new(pb.SortResult)
 	multiSortVals := make([][]types.Val, n)
 	// Sort and paginate directly as it'd be expensive to iterate over the index which
 	// might have millions of keys just for retrieving some values.
@@ -111,7 +112,7 @@ func sortWithoutIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 			return &sortresult{&emptySortResult, nil, ctx.Err()}
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
-			tempList := &intern.List{ts.UidMatrix[i].Uids}
+			tempList := &pb.List{ts.UidMatrix[i].Uids}
 			var vals []types.Val
 			if vals, err = sortByValue(ctx, ts, tempList, sType); err != nil {
 				return &sortresult{&emptySortResult, nil, err}
@@ -129,7 +130,7 @@ func sortWithoutIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 	return &sortresult{r, multiSortVals, nil}
 }
 
-func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
+func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	values := make([][]types.Val, 0, n) // Values corresponding to uids in the uid matrix.
@@ -137,13 +138,13 @@ func sortWithIndex(ctx context.Context, ts *intern.SortMessage) *sortresult {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
-		var emptyList intern.List
+		var emptyList pb.List
 		out[i].ulist = &emptyList
 		out[i].uset = map[uint64]struct{}{}
 	}
 
 	order := ts.Order[0]
-	r := new(intern.SortResult)
+	r := new(pb.SortResult)
 	// Iterate over every bucket / token.
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
@@ -248,11 +249,11 @@ BUCKETS:
 
 type orderResult struct {
 	idx int
-	r   *intern.Result
+	r   *pb.Result
 	err error
 }
 
-func multiSort(ctx context.Context, r *sortresult, ts *intern.SortMessage) error {
+func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	// SrcUids for other queries are all the uids present in the response of the first sort.
 	dest := destUids(r.reply.UidMatrix)
 
@@ -284,7 +285,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *intern.SortMessage) error
 	// Execute rest of the sorts concurrently.
 	och := make(chan orderResult, len(ts.Order)-1)
 	for i := 1; i < len(ts.Order); i++ {
-		in := &intern.Query{
+		in := &pb.Query{
 			Attr:    ts.Order[i].Attr,
 			UidList: dest,
 			Langs:   ts.Order[i].Langs,
@@ -362,7 +363,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *intern.SortMessage) error
 // bucket if we haven't hit the offset. We stop getting results when we got
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
-func processSort(ctx context.Context, ts *intern.SortMessage) (*intern.SortResult, error) {
+func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error) {
 	if err := posting.Oracle().WaitForTs(ctx, ts.ReadTs); err != nil {
 		return &emptySortResult, err
 	}
@@ -417,7 +418,7 @@ func processSort(ctx context.Context, ts *intern.SortMessage) (*intern.SortResul
 	return r.reply, err
 }
 
-func destUids(uidMatrix []*intern.List) *intern.List {
+func destUids(uidMatrix []*pb.List) *pb.List {
 	included := make(map[uint64]struct{})
 	for _, ul := range uidMatrix {
 		for _, uid := range ul.Uids {
@@ -425,7 +426,7 @@ func destUids(uidMatrix []*intern.List) *intern.List {
 		}
 	}
 
-	res := &intern.List{Uids: make([]uint64, 0, len(included))}
+	res := &pb.List{Uids: make([]uint64, 0, len(included))}
 	for uid := range included {
 		res.Uids = append(res.Uids, uid)
 	}
@@ -433,7 +434,7 @@ func destUids(uidMatrix []*intern.List) *intern.List {
 	return res
 }
 
-func fetchValues(ctx context.Context, in *intern.Query, idx int, or chan orderResult) {
+func fetchValues(ctx context.Context, in *pb.Query, idx int, or chan orderResult) {
 	var err error
 	in.Reverse = strings.HasPrefix(in.Attr, "~")
 	if in.Reverse {
@@ -449,14 +450,14 @@ func fetchValues(ctx context.Context, in *intern.Query, idx int, or chan orderRe
 
 type intersectedList struct {
 	offset int
-	ulist  *intern.List
+	ulist  *pb.List
 	values []types.Val
 	uset   map[uint64]struct{}
 }
 
 // intersectBucket intersects every UID list in the UID matrix with the
 // indexed bucket.
-func intersectBucket(ctx context.Context, ts *intern.SortMessage, token string,
+func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	out []intersectedList) error {
 	count := int(ts.Count)
 	order := ts.Order[0]
@@ -571,7 +572,7 @@ func removeDuplicates(uids []uint64, set map[uint64]struct{}) []uint64 {
 	return uids
 }
 
-func paginate(ts *intern.SortMessage, dest *intern.List, vals []types.Val) (int, int, error) {
+func paginate(ts *pb.SortMessage, dest *pb.List, vals []types.Val) (int, int, error) {
 	count := int(ts.Count)
 	offset := int(ts.Offset)
 	start, end := x.PageRange(count, offset, len(dest.Uids))
@@ -592,7 +593,7 @@ func paginate(ts *intern.SortMessage, dest *intern.List, vals []types.Val) (int,
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(ctx context.Context, ts *intern.SortMessage, ul *intern.List,
+func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 	typ types.TypeID) ([]types.Val, error) {
 	lenList := len(ul.Uids)
 	uids := make([]uint64, 0, lenList)
@@ -616,7 +617,7 @@ func sortByValue(ctx context.Context, ts *intern.SortMessage, ul *intern.List,
 			values = append(values, []types.Val{val})
 		}
 	}
-	err := types.Sort(values, &intern.List{uids}, []bool{order.Desc})
+	err := types.Sort(values, &pb.List{uids}, []bool{order.Desc})
 	ul.Uids = uids
 	if len(ts.Order) > 1 {
 		for _, v := range values {

@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	context "golang.org/x/net/context"
+	context "context"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -25,7 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 
@@ -35,7 +35,7 @@ import (
 var passwordCache map[string]string = make(map[string]string, 2)
 
 var ts uint64
-var odch chan *intern.OracleDelta
+var odch chan *pb.OracleDelta
 
 func timestamp() uint64 {
 	return atomic.AddUint64(&ts, 1)
@@ -1624,7 +1624,7 @@ var maxPendingCh chan uint64
 func TestMain(m *testing.M) {
 	x.Init(true)
 
-	odch = make(chan *intern.OracleDelta, 100)
+	odch = make(chan *pb.OracleDelta, 100)
 	maxPendingCh = make(chan uint64, 100)
 
 	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")

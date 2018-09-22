@@ -18,13 +18,14 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -93,7 +94,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
 
-	rc := intern.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
+	rc := pb.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
 	m := conn.NewNode(&rc, store)
 	st.rs = &conn.RaftServer{Node: m}
 
@@ -102,8 +103,8 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 	st.zero.Init()
 	st.node.server = st.zero
 
-	intern.RegisterZeroServer(s, st.zero)
-	intern.RegisterRaftServer(s, st.rs)
+	pb.RegisterZeroServer(s, st.zero)
+	pb.RegisterRaftServer(s, st.rs)
 
 	go func() {
 		defer wg.Done()

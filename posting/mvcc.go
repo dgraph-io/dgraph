@@ -16,7 +16,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -137,7 +137,7 @@ func (tx *Txn) CommitToMemory(commitTs uint64) error {
 	return nil
 }
 
-func unmarshalOrCopy(plist *intern.PostingList, item *badger.Item) error {
+func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	// It's delta
 	val, err := item.Value()
 	if err != nil {
@@ -165,8 +165,8 @@ func unmarshalOrCopy(plist *intern.PostingList, item *badger.Item) error {
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
-	l.mutationMap = make(map[uint64]*intern.PostingList)
-	l.plist = new(intern.PostingList)
+	l.mutationMap = make(map[uint64]*pb.PostingList)
+	l.plist = new(pb.PostingList)
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
@@ -196,7 +196,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			break
 		}
 		if item.UserMeta()&bitDeltaPosting > 0 {
-			pl := &intern.PostingList{}
+			pl := &pb.PostingList{}
 			x.Check(pl.Unmarshal(val))
 			pl.Commit = item.Version()
 			for _, mpost := range pl.Postings {
@@ -219,8 +219,8 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	l := new(List)
 	l.key = key
-	l.mutationMap = make(map[uint64]*intern.PostingList)
-	l.plist = new(intern.PostingList)
+	l.mutationMap = make(map[uint64]*pb.PostingList)
+	l.plist = new(pb.PostingList)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 

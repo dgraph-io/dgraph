@@ -17,17 +17,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	"context"
+
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger/y"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -60,7 +61,7 @@ type node struct {
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
 	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
 
-	rc := &intern.RaftContext{
+	rc := &pb.RaftContext{
 		Addr:  myAddr,
 		Group: gid,
 		Id:    id,
@@ -105,7 +106,7 @@ var errInternalRetry = errors.New("Retry Raft proposal internally")
 
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
-func (n *node) proposeAndWait(ctx context.Context, proposal *intern.Proposal) error {
+func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")
 	}
@@ -224,7 +225,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		n.DeletePeer(cc.NodeID)
 	} else if len(cc.Context) > 0 {
-		var rc intern.RaftContext
+		var rc pb.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		n.Connect(rc.Id, rc.Addr)
 	}
@@ -254,7 +255,7 @@ func detectPendingTxns(attr string) error {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
+func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
 	tr := trace.New("Dgraph.Node", "ApplyMutations")
 	defer tr.Finish()
 
@@ -322,7 +323,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 			return posting.DeletePredicate(ctx, edge.Attr)
 		}
 		// Dont derive schema when doing deletion.
-		if edge.Op == intern.DirectedEdge_DEL {
+		if edge.Op == pb.DirectedEdge_DEL {
 			continue
 		}
 		if _, ok := schemaMap[edge.Attr]; !ok {
@@ -366,7 +367,7 @@ func (n *node) applyMutations(proposal *intern.Proposal, index uint64) error {
 	return nil
 }
 
-func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
+func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.
 		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
@@ -430,7 +431,7 @@ func (n *node) processApplyCh() {
 				n.elog.Printf("Found empty data at index: %d", e.Index)
 				n.Applied.Done(e.Index)
 			default:
-				proposal := &intern.Proposal{}
+				proposal := &pb.Proposal{}
 				if err := proposal.Unmarshal(e.Data); err != nil {
 					x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 				}
@@ -445,7 +446,7 @@ func (n *node) processApplyCh() {
 	}
 }
 
-func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
+func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
 	writer := x.TxnWriter{DB: pstore}
 	toDisk := func(start, commit uint64) {
@@ -509,7 +510,7 @@ func (n *node) leaderBlocking() (*conn.Pool, error) {
 	return pool, nil
 }
 
-func (n *node) Snapshot() (*intern.Snapshot, error) {
+func (n *node) Snapshot() (*pb.Snapshot, error) {
 	if n == nil || n.Store == nil {
 		return nil, conn.ErrNoNode
 	}
@@ -517,7 +518,7 @@ func (n *node) Snapshot() (*intern.Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := &intern.Snapshot{}
+	res := &pb.Snapshot{}
 	if err := res.Unmarshal(snap.Data); err != nil {
 		return nil, err
 	}
@@ -560,7 +561,7 @@ func (n *node) proposeSnapshot() error {
 	if err != nil || snap == nil {
 		return err
 	}
-	proposal := &intern.Proposal{
+	proposal := &pb.Proposal{
 		Snapshot: snap,
 	}
 	n.elog.Printf("Proposing snapshot: %+v\n", snap)
@@ -650,7 +651,7 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var snap intern.Snapshot
+				var snap pb.Snapshot
 				x.Check(snap.Unmarshal(rd.Snapshot.Data))
 				rc := snap.GetContext()
 				x.AssertTrue(rc.GetGroup() == n.gid)
@@ -724,12 +725,12 @@ func (n *node) Run() {
 
 var errConnection = errors.New("No connection exists")
 
-func (n *node) blockingAbort(req *intern.TxnTimestamps) error {
+func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 	pl := groups().Leader(0)
 	if pl == nil {
 		return errConnection
 	}
-	zc := intern.NewZeroClient(pl.Get())
+	zc := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -742,7 +743,7 @@ func (n *node) blockingAbort(req *intern.TxnTimestamps) error {
 	// Let's propose the txn updates received from Zero. This is important because there are edge
 	// cases where a txn status might have been missed by the group.
 	n.elog.Printf("Proposing abort txn delta: %+v\n", delta)
-	proposal := &intern.Proposal{Delta: delta}
+	proposal := &pb.Proposal{Delta: delta}
 	return n.proposeAndWait(n.ctx, proposal)
 }
 
@@ -758,7 +759,7 @@ func (n *node) abortOldTransactions() {
 		return
 	}
 	x.Printf("Found %d old transactions. Acting to abort them.\n", len(starts))
-	req := &intern.TxnTimestamps{Ts: starts}
+	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
 	x.Printf("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
@@ -786,7 +787,7 @@ func (n *node) abortOldTransactions() {
 //
 // At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
 // At i7, max commit ts = C1, therefore readTs = C1.
-func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
+func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
 	defer tr.Finish()
 
@@ -834,7 +835,7 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 		if entry.Type != raftpb.EntryNormal {
 			continue
 		}
-		var proposal intern.Proposal
+		var proposal pb.Proposal
 		if err := proposal.Unmarshal(entry.Data); err != nil {
 			tr.LazyPrintf("Error: %v", err)
 			tr.SetError()
@@ -874,7 +875,7 @@ func (n *node) calculateSnapshot(discardN int) (*intern.Snapshot, error) {
 		return nil, nil
 	}
 
-	snap := &intern.Snapshot{
+	snap := &pb.Snapshot{
 		Context: n.RaftContext,
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
@@ -890,7 +891,7 @@ func (n *node) joinPeers() error {
 	}
 
 	gconn := pl.Get()
-	c := intern.NewRaftClient(gconn)
+	c := pb.NewRaftClient(gconn)
 	x.Printf("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
 		return x.Errorf("Error while joining cluster: %+v\n", err)
@@ -907,7 +908,7 @@ func (n *node) isMember() (bool, error) {
 	}
 
 	gconn := pl.Get()
-	c := intern.NewRaftClient(gconn)
+	c := pb.NewRaftClient(gconn)
 	x.Printf("Calling IsPeer")
 	pr, err := c.IsPeer(n.ctx, n.RaftContext)
 	if err != nil {

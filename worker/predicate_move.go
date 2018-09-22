@@ -15,12 +15,12 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -33,7 +33,7 @@ var (
 )
 
 // size of kvs won't be too big, we would take care before proposing.
-func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
+func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 	// No new deletion/background cleanup would start after we start streaming tablet,
 	// so all the proposals for a particular tablet would atmost wait for deletion of
 	// single tablet.
@@ -78,7 +78,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if pl == nil {
 		return x.Errorf("Unable to find a connection for group: %d\n", gid)
 	}
-	c := intern.NewWorkerClient(pl.Get())
+	c := pb.NewWorkerClient(pl.Get())
 	stream, err := c.ReceivePredicate(ctx)
 	if err != nil {
 		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
@@ -87,7 +87,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
 	sl := streamLists{stream: stream, predicate: predicate, db: pstore}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
+	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -115,8 +115,8 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		if err != nil {
 			return err
 		}
-		kvs := &intern.KVS{}
-		kv := &intern.KV{}
+		kvs := &pb.KVS{}
+		kv := &pb.KV{}
 		kv.Key = schemaKey
 		kv.Val = val
 		kv.Version = 1
@@ -139,10 +139,10 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	return nil
 }
 
-func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
+func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	x.Println("Receiving predicate. Batching and proposing key values")
 	n := groups().Node
-	proposal := &intern.Proposal{}
+	proposal := &pb.Proposal{}
 	size := 0
 	var pk *x.ParsedKey
 
@@ -159,7 +159,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 			if pk == nil {
 				pk = x.Parse(kv.Key)
 				// Delete on all nodes.
-				p := &intern.Proposal{CleanPredicate: pk.Attr}
+				p := &pb.Proposal{CleanPredicate: pk.Attr}
 				x.Printf("Predicate being received: %v", pk.Attr)
 				err := groups().Node.proposeAndWait(ctx, p)
 				if err != nil {
@@ -182,9 +182,9 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 
 // Returns count which can be used to verify whether we have moved all keys
 // for a predicate or not.
-func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServer) error {
+func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) error {
 	// Values can be pretty big so having less buffer is safer.
-	kvs := make(chan *intern.KVS, 10)
+	kvs := make(chan *pb.KVS, 10)
 	che := make(chan error, 1)
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
@@ -230,7 +230,7 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 }
 
 func (w *grpcWorker) MovePredicate(ctx context.Context,
-	in *intern.MovePredicatePayload) (*api.Payload, error) {
+	in *pb.MovePredicatePayload) (*api.Payload, error) {
 	if groups().gid != in.SourceGroupId {
 		return &emptyPayload,
 			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
@@ -251,7 +251,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		in.SourceGroupId, in.DestGroupId)
 
 	// Ensures that all future mutations beyond this point are rejected.
-	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
+	if err := n.proposeAndWait(ctx, &pb.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
 	aborted := false

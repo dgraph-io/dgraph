@@ -15,17 +15,17 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type nameType struct {
 	name string
-	typ  *intern.SchemaUpdate
+	typ  *pb.SchemaUpdate
 }
 
-func checkSchema(t *testing.T, h map[string]*intern.SchemaUpdate, expected []nameType) {
+func checkSchema(t *testing.T, h map[string]*pb.SchemaUpdate, expected []nameType) {
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
@@ -45,25 +45,25 @@ name: string .
 func TestSchema(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaVal), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"name", &intern.SchemaUpdate{
+		{"name", &pb.SchemaUpdate{
 			Predicate: "name",
-			ValueType: intern.Posting_STRING,
+			ValueType: pb.Posting_STRING,
 		}},
-		{"_predicate_", &intern.SchemaUpdate{
-			ValueType: intern.Posting_STRING,
+		{"_predicate_", &pb.SchemaUpdate{
+			ValueType: pb.Posting_STRING,
 			List:      true,
 		}},
-		{"address", &intern.SchemaUpdate{
+		{"address", &pb.SchemaUpdate{
 			Predicate: "address",
-			ValueType: intern.Posting_STRING,
+			ValueType: pb.Posting_STRING,
 		}},
-		{"http://scalar.com/helloworld/", &intern.SchemaUpdate{
+		{"http://scalar.com/helloworld/", &pb.SchemaUpdate{
 			Predicate: "http://scalar.com/helloworld/",
-			ValueType: intern.Posting_STRING,
+			ValueType: pb.Posting_STRING,
 		}},
-		{"age", &intern.SchemaUpdate{
+		{"age", &pb.SchemaUpdate{
 			Predicate: "age",
-			ValueType: intern.Posting_INT,
+			ValueType: pb.Posting_INT,
 		}},
 	})
 
@@ -164,33 +164,33 @@ friend  : uid @reverse @count .
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"_predicate_", &intern.SchemaUpdate{
-			ValueType: intern.Posting_STRING,
+		{"_predicate_", &pb.SchemaUpdate{
+			ValueType: pb.Posting_STRING,
 			List:      true,
 		}},
-		{"name", &intern.SchemaUpdate{
+		{"name", &pb.SchemaUpdate{
 			Predicate: "name",
-			ValueType: intern.Posting_STRING,
+			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"exact"},
-			Directive: intern.SchemaUpdate_INDEX,
+			Directive: pb.SchemaUpdate_INDEX,
 			Count:     true,
 		}},
-		{"address", &intern.SchemaUpdate{
+		{"address", &pb.SchemaUpdate{
 			Predicate: "address",
-			ValueType: intern.Posting_STRING,
+			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"term"},
-			Directive: intern.SchemaUpdate_INDEX,
+			Directive: pb.SchemaUpdate_INDEX,
 		}},
-		{"age", &intern.SchemaUpdate{
+		{"age", &pb.SchemaUpdate{
 			Predicate: "age",
-			ValueType: intern.Posting_INT,
+			ValueType: pb.Posting_INT,
 			Tokenizer: []string{"int"},
-			Directive: intern.SchemaUpdate_INDEX,
+			Directive: pb.SchemaUpdate_INDEX,
 		}},
-		{"friend", &intern.SchemaUpdate{
-			ValueType: intern.Posting_UID,
+		{"friend", &pb.SchemaUpdate{
+			ValueType: pb.Posting_UID,
 			Predicate: "friend",
-			Directive: intern.SchemaUpdate_REVERSE,
+			Directive: pb.SchemaUpdate_REVERSE,
 			Count:     true,
 		}},
 	})
@@ -272,21 +272,21 @@ func TestParseScalarList(t *testing.T) {
 	`)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(schemas))
-	require.EqualValues(t, &intern.SchemaUpdate{
+	require.EqualValues(t, &pb.SchemaUpdate{
 		Predicate: "jobs",
 		ValueType: 9,
-		Directive: intern.SchemaUpdate_INDEX,
+		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"},
 		List:      true,
 	}, schemas[0])
 
-	require.EqualValues(t, &intern.SchemaUpdate{
+	require.EqualValues(t, &pb.SchemaUpdate{
 		Predicate: "occupations",
 		ValueType: 9,
 		List:      true,
 	}, schemas[1])
 
-	require.EqualValues(t, &intern.SchemaUpdate{
+	require.EqualValues(t, &pb.SchemaUpdate{
 		Predicate: "graduation",
 		ValueType: 5,
 		List:      true,

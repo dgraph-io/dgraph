@@ -21,13 +21,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
 )
 
 func getPosting() *List {
 	l := &List{
-		plist: &intern.PostingList{},
+		plist: &pb.PostingList{},
 	}
 	return l
 }
