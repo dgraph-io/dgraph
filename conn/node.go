@@ -63,7 +63,7 @@ type Node struct {
 }
 
 func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
-	first, err := store.FirstIndex()
+	snap, err := store.Snapshot()
 	x.Check(err)
 
 	n := &Node{
@@ -102,7 +102,11 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 			// In case this is a new Raft log, first would be 1, and therefore
 			// Applied would be zero, hence meeting the condition by the library
 			// that Applied should only be set during a restart.
-			Applied: first - 1,
+			//
+			// Update: Set the Applied to the latest snapshot, because it seems
+			// like somehow the first index can be out of sync with the latest
+			// snapshot.
+			Applied: snap.Metadata.Index,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full

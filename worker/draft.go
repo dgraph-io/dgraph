@@ -407,11 +407,20 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		}
 		n.elog.Printf("Creating snapshot: %+v", snap)
 		glog.Infof("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
-		data, err := snap.Marshal()
-		x.Check(err)
+
 		//	We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
-		return n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+
+		data, err := snap.Marshal()
+		x.Check(err)
+		for {
+			// We should never let CreateSnapshot have an error.
+			err := n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+			if err == nil {
+				return nil
+			}
+			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
+		}
 
 	} else {
 		x.Fatalf("Unknown proposal")
