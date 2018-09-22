@@ -23,7 +23,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -34,10 +34,10 @@ type groupi struct {
 	// TODO: Is this context being used?
 	ctx       context.Context
 	cancel    context.CancelFunc
-	state     *intern.MembershipState
+	state     *pb.MembershipState
 	Node      *node
 	gid       uint32
-	tablets   map[string]*intern.Tablet
+	tablets   map[string]*pb.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
 	closer    *y.Closer
@@ -83,9 +83,9 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	p := conn.Get().Connect(Config.ZeroAddr)
 
 	// Connect with dgraphzero and figure out what group we should belong to.
-	zc := intern.NewZeroClient(p.Get())
-	var connState *intern.ConnectionState
-	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
+	zc := pb.NewZeroClient(p.Get())
+	var connState *pb.ConnectionState
+	m := &pb.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 	delay := 50 * time.Millisecond
 	maxHalfDelay := 3 * time.Second
 	var err error
@@ -145,12 +145,12 @@ func (g *groupi) proposeInitialSchema() {
 	}
 
 	// Propose schema mutation.
-	var m intern.Mutations
+	var m pb.Mutations
 	// schema for _predicate_ is not changed once set.
 	m.StartTs = 1
-	m.Schema = append(m.Schema, &intern.SchemaUpdate{
+	m.Schema = append(m.Schema, &pb.SchemaUpdate{
 		Predicate: x.PredicateListAttr,
-		ValueType: intern.Posting_STRING,
+		ValueType: pb.Posting_STRING,
 		List:      true,
 	})
 
@@ -174,7 +174,7 @@ func (g *groupi) groupId() uint32 {
 
 // calculateTabletSizes iterates through badger and gets a size of the space occupied by each
 // predicate (including data and indexes). All data for a predicate forms a Tablet.
-func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
+func (g *groupi) calculateTabletSizes() map[string]*pb.Tablet {
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchValues = false
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
@@ -183,7 +183,7 @@ func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 	defer itr.Close()
 
 	gid := g.groupId()
-	tablets := make(map[string]*intern.Tablet)
+	tablets := make(map[string]*pb.Tablet)
 
 	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
@@ -208,7 +208,7 @@ func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 				}
 				continue
 			}
-			tablet = &intern.Tablet{GroupId: gid, Predicate: pk.Attr}
+			tablet = &pb.Tablet{GroupId: gid, Predicate: pk.Attr}
 			tablets[pk.Attr] = tablet
 		}
 		tablet.Space += item.EstimatedSize()
@@ -234,8 +234,8 @@ func UpdateMembershipState(ctx context.Context) error {
 		return x.Errorf("don't have the address of any dgraphzero server")
 	}
 
-	c := intern.NewZeroClient(p.Get())
-	state, err := c.Connect(ctx, &intern.Member{ClusterInfoOnly: true})
+	c := pb.NewZeroClient(p.Get())
+	state, err := c.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func UpdateMembershipState(ctx context.Context) error {
 	return nil
 }
 
-func (g *groupi) applyState(state *intern.MembershipState) {
+func (g *groupi) applyState(state *pb.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
@@ -270,7 +270,7 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 	}
 
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
-	g.tablets = make(map[string]*intern.Tablet)
+	g.tablets = make(map[string]*pb.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if Config.RaftId == member.Id {
@@ -330,7 +330,7 @@ func (g *groupi) ServesTablet(key string) bool {
 }
 
 // Do not modify the returned Tablet
-func (g *groupi) Tablet(key string) *intern.Tablet {
+func (g *groupi) Tablet(key string) *pb.Tablet {
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
 	tablet, ok := g.tablets[key]
@@ -345,9 +345,9 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 	if pl == nil {
 		return nil
 	}
-	zc := intern.NewZeroClient(pl.Get())
+	zc := pb.NewZeroClient(pl.Get())
 
-	tablet = &intern.Tablet{GroupId: g.groupId(), Predicate: key}
+	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		x.Printf("Error while ShouldServe grpc call %v", err)
@@ -401,7 +401,7 @@ func (g *groupi) AnyTwoServers(gid uint32) []string {
 	return res
 }
 
-func (g *groupi) members(gid uint32) map[uint64]*intern.Member {
+func (g *groupi) members(gid uint32) map[uint64]*pb.Member {
 	g.RLock()
 	defer g.RUnlock()
 
@@ -506,7 +506,7 @@ START:
 	}
 	x.Printf("Got address of a Zero server: %s", pl.Addr)
 
-	c := intern.NewZeroClient(pl.Get())
+	c := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := c.Update(ctx)
 	if err != nil {
@@ -555,16 +555,16 @@ OUTER:
 			// dgraphzero just adds to the map so check that no data is present for the tablet
 			// before we remove it to avoid the race condition where a tablet is added recently
 			// and mutation has not been persisted to disk.
-			var allTablets map[string]*intern.Tablet
+			var allTablets map[string]*pb.Tablet
 			if g.Node.AmLeader() {
 				prevTablets := tablets
 				tablets = g.calculateTabletSizes()
 				if prevTablets != nil {
-					allTablets = make(map[string]*intern.Tablet)
+					allTablets = make(map[string]*pb.Tablet)
 					g.RLock()
 					for attr := range g.tablets {
 						if tablets[attr] == nil && prevTablets[attr] == nil {
-							allTablets[attr] = &intern.Tablet{
+							allTablets[attr] = &pb.Tablet{
 								GroupId:   g.gid,
 								Predicate: attr,
 								Remove:    true,
@@ -670,18 +670,18 @@ func (g *groupi) cleanupTablets() {
 	}
 }
 
-func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
-	stream intern.Zero_UpdateClient) error {
+func (g *groupi) sendMembership(tablets map[string]*pb.Tablet,
+	stream pb.Zero_UpdateClient) error {
 	leader := g.Node.AmLeader()
-	member := &intern.Member{
+	member := &pb.Member{
 		Id:         Config.RaftId,
 		GroupId:    g.groupId(),
 		Addr:       Config.MyAddr,
 		Leader:     leader,
 		LastUpdate: uint64(time.Now().Unix()),
 	}
-	group := &intern.Group{
-		Members: make(map[uint64]*intern.Member),
+	group := &pb.Group{
+		Members: make(map[uint64]*pb.Member),
 	}
 	group.Members[member.Id] = member
 	if leader {
@@ -717,7 +717,7 @@ func (g *groupi) processOracleDeltaStream() {
 		// code base).
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		c := intern.NewZeroClient(pl.Get())
+		c := pb.NewZeroClient(pl.Get())
 		// The first entry send by Zero contains the entire state of transactions. Zero periodically
 		// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
 		// safe way to get the status of all the transactions.
@@ -729,7 +729,7 @@ func (g *groupi) processOracleDeltaStream() {
 			return
 		}
 
-		deltaCh := make(chan *intern.OracleDelta, 100)
+		deltaCh := make(chan *pb.OracleDelta, 100)
 		go func() {
 			// This would exit when either a Recv() returns error. Or, cancel() is called by
 			// something outside of this goroutine.
@@ -752,7 +752,7 @@ func (g *groupi) processOracleDeltaStream() {
 		}()
 
 		for {
-			var delta *intern.OracleDelta
+			var delta *pb.OracleDelta
 			var batch int
 			select {
 			case delta = <-deltaCh:
@@ -793,7 +793,7 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 			// Block forever trying to propose this.
 			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
-			g.Node.proposeAndWait(context.Background(), &intern.Proposal{Delta: delta})
+			g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
 		}
 	}
 

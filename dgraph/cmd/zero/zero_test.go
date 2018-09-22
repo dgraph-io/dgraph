@@ -11,14 +11,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRemoveNode(t *testing.T) {
 	server := &Server{
-		state: &intern.MembershipState{
-			Groups: map[uint32]*intern.Group{1: {Members: map[uint64]*intern.Member{}}},
+		state: &pb.MembershipState{
+			Groups: map[uint32]*pb.Group{1: {Members: map[uint64]*pb.Member{}}},
 		},
 	}
 	ctx := context.Background()

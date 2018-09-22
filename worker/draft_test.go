@@ -8,7 +8,7 @@ import (
 	pb "github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -23,16 +23,16 @@ func openBadger(dir string) (*badger.DB, error) {
 }
 
 func getEntryForMutation(index, startTs uint64) pb.Entry {
-	proposal := intern.Proposal{Mutations: &intern.Mutations{StartTs: startTs}}
+	proposal := pb.Proposal{Mutations: &pb.Mutations{StartTs: startTs}}
 	data, err := proposal.Marshal()
 	x.Check(err)
 	return pb.Entry{Index: index, Term: 1, Type: pb.EntryNormal, Data: data}
 }
 
 func getEntryForCommit(index, startTs, commitTs uint64) pb.Entry {
-	delta := &intern.OracleDelta{}
-	delta.Txns = append(delta.Txns, &intern.TxnStatus{StartTs: startTs, CommitTs: commitTs})
-	proposal := intern.Proposal{Delta: delta}
+	delta := &pb.OracleDelta{}
+	delta.Txns = append(delta.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commitTs})
+	proposal := pb.Proposal{Delta: delta}
 	data, err := proposal.Marshal()
 	x.Check(err)
 	return pb.Entry{Index: index, Term: 1, Type: pb.EntryNormal, Data: data}

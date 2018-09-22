@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -40,7 +40,7 @@ type XidMap struct {
 	shards    []shard
 	kv        *badger.DB
 	opt       Options
-	newRanges chan *intern.AssignedIds
+	newRanges chan *pb.AssignedIds
 
 	noMapMu sync.Mutex
 	noMap   block // block for allocating uids without an xid to uid mapping
@@ -67,7 +67,7 @@ type block struct {
 	start, end uint64
 }
 
-func (b *block) assign(ch <-chan *intern.AssignedIds) uint64 {
+func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 	if b.end == 0 || b.start > b.end {
 		newRange := <-ch
 		b.start, b.end = newRange.StartId, newRange.EndId
@@ -86,7 +86,7 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		shards:    make([]shard, opt.NumShards),
 		kv:        kv,
 		opt:       opt,
-		newRanges: make(chan *intern.AssignedIds),
+		newRanges: make(chan *pb.AssignedIds),
 	}
 	for i := range xm.shards {
 		xm.shards[i].elems = make(map[string]*list.Element)
@@ -94,13 +94,13 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		xm.shards[i].xm = xm
 	}
 	go func() {
-		zc := intern.NewZeroClient(zero)
+		zc := pb.NewZeroClient(zero)
 		const initBackoff = 10 * time.Millisecond
 		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := zc.AssignUids(ctx, &intern.Num{Val: 10000})
+			assigned, err := zc.AssignUids(ctx, &pb.Num{Val: 10000})
 			cancel()
 			if err == nil {
 				backoff = initBackoff

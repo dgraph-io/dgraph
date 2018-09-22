@@ -218,7 +218,7 @@ func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 }
 
 func setupServer() {
-	go worker.RunServer(bindall) // For intern.communication.
+	go worker.RunServer(bindall) // For pb.communication.
 
 	laddr := "localhost"
 	if bindall {

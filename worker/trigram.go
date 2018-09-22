@@ -14,7 +14,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -22,8 +22,8 @@ import (
 var regexTooWideErr = errors.New("Regular expression is too wide-ranging and can't be executed efficiently.")
 
 func uidsForRegex(attr string, arg funcArgs,
-	query *cindex.Query, intersect *intern.List) (*intern.List, error) {
-	var results *intern.List
+	query *cindex.Query, intersect *pb.List) (*pb.List, error) {
+	var results *pb.List
 	opts := posting.ListOptions{
 		ReadTs: arg.q.ReadTs,
 	}
@@ -31,7 +31,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		opts.Intersect = intersect
 	}
 
-	uidsForTrigram := func(trigram string) (*intern.List, error) {
+	uidsForTrigram := func(trigram string) (*pb.List, error) {
 		key := x.IndexKey(attr, trigram)
 		pl, err := posting.Get(key)
 		if err != nil {
@@ -74,7 +74,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		}
 	case cindex.QOr:
 		tok.EncodeRegexTokens(query.Trigram)
-		uidMatrix := make([]*intern.List, len(query.Trigram))
+		uidMatrix := make([]*pb.List, len(query.Trigram))
 		var err error
 		for i, t := range query.Trigram {
 			uidMatrix[i], err = uidsForTrigram(t)
@@ -91,7 +91,7 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			results = algo.MergeSorted([]*intern.List{results, subUids})
+			results = algo.MergeSorted([]*pb.List{results, subUids})
 		}
 	default:
 		return nil, regexTooWideErr

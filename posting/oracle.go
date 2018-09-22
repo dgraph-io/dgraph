@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -152,7 +152,7 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	}
 }
 
-func (o *oracle) ProcessDelta(delta *intern.OracleDelta) {
+func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	o.Lock()
 	defer o.Unlock()
 	for _, txn := range delta.Txns {

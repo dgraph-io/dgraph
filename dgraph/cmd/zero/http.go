@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 )
@@ -56,7 +56,7 @@ func (st *state) assignUids(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	num := &intern.Num{Val: uint64(val)}
+	num := &pb.Num{Val: uint64(val)}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ids, err := st.zero.AssignUids(ctx, num)

@@ -23,7 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 
@@ -68,7 +68,7 @@ func populateGraphExport(t *testing.T) {
 func initTestExport(t *testing.T, schemaStr string) {
 	schema.ParseBytes([]byte(schemaStr), 1)
 
-	val, err := (&intern.SchemaUpdate{ValueType: intern.Posting_UID}).Marshal()
+	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
@@ -78,7 +78,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	txn.Discard()
 
 	require.NoError(t, err)
-	val, err = (&intern.SchemaUpdate{ValueType: intern.Posting_UID}).Marshal()
+	val, err = (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
@@ -229,10 +229,10 @@ func TestToSchema(t *testing.T) {
 		{
 			skv: &skv{
 				attr: "Alice",
-				schema: &intern.SchemaUpdate{
+				schema: &pb.SchemaUpdate{
 					Predicate: "mother",
-					ValueType: intern.Posting_STRING,
-					Directive: intern.SchemaUpdate_REVERSE,
+					ValueType: pb.Posting_STRING,
+					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
 					Count:     true,
 					Upsert:    true,
@@ -244,10 +244,10 @@ func TestToSchema(t *testing.T) {
 		{
 			skv: &skv{
 				attr: "Alice:best",
-				schema: &intern.SchemaUpdate{
+				schema: &pb.SchemaUpdate{
 					Predicate: "mother",
-					ValueType: intern.Posting_STRING,
-					Directive: intern.SchemaUpdate_REVERSE,
+					ValueType: pb.Posting_STRING,
+					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
 					Count:     false,
 					Upsert:    false,
@@ -289,9 +289,9 @@ func TestToSchema(t *testing.T) {
 // 	benchItems := []kv{
 // 		{
 // 			prefix: "testString",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_STRING,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_STRING,
 // 					Value:   []byte("手機裡的眼淚"),
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
@@ -299,36 +299,36 @@ func TestToSchema(t *testing.T) {
 // 			},
 // 		},
 // 		{prefix: "testGeo",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_GEO,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_GEO,
 // 					Value:   geoData,
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
 // 			}},
 // 		{prefix: "testPassword",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_PASSWORD,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_PASSWORD,
 // 					Value:   []byte("test"),
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
 // 			}},
 // 		{prefix: "testInt",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_INT,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_INT,
 // 					Value:   byteInt,
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
 // 			}},
 // 		{prefix: "testUid",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_INT,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_INT,
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
