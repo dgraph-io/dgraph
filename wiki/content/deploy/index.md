@@ -1196,8 +1196,7 @@ The server option `--tls_client_auth` accepts different values that change the s
 | VERIFYIFGIVEN | Client certificate is verified if provided (default) |
 | REQUIREANDVERIFY | Always require a valid certificate (most secure) |
 
-The value _REQUIREANDVERIFY_ is the most secure, but also the most difficult to configure for remote
-clients.
+The value _REQUIREANDVERIFY_ is the most secure, but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.
 
 ## Cluster Checklist
 
