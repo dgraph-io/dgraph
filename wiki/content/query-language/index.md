@@ -2726,6 +2726,20 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 
 
+## shortest path with depth parameter
+
+This query lets you traverse a set of predicates (with filter, facets, etc.) until we reach the destination node with the shortest path with depth which is specified by the depth parameter.
+
+```
+{
+	shortest(from: 0x2, to: 0x5, depth:3, numpaths: 2) {
+		path @facets(weight)
+	}
+}
+```
+
+This query will return the shortest path between two nodes depending on the depth assigned to the depth parameter in the query. If there is no shortest path depending on the depth specified, it will return `Your query did not return any results`.
+
 ## Recurse Query
 
 `Recurse` queries let you traverse a set of predicates (with filter, facets, etc.) until we reach all leaf nodes or we reach the maximum depth which is specified by the `depth` parameter.
