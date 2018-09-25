@@ -1084,7 +1084,11 @@ $ dgraph cert ls
 
 ### File naming conventions
 
-To enable TLS you must specify the directory path to find certificates and keys. The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory; where the data files are found. The default dir path can be overriden using the `--tls_dir` option.
+To enable TLS you must specify the directory path to find certificates and keys. The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory; where the data files are found. The default dir path can be overridden using the `--dir` option.
+
+```sh
+$ dgraph cert --dir ~/mycerts
+```
 
 The following file naming conventions are used by Dgraph for proper TLS setup.
 
@@ -1113,7 +1117,7 @@ $ dgraph cert -n localhost,104.25.165.23,dgraph.io,2400:cb00:2048:1::6819:a417
 
 ### Certificate inspection
 
-The command `dgraph cert ls` lists all certificates and keys in the `--tls_dir` directory (default 'tls'), along with details to inspect and validate cert/key pairs.
+The command `dgraph cert ls` lists all certificates and keys in the `--dir` directory (default 'tls'), along with details to inspect and validate cert/key pairs.
 
 Example of command output:
 
@@ -1182,7 +1186,7 @@ Dgraph live loader can be configured with following options:
 $ dgraph cert -c live
 
 # Now, connect to server using TLS
-$ dgraph live --tls_dir tls -s starwars.schema
+$ dgraph live --tls_dir tls -s 21million.schema -r 21million.rdf.gz
 ```
 
 ### Client authentication
@@ -1196,7 +1200,7 @@ The server option `--tls_client_auth` accepts different values that change the s
 | VERIFYIFGIVEN | Client certificate is verified if provided (default) |
 | REQUIREANDVERIFY | Always require a valid certificate (most secure) |
 
-{{% notice "note" %}}The value _REQUIREANDVERIFY_ is the most secure, but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
+{{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
 ## Cluster Checklist
 
