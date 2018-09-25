@@ -1109,7 +1109,7 @@ $ dgraph cert -n localhost 104.25.165.23 dgraph.io 2400:cb00:2048:1::6819:a417
 
 {{% notice "tip" %}}You must delete the old node cert and key before you can generate a new pair.{{% /notice %}}
 
-{{% notice "tip" %}}When using host names for node certificates, including _localhost_, your clients must connect to the matching host name -- such as _localhost_ not 127.0.0.1. If you need to use IP addresses, then add them to the node certificate.{{% /notice %}}
+{{% notice "note" %}}When using host names for node certificates, including _localhost_, your clients must connect to the matching host name -- such as _localhost_ not 127.0.0.1. If you need to use IP addresses, then add them to the node certificate.{{% /notice %}}
 
 ### Certificate inspection
 
@@ -1196,7 +1196,7 @@ The server option `--tls_client_auth` accepts different values that change the s
 | VERIFYIFGIVEN | Client certificate is verified if provided (default) |
 | REQUIREANDVERIFY | Always require a valid certificate (most secure) |
 
-The value _REQUIREANDVERIFY_ is the most secure, but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.
+{{% notice "note" %}}The value _REQUIREANDVERIFY_ is the most secure, but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
 ## Cluster Checklist
 
