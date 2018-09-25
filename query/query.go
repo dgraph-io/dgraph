@@ -1634,7 +1634,8 @@ func (sg *SubGraph) replaceVarInFunc() error {
 
 func (sg *SubGraph) ApplyIneqFunc() error {
 	if sg.Params.uidToVal == nil {
-		x.Println("Expected a valid value map. But got empty.")
+		// Expected a valid value map. But got empty.
+		// Don't return error, return empty - issue #2610
 		return nil
 	}
 	var typ types.TypeID
