@@ -458,11 +458,12 @@ func ExportOverNetwork(ctx context.Context) error {
 		return err
 	}
 	readTs := ts.ReadOnly
+	glog.Infof("Got readonly ts from Zero: %d\n", readTs)
 	posting.Oracle().WaitForTs(ctx, readTs)
 
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
-	glog.Infof("Requesting export from groups: %v\n", gids)
+	glog.Infof("Requesting export for groups: %v\n", gids)
 
 	ch := make(chan *intern.ExportPayload, len(gids))
 	for _, gid := range gids {
