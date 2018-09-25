@@ -1164,14 +1164,14 @@ Following configuration options are available for the server:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_client_auth string` - TLS client authentication used to validate client connection.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
 
 ```sh
 # Default use for enabling TLS server (after generating certificates)
 $ dgraph server --tls_dir tls
 ```
 
-Dgraph loader can be configured with following options:
+Dgraph live loader can be configured with following options:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
@@ -1184,6 +1184,20 @@ $ dgraph cert -c live
 # Now, connect to server using TLS
 $ dgraph live --tls_dir tls -s starwars.schema
 ```
+
+### Client authentication
+
+The server option `--tls_client_auth` accepts different values that change the security policty of client certificate verification.
+
+| Value | Description |
+|-------|-------------|
+| REQUEST | Server accepts any certificate, invalid and unverified (least secure) |
+| REQUIREANY | Server expects any certificate, valid and unverified |
+| VERIFYIFGIVEN | Client certificate is verified if provided (default) |
+| REQUIREANDVERIFY | Always require a valid certificate (most secure) |
+
+The value _REQUIREANDVERIFY_ is the most secure, but also the most difficult to configure for remote
+clients.
 
 ## Cluster Checklist
 
