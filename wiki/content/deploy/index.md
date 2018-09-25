@@ -1101,10 +1101,10 @@ The Root CA certificate is used for verifying node and client certificates, if c
 
 For client authentication, each client must have their own certificate and key. These are then used to connect to the Dgraph node(s).
 
-The node certificate `node.crt` can support multiple node names using multiple host names and/or IP address. Just separate the names by a space when generating the certificate.
+The node certificate `node.crt` can support multiple node names using multiple host names and/or IP address. Just separate the names with commas when generating the certificate.
 
 ```sh
-$ dgraph cert -n localhost 104.25.165.23 dgraph.io 2400:cb00:2048:1::6819:a417
+$ dgraph cert -n localhost,104.25.165.23,dgraph.io,2400:cb00:2048:1::6819:a417
 ```
 
 {{% notice "tip" %}}You must delete the old node cert and key before you can generate a new pair.{{% /notice %}}
