@@ -1054,6 +1054,11 @@ You should not use the same `idx` as that of a node that was removed earlier.
 
 ## TLS configuration
 
+{{% notice "note" %}}
+This section refers to the `dgraph cert` command which will be part of a future release. For TLS configuration for the current release, see the previous [TLS configuration documentation](https://docs.dgraph.io/v1.0.7/deploy/#tls-configuration).
+{{% /notice %}}
+
+
 Connections between client and server can be secured with TLS. Password protected private keys are **not supported**.
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
