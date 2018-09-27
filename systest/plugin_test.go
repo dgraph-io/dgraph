@@ -30,10 +30,10 @@ func TestPlugins(t *testing.T) {
 
 	var soFiles []string
 	for i, src := range []string{
-		"./customtok/anagram/main.go",
-		"./customtok/cidr/main.go",
-		"./customtok/factor/main.go",
-		"./customtok/rune/main.go",
+		"./_customtok/anagram/main.go",
+		"./_customtok/cidr/main.go",
+		"./_customtok/factor/main.go",
+		"./_customtok/rune/main.go",
 	} {
 		so := strconv.Itoa(i) + ".so"
 		t.Logf("compiling plugin: src=%q so=%q", src, so)
