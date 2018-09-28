@@ -380,7 +380,7 @@ func run() error {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			log.Printf("Error while processing file %q: %s\n", err)
+			log.Printf("Error while processing file %q: %s\n", filesList[i], err)
 			return err
 		}
 	}
