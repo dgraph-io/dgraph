@@ -24,8 +24,6 @@ You can see the accompanying [video here](https://www.youtube.com/watch?v=QIIdSp
 
 Dgraph can be installed from the install scripts, or run via Docker.
 
-{{% notice "note" %}}These instructions will install the latest release version.  To instead install our nightly build see [these instructions](/deploy).{{% /notice %}}
-
 ### From Docker Image
 
 Pull the Dgraph Docker images [from here](https://hub.docker.com/r/dgraph/dgraph/). From a terminal:
