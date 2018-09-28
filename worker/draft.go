@@ -43,7 +43,7 @@ type node struct {
 	*conn.Node
 
 	// Fields which are never changed after init.
-	applyCh chan raftpb.Entry
+	applyCh chan []raftpb.Entry
 	ctx     context.Context
 	gid     uint32
 	closer  *y.Closer
@@ -73,7 +73,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		gid:  gid,
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
+		applyCh: make(chan []raftpb.Entry, 100),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:  y.NewCloser(2), // Matches CLOSER:1
 	}
@@ -407,11 +407,20 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 		}
 		n.elog.Printf("Creating snapshot: %+v", snap)
 		glog.Infof("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
-		data, err := snap.Marshal()
-		x.Check(err)
+
 		//	We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
-		return n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+
+		data, err := snap.Marshal()
+		x.Check(err)
+		for {
+			// We should never let CreateSnapshot have an error.
+			err := n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+			if err == nil {
+				return nil
+			}
+			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
+		}
 
 	} else {
 		x.Fatalf("Unknown proposal")
@@ -421,16 +430,27 @@ func (n *node) applyCommitted(proposal *intern.Proposal, index uint64) error {
 
 func (n *node) processApplyCh() {
 	defer n.closer.Done() // CLOSER:1
-	for e := range n.applyCh {
-		proposal := &intern.Proposal{}
-		if err := proposal.Unmarshal(e.Data); err != nil {
-			x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
-		}
+	for entries := range n.applyCh {
+		for _, e := range entries {
+			switch {
+			case e.Type == raftpb.EntryConfChange:
+				// Already handled in the main Run loop.
+			case len(e.Data) == 0:
+				n.elog.Printf("Found empty data at index: %d", e.Index)
+				n.Applied.Done(e.Index)
+			default:
+				proposal := &intern.Proposal{}
+				if err := proposal.Unmarshal(e.Data); err != nil {
+					x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
+				}
 
-		err := n.applyCommitted(proposal, e.Index)
-		n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v", proposal.Key, e.Index, err)
-		n.Proposals.Done(proposal.Key, err)
-		n.Applied.Done(e.Index)
+				err := n.applyCommitted(proposal, e.Index)
+				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
+					proposal.Key, e.Index, err)
+				n.Proposals.Done(proposal.Key, err)
+				n.Applied.Done(e.Index)
+			}
+		}
 	}
 }
 
@@ -443,7 +463,7 @@ func (n *node) commitOrAbort(pkey string, delta *intern.OracleDelta) error {
 			return
 		}
 		for err := txn.CommitToDisk(&writer, commit); err != nil; {
-			x.Printf("Error while applying txn status to disk (%d -> %d): %v",
+			glog.Warningf("Error while applying txn status to disk (%d -> %d): %v",
 				start, commit, err)
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -644,14 +664,19 @@ func (n *node) Run() {
 				rc := snap.GetContext()
 				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
-					// NOTE: Retrieving snapshot here is OK, after storing it above in WAL, because
-					// rc.Id != n.Id.
-					x.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
-					// It's ok to block tick while retrieving snapshot, since it's a follower
+					// We are getting a new snapshot from leader. We need to wait for the applyCh to
+					// finish applying the updates, otherwise, we'll end up overwriting the data
+					// from the new snapshot that we retrieved.
+					maxIndex := n.Applied.LastIndex()
+					glog.Infof("Waiting for applyCh to reach %d before taking snapshot\n", maxIndex)
+					n.Applied.WaitForMark(context.Background(), maxIndex)
+
+					// It's ok to block ticks while retrieving snapshot, since it's a follower.
+					glog.Infof("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
 					n.retryUntilSuccess(n.retrieveSnapshot, 100*time.Millisecond)
-					x.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
+					glog.Infof("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
-					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
+					glog.Infof("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
 			}
 			if tr != nil {
@@ -659,7 +684,7 @@ func (n *node) Run() {
 			}
 
 			// Now schedule or apply committed entries.
-			for idx, entry := range rd.CommittedEntries {
+			for _, entry := range rd.CommittedEntries {
 				// Need applied watermarks for schema mutation also for read linearazibility
 				// Applied watermarks needs to be emitted as soon as possible sequentially.
 				// If we emit Mark{4, false} and Mark{4, true} before emitting Mark{3, false}
@@ -673,28 +698,11 @@ func (n *node) Run() {
 					// Not present in proposal map.
 					n.Applied.Done(entry.Index)
 					groups().triggerMembershipSync()
-
-				} else if len(entry.Data) == 0 {
-					// TODO: Say something. Do something.
-					tr.LazyPrintf("Found empty data at index: %d", entry.Index)
-					tr.SetError()
-					n.Applied.Done(entry.Index)
-
-				} else {
-					// When applyCh fills up, this would automatically block.
-					// TODO: Instead of sending each entry, we should just send
-					// the whole array of CommittedEntries. It would avoid
-					// blocking this loop.
-					n.applyCh <- entry
-				}
-
-				// Move to debug log later.
-				// Sometimes after restart there are too many entries to replay, so log so that we
-				// know Run loop is replaying them.
-				if tr != nil && idx%5000 == 4999 {
-					tr.LazyPrintf("Handling committed entries. At idx: [%v]\n", idx)
 				}
 			}
+			// Send the whole lot to applyCh in one go, instead of sending entries one by one.
+			n.applyCh <- rd.CommittedEntries
+
 			if tr != nil {
 				tr.LazyPrintf("Handled %d committed entries.", len(rd.CommittedEntries))
 			}
@@ -931,9 +939,8 @@ func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
 
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
 func (n *node) InitAndStartNode() {
-	idx, restart, err := n.PastLife()
+	_, restart, err := n.PastLife()
 	x.Check(err)
-	n.Applied.SetDoneUntil(idx)
 
 	if _, hasPeer := groups().MyPeer(); !restart && hasPeer {
 		// The node has other peers, it might have crashed after joining the cluster and before

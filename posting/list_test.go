@@ -876,7 +876,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 }
 
-var ps *badger.ManagedDB
+var ps *badger.DB
 
 func TestMain(m *testing.M) {
 	x.Init(true)

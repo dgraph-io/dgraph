@@ -467,7 +467,7 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 	return nil
 }
 
-func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) {
+func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) error {
 	db := vlog.kv
 	var result []*Entry
 	var count, pointers uint64
@@ -498,7 +498,7 @@ func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) {
 	if err != nil {
 		tr.LazyPrintf("Got error while iterating move keys: %v", err)
 		tr.SetError()
-		return
+		return err
 	}
 	tr.LazyPrintf("Num total move keys: %d. Num pointers: %d", count, pointers)
 	tr.LazyPrintf("Number of invalid move keys found: %d", len(result))
@@ -516,12 +516,12 @@ func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) {
 			}
 			tr.LazyPrintf("Error while doing batchSet: %v", err)
 			tr.SetError()
-			return
+			return err
 		}
 		i += batchSize
 	}
 	tr.LazyPrintf("Move keys deletion done.")
-	return
+	return nil
 }
 
 func (vlog *valueLog) incrIteratorCount() {
@@ -583,7 +583,7 @@ type valueLog struct {
 	numActiveIterators int32
 
 	kv                *DB
-	maxFid            uint32
+	maxFid            uint32 // accessed via atomics.
 	writableLogOffset uint32
 	numEntriesWritten uint32
 	opt               Options
@@ -715,7 +715,8 @@ func (vlog *valueLog) Close() error {
 			err = munmapErr
 		}
 
-		if !vlog.opt.ReadOnly && id == vlog.maxFid {
+		maxFid := atomic.LoadUint32(&vlog.maxFid)
+		if !vlog.opt.ReadOnly && id == maxFid {
 			// truncate writable log file to correct offset.
 			if truncErr := f.fd.Truncate(
 				int64(vlog.writableLogOffset)); truncErr != nil && err == nil {
@@ -755,6 +756,7 @@ func (vlog *valueLog) Replay(ptr valuePointer, fn logEntry) error {
 	fid := ptr.Fid
 	offset := ptr.Offset + ptr.Len
 	vlog.elog.Printf("Seeking at value pointer: %+v\n", ptr)
+	log.Printf("Replaying from value pointer: %+v\n", ptr)
 
 	fids := vlog.sortedFids()
 
@@ -767,7 +769,10 @@ func (vlog *valueLog) Replay(ptr valuePointer, fn logEntry) error {
 			of = 0
 		}
 		f := vlog.filesMap[id]
+		log.Printf("Iterating file id: %d", id)
+		now := time.Now()
 		err := vlog.iterate(f, of, fn)
+		log.Printf("Iteration took: %s\n", time.Since(now))
 		if err != nil {
 			return errors.Wrapf(err, "Unable to replay value log: %q", f.path)
 		}
@@ -809,7 +814,8 @@ func (vlog *valueLog) sync() error {
 		vlog.filesLock.RUnlock()
 		return nil
 	}
-	curlf := vlog.filesMap[vlog.maxFid]
+	maxFid := atomic.LoadUint32(&vlog.maxFid)
+	curlf := vlog.filesMap[maxFid]
 	curlf.lock.RLock()
 	vlog.filesLock.RUnlock()
 
@@ -831,7 +837,8 @@ func (vlog *valueLog) writableOffset() uint32 {
 // write is thread-unsafe by design and should not be called concurrently.
 func (vlog *valueLog) write(reqs []*request) error {
 	vlog.filesLock.RLock()
-	curlf := vlog.filesMap[vlog.maxFid]
+	maxFid := atomic.LoadUint32(&vlog.maxFid)
+	curlf := vlog.filesMap[maxFid]
 	vlog.filesLock.RUnlock()
 
 	toDisk := func() error {
@@ -857,7 +864,7 @@ func (vlog *valueLog) write(reqs []*request) error {
 			}
 
 			newid := atomic.AddUint32(&vlog.maxFid, 1)
-			y.AssertTruef(newid <= math.MaxUint32, "newid will overflow uint32: %v", newid)
+			y.AssertTruef(newid > 0, "newid has overflown uint32: %v", newid)
 			newlf, err := vlog.createVlogFile(newid)
 			if err != nil {
 				return err
@@ -925,7 +932,8 @@ func (vlog *valueLog) getFileRLocked(fid uint32) (*logFile, error) {
 // TODO: Make this read private.
 func (vlog *valueLog) Read(vp valuePointer, s *y.Slice) ([]byte, func(), error) {
 	// Check for valid offset if we are reading to writable log.
-	if vp.Fid == vlog.maxFid && vp.Offset >= vlog.writableOffset() {
+	maxFid := atomic.LoadUint32(&vlog.maxFid)
+	if vp.Fid == maxFid && vp.Offset >= vlog.writableOffset() {
 		return nil, nil, errors.Errorf(
 			"Invalid value pointer offset: %d greater than current offset: %d",
 			vp.Offset, vlog.writableOffset())
@@ -1211,8 +1219,7 @@ func (vlog *valueLog) runGC(discardRatio float64, head valuePointer) error {
 			tried[lf.fid] = true
 			err = vlog.doRunGC(lf, discardRatio, tr)
 			if err == nil {
-				vlog.deleteMoveKeysFor(lf.fid, tr)
-				return nil
+				return vlog.deleteMoveKeysFor(lf.fid, tr)
 			}
 		}
 		return err

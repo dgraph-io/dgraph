@@ -177,6 +177,7 @@ func run() {
 	kvOpt.Truncate = true
 	kvOpt.Dir = opts.w
 	kvOpt.ValueDir = opts.w
+	kvOpt.ValueLogFileSize = 64 << 20
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()

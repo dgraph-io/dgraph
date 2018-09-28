@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+
+// Style guide for Protocol Buffer 3.
+// Use CamelCase (with an initial capital) for message names – for example,
+// SongServerRequest. Use underscore_separated_names for field names – for
+// example, song_name.
+
 syntax = "proto3";
 
 package intern;
@@ -389,8 +395,8 @@ service Zero {
 	rpc Update (stream Group)          returns (stream MembershipState) {}
 	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)           returns (Tablet) {}
-	rpc AssignUids (Num)               returns (api.AssignedIds) {}
-	rpc Timestamps (Num)               returns (api.AssignedIds) {}
+	rpc AssignUids (Num)               returns (AssignedIds) {}
+	rpc Timestamps (Num)               returns (AssignedIds) {}
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
 	rpc TryAbort (TxnTimestamps)       returns (OracleDelta) {}
 }
@@ -411,6 +417,15 @@ service Worker {
 
 message Num {
 	uint64 val = 1;
+	bool read_only = 2;
+}
+
+message AssignedIds {
+	uint64 startId = 1;
+	uint64 endId = 2;
+
+	// The following is used for read only transactions.
+	uint64 read_only = 5;
 }
 
 message SnapshotMeta {

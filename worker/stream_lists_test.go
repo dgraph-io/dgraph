@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func openManaged(dir string) (*badger.ManagedDB, error) {
+func openManaged(dir string) (*badger.DB, error) {
 	opt := badger.DefaultOptions
 	opt.Dir = dir
 	opt.ValueDir = dir

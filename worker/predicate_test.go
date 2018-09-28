@@ -24,7 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func checkShard(ps *badger.ManagedDB) (int, []byte) {
+func checkShard(ps *badger.DB) (int, []byte) {
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
@@ -84,7 +84,7 @@ func writePLs(t *testing.T, pred string, startIdx int, count int, vid uint64) {
 	}
 }
 
-func deletePLs(t *testing.T, pred string, startIdx int, count int, ps *badger.ManagedDB) {
+func deletePLs(t *testing.T, pred string, startIdx int, count int, ps *badger.DB) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i+startIdx))
 		err := ps.Update(func(txn *badger.Txn) error {
@@ -94,7 +94,7 @@ func deletePLs(t *testing.T, pred string, startIdx int, count int, ps *badger.Ma
 	}
 }
 
-func writeToBadger(t *testing.T, pred string, startIdx int, count int, ps *badger.ManagedDB) {
+func writeToBadger(t *testing.T, pred string, startIdx int, count int, ps *badger.DB) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i+startIdx))
 		pl := new(intern.PostingList)

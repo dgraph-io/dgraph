@@ -25,6 +25,7 @@ const (
 
 type progress struct {
 	rdfCount        int64
+	errCount        int64
 	mapEdgeCount    int64
 	reduceEdgeCount int64
 	reduceKeyCount  int64
@@ -70,10 +71,12 @@ func (p *progress) reportOnce() {
 	case nothing:
 	case mapPhase:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
+		errCount := atomic.LoadInt64(&p.errCount)
 		elapsed := time.Since(p.start)
-		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
+		fmt.Printf("MAP %s rdf_count:%s err_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
 			x.FixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
+			niceFloat(float64(errCount)),
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
 			niceFloat(float64(mapEdgeCount)),
 			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),

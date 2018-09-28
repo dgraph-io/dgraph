@@ -63,6 +63,9 @@ type Node struct {
 }
 
 func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
+	snap, err := store.Snapshot()
+	x.Check(err)
+
 	n := &Node{
 		Id:     rc.Id,
 		MyAddr: rc.Addr,
@@ -92,6 +95,18 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 			// increasing the term, if the node has a good chance of becoming
 			// the leader.
 			PreVote: true,
+
+			// We can explicitly set Applied to the first index in the Raft log,
+			// so it does not derive it separately, thus avoiding a crash when
+			// the Applied is set to below snapshot index by Raft.
+			// In case this is a new Raft log, first would be 1, and therefore
+			// Applied would be zero, hence meeting the condition by the library
+			// that Applied should only be set during a restart.
+			//
+			// Update: Set the Applied to the latest snapshot, because it seems
+			// like somehow the first index can be out of sync with the latest
+			// snapshot.
+			Applied: snap.Metadata.Index,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
@@ -104,6 +119,8 @@ func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
 		requestCh:   make(chan linReadReq),
 	}
 	n.Applied.Init()
+	// This should match up to the Applied index set above.
+	n.Applied.SetDoneUntil(n.Cfg.Applied)
 	return n
 }
 
@@ -439,7 +456,7 @@ func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 }
 
 type linReadReq struct {
-	// A one-shot chan which we send a raft index upon
+	// A one-shot chan which we send a raft index upon.
 	indexCh chan<- uint64
 }
 

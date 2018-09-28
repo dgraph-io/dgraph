@@ -474,8 +474,8 @@ func (txn *Txn) Discard() {
 // If error is nil, the transaction is successfully committed. In case of a non-nil error, the LSM
 // tree won't be updated, so there's no need for any rollback.
 func (txn *Txn) Commit(callback func(error)) error {
-	if txn.commitTs == 0 && txn.db.opt.managedTxns {
-		return ErrManagedTxn
+	if txn.commitTs == 0 && txn.db.opt.ManagedTxns {
+		panic("Commit cannot be called with ManagedTxns=true. Use CommitAt.")
 	}
 	if txn.discarded {
 		return ErrDiscardedTxn
@@ -577,11 +577,14 @@ func (db *DB) NewTransaction(update bool) *Txn {
 
 // View executes a function creating and managing a read-only transaction for the user. Error
 // returned by the function is relayed by the View method.
+// If View is used with managed transactions, it would assume a read timestamp of MaxUint64.
 func (db *DB) View(fn func(txn *Txn) error) error {
-	if db.opt.managedTxns {
-		return ErrManagedTxn
+	var txn *Txn
+	if db.opt.ManagedTxns {
+		txn = db.NewTransactionAt(math.MaxUint64, false)
+	} else {
+		txn = db.NewTransaction(false)
 	}
-	txn := db.NewTransaction(false)
 	defer txn.Discard()
 
 	return fn(txn)
@@ -589,9 +592,10 @@ func (db *DB) View(fn func(txn *Txn) error) error {
 
 // Update executes a function, creating and managing a read-write transaction
 // for the user. Error returned by the function is relayed by the Update method.
+// Update cannot be used with managed transactions.
 func (db *DB) Update(fn func(txn *Txn) error) error {
-	if db.opt.managedTxns {
-		return ErrManagedTxn
+	if db.opt.ManagedTxns {
+		panic("Update can only be used with ManagedTxns=false.")
 	}
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
