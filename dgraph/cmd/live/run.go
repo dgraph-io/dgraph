@@ -66,7 +66,9 @@ func init() {
 		Short: "Run Dgraph live loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Live.Conf).Stop()
-			run()
+			if err := run(); err != nil {
+				os.Exit(1)
+			}
 		},
 	}
 	Live.EnvPrefix = "DGRAPH_LIVE"
@@ -296,7 +298,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	return l
 }
 
-func run() {
+func run() error {
 	opt = options{
 		files:               Live.Conf.GetString("rdfs"),
 		schemaFile:          Live.Conf.GetString("schema"),
@@ -347,19 +349,19 @@ func run() {
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
 			if err == context.Canceled {
-				log.Println("Interrupted while processing schema file")
-			} else {
-				log.Println(err)
+				log.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
+				return nil
 			}
-			return
+			log.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
+			return err
 		}
-		x.Printf("Processed schema file")
+		x.Printf("Processed schema file %q\n", opt.schemaFile)
 	}
 
 	filesList := fileList(opt.files)
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		os.Exit(0)
+		return nil
 	}
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
@@ -378,7 +380,8 @@ func run() {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			log.Fatal("While processing file ", err)
+			log.Printf("Error while processing file %q: %s\n", filesList[i], err)
+			return err
 		}
 	}
 
@@ -398,10 +401,10 @@ func run() {
 	// Lets print an empty line, otherwise Interrupted or Number of Mutations overwrites the
 	// previous printed line.
 	fmt.Printf("%100s\r", "")
-
 	fmt.Printf("Number of TXs run         : %d\n", c.TxnsDone)
 	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
-
 	fmt.Printf("RDFs processed per second : %d\n", rate)
+
+	return nil
 }
