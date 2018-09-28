@@ -1754,7 +1754,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			// We've consumed `'@facets' '(' <facetItem> ',' <facetItem>`, so this is definitely
 			// not a filter.  Return an error.
 			return res, false, x.Errorf(
-				"Expected ',' or ')' in facet list", item.Val)
+				"Expected ',' or ')' in facet list: %s", item.Val)
 		}
 	}
 }
@@ -2508,7 +2508,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isExpandFunc(valLower) {
 				if varName != "" {
-					return x.Errorf("expand() cannot be used with a variable", val)
+					return x.Errorf("expand() cannot be used with a variable: %s", val)
 				}
 				if alias != "" {
 					return x.Errorf("expand() cannot have an alias")

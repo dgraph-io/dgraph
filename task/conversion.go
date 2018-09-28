@@ -19,14 +19,14 @@ var (
 )
 
 func FromInt(val int) *intern.TaskValue {
-	bs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bs, uint32(val))
+	bs := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bs, uint64(val))
 	return &intern.TaskValue{Val: []byte(bs), ValType: intern.Posting_INT}
 }
 
-func ToInt(val *intern.TaskValue) int32 {
-	result := binary.LittleEndian.Uint32(val.Val)
-	return int32(result)
+func ToInt(val *intern.TaskValue) int64 {
+	result := binary.LittleEndian.Uint64(val.Val)
+	return int64(result)
 }
 
 func FromBool(val bool) *intern.TaskValue {
