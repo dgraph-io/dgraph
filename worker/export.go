@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
@@ -30,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"golang.org/x/net/trace"
 )
 
 const numExportRoutines = 100
@@ -62,7 +62,7 @@ var rdfTypeMap = map[types.TypeID]string{
 func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 	l, err := posting.GetNoStore(item.key)
 	if err != nil {
-		x.Printf("Error while retrieving list for key %X. Error: %v\n", item.key, err)
+		glog.Errorf("Error while retrieving list for key %X. Error: %v\n", item.key, err)
 		return
 	}
 	err = l.Iterate(readTs, 0, func(p *pb.Posting) bool {
@@ -126,7 +126,7 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 	if err != nil {
 		// TODO: Throw error back to the user.
 		// Ensure that we are not missing errCheck at other places.
-		x.Printf("Error while exporting :%v\n", err)
+		glog.Errorf("Error while exporting: %v\n", err)
 	}
 }
 
@@ -195,6 +195,7 @@ func writeToFile(fpath string, ch chan []byte) error {
 }
 
 // Export creates a export of data by exporting it as an RDF gzip.
+// TODO: The logic here is rusty. Potentially move this to use orchestrate.
 func export(bdir string, readTs uint64) error {
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)
@@ -212,7 +213,7 @@ func export(bdir string, readTs uint64) error {
 	if err != nil {
 		return err
 	}
-	x.Printf("Exporting to: %v, schema at %v\n", fpath, fspath)
+	glog.Infof("Exporting to: %v, schema at %v\n", fpath, fspath)
 	chb := make(chan []byte, 1000)
 	errChan := make(chan error, 2)
 	go func() {
@@ -287,6 +288,9 @@ func export(bdir string, readTs uint64) error {
 	prefix.Grow(100)
 	var debugCount int
 	for it.Rewind(); it.Valid(); debugCount++ {
+		if debugCount%10000 == 0 && glog.V(2) {
+			glog.Infof("Exporting count: %d\n", debugCount)
+		}
 		item := it.Item()
 		key := item.Key()
 		pk := x.Parse(key)
@@ -372,19 +376,16 @@ func handleExportForGroupOverNetwork(ctx context.Context, in *pb.ExportPayload) 
 	if pl == nil {
 		// Unable to find any connection to any of these servers. This should be exceedingly rare.
 		// But probably not worthy of crashing the server. We can just skip the export.
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Unable to find a server to export group: %d", in.GroupId)
-		}
+		glog.Warningf("Unable to find leader of group: %d\n", in.GroupId)
 		in.Status = pb.ExportPayload_FAILED
 		return in
 	}
 
+	glog.Infof("Sending export request to group: %d, addr: %s\n", in.GroupId, pl.Addr)
 	c := pb.NewWorkerClient(pl.Get())
 	nrep, err := c.Export(ctx, in)
 	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
-		}
+		glog.Errorf("Export error received from group: %d. Error: %v\n", in.GroupId, err)
 		in.Status = pb.ExportPayload_FAILED
 		return in
 	}
@@ -394,26 +395,18 @@ func handleExportForGroupOverNetwork(ctx context.Context, in *pb.ExportPayload) 
 func handleExportForGroup(ctx context.Context, in *pb.ExportPayload) *pb.ExportPayload {
 	n := groups().Node
 	if in.GroupId != groups().groupId() || !n.AmLeader() {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("I am not leader of group %d.", in.GroupId)
-		}
+		glog.Warningf("Rejecting export request because I'm not leader of group: %d\n", in.GroupId)
 		in.Status = pb.ExportPayload_FAILED
 		return in
 	}
 	n.applyAllMarks(n.ctx)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Leader of group: %d. Running export.", in.GroupId)
-	}
+	glog.Infof("I'm leader of group: %d. Running export at timestamp: %d.", in.GroupId, in.ReadTs)
 	if err := export(Config.ExportPath, in.ReadTs); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
-		}
+		glog.Errorf("Error while running export: %v", err)
 		in.Status = pb.ExportPayload_FAILED
 		return in
 	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Export done for group: %d.", in.GroupId)
-	}
+	glog.Infof("Export DONE for group: %d", in.GroupId)
 	in.Status = pb.ExportPayload_SUCCESS
 	return in
 }
@@ -422,17 +415,21 @@ func handleExportForGroup(ctx context.Context, in *pb.ExportPayload) *pb.ExportP
 // If a server receives request to export a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
 func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportPayload) (*pb.ExportPayload, error) {
+	glog.Infof("Received export request via Grpc: %+v\n", req)
 	reply := &pb.ExportPayload{ReqId: req.ReqId, GroupId: req.GroupId}
 	reply.Status = pb.ExportPayload_FAILED // Set by default.
 
 	if ctx.Err() != nil {
+		glog.Errorf("Context error during export: %v\n", ctx.Err())
 		return reply, ctx.Err()
 	}
 	if !w.addIfNotPresent(req.ReqId) {
+		glog.Warningf("Duplicate export request: %d\n", req.ReqId)
 		reply.Status = pb.ExportPayload_DUPLICATE
 		return reply, nil
 	}
 
+	glog.Infof("Issuing export request...")
 	chb := make(chan *pb.ExportPayload, 1)
 	go func() {
 		chb <- handleExportForGroup(ctx, req)
@@ -440,8 +437,10 @@ func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportPayload) (*pb.Exp
 
 	select {
 	case rep := <-chb:
+		glog.Infof("Export response: %+v\n", rep)
 		return rep, nil
 	case <-ctx.Done():
+		glog.Errorf("Context error during export: %v\n", ctx.Err())
 		return reply, ctx.Err()
 	}
 }
@@ -449,21 +448,22 @@ func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportPayload) (*pb.Exp
 func ExportOverNetwork(ctx context.Context) error {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Request rejected %v", err)
-		}
+		glog.Errorf("Rejecting export request due to health check error: %v\n", err)
 		return err
 	}
 	// Get ReadTs from zero and wait for stream to catch up.
-	ts, err := Timestamps(ctx, &pb.Num{Val: 1})
+	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
+		glog.Errorf("Unable to retrieve readonly ts for export: %v\n", err)
 		return err
 	}
-	readTs := ts.StartId
+	readTs := ts.ReadOnly
+	glog.Infof("Got readonly ts from Zero: %d\n", readTs)
 	posting.Oracle().WaitForTs(ctx, readTs)
 
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
+	glog.Infof("Requesting export for groups: %v\n", gids)
 
 	ch := make(chan *pb.ExportPayload, len(gids))
 	for _, gid := range gids {
@@ -480,17 +480,12 @@ func ExportOverNetwork(ctx context.Context) error {
 	for i := 0; i < len(gids); i++ {
 		bp := <-ch
 		if bp.Status != pb.ExportPayload_SUCCESS {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Export status: %v for group id: %d", bp.Status, bp.GroupId)
-			}
-			return fmt.Errorf("Export status: %v for group id: %d", bp.Status, bp.GroupId)
+			err := fmt.Errorf("Export status: %v for group id: %d", bp.Status, bp.GroupId)
+			glog.Errorln(err)
+			return err
 		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Export successful for group: %v", bp.GroupId)
-		}
+		glog.Infof("Export OK for group: %d\n", bp.GroupId)
 	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("DONE export")
-	}
+	glog.Infoln("Export DONE")
 	return nil
 }

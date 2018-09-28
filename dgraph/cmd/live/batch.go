@@ -19,6 +19,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo"
@@ -116,13 +117,21 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
+// handleError inspects errors and terminates if the errors are non-recoverable.
+// A gRPC code is Internal if there is an unforseen issue that needs attention.
+// A gRPC code is Unavailable when we can't possibly reach the remote server, most likely the
+// server expects TLS and our certificate does not match or the host name is not verified. When
+// the node certificate is created the name much match the request host name. e.g., localhost not
+// 127.0.0.1.
 func handleError(err error) {
-	errString := grpc.ErrorDesc(err)
-	// Irrecoverable
-	if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
-		x.Fatalf(errString)
-	} else if errString != y.ErrAborted.Error() && errString != y.ErrConflict.Error() {
-		x.Printf("Error while mutating %v\n", errString)
+	s := status.Convert(err)
+	switch {
+	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
+		x.Fatalf(s.Message())
+	case strings.Contains(s.Message(), "x509"):
+		x.Fatalf(s.Message())
+	case err != y.ErrAborted && err != y.ErrConflict:
+		x.Printf("Error while mutating %v\n", s.Message())
 	}
 }
 

@@ -39,6 +39,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	tlsLiveCert = "client.live.crt"
+	tlsLiveKey  = "client.live.key"
+)
+
 type options struct {
 	files               string
 	schemaFile          string
@@ -61,7 +66,9 @@ func init() {
 		Short: "Run Dgraph live loader",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Live.Conf).Stop()
-			run()
+			if err := run(); err != nil {
+				os.Exit(1)
+			}
 		},
 	}
 	Live.EnvPrefix = "DGRAPH_LIVE"
@@ -81,9 +88,7 @@ func init() {
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
-	flag.Bool("tls_insecure", false, "Skip certificate validation (insecure)")
-	flag.String("tls_ca_certs", "", "CA Certs file path.")
-	flag.String("tls_server_name", "", "Server name.")
+	flag.String("tls_server_name", "", "Used to verify the server hostname.")
 }
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -228,7 +233,8 @@ func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
 	}
 
 	tlsConf.ConfigType = x.TLSClientConfig
-	tlsConf.CertRequired = false
+	tlsConf.Cert = filepath.Join(tlsConf.CertDir, tlsLiveCert)
+	tlsConf.Key = filepath.Join(tlsConf.CertDir, tlsLiveKey)
 	tlsCfg, _, err := x.GenerateTLSConfig(tlsConf)
 	if err != nil {
 		return nil, err
@@ -292,7 +298,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	return l
 }
 
-func run() {
+func run() error {
 	opt = options{
 		files:               Live.Conf.GetString("rdfs"),
 		schemaFile:          Live.Conf.GetString("schema"),
@@ -304,8 +310,6 @@ func run() {
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf)
-	tlsConf.Insecure = Live.Conf.GetBool("tls_insecure")
-	tlsConf.RootCACerts = Live.Conf.GetString("tls_ca_certs")
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
 	go http.ListenAndServe("localhost:6060", nil)
@@ -345,19 +349,19 @@ func run() {
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
 			if err == context.Canceled {
-				log.Println("Interrupted while processing schema file")
-			} else {
-				log.Println(err)
+				log.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
+				return nil
 			}
-			return
+			log.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
+			return err
 		}
-		x.Printf("Processed schema file")
+		x.Printf("Processed schema file %q\n", opt.schemaFile)
 	}
 
 	filesList := fileList(opt.files)
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		os.Exit(0)
+		return nil
 	}
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
@@ -376,7 +380,8 @@ func run() {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			log.Fatal("While processing file ", err)
+			log.Printf("Error while processing file %q: %s\n", filesList[i], err)
+			return err
 		}
 	}
 
@@ -396,10 +401,10 @@ func run() {
 	// Lets print an empty line, otherwise Interrupted or Number of Mutations overwrites the
 	// previous printed line.
 	fmt.Printf("%100s\r", "")
-
 	fmt.Printf("Number of TXs run         : %d\n", c.TxnsDone)
 	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
-
 	fmt.Printf("RDFs processed per second : %d\n", rate)
+
+	return nil
 }

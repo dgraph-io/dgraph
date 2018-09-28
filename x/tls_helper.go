@@ -10,9 +10,9 @@ package x
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -28,43 +28,40 @@ const (
 	TLSServerConfig
 )
 
+const (
+	tlsRootCert = "ca.crt"
+	tlsNodeCert = "node.crt"
+	tlsNodeKey  = "node.key"
+)
+
 // TLSHelperConfig define params used to create a tls.Config
 type TLSHelperConfig struct {
-	ConfigType             tlsConfigType
-	CertRequired           bool
-	Cert                   string
-	Key                    string
-	KeyPassphrase          string
-	ServerName             string
-	Insecure               bool
-	RootCACerts            string
-	UseSystemRootCACerts   bool
-	ClientAuth             string
-	ClientCACerts          string
-	UseSystemClientCACerts bool
-	MinVersion             string
-	MaxVersion             string
+	ConfigType       tlsConfigType
+	CertDir          string
+	CertRequired     bool
+	Cert             string
+	Key              string
+	ServerName       string
+	RootCACert       string
+	ClientAuth       string
+	UseSystemCACerts bool
 }
 
 func RegisterTLSFlags(flag *pflag.FlagSet) {
-	// TODO: Why is the naming of the flags inconsistent here?
-	flag.Bool("tls_on", false, "Use TLS connections with clients.")
-	flag.String("tls_cert", "", "Certificate file path.")
-	flag.String("tls_cert_key", "", "Certificate key file path.")
-	flag.String("tls_cert_key_passphrase", "", "Certificate key passphrase.")
-	flag.Bool("tls_use_system_ca", false, "Include System CA into CA Certs.")
-	flag.String("tls_min_version", "TLS11", "TLS min version.")
-	flag.String("tls_max_version", "TLS12", "TLS max version.")
+	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 }
 
 func LoadTLSConfig(conf *TLSHelperConfig, v *viper.Viper) {
-	conf.CertRequired = v.GetBool("tls_on")
-	conf.Cert = v.GetString("tls_cert")
-	conf.Key = v.GetString("tls_cert_key")
-	conf.KeyPassphrase = v.GetString("tls_cert_key_passphrase")
-	conf.UseSystemClientCACerts = v.GetBool("tls_use_system_ca")
-	conf.MinVersion = v.GetString("tls_min_version")
-	conf.MaxVersion = v.GetString("tls_max_version")
+	conf.CertDir = v.GetString("tls_dir")
+	if conf.CertDir != "" {
+		conf.CertRequired = true
+		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
+		conf.Cert = path.Join(conf.CertDir, tlsNodeCert)
+		conf.Key = path.Join(conf.CertDir, tlsNodeKey)
+		conf.ClientAuth = v.GetString("tls_client_auth")
+	}
+	conf.UseSystemCACerts = v.GetBool("tls_use_system_ca")
 }
 
 func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error) {
@@ -91,85 +88,15 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 	return pool, nil
 }
 
-func parseCertificate(required bool, certPath string, certKeyPath string, certKeyPass string) (*tls.Certificate, error) {
-	if len(certKeyPath) > 0 || len(certPath) > 0 || required {
-		// Load key
-		keyFile, err := ioutil.ReadFile(certKeyPath)
-		if err != nil {
-			return nil, err
-		}
-
-		var certKey []byte
-		if block, _ := pem.Decode(keyFile); block != nil {
-			if x509.IsEncryptedPEMBlock(block) {
-				decryptKey, err := x509.DecryptPEMBlock(block, []byte(certKeyPass))
-				if err != nil {
-					return nil, err
-				}
-
-				privKey, err := x509.ParsePKCS1PrivateKey(decryptKey)
-				if err != nil {
-					return nil, err
-				}
-
-				certKey = pem.EncodeToMemory(&pem.Block{
-					Type:  "RSA PRIVATE KEY",
-					Bytes: x509.MarshalPKCS1PrivateKey(privKey),
-				})
-			} else {
-				certKey = pem.EncodeToMemory(block)
-			}
-		} else {
-			return nil, fmt.Errorf("Invalid Cert Key")
-		}
-
-		// Load cert
-		certFile, err := ioutil.ReadFile(certPath)
-		if err != nil {
-			return nil, err
-		}
-
-		// Load certificate, pair cert/key
-		certificate, err := tls.X509KeyPair(certFile, certKey)
-		if err != nil {
-			return nil, fmt.Errorf("Error reading certificate {cert: '%s', key: '%s'}\n%s", certPath, certKeyPath, err)
-		}
-
-		return &certificate, nil
+func parseCertificate(required bool, certFile, keyFile string) (*tls.Certificate, error) {
+	if !required {
+		return nil, nil
 	}
-	return nil, nil
-}
-
-func setupVersion(cfg *tls.Config, minVersion string, maxVersion string) error {
-	// Configure TLS version
-	tlsVersion := map[string]uint16{
-		"TLS11": tls.VersionTLS11,
-		"TLS12": tls.VersionTLS12,
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
 	}
-
-	if len(minVersion) > 0 {
-		if val, has := tlsVersion[strings.ToUpper(minVersion)]; has {
-			cfg.MinVersion = val
-		} else {
-			return fmt.Errorf("Invalid min_version '%s'. Valid values [TLS11, TLS12]", minVersion)
-		}
-	} else {
-		cfg.MinVersion = tls.VersionTLS11
-	}
-
-	if len(maxVersion) > 0 {
-		if val, has := tlsVersion[strings.ToUpper(maxVersion)]; has && val >= cfg.MinVersion {
-			cfg.MaxVersion = val
-		} else {
-			if has {
-				return fmt.Errorf("Cannot use '%s' as max_version, it's lower than '%s'", maxVersion, minVersion)
-			}
-			return fmt.Errorf("Invalid max_version '%s'. Valid values [TLS11, TLS12]", maxVersion)
-		}
-	} else {
-		cfg.MaxVersion = tls.VersionTLS12
-	}
-	return nil
+	return &cert, nil
 }
 
 func setupClientAuth(authType string) (tls.ClientAuthType, error) {
@@ -199,20 +126,27 @@ func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig
 	tlsCfg = new(tls.Config)
 	wrapper.config = tlsCfg
 
-	cert, err := parseCertificate(config.CertRequired, config.Cert, config.Key, config.KeyPassphrase)
+	cert, err := parseCertificate(config.CertRequired, config.Cert, config.Key)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if cert != nil {
+		tlsCfg.Certificates = []tls.Certificate{*cert}
+		pool, err := generateCertPool(config.RootCACert, config.UseSystemCACerts)
+		if err != nil {
+			return nil, nil, err
+		}
 		switch config.ConfigType {
 		case TLSClientConfig:
-			tlsCfg.Certificates = []tls.Certificate{*cert}
-			tlsCfg.BuildNameToCertificate()
+			tlsCfg.RootCAs = pool
+
 		case TLSServerConfig:
 			wrapper.cert = &wrapperCert{cert: cert}
 			tlsCfg.GetCertificate = wrapper.getCertificate
 			tlsCfg.VerifyPeerCertificate = wrapper.verifyPeerCertificate
+			tlsCfg.ClientCAs = pool
+			wrapper.clientCAPool = &wrapperCAPool{pool: pool}
 		}
 	}
 
@@ -240,31 +174,8 @@ func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig
 		tlsCfg.ClientAuth = auth
 	}
 
-	// Configure Root CAs
-	if len(config.RootCACerts) > 0 || config.UseSystemRootCACerts {
-		pool, err := generateCertPool(config.RootCACerts, config.UseSystemRootCACerts)
-		if err != nil {
-			return nil, nil, err
-		}
-		tlsCfg.RootCAs = pool
-	}
-
-	// Configure Client CAs
-	if len(config.ClientCACerts) > 0 || config.UseSystemClientCACerts {
-		pool, err := generateCertPool(config.ClientCACerts, config.UseSystemClientCACerts)
-		if err != nil {
-			return nil, nil, err
-		}
-		tlsCfg.ClientCAs = x509.NewCertPool()
-		wrapper.clientCAPool = &wrapperCAPool{pool: pool}
-	}
-
-	err = setupVersion(tlsCfg, config.MinVersion, config.MaxVersion)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tlsCfg.InsecureSkipVerify = config.Insecure
+	tlsCfg.MinVersion = tls.VersionTLS11
+	tlsCfg.MaxVersion = tls.VersionTLS12
 	tlsCfg.ServerName = config.ServerName
 
 	if config.ConfigType == TLSClientConfig {
@@ -351,7 +262,7 @@ func (c *wrapperTLSConfig) reloadConfig() {
 	defer c.mutex.Unlock()
 
 	// Loading new certificate
-	cert, err := parseCertificate(c.helperConfig.CertRequired, c.helperConfig.Cert, c.helperConfig.Key, c.helperConfig.KeyPassphrase)
+	cert, err := parseCertificate(c.helperConfig.CertRequired, c.helperConfig.Cert, c.helperConfig.Key)
 	if err != nil {
 		Printf("Error reloading certificate. %s\nUsing current certificate\n", err.Error())
 	} else if cert != nil {
@@ -363,8 +274,8 @@ func (c *wrapperTLSConfig) reloadConfig() {
 	}
 
 	// Configure Client CAs
-	if len(c.helperConfig.ClientCACerts) > 0 || c.helperConfig.UseSystemClientCACerts {
-		pool, err := generateCertPool(c.helperConfig.ClientCACerts, c.helperConfig.UseSystemClientCACerts)
+	if len(c.helperConfig.RootCACert) > 0 || c.helperConfig.UseSystemCACerts {
+		pool, err := generateCertPool(c.helperConfig.RootCACert, c.helperConfig.UseSystemCACerts)
 		if err != nil {
 			Printf("Error reloading CAs. %s\nUsing current Client CAs\n", err.Error())
 		} else {
