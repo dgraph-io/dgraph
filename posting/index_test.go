@@ -103,10 +103,12 @@ func TestIndexingInvalidLang(t *testing.T) {
 func TestIndexingAliasedLang(t *testing.T) {
 	schema.ParseBytes([]byte("name:string @index(fulltext) @lang ."), 1)
 
-	// there is no tokenizer for "xx" language
-	_, err := indexTokens("name", "es", types.Val{types.StringID, []byte("error")})
+	// es-es and es-419 are aliased to es
+	_, err := indexTokens("name", "es", types.Val{types.StringID, []byte("base")})
 	require.NoError(t, err)
-	_, err = indexTokens("name", "es-es", types.Val{types.StringID, []byte("error")})
+	_, err = indexTokens("name", "es-es", types.Val{types.StringID, []byte("alias")})
+	require.NoError(t, err)
+	_, err = indexTokens("name", "es-419", types.Val{types.StringID, []byte("alias")})
 	require.NoError(t, err)
 }
 
