@@ -53,14 +53,15 @@ func initFullTextTokenizers() {
 		for _, cc := range countryCodes(lang) {
 			defineStemmer(cc, lang)
 			defineStopWordsList(cc, lang)
-			defineAnalyzer(cc, lang)
+			defineAnalyzer(cc)
 			registerTokenizer(&FullTextTokenizer{Lang: cc})
 		}
 	}
 
 	for _, lang := range [...]string{"chinese", "japanese", "korean"} {
-		defineCJKAnalyzer(lang)
-		registerTokenizer(&FullTextTokenizer{Lang: countryCode(lang)})
+		cc := countryCode(lang)
+		defineCJKAnalyzer(cc, lang)
+		registerTokenizer(&FullTextTokenizer{Lang: cc})
 	}
 
 	// Default full text tokenizer, with Porter stemmer (it works with English only).
@@ -120,13 +121,14 @@ func defineDefaultFullTextAnalyzer() {
 			lowercase.Name,
 			normalizerName,
 			stopWordsListName("en"),
-			porter.Name},
+			porter.Name,
+		},
 	})
 	x.Check(err)
 }
 
 // full text search analyzer - does language-specific stop-words removal and stemming
-func defineAnalyzer(cc, lang string) {
+func defineAnalyzer(cc string) {
 	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(cc), map[string]interface{}{
 		"type":      custom.Name,
 		"tokenizer": unicode.Name,
@@ -143,9 +145,8 @@ func defineAnalyzer(cc, lang string) {
 // Full text search analyzer - does Chinese/Japanese/Korean style bigram
 // tokenization. It's language unaware (so doesn't do stemming or stop
 // words), but works OK in some contexts.
-func defineCJKAnalyzer(lang string) {
-	ln := countryCode(lang)
-	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(ln), map[string]interface{}{
+func defineCJKAnalyzer(cc, lang string) {
+	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(cc), map[string]interface{}{
 		"type":      custom.Name,
 		"tokenizer": unicode.Name,
 		"token_filters": []string{
