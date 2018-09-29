@@ -54,6 +54,7 @@ func run() {
 
 	x.AssertTruef(len(opts.Dir) > 0, "No posting dir specified.")
 	fmt.Printf("Opening DB: %s\n", opts.Dir)
+
 	db, err := badger.OpenManaged(opts)
 	x.Check(err)
 	defer db.Close()

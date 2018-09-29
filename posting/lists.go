@@ -193,14 +193,14 @@ func updateMemoryMetrics(lc *y.Closer) {
 }
 
 var (
-	pstore *badger.ManagedDB
+	pstore *badger.DB
 	lcache *listCache
 	btree  *BTree
 	closer *y.Closer
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.ManagedDB) {
+func Init(ps *badger.DB) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
 	btree = newBTree(2)

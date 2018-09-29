@@ -10,7 +10,6 @@ package edgraph
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -45,15 +44,14 @@ type ServerState struct {
 	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
 	ShutdownCh chan struct{} // channel to signal shutdown.
 
-	Pstore   *badger.ManagedDB
+	Pstore   *badger.DB
 	WALstore *badger.DB
 
 	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
 	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
 
 	mu     sync.Mutex
-	needTs []chan uint64
-	notify chan struct{}
+	needTs chan tsReq
 }
 
 // TODO(tzdybal) - remove global
@@ -64,14 +62,14 @@ func InitServerState() {
 
 	State.FinishCh = make(chan struct{})
 	State.ShutdownCh = make(chan struct{})
-	State.notify = make(chan struct{}, 1)
+	State.needTs = make(chan tsReq, 100)
 
 	State.initStorage()
 
 	go State.fillTimestampRequests()
 }
 
-func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
+func (s *ServerState) runVlogGC(store *badger.DB) {
 	// Get initial size on start.
 	_, lastVlogSize := store.Size()
 	const GB = int64(1 << 30)
@@ -99,43 +97,14 @@ func (s *ServerState) runVlogGC(store *badger.ManagedDB) {
 	}
 }
 
-func (s *ServerState) initStorage() {
-	// Write Ahead Log directory
-	x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.LSMOnlyOptions
-	kvOpt.SyncWrites = true
-	kvOpt.Truncate = true
-	kvOpt.Dir = Config.WALDir
-	kvOpt.ValueDir = Config.WALDir
-	kvOpt.TableLoadingMode = options.MemoryMap
-
-	var err error
-	s.WALstore, err = badger.Open(kvOpt)
-	x.Checkf(err, "Error while creating badger KV WAL store")
-
-	// Postings directory
-	// All the writes to posting store should be synchronous. We use batched writers
-	// for posting lists, so the cost of sync writes is amortized.
-	x.Check(os.MkdirAll(Config.PostingDir, 0700))
-	x.Printf("Setting Badger option: %s", Config.BadgerOptions)
-	var opt badger.Options
-	switch Config.BadgerOptions {
-	case "ssd":
-		opt = badger.DefaultOptions
-	case "hdd":
-		opt = badger.LSMOnlyOptions
-	default:
-		x.Fatalf("Invalid Badger options")
-	}
+func setBadgerOptions(opt badger.Options, dir string) badger.Options {
 	opt.SyncWrites = true
 	opt.Truncate = true
-	opt.Dir = Config.PostingDir
-	opt.ValueDir = Config.PostingDir
-	opt.NumVersionsToKeep = math.MaxInt32
+	opt.Dir = dir
+	opt.ValueDir = dir
 
-	x.Printf("Setting Badger table load option: %s", Config.BadgerTables)
+	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
-	case "none": // Use default based on BadgerOptions.
 	case "mmap":
 		opt.TableLoadingMode = options.MemoryMap
 	case "ram":
@@ -146,9 +115,8 @@ func (s *ServerState) initStorage() {
 		x.Fatalf("Invalid Badger Tables options")
 	}
 
-	x.Printf("Setting Badger value log load option: %s", Config.BadgerVlog)
+	glog.Infof("Setting Badger value log load option: %s", Config.BadgerVlog)
 	switch Config.BadgerVlog {
-	case "none": // Use default based on BadgerOptions.
 	case "mmap":
 		opt.ValueLogLoadingMode = options.MemoryMap
 	case "disk":
@@ -156,16 +124,41 @@ func (s *ServerState) initStorage() {
 	default:
 		x.Fatalf("Invalid Badger Value log options")
 	}
+	return opt
+}
 
-	x.Printf("Opening postings Badger DB with options: %+v\n", opt)
-	s.Pstore, err = badger.OpenManaged(opt)
-	x.Checkf(err, "Error while creating badger KV posting store")
+func (s *ServerState) initStorage() {
+	var err error
+	{
+		// Write Ahead Log directory
+		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
+		opt := badger.LSMOnlyOptions
+		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
+		opt = setBadgerOptions(opt, Config.WALDir)
+
+		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
+		s.WALstore, err = badger.Open(opt)
+		x.Checkf(err, "Error while creating badger KV WAL store")
+	}
+	{
+		// Postings directory
+		// All the writes to posting store should be synchronous. We use batched writers
+		// for posting lists, so the cost of sync writes is amortized.
+		x.Check(os.MkdirAll(Config.PostingDir, 0700))
+		opt := badger.DefaultOptions
+		opt.ValueThreshold = 1 << 10 // 1KB
+		opt.NumVersionsToKeep = math.MaxInt32
+		opt = setBadgerOptions(opt, Config.PostingDir)
+
+		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
+		s.Pstore, err = badger.OpenManaged(opt)
+		x.Checkf(err, "Error while creating badger KV posting store")
+	}
+
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
 	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
 	go s.runVlogGC(s.Pstore)
-
-	wrapper := &badger.ManagedDB{DB: s.WALstore}
-	go s.runVlogGC(wrapper)
+	go s.runVlogGC(s.WALstore)
 }
 
 func (s *ServerState) Dispose() error {
@@ -183,58 +176,76 @@ func (s *ServerState) Dispose() error {
 // Server implements protos.DgraphServer
 type Server struct{}
 
-// TODO(pawan) - Remove this logic from client after client doesn't have to fetch ts
-// for Commit API.
 func (s *ServerState) fillTimestampRequests() {
-	var chs []chan uint64
 	const (
 		initDelay = 10 * time.Millisecond
 		maxDelay  = 10 * time.Second
 	)
 	delay := initDelay
-	for range s.notify {
-	RETRY:
-		s.mu.Lock()
-		chs = append(chs, s.needTs...)
-		s.needTs = s.needTs[:0]
-		s.mu.Unlock()
 
-		if len(chs) == 0 {
-			continue
+	var reqs []tsReq
+	for {
+		req := <-s.needTs
+	slurpLoop:
+		for {
+			reqs = append(reqs, req)
+			select {
+			case req = <-s.needTs:
+			default:
+				break slurpLoop
+			}
 		}
-		num := &intern.Num{Val: uint64(len(chs))}
+
+		// Generate the request.
+		num := &intern.Num{}
+		for _, r := range reqs {
+			if r.readOnly {
+				num.ReadOnly = true
+			} else {
+				num.Val += 1
+			}
+		}
+
+		// Execute the request with infinite retries.
+	retry:
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		ts, err := worker.Timestamps(ctx, num)
 		cancel()
 		if err != nil {
-			log.Printf("Error while retrieving timestamps: %v. Will retry...\n", err)
+			glog.Warning("Error while retrieving timestamps: %v with delay: %v."+
+				" Will retry...\n", err, delay)
 			time.Sleep(delay)
 			delay *= 2
 			if delay > maxDelay {
 				delay = maxDelay
 			}
-			goto RETRY
+			goto retry
 		}
 		delay = initDelay
-		x.AssertTrue(ts.EndId-ts.StartId+1 == uint64(len(chs)))
-		for i, ch := range chs {
-			ch <- ts.StartId + uint64(i)
+		var offset uint64
+		for _, req := range reqs {
+			if req.readOnly {
+				req.ch <- ts.ReadOnly
+			} else {
+				req.ch <- ts.StartId + offset
+				offset++
+			}
 		}
-		chs = chs[:0]
+		x.AssertTrue(ts.StartId == 0 || ts.StartId+offset-1 == ts.EndId)
+		reqs = reqs[:0]
 	}
 }
 
-func (s *ServerState) getTimestamp() uint64 {
-	ch := make(chan uint64)
-	s.mu.Lock()
-	s.needTs = append(s.needTs, ch)
-	s.mu.Unlock()
+type tsReq struct {
+	readOnly bool
+	// A one-shot chan which we can send a txn timestamp upon.
+	ch chan uint64
+}
 
-	select {
-	case s.notify <- struct{}{}:
-	default:
-	}
-	return <-ch
+func (s *ServerState) getTimestamp(readOnly bool) uint64 {
+	tr := tsReq{readOnly: readOnly, ch: make(chan uint64)}
+	s.needTs <- tr
+	return <-tr.ch
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
@@ -262,7 +273,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
-	m := &intern.Mutations{StartTs: State.getTimestamp()}
+	m := &intern.Mutations{StartTs: State.getTimestamp(false)}
 	if op.DropAll {
 		m.DropAll = true
 		_, err := query.ApplyMutations(ctx, m)
@@ -308,7 +319,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		return nil, x.Errorf("No mutations allowed.")
 	}
 	if mu.StartTs == 0 {
-		mu.StartTs = State.getTimestamp()
+		mu.StartTs = State.getTimestamp(false)
 	}
 	emptyMutation :=
 		len(mu.GetSetJson()) == 0 && len(mu.GetDeleteJson()) == 0 &&
@@ -441,7 +452,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	var l query.Latency
 	l.Start = time.Now()
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
+		tr.LazyPrintf("Query request received: %v", req)
 	}
 
 	parsedReq, err := gql.Parse(gql.Request{
@@ -453,7 +464,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}
 
 	if req.StartTs == 0 {
-		req.StartTs = State.getTimestamp()
+		req.StartTs = State.getTimestamp(req.ReadOnly)
 	}
 	resp.Txn = &api.TxnContext{
 		StartTs: req.StartTs,

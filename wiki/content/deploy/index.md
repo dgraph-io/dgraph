@@ -46,20 +46,6 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 dgraph
 ```
 
-#### Nightly
-
-Nightly builds from Dgraph master branch at https://github.com/dgraph-io/dgraph are available from https://get.dgraph.io.  To install run:
-
-```sh
-curl https://get.dgraph.io -sSf | bash -s nightly
-```
-
-The Docker version is available as _master_.  Pull and run with:
-
-```sh
-docker pull dgraph/dgraph:master
-```
-
 #### Building from Source
 
 {{% notice "note" %}}
@@ -311,10 +297,6 @@ Notice the use of -o for server2 to override the default ports for server2.
 docker run -it -p 8000:8000 dgraph/dgraph:latest dgraph-ratel
 ```
 
-{{% notice "note" %}}
-You can also use the `:master` tag when running docker image to get the nightly build. Though, nightly is thoroughly tested and could have unseen bugs.
-{{% /notice %}}
-
 ### Run using Docker Compose (On single AWS instance)
 
 We will use [Docker Machine](https://docs.docker.com/machine/overview/). It is a tool that lets you install Docker Engine on virtual machines and easily deploy applications.
@@ -412,7 +394,7 @@ You can look at the logs using `docker-compose logs`.
 
 ### Using Docker Swarm
 
-#### Cluster setup using Docker Swarm
+#### Cluster Setup Using Docker Swarm
 
 {{% notice "note" %}}These instructions are for running Dgraph Server without TLS config.
 Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
@@ -911,12 +893,12 @@ Stop the cluster. If you used `kops` you can run the following command.
 kops delete cluster ${NAME} --yes
 ```
 
-### Replicated Cluster
+### HA Cluster Setup Using Kubernetes
 
-In this setup, we are going to deploy 1 Zero node and 3 Server nodes. We start Zero with `--replicas
-3` flag, so all data would be replicated on each of the 3 Server nodes.
+This setup allows you to run 3 Dgraph Servers and 3 Zero Servers. We start Zero with `--replicas
+3` flag, so all data would be replicated on 3 Servers and form 1 server group.
 
-{{% notice "note" %}} Ideally you should have atleast three worker nodes as part of your Kubernetes
+{{% notice "note" %}} Ideally you should have at least three worker nodes as part of your Kubernetes
 cluster so that each Dgraph Server runs on a separate node.{{% /notice %}}
 
 * Check the nodes that are part of the Kubernetes cluster.
@@ -934,16 +916,16 @@ ip-172-20-59-116.us-west-2.compute.internal   Ready     node      4m        v1.8
 ip-172-20-61-88.us-west-2.compute.internal    Ready     node      5m        v1.8.4
 ```
 
-Once your kubernetes cluster is up, you can use [dgraph-multi.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-multi.yaml) to start the cluster.
+Once your Kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha.yaml) to start the cluster.
 
 * From your machine, run the following command to start the cluster.
 
 ```sh
-kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-multi.yaml
+kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha.yaml
 ```
 
 Output:
-```
+```sh
 service "dgraph-zero-public" created
 service "dgraph-server-public" created
 service "dgraph-server-0-http-public" created
@@ -967,8 +949,10 @@ NAME                   READY     STATUS    RESTARTS   AGE
 dgraph-ratel-<pod-id>  1/1       Running   0          9s
 dgraph-server-0        1/1       Running   0          2m
 dgraph-server-1        1/1       Running   0          2m
-dgraph-server-2        1/1       Running   0          1m
+dgraph-server-2        1/1       Running   0          2m
 dgraph-zero-0          1/1       Running   0          2m
+dgraph-zero-1          1/1       Running   0          2m
+dgraph-zero-2          1/1       Running   0          2m
 
 ```
 
@@ -1003,39 +987,6 @@ Stop the cluster. If you used `kops` you can run the following command.
 ```sh
 kops delete cluster ${NAME} --yes
 ```
-
-### HA Cluster Setup using Kubernetes
-
-This setup allows you to run 15 Dgraph Servers and 3 Zero Servers. The instructions are similar to
-[replicated cluster]({{< relref "#replicated-cluster">}}) setup. We start Zero with `--replicas
-5` flag, so all data would be replicated on 15 Servers and forms 3 server groups to distribute predicates.
-
-{{% notice "note" %}} Ideally you should have atleast three worker nodes as part of your Kubernetes
-cluster so that each Dgraph Server runs on a separate node.{{% /notice %}}
-
-Once your kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha.yaml) to start the cluster.
-
-* From your machine, run the following command to start the cluster.
-
-```sh
-kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha.yaml
-```
-
-Output:
-```sh
-service "dgraph-zero-public" created
-service "dgraph-server-public" created
-service "dgraph-server-0-http-public" created
-service "dgraph-ratel-public" created
-service "dgraph-zero" created
-service "dgraph-server" created
-statefulset "dgraph-zero" created
-statefulset "dgraph-server" created
-deployment "dgraph-ratel" created
-```
-
-After this you can follow other steps from [Replicated Cluster]({{< relref "#replicated-cluster">}}) to verify
-that your setup is working as expected.
 
 ## More about Dgraph
 
@@ -1084,76 +1035,159 @@ You should not use the same `idx` as that of a node that was removed earlier.
 
 
 ## TLS configuration
-Connections between client and server can be secured with TLS.
-Both encrypted (password protected) and unencrypted private keys are supported.
+
+{{% notice "note" %}}
+This section refers to the `dgraph cert` command which will be part of a future release. For TLS configuration for the current release, see the previous [TLS configuration documentation](https://docs.dgraph.io/v1.0.7/deploy/#tls-configuration).
+{{% /notice %}}
+
+
+Connections between client and server can be secured with TLS. Password protected private keys are **not supported**.
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
+### Self-signed certificates
+
+The `dgraph cert` program creates and manages self-signed certificates using a generated Dgraph Root CA. The _cert_ command simplifies certificate management for you.
+
+```sh
+# To see the available flags.
+$ dgraph cert --help
+
+# Create Dgraph Root CA, used to sign all other certificates.
+$ dgraph cert
+
+# Create node certificate (needed for Dgraph live loader using TLS)
+$ dgraph cert -n live
+
+# Create client certificate
+$ dgraph cert -c dgraphuser
+
+# Combine all in one command
+$ dgraph cert -n live -c dgraphuser
+
+# List all your certificates and keys
+$ dgraph cert ls
+```
+
+### File naming conventions
+
+To enable TLS you must specify the directory path to find certificates and keys. The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory; where the data files are found. The default dir path can be overridden using the `--dir` option.
+
+```sh
+$ dgraph cert --dir ~/mycerts
+```
+
+The following file naming conventions are used by Dgraph for proper TLS setup.
+
+| File name | Description | Use |
+|-----------|-------------|-------|
+| ca.crt | Dgraph Root CA certificate | Verify all certificates |
+| ca.key | Dgraph CA private key | Validate CA certificate |
+| node.crt | Dgraph node certificate | Shared by all nodes for accepting TLS connections |
+| node.key | Dgraph node private key | Validate node certificate |
+| client._name_.crt | Dgraph client certificate | Authenticate a client _name_ |
+| client._name_.key | Dgraph client private key | Validate _name_ client certificate |
+
+The Root CA certificate is used for verifying node and client certificates, if changed you must regenerate all certificates.
+
+For client authentication, each client must have their own certificate and key. These are then used to connect to the Dgraph node(s).
+
+The node certificate `node.crt` can support multiple node names using multiple host names and/or IP address. Just separate the names with commas when generating the certificate.
+
+```sh
+$ dgraph cert -n localhost,104.25.165.23,dgraph.io,2400:cb00:2048:1::6819:a417
+```
+
+{{% notice "tip" %}}You must delete the old node cert and key before you can generate a new pair.{{% /notice %}}
+
+{{% notice "note" %}}When using host names for node certificates, including _localhost_, your clients must connect to the matching host name -- such as _localhost_ not 127.0.0.1. If you need to use IP addresses, then add them to the node certificate.{{% /notice %}}
+
+### Certificate inspection
+
+The command `dgraph cert ls` lists all certificates and keys in the `--dir` directory (default 'tls'), along with details to inspect and validate cert/key pairs.
+
+Example of command output:
+
+```sh
+-rw-r--r-- ca.crt - Dgraph Root CA certificate
+    Issuer: Dgraph Labs, Inc.
+       S/N: 3e468ac77ecd5017
+Expiration: 23 Sep 28 19:10 UTC
+  MD5 hash: 85B533D86B0DD689B9DBDAD6755B702F
+
+-r-------- ca.key - Dgraph Root CA key
+  MD5 hash: 85B533D86B0DD689B9DBDAD6755B702F
+
+-rw-r--r-- client.srfrog.crt - Dgraph client certificate: srfrog
+    Issuer: Dgraph Labs, Inc.
+ CA Verify: PASSED
+       S/N: 55cedf3c8606d98e
+Expiration: 25 Sep 23 19:25 UTC
+  MD5 hash: 445DCB276E29FA1000F79CAC376569BA
+
+-rw------- client.srfrog.key - Dgraph Client key
+  MD5 hash: 445DCB276E29FA1000F79CAC376569BA
+
+-rw-r--r-- node.crt - Dgraph Node certificate
+    Issuer: Dgraph Labs, Inc.
+ CA Verify: PASSED
+       S/N: 75aeb1ccd9a6f3fd
+Expiration: 25 Sep 23 19:39 UTC
+     Hosts: localhost
+  MD5 hash: FA0FFC88F7AA654575CD48A493C3D65A
+
+-rw------- node.key - Dgraph Node key
+  MD5 hash: FA0FFC88F7AA654575CD48A493C3D65A
+```
+
+Important points:
+
+* The cert/key pairs should always have matching MD5 hashes. Otherwise, the cert(s) must be regenerated. If the Root CA pair differ, all cert/key must be regenerated; the flag `--force` can help.
+* All certificates must pass Dgraph CA verification.
+* All key files should have the least access permissions, specially the `ca.key`, but be readable.
+* Key files won't be overwritten if they have limited access, even with `--force`.
+* Node certificates are only valid for the hosts listed.
+* Client certificates are only valid for the named client/user.
+
+### TLS options
+
 Following configuration options are available for the server:
 
-```sh
-# Use TLS connections with clients.
-tls_on
-
-# CA Certs file path.
-tls_ca_certs string
-
-# Include System CA into CA Certs.
-tls_use_system_ca
-
-# Certificate file path.
-tls_cert string
-
-# Certificate key file path.
-tls_cert_key string
-
-# Certificate key passphrase.
-tls_cert_key_passphrase string
-
-# Enable TLS client authentication
-tls_client_auth string
-
-# TLS max version. (default "TLS12")
-tls_max_version string
-
-# TLS min version. (default "TLS11")
-tls_min_version string
-```
-
-Dgraph loader can be configured with following options:
+* `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
+* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
 
 ```sh
-# Use TLS connections.
-tls_on
-
-# CA Certs file path.
-tls_ca_certs string
-
-# Include System CA into CA Certs.
-tls_use_system_ca
-
-# Certificate file path.
-tls_cert string
-
-# Certificate key file path.
-tls_cert_key string
-
-# Certificate key passphrase.
-tls_cert_key_passphrase string
-
-# Server name.
-tls_server_name string
-
-# Skip certificate validation (insecure)
-tls_insecure
-
-# TLS max version. (default "TLS12")
-tls_max_version string
-
-# TLS min version. (default "TLS11")
-tls_min_version string
+# Default use for enabling TLS server (after generating certificates)
+$ dgraph server --tls_dir tls
 ```
 
+Dgraph live loader can be configured with following options:
+
+* `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
+* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
+* `--tls_server_name string` - Server name, used for validating the server's TLS host name.
+
+```sh
+# First, create a client certificate for live loader. This will create 'tls/client.live.crt'
+$ dgraph cert -c live
+
+# Now, connect to server using TLS
+$ dgraph live --tls_dir tls -s 21million.schema -r 21million.rdf.gz
+```
+
+### Client authentication
+
+The server option `--tls_client_auth` accepts different values that change the security policty of client certificate verification.
+
+| Value | Description |
+|-------|-------------|
+| REQUEST | Server accepts any certificate, invalid and unverified (least secure) |
+| REQUIREANY | Server expects any certificate, valid and unverified |
+| VERIFYIFGIVEN | Client certificate is verified if provided (default) |
+| REQUIREANDVERIFY | Always require a valid certificate (most secure) |
+
+{{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
 ## Cluster Checklist
 

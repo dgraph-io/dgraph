@@ -317,6 +317,17 @@ office.room                    : uid .
 	addPassword(t, 1, "password", "123456")
 	addPassword(t, 23, "pass", "654321")
 
+	addEdgeToUID(t, "school", 32, 33, nil)
+	addEdgeToUID(t, "district", 33, 34, nil)
+	addEdgeToUID(t, "county", 34, 35, nil)
+	addEdgeToUID(t, "state", 35, 36, nil)
+
+	addEdgeToValue(t, "name", 33, "San Mateo High School", nil)
+	addEdgeToValue(t, "name", 34, "San Mateo School District", nil)
+	addEdgeToValue(t, "name", 35, "San Mateo County", nil)
+	addEdgeToValue(t, "name", 36, "California", nil)
+	addEdgeToValue(t, "abbr", 36, "CA", nil)
+
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
 	addEdgeToUID(t, "friend", 1, 23, nil)

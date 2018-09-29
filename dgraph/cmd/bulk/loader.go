@@ -24,7 +24,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/intern"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -47,6 +46,7 @@ type options struct {
 	StoreXids     bool
 	ZeroAddr      string
 	HttpAddr      string
+	IgnoreErrors  bool
 
 	MapShards    int
 	ReduceShards int
@@ -62,7 +62,7 @@ type state struct {
 	shards     *shardMap
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	dbs        []*badger.ManagedDB
+	dbs        []*badger.DB
 	writeTs    uint64 // All badger writes use this timestamp
 }
 
@@ -180,7 +180,7 @@ func findRDFFiles(dir string) []string {
 }
 
 type uidRangeResponse struct {
-	uids *api.AssignedIds
+	uids *intern.AssignedIds
 	err  error
 }
 
@@ -202,17 +202,17 @@ func (ld *loader) mapStage() {
 		LRUSize:   1 << 19,
 	})
 
-	var readers []*bufio.Reader
+	readers := make(map[string]*bufio.Reader)
 	for _, rdfFile := range findRDFFiles(ld.opt.RDFDir) {
 		f, err := os.Open(rdfFile)
 		x.Check(err)
 		defer f.Close()
 		if !strings.HasSuffix(rdfFile, ".gz") {
-			readers = append(readers, bufio.NewReaderSize(f, 1<<20))
+			readers[rdfFile] = bufio.NewReaderSize(f, 1<<20)
 		} else {
 			gzr, err := gzip.NewReader(f)
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
-			readers = append(readers, bufio.NewReader(gzr))
+			readers[rdfFile] = bufio.NewReader(gzr)
 		}
 	}
 
@@ -232,8 +232,11 @@ func (ld *loader) mapStage() {
 
 	// This is the main map loop.
 	thr := x.NewThrottle(ld.opt.NumGoroutines)
-	for _, r := range readers {
+	var fileCount int
+	for rdfFile, r := range readers {
 		thr.Start()
+		fileCount++
+		fmt.Printf("processing file (%d out of %d): %s\n", fileCount, len(readers), rdfFile)
 		go func(r *bufio.Reader) {
 			defer thr.Done()
 			for {
@@ -265,7 +268,7 @@ func (ld *loader) mapStage() {
 }
 
 type shuffleOutput struct {
-	db         *badger.ManagedDB
+	db         *badger.DB
 	mapEntries []*intern.MapEntry
 }
 

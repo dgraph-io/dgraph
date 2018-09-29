@@ -369,7 +369,7 @@ func ValidateAndConvert(edge *intern.DirectedEdge, su *intern.SchemaUpdate) erro
 	return nil
 }
 
-func AssignUidsOverNetwork(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) {
+func AssignUidsOverNetwork(ctx context.Context, num *intern.Num) (*intern.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
@@ -380,7 +380,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *intern.Num) (*api.AssignedI
 	return c.AssignUids(ctx, num)
 }
 
-func Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) {
+func Timestamps(ctx context.Context, num *intern.Num) (*intern.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection

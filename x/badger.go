@@ -5,10 +5,11 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 )
 
 type TxnWriter struct {
-	DB  *badger.ManagedDB
+	DB  *badger.DB
 	wg  sync.WaitGroup
 	che chan error
 }
@@ -27,9 +28,23 @@ func (w *TxnWriter) cb(err error) {
 func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 	txn := w.DB.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
-	// TODO: We should probably do a Get to ensure that we don't end up
-	// overwriting an already existing value at that ts, which might be there
-	// due to a previous rollup event.
+
+	// We do a Get to ensure that we don't end up overwriting an already
+	// existing delta or state at the ts.
+	if item, err := txn.Get(key); err == badger.ErrKeyNotFound {
+		// pass
+	} else if err != nil {
+		return err
+
+	} else if item.Version() >= ts {
+		// Found an existing commit at an equal or higher timestamp. So, skip writing.
+		if glog.V(2) {
+			pk := Parse(key)
+			glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
+				item.Version(), ts, pk)
+		}
+		return nil
+	}
 	if err := txn.SetWithMeta(key, val, meta); err != nil {
 		return err
 	}

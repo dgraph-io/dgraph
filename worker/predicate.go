@@ -33,7 +33,7 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to BadgerDB.
-func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *intern.KVS, che chan error) {
+func writeBatch(ctx context.Context, pstore *badger.DB, kvChan chan *intern.KVS, che chan error) {
 	var bytesWritten uint64
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -98,7 +98,7 @@ OUTER:
 }
 
 // populateShard gets data for a shard from the leader and writes it to BadgerDB on the follower.
-func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
+func (n *node) populateShard(ps *badger.DB, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
 	c := intern.NewWorkerClient(conn)
 

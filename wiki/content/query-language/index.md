@@ -1762,6 +1762,8 @@ Query Example: All predicates from actor Geoffrey Rush and the count of such pre
 Predicates can be stored in a variable and passed to `expand()` to expand all the predicates in the variable.
 
 If `_all_` is passed as an argument to `expand()`, all the predicates at that level are retrieved. More levels can be specfied in a nested fashion under `expand()`.
+If `_forward_` is passed as an argument to `expand()`, all predicates at that level (minus any reverse predicates) are retrieved.
+If `_reverse_` is passed as an argument to `expand()`, only the reverse predicates are retrieved.
 
 Query Example: Predicates saved to a variable and queried with `expand()`.
 {{< runnable >}}
