@@ -169,8 +169,7 @@ func stopWordsListName(lang string) string {
 }
 
 func countryCode(lang string) string {
-	codes := countryCodes(lang)
-	return codes[0]
+	return countryCodes(lang)[0]
 }
 
 func countryCodes(lang string) []string {
