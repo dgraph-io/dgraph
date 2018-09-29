@@ -1961,6 +1961,34 @@ func TestExpandAll(t *testing.T) {
 	require.JSONEq(t, `{"data":{"q":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"power":13.250000,"_xid_":"mich","noindex_name":"Michonne's name not indexed","son":[{"name":"Andre"},{"name":"Helmut"}],"address":"31, 32 street, Jupiter","dob_day":"1910-01-01T00:00:00Z","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"name":"Michonne","path":[{"name":"Glenn Rhee","path|weight":0.200000},{"name":"Andrea","path|weight":0.100000,"path|weight1":0.200000}],"school":[{"name":"School A"}],"full_name":"Michonne's large name for hashing","alive":true,"bin_data":"YmluLWRhdGE=","gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"graduation":["1932-01-01T00:00:00Z"],"age":38,"sword_present":"true","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"~friend":[{"name":"Rick Grimes"}]}]}}`, js)
 }
 
+func TestExpandForward(t *testing.T) {
+	query := `
+	{
+		q(func: uid(1)) {
+			expand(_forward_) {
+				name
+			}
+		}
+	}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"power":13.250000,"_xid_":"mich","noindex_name":"Michonne's name not indexed","son":[{"name":"Andre"},{"name":"Helmut"}],"address":"31, 32 street, Jupiter","dob_day":"1910-01-01T00:00:00Z","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"name":"Michonne","path":[{"name":"Glenn Rhee","path|weight":0.200000},{"name":"Andrea","path|weight":0.100000,"path|weight1":0.200000}],"school":[{"name":"School A"}],"full_name":"Michonne's large name for hashing","alive":true,"bin_data":"YmluLWRhdGE=","gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"graduation":["1932-01-01T00:00:00Z"],"age":38,"sword_present":"true","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000}]}}`, js)
+}
+
+func TestExpandReverse(t *testing.T) {
+	query := `
+	{
+		q(func: uid(1)) {
+			expand(_reverse_) {
+				name
+			}
+		}
+	}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"q":[{"~friend":[{"name":"Rick Grimes"}]}]}}`, js)
+}
+
 func TestUidWithoutDebug(t *testing.T) {
 
 	query := `

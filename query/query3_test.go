@@ -51,6 +51,34 @@ func TestRecurseQuery(t *testing.T) {
 		`{"data": {"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes", "friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea", "friend":[{"name":"Glenn Rhee"}]}]}]}}`, js)
 }
 
+func TestRecurseExpand(t *testing.T) {
+
+	query := `
+		{
+			me(func: uid(32)) @recurse {
+				expand(_all_)
+			}
+		}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"school":[{"name":"San Mateo High School","district":[{"name":"San Mateo School District","county":[{"state":[{"name":"California","abbr":"CA"}],"name":"San Mateo County"}]}]}]}]}}`, js)
+}
+
+func TestRecurseExpandRepeatedPredError(t *testing.T) {
+
+	query := `
+		{
+			me(func: uid(32)) @recurse {
+				name
+				expand(_all_)
+			}
+		}`
+
+	ctx := defaultContext()
+	_, err := processToFastJsonCtxVars(t, query, ctx, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Repeated subgraph: [name] while using expand()")
+}
+
 func TestRecurseQueryOrder(t *testing.T) {
 
 	query := `

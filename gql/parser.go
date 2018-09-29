@@ -1754,7 +1754,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			// We've consumed `'@facets' '(' <facetItem> ',' <facetItem>`, so this is definitely
 			// not a filter.  Return an error.
 			return res, false, x.Errorf(
-				"Expected ',' or ')' in facet list", item.Val)
+				"Expected ',' or ')' in facet list: %s", item.Val)
 		}
 	}
 }
@@ -2508,7 +2508,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isExpandFunc(valLower) {
 				if varName != "" {
-					return x.Errorf("expand() cannot be used with a variable", val)
+					return x.Errorf("expand() cannot be used with a variable: %s", val)
 				}
 				if alias != "" {
 					return x.Errorf("expand() cannot have an alias")
@@ -2524,7 +2524,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					Args:       make(map[string]string),
 					IsInternal: true,
 				}
-				if item.Val == value {
+				switch item.Val {
+				case value:
 					count, err := parseVarList(it, child)
 					if err != nil {
 						return err
@@ -2534,9 +2535,13 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = LIST_VAR
 					child.Expand = child.NeedsVar[len(child.NeedsVar)-1].Name
-				} else if item.Val == "_all_" {
+				case "_all_":
 					child.Expand = "_all_"
-				} else {
+				case "_forward_":
+					child.Expand = "_forward_"
+				case "_reverse_":
+					child.Expand = "_reverse_"
+				default:
 					return x.Errorf("Invalid argument %v in expand()", item.Val)
 				}
 				it.Next() // Consume ')'

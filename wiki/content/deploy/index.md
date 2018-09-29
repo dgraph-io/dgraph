@@ -46,20 +46,6 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 dgraph
 ```
 
-#### Nightly
-
-Nightly builds from Dgraph master branch at https://github.com/dgraph-io/dgraph are available from https://get.dgraph.io.  To install run:
-
-```sh
-curl https://get.dgraph.io -sSf | bash -s nightly
-```
-
-The Docker version is available as _master_.  Pull and run with:
-
-```sh
-docker pull dgraph/dgraph:master
-```
-
 #### Building from Source
 
 {{% notice "note" %}}
@@ -310,10 +296,6 @@ Notice the use of -o for server2 to override the default ports for server2.
 ```sh
 docker run -it -p 8000:8000 dgraph/dgraph:latest dgraph-ratel
 ```
-
-{{% notice "note" %}}
-You can also use the `:master` tag when running docker image to get the nightly build. Though, nightly is thoroughly tested and could have unseen bugs.
-{{% /notice %}}
 
 ### Run using Docker Compose (On single AWS instance)
 
