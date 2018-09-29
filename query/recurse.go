@@ -9,6 +9,7 @@ package query
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -49,20 +50,9 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		return ctx.Err()
 	}
 
-	// Add children back so that expandSubgraph can expand them if needed.
-	start.Children = append(start.Children, startChildren...)
-	if startChildren, err = expandSubgraph(ctx, start); err != nil {
+	// Add children back and expand if necessary
+	if exec, err = expandChildren(ctx, start, startChildren); err != nil {
 		return err
-	}
-
-	start.Children = start.Children[:0]
-	for _, child := range startChildren {
-		temp := new(SubGraph)
-		temp.copyFiltersRecurse(child)
-		temp.SrcUIDs = start.DestUIDs
-		temp.Params.Var = child.Params.Var
-		exec = append(exec, temp)
-		start.Children = append(start.Children, temp)
 	}
 
 	dummy := &SubGraph{}
@@ -140,18 +130,15 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
+		var exp []*SubGraph
 		for _, sg := range exec {
 			if len(sg.DestUIDs.Uids) == 0 {
 				continue
 			}
-			for _, child := range startChildren {
-				temp := new(SubGraph)
-				temp.copyFiltersRecurse(child)
-				temp.SrcUIDs = sg.DestUIDs
-				temp.Params.Var = child.Params.Var
-				sg.Children = append(sg.Children, temp)
-				out = append(out, temp)
+			if exp, err = expandChildren(ctx, sg, startChildren); err != nil {
+				return err
 			}
+			out = append(out, exp...)
 		}
 
 		if numEdges > x.Config.QueryEdgeLimit {
@@ -164,6 +151,31 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		}
 		exec = out
 	}
+}
+
+// expandChildren adds child nodes to a SubGraph with no children, expanding them if necessary.
+func expandChildren(ctx context.Context, sg *SubGraph, children []*SubGraph) ([]*SubGraph, error) {
+	if len(sg.Children) > 0 {
+		return nil, errors.New("Subgraph should not have any children")
+	}
+	// Add children and expand if necessary
+	sg.Children = append(sg.Children, children...)
+	expandedChildren, err := expandSubgraph(ctx, sg)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*SubGraph, 0, len(expandedChildren))
+	sg.Children = sg.Children[:0]
+	// Link new child nodes back to parent destination UIDs
+	for _, child := range expandedChildren {
+		newChild := new(SubGraph)
+		newChild.copyFiltersRecurse(child)
+		newChild.SrcUIDs = sg.DestUIDs
+		newChild.Params.Var = child.Params.Var
+		sg.Children = append(sg.Children, newChild)
+		out = append(out, newChild)
+	}
+	return out, nil
 }
 
 func Recurse(ctx context.Context, sg *SubGraph) error {
