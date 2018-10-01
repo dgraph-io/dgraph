@@ -127,11 +127,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = g
 			case PasswordID:
-				password, err := Encrypt(vc)
-				if err != nil {
-					return to, err
-				}
-				*res = password
+				*res = string(vc)
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -511,6 +507,10 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 		var v string
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type password. Got : %v", value)
+		}
+		v, err := Encrypt(v)
+		if err != nil {
+			return def, err
 		}
 		return &api.Value{&api.Value_PasswordVal{v}}, nil
 	default:
