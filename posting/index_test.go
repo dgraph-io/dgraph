@@ -17,7 +17,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -100,24 +100,12 @@ func TestIndexingInvalidLang(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestIndexingAliasedLang(t *testing.T) {
-	schema.ParseBytes([]byte("name:string @index(fulltext) @lang ."), 1)
-
-	// es-es and es-419 are aliased to es
-	_, err := indexTokens("name", "es", types.Val{types.StringID, []byte("base")})
-	require.NoError(t, err)
-	_, err = indexTokens("name", "es-es", types.Val{types.StringID, []byte("alias")})
-	require.NoError(t, err)
-	_, err = indexTokens("name", "es-419", types.Val{types.StringID, []byte("alias")})
-	require.NoError(t, err)
-}
-
-func addMutation(t *testing.T, l *List, edge *intern.DirectedEdge, op uint32,
+func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 	startTs uint64, commitTs uint64, index bool) {
 	if op == Del {
-		edge.Op = intern.DirectedEdge_DEL
+		edge.Op = pb.DirectedEdge_DEL
 	} else if op == Set {
-		edge.Op = intern.DirectedEdge_SET
+		edge.Op = pb.DirectedEdge_SET
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
@@ -152,7 +140,7 @@ func TestTokensTable(t *testing.T) {
 	require.NoError(t, err)
 	lcache.PutIfMissing(string(l.key), l)
 
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value:  []byte("david"),
 		Label:  "testing",
 		Attr:   "name",
@@ -198,12 +186,12 @@ func tokensForTest(attr string) []string {
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string, startTs, commitTs uint64) {
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value:  []byte(value),
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     intern.DirectedEdge_SET,
+		Op:     pb.DirectedEdge_SET,
 	}
 	l, err := Get(x.DataKey(attr, src))
 	require.NoError(t, err)
@@ -214,12 +202,12 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 // addEdgeToUID adds uid edge with reverse edge
 func addEdgeToUID(t *testing.T, attr string, src uint64,
 	dst uint64, startTs, commitTs uint64) {
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
-		Op:      intern.DirectedEdge_SET,
+		Op:      pb.DirectedEdge_SET,
 	}
 	l, err := Get(x.DataKey(attr, src))
 	require.NoError(t, err)
@@ -230,12 +218,12 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 // addEdgeToUID adds uid edge with reverse edge
 func addReverseEdge(t *testing.T, attr string, src uint64,
 	dst uint64, startTs, commitTs uint64) {
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
-		Op:      intern.DirectedEdge_SET,
+		Op:      pb.DirectedEdge_SET,
 	}
 	txn := Txn{
 		StartTs: startTs,

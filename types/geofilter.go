@@ -15,7 +15,7 @@ import (
 	"github.com/golang/geo/s2"
 	"github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -33,7 +33,7 @@ const (
 	QueryTypeNear
 )
 
-// GeoQueryData is intern.data used by the geo query filter to additionally filter the geometries.
+// GeoQueryData is pb.data used by the geo query filter to additionally filter the geometries.
 type GeoQueryData struct {
 	pt    *s2.Point  // If not nil, the input data was a point
 	loops []*s2.Loop // If not empty, the input data was a polygon/multipolygon or it was a near query.
@@ -52,7 +52,7 @@ func IsGeoFunc(str string) bool {
 
 // GetGeoTokens returns the corresponding index keys based on the type
 // of function.
-func GetGeoTokens(srcFunc *intern.SrcFunction) ([]string, *GeoQueryData, error) {
+func GetGeoTokens(srcFunc *pb.SrcFunction) ([]string, *GeoQueryData, error) {
 	x.AssertTruef(len(srcFunc.Name) > 0, "Invalid function")
 	funcName := strings.ToLower(srcFunc.Name)
 	switch funcName {
@@ -395,7 +395,7 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 
 // MatchGeo matches values and GeoQueryData and ensures that the value actually
 // matches the query criteria.
-func MatchGeo(value *intern.TaskValue, q *GeoQueryData) bool {
+func MatchGeo(value *pb.TaskValue, q *GeoQueryData) bool {
 	valBytes := value.Val
 	if bytes.Equal(valBytes, nil) {
 		return false

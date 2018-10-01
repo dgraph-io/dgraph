@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -35,7 +35,7 @@ type Telemetry struct {
 
 var keenUrl = "https://api.keen.io/3.0/projects/5b809dfac9e77c0001783ad0/events"
 
-func newTelemetry(ms *intern.MembershipState) *Telemetry {
+func newTelemetry(ms *pb.MembershipState) *Telemetry {
 	if len(ms.Cid) == 0 {
 		glog.V(2).Infoln("No CID found yet")
 		return nil

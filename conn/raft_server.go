@@ -15,7 +15,7 @@ import (
 
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -110,27 +110,27 @@ type RaftServer struct {
 	Node     *Node
 }
 
-func (w *RaftServer) IsPeer(ctx context.Context, rc *intern.RaftContext) (*intern.PeerResponse,
+func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (*pb.PeerResponse,
 	error) {
 	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
-		return &intern.PeerResponse{}, ErrNoNode
+		return &pb.PeerResponse{}, ErrNoNode
 	}
 
 	if node._confState == nil {
-		return &intern.PeerResponse{}, nil
+		return &pb.PeerResponse{}, nil
 	}
 
 	for _, raftIdx := range node._confState.Nodes {
 		if rc.Id == raftIdx {
-			return &intern.PeerResponse{Status: true}, nil
+			return &pb.PeerResponse{Status: true}, nil
 		}
 	}
-	return &intern.PeerResponse{}, nil
+	return &pb.PeerResponse{}, nil
 }
 
 func (w *RaftServer) JoinCluster(ctx context.Context,
-	rc *intern.RaftContext) (*api.Payload, error) {
+	rc *pb.RaftContext) (*api.Payload, error) {
 	if ctx.Err() != nil {
 		return &api.Payload{}, ctx.Err()
 	}
@@ -168,7 +168,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 }
 
 func (w *RaftServer) RaftMessage(ctx context.Context,
-	batch *intern.RaftBatch) (*api.Payload, error) {
+	batch *pb.RaftBatch) (*api.Payload, error) {
 	if ctx.Err() != nil {
 		return &api.Payload{}, ctx.Err()
 	}

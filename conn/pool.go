@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
 	"google.golang.org/grpc"
@@ -150,7 +150,7 @@ func (p *Pool) UpdateHealthStatus(printError bool) error {
 	query.Data = make([]byte, 10)
 	x.Check2(rand.Read(query.Data))
 
-	c := intern.NewRaftClient(conn)
+	c := pb.NewRaftClient(conn)
 	resp, err := c.Echo(context.Background(), query)
 	if err == nil {
 		x.AssertTruef(bytes.Equal(resp.Data, query.Data),

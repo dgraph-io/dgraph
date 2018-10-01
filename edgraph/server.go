@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
@@ -197,7 +197,7 @@ func (s *ServerState) fillTimestampRequests() {
 		}
 
 		// Generate the request.
-		num := &intern.Num{}
+		num := &pb.Num{}
 		for _, r := range reqs {
 			if r.readOnly {
 				num.ReadOnly = true
@@ -273,7 +273,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
-	m := &intern.Mutations{StartTs: State.getTimestamp(false)}
+	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
 	if op.DropAll {
 		m.DropAll = true
 		_, err := query.ApplyMutations(ctx, m)
@@ -290,7 +290,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		if err != nil {
 			return empty, err
 		}
-		edges := []*intern.DirectedEdge{edge}
+		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
 		_, err = query.ApplyMutations(ctx, m)
 		return empty, err
@@ -360,7 +360,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		return resp, err
 	}
 
-	m := &intern.Mutations{
+	m := &pb.Mutations{
 		Edges:   edges,
 		StartTs: mu.StartTs,
 	}

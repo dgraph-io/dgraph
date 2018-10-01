@@ -12,7 +12,7 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -61,7 +61,7 @@ func TestProposal(t *testing.T) {
 	require.NoError(t, err)
 	store := raftwal.Init(db, 0, 0)
 
-	rc := &intern.RaftContext{Id: 1}
+	rc := &pb.RaftContext{Id: 1}
 	n := NewNode(rc, store)
 
 	peers := []raft.Peer{{ID: n.Id}}

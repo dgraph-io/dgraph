@@ -21,7 +21,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -82,8 +82,8 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 // t represents the original uid -> value edge.
 // TODO - See if we need to pass op as argument as t should already have Op.
-func (txn *Txn) addIndexMutations(ctx context.Context, t *intern.DirectedEdge, p types.Val,
-	op intern.DirectedEdge_Op) error {
+func (txn *Txn) addIndexMutations(ctx context.Context, t *pb.DirectedEdge, p types.Val,
+	op pb.DirectedEdge_Op) error {
 	attr := t.Attr
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
@@ -95,7 +95,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, t *intern.DirectedEdge, p
 	}
 
 	// Create a value token -> uid edge.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
 		Op:      op,
@@ -109,7 +109,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, t *intern.DirectedEdge, p
 	return nil
 }
 
-func (txn *Txn) addIndexMutation(ctx context.Context, edge *intern.DirectedEdge,
+func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
 
@@ -148,7 +148,7 @@ type countParams struct {
 }
 
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
-	hasCountIndex bool, edge *intern.DirectedEdge) (countParams, error) {
+	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
 	plist.Lock()
 	defer plist.Unlock()
@@ -177,7 +177,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	return emptyCountParams, nil
 }
 
-func (txn *Txn) addReverseMutation(ctx context.Context, t *intern.DirectedEdge) error {
+func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	plist, err := Get(key)
 	if err != nil {
@@ -185,7 +185,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *intern.DirectedEdge) 
 	}
 
 	x.AssertTrue(plist != nil)
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
 		Attr:    t.Attr,
@@ -212,12 +212,12 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *intern.DirectedEdge) 
 	return nil
 }
 
-func (l *List) handleDeleteAll(ctx context.Context, t *intern.DirectedEdge,
+func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
 	txn *Txn) error {
 	isReversed := schema.State().IsReversed(t.Attr)
 	isIndexed := schema.State().IsIndexed(t.Attr)
 	hasCount := schema.State().HasCount(t.Attr)
-	delEdge := &intern.DirectedEdge{
+	delEdge := &pb.DirectedEdge{
 		Attr:   t.Attr,
 		Op:     t.Op,
 		Entity: t.Entity,
@@ -225,7 +225,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *intern.DirectedEdge,
 	// To calculate length of posting list. Used for deletion of count index.
 	var plen int
 	var iterErr error
-	l.Iterate(txn.StartTs, 0, func(p *intern.Posting) bool {
+	l.Iterate(txn.StartTs, 0, func(p *pb.Posting) bool {
 		plen++
 		if isReversed {
 			// Delete reverse edge for each posting.
@@ -241,7 +241,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *intern.DirectedEdge,
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			if err := txn.addIndexMutations(ctx, t, p, intern.DirectedEdge_DEL); err != nil {
+			if err := txn.addIndexMutations(ctx, t, p, pb.DirectedEdge_DEL); err != nil {
 				iterErr = err
 				return false
 			}
@@ -269,7 +269,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *intern.DirectedEdge,
 	return l.addMutation(ctx, txn, t)
 }
 
-func (txn *Txn) addCountMutation(ctx context.Context, t *intern.DirectedEdge, count uint32,
+func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
 	plist, err := Get(key)
@@ -292,10 +292,10 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *intern.DirectedEdge, co
 }
 
 func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
-	edge := intern.DirectedEdge{
+	edge := pb.DirectedEdge{
 		ValueId: params.entity,
 		Attr:    params.attr,
-		Op:      intern.DirectedEdge_DEL,
+		Op:      pb.DirectedEdge_DEL,
 	}
 	if err := txn.addCountMutation(ctx, &edge, uint32(params.countBefore),
 		params.reverse); err != nil {
@@ -303,7 +303,7 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 	}
 
 	if params.countAfter > 0 {
-		edge.Op = intern.DirectedEdge_SET
+		edge.Op = pb.DirectedEdge_SET
 		if err := txn.addCountMutation(ctx, &edge, uint32(params.countAfter),
 			params.reverse); err != nil {
 			return err
@@ -313,7 +313,7 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 }
 
 func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bool,
-	hasCountIndex bool, t *intern.DirectedEdge) (types.Val, bool, countParams, error) {
+	hasCountIndex bool, t *pb.DirectedEdge) (types.Val, bool, countParams, error) {
 	var val types.Val
 	var found bool
 	var err error
@@ -361,14 +361,14 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 // AddMutationWithIndex is AddMutation with support for indexing. It also
 // supports reverse edges.
-func (l *List) AddMutationWithIndex(ctx context.Context, t *intern.DirectedEdge,
+func (l *List) AddMutationWithIndex(ctx context.Context, t *pb.DirectedEdge,
 	txn *Txn) error {
 	if len(t.Attr) == 0 {
 		return x.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
 			" and value: [%v]", t.Entity, t.ValueId, t.Value)
 	}
 
-	if t.Op == intern.DirectedEdge_DEL && string(t.Value) == x.Star {
+	if t.Op == pb.DirectedEdge_DEL && string(t.Value) == x.Star {
 		return l.handleDeleteAll(ctx, t, txn)
 	}
 
@@ -387,16 +387,16 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *intern.DirectedEdge,
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
-			if err := txn.addIndexMutations(ctx, t, val, intern.DirectedEdge_DEL); err != nil {
+			if err := txn.addIndexMutations(ctx, t, val, pb.DirectedEdge_DEL); err != nil {
 				return err
 			}
 		}
-		if t.Op == intern.DirectedEdge_SET {
+		if t.Op == pb.DirectedEdge_SET {
 			p := types.Val{
 				Tid:   types.TypeID(t.ValueType),
 				Value: t.Value,
 			}
-			if err := txn.addIndexMutations(ctx, t, p, intern.DirectedEdge_SET); err != nil {
+			if err := txn.addIndexMutations(ctx, t, p, pb.DirectedEdge_SET); err != nil {
 				return err
 			}
 		}
@@ -512,10 +512,10 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 			txn := &Txn{StartTs: startTs}
 			for it := range ch {
 				l := it.list
-				t := &intern.DirectedEdge{
+				t := &pb.DirectedEdge{
 					ValueId: it.uid,
 					Attr:    attr,
-					Op:      intern.DirectedEdge_SET,
+					Op:      pb.DirectedEdge_SET,
 				}
 				len := l.Length(txn.StartTs, 0)
 				if len == -1 {
@@ -627,13 +627,13 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error
 
 	// Helper function - Add reverse entries for values in posting list
 	addReversePostings := func(uid uint64, pl *List, txn *Txn) {
-		edge := intern.DirectedEdge{Attr: attr, Entity: uid}
+		edge := pb.DirectedEdge{Attr: attr, Entity: uid}
 		var err error
-		pl.Iterate(txn.StartTs, 0, func(pp *intern.Posting) bool {
+		pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) bool {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
-			edge.Op = intern.DirectedEdge_SET
+			edge.Op = pb.DirectedEdge_SET
 			edge.Facets = pp.Facets
 			edge.Label = pp.Label
 			err = txn.addReverseMutation(ctx, &edge)
@@ -732,8 +732,8 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	defer it.Close()
 
 	rewriteValuePostings := func(pl *List, txn *Txn) error {
-		var mpost *intern.Posting
-		pl.Iterate(txn.StartTs, 0, func(p *intern.Posting) bool {
+		var mpost *pb.Posting
+		pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) bool {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {
@@ -744,10 +744,10 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 		})
 		if mpost != nil {
 			// Delete the old edge corresponding to ValueId math.MaxUint64
-			t := &intern.DirectedEdge{
+			t := &pb.DirectedEdge{
 				ValueId: mpost.Uid,
 				Attr:    attr,
-				Op:      intern.DirectedEdge_DEL,
+				Op:      pb.DirectedEdge_DEL,
 			}
 
 			if err := pl.AddMutation(ctx, txn, t); err != nil {
@@ -755,11 +755,11 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 			}
 
 			// Add the new edge with the fingerprinted value id.
-			newEdge := &intern.DirectedEdge{
+			newEdge := &pb.DirectedEdge{
 				Attr:      attr,
 				Value:     mpost.Value,
 				ValueType: mpost.ValType,
-				Op:        intern.DirectedEdge_SET,
+				Op:        pb.DirectedEdge_SET,
 				Label:     mpost.Label,
 				Facets:    mpost.Facets,
 			}
@@ -832,18 +832,18 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 
 	// Helper function - Add index entries for values in posting list
 	addPostingsToIndex := func(uid uint64, pl *List, txn *Txn) {
-		edge := intern.DirectedEdge{Attr: attr, Entity: uid}
+		edge := pb.DirectedEdge{Attr: attr, Entity: uid}
 		var err error
-		pl.Iterate(txn.StartTs, 0, func(p *intern.Posting) bool {
+		pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) bool {
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
 				Tid:   types.TypeID(p.ValType),
 			}
-			err = txn.addIndexMutations(ctx, &edge, val, intern.DirectedEdge_SET)
+			err = txn.addIndexMutations(ctx, &edge, val, pb.DirectedEdge_SET)
 			for err == ErrRetry {
 				time.Sleep(10 * time.Millisecond)
-				err = txn.addIndexMutations(ctx, &edge, val, intern.DirectedEdge_SET)
+				err = txn.addIndexMutations(ctx, &edge, val, pb.DirectedEdge_SET)
 			}
 			if err != nil {
 				x.Printf("Error while adding index mutation: %v\n", err)

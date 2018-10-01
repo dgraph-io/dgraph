@@ -26,7 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 )
@@ -59,7 +59,7 @@ func (c *raftServer) RaftMessage(ctx context.Context, in *api.Payload) (*api.Pay
 	return &api.Payload{}, nil
 }
 
-func (c *raftServer) JoinCluster(ctx context.Context, in *intern.RaftContext) (*api.Payload, error) {
+func (c *raftServer) JoinCluster(ctx context.Context, in *pb.RaftContext) (*api.Payload, error) {
 	return &api.Payload{}, nil
 }
 
@@ -1430,8 +1430,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	zc := intern.NewZeroClient(conn)
-	if _, err := zc.AssignUids(context.Background(), &intern.Num{Val: 1e6}); err != nil {
+	zc := pb.NewZeroClient(conn)
+	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
 

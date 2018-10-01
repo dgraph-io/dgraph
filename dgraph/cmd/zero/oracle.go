@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -36,8 +36,8 @@ type Oracle struct {
 	tmax uint64
 	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
-	subscribers map[int]chan *intern.OracleDelta
-	updates     chan *intern.OracleDelta
+	subscribers map[int]chan *pb.OracleDelta
+	updates     chan *pb.OracleDelta
 	doneUntil   x.WaterMark
 	syncMarks   []syncMark
 }
@@ -45,8 +45,8 @@ type Oracle struct {
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	o.keyCommit = make(map[string]uint64)
-	o.subscribers = make(map[int]chan *intern.OracleDelta)
-	o.updates = make(chan *intern.OracleDelta, 100000) // Keeping 1 second worth of updates.
+	o.subscribers = make(map[int]chan *pb.OracleDelta)
+	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init()
 	go o.sendDeltasToSubscribers()
 }
@@ -107,24 +107,24 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 	return nil
 }
 
-func sortTxns(delta *intern.OracleDelta) {
+func sortTxns(delta *pb.OracleDelta) {
 	sort.Slice(delta.Txns, func(i, j int) bool {
 		return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 	})
 }
 
-func (o *Oracle) currentState() *intern.OracleDelta {
+func (o *Oracle) currentState() *pb.OracleDelta {
 	o.AssertRLock()
-	resp := &intern.OracleDelta{}
+	resp := &pb.OracleDelta{}
 	for start, commit := range o.commits {
 		resp.Txns = append(resp.Txns,
-			&intern.TxnStatus{StartTs: start, CommitTs: commit})
+			&pb.TxnStatus{StartTs: start, CommitTs: commit})
 	}
 	resp.MaxAssigned = o.maxAssigned
 	return resp
 }
 
-func (o *Oracle) newSubscriber() (<-chan *intern.OracleDelta, int) {
+func (o *Oracle) newSubscriber() (<-chan *pb.OracleDelta, int) {
 	o.Lock()
 	defer o.Unlock()
 	var id int
@@ -134,7 +134,7 @@ func (o *Oracle) newSubscriber() (<-chan *intern.OracleDelta, int) {
 			break
 		}
 	}
-	ch := make(chan *intern.OracleDelta, 1000)
+	ch := make(chan *pb.OracleDelta, 1000)
 	ch <- o.currentState() // Queue up the full state as the first entry.
 	o.subscribers[id] = ch
 	return ch, id
@@ -147,7 +147,7 @@ func (o *Oracle) removeSubscriber(id int) {
 }
 
 func (o *Oracle) sendDeltasToSubscribers() {
-	delta := &intern.OracleDelta{}
+	delta := &pb.OracleDelta{}
 	for {
 		update, open := <-o.updates
 		if !open {
@@ -177,7 +177,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			}
 		}
 		o.Unlock()
-		delta = &intern.OracleDelta{}
+		delta = &pb.OracleDelta{}
 	}
 }
 
@@ -199,8 +199,8 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
 	// TODO: We should check if the tablet is in read-only status here.
 	if o.updateCommitStatusHelper(index, src) {
-		delta := new(intern.OracleDelta)
-		delta.Txns = append(delta.Txns, &intern.TxnStatus{
+		delta := new(pb.OracleDelta)
+		delta.Txns = append(delta.Txns, &pb.TxnStatus{
 			StartTs:  src.StartTs,
 			CommitTs: o.commitTs(src.StartTs),
 		})
@@ -214,12 +214,12 @@ func (o *Oracle) commitTs(startTs uint64) uint64 {
 	return o.commits[startTs]
 }
 
-func (o *Oracle) storePending(ids *intern.AssignedIds) {
+func (o *Oracle) storePending(ids *pb.AssignedIds) {
 	// Wait to finish up processing everything before start id.
 	max := x.Max(ids.EndId, ids.ReadOnly)
 	o.doneUntil.WaitForMark(context.Background(), max)
 	// Now send it out to updates.
-	o.updates <- &intern.OracleDelta{MaxAssigned: max}
+	o.updates <- &pb.OracleDelta{MaxAssigned: max}
 
 	o.Lock()
 	defer o.Unlock()
@@ -237,7 +237,7 @@ var errConflict = errors.New("Transaction conflict")
 // proposeTxn proposes a txn update, and then updates src to reflect the state
 // of the commit after proposal is run.
 func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
-	var zp intern.ZeroProposal
+	var zp pb.ZeroProposal
 	zp.Txn = &api.TxnContext{
 		StartTs:  src.StartTs,
 		CommitTs: src.CommitTs,
@@ -303,7 +303,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		}
 	}
 
-	num := intern.Num{Val: 1}
+	num := pb.Num{Val: 1}
 	assigned, err := s.lease(ctx, &num, true)
 	if err != nil {
 		return err
@@ -333,7 +333,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 var errClosed = errors.New("Streaming closed by Oracle.")
 var errNotLeader = errors.New("Node is no longer leader.")
 
-func (s *Server) Oracle(unused *api.Payload, server intern.Zero_OracleServer) error {
+func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error {
 	if !s.Node.AmLeader() {
 		return errNotLeader
 	}
@@ -397,7 +397,7 @@ OUTER:
 				x.Printf("No healthy connection found to leader of group %d\n", group)
 				goto OUTER
 			}
-			c := intern.NewWorkerClient(pl.Get())
+			c := pb.NewWorkerClient(pl.Get())
 			num, err := c.PurgeTs(context.Background(), &api.Payload{})
 			if err != nil {
 				x.Printf("Error while fetching minTs from group %d, err: %v\n", group, err)
@@ -416,8 +416,8 @@ OUTER:
 }
 
 func (s *Server) TryAbort(ctx context.Context,
-	txns *intern.TxnTimestamps) (*intern.OracleDelta, error) {
-	delta := &intern.OracleDelta{}
+	txns *pb.TxnTimestamps) (*pb.OracleDelta, error) {
+	delta := &pb.OracleDelta{}
 	for _, startTs := range txns.Ts {
 		// Do via proposals to avoid race
 		tctx := &api.TxnContext{StartTs: startTs, Aborted: true}
@@ -425,7 +425,7 @@ func (s *Server) TryAbort(ctx context.Context,
 			return delta, err
 		}
 		// Txn should be aborted if not already committed.
-		delta.Txns = append(delta.Txns, &intern.TxnStatus{
+		delta.Txns = append(delta.Txns, &pb.TxnStatus{
 			StartTs:  startTs,
 			CommitTs: s.orc.commitTs(startTs)})
 	}
@@ -433,7 +433,7 @@ func (s *Server) TryAbort(ctx context.Context,
 }
 
 // Timestamps is used to assign startTs for a new transaction
-func (s *Server) Timestamps(ctx context.Context, num *intern.Num) (*intern.AssignedIds, error) {
+func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}

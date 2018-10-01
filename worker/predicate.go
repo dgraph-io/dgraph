@@ -22,7 +22,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 )
@@ -33,7 +33,7 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to BadgerDB.
-func writeBatch(ctx context.Context, pstore *badger.DB, kvChan chan *intern.KVS, che chan error) {
+func writeBatch(ctx context.Context, pstore *badger.DB, kvChan chan *pb.KVS, che chan error) {
 	var bytesWritten uint64
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -100,7 +100,7 @@ OUTER:
 // populateShard gets data for a shard from the leader and writes it to BadgerDB on the follower.
 func (n *node) populateShard(ps *badger.DB, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
-	c := intern.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(conn)
 
 	ctx := n.ctx
 	snap, err := n.Snapshot()
@@ -116,7 +116,7 @@ func (n *node) populateShard(ps *badger.DB, pl *conn.Pool) (int, error) {
 		return 0, err
 	}
 
-	kvChan := make(chan *intern.KVS, 100)
+	kvChan := make(chan *pb.KVS, 100)
 	che := make(chan error, 1)
 	go writeBatch(ctx, ps, kvChan, che)
 
@@ -158,8 +158,8 @@ func (n *node) populateShard(ps *badger.DB, pl *conn.Pool) (int, error) {
 	return count, nil
 }
 
-func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot,
-	stream intern.Worker_StreamSnapshotServer) error {
+func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
+	stream pb.Worker_StreamSnapshotServer) error {
 	n := groups().Node
 	if n == nil {
 		return conn.ErrNoNode
@@ -204,7 +204,7 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot,
 		// Pick all keys.
 		return true
 	}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
+	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		item := itr.Item()
 		pk := x.Parse(key)
 		if pk.IsSchema() {
@@ -212,7 +212,7 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *intern.Snapshot,
 			if err != nil {
 				return nil, err
 			}
-			kv := &intern.KV{
+			kv := &pb.KV{
 				Key:      key,
 				Val:      val,
 				UserMeta: []byte{item.UserMeta()},

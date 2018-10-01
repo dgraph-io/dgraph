@@ -1,5 +1,7 @@
-// Copyright (c) 2013, Vastech SA (PTY) LTD. All rights reserved.
-// http://github.com/gogo/protobuf/gogoproto
+// Protocol Buffers for Go with Gadgets
+//
+// Copyright (c) 2013, The GoGo Authors. All rights reserved.
+// http://github.com/gogo/protobuf
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -30,12 +32,37 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 )
 
-func GetBoolExtension(pb extendableProto, extension *ExtensionDesc, ifnotset bool) bool {
+type extensionsBytes interface {
+	Message
+	ExtensionRangeArray() []ExtensionRange
+	GetExtensions() *[]byte
+}
+
+type slowExtensionAdapter struct {
+	extensionsBytes
+}
+
+func (s slowExtensionAdapter) extensionsWrite() map[int32]Extension {
+	panic("Please report a bug to github.com/gogo/protobuf if you see this message: Writing extensions is not supported for extensions stored in a byte slice field.")
+}
+
+func (s slowExtensionAdapter) extensionsRead() (map[int32]Extension, sync.Locker) {
+	b := s.GetExtensions()
+	m, err := BytesToExtensionsMap(*b)
+	if err != nil {
+		panic(err)
+	}
+	return m, notLocker{}
+}
+
+func GetBoolExtension(pb Message, extension *ExtensionDesc, ifnotset bool) bool {
 	if reflect.ValueOf(pb).IsNil() {
 		return ifnotset
 	}
@@ -53,15 +80,28 @@ func GetBoolExtension(pb extendableProto, extension *ExtensionDesc, ifnotset boo
 }
 
 func (this *Extension) Equal(that *Extension) bool {
+	if err := this.Encode(); err != nil {
+		return false
+	}
+	if err := that.Encode(); err != nil {
+		return false
+	}
 	return bytes.Equal(this.enc, that.enc)
 }
 
 func (this *Extension) Compare(that *Extension) int {
+	if err := this.Encode(); err != nil {
+		return 1
+	}
+	if err := that.Encode(); err != nil {
+		return -1
+	}
 	return bytes.Compare(this.enc, that.enc)
 }
 
-func SizeOfExtensionMap(m map[int32]Extension) (n int) {
-	return sizeExtensionMap(m)
+func SizeOfInternalExtension(m extendableProto) (n int) {
+	info := getMarshalInfo(reflect.TypeOf(m))
+	return info.sizeV1Extensions(m.extensionsWrite())
 }
 
 type sortableMapElem struct {
@@ -94,6 +134,10 @@ func (this sortableExtensions) String() string {
 	return "map[" + strings.Join(ss, ",") + "]"
 }
 
+func StringFromInternalExtension(m extendableProto) string {
+	return StringFromExtensionsMap(m.extensionsWrite())
+}
+
 func StringFromExtensionsMap(m map[int32]Extension) string {
 	return newSortableExtensionsFromMap(m).String()
 }
@@ -106,29 +150,31 @@ func StringFromExtensionsBytes(ext []byte) string {
 	return StringFromExtensionsMap(m)
 }
 
+func EncodeInternalExtension(m extendableProto, data []byte) (n int, err error) {
+	return EncodeExtensionMap(m.extensionsWrite(), data)
+}
+
 func EncodeExtensionMap(m map[int32]Extension, data []byte) (n int, err error) {
-	if err := encodeExtensionMap(m); err != nil {
-		return 0, err
+	o := 0
+	for _, e := range m {
+		if err := e.Encode(); err != nil {
+			return 0, err
+		}
+		n := copy(data[o:], e.enc)
+		if n != len(e.enc) {
+			return 0, io.ErrShortBuffer
+		}
+		o += n
 	}
-	keys := make([]int, 0, len(m))
-	for k := range m {
-		keys = append(keys, int(k))
-	}
-	sort.Ints(keys)
-	for _, k := range keys {
-		n += copy(data[n:], m[int32(k)].enc)
-	}
-	return n, nil
+	return o, nil
 }
 
 func GetRawExtension(m map[int32]Extension, id int32) ([]byte, error) {
-	if m[id].value == nil || m[id].desc == nil {
-		return m[id].enc, nil
-	}
-	if err := encodeExtensionMap(m); err != nil {
+	e := m[id]
+	if err := e.Encode(); err != nil {
 		return nil, err
 	}
-	return m[id].enc, nil
+	return e.enc, nil
 }
 
 func size(buf []byte, wire int) (int, error) {
@@ -189,27 +235,77 @@ func NewExtension(e []byte) Extension {
 	return ee
 }
 
-func AppendExtension(e extendableProto, tag int32, buf []byte) {
-	if ee, eok := e.(extensionsMap); eok {
-		ext := ee.ExtensionMap()[int32(tag)] // may be missing
-		ext.enc = append(ext.enc, buf...)
-		ee.ExtensionMap()[int32(tag)] = ext
-	} else if ee, eok := e.(extensionsBytes); eok {
+func AppendExtension(e Message, tag int32, buf []byte) {
+	if ee, eok := e.(extensionsBytes); eok {
 		ext := ee.GetExtensions()
 		*ext = append(*ext, buf...)
+		return
+	}
+	if ee, eok := e.(extendableProto); eok {
+		m := ee.extensionsWrite()
+		ext := m[int32(tag)] // may be missing
+		ext.enc = append(ext.enc, buf...)
+		m[int32(tag)] = ext
 	}
 }
 
-func (this Extension) GoString() string {
-	if this.enc == nil {
-		if err := encodeExtension(&this); err != nil {
-			panic(err)
+func encodeExtension(extension *ExtensionDesc, value interface{}) ([]byte, error) {
+	u := getMarshalInfo(reflect.TypeOf(extension.ExtendedType))
+	ei := u.getExtElemInfo(extension)
+	v := value
+	p := toAddrPointer(&v, ei.isptr)
+	siz := ei.sizer(p, SizeVarint(ei.wiretag))
+	buf := make([]byte, 0, siz)
+	return ei.marshaler(buf, p, ei.wiretag, false)
+}
+
+func decodeExtensionFromBytes(extension *ExtensionDesc, buf []byte) (interface{}, error) {
+	o := 0
+	for o < len(buf) {
+		tag, n := DecodeVarint((buf)[o:])
+		fieldNum := int32(tag >> 3)
+		wireType := int(tag & 0x7)
+		if o+n > len(buf) {
+			return nil, fmt.Errorf("unable to decode extension")
 		}
+		l, err := size((buf)[o+n:], wireType)
+		if err != nil {
+			return nil, err
+		}
+		if int32(fieldNum) == extension.Field {
+			if o+n+l > len(buf) {
+				return nil, fmt.Errorf("unable to decode extension")
+			}
+			v, err := decodeExtension((buf)[o:o+n+l], extension)
+			if err != nil {
+				return nil, err
+			}
+			return v, nil
+		}
+		o += n + l
+	}
+	return defaultExtensionValue(extension)
+}
+
+func (this *Extension) Encode() error {
+	if this.enc == nil {
+		var err error
+		this.enc, err = encodeExtension(this.desc, this.value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (this Extension) GoString() string {
+	if err := this.Encode(); err != nil {
+		return fmt.Sprintf("error encoding extension: %v", err)
 	}
 	return fmt.Sprintf("proto.NewExtension(%#v)", this.enc)
 }
 
-func SetUnsafeExtension(pb extendableProto, fieldNum int32, value interface{}) error {
+func SetUnsafeExtension(pb Message, fieldNum int32, value interface{}) error {
 	typ := reflect.TypeOf(pb).Elem()
 	ext, ok := extensionMaps[typ]
 	if !ok {
@@ -219,10 +315,10 @@ func SetUnsafeExtension(pb extendableProto, fieldNum int32, value interface{}) e
 	if !ok {
 		return errors.New("proto: bad extension number; not in declared ranges")
 	}
-	return setExtension(pb, desc, value)
+	return SetExtension(pb, desc, value)
 }
 
-func GetUnsafeExtension(pb extendableProto, fieldNum int32) (interface{}, error) {
+func GetUnsafeExtension(pb Message, fieldNum int32) (interface{}, error) {
 	typ := reflect.TypeOf(pb).Elem()
 	ext, ok := extensionMaps[typ]
 	if !ok {
@@ -233,4 +329,40 @@ func GetUnsafeExtension(pb extendableProto, fieldNum int32) (interface{}, error)
 		return nil, fmt.Errorf("unregistered field number %d", fieldNum)
 	}
 	return GetExtension(pb, desc)
+}
+
+func NewUnsafeXXX_InternalExtensions(m map[int32]Extension) XXX_InternalExtensions {
+	x := &XXX_InternalExtensions{
+		p: new(struct {
+			mu           sync.Mutex
+			extensionMap map[int32]Extension
+		}),
+	}
+	x.p.extensionMap = m
+	return *x
+}
+
+func GetUnsafeExtensionsMap(extendable Message) map[int32]Extension {
+	pb := extendable.(extendableProto)
+	return pb.extensionsWrite()
+}
+
+func deleteExtension(pb extensionsBytes, theFieldNum int32, offset int) int {
+	ext := pb.GetExtensions()
+	for offset < len(*ext) {
+		tag, n1 := DecodeVarint((*ext)[offset:])
+		fieldNum := int32(tag >> 3)
+		wireType := int(tag & 0x7)
+		n2, err := size((*ext)[offset+n1:], wireType)
+		if err != nil {
+			panic(err)
+		}
+		newOffset := offset + n1 + n2
+		if fieldNum == theFieldNum {
+			*ext = append((*ext)[:offset], (*ext)[newOffset:]...)
+			return offset
+		}
+		offset = newOffset
+	}
+	return -1
 }
