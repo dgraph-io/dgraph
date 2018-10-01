@@ -19,12 +19,12 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (l *List) PostingList() *intern.PostingList {
+func (l *List) PostingList() *pb.PostingList {
 	l.RLock()
 	defer l.RUnlock()
 	return l.plist
@@ -32,7 +32,7 @@ func (l *List) PostingList() *intern.PostingList {
 
 func listToArray(t *testing.T, afterUid uint64, l *List, readTs uint64) []uint64 {
 	out := make([]uint64, 0, 10)
-	l.Iterate(readTs, afterUid, func(p *intern.Posting) bool {
+	l.Iterate(readTs, afterUid, func(p *pb.Posting) bool {
 		out = append(out, p.Uid)
 		return true
 	})
@@ -48,11 +48,11 @@ func checkUids(t *testing.T, l *List, uids []uint64, readTs uint64) {
 	}
 }
 
-func addMutationHelper(t *testing.T, l *List, edge *intern.DirectedEdge, op uint32, txn *Txn) {
+func addMutationHelper(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32, txn *Txn) {
 	if op == Del {
-		edge.Op = intern.DirectedEdge_DEL
+		edge.Op = pb.DirectedEdge_DEL
 	} else if op == Set {
-		edge.Op = intern.DirectedEdge_SET
+		edge.Op = pb.DirectedEdge_SET
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
@@ -67,7 +67,7 @@ func TestAddMutation(t *testing.T) {
 	require.NoError(t, err)
 
 	txn := &Txn{StartTs: uint64(1)}
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		ValueId: 9,
 		Label:   "testing",
 	}
@@ -116,8 +116,8 @@ func TestAddMutation(t *testing.T) {
 	checkUids(t, dl, uids, 3)
 }
 
-func getFirst(l *List, readTs uint64) (res intern.Posting) {
-	l.Iterate(readTs, 0, func(p *intern.Posting) bool {
+func getFirst(l *List, readTs uint64) (res pb.Posting) {
+	l.Iterate(readTs, 0, func(p *pb.Posting) bool {
 		res = *p
 		return false
 	})
@@ -135,7 +135,7 @@ func TestAddMutation_Value(t *testing.T) {
 	key := x.DataKey("value", 10)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value: []byte("oh hey there"),
 		Label: "new-testing",
 	}
@@ -162,7 +162,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -179,7 +179,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 
 	txn = &Txn{StartTs: 3}
 	// Set value to newcars, but don't merge yet.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -188,7 +188,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	checkValue(t, ol, "newcars", txn.StartTs)
 
 	// Set value to someothercars, but don't merge yet.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("someothercars"),
 		Label: "jchiu",
 	}
@@ -197,7 +197,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	checkValue(t, ol, "someothercars", txn.StartTs)
 
 	// Set value back to the committed value cars, but don't merge yet.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -213,16 +213,16 @@ func TestAddMutation_DelSet(t *testing.T) {
 
 	// DO sp*, don't commit
 	// Del a value cars and but don't merge.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value: []byte(x.Star),
-		Op:    intern.DirectedEdge_DEL,
+		Op:    pb.DirectedEdge_DEL,
 	}
 	txn := &Txn{StartTs: 1}
 	err = ol.AddMutation(context.Background(), txn, edge)
 	require.NoError(t, err)
 
 	// Set value to newcars, commit it
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
 	}
 	txn = &Txn{StartTs: 2}
@@ -237,7 +237,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set value to newcars, and commit it
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value: []byte("newcars"),
 	}
 	txn := &Txn{StartTs: 1}
@@ -248,9 +248,9 @@ func TestAddMutation_DelRead(t *testing.T) {
 
 	// DO sp*, don't commit
 	// Del a value cars and but don't merge.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte(x.Star),
-		Op:    intern.DirectedEdge_DEL,
+		Op:    pb.DirectedEdge_DEL,
 	}
 	txn = &Txn{StartTs: 3}
 	err = ol.AddMutation(context.Background(), txn, edge)
@@ -276,7 +276,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -285,7 +285,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 0))
 
 	// Set value to newcars, but don't merge yet.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -300,7 +300,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -310,7 +310,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(uint64(3), 0))
 
 	// Set value to newcars, but don't merge yet.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -327,7 +327,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -342,7 +342,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	checkValue(t, ol, "cars", uint64(3))
 
 	// Del a value cars and but don't merge.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -351,7 +351,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 
 	// Set value to newcars, but don't merge yet.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -360,7 +360,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	checkValue(t, ol, "newcars", txn.StartTs)
 
 	// Del a value newcars and but don't merge.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -374,7 +374,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set a value cars and merge.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -387,7 +387,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 	// Delete the previously committed value cars. But don't merge.
 	txn = &Txn{StartTs: 2}
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -396,7 +396,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 	// Do this again to cover Del, muid == curUid, inPlist test case.
 	// Delete the previously committed value cars. But don't merge.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -405,7 +405,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 	// Set the value again to cover Set, muid == curUid, inPlist test case.
 	// Set the previously committed value cars. But don't merge.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -413,7 +413,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	checkValue(t, ol, "cars", txn.StartTs)
 
 	// Delete it again, just for fun.
-	edge = &intern.DirectedEdge{
+	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -428,7 +428,7 @@ func TestMillion(t *testing.T) {
 	var commits int
 	N := int(1e6)
 	for i := 2; i <= N; i += 2 {
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			ValueId: uint64(i),
 		}
 		txn := Txn{StartTs: uint64(i)}
@@ -453,9 +453,9 @@ func TestAddMutation_mrjn2(t *testing.T) {
 	require.NoError(t, err)
 	var readTs uint64
 	for readTs = 1; readTs < 10; readTs++ {
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			ValueId:   readTs,
-			ValueType: intern.Posting_INT,
+			ValueType: pb.Posting_INT,
 		}
 		txn := &Txn{StartTs: readTs}
 		addMutationHelper(t, ol, edge, Set, txn)
@@ -476,18 +476,18 @@ func TestAddMutation_mrjn2(t *testing.T) {
 	require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits.
 
 	{
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			Value: []byte(x.Star),
-			Op:    intern.DirectedEdge_DEL,
+			Op:    pb.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 7}
 		err := ol.AddMutation(ctx, txn, edge)
 		require.NoError(t, err)
 
 		// Add edge just to test that the deletion still happens.
-		edge = &intern.DirectedEdge{
+		edge = &pb.DirectedEdge{
 			ValueId:   7,
-			ValueType: intern.Posting_INT,
+			ValueType: pb.Posting_INT,
 		}
 		err = ol.AddMutation(ctx, txn, edge)
 		require.NoError(t, err)
@@ -500,9 +500,9 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		require.EqualValues(t, 2, ol.Length(15, 0)) // Only one commit should be found.
 	}
 	{
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			Value: []byte(x.Star),
-			Op:    intern.DirectedEdge_DEL,
+			Op:    pb.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 5}
 		err := ol.AddMutation(ctx, txn, edge)
@@ -532,13 +532,13 @@ func TestAddMutation_gru(t *testing.T) {
 
 	{
 		// Set two tag ids and merge.
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			ValueId: 0x2b693088816b04b7,
 			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
-		edge = &intern.DirectedEdge{
+		edge = &pb.DirectedEdge{
 			ValueId: 0x29bf442b48a772e0,
 			Label:   "gru",
 		}
@@ -550,13 +550,13 @@ func TestAddMutation_gru(t *testing.T) {
 	}
 
 	{
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			ValueId: 0x38dec821d2ac3a79,
 			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 3}
 		addMutationHelper(t, ol, edge, Set, txn)
-		edge = &intern.DirectedEdge{
+		edge = &pb.DirectedEdge{
 			ValueId: 0x2b693088816b04b7,
 			Label:   "gru",
 		}
@@ -575,13 +575,13 @@ func TestAddMutation_gru2(t *testing.T) {
 
 	{
 		// Set two tag ids and merge.
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
 			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
-		edge = &intern.DirectedEdge{
+		edge = &pb.DirectedEdge{
 			ValueId: 0x03,
 			Label:   "gru",
 		}
@@ -595,19 +595,19 @@ func TestAddMutation_gru2(t *testing.T) {
 
 	{
 		// Lets set a new tag and delete the two older ones.
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
 			Label:   "gru",
 		}
 		txn := &Txn{StartTs: 3}
 		addMutationHelper(t, ol, edge, Del, txn)
-		edge = &intern.DirectedEdge{
+		edge = &pb.DirectedEdge{
 			ValueId: 0x03,
 			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Del, txn)
 
-		edge = &intern.DirectedEdge{
+		edge = &pb.DirectedEdge{
 			ValueId: 0x04,
 			Label:   "gru",
 		}
@@ -630,7 +630,7 @@ func TestAddAndDelMutation(t *testing.T) {
 
 	// Set and callSyncIfDirty
 	{
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
 			Label:   "gru",
 		}
@@ -644,7 +644,7 @@ func TestAddAndDelMutation(t *testing.T) {
 
 	// Delete and callSyncIfDirty
 	{
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
 			Label:   "gru",
 		}
@@ -667,7 +667,7 @@ func TestAfterUIDCount(t *testing.T) {
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 	// Set value to cars and merge to BadgerDB.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Label: "jchiu",
 	}
 
@@ -742,7 +742,7 @@ func TestAfterUIDCount2(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Label: "jchiu",
 	}
 
@@ -772,7 +772,7 @@ func TestDelete(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Label: "jchiu",
 	}
 
@@ -799,7 +799,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Label: "jchiu",
 	}
 
@@ -914,10 +914,10 @@ func BenchmarkAddMutations(b *testing.B) {
 			b.Error(err)
 			return
 		}
-		edge := &intern.DirectedEdge{
+		edge := &pb.DirectedEdge{
 			ValueId: uint64(rand.Intn(b.N) + 1),
 			Label:   "testing",
-			Op:      intern.DirectedEdge_SET,
+			Op:      pb.DirectedEdge_SET,
 		}
 		txn := &Txn{StartTs: 1}
 		if err = l.AddMutation(ctx, txn, edge); err != nil {

@@ -22,7 +22,7 @@
 
 syntax = "proto3";
 
-package intern;
+package pb;
 
 import "api.proto";
 

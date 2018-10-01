@@ -26,7 +26,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -42,7 +42,7 @@ type kv struct {
 
 type skv struct {
 	attr   string
-	schema *intern.SchemaUpdate
+	schema *pb.SchemaUpdate
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -65,9 +65,9 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 		glog.Errorf("Error while retrieving list for key %X. Error: %v\n", item.key, err)
 		return
 	}
-	err = l.Iterate(readTs, 0, func(p *intern.Posting) bool {
+	err = l.Iterate(readTs, 0, func(p *pb.Posting) bool {
 		buf.WriteString(item.prefix)
-		if p.PostingType != intern.Posting_REF {
+		if p.PostingType != pb.Posting_REF {
 			// Value posting
 			// Convert to appropriate type
 			vID := types.TypeID(p.ValType)
@@ -79,7 +79,7 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 			// trim null character at end
 			trimmed := strings.TrimRight(str.Value.(string), "\x00")
 			buf.WriteString(strconv.Quote(trimmed))
-			if p.PostingType == intern.Posting_VALUE_LANG {
+			if p.PostingType == pb.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.LangTag))
 			} else if vID != types.DefaultID {
@@ -147,9 +147,9 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 	if isList {
 		buf.WriteRune(']')
 	}
-	if s.schema.Directive == intern.SchemaUpdate_REVERSE {
+	if s.schema.Directive == pb.SchemaUpdate_REVERSE {
 		buf.WriteString(" @reverse")
-	} else if s.schema.Directive == intern.SchemaUpdate_INDEX && len(s.schema.Tokenizer) > 0 {
+	} else if s.schema.Directive == pb.SchemaUpdate_INDEX && len(s.schema.Tokenizer) > 0 {
 		buf.WriteString(" @index(")
 		buf.WriteString(strings.Join(s.schema.Tokenizer, ","))
 		buf.WriteByte(')')
@@ -322,7 +322,7 @@ func export(bdir string, readTs uint64) error {
 		}
 
 		if pk.IsSchema() {
-			s := &intern.SchemaUpdate{}
+			s := &pb.SchemaUpdate{}
 			val, err := item.Value()
 			if err != nil {
 				return err
@@ -366,7 +366,7 @@ func export(bdir string, readTs uint64) error {
 
 // TODO: How do we want to handle export for group, do we pause mutations, sync all and then export ?
 // TODO: Should we move export logic to dgraphzero?
-func handleExportForGroupOverNetwork(ctx context.Context, in *intern.ExportPayload) *intern.ExportPayload {
+func handleExportForGroupOverNetwork(ctx context.Context, in *pb.ExportPayload) *pb.ExportPayload {
 	n := groups().Node
 	if in.GroupId == groups().groupId() && n != nil && n.AmLeader() {
 		return handleExportForGroup(ctx, in)
@@ -377,47 +377,47 @@ func handleExportForGroupOverNetwork(ctx context.Context, in *intern.ExportPaylo
 		// Unable to find any connection to any of these servers. This should be exceedingly rare.
 		// But probably not worthy of crashing the server. We can just skip the export.
 		glog.Warningf("Unable to find leader of group: %d\n", in.GroupId)
-		in.Status = intern.ExportPayload_FAILED
+		in.Status = pb.ExportPayload_FAILED
 		return in
 	}
 
 	glog.Infof("Sending export request to group: %d, addr: %s\n", in.GroupId, pl.Addr)
-	c := intern.NewWorkerClient(pl.Get())
+	c := pb.NewWorkerClient(pl.Get())
 	nrep, err := c.Export(ctx, in)
 	if err != nil {
 		glog.Errorf("Export error received from group: %d. Error: %v\n", in.GroupId, err)
-		in.Status = intern.ExportPayload_FAILED
+		in.Status = pb.ExportPayload_FAILED
 		return in
 	}
 	return nrep
 }
 
-func handleExportForGroup(ctx context.Context, in *intern.ExportPayload) *intern.ExportPayload {
+func handleExportForGroup(ctx context.Context, in *pb.ExportPayload) *pb.ExportPayload {
 	n := groups().Node
 	if in.GroupId != groups().groupId() || !n.AmLeader() {
 		glog.Warningf("Rejecting export request because I'm not leader of group: %d\n", in.GroupId)
-		in.Status = intern.ExportPayload_FAILED
+		in.Status = pb.ExportPayload_FAILED
 		return in
 	}
 	n.applyAllMarks(n.ctx)
 	glog.Infof("I'm leader of group: %d. Running export at timestamp: %d.", in.GroupId, in.ReadTs)
 	if err := export(Config.ExportPath, in.ReadTs); err != nil {
 		glog.Errorf("Error while running export: %v", err)
-		in.Status = intern.ExportPayload_FAILED
+		in.Status = pb.ExportPayload_FAILED
 		return in
 	}
 	glog.Infof("Export DONE for group: %d", in.GroupId)
-	in.Status = intern.ExportPayload_SUCCESS
+	in.Status = pb.ExportPayload_SUCCESS
 	return in
 }
 
 // Export request is used to trigger exports for the request list of groups.
 // If a server receives request to export a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
-func (w *grpcWorker) Export(ctx context.Context, req *intern.ExportPayload) (*intern.ExportPayload, error) {
+func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportPayload) (*pb.ExportPayload, error) {
 	glog.Infof("Received export request via Grpc: %+v\n", req)
-	reply := &intern.ExportPayload{ReqId: req.ReqId, GroupId: req.GroupId}
-	reply.Status = intern.ExportPayload_FAILED // Set by default.
+	reply := &pb.ExportPayload{ReqId: req.ReqId, GroupId: req.GroupId}
+	reply.Status = pb.ExportPayload_FAILED // Set by default.
 
 	if ctx.Err() != nil {
 		glog.Errorf("Context error during export: %v\n", ctx.Err())
@@ -425,12 +425,12 @@ func (w *grpcWorker) Export(ctx context.Context, req *intern.ExportPayload) (*in
 	}
 	if !w.addIfNotPresent(req.ReqId) {
 		glog.Warningf("Duplicate export request: %d\n", req.ReqId)
-		reply.Status = intern.ExportPayload_DUPLICATE
+		reply.Status = pb.ExportPayload_DUPLICATE
 		return reply, nil
 	}
 
 	glog.Infof("Issuing export request...")
-	chb := make(chan *intern.ExportPayload, 1)
+	chb := make(chan *pb.ExportPayload, 1)
 	go func() {
 		chb <- handleExportForGroup(ctx, req)
 	}()
@@ -452,7 +452,7 @@ func ExportOverNetwork(ctx context.Context) error {
 		return err
 	}
 	// Get ReadTs from zero and wait for stream to catch up.
-	ts, err := Timestamps(ctx, &intern.Num{ReadOnly: true})
+	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
 		glog.Errorf("Unable to retrieve readonly ts for export: %v\n", err)
 		return err
@@ -465,10 +465,10 @@ func ExportOverNetwork(ctx context.Context) error {
 	gids := groups().KnownGroups()
 	glog.Infof("Requesting export for groups: %v\n", gids)
 
-	ch := make(chan *intern.ExportPayload, len(gids))
+	ch := make(chan *pb.ExportPayload, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
-			req := &intern.ExportPayload{
+			req := &pb.ExportPayload{
 				ReqId:   uint64(rand.Int63()),
 				GroupId: group,
 				ReadTs:  readTs,
@@ -479,7 +479,7 @@ func ExportOverNetwork(ctx context.Context) error {
 
 	for i := 0; i < len(gids); i++ {
 		bp := <-ch
-		if bp.Status != intern.ExportPayload_SUCCESS {
+		if bp.Status != pb.ExportPayload_SUCCESS {
 			err := fmt.Errorf("Export status: %v for group id: %d", bp.Status, bp.GroupId)
 			glog.Errorln(err)
 			return err

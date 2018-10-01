@@ -1,5 +1,7 @@
-// Copyright (c) 2013, Vastech SA (PTY) LTD. All rights reserved.
-// http://github.com/gogo/protobuf/gogoproto
+// Protocol Buffers for Go with Gadgets
+//
+// Copyright (c) 2013, The GoGo Authors. All rights reserved.
+// http://github.com/gogo/protobuf
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -30,6 +32,14 @@ import (
 	"encoding/json"
 	"strconv"
 )
+
+type Sizer interface {
+	Size() int
+}
+
+type ProtoSizer interface {
+	ProtoSize() int
+}
 
 func MarshalJSONEnum(m map[int32]string, value int32) ([]byte, error) {
 	s, ok := m[value]

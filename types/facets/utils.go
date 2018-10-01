@@ -16,7 +16,7 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -40,7 +40,7 @@ func SortAndValidate(fs []*api.Facet) error {
 }
 
 // CopyFacets makes a copy of facets of the posting which are requested in param.Keys.
-func CopyFacets(fcs []*api.Facet, param *intern.FacetParams) (fs []*api.Facet) {
+func CopyFacets(fcs []*api.Facet, param *pb.FacetParams) (fs []*api.Facet) {
 	if param == nil || fcs == nil {
 		return nil
 	}

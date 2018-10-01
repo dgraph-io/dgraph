@@ -12,14 +12,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
 var (
-	emptyNum         intern.Num
-	emptyAssignedIds intern.AssignedIds
+	emptyNum         pb.Num
+	emptyAssignedIds pb.AssignedIds
 )
 
 const (
@@ -54,7 +54,7 @@ var servedFromMemory = errors.New("Lease was served from memory.")
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the leasemanager
 // In essence, we just want one server to be handing out new uids.
-func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*intern.AssignedIds, error) {
+func (s *Server) lease(ctx context.Context, num *pb.Num, txn bool) (*pb.AssignedIds, error) {
 	node := s.Node
 	// TODO: Fix when we move to linearizable reads, need to check if we are the leader, might be
 	// based on leader leases. If this node gets partitioned and unless checkquorum is enabled, this
@@ -82,7 +82,7 @@ func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*intern.
 					s.readOnlyTs, s.nextTxnTs)
 			}
 			if s.readOnlyTs > 0 && s.readOnlyTs == s.nextTxnTs-1 {
-				return &intern.AssignedIds{ReadOnly: s.readOnlyTs}, servedFromMemory
+				return &pb.AssignedIds{ReadOnly: s.readOnlyTs}, servedFromMemory
 			}
 		}
 		// We couldn't service it. So, let's request an extra timestamp for
@@ -103,7 +103,7 @@ func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*intern.
 	}
 
 	var maxLease, available uint64
-	var proposal intern.ZeroProposal
+	var proposal pb.ZeroProposal
 
 	// Calculate how many ids do we have available in memory, before we need to
 	// renew our lease.
@@ -125,7 +125,7 @@ func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*intern.
 		}
 	}
 
-	out := &intern.AssignedIds{}
+	out := &pb.AssignedIds{}
 	if txn {
 		if num.Val > 0 {
 			out.StartId = s.nextTxnTs
@@ -148,7 +148,7 @@ func (s *Server) lease(ctx context.Context, num *intern.Num, txn bool) (*intern.
 
 // AssignUids is used to assign new uids by communicating with the leader of the RAFT group
 // responsible for handing out uids.
-func (s *Server) AssignUids(ctx context.Context, num *intern.Num) (*intern.AssignedIds, error) {
+func (s *Server) AssignUids(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}
@@ -166,7 +166,7 @@ func (s *Server) AssignUids(ctx context.Context, num *intern.Num) (*intern.Assig
 		if pl == nil {
 			err = x.Errorf("No healthy connection found to Leader of group zero")
 		} else {
-			zc := intern.NewZeroClient(pl.Get())
+			zc := pb.NewZeroClient(pl.Get())
 			reply, err = zc.AssignUids(ctx, num)
 		}
 		c <- err

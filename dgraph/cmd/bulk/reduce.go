@@ -13,7 +13,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -43,7 +43,7 @@ func (r *reducer) run() {
 func (r *reducer) reduce(job shuffleOutput) {
 	var currentKey []byte
 	var uids []uint64
-	pl := new(intern.PostingList)
+	pl := new(pb.PostingList)
 	txn := job.db.NewTransactionAt(r.state.writeTs, true)
 
 	outputPostingList := func() {
@@ -52,7 +52,7 @@ func (r *reducer) reduce(job shuffleOutput) {
 		// For a UID-only posting list, the badger value is a delta packed UID
 		// list. The UserMeta indicates to treat the value as a delta packed
 		// list when the value is read by dgraph.  For a value posting list,
-		// the full intern.Posting type is used (which intern.y contains the
+		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
 		meta := posting.BitCompletePosting
 		if len(pl.Postings) == 0 {

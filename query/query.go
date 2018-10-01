@@ -23,7 +23,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -54,7 +54,7 @@ const (
  * }
  *
  * REPRESENTATION:
- * This would be represented in SubGraph format intern.y, as such:
+ * This would be represented in SubGraph format pb.y, as such:
  * SubGraph [result uid = me]
  *    |
  *  Children
@@ -105,7 +105,7 @@ type params struct {
 	AfterUID   uint64
 	DoCount    bool
 	GetUid     bool
-	Order      []*intern.Order
+	Order      []*pb.Order
 	Var        string
 	NeedsVar   []gql.VarContext
 	ParentVars map[string]varValue
@@ -122,7 +122,7 @@ type params struct {
 
 	From           uint64
 	To             uint64
-	Facet          *intern.FacetParams
+	Facet          *pb.FacetParams
 	FacetOrder     string
 	FacetOrderDesc bool
 	ExploreDepth   uint64
@@ -148,7 +148,7 @@ type Function struct {
 	IsValueVar bool      // eq(val(s), 10)
 }
 
-// SubGraph is the way to represent data intern.y. It contains both the
+// SubGraph is the way to represent data pb.y. It contains both the
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
@@ -156,26 +156,26 @@ type SubGraph struct {
 	Attr         string
 	Params       params
 	counts       []uint32
-	valueMatrix  []*intern.ValueList
-	uidMatrix    []*intern.List
-	facetsMatrix []*intern.FacetsList
-	ExpandPreds  []*intern.ValueList
+	valueMatrix  []*pb.ValueList
+	uidMatrix    []*pb.List
+	facetsMatrix []*pb.FacetsList
+	ExpandPreds  []*pb.ValueList
 	GroupbyRes   []*groupResults // one result for each uid list.
-	LangTags     []*intern.LangList
+	LangTags     []*pb.LangList
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
-	SrcUIDs *intern.List
+	SrcUIDs *pb.List
 	SrcFunc *Function
 
 	FilterOp     string
 	Filters      []*SubGraph
-	facetsFilter *intern.FilterTree
+	facetsFilter *pb.FilterTree
 	MathExp      *mathTree
 	Children     []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestUIDs *intern.List
+	DestUIDs *pb.List
 	List     bool // whether predicate is of list type
 }
 
@@ -232,7 +232,7 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 }
 
 // getValue gets the value from the task.
-func getValue(tv *intern.TaskValue) (types.Val, error) {
+func getValue(tv *pb.TaskValue) (types.Val, error) {
 	vID := types.TypeID(tv.ValType)
 	val := types.ValueForType(vID)
 	val.Value = tv.Val
@@ -324,7 +324,7 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	return nil
 }
 
-func addCheckPwd(pc *SubGraph, vals []*intern.TaskValue, dst outputNode) {
+func addCheckPwd(pc *SubGraph, vals []*pb.TaskValue, dst outputNode) {
 	c := types.ValueForType(types.BoolID)
 	if len(vals) == 0 {
 		// No value found for predicate.
@@ -413,7 +413,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		} else if pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd" {
 			addCheckPwd(pc, pc.valueMatrix[idx].Values, dst)
 		} else if idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0 {
-			var fcsList []*intern.Facets
+			var fcsList []*pb.Facets
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
@@ -500,7 +500,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if pc.Params.expandAll && len(pc.LangTags[idx].Lang) != 0 {
 					if i >= len(pc.LangTags[idx].Lang) {
 						return x.Errorf(
-							"intern.error: all lang tags should be either present or absent")
+							"pb.error: all lang tags should be either present or absent")
 					}
 					fieldNameWithTag := fieldName
 					lang := pc.LangTags[idx].Lang[i]
@@ -545,7 +545,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 // convert from task.Val to types.Value, based on schema appropriate type
 // is already set in api.Value
-func convertWithBestEffort(tv *intern.TaskValue, attr string) (types.Val, error) {
+func convertWithBestEffort(tv *pb.TaskValue, attr string) (types.Val, error) {
 	// value would be in binary format with appropriate type
 	v, _ := getValue(tv)
 	if !v.Tid.IsScalar() {
@@ -819,7 +819,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 	return nil
 }
 
-// ToSubGraph converts the GraphQuery into the intern.SubGraph instance type.
+// ToSubGraph converts the GraphQuery into the pb.SubGraph instance type.
 func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg, err := newGraph(ctx, gq)
 	if err != nil {
@@ -846,9 +846,9 @@ func isDebug(ctx context.Context) bool {
 func (sg *SubGraph) populate(uids []uint64) error {
 	// Put sorted entries in matrix.
 	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-	sg.uidMatrix = []*intern.List{{uids}}
+	sg.uidMatrix = []*pb.List{{uids}}
 	// User specified list may not be sorted.
-	sg.SrcUIDs = &intern.List{uids}
+	sg.SrcUIDs = &pb.List{uids}
 	return nil
 }
 
@@ -930,14 +930,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, nil
 }
 
-func toFacetsFilter(gft *gql.FilterTree) (*intern.FilterTree, error) {
+func toFacetsFilter(gft *gql.FilterTree) (*pb.FilterTree, error) {
 	if gft == nil {
 		return nil, nil
 	}
 	if gft.Func != nil && len(gft.Func.NeedsVar) != 0 {
-		return nil, x.Errorf("Variables not supported in intern.FilterTree")
+		return nil, x.Errorf("Variables not supported in pb.FilterTree")
 	}
-	ftree := new(intern.FilterTree)
+	ftree := new(pb.FilterTree)
 	ftree.Op = gft.Op
 	for _, gftc := range gft.Child {
 		ftc, err := toFacetsFilter(gftc)
@@ -947,7 +947,7 @@ func toFacetsFilter(gft *gql.FilterTree) (*intern.FilterTree, error) {
 		ftree.Children = append(ftree.Children, ftc)
 	}
 	if gft.Func != nil {
-		ftree.Func = &intern.Function{
+		ftree.Func = &pb.Function{
 			Key:  gft.Func.Attr,
 			Name: gft.Func.Name,
 			Args: []string{},
@@ -961,16 +961,16 @@ func toFacetsFilter(gft *gql.FilterTree) (*intern.FilterTree, error) {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph) (*intern.Query, error) {
+func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	attr := sg.Attr
 	// Might be safer than just checking first byte due to i18n
 	reverse := strings.HasPrefix(attr, "~")
 	if reverse {
 		attr = strings.TrimPrefix(attr, "~")
 	}
-	var srcFunc *intern.SrcFunction
+	var srcFunc *pb.SrcFunction
 	if sg.SrcFunc != nil {
-		srcFunc = &intern.SrcFunction{}
+		srcFunc = &pb.SrcFunction{}
 		srcFunc.Name = sg.SrcFunc.Name
 		srcFunc.IsCount = sg.SrcFunc.IsCount
 		for _, arg := range sg.SrcFunc.Args {
@@ -980,7 +980,7 @@ func createTaskQuery(sg *SubGraph) (*intern.Query, error) {
 			}
 		}
 	}
-	out := &intern.Query{
+	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
@@ -999,11 +999,11 @@ func createTaskQuery(sg *SubGraph) (*intern.Query, error) {
 }
 
 type varValue struct {
-	Uids *intern.List
+	Uids *pb.List
 	Vals map[uint64]types.Val
 	path []*SubGraph // This stores the subgraph path from root to var definition.
 	// TODO: Check if we can do without this field.
-	strList []*intern.ValueList
+	strList []*pb.ValueList
 }
 
 func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[uint64]types.Val,
@@ -1262,7 +1262,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		// The value var can be empty. No need to check for nil.
 		sg.Params.uidToVal = srcMap.Vals
 	} else {
-		return x.Errorf("Unhandled intern.node %v with parent %v", sg.Attr, parent.Attr)
+		return x.Errorf("Unhandled pb.node %v with parent %v", sg.Attr, parent.Attr)
 	}
 	return nil
 }
@@ -1380,7 +1380,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	}
 	// Note the we can't overwrite DestUids, as it'd also modify the SrcUids of
 	// next level and the mapping from SrcUids to uidMatrix would be lost.
-	sg.DestUIDs = &intern.List{out}
+	sg.DestUIDs = &pb.List{out}
 
 AssignStep:
 	return sg.updateVars(doneVars, sgPath)
@@ -1429,7 +1429,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 	} else if len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil) {
 		// Uid variable could be defined using uid or a predicate.
-		var uids *intern.List
+		var uids *pb.List
 		if sg.Attr == "uid" {
 			uids = sg.SrcUIDs
 		} else {
@@ -1448,7 +1448,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		// For a recurse query this can happen. We don't allow using the same variable more than
 		// once otherwise.
 		oldUids := v.Uids
-		lists := make([]*intern.List, 0, 2)
+		lists := make([]*pb.List, 0, 2)
 		lists = append(lists, oldUids, uids)
 		v.Uids = algo.MergeSorted(lists)
 		doneVars[sg.Params.Var] = v
@@ -1563,7 +1563,7 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 }
 
 func (sg *SubGraph) fillVars(mp map[string]varValue) error {
-	lists := make([]*intern.List, 0, 3)
+	lists := make([]*pb.List, 0, 3)
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
 			if (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil {
@@ -1584,7 +1584,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				sort.Slice(uids, func(i, j int) bool {
 					return uids[i] < uids[j]
 				})
-				lists = append(lists, &intern.List{uids})
+				lists = append(lists, &pb.List{uids})
 			} else if len(l.Vals) != 0 || l.Uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 			}
@@ -1666,7 +1666,7 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 		sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
 			return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
 		})
-		sg.uidMatrix = []*intern.List{sg.DestUIDs}
+		sg.uidMatrix = []*pb.List{sg.DestUIDs}
 	}
 	return nil
 }
@@ -1675,8 +1675,8 @@ func (sg *SubGraph) appendDummyValues() {
 	if sg.SrcUIDs == nil {
 		return
 	}
-	var l intern.List
-	var val intern.ValueList
+	var l pb.List
+	var val pb.ValueList
 	for i := 0; i < len(sg.SrcUIDs.Uids); i++ {
 		// This is necessary so that preTraverse can be processed smoothly.
 		sg.uidMatrix = append(sg.uidMatrix, &l)
@@ -1684,7 +1684,7 @@ func (sg *SubGraph) appendDummyValues() {
 	}
 }
 
-func uniquePreds(vl []*intern.ValueList) []string {
+func uniquePreds(vl []*pb.ValueList) []string {
 	predMap := make(map[string]struct{})
 
 	for _, l := range vl {
@@ -1787,7 +1787,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			temp.Params.isInternal = false
 			temp.Params.Expand = ""
-			temp.Params.Facet = &intern.FacetParams{AllKeys: true}
+			temp.Params.Facet = &pb.FacetParams{AllKeys: true}
 
 			// Go through each child, create a copy and attach to temp.Children.
 			for _, cc := range child.Children {
@@ -1808,7 +1808,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 }
 
 func getReversePredicates(ctx context.Context) ([]string, error) {
-	schs, err := worker.GetSchemaOverNetwork(ctx, &intern.SchemaRequest{})
+	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -1849,7 +1849,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// Populated variable.
 			o := make([]uint64, len(sg.DestUIDs.Uids))
 			copy(o, sg.DestUIDs.Uids)
-			sg.uidMatrix = []*intern.List{{o}}
+			sg.uidMatrix = []*pb.List{{o}}
 			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool { return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j] })
 		}
 	} else if len(sg.Attr) == 0 {
@@ -1872,7 +1872,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// This is to allow providing SrcUIDs to the filter children.
 		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
 		// when multiple filters replace their sg.DestUIDs
-		sg.DestUIDs = &intern.List{sg.SrcUIDs.Uids}
+		sg.DestUIDs = &pb.List{sg.SrcUIDs.Uids}
 	} else {
 
 		if sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && sg.SrcFunc.IsValueVar {
@@ -1927,7 +1927,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			if parent == nil {
 				// I'm root. We reach here if root had a function.
-				sg.uidMatrix = []*intern.List{sg.DestUIDs}
+				sg.uidMatrix = []*pb.List{sg.DestUIDs}
 			}
 		}
 	}
@@ -1988,7 +1988,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		// Now apply the results from filter.
-		var lists []*intern.List
+		var lists []*pb.List
 		for _, filter := range sg.Filters {
 			lists = append(lists, filter.DestUIDs)
 		}
@@ -2156,7 +2156,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	x.AssertTrue(len(sg.Params.Order) > 0)
 
-	sort := &intern.SortMessage{
+	sort := &pb.SortMessage{
 		Order:     sg.Params.Order,
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
@@ -2173,7 +2173,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		// The order of uids in the lists which are part of the uidMatrix would have been changed
 		// after sort. We want to update the order of lists in the facetMatrix accordingly.
 		for idx, rl := range result.UidMatrix {
-			fl := make([]*intern.Facets, 0, len(sg.facetsMatrix[idx].FacetsList))
+			fl := make([]*pb.Facets, 0, len(sg.facetsMatrix[idx].FacetsList))
 			for _, uid := range rl.Uids {
 				// Find index of this uid in original sorted uid list.
 				oidx := algo.IndexOf(sg.uidMatrix[idx], uid)
@@ -2242,7 +2242,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.SortWithFacet(values, &intern.List{uids},
+		if err := types.SortWithFacet(values, &pb.List{uids},
 			facetList, []bool{sg.Params.FacetOrderDesc}); err != nil {
 			return err
 		}
@@ -2287,7 +2287,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.Sort(values, &intern.List{uids}, []bool{sg.Params.Order[0].Desc}); err != nil {
+		if err := types.Sort(values, &pb.List{uids}, []bool{sg.Params.Order[0].Desc}); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
@@ -2345,7 +2345,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func getNodePredicates(ctx context.Context, sg *SubGraph) ([]*intern.ValueList, error) {
+func getNodePredicates(ctx context.Context, sg *SubGraph) ([]*pb.ValueList, error) {
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = sg.DestUIDs
@@ -2431,7 +2431,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
 			gq.Alias != "shortest" && !gq.IsEmpty) {
-			err := x.Errorf("Invalid query, query intern.id is zero and generator is nil")
+			err := x.Errorf("Invalid query, query pb.id is zero and generator is nil")
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
@@ -2583,7 +2583,7 @@ type InternalError struct {
 }
 
 func (e *InternalError) Error() string {
-	return "intern.error: " + e.err.Error()
+	return "pb.error: " + e.err.Error()
 }
 
 // TODO: This looks unnecessary.

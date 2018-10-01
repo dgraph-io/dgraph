@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -33,14 +33,14 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	for _, update := range updates {
 		State().Set(update.Predicate, *update)
 	}
-	State().Set("_predicate_", intern.SchemaUpdate{
-		ValueType: intern.Posting_STRING,
+	State().Set("_predicate_", pb.SchemaUpdate{
+		ValueType: pb.Posting_STRING,
 		List:      true,
 	})
 	return nil
 }
 
-func parseDirective(it *lex.ItemIterator, schema *intern.SchemaUpdate, t types.TypeID) error {
+func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeID) error {
 	it.Next()
 	next := it.Item()
 	if next.Typ != itemText {
@@ -51,12 +51,12 @@ func parseDirective(it *lex.ItemIterator, schema *intern.SchemaUpdate, t types.T
 		if t != types.UidID {
 			return x.Errorf("Cannot reverse for non-UID type")
 		}
-		schema.Directive = intern.SchemaUpdate_REVERSE
+		schema.Directive = pb.SchemaUpdate_REVERSE
 	case "index":
 		if tokenizer, err := parseIndexDirective(it, schema.Predicate, t); err != nil {
 			return err
 		} else {
-			schema.Directive = intern.SchemaUpdate_INDEX
+			schema.Directive = pb.SchemaUpdate_INDEX
 			schema.Tokenizer = tokenizer
 		}
 	case "count":
@@ -77,7 +77,7 @@ func parseDirective(it *lex.ItemIterator, schema *intern.SchemaUpdate, t types.T
 	return nil
 }
 
-func parseScalarPair(it *lex.ItemIterator, predicate string) (*intern.SchemaUpdate,
+func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate,
 	error) {
 	it.Next()
 	if next := it.Item(); next.Typ != itemColon {
@@ -88,7 +88,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*intern.SchemaUpda
 		return nil, x.Errorf("Invalid ending while trying to parse schema.")
 	}
 	next := it.Item()
-	schema := &intern.SchemaUpdate{Predicate: predicate}
+	schema := &pb.SchemaUpdate{Predicate: predicate}
 	// Could be list type.
 	if next.Typ == itemLeftSquare {
 		schema.List = true
@@ -230,12 +230,12 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 }
 
 // resolveTokenizers resolves default tokenizers and verifies tokenizers definitions.
-func resolveTokenizers(updates []*intern.SchemaUpdate) error {
+func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
 
 		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
-			schema.Directive == intern.SchemaUpdate_INDEX {
+			schema.Directive == pb.SchemaUpdate_INDEX {
 			return x.Errorf("Indexing not allowed on predicate %s of type %s",
 				schema.Predicate, typ.Name())
 		}
@@ -244,10 +244,10 @@ func resolveTokenizers(updates []*intern.SchemaUpdate) error {
 			continue
 		}
 
-		if len(schema.Tokenizer) == 0 && schema.Directive == intern.SchemaUpdate_INDEX {
+		if len(schema.Tokenizer) == 0 && schema.Directive == pb.SchemaUpdate_INDEX {
 			return x.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
 				schema.Predicate, typ.Name())
-		} else if len(schema.Tokenizer) > 0 && schema.Directive != intern.SchemaUpdate_INDEX {
+		} else if len(schema.Tokenizer) > 0 && schema.Directive != pb.SchemaUpdate_INDEX {
 			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
 		}
 		// check for valid tokeniser types and duplicates
@@ -282,8 +282,8 @@ func resolveTokenizers(updates []*intern.SchemaUpdate) error {
 }
 
 // Parse parses a schema string and returns the schema representation for it.
-func Parse(s string) ([]*intern.SchemaUpdate, error) {
-	var schemas []*intern.SchemaUpdate
+func Parse(s string) ([]*pb.SchemaUpdate, error) {
+	var schemas []*pb.SchemaUpdate
 	l := lex.Lexer{Input: s}
 	l.Run(lexText)
 	it := l.NewIterator()

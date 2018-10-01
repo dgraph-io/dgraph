@@ -18,7 +18,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -111,13 +111,13 @@ func (c *raftServer) RaftMessage(ctx context.Context, in *api.Payload) (*api.Pay
 	return &api.Payload{}, nil
 }
 
-func (c *raftServer) JoinCluster(ctx context.Context, in *intern.RaftContext) (*api.Payload, error) {
+func (c *raftServer) JoinCluster(ctx context.Context, in *pb.RaftContext) (*api.Payload, error) {
 	return &api.Payload{}, nil
 }
 
 func updateMaxPending() {
 	for mp := range maxPendingCh {
-		posting.Oracle().ProcessDelta(&intern.OracleDelta{
+		posting.Oracle().ProcessDelta(&pb.OracleDelta{
 			MaxAssigned: mp,
 		})
 	}

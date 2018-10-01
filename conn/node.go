@@ -20,7 +20,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -51,7 +51,7 @@ type Node struct {
 	peers       map[uint64]string
 	confChanges map[uint64]chan error
 	messages    chan sendmsg
-	RaftContext *intern.RaftContext
+	RaftContext *pb.RaftContext
 	Store       *raftwal.DiskStorage
 	Rand        *rand.Rand
 
@@ -62,7 +62,7 @@ type Node struct {
 	Applied x.WaterMark
 }
 
-func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
+func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
 
@@ -332,9 +332,9 @@ func (n *Node) doSendMessage(pool *Pool, data []byte) {
 
 	client := pool.Get()
 
-	c := intern.NewRaftClient(client)
+	c := pb.NewRaftClient(client)
 	p := &api.Payload{Data: data}
-	batch := &intern.RaftBatch{
+	batch := &pb.RaftBatch{
 		Context: n.RaftContext,
 		Payload: p,
 	}
@@ -415,7 +415,7 @@ func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) erro
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr, ok := n.Peer(pid)
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
-	rc := &intern.RaftContext{
+	rc := &pb.RaftContext{
 		Addr:  addr,
 		Group: n.RaftContext.Group,
 		Id:    pid,
