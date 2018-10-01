@@ -43,10 +43,10 @@ docker pull dgraph/dgraph:latest
 
 ## Install from Source
 
-If you want to install from source, you can use `go install` to install to `$GOPATH/bin`.
+If you want to install from source, you can use `go get` to install to `$GOPATH/bin`.
 
 ```bash
-go install -v github.com/dgraph-io/dgraph/dgraph
+go get -u -v github.com/dgraph-io/dgraph/dgraph
 ```
 
 ## Get Started
