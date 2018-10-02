@@ -132,6 +132,9 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
+		// In RDF, we assume everything is default (types.DefaultID), but in JSON we assume string
+		// (StringID). But this value will be checked against the schema so we don't overshadow a
+		// password value (types.PasswordID) - Issue#2623
 		nq.ObjectValue = &api.Value{&api.Value_StrVal{v}}
 	case float64:
 		if v == 0 && op == delete {
