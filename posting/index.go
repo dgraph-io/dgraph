@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"golang.org/x/net/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger"
 
@@ -54,7 +56,7 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 			if ok {
 				it = newTokenizer
 			} else {
-				return nil, x.Errorf("Tokenizer not available for language: %s", lang)
+				return nil, status.Errorf(codes.Internal, "Tokenizer not available for language: %s", lang)
 			}
 		}
 		if schemaType == types.StringID {

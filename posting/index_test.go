@@ -100,6 +100,17 @@ func TestIndexingInvalidLang(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestIndexingAliasedLang(t *testing.T) {
+	schema.ParseBytes([]byte("name:string @index(fulltext) @lang ."), 1)
+	_, err := indexTokens("name", "es", types.Val{types.StringID, []byte("base")})
+	require.NoError(t, err)
+	// es-es and es-419 are aliased to es
+	_, err = indexTokens("name", "es-es", types.Val{types.StringID, []byte("alias")})
+	require.NoError(t, err)
+	_, err = indexTokens("name", "es-419", types.Val{types.StringID, []byte("alias")})
+	require.NoError(t, err)
+}
+
 func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 	startTs uint64, commitTs uint64, index bool) {
 	if op == Del {
