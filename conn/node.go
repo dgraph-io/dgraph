@@ -493,7 +493,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		var activeRctx [8]byte
 		x.Check2(n.Rand.Read(activeRctx[:]))
 		if err := n.Raft().ReadIndex(ctx, activeRctx[:]); err != nil {
-			x.Errorf("Error while trying to call ReadIndex: %v\n", err)
+			glog.Errorf("Error while trying to call ReadIndex: %v\n", err)
 			return 0, err
 		}
 
@@ -507,10 +507,10 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			}
 			return rs.Index, nil
 		case <-ctx.Done():
-			x.Errorf("[%d] Read index context timed out\n")
+			glog.Warningf("[%d] Read index context timed out\n", n.Id)
 			return 0, errInternalRetry
 		}
-	}
+	} // end of readIndex func
 
 	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
 	// requestCh.
@@ -521,7 +521,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			return
 		case rs := <-readStateCh:
 			// Do nothing, discard ReadState as we don't have any pending ReadIndex requests.
-			x.Errorf("Received a read state unexpectedly: %+v\n", rs)
+			glog.Warningf("Received a read state unexpectedly: %+v\n", rs)
 		case req := <-n.requestCh:
 		slurpLoop:
 			for {
@@ -539,7 +539,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 				}
 				if err != nil {
 					index = 0
-					x.Errorf("[%d] While trying to do lin read index: %v", n.Id, err)
+					glog.Errorf("[%d] While trying to do lin read index: %v", n.Id, err)
 				}
 				for _, req := range requests {
 					req.indexCh <- index
