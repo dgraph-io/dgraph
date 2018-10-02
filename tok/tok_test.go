@@ -133,6 +133,61 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	require.Equal(t, []string{encodeToken("auffass", id), encodeToken("katz", id)}, tokens)
 }
 
+func TestFullTextTokenizerSupportedLangs(t *testing.T) {
+	var tests = []struct {
+		lang string
+		ok   bool
+	}{
+		{"ar", false},
+		{"ar-001", false},
+		{"bg", false},
+		{"ca", false},
+		{"cjk", false},
+		{"ckb", false},
+		{"cs", false},
+		{"da", true},
+		{"de", true},
+		{"el", false},
+		{"en", true},
+		{"en-us", true},
+		{"en-gb", true},
+		{"es", true},
+		{"es-es", true},
+		{"es-419", true},
+		{"eu", false},
+		{"fa", false},
+		{"fi", true},
+		{"fr", true},
+		{"fr-ca", true},
+		{"ga", false},
+		{"gl", false},
+		{"hi", false},
+		{"hu", true},
+		{"hy", false},
+		{"id", false},
+		{"in", false},
+		{"it", true},
+		{"nl", true},
+		{"no", true},
+		{"pt", true},
+		{"pt-br", true},
+		{"pt-pt", true},
+		{"ro", true},
+		{"ru", true},
+		{"sr", false},
+		{"sr-latin", false},
+		{"sv", true},
+		{"tr", true},
+	}
+	for _, test := range tests {
+		tokenizer, ok := GetTokenizer(FtsTokenizerName(test.lang))
+		require.Equal(t, test.ok, ok, "Fulltext tokenizer for %q failed", test.lang)
+		if test.ok {
+			require.NotNil(t, tokenizer)
+		}
+	}
+}
+
 func TestTermTokenizer(t *testing.T) {
 	tokenizer, has := GetTokenizer("term")
 	require.True(t, has)

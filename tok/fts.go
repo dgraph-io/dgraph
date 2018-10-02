@@ -60,7 +60,7 @@ func initFullTextTokenizers() {
 
 	for _, lang := range [...]string{"chinese", "japanese", "korean"} {
 		cc := countryCode(lang)
-		defineCJKAnalyzer(cc, lang)
+		defineCJKAnalyzer(cc)
 		registerTokenizer(&FullTextTokenizer{Lang: cc})
 	}
 
@@ -145,7 +145,7 @@ func defineAnalyzer(cc string) {
 // Full text search analyzer - does Chinese/Japanese/Korean style bigram
 // tokenization. It's language unaware (so doesn't do stemming or stop
 // words), but works OK in some contexts.
-func defineCJKAnalyzer(cc, lang string) {
+func defineCJKAnalyzer(cc string) {
 	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(cc), map[string]interface{}{
 		"type":      custom.Name,
 		"tokenizer": unicode.Name,
