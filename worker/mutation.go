@@ -23,7 +23,7 @@ import (
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -34,12 +34,12 @@ var (
 	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
 )
 
-func deletePredicateEdge(edge *intern.DirectedEdge) bool {
+func deletePredicateEdge(edge *pb.DirectedEdge) bool {
 	return edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star))
 }
 
 // runMutation goes through all the edges and applies them.
-func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Txn) error {
+func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
 	if !groups().ServesTabletRW(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
@@ -47,7 +47,7 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 	}
 
 	su, ok := schema.State().Get(edge.Attr)
-	if edge.Op == intern.DirectedEdge_SET {
+	if edge.Op == pb.DirectedEdge_SET {
 		x.AssertTruef(ok, "Schema is not present for predicate %s", edge.Attr)
 	}
 
@@ -79,7 +79,7 @@ func runMutation(ctx context.Context, edge *intern.DirectedEdge, txn *posting.Tx
 
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
-func runSchemaMutation(ctx context.Context, update *intern.SchemaUpdate, startTs uint64) error {
+func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	if err := runSchemaMutationHelper(ctx, update, startTs); err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func runSchemaMutation(ctx context.Context, update *intern.SchemaUpdate, startTs
 	return nil
 }
 
-func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, startTs uint64) error {
+func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	n := groups().Node
 	if !groups().ServesTablet(update.Predicate) {
 		return errUnservedTablet
@@ -123,11 +123,11 @@ func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, s
 	// (both applied and synced watermarks).
 	defer x.Printf("Done schema update %+v\n", update)
 	if !ok {
-		if current.Directive == intern.SchemaUpdate_INDEX {
+		if current.Directive == pb.SchemaUpdate_INDEX {
 			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true, startTs); err != nil {
 				return err
 			}
-		} else if current.Directive == intern.SchemaUpdate_REVERSE {
+		} else if current.Directive == pb.SchemaUpdate_REVERSE {
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true, startTs); err != nil {
 				return err
 			}
@@ -154,13 +154,13 @@ func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, s
 	if needReindexing(old, current) {
 		// Reindex if update.Index is true or remove index
 		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
-			current.Directive == intern.SchemaUpdate_INDEX, startTs); err != nil {
+			current.Directive == pb.SchemaUpdate_INDEX, startTs); err != nil {
 			return err
 		}
 	} else if needsRebuildingReverses(old, current) {
 		// Add or remove reverse edge based on update.Reverse
 		if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
-			current.Directive == intern.SchemaUpdate_REVERSE, startTs); err != nil {
+			current.Directive == pb.SchemaUpdate_REVERSE, startTs); err != nil {
 			return err
 		}
 	}
@@ -174,17 +174,17 @@ func runSchemaMutationHelper(ctx context.Context, update *intern.SchemaUpdate, s
 	return nil
 }
 
-func needsRebuildingReverses(old intern.SchemaUpdate, current intern.SchemaUpdate) bool {
-	return (current.Directive == intern.SchemaUpdate_REVERSE) !=
-		(old.Directive == intern.SchemaUpdate_REVERSE)
+func needsRebuildingReverses(old pb.SchemaUpdate, current pb.SchemaUpdate) bool {
+	return (current.Directive == pb.SchemaUpdate_REVERSE) !=
+		(old.Directive == pb.SchemaUpdate_REVERSE)
 }
 
-func needReindexing(old intern.SchemaUpdate, current intern.SchemaUpdate) bool {
-	if (current.Directive == intern.SchemaUpdate_INDEX) != (old.Directive == intern.SchemaUpdate_INDEX) {
+func needReindexing(old pb.SchemaUpdate, current pb.SchemaUpdate) bool {
+	if (current.Directive == pb.SchemaUpdate_INDEX) != (old.Directive == pb.SchemaUpdate_INDEX) {
 		return true
 	}
 	// if value types has changed
-	if current.Directive == intern.SchemaUpdate_INDEX && current.ValueType != old.ValueType {
+	if current.Directive == pb.SchemaUpdate_INDEX && current.ValueType != old.ValueType {
 		return true
 	}
 	// if tokenizer has changed - if same tokenizer works differently
@@ -203,7 +203,7 @@ func needReindexing(old intern.SchemaUpdate, current intern.SchemaUpdate) bool {
 
 // We commit schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateSchema(attr string, s intern.SchemaUpdate) error {
+func updateSchema(attr string, s pb.SchemaUpdate) error {
 	schema.State().Set(attr, s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
@@ -222,7 +222,7 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 	if ok {
 		s.ValueType = typ.Enum()
 	} else {
-		s = intern.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
+		s = pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
 	}
 	updateSchema(attr, s)
 }
@@ -250,25 +250,25 @@ func hasEdges(attr string, startTs uint64) bool {
 	return false
 }
 
-func checkSchema(s *intern.SchemaUpdate) error {
+func checkSchema(s *pb.SchemaUpdate) error {
 	if len(s.Predicate) == 0 {
 		return x.Errorf("No predicate specified in schema mutation")
 	}
 
-	if s.Directive == intern.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
+	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
 		return x.Errorf("Tokenizer must be specified while indexing a predicate: %+v", s)
 	}
 
-	if len(s.Tokenizer) > 0 && s.Directive != intern.SchemaUpdate_INDEX {
+	if len(s.Tokenizer) > 0 && s.Directive != pb.SchemaUpdate_INDEX {
 		return x.Errorf("Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
 	}
 
 	typ := types.TypeID(s.ValueType)
-	if typ == types.UidID && s.Directive == intern.SchemaUpdate_INDEX {
+	if typ == types.UidID && s.Directive == pb.SchemaUpdate_INDEX {
 		// index on uid type
 		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
 			s.Predicate)
-	} else if typ != types.UidID && s.Directive == intern.SchemaUpdate_REVERSE {
+	} else if typ != types.UidID && s.Directive == pb.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}
@@ -288,11 +288,11 @@ func checkSchema(s *intern.SchemaUpdate) error {
 	// schema was defined already
 	switch {
 	// can't change password -> x
-	case t.IsScalar() && t.Enum() == intern.Posting_PASSWORD:
+	case t.IsScalar() && t.Enum() == pb.Posting_PASSWORD:
 		return x.Errorf("Schema change not allowed from PASSWORD to %s", typ.Enum().String())
 
 	// can't change x -> password
-	case t.IsScalar() && s.ValueType == intern.Posting_PASSWORD:
+	case t.IsScalar() && s.ValueType == pb.Posting_PASSWORD:
 		return x.Errorf("Schema change not allowed from %s to PASSWORD.", t.Enum().String())
 
 	case t.IsScalar() == typ.IsScalar():
@@ -315,7 +315,7 @@ func checkSchema(s *intern.SchemaUpdate) error {
 
 // If storage type is specified, then check compatibility or convert to schema type
 // if no storage type is specified then convert to schema type.
-func ValidateAndConvert(edge *intern.DirectedEdge, su *intern.SchemaUpdate) error {
+func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	if deletePredicateEdge(edge) {
 		return nil
 	}
@@ -324,7 +324,7 @@ func ValidateAndConvert(edge *intern.DirectedEdge, su *intern.SchemaUpdate) erro
 	}
 	// <s> <p> <o> Del on non list scalar type.
 	if edge.ValueId == 0 && !bytes.Equal(edge.Value, []byte(x.Star)) &&
-		edge.Op == intern.DirectedEdge_DEL {
+		edge.Op == pb.DirectedEdge_DEL {
 		if !su.GetList() {
 			return x.Errorf("Please use * with delete operation for non-list type: [%v]", edge.Attr)
 		}
@@ -376,25 +376,25 @@ func ValidateAndConvert(edge *intern.DirectedEdge, su *intern.SchemaUpdate) erro
 	return nil
 }
 
-func AssignUidsOverNetwork(ctx context.Context, num *intern.Num) (*intern.AssignedIds, error) {
+func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
 	}
 
 	conn := pl.Get()
-	c := intern.NewZeroClient(conn)
+	c := pb.NewZeroClient(conn)
 	return c.AssignUids(ctx, num)
 }
 
-func Timestamps(ctx context.Context, num *intern.Num) (*intern.AssignedIds, error) {
+func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection
 	}
 
 	conn := pl.Get()
-	c := intern.NewZeroClient(conn)
+	c := pb.NewZeroClient(conn)
 	return c.Timestamps(ctx, num)
 }
 
@@ -408,12 +408,12 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
 // the leader of the group gid for proposing.
-func proposeOrSend(ctx context.Context, gid uint32, m *intern.Mutations, chr chan res) {
+func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
 	res := res{}
 	if groups().ServesGroup(gid) {
 		node := groups().Node
 		// we don't timeout after proposing
-		res.err = node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
+		res.err = node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
 		res.ctx = &api.TxnContext{}
 		fillTxnContext(res.ctx, m.StartTs)
 		chr <- res
@@ -432,7 +432,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *intern.Mutations, chr cha
 	conn := pl.Get()
 
 	var tc *api.TxnContext
-	c := intern.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(conn)
 
 	ch := make(chan error, 1)
 	go func() {
@@ -454,13 +454,13 @@ func proposeOrSend(ctx context.Context, gid uint32, m *intern.Mutations, chr cha
 
 // populateMutationMap populates a map from group id to the mutation that
 // should be sent to that group.
-func populateMutationMap(src *intern.Mutations) map[uint32]*intern.Mutations {
-	mm := make(map[uint32]*intern.Mutations)
+func populateMutationMap(src *pb.Mutations) map[uint32]*pb.Mutations {
+	mm := make(map[uint32]*pb.Mutations)
 	for _, edge := range src.Edges {
 		gid := groups().BelongsTo(edge.Attr)
 		mu := mm[gid]
 		if mu == nil {
-			mu = &intern.Mutations{GroupId: gid}
+			mu = &pb.Mutations{GroupId: gid}
 			mm[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
@@ -469,7 +469,7 @@ func populateMutationMap(src *intern.Mutations) map[uint32]*intern.Mutations {
 		gid := groups().BelongsTo(schema.Predicate)
 		mu := mm[gid]
 		if mu == nil {
-			mu = &intern.Mutations{GroupId: gid}
+			mu = &pb.Mutations{GroupId: gid}
 			mm[gid] = mu
 		}
 		mu.Schema = append(mu.Schema, schema)
@@ -478,7 +478,7 @@ func populateMutationMap(src *intern.Mutations) map[uint32]*intern.Mutations {
 		for _, gid := range groups().KnownGroups() {
 			mu := mm[gid]
 			if mu == nil {
-				mu = &intern.Mutations{GroupId: gid}
+				mu = &pb.Mutations{GroupId: gid}
 				mm[gid] = mu
 			}
 			mu.DropAll = true
@@ -503,7 +503,7 @@ type res struct {
 
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
-func MutateOverNetwork(ctx context.Context, m *intern.Mutations) (*api.TxnContext, error) {
+func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	tctx := &api.TxnContext{StartTs: m.StartTs}
 	mutationMap := populateMutationMap(m)
 
@@ -541,7 +541,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	if pl == nil {
 		return 0, conn.ErrNoConnection
 	}
-	zc := intern.NewZeroClient(pl.Get())
+	zc := pb.NewZeroClient(pl.Get())
 	tctx, err := zc.CommitOrAbort(ctx, tc)
 	if err != nil {
 		return 0, err
@@ -553,14 +553,14 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 }
 
 func (w *grpcWorker) PurgeTs(ctx context.Context,
-	payload *api.Payload) (*intern.Num, error) {
-	n := &intern.Num{}
+	payload *api.Payload) (*pb.Num, error) {
+	n := &pb.Num{}
 	n.Val = posting.Oracle().PurgeTs()
 	return n, nil
 }
 
 // Mutate is used to apply mutations over the network on other instances.
-func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnContext, error) {
+func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	txnCtx := &api.TxnContext{}
 	if ctx.Err() != nil {
 		return txnCtx, ctx.Err()
@@ -576,14 +576,14 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *intern.Mutations) (*api.TxnC
 		defer tr.Finish()
 	}
 
-	err := node.proposeAndWait(ctx, &intern.Proposal{Mutations: m})
+	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
 	fillTxnContext(txnCtx, m.StartTs)
 	return txnCtx, err
 }
 
 func tryAbortTransactions(startTimestamps []uint64) {
 	// Aborts if not already committed.
-	req := &intern.TxnTimestamps{Ts: startTimestamps}
+	req := &pb.TxnTimestamps{Ts: startTimestamps}
 
 	err := groups().Node.blockingAbort(req)
 	x.Printf("tryAbortTransactions for %d txns. Error: %+v\n", len(req.Ts), err)

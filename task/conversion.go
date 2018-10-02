@@ -10,7 +10,7 @@ package task
 import (
 	"encoding/binary"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 var (
@@ -18,25 +18,25 @@ var (
 	FalseVal = FromBool(false)
 )
 
-func FromInt(val int) *intern.TaskValue {
-	bs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bs, uint32(val))
-	return &intern.TaskValue{Val: []byte(bs), ValType: intern.Posting_INT}
+func FromInt(val int) *pb.TaskValue {
+	bs := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bs, uint64(val))
+	return &pb.TaskValue{Val: []byte(bs), ValType: pb.Posting_INT}
 }
 
-func ToInt(val *intern.TaskValue) int32 {
-	result := binary.LittleEndian.Uint32(val.Val)
-	return int32(result)
+func ToInt(val *pb.TaskValue) int64 {
+	result := binary.LittleEndian.Uint64(val.Val)
+	return int64(result)
 }
 
-func FromBool(val bool) *intern.TaskValue {
+func FromBool(val bool) *pb.TaskValue {
 	if val == true {
 		return FromInt(1)
 	}
 	return FromInt(0)
 }
 
-func ToBool(val *intern.TaskValue) bool {
+func ToBool(val *pb.TaskValue) bool {
 	if len(val.Val) == 0 {
 		return false
 	}

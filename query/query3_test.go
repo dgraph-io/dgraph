@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
@@ -49,6 +49,34 @@ func TestRecurseQuery(t *testing.T) {
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes", "friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea", "friend":[{"name":"Glenn Rhee"}]}]}]}}`, js)
+}
+
+func TestRecurseExpand(t *testing.T) {
+
+	query := `
+		{
+			me(func: uid(32)) @recurse {
+				expand(_all_)
+			}
+		}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"school":[{"name":"San Mateo High School","district":[{"name":"San Mateo School District","county":[{"state":[{"name":"California","abbr":"CA"}],"name":"San Mateo County"}]}]}]}]}}`, js)
+}
+
+func TestRecurseExpandRepeatedPredError(t *testing.T) {
+
+	query := `
+		{
+			me(func: uid(32)) @recurse {
+				name
+				expand(_all_)
+			}
+		}`
+
+	ctx := defaultContext()
+	_, err := processToFastJsonCtxVars(t, query, ctx, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Repeated subgraph: [name] while using expand()")
 }
 
 func TestRecurseQueryOrder(t *testing.T) {
@@ -956,12 +984,12 @@ func TestMinSchema(t *testing.T) {
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"min(val(x))":1.600000}]}}`,
 		js)
 
-	schema.State().Set("survival_rate", intern.SchemaUpdate{ValueType: intern.Posting_ValType(types.IntID)})
+	schema.State().Set("survival_rate", pb.SchemaUpdate{ValueType: pb.Posting_ValType(types.IntID)})
 	js = processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"min(val(x))":1}]}}`,
 		js)
-	schema.State().Set("survival_rate", intern.SchemaUpdate{ValueType: intern.Posting_ValType(types.FloatID)})
+	schema.State().Set("survival_rate", pb.SchemaUpdate{ValueType: pb.Posting_ValType(types.FloatID)})
 }
 
 func TestAvg(t *testing.T) {

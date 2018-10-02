@@ -31,6 +31,10 @@ For purposes of the clause above, the “Licensor” is Dgraph Labs, Inc., the
 “License” is the Apache License, Version 2.0, and the Software is the Dgraph
 software provided with this notice.
 
+You may obtain a copy of the clause at
+
+    https://commonsclause.com/
+
 ## Trademark
 
 Dgraph is a registered trademark of Dgraph Labs, Inc.

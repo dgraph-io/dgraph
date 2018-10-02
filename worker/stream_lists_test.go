@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
@@ -34,10 +34,10 @@ func value(k int) []byte {
 }
 
 type collector struct {
-	kv []*intern.KV
+	kv []*pb.KV
 }
 
-func (c *collector) Send(kvs *intern.KVS) error {
+func (c *collector) Send(kvs *pb.KVS) error {
 	c.kv = append(c.kv, kvs.Kv...)
 	return nil
 }
@@ -61,13 +61,13 @@ func TestOrchestrate(t *testing.T) {
 		require.NoError(t, txn.CommitAt(5, nil))
 	}
 
-	c := &collector{kv: make([]*intern.KV, 0, 100)}
+	c := &collector{kv: make([]*pb.KV, 0, 100)}
 	sl := streamLists{stream: c, db: db}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
+	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		item := itr.Item()
 		val, err := item.ValueCopy(nil)
 		require.NoError(t, err)
-		kv := &intern.KV{Key: item.KeyCopy(nil), Val: val, Version: item.Version()}
+		kv := &pb.KV{Key: item.KeyCopy(nil), Val: val, Version: item.Version()}
 		itr.Next() // Just for fun.
 		return kv, nil
 	}

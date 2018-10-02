@@ -12,7 +12,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"golang.org/x/net/context"
@@ -116,12 +116,12 @@ func (s *Server) runRecovery() {
 	if s.state == nil {
 		return
 	}
-	var proposals []*intern.ZeroProposal
+	var proposals []*pb.ZeroProposal
 	for _, group := range s.state.Groups {
 		for _, tab := range group.Tablets {
 			if tab.ReadOnly {
-				p := &intern.ZeroProposal{}
-				p.Tablet = &intern.Tablet{
+				p := &pb.ZeroProposal{}
+				p.Tablet = &pb.Tablet{
 					GroupId:   tab.GroupId,
 					Predicate: tab.Predicate,
 					Space:     tab.Space,
@@ -134,7 +134,7 @@ func (s *Server) runRecovery() {
 
 	errCh := make(chan error)
 	for _, pr := range proposals {
-		go func(pr *intern.ZeroProposal) {
+		go func(pr *pb.ZeroProposal) {
 			errCh <- s.Node.proposeAndWait(context.Background(), pr)
 		}(pr)
 	}
@@ -226,8 +226,8 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 
 	stab := s.ServingTablet(predicate)
 	x.AssertTrue(stab != nil)
-	p := &intern.ZeroProposal{}
-	p.Tablet = &intern.Tablet{
+	p := &pb.ZeroProposal{}
+	p.Tablet = &pb.Tablet{
 		GroupId:   srcGroup,
 		Predicate: predicate,
 		Space:     stab.Space,
@@ -246,8 +246,8 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 	stab := s.ServingTablet(predicate)
 	x.AssertTrue(stab != nil)
 	// Propose that predicate in read only
-	p := &intern.ZeroProposal{}
-	p.Tablet = &intern.Tablet{
+	p := &pb.ZeroProposal{}
+	p.Tablet = &pb.Tablet{
 		GroupId:   srcGroup,
 		Predicate: predicate,
 		Space:     stab.Space,
@@ -262,8 +262,8 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
 	}
 
-	c := intern.NewWorkerClient(pl.Get())
-	in := &intern.MovePredicatePayload{
+	c := pb.NewWorkerClient(pl.Get())
+	in := &pb.MovePredicatePayload{
 		Predicate:     predicate,
 		State:         s.membershipState(),
 		SourceGroupId: srcGroup,
@@ -274,7 +274,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 	}
 
 	// Propose that predicate is served by dstGroup in RW.
-	p.Tablet = &intern.Tablet{
+	p.Tablet = &pb.Tablet{
 		GroupId:   dstGroup,
 		Predicate: predicate,
 		Space:     stab.Space,

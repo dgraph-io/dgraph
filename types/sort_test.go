@@ -10,7 +10,7 @@ package types
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,12 +35,12 @@ func getInput(t *testing.T, tid TypeID, in []string) [][]Val {
 	return list
 }
 
-func getUIDList(n int) *intern.List {
+func getUIDList(n int) *pb.List {
 	data := make([]uint64, 0, n)
 	for i := 1; i <= n; i++ {
 		data = append(data, uint64(i*100))
 	}
-	return &intern.List{data}
+	return &pb.List{data}
 }
 
 func TestSortStrings(t *testing.T) {

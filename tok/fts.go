@@ -8,6 +8,8 @@
 package tok
 
 import (
+	"strings"
+
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/blevesearch/bleve/analysis/analyzer/custom"
@@ -48,15 +50,18 @@ func initFullTextTokenizers() {
 			continue
 		}
 
-		defineStemmer(lang)
-		defineStopWordsList(lang)
-		defineAnalyzer(lang)
-		registerTokenizer(&FullTextTokenizer{Lang: countryCode(lang)})
+		for _, cc := range countryCodes(lang) {
+			defineStemmer(cc, lang)
+			defineStopWordsList(cc, lang)
+			defineAnalyzer(cc)
+			registerTokenizer(&FullTextTokenizer{Lang: cc})
+		}
 	}
 
 	for _, lang := range [...]string{"chinese", "japanese", "korean"} {
-		defineCJKAnalyzer(lang)
-		registerTokenizer(&FullTextTokenizer{Lang: countryCode(lang)})
+		cc := countryCode(lang)
+		defineCJKAnalyzer(cc)
+		registerTokenizer(&FullTextTokenizer{Lang: cc})
 	}
 
 	// Default full text tokenizer, with Porter stemmer (it works with English only).
@@ -74,16 +79,16 @@ func defineNormalizer() {
 	x.Check(err)
 }
 
-func defineStemmer(lang string) {
-	_, err := bleveCache.DefineTokenFilter(stemmerName(countryCode(lang)), map[string]interface{}{
+func defineStemmer(cc, lang string) {
+	_, err := bleveCache.DefineTokenFilter(stemmerName(cc), map[string]interface{}{
 		"type": stemmer.Name,
 		"lang": lang,
 	})
 	x.Check(err)
 }
 
-func defineStopWordsList(lang string) {
-	name := stopWordsListName(countryCode(lang))
+func defineStopWordsList(cc, lang string) {
+	name := stopWordsListName(cc)
 	_, err := bleveCache.DefineTokenMap(name, map[string]interface{}{
 		"type":   tokenmap.Name,
 		"tokens": stopwords[lang],
@@ -116,22 +121,22 @@ func defineDefaultFullTextAnalyzer() {
 			lowercase.Name,
 			normalizerName,
 			stopWordsListName("en"),
-			porter.Name},
+			porter.Name,
+		},
 	})
 	x.Check(err)
 }
 
 // full text search analyzer - does language-specific stop-words removal and stemming
-func defineAnalyzer(lang string) {
-	ln := countryCode(lang)
-	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(ln), map[string]interface{}{
+func defineAnalyzer(cc string) {
+	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(cc), map[string]interface{}{
 		"type":      custom.Name,
 		"tokenizer": unicode.Name,
 		"token_filters": []string{
 			lowercase.Name,
 			normalizerName,
-			stopWordsListName(ln),
-			stemmerName(ln),
+			stopWordsListName(cc),
+			stemmerName(cc),
 		},
 	})
 	x.Check(err)
@@ -140,9 +145,8 @@ func defineAnalyzer(lang string) {
 // Full text search analyzer - does Chinese/Japanese/Korean style bigram
 // tokenization. It's language unaware (so doesn't do stemming or stop
 // words), but works OK in some contexts.
-func defineCJKAnalyzer(lang string) {
-	ln := countryCode(lang)
-	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(ln), map[string]interface{}{
+func defineCJKAnalyzer(cc string) {
+	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(cc), map[string]interface{}{
 		"type":      custom.Name,
 		"tokenizer": unicode.Name,
 		"token_filters": []string{
@@ -166,18 +170,24 @@ func stopWordsListName(lang string) string {
 }
 
 func countryCode(lang string) string {
-	code, ok := langToCode[lang]
+	return countryCodes(lang)[0]
+}
+
+func countryCodes(lang string) []string {
+	codes, ok := langToCode[lang]
 	x.AssertTruef(ok, "Unsupported language: %s", lang)
-	return code
+	return strings.Split(codes, ",")
 }
 
 func init() {
 	// List based on https://godoc.org/golang.org/x/text/language#Tag
 	// It contains more languages than supported by Bleve, to enable seamless addition of new langs.
+	// Issue#2601: added aliasing of related languages to broaden support. When those langs are added
+	// the aliases won't matter.
 	langToCode = map[string]string{
 		"afrikaans":            "af",
 		"amharic":              "am",
-		"arabic":               "ar",
+		"arabic":               "ar,ar-001",
 		"modernstandardarabic": "ar-001",
 		"azerbaijani":          "az",
 		"bulgarian":            "bg",
@@ -187,17 +197,17 @@ func init() {
 		"danish":               "da",
 		"german":               "de",
 		"greek":                "el",
-		"english":              "en",
+		"english":              "en,en-us,en-gb",
 		"americanenglish":      "en-us",
 		"britishenglish":       "en-gb",
-		"spanish":              "es",
+		"spanish":              "es,es-es,es-419",
 		"europeanspanish":      "es-es",
 		"latinamericanspanish": "es-419",
 		"estonian":             "et",
 		"persian":              "fa",
 		"finnish":              "fi",
 		"filipino":             "fil",
-		"french":               "fr",
+		"french":               "fr,fr-ca",
 		"canadianfrench":       "fr-ca",
 		"gujarati":             "gu",
 		"hebrew":               "he",
@@ -229,7 +239,7 @@ func init() {
 		"norwegian":            "no",
 		"punjabi":              "pa",
 		"polish":               "pl",
-		"portuguese":           "pt",
+		"portuguese":           "pt,pt-br,pt-pt",
 		"brazilianportuguese":  "pt-br",
 		"europeanportuguese":   "pt-pt",
 		"romanian":             "ro",
@@ -238,7 +248,7 @@ func init() {
 		"slovak":               "sk",
 		"slovenian":            "sl",
 		"albanian":             "sq",
-		"serbian":              "sr",
+		"serbian":              "sr,sr-latn",
 		"serbianlatin":         "sr-latn",
 		"swedish":              "sv",
 		"swahili":              "sw",

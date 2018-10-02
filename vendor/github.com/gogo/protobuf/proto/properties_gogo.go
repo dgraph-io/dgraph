@@ -1,5 +1,7 @@
-// Copyright (c) 2013, Vastech SA (PTY) LTD. All rights reserved.
-// http://github.com/gogo/protobuf/gogoproto
+// Protocol Buffers for Go with Gadgets
+//
+// Copyright (c) 2018, The GoGo Authors. All rights reserved.
+// http://github.com/gogo/protobuf
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -27,38 +29,8 @@
 package proto
 
 import (
-	"fmt"
-	"os"
 	"reflect"
 )
 
-func (p *Properties) setCustomEncAndDec(typ reflect.Type) {
-	p.ctype = typ
-	if p.Repeated {
-		p.enc = (*Buffer).enc_custom_slice_bytes
-		p.dec = (*Buffer).dec_custom_slice_bytes
-		p.size = size_custom_slice_bytes
-	} else if typ.Kind() == reflect.Ptr {
-		p.enc = (*Buffer).enc_custom_bytes
-		p.dec = (*Buffer).dec_custom_bytes
-		p.size = size_custom_bytes
-	} else {
-		p.enc = (*Buffer).enc_custom_ref_bytes
-		p.dec = (*Buffer).dec_custom_ref_bytes
-		p.size = size_custom_ref_bytes
-	}
-}
-
-func (p *Properties) setSliceOfNonPointerStructs(typ reflect.Type) {
-	t2 := typ.Elem()
-	p.sstype = typ
-	p.stype = t2
-	p.isMarshaler = isMarshaler(t2)
-	p.isUnmarshaler = isUnmarshaler(t2)
-	p.enc = (*Buffer).enc_slice_ref_struct_message
-	p.dec = (*Buffer).dec_slice_ref_struct_message
-	p.size = size_slice_ref_struct_message
-	if p.Wire != "bytes" {
-		fmt.Fprintf(os.Stderr, "proto: no ptr oenc for %T -> %T \n", typ, t2)
-	}
-}
+var sizerType = reflect.TypeOf((*Sizer)(nil)).Elem()
+var protosizerType = reflect.TypeOf((*ProtoSizer)(nil)).Elem()

@@ -12,15 +12,15 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
 	values [][]Val // Each uid could have multiple values which we need to sort it by.
 	desc   []bool  // Sort orders for different values.
-	ul     *intern.List
-	o      []*intern.Facets
+	ul     *pb.List
+	o      []*pb.Facets
 }
 
 // Len returns size of vector.
@@ -71,7 +71,7 @@ func (s byValue) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func SortWithFacet(v [][]Val, ul *intern.List, l []*intern.Facets, desc []bool) error {
+func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool) error {
 	if len(v) == 0 || len(v[0]) == 0 {
 		return nil
 	}
@@ -91,7 +91,7 @@ func SortWithFacet(v [][]Val, ul *intern.List, l []*intern.Facets, desc []bool) 
 }
 
 // Sort sorts the given array in-place.
-func Sort(v [][]Val, ul *intern.List, desc []bool) error {
+func Sort(v [][]Val, ul *pb.List, desc []bool) error {
 	return SortWithFacet(v, ul, nil, desc)
 }
 

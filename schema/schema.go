@@ -15,7 +15,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -27,14 +27,14 @@ var (
 )
 
 func (s *state) init() {
-	s.predicate = make(map[string]*intern.SchemaUpdate)
+	s.predicate = make(map[string]*pb.SchemaUpdate)
 	s.elog = trace.NewEventLog("Dgraph", "Schema")
 }
 
 type state struct {
 	sync.RWMutex
 	// Map containing predicate to type information.
-	predicate map[string]*intern.SchemaUpdate
+	predicate map[string]*pb.SchemaUpdate
 	elog      trace.EventLog
 }
 
@@ -70,7 +70,7 @@ func (s *state) Delete(attr string) error {
 	return txn.CommitAt(1, nil)
 }
 
-func logUpdate(schema intern.SchemaUpdate, pred string) string {
+func logUpdate(schema pb.SchemaUpdate, pred string) string {
 	typ := types.TypeID(schema.ValueType).Name()
 	if schema.List {
 		typ = fmt.Sprintf("[%s]", typ)
@@ -82,7 +82,7 @@ func logUpdate(schema intern.SchemaUpdate, pred string) string {
 // Set sets the schema for given predicate in memory
 // schema mutations must flow through update function, which are
 // synced to db
-func (s *state) Set(pred string, schema intern.SchemaUpdate) {
+func (s *state) Set(pred string, schema pb.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
@@ -90,12 +90,12 @@ func (s *state) Set(pred string, schema intern.SchemaUpdate) {
 }
 
 // Get gets the schema for given predicate
-func (s *state) Get(pred string) (intern.SchemaUpdate, bool) {
+func (s *state) Get(pred string) (pb.SchemaUpdate, bool) {
 	s.RLock()
 	defer s.RUnlock()
 	schema, has := s.predicate[pred]
 	if !has {
-		return intern.SchemaUpdate{}, false
+		return pb.SchemaUpdate{}, false
 	}
 	return *schema, true
 }
@@ -179,7 +179,7 @@ func (s *state) IsReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
-		return schema.Directive == intern.SchemaUpdate_REVERSE
+		return schema.Directive == pb.SchemaUpdate_REVERSE
 	}
 	return false
 }
@@ -245,7 +245,7 @@ func Load(predicate string) error {
 	if err != nil {
 		return err
 	}
-	var s intern.SchemaUpdate
+	var s pb.SchemaUpdate
 	x.Check(s.Unmarshal(val))
 	State().Set(predicate, s)
 	State().elog.Printf(logUpdate(s, predicate))
@@ -272,7 +272,7 @@ func LoadFromDb() error {
 			continue
 		}
 		attr := pk.Attr
-		var s intern.SchemaUpdate
+		var s pb.SchemaUpdate
 		val, err := item.Value()
 		if err != nil {
 			return err

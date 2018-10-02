@@ -33,6 +33,22 @@ The quickest way to install Dgraph is to run this command on Linux or Mac.
 curl https://get.dgraph.io -sSf | bash
 ```
 
+## Install with Docker
+
+If you're using Docker, you can use the [official Dgraph image](https://hub.docker.com/r/dgraph/dgraph/).
+
+```bash
+docker pull dgraph/dgraph:latest
+```
+
+## Install from Source
+
+If you want to install from source, you can use `go get` to install to `$GOPATH/bin`.
+
+```bash
+go get -u -v github.com/dgraph-io/dgraph/dgraph
+```
+
 ## Get Started
 **To get started with Dgraph, follow:**
 
