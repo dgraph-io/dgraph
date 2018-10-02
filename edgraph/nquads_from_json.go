@@ -132,7 +132,9 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
-		nq.ObjectValue = &api.Value{&api.Value_StrVal{v}}
+		// NOTE: even though this is a JS string, we don't know if it is a password or
+		// NOTE: other string-encoded value. so defer until we check storage type.
+		nq.ObjectValue = &api.Value{&api.Value_DefaultVal{v}}
 	case float64:
 		if v == 0 && op == delete {
 			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}

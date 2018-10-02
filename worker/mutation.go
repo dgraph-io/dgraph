@@ -286,17 +286,24 @@ func checkSchema(s *intern.SchemaUpdate) error {
 	}
 
 	// schema was defined already
-	if t.IsScalar() && t.Enum() != intern.Posting_PASSWORD && s.ValueType == intern.Posting_PASSWORD {
-		return x.Errorf("Schema change not allowed from %s to PASSWORD", t.Enum().String())
-	}
-	if t.IsScalar() == typ.IsScalar() {
+	switch {
+	// can't change password -> x
+	case t.IsScalar() && t.Enum() == intern.Posting_PASSWORD:
+		return x.Errorf("Schema change not allowed from PASSWORD to %s", typ.Enum().String())
+
+	// can't change x -> password
+	case t.IsScalar() && s.ValueType == intern.Posting_PASSWORD:
+		return x.Errorf("Schema change not allowed from %s to PASSWORD.", t.Enum().String())
+
+	case t.IsScalar() == typ.IsScalar():
 		// If old type was list and new type is non-list, we don't allow it until user
 		// has data.
 		if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, math.MaxUint64) {
 			return x.Errorf("Schema change not allowed from [%s] => %s without"+
 				" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
 		}
-	} else {
+
+	default:
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasEdges(s.Predicate, math.MaxUint64) {
 			return x.Errorf("Schema change not allowed from scalar to uid or vice versa"+
@@ -348,7 +355,7 @@ func ValidateAndConvert(edge *intern.DirectedEdge, su *intern.SchemaUpdate) erro
 	var dst types.Val
 	var err error
 
-	src = types.Val{types.TypeID(edge.ValueType), edge.Value}
+	src = types.Val{Tid: types.TypeID(edge.ValueType), Value: edge.Value}
 	// check compatibility of schema type and storage type
 	if dst, err = types.Convert(src, schemaType); err != nil {
 		return err

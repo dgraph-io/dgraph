@@ -127,7 +127,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = g
 			case PasswordID:
-				*res = string(vc)
+				p, err := Encrypt(vc)
+				if err != nil {
+					return to, err
+				}
+				*res = p
 			default:
 				return to, cantConvert(fromID, toID)
 			}
