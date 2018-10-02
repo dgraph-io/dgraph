@@ -354,14 +354,14 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	var dst types.Val
 	var err error
 
-	src = types.Val{Tid: types.TypeID(edge.ValueType), Value: edge.Value}
+	src = types.Val{Tid: storageType, Value: edge.Value}
 	// check compatibility of schema type and storage type
 	if dst, err = types.Convert(src, schemaType); err != nil {
 		return err
 	}
 
-	// if storage type was specified skip
-	if storageType != types.DefaultID {
+	// if storage type was specified skip.
+	if storageType != types.DefaultID && schemaType != types.PasswordID {
 		return nil
 	}
 

@@ -79,7 +79,7 @@ func TestNquadsFromJson1(t *testing.T) {
 
 	require.Equal(t, 5, len(nq))
 
-	oval := &api.Value{&api.Value_DefaultVal{"Alice"}}
+	oval := &api.Value{&api.Value_StrVal{"Alice"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 
 	oval = &api.Value{&api.Value_IntVal{26}}
@@ -88,7 +88,7 @@ func TestNquadsFromJson1(t *testing.T) {
 	oval = &api.Value{&api.Value_BoolVal{true}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "married", oval))
 
-	oval = &api.Value{&api.Value_DefaultVal{tn.Format(time.RFC3339Nano)}}
+	oval = &api.Value{&api.Value_StrVal{tn.Format(time.RFC3339Nano)}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "now", oval))
 
 	var g geom.T
@@ -124,13 +124,13 @@ func TestNquadsFromJson2(t *testing.T) {
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "_:blank-1"))
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "1000"))
 
-	oval := &api.Value{&api.Value_DefaultVal{"Charlie"}}
+	oval := &api.Value{&api.Value_StrVal{"Charlie"}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "name", oval))
 
 	oval = &api.Value{&api.Value_BoolVal{false}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "married", oval))
 
-	oval = &api.Value{&api.Value_DefaultVal{"Bob"}}
+	oval = &api.Value{&api.Value_StrVal{"Bob"}}
 	require.Contains(t, nq, makeNquad("1000", "name", oval))
 }
 
@@ -151,7 +151,7 @@ func TestNquadsFromJson3(t *testing.T) {
 	require.Equal(t, 3, len(nq))
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "school", "_:blank-1"))
 
-	oval := &api.Value{&api.Value_DefaultVal{"Wellington Public School"}}
+	oval := &api.Value{&api.Value_StrVal{"Wellington Public School"}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval))
 }
 
@@ -161,7 +161,7 @@ func TestNquadsFromJson4(t *testing.T) {
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(nq))
-	oval := &api.Value{&api.Value_DefaultVal{"Alice"}}
+	oval := &api.Value{&api.Value_StrVal{"Alice"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 	require.Contains(t, nq, makeNquad("_:blank-0", "age", &api.Value{&api.Value_IntVal{21}}))
 	require.Contains(t, nq, makeNquad("_:blank-0", "weight",
@@ -212,7 +212,7 @@ func TestNquadsFromJson_EmptyUid(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
-	oval := &api.Value{&api.Value_DefaultVal{"Name"}}
+	oval := &api.Value{&api.Value_StrVal{"Name"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 }
 
