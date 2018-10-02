@@ -38,7 +38,10 @@ Dgraph is licensed under Apache v2.0 with a Commons Clause restriction. The full
 
 ### How does Commons Clause restriction affect me?
 
-The Commons Clause restriction allows you to do everything below:
+A comprehensive list of FAQs, which explain the workings and restrictions of the
+Commons Clause [is present here](https://commonsclause.com/).
+
+In short, the Commons Clause restriction allows you to do everything below:
 
 - Using Dgraph internally within your organization to support your own processing.
 - Build or sell a service on top of Dgraph, which adds substantial value to Dgraph. For e.g., building a proprietary recommendation engine service which uses Dgraph internally.
