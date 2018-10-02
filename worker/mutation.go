@@ -287,13 +287,12 @@ func checkSchema(s *pb.SchemaUpdate) error {
 
 	// schema was defined already
 	switch {
-	// can't change password -> x
-	case t.IsScalar() && t.Enum() == pb.Posting_PASSWORD:
-		return x.Errorf("Schema change not allowed from PASSWORD to %s", typ.Enum().String())
-
-	// can't change x -> password
-	case t.IsScalar() && s.ValueType == pb.Posting_PASSWORD:
-		return x.Errorf("Schema change not allowed from %s to PASSWORD.", t.Enum().String())
+	case t.IsScalar() && (t.Enum() == pb.Posting_PASSWORD || s.ValueType == pb.Posting_PASSWORD):
+		// can't change password -> x, x -> password
+		if t.Enum() != s.ValueType {
+			return x.Errorf("Schema change not allowed from %s to %s",
+				t.Enum().String(), typ.Enum().String())
+		}
 
 	case t.IsScalar() == typ.IsScalar():
 		// If old type was list and new type is non-list, we don't allow it until user
