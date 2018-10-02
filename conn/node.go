@@ -29,7 +29,7 @@ import (
 
 var (
 	ErrDuplicateRaftId = x.Errorf("Node is already part of group")
-	ErrNoNode          = fmt.Errorf("No node has been set up yet")
+	ErrNoNode          = x.Errorf("No node has been set up yet")
 )
 
 type Node struct {
