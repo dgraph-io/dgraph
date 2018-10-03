@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.0.7] - 2018-08-10
+
+### Changed
+
+- Set the `--conc` flag in live loader default to 1, as a temporary fix to avoid tons of aborts.
+
+### Fixed
+
+- All Oracle delta streams are applied via Raft proposals. This deals better with network partition like edge-cases. #2463
+- Fix deadlock in 10-node cluster convergence. Fixes #2286.
+- Make ReadIndex work safely. #2469
+- Simplify snapshots, leader now calculates and proposes snapshots to the group. #2475.
+- Make snapshot streaming more robust. #2487
+- Consolidate all txn tracking logic into Oracle, remove inSnapshot logic. #2480.
+- Bug fix in Badger, to stop panics when exporting.
+- Use PreVote to avoid leader change on a node join.
+- Fix a long-standing bug where `raft.Step` was being called via goroutines. It is now called serially.
+- Fix context deadline issues with proposals. #2501.
+
 ## [1.0.6] - 2018-06-20
 
 ### Added
