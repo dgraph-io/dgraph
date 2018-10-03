@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.0.8] - 2018-08-29
+
+### Added
+
+- Introduce a new /assignIds HTTP endpoint in Zero, so users can allocate UIDs to nodes externally.
+- Add a new tool which retrieves and increments a counter by 1 transactionally. This can be used to test the sanity of Dgraph cluster.
+
+### Changed
+
+- This version introduces tracking of a few anonymous metrics to measure Dgraph adoption (#2554). These metrics do not contain any specifically identifying information about the user, so most users can leave it on. This can be turned off by setting `--telemetry=false` flag if needed in Dgraph Zero.
+
+### Fixed
+
+- Correctly handle a list of type geo in json (#2482, #2485).
+- Fix the graceful shutdown of Dgraph server, so a single Ctrl+C would now suffice to stop it.
+- Fix various deadlocks in Dgraph and set ConfState in Raft correctly (#2548).
+- Significantly decrease the number of transaction aborts by using SPO as key for entity to entity connections. (#2556).
+- Do not print error while sending Raft message by default. No action needs to be taken by the user, so it is set to V(3) level.
+
 ## [1.0.7] - 2018-08-10
 
 ### Changed
