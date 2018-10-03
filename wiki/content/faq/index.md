@@ -99,7 +99,7 @@ Yes. We're VC funded and plan to use the funds for development. We have a dedica
 It's currently too early to say. It's very likely that we will offer commercially licensed plugins and paid support to interested customers. This model would enable us to continue advancing Dgraph while standing by our commitment to keeping the core project free and open.
 
 ### How can I contribute to Dgraph?
-We accept both code and documentation contributions. Please see [link](https://wiki.dgraph.io) for more information about how to contribute.
+We accept both code and documentation contributions. Please see [link](https://github.com/dgraph-io/dgraph/blob/master/CONTRIBUTING.md) for more information about how to contribute.
 
 ## Criticism
 

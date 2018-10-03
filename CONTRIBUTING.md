@@ -1,7 +1,21 @@
-+++
-title = "Contribute to Dgraph"
-+++
-# Getting Started
+# Contributing to Dgraph
+
+* [Getting Started](#getting-started)
+* [Setting Up the Development Environment](#setting-up-the-development-environment)
+   * [Prerequisites](#prerequisites)
+   * [Setup Dgraph from source repo](#setup-dgraph-from-source-repo)
+   * [Setup Badger from source repo](#setup-badger-from-source-repo)
+   * [Protocol buffers](#protocol-buffers)
+   * [Testing](#testing)
+* [Doing a release](#doing-a-release)
+* [Contributing](#contributing)
+   * [Guidelines](#guidelines)
+   * [Code style](#code-style)
+   * [License Header](#license-header)
+   * [Signed Commits](#signed-commits)
+
+## Getting Started
+
 - Read the [Getting Started Guide](https://docs.dgraph.io/get-started/)
 - [Take the Dgraph tour](https://tour.dgraph.io)
 

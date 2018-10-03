@@ -102,7 +102,7 @@ Dgraph is a liberally licensed, scalable, distributed, highly available and fast
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "contribute/index.md">}}">
+            <a href="https://github.com/dgraph-io/dgraph/blob/master/CONTRIBUTING.md">
               Contribute to Dgraph
             </a>
           </div>
