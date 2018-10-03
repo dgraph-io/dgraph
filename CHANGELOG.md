@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.0.9] - 2018-10-02
+
+### Added
+
+- This version switches Badger Options to reasonable settings for p and w directories. This removes the need to expose `--badger.options` option and removes the `none` option from `--badger.vlog`. (#2605)
+- Add support for ignoring parse errors in bulk loader with the option `--ignore_error`. (#2599)
+- Introduction of new command `dgraph cert` to simplify initial TLS setup. See [TLS configuration docs](https://docs.dgraph.io/deploy/#tls-configuration) for more info.
+- Add `expand(_forward_)` and `expand(_reverse_)` to GraphQL+- query language. If `_forward_` is passed as an argument to `expand()`, all predicates at that level (minus any reverse predicates) are retrieved.
+If `_reverse_` is passed as an argument to `expand()`, only the reverse predicates are retrieved.
+
+### Changed
+
+- Rename intern pkg to pb (#2608)
+
+### Fixed
+
+- Remove LinRead map logic from Dgraph (#2570)
+- Sanity length check for facets mostly.
+- Make has function correct w.r.t. transactions (#2585)
+- Increase the snapshot calculation interval, while decreasing the min number of entries required; so we take snapshots even when there's little activity.
+- Convert an assert during DropAll to inf retry. (#2578)
+- Fix a bug which caused all transactions to abort if `--expand_edge` was set to false. Fixes #2547.
+- Set the Applied index in Raft directly, so it does not pick up an index older than the snapshot. Ensure that it is in sync with the Applied watermark. Fixes #2581.
+- Pull in Badger updates. This also fixes the Unable to find log file, retry error.
+- Improve efficiency of readonly transactions by reusing the same read ts (#2604)
+- Fix a bug in Raft.Run loop. (#2606)
+- Fix a few issues regarding snapshot.Index for raft.Cfg.Applied. Do not overwrite any existing data when apply txn commits. Do not let CreateSnapshot fail.
+- Consider all future versions of the key as well, when deciding whether to write a key or not during txn commits. Otherwise, we'll end up in an endless loop of trying to write a stale key but failing to do so.
+- When testing inequality value vars with non-matching values, the response was sent as an error although it should return empty result if the query has correct syntax. (#2611)
+- Switch traces to glogs in worker/export.go (#2614)
+- Improve error handling for `dgraph live` for errors when processing RDF and schema files. (#2596)
+- Fix task conversion from bool to int that used uint32 (#2621)
+- Fix `expand(_all_)` in recurse queries (#2600).
+- Add language aliases for broader support for full text indices. (#2602)
+
 ## [1.0.8] - 2018-08-29
 
 ### Added
