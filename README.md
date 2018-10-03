@@ -103,7 +103,7 @@ makes it easy to build applications with it.
 
 ## Developers
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
-- Please see [contributing to Dgraph](https://docs.dgraph.io/contribute/) for guidelines on contributions.
+- Please see [Contributing to Dgraph](https://github.com/dgraph-io/dgraph/blob/master/CONTRIBUTING.md) for guidelines on contributions.
 
 ## Unofficial Client Libraries
 The Dgraph team maintain a number of [officially supported client libraries](https://docs.dgraph.io/clients/).  The following libraries are contributed by the community.
