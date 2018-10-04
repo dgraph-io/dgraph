@@ -560,12 +560,8 @@ func (n *node) retrieveSnapshot() error {
 	return nil
 }
 
-func (n *node) proposeSnapshot() error {
-	// Setting calculateSnapshot min entries to 10, so that we calculate
-	// snapshots more frequently. This avoids the scenario where after bringing
-	// up an Alpha, and doing a hundred schema updates, we don't take any
-	// snapshots, which then really slows down restarts.
-	snap, err := n.calculateSnapshot(10)
+func (n *node) proposeSnapshot(discardN int) error {
+	snap, err := n.calculateSnapshot(discardN)
 	if err != nil || snap == nil {
 		return err
 	}
@@ -587,7 +583,7 @@ func (n *node) Run() {
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 
-	slowTicker := time.NewTicker(3 * time.Minute)
+	slowTicker := time.NewTicker(30 * time.Second)
 	defer slowTicker.Stop()
 
 	done := make(chan struct{})
@@ -603,6 +599,7 @@ func (n *node) Run() {
 		close(done)
 	}()
 
+	var snapshotLoops uint64
 	for {
 		select {
 		case <-done:
@@ -612,10 +609,22 @@ func (n *node) Run() {
 		case <-slowTicker.C:
 			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
 			if leader {
+				// We try to take a snapshot every slow tick duration, with a 1000 discard entries.
+				// But, once a while, we take a snapshot with 10 discard entries. This avoids the
+				// scenario where after bringing up an Alpha, and doing a hundred schema updates, we
+				// don't take any snapshots because there are not enough updates (discardN=10),
+				// which then really slows down restarts. At the same time, by checking more
+				// frequently, we can quickly take a snapshot if a lot of mutations are coming in
+				// fast (discardN=1000).
+				discardN := 1000
+				if snapshotLoops%5 == 0 {
+					discardN = 10
+				}
+				snapshotLoops++
 				// We use disk based storage for Raft. So, we're not too concerned about
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
-				if err := n.proposeSnapshot(); err != nil {
+				if err := n.proposeSnapshot(discardN); err != nil {
 					x.Errorf("While calculating and proposing snapshot: %v", err)
 				}
 				go n.abortOldTransactions()
