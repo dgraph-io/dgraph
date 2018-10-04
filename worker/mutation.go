@@ -34,8 +34,12 @@ var (
 	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
 )
 
-func deletePredicateEdge(edge *pb.DirectedEdge) bool {
-	return edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star))
+func isStarAll(v []byte) bool {
+	return bytes.Equal(v, []byte(x.Star))
+}
+
+func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
+	return edge.Entity == 0 && isStarAll(edge.Value)
 }
 
 // runMutation goes through all the edges and applies them.
@@ -51,7 +55,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 		x.AssertTruef(ok, "Schema is not present for predicate %s", edge.Attr)
 	}
 
-	if deletePredicateEdge(edge) {
+	if isDeletePredicateEdge(edge) {
 		return errors.New("We should never reach here")
 	}
 	// Once mutation comes via raft we do best effort conversion
@@ -315,54 +319,58 @@ func checkSchema(s *pb.SchemaUpdate) error {
 // If storage type is specified, then check compatibility or convert to schema type
 // if no storage type is specified then convert to schema type.
 func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
-	if deletePredicateEdge(edge) {
+	if isDeletePredicateEdge(edge) {
 		return nil
 	}
-	if types.TypeID(edge.ValueType) == types.DefaultID && string(edge.Value) == x.Star {
+	if types.TypeID(edge.ValueType) == types.DefaultID && isStarAll(edge.Value) {
 		return nil
 	}
 	// <s> <p> <o> Del on non list scalar type.
-	if edge.ValueId == 0 && !bytes.Equal(edge.Value, []byte(x.Star)) &&
-		edge.Op == pb.DirectedEdge_DEL {
-		if !su.GetList() {
-			return x.Errorf("Please use * with delete operation for non-list type: [%v]", edge.Attr)
-		}
+	if edge.ValueId == 0 && !isStarAll(edge.Value) && edge.Op == pb.DirectedEdge_DEL && !su.GetList() {
+		return x.Errorf("Please use * with delete operation for non-list type: [%v]", edge.Attr)
 	}
 
-	schemaType := types.TypeID(su.ValueType)
-	if schemaType == types.StringID && len(edge.Lang) > 0 && !su.GetLang() {
+	// type checks
+	storageType, schemaType := posting.TypeID(edge), types.TypeID(su.ValueType)
+	switch {
+	case schemaType == types.StringID && len(edge.Lang) > 0 && !su.GetLang():
 		return x.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
 			edge.Attr, edge)
-	}
 
-	storageType := posting.TypeID(edge)
-	if !schemaType.IsScalar() && !storageType.IsScalar() {
+	case !schemaType.IsScalar() && !storageType.IsScalar():
 		return nil
-	} else if !schemaType.IsScalar() && storageType.IsScalar() {
+
+	case !schemaType.IsScalar() && storageType.IsScalar():
 		return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
-	} else if schemaType.IsScalar() && !storageType.IsScalar() {
+
+	case schemaType.IsScalar() && !storageType.IsScalar():
 		return x.Errorf("Input for predicate %s of type scalar is uid", edge.Attr)
-	} else {
-		// Both are scalars. Continue.
-	}
 
-	if storageType == schemaType {
+	// The suggested storage type matches the schema, OK!
+	case storageType == schemaType && schemaType != types.DefaultID:
 		return nil
+
+	// try to guess a type from the value
+	case storageType == schemaType && schemaType == types.DefaultID:
+		schemaType, _ = types.TypeForValue(edge.Value)
+		if schemaType == types.DefaultID {
+			return nil
+		}
+
+	// We accept the storage type iff we don't have a schema type and a storage type is specified.
+	case schemaType == types.DefaultID:
+		schemaType = storageType
 	}
 
-	var src types.Val
-	var dst types.Val
-	var err error
+	var (
+		dst types.Val
+		err error
+	)
 
-	src = types.Val{Tid: storageType, Value: edge.Value}
+	src := types.Val{Tid: types.TypeID(edge.ValueType), Value: edge.Value}
 	// check compatibility of schema type and storage type
 	if dst, err = types.Convert(src, schemaType); err != nil {
 		return err
-	}
-
-	// if storage type was specified skip.
-	if storageType != types.DefaultID && schemaType != types.PasswordID {
-		return nil
 	}
 
 	// convert to schema type

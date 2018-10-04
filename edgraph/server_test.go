@@ -169,22 +169,24 @@ func TestNquadsFromJson4(t *testing.T) {
 }
 
 func TestJsonNumberParsing(t *testing.T) {
-	var data []string
-	data = append(data, `{"uid": "1", "key": 9223372036854775299}`)
-	data = append(data, `{"uid": "1", "key": 9223372036854775299.0}`)
-	data = append(data, `{"uid": "1", "key": 27670116110564327426}`)
+	tests := []struct {
+		in  string
+		out *api.Value
+	}{
+		{`{"uid": "1", "key": 9223372036854775299}`, &api.Value{&api.Value_IntVal{9223372036854775299}}},
+		{`{"uid": "1", "key": 9223372036854775299.0}`, &api.Value{&api.Value_DoubleVal{9223372036854775299.0}}},
+		{`{"uid": "1", "key": 27670116110564327426}`, nil},
+		{`{"uid": "1", "key": "23452786"}`, &api.Value{&api.Value_StrVal{"23452786"}}},
+		{`{"uid": "1", "key": "23452786.2378"}`, &api.Value{&api.Value_StrVal{"23452786.2378"}}},
+		{`{"uid": "1", "key": -1e10}`, &api.Value{&api.Value_DoubleVal{-1e+10}}},
+		{`{"uid": "1", "key": 0E-0}`, &api.Value{&api.Value_DoubleVal{0}}},
+	}
 
-	var vals []*api.Value
-	vals = append(vals, &api.Value{&api.Value_IntVal{9223372036854775299}})
-	vals = append(vals, &api.Value{&api.Value_DoubleVal{9223372036854775299.0}})
-	vals = append(vals, nil)
-
-	for i, d := range data {
-		v := vals[i]
-		nqs, err := nquadsFromJson([]byte(d), set)
-		if v != nil {
-			require.NoError(t, err)
-			require.Equal(t, makeNquad("1", "key", v), nqs[0])
+	for _, test := range tests {
+		nqs, err := nquadsFromJson([]byte(test.in), set)
+		if test.out != nil {
+			require.NoError(t, err, "%T", err)
+			require.Equal(t, makeNquad("1", "key", test.out), nqs[0])
 		} else {
 			require.Error(t, err)
 		}

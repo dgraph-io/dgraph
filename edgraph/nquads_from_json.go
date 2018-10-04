@@ -106,7 +106,7 @@ type mapResponse struct {
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 	switch v := v.(type) {
 	case json.Number:
-		if strings.Index(v.String(), ".") >= 0 {
+		if strings.ContainsAny(v.String(), ".Ee") {
 			f, err := v.Float64()
 			if err != nil {
 				return err
@@ -119,6 +119,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return err
 		}
 		nq.ObjectValue = &api.Value{&api.Value_IntVal{i}}
+
 	case string:
 		predWithLang := strings.SplitN(k, "@", 2)
 		if len(predWithLang) == 2 && predWithLang[0] != "" {
@@ -132,24 +133,32 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
+		// Try to guess a storage type. The schema type is preferred though.
+		tid, val := types.TypeForValue([]byte(v))
+		if tid != types.DefaultID {
+			var err error
+			nq.ObjectValue, err = types.ObjectValue(tid, val)
+			return err
+		}
 		// In RDF, we assume everything is default (types.DefaultID), but in JSON we assume string
 		// (StringID). But this value will be checked against the schema so we don't overshadow a
 		// password value (types.PasswordID) - Issue#2623
 		nq.ObjectValue = &api.Value{&api.Value_StrVal{v}}
+
 	case float64:
 		if v == 0 && op == delete {
 			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
 			return nil
 		}
-
 		nq.ObjectValue = &api.Value{&api.Value_DoubleVal{v}}
+
 	case bool:
 		if v == false && op == delete {
 			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
 			return nil
 		}
-
 		nq.ObjectValue = &api.Value{&api.Value_BoolVal{v}}
+
 	default:
 		return x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 	}
