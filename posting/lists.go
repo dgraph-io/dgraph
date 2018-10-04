@@ -193,8 +193,8 @@ func updateMemoryMetrics(lc *y.Closer) {
 			idle := float64(ms.HeapIdle - ms.HeapReleased)
 
 			x.MemoryInUse.Set(int64(inUse))
-			x.HeapIdle.Set(int64(idle))
-			x.TotalOSMemory.Set(int64(getMemUsage()))
+			x.MemoryIdle.Set(int64(idle))
+			x.MemoryProc.Set(int64(getMemUsage()))
 		}
 	}
 }
