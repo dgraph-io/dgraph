@@ -27,12 +27,12 @@ import (
 )
 
 // OpenManaged returns a new DB, which allows more control over setting
-// transaction timestamps, by setting ManagedTxns=true.
+// transaction timestamps, by setting managedDB=true.
 //
 // This is only useful for databases built on top of Badger (like Dgraph), and
 // can be ignored by most users.
 func OpenManaged(opts Options) (*DB, error) {
-	opts.ManagedTxns = true
+	opts.managedTxns = true
 	return Open(opts)
 }
 
@@ -42,8 +42,8 @@ func OpenManaged(opts Options) (*DB, error) {
 // This is only useful for databases built on top of Badger (like Dgraph), and
 // can be ignored by most users.
 func (db *DB) NewTransactionAt(readTs uint64, update bool) *Txn {
-	if !db.opt.ManagedTxns {
-		panic("Cannot use NewTransactionAt with ManagedTxns=false. Use NewTransaction instead.")
+	if !db.opt.managedTxns {
+		panic("Cannot use NewTransactionAt with managedDB=false. Use NewTransaction instead.")
 	}
 	txn := db.NewTransaction(update)
 	txn.readTs = readTs
@@ -56,8 +56,8 @@ func (db *DB) NewTransactionAt(readTs uint64, update bool) *Txn {
 // This is only useful for databases built on top of Badger (like Dgraph), and
 // can be ignored by most users.
 func (txn *Txn) CommitAt(commitTs uint64, callback func(error)) error {
-	if !txn.db.opt.ManagedTxns {
-		panic("Cannot use CommitAt with ManagedTxns=false. Use Commit instead.")
+	if !txn.db.opt.managedTxns {
+		panic("Cannot use CommitAt with managedDB=false. Use Commit instead.")
 	}
 	txn.commitTs = commitTs
 	return txn.Commit(callback)
@@ -67,8 +67,8 @@ func (txn *Txn) CommitAt(commitTs uint64, callback func(error)) error {
 // versions can be discarded from the LSM tree, and thence from the value log to
 // reclaim disk space. Can only be used with managed transactions.
 func (db *DB) SetDiscardTs(ts uint64) {
-	if !db.opt.ManagedTxns {
-		panic("Cannot use SetDiscardTs with ManagedTxns=false.")
+	if !db.opt.managedTxns {
+		panic("Cannot use SetDiscardTs with managedDB=false.")
 	}
 	db.orc.setDiscardTs(ts)
 }
@@ -87,8 +87,8 @@ var errDone = errors.New("Done deleting keys")
 //
 // DropAll is only available with managed transactions.
 func (db *DB) DropAll() error {
-	if !db.opt.ManagedTxns {
-		panic("DropAll is only available with ManagedTxns=true.")
+	if !db.opt.managedTxns {
+		panic("DropAll is only available with managedDB=true.")
 	}
 	// Stop accepting new writes.
 	atomic.StoreInt32(&db.blockWrites, 1)

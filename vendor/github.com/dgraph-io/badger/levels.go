@@ -729,8 +729,7 @@ func (s *levelsController) addLevel0Table(t *table.Table) error {
 		// Stall. Make sure all levels are healthy before we unstall.
 		var timeStart time.Time
 		{
-			s.elog.Printf("STALLED STALLED STALLED STALLED STALLED STALLED STALLED STALLED: %v\n",
-				time.Since(lastUnstalled))
+			s.elog.Printf("STALLED STALLED STALLED: %v\n", time.Since(lastUnstalled))
 			s.cstatus.RLock()
 			for i := 0; i < s.kv.opt.MaxLevels; i++ {
 				s.elog.Printf("level=%d. Status=%s Size=%d\n",
@@ -758,8 +757,7 @@ func (s *levelsController) addLevel0Table(t *table.Table) error {
 			}
 		}
 		{
-			s.elog.Printf("UNSTALLED UNSTALLED UNSTALLED UNSTALLED UNSTALLED UNSTALLED: %v\n",
-				time.Since(timeStart))
+			s.elog.Printf("UNSTALLED UNSTALLED UNSTALLED: %v\n", time.Since(timeStart))
 			lastUnstalled = time.Now()
 		}
 	}
@@ -773,12 +771,13 @@ func (s *levelsController) close() error {
 }
 
 // get returns the found value if any. If not found, we return nil.
-func (s *levelsController) get(key []byte) (y.ValueStruct, error) {
+func (s *levelsController) get(key []byte, maxVs *y.ValueStruct) (y.ValueStruct, error) {
 	// It's important that we iterate the levels from 0 on upward.  The reason is, if we iterated
 	// in opposite order, or in parallel (naively calling all the h.RLock() in some order) we could
 	// read level L's tables post-compaction and level L+1's tables pre-compaction.  (If we do
 	// parallelize this, we will need to call the h.RLock() function by increasing order of level
 	// number.)
+	version := y.ParseTs(key)
 	for _, h := range s.levels {
 		vs, err := h.get(key) // Calls h.RLock() and h.RUnlock().
 		if err != nil {
@@ -787,7 +786,15 @@ func (s *levelsController) get(key []byte) (y.ValueStruct, error) {
 		if vs.Value == nil && vs.Meta == 0 {
 			continue
 		}
-		return vs, nil
+		if maxVs == nil || vs.Version == version {
+			return vs, nil
+		}
+		if maxVs.Version < vs.Version {
+			*maxVs = vs
+		}
+	}
+	if maxVs != nil {
+		return *maxVs, nil
 	}
 	return y.ValueStruct{}, nil
 }

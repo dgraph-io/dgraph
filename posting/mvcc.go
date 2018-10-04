@@ -139,22 +139,20 @@ func (tx *Txn) CommitToMemory(commitTs uint64) error {
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	// It's delta
-	val, err := item.Value()
-	if err != nil {
-		return err
-	}
-	if len(val) == 0 {
-		// empty pl
+	return item.Value(func(val []byte) error {
+		if len(val) == 0 {
+			// empty pl
+			return nil
+		}
+		// Found complete pl, no needn't iterate more
+		if item.UserMeta()&BitUidPosting != 0 {
+			plist.Uids = make([]byte, len(val))
+			copy(plist.Uids, val)
+		} else if len(val) > 0 {
+			x.Check(plist.Unmarshal(val))
+		}
 		return nil
-	}
-	// Found complete pl, no needn't iterate more
-	if item.UserMeta()&BitUidPosting != 0 {
-		plist.Uids = make([]byte, len(val))
-		copy(plist.Uids, val)
-	} else if len(val) > 0 {
-		x.Check(plist.Unmarshal(val))
-	}
-	return nil
+	})
 }
 
 // constructs the posting list from the disk using the passed iterator.
@@ -182,10 +180,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			l.commitTs = item.Version()
 		}
 
-		val, err := item.Value()
-		if err != nil {
-			return nil, err
-		}
 		if item.UserMeta()&BitCompletePosting > 0 {
 			if err := unmarshalOrCopy(l.plist, item); err != nil {
 				return nil, err
@@ -195,16 +189,23 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			// the same key.
 			break
 		}
+
 		if item.UserMeta()&bitDeltaPosting > 0 {
-			pl := &pb.PostingList{}
-			x.Check(pl.Unmarshal(val))
-			pl.Commit = item.Version()
-			for _, mpost := range pl.Postings {
-				// commitTs, startTs are meant to be only in memory, not
-				// stored on disk.
-				mpost.CommitTs = item.Version()
+			err := item.Value(func(val []byte) error {
+				pl := &pb.PostingList{}
+				x.Check(pl.Unmarshal(val))
+				pl.Commit = item.Version()
+				for _, mpost := range pl.Postings {
+					// commitTs, startTs are meant to be only in memory, not
+					// stored on disk.
+					mpost.CommitTs = item.Version()
+				}
+				l.mutationMap[pl.Commit] = pl
+				return nil
+			})
+			if err != nil {
+				return nil, err
 			}
-			l.mutationMap[pl.Commit] = pl
 		} else {
 			x.Fatalf("unexpected meta: %d", item.UserMeta())
 		}
