@@ -187,7 +187,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BoolID:
 				*res = bool(vc != 1)
 			case StringID, DefaultID:
-				*res = string(strconv.FormatFloat(float64(vc), 'E', -1, 64))
+				*res = string(strconv.FormatFloat(float64(vc), 'G', -1, 64))
 			case DateTimeID:
 				secs := int64(vc)
 				fracSecs := vc - float64(secs)
@@ -366,7 +366,7 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(float64)
 		switch toID {
 		case StringID, DefaultID:
-			*res = strconv.FormatFloat(float64(vc), 'E', -1, 64)
+			*res = strconv.FormatFloat(float64(vc), 'G', -1, 64)
 		case BinaryID:
 			// Marshal Binary
 			var bs [8]byte

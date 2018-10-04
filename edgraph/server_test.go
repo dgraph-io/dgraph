@@ -88,7 +88,8 @@ func TestNquadsFromJson1(t *testing.T) {
 	oval = &api.Value{&api.Value_BoolVal{true}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "married", oval))
 
-	oval = &api.Value{&api.Value_StrVal{tn.Format(time.RFC3339Nano)}}
+	oval, err = types.ObjectValue(types.DateTimeID, tn)
+	require.NoError(t, err)
 	require.Contains(t, nq, makeNquad("_:blank-0", "now", oval))
 
 	var g geom.T
@@ -176,8 +177,8 @@ func TestJsonNumberParsing(t *testing.T) {
 		{`{"uid": "1", "key": 9223372036854775299}`, &api.Value{&api.Value_IntVal{9223372036854775299}}},
 		{`{"uid": "1", "key": 9223372036854775299.0}`, &api.Value{&api.Value_DoubleVal{9223372036854775299.0}}},
 		{`{"uid": "1", "key": 27670116110564327426}`, nil},
-		{`{"uid": "1", "key": "23452786"}`, &api.Value{&api.Value_StrVal{"23452786"}}},
-		{`{"uid": "1", "key": "23452786.2378"}`, &api.Value{&api.Value_StrVal{"23452786.2378"}}},
+		{`{"uid": "1", "key": "23452786"}`, &api.Value{&api.Value_IntVal{23452786}}},
+		{`{"uid": "1", "key": "23452786.2378"}`, &api.Value{&api.Value_DoubleVal{23452786.2378}}},
 		{`{"uid": "1", "key": -1e10}`, &api.Value{&api.Value_DoubleVal{-1e+10}}},
 		{`{"uid": "1", "key": 0E-0}`, &api.Value{&api.Value_DoubleVal{0}}},
 	}
