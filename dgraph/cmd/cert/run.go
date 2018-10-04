@@ -37,8 +37,6 @@ func init() {
 		},
 	}
 
-	Cert.Cmd.AddCommand()
-
 	flag := Cert.Cmd.Flags()
 	flag.StringP("dir", "d", defaultDir, "directory containing TLS certs and keys")
 	flag.StringP("ca-key", "k", defaultCAKey, "path to the CA private key")
