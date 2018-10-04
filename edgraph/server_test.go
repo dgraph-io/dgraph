@@ -57,7 +57,7 @@ type Person struct {
 }
 
 func TestNquadsFromJson1(t *testing.T) {
-	tn := time.Now()
+	tn := time.Now().UTC()
 	geoVal := `{"Type":"Point", "Coordinates":[1.1,2.0]}`
 	m := true
 	p := Person{
