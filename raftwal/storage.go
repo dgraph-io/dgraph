@@ -134,12 +134,10 @@ func RaftId(db *badger.DB) (uint64, error) {
 		if err != nil {
 			return err
 		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		id = binary.BigEndian.Uint64(val)
-		return nil
+		return item.Value(func(val []byte) error {
+			id = binary.BigEndian.Uint64(val)
+			return nil
+		})
 	})
 	if err == badger.ErrKeyNotFound {
 		return 0, nil
@@ -233,16 +231,14 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint6
 		if !itr.ValidForPrefix(w.entryPrefix()) {
 			return errNotFound
 		}
-		index = w.parseIndex(itr.Item().Key())
+		item := itr.Item()
+		index = w.parseIndex(item.Key())
 		if e == nil {
 			return nil
 		}
-		item := itr.Item()
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		return e.Unmarshal(val)
+		return item.Value(func(val []byte) error {
+			return e.Unmarshal(val)
+		})
 	})
 	return index, err
 }
@@ -324,11 +320,9 @@ func (w *DiskStorage) Snapshot() (snap pb.Snapshot, rerr error) {
 		if err != nil {
 			return err
 		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		return snap.Unmarshal(val)
+		return item.Value(func(val []byte) error {
+			return snap.Unmarshal(val)
+		})
 	})
 	if err == badger.ErrKeyNotFound {
 		return snap, nil
@@ -444,11 +438,9 @@ func (w *DiskStorage) HardState() (hd pb.HardState, rerr error) {
 		if err != nil {
 			return err
 		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		return hd.Unmarshal(val)
+		return item.Value(func(val []byte) error {
+			return hd.Unmarshal(val)
+		})
 	})
 	if err == badger.ErrKeyNotFound {
 		return hd, nil
@@ -497,16 +489,14 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 			if err != nil {
 				return err
 			}
-			val, err := item.Value()
-			if err != nil {
-				return err
-			}
-			var e pb.Entry
-			if err = e.Unmarshal(val); err != nil {
-				return err
-			}
-			es = append(es, e)
-			return nil
+			return item.Value(func(val []byte) error {
+				var e pb.Entry
+				if err = e.Unmarshal(val); err != nil {
+					return err
+				}
+				es = append(es, e)
+				return nil
+			})
 		}
 
 		itr := txn.NewIterator(badger.DefaultIteratorOptions)
@@ -521,11 +511,9 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 			item := itr.Item()
 			var e pb.Entry
-			val, err := item.Value()
-			if err != nil {
-				return err
-			}
-			if err = e.Unmarshal(val); err != nil {
+			if err := item.Value(func(val []byte) error {
+				return e.Unmarshal(val)
+			}); err != nil {
 				return err
 			}
 			// If this Assert does not fail, then we can safely remove that strange append fix

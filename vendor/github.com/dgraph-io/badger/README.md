@@ -214,14 +214,35 @@ value, we can use the `Txn.Get()` method:
 ```go
 err := db.View(func(txn *badger.Txn) error {
   item, err := txn.Get([]byte("answer"))
-  if err != nil {
-    return err
-  }
-  val, err := item.Value()
-  if err != nil {
-    return err
-  }
-  fmt.Printf("The answer is: %s\n", val)
+  handle(err)
+
+  var valNot, valCopy []byte
+  err := item.Value(func(val []byte) error {
+    // This func with val would only be called if item.Value encounters no error.
+
+    // Accessing val here is valid.
+    fmt.Printf("The answer is: %s\n", val)
+
+    // Copying or parsing val is valid.
+    valCopy = append([]byte{}, val...)
+
+    // Assigning val slice to another variable is NOT OK.
+    valNot = val // Do not do this.
+    return nil
+  })
+  handle(err)
+
+  // DO NOT access val here. It is the most common cause of bugs.
+  fmt.Printf("NEVER do this. %s\n", valNot)
+
+  // You must copy it to use it outside item.Value(...).
+  fmt.Printf("The answer is: %s\n", valCopy)
+
+  // Alternatively, you could also use item.ValueCopy().
+  valCopy, err = item.ValueCopy(nil)
+  handle(err)
+  fmt.Printf("The answer is: %s\n", valCopy)
+
   return nil
 })
 ```
@@ -263,7 +284,7 @@ operation. All values are specified in byte arrays. For e.g., here is a merge
 function (`add`) which adds a `uint64` value to an existing `uint64` value.
 
 ```Go
-uint64ToBytes(i uint64) []byte {
+func uint64ToBytes(i uint64) []byte {
   var buf [8]byte
   binary.BigEndian.PutUint64(buf[:], i)
   return buf[:]
@@ -329,11 +350,13 @@ err := db.View(func(txn *badger.Txn) error {
   for it.Rewind(); it.Valid(); it.Next() {
     item := it.Item()
     k := item.Key()
-    v, err := item.Value()
+    err := item.Value(func(v []byte) error {
+      fmt.Printf("key=%s, value=%s\n", k, v)
+      return nil
+    })
     if err != nil {
       return err
     }
-    fmt.Printf("key=%s, value=%s\n", k, v)
   }
   return nil
 })
@@ -359,11 +382,13 @@ db.View(func(txn *badger.Txn) error {
   for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
     item := it.Item()
     k := item.Key()
-    v, err := item.Value()
+    err := item.Value(func(v []byte) error {
+      fmt.Printf("key=%s, value=%s\n", k, v)
+      return nil
+    })
     if err != nil {
       return err
     }
-    fmt.Printf("key=%s, value=%s\n", k, v)
   }
   return nil
 })
@@ -549,6 +574,7 @@ Below is a list of known projects that use Badger:
 
 * [0-stor](https://github.com/zero-os/0-stor) - Single device object store.
 * [Dgraph](https://github.com/dgraph-io/dgraph) - Distributed graph database.
+* [Dispatch Protocol](https://github.com/dispatchlabs/disgo) - Blockchain protocol for distributed application data analytics.
 * [Sandglass](https://github.com/celrenheit/sandglass) - distributed, horizontally scalable, persistent, time sorted message queue.
 * [Usenet Express](https://usenetexpress.com/) - Serving over 300TB of data with Badger.
 * [go-ipfs](https://github.com/ipfs/go-ipfs) - Go client for the InterPlanetary File System (IPFS), a new hypermedia distribution protocol.
@@ -560,6 +586,11 @@ If you are using Badger in a project please send a pull request to add it to the
 
 ## Frequently Asked Questions
 - **My writes are getting stuck. Why?**
+
+**Update: With the new `Value(func(v []byte))` API, this deadlock can no longer
+happen.**
+
+The following is true for users on Badger v1.x.
 
 This can happen if a long running iteration with `Prefetch` is set to false, but
 a `Item::Value` call is made internally in the loop. That causes Badger to

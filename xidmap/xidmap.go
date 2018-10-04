@@ -140,14 +140,14 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool) {
 			return nil
 		}
 		x.Check(err)
-		uidBuf, err := item.Value()
-		x.Check(err)
-		x.AssertTrue(len(uidBuf) > 0)
-		var n int
-		uid, n = binary.Uvarint(uidBuf)
-		x.AssertTrue(n == len(uidBuf))
-		ok = true
-		return nil
+		return item.Value(func(uidBuf []byte) error {
+			x.AssertTrue(len(uidBuf) > 0)
+			var n int
+			uid, n = binary.Uvarint(uidBuf)
+			x.AssertTrue(n == len(uidBuf))
+			ok = true
+			return nil
+		})
 	}))
 	if ok {
 		sh.add(xid, uid, true)

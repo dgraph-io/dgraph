@@ -86,7 +86,7 @@ type Options struct {
 	// Transaction start and commit timestamps are managed by end-user.
 	// This is only useful for databases built on top of Badger (like Dgraph).
 	// Not recommended for most users.
-	ManagedTxns bool
+	managedTxns bool
 
 	// 4. Flags for testing purposes
 	// ------------------------------

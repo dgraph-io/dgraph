@@ -241,12 +241,14 @@ func Load(predicate string) error {
 	if err != nil {
 		return err
 	}
-	val, err := item.Value()
+	var s pb.SchemaUpdate
+	err = item.Value(func(val []byte) error {
+		x.Check(s.Unmarshal(val))
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	var s pb.SchemaUpdate
-	x.Check(s.Unmarshal(val))
 	State().Set(predicate, s)
 	State().elog.Printf(logUpdate(s, predicate))
 	x.Printf(logUpdate(s, predicate))
@@ -273,15 +275,17 @@ func LoadFromDb() error {
 		}
 		attr := pk.Attr
 		var s pb.SchemaUpdate
-		val, err := item.Value()
+		err := item.Value(func(val []byte) error {
+			if len(val) == 0 {
+				return nil
+			}
+			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
+			State().Set(attr, s)
+			return nil
+		})
 		if err != nil {
 			return err
 		}
-		if len(val) == 0 {
-			continue
-		}
-		x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
-		State().Set(attr, s)
 	}
 	return nil
 }

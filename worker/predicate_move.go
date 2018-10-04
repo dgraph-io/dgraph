@@ -111,7 +111,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	} else if err != nil {
 		return err
 	} else {
-		val, err := item.Value()
+		val, err := item.ValueCopy(nil)
 		if err != nil {
 			return err
 		}

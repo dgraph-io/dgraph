@@ -323,11 +323,11 @@ func export(bdir string, readTs uint64) error {
 
 		if pk.IsSchema() {
 			s := &pb.SchemaUpdate{}
-			val, err := item.Value()
-			if err != nil {
+			if err := item.Value(func(val []byte) error {
+				return s.Unmarshal(val)
+			}); err != nil {
 				return err
 			}
-			x.Check(s.Unmarshal(val))
 			chs <- &skv{
 				attr:   pk.Attr,
 				schema: s,
