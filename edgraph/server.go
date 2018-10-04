@@ -18,11 +18,11 @@ import (
 	"time"
 	"unicode"
 
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -261,9 +261,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Request rejected %v", err)
-		}
+		// if tr, ok := trace.FromContext(ctx); ok {
+		// 	tr.LazyPrintf("Request rejected %v", err)
+		// }
 		return empty, err
 	}
 
@@ -309,9 +309,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
 	resp = &api.Assigned{}
 	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Request rejected %v", err)
-		}
+		// if tr, ok := trace.FromContext(ctx); ok {
+		// 	tr.LazyPrintf("Request rejected %v", err)
+		// }
 		return resp, err
 	}
 
@@ -329,9 +329,9 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		return resp, fmt.Errorf("empty mutation")
 	}
 	if rand.Float64() < worker.Config.Tracing {
-		var tr trace.Trace
-		tr, ctx = x.NewTrace("Server.Mutate", ctx)
-		defer tr.Finish()
+		// var tr trace.Trace
+		// tr, ctx = x.NewTrace("Server.Mutate", ctx)
+		// defer tr.Finish()
 	}
 
 	var l query.Latency
@@ -389,16 +389,16 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		}
 		return resp, err
 	}
-	tr, ok := trace.FromContext(ctx)
-	if ok {
-		tr.LazyPrintf("Prewrites err: %v. Attempting to commit/abort immediately.", err)
-	}
+	// tr, ok := trace.FromContext(ctx)
+	// if ok {
+	// 	tr.LazyPrintf("Prewrites err: %v. Attempting to commit/abort immediately.", err)
+	// }
 	ctxn := resp.Context
 	// zero would assign the CommitTs
 	cts, err := worker.CommitOverNetwork(ctx, ctxn)
-	if ok {
-		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, err)
-	}
+	// if ok {
+	// 	tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, err)
+	// }
 	if err != nil {
 		if err == y.ErrAborted {
 			err = status.Errorf(codes.Aborted, err.Error())
@@ -415,15 +415,17 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Response, err error) {
+	ctx, span := trace.StartSpan(ctx, "Server/Query")
+	defer span.End()
+
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
 	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Request rejected %v", err)
-		}
+		span.SetStatus(trace.Status{Code: trace.StatusCodeUnknown, Message: err.Error()})
 		return resp, err
 	}
+	span.SetStatus(trace.Status{Code: trace.StatusCodeOK, Message: "Handling query"})
 
 	x.PendingQueries.Add(1)
 	x.NumQueries.Add(1)
@@ -433,16 +435,16 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}
 
 	if rand.Float64() < worker.Config.Tracing {
-		var tr trace.Trace
-		tr, ctx = x.NewTrace("GrpcQuery", ctx)
-		defer tr.Finish()
+		// var tr trace.Trace
+		// tr, ctx = x.NewTrace("GrpcQuery", ctx)
+		// defer tr.Finish()
 	}
 
 	resp = new(api.Response)
 	if len(req.Query) == 0 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Empty query")
-		}
+		// if tr, ok := trace.FromContext(ctx); ok {
+		// 	tr.LazyPrintf("Empty query")
+		// }
 		return resp, fmt.Errorf("empty query")
 	}
 
@@ -451,9 +453,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}
 	var l query.Latency
 	l.Start = time.Now()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Query request received: %v", req)
-	}
+	// if tr, ok := trace.FromContext(ctx); ok {
+	// 	tr.LazyPrintf("Query request received: %v", req)
+	// }
 
 	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
@@ -479,18 +481,18 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	// Core processing happens here.
 	var er query.ExecuteResult
 	if er, err = queryRequest.Process(ctx); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while processing query: %+v", err)
-		}
+		// if tr, ok := trace.FromContext(ctx); ok {
+		// 	tr.LazyPrintf("Error while processing query: %+v", err)
+		// }
 		return resp, x.Wrap(err)
 	}
 	resp.Schema = er.SchemaNode
 
 	json, err := query.ToJson(&l, er.Subgraphs)
 	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while converting to protocol buffer: %+v", err)
-		}
+		// if tr, ok := trace.FromContext(ctx); ok {
+		// 	tr.LazyPrintf("Error while converting to protocol buffer: %+v", err)
+		// }
 		return resp, err
 	}
 	resp.Json = json
@@ -508,9 +510,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext,
 	error) {
 	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Request rejected %v", err)
-		}
+		// if tr, ok := trace.FromContext(ctx); ok {
+		// 	tr.LazyPrintf("Request rejected %v", err)
+		// }
 		return &api.TxnContext{}, err
 	}
 
@@ -530,9 +532,9 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version, err error) {
 	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("request rejected %v", err)
-		}
+		// if tr, ok := trace.FromContext(ctx); ok {
+		// 	tr.LazyPrintf("request rejected %v", err)
+		// }
 		return v, err
 	}
 

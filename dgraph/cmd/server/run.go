@@ -21,6 +21,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.opencensus.io/plugin/ocgrpc"
+	"go.opencensus.io/stats/view"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -57,52 +59,45 @@ func init() {
 	}
 	Server.EnvPrefix = "DGRAPH_SERVER"
 
-	defaults := edgraph.DefaultConfig
 	flag := Server.Cmd.Flags()
-	flag.StringP("postings", "p", defaults.PostingDir,
+	flag.StringP("postings", "p", "p",
 		"Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.tables", defaults.BadgerTables,
+	flag.String("badger.tables", "mmap",
 		"[ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
 			"Option sequence consume most to least RAM while providing best to worst read "+
 			"performance respectively.")
-	flag.String("badger.vlog", defaults.BadgerVlog,
+	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
 
-	flag.StringP("wal", "w", defaults.WALDir,
-		"Directory to store raft write-ahead logs.")
-	flag.Bool("nomutations", defaults.Nomutations,
-		"Don't allow mutations on this server.")
+	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
+	flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 
-	flag.String("whitelist", defaults.WhitelistedIPs,
+	flag.String("whitelist", "",
 		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
-	flag.String("export", defaults.ExportPath,
+	flag.String("export", "export",
 		"Folder in which to store exports.")
-	flag.Int("pending_proposals", defaults.NumPendingProposals,
+	flag.Int("pending_proposals", 2000,
 		"Number of pending mutation proposals. Useful for rate limiting.")
-	flag.Float64("trace", defaults.Tracing,
-		"The ratio of queries to trace.")
-	flag.String("my", defaults.MyAddr,
+	flag.Float64("trace", 0.0, "The ratio of queries to trace.")
+	flag.String("my", "",
 		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
-	flag.StringP("zero", "z", defaults.ZeroAddr,
+	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"IP_ADDRESS:PORT of Dgraph zero.")
 	flag.Uint64("idx", 0,
 		"Optional Raft ID that this server will use to join RAFT groups.")
-	flag.Uint64("sc", defaults.MaxPendingCount,
-		"Max number of pending entries in wal after which snapshot is taken")
-	flag.Bool("expand_edge", defaults.ExpandEdge,
+	flag.Bool("expand_edge", true,
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
 
-	flag.Float64P("lru_mb", "l", defaults.AllottedMemory,
+	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
 
-	flag.Bool("debugmode", defaults.DebugMode,
-		"enable debug mode for more debug information")
+	flag.Bool("debugmode", false, "enable debug mode for more debug information")
 
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
@@ -179,10 +174,15 @@ func setupListener(addr string, port int, reload func()) (net.Listener, error) {
 
 func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	defer wg.Done()
+	if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
+		log.Fatal(err)
+	}
+
 	opt := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
 	}
 	if tlsCfg != nil {
 		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))

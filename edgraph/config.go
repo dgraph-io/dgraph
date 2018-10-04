@@ -46,28 +46,6 @@ type Options struct {
 // TODO(tzdybal) - remove global
 var Config Options
 
-var DefaultConfig = Options{
-	PostingDir:   "p",
-	BadgerTables: "mmap",
-	BadgerVlog:   "mmap",
-	WALDir:       "w",
-	Nomutations:  false,
-
-	// User must specify this.
-	AllottedMemory: -1.0,
-
-	WhitelistedIPs:      "",
-	ExportPath:          "export",
-	NumPendingProposals: 2000,
-	Tracing:             0.0,
-	MyAddr:              "",
-	ZeroAddr:            fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
-	MaxPendingCount:     100,
-	ExpandEdge:          true,
-
-	DebugMode: false,
-}
-
 // Sometimes users use config.yaml flag so /debug/vars doesn't have information about the
 // value of the flags. Hence we dump conf options we care about to the conf map.
 func setConfVar(conf Options) {
@@ -151,9 +129,9 @@ func (o *Options) validate() {
 	_, err = parseIPsFromString(o.WhitelistedIPs)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
-	x.AssertTruefNoTrace(o.AllottedMemory != DefaultConfig.AllottedMemory,
+	x.AssertTruef(o.AllottedMemory != -1,
 		"LRU memory (--lru_mb) must be specified. (At least 1024 MB)")
-	x.AssertTruefNoTrace(o.AllottedMemory >= MinAllottedMemory,
+	x.AssertTruef(o.AllottedMemory >= MinAllottedMemory,
 		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f",
 		MinAllottedMemory, o.AllottedMemory)
 }
