@@ -183,6 +183,13 @@ func updateMemoryMetrics(lc *y.Closer) {
 			megs := (ms.HeapInuse + ms.StackInuse)
 
 			inUse := float64(megs)
+			// From runtime/mstats.go:
+			// HeapIdle minus HeapReleased estimates the amount of memory
+			// that could be returned to the OS, but is being retained by
+			// the runtime so it can grow the heap without requesting more
+			// memory from the OS. If this difference is significantly
+			// larger than the heap size, it indicates there was a recent
+			// transient spike in live heap size.
 			idle := float64(ms.HeapIdle - ms.HeapReleased)
 
 			x.MemoryInUse.Set(int64(inUse))
