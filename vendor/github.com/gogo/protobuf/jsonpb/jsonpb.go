@@ -991,16 +991,16 @@ func (u *Unmarshaler) unmarshalValue(target reflect.Value, inputValue json.RawMe
 		return nil
 	}
 
+	if prop != nil && len(prop.CustomType) > 0 && target.CanAddr() {
+		if m, ok := target.Addr().Interface().(interface {
+			UnmarshalJSON([]byte) error
+		}); ok {
+			return json.Unmarshal(inputValue, m)
+		}
+	}
+
 	// Handle nested messages.
 	if targetType.Kind() == reflect.Struct {
-		if prop != nil && len(prop.CustomType) > 0 && target.CanAddr() {
-			if m, ok := target.Addr().Interface().(interface {
-				UnmarshalJSON([]byte) error
-			}); ok {
-				return json.Unmarshal(inputValue, m)
-			}
-		}
-
 		var jsonFields map[string]json.RawMessage
 		if err := json.Unmarshal(inputValue, &jsonFields); err != nil {
 			return err
