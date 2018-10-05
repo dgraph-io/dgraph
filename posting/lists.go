@@ -325,8 +325,8 @@ func Get(key []byte) (rlist *List, err error) {
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
 		x.CacheRace.Add(1)
-	} else if !l.onDisk {
-		btree.Insert(l.key)
+	} else if !lp.onDisk {
+		btree.Insert(lp.key)
 	}
 	return lp, nil
 }
