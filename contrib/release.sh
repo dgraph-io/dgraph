@@ -49,6 +49,10 @@ go get -u github.com/dgraph-io/dgo
 # go get github.com/stretchr/testify/require
 go get -u github.com/karalabe/xgo
 
+pushd $GOPATH/src/github.com/dgraph-io/dgo
+  git checkout proto_fixes
+popd
+
 pushd $GOPATH/src/google.golang.org/grpc
   git checkout v1.13.0
 popd
