@@ -1405,20 +1405,20 @@ Dgraph metrics follow the [metric and label conventions for Prometheus](https://
  `dgraph_cache_race_total`        | Total number of cache races when getting posting lists in Dgraph.
  `dgraph_dirtymap_keys_total`     | Unused.
  `dgraph_evicted_lists_total`     | Total number of posting lists evicted from LRU cache. A large number here could indicate a large posting list.
+ `dgraph_memory_idle_bytes`         | Estimated amount of memory that is being held idle that could be reclaimed by the OS.
+ `dgraph_memory_inuse_bytes`      | Total memory usage in bytes (sum of heap usage and stack usage).
+ `dgraph_memory_proc_bytes`       | Total memory usage in bytes of the Dgraph process. On Linux/macOS, this metric is equivalent to resident set size. On Windows, this metric is equivalent to [Go's runtime.ReadMemStats](https://golang.org/pkg/runtime/#ReadMemStats).
  `dgraph_goroutines_total`        | Total number of Goroutines currently running in Dgraph.
- `dgraph_heap_idle_bytes`         | Equivalent to Go's `go_memstats_heap_idle_bytes` metric.
  `dgraph_lcache_capacity_bytes`   | Current size of the LRU cache. The max value should be close to the size specified by `--lru_mb`.
  `dgraph_lcache_keys_total`       | Total number of keys in the LRU cache.
  `dgraph_lcache_size_bytes`       | Size in bytes of the LRU cache.
  `dgraph_max_list_bytes`          | Max posting list size in bytes.
  `dgraph_max_list_length`         | The largest number of postings stored in a posting list seen so far.
- `dgraph_memory_inuse_bytes`      | Total memory usage in bytes (sum of heap usage and stack usage).
  `dgraph_num_queries_total`       | Total number of queries run in Dgraph.
  `dgraph_pending_proposals_total` | Total pending Raft proposals.
  `dgraph_pending_queries_total`  | Total number of queries in progress.
  `dgraph_posting_reads_total`     | Unused.
  `dgraph_posting_writes_total`    | Total number of posting list writes to disk.
- `dgraph_proc_memory_bytes`       | Total memory usage in bytes of the Dgraph process. On Linux/macOS, this metric is equivalent to resident set size. On Windows, this metric is equivalent to [Go's runtime.ReadMemStats](https://golang.org/pkg/runtime/#ReadMemStats).
  `dgraph_read_bytes_total`        | Total bytes read from Dgraph.
  `dgraph_server_health_status`    | Only applicable to Dgraph Server. Value is 1 when the server is ready to accept requests; otherwise 0.
 
