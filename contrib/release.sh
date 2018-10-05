@@ -82,17 +82,17 @@ pushd $basedir/ratel
 popd
 
 # Build Windows.
-# pushd $basedir/dgraph/dgraph
-# 	xgo --targets=windows/amd64 -ldflags \
-#   "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
-#   mkdir $TMP/windows
-#   mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
-# popd
+pushd $basedir/dgraph/dgraph
+	xgo --targets=windows/amd64 -ldflags \
+  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+  mkdir $TMP/windows
+  mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
+popd
 
-# pushd $basedir/ratel
-# 	xgo --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
-# 	mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
-# popd
+pushd $basedir/ratel
+	xgo --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
+	mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
+popd
 
 # Build Darwin.
 pushd $basedir/dgraph/dgraph
@@ -153,7 +153,7 @@ createTar () {
   rm -Rf $TMP/$os
 }
 
-# createTar windows
+createTar windows
 createTar darwin
 createTar linux
 
