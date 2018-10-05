@@ -248,7 +248,7 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		return l, err
 	}
 
-	l.onDisk = 1
+	l.onDisk = true
 	l.Lock()
 	size := l.calculateSize()
 	l.Unlock()
