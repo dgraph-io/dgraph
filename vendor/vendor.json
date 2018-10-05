@@ -229,6 +229,12 @@
 			"revisionTime": "2017-03-29T04:21:07Z"
 		},
 		{
+			"checksumSHA1": "FhEC1RwKSm/8jvTI2MKlzDVz+Vs=",
+			"path": "github.com/gogo/protobuf/gogoproto",
+			"revision": "61dbc136cf5d2f08d68a011382652244990a53a9",
+			"revisionTime": "2018-09-25T08:36:12Z"
+		},
+		{
 			"checksumSHA1": "6slf0S5ruHiSGTpgRNff5YfyNTE=",
 			"path": "github.com/gogo/protobuf/jsonpb",
 			"revision": "61dbc136cf5d2f08d68a011382652244990a53a9",
@@ -237,6 +243,12 @@
 		{
 			"checksumSHA1": "47nJ3iu1bVvK9jPXwAinFYr4mBU=",
 			"path": "github.com/gogo/protobuf/proto",
+			"revision": "61dbc136cf5d2f08d68a011382652244990a53a9",
+			"revisionTime": "2018-09-25T08:36:12Z"
+		},
+		{
+			"checksumSHA1": "4R7X2wRYYOxdXsoXOEcyBoCakb8=",
+			"path": "github.com/gogo/protobuf/protoc-gen-gogo/descriptor",
 			"revision": "61dbc136cf5d2f08d68a011382652244990a53a9",
 			"revisionTime": "2018-09-25T08:36:12Z"
 		},
@@ -281,6 +293,12 @@
 			"path": "github.com/golang/geo/s2",
 			"revision": "31fb0106dc4a947e5aaee1fe186e56447f839510",
 			"revisionTime": "2017-08-10T00:29:00Z"
+		},
+		{
+			"checksumSHA1": "HmbftipkadrLlCfzzVQ+iFHbl6g=",
+			"path": "github.com/golang/glog",
+			"revision": "23def4e6c14b4da8ac2ed8007337bc5eb5007998",
+			"revisionTime": "2016-01-25T20:49:56Z"
 		},
 		{
 			"checksumSHA1": "GaJLoEuMGnP5ofXvuweAI4wx06U=",
