@@ -9,6 +9,7 @@ package posting
 
 import (
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -206,10 +208,85 @@ func Init(ps *badger.DB) {
 	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
-	closer = y.NewCloser(2)
+	closer = y.NewCloser(3)
 
 	go periodicUpdateStats(closer)
 	go updateMemoryMetrics(closer)
+	go clearBtree(closer)
+}
+
+// clearBtree checks if the keys stored in the btree have reached their conclusion, and if so,
+// removes them from the tree. Conclusion in this case would be that the key got written out to
+// disk, or the txn which introduced the key got aborted.
+func clearBtree(closer *y.Closer) {
+	defer closer.Done()
+	var removeKey = errors.New("Remove key from btree.")
+
+	handleKey := func(txn *badger.Txn, k []byte) error {
+		_, err := txn.Get(k)
+		switch {
+		case err == badger.ErrKeyNotFound:
+			l := GetLru(k) // Retrieve from LRU cache, if it exists.
+			if l == nil {
+				// Posting list no longer in memory. So, it must have been either written to
+				// disk, or removed from memory after a txn abort.
+				return removeKey
+			}
+			l.RLock()
+			defer l.RUnlock()
+			if !l.hasPendingTxn() {
+				// This key's txn was aborted. So, we can remove it from btree.
+				return removeKey
+			}
+			return nil
+		case err != nil:
+			glog.Warningf("Error while checking key: %v\n", err)
+			return err
+		default:
+			// Key was found on disk. Remove from btree.
+			return removeKey
+		}
+	}
+
+	removeKeysOnDisk := func() {
+		var keys []string
+		var count int
+		err := pstore.View(func(txn *badger.Txn) error {
+			var rerr error
+			btree.Ascend(func(k []byte) bool {
+				count++
+				err := handleKey(txn, k)
+				if err == removeKey {
+					keys = append(keys, string(k))
+				} else if err != nil {
+					rerr = err
+					return false
+				}
+				return true
+			})
+			return rerr
+		})
+		if glog.V(2) && count > 0 {
+			glog.Infof("Btree size: %d. Removing=%d. Error=%v\n", count, len(keys), err)
+		}
+		if err == nil {
+			for _, k := range keys {
+				btree.Delete([]byte(k))
+			}
+		}
+	}
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			removeKeysOnDisk()
+		case <-closer.HasBeenClosed():
+			return
+		}
+	}
 }
 
 func Cleanup() {
@@ -248,7 +325,7 @@ func Get(key []byte) (rlist *List, err error) {
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
 		x.CacheRace.Add(1)
-	} else if atomic.LoadInt32(&l.onDisk) == 0 {
+	} else if !l.onDisk {
 		btree.Insert(l.key)
 	}
 	return lp, nil

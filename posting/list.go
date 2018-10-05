@@ -69,7 +69,7 @@ type List struct {
 	deleteMe      int32  // Using atomic for this, to avoid expensive SetForDeletion operation.
 	estimatedSize int32
 	numCommits    int
-	onDisk        int32 // Using atomic, Was written to disk atleast once.
+	onDisk        bool
 }
 
 // calculateSize would give you the size estimate. This is expensive, so run it carefully.
@@ -787,7 +787,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	var f func(error)
 	f = func(err error) {
 		if err != nil {
-			x.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
+			glog.Warningf("Got err in while doing async writes in SyncIfDirty: %+v", err)
 			if retries > 5 {
 				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
 					l.key, err)
@@ -796,10 +796,6 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			retries += 1
 			doAsyncWrite(minTs, l.key, data, meta, f)
 			return
-		}
-		if atomic.LoadInt32(&l.onDisk) == 0 {
-			btree.Delete(l.key)
-			atomic.StoreInt32(&l.onDisk, 1)
 		}
 		x.BytesWrite.Add(int64(len(data)))
 		x.PostingWrites.Add(1)
