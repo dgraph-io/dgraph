@@ -20,5 +20,8 @@ lastCommitTime = github.com/dgraph-io/dgraph/x.lastCommitTime
 .PHONY: all $(BIN)
 all: $(BIN)
 
-$(BIN):
+$(BIN): clean
 	@go build -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X ${dgraphVersion}=${BUILD_VERSION} -X ${gitBranch}=${BUILD_BRANCH}' -o $(BIN)
+
+clean:
+	@rm -f $(BIN)
