@@ -180,9 +180,8 @@ func updateMemoryMetrics(lc *y.Closer) {
 		case <-ticker.C:
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
-			megs := (ms.HeapInuse + ms.StackInuse)
 
-			inUse := float64(megs)
+			inUse := ms.HeapInuse + ms.StackInuse
 			// From runtime/mstats.go:
 			// HeapIdle minus HeapReleased estimates the amount of memory
 			// that could be returned to the OS, but is being retained by
@@ -190,7 +189,7 @@ func updateMemoryMetrics(lc *y.Closer) {
 			// memory from the OS. If this difference is significantly
 			// larger than the heap size, it indicates there was a recent
 			// transient spike in live heap size.
-			idle := float64(ms.HeapIdle - ms.HeapReleased)
+			idle := ms.HeapIdle - ms.HeapReleased
 
 			x.MemoryInUse.Set(int64(inUse))
 			x.MemoryIdle.Set(int64(idle))
