@@ -1037,7 +1037,7 @@ You should not use the same `idx` as that of a node that was removed earlier.
 ## TLS configuration
 
 {{% notice "note" %}}
-This section refers to the `dgraph cert` command which will be part of a future release. For TLS configuration for the current release, see the previous [TLS configuration documentation](https://docs.dgraph.io/v1.0.7/deploy/#tls-configuration).
+This section refers to the `dgraph cert` command which was introduced in v1.0.9. For previous releases, see the previous [TLS configuration documentation](https://docs.dgraph.io/v1.0.7/deploy/#tls-configuration).
 {{% /notice %}}
 
 
