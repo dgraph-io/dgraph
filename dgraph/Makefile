@@ -17,11 +17,13 @@ gitBranch      = github.com/dgraph-io/dgraph/x.gitBranch
 lastCommitSHA  = github.com/dgraph-io/dgraph/x.lastCommitSHA
 lastCommitTime = github.com/dgraph-io/dgraph/x.lastCommitTime
 
+BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X ${dgraphVersion}=${BUILD_VERSION} -X ${gitBranch}=${BUILD_BRANCH}'
+
 .PHONY: all $(BIN)
 all: $(BIN)
 
 $(BIN): clean
-	@go build -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X ${dgraphVersion}=${BUILD_VERSION} -X ${gitBranch}=${BUILD_BRANCH}' -o $(BIN)
+	@go build $(BUILD_FLAGS) -o $(BIN)
 
 clean:
 	@rm -f $(BIN)
@@ -30,4 +32,4 @@ uninstall:
 	@go clean -i -x
 
 install:
-	@go install
+	@go install $(BUILD_FLAGS)
