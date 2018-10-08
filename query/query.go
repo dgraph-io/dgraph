@@ -326,16 +326,13 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 
 func addCheckPwd(pc *SubGraph, vals []*pb.TaskValue, dst outputNode) {
 	c := types.ValueForType(types.BoolID)
-	if len(vals) == 0 {
-		// No value found for predicate.
-		c.Value = false
-	} else {
-		c.Value = task.ToBool(vals[0])
-	}
+	c.Value = task.ToBool(vals[0])
 
-	uc := dst.New(pc.Attr)
-	uc.AddValue("checkpwd", c)
-	dst.AddListChild(pc.Attr, uc)
+	fieldName := pc.Params.Alias
+	if fieldName == "" {
+		fieldName = fmt.Sprintf("checkpwd(%s)", pc.Attr)
+	}
+	dst.AddValue(fieldName, c)
 }
 
 func alreadySeen(parentIds []uint64, uid uint64) bool {
