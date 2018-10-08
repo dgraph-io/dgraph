@@ -21,7 +21,7 @@ $(SUBDIRS):
 	$(MAKE) -w -C $@ all
 
 deps:
-	@echo Synching dependencies...
+	@echo Syncing dependencies...
 	@go get github.com/kardianos/govendor
 	@govendor sync
 	@echo Done.
@@ -32,12 +32,26 @@ version:
 	@echo Build date: ${BUILD_DATE}
 	@echo Branch: ${BUILD_BRANCH}
 
+install:
+	@(set -e;for i in $(SUBDIRS); do \
+		echo Installing $$i ...; \
+		$(MAKE) -C $$i install; \
+	done)
+
+uninstall:
+	@(set -e;for i in $(SUBDIRS); do \
+		echo Uninstalling $$i ...; \
+		$(MAKE) -C $$i uninstall; \
+	done)
+
 help:
 	@echo
 	@echo Build commands:
-	@echo "  make [all]   - Build all targets"
-	@echo "  make dgraph  - Build only dgraph binary"
-	@echo "  make deps    - Sync vendor deps"
-	@echo "  make version - Show current build info"
-	@echo "  make help    - This help"
+	@echo "  make [all]     - Build all targets"
+	@echo "  make dgraph    - Build only dgraph binary"
+	@echo "  make install   - Install all targets"
+	@echo "  make uninstall - Uninstall known targets"
+	@echo "  make deps      - Sync vendor deps"
+	@echo "  make version   - Show current build info"
+	@echo "  make help      - This help"
 	@echo

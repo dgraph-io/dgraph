@@ -25,3 +25,9 @@ $(BIN): clean
 
 clean:
 	@rm -f $(BIN)
+
+uninstall:
+	@go clean -i -x
+
+install:
+	@go install
