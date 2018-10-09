@@ -326,7 +326,11 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 
 func addCheckPwd(pc *SubGraph, vals []*pb.TaskValue, dst outputNode) {
 	c := types.ValueForType(types.BoolID)
-	c.Value = task.ToBool(vals[0])
+	if len(vals) == 0 {
+		c.Value = false
+	} else {
+		c.Value = task.ToBool(vals[0])
+	}
 
 	fieldName := pc.Params.Alias
 	if fieldName == "" {
