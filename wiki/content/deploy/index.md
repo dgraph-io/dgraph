@@ -1318,7 +1318,7 @@ copy over the output shards into different servers.
 
 ```sh
 $ cd out/i # i = shard number.
-$ dgraph server -zero=localhost:5080 -lru_mb=1024
+$ dgraph server --zero=localhost:5080 --lru_mb=1024
 ```
 #### Tuning & monitoring
 
@@ -1513,9 +1513,9 @@ Here are some problems that you may encounter and some solutions to try.
 
 During bulk loading of data, Dgraph can consume more memory than usual, due to high volume of writes. That's generally when you see the OOM crashes.
 
-The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can take up to 7-8 GB with the default setting `-lru_mb` set to 4096; so having the rest 8GB for desktop applications should keep your machine humming along.
+The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can take up to 7-8 GB with the default setting `--lru_mb` set to 4096; so having the rest 8GB for desktop applications should keep your machine humming along.
 
-On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `-lru_mb` to one-third of RAM size.
+On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `--lru_mb` to one-third of RAM size.
 
 You could also decrease memory usage of Dgraph by setting `--badger.vlog=disk`.
 
