@@ -40,11 +40,12 @@ var (
 	// In such a case, retry.
 	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue     = fmt.Errorf("No value found")
-	ErrInvalidTxn  = fmt.Errorf("Invalid transaction")
-	errUncommitted = fmt.Errorf("Posting List has uncommitted data")
-	emptyPosting   = &pb.Posting{}
-	emptyList      = &pb.PostingList{}
+	ErrNoValue       = fmt.Errorf("No value found")
+	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
+	ErrStopIteration = errors.New("Stop iteration")
+	errUncommitted   = fmt.Errorf("Posting List has uncommitted data")
+	emptyPosting     = &pb.Posting{}
+	emptyList        = &pb.PostingList{}
 )
 
 const (
@@ -538,8 +539,6 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 	})
 	return storedList, posts
 }
-
-var ErrStopIteration = errors.New("Stop iteration")
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()

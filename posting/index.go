@@ -221,7 +221,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
 	}
 	// To calculate length of posting list. Used for deletion of count index.
 	var plen int
-	if err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 		plen++
 		switch {
 		case isReversed:
@@ -238,7 +238,8 @@ func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
 		default:
 			return nil
 		}
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	if hasCount {
@@ -589,7 +590,10 @@ func (r *rebuild) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		pl.Lock() // We shouldn't need to release this lock.
+
+		pl.Lock()
+		// We shouldn't need to release this lock, because each posting list
+		// must only be accessed once and never again.
 		le := pl.length(r.startTs, 0)
 		y.AssertTruef(le > 0, "Unexpected list of size zero: %q", key)
 		if err := pl.rollup(); err != nil {
@@ -736,14 +740,15 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
-		if err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {
 				mpost = p
 			}
 			return nil
-		}); err != nil {
+		})
+		if err != nil {
 			return err
 		}
 		if mpost == nil {
