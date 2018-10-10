@@ -67,7 +67,7 @@ func TestSortFloats(t *testing.T) {
 	require.NoError(t, Sort(list, ul, []bool{false}))
 	require.EqualValues(t, []uint64{400, 200, 300, 100}, ul.Uids)
 	require.EqualValues(t,
-		[]string{"2.12E+00", "1.12E+01", "1.15E+01", "2.22E+01"},
+		[]string{"2.12", "11.2", "11.5", "22.2"},
 		toString(t, list, FloatID))
 }
 
@@ -77,7 +77,7 @@ func TestSortFloatsDesc(t *testing.T) {
 	require.NoError(t, Sort(list, ul, []bool{true}))
 	require.EqualValues(t, []uint64{100, 300, 200, 400}, ul.Uids)
 	require.EqualValues(t,
-		[]string{"2.22E+01", "1.15E+01", "1.12E+01", "2.12E+00"},
+		[]string{"22.2", "11.5", "11.2", "2.12"},
 		toString(t, list, FloatID))
 }
 
@@ -108,7 +108,7 @@ func TestSortIntAndFloat(t *testing.T) {
 	require.NoError(t, Sort(list, ul, []bool{false}))
 	require.EqualValues(t, []uint64{200, 100, 300}, ul.Uids)
 	require.EqualValues(t,
-		[]string{"2.15E+01", "55", "100"},
+		[]string{"21.5", "55", "100"},
 		toString(t, list, DateTimeID))
 
 }

@@ -23,16 +23,16 @@ const (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
+	DefaultID  = TypeID(pb.Posting_DEFAULT)
 	BinaryID   = TypeID(pb.Posting_BINARY)
 	IntID      = TypeID(pb.Posting_INT)
 	FloatID    = TypeID(pb.Posting_FLOAT)
 	BoolID     = TypeID(pb.Posting_BOOL)
 	DateTimeID = TypeID(pb.Posting_DATETIME)
-	StringID   = TypeID(pb.Posting_STRING)
 	GeoID      = TypeID(pb.Posting_GEO)
 	UidID      = TypeID(pb.Posting_UID)
 	PasswordID = TypeID(pb.Posting_PASSWORD)
-	DefaultID  = TypeID(pb.Posting_DEFAULT)
+	StringID   = TypeID(pb.Posting_STRING)
 )
 
 var typeNameMap = map[string]TypeID{
