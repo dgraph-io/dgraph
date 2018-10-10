@@ -509,18 +509,18 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		var perr error
 		filteredRes = make([]*result, 0)
-		err = pl.Postings(opts, func(p *pb.Posting) bool {
+		err = pl.Postings(opts, func(p *pb.Posting) error {
 			res := true
 			res, perr = applyFacetsTree(p.Facets, facetsTree)
 			if perr != nil {
-				return false // break loop.
+				return posting.ErrStopIteration
 			}
 			if res {
 				filteredRes = append(filteredRes, &result{
 					uid:    p.Uid,
 					facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 			}
-			return true // continue iteration.
+			return nil // continue iteration.
 		})
 		if err != nil {
 			return err
@@ -1641,9 +1641,9 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		}
 		pk := x.Parse(key)
 		var num int
-		if err := pl.Iterate(q.ReadTs, 0, func(_ *pb.Posting) bool {
+		if err := pl.Iterate(q.ReadTs, 0, func(_ *pb.Posting) error {
 			num++
-			return false
+			return posting.ErrStopIteration
 		}); err != nil {
 			return err
 		}
@@ -1692,9 +1692,9 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 			return err
 		}
 		var num int
-		if err = l.Iterate(q.ReadTs, 0, func(_ *pb.Posting) bool {
+		if err = l.Iterate(q.ReadTs, 0, func(_ *pb.Posting) error {
 			num++
-			return false
+			return posting.ErrStopIteration
 		}); err != nil {
 			return err
 		}

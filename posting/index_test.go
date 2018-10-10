@@ -256,14 +256,7 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	require.NoError(t, DeleteIndex("name2"))
-	RebuildIndex(context.Background(), "name2", 5)
-	CommitLists(func(key []byte) bool {
-		pk := x.Parse(key)
-		if pk.Attr == "name2" {
-			return true
-		}
-		return false
-	})
+	require.NoError(t, RebuildIndex(context.Background(), "name2", 5))
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(6, false)

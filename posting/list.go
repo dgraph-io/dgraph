@@ -10,6 +10,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -39,11 +40,12 @@ var (
 	// In such a case, retry.
 	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue     = fmt.Errorf("No value found")
-	ErrInvalidTxn  = fmt.Errorf("Invalid transaction")
-	errUncommitted = fmt.Errorf("Posting List has uncommitted data")
-	emptyPosting   = &pb.Posting{}
-	emptyList      = &pb.PostingList{}
+	ErrNoValue       = fmt.Errorf("No value found")
+	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
+	ErrStopIteration = errors.New("Stop iteration")
+	errUncommitted   = fmt.Errorf("Posting List has uncommitted data")
+	emptyPosting     = &pb.Posting{}
+	emptyList        = &pb.PostingList{}
 )
 
 const (
@@ -276,13 +278,7 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to BadgerDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
-	t1 := time.Now()
 	l.Lock()
-	if dur := time.Since(t1); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("acquired lock %v %v", dur, t.Attr)
-		}
-	}
 	defer l.Unlock()
 	return l.addMutation(ctx, txn, t)
 }
@@ -431,14 +427,22 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 		l.commitTs = commitTs
 	}
 
+	// TODO: Figure out what to do here. We shouldn't really be calling
+	// syncIfDirty here, because the posting list might be created by the index
+	// rebuild process. But, we could potentially rollup the posting list.
+	// In general, a posting list shouldn't try to mix up it's job of keeping
+	// things in memory, with writing things to disk. A separate process can
+	// roll up and write them to disk. Posting list should only keep things in
+	// memory, to make it available for transactions.
+
 	// Calculate 10% of immutable layer
-	numUids := (bp128.NumIntegers(l.plist.Uids) * 10) / 100
-	if numUids < 1000 {
-		numUids = 1000
-	}
-	if l.numCommits > numUids {
-		l.syncIfDirty(false)
-	}
+	// numUids := (bp128.NumIntegers(l.plist.Uids) * 10) / 100
+	// if numUids < 1000 {
+	// 	numUids = 1000
+	// }
+	// if l.numCommits > numUids {
+	// 	l.syncIfDirty(false)
+	// }
 	return nil
 }
 
@@ -453,7 +457,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 //    return true  // to continue iteration.
 //    return false // to break iteration.
 //  })
-func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) bool) error {
+func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
 	return l.iterate(readTs, afterUid, f)
@@ -536,7 +540,7 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 	return storedList, posts
 }
 
-func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) bool) error {
+func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
 
 	plist, mposts := l.pickPostings(readTs)
@@ -553,11 +557,11 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) b
 	}
 
 	var mp, pp *pb.Posting
-	cont := true
 	var pitr PIterator
 	pitr.Init(plist, afterUid)
 	prevUid := uint64(0)
-	for cont {
+	var err error
+	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
 		} else {
@@ -576,21 +580,21 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) b
 			midx++
 		case pp.Uid == 0 && mp.Uid == 0:
 			// Reached empty posting for both iterators.
-			cont = false
+			return nil
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
-			cont = f(pp)
+			err = f(pp)
 			pitr.Next()
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
-				cont = f(mp)
+				err = f(mp)
 			}
 			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
-				cont = f(mp)
+				err = f(mp)
 			}
 			prevUid = mp.Uid
 			pitr.Next()
@@ -599,7 +603,10 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) b
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}
 	}
-	return nil
+	if err == ErrStopIteration {
+		return nil
+	}
+	return err
 }
 
 func (l *List) IsEmpty() bool {
@@ -611,9 +618,9 @@ func (l *List) IsEmpty() bool {
 func (l *List) length(readTs, afterUid uint64) int {
 	l.AssertRLock()
 	count := 0
-	err := l.iterate(readTs, afterUid, func(p *pb.Posting) bool {
+	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		count++
-		return true
+		return nil
 	})
 	if err != nil {
 		return -1
@@ -681,7 +688,7 @@ func (l *List) rollup() error {
 
 	// Pick all committed entries
 	x.AssertTrue(l.minTs <= l.commitTs)
-	err := l.iterate(l.commitTs, 0, func(p *pb.Posting) bool {
+	err := l.iterate(l.commitTs, 0, func(p *pb.Posting) error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
 		// So, we don't need to do any filtering here. In fact, doing filtering here could result
 		// in a bug.
@@ -698,7 +705,7 @@ func (l *List) rollup() error {
 			// underlying data wouldn't be changed.
 			final.Postings = append(final.Postings, p)
 		}
-		return true
+		return nil
 	})
 	x.Check(err)
 	if len(buf) > 0 {
@@ -839,11 +846,11 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
-	err := l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) bool {
+	err := l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
 		}
-		return true
+		return nil
 	})
 	l.RUnlock()
 	if err != nil {
@@ -860,13 +867,13 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 // Postings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
-func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) bool) error {
+func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
 
-	return l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) bool {
+	return l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) error {
 		if p.PostingType != pb.Posting_REF {
-			return true
+			return nil
 		}
 		return postFn(p)
 	})
@@ -877,14 +884,14 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	defer l.RUnlock()
 
 	var vals []types.Val
-	err := l.iterate(readTs, 0, func(p *pb.Posting) bool {
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if len(p.LangTag) == 0 {
 			vals = append(vals, types.Val{
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			})
 		}
-		return true
+		return nil
 	})
 	return vals, err
 }
@@ -894,12 +901,12 @@ func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 	defer l.RUnlock()
 
 	var vals []types.Val
-	err := l.iterate(readTs, 0, func(p *pb.Posting) bool {
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValType),
 			Value: p.Value,
 		})
-		return true
+		return nil
 	})
 	return vals, err
 }
@@ -910,9 +917,9 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 	defer l.RUnlock()
 
 	var tags []string
-	err := l.iterate(readTs, 0, func(p *pb.Posting) bool {
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		tags = append(tags, string(p.LangTag))
-		return true
+		return nil
 	})
 	return tags, err
 }
@@ -998,13 +1005,13 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 	var found bool
 	// last resort - return value with smallest lang Uid
 	if any {
-		err := l.iterate(readTs, 0, func(p *pb.Posting) bool {
+		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 			if p.PostingType == pb.Posting_VALUE_LANG {
 				pos = p
 				found = true
-				return false
+				return ErrStopIteration
 			}
-			return true
+			return nil
 		})
 		if err != nil {
 			return nil, err
@@ -1044,12 +1051,12 @@ func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err er
 
 func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
 	// Iterate starts iterating after the given argument, so we pass uid - 1
-	err = l.iterate(readTs, uid-1, func(p *pb.Posting) bool {
+	err = l.iterate(readTs, uid-1, func(p *pb.Posting) error {
 		if p.Uid == uid {
 			pos = p
 			found = true
 		}
-		return false
+		return ErrStopIteration
 	})
 
 	return found, pos, err

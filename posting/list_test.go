@@ -32,9 +32,9 @@ func (l *List) PostingList() *pb.PostingList {
 
 func listToArray(t *testing.T, afterUid uint64, l *List, readTs uint64) []uint64 {
 	out := make([]uint64, 0, 10)
-	l.Iterate(readTs, afterUid, func(p *pb.Posting) bool {
+	l.Iterate(readTs, afterUid, func(p *pb.Posting) error {
 		out = append(out, p.Uid)
-		return true
+		return nil
 	})
 	return out
 }
@@ -117,9 +117,9 @@ func TestAddMutation(t *testing.T) {
 }
 
 func getFirst(l *List, readTs uint64) (res pb.Posting) {
-	l.Iterate(readTs, 0, func(p *pb.Posting) bool {
+	l.Iterate(readTs, 0, func(p *pb.Posting) error {
 		res = *p
-		return false
+		return ErrStopIteration
 	})
 	return res
 }

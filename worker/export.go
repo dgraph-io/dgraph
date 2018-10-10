@@ -33,7 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const numExportRoutines = 100
+const numExportRoutines = 10
 
 type kv struct {
 	prefix string
@@ -59,13 +59,13 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.PasswordID: "xs:string",
 }
 
-func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
+func toRDF(buf *bytes.Buffer, item kv, readTs uint64) error {
 	l, err := posting.GetNoStore(item.key)
 	if err != nil {
 		glog.Errorf("Error while retrieving list for key %X. Error: %v\n", item.key, err)
-		return
+		return err
 	}
-	err = l.Iterate(readTs, 0, func(p *pb.Posting) bool {
+	err = l.Iterate(readTs, 0, func(p *pb.Posting) error {
 		buf.WriteString(item.prefix)
 		if p.PostingType != pb.Posting_REF {
 			// Value posting
@@ -121,13 +121,14 @@ func toRDF(buf *bytes.Buffer, item kv, readTs uint64) {
 		}
 		// End dot.
 		buf.WriteString(" .\n")
-		return true
+		return nil
 	})
 	if err != nil {
 		// TODO: Throw error back to the user.
 		// Ensure that we are not missing errCheck at other places.
 		glog.Errorf("Error while exporting: %v\n", err)
 	}
+	return err
 }
 
 func toSchema(buf *bytes.Buffer, s *skv) {
@@ -234,7 +235,10 @@ func export(bdir string, readTs uint64) error {
 			buf.Grow(50000)
 			for item := range chkv {
 				// TODO: Add error handling in toRDF.
-				toRDF(buf, item, readTs)
+				if err := toRDF(buf, item, readTs); err != nil {
+					glog.Errorf("Error while converting to RDF: %v. Ignoring...\n", err)
+					continue
+				}
 				if buf.Len() >= 40000 {
 					tmp := make([]byte, buf.Len())
 					copy(tmp, buf.Bytes())
