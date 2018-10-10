@@ -496,7 +496,21 @@ func DeleteCountIndex(attr string) error {
 type rebuild struct {
 	prefix  []byte
 	startTs uint64
-	fn      func(uid uint64, pl *List, txn *Txn) error
+	cache   map[string]*List
+
+	// The posting list passed here is the on disk version. It is not coming
+	// from the LRU cache.
+	fn func(uid uint64, pl *List, txn *Txn) error
+}
+
+// storeList would store the list in the cache.
+func (r *rebuild) storeList(list *List) bool {
+	key := string(list.key)
+	if _, ok := r.cache[key]; ok {
+		return false
+	}
+	r.cache[key] = list
+	return true
 }
 
 func (r *rebuild) Run(ctx context.Context) error {
@@ -511,22 +525,22 @@ func (r *rebuild) Run(ctx context.Context) error {
 	// We create one txn for all the mutations to be housed in. We also create a
 	// localized posting list cache, to avoid stressing or mixing up with the
 	// global lcache (the LRU cache).
-	cache := make(map[string]*List)
 	txn := &Txn{StartTs: r.startTs}
+	r.cache = make(map[string]*List)
 	var numGets uint64
 	txn.getList = func(key []byte) (*List, error) {
 		numGets++
 		if glog.V(2) && numGets%1000 == 0 {
 			glog.Infof("During rebuild, getList hit %d times\n", numGets)
 		}
-		if pl, ok := cache[string(key)]; ok {
+		if pl, ok := r.cache[string(key)]; ok {
 			return pl, nil
 		}
 		pl, err := getNew(key, pstore)
 		if err != nil {
 			return nil, err
 		}
-		cache[string(key)] = pl
+		r.cache[string(key)] = pl
 		return pl, nil
 	}
 
@@ -741,6 +755,10 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 			Attr:    attr,
 			Op:      pb.DirectedEdge_DEL,
 		}
+
+		// Ensure that list is in the cache run by txn. Otherwise, nothing would
+		// get updated.
+		x.AssertTrue(builder.storeList(pl))
 		if err := pl.AddMutation(ctx, txn, t); err != nil {
 			return err
 		}
