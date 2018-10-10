@@ -70,13 +70,16 @@ func isZero(f string, rval types.Val) bool {
 		return false
 	}
 	g, ok := rval.Value.(float64)
+	if !ok {
+		return false
+	}
 	switch f {
 	case "floor":
-		return ok && g >= 0 && g < 1.0
+		return g >= 0 && g < 1.0
 	case "/", "%", "ceil", "sqrt", "u-":
-		return ok && g == 0
+		return g == 0
 	case "ln":
-		return ok && g == 1
+		return g == 1
 	}
 	return false
 }
