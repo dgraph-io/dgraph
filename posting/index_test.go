@@ -10,6 +10,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -256,14 +257,14 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	require.NoError(t, DeleteIndex("name2"))
-	RebuildIndex(context.Background(), "name2", 5)
-	CommitLists(func(key []byte) bool {
-		pk := x.Parse(key)
-		if pk.Attr == "name2" {
-			return true
-		}
-		return false
-	})
+	require.NoError(t, RebuildIndex(context.Background(), "name2", 5))
+	// CommitLists(func(key []byte) bool {
+	// 	pk := x.Parse(key)
+	// 	if pk.Attr == "name2" {
+	// 		return true
+	// 	}
+	// 	return false
+	// })
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(6, false)
@@ -280,7 +281,9 @@ func TestRebuildIndex(t *testing.T) {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
+		fmt.Printf("Got key: %q\n", key)
 		if item.UserMeta()&BitEmptyPosting == BitEmptyPosting {
+			fmt.Printf("Continuing here\n")
 			continue
 		}
 		idxKeys = append(idxKeys, string(key))

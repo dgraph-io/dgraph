@@ -19,6 +19,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 )
 
 var (
@@ -93,7 +94,7 @@ func (tx *Txn) CommitToDisk(writer *x.TxnWriter, commitTs uint64) error {
 	// memory, instead of writing them back again.
 
 	for _, key := range keys {
-		plist, err := Get([]byte(key))
+		plist, err := tx.Get([]byte(key))
 		if err != nil {
 			return err
 		}
@@ -117,21 +118,22 @@ func (tx *Txn) CommitToMemory(commitTs uint64) error {
 	// 	atomic.StoreUint32(&tx.shouldAbort, 1)
 	// }()
 	for key := range tx.deltas {
+	inner:
 		for {
-			plist, err := Get([]byte(key))
+			plist, err := tx.Get([]byte(key))
 			if err != nil {
 				return err
 			}
 			err = plist.CommitMutation(tx.StartTs, commitTs)
-			if err == ErrRetry {
+			switch err {
+			case ErrRetry:
 				time.Sleep(5 * time.Millisecond)
-				continue
+			case nil:
+				break inner
+			default:
+				glog.Warningf("Error while committing to memory: %v\n", err)
+				return err
 			}
-			if err == nil {
-				break
-			}
-			x.Errorf("While commiting to memory: %v\n", err)
-			return err
 		}
 	}
 	return nil

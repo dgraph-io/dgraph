@@ -49,6 +49,17 @@ type Txn struct {
 	// Keeps track of last update wall clock. We use this fact later to
 	// determine unhealthy, stale txns.
 	lastUpdate time.Time
+
+	// getList is the function to use to retrieve and store posting lists in a
+	// cache. This can be left nil to use the global lru cache.
+	getList func(key []byte) (*List, error)
+}
+
+func (txn *Txn) Get(key []byte) (*List, error) {
+	if txn.getList == nil {
+		return Get(key)
+	}
+	return txn.getList(key)
 }
 
 type oracle struct {
