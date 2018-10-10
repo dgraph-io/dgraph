@@ -90,13 +90,13 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = []byte(vc)
 			case IntID:
 				// Marshal text.
-				val, err := strconv.ParseInt(string(vc), 10, 64)
+				val, err := strconv.ParseInt(vc, 10, 64)
 				if err != nil {
 					return to, err
 				}
 				*res = int64(val)
 			case FloatID:
-				val, err := strconv.ParseFloat(string(vc), 64)
+				val, err := strconv.ParseFloat(vc, 64)
 				if err != nil {
 					return to, err
 				}
@@ -105,9 +105,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = float64(val)
 			case StringID, DefaultID:
-				*res = string(vc)
+				*res = vc
 			case BoolID:
-				val, err := strconv.ParseBool(string(vc))
+				val, err := strconv.ParseBool(vc)
 				if err != nil {
 					return to, err
 				}
