@@ -2286,7 +2286,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
 				attr, langs := attrAndLang(val)
-				gq.Order = append(gq.Order, &pb.Order{Attr: attr, Desc: key == "orderdesc", Langs: langs})
+				gq.Order = append(gq.Order,
+					&pb.Order{Attr: attr, Desc: key == "orderdesc", Langs: langs})
 				order[val] = true
 				continue
 			}
