@@ -133,8 +133,15 @@ func (s *ServerState) initStorage() {
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
 		opt := badger.LSMOnlyOptions
-		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
 		opt = setBadgerOptions(opt, Config.WALDir)
+		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
+
+		// We should always force load LSM tables to memory, disregarding user settings, because
+		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
+		// down way too much, causing cluster membership issues. Because of prefix compression and
+		// value separation provided by Badger, this is still better than using the memory based WAL
+		// storage provided by the Raft library.
+		opt.TableLoadingMode = options.LoadToRAM
 
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
 		s.WALstore, err = badger.Open(opt)
