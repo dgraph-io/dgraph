@@ -65,6 +65,22 @@ func isTernary(f string) bool {
 	return f == "cond"
 }
 
+func isZero(f string, rval types.Val) bool {
+	if rval.Tid != types.FloatID {
+		return false
+	}
+	g, ok := rval.Value.(float64)
+	switch f {
+	case "floor":
+		return ok && g >= 0 && g < 1.0
+	case "/", "%", "ceil", "sqrt", "u-":
+		return ok && g == 0
+	case "ln":
+		return ok && g == 1
+	}
+	return false
+}
+
 func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	topOp, err := opStack.pop()
 	if err != nil {
@@ -75,6 +91,12 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		topVal, err := valueStack.pop()
 		if err != nil {
 			return x.Errorf("Invalid math statement. Expected 1 operands")
+		}
+		if opStack.size() > 1 {
+			peek := opStack.peek().Fn
+			if (peek == "/" || peek == "%") && isZero(topOp.Fn, topVal.Const) {
+				return x.Errorf("Division by zero")
+			}
 		}
 		topOp.Child = []*MathTree{topVal}
 
@@ -90,6 +112,9 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	} else {
 		if valueStack.size() < 2 {
 			return x.Errorf("Invalid Math expression. Expected 2 operands")
+		}
+		if isZero(topOp.Fn, valueStack.peek().Const) {
+			return x.Errorf("Division by zero.")
 		}
 		topVal1 := valueStack.popAssert()
 		topVal2 := valueStack.popAssert()

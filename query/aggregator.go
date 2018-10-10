@@ -207,11 +207,17 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		if !isIntOrFloat {
 			return x.Errorf("Wrong type encountered for func %v %v %v", ag.name, va.Tid, v.Tid)
 		}
+		if l == 0 {
+			return nil
+		}
 		va.Value = va.Value.(float64) / l
 		res = va
 	case "%":
 		if !isIntOrFloat {
 			return x.Errorf("Wrong type encountered for func %v", ag.name)
+		}
+		if l == 0 {
+			return nil
 		}
 		va.Value = math.Mod(va.Value.(float64), l)
 		res = va
