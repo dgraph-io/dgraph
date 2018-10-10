@@ -3622,6 +3622,34 @@ func TestMathWithoutVarAlias(t *testing.T) {
 	require.Contains(t, err.Error(), "Function math should be used with a variable or have an alias")
 }
 
+func TestMathDiv0(t *testing.T) {
+	tests := []struct {
+		in       string
+		hasError bool
+	}{
+		{`{f(func: uid(1)){x:math(1+1)}}`, false},
+		{`{f(func: uid(1)){x:math(1/0)}}`, true},
+		{`{f(func: uid(1)){x:math(1/-0)}}`, true},
+		{`{f(func: uid(1)){x:math(1/ln(1))}}`, true},
+		{`{f(func: uid(1)){x:math(1/sqrt(0))}}`, true},
+		{`{f(func: uid(1)){x:math(1/floor(0))}}`, true},
+		{`{f(func: uid(1)){x:math(1/floor(0.5))}}`, true},
+		{`{f(func: uid(1)){x:math(1/floor(1.01))}}`, false},
+		{`{f(func: uid(1)){x:math(1/ceil(0))}}`, true},
+		{`{f(func: uid(1)){x:math(1%0}}`, true},
+		{`{f(func: uid(1)){x:math(1%floor(0)}}`, true},
+		{`{f(func: uid(1)){x:math(1 + 0)}}`, false},
+	}
+	for _, tc := range tests {
+		_, err := Parse(Request{Str: tc.in})
+		if tc.hasError {
+			require.Error(t, err, "Expected an error for %q", tc.in)
+		} else {
+			require.NoError(t, err, "Unexpected error for %q: %s", tc.in, err)
+		}
+	}
+}
+
 func TestMultipleEqual(t *testing.T) {
 	query := `{
 		me(func: eq(name,["Steven Spielberg", "Tom Hanks"])) {
