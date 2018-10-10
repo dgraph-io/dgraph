@@ -127,11 +127,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = g
 			case PasswordID:
-				password, err := Encrypt(vc)
+				p, err := Encrypt(vc)
 				if err != nil {
 					return to, err
 				}
-				*res = password
+				*res = p
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -187,7 +187,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BoolID:
 				*res = bool(vc != 1)
 			case StringID, DefaultID:
-				*res = string(strconv.FormatFloat(float64(vc), 'E', -1, 64))
+				*res = string(strconv.FormatFloat(float64(vc), 'G', -1, 64))
 			case DateTimeID:
 				secs := int64(vc)
 				fracSecs := vc - float64(secs)
@@ -366,7 +366,7 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(float64)
 		switch toID {
 		case StringID, DefaultID:
-			*res = strconv.FormatFloat(float64(vc), 'E', -1, 64)
+			*res = strconv.FormatFloat(float64(vc), 'G', -1, 64)
 		case BinaryID:
 			// Marshal Binary
 			var bs [8]byte
@@ -511,6 +511,10 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 		var v string
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type password. Got : %v", value)
+		}
+		v, err := Encrypt(v)
+		if err != nil {
+			return def, err
 		}
 		return &api.Value{&api.Value_PasswordVal{v}}, nil
 	default:

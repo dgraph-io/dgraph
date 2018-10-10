@@ -57,7 +57,7 @@ type Person struct {
 }
 
 func TestNquadsFromJson1(t *testing.T) {
-	tn := time.Now()
+	tn := time.Now().UTC()
 	geoVal := `{"Type":"Point", "Coordinates":[1.1,2.0]}`
 	m := true
 	p := Person{
@@ -88,7 +88,8 @@ func TestNquadsFromJson1(t *testing.T) {
 	oval = &api.Value{&api.Value_BoolVal{true}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "married", oval))
 
-	oval = &api.Value{&api.Value_StrVal{tn.Format(time.RFC3339Nano)}}
+	oval, err = types.ObjectValue(types.DateTimeID, tn)
+	require.NoError(t, err)
 	require.Contains(t, nq, makeNquad("_:blank-0", "now", oval))
 
 	var g geom.T
@@ -169,22 +170,24 @@ func TestNquadsFromJson4(t *testing.T) {
 }
 
 func TestJsonNumberParsing(t *testing.T) {
-	var data []string
-	data = append(data, `{"uid": "1", "key": 9223372036854775299}`)
-	data = append(data, `{"uid": "1", "key": 9223372036854775299.0}`)
-	data = append(data, `{"uid": "1", "key": 27670116110564327426}`)
+	tests := []struct {
+		in  string
+		out *api.Value
+	}{
+		{`{"uid": "1", "key": 9223372036854775299}`, &api.Value{&api.Value_IntVal{9223372036854775299}}},
+		{`{"uid": "1", "key": 9223372036854775299.0}`, &api.Value{&api.Value_DoubleVal{9223372036854775299.0}}},
+		{`{"uid": "1", "key": 27670116110564327426}`, nil},
+		{`{"uid": "1", "key": "23452786"}`, &api.Value{&api.Value_IntVal{23452786}}},
+		{`{"uid": "1", "key": "23452786.2378"}`, &api.Value{&api.Value_DoubleVal{23452786.2378}}},
+		{`{"uid": "1", "key": -1e10}`, &api.Value{&api.Value_DoubleVal{-1e+10}}},
+		{`{"uid": "1", "key": 0E-0}`, &api.Value{&api.Value_DoubleVal{0}}},
+	}
 
-	var vals []*api.Value
-	vals = append(vals, &api.Value{&api.Value_IntVal{9223372036854775299}})
-	vals = append(vals, &api.Value{&api.Value_DoubleVal{9223372036854775299.0}})
-	vals = append(vals, nil)
-
-	for i, d := range data {
-		v := vals[i]
-		nqs, err := nquadsFromJson([]byte(d), set)
-		if v != nil {
-			require.NoError(t, err)
-			require.Equal(t, makeNquad("1", "key", v), nqs[0])
+	for _, test := range tests {
+		nqs, err := nquadsFromJson([]byte(test.in), set)
+		if test.out != nil {
+			require.NoError(t, err, "%T", err)
+			require.Equal(t, makeNquad("1", "key", test.out), nqs[0])
 		} else {
 			require.Error(t, err)
 		}
