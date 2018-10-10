@@ -222,32 +222,25 @@ func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
 	}
 	// To calculate length of posting list. Used for deletion of count index.
 	var plen int
-	var iterErr error
-	l.Iterate(txn.StartTs, 0, func(p *pb.Posting) bool {
+	if err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 		plen++
-		if isReversed {
+		switch {
+		case isReversed:
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
-			if err := txn.addReverseMutation(ctx, delEdge); err != nil {
-				iterErr = err
-				return false
-			}
-			return true
-		} else if isIndexed {
+			return txn.addReverseMutation(ctx, delEdge)
+		case isIndexed:
 			// Delete index edge of each posting.
 			p := types.Val{
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			if err := txn.addIndexMutations(ctx, t, p, pb.DirectedEdge_DEL); err != nil {
-				iterErr = err
-				return false
-			}
+			return txn.addIndexMutations(ctx, t, p, pb.DirectedEdge_DEL)
+		default:
+			return nil
 		}
-		return true
-	})
-	if iterErr != nil {
-		return iterErr
+	}); err != nil {
+		return err
 	}
 	if hasCount {
 		// Delete uid from count index. Deletion of reverses is taken care by addReverseMutation
@@ -606,8 +599,7 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: attr, Entity: uid}
-		var rerr error
-		pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) bool {
+		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
@@ -617,18 +609,14 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 			for {
 				err := txn.addIndexMutations(ctx, &edge, val, pb.DirectedEdge_SET)
 				switch err {
-				case nil:
-					return true
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
 					// Continue the for loop.
 				default:
-					rerr = err
-					return false
+					return err
 				}
 			}
 		})
-		return rerr
 	}
 	return builder.Run(ctx)
 }
@@ -688,8 +676,7 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: attr, Entity: uid}
-		var rerr error
-		pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) bool {
+		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
@@ -700,17 +687,13 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error
 			for {
 				err := txn.addReverseMutation(ctx, &edge)
 				switch err {
-				case nil:
-					return true
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
 				default:
-					rerr = err
-					return false
+					return err
 				}
 			}
 		})
-		return rerr
 	}
 	return builder.Run(ctx)
 }
@@ -731,101 +714,52 @@ func DeleteIndex(attr string) error {
 // We need to fingerprint the values to get the new ValueId.
 func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().IsList(attr), "Attr %s is not of list type", attr)
+
+	// Let's clear out the cache for anything which belongs to this attribute.
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
 	})
 
 	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.DataPrefix()
-	t := pstore.NewTransactionAt(startTs, false)
-	defer t.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	it := t.NewIterator(iterOpts)
-	defer it.Close()
-
-	rewriteValuePostings := func(pl *List, txn *Txn) error {
+	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
+	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
-		pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) bool {
+		if err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {
 				mpost = p
-				return false
 			}
-			return true
-		})
-		if mpost != nil {
-			// Delete the old edge corresponding to ValueId math.MaxUint64
-			t := &pb.DirectedEdge{
-				ValueId: mpost.Uid,
-				Attr:    attr,
-				Op:      pb.DirectedEdge_DEL,
-			}
-
-			if err := pl.AddMutation(ctx, txn, t); err != nil {
-				return err
-			}
-
-			// Add the new edge with the fingerprinted value id.
-			newEdge := &pb.DirectedEdge{
-				Attr:      attr,
-				Value:     mpost.Value,
-				ValueType: mpost.ValType,
-				Op:        pb.DirectedEdge_SET,
-				Label:     mpost.Label,
-				Facets:    mpost.Facets,
-			}
-			if err := pl.AddMutation(ctx, txn, newEdge); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	ch := make(chan *List, 10000)
-	che := make(chan error, 1000)
-	for i := 0; i < 1000; i++ {
-		go func() {
-			var err error
-			txn := &Txn{StartTs: startTs}
-			for list := range ch {
-				if err := rewriteValuePostings(list, txn); err != nil {
-					che <- err
-					return
-				}
-
-				err = txn.CommitToMemory(txn.StartTs)
-				if err != nil {
-					txn.CommitToMemory(0)
-				}
-				txn.deltas = nil
-			}
-			che <- err
-		}()
-	}
-
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		iterItem := it.Item()
-		key := iterItem.Key()
-		nk := make([]byte, len(key))
-		copy(nk, key)
-
-		// Get is important because we are modifying the mutation layer of the posting lists and
-		// hence want to put the PL in LRU cache.
-		pl, err := Get(nk)
-		if err != nil {
+			return nil
+		}); err != nil {
 			return err
 		}
-		ch <- pl
-	}
-	close(ch)
-
-	for i := 0; i < 1000; i++ {
-		if err := <-che; err != nil {
-			return x.Errorf("While rebuilding list type for attr: [%v], error: [%v]", attr, err)
+		if mpost == nil {
+			return nil
 		}
+		// Delete the old edge corresponding to ValueId math.MaxUint64
+		t := &pb.DirectedEdge{
+			ValueId: mpost.Uid,
+			Attr:    attr,
+			Op:      pb.DirectedEdge_DEL,
+		}
+
+		if err := pl.AddMutation(ctx, txn, t); err != nil {
+			return err
+		}
+
+		// Add the new edge with the fingerprinted value id.
+		newEdge := &pb.DirectedEdge{
+			Attr:      attr,
+			Value:     mpost.Value,
+			ValueType: mpost.ValType,
+			Op:        pb.DirectedEdge_SET,
+			Label:     mpost.Label,
+			Facets:    mpost.Facets,
+		}
+		return pl.AddMutation(ctx, txn, newEdge)
 	}
-	return nil
+	return builder.Run(ctx)
 }
 
 func DeleteAll() error {
