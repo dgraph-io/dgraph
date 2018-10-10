@@ -277,13 +277,7 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to BadgerDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
-	t1 := time.Now()
 	l.Lock()
-	if dur := time.Since(t1); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("acquired lock %v %v", dur, t.Attr)
-		}
-	}
 	defer l.Unlock()
 	return l.addMutation(ctx, txn, t)
 }
@@ -431,6 +425,14 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 		// This is for rolling up the posting list.
 		l.commitTs = commitTs
 	}
+
+	// TODO: Figure out what to do here. We shouldn't really be calling
+	// syncIfDirty here, because the posting list might be created by the index
+	// rebuild process. But, we could potentially rollup the posting list.
+	// In general, a posting list shouldn't try to mix up it's job of keeping
+	// things in memory, with writing things to disk. A separate process can
+	// roll up and write them to disk. Posting list should only keep things in
+	// memory, to make it available for transactions.
 
 	// Calculate 10% of immutable layer
 	// numUids := (bp128.NumIntegers(l.plist.Uids) * 10) / 100

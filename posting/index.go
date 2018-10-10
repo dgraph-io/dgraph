@@ -121,7 +121,6 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	}
 
 	x.AssertTrue(plist != nil)
-	fmt.Printf("Adding edge: %+v to pl: %q\n", edge, plist.key)
 	if err = plist.AddMutation(ctx, txn, edge); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error adding/deleting %s for attr %s entity %d: %v",
@@ -514,11 +513,11 @@ func (r *rebuild) Run(ctx context.Context) error {
 	// global lcache (the LRU cache).
 	cache := make(map[string]*List)
 	txn := &Txn{StartTs: r.startTs}
-	var numGets int
+	var numGets uint64
 	txn.getList = func(key []byte) (*List, error) {
 		numGets++
-		if numGets%1000 == 0 {
-			glog.V(2).Infof("During rebuild, local cache hit %d times\n", numGets)
+		if glog.V(2) && numGets%1000 == 0 {
+			glog.Infof("During rebuild, getList hit %d times\n", numGets)
 		}
 		if pl, ok := cache[string(key)]; ok {
 			return pl, nil
@@ -578,7 +577,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 		}
 		pl.Lock() // We shouldn't need to release this lock.
 		le := pl.length(r.startTs, 0)
-		y.AssertTruef(le > 0, "pl of size zero: %q", key)
+		y.AssertTruef(le > 0, "Unexpected list of size zero: %q", key)
 		if err := pl.rollup(); err != nil {
 			return err
 		}
@@ -611,7 +610,6 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 				switch err {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
-					// Continue the for loop.
 				default:
 					return err
 				}
@@ -623,7 +621,6 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 
 func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
-	// Lets rebuild forward and reverse count indexes concurrently.
 
 	var reverse bool
 	fn := func(uid uint64, pl *List, txn *Txn) error {
@@ -639,17 +636,15 @@ func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
 		for {
 			err := txn.addCountMutation(ctx, t, uint32(sz), reverse)
 			switch err {
-			case nil:
-				return nil
 			case ErrRetry:
 				time.Sleep(10 * time.Millisecond)
-				// Continue the for loop.
 			default:
 				return err
 			}
 		}
 	}
 
+	// Create the forward index.
 	pk := x.ParsedKey{Attr: attr}
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
 	builder.fn = fn
@@ -657,6 +652,7 @@ func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
 		return err
 	}
 
+	// Create the reverse index.
 	reverse = true
 	builder = rebuild{prefix: pk.ReversePrefix(), startTs: startTs}
 	builder.fn = fn
@@ -715,7 +711,9 @@ func DeleteIndex(attr string) error {
 func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().IsList(attr), "Attr %s is not of list type", attr)
 
-	// Let's clear out the cache for anything which belongs to this attribute.
+	// Let's clear out the cache for anything which belongs to this attribute,
+	// so once we're done, any reads would see the new list type. Note that we
+	// don't use lcache during the rebuild process.
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
 	})
@@ -743,11 +741,9 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 			Attr:    attr,
 			Op:      pb.DirectedEdge_DEL,
 		}
-
 		if err := pl.AddMutation(ctx, txn, t); err != nil {
 			return err
 		}
-
 		// Add the new edge with the fingerprinted value id.
 		newEdge := &pb.DirectedEdge{
 			Attr:      attr,

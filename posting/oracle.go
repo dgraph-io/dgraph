@@ -50,8 +50,8 @@ type Txn struct {
 	// determine unhealthy, stale txns.
 	lastUpdate time.Time
 
-	// getList is the function to use to retrieve and store posting lists in a
-	// cache. This can be left nil to use the global lru cache.
+	// getList can be set for a txn, to isolate the retrieval and storage of
+	// posting lists in a separate cache. If nil, global LRU cache is used.
 	getList func(key []byte) (*List, error)
 }
 

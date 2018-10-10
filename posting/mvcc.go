@@ -126,10 +126,10 @@ func (tx *Txn) CommitToMemory(commitTs uint64) error {
 			}
 			err = plist.CommitMutation(tx.StartTs, commitTs)
 			switch err {
-			case ErrRetry:
-				time.Sleep(5 * time.Millisecond)
 			case nil:
 				break inner
+			case ErrRetry:
+				time.Sleep(5 * time.Millisecond)
 			default:
 				glog.Warningf("Error while committing to memory: %v\n", err)
 				return err

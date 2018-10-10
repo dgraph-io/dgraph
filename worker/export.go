@@ -33,7 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const numExportRoutines = 100
+const numExportRoutines = 10
 
 type kv struct {
 	prefix string
@@ -235,7 +235,10 @@ func export(bdir string, readTs uint64) error {
 			buf.Grow(50000)
 			for item := range chkv {
 				// TODO: Add error handling in toRDF.
-				toRDF(buf, item, readTs)
+				if err := toRDF(buf, item, readTs); err != nil {
+					glog.Errorf("Error while converting to RDF: %v. Ignoring...\n", err)
+					continue
+				}
 				if buf.Len() >= 40000 {
 					tmp := make([]byte, buf.Len())
 					copy(tmp, buf.Bytes())
