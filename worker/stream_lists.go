@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
@@ -218,7 +219,8 @@ func (sl *streamLists) streamKVs(ctx context.Context, prefix string,
 		if err := sl.stream.Send(batch); err != nil {
 			return err
 		}
-		x.Printf("Sent batch of size: %s in %v.\n", humanize.Bytes(sz), time.Since(t))
+		glog.Infof("%s Created batch of size: %s in %v.\n",
+			prefix, humanize.Bytes(sz), time.Since(t))
 		return nil
 	}
 
@@ -236,7 +238,7 @@ outer:
 				continue
 			}
 			speed := bytesSent / durSec
-			x.Printf("%s Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
+			glog.Infof("%s Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
 				prefix, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
 
 		case kvs, ok := <-kvChan:
@@ -251,6 +253,6 @@ outer:
 		}
 	}
 
-	x.Printf("%s Sent %d (+1 maybe for schema) keys\n", prefix, count)
+	glog.Infof("%s Sent %d keys\n", prefix, count)
 	return nil
 }
