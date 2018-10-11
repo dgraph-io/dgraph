@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
 )
 
@@ -40,6 +41,22 @@ func (w *TxnWriter) cb(err error) {
 	case w.che <- err:
 	default:
 	}
+}
+
+func (w *TxnWriter) Send(kvs *pb.KVS) error {
+	for _, kv := range kvs.Kv {
+		if kv.Version == 0 {
+			continue
+		}
+		var meta byte
+		if len(kv.UserMeta) > 0 {
+			meta = kv.UserMeta[0]
+		}
+		if err := w.SetAt(kv.Key, kv.Val, meta, kv.Version); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {

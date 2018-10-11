@@ -67,23 +67,17 @@ func (n *node) populateSnapshot(ps *badger.DB, pl *conn.Pool) (int, error) {
 		if err != nil {
 			return count, err
 		}
-
 		select {
 		case <-ctx.Done():
 			return 0, ctx.Err()
 		default:
 		}
+
 		glog.V(2).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
-		for _, kv := range kvs.Kv {
-			count++
-			var meta byte
-			if len(kv.UserMeta) > 0 {
-				meta = kv.UserMeta[0]
-			}
-			if err := writer.SetAt(kv.Key, kv.Val, meta, kv.Version); err != nil {
-				return 0, err
-			}
+		if err := writer.Send(kvs); err != nil {
+			return 0, err
 		}
+		count += len(kvs.Kv)
 	}
 	if err := writer.Flush(); err != nil {
 		return 0, err

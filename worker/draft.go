@@ -770,30 +770,10 @@ func (n *node) Run() {
 	}
 }
 
-type toBadger struct {
-	writer *x.TxnWriter
-}
-
-func (b *toBadger) Send(kvs *pb.KVS) error {
-	for _, kv := range kvs.Kv {
-		if kv.Version == 0 {
-			continue
-		}
-		var meta byte
-		if len(kv.UserMeta) > 0 {
-			meta = kv.UserMeta[0]
-		}
-		if err := b.writer.SetAt(kv.Key, kv.Val, meta, kv.Version); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	writer := &toBadger{writer: &x.TxnWriter{DB: pstore, BlindWrite: true}}
+	writer := &x.TxnWriter{DB: pstore, BlindWrite: true}
 	sl := streamLists{stream: writer, db: pstore}
 	sl.chooseKey = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
@@ -814,7 +794,9 @@ func (n *node) rollupLists(readTs uint64) error {
 	if err := sl.orchestrate(context.Background(), "Rolling up", readTs); err != nil {
 		return err
 	}
-
+	if err := writer.Flush(); err != nil {
+		return err
+	}
 	//	We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)
 	return nil
