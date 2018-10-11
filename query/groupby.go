@@ -110,7 +110,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	if value.Tid == types.UidID {
 		strKey = strconv.FormatUint(value.Value.(uint64), 10)
 	} else {
-		valC := types.Val{types.StringID, ""}
+		valC := types.Val{Tid: types.StringID, Value: ""}
 		err := types.Marshal(value, &valC)
 		if err != nil {
 			return
@@ -122,7 +122,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 		// If this is the first element of the group.
 		cur.elements[strKey] = groupElements{
 			key:      value,
-			entities: &pb.List{make([]uint64, 0)},
+			entities: &pb.List{Uids: []uint64{}},
 		}
 	}
 	curEntity := cur.elements[strKey].entities

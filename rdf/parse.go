@@ -86,7 +86,7 @@ L:
 			} else if rnq.Predicate == "" {
 				rnq.Predicate = x.Star
 			} else {
-				rnq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+				rnq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			}
 		case itemLiteral:
 			var err error
@@ -169,7 +169,7 @@ L:
 	// We only want to set default value if we have seen ObjectValue within "" and if we didn't
 	// already set it.
 	if seenOval && rnq.ObjectValue == nil {
-		rnq.ObjectValue = &api.Value{&api.Value_DefaultVal{oval}}
+		rnq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: oval}}
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
@@ -259,16 +259,16 @@ func isNewline(r rune) bool {
 }
 
 var typeMap = map[string]types.TypeID{
-	"xs:string":                                        types.StringID,
-	"xs:date":                                          types.DateTimeID,
-	"xs:dateTime":                                      types.DateTimeID,
-	"xs:int":                                           types.IntID,
-	"xs:positiveInteger":                               types.IntID,
-	"xs:boolean":                                       types.BoolID,
-	"xs:double":                                        types.FloatID,
-	"xs:float":                                         types.FloatID,
-	"xs:base64Binary":                                  types.BinaryID,
-	"geo:geojson":                                      types.GeoID,
+	"xs:string":          types.StringID,
+	"xs:date":            types.DateTimeID,
+	"xs:dateTime":        types.DateTimeID,
+	"xs:int":             types.IntID,
+	"xs:positiveInteger": types.IntID,
+	"xs:boolean":         types.BoolID,
+	"xs:double":          types.FloatID,
+	"xs:float":           types.FloatID,
+	"xs:base64Binary":    types.BinaryID,
+	"geo:geojson":        types.GeoID,
 	"http://www.w3.org/2001/XMLSchema#string":          types.StringID,
 	"http://www.w3.org/2001/XMLSchema#dateTime":        types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#date":            types.DateTimeID,

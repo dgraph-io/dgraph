@@ -19,7 +19,7 @@ import (
 )
 
 func newList(data []uint64) *pb.List {
-	return &pb.List{data}
+	return &pb.List{Uids: data}
 }
 
 func TestMergeSorted1(t *testing.T) {
@@ -353,8 +353,8 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
 			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
 
-			u := &pb.List{u1}
-			v := &pb.List{v1}
+			u := &pb.List{Uids: u1}
+			v := &pb.List{Uids: v1}
 			dst1 := &pb.List{}
 			dst2 := &pb.List{}
 			compressedUids := bp128.DeltaPack(v1)

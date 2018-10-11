@@ -50,10 +50,8 @@ func (u *txnUnifier) run(k, v []byte, delete bool) error {
 	u.txn = u.db.NewTransaction(true)
 	if delete {
 		return u.txn.Delete(k)
-	} else {
-		return u.txn.Set(k, v)
 	}
-	return nil
+	return u.txn.Set(k, v)
 }
 
 func (u *txnUnifier) Done() error {

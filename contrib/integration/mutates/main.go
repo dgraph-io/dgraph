@@ -55,7 +55,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	quad := &api.NQuad{
 		Subject:     "200",
 		Predicate:   "name",
-		ObjectValue: &api.Value{&api.Value_StrVal{"ok 200"}},
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "ok 200"}},
 	}
 	mu.Set = []*api.NQuad{quad}
 	_, err := txn.Mutate(ctx, mu)
@@ -67,7 +67,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	quad = &api.NQuad{
 		Subject:     "300",
 		Predicate:   "name",
-		ObjectValue: &api.Value{&api.Value_StrVal{"ok 300"}},
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "ok 300"}},
 	}
 	mu.Set = []*api.NQuad{quad}
 	// mu.SetNquads = []byte(`<300> <name> "ok 300" .`)
@@ -80,7 +80,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	quad = &api.NQuad{
 		Subject:     "400",
 		Predicate:   "name",
-		ObjectValue: &api.Value{&api.Value_StrVal{"ok 400"}},
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "ok 400"}},
 	}
 	mu.Set = []*api.NQuad{quad}
 	// mu.SetNquads = []byte(`<400> <name> "ok 400" .`)

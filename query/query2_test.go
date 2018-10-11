@@ -966,7 +966,7 @@ func ageSg(uidMatrix []*pb.List, srcUids *pb.List, ages []uint64) *SubGraph {
 		binary.LittleEndian.PutUint64(bs, a)
 		as = append(as, &pb.ValueList{
 			Values: []*pb.TaskValue{
-				&pb.TaskValue{[]byte(bs), 2},
+				&pb.TaskValue{Val: []byte(bs), ValType: 2},
 			},
 		})
 	}
@@ -982,7 +982,7 @@ func ageSg(uidMatrix []*pb.List, srcUids *pb.List, ages []uint64) *SubGraph {
 func nameSg(uidMatrix []*pb.List, srcUids *pb.List, names []string) *SubGraph {
 	var ns []*pb.ValueList
 	for _, n := range names {
-		ns = append(ns, &pb.ValueList{Values: []*pb.TaskValue{{[]byte(n), 0}}})
+		ns = append(ns, &pb.ValueList{Values: []*pb.TaskValue{{Val: []byte(n), ValType: 0}}})
 	}
 	return &SubGraph{
 		Attr:        "name",

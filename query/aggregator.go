@@ -97,10 +97,8 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 		return isEqual, nil
 	case "!=":
 		return !isEqual, nil
-	default:
-		return false, x.Errorf("Invalid compare function %v", ag)
 	}
-	return false, nil
+	return false, x.Errorf("Invalid compare function %v", ag)
 }
 
 func (ag *aggregator) ApplyVal(v types.Val) error {

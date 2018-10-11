@@ -60,7 +60,7 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			preds = []string{edge.Attr}
 		} else {
 			sg := &SubGraph{}
-			sg.DestUIDs = &pb.List{[]uint64{edge.GetEntity()}}
+			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
 			valMatrix, err := getNodePredicates(ctx, sg)
 			if err != nil {
@@ -180,7 +180,7 @@ func ToInternal(gmu *gql.Mutation,
 	var wnq *gql.NQuad
 
 	parse := func(nq *api.NQuad, op pb.DirectedEdge_Op) error {
-		wnq = &gql.NQuad{nq}
+		wnq = &gql.NQuad{NQuad: nq}
 		if len(nq.Subject) == 0 {
 			return nil
 		}

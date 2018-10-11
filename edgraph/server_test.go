@@ -79,13 +79,13 @@ func TestNquadsFromJson1(t *testing.T) {
 
 	require.Equal(t, 5, len(nq))
 
-	oval := &api.Value{&api.Value_StrVal{"Alice"}}
+	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Alice"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 
-	oval = &api.Value{&api.Value_IntVal{26}}
+	oval = &api.Value{Val: &api.Value_IntVal{IntVal: 26}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "age", oval))
 
-	oval = &api.Value{&api.Value_BoolVal{true}}
+	oval = &api.Value{Val: &api.Value_BoolVal{BoolVal: true}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "married", oval))
 
 	oval = &api.Value{&api.Value_StrVal{tn.Format(time.RFC3339Nano)}}
@@ -124,13 +124,13 @@ func TestNquadsFromJson2(t *testing.T) {
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "_:blank-1"))
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "1000"))
 
-	oval := &api.Value{&api.Value_StrVal{"Charlie"}}
+	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Charlie"}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "name", oval))
 
-	oval = &api.Value{&api.Value_BoolVal{false}}
+	oval = &api.Value{Val: &api.Value_BoolVal{BoolVal: false}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "married", oval))
 
-	oval = &api.Value{&api.Value_StrVal{"Bob"}}
+	oval = &api.Value{Val: &api.Value_StrVal{StrVal: "Bob"}}
 	require.Contains(t, nq, makeNquad("1000", "name", oval))
 }
 
@@ -151,7 +151,7 @@ func TestNquadsFromJson3(t *testing.T) {
 	require.Equal(t, 3, len(nq))
 	require.Contains(t, nq, makeNquadEdge("_:blank-0", "school", "_:blank-1"))
 
-	oval := &api.Value{&api.Value_StrVal{"Wellington Public School"}}
+	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Wellington Public School"}}
 	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval))
 }
 
@@ -161,11 +161,11 @@ func TestNquadsFromJson4(t *testing.T) {
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(nq))
-	oval := &api.Value{&api.Value_StrVal{"Alice"}}
+	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Alice"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
-	require.Contains(t, nq, makeNquad("_:blank-0", "age", &api.Value{&api.Value_IntVal{21}}))
+	require.Contains(t, nq, makeNquad("_:blank-0", "age", &api.Value{Val: &api.Value_IntVal{IntVal: 21}}))
 	require.Contains(t, nq, makeNquad("_:blank-0", "weight",
-		&api.Value{&api.Value_DoubleVal{58.7}}))
+		&api.Value{Val: &api.Value_DoubleVal{DoubleVal: 58.7}}))
 }
 
 func TestJsonNumberParsing(t *testing.T) {
@@ -175,8 +175,8 @@ func TestJsonNumberParsing(t *testing.T) {
 	data = append(data, `{"uid": "1", "key": 27670116110564327426}`)
 
 	var vals []*api.Value
-	vals = append(vals, &api.Value{&api.Value_IntVal{9223372036854775299}})
-	vals = append(vals, &api.Value{&api.Value_DoubleVal{9223372036854775299.0}})
+	vals = append(vals, &api.Value{Val: &api.Value_IntVal{IntVal: 9223372036854775299}})
+	vals = append(vals, &api.Value{Val: &api.Value_DoubleVal{DoubleVal: 9223372036854775299.0}})
 	vals = append(vals, nil)
 
 	for i, d := range data {
@@ -212,7 +212,7 @@ func TestNquadsFromJson_EmptyUid(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
-	oval := &api.Value{&api.Value_StrVal{"Name"}}
+	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Name"}}
 	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
 }
 
@@ -304,8 +304,8 @@ func TestParseNQuads(t *testing.T) {
 	nqs, err := parseNQuads([]byte(nquads))
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
-		makeNquad("_:a", "predA", &api.Value{&api.Value_DefaultVal{"A"}}),
-		makeNquad("_:b", "predB", &api.Value{&api.Value_DefaultVal{"B"}}),
+		makeNquad("_:a", "predA", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "A"}}),
+		makeNquad("_:b", "predB", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "B"}}),
 		makeNquadEdge("_:a", "join", "_:b"),
 	}, nqs)
 }
@@ -315,8 +315,8 @@ func TestParseNQuadsWindowsNewline(t *testing.T) {
 	nqs, err := parseNQuads([]byte(nquads))
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
-		makeNquad("_:a", "predA", &api.Value{&api.Value_DefaultVal{"A"}}),
-		makeNquad("_:b", "predB", &api.Value{&api.Value_DefaultVal{"B"}}),
+		makeNquad("_:a", "predA", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "A"}}),
+		makeNquad("_:b", "predB", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "B"}}),
 	}, nqs)
 }
 
@@ -325,7 +325,7 @@ func TestParseNQuadsDelete(t *testing.T) {
 	nqs, err := parseNQuads([]byte(nquads))
 	require.NoError(t, err)
 	require.Equal(t, []*api.NQuad{
-		makeNquad("_:a", x.Star, &api.Value{&api.Value_DefaultVal{x.Star}}),
+		makeNquad("_:a", x.Star, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}),
 	}, nqs)
 }
 

@@ -126,7 +126,7 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *pb.Query {
 		srcFun.Args = append(srcFun.Args, srcFunc[2:]...)
 	}
 	q := &pb.Query{
-		UidList: &pb.List{uids},
+		UidList: &pb.List{Uids: uids},
 		SrcFunc: srcFun,
 		Attr:    attr,
 		ReadTs:  timestamp(),

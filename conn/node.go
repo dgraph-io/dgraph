@@ -409,7 +409,6 @@ func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) erro
 	case <-cctx.Done():
 		return errInternalRetry
 	}
-	return nil
 }
 
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {

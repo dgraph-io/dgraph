@@ -172,7 +172,7 @@ func convertValue(attr, data string) (types.Val, error) {
 	if !t.IsScalar() {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
-	src := types.Val{types.StringID, []byte(data)}
+	src := types.Val{Tid: types.StringID, Value: []byte(data)}
 	dst, err := types.Convert(src, t)
 	return dst, err
 }
@@ -301,10 +301,8 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 		return false, nil
 	case NotAFunction:
 		return typ.IsScalar(), nil
-	default:
-		return false, x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
 	}
-	return true, nil
+	return false, x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
 }
 
 // Handles fetching of value posting lists and filtering of uids based on that.
@@ -381,7 +379,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			if err != nil {
 				return err
 			}
-			out.LangMatrix = append(out.LangMatrix, &pb.LangList{langTags})
+			out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
 		}
 
 		valTid := vals[0].Tid
@@ -423,7 +421,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				fs = []*api.Facet{}
 			}
 			out.FacetMatrix = append(out.FacetMatrix,
-				&pb.FacetsList{[]*pb.Facets{{fs}}})
+				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
 		}
 
 		switch {
@@ -532,9 +530,9 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		if q.FacetParam != nil {
 			var fcsList []*pb.Facets
 			for _, fres := range filteredRes {
-				fcsList = append(fcsList, &pb.Facets{fres.facets})
+				fcsList = append(fcsList, &pb.Facets{Facets: fres.facets})
 			}
-			out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{fcsList})
+			out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 		}
 
 		switch {
@@ -553,7 +551,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			count := int64(len)
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &pb.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == HasFn:
@@ -563,11 +561,11 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			count := int64(len)
 			if EvalCompare("gt", count, 0) {
-				tlist := &pb.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == UidInFn:
-			reqList := &pb.List{[]uint64{srcFn.uidPresent}}
+			reqList := &pb.List{Uids: []uint64{srcFn.uidPresent}}
 			topts := posting.ListOptions{
 				ReadTs:    args.q.ReadTs,
 				AfterUID:  0,
@@ -578,7 +576,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				return err
 			}
 			if len(plist.Uids) > 0 {
-				tlist := &pb.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		default:

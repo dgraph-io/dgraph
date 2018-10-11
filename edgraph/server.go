@@ -283,9 +283,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   op.DropAttr,
-			ObjectValue: &api.Value{&api.Value_StrVal{x.Star}},
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
 		}
-		wnq := &gql.NQuad{nq}
+		wnq := &gql.NQuad{NQuad: nq}
 		edge, err := wnq.ToDeletePredEdge()
 		if err != nil {
 			return empty, err

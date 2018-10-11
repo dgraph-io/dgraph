@@ -126,7 +126,7 @@ func upsert(c *dgo.Dgraph, acc account) {
 		} else if err == y.ErrAborted {
 			// pass
 		} else {
-			fmt.Errorf("ERROR: %v", err)
+			fmt.Printf("ERROR: %v", err)
 		}
 		atomic.AddUint64(&retryCount, 1)
 	}
