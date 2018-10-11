@@ -2,9 +2,9 @@
 
 Copyright 2016-2018 Dgraph Labs, Inc.
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use
-this file except in compliance with the License. You may obtain a copy of the
-License at
+Source code in this repository is licensed under the Apache Public License 2.0
+(APL). A copy of APL is present in this repository, and is also available online
+at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
