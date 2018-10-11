@@ -133,17 +133,15 @@ func (c *listCache) removeOldest() {
 		e := ele.Value.(*entry)
 
 		if !e.pl.SetForDeletion() {
+			// If the posting list has pending mutations, SetForDeletion would
+			// return false, and hence would be skipped.
 			ele = ele.Prev()
 			continue
 		}
-		// If length of mutation layer is zero, then we won't call pstore.SetAsync and the
-		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
-		if committed, err := e.pl.SyncIfDirty(true); err != nil {
-			ele = ele.Prev()
-			continue
-		} else if !committed {
-			delete(c.cache, e.key)
-		}
+
+		// No mutations found and we have marked the PL for deletion. Now we can
+		// safely delete it from the cache.
+		delete(c.cache, e.key)
 
 		// ele gets Reset once it's passed to Remove, so store the prev.
 		prev := ele.Prev()

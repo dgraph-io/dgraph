@@ -749,6 +749,28 @@ func (n *node) Run() {
 	}
 }
 
+type toBadger struct {
+	writer *x.TxnWriter
+}
+
+func (b *toBadger) Send(kvs *pb.KVS) error {
+	for _, kv := range kvs.Kv {
+		if kv.Version == 0 {
+			continue
+		}
+		if err := b.writer.SetAt(kv.Key, kv.Val, kv.UserMeta, kv.Version); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n *node) rollupLists() error {
+	// We can use orchestrate for this. Also need to share a common logic to
+	// write to Badger.
+	return nil
+}
+
 var errConnection = errors.New("No connection exists")
 
 func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
