@@ -58,7 +58,7 @@ func commitTs(startTs uint64) uint64 {
 	od := &pb.OracleDelta{
 		MaxAssigned: atomic.LoadUint64(&ts),
 	}
-	od.Txns = append(od.Txns, &pb.TxnStatus{startTs, commit})
+	od.Txns = append(od.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commit})
 	posting.Oracle().ProcessDelta(od)
 	return commit
 }

@@ -120,7 +120,7 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 			return &sortresult{&emptySortResult, nil, ctx.Err()}
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
-			tempList := &pb.List{ts.UidMatrix[i].Uids}
+			tempList := &pb.List{Uids: ts.UidMatrix[i].Uids}
 			var vals []types.Val
 			if vals, err = sortByValue(ctx, ts, tempList, sType); err != nil {
 				return &sortresult{&emptySortResult, nil, err}
@@ -625,7 +625,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 			values = append(values, []types.Val{val})
 		}
 	}
-	err := types.Sort(values, &pb.List{uids}, []bool{order.Desc})
+	err := types.Sort(values, &pb.List{Uids: uids}, []bool{order.Desc})
 	ul.Uids = uids
 	if len(ts.Order) > 1 {
 		for _, v := range values {

@@ -56,7 +56,7 @@ type XidMap struct {
 }
 
 type shard struct {
-	sync.Mutex
+	*sync.Mutex
 	block
 
 	elems        map[string]*list.Element

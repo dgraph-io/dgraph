@@ -49,7 +49,7 @@ func getUIDList(n int) *pb.List {
 	for i := 1; i <= n; i++ {
 		data = append(data, uint64(i*100))
 	}
-	return &pb.List{data}
+	return &pb.List{Uids: data}
 }
 
 func TestSortStrings(t *testing.T) {

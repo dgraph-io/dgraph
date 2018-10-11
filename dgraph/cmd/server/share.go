@@ -34,7 +34,7 @@ import (
 // NewSharedQueryNQuads returns nquads with query and hash.
 func NewSharedQueryNQuads(query []byte) []*api.NQuad {
 	val := func(s string) *api.Value {
-		return &api.Value{&api.Value_DefaultVal{s}}
+		return &api.Value{Val: &api.Value_DefaultVal{s}}
 	}
 	qHash := fmt.Sprintf("%x", sha256.Sum256(query))
 	return []*api.NQuad{
