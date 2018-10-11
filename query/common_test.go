@@ -406,26 +406,26 @@ office.room                    : uid .
 
 	// IntID
 	data := types.ValueForType(types.BinaryID)
-	intD := types.Val{types.IntID, int64(15)}
+	intD := types.Val{Tid: types.IntID, Value: int64(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
 
 	// FloatID
 	fdata := types.ValueForType(types.BinaryID)
-	floatD := types.Val{types.FloatID, float64(13.25)}
+	floatD := types.Val{Tid: types.FloatID, Value: float64(13.25)}
 	err = types.Marshal(floatD, &fdata)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "power", 1, types.FloatID, fdata.Value.([]byte), nil)
 
 	addEdgeToValue(t, "address", 1, "31, 32 street, Jupiter", nil)
 
-	boolD := types.Val{types.BoolID, true}
+	boolD := types.Val{Tid: types.BoolID, Value: true}
 	err = types.Marshal(boolD, &data)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "alive", 1, types.BoolID, data.Value.([]byte), nil)
 	addEdgeToTypedValue(t, "alive", 23, types.BoolID, data.Value.([]byte), nil)
 
-	boolD = types.Val{types.BoolID, false}
+	boolD = types.Val{Tid: types.BoolID, Value: false}
 	err = types.Marshal(boolD, &data)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "alive", 25, types.BoolID, data.Value.([]byte), nil)
@@ -549,14 +549,14 @@ office.room                    : uid .
 	// for aggregator(sum) test
 	{
 		data := types.ValueForType(types.BinaryID)
-		intD := types.Val{types.IntID, int64(4)}
+		intD := types.Val{Tid: types.IntID, Value: int64(4)}
 		err = types.Marshal(intD, &data)
 		require.NoError(t, err)
 		addEdgeToTypedValue(t, "shadow_deep", 23, types.IntID, data.Value.([]byte), nil)
 	}
 	{
 		data := types.ValueForType(types.BinaryID)
-		intD := types.Val{types.IntID, int64(14)}
+		intD := types.Val{Tid: types.IntID, Value: int64(14)}
 		err = types.Marshal(intD, &data)
 		require.NoError(t, err)
 		addEdgeToTypedValue(t, "shadow_deep", 24, types.IntID, data.Value.([]byte), nil)

@@ -204,10 +204,10 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 }
 
 func (m *XidMap) EvictAll() {
-	for _, s := range m.shards {
-		s.Lock()
-		s.evict(1.0)
-		s.Unlock()
+	for i := range make([]struct{}, len(m.shards)) {
+		m.shards[i].Lock()
+		m.shards[i].evict(1.0)
+		m.shards[i].Unlock()
 	}
 }
 
