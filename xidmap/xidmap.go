@@ -46,7 +46,7 @@ type Options struct {
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
-	shards    []*shard
+	shards    []shard
 	kv        *badger.DB
 	opt       Options
 	newRanges chan *pb.AssignedIds
@@ -92,7 +92,7 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 	x.AssertTrue(opt.LRUSize != 0)
 	x.AssertTrue(opt.NumShards != 0)
 	xm := &XidMap{
-		shards:    make([]*shard, opt.NumShards),
+		shards:    make([]shard, opt.NumShards),
 		kv:        kv,
 		opt:       opt,
 		newRanges: make(chan *pb.AssignedIds),
@@ -132,7 +132,7 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool) {
 	fp := farm.Fingerprint64([]byte(xid))
 	idx := fp % uint64(m.opt.NumShards)
-	sh := m.shards[idx]
+	sh := &m.shards[idx]
 
 	sh.Lock()
 	defer sh.Unlock()
@@ -204,10 +204,10 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 }
 
 func (m *XidMap) EvictAll() {
-	for _, s := range m.shards {
-		s.Lock()
-		s.evict(1.0)
-		s.Unlock()
+	for i := range make([]struct{}, len(m.shards)) {
+		m.shards[i].Lock()
+		m.shards[i].evict(1.0)
+		m.shards[i].Unlock()
 	}
 }
 
