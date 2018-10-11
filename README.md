@@ -84,7 +84,7 @@ makes it easy to build applications with it.
 | Full Text Search | Native support | Native support | Via External Indexing System |
 | Regular Expressions | Native support | Native support | Via External Indexing System |
 | Geo Search | Native support | External support only | Via External Indexing System |
-| License | Apache 2.0 + Commons Clause | GPL v3 | Apache 2.0 |
+| License | Apache 2.0 | GPL v3 | Apache 2.0 |
 
 ## Users
 - **Dgraph official documentation is present at [docs.dgraph.io](https://docs.dgraph.io).**
@@ -108,7 +108,7 @@ makes it easy to build applications with it.
 ## Unofficial Client Libraries
 The Dgraph team maintain a number of [officially supported client libraries](https://docs.dgraph.io/clients/).  The following libraries are contributed by the community.
 
-**C# .NET**  
+**C# .NET**
 
 * [https://github.com/AlexandreDaSilva/DgraphNet](https://github.com/AlexandreDaSilva/DgraphNet)
 * [https://github.com/MichaelJCompton/Dgraph-dotnet](https://github.com/MichaelJCompton/Dgraph-dotnet)
