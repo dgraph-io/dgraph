@@ -557,7 +557,7 @@ func (n *node) retrieveSnapshot() error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	posting.EvictLRU()
-	if _, err := n.populateShard(pstore, pool); err != nil {
+	if _, err := n.populateSnapshot(pstore, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -758,7 +758,11 @@ func (b *toBadger) Send(kvs *pb.KVS) error {
 		if kv.Version == 0 {
 			continue
 		}
-		if err := b.writer.SetAt(kv.Key, kv.Val, kv.UserMeta, kv.Version); err != nil {
+		var meta byte
+		if len(kv.UserMeta) > 0 {
+			meta = kv.UserMeta[0]
+		}
+		if err := b.writer.SetAt(kv.Key, kv.Val, meta, kv.Version); err != nil {
 			return err
 		}
 	}
