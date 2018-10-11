@@ -156,8 +156,7 @@ Over years of writing big scalable systems, we are convinced that striving for s
 
 Every new source file must begin with a license header.
 
-Badger repo and the dgraph clients(dgo, dgraph-js, pydgraph and dgraph4j) are licensed under the Apache license:
-
+Dgraph, Badger, and the Dgraph clients (dgo, dgraph-js, pydgraph and dgraph4j) are licensed under the Apache 2.0 license:
 
     /*
      * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
@@ -173,17 +172,6 @@ Badger repo and the dgraph clients(dgo, dgraph-js, pydgraph and dgraph4j) are li
      * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
      * See the License for the specific language governing permissions and
      * limitations under the License.
-     */
-
-All the code in the Dgraph repo is licensed under the Apache license with the Commons Clause
-restriction:
-
-
-    /*
-     * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
-     *
-     * This file is available under the Apache License, Version 2.0,
-     * with the Commons Clause restriction.
      */
 
 ### Signed Commits
