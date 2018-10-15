@@ -720,7 +720,9 @@ func (n *node) Run() {
 				}
 			}
 			// Send the whole lot to applyCh in one go, instead of sending entries one by one.
-			n.applyCh <- rd.CommittedEntries
+			if len(rd.CommittedEntries) > 0 {
+				n.applyCh <- rd.CommittedEntries
+			}
 
 			if tr != nil {
 				tr.LazyPrintf("Handled %d committed entries.", len(rd.CommittedEntries))
