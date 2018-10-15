@@ -71,9 +71,10 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		Node: m,
 		ctx:  context.Background(),
 		gid:  gid,
-		// processConfChange etc are not throttled so some extra delta, so that we don't
-		// block tick when applyCh is full
-		applyCh: make(chan []raftpb.Entry, 100),
+		// We need a generous size for applyCh, because raft.Tick happens every
+		// 10ms. If we restrict the size here, then Raft goes into a loop trying
+		// to maintain quorum health.
+		applyCh: make(chan []raftpb.Entry, 1000),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:  y.NewCloser(2), // Matches CLOSER:1
 	}
