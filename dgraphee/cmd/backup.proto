@@ -1,0 +1,25 @@
+/*
+ * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ *
+ */
+
+syntax = "proto3";
+
+package pb;
+
+import "gogoproto/gogo.proto";
+// import "api.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = true;
+
+message BackupRequest {
+	uint64 start_ts = 1;
+}
+ message BackupResponse {
+	bytes data = 1;
+	uint64 length = 2;
+	bytes checksum = 3;
+}
