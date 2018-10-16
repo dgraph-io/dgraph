@@ -265,10 +265,10 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
-	if glog.V(2) {
-		glog.Infof("Received ALTER op: %+v", op)
-		defer glog.Infof("ALTER op: %+v done", op)
-	}
+	// Always print out Alter operations because they are important and rare.
+	glog.Infof("Received ALTER op: %+v", op)
+	defer glog.Infof("ALTER op: %+v done", op)
+
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
