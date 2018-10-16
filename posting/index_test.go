@@ -44,35 +44,35 @@ func uids(l *List, readTs uint64) []uint64 {
 
 func TestIndexingInt(t *testing.T) {
 	schema.ParseBytes([]byte("age:int @index(int) ."), 1)
-	a, err := indexTokens("age", "", types.Val{types.StringID, []byte("10")})
+	a, err := indexTokens("age", "", types.Val{Tid: types.StringID, Value: []byte("10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingIntNegative(t *testing.T) {
 	schema.ParseBytes([]byte("age:int @index(int) ."), 1)
-	a, err := indexTokens("age", "", types.Val{types.StringID, []byte("-10")})
+	a, err := indexTokens("age", "", types.Val{Tid: types.StringID, Value: []byte("-10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
 }
 
 func TestIndexingFloat(t *testing.T) {
 	schema.ParseBytes([]byte("age:float @index(float) ."), 1)
-	a, err := indexTokens("age", "", types.Val{types.StringID, []byte("10.43")})
+	a, err := indexTokens("age", "", types.Val{Tid: types.StringID, Value: []byte("10.43")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingTime(t *testing.T) {
 	schema.ParseBytes([]byte("age:dateTime @index(year) ."), 1)
-	a, err := indexTokens("age", "", types.Val{types.StringID, []byte("0010-01-01T01:01:01.000000001")})
+	a, err := indexTokens("age", "", types.Val{Tid: types.StringID, Value: []byte("0010-01-01T01:01:01.000000001")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x4, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexing(t *testing.T) {
 	schema.ParseBytes([]byte("name:string @index(term) ."), 1)
-	a, err := indexTokens("name", "", types.Val{types.StringID, []byte("abc")})
+	a, err := indexTokens("name", "", types.Val{Tid: types.StringID, Value: []byte("abc")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x01abc", string(a[0]))
 }
@@ -81,22 +81,22 @@ func TestIndexingMultiLang(t *testing.T) {
 	schema.ParseBytes([]byte("name:string @index(fulltext) ."), 1)
 
 	// ensure that default tokenizer is suitable for English
-	a, err := indexTokens("name", "", types.Val{types.StringID, []byte("stemming")})
+	a, err := indexTokens("name", "", types.Val{Tid: types.StringID, Value: []byte("stemming")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08stem", string(a[0]))
 
 	// ensure that Finnish tokenizer is used
-	a, err = indexTokens("name", "fi", types.Val{types.StringID, []byte("edeltäneessä")})
+	a, err = indexTokens("name", "fi", types.Val{Tid: types.StringID, Value: []byte("edeltäneessä")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08edeltän", string(a[0]))
 
 	// ensure that German tokenizer is used
-	a, err = indexTokens("name", "de", types.Val{types.StringID, []byte("Auffassungsvermögen")})
+	a, err = indexTokens("name", "de", types.Val{Tid: types.StringID, Value: []byte("Auffassungsvermögen")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08auffassungsvermog", string(a[0]))
 
 	// ensure that default tokenizer works differently than German
-	a, err = indexTokens("name", "", types.Val{types.StringID, []byte("Auffassungsvermögen")})
+	a, err = indexTokens("name", "", types.Val{Tid: types.StringID, Value: []byte("Auffassungsvermögen")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08auffassungsvermögen", string(a[0]))
 }
@@ -105,18 +105,18 @@ func TestIndexingInvalidLang(t *testing.T) {
 	schema.ParseBytes([]byte("name:string @index(fulltext) ."), 1)
 
 	// there is no tokenizer for "xx" language
-	_, err := indexTokens("name", "xx", types.Val{types.StringID, []byte("error")})
+	_, err := indexTokens("name", "xx", types.Val{Tid: types.StringID, Value: []byte("error")})
 	require.Error(t, err)
 }
 
 func TestIndexingAliasedLang(t *testing.T) {
 	schema.ParseBytes([]byte("name:string @index(fulltext) @lang ."), 1)
-	_, err := indexTokens("name", "es", types.Val{types.StringID, []byte("base")})
+	_, err := indexTokens("name", "es", types.Val{Tid: types.StringID, Value: []byte("base")})
 	require.NoError(t, err)
 	// es-es and es-419 are aliased to es
-	_, err = indexTokens("name", "es-es", types.Val{types.StringID, []byte("alias")})
+	_, err = indexTokens("name", "es-es", types.Val{Tid: types.StringID, Value: []byte("alias")})
 	require.NoError(t, err)
-	_, err = indexTokens("name", "es-419", types.Val{types.StringID, []byte("alias")})
+	_, err = indexTokens("name", "es-419", types.Val{Tid: types.StringID, Value: []byte("alias")})
 	require.NoError(t, err)
 }
 

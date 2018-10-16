@@ -649,7 +649,7 @@ Index Required: none
 
 While the `uid` function filters nodes at the current level based on UID, function `uid_in` allows looking ahead along an edge to check that it leads to a particular UID.  This can often save an extra query block and avoids returning the edge.
 
-`uid_in` cannot be used at root, it accepts one UID constant as it's argument (not a variable).
+`uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
 
 
 Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 597046).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.

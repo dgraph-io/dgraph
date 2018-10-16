@@ -82,9 +82,10 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		Node: m,
 		ctx:  context.Background(),
 		gid:  gid,
-		// processConfChange etc are not throttled so some extra delta, so that we don't
-		// block tick when applyCh is full
-		applyCh:  make(chan []raftpb.Entry, 100),
+		// We need a generous size for applyCh, because raft.Tick happens every
+		// 10ms. If we restrict the size here, then Raft goes into a loop trying
+		// to maintain quorum health.
+		applyCh:  make(chan []raftpb.Entry, 1000),
 		rollupCh: make(chan uint64, 3),
 		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:   y.NewCloser(3), // Matches CLOSER:1
@@ -440,7 +441,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
 }
 
 func (n *node) processRollups() {
-	defer n.closer.Done() // CLOSER: 1
+	defer n.closer.Done() // CLOSER:1
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
@@ -620,7 +621,7 @@ func (n *node) proposeSnapshot(discardN int) error {
 }
 
 func (n *node) Run() {
-	defer n.closer.Done() // CLOSER: 1
+	defer n.closer.Done() // CLOSER:1
 
 	firstRun := true
 	var leader bool
@@ -755,7 +756,9 @@ func (n *node) Run() {
 				}
 			}
 			// Send the whole lot to applyCh in one go, instead of sending entries one by one.
-			n.applyCh <- rd.CommittedEntries
+			if len(rd.CommittedEntries) > 0 {
+				n.applyCh <- rd.CommittedEntries
+			}
 
 			if tr != nil {
 				tr.LazyPrintf("Handled %d committed entries.", len(rd.CommittedEntries))

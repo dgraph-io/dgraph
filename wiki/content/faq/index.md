@@ -34,26 +34,7 @@ Here are some actual benchmarks:
 
 ### How is Dgraph Licensed?
 
-Dgraph is licensed under Apache v2.0 with a Commons Clause restriction. The full text of the license can be found [here](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md).
-
-### How does Commons Clause restriction affect me?
-
-A comprehensive list of FAQs, which explain the workings and restrictions of the
-Commons Clause [is present here](https://commonsclause.com/).
-
-In short, the Commons Clause restriction allows you to do everything below:
-
-- Using Dgraph internally within your organization to support your own processing.
-- Build or sell a service on top of Dgraph, which adds substantial value to Dgraph. For e.g., building a proprietary recommendation engine service which uses Dgraph internally.
-- Use a specific Dgraph library in your application.
-
-The Commons Clause restriction prohibits you from:
-
-- Selling access to Dgraph as a software or in the cloud, without adding
-  substantial value to it.
-
-If you wish to provide Dgraph as a service, [talk to
-us](mailto:contact@dgraph.io).
+Dgraph is licensed under Apache v2.0. The full text of the license can be found [here](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md).
 
 ## Internals
 
@@ -85,12 +66,8 @@ Please see Dgraph [product roadmap](https://github.com/dgraph-io/dgraph/issues/1
 ## Long Term Plans
 
 ### Is Dgraph open-core?
-Yes. The main core of Dgraph is [liberally
-licensed](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md), under
-Apache License modified with [Commons Clause](https://commonsclause.com/)
-restriction. Later, we plan to have enterprise features. Unlike other databases,
-we include running Dgraph distributedly under liberal license; because we want
-all our users to be able to scale as demand grows.
+
+Yes. The main core of Dgraph is [under the Apache 2.0 license](https://github.com/dgraph-io/dgraph/blob/master/LICENSE.md). Enterprise features will be released under a proprietary license. Unlike other databases, we include running Dgraph distributedly under an open source license because we want all our users to be able to scale as demand grows.
 
 ### Would Dgraph be well supported?
 Yes. We're VC funded and plan to use the funds for development. We have a dedicated team of really smart engineers working on this as their full-time job. And of course, we're always open to contributions from the wider community.
