@@ -28,6 +28,6 @@ clean:
 regenerate: clean
 	@protoc \
 		--proto_path=${PROTO_PATH} \
-		--gogofaster_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/protos/api:pb \
+		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/protos/api:pb \
 		pb.proto
 	@echo Done.
