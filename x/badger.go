@@ -45,9 +45,6 @@ func (w *TxnWriter) cb(err error) {
 
 func (w *TxnWriter) Send(kvs *pb.KVS) error {
 	for _, kv := range kvs.Kv {
-		if kv.Version == 0 {
-			continue
-		}
 		var meta byte
 		if len(kv.UserMeta) > 0 {
 			meta = kv.UserMeta[0]
