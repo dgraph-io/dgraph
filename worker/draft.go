@@ -446,13 +446,28 @@ func (n *node) processRollups() {
 		case <-n.closer.HasBeenClosed():
 			return
 		case readTs := <-n.rollupCh:
+			// Let's empty out the rollupCh, so we're working with the latest
+			// value of readTs.
+		inner:
+			for {
+				select {
+				case readTs = <-n.rollupCh:
+				default:
+					break inner
+				}
+			}
+			if readTs == 0 {
+				glog.Warningln("Found ZERO read Ts for rolling up.")
+				break // Breaks the select case.
+			}
+
 			// If we encounter error here, we don't need to do anything about
 			// it. Just let the user know.
 			err := n.rollupLists(readTs)
 			if err != nil {
 				glog.Errorf("Error while rolling up lists at %d: %v\n", readTs, err)
 			} else {
-				glog.Infof("List rollup after snapshot at %d: OK.\n", readTs)
+				glog.Infof("List rollup at Ts %d: OK.\n", readTs)
 			}
 		}
 	}
