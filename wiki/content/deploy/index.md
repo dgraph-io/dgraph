@@ -186,14 +186,21 @@ Dgraph cluster nodes use different ports to communicate over gRPC and http. User
 **Ratel UI** by default listens on port 8000. You can use the -port flag to configure to listen on any other port.
 
 {{% notice "tip" %}}
-If you are using Dgraph v1.0.2 (or older) then the default ports are 7080, 8080 for zero, so when following instructions for different setup guides below override zero port using `--port_offset`.
+**For Dgraph v1.0.2 (or older)**
+
+Zero's default ports are 7080 and 8080. When following instructions for the different setup guides below, override the Zero ports using `--port_offset` to match the current default ports.
 
 ```sh
-dgraph zero --idx=1 --lru_mb=<typically one-third the RAM> --port_offset -2000
-dgraph zero --idx=2 --lru_mb=<typically one-third the RAM> --port_offset -1999
+# Run Zero with ports 5080 and 6080
+dgraph zero --idx=1 --port_offset -2000
+# Run Zero with ports 5081 and 6081
+dgraph zero --idx=2 --port_offset -1999
 ```
-Ratel's default port is 8081, so override it using -p 8000.
+Likewise, Ratel's default port is 8081, so override it using `--port` to the current default port.
 
+```sh
+dgraph-ratel --port 8080
+```
 {{% /notice %}}
 
 ### HA Cluster Setup
