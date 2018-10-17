@@ -596,7 +596,7 @@ func TestProcessSortOffsetCount(t *testing.T) {
 */
 
 func TestMain(m *testing.M) {
-	x.Init(true)
+	x.Init()
 	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
 	gr = new(groupi)

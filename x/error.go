@@ -74,12 +74,6 @@ func AssertTruef(b bool, format string, args ...interface{}) {
 	}
 }
 
-func AssertTruefNoTrace(b bool, format string, args ...interface{}) {
-	if !b {
-		log.Fatalf("%+v", fmt.Errorf(format, args...))
-	}
-}
-
 // Wrap wraps errors from external lib.
 func Wrap(err error) error {
 	return errors.Wrap(err, "")

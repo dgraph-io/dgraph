@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package server
+package alpha
 
 import (
 	"bytes"

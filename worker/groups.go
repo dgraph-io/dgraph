@@ -77,8 +77,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		}
 	}
 
-	x.AssertTruefNoTrace(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
-	x.AssertTruefNoTrace(Config.ZeroAddr != Config.MyAddr,
+	x.AssertTruef(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
+	x.AssertTruef(Config.ZeroAddr != Config.MyAddr,
 		"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
 
 	if Config.RaftId == 0 {

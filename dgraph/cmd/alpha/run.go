@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package server
+package alpha
 
 import (
 	"crypto/tls"
@@ -52,69 +52,67 @@ var (
 	tlsConf x.TLSHelperConfig
 )
 
-var Server x.SubCommand
+var Alpha x.SubCommand
 
 func init() {
-	Server.Cmd = &cobra.Command{
-		Use:   "server",
-		Short: "Run Dgraph data server",
-		Long:  "Run Dgraph data server",
+	Alpha.Cmd = &cobra.Command{
+		Use:   "alpha",
+		Short: "Run Dgraph Alpha",
+		Long: `
+A Dgraph Alpha instance stores the data. Each Dgraph Alpha is responsible for
+storing and serving one data group. If multiple Alphas serve the same group,
+they form a Raft group and provide synchronous replication.
+`,
 		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Server.Conf).Stop()
+			defer x.StartProfile(Alpha.Conf).Stop()
 			run()
 		},
 	}
-	Server.EnvPrefix = "DGRAPH_SERVER"
+	Alpha.EnvPrefix = "DGRAPH_ALPHA"
 
-	defaults := edgraph.DefaultConfig
-	flag := Server.Cmd.Flags()
-	flag.StringP("postings", "p", defaults.PostingDir,
+	flag := Alpha.Cmd.Flags()
+	flag.StringVarP(&config.PostingDir, "postings", "p", "p",
 		"Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.String("badger.tables", defaults.BadgerTables,
+	flag.StringVar(&config.BadgerTables, "badger.tables", "mmap",
 		"[ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
 			"Option sequence consume most to least RAM while providing best to worst read "+
 			"performance respectively.")
-	flag.String("badger.vlog", defaults.BadgerVlog,
+	flag.StringVar(&config.BadgerVlog, "badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
 
-	flag.StringP("wal", "w", defaults.WALDir,
-		"Directory to store raft write-ahead logs.")
-	flag.Bool("nomutations", defaults.Nomutations,
-		"Don't allow mutations on this server.")
+	flag.StringVarP(&config.WALDir, "wal", "w", "w", "Directory to store raft write-ahead logs.")
+	flag.BoolVar(&config.Nomutations, "nomutations", false, "Don't allow mutations on this server.")
 
-	flag.String("whitelist", defaults.WhitelistedIPs,
+	flag.StringVar(&config.WhitelistedIPs, "whitelist", "",
 		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
-	flag.String("export", defaults.ExportPath,
-		"Folder in which to store exports.")
-	flag.Int("pending_proposals", defaults.NumPendingProposals,
+
+	flag.StringVar(&worker.Config.ExportPath, "export", "export", "Folder in which to store exports.")
+	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 2000,
 		"Number of pending mutation proposals. Useful for rate limiting.")
-	flag.Float64("trace", defaults.Tracing,
-		"The ratio of queries to trace.")
-	flag.String("my", defaults.MyAddr,
+	flag.Float64Var(&worker.Config.Tracing, "trace", 0.0, "The ratio of queries to trace.")
+	flag.StringVar(&worker.Config.MyAddr, "my", "",
 		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
-	flag.StringP("zero", "z", defaults.ZeroAddr,
+	flag.StringVarP(&worker.Config.ZeroAddr, "zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"IP_ADDRESS:PORT of Dgraph zero.")
-	flag.Uint64("idx", 0,
+	flag.Uint64Var(&worker.Config.RaftId, "idx", 0,
 		"Optional Raft ID that this server will use to join RAFT groups.")
-	flag.Uint64("sc", defaults.MaxPendingCount,
-		"Max number of pending entries in wal after which snapshot is taken")
-	flag.Bool("expand_edge", defaults.ExpandEdge,
+	flag.BoolVar(&worker.Config.ExpandEdge, "expand_edge", true,
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
 
-	flag.Float64P("lru_mb", "l", defaults.AllottedMemory,
+	flag.Float64VarP(&config.AllottedMemory, "lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
 
-	flag.Bool("debugmode", defaults.DebugMode,
-		"enable debug mode for more debug information")
+	flag.BoolVar(&x.Config.DebugMode, "debugmode", false,
+		"Enable debug mode for more debug information.")
 
 	// Useful for running multiple servers on the same machine.
-	flag.IntP("port_offset", "o", 0,
+	flag.IntVarP(&x.Config.PortOffset, "port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
 	flag.Uint64("query_edge_limit", 1e6,
@@ -135,7 +133,7 @@ func init() {
 }
 
 func setupCustomTokenizers() {
-	customTokenizers := Server.Conf.GetString("custom_tokenizers")
+	customTokenizers := Alpha.Conf.GetString("custom_tokenizers")
 	if customTokenizers == "" {
 		return
 	}
@@ -295,36 +293,14 @@ func setupServer() {
 var shutdownCh chan struct{}
 
 func run() {
-	config := edgraph.Options{
-		BadgerTables: Server.Conf.GetString("badger.tables"),
-		BadgerVlog:   Server.Conf.GetString("badger.vlog"),
-
-		PostingDir: Server.Conf.GetString("postings"),
-		WALDir:     Server.Conf.GetString("wal"),
-
-		Nomutations:         Server.Conf.GetBool("nomutations"),
-		WhitelistedIPs:      Server.Conf.GetString("whitelist"),
-		AllottedMemory:      Server.Conf.GetFloat64("lru_mb"),
-		ExportPath:          Server.Conf.GetString("export"),
-		NumPendingProposals: Server.Conf.GetInt("pending_proposals"),
-		Tracing:             Server.Conf.GetFloat64("trace"),
-		MyAddr:              Server.Conf.GetString("my"),
-		ZeroAddr:            Server.Conf.GetString("zero"),
-		RaftId:              uint64(Server.Conf.GetInt("idx")),
-		MaxPendingCount:     uint64(Server.Conf.GetInt("sc")),
-		ExpandEdge:          Server.Conf.GetBool("expand_edge"),
-		DebugMode:           Server.Conf.GetBool("debugmode"),
-	}
-
-	x.Config.PortOffset = Server.Conf.GetInt("port_offset")
-	bindall = Server.Conf.GetBool("bindall")
-	x.LoadTLSConfig(&tlsConf, Server.Conf)
-	tlsConf.ClientAuth = Server.Conf.GetString("tls_client_auth")
+	bindall = Alpha.Conf.GetBool("bindall")
+	x.LoadTLSConfig(&tlsConf, Alpha.Conf)
+	tlsConf.ClientAuth = Alpha.Conf.GetString("tls_client_auth")
 
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
-	x.Init(edgraph.Config.DebugMode)
-	x.Config.QueryEdgeLimit = cast.ToUint64(Server.Conf.GetString("query_edge_limit"))
+	x.Init()
+	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 
 	x.PrintVersion()
 	edgraph.InitServerState()
@@ -332,7 +308,7 @@ func run() {
 		x.Check(edgraph.State.Dispose())
 	}()
 
-	if Server.Conf.GetBool("expose_trace") {
+	if Alpha.Conf.GetBool("expose_trace") {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}

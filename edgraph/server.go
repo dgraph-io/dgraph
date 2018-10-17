@@ -462,9 +462,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 		return resp, fmt.Errorf("empty query")
 	}
 
-	if Config.DebugMode {
-		x.Printf("Received query: %+v\n", req.Query)
-	}
 	var l query.Latency
 	l.Start = time.Now()
 	if tr, ok := trace.FromContext(ctx); ok {

@@ -46,8 +46,7 @@ func AddInit(f func()) {
 }
 
 // Init initializes flags and run all functions in initFunc.
-func Init(debug bool) {
-	Config.DebugMode = debug
+func Init() {
 	// Default value, would be overwritten by flag.
 	Config.QueryEdgeLimit = 1e6
 
