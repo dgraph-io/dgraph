@@ -84,7 +84,7 @@ services:
     ports:
       - 8180:8180
       - 9180:9180
-    command: /gobin/dgraph server --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
 
   dg2:
     image: dgraph/dgraph:latest
@@ -101,7 +101,7 @@ services:
     ports:
       - 8182:8182
       - 9182:9182
-    command: /gobin/dgraph server --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
 
   dg3:
     image: dgraph/dgraph:latest
@@ -118,7 +118,7 @@ services:
     ports:
       - 8183:8183
       - 9183:9183
-    command: /gobin/dgraph server --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
 
   # dg4:
   #   image: debian:latest
@@ -136,7 +136,7 @@ services:
   #   ports:
   #     - 8184:8184
   #     - 9184:9184
-  #   command: /gobin/dgraph server --my=dg4:7184 --lru_mb=1024 --zero=zero1:5080 -o 104 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10
+  #   command: /gobin/dgraph alpha --my=dg4:7184 --lru_mb=1024 --zero=zero1:5080 -o 104 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10
 
   # dg5:
   #   image: debian:latest
@@ -154,5 +154,5 @@ services:
   #   ports:
   #     - 8185:8185
   #     - 9185:9185
-  #   command: /gobin/dgraph server --my=dg5:7185 --lru_mb=1024 --zero=zero1:5080 -o 105 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10
+  #   command: /gobin/dgraph alpha --my=dg5:7185 --lru_mb=1024 --zero=zero1:5080 -o 105 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10
 

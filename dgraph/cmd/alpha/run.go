@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package server
+package alpha
 
 import (
 	"crypto/tls"
@@ -52,21 +52,25 @@ var (
 	tlsConf x.TLSHelperConfig
 )
 
-var Server x.SubCommand
+var Alpha x.SubCommand
 
 func init() {
-	Server.Cmd = &cobra.Command{
-		Use:   "server",
-		Short: "Run Dgraph data server",
-		Long:  "Run Dgraph data server",
+	Alpha.Cmd = &cobra.Command{
+		Use:   "alpha",
+		Short: "Run Dgraph Alpha",
+		Long: `
+A Dgraph Alpha instance stores the data. Each Dgraph Alpha is responsible for
+storing and serving one data group. If multiple Alphas serve the same group,
+they form a Raft group and provide synchronous replication.
+`,
 		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Server.Conf).Stop()
+			defer x.StartProfile(Alpha.Conf).Stop()
 			run()
 		},
 	}
-	Server.EnvPrefix = "DGRAPH_SERVER"
+	Alpha.EnvPrefix = "DGRAPH_ALPHA"
 
-	flag := Server.Cmd.Flags()
+	flag := Alpha.Cmd.Flags()
 	flag.StringP("postings", "p", "p",
 		"Directory to store posting lists.")
 
@@ -126,7 +130,7 @@ func init() {
 }
 
 func setupCustomTokenizers() {
-	customTokenizers := Server.Conf.GetString("custom_tokenizers")
+	customTokenizers := Alpha.Conf.GetString("custom_tokenizers")
 	if customTokenizers == "" {
 		return
 	}
@@ -287,34 +291,34 @@ var shutdownCh chan struct{}
 
 func run() {
 	config := edgraph.Options{
-		BadgerTables: Server.Conf.GetString("badger.tables"),
-		BadgerVlog:   Server.Conf.GetString("badger.vlog"),
+		BadgerTables: Alpha.Conf.GetString("badger.tables"),
+		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
 
-		PostingDir: Server.Conf.GetString("postings"),
-		WALDir:     Server.Conf.GetString("wal"),
+		PostingDir: Alpha.Conf.GetString("postings"),
+		WALDir:     Alpha.Conf.GetString("wal"),
 
-		Nomutations:     Server.Conf.GetBool("nomutations"),
-		WhitelistedIPs:  Server.Conf.GetString("whitelist"),
-		AllottedMemory:  Server.Conf.GetFloat64("lru_mb"),
-		ExportPath:      Server.Conf.GetString("export"),
-		Tracing:         Server.Conf.GetFloat64("trace"),
-		MyAddr:          Server.Conf.GetString("my"),
-		ZeroAddr:        Server.Conf.GetString("zero"),
-		RaftId:          uint64(Server.Conf.GetInt("idx")),
-		MaxPendingCount: uint64(Server.Conf.GetInt("sc")),
-		ExpandEdge:      Server.Conf.GetBool("expand_edge"),
-		DebugMode:       Server.Conf.GetBool("debugmode"),
+		Nomutations:     Alpha.Conf.GetBool("nomutations"),
+		WhitelistedIPs:  Alpha.Conf.GetString("whitelist"),
+		AllottedMemory:  Alpha.Conf.GetFloat64("lru_mb"),
+		ExportPath:      Alpha.Conf.GetString("export"),
+		Tracing:         Alpha.Conf.GetFloat64("trace"),
+		MyAddr:          Alpha.Conf.GetString("my"),
+		ZeroAddr:        Alpha.Conf.GetString("zero"),
+		RaftId:          uint64(Alpha.Conf.GetInt("idx")),
+		MaxPendingCount: uint64(Alpha.Conf.GetInt("sc")),
+		ExpandEdge:      Alpha.Conf.GetBool("expand_edge"),
+		DebugMode:       Alpha.Conf.GetBool("debugmode"),
 	}
 
-	x.Config.PortOffset = Server.Conf.GetInt("port_offset")
-	bindall = Server.Conf.GetBool("bindall")
-	x.LoadTLSConfig(&tlsConf, Server.Conf)
-	tlsConf.ClientAuth = Server.Conf.GetString("tls_client_auth")
+	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
+	bindall = Alpha.Conf.GetBool("bindall")
+	x.LoadTLSConfig(&tlsConf, Alpha.Conf)
+	tlsConf.ClientAuth = Alpha.Conf.GetString("tls_client_auth")
 
 	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
 	x.Init(edgraph.Config.DebugMode)
-	x.Config.QueryEdgeLimit = cast.ToUint64(Server.Conf.GetString("query_edge_limit"))
+	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 
 	x.PrintVersion()
 	edgraph.InitServerState()
@@ -322,7 +326,7 @@ func run() {
 		x.Check(edgraph.State.Dispose())
 	}()
 
-	if Server.Conf.GetBool("expose_trace") {
+	if Alpha.Conf.GetBool("expose_trace") {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
