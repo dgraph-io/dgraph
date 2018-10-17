@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package query
@@ -1072,7 +1081,7 @@ func TestPasswordExpandAll2(t *testing.T) {
     }
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"_xid_":"mich","address":"31, 32 street, Jupiter","path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"sword_present":"true","dob_day":"1910-01-01T00:00:00Z","gender":"female","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"noindex_name":"Michonne's name not indexed","name":"Michonne","graduation":["1932-01-01T00:00:00Z"],"bin_data":"YmluLWRhdGE=","loc":{"type":"Point","coordinates":[1.1,2]},"age":38,"full_name":"Michonne's large name for hashing","alive":true,"power":13.250000,"password":[{"checkpwd":false}]}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"_xid_":"mich","address":"31, 32 street, Jupiter","path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"sword_present":"true","dob_day":"1910-01-01T00:00:00Z","gender":"female","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"noindex_name":"Michonne's name not indexed","name":"Michonne","graduation":["1932-01-01T00:00:00Z"],"bin_data":"YmluLWRhdGE=","loc":{"type":"Point","coordinates":[1.1,2]},"age":38,"full_name":"Michonne's large name for hashing","alive":true,"power":13.250000,"checkpwd(password)":false}]}}`, js)
 }
 
 func TestPasswordExpandError(t *testing.T) {
@@ -1099,9 +1108,7 @@ func TestCheckPassword(t *testing.T) {
                 }
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Michonne","password":[{"checkpwd":true}]}]}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","checkpwd(password)":true}]}}`, js)
 }
 
 func TestCheckPasswordIncorrect(t *testing.T) {
@@ -1114,9 +1121,7 @@ func TestCheckPasswordIncorrect(t *testing.T) {
                 }
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Michonne","password":[{"checkpwd":false}]}]}}`,
-		js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","checkpwd(password)":false}]}}`, js)
 }
 
 // ensure, that old and deprecated form is not allowed
@@ -1144,7 +1149,7 @@ func TestCheckPasswordDifferentAttr1(t *testing.T) {
                 }
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes","pass":[{"checkpwd":true}]}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes","checkpwd(pass)":true}]}}`, js)
 }
 
 func TestCheckPasswordDifferentAttr2(t *testing.T) {
@@ -1158,7 +1163,7 @@ func TestCheckPasswordDifferentAttr2(t *testing.T) {
                 }
 	`
 	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes","pass":[{"checkpwd":false}]}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes","checkpwd(pass)":false}]}}`, js)
 }
 
 func TestCheckPasswordInvalidAttr(t *testing.T) {
@@ -1173,7 +1178,7 @@ func TestCheckPasswordInvalidAttr(t *testing.T) {
 	`
 	js := processToFastJsonNoErr(t, query)
 	// for id:0x1 there is no pass attribute defined (there's only password attribute)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","pass":[{"checkpwd":false}]}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","checkpwd(pass)":false}]}}`, js)
 }
 
 // test for old version of checkpwd with hardcoded attribute name
@@ -1187,8 +1192,8 @@ func TestCheckPasswordQuery1(t *testing.T) {
                         }
                 }
 	`
-	_, err := processToFastJson(t, query)
-	require.NoError(t, err)
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"}]}}`, js)
 }
 
 // test for improved version of checkpwd with custom attribute name
@@ -1202,8 +1207,38 @@ func TestCheckPasswordQuery2(t *testing.T) {
                         }
                 }
 	`
-	_, err := processToFastJson(t, query)
-	require.NoError(t, err)
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes"}]}}`, js)
+}
+
+// test for improved version of checkpwd with alias for unknown attribute
+func TestCheckPasswordQuery3(t *testing.T) {
+
+	query := `
+                {
+                        me(func: uid(23)) {
+                                name
+																secret: checkpwd(pass, "123456")
+                        }
+                }
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes","secret":false}]}}`, js)
+}
+
+// test for improved version of checkpwd with alias for known attribute
+func TestCheckPasswordQuery4(t *testing.T) {
+
+	query := `
+                {
+                        me(func: uid(0x01)) {
+                                name
+																secreto: checkpwd(password, "123456")
+                        }
+                }
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","secreto":true}]}}`, js)
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {

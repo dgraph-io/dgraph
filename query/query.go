@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package query
@@ -327,15 +336,16 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 func addCheckPwd(pc *SubGraph, vals []*pb.TaskValue, dst outputNode) {
 	c := types.ValueForType(types.BoolID)
 	if len(vals) == 0 {
-		// No value found for predicate.
 		c.Value = false
 	} else {
 		c.Value = task.ToBool(vals[0])
 	}
 
-	uc := dst.New(pc.Attr)
-	uc.AddValue("checkpwd", c)
-	dst.AddListChild(pc.Attr, uc)
+	fieldName := pc.Params.Alias
+	if fieldName == "" {
+		fieldName = fmt.Sprintf("checkpwd(%s)", pc.Attr)
+	}
+	dst.AddValue(fieldName, c)
 }
 
 func alreadySeen(parentIds []uint64, uid uint64) bool {
@@ -846,9 +856,9 @@ func isDebug(ctx context.Context) bool {
 func (sg *SubGraph) populate(uids []uint64) error {
 	// Put sorted entries in matrix.
 	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-	sg.uidMatrix = []*pb.List{{uids}}
+	sg.uidMatrix = []*pb.List{{Uids: uids}}
 	// User specified list may not be sorted.
-	sg.SrcUIDs = &pb.List{uids}
+	sg.SrcUIDs = &pb.List{Uids: uids}
 	return nil
 }
 
@@ -1380,7 +1390,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	}
 	// Note the we can't overwrite DestUids, as it'd also modify the SrcUids of
 	// next level and the mapping from SrcUids to uidMatrix would be lost.
-	sg.DestUIDs = &pb.List{out}
+	sg.DestUIDs = &pb.List{Uids: out}
 
 AssignStep:
 	return sg.updateVars(doneVars, sgPath)
@@ -1584,7 +1594,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				sort.Slice(uids, func(i, j int) bool {
 					return uids[i] < uids[j]
 				})
-				lists = append(lists, &pb.List{uids})
+				lists = append(lists, &pb.List{Uids: uids})
 			} else if len(l.Vals) != 0 || l.Uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 			}
@@ -1644,7 +1654,7 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 		break
 	}
 	val := sg.SrcFunc.Args[0].Value
-	src := types.Val{types.StringID, []byte(val)}
+	src := types.Val{Tid: types.StringID, Value: []byte(val)}
 	dst, err := types.Convert(src, typ)
 	if err != nil {
 		return x.Errorf("Invalid argment %v. Comparing with different type", val)
@@ -1849,7 +1859,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// Populated variable.
 			o := make([]uint64, len(sg.DestUIDs.Uids))
 			copy(o, sg.DestUIDs.Uids)
-			sg.uidMatrix = []*pb.List{{o}}
+			sg.uidMatrix = []*pb.List{{Uids: o}}
 			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool { return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j] })
 		}
 	} else if len(sg.Attr) == 0 {
@@ -1872,7 +1882,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// This is to allow providing SrcUIDs to the filter children.
 		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
 		// when multiple filters replace their sg.DestUIDs
-		sg.DestUIDs = &pb.List{sg.SrcUIDs.Uids}
+		sg.DestUIDs = &pb.List{Uids: sg.SrcUIDs.Uids}
 	} else {
 
 		if sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && sg.SrcFunc.IsValueVar {
@@ -2242,7 +2252,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.SortWithFacet(values, &pb.List{uids},
+		if err := types.SortWithFacet(values, &pb.List{Uids: uids},
 			facetList, []bool{sg.Params.FacetOrderDesc}); err != nil {
 			return err
 		}
@@ -2287,7 +2297,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.Sort(values, &pb.List{uids}, []bool{sg.Params.Order[0].Desc}); err != nil {
+		if err := types.Sort(values, &pb.List{Uids: uids}, []bool{sg.Params.Order[0].Desc}); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids

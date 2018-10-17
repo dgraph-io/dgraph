@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package posting
@@ -20,6 +29,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -113,13 +124,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
 
-	t := time.Now()
-	plist, err := Get(key)
-	if dur := time.Since(t); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("getOrMutate took %v", dur)
-		}
-	}
+	plist, err := txn.Get(key)
 	if err != nil {
 		return err
 	}
@@ -179,12 +184,13 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	plist, err := Get(key)
+	plist, err := txn.Get(key)
 	if err != nil {
 		return err
 	}
 
 	x.AssertTrue(plist != nil)
+	// We must create a copy here.
 	edge := &pb.DirectedEdge{
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
@@ -224,32 +230,26 @@ func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
 	}
 	// To calculate length of posting list. Used for deletion of count index.
 	var plen int
-	var iterErr error
-	l.Iterate(txn.StartTs, 0, func(p *pb.Posting) bool {
+	err := l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 		plen++
-		if isReversed {
+		switch {
+		case isReversed:
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
-			if err := txn.addReverseMutation(ctx, delEdge); err != nil {
-				iterErr = err
-				return false
-			}
-			return true
-		} else if isIndexed {
+			return txn.addReverseMutation(ctx, delEdge)
+		case isIndexed:
 			// Delete index edge of each posting.
 			p := types.Val{
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			if err := txn.addIndexMutations(ctx, t, p, pb.DirectedEdge_DEL); err != nil {
-				iterErr = err
-				return false
-			}
+			return txn.addIndexMutations(ctx, t, p, pb.DirectedEdge_DEL)
+		default:
+			return nil
 		}
-		return true
 	})
-	if iterErr != nil {
-		return iterErr
+	if err != nil {
+		return err
 	}
 	if hasCount {
 		// Delete uid from count index. Deletion of reverses is taken care by addReverseMutation
@@ -272,7 +272,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
 func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
-	plist, err := Get(key)
+	plist, err := txn.Get(key)
 	if err != nil {
 		return err
 	}
@@ -502,109 +502,188 @@ func DeleteCountIndex(attr string) error {
 	return nil
 }
 
-func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error,
-	startTs uint64) {
-	ch := make(chan item, 10000)
-	che := make(chan error, 1000)
-	for i := 0; i < 1000; i++ {
-		go func() {
-			var err error
-			txn := &Txn{StartTs: startTs}
-			for it := range ch {
-				l := it.list
-				t := &pb.DirectedEdge{
-					ValueId: it.uid,
-					Attr:    attr,
-					Op:      pb.DirectedEdge_SET,
-				}
-				len := l.Length(txn.StartTs, 0)
-				if len == -1 {
-					continue
-				}
-				err = txn.addCountMutation(ctx, t, uint32(len), reverse)
-				for err == ErrRetry {
-					time.Sleep(10 * time.Millisecond)
-					err = txn.addCountMutation(ctx, t, uint32(len), reverse)
-				}
-				if err == nil {
-					err = txn.CommitToMemory(txn.StartTs)
-				}
-				if err != nil {
-					txn.CommitToMemory(0)
-				}
-				txn.deltas = nil
-			}
-			che <- err
-		}()
+// Index rebuilding logic here.
+type rebuild struct {
+	prefix  []byte
+	startTs uint64
+	cache   map[string]*List
+
+	// The posting list passed here is the on disk version. It is not coming
+	// from the LRU cache.
+	fn func(uid uint64, pl *List, txn *Txn) error
+}
+
+// storeList would store the list in the cache.
+func (r *rebuild) storeList(list *List) bool {
+	key := string(list.key)
+	if _, ok := r.cache[key]; ok {
+		return false
 	}
+	r.cache[key] = list
+	return true
+}
+
+func (r *rebuild) Run(ctx context.Context) error {
+	t := pstore.NewTransactionAt(r.startTs, false)
+	defer t.Discard()
+
+	opts := badger.DefaultIteratorOptions
+	opts.AllVersions = true
+	it := t.NewIterator(opts)
+	defer it.Close()
+
+	// We create one txn for all the mutations to be housed in. We also create a
+	// localized posting list cache, to avoid stressing or mixing up with the
+	// global lcache (the LRU cache).
+	txn := &Txn{StartTs: r.startTs}
+	r.cache = make(map[string]*List)
+	var numGets uint64
+	txn.getList = func(key []byte) (*List, error) {
+		numGets++
+		if glog.V(2) && numGets%1000 == 0 {
+			glog.Infof("During rebuild, getList hit %d times\n", numGets)
+		}
+		if pl, ok := r.cache[string(key)]; ok {
+			return pl, nil
+		}
+		pl, err := getNew(key, pstore)
+		if err != nil {
+			return nil, err
+		}
+		r.cache[string(key)] = pl
+		return pl, nil
+	}
+
+	var prevKey []byte
+	for it.Seek(r.prefix); it.ValidForPrefix(r.prefix); {
+		item := it.Item()
+		if bytes.Equal(item.Key(), prevKey) {
+			it.Next()
+			continue
+		}
+		key := item.KeyCopy(nil)
+		prevKey = key
+
+		pk := x.Parse(key)
+		if pk == nil {
+			it.Next()
+			continue
+		}
+
+		// We should return quickly if the context is no longer valid.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		l, err := ReadPostingList(key, it)
+		if err != nil {
+			return err
+		}
+		if err := r.fn(pk.Uid, l, txn); err != nil {
+			return err
+		}
+	}
+
+	// We must commit all the posting lists to memory, so they'd be picked up
+	// during posting list rollup below.
+	if err := txn.CommitToMemory(r.startTs); err != nil {
+		return err
+	}
+
+	// Now we write all the created posting lists to disk.
+	writer := x.TxnWriter{DB: pstore}
+	for key := range txn.deltas {
+		pl, err := txn.Get([]byte(key))
+		if err != nil {
+			return err
+		}
+
+		pl.Lock()
+		// We shouldn't need to release this lock, because each posting list
+		// must only be accessed once and never again.
+		le := pl.length(r.startTs, 0)
+		y.AssertTruef(le > 0, "Unexpected list of size zero: %q", key)
+		if err := pl.rollup(); err != nil {
+			return err
+		}
+		data, meta := marshalPostingList(pl.plist)
+		if err = writer.SetAt([]byte(key), data, meta, r.startTs); err != nil {
+			return err
+		}
+	}
+	return writer.Flush()
+}
+
+// RebuildIndex rebuilds index for a given attribute.
+// We commit mutations with startTs and ignore the errors.
+func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
+	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 
 	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.DataPrefix()
-	if reverse {
-		prefix = pk.ReversePrefix()
+	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
+	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
+		edge := pb.DirectedEdge{Attr: attr, Entity: uid}
+		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+			// Add index entries based on p.
+			val := types.Val{
+				Value: p.Value,
+				Tid:   types.TypeID(p.ValType),
+			}
+
+			for {
+				err := txn.addIndexMutations(ctx, &edge, val, pb.DirectedEdge_SET)
+				switch err {
+				case ErrRetry:
+					time.Sleep(10 * time.Millisecond)
+				default:
+					return err
+				}
+			}
+		})
 	}
-
-	t := pstore.NewTransactionAt(startTs, false)
-	defer t.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	it := t.NewIterator(iterOpts)
-	defer it.Close()
-	var prevKey []byte
-	it.Seek(prefix)
-	for it.ValidForPrefix(prefix) {
-		iterItem := it.Item()
-		key := iterItem.Key()
-		if bytes.Equal(key, prevKey) {
-			it.Next()
-			continue
-		}
-		nk := make([]byte, len(key))
-		copy(nk, key)
-		prevKey = nk
-		pki := x.Parse(key)
-		if pki == nil {
-			it.Next()
-			continue
-		}
-		// readPostingList advances the iterator until it finds complete pl
-		l, err := ReadPostingList(nk, it)
-		if err != nil {
-			continue
-		}
-
-		ch <- item{
-			uid:  pki.Uid,
-			list: l,
-		}
-	}
-	close(ch)
-
-	for i := 0; i < 1000; i++ {
-		if err := <-che; err != nil {
-			errCh <- x.Errorf("While rebuilding count index for attr: [%v], error: [%v]", attr, err)
-			return
-		}
-	}
-
-	errCh <- nil
+	return builder.Run(ctx)
 }
 
 func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
-	che := make(chan error, 2)
-	// Lets rebuild forward and reverse count indexes concurrently.
-	go rebuildCountIndex(ctx, attr, false, che, startTs)
-	go rebuildCountIndex(ctx, attr, true, che, startTs)
 
-	var err error
-	for i := 0; i < 2; i++ {
-		if e := <-che; e != nil {
-			err = e
+	var reverse bool
+	fn := func(uid uint64, pl *List, txn *Txn) error {
+		t := &pb.DirectedEdge{
+			ValueId: uid,
+			Attr:    attr,
+			Op:      pb.DirectedEdge_SET,
+		}
+		sz := pl.Length(startTs, 0)
+		if sz == -1 {
+			return nil
+		}
+		for {
+			err := txn.addCountMutation(ctx, t, uint32(sz), reverse)
+			switch err {
+			case ErrRetry:
+				time.Sleep(10 * time.Millisecond)
+			default:
+				return err
+			}
 		}
 	}
 
-	return err
+	// Create the forward index.
+	pk := x.ParsedKey{Attr: attr}
+	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
+	builder.fn = fn
+	if err := builder.Run(ctx); err != nil {
+		return err
+	}
+
+	// Create the reverse index.
+	reverse = true
+	builder = rebuild{prefix: pk.ReversePrefix(), startTs: startTs}
+	builder.fn = fn
+	return builder.Run(ctx)
 }
 
 type item struct {
@@ -615,92 +694,31 @@ type item struct {
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
 func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
-	// Add index entries to data store.
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.DataPrefix()
-	t := pstore.NewTransactionAt(startTs, false)
-	defer t.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	it := t.NewIterator(iterOpts)
-	defer it.Close()
 
-	// Helper function - Add reverse entries for values in posting list
-	addReversePostings := func(uid uint64, pl *List, txn *Txn) {
+	pk := x.ParsedKey{Attr: attr}
+	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
+	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: attr, Entity: uid}
-		var err error
-		pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) bool {
+		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
 			edge.Op = pb.DirectedEdge_SET
 			edge.Facets = pp.Facets
 			edge.Label = pp.Label
-			err = txn.addReverseMutation(ctx, &edge)
-			for err == ErrRetry {
-				time.Sleep(10 * time.Millisecond)
-				err = txn.addReverseMutation(ctx, &edge)
+
+			for {
+				err := txn.addReverseMutation(ctx, &edge)
+				switch err {
+				case ErrRetry:
+					time.Sleep(10 * time.Millisecond)
+				default:
+					return err
+				}
 			}
-			if err != nil {
-				x.Printf("Error while adding reverse mutation: %v\n", err)
-			}
-			return true
 		})
 	}
-
-	ch := make(chan item, 10000)
-	che := make(chan error, 1000)
-	for i := 0; i < 1000; i++ {
-		go func() {
-			var err error
-			txn := &Txn{StartTs: startTs}
-			for it := range ch {
-				addReversePostings(it.uid, it.list, txn)
-				err = txn.CommitToMemory(txn.StartTs)
-				if err != nil {
-					txn.CommitToMemory(0)
-				}
-				txn.deltas = nil
-			}
-			che <- err
-		}()
-	}
-
-	var prevKey []byte
-	it.Seek(prefix)
-	for it.ValidForPrefix(prefix) {
-		iterItem := it.Item()
-		key := iterItem.Key()
-		if bytes.Equal(key, prevKey) {
-			it.Next()
-			continue
-		}
-		nk := make([]byte, len(key))
-		copy(nk, key)
-		prevKey = nk
-		pki := x.Parse(key)
-		if pki == nil {
-			it.Next()
-			continue
-		}
-		l, err := ReadPostingList(nk, it)
-		if err != nil {
-			continue
-		}
-
-		ch <- item{
-			uid:  pki.Uid,
-			list: l,
-		}
-	}
-	close(ch)
-
-	for i := 0; i < 1000; i++ {
-		if err := <-che; err != nil {
-			return x.Errorf("While rebuilding reverse edges for attr: [%v], error: [%v]", attr, err)
-		}
-	}
-	return nil
+	return builder.Run(ctx)
 }
 
 func DeleteIndex(attr string) error {
@@ -719,195 +737,57 @@ func DeleteIndex(attr string) error {
 // We need to fingerprint the values to get the new ValueId.
 func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	x.AssertTruef(schema.State().IsList(attr), "Attr %s is not of list type", attr)
+
+	// Let's clear out the cache for anything which belongs to this attribute,
+	// so once we're done, any reads would see the new list type. Note that we
+	// don't use lcache during the rebuild process.
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
 	})
 
 	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.DataPrefix()
-	t := pstore.NewTransactionAt(startTs, false)
-	defer t.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	it := t.NewIterator(iterOpts)
-	defer it.Close()
-
-	rewriteValuePostings := func(pl *List, txn *Txn) error {
+	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
+	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
-		pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) bool {
+		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {
 				mpost = p
-				return false
 			}
-			return true
+			return nil
 		})
-		if mpost != nil {
-			// Delete the old edge corresponding to ValueId math.MaxUint64
-			t := &pb.DirectedEdge{
-				ValueId: mpost.Uid,
-				Attr:    attr,
-				Op:      pb.DirectedEdge_DEL,
-			}
-
-			if err := pl.AddMutation(ctx, txn, t); err != nil {
-				return err
-			}
-
-			// Add the new edge with the fingerprinted value id.
-			newEdge := &pb.DirectedEdge{
-				Attr:      attr,
-				Value:     mpost.Value,
-				ValueType: mpost.ValType,
-				Op:        pb.DirectedEdge_SET,
-				Label:     mpost.Label,
-				Facets:    mpost.Facets,
-			}
-			if err := pl.AddMutation(ctx, txn, newEdge); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	ch := make(chan *List, 10000)
-	che := make(chan error, 1000)
-	for i := 0; i < 1000; i++ {
-		go func() {
-			var err error
-			txn := &Txn{StartTs: startTs}
-			for list := range ch {
-				if err := rewriteValuePostings(list, txn); err != nil {
-					che <- err
-					return
-				}
-
-				err = txn.CommitToMemory(txn.StartTs)
-				if err != nil {
-					txn.CommitToMemory(0)
-				}
-				txn.deltas = nil
-			}
-			che <- err
-		}()
-	}
-
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		iterItem := it.Item()
-		key := iterItem.Key()
-		nk := make([]byte, len(key))
-		copy(nk, key)
-
-		// Get is important because we are modifying the mutation layer of the posting lists and
-		// hence want to put the PL in LRU cache.
-		pl, err := Get(nk)
 		if err != nil {
 			return err
 		}
-		ch <- pl
-	}
-	close(ch)
-
-	for i := 0; i < 1000; i++ {
-		if err := <-che; err != nil {
-			return x.Errorf("While rebuilding list type for attr: [%v], error: [%v]", attr, err)
+		if mpost == nil {
+			return nil
 		}
-	}
-	return nil
-}
-
-// RebuildIndex rebuilds index for a given attribute.
-// We commit mutations with startTs and ignore the errors.
-func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
-	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
-	// Add index entries to data store.
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.DataPrefix()
-	t := pstore.NewTransactionAt(startTs, false)
-	defer t.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.AllVersions = true
-	it := t.NewIterator(iterOpts)
-	defer it.Close()
-
-	// Helper function - Add index entries for values in posting list
-	addPostingsToIndex := func(uid uint64, pl *List, txn *Txn) {
-		edge := pb.DirectedEdge{Attr: attr, Entity: uid}
-		var err error
-		pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) bool {
-			// Add index entries based on p.
-			val := types.Val{
-				Value: p.Value,
-				Tid:   types.TypeID(p.ValType),
-			}
-			err = txn.addIndexMutations(ctx, &edge, val, pb.DirectedEdge_SET)
-			for err == ErrRetry {
-				time.Sleep(10 * time.Millisecond)
-				err = txn.addIndexMutations(ctx, &edge, val, pb.DirectedEdge_SET)
-			}
-			if err != nil {
-				x.Printf("Error while adding index mutation: %v\n", err)
-			}
-			return true
-		})
-	}
-
-	type item struct {
-		uid  uint64
-		list *List
-	}
-	ch := make(chan item, 10000)
-	che := make(chan error, 1000)
-	for i := 0; i < 1000; i++ {
-		go func() {
-			var err error
-			txn := &Txn{StartTs: startTs}
-			for it := range ch {
-				addPostingsToIndex(it.uid, it.list, txn)
-				err = txn.CommitToMemory(txn.StartTs)
-				if err != nil {
-					txn.CommitToMemory(0)
-				}
-				txn.deltas = nil
-			}
-			che <- err
-		}()
-	}
-
-	var prevKey []byte
-	it.Seek(prefix)
-	for it.ValidForPrefix(prefix) {
-		iterItem := it.Item()
-		key := iterItem.Key()
-		if bytes.Equal(key, prevKey) {
-			it.Next()
-			continue
-		}
-		nk := make([]byte, len(key))
-		copy(nk, key)
-		prevKey = nk
-		pki := x.Parse(key)
-		if pki == nil {
-			it.Next()
-			continue
-		}
-		l, err := ReadPostingList(nk, it)
-		if err != nil {
-			continue
+		// Delete the old edge corresponding to ValueId math.MaxUint64
+		t := &pb.DirectedEdge{
+			ValueId: mpost.Uid,
+			Attr:    attr,
+			Op:      pb.DirectedEdge_DEL,
 		}
 
-		ch <- item{
-			uid:  pki.Uid,
-			list: l,
+		// Ensure that list is in the cache run by txn. Otherwise, nothing would
+		// get updated.
+		x.AssertTrue(builder.storeList(pl))
+		if err := pl.AddMutation(ctx, txn, t); err != nil {
+			return err
 		}
-	}
-	close(ch)
-	for i := 0; i < 1000; i++ {
-		if err := <-che; err != nil {
-			return x.Errorf("While rebuilding index for attr: [%v], error: [%v]", attr, err)
+		// Add the new edge with the fingerprinted value id.
+		newEdge := &pb.DirectedEdge{
+			Attr:      attr,
+			Value:     mpost.Value,
+			ValueType: mpost.ValType,
+			Op:        pb.DirectedEdge_SET,
+			Label:     mpost.Label,
+			Facets:    mpost.Facets,
 		}
+		return pl.AddMutation(ctx, txn, newEdge)
 	}
-	return nil
+	return builder.Run(ctx)
 }
 
 func DeleteAll() error {

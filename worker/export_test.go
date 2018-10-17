@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
@@ -56,7 +65,7 @@ func populateGraphExport(t *testing.T) {
 	for _, edge := range rdfEdges {
 		nq, err := rdf.Parse(edge)
 		require.NoError(t, err)
-		rnq := gql.NQuad{&nq}
+		rnq := gql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
@@ -136,10 +145,10 @@ func TestExport(t *testing.T) {
 		if nq.ObjectValue != nil {
 			switch nq.Subject {
 			case "_:uid1", "_:uid2":
-				require.Equal(t, &api.Value{&api.Value_DefaultVal{"pho\ton"}},
+				require.Equal(t, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "pho\ton"}},
 					nq.ObjectValue)
 			case "_:uid3":
-				require.Equal(t, &api.Value{&api.Value_DefaultVal{"First Line\nSecondLine"}},
+				require.Equal(t, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "First Line\nSecondLine"}},
 					nq.ObjectValue)
 			case "_:uid4":
 			case "_:uid5":
@@ -148,7 +157,7 @@ func TestExport(t *testing.T) {
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
 			if nq.Subject == "_:uid1" || nq.Subject == "_:uid2" {
-				require.Equal(t, &api.Value{&api.Value_DefaultVal{"pho\ton"}},
+				require.Equal(t, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "pho\ton"}},
 					nq.ObjectValue)
 			}
 		}

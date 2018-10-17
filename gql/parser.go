@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package gql
@@ -149,43 +158,37 @@ type Function struct {
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
-var filterOpPrecedence map[string]int
-var mathOpPrecedence map[string]int
+var filterOpPrecedence = map[string]int{
+	"not": 3,
+	"and": 2,
+	"or":  1,
+}
+var mathOpPrecedence = map[string]int{
+	"u-":      500,
+	"floor":   105,
+	"ceil":    104,
+	"since":   103,
+	"exp":     100,
+	"ln":      99,
+	"sqrt":    98,
+	"cond":    90,
+	"pow":     89,
+	"logbase": 88,
+	"max":     85,
+	"min":     84,
 
-func init() {
-	filterOpPrecedence = map[string]int{
-		"not": 3,
-		"and": 2,
-		"or":  1,
-	}
-	mathOpPrecedence = map[string]int{
-		"u-":      500,
-		"floor":   105,
-		"ceil":    104,
-		"since":   103,
-		"exp":     100,
-		"ln":      99,
-		"sqrt":    98,
-		"cond":    90,
-		"pow":     89,
-		"logbase": 88,
-		"max":     85,
-		"min":     84,
+	"/": 50,
+	"*": 49,
+	"%": 48,
+	"-": 47,
+	"+": 46,
 
-		"/": 50,
-		"*": 49,
-		"%": 48,
-		"-": 47,
-		"+": 46,
-
-		"<":  10,
-		">":  9,
-		"<=": 8,
-		">=": 7,
-		"==": 6,
-		"!=": 5,
-	}
-
+	"<":  10,
+	">":  9,
+	"<=": 8,
+	">=": 7,
+	"==": 6,
+	"!=": 5,
 }
 
 func (f *Function) IsAggregator() bool {
@@ -2292,7 +2295,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
 				attr, langs := attrAndLang(val)
-				gq.Order = append(gq.Order, &pb.Order{attr, key == "orderdesc", langs})
+				gq.Order = append(gq.Order,
+					&pb.Order{Attr: attr, Desc: key == "orderdesc", Langs: langs})
 				order[val] = true
 				continue
 			}
@@ -2697,7 +2701,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
 					}
 					attr, langs := attrAndLang(p.Val)
-					curp.Order = append(curp.Order, &pb.Order{attr, p.Key == "orderdesc", langs})
+					curp.Order = append(curp.Order,
+						&pb.Order{Attr: attr, Desc: p.Key == "orderdesc", Langs: langs})
 					order[p.Val] = true
 					continue
 				}

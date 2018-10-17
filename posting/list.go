@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package posting
@@ -10,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -39,11 +49,12 @@ var (
 	// In such a case, retry.
 	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue     = fmt.Errorf("No value found")
-	ErrInvalidTxn  = fmt.Errorf("Invalid transaction")
-	errUncommitted = fmt.Errorf("Posting List has uncommitted data")
-	emptyPosting   = &pb.Posting{}
-	emptyList      = &pb.PostingList{}
+	ErrNoValue       = fmt.Errorf("No value found")
+	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
+	ErrStopIteration = errors.New("Stop iteration")
+	errUncommitted   = fmt.Errorf("Posting List has uncommitted data")
+	emptyPosting     = &pb.Posting{}
+	emptyList        = &pb.PostingList{}
 )
 
 const (
@@ -69,7 +80,7 @@ type List struct {
 	deleteMe      int32  // Using atomic for this, to avoid expensive SetForDeletion operation.
 	estimatedSize int32
 	numCommits    int
-	onDisk        int32 // Using atomic, Was written to disk atleast once.
+	onDisk        bool
 }
 
 // calculateSize would give you the size estimate. This is expensive, so run it carefully.
@@ -276,13 +287,7 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to BadgerDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
-	t1 := time.Now()
 	l.Lock()
-	if dur := time.Since(t1); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("acquired lock %v %v", dur, t.Attr)
-		}
-	}
 	defer l.Unlock()
 	return l.addMutation(ctx, txn, t)
 }
@@ -431,13 +436,18 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 		l.commitTs = commitTs
 	}
 
-	// Calculate 10% of immutable layer
-	numUids := (bp128.NumIntegers(l.plist.Uids) * 10) / 100
+	// In general, a posting list shouldn't try to mix up it's job of keeping
+	// things in memory, with writing things to disk. A separate process can
+	// roll up and write them to disk. Posting list should only keep things in
+	// memory, to make it available for transactions. So, all we need to do here
+	// is to roll them up periodically.
+
+	numUids := (bp128.NumIntegers(l.plist.Uids) * 15) / 100
 	if numUids < 1000 {
 		numUids = 1000
 	}
 	if l.numCommits > numUids {
-		l.syncIfDirty(false)
+		return l.rollup()
 	}
 	return nil
 }
@@ -453,7 +463,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 //    return true  // to continue iteration.
 //    return false // to break iteration.
 //  })
-func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) bool) error {
+func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
 	return l.iterate(readTs, afterUid, f)
@@ -536,7 +546,7 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 	return storedList, posts
 }
 
-func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) bool) error {
+func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
 
 	plist, mposts := l.pickPostings(readTs)
@@ -553,11 +563,11 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) b
 	}
 
 	var mp, pp *pb.Posting
-	cont := true
 	var pitr PIterator
 	pitr.Init(plist, afterUid)
 	prevUid := uint64(0)
-	for cont {
+	var err error
+	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
 		} else {
@@ -576,21 +586,21 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) b
 			midx++
 		case pp.Uid == 0 && mp.Uid == 0:
 			// Reached empty posting for both iterators.
-			cont = false
+			return nil
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
-			cont = f(pp)
+			err = f(pp)
 			pitr.Next()
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
-				cont = f(mp)
+				err = f(mp)
 			}
 			prevUid = mp.Uid
 			midx++
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
-				cont = f(mp)
+				err = f(mp)
 			}
 			prevUid = mp.Uid
 			pitr.Next()
@@ -599,7 +609,10 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) b
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}
 	}
-	return nil
+	if err == ErrStopIteration {
+		return nil
+	}
+	return err
 }
 
 func (l *List) IsEmpty() bool {
@@ -611,9 +624,9 @@ func (l *List) IsEmpty() bool {
 func (l *List) length(readTs, afterUid uint64) int {
 	l.AssertRLock()
 	count := 0
-	err := l.iterate(readTs, afterUid, func(p *pb.Posting) bool {
+	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		count++
-		return true
+		return nil
 	})
 	if err != nil {
 		return -1
@@ -681,7 +694,7 @@ func (l *List) rollup() error {
 
 	// Pick all committed entries
 	x.AssertTrue(l.minTs <= l.commitTs)
-	err := l.iterate(l.commitTs, 0, func(p *pb.Posting) bool {
+	err := l.iterate(l.commitTs, 0, func(p *pb.Posting) error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
 		// So, we don't need to do any filtering here. In fact, doing filtering here could result
 		// in a bug.
@@ -698,7 +711,7 @@ func (l *List) rollup() error {
 			// underlying data wouldn't be changed.
 			final.Postings = append(final.Postings, p)
 		}
-		return true
+		return nil
 	})
 	x.Check(err)
 	if len(buf) > 0 {
@@ -728,12 +741,6 @@ func (l *List) rollup() error {
 	return nil
 }
 
-func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
-	l.Lock()
-	defer l.Unlock()
-	return l.syncIfDirty(delFromCache)
-}
-
 func (l *List) hasPendingTxn() bool {
 	l.AssertRLock()
 	for _, pl := range l.mutationMap {
@@ -742,75 +749,6 @@ func (l *List) hasPendingTxn() bool {
 		}
 	}
 	return false
-}
-
-// Merge mutation layer and immutable layer.
-func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
-	// We no longer set posting list to empty.
-	if len(l.mutationMap) == 0 {
-		return false, nil
-	}
-	if delFromCache {
-		// Don't evict if there is pending transaction.
-		x.AssertTrue(!l.hasPendingTxn())
-	}
-
-	lmlayer := len(l.mutationMap)
-	// Merge all entries in mutation layer with commitTs <= l.commitTs
-	// into immutable layer.
-	if err := l.rollup(); err != nil {
-		return false, err
-	}
-	// Check if length of mutationMap has changed after rollup, else skip writing to disk.
-	if len(l.mutationMap) == lmlayer {
-		// There was no change in immutable layer.
-		return false, nil
-	}
-	x.AssertTrue(l.minTs > 0)
-
-	data, meta := marshalPostingList(l.plist)
-	for {
-		pLen := atomic.LoadInt64(&x.MaxPlSz)
-		if int64(len(data)) <= pLen {
-			break
-		}
-		if atomic.CompareAndSwapInt64(&x.MaxPlSz, pLen, int64(len(data))) {
-			x.MaxPlSize.Set(int64(len(data)))
-			x.MaxPlLength.Set(int64(bp128.NumIntegers(l.plist.Uids)))
-			break
-		}
-	}
-
-	// Copy this over because minTs can change by the time callback returns.
-	minTs := l.minTs
-	retries := 0
-	var f func(error)
-	f = func(err error) {
-		if err != nil {
-			x.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
-			if retries > 5 {
-				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
-					l.key, err)
-			}
-			// Error from badger should be temporary, so we can retry.
-			retries += 1
-			doAsyncWrite(minTs, l.key, data, meta, f)
-			return
-		}
-		if atomic.LoadInt32(&l.onDisk) == 0 {
-			btree.Delete(l.key)
-			atomic.StoreInt32(&l.onDisk, 1)
-		}
-		x.BytesWrite.Add(int64(len(data)))
-		x.PostingWrites.Add(1)
-		if delFromCache {
-			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
-			lcache.delete(l.key)
-		}
-	}
-
-	doAsyncWrite(minTs, l.key, data, meta, f)
-	return true, nil
 }
 
 // Copies the val if it's uid only posting, be careful
@@ -843,11 +781,11 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
-	err := l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) bool {
+	err := l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
 		}
-		return true
+		return nil
 	})
 	l.RUnlock()
 	if err != nil {
@@ -864,13 +802,13 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 // Postings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
-func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) bool) error {
+func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
 
-	return l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) bool {
+	return l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) error {
 		if p.PostingType != pb.Posting_REF {
-			return true
+			return nil
 		}
 		return postFn(p)
 	})
@@ -881,14 +819,14 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 	defer l.RUnlock()
 
 	var vals []types.Val
-	err := l.iterate(readTs, 0, func(p *pb.Posting) bool {
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if len(p.LangTag) == 0 {
 			vals = append(vals, types.Val{
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			})
 		}
-		return true
+		return nil
 	})
 	return vals, err
 }
@@ -898,12 +836,12 @@ func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 	defer l.RUnlock()
 
 	var vals []types.Val
-	err := l.iterate(readTs, 0, func(p *pb.Posting) bool {
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValType),
 			Value: p.Value,
 		})
-		return true
+		return nil
 	})
 	return vals, err
 }
@@ -914,9 +852,9 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 	defer l.RUnlock()
 
 	var tags []string
-	err := l.iterate(readTs, 0, func(p *pb.Posting) bool {
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		tags = append(tags, string(p.LangTag))
-		return true
+		return nil
 	})
 	return tags, err
 }
@@ -1002,13 +940,13 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 	var found bool
 	// last resort - return value with smallest lang Uid
 	if any {
-		err := l.iterate(readTs, 0, func(p *pb.Posting) bool {
+		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 			if p.PostingType == pb.Posting_VALUE_LANG {
 				pos = p
 				found = true
-				return false
+				return ErrStopIteration
 			}
-			return true
+			return nil
 		})
 		if err != nil {
 			return nil, err
@@ -1048,12 +986,12 @@ func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err er
 
 func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
 	// Iterate starts iterating after the given argument, so we pass uid - 1
-	err = l.iterate(readTs, uid-1, func(p *pb.Posting) bool {
+	err = l.iterate(readTs, uid-1, func(p *pb.Posting) error {
 		if p.Uid == uid {
 			pos = p
 			found = true
 		}
-		return false
+		return ErrStopIteration
 	})
 
 	return found, pos, err

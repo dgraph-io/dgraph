@@ -1,8 +1,17 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package edgraph
@@ -106,19 +115,20 @@ type mapResponse struct {
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 	switch v := v.(type) {
 	case json.Number:
-		if strings.Index(v.String(), ".") >= 0 {
+		if strings.ContainsAny(v.String(), ".Ee") {
 			f, err := v.Float64()
 			if err != nil {
 				return err
 			}
-			nq.ObjectValue = &api.Value{&api.Value_DoubleVal{f}}
+			nq.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{DoubleVal: f}}
 			return nil
 		}
 		i, err := v.Int64()
 		if err != nil {
 			return err
 		}
-		nq.ObjectValue = &api.Value{&api.Value_IntVal{i}}
+		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: i}}
+
 	case string:
 		predWithLang := strings.SplitN(k, "@", 2)
 		if len(predWithLang) == 2 && predWithLang[0] != "" {
@@ -128,25 +138,36 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 
 		// Default value is considered as S P * deletion.
 		if v == "" && op == delete {
-			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
 
-		nq.ObjectValue = &api.Value{&api.Value_StrVal{v}}
+		// Try to guess a storage type. The schema type is preferred though.
+		tid, val := types.TypeForValue([]byte(v))
+		if tid != types.DefaultID {
+			var err error
+			nq.ObjectValue, err = types.ObjectValue(tid, val)
+			return err
+		}
+		// In RDF, we assume everything is default (types.DefaultID), but in JSON we assume string
+		// (StringID). But this value will be checked against the schema so we don't overshadow a
+		// password value (types.PasswordID) - Issue#2623
+		nq.ObjectValue = &api.Value{Val: &api.Value_StrVal{StrVal: v}}
+
 	case float64:
 		if v == 0 && op == delete {
-			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
+		nq.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{DoubleVal: v}}
 
-		nq.ObjectValue = &api.Value{&api.Value_DoubleVal{v}}
 	case bool:
 		if v == false && op == delete {
-			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
+		nq.ObjectValue = &api.Value{Val: &api.Value_BoolVal{BoolVal: v}}
 
-		nq.ObjectValue = &api.Value{&api.Value_BoolVal{v}}
 	default:
 		return x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 	}
@@ -160,7 +181,7 @@ func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
 		mr.nquads = append(mr.nquads, &api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
-			ObjectValue: &api.Value{&api.Value_DefaultVal{x.Star}},
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 		})
 	}
 }
@@ -256,7 +277,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				mr.nquads = append(mr.nquads, &api.NQuad{
 					Subject:     mr.uid,
 					Predicate:   pred,
-					ObjectValue: &api.Value{&api.Value_DefaultVal{x.Star}},
+					ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 				})
 				continue
 			}
@@ -278,7 +299,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 
 		if v == nil {
 			if op == delete {
-				nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+				nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 				mr.nquads = append(mr.nquads, &nq)
 			}
 			continue

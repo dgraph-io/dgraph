@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package posting
@@ -32,9 +41,9 @@ func (l *List) PostingList() *pb.PostingList {
 
 func listToArray(t *testing.T, afterUid uint64, l *List, readTs uint64) []uint64 {
 	out := make([]uint64, 0, 10)
-	l.Iterate(readTs, afterUid, func(p *pb.Posting) bool {
+	l.Iterate(readTs, afterUid, func(p *pb.Posting) error {
 		out = append(out, p.Uid)
-		return true
+		return nil
 	})
 	return out
 }
@@ -117,9 +126,9 @@ func TestAddMutation(t *testing.T) {
 }
 
 func getFirst(l *List, readTs uint64) (res pb.Posting) {
-	l.Iterate(readTs, 0, func(p *pb.Posting) bool {
+	l.Iterate(readTs, 0, func(p *pb.Posting) error {
 		res = *p
-		return false
+		return ErrStopIteration
 	})
 	return res
 }
@@ -145,8 +154,6 @@ func TestAddMutation_Value(t *testing.T) {
 
 	// Run the same check after committing.
 	ol.CommitMutation(txn.StartTs, txn.StartTs+1)
-	_, err = ol.SyncIfDirty(false)
-	require.NoError(t, err)
 	checkValue(t, ol, "oh hey there", uint64(3))
 
 	// The value made it to the posting list. Changing it now.
@@ -169,9 +176,6 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
 	ol.CommitMutation(1, uint64(2))
-	merged, err := ol.SyncIfDirty(false)
-	require.NoError(t, err)
-	require.True(t, merged)
 
 	// TODO: Read at commitTimestamp with all committed
 	require.EqualValues(t, 1, ol.Length(uint64(3), 0))
@@ -335,9 +339,6 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	addMutationHelper(t, ol, edge, Set, txn)
 	ol.CommitMutation(1, uint64(2))
 	require.Equal(t, 1, ol.Length(uint64(3), 0))
-	merged, err := ol.SyncIfDirty(false)
-	require.NoError(t, err)
-	require.True(t, merged)
 	require.EqualValues(t, 1, ol.Length(uint64(3), 0))
 	checkValue(t, ol, "cars", uint64(3))
 
@@ -381,12 +382,9 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
 	ol.CommitMutation(1, uint64(2))
-	merged, err := ol.SyncIfDirty(false)
-	require.NoError(t, err)
-	require.True(t, merged)
 
 	// Delete the previously committed value cars. But don't merge.
-	txn = &Txn{StartTs: 2}
+	txn = &Txn{StartTs: 3}
 	edge = &pb.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
@@ -544,9 +542,6 @@ func TestAddMutation_gru(t *testing.T) {
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
 		ol.CommitMutation(1, uint64(2))
-		merged, err := ol.SyncIfDirty(false)
-		require.NoError(t, err)
-		require.True(t, merged)
 	}
 
 	{
@@ -562,9 +557,6 @@ func TestAddMutation_gru(t *testing.T) {
 		}
 		addMutationHelper(t, ol, edge, Del, txn)
 		ol.CommitMutation(3, uint64(4))
-		merged, err := ol.SyncIfDirty(false)
-		require.NoError(t, err)
-		require.True(t, merged)
 	}
 }
 
@@ -588,9 +580,6 @@ func TestAddMutation_gru2(t *testing.T) {
 		txn = &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
 		ol.CommitMutation(1, uint64(2))
-		merged, err := ol.SyncIfDirty(false)
-		require.NoError(t, err)
-		require.True(t, merged)
 	}
 
 	{
@@ -628,7 +617,6 @@ func TestAddAndDelMutation(t *testing.T) {
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 
-	// Set and callSyncIfDirty
 	{
 		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
@@ -637,12 +625,8 @@ func TestAddAndDelMutation(t *testing.T) {
 		txn := &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
 		ol.CommitMutation(1, uint64(2))
-		merged, err := ol.SyncIfDirty(false)
-		require.NoError(t, err)
-		require.True(t, merged)
 	}
 
-	// Delete and callSyncIfDirty
 	{
 		edge := &pb.DirectedEdge{
 			ValueId: 0x02,
@@ -654,10 +638,6 @@ func TestAddAndDelMutation(t *testing.T) {
 		ol.CommitMutation(3, uint64(4))
 
 		checkUids(t, ol, []uint64{}, 5)
-
-		merged, err := ol.SyncIfDirty(false)
-		require.NoError(t, err)
-		require.True(t, merged)
 	}
 	checkUids(t, ol, []uint64{}, 5)
 }
@@ -786,9 +766,6 @@ func TestDelete(t *testing.T) {
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 0))
 	ol.CommitMutation(txn.StartTs, txn.StartTs+1)
-	commited, err := ol.SyncIfDirty(false)
-	require.NoError(t, err)
-	require.True(t, commited)
 
 	require.EqualValues(t, 0, ol.Length(txn.StartTs+2, 0))
 }
@@ -814,9 +791,6 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 
 	// Commit to database.
 	ol.CommitMutation(txn.StartTs, txn.StartTs+1)
-	merged, err := ol.SyncIfDirty(false)
-	require.NoError(t, err)
-	require.True(t, merged)
 
 	txn = &Txn{StartTs: 3}
 	// Mutation layer starts afresh from here.

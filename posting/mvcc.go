@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package posting
@@ -19,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 )
 
 var (
@@ -93,7 +103,7 @@ func (tx *Txn) CommitToDisk(writer *x.TxnWriter, commitTs uint64) error {
 	// memory, instead of writing them back again.
 
 	for _, key := range keys {
-		plist, err := Get([]byte(key))
+		plist, err := tx.Get([]byte(key))
 		if err != nil {
 			return err
 		}
@@ -117,21 +127,22 @@ func (tx *Txn) CommitToMemory(commitTs uint64) error {
 	// 	atomic.StoreUint32(&tx.shouldAbort, 1)
 	// }()
 	for key := range tx.deltas {
+	inner:
 		for {
-			plist, err := Get([]byte(key))
+			plist, err := tx.Get([]byte(key))
 			if err != nil {
 				return err
 			}
 			err = plist.CommitMutation(tx.StartTs, commitTs)
-			if err == ErrRetry {
+			switch err {
+			case nil:
+				break inner
+			case ErrRetry:
 				time.Sleep(5 * time.Millisecond)
-				continue
+			default:
+				glog.Warningf("Error while committing to memory: %v\n", err)
+				return err
 			}
-			if err == nil {
-				break
-			}
-			x.Errorf("While commiting to memory: %v\n", err)
-			return err
 		}
 	}
 	return nil
@@ -249,7 +260,7 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		return l, err
 	}
 
-	l.onDisk = 1
+	l.onDisk = true
 	l.Lock()
 	size := l.calculateSize()
 	l.Unlock()

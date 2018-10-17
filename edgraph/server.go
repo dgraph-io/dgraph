@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package edgraph
@@ -133,8 +142,15 @@ func (s *ServerState) initStorage() {
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
 		opt := badger.LSMOnlyOptions
-		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
 		opt = setBadgerOptions(opt, Config.WALDir)
+		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
+
+		// We should always force load LSM tables to memory, disregarding user settings, because
+		// Raft.Advance hits the WAL many times. If the tables are not in memory, retrieval slows
+		// down way too much, causing cluster membership issues. Because of prefix compression and
+		// value separation provided by Badger, this is still better than using the memory based WAL
+		// storage provided by the Raft library.
+		opt.TableLoadingMode = options.LoadToRAM
 
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
 		s.WALstore, err = badger.Open(opt)
@@ -283,9 +299,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   op.DropAttr,
-			ObjectValue: &api.Value{&api.Value_StrVal{x.Star}},
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
 		}
-		wnq := &gql.NQuad{nq}
+		wnq := &gql.NQuad{NQuad: nq}
 		edge, err := wnq.ToDeletePredEdge()
 		if err != nil {
 			return empty, err

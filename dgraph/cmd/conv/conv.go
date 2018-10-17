@@ -1,17 +1,25 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-package main
+package conv
 
 import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -21,13 +29,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/paulmach/go.geojson"
-)
-
-var (
-	// TODO - Take a directory here and convert all the files in the directory.
-	geoFile    = flag.String("geo", "", "Location of geo file to convert")
-	outputFile = flag.String("out", "output.rdf.gz", "Location of output rdf.gz file")
-	geoPred    = flag.String("geopred", "loc", "Predicate to use to store geometries")
 )
 
 // TODO: Reconsider if we need this binary.
@@ -106,7 +107,7 @@ func convertGeoFile(input string, output string) error {
 
 		geometry := strings.Replace(string(b), `"`, "'", -1)
 		bn := fmt.Sprintf("_:%s-%d", name, count)
-		rdf := fmt.Sprintf("%s <%s> \"%s\"^^<geo:geojson> .\n", bn, *geoPred, geometry)
+		rdf := fmt.Sprintf("%s <%s> \"%s\"^^<geo:geojson> .\n", bn, opt.geopred, geometry)
 		chb <- []byte(rdf)
 
 		for k, _ := range f.Properties {
@@ -126,13 +127,4 @@ func convertGeoFile(input string, output string) error {
 	close(chb)
 	fmt.Printf("%d features converted. %d rdf's generated\n", count, rdfCount)
 	return <-che
-}
-
-func main() {
-	flag.Parse()
-	if len(*geoFile) == 0 {
-		fmt.Printf("The file to be loaded must be specified using the --geo flag.\n")
-		os.Exit(1)
-	}
-	x.Check(convertGeoFile(*geoFile, *outputFile))
 }

@@ -186,14 +186,21 @@ Dgraph cluster nodes use different ports to communicate over gRPC and http. User
 **Ratel UI** by default listens on port 8000. You can use the -port flag to configure to listen on any other port.
 
 {{% notice "tip" %}}
-If you are using Dgraph v1.0.2 (or older) then the default ports are 7080, 8080 for zero, so when following instructions for different setup guides below override zero port using `--port_offset`.
+**For Dgraph v1.0.2 (or older)**
+
+Zero's default ports are 7080 and 8080. When following instructions for the different setup guides below, override the Zero ports using `--port_offset` to match the current default ports.
 
 ```sh
-dgraph zero --idx=1 --lru_mb=<typically one-third the RAM> --port_offset -2000
-dgraph zero --idx=2 --lru_mb=<typically one-third the RAM> --port_offset -1999
+# Run Zero with ports 5080 and 6080
+dgraph zero --idx=1 --port_offset -2000
+# Run Zero with ports 5081 and 6081
+dgraph zero --idx=2 --port_offset -1999
 ```
-Ratel's default port is 8081, so override it using -p 8000.
+Likewise, Ratel's default port is 8081, so override it using `--port` to the current default port.
 
+```sh
+dgraph-ratel --port 8080
+```
 {{% /notice %}}
 
 ### HA Cluster Setup
@@ -1037,7 +1044,7 @@ You should not use the same `idx` as that of a node that was removed earlier.
 ## TLS configuration
 
 {{% notice "note" %}}
-This section refers to the `dgraph cert` command which will be part of a future release. For TLS configuration for the current release, see the previous [TLS configuration documentation](https://docs.dgraph.io/v1.0.7/deploy/#tls-configuration).
+This section refers to the `dgraph cert` command which was introduced in v1.0.9. For previous releases, see the previous [TLS configuration documentation](https://docs.dgraph.io/v1.0.7/deploy/#tls-configuration).
 {{% /notice %}}
 
 
@@ -1318,7 +1325,7 @@ copy over the output shards into different servers.
 
 ```sh
 $ cd out/i # i = shard number.
-$ dgraph server -zero=localhost:5080 -lru_mb=1024
+$ dgraph server --zero=localhost:5080 --lru_mb=1024
 ```
 #### Tuning & monitoring
 
@@ -1405,20 +1412,20 @@ Dgraph metrics follow the [metric and label conventions for Prometheus](https://
  `dgraph_cache_race_total`        | Total number of cache races when getting posting lists in Dgraph.
  `dgraph_dirtymap_keys_total`     | Unused.
  `dgraph_evicted_lists_total`     | Total number of posting lists evicted from LRU cache. A large number here could indicate a large posting list.
+ `dgraph_memory_idle_bytes`         | Estimated amount of memory that is being held idle that could be reclaimed by the OS.
+ `dgraph_memory_inuse_bytes`      | Total memory usage in bytes (sum of heap usage and stack usage).
+ `dgraph_memory_proc_bytes`       | Total memory usage in bytes of the Dgraph process. On Linux/macOS, this metric is equivalent to resident set size. On Windows, this metric is equivalent to [Go's runtime.ReadMemStats](https://golang.org/pkg/runtime/#ReadMemStats).
  `dgraph_goroutines_total`        | Total number of Goroutines currently running in Dgraph.
- `dgraph_heap_idle_bytes`         | Equivalent to Go's `go_memstats_heap_idle_bytes` metric.
  `dgraph_lcache_capacity_bytes`   | Current size of the LRU cache. The max value should be close to the size specified by `--lru_mb`.
  `dgraph_lcache_keys_total`       | Total number of keys in the LRU cache.
  `dgraph_lcache_size_bytes`       | Size in bytes of the LRU cache.
  `dgraph_max_list_bytes`          | Max posting list size in bytes.
  `dgraph_max_list_length`         | The largest number of postings stored in a posting list seen so far.
- `dgraph_memory_inuse_bytes`      | Total memory usage in bytes (sum of heap usage and stack usage).
  `dgraph_num_queries_total`       | Total number of queries run in Dgraph.
  `dgraph_pending_proposals_total` | Total pending Raft proposals.
  `dgraph_pending_queries_total`  | Total number of queries in progress.
  `dgraph_posting_reads_total`     | Unused.
  `dgraph_posting_writes_total`    | Total number of posting list writes to disk.
- `dgraph_proc_memory_bytes`       | Total memory usage in bytes of the Dgraph process. On Linux/macOS, this metric is equivalent to resident set size. On Windows, this metric is equivalent to [Go's runtime.ReadMemStats](https://golang.org/pkg/runtime/#ReadMemStats).
  `dgraph_read_bytes_total`        | Total bytes read from Dgraph.
  `dgraph_server_health_status`    | Only applicable to Dgraph Server. Value is 1 when the server is ready to accept requests; otherwise 0.
 
@@ -1513,9 +1520,9 @@ Here are some problems that you may encounter and some solutions to try.
 
 During bulk loading of data, Dgraph can consume more memory than usual, due to high volume of writes. That's generally when you see the OOM crashes.
 
-The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can take up to 7-8 GB with the default setting `-lru_mb` set to 4096; so having the rest 8GB for desktop applications should keep your machine humming along.
+The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can take up to 7-8 GB with the default setting `--lru_mb` set to 4096; so having the rest 8GB for desktop applications should keep your machine humming along.
 
-On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `-lru_mb` to one-third of RAM size.
+On EC2/GCE instances, the recommended minimum is 8GB. It's recommended to set `--lru_mb` to one-third of RAM size.
 
 You could also decrease memory usage of Dgraph by setting `--badger.vlog=disk`.
 

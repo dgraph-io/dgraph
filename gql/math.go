@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package gql
@@ -65,6 +74,25 @@ func isTernary(f string) bool {
 	return f == "cond"
 }
 
+func isZero(f string, rval types.Val) bool {
+	if rval.Tid != types.FloatID {
+		return false
+	}
+	g, ok := rval.Value.(float64)
+	if !ok {
+		return false
+	}
+	switch f {
+	case "floor":
+		return g >= 0 && g < 1.0
+	case "/", "%", "ceil", "sqrt", "u-":
+		return g == 0
+	case "ln":
+		return g == 1
+	}
+	return false
+}
+
 func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	topOp, err := opStack.pop()
 	if err != nil {
@@ -75,6 +103,12 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		topVal, err := valueStack.pop()
 		if err != nil {
 			return x.Errorf("Invalid math statement. Expected 1 operands")
+		}
+		if opStack.size() > 1 {
+			peek := opStack.peek().Fn
+			if (peek == "/" || peek == "%") && isZero(topOp.Fn, topVal.Const) {
+				return x.Errorf("Division by zero")
+			}
 		}
 		topOp.Child = []*MathTree{topVal}
 
@@ -90,6 +124,9 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	} else {
 		if valueStack.size() < 2 {
 			return x.Errorf("Invalid Math expression. Expected 2 operands")
+		}
+		if isZero(topOp.Fn, valueStack.peek().Const) {
+			return x.Errorf("Division by zero.")
 		}
 		topVal1 := valueStack.popAssert()
 		topVal2 := valueStack.popAssert()

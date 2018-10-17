@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package x
@@ -16,7 +25,7 @@ import (
 )
 
 var (
-	// These are cummulative
+	// These are cumulative
 	PostingReads  *expvar.Int
 	PostingWrites *expvar.Int
 	BytesRead     *expvar.Int
@@ -36,9 +45,8 @@ var (
 	DirtyMapSize     *expvar.Int
 	NumGoRoutines    *expvar.Int
 	MemoryInUse      *expvar.Int
-	HeapIdle         *expvar.Int
-	TotalMemory      *expvar.Int
-	TotalOSMemory    *expvar.Int
+	MemoryIdle       *expvar.Int
+	MemoryProc       *expvar.Int
 	ActiveMutations  *expvar.Int
 	ServerHealth     *expvar.Int
 	MaxPlSize        *expvar.Int
@@ -68,8 +76,8 @@ func init() {
 	LcacheCapacity = expvar.NewInt("dgraph_lcache_capacity_bytes")
 	NumGoRoutines = expvar.NewInt("dgraph_goroutines_total")
 	MemoryInUse = expvar.NewInt("dgraph_memory_inuse_bytes")
-	HeapIdle = expvar.NewInt("dgraph_heap_idle_bytes")
-	TotalOSMemory = expvar.NewInt("dgraph_proc_memory_bytes")
+	MemoryIdle = expvar.NewInt("dgraph_memory_idle_bytes")
+	MemoryProc = expvar.NewInt("dgraph_memory_proc_bytes")
 	ActiveMutations = expvar.NewInt("dgraph_active_mutations_total")
 	PredicateStats = expvar.NewMap("dgraph_predicate_stats")
 	Conf = expvar.NewMap("dgraph_config")
@@ -195,14 +203,14 @@ func init() {
 			"dgraph_memory_inuse_bytes",
 			nil, nil,
 		),
-		"dgraph_heap_idle_bytes": prometheus.NewDesc(
-			"dgraph_heap_idle_bytes",
-			"dgraph_heap_idle_bytes",
+		"dgraph_memory_idle_bytes": prometheus.NewDesc(
+			"dgraph_memory_idle_bytes",
+			"dgraph_memory_idle_bytes",
 			nil, nil,
 		),
-		"dgraph_proc_memory_bytes": prometheus.NewDesc(
-			"dgraph_proc_memory_bytes",
-			"dgraph_proc_memory_bytes",
+		"dgraph_memory_proc_bytes": prometheus.NewDesc(
+			"dgraph_memory_proc_bytes",
+			"dgraph_memory_proc_bytes",
 			nil, nil,
 		),
 		"dgraph_active_mutations_total": prometheus.NewDesc(

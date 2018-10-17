@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package posting
@@ -49,6 +58,17 @@ type Txn struct {
 	// Keeps track of last update wall clock. We use this fact later to
 	// determine unhealthy, stale txns.
 	lastUpdate time.Time
+
+	// getList can be set for a txn, to isolate the retrieval and storage of
+	// posting lists in a separate cache. If nil, global LRU cache is used.
+	getList func(key []byte) (*List, error)
+}
+
+func (txn *Txn) Get(key []byte) (*List, error) {
+	if txn.getList == nil {
+		return Get(key)
+	}
+	return txn.getList(key)
 }
 
 type oracle struct {

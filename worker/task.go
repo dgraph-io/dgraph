@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
@@ -172,7 +181,7 @@ func convertValue(attr, data string) (types.Val, error) {
 	if !t.IsScalar() {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
-	src := types.Val{types.StringID, []byte(data)}
+	src := types.Val{Tid: types.StringID, Value: []byte(data)}
 	dst, err := types.Convert(src, t)
 	return dst, err
 }
@@ -301,10 +310,8 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 		return false, nil
 	case NotAFunction:
 		return typ.IsScalar(), nil
-	default:
-		return false, x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
 	}
-	return true, nil
+	return false, x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
 }
 
 // Handles fetching of value posting lists and filtering of uids based on that.
@@ -381,7 +388,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			if err != nil {
 				return err
 			}
-			out.LangMatrix = append(out.LangMatrix, &pb.LangList{langTags})
+			out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
 		}
 
 		valTid := vals[0].Tid
@@ -423,7 +430,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				fs = []*api.Facet{}
 			}
 			out.FacetMatrix = append(out.FacetMatrix,
-				&pb.FacetsList{[]*pb.Facets{{fs}}})
+				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
 		}
 
 		switch {
@@ -509,18 +516,18 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		var perr error
 		filteredRes = make([]*result, 0)
-		err = pl.Postings(opts, func(p *pb.Posting) bool {
+		err = pl.Postings(opts, func(p *pb.Posting) error {
 			res := true
 			res, perr = applyFacetsTree(p.Facets, facetsTree)
 			if perr != nil {
-				return false // break loop.
+				return posting.ErrStopIteration
 			}
 			if res {
 				filteredRes = append(filteredRes, &result{
 					uid:    p.Uid,
 					facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 			}
-			return true // continue iteration.
+			return nil // continue iteration.
 		})
 		if err != nil {
 			return err
@@ -532,9 +539,9 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		if q.FacetParam != nil {
 			var fcsList []*pb.Facets
 			for _, fres := range filteredRes {
-				fcsList = append(fcsList, &pb.Facets{fres.facets})
+				fcsList = append(fcsList, &pb.Facets{Facets: fres.facets})
 			}
-			out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{fcsList})
+			out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 		}
 
 		switch {
@@ -553,7 +560,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			count := int64(len)
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &pb.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == HasFn:
@@ -563,11 +570,11 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			count := int64(len)
 			if EvalCompare("gt", count, 0) {
-				tlist := &pb.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == UidInFn:
-			reqList := &pb.List{[]uint64{srcFn.uidPresent}}
+			reqList := &pb.List{Uids: []uint64{srcFn.uidPresent}}
 			topts := posting.ListOptions{
 				ReadTs:    args.q.ReadTs,
 				AfterUID:  0,
@@ -578,7 +585,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				return err
 			}
 			if len(plist.Uids) > 0 {
-				tlist := &pb.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		default:
@@ -1641,9 +1648,9 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		}
 		pk := x.Parse(key)
 		var num int
-		if err := pl.Iterate(q.ReadTs, 0, func(_ *pb.Posting) bool {
+		if err := pl.Iterate(q.ReadTs, 0, func(_ *pb.Posting) error {
 			num++
-			return false
+			return posting.ErrStopIteration
 		}); err != nil {
 			return err
 		}
@@ -1692,9 +1699,9 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 			return err
 		}
 		var num int
-		if err = l.Iterate(q.ReadTs, 0, func(_ *pb.Posting) bool {
+		if err = l.Iterate(q.ReadTs, 0, func(_ *pb.Posting) error {
 			num++
-			return false
+			return posting.ErrStopIteration
 		}); err != nil {
 			return err
 		}
