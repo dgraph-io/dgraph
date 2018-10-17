@@ -48,7 +48,7 @@ var (
 	MemoryIdle       *expvar.Int
 	MemoryProc       *expvar.Int
 	ActiveMutations  *expvar.Int
-	ServerHealth     *expvar.Int
+	AlphaHealth      *expvar.Int
 	MaxPlSize        *expvar.Int
 	MaxPlLength      *expvar.Int
 
@@ -69,7 +69,7 @@ func init() {
 	EvictedPls = expvar.NewInt("dgraph_evicted_lists_total")
 	PendingQueries = expvar.NewInt("dgraph_pending_queries_total")
 	NumQueries = expvar.NewInt("dgraph_num_queries_total")
-	ServerHealth = expvar.NewInt("dgraph_server_health_status")
+	AlphaHealth = expvar.NewInt("dgraph_alpha_health_status")
 	DirtyMapSize = expvar.NewInt("dgraph_dirtymap_keys_total")
 	LcacheSize = expvar.NewInt("dgraph_lcache_size_bytes")
 	LcacheLen = expvar.NewInt("dgraph_lcache_keys_total")
@@ -94,9 +94,9 @@ func init() {
 			select {
 			case <-ticker.C:
 				if err := HealthCheck(); err == nil {
-					ServerHealth.Set(1)
+					AlphaHealth.Set(1)
 				} else {
-					ServerHealth.Set(0)
+					AlphaHealth.Set(0)
 				}
 			}
 		}
