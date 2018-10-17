@@ -55,11 +55,14 @@ type mark struct {
 //
 // An index may also become "done" by calling SetDoneUntil at a time such that it is not
 // inter-mingled with Begin/Done calls.
+//
+// Since doneUntil and lastIndex addresses are passed to sync/atomic packages, we ensure that they
+// are 64-bit aligned by putting them at the beginning of the structure.
 type WaterMark struct {
-	Name      string
-	markCh    chan mark
 	doneUntil uint64
 	lastIndex uint64
+	Name      string
+	markCh    chan mark
 	elog      trace.EventLog
 }
 

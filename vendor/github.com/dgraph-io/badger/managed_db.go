@@ -45,7 +45,7 @@ func (db *DB) NewTransactionAt(readTs uint64, update bool) *Txn {
 	if !db.opt.managedTxns {
 		panic("Cannot use NewTransactionAt with managedDB=false. Use NewTransaction instead.")
 	}
-	txn := db.NewTransaction(update)
+	txn := db.newTransaction(update, true)
 	txn.readTs = readTs
 	return txn
 }
@@ -60,7 +60,11 @@ func (txn *Txn) CommitAt(commitTs uint64, callback func(error)) error {
 		panic("Cannot use CommitAt with managedDB=false. Use Commit instead.")
 	}
 	txn.commitTs = commitTs
-	return txn.Commit(callback)
+	if callback == nil {
+		return txn.Commit()
+	}
+	txn.CommitWith(callback)
+	return nil
 }
 
 // SetDiscardTs sets a timestamp at or below which, any invalid or deleted
