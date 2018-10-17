@@ -51,7 +51,7 @@ Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x146a6)) {
+  bladerunner(func: uid(0x389cd3)) {
     uid
     name@en
     initial_release_date
@@ -80,7 +80,7 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x146a6, 0x34a7c)) {
+  movies(func: uid(0x389cd3, 0x6132e8)) {
     uid
     name@en
     initial_release_date
@@ -576,7 +576,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 
 {{< runnable >}}
 {
-  films(func: uid(0xcceb)) {
+  films(func: uid(0x6b1e46)) {
     name@hi
     actor.film {
       performance.film {
@@ -652,12 +652,12 @@ While the `uid` function filters nodes at the current level based on UID, functi
 `uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
 
 
-Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 597046).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x4e9759).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
-    director.film @filter(uid_in(~director.film, 597046)){
+    director.film @filter(uid_in(~director.film, 0x4e9759)){
       name@en
     }
   }
@@ -2554,9 +2554,9 @@ Calculating the average ratings of users requires a variable that maps users to 
 {{< runnable >}}
 
 {
-  var(func: has(~rated)) {
+  var(func: has(rated)) {
     num_rated as math(1)
-    ~rated @facets(r as rating) {
+    rated @facets(r as rating) {
       avg_rating as math(r / num_rated)
     }
   }
