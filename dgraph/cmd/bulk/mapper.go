@@ -235,7 +235,7 @@ func (m *mapper) lookupUid(xid string) uint64 {
 		// Don't store xids for blank nodes.
 		return uid
 	}
-	nq := gql.NQuad{&api.NQuad{
+	nq := gql.NQuad{NQuad: &api.NQuad{
 		Subject:   xid,
 		Predicate: "xid",
 		ObjectValue: &api.Value{
