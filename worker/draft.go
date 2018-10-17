@@ -815,7 +815,7 @@ func (n *node) rollupLists(readTs uint64) error {
 	if err := writer.Flush(); err != nil {
 		return err
 	}
-	//	We can now discard all invalid versions of keys below this ts.
+	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)
 	return nil
 }

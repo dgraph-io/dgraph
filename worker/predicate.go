@@ -61,7 +61,7 @@ func (n *node) populateSnapshot(ps *badger.DB, pl *conn.Pool) (int, error) {
 	for {
 		kvs, err := stream.Recv()
 		if err == io.EOF {
-			glog.V(2).Infoln("EOF has been reached")
+			glog.V(1).Infoln("EOF has been reached")
 			break
 		}
 		if err != nil {
@@ -73,7 +73,7 @@ func (n *node) populateSnapshot(ps *badger.DB, pl *conn.Pool) (int, error) {
 		default:
 		}
 
-		glog.V(2).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
+		glog.V(1).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
 		if err := writer.Send(kvs); err != nil {
 			return 0, err
 		}
