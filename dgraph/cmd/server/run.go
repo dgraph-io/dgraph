@@ -85,10 +85,8 @@ func init() {
 	flag.String("whitelist", "",
 		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
-	flag.String("export", "export",
-		"Folder in which to store exports.")
-	flag.Int("pending_proposals", 2000,
-		"Number of pending mutation proposals. Useful for rate limiting.")
+
+	flag.String("export", "export", "Folder in which to store exports.")
 	flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	flag.String("my", "",
 		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
@@ -295,18 +293,17 @@ func run() {
 		PostingDir: Server.Conf.GetString("postings"),
 		WALDir:     Server.Conf.GetString("wal"),
 
-		Nomutations:         Server.Conf.GetBool("nomutations"),
-		WhitelistedIPs:      Server.Conf.GetString("whitelist"),
-		AllottedMemory:      Server.Conf.GetFloat64("lru_mb"),
-		ExportPath:          Server.Conf.GetString("export"),
-		NumPendingProposals: Server.Conf.GetInt("pending_proposals"),
-		Tracing:             Server.Conf.GetFloat64("trace"),
-		MyAddr:              Server.Conf.GetString("my"),
-		ZeroAddr:            Server.Conf.GetString("zero"),
-		RaftId:              uint64(Server.Conf.GetInt("idx")),
-		MaxPendingCount:     uint64(Server.Conf.GetInt("sc")),
-		ExpandEdge:          Server.Conf.GetBool("expand_edge"),
-		DebugMode:           Server.Conf.GetBool("debugmode"),
+		Nomutations:     Server.Conf.GetBool("nomutations"),
+		WhitelistedIPs:  Server.Conf.GetString("whitelist"),
+		AllottedMemory:  Server.Conf.GetFloat64("lru_mb"),
+		ExportPath:      Server.Conf.GetString("export"),
+		Tracing:         Server.Conf.GetFloat64("trace"),
+		MyAddr:          Server.Conf.GetString("my"),
+		ZeroAddr:        Server.Conf.GetString("zero"),
+		RaftId:          uint64(Server.Conf.GetInt("idx")),
+		MaxPendingCount: uint64(Server.Conf.GetInt("sc")),
+		ExpandEdge:      Server.Conf.GetBool("expand_edge"),
+		DebugMode:       Server.Conf.GetBool("debugmode"),
 	}
 
 	x.Config.PortOffset = Server.Conf.GetInt("port_offset")

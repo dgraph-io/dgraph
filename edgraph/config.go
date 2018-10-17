@@ -39,15 +39,14 @@ type Options struct {
 
 	AllottedMemory float64
 
-	WhitelistedIPs      string
-	ExportPath          string
-	NumPendingProposals int
-	Tracing             float64
-	MyAddr              string
-	ZeroAddr            string
-	RaftId              uint64
-	MaxPendingCount     uint64
-	ExpandEdge          bool
+	WhitelistedIPs  string
+	ExportPath      string
+	Tracing         float64
+	MyAddr          string
+	ZeroAddr        string
+	RaftId          uint64
+	MaxPendingCount uint64
+	ExpandEdge      bool
 
 	DebugMode bool
 }
@@ -70,12 +69,6 @@ func setConfVar(conf Options) {
 		return v
 	}
 
-	newInt := func(i int) *expvar.Int {
-		v := new(expvar.Int)
-		v.Set(int64(i))
-		return v
-	}
-
 	// Expvar doesn't have bool type so we use an int.
 	newIntFromBool := func(b bool) *expvar.Int {
 		v := new(expvar.Int)
@@ -95,7 +88,6 @@ func setConfVar(conf Options) {
 	x.Conf.Set("wal_dir", newStr(conf.WALDir))
 	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
 	x.Conf.Set("tracing", newFloat(conf.Tracing))
-	x.Conf.Set("num_pending_proposals", newInt(conf.NumPendingProposals))
 	x.Conf.Set("expand_edge", newIntFromBool(conf.ExpandEdge))
 }
 
@@ -109,7 +101,6 @@ func SetConfiguration(newConfig Options) {
 	posting.Config.Mu.Unlock()
 
 	worker.Config.ExportPath = Config.ExportPath
-	worker.Config.NumPendingProposals = Config.NumPendingProposals
 	worker.Config.Tracing = Config.Tracing
 	worker.Config.MyAddr = Config.MyAddr
 	worker.Config.ZeroAddr = Config.ZeroAddr
