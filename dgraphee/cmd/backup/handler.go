@@ -3,7 +3,7 @@
  *
  */
 
-package backup
+package main
 
 import (
 	"net/url"

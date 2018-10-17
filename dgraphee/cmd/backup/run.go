@@ -3,7 +3,7 @@
  *
  */
 
-package backup
+package main
 
 import (
 	"fmt"
@@ -12,11 +12,10 @@ import (
 	"os"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 var opt struct {

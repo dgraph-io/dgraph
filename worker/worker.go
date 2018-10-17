@@ -27,10 +27,11 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/dgraphee/backup"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
@@ -116,4 +117,21 @@ func BlockingStop() {
 
 	// TODO: What is this for?
 	posting.StopLRUEviction()
+}
+
+// Backup ...
+func (s *Server) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupResponse, error) {
+	if req.StartTs == 0 {
+		req.StartTs = State.getTimestamp(true)
+	}
+	// resp.Txn = &api.TxnContext{
+	// 	StartTs: req.StartTs,
+	// }
+	backupRequest = &backup.Request{
+		ReadTs: req.StartTs,
+	}
+	if err := backupRequest.Process(ctx); err != nil {
+		return nil, err
+	}
+	return &pb.BackupResponse{}, nil
 }

@@ -25,7 +25,6 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "backup.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -411,15 +410,15 @@ service Zero {
 
 service Worker {
 	// Data serving RPCs.
-	rpc Mutate (Mutations)                    returns (api.TxnContext) {}
-	rpc ServeTask (Query)                     returns (Result) {}
-	rpc StreamSnapshot (Snapshot)             returns (stream KVS) {}
-	rpc Sort (SortMessage)                    returns (SortResult) {}
-	rpc Schema (SchemaRequest)                returns (SchemaResult) {}
-	rpc PurgeTs (api.Payload)                 returns (Num) {}
-
+	rpc Mutate (Mutations)                  returns (api.TxnContext) {}
+	rpc ServeTask (Query)                   returns (Result) {}
+	rpc StreamSnapshot (Snapshot)           returns (stream KVS) {}
+	rpc Sort (SortMessage)                  returns (SortResult) {}
+	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
+	rpc PurgeTs (api.Payload)               returns (Num) {}
+	rpc Backup (BackupRequest)							returns (BackupResponse) {}
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
-	rpc ReceivePredicate(stream KVS)         returns (api.Payload) {}
+	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 }
 
@@ -439,6 +438,22 @@ message AssignedIds {
 message SnapshotMeta {
 	uint64 client_ts = 1;
 	uint32 group_id = 2;
+}
+
+message BackupRequest {
+	uint64 start_ts = 1;
+	string endpoint = 2;
+}
+
+message BackupResponse {
+	string message = 1;
+	enum Status {
+		NONE      = 0;
+		SUCCESS   = 1;
+		DUPLICATE = 2;
+		FAILED    = 3;
+	}
+	Status status = 2;
 }
 
 // vim: noexpandtab sw=2 ts=2
