@@ -97,14 +97,6 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		return err
 	}
 
-	// Flush to disk
-	posting.CommitLists(func(key []byte) bool {
-		pk := x.Parse(key)
-		if pk.Attr == update.Predicate {
-			return true
-		}
-		return false
-	})
 	updateSchema(update.Predicate, *update)
 	return nil
 }

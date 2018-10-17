@@ -27,7 +27,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -365,41 +364,4 @@ func GetNoStore(key []byte) (*List, error) {
 // memory(for example before populating snapshot) or after calling syncAllMarks
 func EvictLRU() {
 	lcache.Reset()
-}
-
-func CommitLists(commit func(key []byte) bool) {
-	// We iterate over lru and pushing values (List) into this
-	// channel. Then goroutines right below will commit these lists to data store.
-	workChan := make(chan *List, 10000)
-
-	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for l := range workChan {
-				l.SyncIfDirty(false)
-			}
-		}()
-	}
-
-	lcache.iterate(func(l *List) bool {
-		if commit(l.key) {
-			workChan <- l
-		}
-		return true
-	})
-	close(workChan)
-	wg.Wait()
-
-	// The following hack ensures that all the asynchrously run commits above would have been done
-	// before this completes. Badger now actually gets rid of keys, which are deleted. So, we can
-	// use the Delete function.
-	txn := pstore.NewTransactionAt(1, true)
-	defer txn.Discard()
-	x.Check(txn.Delete(x.DataKey("_dummy_", 1)))
-	// Nothing is being read, so there can't be an ErrConflict. This should go to disk.
-	if err := txn.CommitAt(1, nil); err != nil {
-		x.Printf("Commit unexpectedly failed with error: %v", err)
-	}
 }

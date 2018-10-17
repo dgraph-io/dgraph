@@ -32,6 +32,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -52,10 +53,11 @@ type node struct {
 	*conn.Node
 
 	// Fields which are never changed after init.
-	applyCh chan []raftpb.Entry
-	ctx     context.Context
-	gid     uint32
-	closer  *y.Closer
+	applyCh  chan []raftpb.Entry
+	rollupCh chan uint64 // Channel to run posting list rollups.
+	ctx      context.Context
+	gid      uint32
+	closer   *y.Closer
 
 	streaming int32 // Used to avoid calculating snapshot
 
@@ -83,9 +85,10 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh: make(chan []raftpb.Entry, 1000),
-		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:  y.NewCloser(2), // Matches CLOSER:1
+		applyCh:  make(chan []raftpb.Entry, 1000),
+		rollupCh: make(chan uint64, 3),
+		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:   y.NewCloser(3), // Matches CLOSER:1
 	}
 	return n
 }
@@ -384,25 +387,26 @@ func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
 	}
 
 	ctx := n.Ctx(proposal.Key)
-	if len(proposal.Kv) > 0 {
+	switch {
+	case len(proposal.Kv) > 0:
 		return populateKeyValues(ctx, proposal.Kv)
 
-	} else if proposal.State != nil {
+	case proposal.State != nil:
 		n.elog.Printf("Applying state for key: %s", proposal.Key)
 		// This state needn't be snapshotted in this group, on restart we would fetch
 		// a state which is latest or equal to this.
 		groups().applyState(proposal.State)
 		return nil
 
-	} else if len(proposal.CleanPredicate) > 0 {
+	case len(proposal.CleanPredicate) > 0:
 		n.elog.Printf("Cleaning predicate: %s", proposal.CleanPredicate)
 		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
 
-	} else if proposal.Delta != nil {
+	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
 		return n.commitOrAbort(proposal.Key, proposal.Delta)
 
-	} else if proposal.Snapshot != nil {
+	case proposal.Snapshot != nil:
 		existing, err := n.Store.Snapshot()
 		if err != nil {
 			return err
@@ -418,24 +422,56 @@ func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
 		n.elog.Printf("Creating snapshot: %+v", snap)
 		glog.Infof("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
 
-		//	We can now discard all invalid versions of keys below this ts.
-		pstore.SetDiscardTs(snap.ReadTs)
-
 		data, err := snap.Marshal()
 		x.Check(err)
 		for {
 			// We should never let CreateSnapshot have an error.
 			err := n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
 			if err == nil {
-				return nil
+				break
 			}
 			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
 		}
-
-	} else {
-		x.Fatalf("Unknown proposal")
+		// Roll up all posting lists as a best-effort operation.
+		n.rollupCh <- snap.ReadTs
+		return nil
 	}
+	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
+}
+
+func (n *node) processRollups() {
+	defer n.closer.Done() // CLOSER:1
+	for {
+		select {
+		case <-n.closer.HasBeenClosed():
+			return
+		case readTs := <-n.rollupCh:
+			// Let's empty out the rollupCh, so we're working with the latest
+			// value of readTs.
+		inner:
+			for {
+				select {
+				case readTs = <-n.rollupCh:
+				default:
+					break inner
+				}
+			}
+			if readTs == 0 {
+				glog.Warningln("Found ZERO read Ts for rolling up.")
+				break // Breaks the select case.
+			}
+
+			// If we encounter error here, we don't need to do anything about
+			// it. Just let the user know.
+			err := n.rollupLists(readTs)
+			if err != nil {
+				glog.Errorf("Error while rolling up lists at %d: %v\n", readTs, err)
+			} else {
+				glog.Infof("List rollup at Ts %d: OK.\n", readTs)
+			}
+		}
+	}
 }
 
 func (n *node) processApplyCh() {
@@ -558,7 +594,7 @@ func (n *node) retrieveSnapshot() error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	posting.EvictLRU()
-	if _, err := n.populateShard(pstore, pool); err != nil {
+	if _, err := n.populateSnapshot(pstore, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -585,7 +621,7 @@ func (n *node) proposeSnapshot(discardN int) error {
 }
 
 func (n *node) Run() {
-	defer n.closer.Done() // CLOSER: 1
+	defer n.closer.Done() // CLOSER:1
 
 	firstRun := true
 	var leader bool
@@ -750,6 +786,38 @@ func (n *node) Run() {
 			}
 		}
 	}
+}
+
+// rollupLists would consolidate all the deltas that constitute one posting
+// list, and write back a complete posting list.
+func (n *node) rollupLists(readTs uint64) error {
+	writer := &x.TxnWriter{DB: pstore, BlindWrite: true}
+	sl := streamLists{stream: writer, db: pstore}
+	sl.chooseKey = func(item *badger.Item) bool {
+		pk := x.Parse(item.Key())
+		if pk.IsSchema() {
+			// Skip if schema.
+			return false
+		}
+		// Return true if we don't find the BitCompletePosting bit.
+		return item.UserMeta()&posting.BitCompletePosting == 0
+	}
+	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+		l, err := posting.ReadPostingList(key, itr)
+		if err != nil {
+			return nil, err
+		}
+		return l.MarshalToKv()
+	}
+	if err := sl.orchestrate(context.Background(), "Rolling up", readTs); err != nil {
+		return err
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	// We can now discard all invalid versions of keys below this ts.
+	pstore.SetDiscardTs(readTs)
+	return nil
 }
 
 var errConnection = errors.New("No connection exists")
@@ -1021,9 +1089,10 @@ func (n *node) InitAndStartNode() {
 			n.canCampaign = true
 		}
 	}
+	go n.processRollups()
 	go n.processApplyCh()
-	go n.Run()
 	go n.BatchAndSendMessages()
+	go n.Run()
 }
 
 func (n *node) AmLeader() bool {

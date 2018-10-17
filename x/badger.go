@@ -21,13 +21,15 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
 )
 
 type TxnWriter struct {
-	DB  *badger.DB
-	wg  sync.WaitGroup
-	che chan error
+	DB         *badger.DB
+	wg         sync.WaitGroup
+	che        chan error
+	BlindWrite bool
 }
 
 func (w *TxnWriter) cb(err error) {
@@ -41,25 +43,44 @@ func (w *TxnWriter) cb(err error) {
 	}
 }
 
+func (w *TxnWriter) Send(kvs *pb.KVS) error {
+	for _, kv := range kvs.Kv {
+		var meta byte
+		if len(kv.UserMeta) > 0 {
+			meta = kv.UserMeta[0]
+		}
+		if err := w.SetAt(kv.Key, kv.Val, meta, kv.Version); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
+	if ts == 0 {
+		return nil
+	}
+
 	txn := w.DB.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 
-	// We do a Get to ensure that we don't end up overwriting an already
-	// existing delta or state at the ts.
-	if item, err := txn.Get(key); err == badger.ErrKeyNotFound {
-		// pass
-	} else if err != nil {
-		return err
+	if !w.BlindWrite {
+		// We do a Get to ensure that we don't end up overwriting an already
+		// existing delta or state at the ts.
+		if item, err := txn.Get(key); err == badger.ErrKeyNotFound {
+			// pass
+		} else if err != nil {
+			return err
 
-	} else if item.Version() >= ts {
-		// Found an existing commit at an equal or higher timestamp. So, skip writing.
-		if glog.V(2) {
-			pk := Parse(key)
-			glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
-				item.Version(), ts, pk)
+		} else if item.Version() >= ts {
+			// Found an existing commit at an equal or higher timestamp. So, skip writing.
+			if glog.V(2) {
+				pk := Parse(key)
+				glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
+					item.Version(), ts, pk)
+			}
+			return nil
 		}
-		return nil
 	}
 	if err := txn.SetWithMeta(key, val, meta); err != nil {
 		return err

@@ -436,22 +436,19 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 		l.commitTs = commitTs
 	}
 
-	// TODO: Figure out what to do here. We shouldn't really be calling
-	// syncIfDirty here, because the posting list might be created by the index
-	// rebuild process. But, we could potentially rollup the posting list.
 	// In general, a posting list shouldn't try to mix up it's job of keeping
 	// things in memory, with writing things to disk. A separate process can
 	// roll up and write them to disk. Posting list should only keep things in
-	// memory, to make it available for transactions.
+	// memory, to make it available for transactions. So, all we need to do here
+	// is to roll them up periodically.
 
-	// Calculate 10% of immutable layer
-	// numUids := (bp128.NumIntegers(l.plist.Uids) * 10) / 100
-	// if numUids < 1000 {
-	// 	numUids = 1000
-	// }
-	// if l.numCommits > numUids {
-	// 	l.syncIfDirty(false)
-	// }
+	numUids := (bp128.NumIntegers(l.plist.Uids) * 15) / 100
+	if numUids < 1000 {
+		numUids = 1000
+	}
+	if l.numCommits > numUids {
+		return l.rollup()
+	}
 	return nil
 }
 
@@ -744,12 +741,6 @@ func (l *List) rollup() error {
 	return nil
 }
 
-func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
-	l.Lock()
-	defer l.Unlock()
-	return l.syncIfDirty(delFromCache)
-}
-
 func (l *List) hasPendingTxn() bool {
 	l.AssertRLock()
 	for _, pl := range l.mutationMap {
@@ -758,71 +749,6 @@ func (l *List) hasPendingTxn() bool {
 		}
 	}
 	return false
-}
-
-// Merge mutation layer and immutable layer.
-func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
-	// We no longer set posting list to empty.
-	if len(l.mutationMap) == 0 {
-		return false, nil
-	}
-	if delFromCache {
-		// Don't evict if there is pending transaction.
-		x.AssertTrue(!l.hasPendingTxn())
-	}
-
-	lmlayer := len(l.mutationMap)
-	// Merge all entries in mutation layer with commitTs <= l.commitTs
-	// into immutable layer.
-	if err := l.rollup(); err != nil {
-		return false, err
-	}
-	// Check if length of mutationMap has changed after rollup, else skip writing to disk.
-	if len(l.mutationMap) == lmlayer {
-		// There was no change in immutable layer.
-		return false, nil
-	}
-	x.AssertTrue(l.minTs > 0)
-
-	data, meta := marshalPostingList(l.plist)
-	for {
-		pLen := atomic.LoadInt64(&x.MaxPlSz)
-		if int64(len(data)) <= pLen {
-			break
-		}
-		if atomic.CompareAndSwapInt64(&x.MaxPlSz, pLen, int64(len(data))) {
-			x.MaxPlSize.Set(int64(len(data)))
-			x.MaxPlLength.Set(int64(bp128.NumIntegers(l.plist.Uids)))
-			break
-		}
-	}
-
-	// Copy this over because minTs can change by the time callback returns.
-	minTs := l.minTs
-	retries := 0
-	var f func(error)
-	f = func(err error) {
-		if err != nil {
-			glog.Warningf("Got err in while doing async writes in SyncIfDirty: %+v", err)
-			if retries > 5 {
-				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
-					l.key, err)
-			}
-			// Error from badger should be temporary, so we can retry.
-			retries += 1
-			doAsyncWrite(minTs, l.key, data, meta, f)
-			return
-		}
-		x.BytesWrite.Add(int64(len(data)))
-		x.PostingWrites.Add(1)
-		if delFromCache {
-			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
-			lcache.delete(l.key)
-		}
-	}
-
-	doAsyncWrite(minTs, l.key, data, meta, f)
-	return true, nil
 }
 
 // Copies the val if it's uid only posting, be careful
