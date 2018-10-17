@@ -368,7 +368,6 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 			return errServerShutDown
 		}
 	}
-	return nil
 }
 
 func (s *Server) SyncedUntil() uint64 {
