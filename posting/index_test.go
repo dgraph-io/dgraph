@@ -167,9 +167,6 @@ func TestTokensTable(t *testing.T) {
 		Entity: 157,
 	}
 	addMutation(t, l, edge, Set, 1, 2, true)
-	merged, err := l.SyncIfDirty(false)
-	require.True(t, merged)
-	require.NoError(t, err)
 
 	key = x.IndexKey("name", "\x01david")
 	time.Sleep(10 * time.Millisecond)
