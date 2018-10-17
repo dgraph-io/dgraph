@@ -853,7 +853,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
-	x.Init(true)
+	x.Init()
 	Config.AllottedMemory = 1024.0
 	Config.CommitFraction = 0.10
 

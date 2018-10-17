@@ -82,7 +82,7 @@ func (d *DgraphCluster) Start() error {
 	}
 
 	d.dgraph = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"server",
+		"alpha",
 		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
 		"--port_offset", strconv.Itoa(d.dgraphPortOffset),
@@ -119,7 +119,7 @@ type Node struct {
 func (d *DgraphCluster) AddNode(dir string) (Node, error) {
 	o := strconv.Itoa(freePort(x.PortInternal))
 	dgraph := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"server",
+		"alpha",
 		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
 		"--port_offset", o,
