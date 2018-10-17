@@ -195,7 +195,7 @@ A set of Posting Lists sharing the same `Predicate` constitute a group. Each ser
 multiple distinct [groups](/deploy#data-sharding).
 
 A group config file is used to determine which server would serve what groups. In the future
-versions, live Dgraph server would be able to move tablets around depending upon heuristics.
+versions, live Dgraph alpha would be able to move tablets around depending upon heuristics.
 
 If a groups gets too big, it could be split further. In this case, a single `Predicate` essentially
 gets divided across two groups.
