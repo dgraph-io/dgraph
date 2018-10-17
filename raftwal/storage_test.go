@@ -198,9 +198,9 @@ func TestStorageFirstIndex(t *testing.T) {
 		t.Errorf("first = %d, want %d", first, 4)
 	}
 
-	u := ds.newUnifier()
-	require.NoError(t, ds.deleteUntil(u, 4))
-	require.NoError(t, u.Done())
+	batch := db.NewWriteBatch()
+	require.NoError(t, ds.deleteUntil(batch, 4))
+	require.NoError(t, batch.Flush())
 	ds.cache.firstIndex = 0
 	first, err = ds.FirstIndex()
 	if err != nil {
@@ -238,9 +238,9 @@ func TestStorageCompact(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		u := ds.newUnifier()
-		err := ds.deleteUntil(u, tt.i)
-		require.NoError(t, u.Done())
+		batch := db.NewWriteBatch()
+		err := ds.deleteUntil(batch, tt.i)
+		require.NoError(t, batch.Flush())
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
@@ -350,12 +350,12 @@ func TestStorageAppend(t *testing.T) {
 
 	for i, tt := range tests {
 		require.NoError(t, ds.reset(ents))
-		u := ds.newUnifier()
-		err := ds.addEntries(u, tt.entries)
+		batch := db.NewWriteBatch()
+		err := ds.addEntries(batch, tt.entries)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
-		require.NoError(t, u.Done())
+		require.NoError(t, batch.Flush())
 		all, err := ds.allEntries(0, math.MaxUint64, math.MaxUint64)
 		require.NoError(t, err)
 		if !reflect.DeepEqual(all, tt.wentries) {
