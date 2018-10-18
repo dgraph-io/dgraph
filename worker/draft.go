@@ -217,14 +217,25 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
 	// timeout. We should always try with a timeout and optionally retry.
-	err := errInternalRetry
 	timeout := 4 * time.Second
-	for err == errInternalRetry {
-		err = propose(timeout)
-		// TODO: Exponential backoff should really block here, instead of sending longer timeouts.
+	for {
+		// The below algorithm would run proposal with a calculated timeout. If
+		// it doesn't succeed or fail, it would block for the timeout duration.
+		// Then it would double the timeout.
+		err := propose(timeout)
+		if err != errInternalRetry {
+			return err
+		}
+		t := time.NewTimer(timeout)
+		select {
+		case <-t.C:
+		case <-ctx.Done():
+			t.Stop()
+			return ctx.Err()
+		}
 		timeout *= 2 // Exponential backoff
 	}
-	return err
+	return nil
 }
 
 func (n *node) Ctx(key string) context.Context {
@@ -497,19 +508,21 @@ func (n *node) processApplyCh() {
 				if err := proposal.Unmarshal(e.Data); err != nil {
 					x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 				}
+				var perr error
 				if err, ok := previous[proposal.Key]; ok && err == nil {
 					n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
 						proposal.Key, e.Index)
-					break // Breaks the switch case.
+
+				} else {
+					perr = n.applyCommitted(proposal, e.Index)
+					if len(proposal.Key) > 0 {
+						previous[proposal.Key] = perr
+					}
+					n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
+						proposal.Key, e.Index, perr)
 				}
 
-				err := n.applyCommitted(proposal, e.Index)
-				if len(proposal.Key) > 0 {
-					previous[proposal.Key] = err
-				}
-				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
-					proposal.Key, e.Index, err)
-				n.Proposals.Done(proposal.Key, err)
+				n.Proposals.Done(proposal.Key, perr)
 				n.Applied.Done(e.Index)
 			}
 		}
