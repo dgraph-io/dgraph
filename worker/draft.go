@@ -1096,7 +1096,7 @@ func (n *node) InitAndStartNode() {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
 
-			// TODO: This is an optimization, which adds complexity because it requires us to
+			// Note: This is an optimization, which adds complexity because it requires us to
 			// understand the Raft state of the node. Let's instead have the node retrieve the
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
 			//
