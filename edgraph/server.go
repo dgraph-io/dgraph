@@ -28,6 +28,8 @@ import (
 	"unicode"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"golang.org/x/net/context"
@@ -267,14 +269,13 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
-	defer glog.Infof("ALTER op: %+v done", op)
 
+	// The following code block checks if the operation should run or not.
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
 		return nil, x.Errorf("Operation must have at least one field set")
 	}
-
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -282,11 +283,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 		return empty, err
 	}
-
 	if !isMutationAllowed(ctx) {
-		return nil, x.Errorf("No mutations allowed.")
+		return nil, x.Errorf("No mutations allowed by server.")
 	}
+	if err := isAlterAllowed(ctx); err != nil {
+		glog.Warningf("Alter denied with error: %v\n", err)
+		return nil, err
+	}
+	// All checks done.
 
+	defer glog.Infof("ALTER op: %+v done", op)
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
@@ -315,7 +321,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if err != nil {
 		return empty, err
 	}
-	x.Printf("Got schema: %+v\n", updates)
+	glog.Infof("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = updates
 	_, err = query.ApplyMutations(ctx, m)
@@ -566,6 +572,30 @@ func isMutationAllowed(ctx context.Context) bool {
 		return false
 	}
 	return true
+}
+
+var errNoAuth = x.Errorf("No Auth Token found. Token needed for Alter operations.")
+
+func isAlterAllowed(ctx context.Context) error {
+	p, ok := peer.FromContext(ctx)
+	if ok {
+		glog.Infof("Got Alter request from %q\n", p.Addr)
+	}
+	if len(Config.AuthToken) == 0 {
+		return nil
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return errNoAuth
+	}
+	tokens := md.Get("auth-token")
+	if len(tokens) == 0 {
+		return errNoAuth
+	}
+	if tokens[0] != Config.AuthToken {
+		return x.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
+	}
+	return nil
 }
 
 func parseNQuads(b []byte) ([]*api.NQuad, error) {

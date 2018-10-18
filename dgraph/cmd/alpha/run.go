@@ -104,6 +104,10 @@ they form a Raft group and provide synchronous replication.
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
 
+	flag.StringVar(&config.AuthToken, "auth_token", "",
+		"If set, all Alter requests to Dgraph would need to have this token."+
+			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
+			" For Grpc, in auth-token key in the context.")
 	flag.Float64VarP(&config.AllottedMemory, "lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")

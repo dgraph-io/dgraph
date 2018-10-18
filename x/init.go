@@ -18,6 +18,8 @@ package x
 
 import (
 	"fmt"
+
+	"github.com/golang/glog"
 )
 
 var (
@@ -75,7 +77,7 @@ Licensed under Apache 2.0. Copyright 2015-2018 Dgraph Labs, Inc.
 
 // PrintVersionOnly prints version and other helpful information if --version.
 func PrintVersion() {
-	fmt.Println(BuildDetails())
+	glog.Infof("\n%s\n", BuildDetails())
 }
 
 func Version() string {
