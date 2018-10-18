@@ -114,130 +114,6 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-var errInternalRetry = errors.New("Retry Raft proposal internally")
-
-// proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
-// to be applied(written to WAL) to all the nodes in the group.
-func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error {
-	if n.Raft() == nil {
-		return x.Errorf("Raft isn't initialized yet")
-	}
-
-	// TODO: Should be based on number of edges (amount of work)
-	pendingProposals <- struct{}{}
-	x.PendingProposals.Add(1)
-	defer func() { <-pendingProposals; x.PendingProposals.Add(-1) }()
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	// Do a type check here if schema is present
-	// In very rare cases invalid entries might pass through raft, which would
-	// be persisted, we do best effort schema check while writing
-	if proposal.Mutations != nil {
-		for _, edge := range proposal.Mutations.Edges {
-			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
-			} else if tablet.GroupId != groups().groupId() {
-				// Tablet can move by the time request reaches here.
-				return errUnservedTablet
-			}
-
-			su, ok := schema.State().Get(edge.Attr)
-			if !ok {
-				continue
-			} else if err := ValidateAndConvert(edge, &su); err != nil {
-				return err
-			}
-		}
-		for _, schema := range proposal.Mutations.Schema {
-			if tablet := groups().Tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
-			}
-			if err := checkSchema(schema); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Let's keep the same key, so multiple retries of the same proposal would
-	// have this shared key. Thus, each server in the group can identify
-	// whether it has already done this work, and if so, skip it.
-	key := uniqueKey()
-
-	propose := func(timeout time.Duration) error {
-		cctx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-
-		che := make(chan error, 1)
-		pctx := &conn.ProposalCtx{
-			Ch:  che,
-			Ctx: cctx,
-		}
-		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
-		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
-		proposal.Key = key
-
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Proposing data with key: %s. Timeout: %v", key, timeout)
-		}
-
-		data, err := proposal.Marshal()
-		if err != nil {
-			return err
-		}
-
-		if err = n.Raft().Propose(cctx, data); err != nil {
-			return x.Wrapf(err, "While proposing")
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal.")
-		}
-
-		select {
-		case err = <-che:
-			// We arrived here by a call to n.Proposals.Done().
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Done with error: %v", err)
-			}
-			return err
-		case <-ctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("External context timed out with error: %v.", ctx.Err())
-			}
-			return ctx.Err()
-		case <-cctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Internal context timed out with error: %v. Retrying...", cctx.Err())
-			}
-			return errInternalRetry
-		}
-	}
-
-	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
-	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
-	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
-	// timeout. We should always try with a timeout and optionally retry.
-	timeout := 4 * time.Second
-	for {
-		// The below algorithm would run proposal with a calculated timeout. If
-		// it doesn't succeed or fail, it would block for the timeout duration.
-		// Then it would double the timeout.
-		err := propose(timeout)
-		if err != errInternalRetry {
-			return err
-		}
-		t := time.NewTimer(timeout)
-		select {
-		case <-t.C:
-		case <-ctx.Done():
-			t.Stop()
-			return ctx.Err()
-		}
-		timeout *= 2 // Exponential backoff
-	}
-	return nil
-}
-
 func (n *node) Ctx(key string) context.Context {
 	ctx := context.Background()
 	if pctx := n.Proposals.Get(key); pctx != nil {
@@ -486,11 +362,20 @@ func (n *node) processRollups() {
 func (n *node) processApplyCh() {
 	defer n.closer.Done() // CLOSER:1
 
-	// Add logic here to delete everything older than 10 mins.
-	// Add logic here to calculate the size of proposal, as an extra step to
-	// ensure that we're dealing with the same proposal as before.
-	previous := make(map[string]error)
-	for entries := range n.applyCh {
+	type P struct {
+		err  error
+		size int
+		seen time.Time
+	}
+	previous := make(map[string]*P)
+
+	maxAge := 10 * time.Minute
+	tick := time.NewTicker(maxAge / 2)
+	defer tick.Stop()
+
+	// This function must be run serially.
+	handle := func(entries []raftpb.Entry) {
+		n.elog.Printf("Handling %d entries", len(entries))
 		for _, e := range entries {
 			switch {
 			case e.Type == raftpb.EntryConfChange:
@@ -503,15 +388,26 @@ func (n *node) processApplyCh() {
 				if err := proposal.Unmarshal(e.Data); err != nil {
 					x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 				}
+				// We use the size as a double check to ensure that we're
+				// working with the same proposal as before.
+				psz := proposal.Size()
+
 				var perr error
-				if err, ok := previous[proposal.Key]; ok && err == nil {
+				p, ok := previous[proposal.Key]
+				if ok && p.err == nil {
+					if p.size != psz {
+						glog.Warningf("Proposal size [now != prev] [%d != %d]\n", p.size, psz)
+					}
 					n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
 						proposal.Key, e.Index)
+					previous[proposal.Key].seen = time.Now() // Update the ts.
+					// Don't break here. We still need to call the Done below.
 
 				} else {
 					perr = n.applyCommitted(proposal, e.Index)
 					if len(proposal.Key) > 0 {
-						previous[proposal.Key] = perr
+						p := &P{err: perr, size: psz, seen: time.Now()}
+						previous[proposal.Key] = p
 					}
 					n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
 						proposal.Key, e.Index, perr)
@@ -520,6 +416,25 @@ func (n *node) processApplyCh() {
 				n.Proposals.Done(proposal.Key, perr)
 				n.Applied.Done(e.Index)
 			}
+		}
+	}
+
+	for {
+		select {
+		case entries, ok := <-n.applyCh:
+			if !ok {
+				return
+			}
+			handle(entries)
+		case <-tick.C:
+			// We use this ticker to clear out previous map.
+			now := time.Now()
+			for key, p := range previous {
+				if now.Sub(p.seen) > maxAge {
+					delete(previous, key)
+				}
+			}
+			n.elog.Printf("Size of previous map: %d", len(previous))
 		}
 	}
 }

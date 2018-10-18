@@ -91,7 +91,7 @@ they form a Raft group and provide synchronous replication.
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
 
 	flag.StringVar(&worker.Config.ExportPath, "export", "export", "Folder in which to store exports.")
-	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 2000,
+	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 512,
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.Float64Var(&worker.Config.Tracing, "trace", 0.0, "The ratio of queries to trace.")
 	flag.StringVar(&worker.Config.MyAddr, "my", "",
