@@ -335,7 +335,7 @@ func run() error {
 	var clients []api.DgraphClient
 	for _, d := range ds {
 		conn, err := setupConnection(d, !tlsConf.CertRequired)
-		x.Checkf(err, "While trying to setup connection to Dgraph server.")
+		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 
 		dc := api.NewDgraphClient(conn)
