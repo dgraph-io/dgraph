@@ -27,14 +27,6 @@ import (
 	"time"
 	"unicode"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
-
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -49,6 +41,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 type ServerState struct {
@@ -657,7 +655,10 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res.Set = append(res.Set, mu.Set...)
 	res.Del = append(res.Del, mu.Del...)
 
-	return res, validateNQuads(res.Set, res.Del)
+	if err := validateNQuads(res.Set, res.Del); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func validateNQuads(set, del []*api.NQuad) error {
@@ -681,9 +682,6 @@ func validateNQuads(set, del []*api.NQuad) error {
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return x.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
-		if err := validateKeys(nq); err != nil {
-			return x.Errorf("Key error: %s: %+v", err, nq)
-		}
 	}
 	return nil
 }
@@ -692,8 +690,8 @@ func validateKey(key string) error {
 	switch {
 	case len(key) == 0:
 		return x.Errorf("has zero length")
-	case strings.ContainsAny(key, "~"):
-		return x.Errorf("has invalid tilde")
+	case strings.ContainsAny(key, "~@"):
+		return x.Errorf("has invalid characters")
 	case strings.IndexFunc(key, unicode.IsSpace) != -1:
 		return x.Errorf("must not contain spaces")
 	}

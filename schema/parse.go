@@ -86,8 +86,7 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 	return nil
 }
 
-func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate,
-	error) {
+func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, error) {
 	it.Next()
 	if next := it.Item(); next.Typ != itemColon {
 		return nil, x.Errorf("Missing colon")
