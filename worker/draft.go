@@ -457,34 +457,26 @@ func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
 }
 
 func (n *node) processRollups() {
-	// TODO: Add a ticker here to ensure that we don't rollup too often.
-	defer n.closer.Done() // CLOSER:1
+	defer n.closer.Done()                    // CLOSER:1
+	tick := time.NewTicker(10 * time.Minute) // Rolling up once every 10 minutes seems alright.
+	defer tick.Stop()
+
+	var readTs, last uint64
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
 			return
-		case readTs := <-n.rollupCh:
-			// Let's empty out the rollupCh, so we're working with the latest
-			// value of readTs.
-		inner:
-			for {
-				select {
-				case readTs = <-n.rollupCh:
-				default:
-					break inner
-				}
+		case readTs = <-n.rollupCh:
+		case <-tick.C:
+			if readTs <= last {
+				break // Break out of the select case.
 			}
-			if readTs == 0 {
-				glog.Warningln("Found ZERO read Ts for rolling up.")
-				break // Breaks the select case.
-			}
-
-			// If we encounter error here, we don't need to do anything about
-			// it. Just let the user know.
-			err := n.rollupLists(readTs)
-			if err != nil {
+			if err := n.rollupLists(readTs); err != nil {
+				// If we encounter error here, we don't need to do anything about
+				// it. Just let the user know.
 				glog.Errorf("Error while rolling up lists at %d: %v\n", readTs, err)
 			} else {
+				last = readTs // Update last only if we succeeded.
 				glog.Infof("List rollup at Ts %d: OK.\n", readTs)
 			}
 		}
