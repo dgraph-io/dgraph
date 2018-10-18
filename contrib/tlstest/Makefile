@@ -21,7 +21,7 @@ CERTS=ca.crt server.crt client.crt server_pass.crt client_pass.crt server3.crt
 DGRAPH_PATH = $(GOPATH)/src/github.com/dgraph-io/dgraph/dgraph
 DGRAPH_BIN  = $(DGRAPH_PATH)/dgraph
 
-TARGETS     = test1 test2 test3 test4 test5
+TARGETS     = test1 test2 test3 test4 test5 test6
 KEYBITS     = 2048
 
 .PHONY: all
@@ -59,4 +59,4 @@ test6: cert
 	@(DGRAPH_BIN=$(DGRAPH_BIN) RELOAD_TEST=1 ./test.sh ./alpha_tls.sh ./live_tls.sh 1)
 
 clean:
-	@echo git clean -d -f
+	git clean -d -f
