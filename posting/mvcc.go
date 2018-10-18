@@ -255,7 +255,6 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		it.Seek(key)
 		l, err = ReadPostingList(key, it)
 	}
-
 	if err != nil {
 		return l, err
 	}

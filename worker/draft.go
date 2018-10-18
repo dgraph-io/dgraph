@@ -159,6 +159,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		}
 	}
 
+	// Let's keep the same key, so multiple retries of the same proposal would
+	// have this shared key. Thus, each server in the group can identify
+	// whether it has already done this work, and if so, skip it.
+	key := uniqueKey()
+
 	propose := func(timeout time.Duration) error {
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
@@ -168,7 +173,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 			Ch:  che,
 			Ctx: cctx,
 		}
-		key := uniqueKey()
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
 		proposal.Key = key
@@ -217,6 +221,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	timeout := 4 * time.Second
 	for err == errInternalRetry {
 		err = propose(timeout)
+		// TODO: Exponential backoff should really block here, instead of sending longer timeouts.
 		timeout *= 2 // Exponential backoff
 	}
 	return err
@@ -476,6 +481,9 @@ func (n *node) processRollups() {
 
 func (n *node) processApplyCh() {
 	defer n.closer.Done() // CLOSER:1
+
+	// Add logic here to delete everything older than 10 mins.
+	previous := make(map[string]error)
 	for entries := range n.applyCh {
 		for _, e := range entries {
 			switch {
@@ -489,8 +497,16 @@ func (n *node) processApplyCh() {
 				if err := proposal.Unmarshal(e.Data); err != nil {
 					x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 				}
+				if err, ok := previous[proposal.Key]; ok && err == nil {
+					n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
+						proposal.Key, e.Index)
+					break // Breaks the switch case.
+				}
 
 				err := n.applyCommitted(proposal, e.Index)
+				if len(proposal.Key) > 0 {
+					previous[proposal.Key] = err
+				}
 				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
 					proposal.Key, e.Index, err)
 				n.Proposals.Done(proposal.Key, err)
