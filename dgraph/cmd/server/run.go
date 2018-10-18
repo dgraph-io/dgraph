@@ -95,7 +95,7 @@ func init() {
 	flag.Float64("trace", defaults.Tracing,
 		"The ratio of queries to trace.")
 	flag.String("my", defaults.MyAddr,
-		"IP_ADDRESS:PORT of this server, so other Dgraph alphas can talk to this.")
+		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
 	flag.StringP("zero", "z", defaults.ZeroAddr,
 		"IP_ADDRESS:PORT of Dgraph zero.")
 	flag.Uint64("idx", 0,

@@ -41,7 +41,7 @@ var (
 	users   = flag.Int("users", 100, "Number of accounts.")
 	conc    = flag.Int("txns", 3, "Number of concurrent transactions per client.")
 	dur     = flag.String("dur", "1m", "How long to run the transactions.")
-	addr    = flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
+	addr    = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
 	verbose = flag.Bool("verbose", true, "Output all logs in verbose mode.")
 )
 

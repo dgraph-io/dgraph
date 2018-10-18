@@ -216,7 +216,7 @@ func TestTxnRead5(t *testing.T) {
 
 	require.NoError(t, txn.Commit(context.Background()))
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
-	// We don't supply startTs, it should be fetched from zero by dgraph alpha.
+	// We don't supply startTs, it should be fetched from zero by dgraph server.
 	req := api.Request{
 		Query: q,
 	}

@@ -82,7 +82,7 @@ func (st *state) assignUids(w http.ResponseWriter, r *http.Request) {
 }
 
 // removeNode can be used to remove a node from the cluster. It takes in the RAFT id of the node
-// and the group it belongs to. It can be used to remove Dgraph alpha and Zero nodes(group=0).
+// and the group it belongs to. It can be used to remove Dgraph server and Zero nodes(group=0).
 func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {
