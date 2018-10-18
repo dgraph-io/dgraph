@@ -49,7 +49,8 @@ func incrLimit(ctx context.Context, retry int) error {
 			return ctx.Err()
 		}
 	}
-	for i := 0; i <= retry; i++ {
+	weight := 1 << uint(retry)
+	for i := 0; i < weight; i++ {
 		select {
 		case pendingProposals <- struct{}{}:
 			x.PendingProposals.Add(1)
@@ -62,23 +63,15 @@ func incrLimit(ctx context.Context, retry int) error {
 
 // Done would slowly bleed the retries out.
 func decrLimit(retry int) {
-	if retry == 0 {
+	weight := 1 << uint(retry)
+	for i := 0; i < weight; i++ {
 		<-pendingProposals
 		x.PendingProposals.Add(-1)
-		return
 	}
-	// The following must happen in a goroutine, otherwise, the defer call to decrLimit would block.
-	go func(retry int) {
-		// Let's block a bit to release the proposal weights slowly.
-		time.Sleep(newTimeout(retry))
-		for i := 0; i <= retry; i++ {
-			<-pendingProposals
-			x.PendingProposals.Add(-1)
-		}
-	}(retry)
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
+var errUnableToServe = errors.New("Server unavailable. Please retry later")
 
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
@@ -89,6 +82,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
 	// Do a type check here if schema is present
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
@@ -176,6 +170,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
 	// timeout. We should always try with a timeout and optionally retry.
+	//
+	// Let's only try for 2 minutes, before giving up.
+	limit := time.Now().Add(2 * time.Minute)
 	for i := 0; ; i++ {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.
@@ -187,10 +184,12 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		// The below algorithm would run proposal with a calculated timeout. If
 		// it doesn't succeed or fail, it would block for the timeout duration.
 		// Then it would double the timeout.
+		if time.Now().After(limit) {
+			return errUnableToServe
+		}
 		err := propose(newTimeout(i))
 		if err != errInternalRetry {
 			return err
 		}
 	}
-	return nil
 }
