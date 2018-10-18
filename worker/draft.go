@@ -457,6 +457,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
 }
 
 func (n *node) processRollups() {
+	// TODO: Add a ticker here to ensure that we don't rollup too often.
 	defer n.closer.Done() // CLOSER:1
 	for {
 		select {
@@ -494,6 +495,8 @@ func (n *node) processApplyCh() {
 	defer n.closer.Done() // CLOSER:1
 
 	// Add logic here to delete everything older than 10 mins.
+	// Add logic here to calculate the size of proposal, as an extra step to
+	// ensure that we're dealing with the same proposal as before.
 	previous := make(map[string]error)
 	for entries := range n.applyCh {
 		for _, e := range entries {
