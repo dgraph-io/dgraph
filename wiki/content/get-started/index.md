@@ -8,11 +8,11 @@ Dgraph cluster consists of different nodes (zero, server & ratel) and each node 
 
 **Dgraph Zero** controls the Dgraph cluster, assigns servers to a group and re-balances data between server groups.
 
-**Dgraph Server** hosts predicates and indexes.
+**Dgraph Alpha** hosts predicates and indexes.
 
 **Dgraph Ratel** serves the UI to run queries, mutations & altering schema.
 
-You need atleast one Dgraph zero and one Dgraph Server to get started.
+You need atleast one Dgraph zero and one Dgraph Alpha to get started.
 
 **Here's a 3 step tutorial to get you up and running.**
 
@@ -96,7 +96,7 @@ services:
       - 8080:8080
       - 9080:9080
     restart: on-failure
-    command: dgraph server --my=server:7080 --lru_mb=2048 --zero=zero:5080
+    command: dgraph alpha --my=server:7080 --lru_mb=2048 --zero=zero:5080
   ratel:
     image: dgraph/dgraph:latest
     volumes:
@@ -119,7 +119,7 @@ command from the folder containing the file.
 docker-compose up -d
 ```
 
-This would start Dgraph Server, Zero and Ratel. You can check the logs using `docker-compose logs`
+This would start Dgraph Alpha, Zero and Ratel. You can check the logs using `docker-compose logs`
 
 ### From Installed Binary
 
@@ -134,10 +134,10 @@ dgraph zero
 
 **Run Dgraph data server**
 
-Run `dgraph server` to start Dgraph server.
+Run `dgraph alpha` to start Dgraph alpha.
 
 ```sh
-dgraph server --lru_mb 2048 --zero localhost:5080
+dgraph alpha --lru_mb 2048 --zero localhost:5080
 ```
 
 **Run Ratel**
@@ -148,7 +148,7 @@ Run 'dgraph-ratel' to start Dgraph UI. This can be used to do mutations and quer
 dgraph-ratel
 ```
 
-{{% notice "tip" %}}You need to set the estimated memory Dgraph server can take through `lru_mb` flag. This is just a hint to the Dgraph server and actual usage would be higher than this. It's recommended to set lru_mb to one-third the available RAM.{{% /notice %}}
+{{% notice "tip" %}}You need to set the estimated memory Dgraph alpha can take through `lru_mb` flag. This is just a hint to the Dgraph alpha and actual usage would be higher than this. It's recommended to set lru_mb to one-third the available RAM.{{% /notice %}}
 
 ### Docker on Linux
 
@@ -159,14 +159,14 @@ mkdir -p /tmp/data
 # Run Dgraph Zero
 docker run -it -p 5080:5080 -p 6080:6080 -p 8080:8080 -p 9080:9080 -p 8000:8000 -v /tmp/data:/dgraph --name diggy dgraph/dgraph dgraph zero
 
-# Run Dgraph Server
-docker exec -it diggy dgraph server --lru_mb 2048 --zero localhost:5080
+# Run Dgraph Alpha
+docker exec -it diggy dgraph alpha --lru_mb 2048 --zero localhost:5080
 
 # Run Dgraph Ratel
 docker exec -it diggy dgraph-ratel
 ```
 
-The dgraph server listens on ports 8080 and 9080  with log output to the terminal.
+The dgraph alpha listens on ports 8080 and 9080  with log output to the terminal.
 
 ### Docker on Non Linux Distributions.
 File access in mounted filesystems is slower when using docker. Try running the command `time dd if=/dev/zero of=test.dat bs=1024 count=100000` on mounted volume and you will notice that it's horribly slow when using mounted volumes. We recommend users to use docker data volumes. The only downside of using data volumes is that you can't access the files from the host, you have to launch a container for accessing it.
@@ -181,7 +181,7 @@ docker create -v /dgraph --name data dgraph/dgraph
 Now if we run Dgraph container with `--volumes-from` flag and run Dgraph with the following command, then anything we write to /dgraph in Dgraph container will get written to /dgraph volume of datacontainer.
 ```sh
 docker run -it -p 5080:5080 -p 6080:6080 --volumes-from data --name diggy dgraph/dgraph dgraph zero
-docker exec -it diggy dgraph server --lru_mb 2048 --zero localhost:5080
+docker exec -it diggy dgraph alpha --lru_mb 2048 --zero localhost:5080
 
 # Run Dgraph Ratel
 docker exec -it diggy dgraph-ratel
