@@ -19,7 +19,6 @@ package live
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 	"sync"
@@ -37,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+	"github.com/golang/glog"
 )
 
 var (
@@ -101,7 +101,7 @@ func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 		if err == nil {
 			return assignedIds.StartId, assignedIds.EndId, nil
 		}
-		x.Printf("Error while getting lease %v\n", err)
+		glog.Errorf("Error while getting lease %v\n", err)
 		select {
 		case <-time.After(factor):
 		case <-p.ctx.Done():
@@ -140,7 +140,7 @@ func handleError(err error) {
 	case strings.Contains(s.Message(), "x509"):
 		x.Fatalf(s.Message())
 	case err != y.ErrAborted && err != y.ErrConflict:
-		x.Printf("Error while mutating %v\n", s.Message())
+		glog.Errorf("Error while mutating %v\n", s.Message())
 	}
 }
 
@@ -198,7 +198,7 @@ func (l *loader) printCounters() {
 		counter := l.Counter()
 		rate := float64(counter.Rdfs) / counter.Elapsed.Seconds()
 		elapsed := ((time.Since(start) / time.Second) * time.Second).String()
-		fmt.Printf("Total Txns done: %8d RDFs per second: %7.0f Time Elapsed: %v, Aborts: %d\n",
+		glog.Infof("Total Txns done: %8d RDFs per second: %7.0f Time Elapsed: %v, Aborts: %d\n",
 			counter.TxnsDone, rate, elapsed, counter.Aborts)
 
 	}

@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+	"github.com/golang/glog"
 	"google.golang.org/grpc"
 )
 
@@ -83,7 +84,7 @@ type loader struct {
 }
 
 func newLoader(opt options) *loader {
-	x.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
+	glog.Infof("Connecting to zero at %s\n", opt.ZeroAddr)
 	zero, err := grpc.Dial(opt.ZeroAddr,
 		grpc.WithBlock(),
 		grpc.WithInsecure(),
@@ -119,7 +120,7 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 		if err == nil {
 			return ts.GetStartId()
 		}
-		x.Printf("error communicating with dgraph zero, retrying: %v", err)
+		glog.Errorf("Error communicating with dgraph zero, retrying: %v", err)
 		time.Sleep(time.Second)
 	}
 }
@@ -245,7 +246,7 @@ func (ld *loader) mapStage() {
 	for rdfFile, r := range readers {
 		thr.Start()
 		fileCount++
-		fmt.Printf("processing file (%d out of %d): %s\n", fileCount, len(readers), rdfFile)
+		glog.Infof("Processing file (%d out of %d): %s\n", fileCount, len(readers), rdfFile)
 		go func(r *bufio.Reader) {
 			defer thr.Done()
 			for {

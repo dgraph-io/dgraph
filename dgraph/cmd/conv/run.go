@@ -20,6 +20,7 @@ import (
 	"os"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +40,7 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Conv.Conf).Stop()
 			if err := run(); err != nil {
-				x.Println(err)
+				glog.Errorln(err)
 				os.Exit(1)
 			}
 		},

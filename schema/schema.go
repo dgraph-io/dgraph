@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -69,7 +70,7 @@ func (s *state) Delete(attr string) error {
 	s.Lock()
 	defer s.Unlock()
 
-	x.Printf("Deleting schema for predicate: [%s]", attr)
+	glog.Infof("Deleting schema for predicate: [%s]", attr)
 	delete(s.predicate, attr)
 	txn := pstore.NewTransactionAt(1, true)
 	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
@@ -95,7 +96,7 @@ func (s *state) Set(pred string, schema pb.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
-	s.elog.Printf(logUpdate(schema, pred))
+	glog.Infof(logUpdate(schema, pred))
 }
 
 // Get gets the schema for given predicate
@@ -260,7 +261,7 @@ func Load(predicate string) error {
 	}
 	State().Set(predicate, s)
 	State().elog.Printf(logUpdate(s, predicate))
-	x.Printf(logUpdate(s, predicate))
+	glog.Infoln(logUpdate(s, predicate))
 	return nil
 }
 

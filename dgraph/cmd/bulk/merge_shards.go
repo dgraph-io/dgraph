@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 func mergeMapShardsIntoReduceShards(opt options) {
@@ -42,7 +43,7 @@ func mergeMapShardsIntoReduceShards(opt options) {
 		sortBySize(reduceShards)
 		reduceShard := filepath.Join(
 			reduceShards[len(reduceShards)-1], filepath.Base(shard))
-		x.Printf("Shard %s -> Reduce %s\n", shard, reduceShard)
+		glog.Infof("Shard %s -> Reduce %s\n", shard, reduceShard)
 		x.Check(os.Rename(shard, reduceShard))
 	}
 }

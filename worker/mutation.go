@@ -595,5 +595,5 @@ func tryAbortTransactions(startTimestamps []uint64) {
 	req := &pb.TxnTimestamps{Ts: startTimestamps}
 
 	err := groups().Node.blockingAbort(req)
-	glog.Errorf("tryAbortTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Infof("tryAbortTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }

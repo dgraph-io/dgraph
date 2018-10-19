@@ -99,7 +99,7 @@ func getMemUsage() int {
 
 	contents, err := ioutil.ReadFile("/proc/self/stat")
 	if err != nil {
-		x.Println("Can't read the proc file", err)
+		glog.Errorf("Can't read the proc file. Err: %v\n", err)
 		return 0
 	}
 
@@ -107,13 +107,13 @@ func getMemUsage() int {
 	// 24th entry of the file is the RSS which denotes the number of pages
 	// used by the process.
 	if len(cont) < 24 {
-		x.Println("Error in RSS from stat")
+		glog.Errorln("Error in RSS from stat")
 		return 0
 	}
 
 	rss, err := strconv.Atoi(cont[23])
 	if err != nil {
-		x.Println(err)
+		glog.Errorln(err)
 		return 0
 	}
 

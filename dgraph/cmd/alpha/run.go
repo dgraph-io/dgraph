@@ -180,9 +180,9 @@ func setupListener(addr string, port int, reload func()) (net.Listener, error) {
 			sigChan := make(chan os.Signal, 1)
 			signal.Notify(sigChan, syscall.SIGHUP)
 			for range sigChan {
-				log.Println("SIGHUP signal received")
+				glog.Infoln("SIGHUP signal received")
 				reload()
-				log.Println("TLS certificates and CAs reloaded")
+				glog.Infoln("TLS certificates and CAs reloaded")
 			}
 		}()
 	}
@@ -290,8 +290,8 @@ func setupServer() {
 		httpListener.Close()
 	}()
 
-	glog.Infof("gRPC server started.  Listening on port", grpcPort())
-	glog.Infof("HTTP server started.  Listening on port", httpPort())
+	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
+	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 	wg.Wait()
 }
 
@@ -350,9 +350,9 @@ func run() {
 					close(shutdownCh)
 				}
 				numShutDownSig++
-				glog.Infof("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
+				glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
 				if numShutDownSig == 3 {
-					glog.Infof("Signaled thrice. Aborting!")
+					glog.Infoln("Signaled thrice. Aborting!")
 					os.Exit(1)
 				}
 			}
@@ -363,7 +363,7 @@ func run() {
 	// Setup external communication.
 	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
 	setupServer()
-	glog.Infof("GRPC and HTTP stopped.")
+	glog.Infoln("GRPC and HTTP stopped.")
 	worker.BlockingStop()
-	glog.Infof("Server shutdown. Bye!")
+	glog.Infoln("Server shutdown. Bye!")
 }

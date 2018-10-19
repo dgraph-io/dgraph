@@ -648,7 +648,7 @@ func (n *node) Run() {
 	for {
 		select {
 		case <-done:
-			glog.Infof("Raft node done.")
+			glog.Infoln("Raft node done.")
 			return
 
 		case <-slowTicker.C:
@@ -831,7 +831,7 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 	defer cancel()
 
 	delta, err := zc.TryAbort(ctx, req)
-	glog.Errorf("TryAbort %d txns with start ts. Error: %v\n", len(req.Ts), err)
+	glog.Infof("TryAbort %d txns with start ts. Error: %v\n", len(req.Ts), err)
 	if err != nil || len(delta.Txns) == 0 {
 		return err
 	}
@@ -854,10 +854,10 @@ func (n *node) abortOldTransactions() {
 	if len(starts) == 0 {
 		return
 	}
-	glog.Errorf("Found %d old transactions. Acting to abort them.\n", len(starts))
+	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
-	glog.Errorf("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Infof("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
@@ -1078,7 +1078,7 @@ func (n *node) InitAndStartNode() {
 			// x.Printf("Retrieving snapshot from peer: %d", peerId)
 			// n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
 
-			glog.Infof("Trying to join peers.")
+			glog.Infoln("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 		} else {

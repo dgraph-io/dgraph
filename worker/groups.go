@@ -74,7 +74,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		ok := x.ValidateAddress(Config.MyAddr)
 		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
 		if !bindall {
-			glog.Errorf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
+			glog.Errorln("--my flag is provided without bindall, Did you forget to specify bindall?")
 		}
 	}
 
@@ -171,7 +171,7 @@ func (g *groupi) proposeInitialSchema() {
 		if err == nil {
 			break
 		}
-		glog.Errorf("Error while proposing initial schema: ", err)
+		glog.Errorf("Error while proposing initial schema: %v\n", err)
 		time.Sleep(100 * time.Millisecond)
 	}
 }
@@ -510,7 +510,7 @@ START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		glog.Warningf("We don't have address of any Zero server.")
+		glog.Warningln("WARNING: We don't have address of any Zero server.")
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -709,12 +709,12 @@ func (g *groupi) processOracleDeltaStream() {
 	blockingReceiveAndPropose := func() {
 		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
 		defer elog.Finish()
-		elog.Printf("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
+		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
 			g.Node.Id, g.groupId())
 
 		pl := g.Leader(0)
 		if pl == nil {
-			glog.Warningf("We don't have address of any dgraphzero leader.")
+			glog.Warningln("WARNING: We don't have address of any dgraphzero leader.")
 			elog.Errorf("Dgraph zero leader address unknown")
 			time.Sleep(time.Second)
 			return

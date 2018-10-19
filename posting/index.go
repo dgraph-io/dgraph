@@ -76,7 +76,7 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 			// Exact index can only be applied for strings so we can safely try to convert Value to
 			// string.
 			if (it.Identifier() == exactTok.Identifier()) && len(sv.Value.(string)) > 100 {
-				x.Printf("Long term for exact index on predicate: [%s]. "+
+				glog.Infof("Long term for exact index on predicate: [%s]. "+
 					"Consider switching to hash for better performance.\n", attr)
 			}
 		}
@@ -806,7 +806,7 @@ func DeleteAll() error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	x.Printf("Dropping predicate: [%s]", attr)
+	glog.Infof("Dropping predicate: [%s]", attr)
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
 	})

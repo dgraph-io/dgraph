@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 var (
@@ -47,7 +48,7 @@ func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 	// so all the proposals for a particular tablet would atmost wait for deletion of
 	// single tablet.
 	groups().waitForBackgroundDeletion()
-	x.Printf("Writing %d keys\n", len(kvs))
+	glog.Infof("Writing %d keys\n", len(kvs))
 
 	var hasError uint32
 	var wg sync.WaitGroup
@@ -144,12 +145,12 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if err != nil {
 		return err
 	}
-	x.Printf("Received %d keys\n", recvCount)
+	glog.Infof("Received %d keys\n", recvCount)
 	return nil
 }
 
 func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
-	x.Println("Receiving predicate. Batching and proposing key values")
+	glog.Infoln("Receiving predicate. Batching and proposing key values")
 	n := groups().Node
 	proposal := &pb.Proposal{}
 	size := 0
@@ -169,10 +170,10 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				pk = x.Parse(kv.Key)
 				// Delete on all nodes.
 				p := &pb.Proposal{CleanPredicate: pk.Attr}
-				x.Printf("Predicate being received: %v", pk.Attr)
+				glog.Infof("Predicate being received: %v", pk.Attr)
 				err := groups().Node.proposeAndWait(ctx, p)
 				if err != nil {
-					x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+					glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 					return err
 				}
 			}
@@ -200,7 +201,7 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 	ctx := stream.Context()
 	payload := &api.Payload{}
 
-	x.Printf("Got ReceivePredicate. Group: %d. Am leader: %v",
+	glog.Infof("Got ReceivePredicate. Group: %d. Am leader: %v",
 		groups().groupId(), groups().Node.AmLeader())
 
 	go func() {
@@ -215,7 +216,7 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 			break
 		}
 		if err != nil {
-			x.Printf("Received %d keys. Error in loop: %v\n", count, err)
+			glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
 			return err
 		}
 		count += len(kvBatch.Kv)
@@ -225,16 +226,16 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 		case <-ctx.Done():
 			close(kvs)
 			<-che
-			x.Printf("Received %d keys. Context deadline\n", count)
+			glog.Infof("Received %d keys. Context deadline\n", count)
 			return ctx.Err()
 		case err := <-che:
-			x.Printf("Received %d keys. Error via channel: %v\n", count, err)
+			glog.Infof("Received %d keys. Error via channel: %v\n", count, err)
 			return err
 		}
 	}
 	close(kvs)
 	err := <-che
-	x.Printf("Proposed %d keys. Error: %v\n", count, err)
+	glog.Infof("Proposed %d keys. Error: %v\n", count, err)
 	return err
 }
 
@@ -256,7 +257,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errNotLeader
 	}
 
-	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
+	glog.Infof("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
 		in.SourceGroupId, in.DestGroupId)
 
 	// Ensures that all future mutations beyond this point are rejected.
@@ -266,7 +267,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	aborted := false
 	for i := 0; i < 12; i++ {
 		// Try a dozen times, then give up.
-		x.Printf("Trying to abort pending mutations. Loop: %d", i)
+		glog.Infof("Trying to abort pending mutations. Loop: %d", i)
 		tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
 			pk := x.Parse(key)
 			return pk.Attr == in.Predicate
