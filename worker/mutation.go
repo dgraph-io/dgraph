@@ -24,9 +24,6 @@ import (
 	"math/rand"
 	"time"
 
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
@@ -37,6 +34,8 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 )
 
 var (
@@ -71,7 +70,9 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	// Once mutation comes via raft we do best effort conversion
 	// Type check is done before proposing mutation, in case schema is not
 	// present, some invalid entries might be written initially
-	err := ValidateAndConvert(edge, &su)
+	if err := ValidateAndConvert(edge, &su); err != nil {
+		return err
+	}
 
 	t := time.Now()
 	key := x.DataKey(edge.Attr, edge.Entity)
@@ -335,7 +336,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	// type checks
 	storageType, schemaType := posting.TypeID(edge), types.TypeID(su.ValueType)
 	switch {
-	case schemaType == types.StringID && len(edge.Lang) > 0 && !su.GetLang():
+	case edge.Lang != "" && !su.GetLang():
 		return x.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
 			edge.Attr, edge)
 

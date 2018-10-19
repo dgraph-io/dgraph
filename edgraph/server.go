@@ -690,7 +690,7 @@ func validateKey(key string) error {
 	switch {
 	case len(key) == 0:
 		return x.Errorf("has zero length")
-	case strings.ContainsAny(key, "~@"):
+	case strings.ContainsAny(key, "~"):
 		return x.Errorf("has invalid characters")
 	case strings.IndexFunc(key, unicode.IsSpace) != -1:
 		return x.Errorf("must not contain spaces")
