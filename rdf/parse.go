@@ -85,14 +85,7 @@ L:
 			it.Next() // parse ')'
 
 		case itemPredicate:
-			val := strings.Trim(item.Val, " ")
-			predWithLang := strings.SplitN(val, "@", 2)
-			if len(predWithLang) == 2 && predWithLang[0] != "" {
-				rnq.Predicate = predWithLang[0]
-				rnq.Lang = predWithLang[1]
-				break
-			}
-			rnq.Predicate = val
+			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.Trim(item.Val, " "))
 
 		case itemObject:
 			rnq.ObjectId = strings.Trim(item.Val, " ")
