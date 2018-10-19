@@ -49,6 +49,10 @@ type rateLimiter struct {
 	iou int32
 }
 
+// Instead of using the time/rate package, we use this simple one, because that
+// allows a certain number of ops per second, without taking any feedback into
+// account. We however, limit solely based on feedback, allowing a certain
+// number of ops to remain pending, and not anymore.
 func (rl *rateLimiter) bleed() {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
