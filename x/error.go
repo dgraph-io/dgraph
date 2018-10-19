@@ -60,6 +60,12 @@ func Check2(_ interface{}, err error) {
 	Check(err)
 }
 
+// Ignore function is used to ignore errors deliberately, while keeping the
+// linter happy.
+func Ignore(_ error) {
+	// Do nothing.
+}
+
 // AssertTrue asserts that b is true. Otherwise, it would log fatal.
 func AssertTrue(b bool) {
 	if !b {

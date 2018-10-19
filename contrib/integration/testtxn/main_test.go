@@ -456,7 +456,7 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	}
 
 	txn = s.dg.NewTxn()
-	defer txn.Discard(context.Background())
+	defer x.Ignore(txn.Discard(context.Background()))
 	q := `{ me(func: le(name, "Manish")) { uid }}`
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
