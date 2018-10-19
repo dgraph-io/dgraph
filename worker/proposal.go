@@ -64,17 +64,9 @@ func (rl *rateLimiter) bleed() {
 }
 
 func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
-	if retry > 0 {
-		timeout := newTimeout(retry)
-		t := time.NewTimer(timeout)
-		select {
-		case <-t.C:
-		case <-ctx.Done():
-			t.Stop()
-			return ctx.Err()
-		}
-	}
-	weight := 1 << uint(retry)
+	// Let's not wait here via time.Sleep or similar. Let pendingProposals
+	// channel do its natural rate limiting.
+	weight := 1 << uint(retry) // Use an exponentially increasing weight.
 	for i := 0; i < weight; i++ {
 		select {
 		case pendingProposals <- struct{}{}:
@@ -93,7 +85,7 @@ func (rl *rateLimiter) decr(retry int) {
 		x.PendingProposals.Add(-1)
 		return
 	}
-	weight := 1 << uint(retry)
+	weight := 1 << uint(retry) // Ensure that the weight calculation is a copy of incr.
 	atomic.AddInt32(&rl.iou, int32(weight))
 }
 
@@ -198,8 +190,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
 	// timeout. We should always try with a timeout and optionally retry.
 	//
-	// Let's only try for 90s, before giving up.
-	limit := time.Now().Add(90 * time.Second)
+	// Let's only try for a minute, before giving up.
+	deadline := time.Now().Add(time.Minute)
 	for i := 0; ; i++ {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.
@@ -211,7 +203,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		// The below algorithm would run proposal with a calculated timeout. If
 		// it doesn't succeed or fail, it would block for the timeout duration.
 		// Then it would double the timeout.
-		if time.Now().After(limit) {
+		if time.Now().After(deadline) {
 			return errUnableToServe
 		}
 		err := propose(newTimeout(i))

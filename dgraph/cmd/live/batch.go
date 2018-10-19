@@ -140,11 +140,12 @@ func handleError(err error) {
 		x.Fatalf(s.Message())
 	case strings.Contains(s.Message(), "x509"):
 		x.Fatalf(s.Message())
+	case strings.Contains(s.Message(), "Server unavailable."):
+		dur := time.Duration(1+rand.Intn(10)) * time.Minute
+		x.Printf("Server is unavailable. Will retry after %s.", dur.Round(time.Minute))
+		time.Sleep(dur)
 	case err != y.ErrAborted && err != y.ErrConflict:
 		x.Printf("Error while mutating %v\n", s.Message())
-	case strings.Contains(s.Message(), "server unavailable"):
-		x.Printf("Server is unavailable. Will retry after some time...")
-		time.Sleep(time.Duration(rand.Intn(10)) * time.Minute)
 	}
 }
 
