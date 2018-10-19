@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 )
 
@@ -86,7 +87,7 @@ instances to achieve high-availability.
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
 	laddr := fmt.Sprintf("%s:%d", addr, port)
-	fmt.Printf("Setting up %s listener at: %v\n", kind, laddr)
+	glog.Infof("Setting up %s listener at: %v\n", kind, laddr)
 	return net.Listen("tcp", laddr)
 }
 
@@ -117,7 +118,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 	go func() {
 		defer wg.Done()
 		err := s.Serve(l)
-		log.Printf("gRpc server stopped : %s", err.Error())
+		glog.Infof("gRpc server stopped : %s", err.Error())
 		st.node.stop <- struct{}{}
 
 		// Attempt graceful stop (waits for pending RPCs), but force a stop if
@@ -131,7 +132,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 		select {
 		case <-done:
 		case <-time.After(timeout):
-			log.Printf("Stopping grpc gracefully is taking longer than %v."+
+			glog.Infof("Stopping grpc gracefully is taking longer than %v."+
 				" Force stopping now. Pending RPCs will be abandoned.", timeout)
 			s.Stop()
 		}
@@ -217,7 +218,7 @@ func run() {
 	go func() {
 		defer wg.Done()
 		<-sdCh
-		fmt.Println("Shutting down...")
+		glog.Infof("Shutting down...")
 		// Close doesn't close already opened connections.
 		httpListener.Close()
 		grpcListener.Close()
@@ -225,7 +226,7 @@ func run() {
 		st.node.trySnapshot(0)
 	}()
 
-	fmt.Println("Running Dgraph zero...")
+	glog.Infof("Running Dgraph Zero...")
 	wg.Wait()
-	fmt.Println("All done.")
+	glog.Infof("All done.")
 }
