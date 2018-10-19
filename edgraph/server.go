@@ -274,11 +274,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// to set a field but use the wrong name (could be decoded from JSON).
 		return nil, x.Errorf("Operation must have at least one field set")
 	}
+	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
 		}
-		return nil, err
+		return empty, err
 	}
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed by server.")
@@ -296,7 +297,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if op.DropAll {
 		m.DropAll = true
 		_, err := query.ApplyMutations(ctx, m)
-		return nil, err
+		return empty, err
 	}
 	if len(op.DropAttr) > 0 {
 		nq := &api.NQuad{
@@ -307,22 +308,22 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		wnq := &gql.NQuad{NQuad: nq}
 		edge, err := wnq.ToDeletePredEdge()
 		if err != nil {
-			return nil, err
+			return empty, err
 		}
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
 		_, err = query.ApplyMutations(ctx, m)
-		return nil, err
+		return empty, err
 	}
 	updates, err := schema.Parse(op.Schema)
 	if err != nil {
-		return nil, err
+		return empty, err
 	}
 	glog.Infof("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = updates
 	_, err = query.ApplyMutations(ctx, m)
-	return nil, err
+	return empty, err
 }
 
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
