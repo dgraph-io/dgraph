@@ -18,6 +18,7 @@ package worker
 
 import (
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/conn"
@@ -38,7 +39,31 @@ func newTimeout(retry int) time.Duration {
 	return timeout
 }
 
-func incrLimit(ctx context.Context, retry int) error {
+var limiter rateLimiter
+
+func init() {
+	go limiter.bleed()
+}
+
+type rateLimiter struct {
+	iou int32
+}
+
+func (rl *rateLimiter) bleed() {
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+
+	for range tick.C {
+		if atomic.AddInt32(&rl.iou, -1) >= 0 {
+			<-pendingProposals
+			x.PendingProposals.Add(-1)
+		} else {
+			atomic.AddInt32(&rl.iou, 1)
+		}
+	}
+}
+
+func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 	if retry > 0 {
 		timeout := newTimeout(retry)
 		t := time.NewTimer(timeout)
@@ -62,12 +87,14 @@ func incrLimit(ctx context.Context, retry int) error {
 }
 
 // Done would slowly bleed the retries out.
-func decrLimit(retry int) {
-	weight := 1 << uint(retry)
-	for i := 0; i < weight; i++ {
+func (rl *rateLimiter) decr(retry int) {
+	if retry == 0 {
 		<-pendingProposals
 		x.PendingProposals.Add(-1)
+		return
 	}
+	weight := 1 << uint(retry)
+	atomic.AddInt32(&rl.iou, int32(weight))
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
@@ -171,15 +198,15 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
 	// timeout. We should always try with a timeout and optionally retry.
 	//
-	// Let's only try for 2 minutes, before giving up.
-	limit := time.Now().Add(2 * time.Minute)
+	// Let's only try for 90s, before giving up.
+	limit := time.Now().Add(90 * time.Second)
 	for i := 0; ; i++ {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.
-		if err := incrLimit(ctx, i); err != nil {
+		if err := limiter.incr(ctx, i); err != nil {
 			return err
 		}
-		defer decrLimit(i)
+		defer limiter.decr(i)
 
 		// The below algorithm would run proposal with a calculated timeout. If
 		// it doesn't succeed or fail, it would block for the timeout duration.
