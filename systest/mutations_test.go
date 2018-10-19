@@ -83,7 +83,10 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `list: [string] @lang .`,
+		Schema: `
+			list: [string] @lang .
+			name: string @lang .
+		`,
 	})))
 
 	txn := c.NewTxn()
@@ -889,7 +892,7 @@ func SetAfterDeletionListType(t *testing.T, c *dgo.Dgraph) {
 
 func EmptyNamesWithExact(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) .`})
+	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) @lang .`})
 	require.NoError(t, err)
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
