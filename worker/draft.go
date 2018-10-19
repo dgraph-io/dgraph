@@ -371,7 +371,6 @@ func (n *node) processApplyCh() {
 
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
-		n.elog.Printf("Handling %d entries", len(entries))
 		for _, e := range entries {
 			switch {
 			case e.Type == raftpb.EntryConfChange:
@@ -390,10 +389,7 @@ func (n *node) processApplyCh() {
 
 				var perr error
 				p, ok := previous[proposal.Key]
-				if ok && p.err == nil {
-					if p.size != psz {
-						glog.Warningf("Proposal size [now != prev] [%d != %d]\n", p.size, psz)
-					}
+				if ok && p.err == nil && p.size == psz {
 					n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
 						proposal.Key, e.Index)
 					previous[proposal.Key].seen = time.Now() // Update the ts.

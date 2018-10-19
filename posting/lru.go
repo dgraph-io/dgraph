@@ -22,6 +22,7 @@ package posting
 import (
 	"container/list"
 	"context"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -30,7 +31,7 @@ import (
 
 // listCache is an LRU cache.
 type listCache struct {
-	x.SafeMutex
+	sync.Mutex
 
 	ctx context.Context
 	// MaxSize is the maximum size of cache before an item is evicted.

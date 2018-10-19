@@ -194,9 +194,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
 	// timeout. We should always try with a timeout and optionally retry.
 	//
-	// Let's only try for a minute, before giving up.
-	deadline := time.Now().Add(time.Minute)
-	for i := 0; ; i++ {
+	// Let's try 3 times before giving up.
+	for i := 0; i < 3; i++ {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.
 		if err := limiter.incr(ctx, i); err != nil {
@@ -204,14 +203,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		}
 		defer limiter.decr(i)
 
-		// The below algorithm would run proposal with a calculated timeout. If
-		// it doesn't succeed or fail, it would block for the timeout duration.
-		// Then it would double the timeout.
-		if time.Now().After(deadline) {
-			return errUnableToServe
-		}
 		if err := propose(newTimeout(i)); err != errInternalRetry {
 			return err
 		}
 	}
+	return errUnableToServe
 }
