@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"sync/atomic"
 	"time"
@@ -69,7 +68,7 @@ type node struct {
 // sufficient. We don't need to wait for proposals to be applied.
 
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
-	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
+	glog.Infof("Node ID: %v with GroupID: %v\n", id, gid)
 
 	rc := &pb.RaftContext{
 		Addr:  myAddr,
@@ -529,7 +528,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 			return
 		}
 		for err := txn.CommitToMemory(commit); err != nil; {
-			x.Printf("Error while applying txn status to memory (%d -> %d): %v",
+			glog.Errorf("Error while applying txn status to memory (%d -> %d): %v",
 				start, commit, err)
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -649,7 +648,7 @@ func (n *node) Run() {
 	for {
 		select {
 		case <-done:
-			log.Println("Raft node done.")
+			glog.Infof("Raft node done.")
 			return
 
 		case <-slowTicker.C:
@@ -832,7 +831,7 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 	defer cancel()
 
 	delta, err := zc.TryAbort(ctx, req)
-	x.Printf("TryAbort %d txns with start ts. Error: %v\n", len(req.Ts), err)
+	glog.Errorf("TryAbort %d txns with start ts. Error: %v\n", len(req.Ts), err)
 	if err != nil || len(delta.Txns) == 0 {
 		return err
 	}
@@ -855,10 +854,10 @@ func (n *node) abortOldTransactions() {
 	if len(starts) == 0 {
 		return
 	}
-	x.Printf("Found %d old transactions. Acting to abort them.\n", len(starts))
+	glog.Errorf("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
-	x.Printf("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Errorf("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
@@ -967,7 +966,7 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		snapshotIdx, maxCommitTs, numDiscarding, minPendingStart)
 	if int(numDiscarding) < discardN {
 		tr.LazyPrintf("Skipping snapshot because insufficient discard entries")
-		x.Printf("Skipping snapshot at index: %d. Insufficient discard entries: %d."+
+		glog.Infof("Skipping snapshot at index: %d. Insufficient discard entries: %d."+
 			" MinPendingStartTs: %d\n", snapshotIdx, numDiscarding, minPendingStart)
 		return nil, nil
 	}
@@ -989,11 +988,11 @@ func (n *node) joinPeers() error {
 
 	gconn := pl.Get()
 	c := pb.NewRaftClient(gconn)
-	x.Printf("Calling JoinCluster via leader: %s", pl.Addr)
+	glog.Infof("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
 		return x.Errorf("Error while joining cluster: %+v\n", err)
 	}
-	x.Printf("Done with JoinCluster call\n")
+	glog.Infof("Done with JoinCluster call\n")
 	return nil
 }
 
@@ -1006,12 +1005,12 @@ func (n *node) isMember() (bool, error) {
 
 	gconn := pl.Get()
 	c := pb.NewRaftClient(gconn)
-	x.Printf("Calling IsPeer")
+	glog.Infof("Calling IsPeer")
 	pr, err := c.IsPeer(n.ctx, n.RaftContext)
 	if err != nil {
 		return false, x.Errorf("Error while joining cluster: %+v\n", err)
 	}
-	x.Printf("Done with IsPeer call\n")
+	glog.Infof("Done with IsPeer call\n")
 	return pr.Status, nil
 }
 
@@ -1021,7 +1020,7 @@ func (n *node) retryUntilSuccess(fn func() error, pause time.Duration) {
 		if err = fn(); err == nil {
 			break
 		}
-		x.Printf("Error while calling fn: %v. Retrying...\n", err)
+		glog.Errorf("Error while calling fn: %v. Retrying...\n", err)
 		time.Sleep(pause)
 	}
 }
@@ -1039,13 +1038,13 @@ func (n *node) InitAndStartNode() {
 			if restart, err = n.isMember(); err == nil {
 				break
 			}
-			x.Printf("Error while calling hasPeer: %v. Retrying...\n", err)
+			glog.Errorf("Error while calling hasPeer: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 		}
 	}
 
 	if restart {
-		x.Printf("Restarting node for group: %d\n", n.gid)
+		glog.Infof("Restarting node for group: %d\n", n.gid)
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
 		if !raft.IsEmptySnap(sp) {
@@ -1079,7 +1078,7 @@ func (n *node) InitAndStartNode() {
 			// x.Printf("Retrieving snapshot from peer: %d", peerId)
 			// n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
 
-			x.Println("Trying to join peers.")
+			glog.Infof("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 		} else {
