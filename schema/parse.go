@@ -73,7 +73,7 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 	case "upsert":
 		schema.Upsert = true
 	case "lang":
-		if t != types.StringID {
+		if t != types.StringID || schema.List {
 			return x.Errorf("@lang directive can only be specified for string type."+
 				" Got: [%v] for attr: [%v]", t.Name(), schema.Predicate)
 		}
