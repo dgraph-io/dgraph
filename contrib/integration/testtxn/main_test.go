@@ -439,8 +439,10 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 
 	txn := s.dg.NewTxn()
 
-	mu := &api.Mutation{}
-	mu.SetJson = []byte(`{"name": "Manish"}`)
+	mu := &api.Mutation{
+		CommitNow: true,
+		SetJson:   []byte(`{"name": "Manish"}`),
+	}
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
@@ -453,6 +455,8 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 		uid = u
 	}
 
+	txn = s.dg.NewTxn()
+	defer txn.Discard(context.Background())
 	q := `{ me(func: le(name, "Manish")) { uid }}`
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
