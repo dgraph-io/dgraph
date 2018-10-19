@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 type groupi struct {
@@ -748,7 +749,7 @@ func (g *groupi) processOracleDeltaStream() {
 			for {
 				delta, err := stream.Recv()
 				if err != nil || delta == nil {
-					x.Printf("Error in oracle delta stream. Error: %v", err)
+					glog.Errorf("Error in oracle delta stream. Error: %v", err)
 					return
 				}
 
@@ -800,9 +801,15 @@ func (g *groupi) processOracleDeltaStream() {
 				elog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
 				return
 			}
-			// Block forever trying to propose this.
 			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
-			g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
+			for {
+				// Block forever trying to propose this.
+				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
+				if err == nil {
+					break
+				}
+				glog.Errorf("While proposing delta: %v. Error=%v. Retrying...\n", delta, err)
+			}
 		}
 	}
 

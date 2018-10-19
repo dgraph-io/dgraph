@@ -22,7 +22,7 @@ import (
 	"github.com/dgraph-io/badger"
 
 	"bytes"
-	"github.com/dgraph-io/dgraph/posting"
+
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -159,11 +159,15 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	var out []string
 	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
 	seekKey := x.IndexKey(attr, ineqToken)
-	it := posting.NewTxnPrefixIterator(txn, itOpt, indexPrefix, seekKey)
+
+	itr := txn.NewIterator(itOpt)
+	defer itr.Close()
+
 	ineqTokenInBytes := []byte(ineqToken) //used for inequality comparison below
-	defer it.Close()
-	for ; it.Valid(); it.Next() {
-		key := it.Key()
+
+	for itr.Seek(seekKey); itr.ValidForPrefix(indexPrefix); itr.Next() {
+		item := itr.Item()
+		key := item.Key()
 		k := x.Parse(key)
 		if k == nil {
 			continue

@@ -55,7 +55,7 @@ func queryCounter(txn *dgo.Txn) (Counter, error) {
 	query := fmt.Sprintf("{ q(func: has(%s)) { uid, val: %s }}", *pred, *pred)
 	resp, err := txn.Query(ctx, query)
 	if err != nil {
-		return counter, err
+		return counter, fmt.Errorf("Query error: %v", err)
 	}
 	m := make(map[string][]Counter)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
@@ -92,13 +92,12 @@ func process(dg *dgo.Dgraph, readOnly bool) (Counter, error) {
 	}
 	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, *pred, counter.Val))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_, err = txn.Mutate(ctx, &mu)
+	// Don't put any timeout for mutation.
+	_, err = txn.Mutate(context.Background(), &mu)
 	if err != nil {
 		return Counter{}, err
 	}
-	return counter, txn.Commit(ctx)
+	return counter, txn.Commit(context.Background())
 }
 
 func main() {
