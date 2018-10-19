@@ -574,7 +574,7 @@ func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	txn = c.NewTxn()
-	defer x.Ignore(txn.Discard(ctx))
+	defer txn.Discard(ctx)
 	resp, err := txn.Query(ctx, `
 	{
 	  q(func: eq(name, "Michael")) {
@@ -1568,7 +1568,7 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	}
 
 	txn = c.NewTxn()
-	defer x.Ignore(txn.Discard(ctx))
+	defer txn.Discard(ctx)
 	uids = getUids(txn)
 	require.Equal(t, 3, len(uids))
 	for _, uid := range uids {
