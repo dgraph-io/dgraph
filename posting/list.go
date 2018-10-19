@@ -80,7 +80,6 @@ type List struct {
 	deleteMe      int32  // Using atomic for this, to avoid expensive SetForDeletion operation.
 	estimatedSize int32
 	numCommits    int
-	onDisk        bool
 }
 
 // calculateSize would give you the size estimate. This is expensive, so run it carefully.

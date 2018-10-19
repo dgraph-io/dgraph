@@ -259,7 +259,6 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		return l, err
 	}
 
-	l.onDisk = true
 	l.Lock()
 	size := l.calculateSize()
 	l.Unlock()
@@ -268,136 +267,86 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	return l, nil
 }
 
-type BTreeIterator struct {
-	keys    [][]byte
-	idx     int
-	Reverse bool
-	Prefix  []byte
-}
+// type TxnPrefixIterator struct {
+// 	badgerIter *badger.Iterator
+// 	prefix     []byte
+// 	reverse    bool
+// 	curKey     []byte
+// 	userMeta   byte // userMeta stored as part of badger item, used to skip empty PL in has query.
+// }
 
-func (bi *BTreeIterator) Next() {
-	bi.idx++
-}
+// func NewTxnPrefixIterator(txn *badger.Txn,
+// 	iterOpts badger.IteratorOptions, prefix, key []byte) *TxnPrefixIterator {
 
-func (bi *BTreeIterator) Key() []byte {
-	x.AssertTrue(bi.Valid())
-	return bi.keys[bi.idx]
-}
+// 	x.AssertTrue(iterOpts.PrefetchValues == false)
+// 	txnIt := new(TxnPrefixIterator)
+// 	txnIt.reverse = iterOpts.Reverse
+// 	txnIt.prefix = prefix
+// 	// Create iterator only after copying the keys from btree, or else there could
+// 	// be race after creating iterator and before reading btree. Some keys might end up
+// 	// getting deleted and iterator won't be initialized with new memtbales.
+// 	txnIt.badgerIter = txn.NewIterator(iterOpts)
+// 	txnIt.badgerIter.Seek(key)
+// 	txnIt.Next()
+// 	return txnIt
+// }
 
-func (bi *BTreeIterator) Valid() bool {
-	// No need to check HasPrefix here, because we are only picking those keys
-	// which have the right prefix in Seek.
-	return bi.idx < len(bi.keys)
-}
+// func (t *TxnPrefixIterator) Valid() bool {
+// 	return len(t.curKey) > 0
+// }
 
-func (bi *BTreeIterator) Seek(key []byte) {
-	bi.keys = bi.keys[:0]
-	bi.idx = 0
-	cont := func(key []byte) bool {
-		if !bytes.HasPrefix(key, bi.Prefix) {
-			return false
-		}
-		bi.keys = append(bi.keys, key)
-		return true
-	}
-	if !bi.Reverse {
-		btree.AscendGreaterOrEqual(key, cont)
-	} else {
-		btree.DescendLessOrEqual(key, cont)
-	}
-}
+// func (t *TxnPrefixIterator) compare(key1 []byte, key2 []byte) int {
+// 	if !t.reverse {
+// 		return bytes.Compare(key1, key2)
+// 	}
+// 	return bytes.Compare(key2, key1)
+// }
 
-type TxnPrefixIterator struct {
-	btreeIter  *BTreeIterator
-	badgerIter *badger.Iterator
-	prefix     []byte
-	reverse    bool
-	curKey     []byte
-	userMeta   byte // userMeta stored as part of badger item, used to skip empty PL in has query.
-}
+// func (t *TxnPrefixIterator) Next() {
+// 	if len(t.curKey) > 0 {
+// 		// Avoid duplicate keys during merging.
+// 		for t.badgerIter.ValidForPrefix(t.prefix) &&
+// 			t.compare(t.badgerIter.Item().Key(), t.curKey) <= 0 {
+// 			t.badgerIter.Next()
+// 		}
+// 	}
 
-func NewTxnPrefixIterator(txn *badger.Txn,
-	iterOpts badger.IteratorOptions, prefix, key []byte) *TxnPrefixIterator {
-	x.AssertTrue(iterOpts.PrefetchValues == false)
-	txnIt := new(TxnPrefixIterator)
-	txnIt.reverse = iterOpts.Reverse
-	txnIt.prefix = prefix
-	txnIt.btreeIter = &BTreeIterator{
-		Reverse: iterOpts.Reverse,
-		Prefix:  prefix,
-	}
-	txnIt.btreeIter.Seek(key)
-	// Create iterator only after copying the keys from btree, or else there could
-	// be race after creating iterator and before reading btree. Some keys might end up
-	// getting deleted and iterator won't be initialized with new memtbales.
-	txnIt.badgerIter = txn.NewIterator(iterOpts)
-	txnIt.badgerIter.Seek(key)
-	txnIt.Next()
-	return txnIt
-}
+// 	t.userMeta = 0 // reset it.
+// 	if !t.badgerIter.ValidForPrefix(t.prefix) {
+// 		t.storeKey(t.btreeIter.Key())
+// 		t.btreeIter.Next()
+// 	} else if !t.btreeIter.Valid() {
+// 		t.userMeta = t.badgerIter.Item().UserMeta()
+// 		t.storeKey(t.badgerIter.Item().Key())
+// 		t.badgerIter.Next()
+// 	} else { // Both are valid
+// 		if t.compare(t.btreeIter.Key(), t.badgerIter.Item().Key()) < 0 {
+// 			t.storeKey(t.btreeIter.Key())
+// 			t.btreeIter.Next()
+// 		} else {
+// 			t.userMeta = t.badgerIter.Item().UserMeta()
+// 			t.storeKey(t.badgerIter.Item().Key())
+// 			t.badgerIter.Next()
+// 		}
+// 	}
+// }
 
-func (t *TxnPrefixIterator) Valid() bool {
-	return len(t.curKey) > 0
-}
+// func (t *TxnPrefixIterator) UserMeta() byte {
+// 	return t.userMeta
+// }
 
-func (t *TxnPrefixIterator) compare(key1 []byte, key2 []byte) int {
-	if !t.reverse {
-		return bytes.Compare(key1, key2)
-	}
-	return bytes.Compare(key2, key1)
-}
+// func (t *TxnPrefixIterator) storeKey(key []byte) {
+// 	if cap(t.curKey) < len(key) {
+// 		t.curKey = make([]byte, 2*len(key))
+// 	}
+// 	t.curKey = t.curKey[:len(key)]
+// 	copy(t.curKey, key)
+// }
 
-func (t *TxnPrefixIterator) Next() {
-	if len(t.curKey) > 0 {
-		// Avoid duplicate keys during merging.
-		for t.btreeIter.Valid() && t.compare(t.btreeIter.Key(), t.curKey) <= 0 {
-			t.btreeIter.Next()
-		}
-		for t.badgerIter.ValidForPrefix(t.prefix) &&
-			t.compare(t.badgerIter.Item().Key(), t.curKey) <= 0 {
-			t.badgerIter.Next()
-		}
-	}
+// func (t *TxnPrefixIterator) Key() []byte {
+// 	return t.curKey
+// }
 
-	t.userMeta = 0 // reset it.
-	if !t.btreeIter.Valid() && !t.badgerIter.ValidForPrefix(t.prefix) {
-		t.curKey = nil
-		return
-	} else if !t.badgerIter.ValidForPrefix(t.prefix) {
-		t.storeKey(t.btreeIter.Key())
-		t.btreeIter.Next()
-	} else if !t.btreeIter.Valid() {
-		t.userMeta = t.badgerIter.Item().UserMeta()
-		t.storeKey(t.badgerIter.Item().Key())
-		t.badgerIter.Next()
-	} else { // Both are valid
-		if t.compare(t.btreeIter.Key(), t.badgerIter.Item().Key()) < 0 {
-			t.storeKey(t.btreeIter.Key())
-			t.btreeIter.Next()
-		} else {
-			t.userMeta = t.badgerIter.Item().UserMeta()
-			t.storeKey(t.badgerIter.Item().Key())
-			t.badgerIter.Next()
-		}
-	}
-}
-
-func (t *TxnPrefixIterator) UserMeta() byte {
-	return t.userMeta
-}
-
-func (t *TxnPrefixIterator) storeKey(key []byte) {
-	if cap(t.curKey) < len(key) {
-		t.curKey = make([]byte, 2*len(key))
-	}
-	t.curKey = t.curKey[:len(key)]
-	copy(t.curKey, key)
-}
-
-func (t *TxnPrefixIterator) Key() []byte {
-	return t.curKey
-}
-
-func (t *TxnPrefixIterator) Close() {
-	t.badgerIter.Close()
-}
+// func (t *TxnPrefixIterator) Close() {
+// 	t.badgerIter.Close()
+// }
