@@ -139,6 +139,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	// have this shared key. Thus, each server in the group can identify
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
+	proposal.Key = key
 
 	propose := func(timeout time.Duration) error {
 		cctx, cancel := context.WithTimeout(ctx, timeout)
@@ -151,7 +152,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		}
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
-		proposal.Key = key
 
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Proposing data with key: %s. Timeout: %v", key, timeout)
@@ -210,8 +210,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		if time.Now().After(deadline) {
 			return errUnableToServe
 		}
-		err := propose(newTimeout(i))
-		if err != errInternalRetry {
+		if err := propose(newTimeout(i)); err != errInternalRetry {
 			return err
 		}
 	}

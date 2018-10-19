@@ -333,8 +333,8 @@ func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
 }
 
 func (n *node) processRollups() {
-	defer n.closer.Done()                    // CLOSER:1
-	tick := time.NewTicker(10 * time.Minute) // Rolling up once every 10 minutes seems alright.
+	defer n.closer.Done()                   // CLOSER:1
+	tick := time.NewTicker(5 * time.Minute) // Rolling up once every 5 minutes seems alright.
 	defer tick.Stop()
 
 	var readTs, last uint64
@@ -368,10 +368,6 @@ func (n *node) processApplyCh() {
 		seen time.Time
 	}
 	previous := make(map[string]*P)
-
-	maxAge := 10 * time.Minute
-	tick := time.NewTicker(maxAge / 2)
-	defer tick.Stop()
 
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
@@ -418,6 +414,10 @@ func (n *node) processApplyCh() {
 			}
 		}
 	}
+
+	maxAge := 10 * time.Minute
+	tick := time.NewTicker(maxAge / 2)
+	defer tick.Stop()
 
 	for {
 		select {
