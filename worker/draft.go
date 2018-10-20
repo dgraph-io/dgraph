@@ -446,7 +446,8 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		retry := Config.MaxRetries
 		for err := txn.CommitToDisk(&writer, commit); err != nil; {
 			if retry <= 0 {
-				glog.Warningf("Max commit retry limit (%d) reached, ", Config.MaxRetries)
+				glog.Warningf("Unable to persist a commit to disk after %d tries. "+
+					"Giving up now would result in a complete or partial loss of committed txn.", Config.MaxRetries)
 				break
 			}
 			retry--
