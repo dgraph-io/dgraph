@@ -75,8 +75,8 @@ type Node struct {
 type raftLogger struct {
 }
 
-func (rl *raftLogger) Debug(v ...interface{})                   { glog.V(1).Info(v...) }
-func (rl *raftLogger) Debugf(format string, v ...interface{})   { glog.V(1).Infof(format, v...) }
+func (rl *raftLogger) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
+func (rl *raftLogger) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
 func (rl *raftLogger) Error(v ...interface{})                   { glog.Error(v...) }
 func (rl *raftLogger) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
 func (rl *raftLogger) Info(v ...interface{})                    { glog.Info(v...) }

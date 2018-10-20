@@ -59,6 +59,8 @@ type node struct {
 	gid      uint32
 	closer   *y.Closer
 
+	lastCommitTs uint64 // Only used to ensure that our commit Ts is monotonically increasing.
+
 	streaming int32 // Used to avoid calculating snapshot
 
 	canCampaign bool
@@ -450,7 +452,11 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		}
 	}
 	for _, status := range delta.Txns {
+		if status.CommitTs > 0 && status.CommitTs < n.lastCommitTs {
+			glog.Fatalf("lastcommit %d > commit now %d", n.lastCommitTs, status.CommitTs)
+		}
 		toDisk(status.StartTs, status.CommitTs)
+		n.lastCommitTs = status.CommitTs
 	}
 	if err := writer.Flush(); err != nil {
 		x.Errorf("Error while flushing to disk: %v", err)

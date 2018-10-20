@@ -176,6 +176,16 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			}
 		}
 		sortTxns(delta) // Sort them in increasing order of CommitTs.
+		// Let's ensure that we have all the commits up until the max here.
+		// Otherwise, we'll be sending commit timestamps out of order, which
+		// would cause Alphas to ignore them, during writes to Badger.
+		if len(delta.Txns) > 0 {
+			maxTs := delta.Txns[len(delta.Txns)-1].CommitTs
+			if o.doneUntil.DoneUntil() < maxTs {
+				// Don't send it yet. Keep on picking up more.
+				continue // the outer for loop.
+			}
+		}
 		o.Lock()
 		for id, ch := range o.subscribers {
 			select {
