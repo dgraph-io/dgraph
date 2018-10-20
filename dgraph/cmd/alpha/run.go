@@ -30,11 +30,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -45,6 +40,10 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 var (
@@ -104,6 +103,9 @@ they form a Raft group and provide synchronous replication.
 	flag.BoolVar(&worker.Config.ExpandEdge, "expand_edge", true,
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
+	flag.IntVar(&worker.Config.MaxRetries, "max_retries", 10,
+		"Commits to disk will give up after these number of retries to prevent locking the worker in a"+
+			" failed state.")
 
 	flag.StringVar(&config.AuthToken, "auth_token", "",
 		"If set, all Alter requests to Dgraph would need to have this token."+
