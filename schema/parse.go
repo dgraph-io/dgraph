@@ -88,14 +88,16 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 
 func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, error) {
 	it.Next()
-	if next := it.Item(); next.Typ != itemColon {
+	next := it.Item()
+	switch {
+	case next.Typ == itemAt || strings.Contains(predicate, "@"):
+		return nil, x.Errorf("Invalid '@' in name")
+	case next.Typ != itemColon:
 		return nil, x.Errorf("Missing colon")
-	}
-
-	if !it.Next() {
+	case !it.Next():
 		return nil, x.Errorf("Invalid ending while trying to parse schema.")
 	}
-	next := it.Item()
+	next = it.Item()
 	schema := &pb.SchemaUpdate{Predicate: predicate}
 	// Could be list type.
 	if next.Typ == itemLeftSquare {
@@ -303,16 +305,20 @@ func Parse(s string) ([]*pb.SchemaUpdate, error) {
 				return nil, x.Wrapf(err, "failed to enrich schema")
 			}
 			return schemas, nil
+
 		case itemText:
-			if schema, err := parseScalarPair(it, item.Val); err != nil {
+			schema, err := parseScalarPair(it, item.Val)
+			if err != nil {
 				return nil, err
-			} else {
-				schemas = append(schemas, schema)
 			}
+			schemas = append(schemas, schema)
+
 		case lex.ItemError:
 			return nil, x.Errorf(item.Val)
+
 		case itemNewLine:
 			// pass empty line
+
 		default:
 			return nil, x.Errorf("Unexpected token: %v while parsing schema", item)
 		}
