@@ -103,9 +103,9 @@ they form a Raft group and provide synchronous replication.
 	flag.BoolVar(&worker.Config.ExpandEdge, "expand_edge", true,
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
-	flag.IntVar(&worker.Config.MaxRetries, "max_retries", 10,
+	flag.IntVar(&worker.Config.MaxRetries, "max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker in a"+
-			" failed state.")
+			" failed state. Use -1 to retry infinitely.")
 
 	flag.StringVar(&config.AuthToken, "auth_token", "",
 		"If set, all Alter requests to Dgraph would need to have this token."+
