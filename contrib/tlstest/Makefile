@@ -55,7 +55,7 @@ test5: cert
 	@(DGRAPH_BIN=$(DGRAPH_BIN) ./test.sh ./alpha_tls_auth.sh ./live_tls_auth.sh 0)
 
 test6: cert
-	@echo "Test 6: Alpha TLS reaload, Live TLS"
+	@echo "Test 6: Alpha TLS reload, Live TLS"
 	@(DGRAPH_BIN=$(DGRAPH_BIN) RELOAD_TEST=1 ./test.sh ./alpha_tls.sh ./live_tls.sh 1)
 
 clean:
