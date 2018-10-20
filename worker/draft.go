@@ -28,10 +28,6 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
 	dy "github.com/dgraph-io/dgo/y"
@@ -42,6 +38,9 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 )
 
 // uniqueKey is meant to be unique across all the replicas.
@@ -508,7 +507,13 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
+		retry := Config.MaxRetries
 		for err := txn.CommitToDisk(&writer, commit); err != nil; {
+			if retry <= 0 {
+				glog.Warningf("Max commit retry limit (%d) reached, ", Config.MaxRetries)
+				break
+			}
+			retry--
 			glog.Warningf("Error while applying txn status to disk (%d -> %d): %v",
 				start, commit, err)
 			time.Sleep(10 * time.Millisecond)
