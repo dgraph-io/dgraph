@@ -96,7 +96,7 @@ func (s *state) Set(pred string, schema pb.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
-	glog.Infof(logUpdate(schema, pred))
+	s.elog.Printf(logUpdate(schema, pred))
 }
 
 // Get gets the schema for given predicate
