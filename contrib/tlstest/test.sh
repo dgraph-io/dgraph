@@ -2,7 +2,7 @@
 trap "cleanup" EXIT
 
 cleanup() {
-  killall -INT dgraph >/dev/null 2>/dev/null
+  killall -KILL dgraph >/dev/null 2>/dev/null
 }
 
 ALPHA=$1
@@ -18,7 +18,6 @@ if [ "x$RELOAD_TEST" != "x" ]; then
   trap '' HUP
   rm -f ./tls/ca.key
   $DGRAPH_BIN cert -d $PWD/tls -n localhost -c live --force
-  # pkill -HUP dgraph alpha >/dev/null 2>/dev/null
   killall -HUP dgraph >/dev/null 2>/dev/null
   sleep 3
 fi
