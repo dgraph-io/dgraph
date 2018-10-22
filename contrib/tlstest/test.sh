@@ -27,8 +27,8 @@ timeout 30s $LIVE > live.log 2>&1
 RESULT=$?
 
 if [ $RESULT != $EXPECTED ]; then
-  echo "$ALPHA <-> $LIVE: $RESULT != $EXPECTED"
-	exit 1
+  echo "$ALPHA <-> $LIVE, Result: $RESULT != Expected: $EXPECTED"
+  exit 1
 fi
 
 exit 0
