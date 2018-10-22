@@ -75,8 +75,8 @@ type Node struct {
 type raftLogger struct {
 }
 
-func (rl *raftLogger) Debug(v ...interface{})                   { glog.V(1).Info(v...) }
-func (rl *raftLogger) Debugf(format string, v ...interface{})   { glog.V(1).Infof(format, v...) }
+func (rl *raftLogger) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
+func (rl *raftLogger) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
 func (rl *raftLogger) Error(v ...interface{})                   { glog.Error(v...) }
 func (rl *raftLogger) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
 func (rl *raftLogger) Info(v ...interface{})                    { glog.Info(v...) }
@@ -109,7 +109,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			// healthy cluster would just cause leader to step down due to
 			// "inactive" quorum, and then disallow anyone from becoming leader.
 			// So, let's stick to default options.  Let's achieve correctness,
-			// then we achieve performance. Plus, for the Dgraph servers, we'll
+			// then we achieve performance. Plus, for the Dgraph alphas, we'll
 			// be soon relying only on Timestamps for blocking reads and
 			// achieving linearizability, than checking quorums (Zero would
 			// still check quorums).

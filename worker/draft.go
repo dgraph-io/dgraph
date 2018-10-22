@@ -113,114 +113,6 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-var errInternalRetry = errors.New("Retry Raft proposal internally")
-
-// proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
-// to be applied(written to WAL) to all the nodes in the group.
-func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error {
-	if n.Raft() == nil {
-		return x.Errorf("Raft isn't initialized yet")
-	}
-
-	// TODO: Should be based on number of edges (amount of work)
-	pendingProposals <- struct{}{}
-	x.PendingProposals.Add(1)
-	defer func() { <-pendingProposals; x.PendingProposals.Add(-1) }()
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	// Do a type check here if schema is present
-	// In very rare cases invalid entries might pass through raft, which would
-	// be persisted, we do best effort schema check while writing
-	if proposal.Mutations != nil {
-		for _, edge := range proposal.Mutations.Edges {
-			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
-			} else if tablet.GroupId != groups().groupId() {
-				// Tablet can move by the time request reaches here.
-				return errUnservedTablet
-			}
-
-			su, ok := schema.State().Get(edge.Attr)
-			if !ok {
-				continue
-			} else if err := ValidateAndConvert(edge, &su); err != nil {
-				return err
-			}
-		}
-		for _, schema := range proposal.Mutations.Schema {
-			if tablet := groups().Tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
-			}
-			if err := checkSchema(schema); err != nil {
-				return err
-			}
-		}
-	}
-
-	propose := func(timeout time.Duration) error {
-		cctx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-
-		che := make(chan error, 1)
-		pctx := &conn.ProposalCtx{
-			Ch:  che,
-			Ctx: cctx,
-		}
-		key := uniqueKey()
-		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
-		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
-		proposal.Key = key
-
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Proposing data with key: %s. Timeout: %v", key, timeout)
-		}
-
-		data, err := proposal.Marshal()
-		if err != nil {
-			return err
-		}
-
-		if err = n.Raft().Propose(cctx, data); err != nil {
-			return x.Wrapf(err, "While proposing")
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal.")
-		}
-
-		select {
-		case err = <-che:
-			// We arrived here by a call to n.Proposals.Done().
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Done with error: %v", err)
-			}
-			return err
-		case <-ctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("External context timed out with error: %v.", ctx.Err())
-			}
-			return ctx.Err()
-		case <-cctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Internal context timed out with error: %v. Retrying...", cctx.Err())
-			}
-			return errInternalRetry
-		}
-	}
-
-	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
-	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
-	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
-	// timeout. We should always try with a timeout and optionally retry.
-	err := errInternalRetry
-	timeout := 4 * time.Second
-	for err == errInternalRetry {
-		err = propose(timeout)
-		timeout *= 2 // Exponential backoff
-	}
-	return err
-}
-
 func (n *node) Ctx(key string) context.Context {
 	ctx := context.Background()
 	if pctx := n.Proposals.Get(key); pctx != nil {
@@ -440,33 +332,26 @@ func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
 }
 
 func (n *node) processRollups() {
-	defer n.closer.Done() // CLOSER:1
+	defer n.closer.Done()                   // CLOSER:1
+	tick := time.NewTicker(5 * time.Minute) // Rolling up once every 5 minutes seems alright.
+	defer tick.Stop()
+
+	var readTs, last uint64
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
 			return
-		case readTs := <-n.rollupCh:
-			// Let's empty out the rollupCh, so we're working with the latest
-			// value of readTs.
-		inner:
-			for {
-				select {
-				case readTs = <-n.rollupCh:
-				default:
-					break inner
-				}
+		case readTs = <-n.rollupCh:
+		case <-tick.C:
+			if readTs <= last {
+				break // Break out of the select case.
 			}
-			if readTs == 0 {
-				glog.Warningln("Found ZERO read Ts for rolling up.")
-				break // Breaks the select case.
-			}
-
-			// If we encounter error here, we don't need to do anything about
-			// it. Just let the user know.
-			err := n.rollupLists(readTs)
-			if err != nil {
+			if err := n.rollupLists(readTs); err != nil {
+				// If we encounter error here, we don't need to do anything about
+				// it. Just let the user know.
 				glog.Errorf("Error while rolling up lists at %d: %v\n", readTs, err)
 			} else {
+				last = readTs // Update last only if we succeeded.
 				glog.Infof("List rollup at Ts %d: OK.\n", readTs)
 			}
 		}
@@ -475,7 +360,16 @@ func (n *node) processRollups() {
 
 func (n *node) processApplyCh() {
 	defer n.closer.Done() // CLOSER:1
-	for entries := range n.applyCh {
+
+	type P struct {
+		err  error
+		size int
+		seen time.Time
+	}
+	previous := make(map[string]*P)
+
+	// This function must be run serially.
+	handle := func(entries []raftpb.Entry) {
 		for _, e := range entries {
 			switch {
 			case e.Type == raftpb.EntryConfChange:
@@ -488,13 +382,54 @@ func (n *node) processApplyCh() {
 				if err := proposal.Unmarshal(e.Data); err != nil {
 					x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 				}
+				// We use the size as a double check to ensure that we're
+				// working with the same proposal as before.
+				psz := proposal.Size()
 
-				err := n.applyCommitted(proposal, e.Index)
-				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
-					proposal.Key, e.Index, err)
-				n.Proposals.Done(proposal.Key, err)
+				var perr error
+				p, ok := previous[proposal.Key]
+				if ok && p.err == nil && p.size == psz {
+					n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
+						proposal.Key, e.Index)
+					previous[proposal.Key].seen = time.Now() // Update the ts.
+					// Don't break here. We still need to call the Done below.
+
+				} else {
+					perr = n.applyCommitted(proposal, e.Index)
+					if len(proposal.Key) > 0 {
+						p := &P{err: perr, size: psz, seen: time.Now()}
+						previous[proposal.Key] = p
+					}
+					n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
+						proposal.Key, e.Index, perr)
+				}
+
+				n.Proposals.Done(proposal.Key, perr)
 				n.Applied.Done(e.Index)
 			}
+		}
+	}
+
+	maxAge := 10 * time.Minute
+	tick := time.NewTicker(maxAge / 2)
+	defer tick.Stop()
+
+	for {
+		select {
+		case entries, ok := <-n.applyCh:
+			if !ok {
+				return
+			}
+			handle(entries)
+		case <-tick.C:
+			// We use this ticker to clear out previous map.
+			now := time.Now()
+			for key, p := range previous {
+				if now.Sub(p.seen) > maxAge {
+					delete(previous, key)
+				}
+			}
+			n.elog.Printf("Size of previous map: %d", len(previous))
 		}
 	}
 }
@@ -1071,7 +1006,7 @@ func (n *node) InitAndStartNode() {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
 
-			// TODO: This is an optimization, which adds complexity because it requires us to
+			// Note: This is an optimization, which adds complexity because it requires us to
 			// understand the Raft state of the node. Let's instead have the node retrieve the
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
 			//

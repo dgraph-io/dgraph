@@ -150,9 +150,9 @@ func restart(cmd *exec.Cmd) error {
 	}
 
 	cmd.Process = nil
-	glog.Infoln("Trying to restart Dgraph Server")
+	glog.Infoln("Trying to restart Dgraph Alpha")
 	if err := cmd.Start(); err != nil {
-		return x.Errorf("Couldn't start Dgraph server again: %v\n", err)
+		return x.Errorf("Couldn't start Dgraph alpha again: %v\n", err)
 	}
 	return nil
 }
@@ -246,7 +246,7 @@ func DONOTRUN_TestClusterSnapshot(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	cmd.Process = nil
-	glog.Infoln("Trying to restart Dgraph Server")
+	glog.Infoln("Trying to restart Dgraph Alpha
 	if err := cmd.Start(); err != nil {
 		shutdownCluster()
 		log.Fatal(err)

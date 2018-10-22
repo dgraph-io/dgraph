@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-var addr = flag.String("addr", "localhost:9080", "Dgraph server addr")
+var addr = flag.String("addr", "localhost:9080", "Dgraph alpha addr")
 var insert = flag.Bool("add", false, "Insert")
 
 func main() {

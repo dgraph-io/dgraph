@@ -73,7 +73,7 @@ instances to achieve high-availability.
 
 	flag := Zero.Cmd.Flags()
 	flag.String("my", "",
-		"addr:port of this server, so other Dgraph servers can talk to this.")
+		"addr:port of this server, so other Dgraph alphas can talk to this.")
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
 	flag.Uint64("idx", 1, "Unique node index for this server.")
