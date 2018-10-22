@@ -801,7 +801,7 @@ func (g *groupi) processOracleDeltaStream() {
 				elog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
 				return
 			}
-			glog.V(2).Infof("Batched %d updates. Proposing Delta: %v.", batch, delta)
+			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
 			for {
 				// Block forever trying to propose this.
 				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})

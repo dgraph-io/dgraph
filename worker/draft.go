@@ -451,9 +451,11 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
+
 	for _, status := range delta.Txns {
 		if status.CommitTs > 0 && status.CommitTs < n.lastCommitTs {
-			glog.Fatalf("lastcommit %d > commit now %d", n.lastCommitTs, status.CommitTs)
+			glog.Errorf("lastcommit %d > current %d. This would cause some commits to be lost.",
+				n.lastCommitTs, status.CommitTs)
 		}
 		toDisk(status.StartTs, status.CommitTs)
 		n.lastCommitTs = status.CommitTs
