@@ -709,7 +709,7 @@ func (g *groupi) processOracleDeltaStream() {
 	blockingReceiveAndPropose := func() {
 		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
 		defer elog.Finish()
-		elog.Printf("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
+		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
 			g.Node.Id, g.groupId())
 
 		pl := g.Leader(0)
@@ -798,7 +798,7 @@ func (g *groupi) processOracleDeltaStream() {
 			// cases around network partitions and race conditions between prewrites and
 			// commits, etc.
 			if !g.Node.AmLeader() {
-				elog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
+				glog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
 				return
 			}
 			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
