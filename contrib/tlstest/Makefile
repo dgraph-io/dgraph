@@ -15,9 +15,6 @@
 #
 
 
-KEYS=ca.key server.key client.key server_pass.key client_pass.key server3.key
-CERTS=ca.crt server.crt client.crt server_pass.crt client_pass.crt server3.crt
-
 DGRAPH_PATH = $(GOPATH)/src/github.com/dgraph-io/dgraph/dgraph
 DGRAPH_BIN  = $(DGRAPH_PATH)/dgraph
 
@@ -60,3 +57,4 @@ test6: cert
 
 clean:
 	git clean -d -f
+
