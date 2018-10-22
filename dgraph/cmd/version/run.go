@@ -17,6 +17,7 @@
 package version
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -32,7 +33,7 @@ func init() {
 		Short: "Prints the dgraph version details",
 		Long:  "Version prints the dgraph version as reported by the build details.",
 		Run: func(cmd *cobra.Command, args []string) {
-			x.PrintVersion()
+			fmt.Print(x.BuildDetails())
 			os.Exit(0)
 		},
 	}

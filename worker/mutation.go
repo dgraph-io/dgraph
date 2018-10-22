@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 var (
@@ -126,7 +127,7 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	// index mutations (old set and new del)
 	// We need watermark for index/reverse edge addition for linearizable reads.
 	// (both applied and synced watermarks).
-	defer x.Printf("Done schema update %+v\n", update)
+	defer glog.Infof("Done schema update %+v\n", update)
 	if !ok {
 		if current.Directive == pb.SchemaUpdate_INDEX {
 			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true, startTs); err != nil {

@@ -26,7 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -216,7 +216,7 @@ func TestTxnRead5(t *testing.T) {
 
 	require.NoError(t, txn.Commit(context.Background()))
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
-	// We don't supply startTs, it should be fetched from zero by dgraph server.
+	// We don't supply startTs, it should be fetched from zero by dgraph alpha.
 	req := api.Request{
 		Query: q,
 	}
@@ -439,8 +439,10 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 
 	txn := s.dg.NewTxn()
 
-	mu := &api.Mutation{}
-	mu.SetJson = []byte(`{"name": "Manish"}`)
+	mu := &api.Mutation{
+		CommitNow: true,
+		SetJson:   []byte(`{"name": "Manish"}`),
+	}
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
@@ -453,6 +455,8 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 		uid = u
 	}
 
+	txn = s.dg.NewTxn()
+	defer txn.Discard(context.Background())
 	q := `{ me(func: le(name, "Manish")) { uid }}`
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {

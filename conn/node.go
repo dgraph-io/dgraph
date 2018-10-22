@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -71,6 +72,22 @@ type Node struct {
 	Applied x.WaterMark
 }
 
+type raftLogger struct {
+}
+
+func (rl *raftLogger) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
+func (rl *raftLogger) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
+func (rl *raftLogger) Error(v ...interface{})                   { glog.Error(v...) }
+func (rl *raftLogger) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
+func (rl *raftLogger) Info(v ...interface{})                    { glog.Info(v...) }
+func (rl *raftLogger) Infof(format string, v ...interface{})    { glog.Infof(format, v...) }
+func (rl *raftLogger) Warning(v ...interface{})                 { glog.Warning(v...) }
+func (rl *raftLogger) Warningf(format string, v ...interface{}) { glog.Warningf(format, v...) }
+func (rl *raftLogger) Fatal(v ...interface{})                   { glog.Fatal(v...) }
+func (rl *raftLogger) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
+func (rl *raftLogger) Panic(v ...interface{})                   { log.Panic(v...) }
+func (rl *raftLogger) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
+
 func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
@@ -86,14 +103,13 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			Storage:         store,
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
-			Logger:          &raft.DefaultLogger{Logger: x.Logger},
 			// We don't need lease based reads. They cause issues because they
 			// require CheckQuorum to be true, and that causes a lot of issues
 			// for us during cluster bootstrapping and later. A seemingly
 			// healthy cluster would just cause leader to step down due to
 			// "inactive" quorum, and then disallow anyone from becoming leader.
 			// So, let's stick to default options.  Let's achieve correctness,
-			// then we achieve performance. Plus, for the Dgraph servers, we'll
+			// then we achieve performance. Plus, for the Dgraph alphas, we'll
 			// be soon relying only on Timestamps for blocking reads and
 			// achieving linearizability, than checking quorums (Zero would
 			// still check quorums).
@@ -116,6 +132,8 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			// like somehow the first index can be out of sync with the latest
 			// snapshot.
 			Applied: snap.Metadata.Index,
+
+			Logger: &raftLogger{},
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full

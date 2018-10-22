@@ -87,7 +87,7 @@ func init() {
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
-	flag.IntP("conc", "c", 100,
+	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 1000,
 		"Number of RDF N-Quads to send as part of a mutation.")
@@ -335,7 +335,7 @@ func run() error {
 	var clients []api.DgraphClient
 	for _, d := range ds {
 		conn, err := setupConnection(d, !tlsConf.CertRequired)
-		x.Checkf(err, "While trying to setup connection to Dgraph server.")
+		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 
 		dc := api.NewDgraphClient(conn)

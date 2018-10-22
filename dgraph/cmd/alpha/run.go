@@ -91,11 +91,11 @@ they form a Raft group and provide synchronous replication.
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
 
 	flag.StringVar(&worker.Config.ExportPath, "export", "export", "Folder in which to store exports.")
-	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 2000,
+	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.Float64Var(&worker.Config.Tracing, "trace", 0.0, "The ratio of queries to trace.")
 	flag.StringVar(&worker.Config.MyAddr, "my", "",
-		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
+		"IP_ADDRESS:PORT of this server, so other Dgraph alphas can talk to this.")
 	flag.StringVarP(&worker.Config.ZeroAddr, "zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"IP_ADDRESS:PORT of Dgraph zero.")
 	flag.Uint64Var(&worker.Config.RaftId, "idx", 0,
@@ -104,6 +104,10 @@ they form a Raft group and provide synchronous replication.
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
 
+	flag.StringVar(&config.AuthToken, "auth_token", "",
+		"If set, all Alter requests to Dgraph would need to have this token."+
+			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
+			" For Grpc, in auth-token key in the context.")
 	flag.Float64VarP(&config.AllottedMemory, "lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")

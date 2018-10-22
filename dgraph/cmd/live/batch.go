@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -139,6 +140,10 @@ func handleError(err error) {
 		x.Fatalf(s.Message())
 	case strings.Contains(s.Message(), "x509"):
 		x.Fatalf(s.Message())
+	case strings.Contains(s.Message(), "Server unavailable."):
+		dur := time.Duration(1+rand.Intn(10)) * time.Minute
+		x.Printf("Server is unavailable. Will retry after %s.", dur.Round(time.Minute))
+		time.Sleep(dur)
 	case err != y.ErrAborted && err != y.ErrConflict:
 		x.Printf("Error while mutating %v\n", s.Message())
 	}
@@ -197,9 +202,9 @@ func (l *loader) printCounters() {
 	for range l.ticker.C {
 		counter := l.Counter()
 		rate := float64(counter.Rdfs) / counter.Elapsed.Seconds()
-		elapsed := ((time.Since(start) / time.Second) * time.Second).String()
-		fmt.Printf("Total Txns done: %8d RDFs per second: %7.0f Time Elapsed: %v, Aborts: %d\n",
-			counter.TxnsDone, rate, elapsed, counter.Aborts)
+		elapsed := time.Since(start).Round(time.Second)
+		fmt.Printf("[%6s] Txns: %d RDFs: %d RDFs/sec: %5.0f Aborts: %d\n",
+			elapsed, counter.TxnsDone, counter.Rdfs, rate, counter.Aborts)
 
 	}
 }
