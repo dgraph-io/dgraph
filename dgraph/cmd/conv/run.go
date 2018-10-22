@@ -17,10 +17,10 @@
 package conv
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +40,7 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Conv.Conf).Stop()
 			if err := run(); err != nil {
-				glog.Errorln(err)
+				fmt.Println(err)
 				os.Exit(1)
 			}
 		},
