@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	addr = flag.String("addr", "localhost:9080", "Address of Dgraph server.")
+	addr = flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
 	num  = flag.Int("num", 1, "How many times to run.")
 	ro   = flag.Bool("ro", false, "Only read the counter value, don't update it.")
 	wait = flag.String("wait", "0", "How long to wait.")

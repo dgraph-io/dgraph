@@ -109,7 +109,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			// healthy cluster would just cause leader to step down due to
 			// "inactive" quorum, and then disallow anyone from becoming leader.
 			// So, let's stick to default options.  Let's achieve correctness,
-			// then we achieve performance. Plus, for the Dgraph servers, we'll
+			// then we achieve performance. Plus, for the Dgraph alphas, we'll
 			// be soon relying only on Timestamps for blocking reads and
 			// achieving linearizability, than checking quorums (Zero would
 			// still check quorums).
