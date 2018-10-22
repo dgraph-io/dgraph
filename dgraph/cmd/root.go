@@ -79,8 +79,8 @@ func init() {
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	// Always set stderrthreshold=0. Don't let users set it themselves.
 	x.Check(flag.Set("stderrthreshold", "0"))
-	flag.CommandLine.MarkDeprecated("stderrthreshold",
-		"Dgraph always sets this flag to 0. It can't be overwritten.")
+	x.Check(flag.CommandLine.MarkDeprecated("stderrthreshold",
+		"Dgraph always sets this flag to 0. It can't be overwritten."))
 
 	var subcommands = []*x.SubCommand{
 		&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero,
