@@ -202,7 +202,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
 	err := s.Serve(l)
-	glog.Errorf("GRPC listener canceled: %s\n", err.Error())
+	glog.Errorf("GRPC listener canceled: %v\n", err.Error())
 	s.Stop()
 }
 
@@ -221,7 +221,7 @@ func serveHTTP(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	default:
 		err = srv.Serve(l)
 	}
-	glog.Errorf("Stopped taking more http(s) requests. Err: %s", err.Error())
+	glog.Errorf("Stopped taking more http(s) requests. Err: %v", err.Error())
 	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {

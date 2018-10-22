@@ -709,7 +709,7 @@ func (g *groupi) processOracleDeltaStream() {
 	blockingReceiveAndPropose := func() {
 		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
 		defer elog.Finish()
-		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
+		elog.Printf("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
 			g.Node.Id, g.groupId())
 
 		pl := g.Leader(0)
