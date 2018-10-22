@@ -1075,7 +1075,7 @@ func (n *node) InitAndStartNode() {
 			// understand the Raft state of the node. Let's instead have the node retrieve the
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
 			//
-			// x.Printf("Retrieving snapshot from peer: %d", peerId)
+			// glog.Infof("Retrieving snapshot from peer: %d", peerId)
 			// n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
 
 			glog.Infoln("Trying to join peers.")
