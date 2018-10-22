@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -274,7 +273,7 @@ func (c *wrapperTLSConfig) reloadConfig() {
 	// Loading new certificate
 	cert, err := parseCertificate(c.helperConfig.CertRequired, c.helperConfig.Cert, c.helperConfig.Key)
 	if err != nil {
-		glog.Errorf("Error reloading certificate. %v\nUsing current certificate\n", err)
+		fmt.Printf("Error reloading certificate. %v\nUsing current certificate\n", err)
 	} else if cert != nil {
 		if c.helperConfig.ConfigType == TLSServerConfig {
 			c.cert.Lock()
@@ -287,7 +286,7 @@ func (c *wrapperTLSConfig) reloadConfig() {
 	if len(c.helperConfig.RootCACert) > 0 || c.helperConfig.UseSystemCACerts {
 		pool, err := generateCertPool(c.helperConfig.RootCACert, c.helperConfig.UseSystemCACerts)
 		if err != nil {
-			glog.Errorf("Error reloading CAs. %v\nUsing current Client CAs\n", err)
+			fmt.Printf("Error reloading CAs. %v\nUsing current Client CAs\n", err)
 		} else {
 			c.clientCAPool.Lock()
 			c.clientCAPool.pool = pool
