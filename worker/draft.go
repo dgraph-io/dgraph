@@ -443,15 +443,16 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		for retry, err := Config.MaxRetries, txn.CommitToDisk(&writer, commit); err != nil; retry-- {
-			if retry == 0 {
-				glog.Warningf("Unable to persist a commit to disk after %d tries. "+
-					"Giving up now would result in a complete or partial loss of committed txn.", Config.MaxRetries)
+		var err error
+		for retry := Config.MaxRetries; retry != 0; retry-- {
+			err = txn.CommitToDisk(&writer, commit)
+			if err == nil {
 				break
 			}
-			glog.Warningf("Error while applying txn status to disk (%d -> %d): %v",
-				start, commit, err)
 			time.Sleep(10 * time.Millisecond)
+		}
+		if err != nil {
+			glog.Warningf("Error while applying txn status to disk (%d -> %d): %v", start, commit, err)
 		}
 	}
 
