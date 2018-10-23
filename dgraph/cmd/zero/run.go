@@ -118,7 +118,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 	go func() {
 		defer wg.Done()
 		err := s.Serve(l)
-		glog.Infof("gRpc server stopped : %s", err)
+		glog.Infof("gRpc server stopped : %v", err)
 		st.node.stop <- struct{}{}
 
 		// Attempt graceful stop (waits for pending RPCs), but force a stop if
