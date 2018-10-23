@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
 	"golang.org/x/net/trace"
-
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -38,7 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 const (

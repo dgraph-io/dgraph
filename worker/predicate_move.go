@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -32,7 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 var (
