@@ -500,49 +500,65 @@ func (n *node) processApplyCh() {
 }
 
 func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
+	type st struct {
+		status *pb.TxnStatus
+		txn    *posting.Txn
+	}
 	// First let's commit all mutations to disk.
-	writer := x.TxnWriter{DB: pstore}
-	toDisk := func(start, commit uint64) {
-		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
-			return
-		}
-		var err error
-		for retry := Config.MaxRetries; retry != 0; retry-- {
-			err = txn.CommitToDisk(&writer, commit)
-			if err == nil {
-				break
+	commitToDisk := func(in ...*pb.TxnStatus) <-chan *st {
+		out := make(chan *st)
+		go func() {
+			var err error
+			writer := x.TxnWriter{DB: pstore}
+			for _, status := range in {
+				txn := posting.Oracle().GetTxn(status.StartTs)
+				if txn == nil {
+					out <- &st{status: status, txn: txn}
+					continue
+				}
+				for retry := Config.MaxRetries; retry != 0; retry-- {
+					err = txn.CommitToDisk(&writer, status.CommitTs)
+					if err == nil {
+						break
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+				if err != nil {
+					glog.Warningf("Error while applying txn status to disk (%d -> %d): %v", status.StartTs, status.CommitTs, err)
+				}
+				out <- &st{status: status, txn: txn}
 			}
-			time.Sleep(10 * time.Millisecond)
-		}
-		if err != nil {
-			glog.Warningf("Error while applying txn status to disk (%d -> %d): %v", start, commit, err)
-		}
+			close(out)
+			if err := writer.Flush(); err != nil {
+				glog.Errorf("Error while flushing to disk: %v", err)
+			}
+		}()
+		return out
 	}
-	for _, status := range delta.Txns {
-		toDisk(status.StartTs, status.CommitTs)
-	}
-	if err := writer.Flush(); err != nil {
-		x.Errorf("Error while flushing to disk: %v", err)
-		return err
-	}
-
 	// Now let's commit all mutations to memory.
-	toMemory := func(start, commit uint64) {
-		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
-			return
-		}
-		for err := txn.CommitToMemory(commit); err != nil; {
-			x.Printf("Error while applying txn status to memory (%d -> %d): %v",
-				start, commit, err)
-			time.Sleep(10 * time.Millisecond)
+	commitToMemory := func(in <-chan *st) {
+		var err error
+		for st := range in {
+			txn := posting.Oracle().GetTxn(st.status.StartTs)
+			if txn == nil {
+				continue
+			}
+			for retry := Config.MaxRetries; retry != 0; retry-- {
+				err = txn.CommitToMemory(st.status.CommitTs)
+				if err == nil {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if err != nil {
+				glog.Warningf("Error while applying txn status to memory (%d -> %d): %v",
+					st.status.StartTs, st.status.CommitTs, err)
+			}
 		}
 	}
 
-	for _, txn := range delta.Txns {
-		toMemory(txn.StartTs, txn.CommitTs)
-	}
+	commitToMemory(commitToDisk(delta.Txns...))
+
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
