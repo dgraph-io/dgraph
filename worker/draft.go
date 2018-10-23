@@ -453,7 +453,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 				}
 				txn := posting.Oracle().GetTxn(status.StartTs)
 				if txn == nil {
-					out <- &st{status: status, txn: txn}
 					continue
 				}
 				for retry := Config.MaxRetries; retry != 0; retry-- {
@@ -464,12 +463,14 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 					time.Sleep(10 * time.Millisecond)
 				}
 				if err != nil {
-					glog.Warningf("Error while applying txn status to disk (%d -> %d): %v", status.StartTs, status.CommitTs, err)
+					glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
+						status.StartTs, status.CommitTs, err)
 				}
 				n.lastCommitTs = status.CommitTs
 				out <- &st{status: status, txn: txn}
 			}
 			close(out)
+			// flush after all commits were set.
 			if err := writer.Flush(); err != nil {
 				glog.Errorf("Error while flushing to disk: %v", err)
 			}
@@ -480,9 +481,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	commitToMemory := func(in <-chan *st) {
 		var err error
 		for st := range in {
-			if st.txn == nil {
-				continue
-			}
 			for retry := Config.MaxRetries; retry != 0; retry-- {
 				err = st.txn.CommitToMemory(st.status.CommitTs)
 				if err == nil {
@@ -496,7 +494,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 			}
 		}
 	}
-
 	commitToMemory(commitToDisk(delta.Txns...))
 
 	// Now advance Oracle(), so we can service waiting reads.
