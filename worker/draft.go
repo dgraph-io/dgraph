@@ -452,7 +452,8 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 			time.Sleep(10 * time.Millisecond)
 		}
 		if err != nil {
-			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v", start, commit, err)
+			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
+				start, commit, err)
 		}
 	}
 
@@ -484,7 +485,8 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 			time.Sleep(10 * time.Millisecond)
 		}
 		if err != nil {
-			glog.Errorf("Error while applying txn status to memory (%d -> %d): %v", start, commit, err)
+			glog.Errorf("Error while applying txn status to memory (%d -> %d): %v",
+				start, commit, err)
 		}
 	}
 
