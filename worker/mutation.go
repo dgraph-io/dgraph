@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
