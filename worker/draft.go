@@ -539,6 +539,9 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	commitToMemory := func(in <-chan *st) {
 		var err error
 		for st := range in {
+			if st.txn == nil {
+				continue
+			}
 			for retry := Config.MaxRetries; retry != 0; retry-- {
 				err = st.txn.CommitToMemory(st.status.CommitTs)
 				if err == nil {
