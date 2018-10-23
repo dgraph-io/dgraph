@@ -245,7 +245,7 @@ func setupServer() {
 		var err error
 		tlsCfg, reload, err = x.GenerateTLSConfig(tlsConf)
 		if err != nil {
-			log.Fatalf("Failed to setup TLS: %s\n", err)
+			log.Fatalf("Failed to setup TLS: %v\n", err)
 		}
 	}
 
