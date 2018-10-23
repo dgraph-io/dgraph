@@ -75,7 +75,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		ok := x.ValidateAddress(Config.MyAddr)
 		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
 		if !bindall {
-			x.Printf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
+			glog.Errorln("--my flag is provided without bindall, Did you forget to specify bindall?")
 		}
 	}
 
@@ -88,7 +88,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		x.Check(err)
 		Config.RaftId = id
 	}
-	x.Printf("Current Raft Id: %d\n", Config.RaftId)
+	glog.Infof("Current Raft Id: %d\n", Config.RaftId)
 
 	// Successfully connect with dgraphzero, before doing anything else.
 	p := conn.Get().Connect(Config.ZeroAddr)
@@ -105,7 +105,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
 			break
 		}
-		x.Printf("Error while connecting with group zero: %v", err)
+		glog.Errorf("Error while connecting with group zero: %v", err)
 		time.Sleep(delay)
 		if delay <= maxHalfDelay {
 			delay *= 2
@@ -115,7 +115,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}
-	x.Printf("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
+	glog.Infof("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
 	Config.RaftId = connState.GetMember().GetId()
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
@@ -172,7 +172,7 @@ func (g *groupi) proposeInitialSchema() {
 		if err == nil {
 			break
 		}
-		x.Println("Error while proposing initial schema: ", err)
+		glog.Errorf("Error while proposing initial schema: %v\n", err)
 		time.Sleep(100 * time.Millisecond)
 	}
 }
@@ -361,7 +361,7 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
-		x.Printf("Error while ShouldServe grpc call %v", err)
+		glog.Errorf("Error while ShouldServe grpc call %v", err)
 		return nil
 	}
 	g.Lock()
@@ -369,7 +369,7 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 	g.Unlock()
 
 	if out.GroupId == groups().groupId() {
-		x.Printf("Serving tablet for: %v\n", key)
+		glog.Infof("Serving tablet for: %v\n", key)
 	}
 	return out
 }
@@ -511,17 +511,17 @@ START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		x.Printf("WARNING: We don't have address of any Zero server.")
+		glog.Warningln("WARNING: We don't have address of any Zero server.")
 		time.Sleep(time.Second)
 		goto START
 	}
-	x.Printf("Got address of a Zero server: %s", pl.Addr)
+	glog.Infof("Got address of a Zero server: %s", pl.Addr)
 
 	c := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := c.Update(ctx)
 	if err != nil {
-		x.Printf("Error while calling update %v\n", err)
+		glog.Errorf("Error while calling update %v\n", err)
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -531,7 +531,7 @@ START:
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
 			if err != nil || state == nil {
-				x.Printf("Unable to sync memberships. Error: %v", err)
+				glog.Errorf("Unable to sync memberships. Error: %v", err)
 				// If zero server is lagging behind leader.
 				if ctx.Err() == nil {
 					cancel()
@@ -593,7 +593,7 @@ OUTER:
 			// Let's send update even if not leader, zero will know that this node is still
 			// active.
 			if err := g.sendMembership(allTablets, stream); err != nil {
-				x.Printf("Error while updating tablets size %v\n", err)
+				glog.Errorf("Error while updating tablets size %v\n", err)
 				stream.CloseSend()
 				break OUTER
 			}
@@ -710,12 +710,12 @@ func (g *groupi) processOracleDeltaStream() {
 	blockingReceiveAndPropose := func() {
 		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
 		defer elog.Finish()
-		elog.Printf("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
+		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
 			g.Node.Id, g.groupId())
 
 		pl := g.Leader(0)
 		if pl == nil {
-			x.Printf("WARNING: We don't have address of any dgraphzero leader.")
+			glog.Warningln("WARNING: We don't have address of any dgraphzero leader.")
 			elog.Errorf("Dgraph zero leader address unknown")
 			time.Sleep(time.Second)
 			return
@@ -734,7 +734,7 @@ func (g *groupi) processOracleDeltaStream() {
 		// safe way to get the status of all the transactions.
 		stream, err := c.Oracle(ctx, &api.Payload{})
 		if err != nil {
-			x.Printf("Error while calling Oracle %v\n", err)
+			glog.Errorf("Error while calling Oracle %v\n", err)
 			elog.Errorf("Error while calling Oracle %v", err)
 			time.Sleep(time.Second)
 			return
@@ -799,7 +799,7 @@ func (g *groupi) processOracleDeltaStream() {
 			// cases around network partitions and race conditions between prewrites and
 			// commits, etc.
 			if !g.Node.AmLeader() {
-				elog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
+				glog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
 				return
 			}
 

@@ -102,7 +102,7 @@ func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 		if err == nil {
 			return assignedIds.StartId, assignedIds.EndId, nil
 		}
-		x.Printf("Error while getting lease %v\n", err)
+		fmt.Printf("Error while getting lease %v\n", err)
 		select {
 		case <-time.After(factor):
 		case <-p.ctx.Done():
@@ -142,10 +142,10 @@ func handleError(err error) {
 		x.Fatalf(s.Message())
 	case strings.Contains(s.Message(), "Server unavailable."):
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
-		x.Printf("Server is unavailable. Will retry after %s.", dur.Round(time.Minute))
+		fmt.Printf("Server is unavailable. Will retry after %s.", dur.Round(time.Minute))
 		time.Sleep(dur)
 	case err != y.ErrAborted && err != y.ErrConflict:
-		x.Printf("Error while mutating %v\n", s.Message())
+		fmt.Printf("Error while mutating %v\n", s.Message())
 	}
 }
 
@@ -205,7 +205,6 @@ func (l *loader) printCounters() {
 		elapsed := time.Since(start).Round(time.Second)
 		fmt.Printf("[%6s] Txns: %d RDFs: %d RDFs/sec: %5.0f Aborts: %d\n",
 			elapsed, counter.TxnsDone, counter.Rdfs, rate, counter.Aborts)
-
 	}
 }
 

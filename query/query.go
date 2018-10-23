@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
 	"golang.org/x/net/trace"
-
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -229,7 +229,7 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 	if sg.DestUIDs != nil {
 		dst = len(sg.DestUIDs.Uids)
 	}
-	x.Printf("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v IsCount: %v ValueSz:%v]\n",
+	glog.Infof("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v IsCount: %v ValueSz:%v]\n",
 		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
 		dst, sg.Params.DoCount, len(sg.valueMatrix))
 	for _, f := range sg.Filters {
@@ -449,7 +449,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						continue // next UID.
 					}
 					// Some other error.
-					x.Printf("Error while traversal: %v", rerr)
+					glog.Errorf("Error while traversal: %v", rerr)
 					return rerr
 				}
 

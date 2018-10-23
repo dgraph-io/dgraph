@@ -97,7 +97,7 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 		}
 	}
 	o.tmax = minTs
-	x.Printf("Purged below ts:%d, len(o.commits):%d"+
+	glog.Infof("Purged below ts:%d, len(o.commits):%d"+
 		", len(o.rowCommit):%d\n",
 		minTs, len(o.commits), len(o.keyCommit))
 }
@@ -410,13 +410,13 @@ OUTER:
 		for _, group := range groups {
 			pl := s.Leader(group)
 			if pl == nil {
-				x.Printf("No healthy connection found to leader of group %d\n", group)
+				glog.Errorf("No healthy connection found to leader of group %d\n", group)
 				goto OUTER
 			}
 			c := pb.NewWorkerClient(pl.Get())
 			num, err := c.PurgeTs(context.Background(), &api.Payload{})
 			if err != nil {
-				x.Printf("Error while fetching minTs from group %d, err: %v\n", group, err)
+				glog.Errorf("Error while fetching minTs from group %d, err: %v\n", group, err)
 				goto OUTER
 			}
 			if minTs == 0 || num.Val < minTs {

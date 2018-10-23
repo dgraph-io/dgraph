@@ -23,6 +23,7 @@ import (
 	"time"
 
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -89,7 +90,7 @@ func init() {
 }
 
 func LoadCustomTokenizer(soFile string) {
-	x.Printf("Loading custom tokenizer from %q", soFile)
+	glog.Infof("Loading custom tokenizer from %q", soFile)
 	pl, err := plugin.Open(soFile)
 	x.Checkf(err, "could not open custom tokenizer plugin file")
 	symb, err := pl.Lookup("Tokenizer")
