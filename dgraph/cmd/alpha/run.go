@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
@@ -90,11 +91,11 @@ they form a Raft group and provide synchronous replication.
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
 
 	flag.StringVar(&worker.Config.ExportPath, "export", "export", "Folder in which to store exports.")
-	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 2000,
+	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.Float64Var(&worker.Config.Tracing, "trace", 0.0, "The ratio of queries to trace.")
 	flag.StringVar(&worker.Config.MyAddr, "my", "",
-		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
+		"IP_ADDRESS:PORT of this server, so other Dgraph alphas can talk to this.")
 	flag.StringVarP(&worker.Config.ZeroAddr, "zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
 		"IP_ADDRESS:PORT of Dgraph zero.")
 	flag.Uint64Var(&worker.Config.RaftId, "idx", 0,
@@ -181,9 +182,9 @@ func setupListener(addr string, port int, reload func()) (net.Listener, error) {
 			sigChan := make(chan os.Signal, 1)
 			signal.Notify(sigChan, syscall.SIGHUP)
 			for range sigChan {
-				log.Println("SIGHUP signal received")
+				glog.Infoln("SIGHUP signal received")
 				reload()
-				log.Println("TLS certificates and CAs reloaded")
+				glog.Infoln("TLS certificates and CAs reloaded")
 			}
 		}()
 	}
@@ -203,7 +204,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
 	err := s.Serve(l)
-	log.Printf("GRPC listener canceled: %s\n", err.Error())
+	glog.Errorf("GRPC listener canceled: %v\n", err)
 	s.Stop()
 }
 
@@ -222,7 +223,7 @@ func serveHTTP(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	default:
 		err = srv.Serve(l)
 	}
-	log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
+	glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
 	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
@@ -246,7 +247,7 @@ func setupServer() {
 		var err error
 		tlsCfg, reload, err = x.GenerateTLSConfig(tlsConf)
 		if err != nil {
-			log.Fatalf("Failed to setup TLS: %s\n", err)
+			log.Fatalf("Failed to setup TLS: %v\n", err)
 		}
 	}
 
@@ -291,8 +292,8 @@ func setupServer() {
 		httpListener.Close()
 	}()
 
-	log.Println("gRPC server started.  Listening on port", grpcPort())
-	log.Println("HTTP server started.  Listening on port", httpPort())
+	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
+	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 	wg.Wait()
 }
 
@@ -351,9 +352,9 @@ func run() {
 					close(shutdownCh)
 				}
 				numShutDownSig++
-				x.Println("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
+				glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
 				if numShutDownSig == 3 {
-					x.Println("Signaled thrice. Aborting!")
+					glog.Infoln("Signaled thrice. Aborting!")
 					os.Exit(1)
 				}
 			}
@@ -364,7 +365,7 @@ func run() {
 	// Setup external communication.
 	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
 	setupServer()
-	log.Println("GRPC and HTTP stopped.")
+	glog.Infoln("GRPC and HTTP stopped.")
 	worker.BlockingStop()
-	log.Println("Server shutdown. Bye!")
+	glog.Infoln("Server shutdown. Bye!")
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 
 	"google.golang.org/grpc"
 )
@@ -104,7 +105,7 @@ func (p *Pools) Connect(addr string) *Pool {
 
 	pool, err := NewPool(addr)
 	if err != nil {
-		x.Printf("Unable to connect to host: %s", addr)
+		glog.Errorf("Unable to connect to host: %s", addr)
 		return nil
 	}
 
@@ -114,7 +115,7 @@ func (p *Pools) Connect(addr string) *Pool {
 		p.Unlock()
 		return existingPool
 	}
-	x.Printf("== CONNECTED ==> Setting %v\n", addr)
+	glog.Infof("== CONNECTED ==> Setting %v\n", addr)
 	p.all[addr] = pool
 	p.Unlock()
 	return pool
@@ -168,7 +169,7 @@ func (p *Pool) UpdateHealthStatus(printError bool) error {
 		p.lastEcho = time.Now()
 		p.Unlock()
 	} else if printError {
-		x.Printf("Echo error from %v. Err: %v\n", p.Addr, err)
+		glog.Errorf("Echo error from %v. Err: %v\n", p.Addr, err)
 	}
 	return err
 }
@@ -179,7 +180,7 @@ func (p *Pool) MonitorHealth() {
 	for range p.ticker.C {
 		err := p.UpdateHealthStatus(lastErr == nil)
 		if lastErr != nil && err == nil {
-			x.Printf("Connection established with %v\n", p.Addr)
+			glog.Infof("Connection established with %v\n", p.Addr)
 		}
 		lastErr = err
 	}

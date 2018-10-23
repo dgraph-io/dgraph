@@ -19,7 +19,6 @@ package zero
 import (
 	"errors"
 	"math/rand"
-	"sort"
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -98,7 +97,7 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 		}
 	}
 	o.tmax = minTs
-	x.Printf("Purged below ts:%d, len(o.commits):%d"+
+	glog.Infof("Purged below ts:%d, len(o.commits):%d"+
 		", len(o.rowCommit):%d\n",
 		minTs, len(o.commits), len(o.keyCommit))
 }
@@ -114,12 +113,6 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 		o.keyCommit[k] = src.CommitTs // CommitTs is handed out before calling this func.
 	}
 	return nil
-}
-
-func sortTxns(delta *pb.OracleDelta) {
-	sort.Slice(delta.Txns, func(i, j int) bool {
-		return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
-	})
 }
 
 func (o *Oracle) currentState() *pb.OracleDelta {
@@ -175,7 +168,22 @@ func (o *Oracle) sendDeltasToSubscribers() {
 				break slurp_loop
 			}
 		}
-		sortTxns(delta) // Sort them in increasing order of CommitTs.
+		// No need to sort the txn updates here. Alpha would sort them before
+		// applying.
+
+		// Let's ensure that we have all the commits up until the max here.
+		// Otherwise, we'll be sending commit timestamps out of order, which
+		// would cause Alphas to drop some of them, during writes to Badger.
+		waitFor := delta.MaxAssigned
+		for _, txn := range delta.Txns {
+			waitFor = x.Max(waitFor, txn.CommitTs)
+		}
+		if o.doneUntil.DoneUntil() < waitFor {
+			continue // The for loop doing blocking reads from o.updates.
+			// We need at least one entry from the updates channel to pick up a missing update.
+			// Don't goto slurp_loop, because it would break from select immediately.
+		}
+
 		o.Lock()
 		for id, ch := range o.subscribers {
 			select {
@@ -402,13 +410,13 @@ OUTER:
 		for _, group := range groups {
 			pl := s.Leader(group)
 			if pl == nil {
-				x.Printf("No healthy connection found to leader of group %d\n", group)
+				glog.Errorf("No healthy connection found to leader of group %d\n", group)
 				goto OUTER
 			}
 			c := pb.NewWorkerClient(pl.Get())
 			num, err := c.PurgeTs(context.Background(), &api.Payload{})
 			if err != nil {
-				x.Printf("Error while fetching minTs from group %d, err: %v\n", group, err)
+				glog.Errorf("Error while fetching minTs from group %d, err: %v\n", group, err)
 				goto OUTER
 			}
 			if minTs == 0 || num.Val < minTs {

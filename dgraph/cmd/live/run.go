@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -87,7 +86,7 @@ func init() {
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
-	flag.IntP("conc", "c", 100,
+	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 1000,
 		"Number of RDF N-Quads to send as part of a mutation.")
@@ -335,7 +334,7 @@ func run() error {
 	var clients []api.DgraphClient
 	for _, d := range ds {
 		conn, err := setupConnection(d, !tlsConf.CertRequired)
-		x.Checkf(err, "While trying to setup connection to Dgraph server.")
+		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 
 		dc := api.NewDgraphClient(conn)
@@ -347,7 +346,7 @@ func run() error {
 		var err error
 		opt.clientDir, err = ioutil.TempDir("", "x")
 		x.Checkf(err, "Error while trying to create temporary client directory.")
-		x.Printf("Creating temp client directory at %s\n", opt.clientDir)
+		fmt.Printf("Creating temp client directory at %s\n", opt.clientDir)
 		defer os.RemoveAll(opt.clientDir)
 	}
 	l := setup(bmOpts, dgraphClient)
@@ -358,13 +357,13 @@ func run() error {
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
 			if err == context.Canceled {
-				log.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
+				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
 				return nil
 			}
-			log.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
+			fmt.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
 			return err
 		}
-		x.Printf("Processed schema file %q\n", opt.schemaFile)
+		fmt.Printf("Processed schema file %q\n", opt.schemaFile)
 	}
 
 	filesList := fileList(opt.files)
@@ -389,7 +388,7 @@ func run() error {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			log.Printf("Error while processing file %q: %s\n", filesList[i], err)
+			fmt.Printf("Error while processing file %q: %s\n", filesList[i], err)
 			return err
 		}
 	}

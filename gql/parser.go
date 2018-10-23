@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 const (
@@ -201,7 +202,7 @@ func (f *Function) IsPasswordVerifier() bool {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	x.Printf("%s[%x %q %q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
+	glog.Infof("%s[%x %q %q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}

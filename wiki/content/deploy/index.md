@@ -1439,15 +1439,52 @@ Go's built-in metrics may also be useful to measure:
 
 ## Dgraph Administration
 
-By default, admin actions can only be initiated from the machine on which the Dgraph alpha runs. `dgraph
-server` has an option to specify whitelisted IP addresses and ranges for hosts from which admin
-actions can be initiated.
+Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
+
+### Whitelist Admin Operations
+
+By default, admin operations can only be initiated from the machine on which the Dgraph Alpha runs.
+You can use the `--whitelist` option to specify whitelisted IP addresses and ranges for hosts from which admin operations can be initiated.
 
 ```sh
 dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third RAM> ...
 ```
-This would allow admin actions from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
+This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
+
+### Secure Alter Operations
+
+Clients can use alter operations to apply schema updates and drop particular or all predicates from the database.
+By default, all clients are allowed to perform alter operations.
+You can configure Dgraph to only allow alter operations when the client provides a specific token.
+This can be used to prevent clients from making unintended or accidental schema updates or predicate drops.
+
+You can specify the auth token with the `--auth_token` option for each Dgraph Alpha in the cluster.
+Clients must include the same auth token to make alter requests.
+
+```sh
+$ dgraph alpha --lru_mb=2048 --auth_token=<authtokenstring>
+```
+
+```sh
+$ curl -s localhost:8080/alter -d '{ "drop_all": true }'
+# Permission denied. No token provided.
+```
+
+```sh
+$ curl -s -H 'X-Dgraph-AuthToken: <wrongsecret>' localhost:8180/alter -d '{ "drop_all": true }'
+# Permission denied. Incorrect token.
+```
+
+```sh
+$ curl -H 'X-Dgraph-AuthToken: <authtokenstring>' localhost:8180/alter -d '{ "drop_all": true }'
+# Success. Token matches.
+```
+
+{{% notice "note" %}}
+To fully secure alter operations in the cluster, the auth token must be set for every Alpha.
+{{% /notice %}}
+
 
 ### Export Database
 
@@ -1457,7 +1494,7 @@ An export of all nodes is started by locally accessing the export endpoint of an
 $ curl localhost:8080/admin/export
 ```
 {{% notice "warning" %}}By default, this won't work if called from outside the server where Dgraph alpha is running.
-You can specify a list or range of whitelisted IP addresses from which export or other admin actions
+You can specify a list or range of whitelisted IP addresses from which export or other admin operations
 can be initiated using the `--whitelist` flag on `dgraph alpha`.
 {{% /notice %}}
 

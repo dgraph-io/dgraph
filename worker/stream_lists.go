@@ -219,7 +219,7 @@ func (sl *streamLists) streamKVs(ctx context.Context, prefix string,
 		if err := sl.stream.Send(batch); err != nil {
 			return err
 		}
-		glog.Infof("%s Created batch of size: %s in %v.\n",
+		glog.V(2).Infof("%s Created batch of size: %s in %v.\n",
 			prefix, humanize.Bytes(sz), time.Since(t))
 		return nil
 	}

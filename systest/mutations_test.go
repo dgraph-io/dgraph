@@ -562,6 +562,7 @@ func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
 		SetNquads: []byte(`
 			_:michael <name> "Michael" .
 			_:michael <friend> _:sang .
@@ -570,6 +571,10 @@ func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 			_:sang <name> "Sang Hyun"@en .
 		`),
 	})
+	require.NoError(t, err)
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
 	resp, err := txn.Query(ctx, `
 	{
 	  q(func: eq(name, "Michael")) {
@@ -1547,8 +1552,10 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	// Remove the last entry from ids.
 	ids = ids[:len(ids)-1]
 
-	// This time we didn't commit the txn.
+	// We must commit mutations before we expect them to show up as results in
+	// queries, involving secondary indices.
 	assigned, err = txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
 		SetNquads: []byte(`
 			_:d <end> "" .
 		`),
@@ -1560,6 +1567,8 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 		ids = append(ids, uid)
 	}
 
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
 	uids = getUids(txn)
 	require.Equal(t, 3, len(uids))
 	for _, uid := range uids {
