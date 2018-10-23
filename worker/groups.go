@@ -19,6 +19,7 @@ package worker
 import (
 	"fmt"
 	"math"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -801,7 +802,16 @@ func (g *groupi) processOracleDeltaStream() {
 				elog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
 				return
 			}
+
+			// We should always sort the txns before applying. Otherwise, we might lose some of
+			// these updates, becuase we never write over a new version.
+			sort.Slice(delta.Txns, func(i, j int) bool {
+				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
+			})
 			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
+			if glog.V(2) {
+				glog.Infof("Batched %d updates. Proposing Delta: %v.", batch, delta)
+			}
 			for {
 				// Block forever trying to propose this.
 				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
