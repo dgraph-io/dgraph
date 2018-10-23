@@ -41,6 +41,7 @@ type flagOptions struct {
 	predicate string
 	readOnly  bool
 	pdir      string
+	itemMeta  bool
 }
 
 func init() {
@@ -53,11 +54,12 @@ func init() {
 	}
 
 	flag := Debug.Cmd.Flags()
-	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
-	flag.StringVar(&opt.predicate, "pred", "", "Only output specified predicate.")
+	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
 	flag.BoolVar(&opt.vals, "vals", false, "Output values along with keys.")
-	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
+	flag.StringVar(&opt.predicate, "pred", "", "Only output specified predicate.")
+	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
+	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 }
 
 func lookup(db *badger.DB) {
@@ -141,7 +143,9 @@ func printKeys(db *badger.DB) {
 		if pk.Uid > 0 {
 			fmt.Fprintf(&buf, " uid: %d ", pk.Uid)
 		}
-		fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
+		if opt.itemMeta {
+			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
+		}
 		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(item.Key()))
 		fmt.Println(buf.String())
 		loop++
