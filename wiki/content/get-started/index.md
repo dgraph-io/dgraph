@@ -96,7 +96,7 @@ services:
       - 8080:8080
       - 9080:9080
     restart: on-failure
-    command: dgraph alpha --my=server:7080 --lru_mb=2048 --zero=zero:5080
+    command: dgraph server --my=server:7080 --lru_mb=2048 --zero=zero:5080
   ratel:
     image: dgraph/dgraph:latest
     volumes:
