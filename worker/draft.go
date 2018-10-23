@@ -27,9 +27,6 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
@@ -41,6 +38,10 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/golang/glog"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 )
 
 // uniqueKey is meant to be unique across all the replicas.
@@ -444,10 +445,17 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		for err := txn.CommitToDisk(&writer, commit); err != nil; {
-			glog.Warningf("Error while applying txn status to disk (%d -> %d): %v",
-				start, commit, err)
+		var err error
+		for retry := Config.MaxRetries; retry != 0; retry-- {
+			err = txn.CommitToDisk(&writer, commit)
+			if err == nil {
+				break
+			}
 			time.Sleep(10 * time.Millisecond)
+		}
+		if err != nil {
+			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
+				start, commit, err)
 		}
 	}
 
@@ -470,10 +478,17 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		for err := txn.CommitToMemory(commit); err != nil; {
+		var err error
+		for retry := Config.MaxRetries; retry != 0; retry-- {
+			err = txn.CommitToMemory(commit)
+			if err == nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if err != nil {
 			glog.Errorf("Error while applying txn status to memory (%d -> %d): %v",
 				start, commit, err)
-			time.Sleep(10 * time.Millisecond)
 		}
 	}
 
