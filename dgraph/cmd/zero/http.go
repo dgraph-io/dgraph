@@ -209,13 +209,13 @@ func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	go func() {
 		defer wg.Done()
 		err := srv.Serve(l)
-		glog.Errorf("Stopped taking more http(s) requests. Err: %v", err.Error())
+		glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
 		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 		defer cancel()
 		err = srv.Shutdown(ctx)
 		glog.Infoln("All http(s) requests finished.")
 		if err != nil {
-			glog.Errorf("Http(s) shutdown err: %v", err.Error())
+			glog.Errorf("Http(s) shutdown err: %v", err)
 		}
 	}()
 }
