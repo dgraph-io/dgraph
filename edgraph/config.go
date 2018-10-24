@@ -36,46 +36,14 @@ type Options struct {
 	BadgerVlog   string
 	WALDir       string
 	Nomutations  bool
+	AuthToken    string
 
 	AllottedMemory float64
 
-	WhitelistedIPs      string
-	ExportPath          string
-	NumPendingProposals int
-	Tracing             float64
-	MyAddr              string
-	ZeroAddr            string
-	RaftId              uint64
-	MaxPendingCount     uint64
-	ExpandEdge          bool
-
-	DebugMode bool
+	WhitelistedIPs string
 }
 
-// TODO(tzdybal) - remove global
 var Config Options
-
-var DefaultConfig = Options{
-	PostingDir:   "p",
-	BadgerTables: "mmap",
-	BadgerVlog:   "mmap",
-	WALDir:       "w",
-	Nomutations:  false,
-
-	// User must specify this.
-	AllottedMemory: -1.0,
-
-	WhitelistedIPs:      "",
-	ExportPath:          "export",
-	NumPendingProposals: 2000,
-	Tracing:             0.0,
-	MyAddr:              "",
-	ZeroAddr:            fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
-	MaxPendingCount:     100,
-	ExpandEdge:          true,
-
-	DebugMode: false,
-}
 
 // Sometimes users use config.yaml flag so /debug/vars doesn't have information about the
 // value of the flags. Hence we dump conf options we care about to the conf map.
@@ -112,13 +80,14 @@ func setConfVar(conf Options) {
 	// This is so we can find these options in /debug/vars.
 	x.Conf.Set("badger.tables", newStr(conf.BadgerTables))
 	x.Conf.Set("badger.vlog", newStr(conf.BadgerVlog))
-
 	x.Conf.Set("posting_dir", newStr(conf.PostingDir))
 	x.Conf.Set("wal_dir", newStr(conf.WALDir))
 	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
-	x.Conf.Set("tracing", newFloat(conf.Tracing))
-	x.Conf.Set("num_pending_proposals", newInt(conf.NumPendingProposals))
-	x.Conf.Set("expand_edge", newIntFromBool(conf.ExpandEdge))
+
+	// Set some vars from worker.Config.
+	x.Conf.Set("tracing", newFloat(worker.Config.Tracing))
+	x.Conf.Set("num_pending_proposals", newInt(worker.Config.NumPendingProposals))
+	x.Conf.Set("expand_edge", newIntFromBool(worker.Config.ExpandEdge))
 }
 
 func SetConfiguration(newConfig Options) {
@@ -130,24 +99,13 @@ func SetConfiguration(newConfig Options) {
 	posting.Config.AllottedMemory = Config.AllottedMemory
 	posting.Config.Mu.Unlock()
 
-	worker.Config.ExportPath = Config.ExportPath
-	worker.Config.NumPendingProposals = Config.NumPendingProposals
-	worker.Config.Tracing = Config.Tracing
-	worker.Config.MyAddr = Config.MyAddr
-	worker.Config.ZeroAddr = Config.ZeroAddr
-	worker.Config.RaftId = Config.RaftId
-	worker.Config.ExpandEdge = Config.ExpandEdge
-
 	ips, err := parseIPsFromString(Config.WhitelistedIPs)
-
 	if err != nil {
 		fmt.Println("IP ranges could not be parsed from --whitelist " + Config.WhitelistedIPs)
 		worker.Config.WhiteListedIPRanges = []worker.IPRange{}
 	} else {
 		worker.Config.WhiteListedIPRanges = ips
 	}
-
-	x.Config.DebugMode = Config.DebugMode
 }
 
 const MinAllottedMemory = 1024.0
@@ -160,7 +118,7 @@ func (o *Options) validate() {
 	_, err = parseIPsFromString(o.WhitelistedIPs)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
-	x.AssertTruefNoTrace(o.AllottedMemory != DefaultConfig.AllottedMemory,
+	x.AssertTruefNoTrace(o.AllottedMemory != -1,
 		"LRU memory (--lru_mb) must be specified. (At least 1024 MB)")
 	x.AssertTruefNoTrace(o.AllottedMemory >= MinAllottedMemory,
 		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f",

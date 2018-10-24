@@ -3,6 +3,9 @@ matrix:
     - os: linux
       go: 1.10.x
       language: go
+    - os: linux
+      go: 1.11.x
+      language: go
 
 install: contrib/scripts/install.sh
 

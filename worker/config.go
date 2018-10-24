@@ -32,6 +32,7 @@ type Options struct {
 	RaftId              uint64
 	ExpandEdge          bool
 	WhiteListedIPRanges []IPRange
+	MaxRetries          int
 }
 
 var Config Options

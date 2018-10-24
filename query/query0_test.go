@@ -1631,7 +1631,7 @@ func TestNestedFuncRoot4(t *testing.T) {
 var maxPendingCh chan uint64
 
 func TestMain(m *testing.M) {
-	x.Init(true)
+	x.Init()
 
 	odch = make(chan *pb.OracleDelta, 100)
 	maxPendingCh = make(chan uint64, 100)

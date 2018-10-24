@@ -119,8 +119,8 @@ func TestOrchestrate(t *testing.T) {
 
 	// Test case 3. Retrieve select keys within the predicate.
 	c.kv = c.kv[:0]
-	sl.chooseKey = func(key []byte, version uint64) bool {
-		pk := x.Parse(key)
+	sl.chooseKey = func(item *badger.Item) bool {
+		pk := x.Parse(item.Key())
 		return pk.Uid%2 == 0
 	}
 	err = sl.orchestrate(context.Background(), "Testing", math.MaxUint64)

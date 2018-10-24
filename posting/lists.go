@@ -18,7 +18,6 @@ package posting
 
 import (
 	"crypto/md5"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -27,7 +26,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -100,7 +98,7 @@ func getMemUsage() int {
 
 	contents, err := ioutil.ReadFile("/proc/self/stat")
 	if err != nil {
-		x.Println("Can't read the proc file", err)
+		glog.Errorf("Can't read the proc file. Err: %v\n", err)
 		return 0
 	}
 
@@ -108,13 +106,13 @@ func getMemUsage() int {
 	// 24th entry of the file is the RSS which denotes the number of pages
 	// used by the process.
 	if len(cont) < 24 {
-		x.Println("Error in RSS from stat")
+		glog.Errorln("Error in RSS from stat")
 		return 0
 	}
 
 	rss, err := strconv.Atoi(cont[23])
 	if err != nil {
-		x.Println(err)
+		glog.Errorln(err)
 		return 0
 	}
 
@@ -212,7 +210,6 @@ func updateMemoryMetrics(lc *y.Closer) {
 var (
 	pstore *badger.DB
 	lcache *listCache
-	btree  *BTree
 	closer *y.Closer
 )
 
@@ -220,88 +217,12 @@ var (
 func Init(ps *badger.DB) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
-	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
-	closer = y.NewCloser(3)
+	closer = y.NewCloser(2)
 
 	go periodicUpdateStats(closer)
 	go updateMemoryMetrics(closer)
-	go clearBtree(closer)
-}
-
-// clearBtree checks if the keys stored in the btree have reached their conclusion, and if so,
-// removes them from the tree. Conclusion in this case would be that the key got written out to
-// disk, or the txn which introduced the key got aborted.
-func clearBtree(closer *y.Closer) {
-	defer closer.Done()
-	var removeKey = errors.New("Remove key from btree.")
-
-	handleKey := func(txn *badger.Txn, k []byte) error {
-		_, err := txn.Get(k)
-		switch {
-		case err == badger.ErrKeyNotFound:
-			l := GetLru(k) // Retrieve from LRU cache, if it exists.
-			if l == nil {
-				// Posting list no longer in memory. So, it must have been either written to
-				// disk, or removed from memory after a txn abort.
-				return removeKey
-			}
-			l.RLock()
-			defer l.RUnlock()
-			if !l.hasPendingTxn() {
-				// This key's txn was aborted. So, we can remove it from btree.
-				return removeKey
-			}
-			return nil
-		case err != nil:
-			glog.Warningf("Error while checking key: %v\n", err)
-			return err
-		default:
-			// Key was found on disk. Remove from btree.
-			return removeKey
-		}
-	}
-
-	removeKeysOnDisk := func() {
-		var keys []string
-		var count int
-		err := pstore.View(func(txn *badger.Txn) error {
-			var rerr error
-			btree.Ascend(func(k []byte) bool {
-				count++
-				err := handleKey(txn, k)
-				if err == removeKey {
-					keys = append(keys, string(k))
-				} else if err != nil {
-					rerr = err
-					return false
-				}
-				return true
-			})
-			return rerr
-		})
-		if glog.V(2) && count > 0 {
-			glog.Infof("Btree size: %d. Removing=%d. Error=%v\n", count, len(keys), err)
-		}
-		if err == nil {
-			for _, k := range keys {
-				btree.Delete([]byte(k))
-			}
-		}
-	}
-
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			removeKeysOnDisk()
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
 }
 
 func Cleanup() {
@@ -340,8 +261,6 @@ func Get(key []byte) (rlist *List, err error) {
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
 		x.CacheRace.Add(1)
-	} else if !lp.onDisk {
-		btree.Insert(lp.key)
 	}
 	return lp, nil
 }
@@ -365,41 +284,4 @@ func GetNoStore(key []byte) (*List, error) {
 // memory(for example before populating snapshot) or after calling syncAllMarks
 func EvictLRU() {
 	lcache.Reset()
-}
-
-func CommitLists(commit func(key []byte) bool) {
-	// We iterate over lru and pushing values (List) into this
-	// channel. Then goroutines right below will commit these lists to data store.
-	workChan := make(chan *List, 10000)
-
-	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for l := range workChan {
-				l.SyncIfDirty(false)
-			}
-		}()
-	}
-
-	lcache.iterate(func(l *List) bool {
-		if commit(l.key) {
-			workChan <- l
-		}
-		return true
-	})
-	close(workChan)
-	wg.Wait()
-
-	// The following hack ensures that all the asynchrously run commits above would have been done
-	// before this completes. Badger now actually gets rid of keys, which are deleted. So, we can
-	// use the Delete function.
-	txn := pstore.NewTransactionAt(1, true)
-	defer txn.Discard()
-	x.Check(txn.Delete(x.DataKey("_dummy_", 1)))
-	// Nothing is being read, so there can't be an ErrConflict. This should go to disk.
-	if err := txn.CommitAt(1, nil); err != nil {
-		x.Printf("Commit unexpectedly failed with error: %v", err)
-	}
 }

@@ -77,7 +77,7 @@ func TestLoaderXidmap(t *testing.T) {
 	// cluster.dgraph.Process = nil
 	// if err := cluster.dgraph.Start(); err != nil {
 	// 	cluster.Close()
-	// 	t.Fatalf("Couldn't start Dgraph server again: %v\n", err)
+	// 	t.Fatalf("Couldn't start Dgraph alpha again: %v\n", err)
 	// }
 	// time.Sleep(5 * time.Second)
 

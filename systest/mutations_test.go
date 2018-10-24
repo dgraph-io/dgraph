@@ -83,7 +83,10 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `list: [string] @lang .`,
+		Schema: `
+			list: [string] .
+			name: string @lang .
+		`,
 	})))
 
 	txn := c.NewTxn()
@@ -99,10 +102,7 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 			<0x2> <name> "abc_ja"@ja .
 			<0x3> <name> "abcd" .
 			<0x1> <number> "99"^^<xs:int> .
-
 			<0x1> <list> "first" .
-			<0x1> <list> "first_en"@en .
-			<0x1> <list> "first_it"@it .
 			<0x1> <list> "second" .
 		`),
 	})
@@ -136,9 +136,7 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 				"list": [
 					"second",
 					"first"
-				],
-				"list@en": "first_en",
-				"list@it": "first_it"
+				]
 			}
 		]
 	}
@@ -148,60 +146,10 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, (c.Alter(ctx, &api.Operation{
+	err := c.Alter(ctx, &api.Operation{
 		Schema: `pred: [string] @lang .`,
-	})))
-
-	txn := c.NewTxn()
-	defer txn.Discard(ctx)
-	_, err := txn.Mutate(ctx, &api.Mutation{
-		CommitNow: true,
-		SetNquads: []byte(`
-			<0x1> <pred> "first" .
-			<0x1> <pred> "second" .
-			<0x1> <pred> "dutch"@nl .
-		`),
 	})
-	check(t, err)
-
-	resp, err := c.NewTxn().Query(context.Background(), `
-	{
-		q(func: uid(0x1)) {
-			pred
-		}
-	}
-	`)
-	check(t, err)
-	CompareJSON(t, `
-	{
-		"q": [
-			{
-				"pred": [
-					"first",
-					"second"
-				]
-			}
-		]
-	}
-	`, string(resp.GetJson()))
-
-	resp, err = c.NewTxn().Query(context.Background(), `
-	{
-		q(func: uid(0x1)) {
-			pred@nl
-		}
-	}
-	`)
-	check(t, err)
-	CompareJSON(t, `
-	{
-		"q": [
-			{
-				"pred@nl": "dutch"
-			}
-		]
-	}
-	`, string(resp.GetJson()))
+	require.Error(t, err)
 }
 
 func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
@@ -562,6 +510,7 @@ func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
 		SetNquads: []byte(`
 			_:michael <name> "Michael" .
 			_:michael <friend> _:sang .
@@ -570,6 +519,10 @@ func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 			_:sang <name> "Sang Hyun"@en .
 		`),
 	})
+	require.NoError(t, err)
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
 	resp, err := txn.Query(ctx, `
 	{
 	  q(func: eq(name, "Michael")) {
@@ -889,7 +842,7 @@ func SetAfterDeletionListType(t *testing.T, c *dgo.Dgraph) {
 
 func EmptyNamesWithExact(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) .`})
+	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) @lang .`})
 	require.NoError(t, err)
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
@@ -1547,8 +1500,10 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	// Remove the last entry from ids.
 	ids = ids[:len(ids)-1]
 
-	// This time we didn't commit the txn.
+	// We must commit mutations before we expect them to show up as results in
+	// queries, involving secondary indices.
 	assigned, err = txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
 		SetNquads: []byte(`
 			_:d <end> "" .
 		`),
@@ -1560,6 +1515,8 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 		ids = append(ids, uid)
 	}
 
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
 	uids = getUids(txn)
 	require.Equal(t, 3, len(uids))
 	for _, uid := range uids {

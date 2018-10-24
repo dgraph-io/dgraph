@@ -18,6 +18,8 @@ package x
 
 import (
 	"fmt"
+
+	"github.com/golang/glog"
 )
 
 var (
@@ -46,8 +48,7 @@ func AddInit(f func()) {
 }
 
 // Init initializes flags and run all functions in initFunc.
-func Init(debug bool) {
-	Config.DebugMode = debug
+func Init() {
 	// Default value, would be overwritten by flag.
 	Config.QueryEdgeLimit = 1e6
 
@@ -76,7 +77,7 @@ Licensed under Apache 2.0. Copyright 2015-2018 Dgraph Labs, Inc.
 
 // PrintVersionOnly prints version and other helpful information if --version.
 func PrintVersion() {
-	fmt.Println(BuildDetails())
+	glog.Infof("\n%s\n", BuildDetails())
 }
 
 func Version() string {

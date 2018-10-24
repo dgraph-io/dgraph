@@ -344,7 +344,7 @@ func TestParseScalarListError4(t *testing.T) {
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
-	x.Init(true)
+	x.Init()
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)

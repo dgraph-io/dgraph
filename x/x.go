@@ -376,3 +376,13 @@ func (t *Timer) Total() time.Duration {
 func (t *Timer) All() []time.Duration {
 	return t.records
 }
+
+// PredicateLang extracts the language from a predicate (or facet) name.
+// Returns the predicate and the language tag, if any.
+func PredicateLang(s string) (string, string) {
+	i := strings.LastIndex(s, "@")
+	if i <= 0 {
+		return s, ""
+	}
+	return s[0:i], s[i+1:]
+}

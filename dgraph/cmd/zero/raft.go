@@ -269,7 +269,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		}
 		group := state.Groups[p.Tablet.GroupId]
 		if p.Tablet.Remove {
-			x.Printf("Removing tablet for attr: [%v], gid: [%v]\n", p.Tablet.Predicate, p.Tablet.GroupId)
+			glog.Infof("Removing tablet for attr: [%v], gid: [%v]\n", p.Tablet.Predicate, p.Tablet.GroupId)
 			if group != nil {
 				delete(group.Tablets, p.Tablet.Predicate)
 			}
@@ -289,7 +289,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 				delete(originalGroup.Tablets, p.Tablet.Predicate)
 			} else {
 				if tablet.GroupId != p.Tablet.GroupId {
-					x.Printf("Tablet for attr: [%s], gid: [%d] is already being served by group: [%d]\n",
+					glog.Infof("Tablet for attr: [%s], gid: [%d] is already being served by group: [%d]\n",
 						tablet.Predicate, p.Tablet.GroupId, tablet.GroupId)
 					return p.Key, errTabletAlreadyServed
 				}
@@ -307,7 +307,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	} else if p.MaxLeaseId != 0 || p.MaxTxnTs != 0 {
 		// Could happen after restart when some entries were there in WAL and did not get
 		// snapshotted.
-		x.Printf("Could not apply proposal, ignoring: p.MaxLeaseId=%v, p.MaxTxnTs=%v maxLeaseId=%d"+
+		glog.Infof("Could not apply proposal, ignoring: p.MaxLeaseId=%v, p.MaxTxnTs=%v maxLeaseId=%d"+
 			" maxTxnTs=%d\n", p.MaxLeaseId, p.MaxTxnTs, state.MaxLeaseId, state.MaxTxnTs)
 	}
 	if p.Txn != nil {
@@ -368,7 +368,7 @@ func (n *node) initAndStartNode() error {
 	x.Check(err)
 
 	if restart {
-		x.Println("Restarting node for dgraphzero")
+		glog.Infoln("Restarting node for dgraphzero")
 		sp, err := n.Store.Snapshot()
 		x.Checkf(err, "Unable to get existing snapshot")
 		if !raft.IsEmptySnap(sp) {
@@ -409,7 +409,7 @@ func (n *node) initAndStartNode() error {
 				errorDesc == x.ErrReuseRemovedId.Error() {
 				log.Fatalf("Error while joining cluster: %v", errorDesc)
 			}
-			x.Printf("Error while joining cluster: %v\n", err)
+			glog.Errorf("Error while joining cluster: %v\n", err)
 			timeout *= 2
 			if timeout > 32*time.Second {
 				timeout = 32 * time.Second
@@ -419,7 +419,7 @@ func (n *node) initAndStartNode() error {
 		if err != nil {
 			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
 		}
-		x.Printf("[%d] Starting node\n", n.Id)
+		glog.Infof("[%d] Starting node\n", n.Id)
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	} else {
@@ -500,7 +500,7 @@ func (n *node) trySnapshot(skip uint64) {
 	}
 	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
 	x.Checkf(err, "While creating snapshot")
-	x.Printf("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
+	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
 }
 
 func (n *node) Run() {
@@ -544,17 +544,17 @@ func (n *node) Run() {
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
-					x.Printf("Done applying conf change at %d", n.Id)
+					glog.Infof("Done applying conf change at %d", n.Id)
 
 				} else if entry.Type == raftpb.EntryNormal {
 					key, err := n.applyProposal(entry)
 					if err != nil && err != errTabletAlreadyServed {
-						x.Printf("While applying proposal: %v\n", err)
+						glog.Errorf("While applying proposal: %v\n", err)
 					}
 					n.Proposals.Done(key, err)
 
 				} else {
-					x.Printf("Unhandled entry: %+v\n", entry)
+					glog.Infof("Unhandled entry: %+v\n", entry)
 				}
 				n.Applied.Done(entry.Index)
 			}

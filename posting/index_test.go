@@ -167,9 +167,6 @@ func TestTokensTable(t *testing.T) {
 		Entity: 157,
 	}
 	addMutation(t, l, edge, Set, 1, 2, true)
-	merged, err := l.SyncIfDirty(false)
-	require.True(t, merged)
-	require.NoError(t, err)
 
 	key = x.IndexKey("name", "\x01david")
 	time.Sleep(10 * time.Millisecond)
@@ -311,13 +308,6 @@ func TestRebuildReverseEdges(t *testing.T) {
 
 	// TODO: Remove after fixing sync marks.
 	RebuildReverseEdges(context.Background(), "friend", 16)
-	CommitLists(func(key []byte) bool {
-		pk := x.Parse(key)
-		if pk.Attr == "friend" {
-			return true
-		}
-		return false
-	})
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(17, false)

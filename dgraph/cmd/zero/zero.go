@@ -372,8 +372,8 @@ func (s *Server) Connect(ctx context.Context,
 	// Ensures that connect requests are always serialized
 	s.connectLock.Lock()
 	defer s.connectLock.Unlock()
-	x.Printf("Got connection request: %+v\n", m)
-	defer x.Printf("Connected: %+v\n", m)
+	glog.Infof("Got connection request: %+v\n", m)
+	defer glog.Infof("Connected: %+v\n", m)
 
 	if ctx.Err() != nil {
 		x.Errorf("Context has error: %v\n", ctx.Err())
@@ -531,7 +531,7 @@ func (s *Server) receiveUpdates(stream pb.Zero_UpdateServer) error {
 			// Sleep here so the caller doesn't keep on retrying indefinitely, creating a busy
 			// wait.
 			time.Sleep(time.Second)
-			x.Printf("Error while creating proposals in stream %v\n", err)
+			glog.Errorf("Error while creating proposals in stream %v\n", err)
 			return err
 		}
 
@@ -546,7 +546,7 @@ func (s *Server) receiveUpdates(stream pb.Zero_UpdateServer) error {
 			// We Don't care about these errors
 			// Ideally shouldn't error out.
 			if err := <-errCh; err != nil {
-				x.Printf("Error while applying proposal in update stream %v\n", err)
+				glog.Errorf("Error while applying proposal in update stream %v\n", err)
 			}
 		}
 	}

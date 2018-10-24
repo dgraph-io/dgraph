@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/conv"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debug"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/server"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
@@ -75,10 +75,15 @@ func init() {
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
 	rootConf.BindPFlags(RootCmd.PersistentFlags())
+
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+	// Always set stderrthreshold=0. Don't let users set it themselves.
+	x.Check(flag.Set("stderrthreshold", "0"))
+	x.Check(flag.CommandLine.MarkDeprecated("stderrthreshold",
+		"Dgraph always sets this flag to 0. It can't be overwritten."))
 
 	var subcommands = []*x.SubCommand{
-		&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &server.Server, &zero.Zero,
+		&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero,
 		&version.Version, &debug.Debug,
 	}
 	for _, sc := range subcommands {

@@ -120,6 +120,7 @@ Loop:
 		case r == '*':
 			l.Depth++
 			l.Emit(itemStar)
+
 		case r == leftRound:
 			if l.Depth > atObject {
 				l.Backup()
@@ -162,8 +163,7 @@ Loop:
 }
 
 // Assumes that caller has consumed initial '<'
-func lexIRIRef(l *lex.Lexer, styp lex.ItemType,
-	sfn lex.StateFn) lex.StateFn {
+func lexIRIRef(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 	if err := lex.LexIRIRef(l, styp); err != nil {
 		return l.Errorf(err.Error())
 	}
@@ -251,6 +251,7 @@ func lexPredicate(l *lex.Lexer) lex.StateFn {
 	}
 
 	l.Depth++
+
 	return lexIRIRef(l, itemPredicate, lexText)
 }
 

@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 )
 
 // Options controls the performance characteristics of the XidMap.
@@ -116,7 +117,7 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 				xm.newRanges <- assigned
 				continue
 			}
-			x.Printf("Error while getting lease: %v\n", err)
+			glog.Errorf("Error while getting lease: %v\n", err)
 			backoff *= 2
 			if backoff > maxBackoff {
 				backoff = maxBackoff

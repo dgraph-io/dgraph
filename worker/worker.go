@@ -31,6 +31,8 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -92,7 +94,7 @@ func RunServer(bindall bool) {
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
 	}
-	x.Printf("Worker listening at address: %v", ln.Addr())
+	glog.Infof("Worker listening at address: %v", ln.Addr())
 
 	pb.RegisterWorkerServer(workerServer, &grpcWorker{})
 	pb.RegisterRaftServer(workerServer, &raftServer)
@@ -106,13 +108,13 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	log.Println("Stopping group...")
+	glog.Infof("Stopping group...")
 	groups().closer.SignalAndWait()
 
-	log.Println("Stopping node...")
+	glog.Infof("Stopping node...")
 	groups().Node.closer.SignalAndWait()
 
-	log.Printf("Stopping worker server...")
+	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
 
 	// TODO: What is this for?
