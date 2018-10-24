@@ -65,7 +65,7 @@ const (
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
 	BitUidPosting      byte = 0x01
-	bitDeltaPosting    byte = 0x04
+	BitDeltaPosting    byte = 0x04
 	BitCompletePosting byte = 0x08
 	BitEmptyPosting    byte = 0x10 | BitCompletePosting
 )

@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -36,12 +37,13 @@ var Debug x.SubCommand
 var opt flagOptions
 
 type flagOptions struct {
-	vals      bool
-	keyLookup string
-	predicate string
-	readOnly  bool
-	pdir      string
-	itemMeta  bool
+	vals       bool
+	keyLookup  string
+	keyHistory bool
+	predicate  string
+	readOnly   bool
+	pdir       string
+	itemMeta   bool
 }
 
 func init() {
@@ -57,9 +59,79 @@ func init() {
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
 	flag.BoolVar(&opt.vals, "vals", false, "Output values along with keys.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
-	flag.StringVar(&opt.predicate, "pred", "", "Only output specified predicate.")
+	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
+	flag.BoolVarP(&opt.keyHistory, "history", "y", false, "Show all versions of a key.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
+}
+
+func history(lookup []byte, itr *badger.Iterator) {
+	var buf bytes.Buffer
+	for ; itr.Valid(); itr.Next() {
+		item := itr.Item()
+		if !bytes.Equal(item.Key(), lookup) {
+			break
+		}
+		buf.WriteString("{item}")
+		if item.IsDeletedOrExpired() {
+			buf.WriteString("{deleted}")
+			break
+		}
+		val, err := item.ValueCopy(nil)
+		x.Check(err)
+
+		meta := item.UserMeta()
+		if meta&posting.BitCompletePosting > 0 {
+			buf.WriteString("{complete}")
+		}
+		if meta&posting.BitUidPosting > 0 {
+			buf.WriteString("{uid}")
+		}
+		if meta&posting.BitDeltaPosting > 0 {
+			buf.WriteString("{delta}")
+		}
+		if meta&posting.BitEmptyPosting > posting.BitCompletePosting {
+			buf.WriteString("{empty}")
+		}
+		fmt.Fprintf(&buf, " ts=%d\n", item.Version())
+		if meta&posting.BitDeltaPosting > 0 {
+			plist := &pb.PostingList{}
+			x.Check(plist.Unmarshal(val))
+			for _, p := range plist.Postings {
+				buf.WriteString(p.String())
+				buf.WriteString("\n")
+			}
+		}
+		if meta&posting.BitCompletePosting > 0 {
+			switch {
+			case meta&posting.BitUidPosting > 0:
+				var bi bp128.BPackIterator
+				bi.Init(val, 0)
+				var uids []uint64
+				uids = append(uids, bi.Uids()...)
+				for bi.StartIdx() < bi.Length() {
+					bi.Next()
+					if !bi.Valid() {
+						break
+					}
+					uids = append(uids, bi.Uids()...)
+				}
+				fmt.Fprintf(&buf, " Num uids = %d\n", len(uids))
+				for _, uid := range uids {
+					fmt.Fprintf(&buf, " Uid = %d\n", uid)
+				}
+			default:
+				var plist pb.PostingList
+				x.Check(plist.Unmarshal(val))
+				for _, p := range plist.Postings {
+					buf.WriteString(p.String())
+					buf.WriteString("\n")
+				}
+			}
+		}
+		buf.WriteString("\n")
+	}
+	fmt.Println(buf.String())
 }
 
 func lookup(db *badger.DB) {
@@ -76,26 +148,33 @@ func lookup(db *badger.DB) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	for itr.Seek(key); itr.Valid(); {
-		item := itr.Item()
-		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		var buf bytes.Buffer
-		fmt.Fprintf(&buf, " Key: %x", item.Key())
-		fmt.Fprintf(&buf, " Length: %d\n", pl.Length(math.MaxUint64, 0))
-		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
-			fmt.Fprintf(&buf, " Uid: %d\n", o.Uid)
-			// TODO: Extend this to output more fields.
-			return nil
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(buf.String())
+	itr.Seek(key)
+	if !itr.Valid() {
+		log.Fatalf("Unable to seek to key: %s", hex.Dump(key))
+	}
+
+	if opt.keyHistory {
+		history(key, itr)
 		return
 	}
+
+	item := itr.Item()
+	pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, " Key: %x", item.Key())
+	fmt.Fprintf(&buf, " Length: %d\n", pl.Length(math.MaxUint64, 0))
+	err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
+		fmt.Fprintf(&buf, " Uid: %d\n", o.Uid)
+		// TODO: Extend this to output more fields.
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(buf.String())
 }
 
 func printKeys(db *badger.DB) {
@@ -112,6 +191,7 @@ func printKeys(db *badger.DB) {
 		prefix = x.PredicatePrefix(opt.predicate)
 	}
 
+	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	var loop int
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()

@@ -111,7 +111,7 @@ func (tx *Txn) CommitToDisk(writer *x.TxnWriter, commitTs uint64) error {
 		if data == nil {
 			continue
 		}
-		if err := writer.SetAt([]byte(key), data, bitDeltaPosting, commitTs); err != nil {
+		if err := writer.SetAt([]byte(key), data, BitDeltaPosting, commitTs); err != nil {
 			return err
 		}
 	}
@@ -201,7 +201,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			break
 		}
 
-		if item.UserMeta()&bitDeltaPosting > 0 {
+		if item.UserMeta()&BitDeltaPosting > 0 {
 			err := item.Value(func(val []byte) error {
 				pl := &pb.PostingList{}
 				x.Check(pl.Unmarshal(val))
