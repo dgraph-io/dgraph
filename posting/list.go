@@ -689,7 +689,7 @@ func (l *List) rollup() error {
 	l.AssertLock()
 	final := new(pb.PostingList)
 	var bp bp128.BPackEncoder
-	buf := make([]uint64, 0, bp128.BlockSize)
+	uids := make([]uint64, 0, bp128.BlockSize)
 
 	// Pick all committed entries
 	x.AssertTrue(l.minTs <= l.commitTs)
@@ -697,10 +697,10 @@ func (l *List) rollup() error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
 		// So, we don't need to do any filtering here. In fact, doing filtering here could result
 		// in a bug.
-		buf = append(buf, p.Uid)
-		if len(buf) == bp128.BlockSize {
-			bp.PackAppend(buf)
-			buf = buf[:0]
+		uids = append(uids, p.Uid)
+		if len(uids) == bp128.BlockSize {
+			bp.PackAppend(uids)
+			uids = uids[:0]
 		}
 
 		// We want to add the posting if it has facets or has a value.
@@ -713,8 +713,8 @@ func (l *List) rollup() error {
 		return nil
 	})
 	x.Check(err)
-	if len(buf) > 0 {
-		bp.PackAppend(buf)
+	if len(uids) > 0 {
+		bp.PackAppend(uids)
 	}
 	sz := bp.Size()
 	if sz > 0 {

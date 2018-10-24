@@ -96,7 +96,6 @@ func benchmarkPack(trials int, chunks *chunks) int {
 }
 
 func benchmarkUnpack(trials int, chunks *chunks) int {
-
 	packed := make([][]byte, len(chunks.data))
 	for i, c := range chunks.data {
 		packed[i] = bp128.DeltaPack(c)
