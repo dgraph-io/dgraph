@@ -683,6 +683,8 @@ func validateNQuads(set, del []*api.NQuad) error {
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return x.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
+		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
+		// with bad predicate forms. ex: foo@bar ~something
 	}
 	return nil
 }
