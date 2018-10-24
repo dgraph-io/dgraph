@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"google.golang.org/grpc/metadata"
 	"io"
 	"io/ioutil"
 	"math"
@@ -61,6 +62,7 @@ type options struct {
 	numRdf              int
 	clientDir           string
 	ignoreIndexConflict bool
+	authToken           string
 }
 
 var opt options
@@ -93,6 +95,11 @@ func init() {
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
+	flag.StringP("auth_token", "a", "",
+		"The auth token that is required when a schema file is provided(through the --schema option), " +
+		"and the alpha server is started with the --auth_token option. In that case, the auth token value " +
+		"given to this command needs to match the auth token given to the alpha server in order for the schema " +
+		"to be successfully processed.")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -316,12 +323,19 @@ func run() error {
 		numRdf:              Live.Conf.GetInt("batch"),
 		clientDir:           Live.Conf.GetString("xidmap"),
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
+		authToken:           Live.Conf.GetString("auth_token"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
+	if len(opt.authToken) > 0 {
+		md := metadata.New(nil)
+		md.Append("auth-token", opt.authToken)
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+
 	bmOpts := batchMutationOptions{
 		Size:          opt.numRdf,
 		Pending:       opt.concurrent,
