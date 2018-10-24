@@ -90,6 +90,14 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, 
 	it.Next()
 	next := it.Item()
 	switch {
+	// This check might seem redundant but it's necessary. We have two possibilities,
+	//   1) that the schema is of form: name@en: string .
+	//
+	//   2) or this alternate form: <name@en>: string .
+	//
+	// The itemAt test invalidates 1) and string.Contains() tests for 2). We don't allow
+	// '@' in predicate names, so both forms are disallowed. Handling them here avoids
+	// messing with the lexer and IRI values.
 	case next.Typ == itemAt || strings.Contains(predicate, "@"):
 		return nil, x.Errorf("Invalid '@' in name")
 	case next.Typ != itemColon:

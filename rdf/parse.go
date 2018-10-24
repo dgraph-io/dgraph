@@ -85,7 +85,7 @@ L:
 			it.Next() // parse ')'
 
 		case itemPredicate:
-			// split the lang directive from the predicate name, if needed.
+			// Here we split predicate and lang directive (ex: "name@en"), if needed.
 			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.Trim(item.Val, " "))
 
 		case itemObject:

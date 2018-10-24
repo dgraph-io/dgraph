@@ -130,6 +130,8 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: i}}
 
 	case string:
+		// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
+		// mutations that's the only way to send language for a value.
 		nq.Predicate, nq.Lang = x.PredicateLang(k)
 
 		// Default value is considered as S P * deletion.
