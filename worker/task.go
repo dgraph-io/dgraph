@@ -26,13 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/metadata"
-
 	"github.com/dgraph-io/badger"
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
@@ -45,8 +39,12 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 
+	"github.com/golang/glog"
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 var (

@@ -83,7 +83,10 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `list: [string] @lang .`,
+		Schema: `
+			list: [string] .
+			name: string @lang .
+		`,
 	})))
 
 	txn := c.NewTxn()
@@ -99,10 +102,7 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 			<0x2> <name> "abc_ja"@ja .
 			<0x3> <name> "abcd" .
 			<0x1> <number> "99"^^<xs:int> .
-
 			<0x1> <list> "first" .
-			<0x1> <list> "first_en"@en .
-			<0x1> <list> "first_it"@it .
 			<0x1> <list> "second" .
 		`),
 	})
@@ -136,9 +136,7 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 				"list": [
 					"second",
 					"first"
-				],
-				"list@en": "first_en",
-				"list@it": "first_it"
+				]
 			}
 		]
 	}
@@ -148,60 +146,10 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, (c.Alter(ctx, &api.Operation{
+	err := c.Alter(ctx, &api.Operation{
 		Schema: `pred: [string] @lang .`,
-	})))
-
-	txn := c.NewTxn()
-	defer txn.Discard(ctx)
-	_, err := txn.Mutate(ctx, &api.Mutation{
-		CommitNow: true,
-		SetNquads: []byte(`
-			<0x1> <pred> "first" .
-			<0x1> <pred> "second" .
-			<0x1> <pred> "dutch"@nl .
-		`),
 	})
-	check(t, err)
-
-	resp, err := c.NewTxn().Query(context.Background(), `
-	{
-		q(func: uid(0x1)) {
-			pred
-		}
-	}
-	`)
-	check(t, err)
-	CompareJSON(t, `
-	{
-		"q": [
-			{
-				"pred": [
-					"first",
-					"second"
-				]
-			}
-		]
-	}
-	`, string(resp.GetJson()))
-
-	resp, err = c.NewTxn().Query(context.Background(), `
-	{
-		q(func: uid(0x1)) {
-			pred@nl
-		}
-	}
-	`)
-	check(t, err)
-	CompareJSON(t, `
-	{
-		"q": [
-			{
-				"pred@nl": "dutch"
-			}
-		]
-	}
-	`, string(resp.GetJson()))
+	require.Error(t, err)
 }
 
 func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
@@ -894,7 +842,7 @@ func SetAfterDeletionListType(t *testing.T, c *dgo.Dgraph) {
 
 func EmptyNamesWithExact(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) .`})
+	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) @lang .`})
 	require.NoError(t, err)
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
