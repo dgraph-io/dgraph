@@ -1558,7 +1558,8 @@ L:
 				// uid function could take variables as well as actual uids.
 				// If we can parse the value that means its an uid otherwise a variable.
 				uid, err := strconv.ParseUint(val, 0, 64)
-				if err == nil {
+				switch e := err.(type) {
+				case nil:
 					// It could be uid function at root.
 					if gq != nil {
 						gq.UID = append(gq.UID, uid)
@@ -1567,6 +1568,10 @@ L:
 						function.UID = append(function.UID, uid)
 					}
 					continue
+				case *strconv.NumError:
+					if e.Err == strconv.ErrRange {
+						return nil, x.Errorf("The uid value %q is too large.", val)
+					}
 				}
 				// E.g. @filter(uid(a, b, c))
 				function.NeedsVar = append(function.NeedsVar, VarContext{
@@ -1929,14 +1934,14 @@ func parseID(val string) ([]uint64, error) {
 	if val[0] != '[' {
 		uid, err := strconv.ParseUint(val, 0, 64)
 		if err != nil {
-			return uids, err
+			return nil, err
 		}
 		uids = append(uids, uid)
 		return uids, nil
 	}
 
 	if val[len(val)-1] != ']' {
-		return uids, x.Errorf("Invalid id list at root. Got: %+v", val)
+		return nil, x.Errorf("Invalid id list at root. Got: %+v", val)
 	}
 	var buf bytes.Buffer
 	for _, c := range val[1:] {
@@ -1946,14 +1951,14 @@ func parseID(val string) ([]uint64, error) {
 			}
 			uid, err := strconv.ParseUint(buf.String(), 0, 64)
 			if err != nil {
-				return uids, err
+				return nil, err
 			}
 			uids = append(uids, uid)
 			buf.Reset()
 			continue
 		}
 		if c == '[' || c == ')' {
-			return uids, x.Errorf("Invalid id list at root. Got: %+v", val)
+			return nil, x.Errorf("Invalid id list at root. Got: %+v", val)
 		}
 		buf.WriteRune(c)
 	}
