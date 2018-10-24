@@ -403,6 +403,9 @@ func (n *node) processApplyCh() {
 						p := &P{err: perr, size: psz, seen: time.Now()}
 						previous[proposal.Key] = p
 					}
+					if perr != nil {
+						glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+					}
 					n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
 						proposal.Key, e.Index, perr)
 				}

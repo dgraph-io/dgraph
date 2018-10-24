@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
@@ -52,6 +53,7 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 	}
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
+		glog.Errorf("MutateOverNetwork Error: %v. Mutation: %v.", err, m)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while MutateOverNetwork: %+v", err)
 		}

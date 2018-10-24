@@ -106,6 +106,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		return ctx.Err()
 	}
 
+	// Set this to disable retrying mechanism, and using the user-specified
+	// timeout.
+	var noTimeout bool
+
 	// Do a type check here if schema is present
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
@@ -132,6 +136,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 			if err := checkSchema(schema); err != nil {
 				return err
 			}
+			noTimeout = true
 		}
 	}
 
@@ -189,12 +194,19 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		}
 	}
 
+	// Some proposals, like schema updates can take a long time to apply. Let's
+	// not do the retry mechanism on them. Instead, we can set a long timeout of
+	// 20 minutes.
+	if noTimeout {
+		return propose(20 * time.Minute)
+	}
 	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
 	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
 	// timeout. We should always try with a timeout and optionally retry.
 	//
 	// Let's try 3 times before giving up.
+
 	for i := 0; i < 3; i++ {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.

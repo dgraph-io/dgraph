@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"sync"
@@ -419,6 +420,7 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 	idxIt := txn.NewIterator(iterOpt)
 	defer idxIt.Close()
 
+	// TODO: Rewrite this code. It is old. Replace with TxnWriter.
 	var m sync.Mutex
 	var err error
 	setError := func(e error) {
@@ -436,7 +438,9 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 		version := item.Version()
 
 		txn := pstore.NewTransactionAt(version, true)
-		txn.Delete(nkey)
+		if err = txn.Delete(nkey); err != nil {
+			break
+		}
 		wg.Add(1)
 		err := txn.CommitAt(version, func(e error) {
 			defer wg.Done()
@@ -445,7 +449,6 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 				return
 			}
 		})
-		txn.Discard()
 		if err != nil {
 			break
 		}
@@ -527,6 +530,8 @@ func (r *rebuild) Run(ctx context.Context) error {
 	t := pstore.NewTransactionAt(r.startTs, false)
 	defer t.Discard()
 
+	glog.V(1).Infof("Rebuild: Starting process. StartTs=%d. Prefix=\n%s\n",
+		r.startTs, hex.Dump(r.prefix))
 	opts := badger.DefaultIteratorOptions
 	opts.AllVersions = true
 	it := t.NewIterator(opts)
@@ -585,6 +590,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 			return err
 		}
 	}
+	glog.V(1).Infof("Rebuild: Iteration done. Now commiting at ts=%d\n", r.startTs)
 
 	// We must commit all the posting lists to memory, so they'd be picked up
 	// during posting list rollup below.
@@ -600,19 +606,26 @@ func (r *rebuild) Run(ctx context.Context) error {
 			return err
 		}
 
+		le := pl.Length(r.startTs, 0)
+		if le == 0 {
+			y.AssertTruef(le > 0, "Unexpected list of size zero: %q", key)
+		}
+		kv, err := pl.MarshalToKv()
+		if err != nil {
+			return err
+		}
+		// We choose to write the PL at r.startTs, so it won't be read by txns,
+		// which occurred before this schema mutation. Typically, we use
+		// kv.Version as the timestamp.
+		if err = writer.SetAt(kv.Key, kv.Val, kv.UserMeta[0], r.startTs); err != nil {
+			return err
+		}
+		// This locking is just to catch any future issues.  We shouldn't need
+		// to release this lock, because each posting list must only be accessed
+		// once and never again.
 		pl.Lock()
-		// We shouldn't need to release this lock, because each posting list
-		// must only be accessed once and never again.
-		le := pl.length(r.startTs, 0)
-		y.AssertTruef(le > 0, "Unexpected list of size zero: %q", key)
-		if err := pl.rollup(); err != nil {
-			return err
-		}
-		data, meta := marshalPostingList(pl.plist)
-		if err = writer.SetAt([]byte(key), data, meta, r.startTs); err != nil {
-			return err
-		}
 	}
+	glog.V(1).Infoln("Rebuild: Flushing all writes.")
 	return writer.Flush()
 }
 
