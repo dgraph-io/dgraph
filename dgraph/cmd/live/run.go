@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"google.golang.org/grpc/metadata"
 	"io"
 	"io/ioutil"
 	"math"
@@ -37,6 +36,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
 	bopt "github.com/dgraph-io/badger/options"
@@ -96,10 +96,7 @@ func init() {
 	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
 	flag.StringP("auth_token", "a", "",
-		"The auth token that is required when a schema file is provided(through the --schema option), " +
-		"and the alpha server is started with the --auth_token option. In that case, the auth token value " +
-		"given to this command needs to match the auth token given to the alpha server in order for the schema " +
-		"to be successfully processed.")
+		"The auth token passed to the server for Alter operation of the schema file")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -129,6 +126,12 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 // processSchemaFile process schema for a given gz file.
 func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing %s\n", file)
+	if len(opt.authToken) > 0 {
+		md := metadata.New(nil)
+		md.Append("auth-token", opt.authToken)
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+
 	f, err := os.Open(file)
 	x.Check(err)
 	defer f.Close()
@@ -330,12 +333,6 @@ func run() error {
 
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
-	if len(opt.authToken) > 0 {
-		md := metadata.New(nil)
-		md.Append("auth-token", opt.authToken)
-		ctx = metadata.NewOutgoingContext(ctx, md)
-	}
-
 	bmOpts := batchMutationOptions{
 		Size:          opt.numRdf,
 		Pending:       opt.concurrent,
