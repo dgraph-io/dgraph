@@ -70,6 +70,20 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"code": "Success", "message": "Export completed."}`))
 }
 
+func backupHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+	err := worker.BackupOverNetwork(context.Background())
+	if err != nil {
+		x.SetStatus(w, err.Error(), "Backup failed.")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`))
+
+}
+
 func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:

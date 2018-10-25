@@ -62,7 +62,3 @@ func (h *fileHandler) Exists(path string) bool {
 	_, err := os.Stat(path)
 	return os.IsExist(err)
 }
-
-func init() {
-	handlers["file"] = &fileHandler{}
-}

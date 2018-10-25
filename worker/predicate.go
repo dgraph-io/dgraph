@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker/stream"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -87,7 +88,7 @@ func (n *node) populateSnapshot(ps *badger.DB, pl *conn.Pool) (int, error) {
 }
 
 func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
-	stream pb.Worker_StreamSnapshotServer) error {
+	s pb.Worker_StreamSnapshotServer) error {
 	n := groups().Node
 	if n == nil {
 		return conn.ErrNoNode
@@ -127,12 +128,12 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
 	// BUG: There's a bug here due to which a node which doesn't see any transactions, but has real
 	// data fails to send that over, because of min_ts.
 
-	sl := streamLists{stream: stream, db: pstore}
-	sl.chooseKey = func(_ *badger.Item) bool {
+	sl := stream.Lists{Stream: s, DB: pstore}
+	sl.ChooseKeyFunc = func(_ *badger.Item) bool {
 		// Pick all keys.
 		return true
 	}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		item := itr.Item()
 		pk := x.Parse(key)
 		if pk.IsSchema() {
@@ -159,11 +160,11 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
 		return l.MarshalToKv()
 	}
 
-	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
+	if err := sl.Orchestrate(s.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
 		return err
 	}
 
-	if tr, ok := trace.FromContext(stream.Context()); ok {
+	if tr, ok := trace.FromContext(s.Context()); ok {
 		tr.LazyPrintf("Sent keys. Done.\n")
 	}
 	return nil
