@@ -46,6 +46,8 @@ func (w *TxnWriter) cb(err error) {
 	if err == nil {
 		return
 	}
+
+	glog.Errorf("TxnWriter got error during callback: %v", err)
 	select {
 	case w.che <- err:
 	default:
