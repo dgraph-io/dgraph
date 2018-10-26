@@ -403,6 +403,9 @@ func (n *node) processApplyCh() {
 						p := &P{err: perr, size: psz, seen: time.Now()}
 						previous[proposal.Key] = p
 					}
+					if perr != nil {
+						glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+					}
 					n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
 						proposal.Key, e.Index, perr)
 				}
@@ -439,7 +442,7 @@ func (n *node) processApplyCh() {
 
 func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
-	writer := x.TxnWriter{DB: pstore}
+	writer := x.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
 		if txn == nil {
@@ -447,7 +450,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		}
 		var err error
 		for retry := Config.MaxRetries; retry != 0; retry-- {
-			err = txn.CommitToDisk(&writer, commit)
+			err = txn.CommitToDisk(writer, commit)
 			if err == nil {
 				break
 			}
@@ -748,7 +751,9 @@ func (n *node) Run() {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	writer := &x.TxnWriter{DB: pstore, BlindWrite: true}
+	writer := x.NewTxnWriter(pstore)
+	writer.BlindWrite = true // Do overwrite keys.
+
 	sl := streamLists{stream: writer, db: pstore}
 	sl.chooseKey = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())

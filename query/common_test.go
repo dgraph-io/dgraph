@@ -296,7 +296,7 @@ func addPassword(t *testing.T, uid uint64, attr, password string) {
 func populateGraph(t *testing.T) {
 	x.AssertTrue(ps != nil)
 	// Initialize a TxnWriter, so CommitToDisk can use it to write to Badger.
-	writer = &x.TxnWriter{DB: ps}
+	writer = x.NewTxnWriter(ps)
 	defer x.Check(writer.Flush())
 
 	const schemaStr = `
