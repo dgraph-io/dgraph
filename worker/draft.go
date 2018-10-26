@@ -801,8 +801,25 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 
 	// Let's propose the txn updates received from Zero. This is important because there are edge
 	// cases where a txn status might have been missed by the group.
-	n.elog.Printf("Proposing abort txn delta: %+v\n", delta)
-	proposal := &pb.Proposal{Delta: delta}
+	glog.Infof("TryAbort returned with delta: %+v\n", delta)
+	aborted := &pb.OracleDelta{}
+	for _, txn := range delta.Txns {
+		// Only pick the aborts. DO NOT propose the commits. They must come in the right order via
+		// oracle delta stream, otherwise, we'll end up losing some committed txns.
+		if txn.CommitTs == 0 {
+			aborted.Txns = append(aborted.Txns, txn)
+		}
+	}
+	if len(aborted.Txns) == 0 {
+		glog.Infoln("TryAbort: No aborts found. Quitting.")
+		return nil
+	}
+
+	// We choose not to store the MaxAssigned, because it would cause our Oracle to move ahead
+	// artificially. The Oracle delta stream moves that ahead in the right order, and we shouldn't
+	// muck with that order here.
+	glog.Infof("TryAbort selectively proposing only aborted txns: %+v\n", aborted)
+	proposal := &pb.Proposal{Delta: aborted}
 	return n.proposeAndWait(n.ctx, proposal)
 }
 
