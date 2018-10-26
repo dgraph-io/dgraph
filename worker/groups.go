@@ -809,7 +809,7 @@ func (g *groupi) processOracleDeltaStream() {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
 			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
-			if glog.V(2) {
+			if glog.V(3) {
 				glog.Infof("Batched %d updates. Proposing Delta: %v.", batch, delta)
 			}
 			for {

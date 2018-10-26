@@ -240,7 +240,7 @@ func export(ctx context.Context, in *pb.ExportPayload) error {
 
 	uts := time.Unix(in.UnixTs, 0)
 	bdir := path.Join(Config.ExportPath, fmt.Sprintf(
-		"dgraph.r%06d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
+		"dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
 
 	if err := os.MkdirAll(bdir, 0700); err != nil {
 		return err
