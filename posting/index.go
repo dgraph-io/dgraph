@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -413,48 +412,22 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *pb.DirectedEdge,
 }
 
 func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
-	iterOpt := badger.DefaultIteratorOptions
-	iterOpt.PrefetchValues = false
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	idxIt := txn.NewIterator(iterOpt)
-	defer idxIt.Close()
+	return pstore.View(func(txn *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchValues = false
 
-	// TODO: Rewrite this code. It is old. Replace with TxnWriter.
-	var m sync.Mutex
-	var err error
-	setError := func(e error) {
-		m.Lock()
-		err = e
-		m.Unlock()
-	}
-	var wg sync.WaitGroup
-	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
-		item := idxIt.Item()
-		if !remove(item.Key()) {
-			continue
-		}
-		nkey := item.KeyCopy(nil)
-		version := item.Version()
+		itr := txn.NewIterator(opt)
+		defer itr.Close()
 
-		txn := pstore.NewTransactionAt(version, true)
-		if err = txn.Delete(nkey); err != nil {
-			break
-		}
-		wg.Add(1)
-		err := txn.CommitAt(version, func(e error) {
-			defer wg.Done()
-			if e != nil {
-				setError(e)
-				return
+		writer := x.NewTxnWriter(pstore)
+		for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+			item := itr.Item()
+			if err := writer.Delete(item.KeyCopy(nil), item.Version()); err != nil {
+				return err
 			}
-		})
-		if err != nil {
-			break
 		}
-	}
-	wg.Wait()
-	return err
+		return writer.Flush()
+	})
 }
 
 func compareAttrAndType(key []byte, attr string, typ byte) bool {
@@ -599,7 +572,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 	}
 
 	// Now we write all the created posting lists to disk.
-	writer := x.TxnWriter{DB: pstore}
+	writer := x.NewTxnWriter(pstore)
 	for key := range txn.deltas {
 		pl, err := txn.Get([]byte(key))
 		if err != nil {

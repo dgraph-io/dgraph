@@ -26,10 +26,19 @@ import (
 )
 
 type TxnWriter struct {
-	DB         *badger.DB
-	wg         sync.WaitGroup
-	che        chan error
+	db  *badger.DB
+	wg  sync.WaitGroup
+	che chan error
+
+	// This can be set to allow overwrites during Set.
 	BlindWrite bool
+}
+
+func NewTxnWriter(db *badger.DB) *TxnWriter {
+	return &TxnWriter{
+		db:  db,
+		che: make(chan error, 1),
+	}
 }
 
 func (w *TxnWriter) cb(err error) {
@@ -56,12 +65,25 @@ func (w *TxnWriter) Send(kvs *pb.KVS) error {
 	return nil
 }
 
+func (w *TxnWriter) Delete(key []byte, ts uint64) error {
+	if ts == 0 {
+		return nil
+	}
+	txn := w.db.NewTransactionAt(math.MaxUint64, true)
+	defer txn.Discard()
+	if err := txn.Delete(key); err != nil {
+		return err
+	}
+	w.wg.Add(1)
+	return txn.CommitAt(ts, w.cb)
+}
+
 func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 	if ts == 0 {
 		return nil
 	}
 
-	txn := w.DB.NewTransactionAt(math.MaxUint64, true)
+	txn := w.db.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 
 	if !w.BlindWrite {
