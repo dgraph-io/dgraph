@@ -28,7 +28,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 
@@ -334,12 +333,9 @@ func export(ctx context.Context, in *pb.ExportPayload) error {
 // automatically relay that request to the server that it thinks should handle the request.
 func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportPayload) (*pb.ExportPayload, error) {
 	glog.Infof("Received export request via Grpc: %+v\n", req)
-	reply := proto.Clone(req).(*pb.ExportPayload)
-	reply.Status = pb.ExportPayload_FAILED // Set by default.
-
 	if ctx.Err() != nil {
 		glog.Errorf("Context error during export: %v\n", ctx.Err())
-		return reply, ctx.Err()
+		return nil, ctx.Err()
 	}
 
 	glog.Infof("Issuing export request...")
