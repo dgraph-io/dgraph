@@ -60,7 +60,6 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
 	err := pl.Iterate(readTs, 0, func(p *pb.Posting) error {
 		buf.WriteString(prefix)
 		if p.PostingType == pb.Posting_REF {
-			// TODO: Weird that it doesn't need brackets?
 			buf.WriteString(fmt.Sprintf("<_:uid%d>", p.Uid))
 
 		} else {
@@ -273,7 +272,6 @@ func export(ctx context.Context, in *pb.ExportPayload) error {
 	mux := writerMux{data: dataWriter, schema: schemaWriter}
 	sl := streamLists{stream: &mux, db: pstore}
 	sl.chooseKey = func(item *badger.Item) bool {
-		// Pick all keys.
 		pk := x.Parse(item.Key())
 		if pk.Attr == "_predicate_" {
 			return false
@@ -299,7 +297,6 @@ func export(ctx context.Context, in *pb.ExportPayload) error {
 			if err != nil {
 				// Let's not propagate this error. We just log this and continue onwards.
 				glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
-				// TODO: Ensure that itemToKV can return a nil pb.KV.
 				return nil, nil
 			}
 			return toSchema(pk.Attr, update)
