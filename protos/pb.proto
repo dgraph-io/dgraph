@@ -354,7 +354,6 @@ message MovePredicatePayload {
 // When used in request, groups represents the list of groups that need to be backed up.
 // When used in response, groups represent the list of groups that were backed up.
 message ExportPayload {
-	uint64 req_id = 1;    // Use req_id to handle duplicate requests.
 	uint32 group_id = 2;  // Group id to back up.
 	enum Status {
 		NONE      = 0;
@@ -364,6 +363,7 @@ message ExportPayload {
 	}
 	Status status = 3;
 	uint64 read_ts = 4;
+	int64 unix_ts = 5;
 }
 
 message TxnStatus {

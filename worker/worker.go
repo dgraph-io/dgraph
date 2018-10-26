@@ -63,21 +63,6 @@ func Init(ps *badger.DB) {
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
 	sync.Mutex
-	reqids map[uint64]bool
-}
-
-// addIfNotPresent returns false if it finds the reqid already present.
-// Otherwise, adds the reqid in the list, and returns true.
-func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
-	w.Lock()
-	defer w.Unlock()
-	if w.reqids == nil {
-		w.reqids = make(map[uint64]bool)
-	} else if _, has := w.reqids[reqid]; has {
-		return false
-	}
-	w.reqids[reqid] = true
-	return true
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
