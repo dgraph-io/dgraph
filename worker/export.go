@@ -28,11 +28,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -61,8 +61,7 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
 		buf.WriteString(prefix)
 		if p.PostingType == pb.Posting_REF {
 			// TODO: Weird that it doesn't need brackets?
-			buf.WriteString("_:uid")
-			buf.WriteString(strconv.FormatUint(p.Uid, 16))
+			buf.WriteString(fmt.Sprintf("<_:uid%d>", p.Uid))
 
 		} else {
 			// Value posting
