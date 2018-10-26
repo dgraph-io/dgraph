@@ -39,7 +39,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 
-	"github.com/golang/glog"
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
 	"golang.org/x/net/context"
@@ -1630,7 +1629,10 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	startKey := x.DataKey(q.Attr, q.AfterUid+1)
 	prefix := initKey.DataPrefix()
 	if q.Reverse {
-		glog.Warningln("has function does not handle reverse iteration.")
+		// Reverse does not mean reverse iteration. It means we're looking for
+		// the reverse index.
+		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
+		prefix = initKey.ReversePrefix()
 	}
 
 	result := &pb.List{}

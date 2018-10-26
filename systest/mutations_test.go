@@ -77,6 +77,7 @@ func TestSystem(t *testing.T) {
 	t.Run("graphql var child", wrap(GraphQLVarChild))
 	t.Run("math ge", wrap(MathGe))
 	t.Run("has should not have deleted edge", wrap(HasDeletedEdge))
+	t.Run("has should have reverse edges", wrap(HasReverseEdge))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -1522,4 +1523,56 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	for _, uid := range uids {
 		require.Contains(t, ids, uid)
 	}
+}
+
+func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			follow: uid @reverse .
+		`,
+	}))
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:alice <name> "alice" .
+			_:bob <name> "bob" .
+			_:carol <name> "carol" .
+			_:alice <follow> _:carol .
+			_:bob <follow> _:carol .
+		`),
+	})
+	check(t, err)
+
+	type F struct {
+		Name string `json:"name"`
+	}
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	resp, err := txn.Query(ctx, `{
+		fwd(func: has(follow)) { name }
+		rev(func: has(~follow)) { name }
+		}`)
+	check(t, err)
+
+	t.Logf("resp: %s\n", resp.GetJson())
+	m := make(map[string][]F)
+	err = json.Unmarshal(resp.GetJson(), &m)
+	check(t, err)
+
+	fwds := m["fwd"]
+	revs := m["rev"]
+
+	require.Equal(t, len(fwds), 2)
+	require.Contains(t, []string{"alice", "bob"}, fwds[0].Name)
+	require.Contains(t, []string{"alice", "bob"}, fwds[1].Name)
+	require.NotEqual(t, fwds[0].Name, fwds[1].Name)
+
+	require.Equal(t, len(revs), 1)
+	require.Equal(t, revs[0].Name, "carol")
 }
