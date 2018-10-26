@@ -22,15 +22,15 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
+	"golang.org/x/net/trace"
 )
 
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
