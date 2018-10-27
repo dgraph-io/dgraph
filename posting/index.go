@@ -422,6 +422,9 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 		writer := x.NewTxnWriter(pstore)
 		for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 			item := itr.Item()
+			if !remove(item.Key()) {
+				continue
+			}
 			if err := writer.Delete(item.KeyCopy(nil), item.Version()); err != nil {
 				return err
 			}
