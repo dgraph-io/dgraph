@@ -604,31 +604,19 @@ type txnCb struct {
 	err    error
 }
 
-func (db *DB) runTxnCallbacks(closer *y.Closer) {
-	defer closer.Done()
-
-	run := func(cb *txnCb) {
-		switch {
-		case cb == nil:
-			panic("txn callback is nil")
-		case cb.err != nil:
-			cb.user(cb.err)
-		case cb.commit != nil:
-			err := cb.commit()
-			cb.user(err)
-		case cb.user == nil:
-			panic("Must have caught a nil callback for txn.CommitWith")
-		default:
-			cb.user(nil)
-		}
-	}
-
-	// We don't check closer.HasBeenClosed because we must empty out the txnCallbackCh completely
-	// before exiting here. During db.Close, txnCallbackCh is closed, so this loop below would
-	// automatically exit. We do still need the closer, so we can block until all these callbacks
-	// are finished running.
-	for cb := range db.txnCallbackCh {
-		go run(cb)
+func runTxnCallback(cb *txnCb) {
+	switch {
+	case cb == nil:
+		panic("txn callback is nil")
+	case cb.err != nil:
+		cb.user(cb.err)
+	case cb.commit != nil:
+		err := cb.commit()
+		cb.user(err)
+	case cb.user == nil:
+		panic("Must have caught a nil callback for txn.CommitWith")
+	default:
+		cb.user(nil)
 	}
 }
 
@@ -648,16 +636,17 @@ func (txn *Txn) CommitWith(cb func(error)) {
 		// Do not run these callbacks from here, because the CommitWith and the
 		// callback might be acquiring the same locks. Instead run the callback
 		// from another goroutine.
-		txn.db.txnCallbackCh <- &txnCb{user: cb, err: nil}
+		go runTxnCallback(&txnCb{user: cb, err: nil})
 		return
 	}
 
 	commitCb, err := txn.commitAndSend()
 	if err != nil {
-		txn.db.txnCallbackCh <- &txnCb{user: cb, err: err}
+		go runTxnCallback(&txnCb{user: cb, err: err})
 		return
 	}
-	txn.db.txnCallbackCh <- &txnCb{user: cb, commit: commitCb}
+
+	go runTxnCallback(&txnCb{user: cb, commit: commitCb})
 }
 
 // ReadTs returns the read timestamp of the transaction.

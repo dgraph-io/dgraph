@@ -44,12 +44,11 @@ var (
 )
 
 type closers struct {
-	updateSize  *y.Closer
-	compactors  *y.Closer
-	memtable    *y.Closer
-	writes      *y.Closer
-	txnCallback *y.Closer
-	valueGC     *y.Closer
+	updateSize *y.Closer
+	compactors *y.Closer
+	memtable   *y.Closer
+	writes     *y.Closer
+	valueGC    *y.Closer
 }
 
 // DB provides the various functions required to interact with Badger.
@@ -61,18 +60,17 @@ type DB struct {
 	// nil if Dir and ValueDir are the same
 	valueDirGuard *directoryLockGuard
 
-	closers       closers
-	elog          trace.EventLog
-	mt            *skl.Skiplist   // Our latest (actively written) in-memory table
-	imm           []*skl.Skiplist // Add here only AFTER pushing to flushChan.
-	opt           Options
-	manifest      *manifestFile
-	lc            *levelsController
-	vlog          valueLog
-	vptr          valuePointer // less than or equal to a pointer to the last vlog value put into mt
-	writeCh       chan *request
-	flushChan     chan flushTask // For flushing memtables.
-	txnCallbackCh chan *txnCb    // For running txn callbacks.
+	closers   closers
+	elog      trace.EventLog
+	mt        *skl.Skiplist   // Our latest (actively written) in-memory table
+	imm       []*skl.Skiplist // Add here only AFTER pushing to flushChan.
+	opt       Options
+	manifest  *manifestFile
+	lc        *levelsController
+	vlog      valueLog
+	vptr      valuePointer // less than or equal to a pointer to the last vlog value put into mt
+	writeCh   chan *request
+	flushChan chan flushTask // For flushing memtables.
 
 	blockWrites int32
 
@@ -249,7 +247,6 @@ func Open(opt Options) (db *DB, err error) {
 		imm:           make([]*skl.Skiplist, 0, opt.NumMemtables),
 		flushChan:     make(chan flushTask, opt.NumMemtables),
 		writeCh:       make(chan *request, kvWriteChCapacity),
-		txnCallbackCh: make(chan *txnCb, 100),
 		opt:           opt,
 		manifest:      manifestFile,
 		elog:          trace.NewEventLog("Badger", "DB"),
@@ -302,12 +299,6 @@ func Open(opt Options) (db *DB, err error) {
 	db.orc.txnMark.Done(db.orc.nextTxnTs)
 	db.orc.nextTxnTs++
 
-	// These goroutines run the user specified callbacks passed during txn.CommitWith.
-	db.closers.txnCallback = y.NewCloser(1)
-	for i := 0; i < 1; i++ {
-		go db.runTxnCallbacks(db.closers.txnCallback)
-	}
-
 	db.writeCh = make(chan *request, kvWriteChCapacity)
 	db.closers.writes = y.NewCloser(1)
 	go db.doWrites(db.closers.writes)
@@ -331,10 +322,6 @@ func (db *DB) Close() (err error) {
 
 	// Stop writes next.
 	db.closers.writes.SignalAndWait()
-
-	// Wait for callbacks to be run.
-	close(db.txnCallbackCh)
-	db.closers.txnCallback.SignalAndWait()
 
 	// Now close the value log.
 	if vlogErr := db.vlog.Close(); err == nil {

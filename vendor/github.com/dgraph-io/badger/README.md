@@ -6,19 +6,19 @@ BadgerDB is an embeddable, persistent, simple and fast key-value (KV) database
 written in pure Go. It's meant to be a performant alternative to non-Go-based
 key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
 
-## Project Status
-Badger v1.0 was released in Nov 2017. Check the [Changelog] for the full details.
+## Project Status [Oct 27, 2018]
+
+Badger is stable and is being used to serve data sets worth hundreds of
+terabytes. Badger supports concurrent ACID transactions with serializable
+snapshot isolation (SSI) guarantees. A Jepsen-style bank test runs nightly for
+8h, with `--race` flag and ensures maintainance of transactional guarantees.
+Badger has also been tested to work with filesystem level anomalies, to ensure
+persistence and consistency.
+
+Badger v1.0 was released in Nov 2017, with a Badger v2.0 release coming up in a
+few months. The [Changelog] is kept fairly up-to-date.
 
 [Changelog]:https://github.com/dgraph-io/badger/blob/master/CHANGELOG.md
-
-We introduced transactions in [v0.9.0] which involved a major API change. If you have a Badger
-datastore prior to that, please use [v0.8.1], but we strongly urge you to upgrade. Upgrading from
-both v0.8 and v0.9 will require you to [take backups](#database-backup) and restore using the new
-version.
-
-[v1.0.1]: //github.com/dgraph-io/badger/tree/v1.0.1
-[v0.8.1]: //github.com/dgraph-io/badger/tree/v0.8.1
-[v0.9.0]: //github.com/dgraph-io/badger/tree/v0.9.0
 
 ## Table of Contents
  * [Getting Started](#getting-started)
@@ -621,9 +621,6 @@ many updates into a single transaction and `Commit` that transaction using
 callbacks to avoid blocking. This amortizes the cost of a transaction really
 well, and provides the most efficient way to do bulk writes.
 
-Note that `WriteBatch` API does not allow any reads. For read-modify-write
-workloads, you should be using the `Transaction` API.
-
 ```go
 wb := db.NewWriteBatch()
 defer wb.Cancel()
@@ -634,6 +631,9 @@ for i := 0; i < N; i++ {
 }
 handle(wb.Flush()) // Wait for all txns to finish.
 ```
+
+Note that `WriteBatch` API does not allow any reads. For read-modify-write
+workloads, you should be using the `Transaction` API.
 
 - **I don't see any disk write. Why?**
 
