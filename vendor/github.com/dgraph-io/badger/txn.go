@@ -44,12 +44,12 @@ type oracle struct {
 	nextTxnTs   uint64
 
 	// Used to block NewTransaction, so all previous commits are visible to a new read.
-	txnMark y.WaterMark
+	txnMark *y.WaterMark
 
 	// Either of these is used to determine which versions can be permanently
 	// discarded during compaction.
-	discardTs uint64      // Used by ManagedDB.
-	readMark  y.WaterMark // Used by DB.
+	discardTs uint64       // Used by ManagedDB.
+	readMark  *y.WaterMark // Used by DB.
 
 	// commits stores a key fingerprint and latest commit counter for it.
 	// refCount is used to clear out commits map to avoid a memory blowup.
@@ -61,8 +61,11 @@ func newOracle(opt Options) *oracle {
 		isManaged: opt.managedTxns,
 		commits:   make(map[uint64]uint64),
 		// We're not initializing nextTxnTs and readOnlyTs. It would be done after replay in Open.
-		readMark: y.WaterMark{Name: "badger.PendingReads"},
-		txnMark:  y.WaterMark{Name: "badger.TxnTimestamp"},
+		//
+		// WaterMarks must be 64-bit aligned for atomic package, hence we must use pointers here.
+		// See https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
+		readMark: &y.WaterMark{Name: "badger.PendingReads"},
+		txnMark:  &y.WaterMark{Name: "badger.TxnTimestamp"},
 	}
 	orc.readMark.Init()
 	orc.txnMark.Init()
@@ -93,7 +96,7 @@ func (o *oracle) decrRef() {
 
 func (o *oracle) readTs() uint64 {
 	if o.isManaged {
-		return math.MaxUint64
+		panic("ReadTs should not be retrieved for managed DB")
 	}
 
 	var readTs uint64
@@ -549,6 +552,15 @@ func (txn *Txn) commitAndSend() (func() error, error) {
 	return ret, nil
 }
 
+func (txn *Txn) commitPrecheck() {
+	if txn.commitTs == 0 && txn.db.opt.managedTxns {
+		panic("Commit cannot be called with managedDB=true. Use CommitAt.")
+	}
+	if txn.discarded {
+		panic("Trying to commit a discarded txn")
+	}
+}
+
 // Commit commits the transaction, following these steps:
 //
 // 1. If there are no writes, return immediately.
@@ -567,14 +579,10 @@ func (txn *Txn) commitAndSend() (func() error, error) {
 //
 // If error is nil, the transaction is successfully committed. In case of a non-nil error, the LSM
 // tree won't be updated, so there's no need for any rollback.
-func (txn *Txn) Commit(callback func(error)) error {
-	if txn.commitTs == 0 && txn.db.opt.managedTxns {
-		panic("Commit cannot be called with managedDB=true. Use CommitAt.")
-	}
-	if txn.discarded {
-		return ErrDiscardedTxn
-	}
+func (txn *Txn) Commit() error {
+	txn.commitPrecheck() // Precheck before discarding txn.
 	defer txn.Discard()
+
 	if len(txn.writes) == 0 {
 		return nil // Nothing to do.
 	}
@@ -583,24 +591,62 @@ func (txn *Txn) Commit(callback func(error)) error {
 	if err != nil {
 		return err
 	}
+	// If batchSet failed, LSM would not have been updated. So, no need to rollback anything.
 
-	if callback == nil {
-		// If batchSet failed, LSM would not have been updated. So, no need to rollback anything.
+	// TODO: What if some of the txns successfully make it to value log, but others fail.
+	// Nothing gets updated to LSM, until a restart happens.
+	return txnCb()
+}
 
-		// TODO: What if some of the txns successfully make it to value log, but others fail.
-		// Nothing gets updated to LSM, until a restart happens.
-		return txnCb()
+type txnCb struct {
+	commit func() error
+	user   func(error)
+	err    error
+}
+
+func runTxnCallback(cb *txnCb) {
+	switch {
+	case cb == nil:
+		panic("txn callback is nil")
+	case cb.err != nil:
+		cb.user(cb.err)
+	case cb.commit != nil:
+		err := cb.commit()
+		cb.user(err)
+	case cb.user == nil:
+		panic("Must have caught a nil callback for txn.CommitWith")
+	default:
+		cb.user(nil)
+	}
+}
+
+// CommitWith acts like Commit, but takes a callback, which gets run via a
+// goroutine to avoid blocking this function. The callback is guaranteed to run,
+// so it is safe to increment sync.WaitGroup before calling CommitWith, and
+// decrementing it in the callback; to block until all callbacks are run.
+func (txn *Txn) CommitWith(cb func(error)) {
+	txn.commitPrecheck() // Precheck before discarding txn.
+	defer txn.Discard()
+
+	if cb == nil {
+		panic("Nil callback provided to CommitWith")
 	}
 
-	// TODO: Avoid creating a goroutine per txn. We should instead send these
-	// over to a channel, which can run them via a single goroutine. This would
-	// also ensure that the callbacks are run serially, which makes it easier
-	// for the users to write thread-unsafe callbacks.
-	go func() {
-		err := txnCb()
-		callback(err)
-	}()
-	return nil
+	if len(txn.writes) == 0 {
+		// Do not run these callbacks from here, because the CommitWith and the
+		// callback might be acquiring the same locks. Instead run the callback
+		// from another goroutine.
+		go runTxnCallback(&txnCb{user: cb, err: nil})
+		return
+	}
+
+	commitCb, err := txn.commitAndSend()
+	if err != nil {
+		go runTxnCallback(&txnCb{user: cb, err: err})
+		return
+	}
+
+	go runTxnCallback(&txnCb{user: cb, commit: commitCb})
 }
 
 // ReadTs returns the read timestamp of the transaction.
@@ -629,6 +675,10 @@ func (txn *Txn) ReadTs() uint64 {
 //  defer txn.Discard()
 //  // Call various APIs.
 func (db *DB) NewTransaction(update bool) *Txn {
+	return db.newTransaction(update, false)
+}
+
+func (db *DB) newTransaction(update, isManaged bool) *Txn {
 	if db.opt.ReadOnly && update {
 		// DB is read-only, force read-only transaction.
 		update = false
@@ -656,7 +706,9 @@ func (db *DB) NewTransaction(update bool) *Txn {
 	// 5. Now this txn would go on to commit the keyset, and no conflicts
 	//    would be detected.
 	// See issue: https://github.com/dgraph-io/badger/issues/574
-	txn.readTs = db.orc.readTs()
+	if !isManaged {
+		txn.readTs = db.orc.readTs()
+	}
 	return txn
 }
 
@@ -689,5 +741,5 @@ func (db *DB) Update(fn func(txn *Txn) error) error {
 		return err
 	}
 
-	return txn.Commit(nil)
+	return txn.Commit()
 }

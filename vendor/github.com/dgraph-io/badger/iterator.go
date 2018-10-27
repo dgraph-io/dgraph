@@ -19,6 +19,7 @@ package badger
 import (
 	"bytes"
 	"fmt"
+	"hash/crc32"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -67,7 +68,7 @@ func (item *Item) ToString() string {
 // Key returns the key.
 //
 // Key is only valid as long as item is valid, or transaction is valid.  If you need to use it
-// outside its validity, please use KeyCopy
+// outside its validity, please use KeyCopy.
 func (item *Item) Key() []byte {
 	return item.key
 }
@@ -227,7 +228,7 @@ func (item *Item) prefetchValue() {
 	}
 }
 
-// EstimatedSize returns approximate size of the key-value pair.
+// EstimatedSize returns the approximate size of the key-value pair.
 //
 // This can be called while iterating through a store to quickly estimate the
 // size of a range of key-value pairs (without fetching the corresponding
@@ -242,6 +243,24 @@ func (item *Item) EstimatedSize() int64 {
 	var vp valuePointer
 	vp.Decode(item.vptr)
 	return int64(vp.Len) // includes key length.
+}
+
+// ValueSize returns the exact size of the value.
+//
+// This can be called to quickly estimate the size of a value without fetching
+// it.
+func (item *Item) ValueSize() int64 {
+	if !item.hasValue() {
+		return 0
+	}
+	if (item.meta & bitValuePointer) == 0 {
+		return int64(len(item.vptr))
+	}
+	var vp valuePointer
+	vp.Decode(item.vptr)
+
+	klen := int64(len(item.key) + 8) // 8 bytes for timestamp.
+	return int64(vp.Len) - klen - headerBufSize - crc32.Size
 }
 
 // UserMeta returns the userMeta set by the user. Typically, this byte, optionally set by the user
@@ -574,7 +593,7 @@ func (it *Iterator) prefetch() {
 }
 
 // Seek would seek to the provided key if present. If absent, it would seek to the next smallest key
-// greater than provided if iterating in the forward direction. Behavior would be reversed is
+// greater than the provided key if iterating in the forward direction. Behavior would be reversed if
 // iterating backwards.
 func (it *Iterator) Seek(key []byte) {
 	for i := it.data.pop(); i != nil; i = it.data.pop() {
