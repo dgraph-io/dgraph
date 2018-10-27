@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -37,6 +36,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
 	bopt "github.com/dgraph-io/badger/options"
@@ -62,6 +62,7 @@ type options struct {
 	numRdf              int
 	clientDir           string
 	ignoreIndexConflict bool
+	authToken           string
 }
 
 var opt options
@@ -87,13 +88,15 @@ func init() {
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
-	flag.IntP("conc", "c", 100,
+	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 1000,
 		"Number of RDF N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
+	flag.StringP("auth_token", "a", "",
+		"The auth token passed to the server for Alter operation of the schema file")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -123,6 +126,12 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 // processSchemaFile process schema for a given gz file.
 func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing %s\n", file)
+	if len(opt.authToken) > 0 {
+		md := metadata.New(nil)
+		md.Append("auth-token", opt.authToken)
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+
 	f, err := os.Open(file)
 	x.Check(err)
 	defer f.Close()
@@ -317,6 +326,7 @@ func run() error {
 		numRdf:              Live.Conf.GetInt("batch"),
 		clientDir:           Live.Conf.GetString("xidmap"),
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
+		authToken:           Live.Conf.GetString("auth_token"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
@@ -335,7 +345,7 @@ func run() error {
 	var clients []api.DgraphClient
 	for _, d := range ds {
 		conn, err := setupConnection(d, !tlsConf.CertRequired)
-		x.Checkf(err, "While trying to setup connection to Dgraph server.")
+		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 
 		dc := api.NewDgraphClient(conn)
@@ -347,7 +357,7 @@ func run() error {
 		var err error
 		opt.clientDir, err = ioutil.TempDir("", "x")
 		x.Checkf(err, "Error while trying to create temporary client directory.")
-		x.Printf("Creating temp client directory at %s\n", opt.clientDir)
+		fmt.Printf("Creating temp client directory at %s\n", opt.clientDir)
 		defer os.RemoveAll(opt.clientDir)
 	}
 	l := setup(bmOpts, dgraphClient)
@@ -358,13 +368,13 @@ func run() error {
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
 			if err == context.Canceled {
-				log.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
+				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
 				return nil
 			}
-			log.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
+			fmt.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
 			return err
 		}
-		x.Printf("Processed schema file %q\n", opt.schemaFile)
+		fmt.Printf("Processed schema file %q\n", opt.schemaFile)
 	}
 
 	filesList := fileList(opt.files)
@@ -389,7 +399,7 @@ func run() error {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			log.Printf("Error while processing file %q: %s\n", filesList[i], err)
+			fmt.Printf("Error while processing file %q: %s\n", filesList[i], err)
 			return err
 		}
 	}

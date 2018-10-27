@@ -57,7 +57,8 @@ func (n *node) populateSnapshot(ps *badger.DB, pl *conn.Pool) (int, error) {
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
-	writer := &x.TxnWriter{DB: ps, BlindWrite: true}
+	writer := x.NewTxnWriter(ps)
+	writer.BlindWrite = true // Do overwrite keys.
 	for {
 		kvs, err := stream.Recv()
 		if err == io.EOF {
@@ -109,7 +110,7 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
 	if err != nil {
 		return err
 	}
-	x.Printf("Got StreamSnapshot request. Mine: %+v. Requested: %+v\n", snap, reqSnap)
+	glog.Infof("Got StreamSnapshot request. Mine: %+v. Requested: %+v\n", snap, reqSnap)
 	if snap.Index != reqSnap.Index || snap.ReadTs != reqSnap.ReadTs {
 		return errors.New("Mismatching snapshot request")
 	}

@@ -130,11 +130,9 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: i}}
 
 	case string:
-		predWithLang := strings.SplitN(k, "@", 2)
-		if len(predWithLang) == 2 && predWithLang[0] != "" {
-			nq.Predicate = predWithLang[0]
-			nq.Lang = predWithLang[1]
-		}
+		// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
+		// mutations that's the only way to send language for a value.
+		nq.Predicate, nq.Lang = x.PredicateLang(k)
 
 		// Default value is considered as S P * deletion.
 		if v == "" && op == delete {
@@ -192,8 +190,7 @@ func handleGeoType(val map[string]interface{}, nq *api.NQuad) (bool, error) {
 	if len(val) == 2 && hasType && hasCoordinates {
 		b, err := json.Marshal(val)
 		if err != nil {
-			return false, x.Errorf("Error while trying to parse "+
-				"value: %+v as geo val", val)
+			return false, x.Errorf("Error while trying to parse value: %+v as geo val", val)
 		}
 		ok, err := tryParseAsGeo(b, nq)
 		if err != nil && ok {

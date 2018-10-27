@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 type sendmsg struct {
@@ -172,7 +173,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	node.Connect(rc.Id, rc.Addr)
 
 	err := node.AddToCluster(context.Background(), rc.Id)
-	x.Printf("[%d] Done joining cluster with err: %v", rc.Id, err)
+	glog.Infof("[%d] Done joining cluster with err: %v", rc.Id, err)
 	return &api.Payload{}, err
 }
 

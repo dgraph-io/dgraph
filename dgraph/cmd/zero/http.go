@@ -19,7 +19,6 @@ package zero
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -29,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/golang/glog"
 )
 
 // intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.
@@ -82,7 +82,7 @@ func (st *state) assignUids(w http.ResponseWriter, r *http.Request) {
 }
 
 // removeNode can be used to remove a node from the cluster. It takes in the RAFT id of the node
-// and the group it belongs to. It can be used to remove Dgraph server and Zero nodes(group=0).
+// and the group it belongs to. It can be used to remove Dgraph alpha and Zero nodes(group=0).
 func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {
@@ -209,13 +209,13 @@ func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	go func() {
 		defer wg.Done()
 		err := srv.Serve(l)
-		log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
+		glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
 		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 		defer cancel()
 		err = srv.Shutdown(ctx)
-		log.Printf("All http(s) requests finished.")
+		glog.Infoln("All http(s) requests finished.")
 		if err != nil {
-			log.Printf("Http(s) shutdown err: %v", err.Error())
+			glog.Errorf("Http(s) shutdown err: %v", err)
 		}
 	}()
 }

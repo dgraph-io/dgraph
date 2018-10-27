@@ -166,7 +166,9 @@ func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
 			if err != nil {
 				return err
 			}
-			kvs.Kv = append(kvs.Kv, kv)
+			if kv != nil {
+				kvs.Kv = append(kvs.Kv, kv)
+			}
 		}
 		if len(kvs.Kv) > 0 {
 			kvChan <- kvs
@@ -219,7 +221,7 @@ func (sl *streamLists) streamKVs(ctx context.Context, prefix string,
 		if err := sl.stream.Send(batch); err != nil {
 			return err
 		}
-		glog.Infof("%s Created batch of size: %s in %v.\n",
+		glog.V(2).Infof("%s Created batch of size: %s in %v.\n",
 			prefix, humanize.Bytes(sz), time.Since(t))
 		return nil
 	}

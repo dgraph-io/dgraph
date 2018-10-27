@@ -42,7 +42,7 @@ func mergeMapShardsIntoReduceShards(opt options) {
 		sortBySize(reduceShards)
 		reduceShard := filepath.Join(
 			reduceShards[len(reduceShards)-1], filepath.Base(shard))
-		x.Printf("Shard %s -> Reduce %s\n", shard, reduceShard)
+		fmt.Printf("Shard %s -> Reduce %s\n", shard, reduceShard)
 		x.Check(os.Rename(shard, reduceShard))
 	}
 }

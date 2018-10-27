@@ -26,13 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/metadata"
-
 	"github.com/dgraph-io/badger"
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
@@ -47,6 +41,9 @@ import (
 
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
@@ -1598,13 +1595,13 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 		Attr: cp.attr,
 	}
 	countPrefix := pk.CountPrefix(cp.reverse)
-	it := posting.NewTxnPrefixIterator(txn, itOpt, countPrefix, countKey)
-	defer it.Close()
 
-	for ; it.Valid(); it.Next() {
-		key := it.Key()
-		nk := make([]byte, len(key))
-		copy(nk, key)
+	itr := txn.NewIterator(itOpt)
+	defer itr.Close()
+
+	for itr.Seek(countKey); itr.ValidForPrefix(countPrefix); itr.Next() {
+		item := itr.Item()
+		key := item.KeyCopy(nil)
 		pl, err := posting.Get(key)
 		if err != nil {
 			return err
@@ -1632,36 +1629,15 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	startKey := x.DataKey(q.Attr, q.AfterUid+1)
 	prefix := initKey.DataPrefix()
 	if q.Reverse {
-		glog.Warningln("has function does not handle reverse iteration.")
-	}
-
-	var cachedUids []uint64
-	bitr := &posting.BTreeIterator{
-		// Reverse: q.Reverse, // We don't handle reverse iteration.
-		Prefix: prefix,
-	}
-	for bitr.Seek(startKey); bitr.Valid(); bitr.Next() {
-		key := bitr.Key()
-		pl := posting.GetLru(key)
-		if pl == nil {
-			continue
-		}
-		pk := x.Parse(key)
-		var num int
-		if err := pl.Iterate(q.ReadTs, 0, func(_ *pb.Posting) error {
-			num++
-			return posting.ErrStopIteration
-		}); err != nil {
-			return err
-		}
-		if num > 0 {
-			cachedUids = append(cachedUids, pk.Uid)
-		}
+		// Reverse does not mean reverse iteration. It means we're looking for
+		// the reverse index.
+		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
+		prefix = initKey.ReversePrefix()
 	}
 
 	result := &pb.List{}
 	var prevKey []byte
-	var cidx, w int
+	var w int
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.AllVersions = true
@@ -1679,19 +1655,6 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		// Parse the key upfront, otherwise ReadPostingList would advance the
 		// iterator.
 		pk := x.Parse(item.Key())
-
-		// Pick up all the uids found in the Btree, which are <= this Uid.
-		for cidx < len(cachedUids) && cachedUids[cidx] < pk.Uid {
-			result.Uids = append(result.Uids, pk.Uid)
-			cidx++
-		}
-		if cidx < len(cachedUids) && cachedUids[cidx] == pk.Uid {
-			// No need to check this key on disk. We already found it in the
-			// Btree.
-			result.Uids = append(result.Uids, pk.Uid)
-			cidx++
-			continue
-		}
 
 		// We do need to copy over the key for ReadPostingList.
 		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
@@ -1722,11 +1685,6 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 			}
 		}
 	}
-	// Pick up any remaining UIDs from the Btree.
-	if cidx < len(cachedUids) {
-		result.Uids = append(result.Uids, cachedUids[cidx:]...)
-	}
-
 	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }

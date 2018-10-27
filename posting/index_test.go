@@ -137,7 +137,7 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 		require.NoError(t, err)
 	}
 
-	writer := &x.TxnWriter{DB: pstore}
+	writer := x.NewTxnWriter(pstore)
 	require.NoError(t, txn.CommitToDisk(writer, commitTs))
 	require.NoError(t, writer.Flush())
 	require.NoError(t, txn.CommitToMemory(commitTs))
