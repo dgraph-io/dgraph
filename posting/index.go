@@ -521,7 +521,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 	var numGets uint64
 	txn.getList = func(key []byte) (*List, error) {
 		numGets++
-		if glog.V(1) && numGets%1000 == 0 {
+		if glog.V(2) && numGets%1000 == 0 {
 			glog.Infof("During rebuild, getList hit %d times\n", numGets)
 		}
 		if pl, ok := r.cache[string(key)]; ok {
