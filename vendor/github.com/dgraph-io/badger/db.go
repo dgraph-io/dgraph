@@ -303,8 +303,8 @@ func Open(opt Options) (db *DB, err error) {
 	db.orc.nextTxnTs++
 
 	// These goroutines run the user specified callbacks passed during txn.CommitWith.
-	db.closers.txnCallback = y.NewCloser(16)
-	for i := 0; i < 16; i++ {
+	db.closers.txnCallback = y.NewCloser(1)
+	for i := 0; i < 1; i++ {
 		go db.runTxnCallbacks(db.closers.txnCallback)
 	}
 

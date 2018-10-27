@@ -628,7 +628,7 @@ func (db *DB) runTxnCallbacks(closer *y.Closer) {
 	// automatically exit. We do still need the closer, so we can block until all these callbacks
 	// are finished running.
 	for cb := range db.txnCallbackCh {
-		run(cb)
+		go run(cb)
 	}
 }
 
