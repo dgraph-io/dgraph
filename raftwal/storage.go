@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// TODO: txnUnifier has to go.
 type txnUnifier struct {
 	txn *badger.Txn
 	db  *badger.DB
