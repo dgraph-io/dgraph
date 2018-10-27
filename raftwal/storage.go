@@ -52,7 +52,7 @@ func (u *txnUnifier) run(k, v []byte, delete bool) error {
 		// Error can be nil, and we can return here.
 		return err
 	}
-	err = u.txn.Commit(nil)
+	err = u.txn.Commit()
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (u *txnUnifier) run(k, v []byte, delete bool) error {
 }
 
 func (u *txnUnifier) Done() error {
-	return u.txn.Commit(nil)
+	return u.txn.Commit()
 }
 
 func (u *txnUnifier) Cancel() {

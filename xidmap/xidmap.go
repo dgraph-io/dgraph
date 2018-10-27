@@ -228,7 +228,7 @@ func (s *shard) evict(ratio float64) {
 		}
 
 	}
-	err := txn.Commit(nil)
+	err := txn.Commit()
 	x.Check(err)
 	s.beingEvicted = nil
 }
