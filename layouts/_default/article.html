@@ -1,11 +1,15 @@
 {{ $currentVersion := getenv "CURRENT_VERSION" }}
 {{ $versionString := getenv "VERSIONS" }}
 {{ $versions := split $versionString "," }}
-{{ $latestVersions := first 2 $versions }}
+{{ $latestVersion := index $versions 0 }}
 
-{{ if not (in $latestVersions $currentVersion) }}
+{{ if not (eq $latestVersion $currentVersion) }}
   <div class="alert alert-warning">
-    <i class="fa fa-warning"></i> You are looking at a doc for older version of Dgraph ({{ $currentVersion }}). The latest version is <a href="/">{{ index $latestVersions 0 }}</a>.
+    <i class="fa fa-warning"></i> You are looking at the docs for an older version of Dgraph ({{ $currentVersion }}). The latest version is <a href="/">{{ $latestVersion }}</a>.
+  </div>
+{{ else if (eq $currentVersion "master") }}
+  <div class="alert alert-warning">
+    <i class="fa fa-warning"></i> You are looking at the docs for the unreleased <code>master</code> branch of Dgraph. The latest version is <a href="/">{{ $latestVersion }}</a>.
   </div>
 {{ end }}
 
