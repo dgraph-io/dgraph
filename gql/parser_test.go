@@ -68,6 +68,40 @@ func TestParseVarError(t *testing.T) {
 	require.Contains(t, err.Error(), "Cannot do uid() of a variable")
 }
 
+func TestDuplicateQueryAliasesError(t *testing.T) {
+	query := `
+{
+  find_michael(func: eq(name@., "Michael")) {
+    uid
+    name@.
+    age
+  }
+    find_michael(func: eq(name@., "Amit")) {
+      uid
+      name@.
+    }
+}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+
+	queryInOpType := `
+{
+  find_michael(func: eq(name@., "Michael")) {
+    uid
+    name@.
+    age
+  }
+}
+query {find_michael(func: eq(name@., "Amit")) {
+      uid
+      name@.
+    }
+}
+`
+	_, err = Parse(Request{Str: queryInOpType})
+	require.Error(t, err)
+}
+
 func TestParseQueryListPred1(t *testing.T) {
 	query := `
 	{

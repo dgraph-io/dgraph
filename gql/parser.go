@@ -468,6 +468,7 @@ func Parse(r Request) (res Result, rerr error) {
 	var qu *GraphQuery
 	it := lexer.NewIterator()
 	fmap := make(fragmentMap)
+	seenQueryAliases := make(map[string]bool)
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -502,18 +503,32 @@ func Parse(r Request) (res Result, rerr error) {
 				if qu, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return res, rerr
 				}
+
+				if _, found := seenQueryAliases[qu.Alias]; found {
+					return res, x.Errorf("Duplicate aliases not allowed: %v", qu.Alias)
+				}
+				seenQueryAliases[qu.Alias] = true
 				res.Query = append(res.Query, qu)
 			}
 		case itemLeftCurl:
 			if qu, rerr = getQuery(it); rerr != nil {
 				return res, rerr
 			}
+
+			if _, found := seenQueryAliases[qu.Alias]; found {
+				return res, x.Errorf("Duplicate aliases not allowed: %v", qu.Alias)
+			}
+			seenQueryAliases[qu.Alias] = true
 			res.Query = append(res.Query, qu)
 		case itemName:
 			it.Prev()
 			if qu, rerr = getQuery(it); rerr != nil {
 				return res, rerr
 			}
+			if _, found := seenQueryAliases[qu.Alias]; found {
+				return res, x.Errorf("Duplicate aliases not allowed: %v", qu.Alias)
+			}
+			seenQueryAliases[qu.Alias] = true
 			res.Query = append(res.Query, qu)
 		}
 	}
