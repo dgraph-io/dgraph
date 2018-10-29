@@ -3,13 +3,13 @@
 {{ $versions := split $versionString "," }}
 {{ $latestVersion := index $versions 0 }}
 
-{{ if not (eq $latestVersion $currentVersion) }}
-  <div class="alert alert-warning">
-    <i class="fa fa-warning"></i> You are looking at the docs for an older version of Dgraph ({{ $currentVersion }}). The latest version is <a href="/">{{ $latestVersion }}</a>.
-  </div>
-{{ else if (eq $currentVersion "master") }}
+{{ if (eq $currentVersion "master") }}
   <div class="alert alert-warning">
     <i class="fa fa-warning"></i> You are looking at the docs for the unreleased <code>master</code> branch of Dgraph. The latest version is <a href="/">{{ $latestVersion }}</a>.
+  </div>
+{{ else if not (eq $latestVersion $currentVersion) }}
+  <div class="alert alert-warning">
+    <i class="fa fa-warning"></i> You are looking at the docs for an older version of Dgraph ({{ $currentVersion }}). The latest version is <a href="/">{{ $latestVersion }}</a>.
   </div>
 {{ end }}
 
