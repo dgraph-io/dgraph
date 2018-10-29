@@ -229,7 +229,7 @@ func (s *ServerState) fillTimestampRequests() {
 		ts, err := worker.Timestamps(ctx, num)
 		cancel()
 		if err != nil {
-			glog.Warning("Error while retrieving timestamps: %v with delay: %v."+
+			glog.Warningf("Error while retrieving timestamps: %v with delay: %v."+
 				" Will retry...\n", err, delay)
 			time.Sleep(delay)
 			delay *= 2

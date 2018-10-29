@@ -115,7 +115,7 @@ func (p *Pools) Connect(addr string) *Pool {
 		p.Unlock()
 		return existingPool
 	}
-	glog.Infof("== CONNECTED ==> Setting %v\n", addr)
+	glog.Infof("CONNECTED to %v\n", addr)
 	p.all[addr] = pool
 	p.Unlock()
 	return pool

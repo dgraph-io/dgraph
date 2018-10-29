@@ -687,11 +687,11 @@ func (n *node) Run() {
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
-					glog.Infof("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
+					glog.Infof("-------> SNAPSHOT group %d from node id %d\n", n.gid, rc.Id)
 					n.retryUntilSuccess(n.retrieveSnapshot, 100*time.Millisecond)
-					glog.Infof("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
+					glog.Infof("-------> SNAPSHOT group %d. DONE.\n", n.gid)
 				} else {
-					glog.Infof("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
+					glog.Infof("-------> SNAPSHOT group %d from node id %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
 			}
 			if tr != nil {
