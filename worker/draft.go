@@ -609,6 +609,8 @@ func (n *node) Run() {
 	for {
 		select {
 		case <-done:
+			// We use done channel here instead of closer.HasBeenClosed so that we can transfer
+			// leadership in a goroutine.
 			glog.Infoln("Raft node done.")
 			return
 
@@ -661,15 +663,15 @@ func (n *node) Run() {
 				tr.LazyPrintf("Handled ReadStates and SoftState.")
 			}
 
-			// Store the hardstate and entries. Note that these are not CommittedEntries.
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-			if tr != nil {
-				tr.LazyPrintf("Saved %d entries. Snapshot, HardState empty? (%v, %v)",
-					len(rd.Entries),
-					raft.IsEmptySnap(rd.Snapshot),
-					raft.IsEmptyHardState(rd.HardState))
-			}
-
+			// We move the retrieval of snapshot before we store the rd.Snapshot, so that in case
+			// this node fails to get the snapshot, the Raft state would reflect that by not having
+			// the snapshot.
+			//
+			// This is different from the recommended order in Raft docs, where they assume that the
+			// Snapshot contains the full data, so even on a crash between n.SaveToStorage and
+			// n.retrieveSnapshot, that Snapshot can be applied by the node on a restart. In our
+			// case, we don't store the full data in snapshot. So, we should only store the snapshot
+			// received in Raft, iff we actually were able to update the state.
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
@@ -687,15 +689,25 @@ func (n *node) Run() {
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
-					glog.Infof("-------> SNAPSHOT group %d from node id %d\n", n.gid, rc.Id)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d\n", snap, n.gid, rc.Id)
 					n.retryUntilSuccess(n.retrieveSnapshot, 100*time.Millisecond)
-					glog.Infof("-------> SNAPSHOT group %d. DONE.\n", n.gid)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
 				} else {
-					glog.Infof("-------> SNAPSHOT group %d from node id %d [SELF]. Ignoring.\n", n.gid, rc.Id)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d [SELF]. Ignoring.\n",
+						snap, n.gid, rc.Id)
 				}
 			}
 			if tr != nil {
 				tr.LazyPrintf("Applied or retrieved snapshot.")
+			}
+
+			// Store the hardstate and entries. Note that these are not CommittedEntries.
+			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			if tr != nil {
+				tr.LazyPrintf("Saved %d entries. Snapshot, HardState empty? (%v, %v)",
+					len(rd.Entries),
+					raft.IsEmptySnap(rd.Snapshot),
+					raft.IsEmptyHardState(rd.HardState))
 			}
 
 			// Now schedule or apply committed entries.
