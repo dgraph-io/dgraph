@@ -18,7 +18,6 @@ package worker
 
 import (
 	"sync/atomic"
-	"time"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/dgraph-io/badger"
@@ -54,12 +53,6 @@ func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) 
 	if err := ps.DropAll(); err != nil {
 		return 0, err
 	}
-
-	// TODO HACK
-	// Let's add artificial delay, so we can test this failure.
-	glog.Infof("Sleeping for 15s...")
-	time.Sleep(15 * time.Second)
-	glog.Infof("Woke up")
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
@@ -99,18 +92,17 @@ func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) 
 }
 
 func doStreamSnapshot(snap *pb.Snapshot, stream pb.Worker_StreamSnapshotServer) error {
-	// We have matched the requested snapshot with what this node, the leader of the group, has.
-	// Now, we read all the posting lists stored below MinPendingStartTs, and stream them over the
-	// wire. The MinPendingStartTs stored as part of creation of Snapshot, tells us the readTs to
-	// use to read from the store. Anything below this timestamp, we should pick up.
+	// We choose not to try and match the requested snapshot from the latest snapshot at the leader.
+	// This is the job of the Raft library. At the leader end, we service whatever is asked of us.
+	// If this snapshot is old, Raft should cause the follower to request another one, to overwrite
+	// the data from this one.
 	//
-	// TODO: This would also pick up schema updates done "after" the snapshot index. Guess that
+	// Snapshot request contains the txn read timestamp to be used to get a consistent snapshot of
+	// the data. This is what we use in orchestrate.
+	//
+	// Note: This would also pick up schema updates done "after" the snapshot index. Guess that
 	// might be OK. Otherwise, we'd want to version the schemas as well. Currently, they're stored
 	// at timestamp=1.
-
-	// TODO: Confirm that the bug is now over.
-	// BUG: There's a bug here due to which a node which doesn't see any transactions, but has real
-	// data fails to send that over, because of min_ts.
 
 	var numKeys uint64
 	sl := streamLists{stream: stream, db: pstore}
@@ -182,6 +174,12 @@ func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error
 	}
 	snap, err := stream.Recv()
 	if err != nil {
+		// If we don't even receive a request (here or if no StreamSnapshot is called), we can't
+		// report the snapshot to be a failure, because we don't know which follower is asking for
+		// one. Technically, I (the leader) can figure out from my Raft state, but I (Manish) think
+		// this is such a rare scenario, that we don't need to build a mechanism to track that. If
+		// we see it in the wild, we could add a timeout based mechanism to receive this request,
+		// but timeouts are always hard to get right.
 		return err
 	}
 	glog.Infof("Got StreamSnapshot request: %+v\n", snap)

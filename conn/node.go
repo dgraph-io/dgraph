@@ -101,7 +101,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			ElectionTick:    100, // 2s if we call Tick() every 20 ms.
 			HeartbeatTick:   1,   // 20ms if we call Tick() every 20 ms.
 			Storage:         store,
-			MaxSizePerMsg:   256 << 10,
+			MaxSizePerMsg:   1 << 20, // 1MB should allow more batching.
 			MaxInflightMsgs: 256,
 			// We don't need lease based reads. They cause issues because they
 			// require CheckQuorum to be true, and that causes a lot of issues
@@ -253,7 +253,7 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
 	for {
 		if err := n.Store.Save(h, es, s); err != nil {
-			glog.Errorf("While trying to save Raft update to pstore: %v. Retrying...", err)
+			glog.Errorf("While trying to save Raft update: %v. Retrying...", err)
 		} else {
 			return
 		}

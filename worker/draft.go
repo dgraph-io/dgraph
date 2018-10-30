@@ -609,7 +609,8 @@ func (n *node) Run() {
 		select {
 		case <-done:
 			// We use done channel here instead of closer.HasBeenClosed so that we can transfer
-			// leadership in a goroutine.
+			// leadership in a goroutine. The push to n.applyCh happens in this loop, so the close
+			// should happen here too. Otherwise, race condition between push and close happens.
 			close(n.applyCh)
 			glog.Infoln("Raft node done.")
 			return
@@ -656,9 +657,6 @@ func (n *node) Run() {
 				// Leader can send messages in parallel with writing to disk.
 				for _, msg := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
-					if !raft.IsEmptySnap(msg.Snapshot) {
-						glog.Infof("Sending snapshot: %+v\n", msg)
-					}
 					n.Send(msg)
 				}
 			}
@@ -668,13 +666,12 @@ func (n *node) Run() {
 
 			// We move the retrieval of snapshot before we store the rd.Snapshot, so that in case
 			// this node fails to get the snapshot, the Raft state would reflect that by not having
-			// the snapshot.
-			//
-			// This is different from the recommended order in Raft docs, where they assume that the
-			// Snapshot contains the full data, so even on a crash between n.SaveToStorage and
-			// n.retrieveSnapshot, that Snapshot can be applied by the node on a restart. In our
-			// case, we don't store the full data in snapshot. So, we should only store the snapshot
-			// received in Raft, iff we actually were able to update the state.
+			// the snapshot, on a future probe. This is different from the recommended order in Raft
+			// docs, where they assume that the Snapshot contains the full data, so even on a crash
+			// between n.SaveToStorage and n.retrieveSnapshot, that Snapshot can be applied by the
+			// node on a restart. In our case, we don't store the full data in snapshot, only the
+			// metadata.  So, we should only store the snapshot received in Raft, iff we actually
+			// were able to update the state.
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
@@ -697,12 +694,11 @@ func (n *node) Run() {
 					for {
 						err := n.retrieveSnapshot(snap)
 						if err == nil {
-							glog.Info("---> No error from retrieveSnapshot")
+							glog.Infoln("---> Retrieve snapshot: OK.")
 							break
 						}
 						glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
 					}
-					// n.retryUntilSuccess(n.retrieveSnapshot, 100*time.Millisecond)
 					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
 				} else {
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d [SELF]. Ignoring.\n",
@@ -1068,24 +1064,16 @@ func (n *node) InitAndStartNode() {
 			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
-		// TODO: HACK. Let's always report the snapshot as failed. I *think* if the leader is
-		// causing the limbo, it should come out of it. If the leader is not, then it should just
-		// ignore this I suppose.
-		n.Raft().ReportSnapshot(n.Id, raft.SnapshotFailure)
 		glog.V(2).Infoln("Restart node complete")
+
 	} else {
 		glog.Infof("New Node for group: %d\n", n.gid)
 		if _, hasPeer := groups().MyPeer(); hasPeer {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
-
-			// Note: This is an optimization, which adds complexity because it requires us to
+			// Update: This is an optimization, which adds complexity because it requires us to
 			// understand the Raft state of the node. Let's instead have the node retrieve the
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
-			//
-			// glog.Infof("Retrieving snapshot from peer: %d", peerId)
-			// n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
-
 			glog.Infoln("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
