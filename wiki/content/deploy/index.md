@@ -1425,17 +1425,19 @@ By looking at all three metrics you can see how much memory a Dgraph process is 
 
 ### LRU Cache Metrics
 
-The LRU cache metrics let you track on how well the posting list cache is being used. You can measure the cache capacity with the max posting list size (see data metrics below), which may correlate with `dgraph_evicted_lists_total` is growing.
+The LRU cache metrics let you track on how well the posting list cache is being used.
 
- Metrics                          | Description
- -------                          | -----------
- `dgraph_cache_hits_total`        | Total number of cache hits for posting lists in Dgraph.
- `dgraph_cache_miss_total`        | Total number of cache misses for posting lists in Dgraph.
- `dgraph_cache_race_total`        | Total number of cache races when getting posting lists in Dgraph.
- `dgraph_evicted_lists_total`     | Total number of posting lists evicted from LRU cache. A large number here could indicate a large posting list.
- `dgraph_lcache_capacity_bytes`   | Current size of the LRU cache. The max value should be close to the size specified by `--lru_mb`.
- `dgraph_lcache_keys_total`       | Total number of keys in the LRU cache.
- `dgraph_lcache_size_bytes`       | Size in bytes of the LRU cache.
+You can track `dgraph_lru_capacity_bytes`, `dgraph_lru_evicted_total`, and `dgraph_max_list_bytes` (see the [Data Metrics]({{< relref "#data-metrics" >}})) to determine if the cache size should be adjusted. A high number of evictions can indicate a large posting list that repeatedly is inserted and evicted from cache due to insufficient sizing. The LRU cache size can be tuned with the option `--lru_mb`.
+
+ Metrics                     | Description
+ -------                     | -----------
+ `dgraph_lru_hits_total`     | Total number of cache hits for posting lists in Dgraph.
+ `dgraph_lru_miss_total`     | Total number of cache misses for posting lists in Dgraph.
+ `dgraph_lru_race_total`     | Total number of cache races when getting posting lists in Dgraph.
+ `dgraph_lru_evicted_total`  | Total number of posting lists evicted from LRU cache.
+ `dgraph_lru_capacity_bytes` | Current size of the LRU cache. The max value should be close to the size specified by `--lru_mb`.
+ `dgraph_lru_keys_total`     | Total number of keys in the LRU cache.
+ `dgraph_lru_size_bytes`     | Size in bytes of the LRU cache.
 
 ### Data Metrics
 
