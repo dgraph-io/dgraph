@@ -32,8 +32,8 @@ import (
 )
 
 // handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method != http.MethodGet {
+func handlerInit(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method != method {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return false
 	}
@@ -47,7 +47,7 @@ func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	if !handlerInit(w, r, http.MethodGet) {
 		return
 	}
 
@@ -57,12 +57,11 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	if !handlerInit(w, r, http.MethodGet) {
 		return
 	}
-	ctx := context.Background()
 	// Export logic can be moved to dgraphzero.
-	if err := worker.ExportOverNetwork(ctx); err != nil {
+	if err := worker.ExportOverNetwork(context.Background()); err != nil {
 		x.SetStatus(w, err.Error(), "Export failed.")
 		return
 	}
@@ -71,11 +70,16 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	if !handlerInit(w, r, http.MethodPost) {
 		return
 	}
-	err := worker.BackupOverNetwork(context.Background())
-	if err != nil {
+	target := r.FormValue("destination")
+	if target == "" {
+		err := x.Errorf("You must specify a 'destination' value")
+		x.SetStatus(w, err.Error(), "Backup failed.")
+		return
+	}
+	if err := worker.BackupOverNetwork(context.Background(), target); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}

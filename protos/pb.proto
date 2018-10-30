@@ -443,7 +443,7 @@ message SnapshotMeta {
 message BackupRequest {
 	uint64 start_ts = 1;
 	uint32 group_id = 2;
-	string endpoint = 3;
+	string target = 3;
 }
 
 message BackupResponse {

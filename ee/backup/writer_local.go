@@ -10,33 +10,37 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
-const dgraphBackupFullPrefix = "full-"
-const dgraphBackupPartialPrefix = "part-"
-const dgraphBackupSuffix = ".dgraph-backup"
-
+// fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
 	path string
 }
 
+// Session authenticates or prepares a handler session.
+// Returns error on failure, nil on success.
 func (h *fileHandler) Session(_, path string) error {
 	h.path = path
 	return os.Chdir(h.path)
 }
 
+// List returns a list of Dgraph backup files at target.
+// Returns a list (might be empty) on success, error otherwise.
 func (h *fileHandler) List() ([]string, error) {
 	return filepath.Glob(filepath.Join(h.path, "*"+dgraphBackupSuffix))
 }
 
+// Copy is called when we are ready to transmit a file to the target.
+// Returns error on failure, nil on success.
 func (h *fileHandler) Copy(in, out string) error {
 	if filepath.Base(out) == out {
 		out = filepath.Join(h.path, out)
 	}
 
 	if h.Exists(out) {
-		return x.Errorf("file already exists: %q", out)
+		glog.Errorf("File already exists on target: %q", out)
+		return os.ErrExist
 	}
 
 	src, err := os.Open(in)
@@ -58,19 +62,14 @@ func (h *fileHandler) Copy(in, out string) error {
 	return dst.Sync()
 }
 
+// Exists checks if a path (file or dir) is found at target.
+// Returns true if found, false otherwise.
 func (h *fileHandler) Exists(path string) bool {
 	_, err := os.Stat(path)
 	return os.IsExist(err)
 }
 
-func (h *fileHandler) Write(b []byte) (int, error) {
-	return 0, nil
-}
-
-func (h *fileHandler) Close() error {
-	return h.Close()
-}
-
+// Register this handler
 func init() {
-	handlers["file"] = &fileHandler{}
+	addSchemeHandler("file", &fileHandler{})
 }
