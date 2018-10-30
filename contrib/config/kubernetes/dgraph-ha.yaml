@@ -163,7 +163,7 @@ spec:
             else
               dgraph zero --my=$(hostname -f):5080 --peer dgraph-zero-0.dgraph-zero.default.svc.cluster.local:5080 --idx $idx --replicas 3
             fi
-      terminationGracePeriodSeconds: 600
+      terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir
         persistentVolumeClaim:
