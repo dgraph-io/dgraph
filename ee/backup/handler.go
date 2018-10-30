@@ -22,7 +22,13 @@ type handler interface {
 	Session(string, string) error
 }
 
-// handlers map uri scheme to a handler
+// handlers map URI scheme to a handler.
+// List of possible handlers:
+//   file - local file or NFS mounted (default if no scheme detected)
+//   http - multipart HTTP upload
+//     gs - Google Cloud Storage
+//     s3 - Amazon S3
+//     as - Azure Storage
 var handlers struct {
 	sync.Mutex
 	m map[string]handler
@@ -53,6 +59,8 @@ func getSchemeHandler(uri string) (handler, error) {
 	return h, nil
 }
 
+// addSchemeHandler registers a new scheme handler. If the handler is already registered
+// we just ignore the request.
 func addSchemeHandler(scheme string, h handler) {
 	handlers.Lock()
 	defer handlers.Unlock()

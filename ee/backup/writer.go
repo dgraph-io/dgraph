@@ -78,7 +78,7 @@ func newWriter(worker *Worker) (*writer, error) {
 }
 
 // Send implements the stream.kvStream interface.
-// It writes the received KV into the temp file.
+// It writes the received KV into the temp file as a delimited binary chain.
 // Returns error if the writing fails, nil on success.
 func (w *writer) Send(kvs *pb.KVS) error {
 	var err error

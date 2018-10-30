@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/golang/glog"
 )
@@ -41,6 +42,12 @@ func (h *fileHandler) Copy(in, out string) error {
 	if h.Exists(out) {
 		glog.Errorf("File already exists on target: %q", out)
 		return os.ErrExist
+	}
+
+	// if we are in the same volume, just rename. it should work on NFS too.
+	if strings.HasPrefix(in, h.path) {
+		glog.V(3).Infof("renaming %q to %q", in, out)
+		return os.Rename(in, out)
 	}
 
 	src, err := os.Open(in)
