@@ -17,16 +17,12 @@
 package worker
 
 import (
-	"errors"
-	"io"
 	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/golang/glog"
-	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -47,8 +43,11 @@ func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) 
 	// Set my RaftContext on the snapshot, so it's easier to locate me.
 	ctx := n.ctx
 	snap.Context = n.RaftContext
-	stream, err := c.StreamSnapshot(ctx, &snap)
+	stream, err := c.StreamSnapshot(ctx)
 	if err != nil {
+		return 0, err
+	}
+	if err := stream.Send(&snap); err != nil {
 		return 0, err
 	}
 	// Before we write anything, we should drop all the data stored in ps.
@@ -68,12 +67,12 @@ func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) 
 	writer.BlindWrite = true // Do overwrite keys.
 	for {
 		kvs, err := stream.Recv()
-		if err == io.EOF {
-			glog.V(1).Infoln("EOF has been reached")
-			break
-		}
 		if err != nil {
 			return count, err
+		}
+		if kvs.Done {
+			glog.V(1).Infoln("All key-values have been received.")
+			break
 		}
 		select {
 		case <-ctx.Done():
@@ -90,45 +89,16 @@ func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) 
 	if err := writer.Flush(); err != nil {
 		return 0, err
 	}
-
-	var payload api.Payload
-	payload.Data = []byte("DONE")
-	glog.Infof("Populated snapshot with %d keys.\n", count)
-	if err := stream.SendMsg(&payload); err != nil {
+	glog.Infof("Snapshot writes DONE. Sending ACK")
+	// Send an acknowledgement back to the leader.
+	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
 		return 0, err
 	}
+	glog.Infof("Populated snapshot with %d keys.\n", count)
 	return count, nil
 }
 
-func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
-	stream pb.Worker_StreamSnapshotServer) error {
-	n := groups().Node
-	if n == nil {
-		return conn.ErrNoNode
-	}
-	// Indicate that we're streaming right now. Used to cancel
-	// calculateSnapshot.  However, this logic isn't foolproof. A leader might
-	// have already proposed a snapshot, which it can apply while this streaming
-	// is going on. That can happen after the reqSnap check we're doing below.
-	// However, I don't think we need to tackle this edge case for now.
-	atomic.AddInt32(&n.streaming, 1)
-	defer atomic.AddInt32(&n.streaming, -1)
-
-	if !x.IsTestRun() {
-		if !n.AmLeader() {
-			return errNotLeader
-		}
-	}
-	snap, err := n.Snapshot()
-	if err != nil {
-		return err
-	}
-	glog.Infof("Got StreamSnapshot request. Mine: %+v. Requested: %+v\n", snap, reqSnap)
-	if snap.Index != reqSnap.Index || snap.ReadTs != reqSnap.ReadTs {
-		n.Raft().ReportSnapshot(reqSnap.Context.GetId(), raft.SnapshotFailure)
-		return errors.New("ErrSnapMismatch: Mismatching snapshot request")
-	}
-
+func doStreamSnapshot(snap *pb.Snapshot, stream pb.Worker_StreamSnapshotServer) error {
 	// We have matched the requested snapshot with what this node, the leader of the group, has.
 	// Now, we read all the posting lists stored below MinPendingStartTs, and stream them over the
 	// wire. The MinPendingStartTs stored as part of creation of Snapshot, tells us the readTs to
@@ -142,12 +112,14 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
 	// BUG: There's a bug here due to which a node which doesn't see any transactions, but has real
 	// data fails to send that over, because of min_ts.
 
+	var numKeys uint64
 	sl := streamLists{stream: stream, db: pstore}
 	sl.chooseKey = func(_ *badger.Item) bool {
 		// Pick all keys.
 		return true
 	}
 	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+		atomic.AddUint64(&numKeys, 1)
 		item := itr.Item()
 		pk := x.Parse(key)
 		if pk.IsSchema() {
@@ -175,31 +147,49 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
 	}
 
 	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
-		glog.Errorf("While trying to stream snapshot. Error=%v. Reporting failure...\n", err)
-		n.Raft().ReportSnapshot(reqSnap.Context.GetId(), raft.SnapshotFailure)
 		return err
 	}
-	glog.Infoln("Streamed keys. Done.")
+	// Indicate that sending is done.
+	if err := stream.Send(&pb.KVS{Done: true}); err != nil {
+		return err
+	}
+	glog.Infof("Key streaming done. Sent %d keys. Waiting for ACK...", numKeys)
+	ack, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	glog.Infof("Received ACK with done: %v\n", ack.Done)
+	return nil
+}
 
-	var done api.Payload
-	tick := time.NewTicker(3 * time.Second)
-	defer tick.Stop()
-	for range tick.C {
-		if err := stream.RecvMsg(&done); err == io.EOF {
-			glog.Infof("Waiting to hear from the client.")
+func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error {
+	n := groups().Node
+	if n == nil {
+		return conn.ErrNoNode
+	}
+	// Indicate that we're streaming right now. Used to cancel
+	// calculateSnapshot.  However, this logic isn't foolproof. A leader might
+	// have already proposed a snapshot, which it can apply while this streaming
+	// is going on. That can happen after the reqSnap check we're doing below.
+	// However, I don't think we need to tackle this edge case for now.
+	atomic.AddInt32(&n.streaming, 1)
+	defer atomic.AddInt32(&n.streaming, -1)
 
-		} else if err != nil {
-			glog.Infof("While receiving message: %v\n", err)
-			n.Raft().ReportSnapshot(reqSnap.Context.GetId(), raft.SnapshotFailure)
-			return err
-		} else {
-			break
+	if !x.IsTestRun() {
+		if !n.AmLeader() {
+			return errNotLeader
 		}
 	}
-	glog.Infof("Received ACK with message: %v\n", done)
-
-	if tr, ok := trace.FromContext(stream.Context()); ok {
-		tr.LazyPrintf("Sent keys. Done.\n")
+	snap, err := stream.Recv()
+	if err != nil {
+		return err
 	}
+	glog.Infof("Got StreamSnapshot request: %+v\n", snap)
+	if err := doStreamSnapshot(snap, stream); err != nil {
+		glog.Errorf("While streaming snapshot: %v. Reporting failure.", err)
+		n.Raft().ReportSnapshot(snap.Context.GetId(), raft.SnapshotFailure)
+		return err
+	}
+	glog.Infof("Stream snapshot: OK")
 	return nil
 }

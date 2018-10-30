@@ -206,6 +206,8 @@ message Snapshot {
 	RaftContext context = 1;
 	uint64 index        = 2;
 	uint64 read_ts      = 3;
+
+	bool done           = 4;
 }
 
 message Proposal {
@@ -220,6 +222,7 @@ message Proposal {
 
 message KVS {
  repeated KV kv = 1;
+ bool done      = 2;
 }
 
 message KV {
@@ -412,7 +415,7 @@ service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                    returns (api.TxnContext) {}
 	rpc ServeTask (Query)                     returns (Result) {}
-	rpc StreamSnapshot (Snapshot)             returns (stream KVS) {}
+	rpc StreamSnapshot (stream Snapshot)      returns (stream KVS) {}
 	rpc Sort (SortMessage)                    returns (SortResult) {}
 	rpc Schema (SchemaRequest)                returns (SchemaResult) {}
 	rpc PurgeTs (api.Payload)                 returns (Num) {}

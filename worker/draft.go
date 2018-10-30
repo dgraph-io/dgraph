@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -699,10 +698,6 @@ func (n *node) Run() {
 						err := n.retrieveSnapshot(snap)
 						if err == nil {
 							glog.Info("---> No error from retrieveSnapshot")
-							break
-
-						} else if strings.Contains(err.Error(), "ErrSnapMismatch") {
-							glog.Errorf("---> Snapshot mismatch. Skipping.")
 							break
 						}
 						glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
