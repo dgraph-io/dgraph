@@ -312,9 +312,8 @@ func run() {
 	x.PrintVersion()
 	edgraph.InitServerState()
 	defer func() {
-		if err := edgraph.State.Dispose(); err != nil {
-			glog.Errorf("Error while disposing server state: %v", err)
-		}
+		edgraph.State.Dispose()
+		glog.Info("Finished disposing server state.")
 	}()
 
 	if Alpha.Conf.GetBool("expose_trace") {
