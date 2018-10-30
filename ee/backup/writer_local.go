@@ -62,3 +62,15 @@ func (h *fileHandler) Exists(path string) bool {
 	_, err := os.Stat(path)
 	return os.IsExist(err)
 }
+
+func (h *fileHandler) Write(b []byte) (int, error) {
+	return 0, nil
+}
+
+func (h *fileHandler) Close() error {
+	return h.Close()
+}
+
+func init() {
+	handlers["file"] = &fileHandler{}
+}

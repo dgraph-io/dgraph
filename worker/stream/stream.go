@@ -35,12 +35,12 @@ const (
 	MB = 1 << 20
 )
 
-type KVStream interface {
+type kvStream interface {
 	Send(*pb.KVS) error
 }
 
 type Lists struct {
-	Stream        KVStream
+	Stream        kvStream
 	Predicate     string
 	DB            *badger.DB
 	ChooseKeyFunc func(item *badger.Item) bool

@@ -350,7 +350,7 @@ message MovePredicatePayload {
 	MembershipState state = 4;
 }
 
-// BackupPayload is used both as a request and a response.
+// ExportPayload is used both as a request and a response.
 // When used in request, groups represents the list of groups that need to be backed up.
 // When used in response, groups represent the list of groups that were backed up.
 message ExportPayload {
@@ -442,7 +442,8 @@ message SnapshotMeta {
 
 message BackupRequest {
 	uint64 start_ts = 1;
-	string endpoint = 2;
+	uint32 group_id = 2;
+	string endpoint = 3;
 }
 
 message BackupResponse {
