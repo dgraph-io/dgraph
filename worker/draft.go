@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -539,7 +540,7 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 	return res, nil
 }
 
-func (n *node) retrieveSnapshot() error {
+func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	pool, err := n.leaderBlocking()
 	if err != nil {
 		return err
@@ -554,7 +555,7 @@ func (n *node) retrieveSnapshot() error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	posting.EvictLRU()
-	if _, err := n.populateSnapshot(pstore, pool); err != nil {
+	if _, err := n.populateSnapshot(snap, pstore, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -601,7 +602,6 @@ func (n *node) Run() {
 			time.Sleep(time.Second) // Let transfer happen.
 		}
 		n.Raft().Stop()
-		close(n.applyCh)
 		close(done)
 	}()
 
@@ -611,6 +611,7 @@ func (n *node) Run() {
 		case <-done:
 			// We use done channel here instead of closer.HasBeenClosed so that we can transfer
 			// leadership in a goroutine.
+			close(n.applyCh)
 			glog.Infoln("Raft node done.")
 			return
 
@@ -656,6 +657,9 @@ func (n *node) Run() {
 				// Leader can send messages in parallel with writing to disk.
 				for _, msg := range rd.Messages {
 					// NOTE: We can do some optimizations here to drop messages.
+					if !raft.IsEmptySnap(msg.Snapshot) {
+						glog.Infof("Sending snapshot: %+v\n", msg)
+					}
 					n.Send(msg)
 				}
 			}
@@ -685,20 +689,33 @@ func (n *node) Run() {
 					// finish applying the updates, otherwise, we'll end up overwriting the data
 					// from the new snapshot that we retrieved.
 					maxIndex := n.Applied.LastIndex()
-					glog.Infof("Waiting for applyCh to reach %d before taking snapshot\n", maxIndex)
+					glog.Infof("Waiting for applyCh to become empty by reaching %d before"+
+						" retrieving snapshot\n", maxIndex)
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d\n", snap, n.gid, rc.Id)
-					n.retryUntilSuccess(n.retrieveSnapshot, 100*time.Millisecond)
+					for {
+						err := n.retrieveSnapshot(snap)
+						if err == nil {
+							glog.Info("---> No error from retrieveSnapshot")
+							break
+
+						} else if strings.Contains(err.Error(), "ErrSnapMismatch") {
+							glog.Errorf("---> Snapshot mismatch. Skipping.")
+							break
+						}
+						glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
+					}
+					// n.retryUntilSuccess(n.retrieveSnapshot, 100*time.Millisecond)
 					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
 				} else {
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d [SELF]. Ignoring.\n",
 						snap, n.gid, rc.Id)
 				}
-			}
-			if tr != nil {
-				tr.LazyPrintf("Applied or retrieved snapshot.")
+				if tr != nil {
+					tr.LazyPrintf("Applied or retrieved snapshot.")
+				}
 			}
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
@@ -1056,6 +1073,10 @@ func (n *node) InitAndStartNode() {
 			}
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
+		// TODO: HACK. Let's always report the snapshot as failed. I *think* if the leader is
+		// causing the limbo, it should come out of it. If the leader is not, then it should just
+		// ignore this I suppose.
+		n.Raft().ReportSnapshot(n.Id, raft.SnapshotFailure)
 		glog.V(2).Infoln("Restart node complete")
 	} else {
 		glog.Infof("New Node for group: %d\n", n.gid)

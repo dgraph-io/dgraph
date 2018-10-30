@@ -98,8 +98,8 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		Store:  store,
 		Cfg: &raft.Config{
 			ID:              rc.Id,
-			ElectionTick:    100, // 200 ms if we call Tick() every 20 ms.
-			HeartbeatTick:   1,   // 20 ms if we call Tick() every 20 ms.
+			ElectionTick:    100, // 2s if we call Tick() every 20 ms.
+			HeartbeatTick:   1,   // 20ms if we call Tick() every 20 ms.
 			Storage:         store,
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
@@ -148,6 +148,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	n.Applied.Init()
 	// This should match up to the Applied index set above.
 	n.Applied.SetDoneUntil(n.Cfg.Applied)
+	glog.Infof("Setting raft.Config to: %+v\n", n.Cfg)
 	return n
 }
 
@@ -250,7 +251,13 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 }
 
 func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
-	x.Check(n.Store.Save(h, es, s))
+	for {
+		if err := n.Store.Save(h, es, s); err != nil {
+			glog.Errorf("While trying to save Raft update to pstore: %v. Retrying...", err)
+		} else {
+			return
+		}
+	}
 }
 
 func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {

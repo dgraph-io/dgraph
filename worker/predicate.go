@@ -20,8 +20,11 @@ import (
 	"errors"
 	"io"
 	"sync/atomic"
+	"time"
 
+	"github.com/coreos/etcd/raft"
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/golang/glog"
 	"golang.org/x/net/trace"
 
@@ -37,16 +40,14 @@ const (
 )
 
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
-func (n *node) populateSnapshot(ps *badger.DB, pl *conn.Pool) (int, error) {
+func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
 	c := pb.NewWorkerClient(conn)
 
+	// Set my RaftContext on the snapshot, so it's easier to locate me.
 	ctx := n.ctx
-	snap, err := n.Snapshot()
-	if err != nil {
-		return 0, err
-	}
-	stream, err := c.StreamSnapshot(ctx, snap)
+	snap.Context = n.RaftContext
+	stream, err := c.StreamSnapshot(ctx, &snap)
 	if err != nil {
 		return 0, err
 	}
@@ -54,6 +55,12 @@ func (n *node) populateSnapshot(ps *badger.DB, pl *conn.Pool) (int, error) {
 	if err := ps.DropAll(); err != nil {
 		return 0, err
 	}
+
+	// TODO HACK
+	// Let's add artificial delay, so we can test this failure.
+	glog.Infof("Sleeping for 15s...")
+	time.Sleep(15 * time.Second)
+	glog.Infof("Woke up")
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
@@ -83,7 +90,13 @@ func (n *node) populateSnapshot(ps *badger.DB, pl *conn.Pool) (int, error) {
 	if err := writer.Flush(); err != nil {
 		return 0, err
 	}
+
+	var payload api.Payload
+	payload.Data = []byte("DONE")
 	glog.Infof("Populated snapshot with %d keys.\n", count)
+	if err := stream.SendMsg(&payload); err != nil {
+		return 0, err
+	}
 	return count, nil
 }
 
@@ -112,7 +125,8 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
 	}
 	glog.Infof("Got StreamSnapshot request. Mine: %+v. Requested: %+v\n", snap, reqSnap)
 	if snap.Index != reqSnap.Index || snap.ReadTs != reqSnap.ReadTs {
-		return errors.New("Mismatching snapshot request")
+		n.Raft().ReportSnapshot(reqSnap.Context.GetId(), raft.SnapshotFailure)
+		return errors.New("ErrSnapMismatch: Mismatching snapshot request")
 	}
 
 	// We have matched the requested snapshot with what this node, the leader of the group, has.
@@ -161,8 +175,28 @@ func (w *grpcWorker) StreamSnapshot(reqSnap *pb.Snapshot,
 	}
 
 	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
+		glog.Errorf("While trying to stream snapshot. Error=%v. Reporting failure...\n", err)
+		n.Raft().ReportSnapshot(reqSnap.Context.GetId(), raft.SnapshotFailure)
 		return err
 	}
+	glog.Infoln("Streamed keys. Done.")
+
+	var done api.Payload
+	tick := time.NewTicker(3 * time.Second)
+	defer tick.Stop()
+	for range tick.C {
+		if err := stream.RecvMsg(&done); err == io.EOF {
+			glog.Infof("Waiting to hear from the client.")
+
+		} else if err != nil {
+			glog.Infof("While receiving message: %v\n", err)
+			n.Raft().ReportSnapshot(reqSnap.Context.GetId(), raft.SnapshotFailure)
+			return err
+		} else {
+			break
+		}
+	}
+	glog.Infof("Received ACK with message: %v\n", done)
 
 	if tr, ok := trace.FromContext(stream.Context()); ok {
 		tr.LazyPrintf("Sent keys. Done.\n")
