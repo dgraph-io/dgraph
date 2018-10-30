@@ -1292,7 +1292,7 @@ Types : `int`, `float`, `String`, `dateTime`, `id`, `default`, `geo`, `bool`
 
 Value variables store scalar values.  Value variables are a map from the UIDs of the enclosing block to the corresponding values.
 
-It therefor only makes sense to use the values from a value variable in a context that matches the same UIDs - if used in a block matching different UIDs the value variable is undefined.
+It therefore only makes sense to use the values from a value variable in a context that matches the same UIDs - if used in a block matching different UIDs the value variable is undefined.
 
 It is an error to define a value variable but not use it elsewhere in the query.
 

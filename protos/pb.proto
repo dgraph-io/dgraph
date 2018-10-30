@@ -206,6 +206,8 @@ message Snapshot {
 	RaftContext context = 1;
 	uint64 index        = 2;
 	uint64 read_ts      = 3;
+	// done is used to indicate that snapshot stream was a success.
+	bool done           = 4;
 }
 
 message Proposal {
@@ -220,6 +222,8 @@ message Proposal {
 
 message KVS {
  repeated KV kv = 1;
+ // done used to indicate if the stream of KVS is over.
+ bool done      = 2;
 }
 
 message KV {
@@ -354,16 +358,16 @@ message MovePredicatePayload {
 // When used in request, groups represents the list of groups that need to be backed up.
 // When used in response, groups represent the list of groups that were backed up.
 message ExportPayload {
-	uint64 req_id = 1;    // Use req_id to handle duplicate requests.
-	uint32 group_id = 2;  // Group id to back up.
 	enum Status {
 		NONE      = 0;
 		SUCCESS   = 1;
 		DUPLICATE = 2;
 		FAILED    = 3;
 	}
-	Status status = 3;
-	uint64 read_ts = 4;
+	uint32 group_id = 1;  // Group id to back up.
+	Status status   = 2;
+	uint64 read_ts  = 3;
+	int64 unix_ts   = 4;
 }
 
 message TxnStatus {
@@ -410,12 +414,12 @@ service Zero {
 
 service Worker {
 	// Data serving RPCs.
-	rpc Mutate (Mutations)                  returns (api.TxnContext) {}
-	rpc ServeTask (Query)                   returns (Result) {}
-	rpc StreamSnapshot (Snapshot)           returns (stream KVS) {}
-	rpc Sort (SortMessage)                  returns (SortResult) {}
-	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc PurgeTs (api.Payload)               returns (Num) {}
+	rpc Mutate (Mutations)                    returns (api.TxnContext) {}
+	rpc ServeTask (Query)                     returns (Result) {}
+	rpc StreamSnapshot (stream Snapshot)      returns (stream KVS) {}
+	rpc Sort (SortMessage)                    returns (SortResult) {}
+	rpc Schema (SchemaRequest)                returns (SchemaResult) {}
+	rpc PurgeTs (api.Payload)                 returns (Num) {}
 	rpc Backup (BackupRequest)							returns (BackupResponse) {}
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}

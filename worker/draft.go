@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/worker/stream"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
@@ -404,6 +403,9 @@ func (n *node) processApplyCh() {
 						p := &P{err: perr, size: psz, seen: time.Now()}
 						previous[proposal.Key] = p
 					}
+					if perr != nil {
+						glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+					}
 					n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
 						proposal.Key, e.Index, perr)
 				}
@@ -440,7 +442,7 @@ func (n *node) processApplyCh() {
 
 func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
-	writer := x.TxnWriter{DB: pstore}
+	writer := x.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
 		if txn == nil {
@@ -448,7 +450,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		}
 		var err error
 		for retry := Config.MaxRetries; retry != 0; retry-- {
-			err = txn.CommitToDisk(&writer, commit)
+			err = txn.CommitToDisk(writer, commit)
 			if err == nil {
 				break
 			}
@@ -537,7 +539,7 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 	return res, nil
 }
 
-func (n *node) retrieveSnapshot() error {
+func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	pool, err := n.leaderBlocking()
 	if err != nil {
 		return err
@@ -552,7 +554,7 @@ func (n *node) retrieveSnapshot() error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	posting.EvictLRU()
-	if _, err := n.populateSnapshot(pstore, pool); err != nil {
+	if _, err := n.populateSnapshot(snap, pstore, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -599,7 +601,6 @@ func (n *node) Run() {
 			time.Sleep(time.Second) // Let transfer happen.
 		}
 		n.Raft().Stop()
-		close(n.applyCh)
 		close(done)
 	}()
 
@@ -607,6 +608,10 @@ func (n *node) Run() {
 	for {
 		select {
 		case <-done:
+			// We use done channel here instead of closer.HasBeenClosed so that we can transfer
+			// leadership in a goroutine. The push to n.applyCh happens in this loop, so the close
+			// should happen here too. Otherwise, race condition between push and close happens.
+			close(n.applyCh)
 			glog.Infoln("Raft node done.")
 			return
 
@@ -659,15 +664,14 @@ func (n *node) Run() {
 				tr.LazyPrintf("Handled ReadStates and SoftState.")
 			}
 
-			// Store the hardstate and entries. Note that these are not CommittedEntries.
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-			if tr != nil {
-				tr.LazyPrintf("Saved %d entries. Snapshot, HardState empty? (%v, %v)",
-					len(rd.Entries),
-					raft.IsEmptySnap(rd.Snapshot),
-					raft.IsEmptyHardState(rd.HardState))
-			}
-
+			// We move the retrieval of snapshot before we store the rd.Snapshot, so that in case
+			// this node fails to get the snapshot, the Raft state would reflect that by not having
+			// the snapshot on a future probe. This is different from the recommended order in Raft
+			// docs where they assume that the Snapshot contains the full data, so even on a crash
+			// between n.SaveToStorage and n.retrieveSnapshot, that Snapshot can be applied by the
+			// node on a restart. In our case, we don't store the full data in snapshot, only the
+			// metadata.  So, we should only store the snapshot received in Raft, iff we actually
+			// were able to update the state.
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
@@ -681,19 +685,37 @@ func (n *node) Run() {
 					// finish applying the updates, otherwise, we'll end up overwriting the data
 					// from the new snapshot that we retrieved.
 					maxIndex := n.Applied.LastIndex()
-					glog.Infof("Waiting for applyCh to reach %d before taking snapshot\n", maxIndex)
+					glog.Infof("Waiting for applyCh to become empty by reaching %d before"+
+						" retrieving snapshot\n", maxIndex)
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
-					glog.Infof("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
-					n.retryUntilSuccess(n.retrieveSnapshot, 100*time.Millisecond)
-					glog.Infof("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d\n", snap, n.gid, rc.Id)
+					for {
+						err := n.retrieveSnapshot(snap)
+						if err == nil {
+							glog.Infoln("---> Retrieve snapshot: OK.")
+							break
+						}
+						glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
+					}
+					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
 				} else {
-					glog.Infof("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d [SELF]. Ignoring.\n",
+						snap, n.gid, rc.Id)
+				}
+				if tr != nil {
+					tr.LazyPrintf("Applied or retrieved snapshot.")
 				}
 			}
+
+			// Store the hardstate and entries. Note that these are not CommittedEntries.
+			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 			if tr != nil {
-				tr.LazyPrintf("Applied or retrieved snapshot.")
+				tr.LazyPrintf("Saved %d entries. Snapshot, HardState empty? (%v, %v)",
+					len(rd.Entries),
+					raft.IsEmptySnap(rd.Snapshot),
+					raft.IsEmptyHardState(rd.HardState))
 			}
 
 			// Now schedule or apply committed entries.
@@ -749,9 +771,11 @@ func (n *node) Run() {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	writer := &x.TxnWriter{DB: pstore, BlindWrite: true}
-	sl := stream.Lists{Stream: writer, DB: pstore}
-	sl.ChooseKeyFunc = func(item *badger.Item) bool {
+	writer := x.NewTxnWriter(pstore)
+	writer.BlindWrite = true // Do overwrite keys.
+
+	sl := streamLists{stream: writer, db: pstore}
+	sl.chooseKey = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
 		if pk.IsSchema() {
 			// Skip if schema.
@@ -797,8 +821,25 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 
 	// Let's propose the txn updates received from Zero. This is important because there are edge
 	// cases where a txn status might have been missed by the group.
-	n.elog.Printf("Proposing abort txn delta: %+v\n", delta)
-	proposal := &pb.Proposal{Delta: delta}
+	glog.Infof("TryAbort returned with delta: %+v\n", delta)
+	aborted := &pb.OracleDelta{}
+	for _, txn := range delta.Txns {
+		// Only pick the aborts. DO NOT propose the commits. They must come in the right order via
+		// oracle delta stream, otherwise, we'll end up losing some committed txns.
+		if txn.CommitTs == 0 {
+			aborted.Txns = append(aborted.Txns, txn)
+		}
+	}
+	if len(aborted.Txns) == 0 {
+		glog.Infoln("TryAbort: No aborts found. Quitting.")
+		return nil
+	}
+
+	// We choose not to store the MaxAssigned, because it would cause our Oracle to move ahead
+	// artificially. The Oracle delta stream moves that ahead in the right order, and we shouldn't
+	// muck with that order here.
+	glog.Infof("TryAbort selectively proposing only aborted txns: %+v\n", aborted)
+	proposal := &pb.Proposal{Delta: aborted}
 	return n.proposeAndWait(n.ctx, proposal)
 }
 
@@ -1024,19 +1065,15 @@ func (n *node) InitAndStartNode() {
 		}
 		n.SetRaft(raft.RestartNode(n.Cfg))
 		glog.V(2).Infoln("Restart node complete")
+
 	} else {
 		glog.Infof("New Node for group: %d\n", n.gid)
 		if _, hasPeer := groups().MyPeer(); hasPeer {
 			// Get snapshot before joining peers as it can take time to retrieve it and we dont
 			// want the quorum to be inactive when it happens.
-
-			// Note: This is an optimization, which adds complexity because it requires us to
+			// Update: This is an optimization, which adds complexity because it requires us to
 			// understand the Raft state of the node. Let's instead have the node retrieve the
 			// snapshot as needed after joining the group, instead of us forcing one upfront.
-			//
-			// glog.Infof("Retrieving snapshot from peer: %d", peerId)
-			// n.retryUntilSuccess(n.retrieveSnapshot, time.Second)
-
 			glog.Infoln("Trying to join peers.")
 			n.retryUntilSuccess(n.joinPeers, time.Second)
 			n.SetRaft(raft.StartNode(n.Cfg, nil))

@@ -172,7 +172,9 @@ func (sl *Lists) produceKVs(ctx context.Context, ts uint64,
 			if err != nil {
 				return err
 			}
-			kvs.Kv = append(kvs.Kv, kv)
+			if kv != nil {
+				kvs.Kv = append(kvs.Kv, kv)
+			}
 		}
 		if len(kvs.Kv) > 0 {
 			kvChan <- kvs

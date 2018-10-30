@@ -36,6 +36,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
 	bopt "github.com/dgraph-io/badger/options"
@@ -61,6 +62,7 @@ type options struct {
 	numRdf              int
 	clientDir           string
 	ignoreIndexConflict bool
+	authToken           string
 }
 
 var opt options
@@ -93,6 +95,8 @@ func init() {
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
+	flag.StringP("auth_token", "a", "",
+		"The auth token passed to the server for Alter operation of the schema file")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -122,6 +126,12 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 // processSchemaFile process schema for a given gz file.
 func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing %s\n", file)
+	if len(opt.authToken) > 0 {
+		md := metadata.New(nil)
+		md.Append("auth-token", opt.authToken)
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+
 	f, err := os.Open(file)
 	x.Check(err)
 	defer f.Close()
@@ -316,6 +326,7 @@ func run() error {
 		numRdf:              Live.Conf.GetInt("batch"),
 		clientDir:           Live.Conf.GetString("xidmap"),
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
+		authToken:           Live.Conf.GetString("auth_token"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")

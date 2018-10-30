@@ -18,6 +18,7 @@ package worker
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"sort"
 	"sync/atomic"
@@ -530,7 +531,11 @@ START:
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
 			if err != nil || state == nil {
-				glog.Errorf("Unable to sync memberships. Error: %v", err)
+				if err == io.EOF {
+					glog.Infoln("Membership sync stream closed.")
+				} else {
+					glog.Errorf("Unable to sync memberships. Error: %v. State: %v", err, state)
+				}
 				// If zero server is lagging behind leader.
 				if ctx.Err() == nil {
 					cancel()
@@ -808,7 +813,7 @@ func (g *groupi) processOracleDeltaStream() {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
 			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
-			if glog.V(2) {
+			if glog.V(3) {
 				glog.Infof("Batched %d updates. Proposing Delta: %v.", batch, delta)
 			}
 			for {

@@ -168,9 +168,9 @@ func init() {
 			"dgraph_num_queries_total",
 			nil, nil,
 		),
-		"dgraph_server_health_status": prometheus.NewDesc(
-			"dgraph_server_health_status",
-			"dgraph_server_health_status",
+		"dgraph_alpha_health_status": prometheus.NewDesc(
+			"dgraph_alpha_health_status",
+			"dgraph_alpha_health_status",
 			nil, nil,
 		),
 		"dgraph_dirtymap_keys_total": prometheus.NewDesc(

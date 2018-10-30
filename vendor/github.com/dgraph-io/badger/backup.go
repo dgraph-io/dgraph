@@ -20,12 +20,10 @@ import (
 	"bufio"
 	"encoding/binary"
 	"io"
-	"log"
 	"sync"
 
-	"github.com/dgraph-io/badger/y"
-
 	"github.com/dgraph-io/badger/protos"
+	"github.com/dgraph-io/badger/y"
 )
 
 func writeTo(entry *protos.KVPair, w io.Writer) error {
@@ -63,7 +61,7 @@ func (db *DB) Backup(w io.Writer, since uint64) (uint64, error) {
 			}
 			valCopy, err := item.ValueCopy(nil)
 			if err != nil {
-				log.Printf("Key [%x]. Error while fetching value [%v]\n", item.Key(), err)
+				Errorf("Key [%x]. Error while fetching value [%v]\n", item.Key(), err)
 				continue
 			}
 

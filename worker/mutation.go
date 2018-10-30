@@ -100,8 +100,7 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		return err
 	}
 
-	updateSchema(update.Predicate, *update)
-	return nil
+	return updateSchema(update.Predicate, *update)
 }
 
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {

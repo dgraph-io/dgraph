@@ -41,7 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
@@ -178,16 +177,15 @@ func (s *ServerState) initStorage() {
 	go s.runVlogGC(s.WALstore)
 }
 
-func (s *ServerState) Dispose() error {
+func (s *ServerState) Dispose() {
 	if err := s.Pstore.Close(); err != nil {
-		return errors.Wrapf(err, "While closing postings store")
+		glog.Errorf("Error while closing postings store: %v", err)
 	}
 	if err := s.WALstore.Close(); err != nil {
-		return errors.Wrapf(err, "While closing WAL store")
+		glog.Errorf("Error while closing WAL store: %v", err)
 	}
 	s.vlogTicker.Stop()
 	s.mandatoryVlogTicker.Stop()
-	return nil
 }
 
 // Server implements protos.DgraphServer
@@ -229,7 +227,7 @@ func (s *ServerState) fillTimestampRequests() {
 		ts, err := worker.Timestamps(ctx, num)
 		cancel()
 		if err != nil {
-			glog.Warning("Error while retrieving timestamps: %v with delay: %v."+
+			glog.Warningf("Error while retrieving timestamps: %v with delay: %v."+
 				" Will retry...\n", err, delay)
 			time.Sleep(delay)
 			delay *= 2
