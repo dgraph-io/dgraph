@@ -66,7 +66,7 @@ func init() {
 	PendingProposals = expvar.NewInt("dgraph_pending_proposals_total")
 	BytesRead = expvar.NewInt("dgraph_read_bytes_total")
 	BytesWrite = expvar.NewInt("dgraph_written_bytes_total")
-	EvictedPls = expvar.NewInt("dgraph_evicted_lists_total")
+	EvictedPls = expvar.NewInt("dgraph_lru_evicted_total")
 	PendingQueries = expvar.NewInt("dgraph_pending_queries_total")
 	NumQueries = expvar.NewInt("dgraph_num_queries_total")
 	AlphaHealth = expvar.NewInt("dgraph_alpha_health_status")
@@ -153,9 +153,9 @@ func init() {
 			"dgraph_written_bytes_total",
 			nil, nil,
 		),
-		"dgraph_evicted_lists_total": prometheus.NewDesc(
-			"dgraph_evicted_lists_total",
-			"dgraph_evicted_lists_total",
+		"dgraph_lru_evicted_total": prometheus.NewDesc(
+			"dgraph_lru_evicted_total",
+			"dgraph_lru_evicted_total",
 			nil, nil,
 		),
 		"dgraph_pending_queries_total": prometheus.NewDesc(
