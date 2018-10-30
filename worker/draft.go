@@ -666,8 +666,8 @@ func (n *node) Run() {
 
 			// We move the retrieval of snapshot before we store the rd.Snapshot, so that in case
 			// this node fails to get the snapshot, the Raft state would reflect that by not having
-			// the snapshot, on a future probe. This is different from the recommended order in Raft
-			// docs, where they assume that the Snapshot contains the full data, so even on a crash
+			// the snapshot on a future probe. This is different from the recommended order in Raft
+			// docs where they assume that the Snapshot contains the full data, so even on a crash
 			// between n.SaveToStorage and n.retrieveSnapshot, that Snapshot can be applied by the
 			// node on a restart. In our case, we don't store the full data in snapshot, only the
 			// metadata.  So, we should only store the snapshot received in Raft, iff we actually

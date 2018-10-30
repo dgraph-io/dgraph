@@ -222,6 +222,7 @@ message Proposal {
 
 message KVS {
  repeated KV kv = 1;
+ // done used to indicate if the stream of KVS is over.
  bool done      = 2;
 }
 
