@@ -65,11 +65,11 @@ func newWriter(worker *Worker) (*writer, error) {
 		glog.Errorf("Failed to create temp file: %s\n", err)
 		return nil, err
 	}
-	glog.V(3).Infof("Backup temp file: %q", w.tmp.Name())
+	glog.V(3).Infof("temp file: %q", w.tmp.Name())
 
 	w.file = fmt.Sprintf("%s-g%d-r%d%s",
 		worker.SeqTs, worker.GroupId, worker.ReadTs, dgraphBackupSuffix)
-	glog.V(3).Infof("Backup target file name: %q", w.file)
+	glog.V(3).Infof("target file name: %q", w.file)
 
 	return &w, err
 }

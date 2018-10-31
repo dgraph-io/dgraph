@@ -29,6 +29,7 @@ import (
 )
 
 func backupProcess(ctx context.Context, in *pb.BackupRequest) (*pb.BackupResponse, error) {
+	glog.Infof("Backup request: group %d at %d", in.GroupId, in.ReadTs)
 	resp := &pb.BackupResponse{Status: pb.BackupResponse_FAILED}
 	if err := ctx.Err(); err != nil {
 		glog.Errorf("Context error during backup: %v\n", err)
@@ -42,16 +43,12 @@ func backupProcess(ctx context.Context, in *pb.BackupRequest) (*pb.BackupRespons
 		resp.Message = err.Error()
 		return resp, err
 	}
-	glog.Infof("Backup requested at %d.", in.ReadTs)
-
 	// wait for this node to catch-up.
 	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
 		resp.Message = err.Error()
 		return resp, err
 	}
-	glog.Infof("Running backup for group %d at timestamp %d.", in.GroupId, in.ReadTs)
-
-	// process this request
+	// create backup worker and process this request
 	w := &backup.Worker{
 		ReadTs:    in.ReadTs,
 		GroupId:   in.GroupId,
@@ -70,7 +67,7 @@ func backupProcess(ctx context.Context, in *pb.BackupRequest) (*pb.BackupRespons
 // Backup handles a request coming from another node.
 func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest,
 ) (*pb.BackupResponse, error) {
-	glog.Infof("Received backup request via Grpc: %+v\n", req)
+	glog.Infof("Received backup request via Grpc: %+v", req)
 	return backupProcess(ctx, req)
 }
 
@@ -81,13 +78,13 @@ func backupDispatch(ctx context.Context, readTs uint64, target string, gids []ui
 	go func() {
 		glog.Infof("Dispatching backup requests...")
 		for _, gid := range gids {
-			glog.V(3).Infof("Backup dispatch to group %d snapshot at %d", gid, readTs)
+			glog.V(3).Infof("Backup dispatched to group %d snapshot at %d", gid, readTs)
 			in := &pb.BackupRequest{ReadTs: readTs, GroupId: gid, Target: target}
 			// this node is part of the group, process backup.
 			if groups().groupId() == gid {
 				resp, err := backupProcess(ctx, in)
 				if err != nil {
-					glog.Errorf("Error while running backup: %v", err)
+					glog.Errorf("Error while running backup: %s", err)
 				}
 				out <- resp
 				continue
@@ -97,7 +94,7 @@ func backupDispatch(ctx context.Context, readTs uint64, target string, gids []ui
 			c := pb.NewWorkerClient(pl.Get())
 			resp, err := c.Backup(ctx, in)
 			if err != nil {
-				glog.Errorf("Backup error received from group: %d. Error: %v\n", gid, err)
+				glog.Errorf("Backup error group %d: %s", gid, err)
 			}
 			out <- resp
 		}
@@ -110,22 +107,25 @@ func backupDispatch(ctx context.Context, readTs uint64, target string, gids []ui
 func BackupOverNetwork(ctx context.Context, target string) error {
 	// Check that this node can accept requests.
 	if err := x.HealthCheck(); err != nil {
-		glog.Errorf("Backup canceled, not ready to accept requests: %v\n", err)
+		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
 		return err
 	}
 	// Get ReadTs from zero and wait for stream to catch up.
 	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
-		glog.Errorf("Unable to retrieve readonly ts for backup: %v\n", err)
+		glog.Errorf("Unable to retrieve readonly ts for backup: %s", err)
 		return err
 	}
 	readTs := ts.ReadOnly
-	glog.Infof("Got readonly ts from Zero: %d\n", readTs)
-	posting.Oracle().WaitForTs(ctx, readTs)
+	glog.Infof("Got readonly ts from Zero: %d", readTs)
+	if err := posting.Oracle().WaitForTs(ctx, readTs); err != nil {
+		glog.Errorf("Error while waiting for ts: %s", err)
+		return err
+	}
 
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
-	glog.Infof("Requesting backup for groups: %v\n", gids)
+	glog.Infof("Requesting backup for groups: %v", gids)
 
 	// This will dispatch the request to all groups and wait for their response.
 	// If we receive any failures, we cancel the process.
@@ -134,5 +134,6 @@ func BackupOverNetwork(ctx context.Context, target string) error {
 			return x.Errorf("Backup error: %s", resp.Message)
 		}
 	}
+	glog.Infof("Backup done.")
 	return nil
 }

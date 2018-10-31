@@ -30,10 +30,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-const (
-	// MB represents a megabyte.
-	MB = 1 << 20
-)
+const pageSize = 1 << 20 * 4 // 4MB
 
 type kvStream interface {
 	Send(*pb.KVS) error
@@ -119,7 +116,7 @@ func (sl *Lists) produceRanges(ctx context.Context, ts uint64, keyCh chan keyRan
 		}
 
 		size += item.EstimatedSize()
-		if size > 4*MB {
+		if size > pageSize {
 			kr := keyRange{start: start, end: item.KeyCopy(nil)}
 			keyCh <- kr
 			start = item.KeyCopy(nil)
