@@ -137,7 +137,7 @@ func periodicUpdateStats(lc *y.Closer) {
 			inUse := float64(megs)
 
 			stats := lcache.Stats()
-			x.EvictedPls.Set(int64(stats.NumEvicts))
+			x.LcacheEvicts.Set(int64(stats.NumEvicts))
 			x.LcacheSize.Set(int64(stats.Size))
 			x.LcacheLen.Set(int64(stats.Length))
 

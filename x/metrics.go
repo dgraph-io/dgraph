@@ -30,11 +30,11 @@ var (
 	PostingWrites *expvar.Int
 	BytesRead     *expvar.Int
 	BytesWrite    *expvar.Int
-	EvictedPls    *expvar.Int
 	NumQueries    *expvar.Int
 	LcacheHit     *expvar.Int
 	LcacheMiss    *expvar.Int
 	LcacheRace    *expvar.Int
+	LcacheEvicts  *expvar.Int
 
 	// value at particular point of time
 	PendingQueries   *expvar.Int
@@ -66,7 +66,7 @@ func init() {
 	PendingProposals = expvar.NewInt("dgraph_pending_proposals_total")
 	BytesRead = expvar.NewInt("dgraph_read_bytes_total")
 	BytesWrite = expvar.NewInt("dgraph_written_bytes_total")
-	EvictedPls = expvar.NewInt("dgraph_lru_evicted_total")
+	LcacheEvicts = expvar.NewInt("dgraph_lru_evicted_total")
 	PendingQueries = expvar.NewInt("dgraph_pending_queries_total")
 	NumQueries = expvar.NewInt("dgraph_num_queries_total")
 	AlphaHealth = expvar.NewInt("dgraph_alpha_health_status")
@@ -102,6 +102,8 @@ func init() {
 		}
 	}()
 
+	// TODO: prometheus.NewExpvarCollector is not production worthy (see godocs). Use a better
+	// way for exporting Prometheus metrics (like an OpenCensus metrics exporter).
 	expvarCollector := prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
 		"dgraph_lru_hits_total": prometheus.NewDesc(
 			"dgraph_lru_hits_total",
