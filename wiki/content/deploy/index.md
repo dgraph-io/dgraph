@@ -1436,7 +1436,7 @@ The LRU cache metrics let you track on how well the posting list cache is being 
 You can track `dgraph_lru_capacity_bytes`, `dgraph_lru_evicted_total`, and `dgraph_max_list_bytes`
 (see the [Data Metrics]({{< relref "#data-metrics" >}})) to determine if the cache size should be
 adjusted. A high number of evictions can indicate a large posting list that repeatedly is inserted
-and evicted from cache due to insufficient sizing. The LRU cache size can be tuned with the option
+and evicted from the cache due to insufficient sizing. The LRU cache size can be tuned with the option
 `--lru_mb`.
 
  Metrics                     | Description
