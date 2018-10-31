@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/worker/stream"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
@@ -774,8 +775,8 @@ func (n *node) rollupLists(readTs uint64) error {
 	writer := x.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 
-	sl := streamLists{stream: writer, db: pstore}
-	sl.chooseKey = func(item *badger.Item) bool {
+	sl := stream.Lists{Stream: writer, DB: pstore}
+	sl.ChooseKeyFunc = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
 		if pk.IsSchema() {
 			// Skip if schema.

@@ -28,7 +28,6 @@ type Worker struct {
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
 func (w *Worker) Process(ctx context.Context) error {
-	glog.Infof("Backup process beginning ...")
 	c, err := newWriter(w)
 	if err != nil {
 		return err
@@ -45,15 +44,15 @@ func (w *Worker) Process(ctx context.Context) error {
 		return kv, nil
 	}
 
+	glog.Infof("Backup started ...")
 	if err = sl.Orchestrate(ctx, "Backup", w.ReadTs); err != nil {
 		return err
 	}
-
 	glog.Infof("Backup saving ...")
 	if err = c.save(); err != nil {
 		return err
 	}
+	glog.Infof("Backup complete: group %d @ %d", w.GroupId, w.ReadTs)
 
-	glog.Infof("Backup done.")
 	return nil
 }

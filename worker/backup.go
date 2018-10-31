@@ -42,18 +42,18 @@ func backupProcess(ctx context.Context, in *pb.BackupRequest) (*pb.BackupRespons
 		resp.Message = err.Error()
 		return resp, err
 	}
-	glog.Infof("Backup requested at %d.", in.StartTs)
+	glog.Infof("Backup requested at %d.", in.ReadTs)
 
 	// wait for this node to catch-up.
-	if err := posting.Oracle().WaitForTs(ctx, in.StartTs); err != nil {
+	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
 		resp.Message = err.Error()
 		return resp, err
 	}
-	glog.Infof("Running backup for group %d at timestamp %d.", in.GroupId, in.StartTs)
+	glog.Infof("Running backup for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 
 	// process this request
 	w := &backup.Worker{
-		ReadTs:    in.StartTs,
+		ReadTs:    in.ReadTs,
 		GroupId:   in.GroupId,
 		SeqTs:     fmt.Sprint(time.Now().UTC().UnixNano()),
 		TargetURI: in.Target,
@@ -82,7 +82,7 @@ func backupDispatch(ctx context.Context, readTs uint64, target string, gids []ui
 		glog.Infof("Dispatching backup requests...")
 		for _, gid := range gids {
 			glog.V(3).Infof("Backup dispatch to group %d snapshot at %d", gid, readTs)
-			in := &pb.BackupRequest{StartTs: readTs, GroupId: gid, Target: target}
+			in := &pb.BackupRequest{ReadTs: readTs, GroupId: gid, Target: target}
 			// this node is part of the group, process backup.
 			if groups().groupId() == gid {
 				resp, err := backupProcess(ctx, in)

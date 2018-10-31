@@ -445,7 +445,7 @@ message SnapshotMeta {
 }
 
 message BackupRequest {
-	uint64 start_ts = 1;
+	uint64 read_ts = 1;
 	uint32 group_id = 2;
 	string target = 3;
 }
