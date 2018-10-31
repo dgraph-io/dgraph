@@ -267,6 +267,16 @@ message Posting {
 	uint64 commit_ts = 14;  // Meant to use only inmemory
 }
 
+message UidBlock {
+	uint64 base = 1;
+	repeated uint64 deltas = 2;
+}
+
+message UidPack {
+	uint32 block_size        = 1;
+	repeated UidBlock blocks = 2;
+}
+
 message PostingList {
 	repeated Posting postings = 1;
 	bytes checksum = 2;
