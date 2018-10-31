@@ -25,7 +25,7 @@ type writer struct {
 }
 
 func (w *writer) save() error {
-	glog.Infof("Saving backup to: %q", w.file)
+	glog.Infof("Saving: %q", w.file)
 	if err := w.dst.Copy(w.tmp.Name(), w.file); err != nil {
 		return err
 	}
@@ -35,15 +35,13 @@ func (w *writer) save() error {
 }
 
 func (w *writer) cleanup() error {
-	// always remove the temp file
 	defer func() {
 		if err := os.Remove(w.tmp.Name()); err != nil {
 			// let the user know there's baggage left behind. they might have to delete by hand.
-			glog.Errorf("failed to remove temp file %q: %s", w.tmp.Name(), err)
+			glog.Errorf("Failed to remove temp file %q: %s", w.tmp.Name(), err)
 		}
 	}()
-
-	glog.V(3).Info("cleaning up ...")
+	glog.V(3).Info("Backup cleanup ...")
 	if err := w.tmp.Close(); err != nil {
 		return err
 	}
@@ -64,15 +62,14 @@ func newWriter(worker *Worker) (*writer, error) {
 	// we will prepare this file and then copy to dst when done.
 	w.tmp, err = ioutil.TempFile("", dgraphBackupTempPrefix)
 	if err != nil {
-		glog.Errorf("could not create temp file: %s\n", err)
+		glog.Errorf("Failed to create temp file: %s\n", err)
 		return nil, err
 	}
-	glog.V(3).Infof("temp file: %q", w.tmp.Name())
+	glog.V(3).Infof("Backup temp file: %q", w.tmp.Name())
 
-	// file name: 1283719371922.12.3242423938.dgraph-backup
-	w.file = fmt.Sprintf("%s.%d.%d%s",
+	w.file = fmt.Sprintf("%s-g%d-r%d%s",
 		worker.SeqTs, worker.GroupId, worker.ReadTs, dgraphBackupSuffix)
-	glog.V(3).Infof("target file %q", w.file)
+	glog.V(3).Infof("Backup target file name: %q", w.file)
 
 	return &w, err
 }

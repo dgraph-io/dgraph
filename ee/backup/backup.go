@@ -44,15 +44,15 @@ func (w *Worker) Process(ctx context.Context) error {
 		return kv, nil
 	}
 
-	glog.Infof("Backup started ...")
+	glog.V(3).Infof("Backup started ...")
 	if err = sl.Orchestrate(ctx, "Backup", w.ReadTs); err != nil {
 		return err
 	}
-	glog.Infof("Backup saving ...")
+	glog.V(3).Infof("Backup saving ...")
 	if err = c.save(); err != nil {
 		return err
 	}
-	glog.Infof("Backup complete: group %d @ %d", w.GroupId, w.ReadTs)
+	glog.Infof("Backup complete: group %d at %d", w.GroupId, w.ReadTs)
 
 	return nil
 }
