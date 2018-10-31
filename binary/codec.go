@@ -17,6 +17,13 @@ func packBlock(uids []uint64) *pb.UidBlock {
 	return block
 }
 
+// Encode takes in a list of uids and a block size. It would pack these uids into blocks of the
+// given size, with the last block having fewer uids. Within each block, it stores the first uid as
+// base. For each next uid, a delta = uids[i] - uids[i-1] is stored. Protobuf uses Varint encoding,
+// as mentioned here: https://developers.google.com/protocol-buffers/docs/encoding . This ensures
+// that the deltas being considerably smaller than the original uids are nicely packed in fewer
+// bytes. Our benchmarks on artificial data show compressed size to be 13% of the original. This
+// mechanism is a LOT simpler to understand and if needed, debug.
 func Encode(uids []uint64, blockSize int) pb.UidPack {
 	pack := pb.UidPack{BlockSize: uint32(blockSize)}
 	for {
@@ -32,13 +39,15 @@ func Encode(uids []uint64, blockSize int) pb.UidPack {
 	}
 }
 
+// NumUids returns the number of uids stored in a UidPack.
 func NumUids(pack pb.UidPack) int {
 	sz := len(pack.Blocks)
 	lastBlock := pack.Blocks[sz-1]
 	return (sz-1)*int(pack.BlockSize) + len(lastBlock.Deltas) + 1 // We don't store base in deltas.
 }
 
-// Decode would need to do more specific things than just return the array back.
+// Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
+// need to do more specific things than just return the list back.
 func Decode(pack pb.UidPack) []uint64 {
 	uids := make([]uint64, NumUids(pack))
 	uids = uids[:0]
