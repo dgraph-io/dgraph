@@ -47,17 +47,19 @@ func Encode(uids []uint64, blockSize int) pb.UidPack {
 			block := packBlock(uids)
 			pack.Blocks = append(pack.Blocks, block)
 			return pack
-		} else {
-			block := packBlock(uids[:blockSize])
-			pack.Blocks = append(pack.Blocks, block)
-			uids = uids[blockSize:] // Advance.
 		}
+		block := packBlock(uids[:blockSize])
+		pack.Blocks = append(pack.Blocks, block)
+		uids = uids[blockSize:] // Advance.
 	}
 }
 
 // NumUids returns the number of uids stored in a UidPack.
 func NumUids(pack pb.UidPack) int {
 	sz := len(pack.Blocks)
+	if sz == 0 {
+		return 0
+	}
 	lastBlock := pack.Blocks[sz-1]
 	return (sz-1)*int(pack.BlockSize) + len(lastBlock.Deltas) + 1 // We don't store base in deltas.
 }

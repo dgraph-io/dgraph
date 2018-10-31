@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/stretchr/testify/require"
@@ -42,6 +43,11 @@ func getUids(size int) []uint64 {
 
 func TestUidPack(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
+
+	// Some edge case tests.
+	Encode([]uint64{}, 128)
+	require.Equal(t, 0, NumUids(pb.UidPack{}))
+	require.Equal(t, 0, len(Decode(pb.UidPack{})))
 
 	for i := 0; i < 13; i++ {
 		size := rand.Intn(10e6)
