@@ -66,7 +66,6 @@ func init() {
 	PendingProposals = expvar.NewInt("dgraph_pending_proposals_total")
 	BytesRead = expvar.NewInt("dgraph_read_bytes_total")
 	BytesWrite = expvar.NewInt("dgraph_written_bytes_total")
-	LcacheEvicts = expvar.NewInt("dgraph_lru_evicted_total")
 	PendingQueries = expvar.NewInt("dgraph_pending_queries_total")
 	NumQueries = expvar.NewInt("dgraph_num_queries_total")
 	AlphaHealth = expvar.NewInt("dgraph_alpha_health_status")
@@ -81,6 +80,7 @@ func init() {
 	LcacheHit = expvar.NewInt("dgraph_lru_hits_total")
 	LcacheMiss = expvar.NewInt("dgraph_lru_miss_total")
 	LcacheRace = expvar.NewInt("dgraph_lru_race_total")
+	LcacheEvicts = expvar.NewInt("dgraph_lru_evicted_total")
 	LcacheSize = expvar.NewInt("dgraph_lru_size_bytes")
 	LcacheLen = expvar.NewInt("dgraph_lru_keys_total")
 	LcacheCapacity = expvar.NewInt("dgraph_lru_capacity_bytes")
@@ -120,6 +120,26 @@ func init() {
 			"dgraph_lru_race_total",
 			nil, nil,
 		),
+		"dgraph_lru_evicted_total": prometheus.NewDesc(
+			"dgraph_lru_evicted_total",
+			"dgraph_lru_evicted_total",
+			nil, nil,
+		),
+		"dgraph_lru_size_bytes": prometheus.NewDesc(
+			"dgraph_lru_size_bytes",
+			"dgraph_lru_size_bytes",
+			nil, nil,
+		),
+		"dgraph_lru_keys_total": prometheus.NewDesc(
+			"dgraph_lru_keys_total",
+			"dgraph_lru_keys_total",
+			nil, nil,
+		),
+		"dgraph_lru_capacity_bytes": prometheus.NewDesc(
+			"dgraph_lru_capacity_bytes",
+			"dgraph_lru_capacity_bytes",
+			nil, nil,
+		),
 		"dgraph_posting_reads_total": prometheus.NewDesc(
 			"dgraph_posting_reads_total",
 			"dgraph_posting_reads_total",
@@ -155,11 +175,6 @@ func init() {
 			"dgraph_written_bytes_total",
 			nil, nil,
 		),
-		"dgraph_lru_evicted_total": prometheus.NewDesc(
-			"dgraph_lru_evicted_total",
-			"dgraph_lru_evicted_total",
-			nil, nil,
-		),
 		"dgraph_pending_queries_total": prometheus.NewDesc(
 			"dgraph_pending_queries_total",
 			"dgraph_pending_queries_total",
@@ -178,21 +193,6 @@ func init() {
 		"dgraph_dirtymap_keys_total": prometheus.NewDesc(
 			"dgraph_dirtymap_keys_total",
 			"dgraph_dirtymap_keys_total",
-			nil, nil,
-		),
-		"dgraph_lru_size_bytes": prometheus.NewDesc(
-			"dgraph_lru_size_bytes",
-			"dgraph_lru_size_bytes",
-			nil, nil,
-		),
-		"dgraph_lru_keys_total": prometheus.NewDesc(
-			"dgraph_lru_keys_total",
-			"dgraph_lru_keys_total",
-			nil, nil,
-		),
-		"dgraph_lru_capacity_bytes": prometheus.NewDesc(
-			"dgraph_lru_capacity_bytes",
-			"dgraph_lru_capacity_bytes",
 			nil, nil,
 		),
 		"dgraph_goroutines_total": prometheus.NewDesc(
