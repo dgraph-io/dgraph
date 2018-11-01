@@ -25,7 +25,6 @@ import (
 	"math"
 	"sort"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"golang.org/x/net/trace"
@@ -233,7 +232,7 @@ func (l *List) SetForDeletion() bool {
 	l.RLock()
 	defer l.RUnlock()
 	for _, plist := range l.mutationMap {
-		if plist.Commit == 0 {
+		if plist.CommitTs == 0 {
 			return false
 		}
 	}
@@ -369,14 +368,8 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 		mpost.Uid = t.ValueId
 	}
 
-	t1 := time.Now()
 	l.updateMutationLayer(mpost)
 	atomic.AddInt32(&l.estimatedSize, int32(mpost.Size()+16 /* various overhead */))
-	if dur := time.Since(t1); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mutationMap), len(l.plist.Uids))
-		}
-	}
 	txn.AddKeys(string(l.key), conflictKey)
 	return nil
 }
@@ -418,7 +411,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	}
 
 	// We have a valid commit.
-	plist.Commit = commitTs
+	plist.CommitTs = commitTs
 	for _, mpost := range plist.Postings {
 		mpost.CommitTs = commitTs
 	}
@@ -435,7 +428,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	// memory, to make it available for transactions. So, all we need to do here
 	// is to roll them up periodically.
 
-	numUids := (bp128.NumIntegers(l.plist.Uids) * 15) / 100
+	numUids := (codec.ApproxLen(l.plist.Pack) * 15) / 100
 	if numUids < 1000 {
 		numUids = 1000
 	}
@@ -467,7 +460,7 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	defer l.RUnlock()
 	var conflicts []uint64
 	for ts, pl := range l.mutationMap {
-		if pl.Commit > 0 {
+		if pl.CommitTs > 0 {
 			continue
 		}
 		if ts < readTs {
@@ -496,7 +489,7 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 	var posts []*pb.Posting
 	for startTs, plist := range l.mutationMap {
 		// Pick up the transactions which are either committed, or the one which is ME.
-		effectiveTs := effective(startTs, plist.Commit)
+		effectiveTs := effective(startTs, plist.CommitTs)
 		if effectiveTs > deleteBelow {
 			// We're above the deleteBelow marker. We wouldn't reach here if effectiveTs is zero.
 			for _, mpost := range plist.Postings {
@@ -611,7 +604,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 func (l *List) IsEmpty() bool {
 	l.RLock()
 	defer l.RUnlock()
-	return len(l.plist.Uids) == 0 && len(l.mutationMap) == 0
+	return len(l.plist.Pack.GetBlocks()) == 0 && len(l.mutationMap) == 0
 }
 
 func (l *List) length(readTs, afterUid uint64) int {
@@ -704,7 +697,7 @@ func (l *List) rollup() error {
 	// Keep all uncommited Entries or postings with commitTs > l.commitTs
 	// in mutation map. Discard all else.
 	for startTs, plist := range l.mutationMap {
-		cl := plist.Commit
+		cl := plist.CommitTs
 		if cl == 0 || cl > l.commitTs {
 			// Keep this.
 		} else {
@@ -722,7 +715,7 @@ func (l *List) rollup() error {
 func (l *List) hasPendingTxn() bool {
 	l.AssertRLock()
 	for _, pl := range l.mutationMap {
-		if pl.Commit == 0 {
+		if pl.CommitTs == 0 {
 			return true
 		}
 	}
@@ -736,7 +729,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
 	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, len(l.mutationMap)+bp128.NumIntegers(l.plist.Uids))
+	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
 	if len(l.mutationMap) == 0 && opt.Intersect != nil {
 		if opt.ReadTs < l.minTs {

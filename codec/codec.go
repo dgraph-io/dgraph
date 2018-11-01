@@ -19,6 +19,7 @@ package codec
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -70,29 +71,39 @@ func (e *Encoder) Done() *pb.UidPack {
 type Decoder struct {
 	Pack     *pb.UidPack
 	blockIdx int
+	uids     []uint64
 }
 
 func (d *Decoder) unpackBlock() []uint64 {
-	if d.blockIdx >= len(d.Pack.Blocks) {
-		return []uint64{}
+	if cap(d.uids) == 0 {
+		d.uids = make([]uint64, 0, d.Pack.BlockSize)
+	} else {
+		d.uids = d.uids[:0]
 	}
 
-	uids := make([]uint64, 0, d.Pack.BlockSize)
+	if d.blockIdx >= len(d.Pack.Blocks) {
+		return d.uids
+	}
 	block := d.Pack.Blocks[d.blockIdx]
 
 	last := block.Base
-	uids = append(uids, last)
+	d.uids = append(d.uids, last)
 
+	// Read back the encoded varints.
 	var offset int
 	for offset < len(block.Deltas) {
 		delta, n := binary.Uvarint(block.Deltas[offset:])
 		x.AssertTrue(n > 0)
 		offset += n
 		uid := last + delta
-		uids = append(uids, uid)
+		d.uids = append(d.uids, uid)
 		last = uid
 	}
-	return uids
+	return d.uids
+}
+
+func (d *Decoder) ApproxLen() int {
+	return int(d.Pack.BlockSize) * (len(d.Pack.Blocks) - d.blockIdx)
 }
 
 func (d *Decoder) Seek(uid uint64) []uint64 {
@@ -121,19 +132,60 @@ func (d *Decoder) Seek(uid uint64) []uint64 {
 	// Either the idx = len(pack.Blocks) that means it wasn't found in any of the block's base. Or,
 	// we found the first block index whose base is greater than uid. In these cases, go to the
 	// previous block and search there.
-	d.blockIdx = idx - 1    // Move to the previous block. If blockIdx<0, unpack will deal with it.
-	uids := d.unpackBlock() // And get all their uids.
+	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
+	d.unpackBlock()      // And get all their uids.
 
 	// uidx points to the first uid in the uid list, which is >= uid.
-	uidx := sort.Search(len(uids), func(i int) bool {
-		return uids[i] >= uid
+	uidx := sort.Search(len(d.uids), func(i int) bool {
+		return d.uids[i] >= uid
 	})
-	if uidx < len(uids) { // Found an entry in uids, which >= uid.
-		return uids[uidx:]
+	if uidx < len(d.uids) { // Found an entry in uids, which >= uid.
+		d.uids = d.uids[uidx:]
+		return d.uids
 	}
 	// Could not find any uid in the block, which is >= uid. The next block might still have valid
 	// entries > uid.
 	return d.Next()
+}
+
+// Uids are owned by the Decoder, and the slice contents would be changed on the next call. They
+// should be copied if passed around.
+func (d *Decoder) Uids() []uint64 {
+	return d.uids
+}
+
+func (d *Decoder) LinearSeek(seek uint64) []uint64 {
+	prev := d.blockIdx
+	for {
+		v := d.PeekNextBase()
+		if seek <= v {
+			break
+		}
+		d.blockIdx++
+	}
+	if d.blockIdx == prev {
+		// The seek id is <= base of next block. But, we have already searched this
+		// block. So, let's move to the next block anyway.
+		return d.Next()
+	}
+	return d.unpackBlock()
+}
+
+func (d *Decoder) PeekNextBase() uint64 {
+	bidx := d.blockIdx + 1
+	if bidx < len(d.Pack.Blocks) {
+		return d.Pack.Blocks[bidx].Base
+	}
+	return math.MaxUint64
+}
+
+func (d *Decoder) Skip() {
+	d.blockIdx++
+	d.uids = d.uids[:0]
+}
+
+func (d *Decoder) Valid() bool {
+	return d.blockIdx < len(d.Pack.Blocks)
 }
 
 func (d *Decoder) Next() []uint64 {
@@ -159,6 +211,9 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 // ApproxNum would indicate the total number of UIDs in the pack. Can be used for int slice
 // allocations.
 func ApproxLen(pack *pb.UidPack) int {
+	if pack == nil {
+		return 0
+	}
 	return len(pack.Blocks) * int(pack.BlockSize)
 }
 

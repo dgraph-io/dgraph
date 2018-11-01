@@ -22,7 +22,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
 )
@@ -301,7 +301,7 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 		v := newList(v1)
 		dst1 := &pb.List{}
 		dst2 := &pb.List{}
-		compressedUids := bp128.DeltaPack(u1)
+		compressedUids := codec.Encode(u1, 256)
 
 		b.Run(fmt.Sprintf(":size=%d:overlap=%.2f:", arrSz, overlap),
 			func(b *testing.B) {
@@ -366,10 +366,10 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			v := &pb.List{Uids: v1}
 			dst1 := &pb.List{}
 			dst2 := &pb.List{}
-			compressedUids := bp128.DeltaPack(v1)
+			compressedUids := codec.Encode(v1, 256)
 
 			fmt.Printf("len: %d, compressed: %d, bytes/int: %f\n",
-				len(v1), len(compressedUids), float64(len(compressedUids))/float64(len(v1)))
+				len(v1), compressedUids.Size(), float64(compressedUids.Size())/float64(len(v1)))
 			b.Run(fmt.Sprintf(":IntersectWith:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
