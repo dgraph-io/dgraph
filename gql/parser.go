@@ -543,7 +543,25 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 	}
 
+	if err := validateResult(&res); err != nil {
+		return res, err
+	}
+
 	return res, nil
+}
+
+func validateResult(res *Result) error {
+	seenQueryAliases := make(map[string]bool)
+	for _, q := range res.Query {
+		if q.Alias == "var" || q.Alias == "shortest" {
+			continue
+		}
+		if _, found := seenQueryAliases[q.Alias]; found {
+			return x.Errorf("Duplicate aliases not allowed: %v", q.Alias)
+		}
+		seenQueryAliases[q.Alias] = true
+	}
+	return nil
 }
 
 func flatten(vl []*Vars) (needs []string, defines []string) {
