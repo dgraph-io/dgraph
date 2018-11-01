@@ -33,6 +33,18 @@ Dgraph by default doesn't collect the block profile. Dgraph must be started with
 go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/block
 ```
 
+## Using the `dgraph debug` tool
+
+The `dgraph debug` tool is useful to inspect the posting list structure stored in Badger in Dgraph's
+p directory. Some scenarios where the debug tool is useful:
+
+- Verify that mutations committed to Dgraph are indeed persisted to disk.
+- Verify that the correct indices are created.
+- Inspect the history of a posting list.
+
+Let's go over an example of using the debug tool with a Dgraph p directory that
+loaded the 1-million movie data set. We want to double check that the
+
 ## Giving Nodes a Type
 
 It's often useful to give the nodes in a graph *types* (also commonly referred
