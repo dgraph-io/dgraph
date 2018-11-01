@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -74,11 +74,13 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 	txn := c.db.NewTransactionAt(c.state.writeTs, true)
 	for count, uids := range counts {
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
+
+		pack := codec.Encode(uids, 256)
+		data, err := pack.Marshal()
+		x.Check(err)
 		x.Check(txn.SetWithMeta(
 			x.CountKey(pred, uint32(count), rev),
-			bp128.DeltaPack(uids),
-			posting.BitCompletePosting|posting.BitUidPosting,
-		))
+			data, posting.BitCompletePosting))
 	}
 	x.Check(txn.CommitAt(c.state.writeTs, nil))
 	c.wg.Done()

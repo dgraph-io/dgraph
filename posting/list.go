@@ -36,8 +36,8 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/binary"
 	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -99,7 +99,7 @@ type PIterator struct {
 	pidx       int // index of postings
 	plen       int
 
-	dec  *binary.Decoder
+	dec  *codec.Decoder
 	uids []uint64
 	uidx int // Offset into the uids slice
 }
@@ -108,7 +108,7 @@ func (it *PIterator) Init(pl *pb.PostingList, afterUid uint64) {
 	it.pl = pl
 	it.uidPosting = &pb.Posting{}
 
-	it.dec = &binary.Decoder{Pack: pl.Pack}
+	it.dec = &codec.Decoder{Pack: pl.Pack}
 	it.uids = it.dec.Seek(afterUid)
 	it.uidx = 0
 
@@ -682,7 +682,7 @@ func (l *List) rollup() error {
 	x.AssertTrue(l.minTs <= l.commitTs)
 
 	final := new(pb.PostingList)
-	enc := binary.Encoder{BlockSize: blockSize}
+	enc := codec.Encoder{BlockSize: blockSize}
 
 	err := l.iterate(l.commitTs, 0, func(p *pb.Posting) error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.

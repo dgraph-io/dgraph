@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"sync/atomic"
 
-	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -64,15 +64,10 @@ func (r *reducer) reduce(job shuffleOutput) {
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
 		meta := posting.BitCompletePosting
-		if len(pl.Postings) == 0 {
-			meta |= posting.BitUidPosting
-			txn.SetWithMeta(currentKey, bp128.DeltaPack(uids), meta)
-		} else {
-			pl.Uids = bp128.DeltaPack(uids)
-			val, err := pl.Marshal()
-			x.Check(err)
-			txn.SetWithMeta(currentKey, val, meta)
-		}
+		pl.Pack = codec.Encode(uids, 256)
+		val, err := pl.Marshal()
+		x.Check(err)
+		txn.SetWithMeta(currentKey, val, meta)
 
 		uids = uids[:0]
 		pl.Reset()
