@@ -17,9 +17,12 @@
 package binary
 
 import (
+	"bytes"
+	"encoding/binary"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type Encoder struct {
@@ -34,10 +37,17 @@ func (e *Encoder) packBlock() {
 	}
 	block := &pb.UidBlock{Base: e.uids[0]}
 	last := e.uids[0]
+
+	count := 1
+	var out bytes.Buffer
+	var buf [binary.MaxVarintLen64]byte
 	for _, uid := range e.uids[1:] {
-		block.Deltas = append(block.Deltas, uid-last)
+		n := binary.PutUvarint(buf[:], uid-last)
+		x.Check2(out.Write(buf[:n]))
 		last = uid
+		count++
 	}
+	block.Deltas = out.Bytes()
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
 
@@ -72,7 +82,12 @@ func (d *Decoder) unpackBlock() []uint64 {
 
 	last := block.Base
 	uids = append(uids, last)
-	for _, delta := range block.Deltas {
+
+	var offset int
+	for offset < len(block.Deltas) {
+		delta, n := binary.Uvarint(block.Deltas[offset:])
+		x.AssertTrue(n > 0)
+		offset += n
 		uid := last + delta
 		uids = append(uids, uid)
 		last = uid
@@ -141,20 +156,36 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 	return enc.Done()
 }
 
-// NumUids returns the number of uids stored in a UidPack.
-func NumUids(pack *pb.UidPack) int {
-	sz := len(pack.Blocks)
+// ApproxNum would indicate the total number of UIDs in the pack. Can be used for int slice
+// allocations.
+func ApproxNum(pack *pb.UidPack) int {
+	return len(pack.Blocks) * int(pack.BlockSize)
+}
+
+// ExactNum would calculate the total number of UIDs. Instead of using a UidPack, it accepts blocks,
+// so we can calculate the number of uids after a seek.
+func ExactNum(blockSize uint32, blocks []*pb.UidBlock) int {
+	sz := len(blocks)
 	if sz == 0 {
 		return 0
 	}
-	lastBlock := pack.Blocks[sz-1]
-	return (sz-1)*int(pack.BlockSize) + len(lastBlock.Deltas) + 1 // We don't store base in deltas.
+	block := blocks[sz-1]
+	num := 1 // Count the base.
+	for _, b := range block.Deltas {
+		// If the MSB in varint encoding is zero, then it is the final byte, not a continuation of
+		// the integer. Thus, we can count it as one delta.
+		if b&0x80 == 0 {
+			num++
+		}
+	}
+	num += (sz - 1) * int(blockSize)
+	return num
 }
 
 // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
 // need to do more specific things than just return the list back.
 func Decode(pack *pb.UidPack, seek uint64) []uint64 {
-	uids := make([]uint64, 0, NumUids(pack))
+	uids := make([]uint64, 0, ApproxNum(pack))
 	dec := Decoder{Pack: pack}
 
 	for block := dec.Seek(seek); len(block) > 0; block = dec.Next() {

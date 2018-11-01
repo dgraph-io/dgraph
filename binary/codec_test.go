@@ -46,7 +46,7 @@ func TestUidPack(t *testing.T) {
 
 	// Some edge case tests.
 	Encode([]uint64{}, 128)
-	require.Equal(t, 0, NumUids(&pb.UidPack{}))
+	require.Equal(t, 0, ApproxNum(&pb.UidPack{}))
 	require.Equal(t, 0, len(Decode(&pb.UidPack{}, 0)))
 
 	for i := 0; i < 13; i++ {
@@ -61,7 +61,7 @@ func TestUidPack(t *testing.T) {
 		for _, block := range pack.Blocks {
 			require.True(t, len(block.Deltas) <= 255)
 		}
-		require.Equal(t, len(expected), NumUids(pack))
+		require.Equal(t, len(expected), ExactNum(pack.BlockSize, pack.Blocks))
 		actual := Decode(pack, 0)
 		require.Equal(t, expected, actual)
 	}
@@ -91,6 +91,7 @@ func TestDecoder(t *testing.T) {
 		start := i/3 - 1
 		actual := Decode(pack, uint64(i))
 		require.Equal(t, expected[start:], actual)
+
 	}
 }
 
