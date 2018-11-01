@@ -70,12 +70,13 @@ func init() {
 	flag.Int("shufflers", 1,
 		"Number of shufflers to run concurrently. Increasing this can improve performance, and "+
 			"must be less than or equal to the number of reduce shards.")
+    flag.Int("workers", 1, "Number of distributed bulkloader machines")
 	flag.Bool("version", false, "Prints the version of dgraph-bulk-loader.")
 	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
 	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
 	// TODO: Potentially move http server to main.
-	flag.String("http", "localhost:8080",
-		"Address to serve http (pprof).")
+	flag.String("http", "localhost:8080", "Address to serve HTTP (pprof).")
+    flag.String("grpc", "localhost:7080", "Address to serve internal gRPC.")
 	flag.Bool("ignore_errors", false, "ignore line parsing errors in rdf files")
 	flag.Int("map_shards", 1,
 		"Number of map output shards. Must be greater than or equal to the number of reduce "+
@@ -85,7 +86,22 @@ func init() {
 		"Number of reduce shards. This determines the number of dgraph instances in the final "+
 			"cluster. Increasing this potentially decreases the reduce stage runtime by using "+
 			"more parallelism, but increases memory usage.")
+    flag.Bool("master", false, "Coordinate the distributed bulkloaders.")
 }
+
+// TODO Turn the bulk command into a "live"-like command where other machines can connect to a
+// master node for message passing. Wait for all bulk machines to connect before starting the bulk
+// loading process
+// TODO distribute the Xidmap over all machines running the bulkloader
+// TODO implement batched XID->UID mapping requests through gRPC to other machines
+// TODO figure out design for the shufflers and reducers to be distributed (should be easy)
+// TODO Figure out machine discovery and/or orchestration. Test with things like Docker Swarm,
+// Kubernetes, etc.
+// TODO figure out how predicate sharding relates to all of this
+// TODO benchmark different configurations of batch size, etc. to see which number is optimal for
+// large-ish RDF datasets
+// TODO figure out how the data output shards will be distributed across all the machines and how to
+// consolidate them back so that each "reduce shard" can correspond correctly to one server
 
 func run() {
 	opt := options{
@@ -99,10 +115,13 @@ func run() {
 		SkipMapPhase:  Bulk.Conf.GetBool("skip_map_phase"),
 		CleanupTmp:    Bulk.Conf.GetBool("cleanup_tmp"),
 		NumShufflers:  Bulk.Conf.GetInt("shufflers"),
+        NumWorkers:    Bulk.Conf.GetInt("workers"),
 		Version:       Bulk.Conf.GetBool("version"),
 		StoreXids:     Bulk.Conf.GetBool("store_xids"),
 		ZeroAddr:      Bulk.Conf.GetString("zero"),
 		HttpAddr:      Bulk.Conf.GetString("http"),
+        GrpcAddr:      Bulk.Conf.GetString("grpc"),
+        IsMaster:      Bulk.Conf.GetBool("master"),
 		IgnoreErrors:  Bulk.Conf.GetBool("ignore_errors"),
 		MapShards:     Bulk.Conf.GetInt("map_shards"),
 		ReduceShards:  Bulk.Conf.GetInt("reduce_shards"),
@@ -128,17 +147,32 @@ func run() {
 		os.Exit(1)
 	}
 
-	opt.MapBufSize <<= 20 // Convert from MB to B.
+    // Convert from MB to B.
+	opt.MapBufSize <<= 20
 
+    // print all the manually specified and default loader options
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")
 	x.Check(err)
 	fmt.Println(string(optBuf))
 
-	maxOpenFilesWarning()
-
 	go func() {
 		log.Fatal(http.ListenAndServe(opt.HttpAddr, nil))
 	}()
+
+    // Set up the gRPC connections require to coordinate the shared XID->UID map
+    if opt.IsMaster {
+        fmt.Println("HELLO IM THE MASTER")
+        x.PrintVersion()
+        os.Exit(0)
+    } else {
+
+    }
+
+    // TODO make everything below this as part of the startup process after all workers have
+    // connected to the master bulkloader
+    // ---------------------------------------------
+
+    maxOpenFilesWarning()
 
 	// Delete and recreate the output dirs to ensure they are empty.
 	x.Check(os.RemoveAll(opt.DgraphsDir))
@@ -160,6 +194,10 @@ func run() {
 	loader := newLoader(opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()
+
+        // TODO siva
+        fmt.Println("Temporarily stopping program for debug NOW")
+        os.Exit(0)
 		mergeMapShardsIntoReduceShards(opt)
 	}
 	loader.reduceStage()

@@ -138,12 +138,14 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool) {
 	sh.Lock()
 	defer sh.Unlock()
 
+    // Check if the XID exists in the LRU cache map
 	var ok bool
 	uid, ok = sh.lookup(xid)
 	if ok {
 		return uid, false
 	}
 
+    // Check if the XID exists in the Badger
 	x.Check(m.kv.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(xid))
 		if err == badger.ErrKeyNotFound {
@@ -159,11 +161,14 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool) {
 			return nil
 		})
 	}))
+
+    // If found in the Badger, add it to the LRU cache
 	if ok {
 		sh.add(xid, uid, true)
 		return uid, false
 	}
 
+    // Otherwise, it's a brand new XID, so we need to assign a UID to it
 	uid = sh.assign(m.newRanges)
 	sh.add(xid, uid, false)
 	return uid, true

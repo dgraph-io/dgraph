@@ -436,6 +436,24 @@ service Worker {
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 }
 
+// TODO SIVA BULK STUFF  --------------------
+
+message BulkXid {
+	bytes xid = 1;
+}
+
+message BulkUid {
+  fixed64 uid = 1;
+}
+
+service Bulk {
+  rpc Connect (BulkConnectionRequest) returns (BulkConnectionResponse) {}
+	rpc Start (Void) returns (Void) {}
+  rpc XidmapStream (stream BulkXid) returns (stream BulkUid) {}
+}
+
+// -------------------------
+
 message Num {
 	uint64 val = 1;
 	bool read_only = 2;

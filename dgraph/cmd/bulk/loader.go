@@ -51,11 +51,14 @@ type options struct {
 	SkipMapPhase  bool
 	CleanupTmp    bool
 	NumShufflers  int
+    NumWorkers    int
 	Version       bool
 	StoreXids     bool
 	ZeroAddr      string
 	HttpAddr      string
+    GrpcAddr      string
 	IgnoreErrors  bool
+    IsMaster      bool
 
 	MapShards    int
 	ReduceShards int
@@ -272,6 +275,7 @@ func (ld *loader) mapStage() {
 	}
 	ld.xids.EvictAll()
 	x.Check(ld.xidDB.Close())
+
 	ld.xids = nil
 	runtime.GC()
 }
