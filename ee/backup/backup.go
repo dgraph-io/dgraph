@@ -13,6 +13,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
 )
 

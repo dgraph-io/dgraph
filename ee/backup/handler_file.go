@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
 )
 

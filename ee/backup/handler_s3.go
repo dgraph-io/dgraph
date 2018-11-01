@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
 	minio "github.com/minio/minio-go"
 )

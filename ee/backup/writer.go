@@ -11,10 +11,10 @@ import (
 	"net/url"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+
 	"github.com/golang/glog"
 )
 
-const dgraphBackupTempPrefix = "dgraph-backup-*"
 const dgraphBackupSuffix = ".dgraph-backup"
 
 // writer handles the writes from stream.Orchestrate. It implements the kvStream interface.
