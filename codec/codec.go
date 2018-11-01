@@ -217,14 +217,17 @@ func ApproxLen(pack *pb.UidPack) int {
 	return len(pack.Blocks) * int(pack.BlockSize)
 }
 
-// ExactNum would calculate the total number of UIDs. Instead of using a UidPack, it accepts blocks,
+// ExactLen would calculate the total number of UIDs. Instead of using a UidPack, it accepts blocks,
 // so we can calculate the number of uids after a seek.
-func ExactLen(blockSize uint32, blocks []*pb.UidBlock) int {
-	sz := len(blocks)
+func ExactLen(pack *pb.UidPack) int {
+	if pack == nil {
+		return 0
+	}
+	sz := len(pack.Blocks)
 	if sz == 0 {
 		return 0
 	}
-	block := blocks[sz-1]
+	block := pack.Blocks[sz-1]
 	num := 1 // Count the base.
 	for _, b := range block.Deltas {
 		// If the MSB in varint encoding is zero, then it is the final byte, not a continuation of
@@ -233,7 +236,7 @@ func ExactLen(blockSize uint32, blocks []*pb.UidBlock) int {
 			num++
 		}
 	}
-	num += (sz - 1) * int(blockSize)
+	num += (sz - 1) * int(pack.BlockSize)
 	return num
 }
 

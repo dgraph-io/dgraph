@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -99,29 +100,20 @@ func history(lookup []byte, itr *badger.Iterator) {
 			}
 		}
 		if meta&posting.BitCompletePosting > 0 {
-			switch {
-			// case meta&posting.BitUidPosting > 0:
-			// 	var bi bp128.BPackIterator
-			// 	bi.Init(val, 0)
-			// 	var uids []uint64
-			// 	uids = append(uids, bi.Uids()...)
-			// 	for bi.StartIdx() < bi.Length() {
-			// 		bi.Next()
-			// 		if !bi.Valid() {
-			// 			break
-			// 		}
-			// 		uids = append(uids, bi.Uids()...)
-			// 	}
-			// 	fmt.Fprintf(&buf, " Num uids = %d\n", len(uids))
-			// 	for _, uid := range uids {
-			// 		fmt.Fprintf(&buf, " Uid = %d\n", uid)
-			// 	}
-			default:
-				var plist pb.PostingList
-				x.Check(plist.Unmarshal(val))
-				for _, p := range plist.Postings {
-					buf.WriteString(p.String())
-					buf.WriteString("\n")
+			var plist pb.PostingList
+			x.Check(plist.Unmarshal(val))
+
+			for _, p := range plist.Postings {
+				buf.WriteString(p.String())
+				buf.WriteString("\n")
+			}
+
+			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
+				codec.ExactLen(plist.Pack), plist.Pack.Size())
+			dec := codec.Decoder{Pack: plist.Pack}
+			for uids := dec.Seek(0); len(uids) > 0; uids = dec.Next() {
+				for _, uid := range uids {
+					fmt.Fprintf(&buf, " Uid = %d\n", uid)
 				}
 			}
 		}
