@@ -36,7 +36,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -744,7 +743,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			l.RUnlock()
 			return out, ErrTsTooOld
 		}
-		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)
+		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUID, opt.Intersect, out)
 		l.RUnlock()
 		return out, nil
 	}

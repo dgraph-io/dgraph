@@ -158,13 +158,13 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 
 // ApproxNum would indicate the total number of UIDs in the pack. Can be used for int slice
 // allocations.
-func ApproxNum(pack *pb.UidPack) int {
+func ApproxLen(pack *pb.UidPack) int {
 	return len(pack.Blocks) * int(pack.BlockSize)
 }
 
 // ExactNum would calculate the total number of UIDs. Instead of using a UidPack, it accepts blocks,
 // so we can calculate the number of uids after a seek.
-func ExactNum(blockSize uint32, blocks []*pb.UidBlock) int {
+func ExactLen(blockSize uint32, blocks []*pb.UidBlock) int {
 	sz := len(blocks)
 	if sz == 0 {
 		return 0
@@ -185,7 +185,7 @@ func ExactNum(blockSize uint32, blocks []*pb.UidBlock) int {
 // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
 // need to do more specific things than just return the list back.
 func Decode(pack *pb.UidPack, seek uint64) []uint64 {
-	uids := make([]uint64, 0, ApproxNum(pack))
+	uids := make([]uint64, 0, ApproxLen(pack))
 	dec := Decoder{Pack: pack}
 
 	for block := dec.Seek(seek); len(block) > 0; block = dec.Next() {
