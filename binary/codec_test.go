@@ -46,8 +46,8 @@ func TestUidPack(t *testing.T) {
 
 	// Some edge case tests.
 	Encode([]uint64{}, 128)
-	require.Equal(t, 0, NumUids(pb.UidPack{}))
-	require.Equal(t, 0, len(Decode(pb.UidPack{})))
+	require.Equal(t, 0, NumUids(&pb.UidPack{}))
+	require.Equal(t, 0, len(Decode(&pb.UidPack{})))
 
 	for i := 0; i < 13; i++ {
 		size := rand.Intn(10e6)

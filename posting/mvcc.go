@@ -155,14 +155,7 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 			// empty pl
 			return nil
 		}
-		// Found complete pl, no needn't iterate more
-		if item.UserMeta()&BitUidPosting != 0 {
-			plist.Uids = make([]byte, len(val))
-			copy(plist.Uids, val)
-		} else if len(val) > 0 {
-			x.Check(plist.Unmarshal(val))
-		}
-		return nil
+		return plist.Unmarshal(val)
 	})
 }
 

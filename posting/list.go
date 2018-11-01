@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/binary"
 	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -64,7 +65,6 @@ const (
 	Del uint32 = 0x02
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
-	BitUidPosting      byte = 0x01
 	BitDeltaPosting    byte = 0x04
 	BitCompletePosting byte = 0x08
 	BitEmptyPosting    byte = 0x10 | BitCompletePosting
@@ -668,40 +668,32 @@ func (l *List) MarshalToKv() (*pb.KV, error) {
 }
 
 func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
-	if len(plist.Uids) == 0 {
-		data = nil
-		meta |= BitEmptyPosting
-	} else if len(plist.Postings) > 0 {
-		var err error
-		data, err = plist.Marshal()
-		x.Checkf(err, "Unable to marshal posting list")
-	} else {
-		data = plist.Uids
-		meta = BitUidPosting
+	if plist.Pack == nil {
+		return nil, BitEmptyPosting
 	}
-	meta |= BitCompletePosting
-	return
+	data, err := plist.Marshal()
+	x.Check(err)
+	return data, BitCompletePosting
 }
+
+const blockSize int = 256
 
 // Merge all entries in mutation layer with commitTs <= l.commitTs
 // into immutable layer.
 func (l *List) rollup() error {
 	l.AssertLock()
-	final := new(pb.PostingList)
-	var bp bp128.BPackEncoder
-	uids := make([]uint64, 0, bp128.BlockSize)
 
 	// Pick all committed entries
 	x.AssertTrue(l.minTs <= l.commitTs)
+
+	final := new(pb.PostingList)
+	enc := binary.Encoder{BlockSize: blockSize}
+
 	err := l.iterate(l.commitTs, 0, func(p *pb.Posting) error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
 		// So, we don't need to do any filtering here. In fact, doing filtering here could result
 		// in a bug.
-		uids = append(uids, p.Uid)
-		if len(uids) == bp128.BlockSize {
-			bp.PackAppend(uids)
-			uids = uids[:0]
-		}
+		enc.Add(p.Uid)
 
 		// We want to add the posting if it has facets or has a value.
 		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
@@ -713,15 +705,8 @@ func (l *List) rollup() error {
 		return nil
 	})
 	x.Check(err)
-	if len(uids) > 0 {
-		bp.PackAppend(uids)
-	}
-	sz := bp.Size()
-	if sz > 0 {
-		final.Uids = make([]byte, sz)
-		// TODO: Add bytes method
-		bp.WriteTo(final.Uids)
-	}
+	final.Pack = enc.Done()
+
 	// Keep all uncommited Entries or postings with commitTs > l.commitTs
 	// in mutation map. Discard all else.
 	for startTs, plist := range l.mutationMap {
@@ -748,17 +733,6 @@ func (l *List) hasPendingTxn() bool {
 		}
 	}
 	return false
-}
-
-// Copies the val if it's uid only posting, be careful
-func UnmarshalOrCopy(val []byte, metadata byte, pl *pb.PostingList) {
-	if metadata == BitUidPosting {
-		buf := make([]byte, len(val))
-		copy(buf, val)
-		pl.Uids = buf
-	} else if val != nil {
-		x.Checkf(pl.Unmarshal(val), "Unable to Unmarshal PostingList from store")
-	}
 }
 
 // Uids returns the UIDs given some query params.
