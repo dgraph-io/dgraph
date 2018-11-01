@@ -6,81 +6,86 @@
 package backup
 
 import (
+	"encoding/binary"
 	"fmt"
-	"io/ioutil"
-	"os"
+	"net/url"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
-	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 )
 
 const dgraphBackupTempPrefix = "dgraph-backup-*"
 const dgraphBackupSuffix = ".dgraph-backup"
 
+// writer handles the writes from stream.Orchestrate. It implements the kvStream interface.
 type writer struct {
+	h    handler
 	file string
-	dst  handler
-	tmp  *os.File
 }
 
-func (w *writer) save() error {
-	glog.Infof("Saving: %q", w.file)
-	if err := w.dst.Copy(w.tmp.Name(), w.file); err != nil {
-		return err
-	}
-	glog.V(3).Infof("copied %q to %q on target ...", w.tmp.Name(), w.file)
-	// we are done done, cleanup.
-	return w.cleanup()
-}
-
-func (w *writer) cleanup() error {
-	defer func() {
-		if err := os.Remove(w.tmp.Name()); err != nil {
-			// let the user know there's baggage left behind. they might have to delete by hand.
-			glog.Errorf("Failed to remove temp file %q: %s", w.tmp.Name(), err)
-		}
-	}()
-	glog.V(3).Info("Backup cleanup ...")
-	if err := w.tmp.Close(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func newWriter(worker *Worker) (*writer, error) {
-	var w writer
-	var err error
-
-	// dst is the final destination for data.
-	w.dst, err = getSchemeHandler(worker.TargetURI)
+// newWriter parses the requested target URI, finds a handler and then tries to create a session.
+// Target URI format:
+//   [scheme]://[host]/[path]?[args]
+//
+// Target URI parts:
+//   scheme - service handler, one of: "s3", "gs", "az", "http", "file"
+//     host - remote address. ex: "dgraph.s3.amazonaws.com"
+//     path - directory, bucket or container at target. ex: "/dgraph/backups/"
+//     args - specific arguments that are ok to appear in logs.
+//
+// Examples:
+//   s3://dgraph.s3.amazonaws.com/dgraph/backups?useSSL=1
+//   gs://dgraph/backups/
+//   as://dgraph-container/backups/
+//   http://backups.dgraph.io/upload
+//   file:///tmp/dgraph/backups or /tmp/dgraph/backups
+func newWriter(r *Request) (*writer, error) {
+	u, err := url.Parse(r.TargetURI)
 	if err != nil {
 		return nil, err
 	}
-
-	// tmp file is our main working file.
-	// we will prepare this file and then copy to dst when done.
-	w.tmp, err = ioutil.TempFile("", dgraphBackupTempPrefix)
+	// find handler for this URI scheme
+	h, err := getHandler(u.Scheme)
 	if err != nil {
-		glog.Errorf("Failed to create temp file: %s\n", err)
 		return nil, err
 	}
-	glog.V(3).Infof("temp file: %q", w.tmp.Name())
+	f := fmt.Sprintf("%s-g%d-r%d%s", r.UnixTs, r.GroupId, r.ReadTs, dgraphBackupSuffix)
+	glog.V(3).Infof("target file: %q", f)
 
-	w.file = fmt.Sprintf("%s-g%d-r%d%s",
-		worker.SeqTs, worker.GroupId, worker.ReadTs, dgraphBackupSuffix)
-	glog.V(3).Infof("target file name: %q", w.file)
+	// create session at
+	sess := &session{host: u.Host, path: u.Path, file: f, args: u.Query()}
+	if err := h.Open(sess); err != nil {
+		return nil, err
+	}
 
-	return &w, err
+	return &writer{h: h, file: f}, nil
+}
+
+func (w *writer) close() error {
+	return w.h.Close()
+}
+
+// write uses the data length as delimiter.
+// XXX: we could use CRC for restore.
+func (w *writer) write(kv *pb.KV) error {
+	if err := binary.Write(w.h, binary.LittleEndian, uint64(kv.Size())); err != nil {
+		return err
+	}
+	b, err := kv.Marshal()
+	if err != nil {
+		return err
+	}
+	_, err = w.h.Write(b)
+	return err
 }
 
 // Send implements the stream.kvStream interface.
-// It writes the received KV into the temp file as a delimited binary chain.
+// It writes the received KV the target as a delimited binary chain.
 // Returns error if the writing fails, nil on success.
 func (w *writer) Send(kvs *pb.KVS) error {
 	var err error
 	for _, kv := range kvs.Kv {
-		_, err = pbutil.WriteDelimited(w.tmp, kv)
+		err = w.write(kv)
 		if err != nil {
 			return err
 		}

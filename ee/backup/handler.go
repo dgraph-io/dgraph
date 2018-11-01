@@ -6,20 +6,19 @@
 package backup
 
 import (
-	"net/url"
+	"io"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// handler interface is implemented by uri scheme handlers.
-//
-// Session() will read any supported environment variables and authenticate if needed.
-// Copy() copies a local file to a new destination, possibly remote.
-// Exists() tests if a file exists at destination.
+// handler interface is implemented by URI scheme handlers.
 type handler interface {
-	Copy(string, string) error
-	Session(string, string) error
+	// Handlers know how to Write and Close to their target.
+	io.WriteCloser
+	// Session receives the host and path of the target. It should get all its configuration
+	// from the environment.
+	Open(*session) error
 }
 
 // handlers map URI scheme to a handler.
@@ -34,34 +33,24 @@ var handlers struct {
 	m map[string]handler
 }
 
-// getSchemeHandler takes a URI and picks the parts we need for creating a scheme handler.
-// The scheme handler knows how to authenticate itself (using URI params), and how to copy
-// itself to the destination target.
-// Returns a new file handler on success, error otherwise.
-func getSchemeHandler(uri string) (handler, error) {
-	u, err := url.Parse(uri)
-	if err != nil {
-		return nil, err
-	}
-	// target might be just a dir like '/tmp/backup', then default to local file handler.
-	if u.Scheme == "" {
-		u.Scheme = "file"
-	}
+// getHandler takes an URI scheme and finds a handler for it.
+// Returns the handler on success, error otherwise.
+func getHandler(scheme string) (handler, error) {
 	handlers.Lock()
 	defer handlers.Unlock()
-	h, ok := handlers.m[u.Scheme]
-	if !ok {
-		return nil, x.Errorf("invalid scheme %q", u.Scheme)
+	// target might be just a dir like '/tmp/backup', then default to local file handler.
+	if scheme == "" {
+		scheme = "file"
 	}
-	if err := h.Session(u.Host, u.Path); err != nil {
-		return nil, err
+	if h, ok := handlers.m[scheme]; ok {
+		return h, nil
 	}
-	return h, nil
+	return nil, x.Errorf("Unsupported URI scheme %q", scheme)
 }
 
-// addSchemeHandler registers a new scheme handler. If the handler is already registered
+// addHandler registers a new scheme handler. If the handler is already registered
 // we just ignore the request.
-func addSchemeHandler(scheme string, h handler) {
+func addHandler(scheme string, h handler) {
 	handlers.Lock()
 	defer handlers.Unlock()
 	if handlers.m == nil {

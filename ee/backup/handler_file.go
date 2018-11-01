@@ -6,77 +6,64 @@
 package backup
 
 import (
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	path string
+	*session
+	fp *os.File
 }
 
-// Session authenticates or prepares a handler session.
+// Open authenticates or prepares a handler session.
 // Returns error on failure, nil on success.
-func (h *fileHandler) Session(_, path string) error {
-	h.path = path
-	return os.Chdir(h.path)
-}
-
-// List returns a list of Dgraph backup files at target.
-// Returns a list (might be empty) on success, error otherwise.
-func (h *fileHandler) List() ([]string, error) {
-	return filepath.Glob(filepath.Join(h.path, "*"+dgraphBackupSuffix))
-}
-
-// Copy is called when we are ready to transmit a file to the target.
-// Returns error on failure, nil on success.
-func (h *fileHandler) Copy(in, out string) error {
-	if filepath.Base(out) == out {
-		out = filepath.Join(h.path, out)
+func (h *fileHandler) Open(s *session) error {
+	// check that this path exists and we can access it.
+	if !h.Exists(s.path) {
+		return x.Errorf("The path %q does not exist or it is inaccessible.", s.path)
 	}
-
-	if h.Exists(out) {
-		glog.Errorf("File already exists on target: %q", out)
-		return os.ErrExist
-	}
-
-	// if we are in the same volume, just rename. it should work on NFS too.
-	if strings.HasPrefix(in, h.path) {
-		glog.V(3).Infof("renaming %q to %q", in, out)
-		return os.Rename(in, out)
-	}
-
-	src, err := os.Open(in)
+	path := filepath.Join(s.path, s.file)
+	fp, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	glog.V(3).Infof("using file path: %q", path)
+	h.fp = fp
+	h.session = s
+	return nil
+}
 
-	dst, err := os.Create(out)
-	if err != nil {
+func (h *fileHandler) Close() error {
+	defer func() {
+		if err := h.fp.Close(); err != nil {
+			glog.Errorf("Failed to close file %q: %s", h.file, err)
+		}
+	}()
+	if err := h.fp.Sync(); err != nil {
 		return err
 	}
-	defer dst.Close()
+	return nil
+}
 
-	if _, err = io.Copy(dst, src); err != nil {
-		return err
-	}
-
-	return dst.Sync()
+func (h *fileHandler) Write(b []byte) (int, error) {
+	return h.fp.Write(b)
 }
 
 // Exists checks if a path (file or dir) is found at target.
 // Returns true if found, false otherwise.
 func (h *fileHandler) Exists(path string) bool {
 	_, err := os.Stat(path)
-	return os.IsExist(err)
+	if err == nil {
+		return true
+	}
+	return !os.IsNotExist(err) && !os.IsPermission(err)
 }
 
 // Register this handler
 func init() {
-	addSchemeHandler("file", &fileHandler{})
+	addHandler("file", &fileHandler{})
 }

@@ -420,7 +420,7 @@ service Worker {
 	rpc Sort (SortMessage)                    returns (SortResult) {}
 	rpc Schema (SchemaRequest)                returns (SchemaResult) {}
 	rpc PurgeTs (api.Payload)                 returns (Num) {}
-	rpc Backup (BackupRequest)							returns (BackupResponse) {}
+	rpc Backup (BackupRequest)							returns (Status) {}
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
@@ -444,21 +444,17 @@ message SnapshotMeta {
 	uint32 group_id = 2;
 }
 
+// Status describes a general status response.
+// code: 0 = success, -1 = unknown failure
+message Status {
+	int32 code = 1;
+	string msg = 2;
+}
+
 message BackupRequest {
 	uint64 read_ts = 1;
 	uint32 group_id = 2;
 	string target = 3;
-}
-
-message BackupResponse {
-	string message = 1;
-	enum Status {
-		NONE      = 0;
-		SUCCESS   = 1;
-		DUPLICATE = 2;
-		FAILED    = 3;
-	}
-	Status status = 2;
 }
 
 // vim: noexpandtab sw=2 ts=2

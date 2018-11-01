@@ -30,7 +30,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-const pageSize = 1 << 20 * 4 // 4MB
+const pageSize = 4 << 20 // 4MB
 
 type kvStream interface {
 	Send(*pb.KVS) error
