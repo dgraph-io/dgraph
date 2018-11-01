@@ -98,55 +98,50 @@ type PIterator struct {
 	uidPosting *pb.Posting
 	pidx       int // index of postings
 	plen       int
-	valid      bool
-	bi         bp128.BPackIterator
-	uids       []uint64
-	// Offset into the uids slice
-	offset int
+
+	dec  *binary.Decoder
+	uids []uint64
+	uidx int // Offset into the uids slice
 }
 
 func (it *PIterator) Init(pl *pb.PostingList, afterUid uint64) {
 	it.pl = pl
 	it.uidPosting = &pb.Posting{}
-	it.bi.Init(pl.Uids, afterUid)
+
+	it.dec = &binary.Decoder{Pack: pl.Pack}
+	it.uids = it.dec.Seek(afterUid)
+	it.uidx = 0
+
 	it.plen = len(pl.Postings)
-	it.uids = it.bi.Uids()
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
 		p := pl.Postings[idx]
 		return afterUid < p.Uid
 	})
-	if it.bi.StartIdx() < it.bi.Length() {
-		it.valid = true
-	}
 }
 
 func (it *PIterator) Next() {
-	it.offset++
-	if it.offset < len(it.uids) {
+	it.uidx++
+	if it.uidx < len(it.uids) {
 		return
 	}
-	it.bi.Next()
-	if !it.bi.Valid() {
-		it.valid = false
-		return
-	}
-	it.uids = it.bi.Uids()
-	it.offset = 0
+	it.uidx = 0
+	it.uids = it.dec.Next()
 }
 
 func (it *PIterator) Valid() bool {
-	return it.valid
+	return len(it.uids) > 0
 }
 
 func (it *PIterator) Posting() *pb.Posting {
-	uid := it.uids[it.offset]
+	uid := it.uids[it.uidx]
 
 	for it.pidx < it.plen {
-		if it.pl.Postings[it.pidx].Uid > uid {
+		p := it.pl.Postings[it.pidx]
+		if p.Uid > uid {
 			break
 		}
-		if it.pl.Postings[it.pidx].Uid == uid {
-			return it.pl.Postings[it.pidx]
+		if p.Uid == uid {
+			return p
 		}
 		it.pidx++
 	}

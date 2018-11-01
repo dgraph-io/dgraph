@@ -81,6 +81,9 @@ func (d *Decoder) unpackBlock() []uint64 {
 }
 
 func (d *Decoder) Seek(uid uint64) []uint64 {
+	if d.Pack == nil {
+		return []uint64{}
+	}
 	d.blockIdx = 0
 	if uid == 0 {
 		return d.unpackBlock()
@@ -150,11 +153,11 @@ func NumUids(pack *pb.UidPack) int {
 
 // Decode decodes the UidPack back into the list of uids. This is a stop-gap function, Decode would
 // need to do more specific things than just return the list back.
-func Decode(pack *pb.UidPack) []uint64 {
+func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 	uids := make([]uint64, 0, NumUids(pack))
 	dec := Decoder{Pack: pack}
 
-	for block := dec.Seek(0); len(block) > 0; block = dec.Next() {
+	for block := dec.Seek(seek); len(block) > 0; block = dec.Next() {
 		uids = append(uids, block...)
 	}
 	return uids

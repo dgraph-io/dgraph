@@ -47,7 +47,7 @@ func TestUidPack(t *testing.T) {
 	// Some edge case tests.
 	Encode([]uint64{}, 128)
 	require.Equal(t, 0, NumUids(&pb.UidPack{}))
-	require.Equal(t, 0, len(Decode(&pb.UidPack{})))
+	require.Equal(t, 0, len(Decode(&pb.UidPack{}, 0)))
 
 	for i := 0; i < 13; i++ {
 		size := rand.Intn(10e6)
@@ -62,8 +62,35 @@ func TestUidPack(t *testing.T) {
 			require.True(t, len(block.Deltas) <= 255)
 		}
 		require.Equal(t, len(expected), NumUids(pack))
-		actual := Decode(pack)
+		actual := Decode(pack, 0)
 		require.Equal(t, expected, actual)
+	}
+}
+
+func TestDecoder(t *testing.T) {
+	N := 10001
+	var expected []uint64
+	enc := Encoder{BlockSize: 10}
+	for i := 3; i < N; i += 3 {
+		enc.Add(uint64(i))
+		expected = append(expected, uint64(i))
+	}
+	pack := enc.Done()
+
+	dec := Decoder{Pack: pack}
+	for i := 3; i < N; i += 3 {
+		uids := dec.Seek(uint64(i))
+		require.Equal(t, uint64(i), uids[0])
+
+		uids = dec.Seek(uint64(i - 1))
+		require.Equal(t, uint64(i), uids[0])
+
+		uids = dec.Seek(uint64(i - 2))
+		require.Equal(t, uint64(i), uids[0])
+
+		start := i/3 - 1
+		actual := Decode(pack, uint64(i))
+		require.Equal(t, expected[start:], actual)
 	}
 }
 
@@ -148,6 +175,6 @@ func benchmarkUidPackDecode(b *testing.B, blockSize int) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = Decode(pack)
+		_ = Decode(pack, 0)
 	}
 }
