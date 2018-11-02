@@ -12,6 +12,10 @@ rm -Rf $GOPATH
 mkdir $GOPATH
 
 TAG=$1
+# The Docker tag should not contain a slash e.g. feature/issue1234
+# The initial slash is taken from the repository dgraph/dgraph:tag
+DOCKERTAG=$(echo "$TAG" | tr '/' '-')
+
 
 # DO NOT change the /tmp/build directory, because Dockerfile also picks up binaries from there.
 TMP="/tmp/build"
@@ -139,7 +143,7 @@ createSum linux
 # Create Docker image.
 cp $basedir/dgraph/contrib/Dockerfile $TMP
 pushd $TMP
-  docker build -t dgraph/dgraph:$TAG .
+  docker build -t dgraph/dgraph:$DTAG .
 popd
 rm $TMP/Dockerfile
 
@@ -158,5 +162,5 @@ createTar darwin
 createTar linux
 
 echo "Release $TAG is ready."
-docker run -it dgraph/dgraph:$TAG dgraph
+docker run -it dgraph/dgraph:$DTAG dgraph
 ls -alh $TMP
