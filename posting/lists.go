@@ -17,7 +17,6 @@
 package posting
 
 import (
-	"crypto/md5"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -62,10 +61,7 @@ const (
 // RAFT entries discarded.
 func init() {
 	x.AddInit(func() {
-		h := md5.New()
-		pl := pb.PostingList{
-			Checksum: h.Sum(nil),
-		}
+		pl := pb.PostingList{}
 		var err error
 		emptyPostingList, err = pl.Marshal()
 		x.Check(err)

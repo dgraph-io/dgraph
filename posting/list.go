@@ -25,7 +25,6 @@ import (
 	"math"
 	"sort"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"golang.org/x/net/trace"
@@ -36,7 +35,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -64,7 +63,6 @@ const (
 	Del uint32 = 0x02
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
-	BitUidPosting      byte = 0x01
 	BitDeltaPosting    byte = 0x04
 	BitCompletePosting byte = 0x08
 	BitEmptyPosting    byte = 0x10 | BitCompletePosting
@@ -98,55 +96,50 @@ type PIterator struct {
 	uidPosting *pb.Posting
 	pidx       int // index of postings
 	plen       int
-	valid      bool
-	bi         bp128.BPackIterator
-	uids       []uint64
-	// Offset into the uids slice
-	offset int
+
+	dec  *codec.Decoder
+	uids []uint64
+	uidx int // Offset into the uids slice
 }
 
 func (it *PIterator) Init(pl *pb.PostingList, afterUid uint64) {
 	it.pl = pl
 	it.uidPosting = &pb.Posting{}
-	it.bi.Init(pl.Uids, afterUid)
+
+	it.dec = &codec.Decoder{Pack: pl.Pack}
+	it.uids = it.dec.Seek(afterUid)
+	it.uidx = 0
+
 	it.plen = len(pl.Postings)
-	it.uids = it.bi.Uids()
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
 		p := pl.Postings[idx]
 		return afterUid < p.Uid
 	})
-	if it.bi.StartIdx() < it.bi.Length() {
-		it.valid = true
-	}
 }
 
 func (it *PIterator) Next() {
-	it.offset++
-	if it.offset < len(it.uids) {
+	it.uidx++
+	if it.uidx < len(it.uids) {
 		return
 	}
-	it.bi.Next()
-	if !it.bi.Valid() {
-		it.valid = false
-		return
-	}
-	it.uids = it.bi.Uids()
-	it.offset = 0
+	it.uidx = 0
+	it.uids = it.dec.Next()
 }
 
 func (it *PIterator) Valid() bool {
-	return it.valid
+	return len(it.uids) > 0
 }
 
 func (it *PIterator) Posting() *pb.Posting {
-	uid := it.uids[it.offset]
+	uid := it.uids[it.uidx]
 
 	for it.pidx < it.plen {
-		if it.pl.Postings[it.pidx].Uid > uid {
+		p := it.pl.Postings[it.pidx]
+		if p.Uid > uid {
 			break
 		}
-		if it.pl.Postings[it.pidx].Uid == uid {
-			return it.pl.Postings[it.pidx]
+		if p.Uid == uid {
+			return p
 		}
 		it.pidx++
 	}
@@ -239,7 +232,7 @@ func (l *List) SetForDeletion() bool {
 	l.RLock()
 	defer l.RUnlock()
 	for _, plist := range l.mutationMap {
-		if plist.Commit == 0 {
+		if plist.CommitTs == 0 {
 			return false
 		}
 	}
@@ -375,14 +368,8 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 		mpost.Uid = t.ValueId
 	}
 
-	t1 := time.Now()
 	l.updateMutationLayer(mpost)
 	atomic.AddInt32(&l.estimatedSize, int32(mpost.Size()+16 /* various overhead */))
-	if dur := time.Since(t1); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mutationMap), len(l.plist.Uids))
-		}
-	}
 	txn.AddKeys(string(l.key), conflictKey)
 	return nil
 }
@@ -424,7 +411,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	}
 
 	// We have a valid commit.
-	plist.Commit = commitTs
+	plist.CommitTs = commitTs
 	for _, mpost := range plist.Postings {
 		mpost.CommitTs = commitTs
 	}
@@ -441,7 +428,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	// memory, to make it available for transactions. So, all we need to do here
 	// is to roll them up periodically.
 
-	numUids := (bp128.NumIntegers(l.plist.Uids) * 15) / 100
+	numUids := (codec.ApproxLen(l.plist.Pack) * 15) / 100
 	if numUids < 1000 {
 		numUids = 1000
 	}
@@ -473,7 +460,7 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	defer l.RUnlock()
 	var conflicts []uint64
 	for ts, pl := range l.mutationMap {
-		if pl.Commit > 0 {
+		if pl.CommitTs > 0 {
 			continue
 		}
 		if ts < readTs {
@@ -502,7 +489,7 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 	var posts []*pb.Posting
 	for startTs, plist := range l.mutationMap {
 		// Pick up the transactions which are either committed, or the one which is ME.
-		effectiveTs := effective(startTs, plist.Commit)
+		effectiveTs := effective(startTs, plist.CommitTs)
 		if effectiveTs > deleteBelow {
 			// We're above the deleteBelow marker. We wouldn't reach here if effectiveTs is zero.
 			for _, mpost := range plist.Postings {
@@ -617,7 +604,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 func (l *List) IsEmpty() bool {
 	l.RLock()
 	defer l.RUnlock()
-	return len(l.plist.Uids) == 0 && len(l.mutationMap) == 0
+	return codec.ApproxLen(l.plist.Pack) == 0 && len(l.mutationMap) == 0
 }
 
 func (l *List) length(readTs, afterUid uint64) int {
@@ -668,40 +655,32 @@ func (l *List) MarshalToKv() (*pb.KV, error) {
 }
 
 func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
-	if len(plist.Uids) == 0 {
-		data = nil
-		meta |= BitEmptyPosting
-	} else if len(plist.Postings) > 0 {
-		var err error
-		data, err = plist.Marshal()
-		x.Checkf(err, "Unable to marshal posting list")
-	} else {
-		data = plist.Uids
-		meta = BitUidPosting
+	if plist.Pack == nil {
+		return nil, BitEmptyPosting
 	}
-	meta |= BitCompletePosting
-	return
+	data, err := plist.Marshal()
+	x.Check(err)
+	return data, BitCompletePosting
 }
+
+const blockSize int = 256
 
 // Merge all entries in mutation layer with commitTs <= l.commitTs
 // into immutable layer.
 func (l *List) rollup() error {
 	l.AssertLock()
-	final := new(pb.PostingList)
-	var bp bp128.BPackEncoder
-	uids := make([]uint64, 0, bp128.BlockSize)
 
 	// Pick all committed entries
 	x.AssertTrue(l.minTs <= l.commitTs)
+
+	final := new(pb.PostingList)
+	enc := codec.Encoder{BlockSize: blockSize}
+
 	err := l.iterate(l.commitTs, 0, func(p *pb.Posting) error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
 		// So, we don't need to do any filtering here. In fact, doing filtering here could result
 		// in a bug.
-		uids = append(uids, p.Uid)
-		if len(uids) == bp128.BlockSize {
-			bp.PackAppend(uids)
-			uids = uids[:0]
-		}
+		enc.Add(p.Uid)
 
 		// We want to add the posting if it has facets or has a value.
 		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
@@ -713,19 +692,12 @@ func (l *List) rollup() error {
 		return nil
 	})
 	x.Check(err)
-	if len(uids) > 0 {
-		bp.PackAppend(uids)
-	}
-	sz := bp.Size()
-	if sz > 0 {
-		final.Uids = make([]byte, sz)
-		// TODO: Add bytes method
-		bp.WriteTo(final.Uids)
-	}
+	final.Pack = enc.Done()
+
 	// Keep all uncommited Entries or postings with commitTs > l.commitTs
 	// in mutation map. Discard all else.
 	for startTs, plist := range l.mutationMap {
-		cl := plist.Commit
+		cl := plist.CommitTs
 		if cl == 0 || cl > l.commitTs {
 			// Keep this.
 		} else {
@@ -743,22 +715,11 @@ func (l *List) rollup() error {
 func (l *List) hasPendingTxn() bool {
 	l.AssertRLock()
 	for _, pl := range l.mutationMap {
-		if pl.Commit == 0 {
+		if pl.CommitTs == 0 {
 			return true
 		}
 	}
 	return false
-}
-
-// Copies the val if it's uid only posting, be careful
-func UnmarshalOrCopy(val []byte, metadata byte, pl *pb.PostingList) {
-	if metadata == BitUidPosting {
-		buf := make([]byte, len(val))
-		copy(buf, val)
-		pl.Uids = buf
-	} else if val != nil {
-		x.Checkf(pl.Unmarshal(val), "Unable to Unmarshal PostingList from store")
-	}
 }
 
 // Uids returns the UIDs given some query params.
@@ -768,14 +729,14 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
 	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, len(l.mutationMap)+bp128.NumIntegers(l.plist.Uids))
+	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
 	if len(l.mutationMap) == 0 && opt.Intersect != nil {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
 			return out, ErrTsTooOld
 		}
-		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)
+		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUID, opt.Intersect, out)
 		l.RUnlock()
 		return out, nil
 	}
