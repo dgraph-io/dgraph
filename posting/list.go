@@ -604,7 +604,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 func (l *List) IsEmpty() bool {
 	l.RLock()
 	defer l.RUnlock()
-	return len(l.plist.Pack.GetBlocks()) == 0 && len(l.mutationMap) == 0
+	return codec.ApproxLen(l.plist.Pack) == 0 && len(l.mutationMap) == 0
 }
 
 func (l *List) length(readTs, afterUid uint64) int {

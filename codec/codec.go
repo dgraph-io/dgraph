@@ -179,11 +179,6 @@ func (d *Decoder) PeekNextBase() uint64 {
 	return math.MaxUint64
 }
 
-func (d *Decoder) Skip() {
-	d.blockIdx++
-	d.uids = d.uids[:0]
-}
-
 func (d *Decoder) Valid() bool {
 	return d.blockIdx < len(d.Pack.Blocks)
 }

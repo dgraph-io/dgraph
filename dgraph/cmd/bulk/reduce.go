@@ -67,7 +67,7 @@ func (r *reducer) reduce(job shuffleOutput) {
 		pl.Pack = codec.Encode(uids, 256)
 		val, err := pl.Marshal()
 		x.Check(err)
-		txn.SetWithMeta(currentKey, val, meta)
+		x.Check(txn.SetWithMeta(currentKey, val, meta))
 
 		uids = uids[:0]
 		pl.Reset()
