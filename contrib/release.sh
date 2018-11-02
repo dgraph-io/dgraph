@@ -13,8 +13,8 @@ mkdir $GOPATH
 
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
-# The initial slash is taken from the repository dgraph/dgraph:tag
-DOCKERTAG=$(echo "$TAG" | tr '/' '-')
+# The initial slash is taken from the repository name dgraph/dgraph:tag
+DTAG=$(echo "$TAG" | tr '/' '-')
 
 
 # DO NOT change the /tmp/build directory, because Dockerfile also picks up binaries from there.
