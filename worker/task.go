@@ -1615,10 +1615,6 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 	return nil
 }
 
-// handleHasFunction looks at both the inmemory btree populated by
-// posting/lists.go, and Badger. Thus, it can capture both committed
-// transactions and in-progress transactions. It also accounts for transaction
-// start ts.
 func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
@@ -1637,7 +1633,6 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 
 	result := &pb.List{}
 	var prevKey []byte
-	var w int
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.AllVersions = true
@@ -1655,6 +1650,11 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		// Parse the key upfront, otherwise ReadPostingList would advance the
 		// iterator.
 		pk := x.Parse(item.Key())
+		if item.UserMeta()&posting.BitCompletePosting > 0 {
+			// This bit would only be set if there are valid uids in UidPack.
+			result.Uids = append(result.Uids, pk.Uid)
+			continue
+		}
 
 		// We do need to copy over the key for ReadPostingList.
 		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
@@ -1670,10 +1670,9 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		}
 		if num > 0 {
 			result.Uids = append(result.Uids, pk.Uid)
-			w++
 		}
 
-		if w%1000 == 0 {
+		if len(result.Uids)%100000 == 0 {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

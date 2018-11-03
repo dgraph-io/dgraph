@@ -655,7 +655,7 @@ func (l *List) MarshalToKv() (*pb.KV, error) {
 }
 
 func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
-	if plist.Pack == nil {
+	if plist.Pack == nil || len(plist.Pack.Blocks) == 0 {
 		return nil, BitEmptyPosting
 	}
 	data, err := plist.Marshal()
