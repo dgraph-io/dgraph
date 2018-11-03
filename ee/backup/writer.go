@@ -7,6 +7,7 @@ package backup
 
 import (
 	"encoding/binary"
+	"io"
 	"net/url"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -16,10 +17,18 @@ import (
 
 const dgraphBackupSuffix = ".dgraph-backup"
 
+// handler interface is implemented by URI scheme handlers.
+type handler interface {
+	// Handlers know how to Write and Close to their target.
+	io.WriteCloser
+	// Session receives the host and path of the target. It should get all its configuration
+	// from the environment.
+	Open(*url.URL, *Request) error
+}
+
 // writer handles the writes from stream.Orchestrate. It implements the kvStream interface.
 type writer struct {
-	h    handler
-	file string
+	h handler
 }
 
 // newWriter parses the requested target URI, finds a handler and then tries to create a session.
@@ -44,30 +53,37 @@ type writer struct {
 //   as://dgraph-container/backups/
 //   http://backups.dgraph.io/upload
 //   file:///tmp/dgraph/backups or /tmp/dgraph/backups?compress=gzip
-func newWriter(r *Request, uri string) (*writer, error) {
-	u, err := url.Parse(uri)
+func (r *Request) newWriter() (*writer, error) {
+	uri, err := url.Parse(r.Backup.Target)
 	if err != nil {
 		return nil, err
 	}
+
 	// find handler for this URI scheme
-	h, err := getHandler(u.Scheme)
-	if err != nil {
+	var h handler
+	switch uri.Scheme {
+	case "file":
+		h = &fileHandler{}
+	case "s3":
+		h = &s3Handler{}
+	default:
+		h = &fileHandler{}
+	}
+
+	// // create session at
+	// sess := &session{
+	// 	ui: ui,
+	// 	// host: u.Host,
+	// 	// path: u.Path,
+	// 	// file: r.Prefix + dgraphBackupSuffix,
+	// 	// args: u.Query(),
+	// 	size: r.Sizex,
+	// }
+	if err := h.Open(uri, r); err != nil {
 		return nil, err
 	}
 
-	// create session at
-	sess := &session{
-		host: u.Host,
-		path: u.Path,
-		file: r.Prefix + dgraphBackupSuffix,
-		args: u.Query(),
-		size: r.Sizex,
-	}
-	if err := h.Open(sess); err != nil {
-		return nil, err
-	}
-
-	return &writer{h: h, file: sess.file}, nil
+	return &writer{h: h}, nil
 }
 
 func (w *writer) cleanup() error {

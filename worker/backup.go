@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/dgraph-io/dgraph/ee/backup"
@@ -54,19 +53,16 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 	// create backup request and process it.
 	br := &backup.Request{
 		DB:     pstore,
-		Prefix: fmt.Sprintf("%s-g%d-r%d", req.UnixTs, req.GroupId, req.ReadTs),
-		Sizex:  int64(float64(sz) * 1.18),
+		Backup: req,
+		Sizex:  int64(float64(sz) * 1.20), // Some extra buffer for headers.
 	}
-	if err := br.Process(ctx, req); err != nil {
-		return err
-	}
-	return nil
+	return br.Process(ctx)
 }
 
 // Backup handles a request coming from another node.
 func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
 	var resp pb.Status
-	glog.V(3).Infof("Received backup request via Grpc: %+v", req)
+	glog.V(2).Infof("Received backup request via Grpc: %+v", req)
 	if err := backupProcess(ctx, req); err != nil {
 		resp.Code = -1
 		resp.Msg = err.Error()
@@ -75,34 +71,30 @@ func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Sta
 	return &resp, nil
 }
 
-func backupDispatch(ctx context.Context, in *pb.BackupRequest, gids []uint32) chan error {
-	statusCh := make(chan error)
-	go func() {
-		glog.Infof("Dispatching backup requests...")
-		for _, gid := range gids {
-			glog.V(3).Infof("sent to group %d snapshot at %d", gid, in.ReadTs)
-			in := in
-			in.GroupId = gid
-			// this node is part of the group, process backup.
-			if groups().groupId() == gid {
-				statusCh <- backupProcess(ctx, in)
-				continue
-			}
-			// send request to any node in the group.
-			pl := groups().AnyServer(gid)
-			if pl == nil {
-				statusCh <- x.Errorf("Couldn't find a server in group %d", gid)
-				continue
-			}
-			_, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, in)
-			if err != nil {
-				glog.Errorf("Backup error group %d: %s", gid, err)
-			}
-			statusCh <- err
-		}
-		close(statusCh)
-	}()
-	return statusCh
+func backupGroup(ctx context.Context, in pb.BackupRequest) error {
+	glog.V(2).Infof("Sending backup request: %+v\n", in)
+	// this node is part of the group, process backup.
+	if groups().groupId() == in.GroupId {
+		return backupProcess(ctx, &in)
+	}
+
+	// send request to any node in the group.
+	pl := groups().AnyServer(in.GroupId)
+	if pl == nil {
+		return x.Errorf("Couldn't find a server in group %d", in.GroupId)
+	}
+	status, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, &in)
+	if err != nil {
+		glog.Errorf("Backup error group %d: %s", in.GroupId, err)
+		return err
+	}
+	if status.Code != 0 {
+		err := x.Errorf("Backup error group %d: %s", in.GroupId, status.Msg)
+		glog.Errorln(err)
+		return err
+	}
+	glog.V(2).Infof("Backup request to gid=%d. OK\n", in.GroupId)
+	return nil
 }
 
 // BackupOverNetwork handles a request coming from an HTTP client.
@@ -115,36 +107,40 @@ func BackupOverNetwork(pctx context.Context, target string) error {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
 		return err
 	}
+
 	// Get ReadTs from zero and wait for stream to catch up.
 	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
 		glog.Errorf("Unable to retrieve readonly timestamp for backup: %s", err)
 		return err
 	}
-	readTs := ts.ReadOnly
-	glog.Infof("Got readonly ts from Zero: %d", readTs)
-	if err := posting.Oracle().WaitForTs(ctx, readTs); err != nil {
-		glog.Errorf("Error while waiting for ts: %s", err)
-		return err
-	}
 
-	// Let's first collect all groups.
 	gids := groups().KnownGroups()
-	glog.Infof("Requesting backup for groups: %v", gids)
+	req := pb.BackupRequest{
+		ReadTs: ts.ReadOnly,
+		Target: target,
+		UnixTs: time.Now().UTC().Format("20060102.1504"),
+	}
+	glog.Infof("Created backup request: %+v. Groups=%v\n", req, gids)
 
 	// This will dispatch the request to all groups and wait for their response.
 	// If we receive any failures, we cancel the process.
-	req := &pb.BackupRequest{
-		ReadTs: readTs,
-		Target: target,
-		UnixTs: fmt.Sprint(time.Now().UTC().UnixNano()),
+	errCh := make(chan error, 1)
+	for _, gid := range gids {
+		req.GroupId = gid
+		go func() {
+			errCh <- backupGroup(ctx, req)
+		}()
 	}
-	for err := range backupDispatch(ctx, req, gids) {
+
+	for i := 0; i < len(gids); i++ {
+		err := <-errCh
 		if err != nil {
-			glog.Errorf("Error while running backup: %s", err)
+			glog.Errorf("Error received during backup: %v", err)
 			return err
 		}
 	}
-	glog.Infof("Backup done.")
+	req.GroupId = 0
+	glog.Infof("Backup for req: %+v. OK.\n", req)
 	return nil
 }

@@ -20,16 +20,16 @@ import (
 // Request has all the information needed to perform a backup.
 type Request struct {
 	DB     *badger.DB // Badger pstore managed by this node.
-	Prefix string     // target file name prefix
 	Sizex  int64      // approximate upload size
+	Backup *pb.BackupRequest
 }
 
 // Process uses the request values to create a stream writer then hand off the data
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
-func (r *Request) Process(ctx context.Context, br *pb.BackupRequest) error {
-	w, err := newWriter(r, br.Target)
+func (r *Request) Process(ctx context.Context) error {
+	w, err := r.newWriter()
 	if err != nil {
 		return err
 	}
@@ -60,6 +60,7 @@ func (r *Request) Process(ctx context.Context, br *pb.BackupRequest) error {
 		return l.MarshalToKv()
 	}
 
+	br := r.Backup
 	glog.V(2).Infof("Backup started ...")
 	if err = sl.Orchestrate(ctx, "Backup", br.ReadTs); err != nil {
 		return err

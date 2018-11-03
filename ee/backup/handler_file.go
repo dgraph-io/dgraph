@@ -6,6 +6,8 @@
 package backup
 
 import (
+	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -16,30 +18,30 @@ import (
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	*session
 	fp *os.File
-}
-
-// New creates a new instance of this handler.
-func (h *fileHandler) New() handler {
-	return &fileHandler{}
 }
 
 // Open authenticates or prepares a handler session.
 // Returns error on failure, nil on success.
-func (h *fileHandler) Open(s *session) error {
+func (h *fileHandler) Open(uri *url.URL, req *Request) error {
 	// check that this path exists and we can access it.
-	if !h.Exists(s.path) {
-		return x.Errorf("The path %q does not exist or it is inaccessible.", s.path)
+	if !h.exists(uri.Path) {
+		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
-	path := filepath.Join(s.path, s.file)
+
+	dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
+	if err := os.Mkdir(dir, 0700); err != nil {
+		return err
+	}
+
+	path := filepath.Join(dir,
+		fmt.Sprintf("r%d-g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
 	fp, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	glog.V(2).Infof("using file path: %q", path)
+	glog.V(2).Infof("Using file path: %q", path)
 	h.fp = fp
-	h.session = s
 	return nil
 }
 
@@ -56,15 +58,10 @@ func (h *fileHandler) Write(b []byte) (int, error) {
 
 // Exists checks if a path (file or dir) is found at target.
 // Returns true if found, false otherwise.
-func (h *fileHandler) Exists(path string) bool {
+func (h *fileHandler) exists(path string) bool {
 	_, err := os.Stat(path)
 	if err == nil {
 		return true
 	}
 	return !os.IsNotExist(err) && !os.IsPermission(err)
-}
-
-// Register this handler
-func init() {
-	addHandler("file", &fileHandler{})
 }
