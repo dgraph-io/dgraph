@@ -1208,14 +1208,14 @@ In setting up a cluster be sure the check the following.
 
 ## Fast Data Loading
 
-There are two different tools that can be used for bulk data loading:
+There are two different tools that can be used for fast data loading:
 
-- `dgraph live`
-- `dgraph bulk`
+- `dgraph live` runs the Dgraph Live Loader
+- `dgraph bulk` runs the Dgraph Bulk Loader
 
-{{% notice "note" %}} Both tools only accepts gzipped, RDF NQuad/Triple data.
-Data in other formats must be converted [to
-this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
+{{% notice "note" %}} Both tools only accept [RDF NQuad/Triple
+data](https://www.w3.org/TR/n-quads/) in plain or gzipped format. Data
+in other formats must be converted.{{% /notice %}}
 
 ### Live Loader
 
@@ -1243,33 +1243,36 @@ It's crucial to tune the bulk loaders flags to get good performance. See the
 section below for details.
 {{% /notice %}}
 
-Bulk loader serves a similar purpose to the live loader, but can only be used
-while Dgraph is offline (i.e., no Dgraph alphas are running, except a Dgraph zero) for the initial population. It cannot be run on an existing live Dgraph cluster.
+Bulk loader serves a similar purpose to the live loader, but can only be used to
+load data into a new cluster. It cannot be run on an existing live Dgraph
+cluster. Bulk loader is **considerably faster** than the live loader and is the
+recommended way to perform the initial import of large datasets into Dgraph.
+
+Dgraph Alphas must be offline during the bulk load (i.e., only Dgraph Zero)
+Dgraph Alphas are running, except a Dgraph Zero) for the initial population.
 
 {{% notice "warning" %}}
-Don't use bulk loader once Dgraph cluster is up and running. Use it to import your
-existing data into a new instance of Dgraph alpha.
+Don't use bulk loader once Dgraph cluster is up and running. Use it to import
+your existing data to a new cluster.
 {{% /notice %}}
-
-Bulk loader is **considerably faster** than the live loader, and is the recommended
-way to perform the initial import of large datasets into Dgraph.
 
 You can [read some technical details](https://blog.dgraph.io/post/bulkloader/)
 about the bulk loader on the blog.
 
-See [Fast Data Loading]({{< relref "#fast-data-loading" >}}) for more about the expected N-Quads format.
+See [Fast Data Loading]({{< relref "#fast-data-loading" >}}) for more info about
+the expected N-Quads format.
 
-You need to determine the
-number of Dgraph alpha instances you want in your cluster. You should set the number
-of reduce shards to this number. You will also need to set the number of map
-shards to at least this number (a higher number helps the bulk loader evenly
-distribute predicates between the reduce shards). For this example, you could use
-2 reduce shards and 4 map shards.
+**Reduce shards**: Before running the bulk load, you need to decide how many
+Alpha groups will be running when the cluster starts. The number of Alpha groups
+will be the same number of reduce shards you set with the `--reduce_shards`
+flag. For example, if your cluster will run 3 Alpha with 3 replicas per group,
+then there is 1 group and `--reduce_shards` should be set to 1. If your cluster
+will run 6 Alphas with 3 replicas per group, then there are 2 groups and
+`--reduce_shards` should be set to 2.
 
-{{% notice "note" %}}
-Ports in the example below may have to be adjusted depending on how other processes have been set up.
-If you are using Dgraph v1.0.2 (and older) the option would be `--zero_addr` instead of `--zero`.
-{{% /notice %}}
+**Map shards**: The `--map_shards` option must be set to at least what's set for
+`--reduce_shards`. A higher number helps the bulk loader evenly distribute
+predicates between the reduce shards.
 
 ```sh
 $ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero=localhost:5080
@@ -1319,14 +1322,35 @@ REDUCE 22s [100.00%] edge_count:3.695M edge_speed:584.4k/sec plist_count:1.778M 
 Total: 22s
 ```
 
-Once the data is generated, you can start the Dgraph alphas by pointing their
-`-p` directory to the output. If running multiple Dgraph alphas, you'd need to
-copy over the output shards into different servers.
+The output will be generated in the `out` directory by default. Here's the bulk
+load output from the example above:
 
 ```sh
-$ cd out/i # i = shard number.
-$ dgraph alpha --zero=localhost:5080 --lru_mb=1024
+$ tree ./out
+./out
+├── 0
+│   └── p
+│       ├── 000000.vlog
+│       ├── 000002.sst
+│       └── MANIFEST
+└── 1
+    └── p
+        ├── 000000.vlog
+        ├── 000002.sst
+        └── MANIFEST
+
+4 directories, 6 files
 ```
+
+Because `--reduce_shards` was set to 2, there are two sets of p directories: one
+in `./out/0` directory and another in the `./out/1` directory.
+
+Once the output is created, they can be copied to all the servers that will run
+Dgraph Alphas. Each Dgraph Alpha must have its own copy of the group's p
+directory output. Each replica of the first group should have its own copy of
+`./out/0/p`, each replica of the second group should have its own copy of
+`./out/1/p`, and so on.
+
 #### Tuning & monitoring
 
 ##### Performance Tuning
