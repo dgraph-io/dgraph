@@ -9,8 +9,11 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 
@@ -19,21 +22,26 @@ import (
 )
 
 const (
-	bufSize           = 1 << 20
-	defaultS3Endpoint = "s3.amazonaws.com"
+	s3defaultEndpoint = "s3.amazonaws.com"
+	s3accelerateHost  = "s3-accelerate"
 )
 
 // s3Handler is used for 's3:' URI scheme.
 type s3Handler struct {
-	client *minio.Client
-	buf    *bufio.Writer
-	pr     io.ReadCloser
-	pw     io.WriteCloser
+	w io.Writer
+	n uint64
 }
 
-func (h *s3Handler) Open(s *session) error {
-	var err error
+// New creates a new instance of this handler.
+func (h *s3Handler) New() handler {
+	return &s3Handler{}
+}
 
+// Open creates an AWS session and sends our data stream to an S3 blob.
+// URI formats:
+//   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
+//   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
+func (h *s3Handler) Open(s *session) error {
 	accessKeyID := os.Getenv("AWS_ACCESS_KEY_ID")
 	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	if accessKeyID == "" || secretAccessKey == "" {
@@ -42,17 +50,14 @@ func (h *s3Handler) Open(s *session) error {
 	// s3:///bucket/folder
 	if !strings.Contains(s.host, ".") {
 		s.path = s.host
-		s.host = ""
+		s.host = s3defaultEndpoint
 	}
-	// no host part, use default server
-	if s.host == "" {
-		s.host = defaultS3Endpoint
-	}
-	glog.V(3).Infof("using S3 host: %s", s.host)
+	glog.V(3).Infof("using S3 endpoint: %s", s.host)
 
 	if len(s.path) < 1 {
-		return x.Errorf("The bucket name %q is invalid", s.path)
+		return x.Errorf("the S3 bucket %q is invalid", s.path)
 	}
+
 	// split path into bucket and blob
 	parts := strings.Split(s.path[1:], "/")
 	s.path = parts[0] // bucket
@@ -61,51 +66,55 @@ func (h *s3Handler) Open(s *session) error {
 		// blob: folder1/...folderN/file1
 		s.file = filepath.Join(parts[1:]...)
 	}
-	glog.V(3).Infof("sending to S3: bucket[%q] blob[%q]", s.path, s.file)
+	glog.V(3).Infof("sending to S3: %s", path.Join(s.host, s.path, s.file))
 
 	// secure by default
 	secure := s.Getarg("secure") != "false"
 
-	h.client, err = minio.New(s.host, accessKeyID, secretAccessKey, secure)
+	c, err := minio.New(s.host, accessKeyID, secretAccessKey, secure)
 	if err != nil {
 		return err
 	}
+	// S3 transfer acceleration support.
+	if strings.Contains(s.host, "s3-accelerate") {
+		c.SetS3TransferAccelerate(s.host)
+	}
+	c.TraceOn(os.Stderr)
 
-	h.pr, h.pw = io.Pipe()
-	h.buf = bufio.NewWriterSize(h.pw, bufSize)
-
-	// block until done.
-	go func() {
-		for {
-			glog.V(3).Infof("--- blocking for pipe reader ...")
-			_, err := h.client.PutObject(s.path, s.file, h.pr, -1,
-				minio.PutObjectOptions{ContentType: "application/octet-stream"})
-			if err != nil {
-				// TODO: need to send this back to caller
-				glog.Errorf("PutObject %s, %s: %v", s.path, s.file, err)
-			}
-			glog.V(3).Infof("--- done with pipe")
-			break
-		}
-		if err := h.pr.Close(); err != nil {
-			glog.V(3).Infof("failure closing pipe reader: %s", err)
-		}
-	}()
+	go h.send(c, s)
 
 	return nil
 }
 
-func (h *s3Handler) Write(b []byte) (int, error) {
-	return h.buf.Write(b)
+func (h *s3Handler) send(c *minio.Client, s *session) {
+	glog.Infof("Backup streaming in background, est. %d bytes", s.size)
+	start := time.Now()
+	pr, pw := io.Pipe()
+	buf := bufio.NewWriterSize(pw, 5<<20)
+	h.w = buf
+
+	// block until done or pipe closed.
+	for {
+		time.Sleep(10 * time.Millisecond) // wait for some buffered data
+		n, err := c.PutObject(s.path, s.file, pr, s.size,
+			minio.PutObjectOptions{})
+		if err != nil {
+			glog.Errorf("Failure while uploading backup: %s", err)
+		}
+		glog.V(3).Infof("sent %d bytes, actual %d bytes, time elapsed %s", n, h.n, time.Since(start))
+		break
+	}
+	pr.CloseWithError(nil) // EOF
 }
 
 func (h *s3Handler) Close() error {
-	defer func() {
-		if err := h.pw.Close(); err != nil {
-			glog.V(3).Infof("failure closing pipe writer: %s", err)
-		}
-	}()
-	return h.buf.Flush()
+	return nil
+}
+
+func (h *s3Handler) Write(b []byte) (int, error) {
+	n, err := h.w.Write(b)
+	atomic.AddUint64(&h.n, uint64(n))
+	return n, err
 }
 
 func init() {

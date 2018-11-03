@@ -452,9 +452,10 @@ message Status {
 }
 
 message BackupRequest {
-	uint64 read_ts = 1;
+	uint64 read_ts  = 1;
 	uint32 group_id = 2;
-	string target = 3;
+	string unix_ts  = 3;
+	string target   = 4;
 }
 
 // vim: noexpandtab sw=2 ts=2

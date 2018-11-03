@@ -19,6 +19,7 @@ type handler interface {
 	// Session receives the host and path of the target. It should get all its configuration
 	// from the environment.
 	Open(*session) error
+	New() handler
 }
 
 // handlers map URI scheme to a handler.
@@ -43,7 +44,7 @@ func getHandler(scheme string) (handler, error) {
 		scheme = "file"
 	}
 	if h, ok := handlers.m[scheme]; ok {
-		return h, nil
+		return h.New(), nil
 	}
 	return nil, x.Errorf("Unsupported URI scheme %q", scheme)
 }

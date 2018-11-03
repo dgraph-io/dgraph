@@ -37,23 +37,27 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 	}
 	// sanity, make sure this is our group.
 	if groups().groupId() != req.GroupId {
-		err := x.Errorf("Backup request group mismatch. Mine: %d. Requested: %d\n",
+		return x.Errorf("Backup request group mismatch. Mine: %d. Requested: %d\n",
 			groups().groupId(), req.GroupId)
-		return err
 	}
 	// wait for this node to catch-up.
 	if err := posting.Oracle().WaitForTs(ctx, req.ReadTs); err != nil {
 		return err
 	}
+	// calculate upload size
+	var sz int64
+	for _, t := range groups().tablets {
+		if t.GroupId == req.GroupId {
+			sz += t.Space
+		}
+	}
 	// create backup request and process it.
 	br := &backup.Request{
-		ReadTs:    req.ReadTs,
-		GroupId:   req.GroupId,
-		UnixTs:    fmt.Sprint(time.Now().UTC().UnixNano()),
-		TargetURI: req.Target,
-		DB:        pstore,
+		DB:     pstore,
+		Prefix: fmt.Sprintf("%s-g%d-r%d", req.UnixTs, req.GroupId, req.ReadTs),
+		Sizex:  int64(float64(sz) * 1.18),
 	}
-	if err := br.Process(ctx); err != nil {
+	if err := br.Process(ctx, req); err != nil {
 		return err
 	}
 	return nil
@@ -71,13 +75,12 @@ func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Sta
 	return &resp, nil
 }
 
-// TODO: add stop to all goroutines to cancel on failure.
 func backupDispatch(ctx context.Context, in *pb.BackupRequest, gids []uint32) chan error {
 	statusCh := make(chan error)
 	go func() {
 		glog.Infof("Dispatching backup requests...")
 		for _, gid := range gids {
-			glog.V(3).Infof("dispatching to group %d snapshot at %d", gid, in.ReadTs)
+			glog.V(3).Infof("sent to group %d snapshot at %d", gid, in.ReadTs)
 			in := in
 			in.GroupId = gid
 			// this node is part of the group, process backup.
@@ -103,7 +106,10 @@ func backupDispatch(ctx context.Context, in *pb.BackupRequest, gids []uint32) ch
 }
 
 // BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(ctx context.Context, target string) error {
+func BackupOverNetwork(pctx context.Context, target string) error {
+	ctx, cancel := context.WithCancel(pctx)
+	defer cancel()
+
 	// Check that this node can accept requests.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
@@ -128,7 +134,11 @@ func BackupOverNetwork(ctx context.Context, target string) error {
 
 	// This will dispatch the request to all groups and wait for their response.
 	// If we receive any failures, we cancel the process.
-	req := &pb.BackupRequest{ReadTs: readTs, Target: target}
+	req := &pb.BackupRequest{
+		ReadTs: readTs,
+		Target: target,
+		UnixTs: fmt.Sprint(time.Now().UTC().UnixNano()),
+	}
 	for err := range backupDispatch(ctx, req, gids) {
 		if err != nil {
 			glog.Errorf("Error while running backup: %s", err)

@@ -9,6 +9,7 @@ package backup
 type session struct {
 	host, path, file string
 	args             map[string][]string
+	size             int64
 }
 
 func (s *session) Getarg(key string) string {

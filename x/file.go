@@ -17,7 +17,6 @@
 package x
 
 import (
-	"io"
 	"os"
 )
 
@@ -37,9 +36,4 @@ func WriteFileSync(filename string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	return nil
-}
-
-// Writeq is a quiet write. Writes b to w and eats up the return.
-func Writeq(w io.Writer, b []byte) {
-	_, _ = w.Write(b)
 }

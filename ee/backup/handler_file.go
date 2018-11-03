@@ -20,6 +20,11 @@ type fileHandler struct {
 	fp *os.File
 }
 
+// New creates a new instance of this handler.
+func (h *fileHandler) New() handler {
+	return &fileHandler{}
+}
+
 // Open authenticates or prepares a handler session.
 // Returns error on failure, nil on success.
 func (h *fileHandler) Open(s *session) error {
@@ -32,22 +37,17 @@ func (h *fileHandler) Open(s *session) error {
 	if err != nil {
 		return err
 	}
-	glog.V(3).Infof("using file path: %q", path)
+	glog.V(2).Infof("using file path: %q", path)
 	h.fp = fp
 	h.session = s
 	return nil
 }
 
 func (h *fileHandler) Close() error {
-	defer func() {
-		if err := h.fp.Close(); err != nil {
-			glog.Errorf("Failed to close file %q: %s", h.file, err)
-		}
-	}()
 	if err := h.fp.Sync(); err != nil {
 		return err
 	}
-	return nil
+	return h.fp.Close()
 }
 
 func (h *fileHandler) Write(b []byte) (int, error) {

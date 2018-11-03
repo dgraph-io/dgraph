@@ -195,8 +195,7 @@ func (sl *Lists) produceKVs(ctx context.Context, ts uint64,
 	}
 }
 
-func (sl *Lists) streamKVs(ctx context.Context, prefix string,
-	kvChan chan *pb.KVS) error {
+func (sl *Lists) streamKVs(ctx context.Context, prefix string, kvChan chan *pb.KVS) error {
 	var count int
 	var bytesSent uint64
 	t := time.NewTicker(time.Second)
@@ -224,7 +223,7 @@ func (sl *Lists) streamKVs(ctx context.Context, prefix string,
 		if err := sl.Stream.Send(batch); err != nil {
 			return err
 		}
-		glog.V(2).Infof("%s Created batch of size: %s in %v.\n",
+		glog.V(2).Infof("%s Created batch of size: %s in %s.\n",
 			prefix, humanize.Bytes(sz), time.Since(t))
 		return nil
 	}
@@ -243,7 +242,7 @@ outer:
 				continue
 			}
 			speed := bytesSent / durSec
-			glog.Infof("%s Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
+			glog.Infof("%s Time elapsed: %s, bytes sent: %s, speed: %s/sec\n",
 				prefix, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
 
 		case kvs, ok := <-kvChan:
