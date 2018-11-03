@@ -1639,6 +1639,8 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	it := txn.NewIterator(itOpt)
 	defer it.Close()
 
+	// TODO
+	// Switch this to stream list interface.
 	for it.Seek(startKey); it.ValidForPrefix(prefix); {
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
@@ -1661,6 +1663,8 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
+		// TODO: Create a list.HasAny() function, which can provide this. This
+		// func can then be used elsewhere, we're using list.Length right now.
 		var num int
 		if err = l.Iterate(q.ReadTs, 0, func(_ *pb.Posting) error {
 			num++
