@@ -1003,6 +1003,9 @@ func filterGeoFunction(arg funcArgs) error {
 	return nil
 }
 
+// TODO: This function is really slow when there are a lot of UIDs to filter, for e.g. when used in
+// `has(name)`. We could potentially have a query level cache, which can be used to speed things up
+// a bit. Or, try to reduce the number of UIDs which make it here.
 func filterStringFunction(arg funcArgs) error {
 	if glog.V(3) {
 		glog.Infof("filterStringFunction. arg: %+v\n", arg.q)
@@ -1667,6 +1670,9 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		// Parse the key upfront, otherwise ReadPostingList would advance the
 		// iterator.
 		pk := x.Parse(item.Key())
+
+		// The following optimization speeds up this iteration considerably, because it avoids
+		// the need to run ReadPostingList.
 		if item.UserMeta()&posting.BitCompletePosting > 0 {
 			// This bit would only be set if there are valid uids in UidPack.
 			result.Uids = append(result.Uids, pk.Uid)
