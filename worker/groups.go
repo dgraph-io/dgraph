@@ -813,6 +813,9 @@ func (g *groupi) processOracleDeltaStream() {
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
+			if len(delta.Txns) > 0 {
+				delta.MaxAssigned = x.Max(delta.MaxAssigned, delta.Txns[len(delta.Txns)-1].CommitTs)
+			}
 			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
 			if glog.V(3) {
 				glog.Infof("Batched %d updates. Proposing Delta: %v.", batch, delta)
