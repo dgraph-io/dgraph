@@ -601,10 +601,18 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	return err
 }
 
-func (l *List) IsEmpty() bool {
+func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	l.RLock()
 	defer l.RUnlock()
-	return codec.ApproxLen(l.plist.Pack) == 0 && len(l.mutationMap) == 0
+	var count int
+	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
+		count++
+		return ErrStopIteration
+	})
+	if err != nil {
+		return false, err
+	}
+	return count == 0, nil
 }
 
 func (l *List) length(readTs, afterUid uint64) int {
@@ -655,7 +663,7 @@ func (l *List) MarshalToKv() (*pb.KV, error) {
 }
 
 func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
-	if plist.Pack == nil {
+	if plist.Pack == nil || len(plist.Pack.Blocks) == 0 {
 		return nil, BitEmptyPosting
 	}
 	data, err := plist.Marshal()
