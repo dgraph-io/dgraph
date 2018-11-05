@@ -234,27 +234,37 @@ func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
 func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "link: uid @reverse ."}))
-	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+	assignedIds, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		SetNquads: []byte("<0x1> <link> <0x2> ."),
+		SetNquads: []byte("_:a <link> _:b ."),
 	})
 	require.NoError(t, err)
+	aId := assignedIds.Uids["a"]
+	bId := assignedIds.Uids["b"]
+
+	// qr := fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId)
+	// fmt.Printf("query = %q\n", qr)
+	// resp, err := c.NewTxn().Query(ctx, qr)
+	// require.NoError(t, err)
+	// fmt.Printf("resp = %s\n", resp.Json)
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		DelNquads: []byte("<0x1> <link> * ."),
+		DelNquads: []byte("<" + aId + "> <link> * ."),
 	})
-	resp, err := c.NewTxn().Query(ctx, "{ q(func: uid(0x2)) { ~link { uid } }}")
+	resp, err := c.NewTxn().Query(ctx, "{ q(func: uid("+bId+")) { ~link { uid } }}")
 	require.NoError(t, err)
 	CompareJSON(t, `{"q":[]}`, string(resp.Json))
 
-	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+	assignedIds, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		SetNquads: []byte("<0x1> <link> <0x3> ."),
+		SetNquads: []byte("<" + aId + "> <link> _:c ."),
 	})
-	resp, err = c.NewTxn().Query(ctx, "{ q(func: uid(0x3)) { ~link { uid } }}")
+	cId := assignedIds.Uids["c"]
+
+	resp, err = c.NewTxn().Query(ctx, "{ q(func: uid("+cId+")) { ~link { uid } }}")
 	require.NoError(t, err)
-	CompareJSON(t, `{"q":[{"~link": [{"uid": "0x1"}]}]}`, string(resp.Json))
+	CompareJSON(t, `{"q":[{"~link": [{"uid": "`+aId+`"}]}]}`, string(resp.Json))
 }
 
 func ExpandAllReversePredicatesTest(t *testing.T, c *dgo.Dgraph) {

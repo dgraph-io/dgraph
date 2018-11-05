@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -428,6 +429,12 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	// CommitNow was true, no need to send keys.
 	resp.Context.Keys = resp.Context.Keys[:0]
 	resp.Context.CommitTs = cts
+
+	glog.Infof("Waiting for commits ts: %d\n", cts)
+	defer glog.Infoln("DONE")
+	if err := posting.Oracle().WaitForTs(ctx, resp.Context.CommitTs); err != nil {
+		glog.Errorf("server.Mutate. WaitForTs for Commit. Error: %v. Ignoring...", err)
+	}
 	return resp, nil
 }
 
