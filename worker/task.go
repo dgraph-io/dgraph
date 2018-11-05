@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
@@ -561,12 +562,11 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == HasFn:
-			len := pl.Length(args.q.ReadTs, 0)
-			if len == -1 {
-				return posting.ErrTsTooOld
+			empty, err := pl.IsEmpty(args.q.ReadTs, 0)
+			if err != nil {
+				return err
 			}
-			count := int64(len)
-			if EvalCompare("gt", count, 0) {
+			if !empty {
 				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
@@ -1004,11 +1004,21 @@ func filterGeoFunction(arg funcArgs) error {
 }
 
 func filterStringFunction(arg funcArgs) error {
+	if glog.V(3) {
+		glog.Infof("filterStringFunction. arg: %+v\n", arg.q)
+		defer glog.Infof("Done filterStringFunction")
+	}
+
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	var values [][]types.Val
 	filteredUids := make([]uint64, 0, len(uids.Uids))
 	lang := langForFunc(arg.q.Langs)
+
+	// This iteration must be done in a serial order, because we're also storing the values in a
+	// matrix, to check it later.
+	// TODO: This function can be optimized by having a query specific cache, which can be populated
+	// by the handleHasFunction for e.g. for a `has(name)` query.
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
 		pl, err := posting.Get(key)
@@ -1616,6 +1626,10 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 }
 
 func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
+	if glog.V(3) {
+		glog.Infof("handleHasFunction query: %+v\n", q)
+	}
+
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
 
@@ -1639,8 +1653,9 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	it := txn.NewIterator(itOpt)
 	defer it.Close()
 
-	// TODO
-	// Switch this to stream list interface.
+	// This function could be switched to the stream.Lists framework, but after the change to use
+	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
+	// occurs in filterStringFunction (like has(name) queries).
 	for it.Seek(startKey); it.ValidForPrefix(prefix); {
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
@@ -1663,16 +1678,9 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
-		// TODO: Create a list.HasAny() function, which can provide this. This
-		// func can then be used elsewhere, we're using list.Length right now.
-		var num int
-		if err = l.Iterate(q.ReadTs, 0, func(_ *pb.Posting) error {
-			num++
-			return posting.ErrStopIteration
-		}); err != nil {
+		if empty, err := l.IsEmpty(q.ReadTs, 0); err != nil {
 			return err
-		}
-		if num > 0 {
+		} else if !empty {
 			result.Uids = append(result.Uids, pk.Uid)
 		}
 
