@@ -53,7 +53,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 
 	close(shutdownCh)
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`))
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +66,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"code": "Success", "message": "Export completed."}`))
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`))
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`)))
 
 }
 

@@ -100,13 +100,12 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 }
 
 // progress allows us to monitor the progress of an upload.
-// TODO: I used this during testing, maybe keep it turned on for -v 5 ?
 type progress struct{ n uint64 }
 
 func (p *progress) Read(b []byte) (int, error) {
 	n := atomic.AddUint64(&p.n, uint64(len(b)))
 	if n%s3MinioChunkSize == 0 { // every 64MiB
-		glog.V(5).Infof("--- progress: %d", n)
+		glog.V(5).Infof("--- upload progress: %d", n)
 	}
 	return int(n), nil
 }
@@ -115,7 +114,8 @@ func (p *progress) Read(b []byte) (int, error) {
 func (h *s3Handler) upload(mc *minio.Client) {
 	start := time.Now()
 	h.pr, h.pw = io.Pipe()
-	n, err := mc.PutObject(h.bucket, h.object, h.pr, -1, minio.PutObjectOptions{})
+	n, err := mc.PutObject(h.bucket, h.object, h.pr, -1,
+		minio.PutObjectOptions{Progress: &progress{}})
 	if err != nil {
 		glog.Errorf("Failure while uploading backup: %s", err)
 		h.pw.Close()
