@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -354,13 +355,13 @@ func (n *Node) BatchAndSendMessages() {
 			failedConn[to] = false
 			data := make([]byte, buf.Len())
 			copy(data, buf.Bytes())
-			go n.doSendMessage(pool, data)
+			go n.doSendMessage(to, pool, data)
 			buf.Reset()
 		}
 	}
 }
 
-func (n *Node) doSendMessage(pool *Pool, data []byte) {
+func (n *Node) doSendMessage(to uint64, pool *Pool, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -377,8 +378,15 @@ func (n *Node) doSendMessage(pool *Pool, data []byte) {
 	// already being run in one.
 	_, err := c.RaftMessage(ctx, batch)
 	if err != nil {
-		glog.V(3).Infof("Error while sending Raft message to node with addr: %s, err: %v\n",
-			pool.Addr, err)
+		switch {
+		case strings.Contains(err.Error(), "TransientFailure"):
+			glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
+			n.Raft().ReportUnreachable(to)
+			pool.SetUnhealthy()
+		default:
+			glog.V(3).Infof("Error while sending Raft message to node with addr: %s, err: %v\n",
+				pool.Addr, err)
+		}
 	}
 	// We don't need to do anything if we receive any error while sending message.
 	// RAFT would automatically retry.
