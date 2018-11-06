@@ -17,7 +17,9 @@
 package alpha
 
 import (
+	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -146,6 +148,47 @@ func setupCustomTokenizers() {
 	for _, soFile := range strings.Split(customTokenizers, ",") {
 		tok.LoadCustomTokenizer(soFile)
 	}
+}
+
+// Parses the comma-delimited whitelist ip-range string passed in as an argument
+// from the command line and returns slice of []IPRange
+//
+// ex. "144.142.126.222:144.124.126.400,190.59.35.57:190.59.35.99"
+func parseIPsFromString(str string) ([]worker.IPRange, error) {
+	if str == "" {
+		return []worker.IPRange{}, nil
+	}
+
+	var ipRanges []worker.IPRange
+	ipRangeStrings := strings.Split(str, ",")
+
+	// Check that the each of the ranges are valid
+	for _, s := range ipRangeStrings {
+		ipsTuple := strings.Split(s, ":")
+
+		// Assert that the range consists of an upper and lower bound
+		if len(ipsTuple) != 2 {
+			return nil, errors.New("IP range must have a lower and upper bound")
+		}
+
+		lowerBoundIP := net.ParseIP(ipsTuple[0])
+		upperBoundIP := net.ParseIP(ipsTuple[1])
+
+		if lowerBoundIP == nil || upperBoundIP == nil {
+			// Assert that both upper and lower bound are valid IPs
+			return nil, errors.New(
+				ipsTuple[0] + " or " + ipsTuple[1] + " is not a valid IP address",
+			)
+		} else if bytes.Compare(lowerBoundIP, upperBoundIP) > 0 {
+			// Assert that the lower bound is less than the upper bound
+			return nil, errors.New(
+				ipsTuple[0] + " cannot be greater than " + ipsTuple[1],
+			)
+		} else {
+			ipRanges = append(ipRanges, worker.IPRange{Lower: lowerBoundIP, Upper: upperBoundIP})
+		}
+	}
+	return ipRanges, nil
 }
 
 func httpPort() int {
@@ -311,16 +354,22 @@ func run() {
 
 		Nomutations:    Alpha.Conf.GetBool("nomutations"),
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
-		WhitelistedIPs: Alpha.Conf.GetString("whitelist"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	})
-	worker.Config.ExportPath = Alpha.Conf.GetString("export")
-	worker.Config.NumPendingProposals = Alpha.Conf.GetInt("pending_proposals")
-	worker.Config.Tracing = Alpha.Conf.GetFloat64("trace")
-	worker.Config.MyAddr = Alpha.Conf.GetString("my")
-	worker.Config.ZeroAddr = Alpha.Conf.GetString("zero")
-	worker.Config.RaftId = cast.ToUint64(Alpha.Conf.GetString("idx"))
-	worker.Config.ExpandEdge = Alpha.Conf.GetBool("expand_edge")
+
+	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
+	x.Check(err)
+	worker.Config = worker.Options{
+		ExportPath:          Alpha.Conf.GetString("export"),
+		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
+		Tracing:             Alpha.Conf.GetFloat64("trace"),
+		MyAddr:              Alpha.Conf.GetString("my"),
+		ZeroAddr:            Alpha.Conf.GetString("zero"),
+		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
+		ExpandEdge:          Alpha.Conf.GetBool("expand_edge"),
+		WhiteListedIPRanges: ips,
+		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
+	}
 
 	x.LoadTLSConfig(&tlsConf, Alpha.Conf)
 	tlsConf.ClientAuth = Alpha.Conf.GetString("tls_client_auth")
