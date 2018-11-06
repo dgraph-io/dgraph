@@ -50,7 +50,6 @@ import (
 
 var (
 	bindall bool
-	config  edgraph.Options
 	tlsConf x.TLSHelperConfig
 )
 
@@ -72,56 +71,54 @@ they form a Raft group and provide synchronous replication.
 	}
 	Alpha.EnvPrefix = "DGRAPH_ALPHA"
 
+	// If you change any of the flags below, you must also update run() to call Alpha.Conf.Get
+	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
+	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
-	flag.StringVarP(&config.PostingDir, "postings", "p", "p",
-		"Directory to store posting lists.")
+	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.StringVar(&config.BadgerTables, "badger.tables", "mmap",
+	flag.String("badger.tables", "mmap",
 		"[ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
 			"Option sequence consume most to least RAM while providing best to worst read "+
 			"performance respectively.")
-	flag.StringVar(&config.BadgerVlog, "badger.vlog", "mmap",
+	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
 
-	flag.StringVarP(&config.WALDir, "wal", "w", "w", "Directory to store raft write-ahead logs.")
-	flag.BoolVar(&config.Nomutations, "nomutations", false, "Don't allow mutations on this server.")
-
-	flag.StringVar(&config.WhitelistedIPs, "whitelist", "",
+	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
+	flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	flag.String("whitelist", "",
 		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
-
-	flag.StringVar(&worker.Config.ExportPath, "export", "export", "Folder in which to store exports.")
-	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 256,
+	flag.String("export", "export", "Folder in which to store exports.")
+	flag.Int("pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
-	flag.Float64Var(&worker.Config.Tracing, "trace", 0.0, "The ratio of queries to trace.")
-	flag.StringVar(&worker.Config.MyAddr, "my", "",
-		"IP_ADDRESS:PORT of this server, so other Dgraph alphas can talk to this.")
-	flag.StringVarP(&worker.Config.ZeroAddr, "zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
-		"IP_ADDRESS:PORT of Dgraph zero.")
-	flag.Uint64Var(&worker.Config.RaftId, "idx", 0,
+	flag.Float64("trace", 0.0, "The ratio of queries to trace.")
+	flag.String("my", "",
+		"IP_ADDRESS:PORT of this server, so other Dgraph Alphas can talk to this.")
+	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
+		"IP_ADDRESS:PORT of a Dgraph Zero of the cluster.")
+	flag.Uint64("idx", 0,
 		"Optional Raft ID that this server will use to join RAFT groups.")
-	flag.BoolVar(&worker.Config.ExpandEdge, "expand_edge", true,
+	flag.Bool("expand_edge", true,
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
-	flag.IntVar(&worker.Config.MaxRetries, "max_retries", -1,
+	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
-
-	flag.StringVar(&config.AuthToken, "auth_token", "",
+	flag.String("auth_token", "",
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
-	flag.Float64VarP(&config.AllottedMemory, "lru_mb", "l", -1,
+	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
-
-	flag.BoolVar(&x.Config.DebugMode, "debugmode", false,
+	flag.Bool("debugmode", false,
 		"Enable debug mode for more debug information.")
 
 	// Useful for running multiple servers on the same machine.
-	flag.IntVarP(&x.Config.PortOffset, "port_offset", "o", 0,
+	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
 	flag.Uint64("query_edge_limit", 1e6,
@@ -304,12 +301,34 @@ var shutdownCh chan struct{}
 
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
+
+	edgraph.SetConfiguration(edgraph.Options{
+		BadgerTables: Alpha.Conf.GetString("badger.tables"),
+		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
+
+		PostingDir: Alpha.Conf.GetString("postings"),
+		WALDir:     Alpha.Conf.GetString("wal"),
+
+		Nomutations:    Alpha.Conf.GetBool("nomutations"),
+		AuthToken:      Alpha.Conf.GetString("auth_token"),
+		WhitelistedIPs: Alpha.Conf.GetString("whitelist"),
+		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	})
+	worker.Config.ExportPath = Alpha.Conf.GetString("export")
+	worker.Config.NumPendingProposals = Alpha.Conf.GetInt("pending_proposals")
+	worker.Config.Tracing = Alpha.Conf.GetFloat64("trace")
+	worker.Config.MyAddr = Alpha.Conf.GetString("my")
+	worker.Config.ZeroAddr = Alpha.Conf.GetString("zero")
+	worker.Config.RaftId = cast.ToUint64(Alpha.Conf.GetString("idx"))
+	worker.Config.ExpandEdge = Alpha.Conf.GetBool("expand_edge")
+
 	x.LoadTLSConfig(&tlsConf, Alpha.Conf)
 	tlsConf.ClientAuth = Alpha.Conf.GetString("tls_client_auth")
 
-	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
 	x.Init()
+	x.Config.DebugMode = Alpha.Conf.GetBool("debugmode")
+	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 
 	x.PrintVersion()

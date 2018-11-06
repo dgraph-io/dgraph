@@ -22,11 +22,9 @@ type IPRange struct {
 }
 
 type Options struct {
-	BaseWorkerPort      int
 	ExportPath          string
 	NumPendingProposals int
 	Tracing             float64
-	GroupIds            string
 	MyAddr              string
 	ZeroAddr            string
 	RaftId              uint64
