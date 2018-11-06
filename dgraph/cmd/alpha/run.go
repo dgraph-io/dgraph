@@ -96,11 +96,11 @@ they form a Raft group and provide synchronous replication.
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	flag.String("my", "",
-		"IP_ADDRESS:PORT of this server, so other Dgraph Alphas can talk to this.")
+		"IP_ADDRESS:PORT of this Dgraph Alpha, so other Dgraph Alphas can talk to this.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
-		"IP_ADDRESS:PORT of a Dgraph Zero of the cluster.")
+		"IP_ADDRESS:PORT of a Dgraph Zero.")
 	flag.Uint64("idx", 0,
-		"Optional Raft ID that this server will use to join RAFT groups.")
+		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
 	flag.Bool("expand_edge", true,
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
