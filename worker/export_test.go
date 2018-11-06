@@ -18,8 +18,8 @@ package worker
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
+	"context"
 	"io/ioutil"
 	"math"
 	"os"
@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -110,13 +111,20 @@ func TestExport(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	err = export(bdir, timestamp())
+	Config.ExportPath = bdir
+	readTs := timestamp()
+	// Do the following so export won't block forever for readTs.
+	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
+	err = export(context.Background(), &pb.ExportPayload{ReadTs: readTs, GroupId: 1})
 	require.NoError(t, err)
 
 	searchDir := bdir
 	fileList := []string{}
 	schemaFileList := []string{}
 	err = filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
+		if f.IsDir() {
+			return nil
+		}
 		if path != bdir {
 			if strings.Contains(path, "schema") {
 				schemaFileList = append(schemaFileList, path)
@@ -127,7 +135,7 @@ func TestExport(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	require.Equal(t, 1, len(fileList))
+	require.Equal(t, 1, len(fileList), "filelist=%v", fileList)
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -190,12 +198,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, 0, int(nq.Facets[2].ValType))
 			require.Equal(t, 4, int(nq.Facets[4].ValType))
 		}
-		// Test label
-		if nq.Subject != "_:uid3" && nq.Subject != "_:uid5" {
-			require.Equal(t, "author0", nq.Label)
-		} else {
-			require.Equal(t, "", nq.Label)
-		}
+		// Labels have been removed.
 		count++
 	}
 	require.NoError(t, scanner.Err())
@@ -230,6 +233,11 @@ func TestExport(t *testing.T) {
 	require.Equal(t, 1, count)
 }
 
+type skv struct {
+	attr   string
+	schema pb.SchemaUpdate
+}
+
 func TestToSchema(t *testing.T) {
 	testCases := []struct {
 		skv      *skv
@@ -238,7 +246,7 @@ func TestToSchema(t *testing.T) {
 		{
 			skv: &skv{
 				attr: "Alice",
-				schema: &pb.SchemaUpdate{
+				schema: pb.SchemaUpdate{
 					Predicate: "mother",
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_REVERSE,
@@ -253,7 +261,7 @@ func TestToSchema(t *testing.T) {
 		{
 			skv: &skv{
 				attr: "Alice:best",
-				schema: &pb.SchemaUpdate{
+				schema: pb.SchemaUpdate{
 					Predicate: "mother",
 					ValueType: pb.Posting_STRING,
 					Directive: pb.SchemaUpdate_REVERSE,
@@ -267,9 +275,9 @@ func TestToSchema(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		buf := new(bytes.Buffer)
-		toSchema(buf, testCase.skv)
-		require.Equal(t, testCase.expected, buf.String())
+		kv, err := toSchema(testCase.skv.attr, testCase.skv.schema)
+		require.NoError(t, err)
+		require.Equal(t, testCase.expected, string(kv.Val))
 	}
 }
 

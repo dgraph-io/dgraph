@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool, startTs uint64) error {
@@ -29,13 +30,13 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool,
 		return x.Errorf("Predicate %s index mismatch, rebuild %v", attr, rebuild)
 	}
 	// Remove index edges
+	glog.Infof("Deleting index for %s", attr)
 	if err := posting.DeleteIndex(attr); err != nil {
 		return err
 	}
 	if rebuild {
-		if err := posting.RebuildIndex(ctx, attr, startTs); err != nil {
-			return err
-		}
+		glog.Infof("Rebuilding index for %s", attr)
+		return posting.RebuildIndex(ctx, attr, startTs)
 	}
 	return nil
 }
@@ -44,26 +45,26 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	if schema.State().IsReversed(attr) != rebuild {
 		return x.Errorf("Predicate %s reverse mismatch, rebuild %v", attr, rebuild)
 	}
+	glog.Infof("Deleting reverse index for %s", attr)
 	if err := posting.DeleteReverseEdges(attr); err != nil {
 		return err
 	}
 	if rebuild {
 		// Remove reverse edges
-		if err := posting.RebuildReverseEdges(ctx, attr, startTs); err != nil {
-			return err
-		}
+		glog.Infof("Rebuilding reverse index for %s", attr)
+		return posting.RebuildReverseEdges(ctx, attr, startTs)
 	}
 	return nil
 }
 
 func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild bool, startTs uint64) error {
+	glog.Infof("Deleting count index for %s", attr)
 	if err := posting.DeleteCountIndex(attr); err != nil {
 		return err
 	}
 	if rebuild {
-		if err := posting.RebuildCountIndex(ctx, attr, startTs); err != nil {
-			return err
-		}
+		glog.Infof("Rebuilding count index for %s", attr)
+		return posting.RebuildCountIndex(ctx, attr, startTs)
 	}
 	return nil
 }

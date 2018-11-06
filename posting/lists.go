@@ -17,8 +17,6 @@
 package posting
 
 import (
-	"crypto/md5"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -63,10 +61,7 @@ const (
 // RAFT entries discarded.
 func init() {
 	x.AddInit(func() {
-		h := md5.New()
-		pl := pb.PostingList{
-			Checksum: h.Sum(nil),
-		}
+		pl := pb.PostingList{}
 		var err error
 		emptyPostingList, err = pl.Marshal()
 		x.Check(err)
@@ -99,7 +94,7 @@ func getMemUsage() int {
 
 	contents, err := ioutil.ReadFile("/proc/self/stat")
 	if err != nil {
-		x.Println("Can't read the proc file", err)
+		glog.Errorf("Can't read the proc file. Err: %v\n", err)
 		return 0
 	}
 
@@ -107,13 +102,13 @@ func getMemUsage() int {
 	// 24th entry of the file is the RSS which denotes the number of pages
 	// used by the process.
 	if len(cont) < 24 {
-		x.Println("Error in RSS from stat")
+		glog.Errorln("Error in RSS from stat")
 		return 0
 	}
 
 	rss, err := strconv.Atoi(cont[23])
 	if err != nil {
-		x.Println(err)
+		glog.Errorln(err)
 		return 0
 	}
 
@@ -138,7 +133,7 @@ func periodicUpdateStats(lc *y.Closer) {
 			inUse := float64(megs)
 
 			stats := lcache.Stats()
-			x.EvictedPls.Set(int64(stats.NumEvicts))
+			x.LcacheEvicts.Set(int64(stats.NumEvicts))
 			x.LcacheSize.Set(int64(stats.Size))
 			x.LcacheLen.Set(int64(stats.Length))
 
@@ -211,7 +206,6 @@ func updateMemoryMetrics(lc *y.Closer) {
 var (
 	pstore *badger.DB
 	lcache *listCache
-	btree  *BTree
 	closer *y.Closer
 )
 
@@ -219,88 +213,12 @@ var (
 func Init(ps *badger.DB) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
-	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
-	closer = y.NewCloser(3)
+	closer = y.NewCloser(2)
 
 	go periodicUpdateStats(closer)
 	go updateMemoryMetrics(closer)
-	go clearBtree(closer)
-}
-
-// clearBtree checks if the keys stored in the btree have reached their conclusion, and if so,
-// removes them from the tree. Conclusion in this case would be that the key got written out to
-// disk, or the txn which introduced the key got aborted.
-func clearBtree(closer *y.Closer) {
-	defer closer.Done()
-	var removeKey = errors.New("Remove key from btree.")
-
-	handleKey := func(txn *badger.Txn, k []byte) error {
-		_, err := txn.Get(k)
-		switch {
-		case err == badger.ErrKeyNotFound:
-			l := GetLru(k) // Retrieve from LRU cache, if it exists.
-			if l == nil {
-				// Posting list no longer in memory. So, it must have been either written to
-				// disk, or removed from memory after a txn abort.
-				return removeKey
-			}
-			l.RLock()
-			defer l.RUnlock()
-			if !l.hasPendingTxn() {
-				// This key's txn was aborted. So, we can remove it from btree.
-				return removeKey
-			}
-			return nil
-		case err != nil:
-			glog.Warningf("Error while checking key: %v\n", err)
-			return err
-		default:
-			// Key was found on disk. Remove from btree.
-			return removeKey
-		}
-	}
-
-	removeKeysOnDisk := func() {
-		var keys []string
-		var count int
-		err := pstore.View(func(txn *badger.Txn) error {
-			var rerr error
-			btree.Ascend(func(k []byte) bool {
-				count++
-				err := handleKey(txn, k)
-				if err == removeKey {
-					keys = append(keys, string(k))
-				} else if err != nil {
-					rerr = err
-					return false
-				}
-				return true
-			})
-			return rerr
-		})
-		if glog.V(2) && count > 0 {
-			glog.Infof("Btree size: %d. Removing=%d. Error=%v\n", count, len(keys), err)
-		}
-		if err == nil {
-			for _, k := range keys {
-				btree.Delete([]byte(k))
-			}
-		}
-	}
-
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			removeKeysOnDisk()
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
 }
 
 func Cleanup() {
@@ -324,10 +242,10 @@ func StopLRUEviction() {
 func Get(key []byte) (rlist *List, err error) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
-		x.CacheHit.Add(1)
+		x.LcacheHit.Add(1)
 		return lp, nil
 	}
-	x.CacheMiss.Add(1)
+	x.LcacheMiss.Add(1)
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
@@ -338,9 +256,7 @@ func Get(key []byte) (rlist *List, err error) {
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
-		x.CacheRace.Add(1)
-	} else if !lp.onDisk {
-		btree.Insert(lp.key)
+		x.LcacheRace.Add(1)
 	}
 	return lp, nil
 }

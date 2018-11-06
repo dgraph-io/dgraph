@@ -19,9 +19,9 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -76,7 +76,7 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 			// Exact index can only be applied for strings so we can safely try to convert Value to
 			// string.
 			if (it.Identifier() == exactTok.Identifier()) && len(sv.Value.(string)) > 100 {
-				x.Printf("Long term for exact index on predicate: [%s]. "+
+				glog.Infof("Long term for exact index on predicate: [%s]. "+
 					"Consider switching to hash for better performance.\n", attr)
 			}
 		}
@@ -412,46 +412,25 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *pb.DirectedEdge,
 }
 
 func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
-	iterOpt := badger.DefaultIteratorOptions
-	iterOpt.PrefetchValues = false
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	idxIt := txn.NewIterator(iterOpt)
-	defer idxIt.Close()
+	return pstore.View(func(txn *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchValues = false
 
-	var m sync.Mutex
-	var err error
-	setError := func(e error) {
-		m.Lock()
-		err = e
-		m.Unlock()
-	}
-	var wg sync.WaitGroup
-	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
-		item := idxIt.Item()
-		if !remove(item.Key()) {
-			continue
-		}
-		nkey := item.KeyCopy(nil)
-		version := item.Version()
+		itr := txn.NewIterator(opt)
+		defer itr.Close()
 
-		txn := pstore.NewTransactionAt(version, true)
-		txn.Delete(nkey)
-		wg.Add(1)
-		err := txn.CommitAt(version, func(e error) {
-			defer wg.Done()
-			if e != nil {
-				setError(e)
-				return
+		writer := x.NewTxnWriter(pstore)
+		for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+			item := itr.Item()
+			if !remove(item.Key()) {
+				continue
 			}
-		})
-		txn.Discard()
-		if err != nil {
-			break
+			if err := writer.Delete(item.KeyCopy(nil), item.Version()); err != nil {
+				return err
+			}
 		}
-	}
-	wg.Wait()
-	return err
+		return writer.Flush()
+	})
 }
 
 func compareAttrAndType(key []byte, attr string, typ byte) bool {
@@ -527,6 +506,8 @@ func (r *rebuild) Run(ctx context.Context) error {
 	t := pstore.NewTransactionAt(r.startTs, false)
 	defer t.Discard()
 
+	glog.V(1).Infof("Rebuild: Starting process. StartTs=%d. Prefix=\n%s\n",
+		r.startTs, hex.Dump(r.prefix))
 	opts := badger.DefaultIteratorOptions
 	opts.AllVersions = true
 	it := t.NewIterator(opts)
@@ -585,6 +566,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 			return err
 		}
 	}
+	glog.V(1).Infof("Rebuild: Iteration done. Now commiting at ts=%d\n", r.startTs)
 
 	// We must commit all the posting lists to memory, so they'd be picked up
 	// during posting list rollup below.
@@ -593,26 +575,33 @@ func (r *rebuild) Run(ctx context.Context) error {
 	}
 
 	// Now we write all the created posting lists to disk.
-	writer := x.TxnWriter{DB: pstore}
+	writer := x.NewTxnWriter(pstore)
 	for key := range txn.deltas {
 		pl, err := txn.Get([]byte(key))
 		if err != nil {
 			return err
 		}
 
+		le := pl.Length(r.startTs, 0)
+		if le == 0 {
+			y.AssertTruef(le > 0, "Unexpected list of size zero: %q", key)
+		}
+		kv, err := pl.MarshalToKv()
+		if err != nil {
+			return err
+		}
+		// We choose to write the PL at r.startTs, so it won't be read by txns,
+		// which occurred before this schema mutation. Typically, we use
+		// kv.Version as the timestamp.
+		if err = writer.SetAt(kv.Key, kv.Val, kv.UserMeta[0], r.startTs); err != nil {
+			return err
+		}
+		// This locking is just to catch any future issues.  We shouldn't need
+		// to release this lock, because each posting list must only be accessed
+		// once and never again.
 		pl.Lock()
-		// We shouldn't need to release this lock, because each posting list
-		// must only be accessed once and never again.
-		le := pl.length(r.startTs, 0)
-		y.AssertTruef(le > 0, "Unexpected list of size zero: %q", key)
-		if err := pl.rollup(); err != nil {
-			return err
-		}
-		data, meta := marshalPostingList(pl.plist)
-		if err = writer.SetAt([]byte(key), data, meta, r.startTs); err != nil {
-			return err
-		}
 	}
+	glog.V(1).Infoln("Rebuild: Flushing all writes.")
 	return writer.Flush()
 }
 
@@ -791,7 +780,6 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 }
 
 func DeleteAll() error {
-	btree.DeleteAll()
 	lcache.clear(func([]byte) bool { return true })
 	return deleteEntries(nil, func(key []byte) bool {
 		pk := x.Parse(key)
@@ -806,7 +794,7 @@ func DeleteAll() error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	x.Printf("Dropping predicate: [%s]", attr)
+	glog.Infof("Dropping predicate: [%s]", attr)
 	lcache.clear(func(key []byte) bool {
 		return compareAttrAndType(key, attr, x.ByteData)
 	})

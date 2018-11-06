@@ -21,7 +21,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -71,6 +73,22 @@ type Node struct {
 	Applied x.WaterMark
 }
 
+type raftLogger struct {
+}
+
+func (rl *raftLogger) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
+func (rl *raftLogger) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
+func (rl *raftLogger) Error(v ...interface{})                   { glog.Error(v...) }
+func (rl *raftLogger) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
+func (rl *raftLogger) Info(v ...interface{})                    { glog.Info(v...) }
+func (rl *raftLogger) Infof(format string, v ...interface{})    { glog.Infof(format, v...) }
+func (rl *raftLogger) Warning(v ...interface{})                 { glog.Warning(v...) }
+func (rl *raftLogger) Warningf(format string, v ...interface{}) { glog.Warningf(format, v...) }
+func (rl *raftLogger) Fatal(v ...interface{})                   { glog.Fatal(v...) }
+func (rl *raftLogger) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
+func (rl *raftLogger) Panic(v ...interface{})                   { log.Panic(v...) }
+func (rl *raftLogger) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
+
 func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
@@ -81,19 +99,18 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		Store:  store,
 		Cfg: &raft.Config{
 			ID:              rc.Id,
-			ElectionTick:    100, // 200 ms if we call Tick() every 20 ms.
-			HeartbeatTick:   1,   // 20 ms if we call Tick() every 20 ms.
+			ElectionTick:    100, // 2s if we call Tick() every 20 ms.
+			HeartbeatTick:   1,   // 20ms if we call Tick() every 20 ms.
 			Storage:         store,
-			MaxSizePerMsg:   256 << 10,
+			MaxSizePerMsg:   1 << 20, // 1MB should allow more batching.
 			MaxInflightMsgs: 256,
-			Logger:          &raft.DefaultLogger{Logger: x.Logger},
 			// We don't need lease based reads. They cause issues because they
 			// require CheckQuorum to be true, and that causes a lot of issues
 			// for us during cluster bootstrapping and later. A seemingly
 			// healthy cluster would just cause leader to step down due to
 			// "inactive" quorum, and then disallow anyone from becoming leader.
 			// So, let's stick to default options.  Let's achieve correctness,
-			// then we achieve performance. Plus, for the Dgraph servers, we'll
+			// then we achieve performance. Plus, for the Dgraph alphas, we'll
 			// be soon relying only on Timestamps for blocking reads and
 			// achieving linearizability, than checking quorums (Zero would
 			// still check quorums).
@@ -116,6 +133,8 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			// like somehow the first index can be out of sync with the latest
 			// snapshot.
 			Applied: snap.Metadata.Index,
+
+			Logger: &raftLogger{},
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
@@ -130,6 +149,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	n.Applied.Init()
 	// This should match up to the Applied index set above.
 	n.Applied.SetDoneUntil(n.Cfg.Applied)
+	glog.Infof("Setting raft.Config to: %+v\n", n.Cfg)
 	return n
 }
 
@@ -232,7 +252,13 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 }
 
 func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
-	x.Check(n.Store.Save(h, es, s))
+	for {
+		if err := n.Store.Save(h, es, s); err != nil {
+			glog.Errorf("While trying to save Raft update: %v. Retrying...", err)
+		} else {
+			return
+		}
+	}
 }
 
 func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
@@ -329,13 +355,13 @@ func (n *Node) BatchAndSendMessages() {
 			failedConn[to] = false
 			data := make([]byte, buf.Len())
 			copy(data, buf.Bytes())
-			go n.doSendMessage(pool, data)
+			go n.doSendMessage(to, pool, data)
 			buf.Reset()
 		}
 	}
 }
 
-func (n *Node) doSendMessage(pool *Pool, data []byte) {
+func (n *Node) doSendMessage(to uint64, pool *Pool, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -352,8 +378,15 @@ func (n *Node) doSendMessage(pool *Pool, data []byte) {
 	// already being run in one.
 	_, err := c.RaftMessage(ctx, batch)
 	if err != nil {
-		glog.V(3).Infof("Error while sending Raft message to node with addr: %s, err: %v\n",
-			pool.Addr, err)
+		switch {
+		case strings.Contains(err.Error(), "TransientFailure"):
+			glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
+			n.Raft().ReportUnreachable(to)
+			pool.SetUnhealthy()
+		default:
+			glog.V(3).Infof("Error while sending Raft message to node with addr: %s, err: %v\n",
+				pool.Addr, err)
+		}
 	}
 	// We don't need to do anything if we receive any error while sending message.
 	// RAFT would automatically retry.

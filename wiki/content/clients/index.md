@@ -54,7 +54,7 @@ documentation for the client API along with examples showing how to use it.
 ### Create the client
 
 To create a client, dial a connection to Dgraph's external Grpc port (typically
-9080). The following code snippet shows just one connection. You can connect to multiple Dgraph servers to distribute the workload evenly.
+9080). The following code snippet shows just one connection. You can connect to multiple Dgraph alphas to distribute the workload evenly.
 
 ```go
 func newClient() *dgo.Dgraph {

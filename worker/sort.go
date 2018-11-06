@@ -201,21 +201,21 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		// We need to reach the last key of this index type.
 		seekKey = x.IndexKey(order.Attr, string(tokenizer.Identifier()+1))
 	}
-	it := posting.NewTxnPrefixIterator(txn, iterOpt, indexPrefix, seekKey)
-	defer it.Close()
+	itr := txn.NewIterator(iterOpt)
+	defer itr.Close()
 
 BUCKETS:
 
 	// Outermost loop is over index buckets.
-	for it.Valid() {
-		key := it.Key()
+	for itr.Seek(seekKey); itr.ValidForPrefix(indexPrefix); itr.Next() {
+		item := itr.Item()
+		key := item.Key() // No need to copy.
 		select {
 		case <-ctx.Done():
 			return &sortresult{&emptySortResult, nil, ctx.Err()}
 		default:
 			k := x.Parse(key)
 			if k == nil {
-				it.Next()
 				continue
 			}
 
@@ -235,7 +235,6 @@ BUCKETS:
 			default:
 				return &sortresult{&emptySortResult, nil, err}
 			}
-			it.Next()
 		}
 	}
 

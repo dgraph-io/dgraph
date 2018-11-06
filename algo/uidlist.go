@@ -20,7 +20,7 @@ import (
 	"container/heap"
 	"sort"
 
-	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
@@ -37,10 +37,13 @@ func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
-func IntersectCompressedWith(u []byte, afterUID uint64, v, o *pb.List) {
-	var bi bp128.BPackIterator
-	bi.Init(u, afterUID)
-	n := bi.Length() - bi.StartIdx()
+func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
+	if pack == nil {
+		return
+	}
+	dec := codec.Decoder{Pack: pack}
+	dec.Seek(afterUID)
+	n := dec.ApproxLen()
 	m := len(v.Uids)
 
 	if n > m {
@@ -53,31 +56,25 @@ func IntersectCompressedWith(u []byte, afterUID uint64, v, o *pb.List) {
 
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
-
 	if ratio < 500 {
-		IntersectCompressedWithLinJump(&bi, v.Uids, &dst)
+		IntersectCompressedWithLinJump(&dec, v.Uids, &dst)
 	} else {
-		IntersectCompressedWithBin(&bi, v.Uids, &dst)
+		IntersectCompressedWithBin(&dec, v.Uids, &dst)
 	}
 	o.Uids = dst
 }
 
-func IntersectCompressedWithLinJump(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
+func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64) {
 	m := len(v)
 	k := 0
-	u := bi.Uids()
-	_, off := IntersectWithLin(u, v[k:], o)
+	_, off := IntersectWithLin(dec.Uids(), v[k:], o)
 	k += off
 
-	for k < m && bi.Valid() {
-		maxId := bi.MaxIntInBlock()
-		if v[k] > maxId {
-			bi.SkipNext()
-			continue
-		} else {
-			bi.Next()
+	for k < m {
+		u := dec.LinearSeek(v[k])
+		if len(u) == 0 {
+			break
 		}
-		u := bi.Uids()
 		_, off := IntersectWithLin(u, v[k:], o)
 		k += off
 	}
@@ -86,42 +83,41 @@ func IntersectCompressedWithLinJump(bi *bp128.BPackIterator, v []uint64, o *[]ui
 // IntersectWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
-func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64) {
-	ld := bi.Length() - bi.StartIdx()
+func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
+	ld := dec.ApproxLen()
 	lq := len(q)
 
-	// TODO: Try SIMD
 	if ld == 0 || lq == 0 {
 		return
 	}
 	// Pick the shorter list and do binary search
 	if ld < lq {
-		bi.AfterUid(q[0] - 1)
-		for bi.Valid() {
-			uids := bi.Uids()
+		uids := dec.Uids()
+		for len(uids) > 0 {
 			for _, u := range uids {
 				qidx := sort.Search(len(q), func(idx int) bool {
 					return q[idx] >= u
 				})
 				if qidx >= len(q) {
 					return
-				} else if q[qidx] == u {
+				}
+				if q[qidx] == u {
 					*o = append(*o, u)
 					qidx++
 				}
 				q = q[qidx:]
 			}
-			bi.Next()
+			uids = dec.Next()
 		}
 		return
 	}
 
 	for _, u := range q {
-		if !bi.Valid() {
+		uids := dec.Seek(u)
+		if len(uids) == 0 {
 			return
 		}
-		found := bi.AfterUid(u)
-		if found {
+		if uids[0] == u {
 			*o = append(*o, u)
 		}
 	}

@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 const N = 10
@@ -101,7 +102,13 @@ func TestIncrement(t *testing.T) {
 	dg := dgo.NewDgraphClient(dc)
 
 	op := api.Operation{DropAll: true}
-	x.Check(dg.Alter(context.Background(), &op))
+
+	// The following piece of code shows how one can set metadata with
+	// auth-token, to allow Alter operation, if the server requires it.
+	md := metadata.New(nil)
+	md.Append("auth-token", "mrjn2")
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	x.Check(dg.Alter(ctx, &op))
 
 	cnt, err := process(dg, false)
 	if err != nil {

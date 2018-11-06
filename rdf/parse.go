@@ -71,6 +71,7 @@ L:
 		switch item.Typ {
 		case itemSubject:
 			rnq.Subject = strings.Trim(item.Val, " ")
+
 		case itemVarKeyword:
 			it.Next()
 			if item = it.Item(); item.Typ != itemLeftRound {
@@ -84,7 +85,8 @@ L:
 			it.Next() // parse ')'
 
 		case itemPredicate:
-			rnq.Predicate = strings.Trim(item.Val, " ")
+			// Here we split predicate and lang directive (ex: "name@en"), if needed.
+			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.Trim(item.Val, " "))
 
 		case itemObject:
 			rnq.ObjectId = strings.Trim(item.Val, " ")
@@ -97,6 +99,7 @@ L:
 			} else {
 				rnq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			}
+
 		case itemLiteral:
 			var err error
 			oval, err = strconv.Unquote(item.Val)
