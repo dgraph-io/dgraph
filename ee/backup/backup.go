@@ -20,7 +20,7 @@ import (
 // Request has all the information needed to perform a backup.
 type Request struct {
 	DB     *badger.DB // Badger pstore managed by this node.
-	Sizex  int64      // approximate upload size
+	Sizex  uint64     // approximate upload size
 	Backup *pb.BackupRequest
 }
 
@@ -36,7 +36,6 @@ func (r *Request) Process(ctx context.Context) error {
 
 	sl := stream.Lists{Stream: w, DB: r.DB}
 	sl.ChooseKeyFunc = nil
-	// sl.ChooseKeyFunc = func(_ *badger.Item) bool { return true }
 	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		item := itr.Item()
 		pk := x.Parse(key)
@@ -60,15 +59,14 @@ func (r *Request) Process(ctx context.Context) error {
 		return l.MarshalToKv()
 	}
 
-	br := r.Backup
 	glog.V(2).Infof("Backup started ...")
-	if err = sl.Orchestrate(ctx, "Backup", br.ReadTs); err != nil {
+	if err = sl.Orchestrate(ctx, "Backup", r.Backup.ReadTs); err != nil {
 		return err
 	}
 	if err = w.cleanup(); err != nil {
 		return err
 	}
-	glog.Infof("Backup complete: group %d at %d", br.GroupId, br.ReadTs)
+	glog.Infof("Backup complete: group %d at %d", r.Backup.GroupId, r.Backup.ReadTs)
 
 	return nil
 }

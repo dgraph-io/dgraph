@@ -15,8 +15,6 @@ import (
 	"github.com/golang/glog"
 )
 
-const dgraphBackupSuffix = ".dgraph-backup"
-
 // handler interface is implemented by URI scheme handlers.
 type handler interface {
 	// Handlers know how to Write and Close to their target.
@@ -70,15 +68,6 @@ func (r *Request) newWriter() (*writer, error) {
 		h = &fileHandler{}
 	}
 
-	// // create session at
-	// sess := &session{
-	// 	ui: ui,
-	// 	// host: u.Host,
-	// 	// path: u.Path,
-	// 	// file: r.Prefix + dgraphBackupSuffix,
-	// 	// args: u.Query(),
-	// 	size: r.Sizex,
-	// }
 	if err := h.Open(uri, r); err != nil {
 		return nil, err
 	}

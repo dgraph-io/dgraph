@@ -43,18 +43,13 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 	if err := posting.Oracle().WaitForTs(ctx, req.ReadTs); err != nil {
 		return err
 	}
-	// calculate upload size
-	var sz int64
+	// create backup request and process it.
+	br := &backup.Request{DB: pstore, Backup: req}
+	// calculate estimated upload size
 	for _, t := range groups().tablets {
 		if t.GroupId == req.GroupId {
-			sz += t.Space
+			br.Sizex += uint64(float64(t.Space) * 1.2)
 		}
-	}
-	// create backup request and process it.
-	br := &backup.Request{
-		DB:     pstore,
-		Backup: req,
-		Sizex:  int64(float64(sz) * 1.20), // Some extra buffer for headers.
 	}
 	return br.Process(ctx)
 }
