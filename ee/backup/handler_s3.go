@@ -76,7 +76,7 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 		return err
 	}
 	// S3 transfer acceleration support.
-	if strings.Contains(uri.Host, "s3-accelerate") {
+	if strings.Contains(uri.Host, s3AccelerateHost) {
 		mc.SetS3TransferAccelerate(uri.Host)
 	}
 	// mc.TraceOn(os.Stderr)
