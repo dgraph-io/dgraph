@@ -19,19 +19,16 @@ package tok
 import (
 	"strings"
 
+	"github.com/dgraph-io/dgraph/tok/stemmerx"
+	"github.com/dgraph-io/dgraph/tok/stopx"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/blevesearch/bleve/analysis/analyzer/custom"
 	"github.com/blevesearch/bleve/analysis/lang/cjk"
 	"github.com/blevesearch/bleve/analysis/token/lowercase"
-	"github.com/blevesearch/bleve/analysis/token/porter"
-	"github.com/blevesearch/bleve/analysis/token/stop"
 	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
 	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
-	"github.com/blevesearch/bleve/analysis/tokenmap"
 	"github.com/blevesearch/bleve/registry"
-	"github.com/blevesearch/blevex/stemmer"
-	"github.com/tebeka/snowball"
 )
 
 var (
@@ -40,115 +37,50 @@ var (
 )
 
 const (
-	FTSTokenizerName   = "fulltext"
-	normalizerFormNFKC = "nfkc"
-	normalizerName     = "nfkc_normalizer"
+	// FTSTokenizerName  = "fulltext"
+	filterUnicodeNorm = "unicodenorm_nfkc"
 )
 
 func initFullTextTokenizers() {
 	bleveCache = registry.NewCache()
 
-	defineNormalizer()
-	defineTermAnalyzer()
+	// unicode normalizer filter - simplifies unicode words using Normalization Form KC (NFKC)
+	// See: http://unicode.org/reports/tr15/#Norm_Forms
+	_, err := bleveCache.DefineTokenFilter(filterUnicodeNorm,
+		map[string]interface{}{
+			"type": unicodenorm.Name,
+			"form": unicodenorm.NFKC,
+		})
+	x.Check(err)
 
-	// List of supported languages (as defined in https://github.com/tebeka/snowball):
-	// danish, dutch, english, finnish, french, german, hungarian, italian, norwegian, porter,
-	// portuguese, romanian, russian, spanish, swedish, turkish
-	for _, lang := range snowball.LangList() {
-		if lang == "porter" {
-			continue
-		}
-
-		for _, cc := range countryCodes(lang) {
-			defineStemmer(cc, lang)
-			defineStopWordsList(cc, lang)
-			defineAnalyzer(cc)
-			registerTokenizer(&FullTextTokenizer{Lang: cc})
-		}
-	}
-
-	for _, lang := range [...]string{"chinese", "japanese", "korean"} {
-		cc := countryCode(lang)
-		defineCJKAnalyzer(cc)
-		registerTokenizer(&FullTextTokenizer{Lang: cc})
-	}
+	// term analyzer - splits on word boundaries, lowercase and normalize tokens
+	_, err = bleveCache.DefineAnalyzer("term",
+		map[string]interface{}{
+			"type":      custom.Name,
+			"tokenizer": unicode.Name,
+			"token_filters": []string{
+				lowercase.Name,
+				filterUnicodeNorm,
+			},
+		})
+	x.Check(err)
 
 	// Default full text tokenizer, with Porter stemmer (it works with English only).
-	defineDefaultFullTextAnalyzer()
+	// fulltext analyzer - does english stop-words removal and Porter stemming
+	_, err = bleveCache.DefineAnalyzer("fulltext",
+		map[string]interface{}{
+			"type":      custom.Name,
+			"tokenizer": unicode.Name,
+			"token_filters": []string{
+				lowercase.Name,
+				filterUnicodeNorm,
+				stopx.Name,
+				stemmerx.Name,
+			},
+		})
+	x.Check(err)
+
 	registerTokenizer(FullTextTokenizer{})
-}
-
-// Create normalizer using Normalization Form KC (NFKC) - Compatibility Decomposition, followed
-// by Canonical Composition. See: http://unicode.org/reports/tr15/#Norm_Forms
-func defineNormalizer() {
-	_, err := bleveCache.DefineTokenFilter(normalizerName, map[string]interface{}{
-		"type": unicodenorm.Name,
-		"form": normalizerFormNFKC,
-	})
-	x.Check(err)
-}
-
-func defineStemmer(cc, lang string) {
-	_, err := bleveCache.DefineTokenFilter(stemmerName(cc), map[string]interface{}{
-		"type": stemmer.Name,
-		"lang": lang,
-	})
-	x.Check(err)
-}
-
-func defineStopWordsList(cc, lang string) {
-	name := stopWordsListName(cc)
-	_, err := bleveCache.DefineTokenMap(name, map[string]interface{}{
-		"type":   tokenmap.Name,
-		"tokens": stopwords[lang],
-	})
-	x.Check(err)
-
-	_, err = bleveCache.DefineTokenFilter(name, map[string]interface{}{
-		"type":           stop.Name,
-		"stop_token_map": name,
-	})
-	x.Check(err)
-}
-
-// basic analyzer - splits on word boundaries, lowercase and normalize tokens
-func defineTermAnalyzer() {
-	_, err := bleveCache.DefineAnalyzer("term", map[string]interface{}{
-		"type":          custom.Name,
-		"tokenizer":     unicode.Name,
-		"token_filters": []string{lowercase.Name, normalizerName},
-	})
-	x.Check(err)
-}
-
-// default full text search analyzer - does english stop-words removal and Porter stemming
-func defineDefaultFullTextAnalyzer() {
-	_, err := bleveCache.DefineAnalyzer(FTSTokenizerName, map[string]interface{}{
-		"type":      custom.Name,
-		"tokenizer": unicode.Name,
-		"token_filters": []string{
-			lowercase.Name,
-			normalizerName,
-			stopWordsListName("en"),
-			porter.Name,
-		},
-	})
-	x.Check(err)
-}
-
-// full text search analyzer - does language-specific stop-words removal and stemming
-func defineAnalyzer(cc string) {
-	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(cc), map[string]interface{}{
-		"type":      custom.Name,
-		"tokenizer": unicode.Name,
-		"token_filters": []string{
-			lowercase.Name,
-			normalizerName,
-			stopWordsListName(cc),
-			stemmerName(cc),
-		},
-	})
-	x.Check(err)
 }
 
 // Full text search analyzer - does Chinese/Japanese/Korean style bigram
@@ -159,23 +91,11 @@ func defineCJKAnalyzer(cc string) {
 		"type":      custom.Name,
 		"tokenizer": unicode.Name,
 		"token_filters": []string{
-			normalizerName,
+			filterUnicodeNorm,
 			cjk.BigramName,
 		},
 	})
 	x.Check(err)
-}
-
-func FtsTokenizerName(lang string) string {
-	return FTSTokenizerName + lang
-}
-
-func stemmerName(lang string) string {
-	return stemmer.Name + lang
-}
-
-func stopWordsListName(lang string) string {
-	return stop.Name + lang
 }
 
 func countryCode(lang string) string {

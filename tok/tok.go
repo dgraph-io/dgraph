@@ -19,7 +19,6 @@ package tok
 import (
 	"encoding/binary"
 	"plugin"
-	"strings"
 	"time"
 
 	farm "github.com/dgryski/go-farm"
@@ -86,6 +85,7 @@ func init() {
 	registerTokenizer(BoolTokenizer{})
 	registerTokenizer(TrigramTokenizer{})
 	registerTokenizer(HashTokenizer{})
+	registerTokenizer(FullTextTokenizer{})
 	initFullTextTokenizers()
 }
 
@@ -118,18 +118,15 @@ func registerTokenizer(t Tokenizer) {
 	if tokenizers == nil {
 		tokenizers = make(map[string]Tokenizer)
 	}
-	name := t.Name()
-	_, found := tokenizers[name]
-	x.AssertTruef(!found, "Duplicate tokenizer name %s", name)
-	for _, tok := range tokenizers {
-		// all full-text tokenizers share the same Identifier, so they skip the test
-		isFTS := strings.HasPrefix(tok.Name(), FTSTokenizerName)
-		x.AssertTruef(isFTS || tok.Identifier() != t.Identifier(),
-			"Duplicate tokenizer id byte %#x, %s and %s", tok.Identifier(), tok.Name(), t.Name())
+	if _, found := tokenizers[t.Name()]; found {
+		glog.V(3).Infof("Duplicate tokenizer name %s", t.Name())
+		return
 	}
-	_, validType := types.TypeForName(t.Type())
-	x.AssertTruef(validType, "t.Type() returned %q which isn't a valid type name", t.Type())
-	tokenizers[name] = t
+	if _, ok := types.TypeForName(t.Type()); !ok {
+		glog.V(3).Infof("Invalid type %q for tokenizer %s", t.Type(), t.Name())
+		return
+	}
+	tokenizers[t.Name()] = t
 }
 
 type GeoTokenizer struct{}
@@ -253,12 +250,9 @@ func (t ExactTokenizer) Identifier() byte { return 0x2 }
 func (t ExactTokenizer) IsSortable() bool { return true }
 func (t ExactTokenizer) IsLossy() bool    { return false }
 
-// Full text tokenizer, with language support
-type FullTextTokenizer struct {
-	Lang string
-}
+type FullTextTokenizer struct{}
 
-func (t FullTextTokenizer) Name() string { return FtsTokenizerName(t.Lang) }
+func (t FullTextTokenizer) Name() string { return "fulltext" }
 func (t FullTextTokenizer) Type() string { return "string" }
 func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
 	return getBleveTokens(t.Name(), v.(string))
