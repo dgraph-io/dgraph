@@ -97,17 +97,13 @@ type StopTokensProxyFilter struct {
 // filter for it. Otherwise, we run the filter and return the new stream.
 // Returns either the same input stream, or a new filtered stream using stop tokens.
 func (f *StopTokensProxyFilter) Filter(input analysis.TokenStream) analysis.TokenStream {
-	if len(input) == 0 {
-		return input
-	}
-	lang := cld2.Detect(string(input[0].Term))
-	glog.V(3).Infof("--- detected lang: %q", lang)
-	if lang == "" {
-		return input
-	}
-	if tf, ok := f.filters[lang]; ok {
-		glog.V(3).Infof("--- filtered stop tokens for lang: %s", lang)
-		return tf.Filter(input)
+	if len(input) > 0 {
+		lang := cld2.Detect(string(input[0].Term))
+		glog.V(3).Infof("--- detected lang: %q", lang)
+		if tf, ok := f.filters[lang]; ok {
+			glog.V(3).Infof("--- filtered stop tokens for lang: %s", lang)
+			return tf.Filter(input)
+		}
 	}
 	return input
 }

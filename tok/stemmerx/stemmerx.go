@@ -81,7 +81,9 @@ type StemmerProxyFilter struct {
 func (f *StemmerProxyFilter) Filter(input analysis.TokenStream) analysis.TokenStream {
 	if len(input) > 0 {
 		lang := cld2.Detect(string(input[0].Term))
+		glog.V(3).Infof("--- detected lang: %q", lang)
 		if tf, ok := f.filters[lang]; ok {
+			glog.V(3).Infof("--- filtered stop tokens for lang: %s", lang)
 			return tf.Filter(input)
 		}
 	}
@@ -109,9 +111,10 @@ func Constructor(config map[string]interface{}, cache *registry.Cache) (analysis
 			proxy.filters["ja"] = tf
 			proxy.filters["ko"] = tf
 			proxy.filters["zh"] = tf
+		default:
+			// split: "stemmer_lang_extra" => {"stemmer", "lang", "extra"}
+			proxy.filters[strings.Split(name, "_")[1]] = tf
 		}
-		// split: "stemmer_lang_extra" => {"stemmer", "lang", "extra"}
-		proxy.filters[strings.Split(name, "_")[1]] = tf
 	}
 	return proxy, nil
 }
