@@ -49,7 +49,6 @@ const Name = "stemmer_proxy"
 // TODO: fix Thai stop tokens.
 var knownFilters = []string{
 	"cjk_bigram",
-	"porter", // "stemmer_en"
 	"stemmer_ar",
 	"stemmer_ckb",
 	"stemmer_da",
@@ -62,6 +61,7 @@ var knownFilters = []string{
 	"stemmer_it_light",
 	"stemmer_nl_snowball",
 	"stemmer_no_snowball",
+	"stemmer_porter",
 	"stemmer_pt_light",
 	"stemmer_ro_snowball",
 	"stemmer_ru_snowball",
@@ -103,7 +103,7 @@ func Constructor(config map[string]interface{}, cache *registry.Cache) (analysis
 			return nil, err
 		}
 		switch name {
-		case "porter":
+		case "stemmer_porter":
 			// English uses porter.
 			proxy.filters["en"] = tf
 		case "cjk_bigram":
