@@ -479,16 +479,29 @@ var testNQuads = []struct {
 		expectedErr: true, // should have 4 hex values after \u
 	},
 	{
+		input: `<alice> <lives> "\x02 wonderland" .`,
+		nq: api.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "\x02 wonderland"}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `<alice> <lives> "\x2 wonderland" .`,
+		expectedErr: true, // should have 2 hex values after \x
+	},
+	{
 		input:       `<alice> <lives> "wonderful land"@a- .`,
 		expectedErr: true, // object langtag can not end with -
 	},
 	{
-		input: `<alice> <lives> "\t\b\n\r\f\"\\"@a-b .`,
+		input: `<alice> <lives> "\v\t\b\n\r\f\"\\"@a-b .`,
 		nq: api.NQuad{
 			Subject:     "alice",
 			Predicate:   "lives",
 			Lang:        "a-b",
-			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "\t\b\n\r\f\"\\"}},
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "\v\t\b\n\r\f\"\\"}},
 		},
 	},
 	{

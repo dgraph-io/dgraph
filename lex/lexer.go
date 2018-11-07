@@ -259,10 +259,10 @@ const (
 	quote = '"'
 )
 
-// ECHAR ::= '\' [tbnrf"'\]
+// ECHAR ::= '\' [vtbnrf"'\]
 func (l *Lexer) IsEscChar(r rune) bool {
 	switch r {
-	case 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
+	case 'v', 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
 		return true
 	}
 	return false
