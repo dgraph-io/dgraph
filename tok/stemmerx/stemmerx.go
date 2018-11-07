@@ -46,7 +46,6 @@ import (
 
 const Name = "stemmer_proxy"
 
-// TODO: fix Thai stop tokens.
 var knownFilters = []string{
 	"cjk_bigram",
 	"stemmer_ar",
@@ -83,7 +82,7 @@ func (f *StemmerProxyFilter) Filter(input analysis.TokenStream) analysis.TokenSt
 		lang := cld2.Detect(string(input[0].Term))
 		glog.V(3).Infof("--- detected lang: %q", lang)
 		if tf, ok := f.filters[lang]; ok {
-			glog.V(3).Infof("--- filtered stop tokens for lang: %s", lang)
+			glog.V(3).Infof("--- filtered stemmers for lang: %s", lang)
 			return tf.Filter(input)
 		}
 	}
@@ -93,7 +92,7 @@ func (f *StemmerProxyFilter) Filter(input analysis.TokenStream) analysis.TokenSt
 // Constructor creates a new instance of this filter.
 // We run through the list of known stemmer filters 'knownFilters' and we try to
 // instantiate each and save in our cache.
-// Returns the stop token proxy on success, error otherwise.
+// Returns the stemmer proxy on success, error otherwise.
 func Constructor(config map[string]interface{}, cache *registry.Cache) (analysis.TokenFilter, error) {
 	proxy := &StemmerProxyFilter{filters: make(map[string]analysis.TokenFilter)}
 	for _, name := range knownFilters {
