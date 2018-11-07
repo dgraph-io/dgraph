@@ -242,17 +242,19 @@ func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	aId := assignedIds.Uids["a"]
 	bId := assignedIds.Uids["b"]
 
-	/** we must run a query first before the next delete transaction,
-	the reason is that a mutation does not wait for the previous mutation to finish completely with
-	a commitTs from zero. If we run the deletion directly,
-	and the previous mutation has not received a commitTs from zero yet,
-	then the deletion will skip the link, and essentially be treated as a no-op. As a result,
-	when we query it again following the reverse link, the link would still exist,
-	and the test would fail.
+	/** 
+    we must run a query first before the next delete transaction, the
+	reason is that a mutation does not wait for the previous mutation
+	to finish completely with a commitTs from zero. If we run the
+	deletion directly, and the previous mutation has not received a
+	commitTs from zero yet, then the deletion will skip the link, and
+	essentially be treated as a no-op. As a result, when we query it
+	again following the reverse link, the link would still exist, and
+	the test would fail.
 
-	Running a query would make sure that the previous mutation for creating the link has
-	completed with a commitTs from zero,
-	and the subsequent deletion is done *AFTER* the link creation.
+	Running a query would make sure that the previous mutation for
+	creating the link has completed with a commitTs from zero, and the
+	subsequent deletion is done *AFTER* the link creation.
 	 */
 	c.NewReadOnlyTxn().Query(ctx,  fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
 
