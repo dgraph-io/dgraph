@@ -17,7 +17,9 @@
 package alpha
 
 import (
+	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -30,11 +32,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -42,13 +39,19 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/health"
+	hapi "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 var (
 	bindall bool
-	config  edgraph.Options
 	tlsConf x.TLSHelperConfig
 )
 
@@ -70,49 +73,54 @@ they form a Raft group and provide synchronous replication.
 	}
 	Alpha.EnvPrefix = "DGRAPH_ALPHA"
 
+	// If you change any of the flags below, you must also update run() to call Alpha.Conf.Get
+	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
+	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
-	flag.StringVarP(&config.PostingDir, "postings", "p", "p",
-		"Directory to store posting lists.")
+	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
-	flag.StringVar(&config.BadgerTables, "badger.tables", "mmap",
+	flag.String("badger.tables", "mmap",
 		"[ram, mmap, disk] Specifies how Badger LSM tree is stored. "+
 			"Option sequence consume most to least RAM while providing best to worst read "+
 			"performance respectively.")
-	flag.StringVar(&config.BadgerVlog, "badger.vlog", "mmap",
+	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
 
-	flag.StringVarP(&config.WALDir, "wal", "w", "w", "Directory to store raft write-ahead logs.")
-	flag.BoolVar(&config.Nomutations, "nomutations", false, "Don't allow mutations on this server.")
-
-	flag.StringVar(&config.WhitelistedIPs, "whitelist", "",
+	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
+	flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	flag.String("whitelist", "",
 		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
-
-	flag.StringVar(&worker.Config.ExportPath, "export", "export", "Folder in which to store exports.")
-	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 2000,
+	flag.String("export", "export", "Folder in which to store exports.")
+	flag.Int("pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
-	flag.Float64Var(&worker.Config.Tracing, "trace", 0.0, "The ratio of queries to trace.")
-	flag.StringVar(&worker.Config.MyAddr, "my", "",
-		"IP_ADDRESS:PORT of this server, so other Dgraph servers can talk to this.")
-	flag.StringVarP(&worker.Config.ZeroAddr, "zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
-		"IP_ADDRESS:PORT of Dgraph zero.")
-	flag.Uint64Var(&worker.Config.RaftId, "idx", 0,
-		"Optional Raft ID that this server will use to join RAFT groups.")
-	flag.BoolVar(&worker.Config.ExpandEdge, "expand_edge", true,
+	flag.Float64("trace", 0.0, "The ratio of queries to trace.")
+	flag.String("my", "",
+		"IP_ADDRESS:PORT of this Dgraph Alpha, so other Dgraph Alphas can talk to this.")
+	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
+		"IP_ADDRESS:PORT of a Dgraph Zero.")
+	flag.Uint64("idx", 0,
+		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
+	flag.Bool("expand_edge", true,
 		"Enables the expand() feature. This is very expensive for large data loads because it"+
 			" doubles the number of mutations going on in the system.")
-
-	flag.Float64VarP(&config.AllottedMemory, "lru_mb", "l", -1,
+	flag.Int("max_retries", -1,
+		"Commits to disk will give up after these number of retries to prevent locking the worker"+
+			" in a failed state. Use -1 to retry infinitely.")
+	flag.String("auth_token", "",
+		"If set, all Alter requests to Dgraph would need to have this token."+
+			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
+			" For Grpc, in auth-token key in the context.")
+	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
-
-	flag.BoolVar(&x.Config.DebugMode, "debugmode", false,
+	flag.Bool("debugmode", false,
 		"Enable debug mode for more debug information.")
 
 	// Useful for running multiple servers on the same machine.
-	flag.IntVarP(&x.Config.PortOffset, "port_offset", "o", 0,
+	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
 	flag.Uint64("query_edge_limit", 1e6,
@@ -140,6 +148,47 @@ func setupCustomTokenizers() {
 	for _, soFile := range strings.Split(customTokenizers, ",") {
 		tok.LoadCustomTokenizer(soFile)
 	}
+}
+
+// Parses the comma-delimited whitelist ip-range string passed in as an argument
+// from the command line and returns slice of []IPRange
+//
+// ex. "144.142.126.222:144.124.126.400,190.59.35.57:190.59.35.99"
+func parseIPsFromString(str string) ([]worker.IPRange, error) {
+	if str == "" {
+		return []worker.IPRange{}, nil
+	}
+
+	var ipRanges []worker.IPRange
+	ipRangeStrings := strings.Split(str, ",")
+
+	// Check that the each of the ranges are valid
+	for _, s := range ipRangeStrings {
+		ipsTuple := strings.Split(s, ":")
+
+		// Assert that the range consists of an upper and lower bound
+		if len(ipsTuple) != 2 {
+			return nil, errors.New("IP range must have a lower and upper bound")
+		}
+
+		lowerBoundIP := net.ParseIP(ipsTuple[0])
+		upperBoundIP := net.ParseIP(ipsTuple[1])
+
+		if lowerBoundIP == nil || upperBoundIP == nil {
+			// Assert that both upper and lower bound are valid IPs
+			return nil, errors.New(
+				ipsTuple[0] + " or " + ipsTuple[1] + " is not a valid IP address",
+			)
+		} else if bytes.Compare(lowerBoundIP, upperBoundIP) > 0 {
+			// Assert that the lower bound is less than the upper bound
+			return nil, errors.New(
+				ipsTuple[0] + " cannot be greater than " + ipsTuple[1],
+			)
+		} else {
+			ipRanges = append(ipRanges, worker.IPRange{Lower: lowerBoundIP, Upper: upperBoundIP})
+		}
+	}
+	return ipRanges, nil
 }
 
 func httpPort() int {
@@ -175,9 +224,9 @@ func setupListener(addr string, port int, reload func()) (net.Listener, error) {
 			sigChan := make(chan os.Signal, 1)
 			signal.Notify(sigChan, syscall.SIGHUP)
 			for range sigChan {
-				log.Println("SIGHUP signal received")
+				glog.Infoln("SIGHUP signal received")
 				reload()
-				log.Println("TLS certificates and CAs reloaded")
+				glog.Infoln("TLS certificates and CAs reloaded")
 			}
 		}()
 	}
@@ -196,8 +245,9 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	}
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
+	hapi.RegisterHealthServer(s, health.NewServer())
 	err := s.Serve(l)
-	log.Printf("GRPC listener canceled: %s\n", err.Error())
+	glog.Errorf("GRPC listener canceled: %v\n", err)
 	s.Stop()
 }
 
@@ -216,7 +266,7 @@ func serveHTTP(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	default:
 		err = srv.Serve(l)
 	}
-	log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
+	glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
 	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
@@ -240,7 +290,7 @@ func setupServer() {
 		var err error
 		tlsCfg, reload, err = x.GenerateTLSConfig(tlsConf)
 		if err != nil {
-			log.Fatalf("Failed to setup TLS: %s\n", err)
+			log.Fatalf("Failed to setup TLS: %v\n", err)
 		}
 	}
 
@@ -285,8 +335,8 @@ func setupServer() {
 		httpListener.Close()
 	}()
 
-	log.Println("gRPC server started.  Listening on port", grpcPort())
-	log.Println("HTTP server started.  Listening on port", httpPort())
+	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
+	glog.Infoln("HTTP server started.  Listening on port", httpPort())
 	wg.Wait()
 }
 
@@ -294,18 +344,47 @@ var shutdownCh chan struct{}
 
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
+
+	edgraph.SetConfiguration(edgraph.Options{
+		BadgerTables: Alpha.Conf.GetString("badger.tables"),
+		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
+
+		PostingDir: Alpha.Conf.GetString("postings"),
+		WALDir:     Alpha.Conf.GetString("wal"),
+
+		Nomutations:    Alpha.Conf.GetBool("nomutations"),
+		AuthToken:      Alpha.Conf.GetString("auth_token"),
+		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	})
+
+	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
+	x.Check(err)
+	worker.Config = worker.Options{
+		ExportPath:          Alpha.Conf.GetString("export"),
+		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
+		Tracing:             Alpha.Conf.GetFloat64("trace"),
+		MyAddr:              Alpha.Conf.GetString("my"),
+		ZeroAddr:            Alpha.Conf.GetString("zero"),
+		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
+		ExpandEdge:          Alpha.Conf.GetBool("expand_edge"),
+		WhiteListedIPRanges: ips,
+		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
+	}
+
 	x.LoadTLSConfig(&tlsConf, Alpha.Conf)
 	tlsConf.ClientAuth = Alpha.Conf.GetString("tls_client_auth")
 
-	edgraph.SetConfiguration(config)
 	setupCustomTokenizers()
 	x.Init()
+	x.Config.DebugMode = Alpha.Conf.GetBool("debugmode")
+	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 
 	x.PrintVersion()
 	edgraph.InitServerState()
 	defer func() {
-		x.Check(edgraph.State.Dispose())
+		edgraph.State.Dispose()
+		glog.Info("Finished disposing server state.")
 	}()
 
 	if Alpha.Conf.GetBool("expose_trace") {
@@ -345,9 +424,9 @@ func run() {
 					close(shutdownCh)
 				}
 				numShutDownSig++
-				x.Println("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
+				glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
 				if numShutDownSig == 3 {
-					x.Println("Signaled thrice. Aborting!")
+					glog.Infoln("Signaled thrice. Aborting!")
 					os.Exit(1)
 				}
 			}
@@ -358,7 +437,7 @@ func run() {
 	// Setup external communication.
 	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
 	setupServer()
-	log.Println("GRPC and HTTP stopped.")
+	glog.Infoln("GRPC and HTTP stopped.")
 	worker.BlockingStop()
-	log.Println("Server shutdown. Bye!")
+	glog.Infoln("Server shutdown. Bye!")
 }

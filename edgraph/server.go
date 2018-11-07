@@ -27,12 +27,6 @@ import (
 	"time"
 	"unicode"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -45,8 +39,14 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
-	"github.com/pkg/errors"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 type ServerState struct {
@@ -177,16 +177,15 @@ func (s *ServerState) initStorage() {
 	go s.runVlogGC(s.WALstore)
 }
 
-func (s *ServerState) Dispose() error {
+func (s *ServerState) Dispose() {
 	if err := s.Pstore.Close(); err != nil {
-		return errors.Wrapf(err, "While closing postings store")
+		glog.Errorf("Error while closing postings store: %v", err)
 	}
 	if err := s.WALstore.Close(); err != nil {
-		return errors.Wrapf(err, "While closing WAL store")
+		glog.Errorf("Error while closing WAL store: %v", err)
 	}
 	s.vlogTicker.Stop()
 	s.mandatoryVlogTicker.Stop()
-	return nil
 }
 
 // Server implements protos.DgraphServer
@@ -228,7 +227,7 @@ func (s *ServerState) fillTimestampRequests() {
 		ts, err := worker.Timestamps(ctx, num)
 		cancel()
 		if err != nil {
-			glog.Warning("Error while retrieving timestamps: %v with delay: %v."+
+			glog.Warningf("Error while retrieving timestamps: %v with delay: %v."+
 				" Will retry...\n", err, delay)
 			time.Sleep(delay)
 			delay *= 2
@@ -267,14 +266,13 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
-	defer glog.Infof("ALTER op: %+v done", op)
 
+	// The following code block checks if the operation should run or not.
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
 		return nil, x.Errorf("Operation must have at least one field set")
 	}
-
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -282,11 +280,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 		return empty, err
 	}
-
 	if !isMutationAllowed(ctx) {
-		return nil, x.Errorf("No mutations allowed.")
+		return nil, x.Errorf("No mutations allowed by server.")
 	}
+	if err := isAlterAllowed(ctx); err != nil {
+		glog.Warningf("Alter denied with error: %v\n", err)
+		return nil, err
+	}
+	// All checks done.
 
+	defer glog.Infof("ALTER op: %+v done", op)
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
@@ -315,7 +318,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if err != nil {
 		return empty, err
 	}
-	x.Printf("Got schema: %+v\n", updates)
+	glog.Infof("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = updates
 	_, err = query.ApplyMutations(ctx, m)
@@ -568,6 +571,30 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
+var errNoAuth = x.Errorf("No Auth Token found. Token needed for Alter operations.")
+
+func isAlterAllowed(ctx context.Context) error {
+	p, ok := peer.FromContext(ctx)
+	if ok {
+		glog.Infof("Got Alter request from %q\n", p.Addr)
+	}
+	if len(Config.AuthToken) == 0 {
+		return nil
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return errNoAuth
+	}
+	tokens := md.Get("auth-token")
+	if len(tokens) == 0 {
+		return errNoAuth
+	}
+	if tokens[0] != Config.AuthToken {
+		return x.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
+	}
+	return nil
+}
+
 func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
@@ -627,7 +654,10 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res.Set = append(res.Set, mu.Set...)
 	res.Del = append(res.Del, mu.Del...)
 
-	return res, validateNQuads(res.Set, res.Del)
+	if err := validateNQuads(res.Set, res.Del); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func validateNQuads(set, del []*api.NQuad) error {
@@ -651,9 +681,8 @@ func validateNQuads(set, del []*api.NQuad) error {
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return x.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
-		if err := validateKeys(nq); err != nil {
-			return x.Errorf("Key error: %s: %+v", err, nq)
-		}
+		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
+		// with bad predicate forms. ex: foo@bar ~something
 	}
 	return nil
 }
@@ -662,8 +691,8 @@ func validateKey(key string) error {
 	switch {
 	case len(key) == 0:
 		return x.Errorf("has zero length")
-	case strings.ContainsAny(key, "~"):
-		return x.Errorf("has invalid tilde")
+	case strings.ContainsAny(key, "~@"):
+		return x.Errorf("has invalid characters")
 	case strings.IndexFunc(key, unicode.IsSpace) != -1:
 		return x.Errorf("must not contain spaces")
 	}
@@ -672,15 +701,14 @@ func validateKey(key string) error {
 
 // validateKeys checks predicate and facet keys in Nquad for syntax errors.
 func validateKeys(nq *api.NQuad) error {
-	err := validateKey(nq.Predicate)
-	if err != nil {
+	if err := validateKey(nq.Predicate); err != nil {
 		return x.Errorf("predicate %q %s", nq.Predicate, err)
 	}
 	for i := range nq.Facets {
 		if nq.Facets[i] == nil {
 			continue
 		}
-		if err = validateKey(nq.Facets[i].Key); err != nil {
+		if err := validateKey(nq.Facets[i].Key); err != nil {
 			return x.Errorf("facet %q, %s", nq.Facets[i].Key, err)
 		}
 	}

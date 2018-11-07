@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 
 	"google.golang.org/grpc"
 )
@@ -62,21 +63,6 @@ func Init(ps *badger.DB) {
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
 	sync.Mutex
-	reqids map[uint64]bool
-}
-
-// addIfNotPresent returns false if it finds the reqid already present.
-// Otherwise, adds the reqid in the list, and returns true.
-func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
-	w.Lock()
-	defer w.Unlock()
-	if w.reqids == nil {
-		w.reqids = make(map[uint64]bool)
-	} else if _, has := w.reqids[reqid]; has {
-		return false
-	}
-	w.reqids[reqid] = true
-	return true
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
@@ -91,7 +77,7 @@ func RunServer(bindall bool) {
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
 	}
-	x.Printf("Worker listening at address: %v", ln.Addr())
+	glog.Infof("Worker listening at address: %v", ln.Addr())
 
 	pb.RegisterWorkerServer(workerServer, &grpcWorker{})
 	pb.RegisterRaftServer(workerServer, &raftServer)
@@ -105,13 +91,13 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	log.Println("Stopping group...")
+	glog.Infof("Stopping group...")
 	groups().closer.SignalAndWait()
 
-	log.Println("Stopping node...")
+	glog.Infof("Stopping node...")
 	groups().Node.closer.SignalAndWait()
 
-	log.Printf("Stopping worker server...")
+	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
 
 	// TODO: What is this for?

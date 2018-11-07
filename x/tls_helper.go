@@ -273,7 +273,7 @@ func (c *wrapperTLSConfig) reloadConfig() {
 	// Loading new certificate
 	cert, err := parseCertificate(c.helperConfig.CertRequired, c.helperConfig.Cert, c.helperConfig.Key)
 	if err != nil {
-		Printf("Error reloading certificate. %s\nUsing current certificate\n", err.Error())
+		fmt.Printf("Error reloading certificate. %v\nUsing current certificate\n", err)
 	} else if cert != nil {
 		if c.helperConfig.ConfigType == TLSServerConfig {
 			c.cert.Lock()
@@ -286,7 +286,7 @@ func (c *wrapperTLSConfig) reloadConfig() {
 	if len(c.helperConfig.RootCACert) > 0 || c.helperConfig.UseSystemCACerts {
 		pool, err := generateCertPool(c.helperConfig.RootCACert, c.helperConfig.UseSystemCACerts)
 		if err != nil {
-			Printf("Error reloading CAs. %s\nUsing current Client CAs\n", err.Error())
+			fmt.Printf("Error reloading CAs. %v\nUsing current Client CAs\n", err)
 		} else {
 			c.clientCAPool.Lock()
 			c.clientCAPool.pool = pool

@@ -21,8 +21,9 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -71,16 +72,21 @@ func (c *countIndexer) addUid(rawKey []byte, count int) {
 }
 
 func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64) {
-	txn := c.db.NewTransactionAt(c.state.writeTs, true)
+	writer := x.NewTxnWriter(c.db)
+	writer.BlindWrite = true
+
 	for count, uids := range counts {
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-		x.Check(txn.SetWithMeta(
+
+		var pl pb.PostingList
+		pl.Pack = codec.Encode(uids, 256)
+		data, err := pl.Marshal()
+		x.Check(err)
+		x.Check(writer.SetAt(
 			x.CountKey(pred, uint32(count), rev),
-			bp128.DeltaPack(uids),
-			posting.BitCompletePosting|posting.BitUidPosting,
-		))
+			data, posting.BitCompletePosting, c.state.writeTs))
 	}
-	x.Check(txn.CommitAt(c.state.writeTs, nil))
+	x.Check(writer.Flush())
 	c.wg.Done()
 }
 

@@ -1,4 +1,11 @@
+#!/bin/bash
+
 set -e
+
+# Ensure that we can compile the binary.
+pushd badger
+go build -v .
+popd
 
 # Run the memory intensive tests first.
 go test -v --manual=true -run='TestBigKeyValuePairs$'

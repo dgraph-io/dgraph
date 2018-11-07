@@ -360,6 +360,8 @@ func TestValidateKeys(t *testing.T) {
 		{name: "test 11", nquad: `_:alice <knows> "stuff" ( "key1" = 12, key2 = 13 , "key	3" = "a b" ) .`, noError: false},
 		{name: "test 12", nquad: `_:alice <knows~> "stuff" ( key1 = 12 ) .`, noError: false},
 		{name: "test 13", nquad: `_:alice <knows> "stuff" ( key1 = 12 ) .`, noError: true},
+		{name: "test 14", nquad: `_:alice <knows@some> "stuff" .`, noError: true},
+		{name: "test 15", nquad: `_:alice <knows@some@en> "stuff" .`, noError: false},
 	}
 
 	for _, tc := range tests {

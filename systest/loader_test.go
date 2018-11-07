@@ -77,7 +77,7 @@ func TestLoaderXidmap(t *testing.T) {
 	// cluster.dgraph.Process = nil
 	// if err := cluster.dgraph.Start(); err != nil {
 	// 	cluster.Close()
-	// 	t.Fatalf("Couldn't start Dgraph server again: %v\n", err)
+	// 	t.Fatalf("Couldn't start Dgraph alpha again: %v\n", err)
 	// }
 	// time.Sleep(5 * time.Second)
 
@@ -106,7 +106,7 @@ func TestLoaderXidmap(t *testing.T) {
 	}
 
 	expected = `<_:uid1> <age> "13"^^<xs:int> .
-<_:uid1> <friend> _:uid2711 .
+<_:uid1> <friend> <_:uid2711> .
 <_:uid1> <location> "Wonderland" .
 <_:uid1> <name> "Alice" .
 <_:uid2711> <name> "Bob" .

@@ -22,16 +22,15 @@ type IPRange struct {
 }
 
 type Options struct {
-	BaseWorkerPort      int
 	ExportPath          string
 	NumPendingProposals int
 	Tracing             float64
-	GroupIds            string
 	MyAddr              string
 	ZeroAddr            string
 	RaftId              uint64
 	ExpandEdge          bool
 	WhiteListedIPRanges []IPRange
+	MaxRetries          int
 }
 
 var Config Options

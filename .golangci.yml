@@ -1,0 +1,11 @@
+run:
+  tests: false
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - errcheck
+    - unused
+    - gas
+    - varcheck
+    - goimports

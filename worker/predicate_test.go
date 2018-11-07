@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
@@ -71,7 +72,7 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 
 	commit := commitTs(startTs)
 
-	writer := &x.TxnWriter{DB: pstore}
+	writer := x.NewTxnWriter(pstore)
 	require.NoError(t, txn.CommitToDisk(writer, commit))
 	require.NoError(t, writer.Flush())
 	require.NoError(t, txn.CommitToMemory(commit))
@@ -129,7 +130,7 @@ func newServer(port string) (*grpc.Server, net.Listener, error) {
 		log.Fatalf("While running server: %v", err)
 		return nil, nil, err
 	}
-	x.Printf("Worker listening at address: %v", ln.Addr())
+	glog.Infof("Worker listening at address: %v", ln.Addr())
 
 	s := grpc.NewServer()
 	return s, ln, nil

@@ -206,6 +206,8 @@ message Snapshot {
 	RaftContext context = 1;
 	uint64 index        = 2;
 	uint64 read_ts      = 3;
+	// done is used to indicate that snapshot stream was a success.
+	bool done           = 4;
 }
 
 message Proposal {
@@ -220,6 +222,8 @@ message Proposal {
 
 message KVS {
  repeated KV kv = 1;
+ // done used to indicate if the stream of KVS is over.
+ bool done      = 2;
 }
 
 message KV {
@@ -263,11 +267,23 @@ message Posting {
 	uint64 commit_ts = 14;  // Meant to use only inmemory
 }
 
+message UidBlock {
+	uint64 base = 1;
+	// deltas contains the deltas encoded with Varints. We don't store deltas as a list of integers,
+	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
+	// storing it as a byte slice is a lot cheaper in memory.
+	bytes deltas = 2;
+}
+
+message UidPack {
+	uint32 block_size        = 1;
+	repeated UidBlock blocks = 2;
+}
+
 message PostingList {
-	repeated Posting postings = 1;
-	bytes checksum = 2;
-	uint64 commit = 3; // More inclination towards smaller values.
-	bytes uids = 4; // Encoded list of uids in this posting list.
+	UidPack pack = 1; // Encoded list of uids in this posting list.
+	repeated Posting postings = 2;
+	uint64 commit_ts = 3; // More inclination towards smaller values.
 }
 
 message FacetParam {
@@ -354,16 +370,16 @@ message MovePredicatePayload {
 // When used in request, groups represents the list of groups that need to be backed up.
 // When used in response, groups represent the list of groups that were backed up.
 message ExportPayload {
-	uint64 req_id = 1;    // Use req_id to handle duplicate requests.
-	uint32 group_id = 2;  // Group id to back up.
 	enum Status {
 		NONE      = 0;
 		SUCCESS   = 1;
 		DUPLICATE = 2;
 		FAILED    = 3;
 	}
-	Status status = 3;
-	uint64 read_ts = 4;
+	uint32 group_id = 1;  // Group id to back up.
+	Status status   = 2;
+	uint64 read_ts  = 3;
+	int64 unix_ts   = 4;
 }
 
 message TxnStatus {
@@ -412,7 +428,7 @@ service Worker {
 	// Data serving RPCs.
 	rpc Mutate (Mutations)                    returns (api.TxnContext) {}
 	rpc ServeTask (Query)                     returns (Result) {}
-	rpc StreamSnapshot (Snapshot)             returns (stream KVS) {}
+	rpc StreamSnapshot (stream Snapshot)      returns (stream KVS) {}
 	rpc Sort (SortMessage)                    returns (SortResult) {}
 	rpc Schema (SchemaRequest)                returns (SchemaResult) {}
 	rpc PurgeTs (api.Payload)                 returns (Num) {}

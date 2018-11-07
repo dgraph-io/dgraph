@@ -83,7 +83,7 @@ type loader struct {
 }
 
 func newLoader(opt options) *loader {
-	x.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
+	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
 	zero, err := grpc.Dial(opt.ZeroAddr,
 		grpc.WithBlock(),
 		grpc.WithInsecure(),
@@ -119,7 +119,7 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 		if err == nil {
 			return ts.GetStartId()
 		}
-		x.Printf("error communicating with dgraph zero, retrying: %v", err)
+		fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
 		time.Sleep(time.Second)
 	}
 }
@@ -245,7 +245,7 @@ func (ld *loader) mapStage() {
 	for rdfFile, r := range readers {
 		thr.Start()
 		fileCount++
-		fmt.Printf("processing file (%d out of %d): %s\n", fileCount, len(readers), rdfFile)
+		fmt.Printf("Processing file (%d out of %d): %s\n", fileCount, len(readers), rdfFile)
 		go func(r *bufio.Reader) {
 			defer thr.Done()
 			for {

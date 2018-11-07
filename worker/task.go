@@ -26,13 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/metadata"
-
 	"github.com/dgraph-io/badger"
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
@@ -44,9 +38,13 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
@@ -564,12 +562,11 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == HasFn:
-			len := pl.Length(args.q.ReadTs, 0)
-			if len == -1 {
-				return posting.ErrTsTooOld
+			empty, err := pl.IsEmpty(args.q.ReadTs, 0)
+			if err != nil {
+				return err
 			}
-			count := int64(len)
-			if EvalCompare("gt", count, 0) {
+			if !empty {
 				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
@@ -1006,12 +1003,25 @@ func filterGeoFunction(arg funcArgs) error {
 	return nil
 }
 
+// TODO: This function is really slow when there are a lot of UIDs to filter, for e.g. when used in
+// `has(name)`. We could potentially have a query level cache, which can be used to speed things up
+// a bit. Or, try to reduce the number of UIDs which make it here.
 func filterStringFunction(arg funcArgs) error {
+	if glog.V(3) {
+		glog.Infof("filterStringFunction. arg: %+v\n", arg.q)
+		defer glog.Infof("Done filterStringFunction")
+	}
+
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	var values [][]types.Val
 	filteredUids := make([]uint64, 0, len(uids.Uids))
 	lang := langForFunc(arg.q.Langs)
+
+	// This iteration must be done in a serial order, because we're also storing the values in a
+	// matrix, to check it later.
+	// TODO: This function can be optimized by having a query specific cache, which can be populated
+	// by the handleHasFunction for e.g. for a `has(name)` query.
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
 		pl, err := posting.Get(key)
@@ -1598,13 +1608,13 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 		Attr: cp.attr,
 	}
 	countPrefix := pk.CountPrefix(cp.reverse)
-	it := posting.NewTxnPrefixIterator(txn, itOpt, countPrefix, countKey)
-	defer it.Close()
 
-	for ; it.Valid(); it.Next() {
-		key := it.Key()
-		nk := make([]byte, len(key))
-		copy(nk, key)
+	itr := txn.NewIterator(itOpt)
+	defer itr.Close()
+
+	for itr.Seek(countKey); itr.ValidForPrefix(countPrefix); itr.Next() {
+		item := itr.Item()
+		key := item.KeyCopy(nil)
 		pl, err := posting.Get(key)
 		if err != nil {
 			return err
@@ -1618,11 +1628,11 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 	return nil
 }
 
-// handleHasFunction looks at both the inmemory btree populated by
-// posting/lists.go, and Badger. Thus, it can capture both committed
-// transactions and in-progress transactions. It also accounts for transaction
-// start ts.
 func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
+	if glog.V(3) {
+		glog.Infof("handleHasFunction query: %+v\n", q)
+	}
+
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
 
@@ -1632,42 +1642,23 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	startKey := x.DataKey(q.Attr, q.AfterUid+1)
 	prefix := initKey.DataPrefix()
 	if q.Reverse {
-		glog.Warningln("has function does not handle reverse iteration.")
-	}
-
-	var cachedUids []uint64
-	bitr := &posting.BTreeIterator{
-		// Reverse: q.Reverse, // We don't handle reverse iteration.
-		Prefix: prefix,
-	}
-	for bitr.Seek(startKey); bitr.Valid(); bitr.Next() {
-		key := bitr.Key()
-		pl := posting.GetLru(key)
-		if pl == nil {
-			continue
-		}
-		pk := x.Parse(key)
-		var num int
-		if err := pl.Iterate(q.ReadTs, 0, func(_ *pb.Posting) error {
-			num++
-			return posting.ErrStopIteration
-		}); err != nil {
-			return err
-		}
-		if num > 0 {
-			cachedUids = append(cachedUids, pk.Uid)
-		}
+		// Reverse does not mean reverse iteration. It means we're looking for
+		// the reverse index.
+		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
+		prefix = initKey.ReversePrefix()
 	}
 
 	result := &pb.List{}
 	var prevKey []byte
-	var cidx, w int
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.AllVersions = true
 	it := txn.NewIterator(itOpt)
 	defer it.Close()
 
+	// This function could be switched to the stream.Lists framework, but after the change to use
+	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
+	// occurs in filterStringFunction (like has(name) queries).
 	for it.Seek(startKey); it.ValidForPrefix(prefix); {
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
@@ -1680,16 +1671,11 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		// iterator.
 		pk := x.Parse(item.Key())
 
-		// Pick up all the uids found in the Btree, which are <= this Uid.
-		for cidx < len(cachedUids) && cachedUids[cidx] < pk.Uid {
+		// The following optimization speeds up this iteration considerably, because it avoids
+		// the need to run ReadPostingList.
+		if item.UserMeta()&posting.BitCompletePosting > 0 {
+			// This bit would only be set if there are valid uids in UidPack.
 			result.Uids = append(result.Uids, pk.Uid)
-			cidx++
-		}
-		if cidx < len(cachedUids) && cachedUids[cidx] == pk.Uid {
-			// No need to check this key on disk. We already found it in the
-			// Btree.
-			result.Uids = append(result.Uids, pk.Uid)
-			cidx++
 			continue
 		}
 
@@ -1698,19 +1684,13 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
-		var num int
-		if err = l.Iterate(q.ReadTs, 0, func(_ *pb.Posting) error {
-			num++
-			return posting.ErrStopIteration
-		}); err != nil {
+		if empty, err := l.IsEmpty(q.ReadTs, 0); err != nil {
 			return err
-		}
-		if num > 0 {
+		} else if !empty {
 			result.Uids = append(result.Uids, pk.Uid)
-			w++
 		}
 
-		if w%1000 == 0 {
+		if len(result.Uids)%100000 == 0 {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -1722,11 +1702,6 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 			}
 		}
 	}
-	// Pick up any remaining UIDs from the Btree.
-	if cidx < len(cachedUids) {
-		result.Uids = append(result.Uids, cachedUids[cidx:]...)
-	}
-
 	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }

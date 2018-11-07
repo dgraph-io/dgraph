@@ -33,6 +33,8 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"google.golang.org/grpc/metadata"
 )
 
 func allowed(method string) bool {
@@ -394,8 +396,17 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		op.Schema = string(b)
 	}
 
-	_, err = (&edgraph.Server{}).Alter(context.Background(), op)
-	if err != nil {
+	glog.Infof("Got alter request via HTTP from %s\n", r.RemoteAddr)
+	fwd := r.Header.Get("X-Forwarded-For")
+	if len(fwd) > 0 {
+		glog.Infof("The alter request is forwarded by %s\n", fwd)
+	}
+
+	md := metadata.New(nil)
+	// Pass in an auth token, if present.
+	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	if _, err = (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
