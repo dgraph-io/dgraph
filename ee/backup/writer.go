@@ -75,8 +75,8 @@ func (r *Request) newWriter() (*writer, error) {
 	return &writer{h: h}, nil
 }
 
-func (w *writer) cleanup() error {
-	glog.V(2).Infof("Backup cleanup ...")
+func (w *writer) close() error {
+	glog.V(2).Infof("Backup: Closing handler.")
 	return w.h.Close()
 }
 

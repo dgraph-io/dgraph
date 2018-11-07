@@ -63,7 +63,7 @@ func (r *Request) Process(ctx context.Context) error {
 	if err = sl.Orchestrate(ctx, "Backup", r.Backup.ReadTs); err != nil {
 		return err
 	}
-	if err = w.cleanup(); err != nil {
+	if err = w.close(); err != nil {
 		return err
 	}
 	glog.Infof("Backup complete: group %d at %d", r.Backup.GroupId, r.Backup.ReadTs)
