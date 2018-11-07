@@ -74,10 +74,8 @@ type List struct {
 	plist         *pb.PostingList
 	mutationMap   map[uint64]*pb.PostingList
 	minTs         uint64 // commit timestamp of immutable layer, reject reads before this ts.
-	commitTs      uint64 // last commitTs of this pl
 	deleteMe      int32  // Using atomic for this, to avoid expensive SetForDeletion operation.
 	estimatedSize int32
-	numCommits    int
 }
 
 // calculateSize would give you the size estimate. This is expensive, so run it carefully.
@@ -415,26 +413,13 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	for _, mpost := range plist.Postings {
 		mpost.CommitTs = commitTs
 	}
-	l.numCommits += len(plist.Postings)
-
-	if commitTs > l.commitTs {
-		// This is for rolling up the posting list.
-		l.commitTs = commitTs
-	}
 
 	// In general, a posting list shouldn't try to mix up it's job of keeping
 	// things in memory, with writing things to disk. A separate process can
 	// roll up and write them to disk. Posting list should only keep things in
 	// memory, to make it available for transactions. So, all we need to do here
-	// is to roll them up periodically.
-
-	numUids := (codec.ApproxLen(l.plist.Pack) * 15) / 100
-	if numUids < 1000 {
-		numUids = 1000
-	}
-	if l.numCommits > numUids {
-		return l.rollup()
-	}
+	// is to roll them up periodically, now being done by draft.go.
+	// For the PLs in memory, we roll them up after we do the disk rollup.
 	return nil
 }
 
@@ -444,10 +429,10 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 // The function will loop until either the Posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
 //
-// 	pl.Iterate(func(p *pb.Posting) bool {
+// 	pl.Iterate(..., func(p *pb.Posting) error {
 //    // Use posting p
-//    return true  // to continue iteration.
-//    return false // to break iteration.
+//    return nil // to continue iteration.
+//    return ErrStopIteration // to break iteration.
 //  })
 func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.RLock()
@@ -649,7 +634,7 @@ func doAsyncWrite(commitTs uint64, key []byte, data []byte, meta byte, f func(er
 func (l *List) MarshalToKv() (*pb.KV, error) {
 	l.Lock()
 	defer l.Unlock()
-	if err := l.rollup(); err != nil {
+	if err := l.rollup(math.MaxUint64); err != nil {
 		return nil, err
 	}
 
@@ -673,18 +658,29 @@ func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
 
 const blockSize int = 256
 
-// Merge all entries in mutation layer with commitTs <= l.commitTs
-// into immutable layer.
-func (l *List) rollup() error {
+func (l *List) Rollup(readTs uint64) error {
+	l.Lock()
+	defer l.Unlock()
+	return l.rollup(readTs)
+}
+
+// Merge all entries in mutation layer with commitTs <= l.commitTs into
+// immutable layer. Note that readTs can be math.MaxUint64, so do NOT use it
+// directly. It should only serve as the read timestamp for iteration.
+func (l *List) rollup(readTs uint64) error {
 	l.AssertLock()
 
 	// Pick all committed entries
-	x.AssertTrue(l.minTs <= l.commitTs)
+	if l.minTs > readTs {
+		// If we are already past the readTs, then skip the rollup.
+		return nil
+	}
 
 	final := new(pb.PostingList)
 	enc := codec.Encoder{BlockSize: blockSize}
 
-	err := l.iterate(l.commitTs, 0, func(p *pb.Posting) error {
+	maxCommitTs := l.minTs
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
 		// So, we don't need to do any filtering here. In fact, doing filtering here could result
 		// in a bug.
@@ -697,6 +693,7 @@ func (l *List) rollup() error {
 			// underlying data wouldn't be changed.
 			final.Postings = append(final.Postings, p)
 		}
+		maxCommitTs = x.Max(maxCommitTs, p.CommitTs)
 		return nil
 	})
 	x.Check(err)
@@ -706,16 +703,15 @@ func (l *List) rollup() error {
 	// in mutation map. Discard all else.
 	for startTs, plist := range l.mutationMap {
 		cl := plist.CommitTs
-		if cl == 0 || cl > l.commitTs {
+		if cl == 0 || cl > maxCommitTs {
 			// Keep this.
 		} else {
 			delete(l.mutationMap, startTs)
 		}
 	}
 
-	l.minTs = l.commitTs
+	l.minTs = maxCommitTs
 	l.plist = final
-	l.numCommits = 0
 	atomic.StoreInt32(&l.estimatedSize, l.calculateSize())
 	return nil
 }

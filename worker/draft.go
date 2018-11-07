@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -774,6 +775,15 @@ func (n *node) rollupLists(readTs uint64) error {
 	writer := x.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 
+	var mu sync.Mutex
+	var keys []string
+
+	addKey := func(key []byte) {
+		mu.Lock()
+		keys = append(keys, string(key))
+		mu.Unlock()
+	}
+
 	sl := streamLists{stream: writer, db: pstore}
 	sl.chooseKey = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
@@ -789,6 +799,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		if err != nil {
 			return nil, err
 		}
+		addKey(key)
 		return l.MarshalToKv()
 	}
 	if err := sl.orchestrate(context.Background(), "Rolling up", readTs); err != nil {
@@ -797,6 +808,19 @@ func (n *node) rollupLists(readTs uint64) error {
 	if err := writer.Flush(); err != nil {
 		return err
 	}
+	// For all the keys, let's see if they're in the LRU cache. If so, we can roll them up.
+	glog.Infof("Rollup on disk done. Rolling up %d keys in LRU cache now...", len(keys))
+	for _, key := range keys {
+		l := posting.GetLru([]byte(key))
+		if l == nil {
+			continue
+		}
+		if err := l.Rollup(readTs); err != nil {
+			glog.Errorf("While rolling up posting.List in LRU cache: %v. Ignoring.", err)
+		}
+	}
+	glog.Infoln("Rollup in LRU cache done.")
+
 	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)
 	return nil
