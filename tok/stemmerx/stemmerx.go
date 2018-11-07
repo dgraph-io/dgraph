@@ -51,7 +51,7 @@ var knownFilters = []string{
 	"cjk_bigram",
 	"stemmer_ar",
 	"stemmer_ckb",
-	"stemmer_da",
+	"stemmer_da_snowball",
 	"stemmer_de_light",
 	"stemmer_es_light",
 	"stemmer_fi_snowball",
