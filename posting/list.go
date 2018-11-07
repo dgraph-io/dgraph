@@ -664,18 +664,22 @@ func (l *List) Rollup(readTs uint64) error {
 	return l.rollup(readTs)
 }
 
-// Merge all entries in mutation layer with commitTs <= l.commitTs
-// into immutable layer.
+// Merge all entries in mutation layer with commitTs <= l.commitTs into
+// immutable layer. Note that readTs can be math.MaxUint64, so do NOT use it
+// directly. It should only serve as the read timestamp for iteration.
 func (l *List) rollup(readTs uint64) error {
 	l.AssertLock()
 
 	// Pick all committed entries
-	x.AssertTrue(l.minTs <= readTs)
+	if l.minTs > readTs {
+		// If we are already past the readTs, then skip the rollup.
+		return nil
+	}
 
 	final := new(pb.PostingList)
 	enc := codec.Encoder{BlockSize: blockSize}
 
-	var maxCommitTs uint64
+	maxCommitTs := l.minTs
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
 		// So, we don't need to do any filtering here. In fact, doing filtering here could result
@@ -693,7 +697,6 @@ func (l *List) rollup(readTs uint64) error {
 		return nil
 	})
 	x.Check(err)
-	x.AssertTrue(maxCommitTs >= l.minTs)
 	final.Pack = enc.Done()
 
 	// Keep all uncommited Entries or postings with commitTs > l.commitTs
