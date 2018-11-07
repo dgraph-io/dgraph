@@ -234,27 +234,45 @@ func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
 func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "link: uid @reverse ."}))
-	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+	assignedIds, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		SetNquads: []byte("<0x1> <link> <0x2> ."),
+		SetNquads: []byte("_:a <link> _:b ."),
 	})
 	require.NoError(t, err)
+	aId := assignedIds.Uids["a"]
+	bId := assignedIds.Uids["b"]
+
+	/** we must run a query first before the next delete transaction,
+	the reason is that a mutation does not wait for the previous mutation to finish completely with
+	a commitTs from zero. If we run the deletion directly,
+	and the previous mutation has not received a commitTs from zero yet,
+	then the deletion will skip the link, and essentially be treated as a no-op. As a result,
+	when we query it again following the reverse link, the link would still exist,
+	and the test would fail.
+
+	Running a query would make sure that the previous mutation for creating the link has
+	completed with a commitTs from zero,
+	and the subsequent deletion is done *AFTER* the link creation.
+	 */
+	c.NewReadOnlyTxn().Query(ctx,  fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		DelNquads: []byte("<0x1> <link> * ."),
+		DelNquads: []byte(fmt.Sprintf("<%s> <link> * .", aId)),
 	})
-	resp, err := c.NewTxn().Query(ctx, "{ q(func: uid(0x2)) { ~link { uid } }}")
+	resp, err := c.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", bId))
 	require.NoError(t, err)
 	CompareJSON(t, `{"q":[]}`, string(resp.Json))
 
-	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+	assignedIds, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		SetNquads: []byte("<0x1> <link> <0x3> ."),
+		SetNquads: []byte(fmt.Sprintf("<%s> <link> _:c .", aId)),
 	})
-	resp, err = c.NewTxn().Query(ctx, "{ q(func: uid(0x3)) { ~link { uid } }}")
+	cId := assignedIds.Uids["c"]
+
+	resp, err = c.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", cId))
 	require.NoError(t, err)
-	CompareJSON(t, `{"q":[{"~link": [{"uid": "0x1"}]}]}`, string(resp.Json))
+	CompareJSON(t, fmt.Sprintf(`{"q":[{"~link": [{"uid": "%s"}]}]}`, aId), string(resp.Json))
 }
 
 func ExpandAllReversePredicatesTest(t *testing.T, c *dgo.Dgraph) {

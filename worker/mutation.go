@@ -132,16 +132,22 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	if !ok {
 		if current.Directive == pb.SchemaUpdate_INDEX {
 			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true, startTs); err != nil {
+				// restore the state to old on error
+				schema.State().Set(update.Predicate, old)
 				return err
 			}
 		} else if current.Directive == pb.SchemaUpdate_REVERSE {
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true, startTs); err != nil {
+				// restore the state to old on error
+				schema.State().Set(update.Predicate, old)
 				return err
 			}
 		}
 
 		if current.Count {
 			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true, startTs); err != nil {
+				// restore the state to old on error
+				schema.State().Set(update.Predicate, old)
 				return err
 			}
 		}
@@ -151,9 +157,13 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	// schema was present already
 	if current.List && !old.List {
 		if err := posting.RebuildListType(ctx, update.Predicate, startTs); err != nil {
+			// restore the state to old on error
+			schema.State().Set(update.Predicate, old)
 			return err
 		}
 	} else if old.List && !current.List {
+		// restore the state to old on error
+		schema.State().Set(update.Predicate, old)
 		return fmt.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
 			" without dropping it first.", current.Predicate)
 	}
@@ -162,12 +172,16 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 		// Reindex if update.Index is true or remove index
 		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
 			current.Directive == pb.SchemaUpdate_INDEX, startTs); err != nil {
+			// restore the state to old on error
+			schema.State().Set(update.Predicate, old)
 			return err
 		}
 	} else if needsRebuildingReverses(old, current) {
 		// Add or remove reverse edge based on update.Reverse
 		if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
 			current.Directive == pb.SchemaUpdate_REVERSE, startTs); err != nil {
+			// restore the state to old on error
+			schema.State().Set(update.Predicate, old)
 			return err
 		}
 	}
@@ -175,6 +189,8 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	if current.Count != old.Count {
 		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count,
 			startTs); err != nil {
+			// restore the state to old on error
+			schema.State().Set(update.Predicate, old)
 			return err
 		}
 	}
