@@ -140,7 +140,7 @@ func handleError(err error) {
 		x.Fatalf(s.Message())
 	case strings.Contains(s.Message(), "x509"):
 		x.Fatalf(s.Message())
-	case strings.Contains(s.Message(), "Server is overloaded."):
+	case strings.Contains(s.Message(), "Server overloaded."):
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
 		fmt.Printf("Server is overloaded. Will retry after %s.", dur.Round(time.Minute))
 		time.Sleep(dur)
