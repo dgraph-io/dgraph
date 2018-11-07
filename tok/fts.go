@@ -24,7 +24,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/blevesearch/bleve/analysis/analyzer/custom"
-	"github.com/blevesearch/bleve/analysis/lang/cjk"
 	"github.com/blevesearch/bleve/analysis/token/lowercase"
 	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
 	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
@@ -36,12 +35,9 @@ var (
 	langToCode map[string]string // maps language name to country code
 )
 
-const (
-	// FTSTokenizerName  = "fulltext"
-	filterUnicodeNorm = "unicodenorm_nfkc"
-)
+const filterUnicodeNorm = "unicodenorm_nfkc"
 
-func initFullTextTokenizers() {
+func registerFullTextTokenizers() {
 	bleveCache = registry.NewCache()
 
 	// unicode normalizer filter - simplifies unicode words using Normalization Form KC (NFKC)
@@ -81,21 +77,6 @@ func initFullTextTokenizers() {
 	x.Check(err)
 
 	registerTokenizer(FullTextTokenizer{})
-}
-
-// Full text search analyzer - does Chinese/Japanese/Korean style bigram
-// tokenization. It's language unaware (so doesn't do stemming or stop
-// words), but works OK in some contexts.
-func defineCJKAnalyzer(cc string) {
-	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(cc), map[string]interface{}{
-		"type":      custom.Name,
-		"tokenizer": unicode.Name,
-		"token_filters": []string{
-			filterUnicodeNorm,
-			cjk.BigramName,
-		},
-	})
-	x.Check(err)
 }
 
 func countryCode(lang string) string {

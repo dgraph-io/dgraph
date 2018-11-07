@@ -85,8 +85,7 @@ func init() {
 	registerTokenizer(BoolTokenizer{})
 	registerTokenizer(TrigramTokenizer{})
 	registerTokenizer(HashTokenizer{})
-	registerTokenizer(FullTextTokenizer{})
-	initFullTextTokenizers()
+	registerFullTextTokenizers()
 }
 
 func LoadCustomTokenizer(soFile string) {

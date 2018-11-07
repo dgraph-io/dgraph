@@ -130,7 +130,7 @@ func TestDateTimeTokenizer(t *testing.T) {
 }
 
 func TestFullTextTokenizerLang(t *testing.T) {
-	tokenizer, has := GetTokenizer(FtsTokenizerName("de"))
+	tokenizer, has := GetTokenizer("fulltext")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -189,7 +189,7 @@ func TestFullTextTokenizerSupportedLangs(t *testing.T) {
 		{"tr", true},
 	}
 	for _, test := range tests {
-		tokenizer, ok := GetTokenizer(FtsTokenizerName(test.lang))
+		tokenizer, ok := GetTokenizer("fulltext")
 		require.Equal(t, test.ok, ok, "Fulltext tokenizer for %q failed", test.lang)
 		if test.ok {
 			require.NotNil(t, tokenizer)
@@ -238,7 +238,7 @@ func TestGetBleveTokens(t *testing.T) {
 	val := "Our chief weapon is surprise...surprise and fear...fear and surprise...." +
 		"Our two weapons are fear and surprise...and ruthless efficiency.... " +
 		"Our three weapons are fear, surprise, and ruthless efficiency..."
-	tokens, err := getBleveTokens(FTSTokenizerName, val)
+	tokens, err := getBleveTokens("fulltext", val)
 	require.NoError(t, err)
 
 	expected := []string{"chief", "weapon", "surpris", "fear", "ruthless", "effici"}
@@ -266,7 +266,7 @@ func TestGetTextTokensInvalidLang(t *testing.T) {
 // Google translate.
 
 func TestFullTextTokenizerCJKChinese(t *testing.T) {
-	tokenizer, has := GetTokenizer(FtsTokenizerName("zh"))
+	tokenizer, has := GetTokenizer("fulltext")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -291,7 +291,7 @@ func TestFullTextTokenizerCJKChinese(t *testing.T) {
 }
 
 func TestFullTextTokenizerCJKKorean(t *testing.T) {
-	tokenizer, has := GetTokenizer(FtsTokenizerName("ko"))
+	tokenizer, has := GetTokenizer("fulltext")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -311,7 +311,7 @@ func TestFullTextTokenizerCJKKorean(t *testing.T) {
 }
 
 func TestFullTextTokenizerCJKJapanese(t *testing.T) {
-	tokenizer, has := GetTokenizer(FtsTokenizerName("ja"))
+	tokenizer, has := GetTokenizer("fulltext")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 

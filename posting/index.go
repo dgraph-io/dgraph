@@ -62,8 +62,8 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 	var tokens []string
 	tokenizers := schema.State().Tokenizer(attr)
 	for _, it := range tokenizers {
-		if tok.FtsTokenizerName("") == it.Name() && len(lang) > 0 {
-			newTokenizer, ok := tok.GetTokenizer(tok.FtsTokenizerName(lang))
+		if it.Name() == "fulltext" && len(lang) > 0 {
+			newTokenizer, ok := tok.GetTokenizer("fulltext")
 			if ok {
 				it = newTokenizer
 			} else {
