@@ -242,8 +242,8 @@ func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	aId := assignedIds.Uids["a"]
 	bId := assignedIds.Uids["b"]
 
-	/** 
-    we must run a query first before the next delete transaction, the
+	/**
+	we must run a query first before the next delete transaction, the
 	reason is that a mutation does not wait for the previous mutation
 	to finish completely with a commitTs from zero. If we run the
 	deletion directly, and the previous mutation has not received a
