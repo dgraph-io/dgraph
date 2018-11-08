@@ -99,7 +99,9 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	if err := runSchemaMutationHelper(ctx, update, startTs); err != nil {
 		// on error, we restore the memory state to be the same as the disk
-		schema.Load(update.Predicate)
+		if loadErr := schema.Load(update.Predicate); loadErr != nil {
+			glog.Errorf("failed to load schema: %v", loadErr)
+		}
 		return err
 	}
 
