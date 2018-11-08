@@ -140,13 +140,6 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
-		// Try to guess a storage type. The schema type is preferred though.
-		tid, val := types.TypeForValue([]byte(v))
-		if tid != types.DefaultID {
-			var err error
-			nq.ObjectValue, err = types.ObjectValue(tid, val)
-			return err
-		}
 		// In RDF, we assume everything is default (types.DefaultID), but in JSON we assume string
 		// (StringID). But this value will be checked against the schema so we don't overshadow a
 		// password value (types.PasswordID) - Issue#2623
