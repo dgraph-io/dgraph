@@ -72,7 +72,8 @@ func registerBleveTokenizers() {
 
 func getTermTokens(str string) ([]string, error) {
 	if str == "" {
-		return []string{}, nil
+		// XXX: why do we need this???
+		return []string{""}, nil
 	}
 	analyzer, err := bleveCache.AnalyzerNamed("term")
 	if err != nil {

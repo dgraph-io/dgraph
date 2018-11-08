@@ -37,8 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const maxBatchSize = 32 << 20
-
 var emptyCountParams countParams
 
 // IndexTokens return tokens, without the predicate prefix and index rune.

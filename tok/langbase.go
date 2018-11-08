@@ -58,6 +58,5 @@ func langBase(lang string) string {
 			return base.String()
 		}
 	}
-	// return language.English.String()
 	return enBase
 }
