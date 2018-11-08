@@ -20,17 +20,16 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func tokenize(funcArgs []string, tokenizer Tokenizer, lang string) ([]string, error) {
+func GetTermTokens(funcArgs []string) ([]string, error) {
 	if l := len(funcArgs); l != 1 {
 		return nil, x.Errorf("Function requires 1 arguments, but got %d", l)
 	}
-	return BuildTokens(funcArgs[0], tokenizer, lang)
-}
-
-func GetTermTokens(funcArgs []string) ([]string, error) {
-	return tokenize(funcArgs, TermTokenizer{}, "")
+	return BuildTokens(funcArgs[0], TermTokenizer{})
 }
 
 func GetFullTextTokens(funcArgs []string, lang string) ([]string, error) {
-	return tokenize(funcArgs, FullTextTokenizer{}, lang)
+	if l := len(funcArgs); l != 1 {
+		return nil, x.Errorf("Function requires 1 arguments, but got %d", l)
+	}
+	return BuildTokens(funcArgs[0], FullTextTokenizer{lang: lang})
 }

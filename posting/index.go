@@ -62,7 +62,7 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 			glog.Infof("Long term for exact index on predicate: [%s]. "+
 				"Consider switching to hash for better performance.\n", attr)
 		}
-		toks, err := tok.BuildTokens(sv.Value, it, lang)
+		toks, err := tok.BuildTokens(sv.Value, it.SetLang(lang))
 		if err != nil {
 			return tokens, err
 		}

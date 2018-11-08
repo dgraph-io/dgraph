@@ -84,7 +84,8 @@ func getTermTokens(str string) ([]string, error) {
 	for i := range tokens {
 		terms = append(terms, string(tokens[i].Term))
 	}
-	return x.RemoveDuplicates(terms), nil
+	terms = x.RemoveDuplicates(terms)
+	return terms, nil
 }
 
 func getFullTextTokens(s, lang string) ([]string, error) {
@@ -108,5 +109,6 @@ func getFullTextTokens(s, lang string) ([]string, error) {
 	for i := range tokens {
 		terms = append(terms, string(tokens[i].Term))
 	}
-	return x.RemoveDuplicates(terms), nil
+	terms = x.RemoveDuplicates(terms)
+	return terms, nil
 }

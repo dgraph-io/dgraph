@@ -129,7 +129,7 @@ func getInequalityTokens(readTs uint64, attr, f string,
 
 	// Get the token for the value passed in function.
 	// XXX: the lang should be query.Langs, but it only matters in edge case test below.
-	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer, "en")
+	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer.SetLang("en"))
 	if err != nil {
 		return nil, "", err
 	}
