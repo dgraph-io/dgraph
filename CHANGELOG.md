@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.0.10] - 2018-11-05
+
+**Note: This release requires you to export and re-import data. We have changed the underlying storage format.**
+
+### Added
+
+- The Alter endpoint can be protected by an auth token that is set on the Dgraph Alphas via the `--auth_token` option. This can help prevent accidental schema updates and drop all operations. (#2692)
+- Optimize has function (#2724)
+- Expose the health check API via gRPC. (#2721)
+
+### Changed
+
+- Dgraph is relicensed to Apache 2.0. (#2652)
+- **Breaking change**. Rename Dgraph Server to Dgraph Alpha to clarify discussions of the Dgraph cluster. The top-level command `dgraph server` is now `dgraph alpha`. (#2667)
+- Prometheus metrics have been renamed for consistency for alpha, memory, and lru cache metrics. (#2636, #2670, #2714)
+- The `dgraph-converter` command is available as the subcommand `dgraph conv`. (#2635)
+- Updating protobuf version. (#2639)
+- Allow checkpwd to be aliased (#2641)
+- Better control excessive traffic to Dgraph (#2678)
+- Export format now exports on the Alpha receiving the export request. The naming scheme of the export files has been simplified.
+- Improvements to the `dgraph debug` tool that can be used to inspect the contents of the posting lists directory.
+- Bring in Badger updates (#2697)
+
+### Fixed
+
+- Make raft leader resume probing after snapshot crash (#2707)
+- **Breaking change:** Create a lot simpler sorted uint64 codec (#2716)
+- Increase the size of applyCh, to give Raft some breathing space. Otherwise, it fails to maintain quorum health.
+- Zero should stream last commit update
+- Send commit timestamps in order (#2687)
+- Query blocks with the same name are no longer allowed.
+- Fix out-of-range values in query parser. (#2690)
+
 ## [1.0.9] - 2018-10-02
 
 ### Added

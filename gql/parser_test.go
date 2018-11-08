@@ -68,6 +68,59 @@ func TestParseVarError(t *testing.T) {
 	require.Contains(t, err.Error(), "Cannot do uid() of a variable")
 }
 
+func TestDuplicateQueryAliasesError(t *testing.T) {
+	query := `
+{
+  find_michael(func: eq(name@., "Michael")) {
+    uid
+    name@.
+    age
+  }
+    find_michael(func: eq(name@., "Amit")) {
+      uid
+      name@.
+    }
+}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+
+	queryInOpType := `
+{
+  find_michael(func: eq(name@., "Michael")) {
+    uid
+    name@.
+    age
+  }
+}
+query {find_michael(func: eq(name@., "Amit")) {
+      uid
+      name@.
+    }
+}
+`
+	_, err = Parse(Request{Str: queryInOpType})
+	require.Error(t, err)
+
+	queryWithDuplicateShortestPaths := `
+{
+ path as shortest(from: 0x1, to: 0x4) {
+  friend
+ }
+ path2 as shortest(from: 0x2, to: 0x3) {
+    friend
+ }
+ pathQuery1(func: uid(path)) {
+   name
+ }
+ pathQuery2(func: uid(path2)) {
+   name
+ }
+
+}`
+	_, err = Parse(Request{Str: queryWithDuplicateShortestPaths})
+	require.NoError(t, err)
+}
+
 func TestParseQueryListPred1(t *testing.T) {
 	query := `
 	{
@@ -2992,12 +3045,12 @@ func TestParseFacetsDuplicateVarError(t *testing.T) {
 func TestParseFacetsOrderVar(t *testing.T) {
 	query := `
 	query {
-		me(func: uid(0x1)) {
+		me1(func: uid(0x1)) {
 			friends @facets(orderdesc: a as b) {
 				name
 			}
 		}
-		me(func: uid(a)) { }
+		me2(func: uid(a)) { }
 	}
 `
 	_, err := Parse(Request{Str: query})

@@ -17,7 +17,6 @@
 package posting
 
 import (
-	"crypto/md5"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -62,10 +61,7 @@ const (
 // RAFT entries discarded.
 func init() {
 	x.AddInit(func() {
-		h := md5.New()
-		pl := pb.PostingList{
-			Checksum: h.Sum(nil),
-		}
+		pl := pb.PostingList{}
 		var err error
 		emptyPostingList, err = pl.Marshal()
 		x.Check(err)
@@ -137,7 +133,7 @@ func periodicUpdateStats(lc *y.Closer) {
 			inUse := float64(megs)
 
 			stats := lcache.Stats()
-			x.EvictedPls.Set(int64(stats.NumEvicts))
+			x.LcacheEvicts.Set(int64(stats.NumEvicts))
 			x.LcacheSize.Set(int64(stats.Size))
 			x.LcacheLen.Set(int64(stats.Length))
 
@@ -246,10 +242,10 @@ func StopLRUEviction() {
 func Get(key []byte) (rlist *List, err error) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
-		x.CacheHit.Add(1)
+		x.LcacheHit.Add(1)
 		return lp, nil
 	}
-	x.CacheMiss.Add(1)
+	x.LcacheMiss.Add(1)
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
@@ -260,7 +256,7 @@ func Get(key []byte) (rlist *List, err error) {
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
-		x.CacheRace.Add(1)
+		x.LcacheRace.Add(1)
 	}
 	return lp, nil
 }

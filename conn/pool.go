@@ -153,6 +153,12 @@ func (p *Pool) shutdown() {
 	p.conn.Close()
 }
 
+func (p *Pool) SetUnhealthy() {
+	p.Lock()
+	p.lastEcho = time.Time{}
+	p.Unlock()
+}
+
 func (p *Pool) UpdateHealthStatus(printError bool) error {
 	conn := p.Get()
 

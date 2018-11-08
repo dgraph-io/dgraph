@@ -155,14 +155,7 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 			// empty pl
 			return nil
 		}
-		// Found complete pl, no needn't iterate more
-		if item.UserMeta()&BitUidPosting != 0 {
-			plist.Uids = make([]byte, len(val))
-			copy(plist.Uids, val)
-		} else if len(val) > 0 {
-			x.Check(plist.Unmarshal(val))
-		}
-		return nil
+		return plist.Unmarshal(val)
 	})
 }
 
@@ -187,9 +180,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if !bytes.Equal(item.Key(), l.key) {
 			break
 		}
-		if l.commitTs == 0 {
-			l.commitTs = item.Version()
-		}
 
 		if item.UserMeta()&BitCompletePosting > 0 {
 			if err := unmarshalOrCopy(l.plist, item); err != nil {
@@ -205,13 +195,13 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			err := item.Value(func(val []byte) error {
 				pl := &pb.PostingList{}
 				x.Check(pl.Unmarshal(val))
-				pl.Commit = item.Version()
+				pl.CommitTs = item.Version()
 				for _, mpost := range pl.Postings {
 					// commitTs, startTs are meant to be only in memory, not
 					// stored on disk.
 					mpost.CommitTs = item.Version()
 				}
-				l.mutationMap[pl.Commit] = pl
+				l.mutationMap[pl.CommitTs] = pl
 				return nil
 			})
 			if err != nil {
@@ -246,7 +236,6 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	if item.UserMeta()&BitCompletePosting > 0 {
 		err = unmarshalOrCopy(l.plist, item)
 		l.minTs = item.Version()
-		l.commitTs = item.Version()
 	} else {
 		iterOpts := badger.DefaultIteratorOptions
 		iterOpts.AllVersions = true
