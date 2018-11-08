@@ -47,16 +47,11 @@ import (
 	"golang.org/x/net/trace"
 )
 
-// uniqueKey is meant to be unique across all the replicas.
-func uniqueKey() string {
-	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
-}
-
 type node struct {
 	*conn.Node
 
 	// Fields which are never changed after init.
-	applyCh  chan []raftpb.Entry
+	applyCh  chan []*pb.Proposal
 	rollupCh chan uint64 // Channel to run posting list rollups.
 	ctx      context.Context
 	gid      uint32
@@ -90,7 +85,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh:  make(chan []raftpb.Entry, 1000),
+		applyCh:  make(chan []*pb.Proposal, 1000),
 		rollupCh: make(chan uint64, 3),
 		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:   y.NewCloser(3), // Matches CLOSER:1
@@ -164,7 +159,7 @@ func detectPendingTxns(attr string) error {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
+func (n *node) applyMutations(proposal *pb.Proposal) error {
 	tr := trace.New("Dgraph.Node", "ApplyMutations")
 	defer tr.Finish()
 
@@ -252,7 +247,7 @@ func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
 			// Since committed entries are serialized, updateSchemaIfMissing is not
 			// needed, In future if schema needs to be changed, it would flow through
 			// raft so there won't be race conditions between read and update schema
-			updateSchemaType(attr, storageType, index)
+			updateSchemaType(attr, storageType, proposal.Index)
 		}
 	}
 
@@ -263,27 +258,35 @@ func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
 		tr.SetError()
 		return dy.ErrConflict
 	}
+
 	tr.LazyPrintf("Applying %d edges", len(m.Edges))
-	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("num", int64(len(m.Edges)))}, "Applying edges")
+	span.Annotatef(nil, "To apply: %d edges", len(m.Edges))
+	var retries int
 	for _, edge := range m.Edges {
-		err := posting.ErrRetry
-		for err == posting.ErrRetry {
-			err = runMutation(ctx, edge, txn)
+		for {
+			err := runMutation(ctx, edge, txn)
+			if err == nil {
+				break
+			}
+			if err != posting.ErrRetry {
+				tr.SetError()
+				return err
+			}
+			retries++
 		}
-		if err != nil {
-			tr.SetError()
-			return err
-		}
+	}
+	if retries > 0 {
+		span.Annotatef(nil, "retries=true num=%d", retries)
 	}
 	tr.LazyPrintf("Done applying %d edges", len(m.Edges))
 	return nil
 }
 
-func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
+func (n *node) applyCommitted(proposal *pb.Proposal) error {
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.
 		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
-		return n.applyMutations(proposal, index)
+		return n.applyMutations(proposal)
 	}
 
 	ctx := n.Ctx(proposal.Key)
@@ -381,47 +384,35 @@ func (n *node) processApplyCh() {
 	previous := make(map[string]*P)
 
 	// This function must be run serially.
-	handle := func(entries []raftpb.Entry) {
-		for _, e := range entries {
-			switch {
-			case e.Type == raftpb.EntryConfChange:
-				// Already handled in the main Run loop.
-			case len(e.Data) == 0:
-				n.elog.Printf("Found empty data at index: %d", e.Index)
-				n.Applied.Done(e.Index)
-			default:
-				proposal := &pb.Proposal{}
-				if err := proposal.Unmarshal(e.Data); err != nil {
-					x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
+	handle := func(proposals []*pb.Proposal) {
+		for _, proposal := range proposals {
+			// We use the size as a double check to ensure that we're
+			// working with the same proposal as before.
+			psz := proposal.Size()
+
+			var perr error
+			p, ok := previous[proposal.Key]
+			if ok && p.err == nil && p.size == psz {
+				n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
+					proposal.Key, proposal.Index)
+				previous[proposal.Key].seen = time.Now() // Update the ts.
+				// Don't break here. We still need to call the Done below.
+
+			} else {
+				perr = n.applyCommitted(proposal)
+				if len(proposal.Key) > 0 {
+					p := &P{err: perr, size: psz, seen: time.Now()}
+					previous[proposal.Key] = p
 				}
-				// We use the size as a double check to ensure that we're
-				// working with the same proposal as before.
-				psz := proposal.Size()
-
-				var perr error
-				p, ok := previous[proposal.Key]
-				if ok && p.err == nil && p.size == psz {
-					n.elog.Printf("Proposal with key: %s already applied. Skipping index: %d.\n",
-						proposal.Key, e.Index)
-					previous[proposal.Key].seen = time.Now() // Update the ts.
-					// Don't break here. We still need to call the Done below.
-
-				} else {
-					perr = n.applyCommitted(proposal, e.Index)
-					if len(proposal.Key) > 0 {
-						p := &P{err: perr, size: psz, seen: time.Now()}
-						previous[proposal.Key] = p
-					}
-					if perr != nil {
-						glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
-					}
-					n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
-						proposal.Key, e.Index, perr)
+				if perr != nil {
+					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
 				}
-
-				n.Proposals.Done(proposal.Key, perr)
-				n.Applied.Done(e.Index)
+				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
+					proposal.Key, proposal.Index, perr)
 			}
+
+			n.Proposals.Done(proposal.Key, perr)
+			n.Applied.Done(proposal.Index)
 		}
 	}
 
@@ -728,6 +719,7 @@ func (n *node) Run() {
 			}
 
 			// Now schedule or apply committed entries.
+			var proposals []*pb.Proposal
 			for _, entry := range rd.CommittedEntries {
 				// Need applied watermarks for schema mutation also for read linearazibility
 				// Applied watermarks needs to be emitted as soon as possible sequentially.
@@ -742,11 +734,29 @@ func (n *node) Run() {
 					// Not present in proposal map.
 					n.Applied.Done(entry.Index)
 					groups().triggerMembershipSync()
+
+				} else if len(entry.Data) == 0 {
+					n.elog.Printf("Found empty data at index: %d", entry.Index)
+					n.Applied.Done(entry.Index)
+
+				} else {
+					proposal := &pb.Proposal{}
+					if err := proposal.Unmarshal(entry.Data); err != nil {
+						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
+					}
+					if pctx := n.Proposals.Get(proposal.Key); pctx != nil {
+						atomic.AddUint32(&pctx.Found, 1)
+						if span := otrace.FromContext(pctx.Ctx); span != nil {
+							span.Annotate(nil, "Proposal found in CommittedEntries")
+						}
+					}
+					proposal.Index = entry.Index
+					proposals = append(proposals, proposal)
 				}
 			}
-			// Send the whole lot to applyCh in one go, instead of sending entries one by one.
-			if len(rd.CommittedEntries) > 0 {
-				n.applyCh <- rd.CommittedEntries
+			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.
+			if len(proposals) > 0 {
+				n.applyCh <- proposals
 			}
 
 			if tr != nil {
