@@ -301,7 +301,6 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 			conn.Get().Connect(member.Addr)
 		}
 	}
-
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {

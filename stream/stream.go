@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package worker
+package stream
 
 import (
 	"bytes"
@@ -24,21 +24,24 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+
 	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
+const pageSize = 4 << 20 // 4MB
+
 type kvStream interface {
 	Send(*pb.KVS) error
 }
 
-type streamLists struct {
-	stream    kvStream
-	predicate string
-	db        *badger.DB
-	chooseKey func(item *badger.Item) bool
-	itemToKv  func(key []byte, itr *badger.Iterator) (*pb.KV, error)
+type Lists struct {
+	Stream        kvStream
+	Predicate     string
+	DB            *badger.DB
+	ChooseKeyFunc func(item *badger.Item) bool
+	ItemToKVFunc  func(key []byte, itr *badger.Iterator) (*pb.KV, error)
 }
 
 // keyRange is [start, end), including start, excluding end. Do ensure that the start,
@@ -48,7 +51,7 @@ type keyRange struct {
 	end   []byte
 }
 
-func (sl *streamLists) orchestrate(ctx context.Context, prefix string, ts uint64) error {
+func (sl *Lists) Orchestrate(ctx context.Context, prefix string, ts uint64) error {
 	keyCh := make(chan keyRange, 100) // Contains keys for posting lists.
 	kvChan := make(chan *pb.KVS, 100) // Contains marshaled posting lists.
 	errCh := make(chan error, 1)      // Stores error by consumeKeys.
@@ -92,12 +95,12 @@ func (sl *streamLists) orchestrate(ctx context.Context, prefix string, ts uint64
 	return nil
 }
 
-func (sl *streamLists) produceRanges(ctx context.Context, ts uint64, keyCh chan keyRange) {
+func (sl *Lists) produceRanges(ctx context.Context, ts uint64, keyCh chan keyRange) {
 	var prefix []byte
-	if len(sl.predicate) > 0 {
-		prefix = x.PredicatePrefix(sl.predicate)
+	if len(sl.Predicate) > 0 {
+		prefix = x.PredicatePrefix(sl.Predicate)
 	}
-	txn := sl.db.NewTransactionAt(ts, false)
+	txn := sl.DB.NewTransactionAt(ts, false)
 	defer txn.Discard()
 	iterOpts := badger.DefaultIteratorOptions
 	iterOpts.PrefetchValues = false
@@ -113,7 +116,7 @@ func (sl *streamLists) produceRanges(ctx context.Context, ts uint64, keyCh chan 
 		}
 
 		size += item.EstimatedSize()
-		if size > 4*MB {
+		if size > pageSize {
 			kr := keyRange{start: start, end: item.KeyCopy(nil)}
 			keyCh <- kr
 			start = item.KeyCopy(nil)
@@ -126,14 +129,14 @@ func (sl *streamLists) produceRanges(ctx context.Context, ts uint64, keyCh chan 
 	close(keyCh)
 }
 
-func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
+func (sl *Lists) produceKVs(ctx context.Context, ts uint64,
 	keyCh chan keyRange, kvChan chan *pb.KVS) error {
 	var prefix []byte
-	if len(sl.predicate) > 0 {
-		prefix = x.PredicatePrefix(sl.predicate)
+	if len(sl.Predicate) > 0 {
+		prefix = x.PredicatePrefix(sl.Predicate)
 	}
 
-	txn := sl.db.NewTransactionAt(ts, false)
+	txn := sl.DB.NewTransactionAt(ts, false)
 	defer txn.Discard()
 	iterate := func(kr keyRange) error {
 		iterOpts := badger.DefaultIteratorOptions
@@ -157,12 +160,12 @@ func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
 				break
 			}
 			// Check if we should pick this key.
-			if sl.chooseKey != nil && !sl.chooseKey(item) {
+			if sl.ChooseKeyFunc != nil && !sl.ChooseKeyFunc(item) {
 				continue
 			}
 
 			// Now convert to key value.
-			kv, err := sl.itemToKv(item.KeyCopy(nil), it)
+			kv, err := sl.ItemToKVFunc(item.KeyCopy(nil), it)
 			if err != nil {
 				return err
 			}
@@ -192,8 +195,7 @@ func (sl *streamLists) produceKVs(ctx context.Context, ts uint64,
 	}
 }
 
-func (sl *streamLists) streamKVs(ctx context.Context, prefix string,
-	kvChan chan *pb.KVS) error {
+func (sl *Lists) streamKVs(ctx context.Context, prefix string, kvChan chan *pb.KVS) error {
 	var count int
 	var bytesSent uint64
 	t := time.NewTicker(time.Second)
@@ -218,10 +220,10 @@ func (sl *streamLists) streamKVs(ctx context.Context, prefix string,
 		bytesSent += sz
 		count += len(batch.Kv)
 		t := time.Now()
-		if err := sl.stream.Send(batch); err != nil {
+		if err := sl.Stream.Send(batch); err != nil {
 			return err
 		}
-		glog.V(2).Infof("%s Created batch of size: %s in %v.\n",
+		glog.V(2).Infof("%s Created batch of size: %s in %s.\n",
 			prefix, humanize.Bytes(sz), time.Since(t))
 		return nil
 	}
@@ -240,7 +242,7 @@ outer:
 				continue
 			}
 			speed := bytesSent / durSec
-			glog.Infof("%s Time elapsed: %v, bytes sent: %s, speed: %v/sec\n",
+			glog.Infof("%s Time elapsed: %s, bytes sent: %s, speed: %s/sec\n",
 				prefix, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
 
 		case kvs, ok := <-kvChan:

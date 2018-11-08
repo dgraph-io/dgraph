@@ -15,7 +15,7 @@
 #
 
 PROTO_PATH := ${GOPATH}/src:.
-PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/gogo/protobuf
+PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/dgraph
 PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/dgo/protos
 
 .PHONY: help
