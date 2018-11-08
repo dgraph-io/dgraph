@@ -92,6 +92,9 @@ they form a Raft group and provide synchronous replication.
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
 
+	flag.String("jaeger.agent", "", "Send opencensus traces to Jaeger.")
+	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
+
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
 	flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	flag.String("whitelist", "",
@@ -243,7 +246,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 		glog.Fatalf("Unable to register opencensus: %v", err)
 	}
 
-	shandler := &ocgrpc.ServerHandler{
+	handler := &ocgrpc.ServerHandler{
 		IsPublicEndpoint: true,
 		StartOptions: otrace.StartOptions{
 			Sampler: otrace.AlwaysSample(),
@@ -253,32 +256,35 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
-		grpc.StatsHandler(shandler),
+		grpc.StatsHandler(handler),
 	}
 	if tlsCfg != nil {
 		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
 
 	// Port details: https://www.jaegertracing.io/docs/getting-started/
-	agentEndpointURI := "localhost:6831"
-	collectorEndpointURI := "http://localhost:14268"
 
-	je, err := jaeger.NewExporter(jaeger.Options{
-		AgentEndpoint: agentEndpointURI,
-		Endpoint:      collectorEndpointURI,
-		ServiceName:   "dgraph",
-	})
-	if err != nil {
-		log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+	if agent := Alpha.Conf.GetString("jaeger.agent"); len(agent) > 0 {
+		// Default endpoints are:
+		// agentEndpointURI := "localhost:6831"
+		// collectorEndpointURI := "http://localhost:14268"
+		collector := Alpha.Conf.GetString("jaeger.collector")
+		je, err := jaeger.NewExporter(jaeger.Options{
+			AgentEndpoint: agent,
+			Endpoint:      collector,
+			ServiceName:   "dgraph.alpha",
+		})
+		if err != nil {
+			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+		}
+		// And now finally register it as a Trace Exporter
+		otrace.RegisterExporter(je)
 	}
-
-	// And now finally register it as a Trace Exporter
-	otrace.RegisterExporter(je)
 
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
 	hapi.RegisterHealthServer(s, health.NewServer())
-	err = s.Serve(l)
+	err := s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)
 	s.Stop()
 }
