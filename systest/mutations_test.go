@@ -77,6 +77,7 @@ func TestSystem(t *testing.T) {
 	t.Run("graphql var child", wrap(GraphQLVarChild))
 	t.Run("math ge", wrap(MathGe))
 	t.Run("has should not have deleted edge", wrap(HasDeletedEdge))
+	t.Run("has should have reverse edges", wrap(HasReverseEdge))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -233,27 +234,47 @@ func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
 func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "link: uid @reverse ."}))
-	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+	assignedIds, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		SetNquads: []byte("<0x1> <link> <0x2> ."),
+		SetNquads: []byte("_:a <link> _:b ."),
 	})
 	require.NoError(t, err)
+	aId := assignedIds.Uids["a"]
+	bId := assignedIds.Uids["b"]
+
+	/**
+	we must run a query first before the next delete transaction, the
+	reason is that a mutation does not wait for the previous mutation
+	to finish completely with a commitTs from zero. If we run the
+	deletion directly, and the previous mutation has not received a
+	commitTs from zero yet, then the deletion will skip the link, and
+	essentially be treated as a no-op. As a result, when we query it
+	again following the reverse link, the link would still exist, and
+	the test would fail.
+
+	Running a query would make sure that the previous mutation for
+	creating the link has completed with a commitTs from zero, and the
+	subsequent deletion is done *AFTER* the link creation.
+	 */
+	c.NewReadOnlyTxn().Query(ctx,  fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		DelNquads: []byte("<0x1> <link> * ."),
+		DelNquads: []byte(fmt.Sprintf("<%s> <link> * .", aId)),
 	})
-	resp, err := c.NewTxn().Query(ctx, "{ q(func: uid(0x2)) { ~link { uid } }}")
+	resp, err := c.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", bId))
 	require.NoError(t, err)
 	CompareJSON(t, `{"q":[]}`, string(resp.Json))
 
-	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+	assignedIds, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		SetNquads: []byte("<0x1> <link> <0x3> ."),
+		SetNquads: []byte(fmt.Sprintf("<%s> <link> _:c .", aId)),
 	})
-	resp, err = c.NewTxn().Query(ctx, "{ q(func: uid(0x3)) { ~link { uid } }}")
+	cId := assignedIds.Uids["c"]
+
+	resp, err = c.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", cId))
 	require.NoError(t, err)
-	CompareJSON(t, `{"q":[{"~link": [{"uid": "0x1"}]}]}`, string(resp.Json))
+	CompareJSON(t, fmt.Sprintf(`{"q":[{"~link": [{"uid": "%s"}]}]}`, aId), string(resp.Json))
 }
 
 func ExpandAllReversePredicatesTest(t *testing.T, c *dgo.Dgraph) {
@@ -1522,4 +1543,56 @@ func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
 	for _, uid := range uids {
 		require.Contains(t, ids, uid)
 	}
+}
+
+func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			follow: uid @reverse .
+		`,
+	}))
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:alice <name> "alice" .
+			_:bob <name> "bob" .
+			_:carol <name> "carol" .
+			_:alice <follow> _:carol .
+			_:bob <follow> _:carol .
+		`),
+	})
+	check(t, err)
+
+	type F struct {
+		Name string `json:"name"`
+	}
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	resp, err := txn.Query(ctx, `{
+		fwd(func: has(follow)) { name }
+		rev(func: has(~follow)) { name }
+		}`)
+	check(t, err)
+
+	t.Logf("resp: %s\n", resp.GetJson())
+	m := make(map[string][]F)
+	err = json.Unmarshal(resp.GetJson(), &m)
+	check(t, err)
+
+	fwds := m["fwd"]
+	revs := m["rev"]
+
+	require.Equal(t, len(fwds), 2)
+	require.Contains(t, []string{"alice", "bob"}, fwds[0].Name)
+	require.Contains(t, []string{"alice", "bob"}, fwds[1].Name)
+	require.NotEqual(t, fwds[0].Name, fwds[1].Name)
+
+	require.Equal(t, len(revs), 1)
+	require.Equal(t, revs[0].Name, "carol")
 }

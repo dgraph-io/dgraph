@@ -25,6 +25,8 @@ services:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.2
     command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --peer=zero1:5080 --idx 2 --logtostderr -v=2
+    depends_on:
+      - zero1
     ports:
       - 5082:5082
       - 6082:6082
@@ -38,6 +40,8 @@ services:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.3
     command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --peer=zero1:5080 --idx 3 --logtostderr -v=2
+    depends_on:
+      - zero2
     ports:
       - 5083:5083
       - 6083:6083
@@ -90,6 +94,8 @@ services:
     image: dgraph/dgraph:latest
     container_name: bank-dg2
     working_dir: /data/dg2
+    depends_on:
+      - dg1
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -107,6 +113,8 @@ services:
     image: dgraph/dgraph:latest
     container_name: bank-dg3
     working_dir: /data/dg3
+    depends_on:
+      - dg2
     volumes:
       - type: bind
         source: $GOPATH/bin

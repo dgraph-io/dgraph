@@ -24,7 +24,6 @@ import (
 	"hash/crc32"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -36,7 +35,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/options"
-
 	"github.com/dgraph-io/badger/y"
 	"github.com/pkg/errors"
 	"golang.org/x/net/trace"
@@ -268,7 +266,7 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) (uint32, 
 
 	// We're not at the end of the file. Let's Seek to the offset and start reading.
 	if _, err := lf.fd.Seek(int64(offset), io.SeekStart); err != nil {
-		return 0, y.Wrap(err)
+		return 0, errFile(err, lf.path, "Unable to seek")
 	}
 
 	reader := bufio.NewReader(lf.fd)
@@ -293,7 +291,7 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) (uint32, 
 		}
 
 		var vp valuePointer
-		vp.Len = uint32(headerBufSize + len(e.Key) + len(e.Value) + 4) // len(crcBuf)
+		vp.Len = uint32(headerBufSize + len(e.Key) + len(e.Value) + crc32.Size)
 		read.recordOffset += vp.Len
 
 		vp.Offset = e.offset
@@ -330,7 +328,7 @@ func (vlog *valueLog) iterate(lf *logFile, offset uint32, fn logEntry) (uint32, 
 			if err == errStop {
 				break
 			}
-			return 0, y.Wrap(err)
+			return 0, errFile(err, lf.path, "Iteration function")
 		}
 	}
 	return validEndOffset, nil
@@ -344,7 +342,7 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 	wb := make([]*Entry, 0, 1000)
 	var size int64
 
-	y.AssertTrue(vlog.kv != nil)
+	y.AssertTrue(vlog.db != nil)
 	var count, moved int
 	fe := func(e Entry) error {
 		count++
@@ -352,7 +350,7 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 			tr.LazyPrintf("Processing entry %d", count)
 		}
 
-		vs, err := vlog.kv.get(e.Key)
+		vs, err := vlog.db.get(e.Key)
 		if err != nil {
 			return err
 		}
@@ -396,14 +394,14 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 			size += int64(e.estimateSize(vlog.opt.ValueThreshold))
 			if size >= 64*mi {
 				tr.LazyPrintf("request has %d entries, size %d", len(wb), size)
-				if err := vlog.kv.batchSet(wb); err != nil {
+				if err := vlog.db.batchSet(wb); err != nil {
 					return err
 				}
 				size = 0
 				wb = wb[:0]
 			}
 		} else {
-			log.Printf("WARNING: This entry should have been caught. %+v\n", e)
+			Warningf("This entry should have been caught. %+v\n", e)
 		}
 		return nil
 	}
@@ -421,14 +419,14 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 	for i := 0; i < len(wb); {
 		loops++
 		if batchSize == 0 {
-			log.Printf("WARNING: We shouldn't reach batch size of zero.")
+			Warningf("We shouldn't reach batch size of zero.")
 			return ErrNoRewrite
 		}
 		end := i + batchSize
 		if end > len(wb) {
 			end = len(wb)
 		}
-		if err := vlog.kv.batchSet(wb[i:end]); err != nil {
+		if err := vlog.db.batchSet(wb[i:end]); err != nil {
 			if err == ErrTxnTooBig {
 				// Decrease the batch size to half.
 				batchSize = batchSize / 2
@@ -468,7 +466,7 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 }
 
 func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) error {
-	db := vlog.kv
+	db := vlog.db
 	var result []*Entry
 	var count, pointers uint64
 	tr.LazyPrintf("Iterating over move keys to find invalids for fid: %d", fid)
@@ -582,7 +580,7 @@ type valueLog struct {
 	// A refcount of iterators -- when this hits zero, we can delete the filesToBeDeleted.
 	numActiveIterators int32
 
-	kv                *DB
+	db                *DB
 	maxFid            uint32 // accessed via atomics.
 	writableLogOffset uint32 // read by read, written by write. Must access via atomics.
 	numEntriesWritten uint32
@@ -600,14 +598,15 @@ func (vlog *valueLog) fpath(fid uint32) string {
 	return vlogFilePath(vlog.dirPath, fid)
 }
 
-func (vlog *valueLog) openOrCreateFiles(readOnly bool) error {
+func (vlog *valueLog) populateFilesMap() error {
+	vlog.filesMap = make(map[uint32]*logFile)
+
 	files, err := ioutil.ReadDir(vlog.dirPath)
 	if err != nil {
-		return errors.Wrapf(err, "Error while opening value log")
+		return errFile(err, vlog.dirPath, "Unable to open log dir.")
 	}
 
 	found := make(map[uint64]struct{})
-	var maxFid uint32 // Beware len(files) == 0 case, this starts at 0.
 	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".vlog") {
 			continue
@@ -615,10 +614,10 @@ func (vlog *valueLog) openOrCreateFiles(readOnly bool) error {
 		fsz := len(file.Name())
 		fid, err := strconv.ParseUint(file.Name()[:fsz-5], 10, 32)
 		if err != nil {
-			return errors.Wrapf(err, "Error while parsing value log id for file: %q", file.Name())
+			return errFile(err, file.Name(), "Unable to parse log id.")
 		}
 		if _, ok := found[fid]; ok {
-			return errors.Errorf("Found the same value log file twice: %d", fid)
+			return errFile(err, file.Name(), "Duplicate file found. Please delete one.")
 		}
 		found[fid] = struct{}{}
 
@@ -628,39 +627,8 @@ func (vlog *valueLog) openOrCreateFiles(readOnly bool) error {
 			loadingMode: vlog.opt.ValueLogLoadingMode,
 		}
 		vlog.filesMap[uint32(fid)] = lf
-		if uint32(fid) > maxFid {
-			maxFid = uint32(fid)
-		}
-	}
-	vlog.maxFid = uint32(maxFid)
-
-	// Open all previous log files as read only. Open the last log file
-	// as read write (unless the DB is read only).
-	for fid, lf := range vlog.filesMap {
-		if fid == maxFid {
-			var flags uint32
-			if vlog.opt.SyncWrites {
-				flags |= y.Sync
-			}
-			if readOnly {
-				flags |= y.ReadOnly
-			}
-			if lf.fd, err = y.OpenExistingFile(vlog.fpath(fid), flags); err != nil {
-				return errors.Wrapf(err, "Unable to open value log file")
-			}
-		} else {
-			if err := lf.openReadOnly(); err != nil {
-				return err
-			}
-		}
-	}
-
-	// If no files are found, then create a new file.
-	if len(vlog.filesMap) == 0 {
-		// We already set vlog.maxFid above
-		_, err := vlog.createVlogFile(0)
-		if err != nil {
-			return err
+		if vlog.maxFid < uint32(fid) {
+			vlog.maxFid = uint32(fid)
 		}
 	}
 	return nil
@@ -668,7 +636,11 @@ func (vlog *valueLog) openOrCreateFiles(readOnly bool) error {
 
 func (vlog *valueLog) createVlogFile(fid uint32) (*logFile, error) {
 	path := vlog.fpath(fid)
-	lf := &logFile{fid: fid, path: path, loadingMode: vlog.opt.ValueLogLoadingMode}
+	lf := &logFile{
+		fid:         fid,
+		path:        path,
+		loadingMode: vlog.opt.ValueLogLoadingMode,
+	}
 	// writableLogOffset is only written by write func, by read by Read func.
 	// To avoid a race condition, all reads and updates to this variable must be
 	// done via atomics.
@@ -677,11 +649,13 @@ func (vlog *valueLog) createVlogFile(fid uint32) (*logFile, error) {
 
 	var err error
 	if lf.fd, err = y.CreateSyncedFile(path, vlog.opt.SyncWrites); err != nil {
-		return nil, errors.Wrapf(err, "Unable to create value log file")
+		return nil, errFile(err, lf.path, "Create value log file")
 	}
-
 	if err = syncDir(vlog.dirPath); err != nil {
-		return nil, errors.Wrapf(err, "Unable to sync value log file dir")
+		return nil, errFile(err, vlog.dirPath, "Sync value log dir")
+	}
+	if err = lf.mmap(2 * vlog.opt.ValueLogFileSize); err != nil {
+		return nil, errFile(err, lf.path, "Mmap value log file")
 	}
 
 	vlog.filesLock.Lock()
@@ -691,18 +665,123 @@ func (vlog *valueLog) createVlogFile(fid uint32) (*logFile, error) {
 	return lf, nil
 }
 
-func (vlog *valueLog) Open(kv *DB, opt Options) error {
-	vlog.dirPath = opt.ValueDir
-	vlog.opt = opt
-	vlog.kv = kv
-	vlog.filesMap = make(map[uint32]*logFile)
-	if err := vlog.openOrCreateFiles(kv.opt.ReadOnly); err != nil {
-		return errors.Wrapf(err, "Unable to open value log")
+func errFile(err error, path string, msg string) error {
+	return fmt.Errorf("%s. Path=%s. Error=%v", msg, path, err)
+}
+
+func (vlog *valueLog) replayLog(lf *logFile, offset uint32, replayFn logEntry) error {
+	// We should open the file in RW mode, so it can be truncated.
+	var err error
+	lf.fd, err = os.OpenFile(lf.path, os.O_RDWR, 0)
+	if err != nil {
+		return errFile(err, lf.path, "Open file in RW mode")
+	}
+	defer lf.fd.Close()
+
+	fi, err := lf.fd.Stat()
+	if err != nil {
+		return errFile(err, lf.path, "Unable to run file.Stat")
 	}
 
+	// Alright, let's iterate now.
+	endOffset, err := vlog.iterate(lf, offset, replayFn)
+	if err != nil {
+		return errFile(err, lf.path, "Unable to replay logfile")
+	}
+	if int64(endOffset) == fi.Size() {
+		return nil
+	}
+
+	// End offset is different from file size. So, we should truncate the file
+	// to that size.
+	y.AssertTrue(int64(endOffset) <= fi.Size())
+	if !vlog.opt.Truncate {
+		return ErrTruncateNeeded
+	}
+	if err := lf.fd.Truncate(int64(endOffset)); err != nil {
+		return errFile(err, lf.path, fmt.Sprintf(
+			"Truncation needed at offset %d. Can be done manually as well.", endOffset))
+	}
+	return nil
+}
+
+func (vlog *valueLog) open(db *DB, ptr valuePointer, replayFn logEntry) error {
+	opt := db.opt
+	vlog.opt = opt
+	vlog.dirPath = opt.ValueDir
+	vlog.db = db
 	vlog.elog = trace.NewEventLog("Badger", "Valuelog")
 	vlog.garbageCh = make(chan struct{}, 1) // Only allow one GC at a time.
 	vlog.lfDiscardStats = &lfDiscardStats{m: make(map[uint32]int64)}
+
+	if err := vlog.populateFilesMap(); err != nil {
+		return err
+	}
+	// If no files are found, then create a new file.
+	if len(vlog.filesMap) == 0 {
+		_, err := vlog.createVlogFile(0)
+		return err
+	}
+
+	fids := vlog.sortedFids()
+	for _, fid := range fids {
+		lf, ok := vlog.filesMap[fid]
+		y.AssertTrue(ok)
+
+		// This file is before the value head pointer. So, we don't need to
+		// replay it, and can just open it in readonly mode.
+		if fid < ptr.Fid {
+			if err := lf.openReadOnly(); err != nil {
+				return err
+			}
+			continue
+		}
+
+		var offset uint32
+		if fid == ptr.Fid {
+			offset = ptr.Offset + ptr.Len
+		}
+		Infof("Replaying file id: %d at offset: %d\n", fid, offset)
+		now := time.Now()
+		// Replay and possible truncation done. Now we can open the file as per
+		// user specified options.
+		if err := vlog.replayLog(lf, offset, replayFn); err != nil {
+			return err
+		}
+		Infof("Replay took: %s\n", time.Since(now))
+
+		if fid < vlog.maxFid {
+			if err := lf.openReadOnly(); err != nil {
+				return err
+			}
+		} else {
+			var flags uint32
+			switch {
+			case vlog.opt.ReadOnly:
+				// If we have read only, we don't need SyncWrites.
+				flags |= y.ReadOnly
+			case vlog.opt.SyncWrites:
+				flags |= y.Sync
+			}
+			var err error
+			if lf.fd, err = y.OpenExistingFile(vlog.fpath(fid), flags); err != nil {
+				return errFile(err, lf.path, "Open existing file")
+			}
+		}
+	}
+
+	// Seek to the end to start writing.
+	last, ok := vlog.filesMap[vlog.maxFid]
+	y.AssertTrue(ok)
+	lastOffset, err := last.fd.Seek(0, io.SeekEnd)
+	if err != nil {
+		return errFile(err, last.path, "file.Seek to end")
+	}
+	vlog.writableLogOffset = uint32(lastOffset)
+	// Map the file if needed. When we create a file, it is automatically mapped.
+	if err = last.mmap(2 * opt.ValueLogFileSize); err != nil {
+		return errFile(err, last.path, "Map log file")
+	}
 	return nil
 }
 
@@ -750,61 +829,6 @@ func (vlog *valueLog) sortedFids() []uint32 {
 		return ret[i] < ret[j]
 	})
 	return ret
-}
-
-// Replay replays the value log. The kv provided is only valid for the lifetime of function call.
-func (vlog *valueLog) Replay(ptr valuePointer, fn logEntry) error {
-	fid := ptr.Fid
-	offset := ptr.Offset + ptr.Len
-	vlog.elog.Printf("Seeking at value pointer: %+v\n", ptr)
-
-	fids := vlog.sortedFids()
-
-	for _, id := range fids {
-		if id < fid {
-			continue
-		}
-		of := offset
-		if id > fid {
-			of = 0
-		}
-		lf := vlog.filesMap[id]
-		vlog.elog.Printf("Iterating file id: %d", id)
-		now := time.Now()
-		fi, err := lf.fd.Stat()
-		if err != nil {
-			return err
-		}
-		validEndOffset, err := vlog.iterate(lf, of, fn)
-		if err != nil {
-			return errors.Wrapf(err, "Unable to replay value log: %q", lf.path)
-		}
-		if int64(validEndOffset) != fi.Size() {
-			y.AssertTrue(int64(validEndOffset) <= fi.Size())
-			switch {
-			case !vlog.opt.Truncate:
-				return ErrTruncateNeeded
-			case len(lf.fmap) > 0:
-				// Only truncate if the file isn't mmaped. Otherwise, Windows would puke.
-				return ErrTruncateNeeded
-			default:
-				if err := lf.fd.Truncate(int64(validEndOffset)); err != nil {
-					return errors.Wrapf(err, "Unable to truncate file: %q", lf.path)
-				}
-			}
-		}
-		vlog.elog.Printf("Iteration took: %s\n", time.Since(now))
-		if err != nil {
-			return errors.Wrapf(err, "Unable to replay value log: %q", lf.path)
-		}
-	}
-
-	// Seek to the end to start writing.
-	var err error
-	last := vlog.filesMap[vlog.maxFid]
-	lastOffset, err := last.fd.Seek(0, io.SeekEnd)
-	atomic.AddUint32(&vlog.writableLogOffset, uint32(lastOffset))
-	return errors.Wrapf(err, "Unable to seek to end of value log: %q", last.path)
 }
 
 type request struct {
@@ -890,11 +914,6 @@ func (vlog *valueLog) write(reqs []*request) error {
 			if err != nil {
 				return err
 			}
-
-			if err = newlf.mmap(2 * vlog.opt.ValueLogFileSize); err != nil {
-				return err
-			}
-
 			curlf = newlf
 		}
 		return nil
@@ -1113,7 +1132,7 @@ func (vlog *valueLog) doRunGC(lf *logFile, discardRatio float64, tr trace.Trace)
 
 	var r reason
 	start := time.Now()
-	y.AssertTrue(vlog.kv != nil)
+	y.AssertTrue(vlog.db != nil)
 	s := new(y.Slice)
 	var numIterations int
 	_, err = vlog.iterate(lf, 0, func(e Entry, vp valuePointer) error {
@@ -1140,7 +1159,7 @@ func (vlog *valueLog) doRunGC(lf *logFile, discardRatio float64, tr trace.Trace)
 		r.total += esz
 		r.count++
 
-		vs, err := vlog.kv.get(e.Key)
+		vs, err := vlog.db.get(e.Key)
 		if err != nil {
 			return err
 		}

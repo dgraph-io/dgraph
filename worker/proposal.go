@@ -18,6 +18,7 @@ package worker
 
 import (
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 )
@@ -93,6 +95,11 @@ func (rl *rateLimiter) decr(retry int) {
 	atomic.AddInt32(&rl.iou, int32(weight))
 }
 
+// uniqueKey is meant to be unique across all the replicas.
+func uniqueKey() string {
+	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
+}
+
 var errInternalRetry = errors.New("Retry Raft proposal internally")
 var errUnableToServe = errors.New("Server unavailable. Please retry later")
 
@@ -105,6 +112,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	// Set this to disable retrying mechanism, and using the user-specified
+	// timeout.
+	var noTimeout bool
 
 	// Do a type check here if schema is present
 	// In very rare cases invalid entries might pass through raft, which would
@@ -132,6 +143,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 			if err := checkSchema(schema); err != nil {
 				return err
 			}
+			noTimeout = true
 		}
 	}
 
@@ -142,8 +154,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	proposal.Key = key
 
 	propose := func(timeout time.Duration) error {
-		cctx, cancel := context.WithTimeout(ctx, timeout)
+		cctx, cancel := context.WithCancel(ctx)
 		defer cancel()
+
+		cctx, span := otrace.StartSpan(cctx, "node.propose")
+		defer span.End()
 
 		che := make(chan error, 1)
 		pctx := &conn.ProposalCtx{
@@ -169,32 +184,50 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 			tr.LazyPrintf("Waiting for the proposal.")
 		}
 
-		select {
-		case err = <-che:
-			// We arrived here by a call to n.Proposals.Done().
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Done with error: %v", err)
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+
+		for {
+			select {
+			case err = <-che:
+				// We arrived here by a call to n.Proposals.Done().
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Done with error: %v", err)
+				}
+				return err
+			case <-ctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("External context timed out with error: %v.", ctx.Err())
+				}
+				return ctx.Err()
+			case <-timer.C:
+				if atomic.LoadUint32(&pctx.Found) > 0 {
+					// We found the proposal in CommittedEntries. No need to retry.
+				} else {
+					cancel()
+				}
+			case <-cctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Internal context timed out with error: %v. Retrying...", cctx.Err())
+				}
+				return errInternalRetry
 			}
-			return err
-		case <-ctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("External context timed out with error: %v.", ctx.Err())
-			}
-			return ctx.Err()
-		case <-cctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Internal context timed out with error: %v. Retrying...", cctx.Err())
-			}
-			return errInternalRetry
 		}
 	}
 
+	// Some proposals, like schema updates can take a long time to apply. Let's
+	// not do the retry mechanism on them. Instead, we can set a long timeout of
+	// 20 minutes.
+	if noTimeout {
+		return propose(20 * time.Minute)
+	}
 	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
 	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
 	// timeout. We should always try with a timeout and optionally retry.
 	//
 	// Let's try 3 times before giving up.
+
 	for i := 0; i < 3; i++ {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.

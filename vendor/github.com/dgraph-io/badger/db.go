@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"expvar"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -30,13 +29,11 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/options"
-
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/badger/skl"
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/badger/y"
 	"github.com/pkg/errors"
+	"golang.org/x/net/trace"
 )
 
 var (
@@ -84,7 +81,7 @@ const (
 	kvWriteChCapacity = 1000
 )
 
-func replayFunction(out *DB) func(Entry, valuePointer) error {
+func (out *DB) replayFunction() func(Entry, valuePointer) error {
 	type txnEntry struct {
 		nk []byte
 		v  y.ValueStruct
@@ -145,22 +142,26 @@ func replayFunction(out *DB) func(Entry, valuePointer) error {
 			txn = txn[:0]
 			lastCommit = 0
 
-		} else if e.meta&bitTxn == 0 {
+		} else if e.meta&bitTxn > 0 {
+			txnTs := y.ParseTs(nk)
+			if lastCommit == 0 {
+				lastCommit = txnTs
+			}
+			if lastCommit != txnTs {
+				Warningf("Found an incomplete txn at timestamp %d. Discarding it.\n", lastCommit)
+				txn = txn[:0]
+				lastCommit = txnTs
+			}
+			te := txnEntry{nk: nk, v: v}
+			txn = append(txn, te)
+
+		} else {
 			// This entry is from a rewrite.
 			toLSM(nk, v)
 
 			// We shouldn't get this entry in the middle of a transaction.
 			y.AssertTrue(lastCommit == 0)
 			y.AssertTrue(len(txn) == 0)
-
-		} else {
-			txnTs := y.ParseTs(nk)
-			if lastCommit == 0 {
-				lastCommit = txnTs
-			}
-			y.AssertTrue(lastCommit == txnTs)
-			te := txnEntry{nk: nk, v: v}
-			txn = append(txn, te)
 		}
 		return nil
 	}
@@ -273,10 +274,6 @@ func Open(opt Options) (db *DB, err error) {
 		go db.flushMemtable(db.closers.memtable) // Need levels controller to be up.
 	}
 
-	if err = db.vlog.Open(db, opt); err != nil {
-		return nil, err
-	}
-
 	headKey := y.KeyWithTs(head, math.MaxUint64)
 	// Need to pass with timestamp, lsm get removes the last 8 bytes and compares key
 	vs, err := db.get(headKey)
@@ -292,22 +289,15 @@ func Open(opt Options) (db *DB, err error) {
 	replayCloser := y.NewCloser(1)
 	go db.doWrites(replayCloser)
 
-	if err = db.vlog.Replay(vptr, replayFunction(db)); err != nil {
+	if err = db.vlog.open(db, vptr, db.replayFunction()); err != nil {
 		return db, err
 	}
-
 	replayCloser.SignalAndWait() // Wait for replay to be applied first.
 
 	// Let's advance nextTxnTs to one more than whatever we observed via
 	// replaying the logs.
 	db.orc.txnMark.Done(db.orc.nextTxnTs)
 	db.orc.nextTxnTs++
-
-	// Mmap writable log
-	lf := db.vlog.filesMap[db.vlog.maxFid]
-	if err = lf.mmap(2 * db.vlog.opt.ValueLogFileSize); err != nil {
-		return db, errors.Wrapf(err, "Unable to mmap RDWR log file")
-	}
 
 	db.writeCh = make(chan *request, kvWriteChCapacity)
 	db.closers.writes = y.NewCloser(1)
@@ -670,7 +660,7 @@ func (db *DB) doWrites(lc *y.Closer) {
 
 	writeRequests := func(reqs []*request) {
 		if err := db.writeRequests(reqs); err != nil {
-			log.Printf("ERROR in Badger::writeRequests: %v", err)
+			Errorf("writeRequests: %v", err)
 		}
 		<-pendingCh
 	}
@@ -890,7 +880,7 @@ func (db *DB) flushMemtable(lc *y.Closer) error {
 				break
 			}
 			// Encounterd error. Retry indefinitely.
-			log.Printf("Error while flushing memtable to disk: %v. Retrying...\n", err)
+			Errorf("Failure while flushing memtable to disk: %v. Retrying...\n", err)
 			time.Sleep(time.Second)
 		}
 	}
@@ -1247,7 +1237,7 @@ func (op *MergeOperator) runCompactions(dur time.Duration) {
 		case <-ticker.C: // wait for tick
 		}
 		if err := op.compact(); err != nil {
-			log.Printf("Error while running merge operation: %s", err)
+			Errorf("failure while running merge operation: %s", err)
 		}
 		if stop {
 			ticker.Stop()

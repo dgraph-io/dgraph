@@ -168,6 +168,20 @@ func Max(a, b uint64) uint64 {
 	return b
 }
 
+func RetryUntilSuccess(maxRetries int, sleepDurationOnFailure time.Duration,
+	f func() error) error  {
+	var err error
+	for retry := maxRetries; retry != 0; retry-- {
+		if err = f(); err == nil {
+			return nil
+		}
+		if sleepDurationOnFailure > 0 {
+			time.Sleep(sleepDurationOnFailure)
+		}
+	}
+	return err
+}
+
 func HasString(a []string, b string) bool {
 	for _, k := range a {
 		if k == b {

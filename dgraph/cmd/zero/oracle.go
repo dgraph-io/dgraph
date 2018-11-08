@@ -150,20 +150,36 @@ func (o *Oracle) removeSubscriber(id int) {
 
 func (o *Oracle) sendDeltasToSubscribers() {
 	delta := &pb.OracleDelta{}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	waitFor := func() uint64 {
+		w := delta.MaxAssigned
+		for _, txn := range delta.Txns {
+			w = x.Max(w, txn.CommitTs)
+		}
+		return w
+	}
+
 	for {
-		update, open := <-o.updates
-		if !open {
-			return
+	get_update:
+		var update *pb.OracleDelta
+		select {
+		case update = <-o.updates:
+		case <-ticker.C:
+			wait := waitFor()
+			if wait == 0 || o.doneUntil.DoneUntil() < wait {
+				goto get_update
+			}
+			// Send empty update.
+			update = &pb.OracleDelta{}
 		}
 	slurp_loop:
 		for {
 			delta.MaxAssigned = x.Max(delta.MaxAssigned, update.MaxAssigned)
 			delta.Txns = append(delta.Txns, update.Txns...)
 			select {
-			case update, open = <-o.updates:
-				if !open {
-					return
-				}
+			case update = <-o.updates:
 			default:
 				break slurp_loop
 			}
@@ -174,11 +190,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		// Let's ensure that we have all the commits up until the max here.
 		// Otherwise, we'll be sending commit timestamps out of order, which
 		// would cause Alphas to drop some of them, during writes to Badger.
-		waitFor := delta.MaxAssigned
-		for _, txn := range delta.Txns {
-			waitFor = x.Max(waitFor, txn.CommitTs)
-		}
-		if o.doneUntil.DoneUntil() < waitFor {
+		if o.doneUntil.DoneUntil() < waitFor() {
 			continue // The for loop doing blocking reads from o.updates.
 			// We need at least one entry from the updates channel to pick up a missing update.
 			// Don't goto slurp_loop, because it would break from select immediately.

@@ -30,11 +30,11 @@ var (
 	PostingWrites *expvar.Int
 	BytesRead     *expvar.Int
 	BytesWrite    *expvar.Int
-	EvictedPls    *expvar.Int
 	NumQueries    *expvar.Int
-	CacheHit      *expvar.Int
-	CacheMiss     *expvar.Int
-	CacheRace     *expvar.Int
+	LcacheHit     *expvar.Int
+	LcacheMiss    *expvar.Int
+	LcacheRace    *expvar.Int
+	LcacheEvicts  *expvar.Int
 
 	// value at particular point of time
 	PendingQueries   *expvar.Int
@@ -66,14 +66,10 @@ func init() {
 	PendingProposals = expvar.NewInt("dgraph_pending_proposals_total")
 	BytesRead = expvar.NewInt("dgraph_read_bytes_total")
 	BytesWrite = expvar.NewInt("dgraph_written_bytes_total")
-	EvictedPls = expvar.NewInt("dgraph_evicted_lists_total")
 	PendingQueries = expvar.NewInt("dgraph_pending_queries_total")
 	NumQueries = expvar.NewInt("dgraph_num_queries_total")
 	AlphaHealth = expvar.NewInt("dgraph_alpha_health_status")
 	DirtyMapSize = expvar.NewInt("dgraph_dirtymap_keys_total")
-	LcacheSize = expvar.NewInt("dgraph_lcache_size_bytes")
-	LcacheLen = expvar.NewInt("dgraph_lcache_keys_total")
-	LcacheCapacity = expvar.NewInt("dgraph_lcache_capacity_bytes")
 	NumGoRoutines = expvar.NewInt("dgraph_goroutines_total")
 	MemoryInUse = expvar.NewInt("dgraph_memory_inuse_bytes")
 	MemoryIdle = expvar.NewInt("dgraph_memory_idle_bytes")
@@ -81,9 +77,13 @@ func init() {
 	ActiveMutations = expvar.NewInt("dgraph_active_mutations_total")
 	PredicateStats = expvar.NewMap("dgraph_predicate_stats")
 	Conf = expvar.NewMap("dgraph_config")
-	CacheHit = expvar.NewInt("dgraph_cache_hits_total")
-	CacheMiss = expvar.NewInt("dgraph_cache_miss_total")
-	CacheRace = expvar.NewInt("dgraph_cache_race_total")
+	LcacheHit = expvar.NewInt("dgraph_lru_hits_total")
+	LcacheMiss = expvar.NewInt("dgraph_lru_miss_total")
+	LcacheRace = expvar.NewInt("dgraph_lru_race_total")
+	LcacheEvicts = expvar.NewInt("dgraph_lru_evicted_total")
+	LcacheSize = expvar.NewInt("dgraph_lru_size_bytes")
+	LcacheLen = expvar.NewInt("dgraph_lru_keys_total")
+	LcacheCapacity = expvar.NewInt("dgraph_lru_capacity_bytes")
 	MaxPlSize = expvar.NewInt("dgraph_max_list_bytes")
 	MaxPlLength = expvar.NewInt("dgraph_max_list_length")
 
@@ -102,20 +102,42 @@ func init() {
 		}
 	}()
 
+	// TODO: prometheus.NewExpvarCollector is not production worthy (see godocs). Use a better
+	// way for exporting Prometheus metrics (like an OpenCensus metrics exporter).
 	expvarCollector := prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
-		"dgraph_cache_hits_total": prometheus.NewDesc(
-			"dgraph_cache_hits_total",
-			"dgraph_cache_hits_total",
+		"dgraph_lru_hits_total": prometheus.NewDesc(
+			"dgraph_lru_hits_total",
+			"dgraph_lru_hits_total",
 			nil, nil,
 		),
-		"dgraph_cache_miss_total": prometheus.NewDesc(
-			"dgraph_cache_miss_total",
-			"dgraph_cache_miss_total",
+		"dgraph_lru_miss_total": prometheus.NewDesc(
+			"dgraph_lru_miss_total",
+			"dgraph_lru_miss_total",
 			nil, nil,
 		),
-		"dgraph_cache_race_total": prometheus.NewDesc(
-			"dgraph_cache_race_total",
-			"dgraph_cache_race_total",
+		"dgraph_lru_race_total": prometheus.NewDesc(
+			"dgraph_lru_race_total",
+			"dgraph_lru_race_total",
+			nil, nil,
+		),
+		"dgraph_lru_evicted_total": prometheus.NewDesc(
+			"dgraph_lru_evicted_total",
+			"dgraph_lru_evicted_total",
+			nil, nil,
+		),
+		"dgraph_lru_size_bytes": prometheus.NewDesc(
+			"dgraph_lru_size_bytes",
+			"dgraph_lru_size_bytes",
+			nil, nil,
+		),
+		"dgraph_lru_keys_total": prometheus.NewDesc(
+			"dgraph_lru_keys_total",
+			"dgraph_lru_keys_total",
+			nil, nil,
+		),
+		"dgraph_lru_capacity_bytes": prometheus.NewDesc(
+			"dgraph_lru_capacity_bytes",
+			"dgraph_lru_capacity_bytes",
 			nil, nil,
 		),
 		"dgraph_posting_reads_total": prometheus.NewDesc(
@@ -153,11 +175,6 @@ func init() {
 			"dgraph_written_bytes_total",
 			nil, nil,
 		),
-		"dgraph_evicted_lists_total": prometheus.NewDesc(
-			"dgraph_evicted_lists_total",
-			"dgraph_evicted_lists_total",
-			nil, nil,
-		),
 		"dgraph_pending_queries_total": prometheus.NewDesc(
 			"dgraph_pending_queries_total",
 			"dgraph_pending_queries_total",
@@ -168,29 +185,14 @@ func init() {
 			"dgraph_num_queries_total",
 			nil, nil,
 		),
-		"dgraph_server_health_status": prometheus.NewDesc(
-			"dgraph_server_health_status",
-			"dgraph_server_health_status",
+		"dgraph_alpha_health_status": prometheus.NewDesc(
+			"dgraph_alpha_health_status",
+			"dgraph_alpha_health_status",
 			nil, nil,
 		),
 		"dgraph_dirtymap_keys_total": prometheus.NewDesc(
 			"dgraph_dirtymap_keys_total",
 			"dgraph_dirtymap_keys_total",
-			nil, nil,
-		),
-		"dgraph_lcache_size_bytes": prometheus.NewDesc(
-			"dgraph_lcache_size_bytes",
-			"dgraph_lcache_size_bytes",
-			nil, nil,
-		),
-		"dgraph_lcache_keys_total": prometheus.NewDesc(
-			"dgraph_lcache_keys_total",
-			"dgraph_lcache_keys_total",
-			nil, nil,
-		),
-		"dgraph_lcache_capacity_bytes": prometheus.NewDesc(
-			"dgraph_lcache_capacity_bytes",
-			"dgraph_lcache_capacity_bytes",
 			nil, nil,
 		),
 		"dgraph_goroutines_total": prometheus.NewDesc(

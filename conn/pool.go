@@ -115,7 +115,7 @@ func (p *Pools) Connect(addr string) *Pool {
 		p.Unlock()
 		return existingPool
 	}
-	glog.Infof("== CONNECTED ==> Setting %v\n", addr)
+	glog.Infof("CONNECTED to %v\n", addr)
 	p.all[addr] = pool
 	p.Unlock()
 	return pool
@@ -151,6 +151,12 @@ func (p *Pool) Get() *grpc.ClientConn {
 func (p *Pool) shutdown() {
 	p.ticker.Stop()
 	p.conn.Close()
+}
+
+func (p *Pool) SetUnhealthy() {
+	p.Lock()
+	p.lastEcho = time.Time{}
+	p.Unlock()
 }
 
 func (p *Pool) UpdateHealthStatus(printError bool) error {
