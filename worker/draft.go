@@ -448,14 +448,10 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		var err error
-		for retry := Config.MaxRetries; retry != 0; retry-- {
-			err = txn.CommitToDisk(writer, commit)
-			if err == nil {
-				break
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
+		err := x.RetryUntilSuccess(Config.MaxRetries, 10 * time.Millisecond, func() error {
+			return txn.CommitToDisk(writer, commit)
+		})
+
 		if err != nil {
 			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
 				start, commit, err)
@@ -481,14 +477,9 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		var err error
-		for retry := Config.MaxRetries; retry != 0; retry-- {
-			err = txn.CommitToMemory(commit)
-			if err == nil {
-				break
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
+		err := x.RetryUntilSuccess(Config.MaxRetries, 10 * time.Millisecond, func() error {
+			return txn.CommitToMemory(commit)
+		})
 		if err != nil {
 			glog.Errorf("Error while applying txn status to memory (%d -> %d): %v",
 				start, commit, err)
