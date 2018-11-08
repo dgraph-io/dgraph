@@ -41,11 +41,17 @@ Use the `has` function among the value variables to search on non-indexed predic
 
 {{< runnable >}}
 {
-  var(func: has(pred_to_be_searched)) {
-    p as pred_to_be_searched
+  var(func: has(festival.date_founded)) {
+    p as festival.date_founded
   }
-  query(func: eq(val(p), "value-searching-for")) {
-    pred_to_be_searched
+  query(func: eq(val(p), "1961-01-01T00:00:00Z")) {
+      uid
+      name@en 
+      name@ru 
+      name@pl
+      festival.date_founded
+      festival.focus { name@en }
+      festival.individual_festivals { total : count(uid) }
   }
 }
 {{< /runnable >}}
