@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -99,8 +100,15 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	if err := runSchemaMutationHelper(ctx, update, startTs); err != nil {
 		// on error, we restore the memory state to be the same as the disk
-		if loadErr := schema.Load(update.Predicate); loadErr != nil {
-			glog.Errorf("failed to load schema: %v", loadErr)
+		maxRetries := 10
+		loadErr := x.RetryUntilSuccess(maxRetries, 10 * time.Millisecond, func() error {
+			return schema.Load(update.Predicate)
+		})
+
+		if loadErr != nil {
+			glog.Errorf("failed to load schema after %d retries: %v", maxRetries, loadErr)
+			os.Exit(1)
+
 		}
 		return err
 	}
