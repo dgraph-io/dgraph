@@ -258,8 +258,8 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 		tr.SetError()
 		return dy.ErrConflict
 	}
-	tr.LazyPrintf("Applying %d edges", len(m.Edges))
 
+	tr.LazyPrintf("Applying %d edges", len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges", len(m.Edges))
 	var retries int
 	for _, edge := range m.Edges {
