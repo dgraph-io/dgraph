@@ -223,7 +223,7 @@ func (mux *writerMux) Send(kvs *pb.KVS) error {
 }
 
 // export creates a export of data by exporting it as an RDF gzip.
-func export(ctx context.Context, in *pb.ExportPayload) error {
+func export(ctx context.Context, in *pb.ExportRequest) error {
 	if in.GroupId != groups().groupId() {
 		return x.Errorf("Export request group mismatch. Mine: %d. Requested: %d\n",
 			groups().groupId(), in.GroupId)
@@ -332,7 +332,7 @@ func export(ctx context.Context, in *pb.ExportPayload) error {
 // Export request is used to trigger exports for the request list of groups.
 // If a server receives request to export a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
-func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportPayload) (*pb.ExportPayload, error) {
+func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportRequest) (*pb.Status, error) {
 	glog.Infof("Received export request via Grpc: %+v\n", req)
 	if ctx.Err() != nil {
 		glog.Errorf("Context error during export: %v\n", ctx.Err())
@@ -345,10 +345,10 @@ func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportPayload) (*pb.Exp
 		return nil, err
 	}
 	glog.Infof("Export request: %+v OK.\n", req)
-	return &pb.ExportPayload{Status: pb.ExportPayload_SUCCESS}, nil
+	return &pb.Status{Msg: "SUCCESS"}, nil
 }
 
-func handleExportOverNetwork(ctx context.Context, in *pb.ExportPayload) error {
+func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
 	if in.GroupId == groups().groupId() {
 		return export(ctx, in)
 	}
@@ -389,7 +389,7 @@ func ExportOverNetwork(ctx context.Context) error {
 	ch := make(chan error, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
-			req := &pb.ExportPayload{
+			req := &pb.ExportRequest{
 				GroupId: group,
 				ReadTs:  readTs,
 				UnixTs:  time.Now().Unix(),

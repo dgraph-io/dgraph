@@ -367,22 +367,6 @@ message MovePredicatePayload {
 	MembershipState state = 4;
 }
 
-// ExportPayload is used both as a request and a response.
-// When used in request, groups represents the list of groups that need to be backed up.
-// When used in response, groups represent the list of groups that were backed up.
-message ExportPayload {
-	enum Status {
-		NONE      = 0;
-		SUCCESS   = 1;
-		DUPLICATE = 2;
-		FAILED    = 3;
-	}
-	uint32 group_id = 1;  // Group id to back up.
-	Status status   = 2;
-	uint64 read_ts  = 3;
-	int64 unix_ts   = 4;
-}
-
 message TxnStatus {
 	uint64 start_ts = 1;
 	uint64 commit_ts = 2;
@@ -427,14 +411,14 @@ service Zero {
 
 service Worker {
 	// Data serving RPCs.
-	rpc Mutate (Mutations)                    returns (api.TxnContext) {}
-	rpc ServeTask (Query)                     returns (Result) {}
-	rpc StreamSnapshot (stream Snapshot)      returns (stream KVS) {}
-	rpc Sort (SortMessage)                    returns (SortResult) {}
-	rpc Schema (SchemaRequest)                returns (SchemaResult) {}
-	rpc PurgeTs (api.Payload)                 returns (Num) {}
+	rpc Mutate (Mutations)                  returns (api.TxnContext) {}
+	rpc ServeTask (Query)                   returns (Result) {}
+	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
+	rpc Sort (SortMessage)                  returns (SortResult) {}
+	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
+	rpc PurgeTs (api.Payload)               returns (Num) {}
 	rpc Backup (BackupRequest)							returns (Status) {}
-	rpc Export (ExportPayload)              returns (ExportPayload) {}
+	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 }
@@ -458,7 +442,7 @@ message SnapshotMeta {
 }
 
 // Status describes a general status response.
-// code: 0 = success, -1 = unknown failure
+// code: 0 = success, 0 != failure.
 message Status {
 	int32 code = 1;
 	string msg = 2;
@@ -469,6 +453,12 @@ message BackupRequest {
 	uint32 group_id = 2;
 	string unix_ts  = 3;
 	string target   = 4;
+}
+
+message ExportRequest {
+	uint32 group_id = 1;  // Group id to back up.
+	uint64 read_ts  = 2;
+	int64 unix_ts   = 3;
 }
 
 // vim: noexpandtab sw=2 ts=2
