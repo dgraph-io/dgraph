@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 )
@@ -514,6 +515,9 @@ type res struct {
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	ctx, span := otrace.StartSpan(ctx, "worker.MutateOverNetwork")
+	defer span.End()
+
 	tctx := &api.TxnContext{StartTs: m.StartTs}
 	mutationMap := populateMutationMap(m)
 

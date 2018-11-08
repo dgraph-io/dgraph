@@ -28,6 +28,7 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
@@ -179,6 +180,8 @@ func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
 
 	startTs := proposal.Mutations.StartTs
 	ctx := n.Ctx(proposal.Key)
+	ctx, span := otrace.StartSpan(ctx, "node.applyMutations")
+	defer span.End()
 
 	if len(proposal.Mutations.Schema) > 0 {
 		tr.LazyPrintf("Applying Schema")
@@ -260,6 +263,7 @@ func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
 		return dy.ErrConflict
 	}
 	tr.LazyPrintf("Applying %d edges", len(m.Edges))
+	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("num", int64(len(m.Edges)))}, "Applying edges")
 	for _, edge := range m.Edges {
 		err := posting.ErrRetry
 		for err == posting.ErrRetry {
@@ -282,6 +286,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
 	}
 
 	ctx := n.Ctx(proposal.Key)
+	ctx, span := otrace.StartSpan(ctx, "node.applyCommitted")
+	defer span.End()
+
 	switch {
 	case len(proposal.Kv) > 0:
 		return populateKeyValues(ctx, proposal.Kv)
