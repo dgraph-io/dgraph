@@ -66,9 +66,7 @@ func (r *Request) newWriter() (*writer, error) {
 		h = &fileHandler{}
 	case "s3":
 		h = &s3Handler{}
-	case "http":
-		fallthrough
-	case "https":
+	case "http", "https":
 		if strings.HasPrefix(uri.Host, "s3") &&
 			strings.HasSuffix(uri.Host, ".amazonaws.com") {
 			h = &s3Handler{}
