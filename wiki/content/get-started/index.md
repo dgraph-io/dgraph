@@ -4,7 +4,7 @@ title = "Get Started"
 
 ## Dgraph
 
-Dgraph cluster consists of different nodes (zero, server & ratel) and each node serves a different purpose.
+Dgraph cluster consists of different nodes (Zero, Alpha & Ratel) and each node serves a different purpose.
 
 **Dgraph Zero** controls the Dgraph cluster, assigns servers to a group and re-balances data between server groups.
 
@@ -12,7 +12,7 @@ Dgraph cluster consists of different nodes (zero, server & ratel) and each node 
 
 **Dgraph Ratel** serves the UI to run queries, mutations & altering schema.
 
-You need atleast one Dgraph zero and one Dgraph Alpha to get started.
+You need at least one Dgraph Zero and one Dgraph Alpha to get started.
 
 **Here's a 3 step tutorial to get you up and running.**
 
