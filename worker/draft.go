@@ -28,6 +28,7 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
@@ -50,11 +51,16 @@ func uniqueKey() string {
 	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
 }
 
+type apply struct {
+	entries []raftpb.Entry
+	span    otrace.SpanContext
+}
+
 type node struct {
 	*conn.Node
 
 	// Fields which are never changed after init.
-	applyCh  chan []raftpb.Entry
+	applyCh  chan apply
 	rollupCh chan uint64 // Channel to run posting list rollups.
 	ctx      context.Context
 	gid      uint32
@@ -88,7 +94,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh:  make(chan []raftpb.Entry, 1000),
+		applyCh:  make(chan apply, 1000),
 		rollupCh: make(chan uint64, 3),
 		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:   y.NewCloser(3), // Matches CLOSER:1
@@ -162,7 +168,7 @@ func detectPendingTxns(attr string) error {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
+func (n *node) applyMutations(spanCtx otrace.SpanContext, proposal *pb.Proposal, index uint64) error {
 	tr := trace.New("Dgraph.Node", "ApplyMutations")
 	defer tr.Finish()
 
@@ -179,6 +185,12 @@ func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
 
 	startTs := proposal.Mutations.StartTs
 	ctx := n.Ctx(proposal.Key)
+	ctx, span := otrace.StartSpan(ctx, "node.applyMutations")
+	defer span.End()
+	// span.AddLink(otrace.Link{
+	// 	TraceID: spanCtx.TraceID,
+	// 	SpanID:  spanCtx.SpanID,
+	// })
 
 	if len(proposal.Mutations.Schema) > 0 {
 		tr.LazyPrintf("Applying Schema")
@@ -260,6 +272,7 @@ func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
 		return dy.ErrConflict
 	}
 	tr.LazyPrintf("Applying %d edges", len(m.Edges))
+	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("num", int64(len(m.Edges)))}, "Applying edges")
 	for _, edge := range m.Edges {
 		err := posting.ErrRetry
 		for err == posting.ErrRetry {
@@ -274,14 +287,17 @@ func (n *node) applyMutations(proposal *pb.Proposal, index uint64) error {
 	return nil
 }
 
-func (n *node) applyCommitted(proposal *pb.Proposal, index uint64) error {
+func (n *node) applyCommitted(spanCtx otrace.SpanContext, proposal *pb.Proposal, index uint64) error {
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's comitted.
 		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
-		return n.applyMutations(proposal, index)
+		return n.applyMutations(spanCtx, proposal, index)
 	}
 
 	ctx := n.Ctx(proposal.Key)
+	ctx, span := otrace.StartSpan(ctx, "node.applyCommitted")
+	defer span.End()
+
 	switch {
 	case len(proposal.Kv) > 0:
 		return populateKeyValues(ctx, proposal.Kv)
@@ -373,7 +389,8 @@ func (n *node) processApplyCh() {
 	previous := make(map[string]*P)
 
 	// This function must be run serially.
-	handle := func(entries []raftpb.Entry) {
+	handle := func(a apply) {
+		entries := a.entries
 		for _, e := range entries {
 			switch {
 			case e.Type == raftpb.EntryConfChange:
@@ -399,7 +416,7 @@ func (n *node) processApplyCh() {
 					// Don't break here. We still need to call the Done below.
 
 				} else {
-					perr = n.applyCommitted(proposal, e.Index)
+					perr = n.applyCommitted(a.span, proposal, e.Index)
 					if len(proposal.Key) > 0 {
 						p := &P{err: perr, size: psz, seen: time.Now()}
 						previous[proposal.Key] = p
@@ -423,11 +440,11 @@ func (n *node) processApplyCh() {
 
 	for {
 		select {
-		case entries, ok := <-n.applyCh:
+		case apply, ok := <-n.applyCh:
 			if !ok {
 				return
 			}
-			handle(entries)
+			handle(apply)
 		case <-tick.C:
 			// We use this ticker to clear out previous map.
 			now := time.Now()
@@ -644,6 +661,7 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			// _, span := otrace.StartSpan(context.Background(), "node.Ready")
 			var tr trace.Trace
 			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) || !raft.IsEmptyHardState(rd.HardState) {
 				// Optionally, trace this run.
@@ -734,11 +752,22 @@ func (n *node) Run() {
 					// Not present in proposal map.
 					n.Applied.Done(entry.Index)
 					groups().triggerMembershipSync()
+				} else if len(entry.Data) > 0 {
+					var p pb.Proposal
+					x.Check(p.Unmarshal(entry.Data))
+					ctx := n.Ctx(p.Key)
+					span := otrace.FromContext(ctx)
+					if span != nil {
+						span.Annotate([]otrace.Attribute{otrace.Int64Attribute("applych", int64(len(n.applyCh)))}, "Sending off to applyCh")
+					}
+					err := n.applyCommitted(otrace.SpanContext{}, &p, entry.Index)
+					n.Proposals.Done(p.Key, err)
+					n.Applied.Done(entry.Index)
 				}
 			}
 			// Send the whole lot to applyCh in one go, instead of sending entries one by one.
 			if len(rd.CommittedEntries) > 0 {
-				n.applyCh <- rd.CommittedEntries
+				// n.applyCh <- apply{entries: rd.CommittedEntries, span: span.SpanContext()}
 			}
 
 			if tr != nil {
@@ -765,6 +794,7 @@ func (n *node) Run() {
 				tr.LazyPrintf("Advanced Raft. Done.")
 				tr.Finish()
 			}
+			// span.End()
 		}
 	}
 }

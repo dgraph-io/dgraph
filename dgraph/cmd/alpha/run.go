@@ -42,6 +42,10 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
+	"go.opencensus.io/exporter/jaeger"
+	"go.opencensus.io/plugin/ocgrpc"
+	"go.opencensus.io/stats/view"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -235,18 +239,46 @@ func setupListener(addr string, port int, reload func()) (net.Listener, error) {
 
 func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	defer wg.Done()
+	if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
+		glog.Fatalf("Unable to register opencensus: %v", err)
+	}
+
+	shandler := &ocgrpc.ServerHandler{
+		IsPublicEndpoint: true,
+		StartOptions: otrace.StartOptions{
+			Sampler: otrace.AlwaysSample(),
+		},
+	}
 	opt := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
+		grpc.StatsHandler(shandler),
 	}
 	if tlsCfg != nil {
 		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
+
+	// Port details: https://www.jaegertracing.io/docs/getting-started/
+	agentEndpointURI := "localhost:6831"
+	collectorEndpointURI := "http://localhost:14268"
+
+	je, err := jaeger.NewExporter(jaeger.Options{
+		AgentEndpoint: agentEndpointURI,
+		Endpoint:      collectorEndpointURI,
+		ServiceName:   "dgraph",
+	})
+	if err != nil {
+		log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+	}
+
+	// And now finally register it as a Trace Exporter
+	otrace.RegisterExporter(je)
+
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
 	hapi.RegisterHealthServer(s, health.NewServer())
-	err := s.Serve(l)
+	err = s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)
 	s.Stop()
 }

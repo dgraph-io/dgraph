@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
@@ -326,6 +327,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 }
 
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
+	ctx, span := otrace.StartSpan(ctx, "Server.Mutate")
+	defer span.End()
+
 	resp = &api.Assigned{}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {

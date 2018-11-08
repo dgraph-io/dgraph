@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 )
@@ -149,6 +150,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	propose := func(timeout time.Duration) error {
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
+
+		cctx, span := otrace.StartSpan(cctx, "node.propose")
+		defer span.End()
 
 		che := make(chan error, 1)
 		pctx := &conn.ProposalCtx{
