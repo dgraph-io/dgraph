@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"os"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -106,9 +105,7 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		})
 
 		if loadErr != nil {
-			glog.Errorf("failed to load schema after %d retries: %v", maxRetries, loadErr)
-			os.Exit(1)
-
+			glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
 		}
 		return err
 	}
