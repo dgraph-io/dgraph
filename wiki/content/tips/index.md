@@ -34,3 +34,18 @@ Then use `count(uid)` to count the number of nodes in a block.
   }
 }
 {{< /runnable >}}
+
+## Search on non-indexed predicates
+
+Use the `has` function among the value variables to search on non-indexed predicates.
+
+{{< runnable >}}
+{
+  var(func: has(pred_to_be_searched)) {
+    p as pred_to_be_searched
+  }
+  query(func: eq(val(p), "value-searching-for")) {
+    pred_to_be_searched
+  }
+}
+{{< /runnable >}}
