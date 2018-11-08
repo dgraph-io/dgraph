@@ -47,6 +47,8 @@ func (h *fileHandler) Open(uri *url.URL, req *Request) error {
 
 func (h *fileHandler) Close() error {
 	if err := h.fp.Sync(); err != nil {
+		glog.Errorf("While closing file: %s. Error: %v", h.fp.Name(), err)
+		x.Ignore(h.fp.Close())
 		return err
 	}
 	return h.fp.Close()

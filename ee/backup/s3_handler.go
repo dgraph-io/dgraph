@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -26,16 +25,15 @@ import (
 const (
 	s3DefaultEndpoint = "s3.amazonaws.com"
 	s3AccelerateHost  = "s3-accelerate"
-	s3MinioChunkSize  = 64 << 20 // 64MiB, minimum upload size for single file.
 )
 
 // s3Handler is used for 's3:' URI scheme.
 type s3Handler struct {
-	bucket string
-	object string
-	pw     *io.PipeWriter
-	pr     *io.PipeReader
-	cerr   chan error
+	bucket  string
+	object  string
+	pwriter *io.PipeWriter
+	preader *io.PipeReader
+	cerr    chan error
 }
 
 // Open creates an AWS session and sends our data stream to an S3 blob.
@@ -49,10 +47,10 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 		return x.Errorf("Env vars AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY not set.")
 	}
 
-	glog.V(2).Infof("S3Handler got uri: %+v\n", uri)
+	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 	// s3:///bucket/folder
 	if !strings.Contains(uri.Host, ".") {
-		uri.Path, uri.Host = uri.Host, s3DefaultEndpoint
+		uri.Host = s3DefaultEndpoint
 	}
 	glog.V(2).Infof("Backup using S3 host: %s, path: %s", uri.Host, uri.Path)
 
@@ -65,9 +63,9 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 	h.bucket = parts[0] // bucket
 	// The location is: /bucket/folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
 	parts = append(parts, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
-	parts = append(parts, fmt.Sprintf("r%d-g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
+	parts = append(parts, fmt.Sprintf("r%d.g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
 	h.object = filepath.Join(parts[1:]...)
-	glog.V(3).Infof("Sending data to S3 blob %q ...", h.object)
+	glog.V(2).Infof("Sending data to S3 blob %q ...", h.object)
 
 	// secure by default
 	secure := uri.Query().Get("secure") != "false"
@@ -84,66 +82,53 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 
 	found, err := mc.BucketExists(h.bucket)
 	if err != nil {
-		return err
+		return x.Errorf("Error while looking for bucket: %s at host: %s. Error: %v",
+			h.bucket, uri.Host, err)
 	}
 	if !found {
-		return x.Errorf("S3 bucket %q not found. Use host with specific region.",
-			h.bucket)
+		return x.Errorf("S3 bucket %s not found.", h.bucket)
 	}
 
 	h.cerr = make(chan error, 1)
-	go h.upload(mc)
+	go func() {
+		h.cerr <- h.upload(mc)
+	}()
 
 	glog.Infof("Uploading data, estimated size %s", humanize.Bytes(req.Sizex))
-
 	return nil
-}
-
-// progress allows us to monitor the progress of an upload.
-type progress struct{ n uint64 }
-
-func (p *progress) Read(b []byte) (int, error) {
-	n := atomic.AddUint64(&p.n, uint64(len(b)))
-	if n%s3MinioChunkSize == 0 { // every 64MiB
-		glog.V(5).Infof("--- upload progress: %d", n)
-	}
-	return int(n), nil
 }
 
 // upload will block until it's done or an error occurs.
-func (h *s3Handler) upload(mc *minio.Client) {
+func (h *s3Handler) upload(mc *minio.Client) error {
 	start := time.Now()
-	h.pr, h.pw = io.Pipe()
-	n, err := mc.PutObject(h.bucket, h.object, h.pr, -1,
-		minio.PutObjectOptions{Progress: &progress{}})
+	h.preader, h.pwriter = io.Pipe()
+
+	// We don't need to have a progress object, because we're using a Pipe. A write to Pipe would
+	// block until it can be fully read. So, the rate of the writes here would be equal to the rate
+	// of upload. We're already tracking progress of the writes in stream.Lists, so no need to track
+	// the progress of read. By definition, it must be the same.
+	n, err := mc.PutObject(h.bucket, h.object, h.preader, -1, minio.PutObjectOptions{})
+	glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
+		n, time.Since(start).Round(time.Second))
+
 	if err != nil {
-		glog.Errorf("Failure while uploading backup: %s", err)
-		h.pw.Close()
-		h.pr.Close()
-	} else {
-		glog.V(3).Infof("--- sent %d bytes, time elapsed %s", n, time.Since(start))
+		// This should cause Write to fail as well.
+		glog.Errorf("Backup: Closing RW pipe due to error: %v", err)
+		h.pwriter.Close()
+		h.preader.Close()
 	}
-	h.cerr <- err
+	return err
 }
 
 func (h *s3Handler) Close() error {
-	defer close(h.cerr)
-
 	// we are done buffering, send EOF.
-	if err := h.pw.CloseWithError(nil); err != nil && err != io.EOF {
-		glog.Errorf("Unexpected error while uploading: %s", err)
+	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
+		glog.Errorf("Unexpected error while uploading: %v", err)
 	}
-
-	glog.V(3).Infof("--- waiting for upload to complete ...")
-	select {
-	case err := <-h.cerr:
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	glog.V(2).Infof("Backup waiting for upload to complete.")
+	return <-h.cerr
 }
 
 func (h *s3Handler) Write(b []byte) (int, error) {
-	return h.pw.Write(b)
+	return h.pwriter.Write(b)
 }
