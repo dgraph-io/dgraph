@@ -9,8 +9,10 @@ import (
 	"encoding/binary"
 	"io"
 	"net/url"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
 )
@@ -64,8 +66,16 @@ func (r *Request) newWriter() (*writer, error) {
 		h = &fileHandler{}
 	case "s3":
 		h = &s3Handler{}
-	default:
-		h = &fileHandler{}
+	case "http":
+		fallthrough
+	case "https":
+		if strings.HasPrefix(uri.Host, "s3") &&
+			strings.HasSuffix(uri.Host, ".amazonaws.com") {
+			h = &s3Handler{}
+		}
+	}
+	if h == nil {
+		return nil, x.Errorf("Unable to handle url: %v", uri)
 	}
 
 	if err := h.Open(uri, r); err != nil {
@@ -75,8 +85,8 @@ func (r *Request) newWriter() (*writer, error) {
 	return &writer{h: h}, nil
 }
 
-func (w *writer) close() error {
-	glog.V(2).Infof("Backup: Closing handler.")
+func (w *writer) flush() error {
+	glog.V(2).Infof("Backup closing handler.")
 	return w.h.Close()
 }
 

@@ -60,10 +60,10 @@ func (r *Request) Process(ctx context.Context) error {
 	}
 
 	glog.V(2).Infof("Backup started ...")
-	if err = sl.Orchestrate(ctx, "Backup", r.Backup.ReadTs); err != nil {
+	if err = sl.Orchestrate(ctx, "Backup:", r.Backup.ReadTs); err != nil {
 		return err
 	}
-	if err = w.close(); err != nil {
+	if err = w.flush(); err != nil {
 		return err
 	}
 	glog.Infof("Backup complete: group %d at %d", r.Backup.GroupId, r.Backup.ReadTs)
