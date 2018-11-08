@@ -47,82 +47,90 @@ import (
 	_ "github.com/blevesearch/bleve/analysis/lang/sv"
 	_ "github.com/blevesearch/bleve/analysis/lang/tr"
 	"github.com/blevesearch/bleve/registry"
-	"github.com/blevesearch/cld2"
-	"github.com/golang/glog"
-	// _ "github.com/blevesearch/blevex/lang/th"
 )
 
 const Name = "stop_tokens_proxy"
 
-// TODO: fix Thai stop tokens.
-var knownFilters = []string{
-	"stop_ar",
-	"stop_bg",
-	"stop_ca",
-	"stop_ckb",
-	"stop_cs",
-	"stop_da",
-	"stop_de",
-	"stop_el",
-	"stop_en",
-	"stop_es",
-	"stop_eu",
-	"stop_fa",
-	"stop_fi",
-	"stop_fr",
-	"stop_ga",
-	"stop_gl",
-	"stop_hi",
-	"stop_hu",
-	"stop_hy",
-	"stop_id",
-	"stop_it",
-	"stop_nl",
-	"stop_no",
-	"stop_pt",
-	"stop_ro",
-	"stop_ru",
-	"stop_sv",
-	// "stop_th",
-	"stop_tr",
+var langStops = map[string]string{
+	"ar":  "stop_ar",
+	"bg":  "stop_bg",
+	"ca":  "stop_ca",
+	"ckb": "stop_ckb",
+	"cs":  "stop_cs",
+	"da":  "stop_da",
+	"de":  "stop_de",
+	"el":  "stop_el",
+	"en":  "stop_en",
+	"es":  "stop_es",
+	"eu":  "stop_eu",
+	"fa":  "stop_fa",
+	"fi":  "stop_fi",
+	"fr":  "stop_fr",
+	"ga":  "stop_ga",
+	"gl":  "stop_gl",
+	"hi":  "stop_hi",
+	"hu":  "stop_hu",
+	"hy":  "stop_hy",
+	"id":  "stop_id",
+	"it":  "stop_it",
+	"nl":  "stop_nl",
+	"no":  "stop_no",
+	"pt":  "stop_pt",
+	"ro":  "stop_ro",
+	"ru":  "stop_ru",
+	"sv":  "stop_sv",
+	"tr":  "stop_tr",
+}
+
+func getLangStopName(lang string) string {
+	if name, ok := langStops[lang]; ok {
+		return name
+	}
+	return ""
 }
 
 // StopTokensProxyFilter is a proxy to other stop token filters.
 type StopTokensProxyFilter struct {
-	filters map[string]analysis.TokenFilter
+	lang   string
+	filter analysis.TokenFilter
 }
 
-// Filter will try to find a stop tokens filters for a detected language.
-// The request is forwarded to the next filter if we can't detect language or we don't have a
-// filter for it. Otherwise, we run the filter and return the new stream.
+// New returns a new instance of this filter proxy.
+// If the lang filter is found, the instance will forward requests to it.
+// Otherwise, the instance is no-op.
+func New(cache *registry.Cache, lang string) *StopTokensProxyFilter {
+	name := getLangStopName(lang)
+	if name == "" {
+		return &StopTokensProxyFilter{}
+	}
+	filter, err := cache.TokenFilterNamed(name)
+	if err != nil {
+		return &StopTokensProxyFilter{}
+	}
+	return &StopTokensProxyFilter{lang: lang, filter: filter}
+}
+
+// Filter will forward the request to the lang filter and return the new stream.
 // Returns either the same input stream, or a new filtered stream using stop tokens.
 func (f *StopTokensProxyFilter) Filter(input analysis.TokenStream) analysis.TokenStream {
-	if len(input) > 0 {
-		lang := cld2.Detect(string(input[0].Term))
-		glog.V(3).Infof("--- detected lang: %q", lang)
-		if tf, ok := f.filters[lang]; ok {
-			glog.V(3).Infof("--- filtered stop tokens for lang: %s", lang)
-			return tf.Filter(input)
-		}
+	if len(input) > 0 && f.filter != nil {
+		return f.filter.Filter(input)
 	}
 	return input
 }
 
-// Constructor creates a new instance of this filter.
-// We run through the list of known stop token filters 'knownFilters' and we try to
-// instantiate each and save in our cache.
+// Constructor creates a new instance of this filter. Used when defining analyzers.
 // Returns the stop token proxy on success, error otherwise.
 func Constructor(config map[string]interface{}, cache *registry.Cache) (analysis.TokenFilter, error) {
-	proxy := &StopTokensProxyFilter{filters: make(map[string]analysis.TokenFilter)}
-	for _, name := range knownFilters {
-		tf, err := cache.TokenFilterNamed(name)
-		if err != nil {
-			glog.V(3).Infof("token filter error: %s", err)
-			return nil, err
-		}
-		proxy.filters[name[5:]] = tf
+	lang, ok := config["lang"].(string)
+	if !ok {
+		lang = "en"
 	}
-	return proxy, nil
+	filter, err := cache.TokenFilterNamed(getLangStopName(lang))
+	if err != nil {
+		return nil, err
+	}
+	return &StopTokensProxyFilter{lang: lang, filter: filter}, nil
 }
 
 func init() {

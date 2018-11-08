@@ -1268,7 +1268,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if !ok {
 			return nil, x.Errorf("Could not find tokenizer with name %q", tokerName)
 		}
-		fc.tokens, err = tok.BuildTokens(valToTok.Value, tokenizer)
+		fc.tokens, err = tok.BuildTokens(valToTok.Value, tokenizer, langForFunc(q.Langs))
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		x.AssertTrue(fnName == "allof" || fnName == "anyof")
 		fc.intersectDest = strings.HasSuffix(fnName, "allof")
@@ -1505,7 +1505,7 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 		case CompareAttrFn:
 			ftree.function.val = types.Val{Tid: types.StringID, Value: []byte(tree.Func.Args[0])}
 		case StandardFn:
-			argTokens, aerr := tok.GetTokens(tree.Func.Args)
+			argTokens, aerr := tok.GetTermTokens(tree.Func.Args)
 			if aerr != nil { // query error ; stop processing.
 				return nil, aerr
 			}

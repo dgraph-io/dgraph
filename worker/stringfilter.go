@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 type matchFn func(types.Val, stringFilter) bool
@@ -101,12 +102,13 @@ func tokenizeValue(value types.Val, filter stringFilter) []string {
 	}
 
 	tokenizer, found := tok.GetTokenizer(tokName)
-
 	// tokenizer was used in previous stages of query proccessing, it has to be available
 	x.AssertTrue(found)
-	tokens, err := tok.BuildTokens(value.Value, tokenizer)
-	if err == nil {
-		return tokens
+
+	tokens, err := tok.BuildTokens(value.Value, tokenizer, filter.lang)
+	if err != nil {
+		glog.V(3).Infof("error while building tokens: %s", err)
+		return []string{}
 	}
-	return []string{}
+	return tokens
 }

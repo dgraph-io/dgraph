@@ -73,9 +73,9 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	}
 	switch funcType {
 	case FullTextSearchFn:
-		return tok.GetTextTokens(funcArgs, lang)
+		return tok.GetFullTextTokens(funcArgs, lang)
 	default:
-		return tok.GetTokens(funcArgs)
+		return tok.GetTermTokens(funcArgs)
 	}
 }
 
@@ -128,7 +128,8 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	}
 
 	// Get the token for the value passed in function.
-	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer)
+	// XXX: the lang should be query.Langs, but it only matters in edge case test below.
+	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer, "en")
 	if err != nil {
 		return nil, "", err
 	}
