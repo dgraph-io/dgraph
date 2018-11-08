@@ -363,13 +363,6 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	case storageType == schemaType && schemaType != types.DefaultID:
 		return nil
 
-	// try to guess a type from the value
-	case storageType == schemaType && schemaType == types.DefaultID:
-		schemaType, _ = types.TypeForValue(edge.Value)
-		if schemaType == types.DefaultID {
-			return nil
-		}
-
 	// We accept the storage type iff we don't have a schema type and a storage type is specified.
 	case schemaType == types.DefaultID:
 		schemaType = storageType
