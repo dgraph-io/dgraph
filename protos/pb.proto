@@ -366,7 +366,7 @@ message MovePredicatePayload {
 	MembershipState state = 4;
 }
 
-// BackupPayload is used both as a request and a response.
+// ExportPayload is used both as a request and a response.
 // When used in request, groups represents the list of groups that need to be backed up.
 // When used in response, groups represent the list of groups that were backed up.
 message ExportPayload {
@@ -432,9 +432,9 @@ service Worker {
 	rpc Sort (SortMessage)                    returns (SortResult) {}
 	rpc Schema (SchemaRequest)                returns (SchemaResult) {}
 	rpc PurgeTs (api.Payload)                 returns (Num) {}
-
+	rpc Backup (BackupRequest)							returns (Status) {}
 	rpc Export (ExportPayload)              returns (ExportPayload) {}
-	rpc ReceivePredicate(stream KVS)         returns (api.Payload) {}
+	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 }
 
@@ -454,6 +454,20 @@ message AssignedIds {
 message SnapshotMeta {
 	uint64 client_ts = 1;
 	uint32 group_id = 2;
+}
+
+// Status describes a general status response.
+// code: 0 = success, -1 = unknown failure
+message Status {
+	int32 code = 1;
+	string msg = 2;
+}
+
+message BackupRequest {
+	uint64 read_ts  = 1;
+	uint32 group_id = 2;
+	string unix_ts  = 3;
+	string target   = 4;
 }
 
 // vim: noexpandtab sw=2 ts=2

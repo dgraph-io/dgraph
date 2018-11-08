@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -791,8 +792,8 @@ func (n *node) rollupLists(readTs uint64) error {
 		mu.Unlock()
 	}
 
-	sl := streamLists{stream: writer, db: pstore}
-	sl.chooseKey = func(item *badger.Item) bool {
+	sl := stream.Lists{Stream: writer, DB: pstore}
+	sl.ChooseKeyFunc = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
 		if pk.IsSchema() {
 			// Skip if schema.
@@ -801,7 +802,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		// Return true if we don't find the BitCompletePosting bit.
 		return item.UserMeta()&posting.BitCompletePosting == 0
 	}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -809,7 +810,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		addKey(key)
 		return l.MarshalToKv()
 	}
-	if err := sl.orchestrate(context.Background(), "Rolling up", readTs); err != nil {
+	if err := sl.Orchestrate(context.Background(), "Rolling up", readTs); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {

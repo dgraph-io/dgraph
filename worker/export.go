@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -269,8 +270,8 @@ func export(ctx context.Context, in *pb.ExportPayload) error {
 	}
 
 	mux := writerMux{data: dataWriter, schema: schemaWriter}
-	sl := streamLists{stream: &mux, db: pstore}
-	sl.chooseKey = func(item *badger.Item) bool {
+	sl := stream.Lists{Stream: &mux, DB: pstore}
+	sl.ChooseKeyFunc = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
 		if pk.Attr == "_predicate_" {
 			return false
@@ -282,7 +283,7 @@ func export(ctx context.Context, in *pb.ExportPayload) error {
 		// written to a different file.
 		return pk.IsData() || pk.IsSchema()
 	}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		item := itr.Item()
 		pk := x.Parse(item.Key())
 
@@ -315,7 +316,7 @@ func export(ctx context.Context, in *pb.ExportPayload) error {
 	}
 
 	// All prepwork done. Time to roll.
-	if err := sl.orchestrate(ctx, "Export", in.ReadTs); err != nil {
+	if err := sl.Orchestrate(ctx, "Export", in.ReadTs); err != nil {
 		return err
 	}
 	if err := mux.data.Close(); err != nil {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package worker
+package stream
 
 import (
 	"context"
@@ -71,8 +71,8 @@ func TestOrchestrate(t *testing.T) {
 	}
 
 	c := &collector{kv: make([]*pb.KV, 0, 100)}
-	sl := streamLists{stream: c, db: db}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl := Lists{Stream: c, DB: db}
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		item := itr.Item()
 		val, err := item.ValueCopy(nil)
 		require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestOrchestrate(t *testing.T) {
 	}
 
 	// Test case 1. Retrieve everything.
-	err = sl.orchestrate(context.Background(), "Testing", math.MaxUint64)
+	err = sl.Orchestrate(context.Background(), "Testing", math.MaxUint64)
 	require.NoError(t, err)
 	require.Equal(t, 300, len(c.kv), "Expected 300. Got: %d", len(c.kv))
 
@@ -99,9 +99,9 @@ func TestOrchestrate(t *testing.T) {
 	}
 
 	// Test case 2. Retrieve only 1 predicate.
-	sl.predicate = "p1"
+	sl.Predicate = "p1"
 	c.kv = c.kv[:0]
-	err = sl.orchestrate(context.Background(), "Testing", math.MaxUint64)
+	err = sl.Orchestrate(context.Background(), "Testing", math.MaxUint64)
 	require.NoError(t, err)
 	require.Equal(t, 100, len(c.kv), "Expected 100. Got: %d", len(c.kv))
 
@@ -119,11 +119,11 @@ func TestOrchestrate(t *testing.T) {
 
 	// Test case 3. Retrieve select keys within the predicate.
 	c.kv = c.kv[:0]
-	sl.chooseKey = func(item *badger.Item) bool {
+	sl.ChooseKeyFunc = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
 		return pk.Uid%2 == 0
 	}
-	err = sl.orchestrate(context.Background(), "Testing", math.MaxUint64)
+	err = sl.Orchestrate(context.Background(), "Testing", math.MaxUint64)
 	require.NoError(t, err)
 	require.Equal(t, 50, len(c.kv), "Expected 50. Got: %d", len(c.kv))
 
@@ -141,8 +141,8 @@ func TestOrchestrate(t *testing.T) {
 
 	// Test case 4. Retrieve select keys from all predicates.
 	c.kv = c.kv[:0]
-	sl.predicate = ""
-	err = sl.orchestrate(context.Background(), "Testing", math.MaxUint64)
+	sl.Predicate = ""
+	err = sl.Orchestrate(context.Background(), "Testing", math.MaxUint64)
 	require.NoError(t, err)
 	require.Equal(t, 150, len(c.kv), "Expected 150. Got: %d", len(c.kv))
 

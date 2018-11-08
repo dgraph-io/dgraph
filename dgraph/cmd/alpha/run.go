@@ -352,6 +352,7 @@ func setupServer() {
 	http.HandleFunc("/share", shareHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
+	http.HandleFunc("/admin/backup", backupHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 

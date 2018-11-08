@@ -32,8 +32,8 @@ import (
 )
 
 // handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method != http.MethodGet {
+func handlerInit(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method != method {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return false
 	}
@@ -47,27 +47,45 @@ func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	if !handlerInit(w, r, http.MethodGet) {
 		return
 	}
 
 	close(shutdownCh)
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`))
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	if !handlerInit(w, r, http.MethodGet) {
 		return
 	}
-	ctx := context.Background()
 	// Export logic can be moved to dgraphzero.
-	if err := worker.ExportOverNetwork(ctx); err != nil {
+	if err := worker.ExportOverNetwork(context.Background()); err != nil {
 		x.SetStatus(w, err.Error(), "Export failed.")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"code": "Success", "message": "Export completed."}`))
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
+}
+
+func backupHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r, http.MethodPost) {
+		return
+	}
+	target := r.FormValue("destination")
+	if target == "" {
+		err := x.Errorf("You must specify a 'destination' value")
+		x.SetStatus(w, err.Error(), "Backup failed.")
+		return
+	}
+	if err := worker.BackupOverNetwork(context.Background(), target); err != nil {
+		x.SetStatus(w, err.Error(), "Backup failed.")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`)))
+
 }
 
 func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {

@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -89,15 +90,15 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		return x.Errorf("Unable to find a connection for group: %d\n", gid)
 	}
 	c := pb.NewWorkerClient(pl.Get())
-	stream, err := c.ReceivePredicate(ctx)
+	s, err := c.ReceivePredicate(ctx)
 	if err != nil {
 		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
 
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
-	sl := streamLists{stream: stream, predicate: predicate, db: pstore}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl := stream.Lists{Stream: s, Predicate: predicate, DB: pstore}
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -106,7 +107,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	}
 
 	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
-	if err := sl.orchestrate(ctx, prefix, math.MaxUint64); err != nil {
+	if err := sl.Orchestrate(ctx, prefix, math.MaxUint64); err != nil {
 		return err
 	}
 
@@ -132,12 +133,12 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		kvs.Kv = append(kvs.Kv, kv)
-		if err := stream.Send(kvs); err != nil {
+		if err := s.Send(kvs); err != nil {
 			return err
 		}
 	}
 
-	payload, err := stream.CloseAndRecv()
+	payload, err := s.CloseAndRecv()
 	if err != nil {
 		return err
 	}
