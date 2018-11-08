@@ -262,9 +262,8 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
 
-	// Port details: https://www.jaegertracing.io/docs/getting-started/
-
 	if agent := Alpha.Conf.GetString("jaeger.agent"); len(agent) > 0 {
+		// Port details: https://www.jaegertracing.io/docs/getting-started/
 		// Default endpoints are:
 		// agentEndpointURI := "localhost:6831"
 		// collectorEndpointURI := "http://localhost:14268"
