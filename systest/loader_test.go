@@ -105,7 +105,7 @@ func TestLoaderXidmap(t *testing.T) {
 		t.Fatalf("While trying to sort exported file: %v", err)
 	}
 
-	expected = `<_:uid1> <age> "13"^^<xs:int> .
+	expected = `<_:uid1> <age> "13" .
 <_:uid1> <friend> _:uid2711 .
 <_:uid1> <location> "Wonderland" .
 <_:uid1> <name> "Alice" .
