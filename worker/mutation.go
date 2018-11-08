@@ -98,6 +98,15 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 // and further mutations are blocked until this is done.
 func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	if err := runSchemaMutationHelper(ctx, update, startTs); err != nil {
+		// on error, we restore the memory state to be the same as the disk
+		maxRetries := 10
+		loadErr := x.RetryUntilSuccess(maxRetries, 10 * time.Millisecond, func() error {
+			return schema.Load(update.Predicate)
+		})
+
+		if loadErr != nil {
+			glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
+		}
 		return err
 	}
 
