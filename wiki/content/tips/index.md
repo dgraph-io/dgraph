@@ -34,3 +34,24 @@ Then use `count(uid)` to count the number of nodes in a block.
   }
 }
 {{< /runnable >}}
+
+## Search on non-indexed predicates
+
+Use the `has` function among the value variables to search on non-indexed predicates.
+
+{{< runnable >}}
+{
+  var(func: has(festival.date_founded)) {
+    p as festival.date_founded
+  }
+  query(func: eq(val(p), "1961-01-01T00:00:00Z")) {
+      uid
+      name@en 
+      name@ru 
+      name@pl
+      festival.date_founded
+      festival.focus { name@en }
+      festival.individual_festivals { total : count(uid) }
+  }
+}
+{{< /runnable >}}

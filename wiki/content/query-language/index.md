@@ -51,7 +51,7 @@ Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x389cd3)) {
+  bladerunner(func: uid(0x107b2c)) {
     uid
     name@en
     initial_release_date
@@ -80,11 +80,15 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x389cd3, 0x6132e8)) {
+  movies(func: uid(0x107b2c, 0x85f961)) {
     uid
     name@en
     initial_release_date
     netflix_id
+    ~director.film {
+      uid
+      name@en
+    }
   }
 }
 {{< /runnable >}}
@@ -576,7 +580,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 
 {{< runnable >}}
 {
-  films(func: uid(0x6b1e46)) {
+  films(func: uid(0x878110)) {
     name@hi
     actor.film {
       performance.film {
@@ -652,12 +656,12 @@ While the `uid` function filters nodes at the current level based on UID, functi
 `uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
 
 
-Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x4e9759).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x6777ba).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
-    director.film @filter(uid_in(~director.film, 0x4e9759)){
+    director.film @filter(uid_in(~director.film, 0x6777ba)){
       name@en
     }
   }
@@ -987,13 +991,13 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
 }
 {{< /runnable >}}
 
-The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x52753`.  The results after Strictly Ballroom can now be obtained with `after`.
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x264ce8`.  The results after Strictly Ballroom can now be obtained with `after`.
 
 {{< runnable >}}
 {
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
-    director.film (first:5, after: 0x52753) {
+    director.film (first:5, after: 0x264ce8) {
       uid
       name@en
     }
