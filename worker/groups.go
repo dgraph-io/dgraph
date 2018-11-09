@@ -670,6 +670,7 @@ func (g *groupi) cleanupTablets() {
 						return
 					}
 					g.delPred <- struct{}{}
+					glog.Warningf("Deleting predicate: %v. Tablet: %+v", pk.Attr, tablet)
 					// Predicate moves are disabled during deletion, deletePredicate purges everything.
 					posting.DeletePredicate(context.Background(), pk.Attr)
 					<-g.delPred
