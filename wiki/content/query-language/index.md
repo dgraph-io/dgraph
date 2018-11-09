@@ -2180,13 +2180,17 @@ For existing data, Dgraph computes all reverse edges.  For data added after the 
 
 ### Querying Schema
 
-A schema query can query for the whole schema
+A schema query queries for the whole schema:
 
 ```
-schema { }
+schema {}
 ```
 
-with particular schema fields
+{{% notice "note" %}}
+Unlike regular queries, the schema query is not surrounded by curly braces.
+{{% /notice %}}
+
+You can query for particular schema fields in the query body.
 
 ```
 schema {
@@ -2201,7 +2205,7 @@ schema {
 }
 ```
 
-and for particular predicates
+You can also query for particular predicates:
 
 ```
 schema(pred: [name, friend]) {
