@@ -283,7 +283,7 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 		r := l.Next()
 		if r == '\u005c' { // backslash
 			r = l.Next()
-			if l.IsEscChar(r) || lex.HasUChars(r, l) {
+			if l.IsEscChar(r) || lex.HasUChars(r, l) || lex.HasXChars(r, l) {
 				continue // This would skip over the escaped rune.
 			}
 			return l.Errorf("Invalid escape character : '%c' in literal", r)
