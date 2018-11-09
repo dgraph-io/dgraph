@@ -25,7 +25,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -223,10 +222,6 @@ func Init(ps *badger.DB) {
 
 func Cleanup() {
 	closer.SignalAndWait()
-}
-
-func StopLRUEviction() {
-	atomic.StoreInt32(&lcache.done, 1)
 }
 
 // Get stores the List corresponding to key, if it's not there already.

@@ -74,8 +74,10 @@ type List struct {
 	plist         *pb.PostingList
 	mutationMap   map[uint64]*pb.PostingList
 	minTs         uint64 // commit timestamp of immutable layer, reject reads before this ts.
-	deleteMe      int32  // Using atomic for this, to avoid expensive SetForDeletion operation.
 	estimatedSize int32
+
+	pendingTxns int32 // Using atomic for this, to avoid locking in SetForDeletion operation.
+	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 }
 
 // calculateSize would give you the size estimate. This is expensive, so run it carefully.
@@ -223,16 +225,11 @@ func (l *List) EstimatedSize() int32 {
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
+// Ensure that we don't acquire any locks during a call to this function, so the LRU cache can
+// proceed smoothly.
 func (l *List) SetForDeletion() bool {
-	if l.AlreadyLocked() {
+	if atomic.LoadInt32(&l.pendingTxns) > 0 {
 		return false
-	}
-	l.RLock()
-	defer l.RUnlock()
-	for _, plist := range l.mutationMap {
-		if plist.CommitTs == 0 {
-			return false
-		}
 	}
 	atomic.StoreInt32(&l.deleteMe, 1)
 	return true
@@ -368,6 +365,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 
 	l.updateMutationLayer(mpost)
 	atomic.AddInt32(&l.estimatedSize, int32(mpost.Size()+16 /* various overhead */))
+	atomic.AddInt32(&l.pendingTxns, 1)
 	txn.AddKeys(string(l.key), conflictKey)
 	return nil
 }
@@ -394,8 +392,18 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		return ErrRetry
 	}
-
 	l.AssertLock()
+
+	// Check if we still have a pending txn when we return from this function.
+	defer func() {
+		for _, plist := range l.mutationMap {
+			if plist.CommitTs == 0 {
+				return // Got a pending txn.
+			}
+		}
+		atomic.StoreInt32(&l.pendingTxns, 0)
+	}()
+
 	plist, ok := l.mutationMap[startTs]
 	if !ok {
 		// It was already committed, might be happening due to replay.

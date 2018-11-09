@@ -27,7 +27,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -99,7 +98,4 @@ func BlockingStop() {
 
 	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
-
-	// TODO: What is this for?
-	posting.StopLRUEviction()
 }

@@ -23,7 +23,6 @@ import (
 	"container/list"
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -41,7 +40,6 @@ type listCache struct {
 	evicts  uint64
 	ll      *list.List
 	cache   map[string]*list.Element
-	done    int32
 }
 
 type CacheStats struct {
@@ -113,17 +111,17 @@ func (c *listCache) removeOldestLoop() {
 	defer ticker.Stop()
 	for range ticker.C {
 		c.removeOldest()
-		if atomic.LoadInt32(&c.done) > 0 {
-			return
-		}
 	}
 }
 
 func (c *listCache) removeOldest() {
 	c.Lock()
 	defer c.Unlock()
+
+	// Only allow evictions for 10ms out of a second.
+	deadline := time.Now().Add(10 * time.Millisecond)
 	ele := c.ll.Back()
-	for c.curSize > c.MaxSize && atomic.LoadInt32(&c.done) == 0 {
+	for c.curSize > c.MaxSize && time.Now().Before(deadline) {
 		if ele == nil {
 			if c.curSize < 0 {
 				c.curSize = 0
