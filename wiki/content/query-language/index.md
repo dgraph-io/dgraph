@@ -85,11 +85,11 @@ Query Example:
     name@en
     initial_release_date
     netflix_id
-    ~director.film { 
+    ~director.film {
       uid
       name@en
+    }
   }
-}
 }
 {{< /runnable >}}
 
