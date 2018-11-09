@@ -105,7 +105,7 @@ func tokenizeValue(value types.Val, filter stringFilter) []string {
 	// tokenizer was used in previous stages of query proccessing, it has to be available
 	x.AssertTrue(found)
 
-	tokens, err := tok.BuildTokens(value.Value, tokenizer.SetLang(filter.lang))
+	tokens, err := tok.BuildTokens(value.Value, tok.GetLangTokenizer(tokenizer, filter.lang))
 	if err != nil {
 		glog.V(3).Infof("error while building tokens: %s", err)
 		return []string{}

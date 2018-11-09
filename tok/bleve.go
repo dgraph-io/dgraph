@@ -17,8 +17,6 @@
 package tok
 
 import (
-	"github.com/dgraph-io/dgraph/tok/stemmerx"
-	"github.com/dgraph-io/dgraph/tok/stopx"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/blevesearch/bleve/analysis/analyzer/custom"
@@ -88,7 +86,7 @@ func getTermTokens(str string) ([]string, error) {
 	return terms, nil
 }
 
-func getFullTextTokens(s, lang string) ([]string, error) {
+func (t *FullTextTokenizer) getFullTextTokens(s string) ([]string, error) {
 	if s == "" {
 		return []string{}, nil
 	}
@@ -96,14 +94,13 @@ func getFullTextTokens(s, lang string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	lang = langBase(lang)
-
+	lang := langBase(t.lang)
 	// pass 1 - lowercase and normalize input
 	tokens := analyzer.Analyze([]byte(s))
-	// pass 2 - filter stop tokens
-	tokens = stopx.New(bleveCache, lang).Filter(tokens)
+	// pass 2 - filter stop words
+	tokens = filterStopwords(lang, tokens)
 	// pass 3 - filter stems
-	tokens = stemmerx.New(bleveCache, lang).Filter(tokens)
+	tokens = filterStemmers(lang, tokens)
 	// finally, return the terms.
 	var terms []string
 	for i := range tokens {

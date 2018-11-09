@@ -42,9 +42,6 @@ type Tokenizer interface {
 	// with the byte identifier.
 	Tokens(interface{}) ([]string, error)
 
-	// SetLang returns a new instance with language context as needed.
-	SetLang(string) Tokenizer
-
 	// Identifier returns the prefix byte for this token type. This should be
 	// unique. The range 0x80 to 0xff (inclusive) is reserved for user-provided
 	// custom tokenizers.
@@ -133,10 +130,9 @@ func (t GeoTokenizer) Type() string { return "geo" }
 func (t GeoTokenizer) Tokens(v interface{}) ([]string, error) {
 	return types.IndexGeoTokens(v.(geom.T))
 }
-func (t GeoTokenizer) SetLang(string) Tokenizer { return t }
-func (t GeoTokenizer) Identifier() byte         { return 0x5 }
-func (t GeoTokenizer) IsSortable() bool         { return false }
-func (t GeoTokenizer) IsLossy() bool            { return true }
+func (t GeoTokenizer) Identifier() byte { return 0x5 }
+func (t GeoTokenizer) IsSortable() bool { return false }
+func (t GeoTokenizer) IsLossy() bool    { return true }
 
 type IntTokenizer struct{}
 
@@ -145,10 +141,9 @@ func (t IntTokenizer) Type() string { return "int" }
 func (t IntTokenizer) Tokens(v interface{}) ([]string, error) {
 	return []string{encodeInt(v.(int64))}, nil
 }
-func (t IntTokenizer) SetLang(string) Tokenizer { return t }
-func (t IntTokenizer) Identifier() byte         { return 0x6 }
-func (t IntTokenizer) IsSortable() bool         { return true }
-func (t IntTokenizer) IsLossy() bool            { return false }
+func (t IntTokenizer) Identifier() byte { return 0x6 }
+func (t IntTokenizer) IsSortable() bool { return true }
+func (t IntTokenizer) IsLossy() bool    { return false }
 
 type FloatTokenizer struct{}
 
@@ -157,10 +152,9 @@ func (t FloatTokenizer) Type() string { return "float" }
 func (t FloatTokenizer) Tokens(v interface{}) ([]string, error) {
 	return []string{encodeInt(int64(v.(float64)))}, nil
 }
-func (t FloatTokenizer) SetLang(string) Tokenizer { return t }
-func (t FloatTokenizer) Identifier() byte         { return 0x7 }
-func (t FloatTokenizer) IsSortable() bool         { return true }
-func (t FloatTokenizer) IsLossy() bool            { return true }
+func (t FloatTokenizer) Identifier() byte { return 0x7 }
+func (t FloatTokenizer) IsSortable() bool { return true }
+func (t FloatTokenizer) IsLossy() bool    { return true }
 
 type YearTokenizer struct{}
 
@@ -172,10 +166,9 @@ func (t YearTokenizer) Tokens(v interface{}) ([]string, error) {
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
 	return []string{string(buf)}, nil
 }
-func (t YearTokenizer) SetLang(string) Tokenizer { return t }
-func (t YearTokenizer) Identifier() byte         { return 0x4 }
-func (t YearTokenizer) IsSortable() bool         { return true }
-func (t YearTokenizer) IsLossy() bool            { return true }
+func (t YearTokenizer) Identifier() byte { return 0x4 }
+func (t YearTokenizer) IsSortable() bool { return true }
+func (t YearTokenizer) IsLossy() bool    { return true }
 
 type MonthTokenizer struct{}
 
@@ -188,10 +181,9 @@ func (t MonthTokenizer) Tokens(v interface{}) ([]string, error) {
 	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
 	return []string{string(buf)}, nil
 }
-func (t MonthTokenizer) SetLang(string) Tokenizer { return t }
-func (t MonthTokenizer) Identifier() byte         { return 0x41 }
-func (t MonthTokenizer) IsSortable() bool         { return true }
-func (t MonthTokenizer) IsLossy() bool            { return true }
+func (t MonthTokenizer) Identifier() byte { return 0x41 }
+func (t MonthTokenizer) IsSortable() bool { return true }
+func (t MonthTokenizer) IsLossy() bool    { return true }
 
 type DayTokenizer struct{}
 
@@ -205,10 +197,9 @@ func (t DayTokenizer) Tokens(v interface{}) ([]string, error) {
 	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.Day()))
 	return []string{string(buf)}, nil
 }
-func (t DayTokenizer) SetLang(string) Tokenizer { return t }
-func (t DayTokenizer) Identifier() byte         { return 0x42 }
-func (t DayTokenizer) IsSortable() bool         { return true }
-func (t DayTokenizer) IsLossy() bool            { return true }
+func (t DayTokenizer) Identifier() byte { return 0x42 }
+func (t DayTokenizer) IsSortable() bool { return true }
+func (t DayTokenizer) IsLossy() bool    { return true }
 
 type HourTokenizer struct{}
 
@@ -223,10 +214,9 @@ func (t HourTokenizer) Tokens(v interface{}) ([]string, error) {
 	binary.BigEndian.PutUint16(buf[6:8], uint16(tval.Hour()))
 	return []string{string(buf)}, nil
 }
-func (t HourTokenizer) SetLang(string) Tokenizer { return t }
-func (t HourTokenizer) Identifier() byte         { return 0x43 }
-func (t HourTokenizer) IsSortable() bool         { return true }
-func (t HourTokenizer) IsLossy() bool            { return true }
+func (t HourTokenizer) Identifier() byte { return 0x43 }
+func (t HourTokenizer) IsSortable() bool { return true }
+func (t HourTokenizer) IsLossy() bool    { return true }
 
 type TermTokenizer struct{}
 
@@ -235,10 +225,9 @@ func (t TermTokenizer) Type() string { return "string" }
 func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
 	return getTermTokens(v.(string))
 }
-func (t TermTokenizer) SetLang(string) Tokenizer { return t }
-func (t TermTokenizer) Identifier() byte         { return 0x1 }
-func (t TermTokenizer) IsSortable() bool         { return false }
-func (t TermTokenizer) IsLossy() bool            { return true }
+func (t TermTokenizer) Identifier() byte { return 0x1 }
+func (t TermTokenizer) IsSortable() bool { return false }
+func (t TermTokenizer) IsLossy() bool    { return true }
 
 type ExactTokenizer struct{}
 
@@ -250,22 +239,20 @@ func (t ExactTokenizer) Tokens(v interface{}) ([]string, error) {
 	}
 	return nil, x.Errorf("Exact indices only supported for string types")
 }
-func (t ExactTokenizer) SetLang(string) Tokenizer { return t }
-func (t ExactTokenizer) Identifier() byte         { return 0x2 }
-func (t ExactTokenizer) IsSortable() bool         { return true }
-func (t ExactTokenizer) IsLossy() bool            { return false }
+func (t ExactTokenizer) Identifier() byte { return 0x2 }
+func (t ExactTokenizer) IsSortable() bool { return true }
+func (t ExactTokenizer) IsLossy() bool    { return false }
 
 type FullTextTokenizer struct{ lang string }
 
 func (t FullTextTokenizer) Name() string { return "fulltext" }
 func (t FullTextTokenizer) Type() string { return "string" }
 func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
-	return getFullTextTokens(v.(string), t.lang)
+	return t.getFullTextTokens(v.(string))
 }
-func (t FullTextTokenizer) SetLang(lang string) Tokenizer { return FullTextTokenizer{lang: lang} }
-func (t FullTextTokenizer) Identifier() byte              { return 0x8 }
-func (t FullTextTokenizer) IsSortable() bool              { return false }
-func (t FullTextTokenizer) IsLossy() bool                 { return true }
+func (t FullTextTokenizer) Identifier() byte { return 0x8 }
+func (t FullTextTokenizer) IsSortable() bool { return false }
+func (t FullTextTokenizer) IsLossy() bool    { return true }
 
 func encodeInt(val int64) string {
 	buf := make([]byte, 9)
@@ -305,10 +292,9 @@ func (t BoolTokenizer) Tokens(v interface{}) ([]string, error) {
 	}
 	return []string{encodeInt(b)}, nil
 }
-func (t BoolTokenizer) SetLang(string) Tokenizer { return t }
-func (t BoolTokenizer) Identifier() byte         { return 0x9 }
-func (t BoolTokenizer) IsSortable() bool         { return false }
-func (t BoolTokenizer) IsLossy() bool            { return false }
+func (t BoolTokenizer) Identifier() byte { return 0x9 }
+func (t BoolTokenizer) IsSortable() bool { return false }
+func (t BoolTokenizer) IsLossy() bool    { return false }
 
 type TrigramTokenizer struct{}
 
@@ -330,10 +316,9 @@ func (t TrigramTokenizer) Tokens(v interface{}) ([]string, error) {
 	}
 	return nil, nil
 }
-func (t TrigramTokenizer) SetLang(string) Tokenizer { return t }
-func (t TrigramTokenizer) Identifier() byte         { return 0xA }
-func (t TrigramTokenizer) IsSortable() bool         { return false }
-func (t TrigramTokenizer) IsLossy() bool            { return true }
+func (t TrigramTokenizer) Identifier() byte { return 0xA }
+func (t TrigramTokenizer) IsSortable() bool { return false }
+func (t TrigramTokenizer) IsLossy() bool    { return true }
 
 type HashTokenizer struct{}
 
@@ -348,10 +333,9 @@ func (t HashTokenizer) Tokens(v interface{}) ([]string, error) {
 	binary.BigEndian.PutUint64(hash[:], farm.Hash64([]byte(term)))
 	return []string{string(hash[:])}, nil
 }
-func (t HashTokenizer) SetLang(string) Tokenizer { return t }
-func (t HashTokenizer) Identifier() byte         { return 0xB }
-func (t HashTokenizer) IsSortable() bool         { return false }
-func (t HashTokenizer) IsLossy() bool            { return true }
+func (t HashTokenizer) Identifier() byte { return 0xB }
+func (t HashTokenizer) IsSortable() bool { return false }
+func (t HashTokenizer) IsLossy() bool    { return true }
 
 // PluginTokenizer is implemented by external plugins loaded dynamically via
 // *.so files. It follows the implementation semantics of the Tokenizer
@@ -369,6 +353,5 @@ type CustomTokenizer struct {
 	PluginTokenizer
 }
 
-func (t CustomTokenizer) SetLang(string) Tokenizer { return t }
-func (t CustomTokenizer) IsSortable() bool         { return false }
-func (t CustomTokenizer) IsLossy() bool            { return true }
+func (t CustomTokenizer) IsSortable() bool { return false }
+func (t CustomTokenizer) IsLossy() bool    { return true }

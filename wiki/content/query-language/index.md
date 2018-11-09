@@ -368,7 +368,7 @@ The following steps are applied during index generation and to process full text
 
 Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
 
-Following table contains all supported languages, corresponding country-codes, stop words and stemming filtering support.
+Following table contains all supported languages, corresponding country-codes, stemming and stop words filtering support.
 
 |  Language  | Country Code | Stemming | Stop words |
 | :--------: | :----------: | :------: | :--------: |

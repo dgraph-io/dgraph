@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package stopx
+package tok
 
 import (
 	"github.com/blevesearch/bleve/analysis"
@@ -46,10 +46,8 @@ import (
 	_ "github.com/blevesearch/bleve/analysis/lang/ru"
 	_ "github.com/blevesearch/bleve/analysis/lang/sv"
 	_ "github.com/blevesearch/bleve/analysis/lang/tr"
-	"github.com/blevesearch/bleve/registry"
+	"github.com/golang/glog"
 )
-
-const Name = "stop_tokens_proxy"
 
 var langStops = map[string]string{
 	"ar":  "stop_ar",
@@ -82,57 +80,25 @@ var langStops = map[string]string{
 	"tr":  "stop_tr",
 }
 
-func getLangStopName(lang string) string {
-	if name, ok := langStops[lang]; ok {
-		return name
+// filterStopwords filters stop words using an existing filter.
+// If the lang filter is found, the we will forward requests to it.
+// Returns filtered tokens if filter is found, otherwise returns tokens unmodified.
+func filterStopwords(lang string, in analysis.TokenStream) analysis.TokenStream {
+	if len(in) == 0 {
+		return in
 	}
-	return ""
-}
-
-// StopTokensProxyFilter is a proxy to other stop token filters.
-type StopTokensProxyFilter struct {
-	lang   string
-	filter analysis.TokenFilter
-}
-
-// New returns a new instance of this filter proxy.
-// If the lang filter is found, the instance will forward requests to it.
-// Otherwise, the instance is no-op.
-func New(cache *registry.Cache, lang string) *StopTokensProxyFilter {
-	name := getLangStopName(lang)
-	if name == "" {
-		return &StopTokensProxyFilter{}
-	}
-	filter, err := cache.TokenFilterNamed(name)
-	if err != nil {
-		return &StopTokensProxyFilter{}
-	}
-	return &StopTokensProxyFilter{lang: lang, filter: filter}
-}
-
-// Filter will forward the request to the lang filter and return the new stream.
-// Returns either the same input stream, or a new filtered stream using stop tokens.
-func (f *StopTokensProxyFilter) Filter(input analysis.TokenStream) analysis.TokenStream {
-	if len(input) > 0 && f.filter != nil {
-		return f.filter.Filter(input)
-	}
-	return input
-}
-
-// Constructor creates a new instance of this filter. Used when defining analyzers.
-// Returns the stop token proxy on success, error otherwise.
-func Constructor(config map[string]interface{}, cache *registry.Cache) (analysis.TokenFilter, error) {
-	lang, ok := config["lang"].(string)
+	name, ok := langStops[lang]
 	if !ok {
-		lang = "en"
+		return in
 	}
-	filter, err := cache.TokenFilterNamed(getLangStopName(lang))
+	// this retrieves filter from concurrent cache.
+	filter, err := bleveCache.TokenFilterNamed(name)
 	if err != nil {
-		return nil, err
+		glog.Errorf("Error while filtering %q stop words: %s", lang, err)
+		return in
 	}
-	return &StopTokensProxyFilter{lang: lang, filter: filter}, nil
-}
-
-func init() {
-	registry.RegisterTokenFilter(Name, Constructor)
+	if filter != nil {
+		return filter.Filter(in)
+	}
+	return in
 }

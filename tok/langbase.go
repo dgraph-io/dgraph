@@ -16,45 +16,48 @@
 
 package tok
 
-import "golang.org/x/text/language"
+import (
+	"sync"
+
+	"golang.org/x/text/language"
+)
 
 const enBase = "en"
 
-// langTop20 top 20 languages by use.
-var langTop20 = map[string]struct{}{
-	"zh": struct{}{},
-	"es": struct{}{},
-	"en": struct{}{},
-	"hi": struct{}{},
-	"ar": struct{}{},
-	"bn": struct{}{},
-	"pt": struct{}{},
-	"ru": struct{}{},
-	"ja": struct{}{},
-	"de": struct{}{},
-	"ko": struct{}{},
-	"fr": struct{}{},
-	"it": struct{}{},
-	"pl": struct{}{},
-	"da": struct{}{},
-	"nl": struct{}{},
-	"no": struct{}{},
-	"ro": struct{}{},
-	"hu": struct{}{},
-	"fi": struct{}{},
+var langBaseCache struct {
+	sync.Mutex
+	m map[string]language.Tag
 }
 
 // langBase returns the BCP47 base of a language.
 // If the confidence of the matching is better than none, we return that base.
 // Otherwise, we return "en" (English) which is a good default.
-// TODO: we need a small LRU cache to speed this up in large imports.
 func langBase(lang string) string {
-	if _, known := langTop20[lang]; known {
-		return lang
+	if lang == "" {
+		return enBase // default to this
 	}
-	tag, _ := language.Parse(lang)
-	if tag != language.Und { // something like "x-klingon" should retag to "en"
+	langBaseCache.Lock()
+	defer langBaseCache.Unlock()
+	if langBaseCache.m == nil {
+		langBaseCache.m = make(map[string]language.Tag)
+	}
+	tag, found := langBaseCache.m[lang]
+	if found {
+		return tag.String()
+	}
+	tag, _ = language.Parse(lang)
+	// Parse will return the best guess for a language tag.
+	// It will return undefined, or 'language.Und', if it gives up. That means the language
+	// tag is either new (to the standard) or simply invalid.
+	// We ignore errors from Parse because to Dgraph they aren't fatal.
+	if tag != language.Und {
+		// The tag value returned will have a 'confidence' value attached.
+		// The confidence will be one of: No, Low, High, Exact.
+		// Low confidence is close to being undefined (see above) so we treat it as such.
+		// Any other confidence values are good enough for us.
+		// e.g., A lang tag like "x-klingon" should retag to "en"
 		if base, conf := tag.Base(); conf > language.No {
+			langBaseCache.m[lang] = tag
 			return base.String()
 		}
 	}

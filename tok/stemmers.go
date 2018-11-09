@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package stemmerx
+package tok
 
 import (
 	"github.com/blevesearch/bleve/analysis"
@@ -37,10 +37,8 @@ import (
 	_ "github.com/blevesearch/bleve/analysis/lang/sv"
 	_ "github.com/blevesearch/bleve/analysis/lang/tr"
 	_ "github.com/blevesearch/bleve/analysis/token/porter"
-	"github.com/blevesearch/bleve/registry"
+	"github.com/golang/glog"
 )
-
-const Name = "stemmer_proxy"
 
 var langStemmers = map[string]string{
 	"ar":  "stemmer_ar",
@@ -66,57 +64,25 @@ var langStemmers = map[string]string{
 	"zh":  "cjk_bigram",
 }
 
-func getLangStemmerName(lang string) string {
-	if name, ok := langStemmers[lang]; ok {
-		return name
+// filterStemmers filters stems using an existing filter.
+// If the lang filter is found, the we will forward requests to it.
+// Returns filtered tokens if filter is found, otherwise returns tokens unmodified.
+func filterStemmers(lang string, in analysis.TokenStream) analysis.TokenStream {
+	if len(in) == 0 {
+		return in
 	}
-	return ""
-}
-
-// StemmerProxyFilter is a proxy to other stemmer filters.
-type StemmerProxyFilter struct {
-	lang   string
-	filter analysis.TokenFilter
-}
-
-// New returns a new instance of this filter proxy.
-// If the lang filter is found, the instance will forward requests to it.
-// Otherwise, the instance is no-op.
-func New(cache *registry.Cache, lang string) *StemmerProxyFilter {
-	name := getLangStemmerName(lang)
-	if name == "" {
-		return &StemmerProxyFilter{}
-	}
-	filter, err := cache.TokenFilterNamed(name)
-	if err != nil {
-		return &StemmerProxyFilter{}
-	}
-	return &StemmerProxyFilter{lang: lang, filter: filter}
-}
-
-// Filter will forward the request to the lang filter and return the new stream.
-// Returns either the same input stream, or a new filtered stream using stemmer.
-func (f *StemmerProxyFilter) Filter(input analysis.TokenStream) analysis.TokenStream {
-	if len(input) > 0 && f.filter != nil {
-		return f.filter.Filter(input)
-	}
-	return input
-}
-
-// Constructor creates a new instance of this filter. Used when defining analyzers.
-// Returns the stemmer proxy on success, error otherwise.
-func Constructor(config map[string]interface{}, cache *registry.Cache) (analysis.TokenFilter, error) {
-	lang, ok := config["lang"].(string)
+	name, ok := langStemmers[lang]
 	if !ok {
-		lang = "en"
+		return in
 	}
-	filter, err := cache.TokenFilterNamed(getLangStemmerName(lang))
+	// this retrieves filter from concurrent cache.
+	filter, err := bleveCache.TokenFilterNamed(name)
 	if err != nil {
-		return nil, err
+		glog.Errorf("Error while filtering %q stems: %s", lang, err)
+		return in
 	}
-	return &StemmerProxyFilter{lang: lang, filter: filter}, nil
-}
-
-func init() {
-	registry.RegisterTokenFilter(Name, Constructor)
+	if filter != nil {
+		return filter.Filter(in)
+	}
+	return in
 }
