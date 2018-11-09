@@ -101,7 +101,7 @@ func uniqueKey() string {
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
-var errUnableToServe = errors.New("Server unavailable. Please retry later")
+var errUnableToServe = errors.New("Server overloaded with pending proposals. Please retry later.")
 
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
