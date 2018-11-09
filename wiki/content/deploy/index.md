@@ -1267,11 +1267,11 @@ live Dgraph cluster. Dgraph Bulk Loader is **considerably faster** than the
 Dgraph Live Loader and is the recommended way to perform the initial import of
 large datasets into Dgraph.
 
-Dgraph Alphas must be offline during the bulk load (i.e., only Dgraph Zero)
-Dgraph Alphas are running, except a Dgraph Zero) for the initial population.
+Only one or more Dgraph Zeros should be running for bulk loading. Dgraph Alphas
+will be started later.
 
 {{% notice "warning" %}}
-Don't use bulk loader once Dgraph cluster is up and running. Use it to import
+Don't use bulk loader once the Dgraph cluster is up and running. Use it to import
 your existing data to a new cluster.
 {{% /notice %}}
 
