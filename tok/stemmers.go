@@ -64,25 +64,26 @@ var langStemmers = map[string]string{
 	"zh":  "cjk_bigram",
 }
 
-// filterStemmers filters stems using an existing filter.
+// filterStemmers filters stems using an existing filter, imported here.
 // If the lang filter is found, the we will forward requests to it.
 // Returns filtered tokens if filter is found, otherwise returns tokens unmodified.
-func filterStemmers(lang string, in analysis.TokenStream) analysis.TokenStream {
-	if len(in) == 0 {
-		return in
+func filterStemmers(lang string, input analysis.TokenStream) analysis.TokenStream {
+	if len(input) == 0 {
+		return input
 	}
+	// check if we have stemmer filter for this lang.
 	name, ok := langStemmers[lang]
 	if !ok {
-		return in
+		return input
 	}
-	// this retrieves filter from concurrent cache.
+	// get filter from concurrent cache so we dont recreate.
 	filter, err := bleveCache.TokenFilterNamed(name)
 	if err != nil {
 		glog.Errorf("Error while filtering %q stems: %s", lang, err)
-		return in
+		return input
 	}
 	if filter != nil {
-		return filter.Filter(in)
+		return filter.Filter(input)
 	}
-	return in
+	return input
 }

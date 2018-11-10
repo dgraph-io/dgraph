@@ -56,20 +56,6 @@ type Tokenizer interface {
 	IsLossy() bool
 }
 
-// BuildTokens tokenizes a value, creating strings that can be used to create
-// index keys.
-func BuildTokens(val interface{}, t Tokenizer) ([]string, error) {
-	tokens, err := t.Tokens(val)
-	if err != nil {
-		return nil, err
-	}
-	id := t.Identifier()
-	for i := range tokens {
-		tokens[i] = encodeToken(tokens[i], id)
-	}
-	return tokens, nil
-}
-
 var tokenizers = make(map[string]Tokenizer)
 
 func init() {
@@ -84,7 +70,23 @@ func init() {
 	registerTokenizer(BoolTokenizer{})
 	registerTokenizer(TrigramTokenizer{})
 	registerTokenizer(HashTokenizer{})
-	registerBleveTokenizers()
+	registerTokenizer(TermTokenizer{})
+	registerTokenizer(FullTextTokenizer{})
+	setupBleve()
+}
+
+// BuildTokens tokenizes a value, creating strings that can be used to create
+// index keys.
+func BuildTokens(val interface{}, t Tokenizer) ([]string, error) {
+	tokens, err := t.Tokens(val)
+	if err != nil {
+		return nil, err
+	}
+	id := t.Identifier()
+	for i := range tokens {
+		tokens[i] = encodeToken(tokens[i], id)
+	}
+	return tokens, nil
 }
 
 func LoadCustomTokenizer(soFile string) {
@@ -112,14 +114,10 @@ func GetTokenizer(name string) (Tokenizer, bool) {
 }
 
 func registerTokenizer(t Tokenizer) {
-	if _, found := tokenizers[t.Name()]; found {
-		glog.V(3).Infof("Duplicate tokenizer: %s", t.Name())
-		return
-	}
-	if _, ok := types.TypeForName(t.Type()); !ok {
-		glog.V(3).Infof("Invalid type %q for tokenizer %s", t.Type(), t.Name())
-		return
-	}
+	_, ok := tokenizers[t.Name()]
+	x.AssertTruef(!ok, "Duplicate tokenizer: %s", t.Name())
+	_, ok = types.TypeForName(t.Type())
+	x.AssertTruef(ok, "Invalid type %q for tokenizer %s", t.Type(), t.Name())
 	tokenizers[t.Name()] = t
 }
 
@@ -223,7 +221,12 @@ type TermTokenizer struct{}
 func (t TermTokenizer) Name() string { return "term" }
 func (t TermTokenizer) Type() string { return "string" }
 func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
-	return getTermTokens(v.(string))
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return []string{str}, nil
+	}
+	tokens := termAnalyzer.Analyze([]byte(str))
+	return uniqueTerms(tokens), nil
 }
 func (t TermTokenizer) Identifier() byte { return 0x1 }
 func (t TermTokenizer) IsSortable() bool { return false }
@@ -248,7 +251,19 @@ type FullTextTokenizer struct{ lang string }
 func (t FullTextTokenizer) Name() string { return "fulltext" }
 func (t FullTextTokenizer) Type() string { return "string" }
 func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
-	return t.getFullTextTokens(v.(string))
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return []string{}, nil
+	}
+	lang := langBase(t.lang)
+	// pass 1 - lowercase and normalize input
+	tokens := fulltextAnalyzer.Analyze([]byte(str))
+	// pass 2 - filter stop words
+	tokens = filterStopwords(lang, tokens)
+	// pass 3 - filter stems
+	tokens = filterStemmers(lang, tokens)
+	// finally, return the terms.
+	return uniqueTerms(tokens), nil
 }
 func (t FullTextTokenizer) Identifier() byte { return 0x8 }
 func (t FullTextTokenizer) IsSortable() bool { return false }
@@ -349,9 +364,7 @@ type PluginTokenizer interface {
 	Identifier() byte
 }
 
-type CustomTokenizer struct {
-	PluginTokenizer
-}
+type CustomTokenizer struct{ PluginTokenizer }
 
 func (t CustomTokenizer) IsSortable() bool { return false }
 func (t CustomTokenizer) IsLossy() bool    { return true }

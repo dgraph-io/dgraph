@@ -24,9 +24,10 @@ import (
 
 const enBase = "en"
 
+// langBaseCache keeps a copy of lang -> base conversions.
 var langBaseCache struct {
 	sync.Mutex
-	m map[string]language.Tag
+	m map[string]string
 }
 
 // langBase returns the BCP47 base of a language.
@@ -39,17 +40,17 @@ func langBase(lang string) string {
 	langBaseCache.Lock()
 	defer langBaseCache.Unlock()
 	if langBaseCache.m == nil {
-		langBaseCache.m = make(map[string]language.Tag)
+		langBaseCache.m = make(map[string]string)
 	}
-	tag, found := langBaseCache.m[lang]
-	if found {
-		return tag.String()
+	// check if we already have this
+	if s, found := langBaseCache.m[lang]; found {
+		return s
 	}
-	tag, _ = language.Parse(lang)
 	// Parse will return the best guess for a language tag.
 	// It will return undefined, or 'language.Und', if it gives up. That means the language
 	// tag is either new (to the standard) or simply invalid.
 	// We ignore errors from Parse because to Dgraph they aren't fatal.
+	tag, _ := language.Parse(lang)
 	if tag != language.Und {
 		// The tag value returned will have a 'confidence' value attached.
 		// The confidence will be one of: No, Low, High, Exact.
@@ -57,8 +58,8 @@ func langBase(lang string) string {
 		// Any other confidence values are good enough for us.
 		// e.g., A lang tag like "x-klingon" should retag to "en"
 		if base, conf := tag.Base(); conf > language.No {
-			langBaseCache.m[lang] = tag
-			return base.String()
+			langBaseCache.m[lang] = base.String()
+			return langBaseCache.m[lang]
 		}
 	}
 	return enBase

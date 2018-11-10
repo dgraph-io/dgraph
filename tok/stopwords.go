@@ -80,25 +80,26 @@ var langStops = map[string]string{
 	"tr":  "stop_tr",
 }
 
-// filterStopwords filters stop words using an existing filter.
+// filterStopwords filters stop words using an existing filter, imported here.
 // If the lang filter is found, the we will forward requests to it.
 // Returns filtered tokens if filter is found, otherwise returns tokens unmodified.
-func filterStopwords(lang string, in analysis.TokenStream) analysis.TokenStream {
-	if len(in) == 0 {
-		return in
+func filterStopwords(lang string, input analysis.TokenStream) analysis.TokenStream {
+	if len(input) == 0 {
+		return input
 	}
+	// check if we have stop words filter for this lang.
 	name, ok := langStops[lang]
 	if !ok {
-		return in
+		return input
 	}
-	// this retrieves filter from concurrent cache.
+	// get filter from concurrent cache so we dont recreate.
 	filter, err := bleveCache.TokenFilterNamed(name)
 	if err != nil {
 		glog.Errorf("Error while filtering %q stop words: %s", lang, err)
-		return in
+		return input
 	}
 	if filter != nil {
-		return filter.Filter(in)
+		return filter.Filter(input)
 	}
-	return in
+	return input
 }

@@ -1268,7 +1268,8 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if !ok {
 			return nil, x.Errorf("Could not find tokenizer with name %q", tokerName)
 		}
-		fc.tokens, err = tok.BuildTokens(valToTok.Value, tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
+		fc.tokens, err = tok.BuildTokens(valToTok.Value,
+			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		x.AssertTrue(fnName == "allof" || fnName == "anyof")
 		fc.intersectDest = strings.HasSuffix(fnName, "allof")

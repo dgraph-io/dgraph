@@ -183,7 +183,7 @@ func TestGetFullTextTokens(t *testing.T) {
 	val := "Our chief weapon is surprise...surprise and fear...fear and surprise...." +
 		"Our two weapons are fear and surprise...and ruthless efficiency.... " +
 		"Our three weapons are fear, surprise, and ruthless efficiency..."
-	tokens, err := (&FullTextTokenizer{lang: "en"}).getFullTextTokens(val)
+	tokens, err := (&FullTextTokenizer{lang: "en"}).Tokens(val)
 	require.NoError(t, err)
 
 	expected := []string{"chief", "weapon", "surpris", "fear", "ruthless", "effici", "two", "three"}
