@@ -70,7 +70,7 @@ func init() {
 	flag.Int("shufflers", 1,
 		"Number of shufflers to run concurrently. Increasing this can improve performance, and "+
 			"must be less than or equal to the number of reduce shards.")
-	flag.Bool("version", false, "Prints the version of Dgraph.")
+	flag.Bool("version", false, "Prints the version of Dgraph Bulk Loader.")
 	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
 	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
 	// TODO: Potentially move http server to main.
