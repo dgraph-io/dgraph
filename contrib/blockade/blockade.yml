@@ -18,7 +18,8 @@ containers:
       - 5080
       - 6080
     command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
-    volumes: {"/home/dmai/go/bin": "/gobin"}
+    volumes:
+      "/home/dmai/go/bin": "/gobin"
 
   zero2:
     image: dgraph/dgraph:latest
@@ -31,7 +32,8 @@ containers:
       - 5081
       - 6081
     command: /gobin/dgraph zero -o 1 --my=zero2:5081 --replicas 3 --peer=zero1:5080 --idx 2 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
-    volumes: {"/home/dmai/go/bin": "/gobin"}
+    volumes:
+      "/home/dmai/go/bin": "/gobin"
 
   zero3:
     image: dgraph/dgraph:latest
@@ -71,7 +73,8 @@ containers:
     expose:
       - 8182
       - 9182
-    command: sh -xc 'sleep 10; /gobin/increment -addr=dg2:9182 -num=10000 -wait=1s & echo "Starting dg2"; /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2'
+    start_delay: 10
+    command: sh -xc '/gobin/increment -addr=dg2:9182 -num=10000 -wait=1s & echo "Starting dg2"; /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2'
     volumes:
       "/home/dmai/go/bin": "/gobin"
 
@@ -85,7 +88,8 @@ containers:
     expose:
       - 8183
       - 9183
-    command: sh -xc 'sleep 15; /gobin/increment -addr=dg3:9183 -num=10000 -wait=1s & echo "Starting dg3"; /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2'
+    start_deplay: 15
+    command: sh -xc '/gobin/increment -addr=dg3:9183 -num=10000 -wait=1s & echo "Starting dg3"; /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2'
     volumes:
       "/home/dmai/go/bin": "/gobin"
 
