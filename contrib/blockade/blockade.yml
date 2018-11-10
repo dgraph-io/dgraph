@@ -57,7 +57,7 @@ containers:
     expose:
       - 8180
       - 9180
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2
+    command: sh -xc '/gobin/increment -addr=dg1:9180 -num=10000 -wait=1s & /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2'
     volumes:
       "/home/dmai/go/bin": "/gobin"
 
@@ -71,7 +71,7 @@ containers:
     expose:
       - 8182
       - 9182
-    command: sh -c 'sleep 10 ; echo "Starting dg2"; /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2'
+    command: sh -xc 'sleep 10; /gobin/increment -addr=dg2:9182 -num=10000 -wait=1s & echo "Starting dg2"; /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2'
     volumes:
       "/home/dmai/go/bin": "/gobin"
 
@@ -85,7 +85,7 @@ containers:
     expose:
       - 8183
       - 9183
-    command: sh -c 'sleep 15 ; echo "Starting dg3"; /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2'
+    command: sh -xc 'sleep 15; /gobin/increment -addr=dg3:9183 -num=10000 -wait=1s & echo "Starting dg3"; /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2'
     volumes:
       "/home/dmai/go/bin": "/gobin"
 
