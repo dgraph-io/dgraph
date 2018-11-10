@@ -495,11 +495,16 @@ func (g *groupi) triggerMembershipSync() {
 func (g *groupi) periodicMembershipUpdate() {
 	defer g.closer.Done() // CLOSER:1
 
-	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
-	ticker := time.NewTicker(time.Minute * 5)
 	// Node might not be the leader when we are calculating size.
 	// We need to send immediately on start so no leader check inside calculatesize.
 	tablets := g.calculateTabletSizes()
+
+	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
+	slowTicker := time.NewTicker(time.Minute * 5)
+	defer slowTicker.Stop()
+
+	fastTicker := time.NewTicker(10 * time.Second)
+	defer fastTicker.Stop()
 
 START:
 	select {
@@ -526,6 +531,7 @@ START:
 		goto START
 	}
 
+	stateCh := make(chan *pb.MembershipState, 10)
 	go func() {
 		for {
 			// Blocking, should return if sending on stream fails(Need to verify).
@@ -542,10 +548,11 @@ START:
 				}
 				return
 			}
-			g.applyState(state)
+			stateCh <- state
 		}
 	}()
 
+	lastRecv := time.Now()
 	g.triggerMembershipSync() // Ticker doesn't start immediately
 OUTER:
 	for {
@@ -556,7 +563,17 @@ OUTER:
 		case <-ctx.Done():
 			stream.CloseSend()
 			break OUTER
-
+		case state := <-stateCh:
+			lastRecv = time.Now()
+			g.applyState(state)
+		case <-fastTicker.C:
+			if time.Since(lastRecv) > 20*time.Second {
+				// Zero might have gone under partition. We should recreate our
+				// connection.
+				glog.Warningf("No membership update since 20s. Closing connection to Zero.")
+				stream.CloseSend()
+				break OUTER
+			}
 		case <-g.triggerCh:
 			if !g.Node.AmLeader() {
 				tablets = nil
@@ -566,7 +583,7 @@ OUTER:
 				stream.CloseSend()
 				break OUTER
 			}
-		case <-ticker.C:
+		case <-slowTicker.C:
 			// dgraphzero just adds to the map so check that no data is present for the tablet
 			// before we remove it to avoid the race condition where a tablet is added recently
 			// and mutation has not been persisted to disk.
