@@ -533,7 +533,8 @@ START:
 
 	stateCh := make(chan *pb.MembershipState, 10)
 	go func() {
-		for {
+		glog.Infof("Starting a new stream receive")
+		for i := 0; ; i++ {
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
 			if err != nil || state == nil {
@@ -547,6 +548,9 @@ START:
 					cancel()
 				}
 				return
+			}
+			if i == 0 {
+				glog.Infof("Received first state update from Zero")
 			}
 			stateCh <- state
 		}
@@ -567,11 +571,12 @@ OUTER:
 			lastRecv = time.Now()
 			g.applyState(state)
 		case <-fastTicker.C:
-			if time.Since(lastRecv) > 20*time.Second {
+			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our
 				// connection.
-				glog.Warningf("No membership update since 20s. Closing connection to Zero.")
+				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
 				stream.CloseSend()
+				cancel()
 				break OUTER
 			}
 		case <-g.triggerCh:
@@ -729,6 +734,9 @@ func (g *groupi) sendMembership(tablets map[string]*pb.Tablet,
 func (g *groupi) processOracleDeltaStream() {
 	defer g.closer.Done() // CLOSER:1
 
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	blockingReceiveAndPropose := func() {
 		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
 		defer elog.Finish()
@@ -793,6 +801,14 @@ func (g *groupi) processOracleDeltaStream() {
 					return
 				}
 				batch++
+			case <-ticker.C:
+				newLead := g.Leader(0)
+				if newLead == nil || newLead.Addr != pl.Addr {
+					glog.Infof("Zero leadership changed. Renewing oracle delta stream.")
+					return
+				}
+				continue
+
 			case <-ctx.Done():
 				return
 			case <-g.closer.HasBeenClosed():
@@ -845,8 +861,6 @@ func (g *groupi) processOracleDeltaStream() {
 		}
 	}
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
 	for {
 		select {
 		case <-g.closer.HasBeenClosed():

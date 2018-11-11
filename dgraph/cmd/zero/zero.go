@@ -560,14 +560,12 @@ func (s *Server) Update(stream pb.Zero_UpdateServer) error {
 		che <- s.receiveUpdates(stream)
 	}()
 
-	// Check every minute that whether we caught upto read index or not.
-	ticker := time.NewTicker(time.Minute)
 	ctx := stream.Context()
 	// node sends struct{} on this channel whenever membership state is updated
-	changeCh := make(chan struct{}, 1)
+	// changeCh := make(chan struct{}, 1)
 
-	id := s.Node.RegisterForUpdates(changeCh)
-	defer s.Node.Deregister(id)
+	// id := s.Node.RegisterForUpdates(changeCh)
+	// defer s.Node.Deregister(id)
 	// Send MembershipState immediately after registering. (Or there could be race
 	// condition between registering and change in membership state).
 	ms, err := s.latestMembershipState(ctx)
@@ -581,9 +579,13 @@ func (s *Server) Update(stream pb.Zero_UpdateServer) error {
 		}
 	}
 
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
-		case <-changeCh:
+		case <-ticker.C:
+			// Send an update every second.
 			ms, err := s.latestMembershipState(ctx)
 			if err != nil {
 				return err
@@ -595,11 +597,6 @@ func (s *Server) Update(stream pb.Zero_UpdateServer) error {
 		case err := <-che:
 			// Error while receiving updates.
 			return err
-		case <-ticker.C:
-			// Check Whether we caught upto read index or not.
-			if _, err := s.latestMembershipState(ctx); err != nil {
-				return err
-			}
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-s.shutDownCh:
