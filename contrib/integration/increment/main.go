@@ -122,7 +122,8 @@ func main() {
 			time.Sleep(time.Second)
 			continue
 		}
-		fmt.Printf("Counter VAL: %d   [ Ts: %d ]\n", cnt.Val, cnt.startTs)
+		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n",
+			time.Now().UTC().Format("0102 03:04:05.999"), cnt.Val, cnt.startTs)
 		*num -= 1
 		time.Sleep(waitDur)
 	}

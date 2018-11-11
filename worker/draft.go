@@ -448,7 +448,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		err := x.RetryUntilSuccess(Config.MaxRetries, 10 * time.Millisecond, func() error {
+		err := x.RetryUntilSuccess(Config.MaxRetries, 10*time.Millisecond, func() error {
 			return txn.CommitToDisk(writer, commit)
 		})
 
@@ -477,7 +477,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		err := x.RetryUntilSuccess(Config.MaxRetries, 10 * time.Millisecond, func() error {
+		err := x.RetryUntilSuccess(Config.MaxRetries, 10*time.Millisecond, func() error {
 			return txn.CommitToMemory(commit)
 		})
 		if err != nil {
@@ -689,6 +689,7 @@ func (n *node) Run() {
 							break
 						}
 						glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
+						time.Sleep(100 * time.Millisecond) // Wait for a bit.
 					}
 					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
 				} else {

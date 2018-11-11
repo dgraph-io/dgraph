@@ -516,7 +516,7 @@ START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		glog.Warningln("WARNING: We don't have address of any Zero server.")
+		glog.Warningln("Membership update: No Zero server known.")
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -533,7 +533,7 @@ START:
 
 	stateCh := make(chan *pb.MembershipState, 10)
 	go func() {
-		glog.Infof("Starting a new stream receive")
+		glog.Infof("Starting a new membership stream receive from %s.", pl.Addr)
 		for i := 0; ; i++ {
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
@@ -550,7 +550,7 @@ START:
 				return
 			}
 			if i == 0 {
-				glog.Infof("Received first state update from Zero")
+				glog.Infof("Received first state update from Zero: %+v", state)
 			}
 			stateCh <- state
 		}
@@ -745,7 +745,7 @@ func (g *groupi) processOracleDeltaStream() {
 
 		pl := g.Leader(0)
 		if pl == nil {
-			glog.Warningln("WARNING: We don't have address of any dgraphzero leader.")
+			glog.Warningln("Oracle delta stream: No Zero leader known.")
 			elog.Errorf("Dgraph zero leader address unknown")
 			time.Sleep(time.Second)
 			return
