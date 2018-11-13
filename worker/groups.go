@@ -492,6 +492,7 @@ func (g *groupi) triggerMembershipSync() {
 	}
 }
 
+// TODO: This function needs to be refactored into smaller functions. It gets hard to reason about.
 func (g *groupi) periodicMembershipUpdate() {
 	defer g.closer.Done() // CLOSER:1
 
