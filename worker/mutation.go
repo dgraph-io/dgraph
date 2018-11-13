@@ -563,14 +563,15 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	zc := pb.NewZeroClient(pl.Get())
 	tctx, err := zc.CommitOrAbort(ctx, tc)
 
+	if err != nil {
+		span.Annotatef(nil, "Error=%v", err)
+		return 0, err
+	}
 	var attributes []otrace.Attribute
 	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)))
 	attributes = append(attributes, otrace.BoolAttribute("committed", tctx.CommitTs > 0))
-	span.Annotatef(attributes, "Error=%v", err)
+	span.Annotate(attributes, "")
 
-	if err != nil {
-		return 0, err
-	}
 	if tctx.Aborted {
 		return 0, y.ErrAborted
 	}
