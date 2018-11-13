@@ -560,8 +560,7 @@ func (s *Server) Update(stream pb.Zero_UpdateServer) error {
 		che <- s.receiveUpdates(stream)
 	}()
 
-	// Send MembershipState right away. So, the connection is correctly
-	// established.
+	// Send MembershipState right away. So, the connection is correctly established.
 	ctx := stream.Context()
 	ms, err := s.latestMembershipState(ctx)
 	if err != nil {
