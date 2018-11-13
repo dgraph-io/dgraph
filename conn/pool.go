@@ -167,6 +167,8 @@ func (p *Pool) UpdateHealthStatus(printError bool) error {
 	x.Check2(rand.Read(query.Data))
 
 	c := pb.NewRaftClient(conn)
+	// Ensure that we have a timeout here, otherwise a network partition could
+	// end up causing this RPC to get stuck forever.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 

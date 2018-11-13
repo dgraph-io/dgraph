@@ -572,8 +572,7 @@ OUTER:
 			g.applyState(state)
 		case <-fastTicker.C:
 			if time.Since(lastRecv) > 10*time.Second {
-				// Zero might have gone under partition. We should recreate our
-				// connection.
+				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
 				stream.CloseSend()
 				cancel()

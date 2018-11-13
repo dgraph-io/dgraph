@@ -560,14 +560,9 @@ func (s *Server) Update(stream pb.Zero_UpdateServer) error {
 		che <- s.receiveUpdates(stream)
 	}()
 
+	// Send MembershipState right away. So, the connection is correctly
+	// established.
 	ctx := stream.Context()
-	// node sends struct{} on this channel whenever membership state is updated
-	// changeCh := make(chan struct{}, 1)
-
-	// id := s.Node.RegisterForUpdates(changeCh)
-	// defer s.Node.Deregister(id)
-	// Send MembershipState immediately after registering. (Or there could be race
-	// condition between registering and change in membership state).
 	ms, err := s.latestMembershipState(ctx)
 	if err != nil {
 		return err
