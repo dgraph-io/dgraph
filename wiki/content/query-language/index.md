@@ -2583,10 +2583,9 @@ The shortest path between a source (`from`) node and destination (`to`) node can
 
 By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
 
-{{% notice "note" %}}If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.{{% /notice %}}
-
 {{% notice "note" %}}
-You can set a deadline for your query context if your query takes too long.
+- If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.
+- If you're seeing queries take a long time, you can set a [gRPC deadline](https://grpc.io/blog/deadlines) to stop the query after a certain amount of time.
 {{% /notice %}}
 
 For example:
