@@ -19,6 +19,7 @@ package cmd
 import (
 	goflag "flag"
 	"fmt"
+	"github.com/dgraph-io/dgraph/ee/acl/cmd"
 	"os"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
@@ -84,7 +85,7 @@ func init() {
 
 	var subcommands = []*x.SubCommand{
 		&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero,
-		&version.Version, &debug.Debug,
+		&version.Version, &debug.Debug, &acl.Acl,
 	}
 	for _, sc := range subcommands {
 		RootCmd.AddCommand(sc.Cmd)
