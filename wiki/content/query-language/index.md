@@ -2581,9 +2581,12 @@ Calculating the average ratings of users requires a variable that maps users to 
 
 The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (atleast one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
 
-By default the shortest path is returned, with `numpaths: k`, the k-shortest paths are returned.
+By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
 
-{{% notice "note" %}}If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.{{% /notice %}}
+{{% notice "note" %}}
+- If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.
+- If you're seeing queries take a long time, you can set a [gRPC deadline](https://grpc.io/blog/deadlines) to stop the query after a certain amount of time.
+{{% /notice %}}
 
 For example:
 ```sh
