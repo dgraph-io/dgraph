@@ -69,6 +69,15 @@ const (
 	ForceAbortDifference = 5000
 )
 
+const (
+	NewUserLabel string = "newuser"
+	Acl_XId      string = "dgraph.xid"
+	Acl_Password string = "dgraph.password"
+	Acl_UserGroup string = "dgraph.user.group"
+	Acl_UserBlob string = "dgraph.userblob"
+)
+
+
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName    = regexp.MustCompile(ValidHostnameRegex)

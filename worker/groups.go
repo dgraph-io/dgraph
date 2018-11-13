@@ -146,11 +146,39 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 }
 
 func (g *groupi) proposeInitialSchema() {
+	g.proposePredicateSchema()
+	g.proposeAclSchema()
+}
+
+func (g *groupi) proposePredicateSchema() {
 	if !Config.ExpandEdge {
 		return
 	}
+
+	g.upsertSchema(x.PredicateListAttr, &pb.SchemaUpdate {
+		Predicate: x.PredicateListAttr,
+		ValueType: pb.Posting_STRING,
+		List: true,
+	})
+}
+
+func (g *groupi) proposeAclSchema() {
+	g.upsertSchema(x.Acl_XId, &pb.SchemaUpdate {
+		Predicate: x.Acl_XId,
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"},
+	})
+
+	g.upsertSchema(x.Acl_Password, &pb.SchemaUpdate {
+		Predicate: x.Acl_Password,
+		ValueType: pb.Posting_STRING,
+	})
+}
+
+func (g *groupi) upsertSchema(pred string, schema *pb.SchemaUpdate) {
 	g.RLock()
-	_, ok := g.tablets[x.PredicateListAttr]
+	_, ok := g.tablets[pred]
 	g.RUnlock()
 	if ok {
 		return
@@ -160,11 +188,7 @@ func (g *groupi) proposeInitialSchema() {
 	var m pb.Mutations
 	// schema for _predicate_ is not changed once set.
 	m.StartTs = 1
-	m.Schema = append(m.Schema, &pb.SchemaUpdate{
-		Predicate: x.PredicateListAttr,
-		ValueType: pb.Posting_STRING,
-		List:      true,
-	})
+	m.Schema = append(m.Schema, schema)
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.

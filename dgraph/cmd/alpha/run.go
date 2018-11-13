@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -120,6 +121,11 @@ they form a Raft group and provide synchronous replication.
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
+	flag.Bool("secure_mode", false, "Enable secure mode and require clients to" +
+		" login before executing any transactions. In secure mode, the --hmac_secret_file option" +
+		" must be set")
+	flag.String("hmac_secret_file", "", "The file storing the HMAC secret" +
+		" that is used for signing the JWT, only required when running in secure mode")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
@@ -282,6 +288,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
+	api.RegisterDgraphAdminServer(s, &AdminServer{})
 	hapi.RegisterHealthServer(s, health.NewServer())
 	err := s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)
@@ -394,6 +401,21 @@ func run() {
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	})
+
+	secureMode := Alpha.Conf.GetBool("secure_mode")
+	if secureMode {
+		secretFile := Alpha.Conf.GetString("hmac_secret_file")
+		hmacSecret, err := ioutil.ReadFile(secretFile)
+		if err != nil {
+			glog.Fatalf("unable to read hmac secret from file: %v", secretFile)
+		}
+
+		SetAdminConfiguration(AdminOptions{
+			hmacSecret: hmacSecret,
+		})
+		glog.Info("HMAC secret loaded successfully.")
+	}
+
 
 	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
