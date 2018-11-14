@@ -531,9 +531,29 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 }
 
 func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
-	pool, err := n.leaderBlocking()
-	if err != nil {
-		return err
+	// In some edge cases, the Zero leader might not have been able to update
+	// the status of Alpha leader. So, instead of blocking forever on waiting
+	// for Zero to send us the updates info about the leader, we can just use
+	// the Snapshot RaftContext, which contains the address of the leader.
+	var pool *conn.Pool
+	addr := snap.Context.GetAddr()
+	glog.V(2).Infof("Snapshot.RaftContext.Addr: %q", addr)
+	if len(addr) > 0 {
+		p, err := conn.Get().Get(addr)
+		if err != nil {
+			glog.V(2).Infof("conn.Get(%q) Error: %v", addr, err)
+		} else {
+			pool = p
+			glog.V(2).Infof("Leader connection picked from RaftContext")
+		}
+	}
+	if pool == nil {
+		glog.V(2).Infof("No leader conn from RaftContext. Using membership state.")
+		p, err := n.leaderBlocking()
+		if err != nil {
+			return err
+		}
+		pool = p
 	}
 
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with

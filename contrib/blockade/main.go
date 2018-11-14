@@ -131,12 +131,6 @@ func waitForHealthy() error {
 }
 
 func runTests() error {
-	defer func() {
-		if err := run(ctxb, "blockade destroy"); err != nil {
-			log.Fatalf("While destroying: %v", err)
-		}
-	}()
-
 	for {
 		if err := waitForHealthy(); err != nil {
 			fmt.Printf("Error while waitForHealthy: %v\n.", err)
@@ -181,6 +175,15 @@ func main() {
 	if err := run(ctxb, "blockade up"); err != nil {
 		log.Fatal(err)
 	}
+	// This defer can be moved within runTests, if we want to destroy blockade,
+	// in case our tests fail. We don't want to do that, because then we won't
+	// be able to get the logs.
+	defer func() {
+		if err := run(ctxb, "blockade destroy"); err != nil {
+			log.Fatalf("While destroying: %v", err)
+		}
+	}()
+
 	if err := runTests(); err != nil {
 		os.Exit(1)
 	}
