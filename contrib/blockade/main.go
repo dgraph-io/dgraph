@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -49,8 +50,8 @@ func increment(atLeast int) error {
 			return err
 		}
 	}
-	fmt.Printf("Time taken to converge %d: %s\n",
-		atLeast, time.Since(start).Round(time.Millisecond))
+	dur := time.Since(start).Round(time.Millisecond)
+	fmt.Printf("Time taken to converge %d: %s\n", atLeast, dur)
 	return nil
 }
 
@@ -90,24 +91,33 @@ func testPartitions() error {
 	return nil
 }
 
+func runTests() error {
+	defer func() {
+		if err := run(ctxb, "blockade destroy"); err != nil {
+			log.Fatalf("While destroying: %v", err)
+		}
+	}()
+
+	if err := run(ctxb,
+		"increment --addr=localhost:9180"); err != nil {
+		fmt.Printf("Error during increment: %v\n", err)
+		return err
+	}
+	if err := testPartitions(); err != nil {
+		fmt.Printf("Error testPartitions: %v\n", err)
+		return err
+	}
+	return nil
+}
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	fmt.Println("Starting blockade")
 	if err := run(ctxb, "blockade up"); err != nil {
 		log.Fatal(err)
 	}
-
-	defer func() {
-		if err := run(ctxb, "blockade destroy"); err != nil {
-			log.Fatalf("While destroying: %v", err)
-		}
-	}()
-	if err := run(ctxb,
-		"increment --addr=localhost:9180"); err != nil {
-		fmt.Printf("Error during increment: %v\n", err)
+	if err := runTests(); err != nil {
+		os.Exit(1)
 	}
-
-	if err := testPartitions(); err != nil {
-		fmt.Printf("Error testPartitions: %v\n", err)
-	}
+	fmt.Println("Blockade tests: OK")
 }
