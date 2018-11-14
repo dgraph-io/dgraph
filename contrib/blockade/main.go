@@ -95,7 +95,7 @@ func testCommon(remove, join string, minAlphasUp int) error {
 		if err := getStatus("localhost:6080"); err != nil {
 			return err
 		}
-		fmt.Printf("\n==> Remove cmd on NODES: %s\n", node)
+		fmt.Printf("\n==> Remove cmd %q on NODES: %s\n", remove, node)
 		if err := run(ctxb, remove+" "+node); err != nil {
 			return err
 		}
