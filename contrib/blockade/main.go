@@ -22,10 +22,10 @@ func run(ctx context.Context, command string) error {
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("ERROR. Command %s. Error: %v. Output:\n%s\n", command, err, out.String())
+		fmt.Printf("ERROR. Command %q. Error: %v. Output:\n%s\n", command, err, out.String())
 		return err
 	}
-	fmt.Printf("Command %s. Output:\n%s\n", command, out.String())
+	fmt.Printf("Command %q. Output:\n%s\n", command, out.String())
 	return nil
 }
 
@@ -82,7 +82,7 @@ func getStatus(zero string) error {
 	return nil
 }
 
-func testPartitions() error {
+func testCommon(remove, join string, minAlphasUp int) error {
 	var nodes []string
 	for i := 1; i <= 3; i++ {
 		for j := 1; j <= 3; j++ {
@@ -92,29 +92,27 @@ func testPartitions() error {
 
 	fmt.Printf("Nodes: %+v\n", nodes)
 	for _, node := range nodes {
-		// First partition.
 		if err := getStatus("localhost:6080"); err != nil {
 			return err
 		}
-		fmt.Printf("\n==> Partitioning NODE: %s\n", node)
-		if err := partition(node); err != nil {
+		fmt.Printf("\n==> Remove cmd on NODES: %s\n", node)
+		if err := run(ctxb, remove+" "+node); err != nil {
 			return err
 		}
 		if err := run(ctxb, "blockade status"); err != nil {
 			return err
 		}
-		if err := increment(2); err != nil {
+		if err := increment(minAlphasUp); err != nil {
 			return err
 		}
 		// Then join.
-		if err := run(ctxb, "blockade join"); err != nil {
+		if err := run(ctxb, join); err != nil {
 			return err
 		}
 		if err := increment(3); err != nil {
 			return err
 		}
 	}
-	fmt.Println("testPartitions: OK")
 	return nil
 }
 
@@ -148,10 +146,32 @@ func runTests() error {
 			break
 		}
 	}
-	if err := testPartitions(); err != nil {
+
+	// Setting flaky --all just does not converge. Too many network interruptions.
+	if err := testCommon("blockade flaky", "blockade fast --all", 3); err != nil {
+		fmt.Printf("Error testFlaky: %v\n", err)
+		return err
+	}
+	fmt.Println("===> Flaky TEST: OK")
+
+	if err := testCommon("blockade slow", "blockade fast --all", 3); err != nil {
+		fmt.Printf("Error testSlow: %v\n", err)
+		return err
+	}
+	fmt.Println("===> Slow TEST: OK")
+
+	if err := testCommon("blockade stop", "blockade start --all", 2); err != nil {
+		fmt.Printf("Error testRestart: %v\n", err)
+		return err
+	}
+	fmt.Println("===> Restart TEST: OK")
+
+	if err := testCommon("blockade partition", "blockade join", 2); err != nil {
 		fmt.Printf("Error testPartitions: %v\n", err)
 		return err
 	}
+	fmt.Println("===> Partition TEST: OK")
+
 	return nil
 }
 
