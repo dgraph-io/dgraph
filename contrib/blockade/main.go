@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -51,7 +52,33 @@ func increment(atLeast int) error {
 		}
 	}
 	dur := time.Since(start).Round(time.Millisecond)
-	fmt.Printf("Time taken to converge %d: %s\n", atLeast, dur)
+	fmt.Printf("\n===> TIME taken to converge %d alphas: %s\n\n", atLeast, dur)
+	return nil
+}
+
+func getStatus(zero string) error {
+	cmd := exec.Command("http", "GET", fmt.Sprintf("%s/state", zero))
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("ERROR. Status at %s. Error: %v. Output:\n%s\n", zero, err, out.String())
+		return err
+	}
+	output := out.String()
+	if strings.Contains(output, "errors") {
+		fmt.Printf("ERROR. Status at %s. Output:\n%s\n", zero, output)
+		return fmt.Errorf(output)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &m); err != nil {
+		return err
+	}
+	pretty, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Status at %s:\n%s\n", zero, pretty)
 	return nil
 }
 
@@ -63,10 +90,10 @@ func testPartitions() error {
 		}
 	}
 
-	fmt.Printf("Nodes: %v\n", nodes)
+	fmt.Printf("Nodes: %+v\n", nodes)
 	for _, node := range nodes {
 		// First partition.
-		if err := run(ctxb, "http GET localhost:6080/state"); err != nil {
+		if err := getStatus("localhost:6080"); err != nil {
 			return err
 		}
 		fmt.Printf("\n==> Partitioning NODE: %s\n", node)
@@ -91,6 +118,20 @@ func testPartitions() error {
 	return nil
 }
 
+func waitForHealthy() error {
+	for _, zero := range []string{"localhost:6080", "localhost:6082", "localhost:6083"} {
+		if err := getStatus(zero); err != nil {
+			return err
+		}
+	}
+	for _, alpha := range []string{"localhost:9180", "localhost:9182", "localhost:9183"} {
+		if err := run(ctxb, "increment --addr="+alpha); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func runTests() error {
 	defer func() {
 		if err := run(ctxb, "blockade destroy"); err != nil {
@@ -98,10 +139,14 @@ func runTests() error {
 		}
 	}()
 
-	if err := run(ctxb,
-		"increment --addr=localhost:9180"); err != nil {
-		fmt.Printf("Error during increment: %v\n", err)
-		return err
+	for {
+		if err := waitForHealthy(); err != nil {
+			fmt.Printf("Error while waitForHealthy: %v\n.", err)
+			time.Sleep(5 * time.Second)
+			fmt.Println("Retrying...")
+		} else {
+			break
+		}
 	}
 	if err := testPartitions(); err != nil {
 		fmt.Printf("Error testPartitions: %v\n", err)
