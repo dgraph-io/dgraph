@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"bytes"
 	"fmt"
 	"sync"
 
@@ -273,22 +272,20 @@ func LoadFromDb() error {
 	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
 	defer itr.Close()
 
-	for itr.Seek(prefix); itr.Valid(); itr.Next() {
+	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
-		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
-		pk := x.Parse(key)
+		pk := x.Parse(item.Key())
 		if pk == nil {
 			continue
 		}
 		attr := pk.Attr
 		var s pb.SchemaUpdate
 		err := item.Value(func(val []byte) error {
+			// Fix this here, use default SchemaUpdate.
 			if len(val) == 0 {
 				return nil
 			}
+			// State().Set(attr, default)
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
 			State().Set(attr, s)
 			return nil

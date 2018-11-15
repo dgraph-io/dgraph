@@ -53,6 +53,7 @@ func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, erro
 	} else {
 		predicates = schema.State().Predicates()
 	}
+	// Check if the predicate is here? Every predicate should be here.
 	if len(s.Fields) > 0 {
 		fields = s.Fields
 	} else {
