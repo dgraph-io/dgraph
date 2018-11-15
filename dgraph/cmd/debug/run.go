@@ -167,7 +167,7 @@ func findFirstInvalidTxn(db *badger.DB, lowTs, highTs uint64) uint64 {
 	if highTs-lowTs < 1 {
 		fmt.Printf("Checking at lowTs: %d\n", lowTs)
 		if total := seekTotal(db, lowTs); total != 100 {
-			fmt.Printf("Violation at ts: %d\n", lowTs)
+			fmt.Printf("==> VIOLATION at ts: %d\n", lowTs)
 			return lowTs
 		}
 		fmt.Printf("No violation found at ts: %d\n", lowTs)
@@ -185,25 +185,62 @@ func findFirstInvalidTxn(db *badger.DB, lowTs, highTs uint64) uint64 {
 	}
 }
 
-func jepsen(db *badger.DB) {
-	var min, max uint64 = math.MaxUint64, 0
-	{
-		txn := db.NewTransactionAt(math.MaxUint64, false)
-		iopt := badger.DefaultIteratorOptions
-		iopt.AllVersions = true
-		itr := txn.NewIterator(iopt)
-		for itr.Rewind(); itr.Valid(); itr.Next() {
-			item := itr.Item()
-			if min > item.Version() {
-				min = item.Version()
-			}
-			if max < item.Version() {
-				max = item.Version()
-			}
+func showAllPostingsAt(db *badger.DB, readTs uint64) {
+	txn := db.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+
+	itr := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer itr.Close()
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "SHOWING all postings at %d\n", readTs)
+	for itr.Rewind(); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		if item.Version() != readTs {
+			continue
 		}
-		itr.Close()
-		txn.Discard()
+
+		pk := x.Parse(item.Key())
+		if !pk.IsData() || pk.Attr == "_predicate_" {
+			continue
+		}
+		fmt.Fprintf(&buf, "\nkey: %+v hex: %x\n", pk, item.Key())
+		val, err := item.ValueCopy(nil)
+		x.Check(err)
+		var plist pb.PostingList
+		x.Check(plist.Unmarshal(val))
+
+		for _, p := range plist.Postings {
+			appendPosting(&buf, p)
+		}
 	}
+	fmt.Println(buf.String())
+}
+
+func getMinMax(db *badger.DB, readTs uint64) (uint64, uint64) {
+	var min, max uint64 = math.MaxUint64, 0
+	txn := db.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+
+	iopt := badger.DefaultIteratorOptions
+	iopt.AllVersions = true
+	itr := txn.NewIterator(iopt)
+	defer itr.Close()
+
+	for itr.Rewind(); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		if min > item.Version() {
+			min = item.Version()
+		}
+		if max < item.Version() {
+			max = item.Version()
+		}
+	}
+	return min, max
+}
+
+func jepsen(db *badger.DB) {
+	min, max := getMinMax(db, math.MaxUint64)
 	fmt.Printf("min=%d. max=%d\n", min, max)
 
 	ts := findFirstInvalidTxn(db, min, max)
@@ -212,7 +249,15 @@ func jepsen(db *badger.DB) {
 		fmt.Println("Nothing found. Exiting.")
 		return
 	}
-	fmt.Printf("Violation at ts: %d\n", ts)
+	showAllPostingsAt(db, ts)
+	seekTotal(db, ts-1)
+
+	for i := 0; i < 5; i++ {
+		// Get a few previous commits.
+		_, ts = getMinMax(db, ts-1)
+		showAllPostingsAt(db, ts)
+		seekTotal(db, ts-1)
+	}
 }
 
 func history(lookup []byte, itr *badger.Iterator) {
