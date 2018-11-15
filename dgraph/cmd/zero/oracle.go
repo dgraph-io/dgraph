@@ -84,6 +84,10 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	o.Lock()
 	defer o.Unlock()
 
+	// TODO: HACK. Remove this later.
+	glog.Infof("Not purging below: %d", minTs)
+	return
+
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
 		if ts < minTs {
