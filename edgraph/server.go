@@ -194,12 +194,15 @@ type Server struct{}
 func (s *ServerState) fillTimestampRequests() {
 	const (
 		initDelay = 10 * time.Millisecond
-		maxDelay  = 10 * time.Second
+		maxDelay  = time.Second
 	)
-	delay := initDelay
 
 	var reqs []tsReq
 	for {
+		// Reset variables.
+		reqs = reqs[:0]
+		delay := initDelay
+
 		req := <-s.needTs
 	slurpLoop:
 		for {
@@ -236,7 +239,6 @@ func (s *ServerState) fillTimestampRequests() {
 			}
 			goto retry
 		}
-		delay = initDelay
 		var offset uint64
 		for _, req := range reqs {
 			if req.readOnly {
@@ -247,7 +249,6 @@ func (s *ServerState) fillTimestampRequests() {
 			}
 		}
 		x.AssertTrue(ts.StartId == 0 || ts.StartId+offset-1 == ts.EndId)
-		reqs = reqs[:0]
 	}
 }
 
