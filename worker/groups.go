@@ -301,7 +301,6 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 			conn.Get().Connect(member.Addr)
 		}
 	}
-
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {
@@ -493,14 +492,20 @@ func (g *groupi) triggerMembershipSync() {
 	}
 }
 
+// TODO: This function needs to be refactored into smaller functions. It gets hard to reason about.
 func (g *groupi) periodicMembershipUpdate() {
 	defer g.closer.Done() // CLOSER:1
 
-	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
-	ticker := time.NewTicker(time.Minute * 5)
 	// Node might not be the leader when we are calculating size.
 	// We need to send immediately on start so no leader check inside calculatesize.
 	tablets := g.calculateTabletSizes()
+
+	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
+	slowTicker := time.NewTicker(time.Minute * 5)
+	defer slowTicker.Stop()
+
+	fastTicker := time.NewTicker(10 * time.Second)
+	defer fastTicker.Stop()
 
 START:
 	select {
@@ -512,7 +517,7 @@ START:
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		glog.Warningln("WARNING: We don't have address of any Zero server.")
+		glog.Warningln("Membership update: No Zero server known.")
 		time.Sleep(time.Second)
 		goto START
 	}
@@ -527,8 +532,10 @@ START:
 		goto START
 	}
 
+	stateCh := make(chan *pb.MembershipState, 10)
 	go func() {
-		for {
+		glog.Infof("Starting a new membership stream receive from %s.", pl.Addr)
+		for i := 0; ; i++ {
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
 			if err != nil || state == nil {
@@ -543,10 +550,18 @@ START:
 				}
 				return
 			}
-			g.applyState(state)
+			if i == 0 {
+				glog.Infof("Received first state update from Zero: %+v", state)
+			}
+			select {
+			case stateCh <- state:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
+	lastRecv := time.Now()
 	g.triggerMembershipSync() // Ticker doesn't start immediately
 OUTER:
 	for {
@@ -557,7 +572,17 @@ OUTER:
 		case <-ctx.Done():
 			stream.CloseSend()
 			break OUTER
-
+		case state := <-stateCh:
+			lastRecv = time.Now()
+			g.applyState(state)
+		case <-fastTicker.C:
+			if time.Since(lastRecv) > 10*time.Second {
+				// Zero might have gone under partition. We should recreate our connection.
+				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
+				stream.CloseSend()
+				cancel()
+				break OUTER
+			}
 		case <-g.triggerCh:
 			if !g.Node.AmLeader() {
 				tablets = nil
@@ -567,7 +592,7 @@ OUTER:
 				stream.CloseSend()
 				break OUTER
 			}
-		case <-ticker.C:
+		case <-slowTicker.C:
 			// dgraphzero just adds to the map so check that no data is present for the tablet
 			// before we remove it to avoid the race condition where a tablet is added recently
 			// and mutation has not been persisted to disk.
@@ -671,6 +696,7 @@ func (g *groupi) cleanupTablets() {
 						return
 					}
 					g.delPred <- struct{}{}
+					glog.Warningf("Deleting predicate: %v. Tablet: %+v", pk.Attr, tablet)
 					// Predicate moves are disabled during deletion, deletePredicate purges everything.
 					posting.DeletePredicate(context.Background(), pk.Attr)
 					<-g.delPred
@@ -712,6 +738,9 @@ func (g *groupi) sendMembership(tablets map[string]*pb.Tablet,
 func (g *groupi) processOracleDeltaStream() {
 	defer g.closer.Done() // CLOSER:1
 
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	blockingReceiveAndPropose := func() {
 		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
 		defer elog.Finish()
@@ -720,7 +749,7 @@ func (g *groupi) processOracleDeltaStream() {
 
 		pl := g.Leader(0)
 		if pl == nil {
-			glog.Warningln("WARNING: We don't have address of any dgraphzero leader.")
+			glog.Warningln("Oracle delta stream: No Zero leader known.")
 			elog.Errorf("Dgraph zero leader address unknown")
 			time.Sleep(time.Second)
 			return
@@ -776,6 +805,14 @@ func (g *groupi) processOracleDeltaStream() {
 					return
 				}
 				batch++
+			case <-ticker.C:
+				newLead := g.Leader(0)
+				if newLead == nil || newLead.Addr != pl.Addr {
+					glog.Infof("Zero leadership changed. Renewing oracle delta stream.")
+					return
+				}
+				continue
+
 			case <-ctx.Done():
 				return
 			case <-g.closer.HasBeenClosed():
@@ -828,8 +865,6 @@ func (g *groupi) processOracleDeltaStream() {
 		}
 	}
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
 	for {
 		select {
 		case <-g.closer.HasBeenClosed():

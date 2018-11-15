@@ -18,6 +18,7 @@ package worker
 
 import (
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 )
@@ -93,8 +95,13 @@ func (rl *rateLimiter) decr(retry int) {
 	atomic.AddInt32(&rl.iou, int32(weight))
 }
 
+// uniqueKey is meant to be unique across all the replicas.
+func uniqueKey() string {
+	return fmt.Sprintf("%02d-%d", groups().Node.Id, groups().Node.Rand.Uint64())
+}
+
 var errInternalRetry = errors.New("Retry Raft proposal internally")
-var errUnableToServe = errors.New("Server unavailable. Please retry later")
+var errUnableToServe = errors.New("Server overloaded with pending proposals. Please retry later.")
 
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
@@ -147,8 +154,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	proposal.Key = key
 
 	propose := func(timeout time.Duration) error {
-		cctx, cancel := context.WithTimeout(ctx, timeout)
+		cctx, cancel := context.WithCancel(ctx)
 		defer cancel()
+
+		cctx, span := otrace.StartSpan(cctx, "node.propose")
+		defer span.End()
 
 		che := make(chan error, 1)
 		pctx := &conn.ProposalCtx{
@@ -174,23 +184,34 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 			tr.LazyPrintf("Waiting for the proposal.")
 		}
 
-		select {
-		case err = <-che:
-			// We arrived here by a call to n.Proposals.Done().
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Done with error: %v", err)
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+
+		for {
+			select {
+			case err = <-che:
+				// We arrived here by a call to n.Proposals.Done().
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Done with error: %v", err)
+				}
+				return err
+			case <-ctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("External context timed out with error: %v.", ctx.Err())
+				}
+				return ctx.Err()
+			case <-timer.C:
+				if atomic.LoadUint32(&pctx.Found) > 0 {
+					// We found the proposal in CommittedEntries. No need to retry.
+				} else {
+					cancel()
+				}
+			case <-cctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Internal context timed out with error: %v. Retrying...", cctx.Err())
+				}
+				return errInternalRetry
 			}
-			return err
-		case <-ctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("External context timed out with error: %v.", ctx.Err())
-			}
-			return ctx.Err()
-		case <-cctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Internal context timed out with error: %v. Retrying...", cctx.Err())
-			}
-			return errInternalRetry
 		}
 	}
 

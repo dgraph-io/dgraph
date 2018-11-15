@@ -37,7 +37,7 @@ var (
 	ErrUnhealthyConnection = fmt.Errorf("Unhealthy connection")
 	errNoPeerPoolEntry     = fmt.Errorf("no peerPool entry")
 	errNoPeerPool          = fmt.Errorf("no peerPool pool, could not connect")
-	echoDuration           = 10 * time.Second
+	echoDuration           = time.Second
 )
 
 // "Pool" is used to manage the grpc client connection(s) for communicating with other
@@ -167,7 +167,12 @@ func (p *Pool) UpdateHealthStatus(printError bool) error {
 	x.Check2(rand.Read(query.Data))
 
 	c := pb.NewRaftClient(conn)
-	resp, err := c.Echo(context.Background(), query)
+	// Ensure that we have a timeout here, otherwise a network partition could
+	// end up causing this RPC to get stuck forever.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	resp, err := c.Echo(ctx, query)
 	if err == nil {
 		x.AssertTruef(bytes.Equal(resp.Data, query.Data),
 			"non-matching Echo response value from %v", p.Addr)

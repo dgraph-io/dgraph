@@ -52,8 +52,9 @@ func (r *lockedSource) Seed(seed int64) {
 }
 
 type ProposalCtx struct {
-	Ch  chan error
-	Ctx context.Context
+	Found uint32
+	Ch    chan error
+	Ctx   context.Context
 }
 
 type proposals struct {

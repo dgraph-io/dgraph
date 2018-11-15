@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	ws "github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -105,12 +106,12 @@ func doStreamSnapshot(snap *pb.Snapshot, stream pb.Worker_StreamSnapshotServer) 
 	// at timestamp=1.
 
 	var numKeys uint64
-	sl := streamLists{stream: stream, db: pstore}
-	sl.chooseKey = func(_ *badger.Item) bool {
+	sl := ws.Lists{Stream: stream, DB: pstore}
+	sl.ChooseKeyFunc = func(_ *badger.Item) bool {
 		// Pick all keys.
 		return true
 	}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		atomic.AddUint64(&numKeys, 1)
 		item := itr.Item()
 		pk := x.Parse(key)
@@ -138,7 +139,7 @@ func doStreamSnapshot(snap *pb.Snapshot, stream pb.Worker_StreamSnapshotServer) 
 		return l.MarshalToKv()
 	}
 
-	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
+	if err := sl.Orchestrate(stream.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
 		return err
 	}
 	// Indicate that sending is done.

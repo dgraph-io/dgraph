@@ -67,6 +67,15 @@ func HasUChars(r rune, l *Lexer) bool {
 	return times == l.AcceptRunTimes(isHex, times)
 }
 
+// XCHAR ::= '\x' HEX HEX
+func HasXChars(r rune, l *Lexer) bool {
+	if r != 'x' {
+		return false
+	}
+	times := 2
+	return times == l.AcceptRunTimes(isHex, times)
+}
+
 // HEX ::= [0-9] | [A-F] | [a-f]
 func isHex(r rune) bool {
 	switch {

@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 
 	"google.golang.org/grpc"
@@ -47,41 +46,6 @@ type node struct {
 }
 
 var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
-
-func (n *node) RegisterForUpdates(ch chan struct{}) uint32 {
-	n.Lock()
-	defer n.Unlock()
-	if n.subscribers == nil {
-		n.subscribers = make(map[uint32]chan struct{})
-	}
-	for {
-		id := rand.Uint32()
-		if _, has := n.subscribers[id]; has {
-			continue
-		}
-		n.subscribers[id] = ch
-		return id
-	}
-}
-
-func (n *node) Deregister(id uint32) {
-	n.Lock()
-	defer n.Unlock()
-	delete(n.subscribers, id)
-}
-
-func (n *node) triggerUpdates() {
-	n.Lock()
-	defer n.Unlock()
-	for _, ch := range n.subscribers {
-		select {
-		case ch <- struct{}{}:
-		// We can ignore it and don't send a notification, because they are going to
-		// read a state version after now since ch is already full.
-		default:
-		}
-	}
-}
 
 func (n *node) AmLeader() bool {
 	if n.Raft() == nil {
@@ -572,10 +536,6 @@ func (n *node) Run() {
 
 			for _, msg := range rd.Messages {
 				n.Send(msg)
-			}
-			// Need to send membership state to dgraph nodes on leader change also.
-			if rd.SoftState != nil || len(rd.CommittedEntries) > 0 {
-				n.triggerUpdates()
 			}
 			n.Raft().Advance()
 		}

@@ -115,7 +115,7 @@ func TestExport(t *testing.T) {
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
-	err = export(context.Background(), &pb.ExportPayload{ReadTs: readTs, GroupId: 1})
+	err = export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1})
 	require.NoError(t, err)
 
 	searchDir := bdir

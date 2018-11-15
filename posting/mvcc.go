@@ -180,9 +180,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		if !bytes.Equal(item.Key(), l.key) {
 			break
 		}
-		if l.commitTs == 0 {
-			l.commitTs = item.Version()
-		}
 
 		if item.UserMeta()&BitCompletePosting > 0 {
 			if err := unmarshalOrCopy(l.plist, item); err != nil {
@@ -239,7 +236,6 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	if item.UserMeta()&BitCompletePosting > 0 {
 		err = unmarshalOrCopy(l.plist, item)
 		l.minTs = item.Version()
-		l.commitTs = item.Version()
 	} else {
 		iterOpts := badger.DefaultIteratorOptions
 		iterOpts.AllVersions = true

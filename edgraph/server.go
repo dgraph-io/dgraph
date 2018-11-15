@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"math"
-	"math/rand"
 	"os"
 	"strings"
 	"sync"
@@ -41,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
@@ -325,12 +325,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	return empty, err
 }
 
+func annotateStartTs(span *otrace.Span, ts uint64) {
+	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(ts))}, "")
+}
+
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
+	ctx, span := otrace.StartSpan(ctx, "Server.Mutate")
+	defer span.End()
+
 	resp = &api.Assigned{}
 	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Request rejected %v", err)
-		}
 		return resp, err
 	}
 
@@ -340,17 +344,13 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	if mu.StartTs == 0 {
 		mu.StartTs = State.getTimestamp(false)
 	}
+	annotateStartTs(span, mu.StartTs)
 	emptyMutation :=
 		len(mu.GetSetJson()) == 0 && len(mu.GetDeleteJson()) == 0 &&
 			len(mu.Set) == 0 && len(mu.Del) == 0 &&
 			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
 		return resp, fmt.Errorf("empty mutation")
-	}
-	if rand.Float64() < worker.Config.Tracing {
-		var tr trace.Trace
-		tr, ctx = x.NewTrace("Server.Mutate", ctx)
-		defer tr.Finish()
 	}
 
 	var l query.Latency
@@ -383,6 +383,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		Edges:   edges,
 		StartTs: mu.StartTs,
 	}
+	span.Annotate(nil, "Applying mutations")
 	resp.Context, err = query.ApplyMutations(ctx, m)
 	if !mu.CommitNow {
 		if err == y.ErrConflict {
@@ -408,16 +409,11 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		}
 		return resp, err
 	}
-	tr, ok := trace.FromContext(ctx)
-	if ok {
-		tr.LazyPrintf("Prewrites err: %v. Attempting to commit/abort immediately.", err)
-	}
+	span.Annotatef(nil, "Prewrites err: %v. Attempting to commit/abort immediately.", err)
 	ctxn := resp.Context
 	// zero would assign the CommitTs
 	cts, err := worker.CommitOverNetwork(ctx, ctxn)
-	if ok {
-		tr.LazyPrintf("Status of commit at ts: %d: %v", ctxn.StartTs, err)
-	}
+	span.Annotatef(nil, "Status of commit at ts: %d: %v", ctxn.StartTs, err)
 	if err != nil {
 		if err == y.ErrAborted {
 			err = status.Errorf(codes.Aborted, err.Error())
@@ -437,6 +433,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
+	ctx, span := otrace.StartSpan(ctx, "Server.Query")
+	defer span.End()
+
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
@@ -451,25 +450,15 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 		return resp, ctx.Err()
 	}
 
-	if rand.Float64() < worker.Config.Tracing {
-		var tr trace.Trace
-		tr, ctx = x.NewTrace("GrpcQuery", ctx)
-		defer tr.Finish()
-	}
-
 	resp = new(api.Response)
 	if len(req.Query) == 0 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Empty query")
-		}
+		span.Annotate(nil, "Empty query")
 		return resp, fmt.Errorf("empty query")
 	}
 
 	var l query.Latency
 	l.Start = time.Now()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Query request received: %v", req)
-	}
+	span.Annotatef(nil, "Query received: %v", req)
 
 	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
@@ -485,6 +474,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	resp.Txn = &api.TxnContext{
 		StartTs: req.StartTs,
 	}
+	annotateStartTs(span, req.StartTs)
 
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
@@ -495,18 +485,12 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	// Core processing happens here.
 	var er query.ExecuteResult
 	if er, err = queryRequest.Process(ctx); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while processing query: %+v", err)
-		}
 		return resp, x.Wrap(err)
 	}
 	resp.Schema = er.SchemaNode
 
 	json, err := query.ToJson(&l, er.Subgraphs)
 	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while converting to protocol buffer: %+v", err)
-		}
 		return resp, err
 	}
 	resp.Json = json
@@ -521,8 +505,10 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	return resp, err
 }
 
-func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext,
-	error) {
+func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
+	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
+	defer span.End()
+
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
@@ -531,10 +517,10 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	}
 
 	tctx := &api.TxnContext{}
-
 	if tc.StartTs == 0 {
 		return &api.TxnContext{}, fmt.Errorf("StartTs cannot be zero while committing a transaction.")
 	}
+	annotateStartTs(span, tc.StartTs)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == y.ErrAborted {
 		tctx.Aborted = true

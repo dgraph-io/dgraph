@@ -21,37 +21,42 @@ title = "Dgraph Documentation"
   identifier = "query-language"
   weight = 3
 [[menu.main]]
+  name = "GraphQL+- Tips and Tricks"
+  url  = "/tips/"
+  identifier = "tips"
+  weight = 4
+[[menu.main]]
   name = "Mutations"
   url = "/mutations/"
   identifier = "mutations"
-  weight = 4
+  weight = 5
 [[menu.main]]
   name = "Clients"
   url = "/clients/"
   identifier = "clients"
-  weight = 5
+  weight = 6
 [[menu.main]]
   name = "Deploy"
   url = "/deploy/"
   identifier = "deploy"
-  weight = 6
+  weight = 7
 [[menu.main]]
   name = "FAQ"
   url = "/faq/"
   identifier = "faq"
-  weight = 7
+  weight = 8
 [[menu.main]]
   name = "How To Guides"
   url = "/howto/"
   identifier = "how-to-guides"
-  weight = 8
+  weight = 9
 [[menu.main]]
   name = "Design Concepts"
   url = "/design-concepts/"
   identifier = "design-concepts"
-  weight = 9
+  weight = 10
 [[menu.main]]
   name = "Dgraph Compared to Other Databases"
   url = "/dgraph-compared-to-other-databases/"
   identifier = "dgraph-compared-to-other-databases"
-  weight = 10
+  weight = 11
