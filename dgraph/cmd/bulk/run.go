@@ -133,6 +133,7 @@ func run() {
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")
 	x.Check(err)
 	fmt.Println(string(optBuf))
+    fmt.Println("HI THIS IS THE TESTING VERSION")
 
 	maxOpenFilesWarning()
 

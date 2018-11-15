@@ -290,7 +290,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 	alloc := xidmap.New(
 		kv,
-		connzero,
+		// connzero,
 		xidmap.Options{
 			NumShards: 100,
 			LRUSize:   1e5,

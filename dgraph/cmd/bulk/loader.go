@@ -196,9 +196,11 @@ type uidRangeResponse struct {
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
 
-	xidDir := filepath.Join(ld.opt.TmpDir, "xids")
-	x.Check(os.Mkdir(xidDir, 0755))
+	// xidDir := filepath.Join(ld.opt.TmpDir, "xids")
+    xidDir := "./final/"
+	// x.Check(os.Mkdir(xidDir, 0755))
 	opt := badger.DefaultOptions
+    opt.ReadOnly = true
 	opt.SyncWrites = false
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = xidDir
@@ -206,7 +208,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, ld.zero, xidmap.Options{
+	ld.xids = xidmap.New(ld.xidDB/*, ld.zero*/, xidmap.Options{
 		NumShards: 1 << 10,
 		LRUSize:   1 << 19,
 	})
@@ -270,7 +272,7 @@ func (ld *loader) mapStage() {
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
-	ld.xids.EvictAll()
+	// ld.xids.EvictAll()
 	x.Check(ld.xidDB.Close())
 	ld.xids = nil
 	runtime.GC()

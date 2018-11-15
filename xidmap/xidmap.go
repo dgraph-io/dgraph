@@ -18,18 +18,18 @@ package xidmap
 
 import (
 	"container/list"
-	"context"
+	// "context"
 	"encoding/binary"
 	"sync"
-	"time"
+	// "time"
 
-	"google.golang.org/grpc"
+	// "google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/pb"
+	// "github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
-	"github.com/golang/glog"
+	// "github.com/golang/glog"
 )
 
 // Options controls the performance characteristics of the XidMap.
@@ -50,7 +50,7 @@ type XidMap struct {
 	shards    []shard
 	kv        *badger.DB
 	opt       Options
-	newRanges chan *pb.AssignedIds
+	// newRanges chan *pb.AssignedIds
 
 	noMapMu sync.Mutex
 	noMap   block // block for allocating uids without an xid to uid mapping
@@ -77,55 +77,55 @@ type block struct {
 	start, end uint64
 }
 
-func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
-	if b.end == 0 || b.start > b.end {
-		newRange := <-ch
-		b.start, b.end = newRange.StartId, newRange.EndId
-	}
-	x.AssertTrue(b.start <= b.end)
-	uid := b.start
-	b.start++
-	return uid
-}
+// func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
+// 	if b.end == 0 || b.start > b.end {
+// 		newRange := <-ch
+// 		b.start, b.end = newRange.StartId, newRange.EndId
+// 	}
+// 	x.AssertTrue(b.start <= b.end)
+// 	uid := b.start
+// 	b.start++
+// 	return uid
+// }
 
 // New creates an XidMap with given badger and uid provider.
-func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
+func New(kv *badger.DB/*, zero *grpc.ClientConn*/, opt Options) *XidMap {
 	x.AssertTrue(opt.LRUSize != 0)
 	x.AssertTrue(opt.NumShards != 0)
 	xm := &XidMap{
 		shards:    make([]shard, opt.NumShards),
 		kv:        kv,
 		opt:       opt,
-		newRanges: make(chan *pb.AssignedIds),
+		// newRanges: make(chan *pb.AssignedIds),
 	}
 	for i := range xm.shards {
 		xm.shards[i].elems = make(map[string]*list.Element)
 		xm.shards[i].queue = list.New()
 		xm.shards[i].xm = xm
 	}
-	go func() {
-		zc := pb.NewZeroClient(zero)
-		const initBackoff = 10 * time.Millisecond
-		const maxBackoff = 5 * time.Second
-		backoff := initBackoff
-		for {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := zc.AssignUids(ctx, &pb.Num{Val: 10000})
-			cancel()
-			if err == nil {
-				backoff = initBackoff
-				xm.newRanges <- assigned
-				continue
-			}
-			glog.Errorf("Error while getting lease: %v\n", err)
-			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
-			}
-			time.Sleep(backoff)
-		}
-
-	}()
+	// go func() {
+	// 	zc := pb.NewZeroClient(zero)
+	// 	const initBackoff = 10 * time.Millisecond
+	// 	const maxBackoff = 5 * time.Second
+	// 	backoff := initBackoff
+	// 	for {
+	// 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	// 		assigned, err := zc.AssignUids(ctx, &pb.Num{Val: 10000})
+	// 		cancel()
+	// 		if err == nil {
+	// 			backoff = initBackoff
+	// 			xm.newRanges <- assigned
+	// 			continue
+	// 		}
+	// 		glog.Errorf("Error while getting lease: %v\n", err)
+	// 		backoff *= 2
+	// 		if backoff > maxBackoff {
+	// 			backoff = maxBackoff
+	// 		}
+	// 		time.Sleep(backoff)
+	// 	}
+    //
+	// }()
 	return xm
 }
 
@@ -164,16 +164,11 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool) {
 		return uid, false
 	}
 
-	uid = sh.assign(m.newRanges)
-	sh.add(xid, uid, false)
-	return uid, true
-}
-
-// AllocateUid gives a single uid without creating an xid to uid mapping.
-func (m *XidMap) AllocateUid() uint64 {
-	m.noMapMu.Lock()
-	defer m.noMapMu.Unlock()
-	return m.noMap.assign(m.newRanges)
+	// uid = sh.assign(m.newRanges)
+	// sh.add(xid, uid, false)
+	// return uid, true
+    panic("THIS MEANS THAT A UID WAS NOT FOUND")
+    return uid, true
 }
 
 func (s *shard) lookup(xid string) (uint64, bool) {
