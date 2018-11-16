@@ -67,8 +67,8 @@ func main() {
 	gio.Init()
 
 	opts := badger.DefaultOptions
-	opts.Dir = "./final/"
-	opts.ValueDir = "./final/"
+	opts.Dir = "./xids/"
+	opts.ValueDir = "./xids/"
 	db, err := badger.Open(opts)
 	check(err)
 	defer db.Close()

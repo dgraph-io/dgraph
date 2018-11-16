@@ -17,60 +17,18 @@
 package distbulk
 
 import (
-	"encoding/json"
-	"flag"
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/cobra"
-
-    "bytes"
-    "context"
-    "encoding/binary"
-    "flag"
-    "io"
-    "log"
-    "math"
     "os"
-    "strings"
-
-    "github.com/chrislusf/gleam/distributed"
-    "github.com/chrislusf/gleam/flow"
-    "github.com/chrislusf/gleam/gio"
-    "github.com/chrislusf/gleam/plugins/file"
-    "github.com/chrislusf/gleam/util"
-
-    "github.com/dgraph-io/badger"
-    "github.com/dgraph-io/dgo/protos/api"
-    "github.com/dgraph-io/dgraph/gql"
-    "github.com/dgraph-io/dgraph/posting"
-    "github.com/dgraph-io/dgraph/protos/pb"
-    "github.com/dgraph-io/dgraph/rdf"
-    "github.com/dgraph-io/dgraph/schema"
-    "github.com/dgraph-io/dgraph/tok"
-    "github.com/dgraph-io/dgraph/types"
-    "github.com/dgraph-io/dgraph/types/facets"
+    "log"
+    "fmt"
+    "bytes"
+	"os/exec"
+	"github.com/spf13/cobra"
     "github.com/dgraph-io/dgraph/x"
-
-    farm "github.com/dgryski/go-farm"
-    "github.com/gogo/protobuf/proto"
-    "github.com/pkg/errors"
-    "google.golang.org/grpc"
 )
 
-type options struct {
-    RDFDir        string
-    SchemaFile    string
-    DgraphsDir    string
-    ExpandEdges   bool
-    StoreXids     bool
-}
 
 var (
-    Distbulk x.SubCommand
+	Distbulk      x.SubCommand
 )
 
 func init() {
@@ -125,60 +83,15 @@ func init() {
 }
 
 func run() {
-	// opt := options{
-	// 	RDFDir:        Distbulk.Conf.GetString("rdfs"),
-	// 	SchemaFile:    Distbulk.Conf.GetString("schema_file"),
-	// 	DgraphsDir:    Distbulk.Conf.GetString("out"),
-	// 	ExpandEdges:   Distbulk.Conf.GetBool("expand_edges"),
-	// 	Version:       Distbulk.Conf.GetBool("version"),
-	// 	StoreXids:     Distbulk.Conf.GetBool("store_xids"),
-	// }
-
-    opt := options{
-        RDFDir:        "data",
-        SchemaFile:    "data.schema",
-        DgraphsDir:    "dgraph-out",
-        ExpandEdges:   true,
-        StoreXids:     false,
+    cmd := exec.Command("go", "run", "main/main.go")
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+    err := cmd.Run()
+    if err != nil {
+        log.Fatalf("cmd.Run() failed with %s\n", err)
     }
-
-	if opt.RDFDir == "" || opt.SchemaFile == "" {
-		flag.Usage()
-		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
-		os.Exit(1)
-	}
-
-	optBuf, err := json.MarshalIndent(&opt, "", "\t")
-	x.Check(err)
-	fmt.Println(string(optBuf))
-
-	// Delete and recreate the output dirs to ensure they are empty.
-	x.Check(os.RemoveAll(opt.DgraphsDir))
-
-	loader := newLoader(opt)
-	if !opt.SkipMapPhase {
-		loader.mapStage()
-		mergeMapShardsIntoReduceShards(opt)
-	}
-	loader.reduceStage()
-	loader.writeSchema()
-	loader.cleanup()
-}
-
-func readSchema(filename string) []*pb.SchemaUpdate {
-    f, err := os.Open(filename)
-    x.Check(err)
-    defer f.Close()
-    var r io.Reader = f
-    if filepath.Ext(filename) == ".gz" {
-        r, err = gzip.NewReader(f)
-        x.Check(err)
-    }
-
-    buf, err := ioutil.ReadAll(r)
-    x.Check(err)
-
-    initialSchema, err := schema.Parse(string(buf))
-    x.Check(err)
-    return initialSchema
+    outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
+    fmt.Print(outStr)
+    fmt.Fprint(os.Stderr, errStr)
 }

@@ -14,17 +14,23 @@
  * limitations under the License.
  */
 
-package distbulk
+package main
 
 import (
+	"compress/gzip"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"math"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	wk "github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -32,10 +38,28 @@ import (
 type schemaStore struct {
 	sync.RWMutex
 	m map[string]*pb.SchemaUpdate
-	*state
 }
 
-func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *schemaStore {
+func readSchema(filename string) []*pb.SchemaUpdate {
+	f, err := os.Open(filename)
+	x.Check(err)
+	defer f.Close()
+
+	var r io.Reader = f
+	if filepath.Ext(filename) == ".gz" {
+		r, err = gzip.NewReader(f)
+		x.Check(err)
+	}
+
+	buf, err := ioutil.ReadAll(r)
+	x.Check(err)
+
+	initialSchema, err := schema.Parse(string(buf))
+	x.Check(err)
+	return initialSchema
+}
+
+func newSchemaStore(initial []*pb.SchemaUpdate, opt options) *schemaStore {
 	s := &schemaStore{
 		m: map[string]*pb.SchemaUpdate{
 			"_predicate_": &pb.SchemaUpdate{
@@ -43,7 +67,6 @@ func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *sche
 				List:      true,
 			},
 		},
-		state: state,
 	}
 	if opt.StoreXids {
 		s.m["xid"] = &pb.SchemaUpdate{
