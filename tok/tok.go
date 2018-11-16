@@ -366,5 +366,6 @@ type PluginTokenizer interface {
 
 type CustomTokenizer struct{ PluginTokenizer }
 
+// It doesn't make sense for plugins to implement the following methods, so they're hardcoded.
 func (t CustomTokenizer) IsSortable() bool { return false }
 func (t CustomTokenizer) IsLossy() bool    { return true }

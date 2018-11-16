@@ -19,6 +19,7 @@ package tok
 import (
 	"sync"
 
+	"github.com/golang/glog"
 	"golang.org/x/text/language"
 )
 
@@ -50,8 +51,12 @@ func langBase(lang string) string {
 	// It will return undefined, or 'language.Und', if it gives up. That means the language
 	// tag is either new (to the standard) or simply invalid.
 	// We ignore errors from Parse because to Dgraph they aren't fatal.
-	tag, _ := language.Parse(lang)
-	if tag != language.Und {
+	tag, err := language.Parse(lang)
+	if err != nil {
+		glog.Errorf("While trying to parse lang %q. Error: %v", lang, err)
+
+	} else if tag != language.Und {
+		// Found a not undefined, i.e. valid language.
 		// The tag value returned will have a 'confidence' value attached.
 		// The confidence will be one of: No, Low, High, Exact.
 		// Low confidence is close to being undefined (see above) so we treat it as such.
@@ -59,8 +64,10 @@ func langBase(lang string) string {
 		// e.g., A lang tag like "x-klingon" should retag to "en"
 		if base, conf := tag.Base(); conf > language.No {
 			langBaseCache.m[lang] = base.String()
-			return langBaseCache.m[lang]
+			return base.String()
 		}
 	}
+	glog.Warningf("Unable to find lang %q. Reverting to English.", lang)
+	langBaseCache.m[lang] = enBase
 	return enBase
 }
