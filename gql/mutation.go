@@ -104,17 +104,15 @@ func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
 	return []byte(p1.Value.([]byte)), p.Tid, nil
 }
 
-// toUid returns the uid in uint64 if the subject is a hex string, e.g. 0x01
-// or the corresponding uid in the provided newToUid map if the subject is in format _:xxx
-func toUid(entity string, newToUid map[string]uint64) (uid uint64, err error) {
-	if id, err := ParseUid(entity); err == nil || err == ErrInvalidUID {
+func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
+	if id, err := ParseUid(subject); err == nil || err == ErrInvalidUID {
 		return id, err
 	}
 	// It's an xid
-	if id, present := newToUid[entity]; present {
+	if id, present := newToUid[subject]; present {
 		return id, err
 	}
-	return 0, x.Errorf("uid not found/generated for xid %s\n", entity)
+	return 0, x.Errorf("uid not found/generated for xid %s\n", subject)
 }
 
 var emptyEdge pb.DirectedEdge

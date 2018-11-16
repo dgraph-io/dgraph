@@ -241,6 +241,7 @@ func (adminServer *AdminServer) CreateUser(ctx context.Context,
 
 	assignedIds, err := (&edgraph.Server{}).Mutate(ctx, mu)
 	if err != nil {
+		glog.Errorf("Unable to create user: %v", err)
 		return nil, err
 	}
 	dgo.MergeContext(txnContext, assignedIds.Context)
@@ -254,10 +255,6 @@ func (adminServer *AdminServer) CreateUser(ctx context.Context,
 type DBGroup struct {
 	Uid string `json:"uid"`
 	GroupID string `json:"dgraph.xid"`
-}
-
-func (dbGroup *DBGroup) toString() string {
-	return dbGroup.GroupID
 }
 
 func toJwtGroups(groups []DBGroup) []JwtGroup {
@@ -299,7 +296,6 @@ func queryDBUser(ctx context.Context, txnContext *api.TxnContext,
 	queryRequest := api.Request{
 		Query:    queryUid,
 		Vars:     queryVars,
-		ReadOnly: true,
 	}
 
 	queryResp, err := (&edgraph.Server{}).Query(ctx, &queryRequest)
@@ -314,6 +310,7 @@ func queryDBUser(ctx context.Context, txnContext *api.TxnContext,
 
 	err = json.Unmarshal(queryResp.GetJson(), &m)
 	if err != nil {
+		glog.Errorf("Unable to unmarshal the query user response for user", userid)
 		return nil, err
 	}
 	users := m["user"]
@@ -323,6 +320,7 @@ func queryDBUser(ctx context.Context, txnContext *api.TxnContext,
 	}
 
 	dbUser = &users[0]
+	// populate the UserID field manually since it's not in the query response
 	dbUser.UserID = userid
 
 	return dbUser, nil

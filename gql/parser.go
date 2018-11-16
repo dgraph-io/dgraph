@@ -19,7 +19,6 @@ package gql
 import (
 	"bytes"
 	"fmt"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -332,8 +331,7 @@ func substituteVar(f string, res *string, vmap varMap) error {
 	if len(f) > 0 && f[0] == '$' {
 		va, ok := vmap[f]
 		if !ok || va.Type == "" {
-			debug.PrintStack()
-			return x.Errorf("Variable not defined %v, vmap: %+v, ok: %v", f, vmap, ok, )
+			return x.Errorf("Variable not defined %v", f)
 		}
 		*res = va.Value
 	}

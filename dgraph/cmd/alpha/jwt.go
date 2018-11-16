@@ -65,7 +65,7 @@ func (jwt *Jwt) EncodeToString(key []byte) (string, error) {
 }
 
 // Decode the input string into the current Jwt struct, and also verify
-// that the signature in the input is valid
+// that the signature in the input is valid using the key if checkSignature is true
 func (jwt *Jwt) DecodeString(input string, checkSignature bool, key []byte) error {
 	if len(input) == 0 {
 		return fmt.Errorf("the input jwt should not be empty")

@@ -77,7 +77,6 @@ func LogIn(t *testing.T, adminClient api.DgraphAdminClient) {
 
 func loginWithCorrectPassword(t *testing.T, ctx context.Context,
 	adminClient api.DgraphAdminClient) {
-	// login again with the correct password
 	loginRequest := api.LogInRequest{
 		Userid:   userid,
 		Password: userpassword,
@@ -90,7 +89,6 @@ func loginWithCorrectPassword(t *testing.T, ctx context.Context,
 	}
 	jwt := alpha.Jwt{}
 	jwt.DecodeString(response2.Context.Jwt, false, nil)
-	//t.Logf("Received jwt from the server: %+v", jwt)
 	if jwt.Payload.Userid != userid {
 		t.Errorf("the jwt token should have the user id encoded")
 	}
@@ -103,7 +101,6 @@ func loginWithCorrectPassword(t *testing.T, ctx context.Context,
 
 func loginWithWrongPassword(t *testing.T, ctx context.Context,
 	adminClient api.DgraphAdminClient) {
-	// first try to log in with a wrong password
 	loginRequestWithWrongPassword := api.LogInRequest{
 		Userid:   userid,
 		Password: userpassword + "123",
