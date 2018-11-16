@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -184,8 +185,7 @@ func (adminServer *AdminServer) LogIn(ctx context.Context,
 	}
 
 	if dbUser.Password != request.Password {
-		glog.Infof("Password mismatch for user: %v, expect %v, received %v", request.Userid,
-			dbUser.Password, request.Password)
+		glog.Infof("Password mismatch for user: %v", request.Userid)
 		resp.Code = api.AclResponseCode_UNAUTHENTICATED
 		return resp, nil
 	}
@@ -195,6 +195,7 @@ func (adminServer *AdminServer) LogIn(ctx context.Context,
 		Payload:JwtPayload{
 			Userid: request.Userid,
 			Groups: toJwtGroups(dbUser.Groups),
+			Exp: time.Now().AddDate(0, 0, 30).Unix(), // set the jwt valid for 30 days
 		},
 	}
 
@@ -308,8 +309,6 @@ func queryDBUser(ctx context.Context, txnContext *api.TxnContext,
 	}
 	// merge the response context so that the startTs and other metadata are populated to the txnContext
 	dgo.MergeContext(txnContext, queryResp.GetTxn())
-
-	glog.Infof("Got query response: %v", string(queryResp.Json))
 
 	m := make(map[string][]DBUser)
 

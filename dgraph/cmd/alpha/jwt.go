@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 )
 
 type JwtHeader struct {
@@ -27,7 +26,7 @@ type JwtGroup struct {
 
 type JwtPayload struct {
 	Userid string
-	Exp time.Time // the expiration time
+	Exp int64 // the unix time sinch epoch
 	Groups []JwtGroup
 }
 
@@ -67,14 +66,10 @@ func (jwt *Jwt) EncodeToString(key []byte) (string, error) {
 
 // Decode the input string into the current Jwt struct, and also verify
 // that the signature in the input is valid
-func (jwt *Jwt) DecodeString(input string, key []byte) error {
+func (jwt *Jwt) DecodeString(input string, checkSignature bool, key []byte) error {
 	if len(input) == 0 {
 		return fmt.Errorf("the input jwt should not be empty")
 	}
-	if len(key) == 0 {
-		return fmt.Errorf("the key should not be empty")
-	}
-
 	components := strings.Split(input, ".")
 	if len(components) != 3 {
 		return fmt.Errorf("input is not in format xxx.yyy.zzz")
@@ -88,20 +83,28 @@ func (jwt *Jwt) DecodeString(input string, key []byte) error {
 	if err != nil {
 		return fmt.Errorf("unable to base64 decode the payload: %v", components[1])
 	}
-	signature, err := base64.StdEncoding.DecodeString(components[2])
-	if err != nil {
-		return fmt.Errorf("unable to base64 decode the signature: %v", components[2])
+
+	if checkSignature {
+		if len(key) == 0 {
+			return fmt.Errorf("the key should not be empty")
+		}
+
+		signature, err := base64.StdEncoding.DecodeString(components[2])
+		if err != nil {
+			return fmt.Errorf("unable to base64 decode the signature: %v", components[2])
+		}
+
+		mac := hmac.New(sha256.New, key)
+		mac.Write(header)
+		mac.Write(payload)
+		expectedSignature := mac.Sum(nil)
+		if !hmac.Equal(signature, expectedSignature) {
+			return fmt.Errorf("Signature mismatch")
+		}
 	}
 
-	mac := hmac.New(sha256.New, key)
-	mac.Write(header)
-	mac.Write(payload)
-	expectedSignature := mac.Sum(nil)
-	if !hmac.Equal(signature, expectedSignature) {
-		return fmt.Errorf("Signature mismatch")
-	}
-
-	json.Unmarshal(header, jwt.Header)
-	json.Unmarshal(payload, jwt.Payload)
+	json.Unmarshal(header, &jwt.Header)
+	json.Unmarshal(payload, &jwt.Payload)
 	return nil
 }
+

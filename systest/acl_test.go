@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
-	"strconv"
-	"testing"
-
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"strconv"
+	"testing"
+	"time"
 )
 
 const (
@@ -87,7 +88,17 @@ func loginWithCorrectPassword(t *testing.T, ctx context.Context,
 		t.Errorf("Login with the correct password should result in the code %v",
 			api.AclResponseCode_OK)
 	}
-	t.Logf("Received jwt from the server: %v", response2.Context.Jwt)
+	jwt := alpha.Jwt{}
+	jwt.DecodeString(response2.Context.Jwt, false, nil)
+	//t.Logf("Received jwt from the server: %+v", jwt)
+	if jwt.Payload.Userid != userid {
+		t.Errorf("the jwt token should have the user id encoded")
+	}
+	jwtTime := time.Unix(jwt.Payload.Exp, 0)
+	jwtValidDays := jwtTime.Sub(time.Now()).Round(time.Hour).Hours() / 24
+	if jwtValidDays != 30.0 {
+		t.Errorf("The jwt token should be valid for 30 days, received %v days", jwtValidDays)
+	}
 }
 
 func loginWithWrongPassword(t *testing.T, ctx context.Context,
