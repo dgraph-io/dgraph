@@ -12,8 +12,8 @@ function cleanup_blockade {
     docker container prune -f
     if docker network ls | grep -q 'blockade_net'; then
         docker network ls |
-            awk '/blockade_net/ { print $1 }'
-        xargs docker network rm
+            awk '/blockade_net/ { print $1 }' |
+            xargs docker network rm
     fi
 }
 
