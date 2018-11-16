@@ -31,7 +31,7 @@ type mathTree struct {
 
 // processBinary handles the binary operands like
 // +, -, *, /, %, max, min, logbase
-func processBinary(mNode *mathTree) (err error) {
+func processBinary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
 
@@ -54,7 +54,7 @@ func processBinary(mNode *mathTree) (err error) {
 			// Use the constant value that was supplied.
 			rVal = cr
 		}
-		err = ag.ApplyVal(lVal)
+		err := ag.ApplyVal(lVal)
 		if err != nil {
 			return err
 		}
@@ -69,13 +69,12 @@ func processBinary(mNode *mathTree) (err error) {
 		return nil
 	}
 
-	if mpl != nil || mpr != nil {
+	if len(mpl) != 0 || len(mpr) != 0 {
 		for k := range mpr {
 			if err := f(k); err != nil {
 				return err
 			}
 		}
-
 		for k := range mpl {
 			if _, ok := mpr[k]; ok {
 				continue
@@ -85,7 +84,7 @@ func processBinary(mNode *mathTree) (err error) {
 			}
 		}
 		mNode.Val = destMap
-		return
+		return nil
 	}
 
 	if cl.Value != nil && cr.Value != nil {
@@ -93,7 +92,7 @@ func processBinary(mNode *mathTree) (err error) {
 		ag := aggregator{
 			name: aggName,
 		}
-		err = ag.ApplyVal(cl)
+		err := ag.ApplyVal(cl)
 		if err != nil {
 			return err
 		}
@@ -110,7 +109,7 @@ func processBinary(mNode *mathTree) (err error) {
 
 // processUnary handles the unary operands like
 // u-, log, exp, since, floor, ceil
-func processUnary(mNode *mathTree) (err error) {
+func processUnary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
 	aggName := mNode.Fn
@@ -120,7 +119,7 @@ func processUnary(mNode *mathTree) (err error) {
 	}
 	if ch.Const.Value != nil {
 		// Use the constant value that was supplied.
-		err = ag.ApplyVal(ch.Const)
+		err := ag.ApplyVal(ch.Const)
 		if err != nil {
 			return err
 		}
@@ -129,7 +128,7 @@ func processUnary(mNode *mathTree) (err error) {
 	}
 
 	for k, val := range srcMap {
-		err = ag.ApplyVal(val)
+		err := ag.ApplyVal(val)
 		if err != nil {
 			return err
 		}
@@ -146,7 +145,7 @@ func processUnary(mNode *mathTree) (err error) {
 // processBinaryBoolean handles the binary operands which
 // return a boolean value.
 // All the inequality operators (<, >, <=, >=, !=, ==)
-func processBinaryBoolean(mNode *mathTree) (err error) {
+func processBinaryBoolean(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
 	aggName := mNode.Fn
@@ -173,11 +172,11 @@ func processBinaryBoolean(mNode *mathTree) (err error) {
 }
 
 // processTernary handles the ternary operand cond()
-func processTernary(mNode *mathTree) (err error) {
+func processTernary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
 	condMap := mNode.Child[0].Val
-	if condMap == nil {
+	if len(condMap) == 0 {
 		return x.Errorf("Expected a value variable in %v but missing.", aggName)
 	}
 	varOne := mNode.Child[1].Val
@@ -211,12 +210,12 @@ func processTernary(mNode *mathTree) (err error) {
 	return nil
 }
 
-func evalMathTree(mNode *mathTree) (err error) {
+func evalMathTree(mNode *mathTree) error {
 	if mNode.Const.Value != nil {
 		return nil
 	}
 	if mNode.Var != "" {
-		if mNode.Val == nil {
+		if len(mNode.Val) == 0 {
 			return x.Errorf("Variable %v not yet populated or missing.", mNode.Var)
 		}
 		// This is a leaf node whose value is already populated. So return.

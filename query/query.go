@@ -321,7 +321,7 @@ func aggWithVarFieldName(pc *SubGraph) string {
 }
 
 func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
-	if pc.Params.uidToVal == nil {
+	if len(pc.Params.uidToVal) == 0 {
 		return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 	}
 	fieldName := aggWithVarFieldName(pc)
@@ -595,8 +595,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 			return x.Errorf("Invalid function name : %s", ft.Func.Name)
 		}
 
-		isUidFuncWithoutVar := isUidFnWithoutVar(ft.Func)
-		if isUidFuncWithoutVar {
+		if isUidFnWithoutVar(ft.Func) {
 			sg.SrcFunc = new(Function)
 			sg.SrcFunc.Name = ft.Func.Name
 			if err := sg.populate(ft.Func.UID); err != nil {
@@ -915,8 +914,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.createSrcFunction(gq.Func)
 	}
 
-	isUidFuncWithoutVar := gq.Func != nil && isUidFnWithoutVar(gq.Func)
-	if isUidFuncWithoutVar && len(gq.UID) > 0 {
+	if isUidFnWithoutVar(gq.Func) && len(gq.UID) > 0 {
 		if err := sg.populate(gq.UID); err != nil {
 			return nil, err
 		}
@@ -1054,11 +1052,9 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 		if sg == ch {
 			continue
 		}
-		if ch.Params.FacetVar != nil {
-			for _, v := range ch.Params.FacetVar {
-				if v == needsVar {
-					relSG = ch
-				}
+		for _, v := range ch.Params.FacetVar {
+			if v == needsVar {
+				relSG = ch
 			}
 		}
 		for _, cch := range ch.Children {
@@ -1121,10 +1117,11 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 		}
 	}
 
-	newMap := fromNode.Vals
-	if newMap == nil {
-		return map[uint64]types.Val{}, nil
+	if len(fromNode.Vals) == 0 {
+		return fromNode.Vals, nil
 	}
+
+	newMap := fromNode.Vals
 	for ; idx < len(toPath); idx++ {
 		curNode := toPath[idx]
 		tempMap := make(map[uint64]types.Val)
@@ -1160,8 +1157,7 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 }
 
 // transformVars transforms all the variables to the variable at the lowest level
-func (sg *SubGraph) transformVars(doneVars map[string]varValue,
-	path []*SubGraph) error {
+func (sg *SubGraph) transformVars(doneVars map[string]varValue, path []*SubGraph) error {
 	mNode := sg.MathExp
 	mvarList := mNode.extractVarNodes()
 	for i := 0; i < len(mvarList); i++ {
@@ -1215,7 +1211,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		if err != nil {
 			return err
 		}
-		if sg.MathExp.Val != nil {
+		if len(sg.MathExp.Val) != 0 {
 			it := doneVars[sg.Params.Var]
 			var isInt, isFloat bool
 			for _, v := range sg.MathExp.Val {
@@ -1398,14 +1394,13 @@ AssignStep:
 
 // Updates the doneVars map by picking up uid/values from the current Subgraph
 func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
+	if len(doneVars) == 0 || (sg.Params.Var == "" && len(sg.Params.FacetVar) == 0) {
 		return nil
 	}
 
 	sgPathCopy := make([]*SubGraph, len(sgPath))
 	copy(sgPathCopy, sgPath)
-	err := sg.populateUidValVar(doneVars, sgPathCopy)
-	if err != nil {
+	if err := sg.populateUidValVar(doneVars, sgPathCopy); err != nil {
 		return err
 	}
 	return sg.populateFacetVars(doneVars, sgPathCopy)
@@ -1500,7 +1495,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 }
 
 func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
+	if len(sg.Params.FacetVar) != 0 && sg.Params.Facet != nil {
 		sgPath = append(sgPath, sg)
 
 		for _, it := range sg.Params.Facet.Param {
@@ -1643,7 +1638,7 @@ func (sg *SubGraph) replaceVarInFunc() error {
 }
 
 func (sg *SubGraph) ApplyIneqFunc() error {
-	if sg.Params.uidToVal == nil {
+	if len(sg.Params.uidToVal) == 0 {
 		// Expected a valid value map. But got empty.
 		// Don't return error, return empty - issue #2610
 		return nil
@@ -2216,8 +2211,7 @@ func (sg *SubGraph) updateDestUids() {
 			}
 		}
 	}
-	algo.ApplyFilter(sg.DestUIDs,
-		func(uid uint64, idx int) bool { return included[idx] })
+	algo.ApplyFilter(sg.DestUIDs, func(uid uint64, idx int) bool { return included[idx] })
 }
 
 func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
@@ -2277,7 +2271,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 }
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
-	if sg.Params.uidToVal == nil {
+	if len(sg.Params.uidToVal) == 0 {
 		return x.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
 	}
 
@@ -2352,7 +2346,7 @@ func isAggregatorFn(f string) bool {
 }
 
 func isUidFnWithoutVar(f *gql.Function) bool {
-	return f.Name == "uid" && len(f.NeedsVar) == 0
+	return f != nil && f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
 func getNodePredicates(ctx context.Context, sg *SubGraph) ([]*pb.ValueList, error) {
