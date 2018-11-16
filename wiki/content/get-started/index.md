@@ -257,6 +257,10 @@ curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
 ' | python -m json.tool | less
 ```
 
+{{% notice "tip" %}}
+To run an RDF mutation via curl, you can use the curl option `--data-binary @/path/to/mutation.txt` instead of `-d $''`. The `--data-binary` option skips curl's default URL-encoding.
+{{% /notice %}}
+
 ### Adding indexes
 Alter the schema to add indexes on some of the data so queries can use term matching, filtering and sorting.
 
