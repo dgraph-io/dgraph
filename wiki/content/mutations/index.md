@@ -478,13 +478,13 @@ testList: [string] .
 
 ```JSON
 {
-  "testList":
-      [ "Grape",
-        "Apple",
-        "Strawberry",
-        "Banana",
-        "watermelon"
-        ]
+  "testList": [
+    "Grape",
+    "Apple",
+    "Strawberry",
+    "Banana",
+    "watermelon"
+  ]
 }
 ```
 
@@ -503,7 +503,7 @@ Let’s then remove "Apple" from this list (Remember, it’s case sensitive):
 Add another fruit:
 
 ```JSON
-{  
+{
    "uid": "0xd", #UID of the list.
    "testList": "Pineapple"
 }
@@ -511,7 +511,7 @@ Add another fruit:
 
 ### Specifying multiple operations
 
-When specifying add or delete mutations, multiple operations can be specified
+When specifying add or delete mutations, multiple nodes can be specified
 at the same time using JSON arrays.
 
 For example, the following JSON object can be used to add two new nodes, each
@@ -519,8 +519,12 @@ with a `name`:
 
 ```JSON
 [
-  { "name": "Edward" },
-  { "name": "Fredric" }
+  {
+    "name": "Edward"
+  },
+  {
+    "name": "Fredric"
+  }
 ]
 ```
 
@@ -532,18 +536,16 @@ You can also [download the Ratel UI for Linux, macOS, or Windows](https://discus
 
 Mutate:
 ```JSON
-
 {
   "set": [
-      {
-          # One JSON obj in here
-      },
-      {
-         # Another JSON obj in here for multiple operations
-      }
+    {
+      # One JSON obj in here
+    },
+    {
+      # Another JSON obj in here for multiple operations
+    }
   ]
 }
-
 ```
 
 Delete:
@@ -551,23 +553,21 @@ Delete:
 Deletion operations are the same as [Deleting literal values]({{< relref "#deleting-literal-values">}}) and [Deleting edges]({{< relref "#deleting-edges">}}).
 
 ```JSON
-
 {
   "delete": [
-      {
-          # One JSON obj in here
-      },
-      {
-         # Another JSON obj in here for multiple operations
-      }
+    {
+      # One JSON obj in here
+    },
+    {
+      # Another JSON obj in here for multiple operations
+    }
   ]
 }
-
 ```
 
 ### Using JSON operations via cURL
 
-First you have to configure the Headers. There are two in this case. One to inform Dgraph that is a JSON mutation and another to commit now.
+First you have to configure the HTTP headers. There are two in this case. One to inform Dgraph that is a JSON mutation and another to commit now.
 
 ```BASH
 -H 'X-Dgraph-MutationType: json'
@@ -580,10 +580,14 @@ First you have to configure the Headers. There are two in this case. One to info
 curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
     {
       "set": [
-      {"name": "Alice"},
-      {"name": "Bob"}
-    ]
-      }' | jq
+        {
+          "name": "Alice"
+        },
+        {
+          "name": "Bob"
+        }
+      ]
+    }' | jq
 
 ```
 
@@ -593,17 +597,22 @@ To delete:
 curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
     {
       "delete": [
-      {"uid": "0xa"}
-    ]
-      }' | jq
+        {
+          "uid": "0xa"
+        }
+      ]
+    }' | jq
 ```
 
 Other way to mutate:
 
 ```BASH
 curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d $'
-    { "set":
-      [
-      { "name": "Bob Dylan" }]
-      }' | python -m json.tool | less
+    {
+      "set": [
+        {
+          "name": "Bob Dylan"
+        }
+      ]
+    }' | jq
 ```
