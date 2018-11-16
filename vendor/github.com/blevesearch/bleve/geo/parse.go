@@ -16,6 +16,7 @@ package geo
 
 import (
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -24,6 +25,8 @@ import (
 // Container:
 // slice length 2 (GeoJSON)
 //  first element lon, second element lat
+// string (coordinates separated by comma, or a geohash)
+//  first element lat, second element lon
 // map[string]interface{}
 //  exact keys lat and lon or lng
 // struct
@@ -56,6 +59,35 @@ func ExtractGeoPoint(thing interface{}) (lon, lat float64, success bool) {
 				secondVal := second.Interface()
 				lat, foundLat = extractNumericVal(secondVal)
 			}
+		}
+	}
+
+	// is it a string
+	if thingVal.Kind() == reflect.String {
+		geoStr := thingVal.Interface().(string)
+		if strings.Contains(geoStr, ",") {
+			// geo point with coordinates split by comma
+			points := strings.Split(geoStr, ",")
+			for i, point := range points {
+				// trim any leading or trailing white spaces
+				points[i] = strings.TrimSpace(point)
+			}
+			if len(points) == 2 {
+				var err error
+				lat, err = strconv.ParseFloat(points[0], 64)
+				if err == nil {
+					foundLat = true
+				}
+				lon, err = strconv.ParseFloat(points[1], 64)
+				if err == nil {
+					foundLon = true
+				}
+			}
+		} else {
+			// geohash
+			lat, lon = GeoHashDecode(geoStr)
+			foundLat = true
+			foundLon = true
 		}
 	}
 
