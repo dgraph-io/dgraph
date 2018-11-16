@@ -107,7 +107,7 @@ func tokenizeValue(value types.Val, filter stringFilter) []string {
 
 	tokens, err := tok.BuildTokens(value.Value, tok.GetLangTokenizer(tokenizer, filter.lang))
 	if err != nil {
-		glog.Errorf("error while building tokens: %s", err)
+		glog.Errorf("Error while building tokens: %s", err)
 		return []string{}
 	}
 	return tokens
