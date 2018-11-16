@@ -47,7 +47,7 @@ func TestLangBase(t *testing.T) {
 		{in: "en-GB-u-co-phonebk-rg-uszzzz", out: "en"},
 		{in: "en-GB-u-co-phonebk-rg-uszz", out: "en"},
 		{in: "", out: "en"},
-		{in: "no_such_language", out: "no"},
+		{in: "no_such_language", out: "en"},
 		{in: "xxx_such_language", out: "en"},
 	}
 
