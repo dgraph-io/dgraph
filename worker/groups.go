@@ -146,23 +146,17 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 }
 
 func (g *groupi) proposeInitialSchema() {
-	g.proposePredicateSchema()
-	g.proposeAclSchema()
-}
-
-func (g *groupi) proposePredicateSchema() {
+	// propose the schema for _predicate_
 	if !Config.ExpandEdge {
 		return
 	}
-
 	g.upsertSchema(x.PredicateListAttr, &pb.SchemaUpdate {
 		Predicate: x.PredicateListAttr,
 		ValueType: pb.Posting_STRING,
 		List: true,
 	})
-}
 
-func (g *groupi) proposeAclSchema() {
+	// propose the schema update for acl predicates
 	g.upsertSchema(x.Acl_XId, &pb.SchemaUpdate {
 		Predicate: x.Acl_XId,
 		ValueType: pb.Posting_STRING,

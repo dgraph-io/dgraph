@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -87,7 +87,7 @@ func loginWithCorrectPassword(t *testing.T, ctx context.Context,
 		t.Errorf("Login with the correct password should result in the code %v",
 			api.AclResponseCode_OK)
 	}
-	jwt := alpha.Jwt{}
+	jwt := acl.Jwt{}
 	jwt.DecodeString(response2.Context.Jwt, false, nil)
 	if jwt.Payload.Userid != userid {
 		t.Errorf("the jwt token should have the user id encoded")

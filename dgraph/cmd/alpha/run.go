@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"io/ioutil"
 	"log"
 	"net"
@@ -288,7 +289,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
-	api.RegisterDgraphAdminServer(s, &AdminServer{})
+	api.RegisterDgraphAdminServer(s, &acl.AccessServer{})
 	hapi.RegisterHealthServer(s, health.NewServer())
 	err := s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)
@@ -402,16 +403,15 @@ func run() {
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	})
 
-	secureMode := Alpha.Conf.GetBool("secure_mode")
-	if secureMode {
-		secretFile := Alpha.Conf.GetString("hmac_secret_file")
+	secretFile := Alpha.Conf.GetString("hmac_secret_file")
+	if secretFile != "" {
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
 			glog.Fatalf("unable to read hmac secret from file: %v", secretFile)
 		}
 
-		SetAdminConfiguration(AdminOptions{
-			hmacSecret: hmacSecret,
+		acl.SetAccessConfiguration(acl.AccessOptions{
+			HmacSecret: hmacSecret,
 		})
 		glog.Info("HMAC secret loaded successfully.")
 	}

@@ -1,4 +1,4 @@
-package alpha
+package acl
 
 import (
 	"crypto/hmac"
@@ -53,9 +53,16 @@ func (jwt *Jwt) EncodeToString(key []byte) (string, error) {
 		return "", err
 	}
 
+	// generate the signature
 	mac := hmac.New(sha256.New, key)
-	mac.Write(header)
-	mac.Write(payload)
+	_, err = mac.Write(header)
+	if err != nil {
+		return "", err
+	}
+	_, err = mac.Write(payload)
+	if err != nil {
+		return "", err
+	}
 	signature := mac.Sum(nil)
 
 	headerBase64 := base64.StdEncoding.EncodeToString(header)
@@ -103,8 +110,14 @@ func (jwt *Jwt) DecodeString(input string, checkSignature bool, key []byte) erro
 		}
 	}
 
-	json.Unmarshal(header, &jwt.Header)
-	json.Unmarshal(payload, &jwt.Payload)
+	err = json.Unmarshal(header, &jwt.Header)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(payload, &jwt.Payload)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
