@@ -104,9 +104,9 @@ func TestIndexingMultiLang(t *testing.T) {
 func TestIndexingInvalidLang(t *testing.T) {
 	schema.ParseBytes([]byte("name:string @index(fulltext) ."), 1)
 
-	// there is no tokenizer for "xx" language
+	// tokenizer for "xx" language won't return an error.
 	_, err := indexTokens("name", "xx", types.Val{Tid: types.StringID, Value: []byte("error")})
-	require.Error(t, err)
+	require.NoError(t, err)
 }
 
 func TestIndexingAliasedLang(t *testing.T) {

@@ -367,33 +367,45 @@ The following steps are applied during index generation and to process full text
 1. Tokenization (according to Unicode word boundaries).
 1. Conversion to lowercase.
 1. Unicode-normalization (to [Normalization Form KC](http://unicode.org/reports/tr15/#Norm_Forms)).
-1. Stemming using language-specific stemmer.
-1. Stop words removal
+1. Stemming using language-specific stemmer (if supported by language).
+1. Stop words removal (if supported by language).
 
-Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing.  See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
+Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
 
-Following table contains all supported languages and corresponding country-codes.
+Following table contains all supported languages, corresponding country-codes, stemming and stop words filtering support.
 
-| Language      | Country Code   |
-| :-----------: | :------------: |
-| Danish        | da             |
-| Dutch         | nl             |
-| English       | en             |
-| Finnish       | fi             |
-| French        | fr             |
-| German        | de             |
-| Hungarian     | hu             |
-| Italian       | it             |
-| Norwegian     | no             |
-| Portuguese    | pt             |
-| Romanian      | ro             |
-| Russian       | ru             |
-| Spanish       | es             |
-| Swedish       | sv             |
-| Turkish       | tr             |
-| Chinese       | zh             |
-| Japanese      | ja             |
-| Korean        | ko             |
+|  Language  | Country Code | Stemming | Stop words |
+| :--------: | :----------: | :------: | :--------: |
+|   Arabic   |      ar      | &#10003; |  &#10003;  |
+|  Armenian  |      hy      |          |  &#10003;  |
+|   Basque   |      eu      |          |  &#10003;  |
+| Bulgarian  |      bg      |          |  &#10003;  |
+|  Catalan   |      ca      |          |  &#10003;  |
+|  Chinese   |      zh      | &#10003; |  &#10003;  |
+|   Czech    |      cs      |          |  &#10003;  |
+|   Danish   |      da      | &#10003; |  &#10003;  |
+|   Dutch    |      nl      | &#10003; |  &#10003;  |
+|  English   |      en      | &#10003; |  &#10003;  |
+|  Finnish   |      fi      | &#10003; |  &#10003;  |
+|   French   |      fr      | &#10003; |  &#10003;  |
+|   Gaelic   |      ga      |          |  &#10003;  |
+|  Galician  |      gl      |          |  &#10003;  |
+|   German   |      de      | &#10003; |  &#10003;  |
+|   Greek    |      el      |          |  &#10003;  |
+|   Hindi    |      hi      | &#10003; |  &#10003;  |
+| Hungarian  |      hu      | &#10003; |  &#10003;  |
+| Indonesian |      id      |          |  &#10003;  |
+|  Italian   |      it      | &#10003; |  &#10003;  |
+|  Japanese  |      ja      | &#10003; |  &#10003;  |
+|   Korean   |      ko      | &#10003; |  &#10003;  |
+| Norwegian  |      no      | &#10003; |  &#10003;  |
+|  Persian   |      fa      |          |  &#10003;  |
+| Portuguese |      pt      | &#10003; |  &#10003;  |
+|  Romanian  |      ro      | &#10003; |  &#10003;  |
+|  Russian   |      ru      | &#10003; |  &#10003;  |
+|  Spanish   |      es      | &#10003; |  &#10003;  |
+|  Swedish   |      sv      | &#10003; |  &#10003;  |
+|  Turkish   |      tr      | &#10003; |  &#10003;  |
 
 
 Query Example: All names that have `run`, `running`, etc and `man`.  Stop word removal eliminates `the` and `maybe`

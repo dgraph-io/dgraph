@@ -1466,7 +1466,7 @@ func TestInvalidStringIndex(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestValidFulltextIndex(t *testing.T) {
+func TestValidFullTextIndex(t *testing.T) {
 	// no FTS index defined for name
 
 	query := `

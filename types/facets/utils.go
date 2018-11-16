@@ -148,7 +148,7 @@ func FacetFor(key, val string) (*api.Facet, error) {
 	res := &api.Facet{Key: key, Value: fval, ValType: vt}
 	if vt == api.Facet_STRING {
 		// tokenize val.
-		res.Tokens, err = tok.GetTokens([]string{v.(string)})
+		res.Tokens, err = tok.GetTermTokens([]string{v.(string)})
 		if err == nil {
 			sort.Strings(res.Tokens)
 		}
