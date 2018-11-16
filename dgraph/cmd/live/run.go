@@ -317,6 +317,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 }
 
 func run() error {
+	x.PrintVersion()
 	opt = options{
 		files:               Live.Conf.GetString("rdfs"),
 		schemaFile:          Live.Conf.GetString("schema"),
