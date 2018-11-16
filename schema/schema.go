@@ -281,11 +281,9 @@ func LoadFromDb() error {
 		attr := pk.Attr
 		var s pb.SchemaUpdate
 		err := item.Value(func(val []byte) error {
-			// Fix this here, use default SchemaUpdate.
 			if len(val) == 0 {
 				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_DEFAULT}
 			}
-			// State().Set(attr, default)
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
 			State().Set(attr, s)
 			return nil
