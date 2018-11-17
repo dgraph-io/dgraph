@@ -154,7 +154,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.FloatID:
 		return []byte(fmt.Sprintf("%f", v.Value)), nil
 	case types.BoolID:
-		if v.Value.(bool) == true {
+		if v.Value.(bool) {
 			return []byte("true"), nil
 		}
 		return []byte("false"), nil

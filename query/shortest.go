@@ -51,7 +51,7 @@ type Item struct {
 
 var pathPool = sync.Pool{
 	New: func() interface{} {
-		return []pathInfo{}
+		return make([]pathInfo, 0)
 	},
 }
 

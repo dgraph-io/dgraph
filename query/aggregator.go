@@ -294,7 +294,7 @@ func (ag *aggregator) Apply(val types.Val) {
 			va.Value = va.Value.(int64) + vb.Value.(int64)
 		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
 			va.Value = va.Value.(float64) + vb.Value.(float64)
-		} else {
+			// } else {
 			// This pair cannot be summed. So pass.
 		}
 		res = va
