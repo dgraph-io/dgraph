@@ -70,6 +70,19 @@ func init() {
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 }
 
+func toInt(o *pb.Posting) int {
+	from := types.Val{
+		Tid:   types.TypeID(o.ValType),
+		Value: o.Value,
+	}
+	out, err := types.Convert(from, types.StringID)
+	x.Check(err)
+	val := out.Value.(string)
+	a, err := strconv.Atoi(val)
+	x.Check(err)
+	return a
+}
+
 func readAmount(txn *badger.Txn, uid uint64) int {
 	iopt := badger.DefaultIteratorOptions
 	iopt.AllVersions = true
@@ -86,16 +99,7 @@ func readAmount(txn *badger.Txn, uid uint64) int {
 		var times int
 		var amount int
 		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
-			from := types.Val{
-				Tid:   types.TypeID(o.ValType),
-				Value: o.Value,
-			}
-			out, err := types.Convert(from, types.StringID)
-			x.Check(err)
-			val := out.Value.(string)
-			a, err := strconv.Atoi(val)
-			x.Check(err)
-			amount = a
+			amount = toInt(o)
 			times++
 			return nil
 		})
@@ -192,6 +196,12 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 	itr := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer itr.Close()
 
+	type account struct {
+		Key int
+		Amt int
+	}
+	keys := make(map[uint64]*account)
+
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "SHOWING all postings at %d\n", readTs)
 	for itr.Rewind(); itr.Valid(); itr.Next() {
@@ -204,15 +214,39 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		if !pk.IsData() || pk.Attr == "_predicate_" {
 			continue
 		}
-		fmt.Fprintf(&buf, "\nkey: %+v hex: %x\n", pk, item.Key())
+
+		var acc *account
+		if pk.Attr == "key_0" || pk.Attr == "amount_0" {
+			var has bool
+			acc, has = keys[pk.Uid]
+			if !has {
+				acc = &account{}
+				keys[pk.Uid] = acc
+			}
+		}
+		fmt.Fprintf(&buf, "  key: %+v hex: %x\n", pk, item.Key())
 		val, err := item.ValueCopy(nil)
 		x.Check(err)
 		var plist pb.PostingList
 		x.Check(plist.Unmarshal(val))
 
+		x.AssertTrue(len(plist.Postings) <= 1)
+		var num int
 		for _, p := range plist.Postings {
+			num = toInt(p)
 			appendPosting(&buf, p)
 		}
+		if num > 0 && acc != nil {
+			switch pk.Attr {
+			case "key_0":
+				acc.Key = num
+			case "amount_0":
+				acc.Amt = num
+			}
+		}
+	}
+	for uid, acc := range keys {
+		fmt.Fprintf(&buf, "Uid: %d Key: %d Amount: %d\n", uid, acc.Key, acc.Amt)
 	}
 	fmt.Println(buf.String())
 }

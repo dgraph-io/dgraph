@@ -66,6 +66,8 @@ type ServerState struct {
 // TODO(tzdybal) - remove global
 var State ServerState
 
+// var startOpt = otrace.WithSampler(otrace.AlwaysSample())
+
 func InitServerState() {
 	Config.validate()
 
@@ -338,6 +340,12 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		return resp, err
 	}
 
+	if len(mu.SetJson) > 0 {
+		span.Annotatef(nil, "Got JSON Mutation: %s", mu.SetJson)
+	} else if len(mu.SetNquads) > 0 {
+		span.Annotatef(nil, "Got NQuad Mutation: %s", mu.SetNquads)
+	}
+
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed.")
 	}
@@ -383,8 +391,9 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		Edges:   edges,
 		StartTs: mu.StartTs,
 	}
-	span.Annotate(nil, "Applying mutations")
+	span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Context, err = query.ApplyMutations(ctx, m)
+	span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Context, err)
 	if !mu.CommitNow {
 		if err == y.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
@@ -494,6 +503,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 		return resp, err
 	}
 	resp.Json = json
+	span.Annotatef(nil, "Response = %s", json)
 
 	gl := &api.Latency{
 		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
@@ -520,6 +530,17 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	if tc.StartTs == 0 {
 		return &api.TxnContext{}, fmt.Errorf("StartTs cannot be zero while committing a transaction.")
 	}
+
+	span.Annotatef(nil, "Txn Context received: %+v", tc)
+	var attrs []otrace.Attribute
+	for _, key := range tc.Keys {
+		attrs = append(attrs, otrace.StringAttribute("conflict", key))
+	}
+	for _, pred := range tc.Preds {
+		attrs = append(attrs, otrace.StringAttribute("pred", pred))
+	}
+	span.Annotate(attrs, "Conflict Keys and Preds")
+
 	annotateStartTs(span, tc.StartTs)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == y.ErrAborted {

@@ -431,6 +431,9 @@ func run() {
 		}
 	}
 
+	// TODO: Set this to the trace sampling rate set in flags.
+	otrace.ApplyConfig(otrace.Config{DefaultSampler: otrace.AlwaysSample()})
+
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	schema.Init(edgraph.State.Pstore)
