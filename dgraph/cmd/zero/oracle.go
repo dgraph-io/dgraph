@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
 
@@ -67,6 +68,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.keyCommit = make(map[string]uint64)
 }
 
+// TODO: This should be done during proposal application for Txn status.
 func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 	// This transaction was started before I became leader.
 	if src.StartTs < o.startTxnTs {
@@ -296,6 +298,8 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 }
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
+	span := otrace.FromContext(ctx)
+	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(src.StartTs))}, "")
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
 	}
@@ -305,6 +309,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	conflict := s.orc.hasConflict(src)
 	s.orc.RUnlock()
 	if conflict {
+		span.Annotate(nil, "Oracle found conflict")
 		src.Aborted = true
 		return s.proposeTxn(ctx, src)
 	}
@@ -332,6 +337,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	for pred := range preds {
 		tablet := s.ServingTablet(pred)
 		if tablet == nil || tablet.GetReadOnly() {
+			span.Annotate(nil, "Tablet is readonly. Aborting.")
 			src.Aborted = true
 			return s.proposeTxn(ctx, src)
 		}
@@ -345,18 +351,26 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	src.CommitTs = assigned.StartId
 	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
 	defer s.orc.doneUntil.Done(src.CommitTs)
+	span.Annotatef([]otrace.Attribute{otrace.Int64Attribute("commitTs", int64(src.CommitTs))},
+		"Node Id: %d. Proposing TxnContext: %+v", s.Node.Id, src)
 
 	if err := s.orc.commit(src); err != nil {
+		span.Annotatef(nil, "Found a conflict. Aborting.")
 		src.Aborted = true
 	}
 	// Propose txn should be used to set watermark as done.
 	return s.proposeTxn(ctx, src)
 }
 
+var startOpt = otrace.WithSampler(otrace.AlwaysSample())
+
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	ctx, span := otrace.StartSpan(ctx, "Zero.CommitOrAbort", startOpt)
+	defer span.End()
+
 	if !s.Node.AmLeader() {
 		return nil, x.Errorf("Only leader can decide to commit or abort")
 	}

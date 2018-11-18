@@ -66,7 +66,7 @@ type ServerState struct {
 // TODO(tzdybal) - remove global
 var State ServerState
 
-// var startOpt = otrace.WithSampler(otrace.AlwaysSample())
+var startOpt = otrace.WithSampler(otrace.AlwaysSample())
 
 func InitServerState() {
 	Config.validate()
@@ -332,7 +332,13 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
-	ctx, span := otrace.StartSpan(ctx, "Server.Mutate")
+	// parent := otrace.FromContext(ctx)
+	// var sp otrace.SpanContext
+	// if parent != nil {
+	// 	sp = parent.SpanContext()
+	// }
+	ctx, span := otrace.StartSpan(ctx, "Server.Mutate", startOpt)
+	// ctx, span := otrace.StartSpanWithRemoteParent(ctx, "Server.Mutate", sp)
 	defer span.End()
 
 	resp = &api.Assigned{}
@@ -442,7 +448,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
-	ctx, span := otrace.StartSpan(ctx, "Server.Query")
+	ctx, span := otrace.StartSpan(ctx, "Server.Query", startOpt)
 	defer span.End()
 
 	if err := x.HealthCheck(); err != nil {
@@ -516,7 +522,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 }
 
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
-	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
+	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort", startOpt)
 	defer span.End()
 
 	if err := x.HealthCheck(); err != nil {

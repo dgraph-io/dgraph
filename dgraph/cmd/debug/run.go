@@ -79,7 +79,9 @@ func toInt(o *pb.Posting) int {
 	x.Check(err)
 	val := out.Value.(string)
 	a, err := strconv.Atoi(val)
-	x.Check(err)
+	if err != nil {
+		return 0
+	}
 	return a
 }
 
@@ -246,7 +248,7 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 	}
 	for uid, acc := range keys {
-		fmt.Fprintf(&buf, "Uid: %d Key: %d Amount: %d\n", uid, acc.Key, acc.Amt)
+		fmt.Fprintf(&buf, "Uid: %d %x Key: %d Amount: %d\n", uid, uid, acc.Key, acc.Amt)
 	}
 	fmt.Println(buf.String())
 }

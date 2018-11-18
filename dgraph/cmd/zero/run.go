@@ -27,6 +27,9 @@ import (
 	"syscall"
 	"time"
 
+	"go.opencensus.io/exporter/jaeger"
+	"go.opencensus.io/plugin/ocgrpc"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -83,6 +86,9 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
+
+	flag.String("jaeger.agent", "", "Send opencensus traces to Jaeger.")
+	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -98,10 +104,35 @@ type state struct {
 }
 
 func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.DiskStorage) {
+	if agent := Zero.Conf.GetString("jaeger.agent"); len(agent) > 0 {
+		// Port details: https://www.jaegertracing.io/docs/getting-started/
+		// Default endpoints are:
+		// agentEndpointURI := "localhost:6831"
+		// collectorEndpointURI := "http://localhost:14268"
+		collector := Zero.Conf.GetString("jaeger.collector")
+		je, err := jaeger.NewExporter(jaeger.Options{
+			AgentEndpoint: agent,
+			Endpoint:      collector,
+			ServiceName:   "dgraph.zero",
+		})
+		if err != nil {
+			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+		}
+		// And now finally register it as a Trace Exporter
+		otrace.RegisterExporter(je)
+	}
+
+	handler := &ocgrpc.ServerHandler{
+		IsPublicEndpoint: false,
+		StartOptions: otrace.StartOptions{
+			Sampler: otrace.AlwaysSample(),
+		},
+	}
 	s := grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
-		grpc.MaxConcurrentStreams(1000))
+		grpc.MaxConcurrentStreams(1000),
+		grpc.StatsHandler(handler))
 
 	rc := pb.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
 	m := conn.NewNode(&rc, store)

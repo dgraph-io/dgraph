@@ -247,7 +247,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	}
 
 	handler := &ocgrpc.ServerHandler{
-		IsPublicEndpoint: true,
+		IsPublicEndpoint: false,
 		StartOptions: otrace.StartOptions{
 			Sampler: otrace.AlwaysSample(),
 		},
