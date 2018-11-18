@@ -120,7 +120,14 @@ func (s *schemaStore) getPredicates(db *badger.DB) []string {
 func (s *schemaStore) write(db *badger.DB) {
 	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
 	// if bulk loader was restarted or other similar scenarios.
-	preds := s.getPredicates(db)
+
+	// Get predicates from schema store rather than badger db
+	// so that it includes all predicates in the schema file
+	// even if not found in the rdf file.
+	preds := make([]string, 0, len(s.m))
+	for pred := range s.m {
+		preds = append(preds, pred)
+	}
 
 	txn := db.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
