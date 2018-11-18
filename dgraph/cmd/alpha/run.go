@@ -289,7 +289,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
-	api.RegisterDgraphAdminServer(s, &acl.AccessServer{})
+	api.RegisterDgraphAccessServer(s, &acl.AccessServer{})
 	hapi.RegisterHealthServer(s, health.NewServer())
 	err := s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)

@@ -18,12 +18,12 @@ const (
 )
 
 func TestAcl(t *testing.T) {
-	wrap := func(fn func(*testing.T, api.DgraphAdminClient)) func(*testing.T) {
+	wrap := func(fn func(*testing.T, api.DgraphAccessClient)) func(*testing.T) {
 		return func(t *testing.T) {
 			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
 			x.Check(err)
 
-			adminStub := api.NewDgraphAdminClient(conn)
+			adminStub := api.NewDgraphAccessClient(conn)
 			fn(t, adminStub)
 		}
 	}
@@ -31,7 +31,7 @@ func TestAcl(t *testing.T) {
 	t.Run("login", wrap(LogIn))
 }
 
-func CreateUser(t *testing.T, adminClient api.DgraphAdminClient) {
+func CreateUser(t *testing.T, adminClient api.DgraphAccessClient) {
 	user := api.AclUser{
 		Userid: userid,
 		Password: userpassword,
@@ -41,8 +41,16 @@ func CreateUser(t *testing.T, adminClient api.DgraphAdminClient) {
 		User: &user,
 	}
 
+	aclMutationRequest := api.AclMutation{
+		SetJson: []byte(`{
+          set {
+            user `+userid+` `+userpassword+`
+          }
+        }`),
+	}
+
 	ctx := context.Background()
-	response, err := adminClient.CreateUser(ctx, &createUserRequest)
+	response, err := adminClient.Mutate(ctx, &aclMutationRequest)
 	require.NoError(t, err)
 
 	userId, err := strconv.ParseInt(response.Uid, 0, 64)
@@ -67,7 +75,7 @@ func CreateUser(t *testing.T, adminClient api.DgraphAdminClient) {
 	}
 }
 
-func LogIn(t *testing.T, adminClient api.DgraphAdminClient) {
+func LogIn(t *testing.T, adminClient api.DgraphAccessClient) {
 	// create user first
 	CreateUser(t, adminClient)
 	ctx := context.Background()
@@ -76,7 +84,7 @@ func LogIn(t *testing.T, adminClient api.DgraphAdminClient) {
 }
 
 func loginWithCorrectPassword(t *testing.T, ctx context.Context,
-	adminClient api.DgraphAdminClient) {
+	adminClient api.DgraphAccessClient) {
 	loginRequest := api.LogInRequest{
 		Userid:   userid,
 		Password: userpassword,
@@ -100,7 +108,7 @@ func loginWithCorrectPassword(t *testing.T, ctx context.Context,
 }
 
 func loginWithWrongPassword(t *testing.T, ctx context.Context,
-	adminClient api.DgraphAdminClient) {
+	adminClient api.DgraphAccessClient) {
 	loginRequestWithWrongPassword := api.LogInRequest{
 		Userid:   userid,
 		Password: userpassword + "123",
