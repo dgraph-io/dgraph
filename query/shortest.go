@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package query
@@ -16,7 +25,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -25,7 +34,7 @@ import (
 type pathInfo struct {
 	uid   uint64
 	attr  string
-	facet *intern.Facets
+	facet *pb.Facets
 }
 
 type route struct {
@@ -78,7 +87,7 @@ func (h *priorityQueue) Pop() interface{} {
 type mapItem struct {
 	attr  string
 	cost  float64
-	facet *intern.Facets
+	facet *pb.Facets
 }
 
 // We manintain a map from UID to nodeInfo for Djikstras.
@@ -90,7 +99,7 @@ type nodeInfo struct {
 }
 
 func (sg *SubGraph) getCost(matrix, list int) (cost float64,
-	fcs *intern.Facets, rerr error) {
+	fcs *pb.Facets, rerr error) {
 
 	cost = 1.0
 	if sg.Params.Facet == nil {
@@ -128,8 +137,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var exec []*SubGraph
 	var err error
 	in := []uint64{start.Params.From}
-	start.SrcUIDs = &intern.List{in}
-	start.uidMatrix = []*intern.List{{in}}
+	start.SrcUIDs = &pb.List{Uids: in}
+	start.uidMatrix = []*pb.List{{Uids: in}}
 	start.DestUIDs = start.SrcUIDs
 
 	for _, child := range start.Children {
@@ -385,7 +394,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	next <- false
 
 	if len(kroutes) == 0 {
-		sg.DestUIDs = &intern.List{}
+		sg.DestUIDs = &pb.List{}
 		return nil, nil
 	}
 	var res []uint64
@@ -569,7 +578,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 	// Put the path in DestUIDs of the root.
 	if cur != sg.Params.From {
-		sg.DestUIDs = &intern.List{}
+		sg.DestUIDs = &pb.List{}
 		return nil, nil
 	}
 
@@ -592,9 +601,9 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		shortest: true,
 	}
 	curUid := result[0]
-	shortestSg.SrcUIDs = &intern.List{[]uint64{curUid}}
-	shortestSg.DestUIDs = &intern.List{[]uint64{curUid}}
-	shortestSg.uidMatrix = []*intern.List{{[]uint64{curUid}}}
+	shortestSg.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
+	shortestSg.DestUIDs = &pb.List{Uids: []uint64{curUid}}
+	shortestSg.uidMatrix = []*pb.List{{Uids: []uint64{curUid}}}
 
 	curNode := shortestSg
 	for i := 0; i < len(result)-1; i++ {
@@ -607,13 +616,13 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		}
 		if nodeInfo.facet != nil {
 			// For consistent later processing.
-			node.Params.Facet = &intern.FacetParams{}
+			node.Params.Facet = &pb.FacetParams{}
 		}
 		node.Attr = nodeInfo.attr
-		node.facetsMatrix = []*intern.FacetsList{{[]*intern.Facets{nodeInfo.facet}}}
-		node.SrcUIDs = &intern.List{[]uint64{curUid}}
-		node.DestUIDs = &intern.List{[]uint64{childUid}}
-		node.uidMatrix = []*intern.List{{[]uint64{childUid}}}
+		node.facetsMatrix = []*pb.FacetsList{{FacetsList: []*pb.Facets{nodeInfo.facet}}}
+		node.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
+		node.DestUIDs = &pb.List{Uids: []uint64{childUid}}
+		node.uidMatrix = []*pb.List{{Uids: []uint64{childUid}}}
 
 		curNode.Children = append(curNode.Children, node)
 		curNode = node
@@ -624,8 +633,8 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		shortest: true,
 	}
 	uid := result[len(result)-1]
-	node.SrcUIDs = &intern.List{[]uint64{uid}}
-	node.uidMatrix = []*intern.List{{[]uint64{uid}}}
+	node.SrcUIDs = &pb.List{Uids: []uint64{uid}}
+	node.uidMatrix = []*pb.List{{Uids: []uint64{uid}}}
 	curNode.Children = append(curNode.Children, node)
 
 	return shortestSg
@@ -640,9 +649,9 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			shortest: true,
 		}
 		curUid := it.route[0].uid
-		shortestSg.SrcUIDs = &intern.List{[]uint64{curUid}}
-		shortestSg.DestUIDs = &intern.List{[]uint64{curUid}}
-		shortestSg.uidMatrix = []*intern.List{{[]uint64{curUid}}}
+		shortestSg.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
+		shortestSg.DestUIDs = &pb.List{Uids: []uint64{curUid}}
+		shortestSg.uidMatrix = []*pb.List{{Uids: []uint64{curUid}}}
 
 		curNode := shortestSg
 		i := 0
@@ -655,13 +664,13 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			}
 			if it.route[i+1].facet != nil {
 				// For consistent later processing.
-				node.Params.Facet = &intern.FacetParams{}
+				node.Params.Facet = &pb.FacetParams{}
 			}
 			node.Attr = it.route[i+1].attr
-			node.facetsMatrix = []*intern.FacetsList{{[]*intern.Facets{it.route[i+1].facet}}}
-			node.SrcUIDs = &intern.List{[]uint64{curUid}}
-			node.DestUIDs = &intern.List{[]uint64{childUid}}
-			node.uidMatrix = []*intern.List{{[]uint64{childUid}}}
+			node.facetsMatrix = []*pb.FacetsList{{FacetsList: []*pb.Facets{it.route[i+1].facet}}}
+			node.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
+			node.DestUIDs = &pb.List{Uids: []uint64{childUid}}
+			node.uidMatrix = []*pb.List{{Uids: []uint64{childUid}}}
 
 			curNode.Children = append(curNode.Children, node)
 			curNode = node
@@ -672,8 +681,8 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 			shortest: true,
 		}
 		uid := it.route[i].uid
-		node.SrcUIDs = &intern.List{[]uint64{uid}}
-		node.uidMatrix = []*intern.List{{[]uint64{uid}}}
+		node.SrcUIDs = &pb.List{Uids: []uint64{uid}}
+		node.uidMatrix = []*pb.List{{Uids: []uint64{uid}}}
 		curNode.Children = append(curNode.Children, node)
 
 		res = append(res, shortestSg)

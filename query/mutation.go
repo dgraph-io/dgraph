@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package query
@@ -13,21 +22,22 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/golang/glog"
+	"golang.org/x/net/trace"
 )
 
-func ApplyMutations(ctx context.Context, m *intern.Mutations) (*api.TxnContext, error) {
+func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	if worker.Config.ExpandEdge {
 		edges, err := expandEdges(ctx, m)
 		if err != nil {
-			return nil, x.Wrapf(err, "While adding intern.edges")
+			return nil, x.Wrapf(err, "While adding pb.edges")
 		}
 		m.Edges = edges
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -43,6 +53,7 @@ func ApplyMutations(ctx context.Context, m *intern.Mutations) (*api.TxnContext, 
 	}
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
+		glog.Errorf("MutateOverNetwork Error: %v. Mutation: %v.", err, m)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while MutateOverNetwork: %+v", err)
 		}
@@ -50,17 +61,17 @@ func ApplyMutations(ctx context.Context, m *intern.Mutations) (*api.TxnContext, 
 	return tctx, err
 }
 
-func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEdge, error) {
-	edges := make([]*intern.DirectedEdge, 0, 2*len(m.Edges))
+func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
+	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
 	for _, edge := range m.Edges {
-		x.AssertTrue(edge.Op == intern.DirectedEdge_DEL || edge.Op == intern.DirectedEdge_SET)
+		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
 
 		var preds []string
 		if edge.Attr != x.Star {
 			preds = []string{edge.Attr}
 		} else {
 			sg := &SubGraph{}
-			sg.DestUIDs = &intern.List{[]uint64{edge.GetEntity()}}
+			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
 			valMatrix, err := getNodePredicates(ctx, sg)
 			if err != nil {
@@ -84,11 +95,11 @@ func expandEdges(ctx context.Context, m *intern.Mutations) ([]*intern.DirectedEd
 
 			// We only want to delete the pred from <uid> + <_predicate_> posting list if this is
 			// a SP* deletion operation. Otherwise we just continue.
-			if edge.Op == intern.DirectedEdge_DEL && string(edge.Value) != x.Star {
+			if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) != x.Star {
 				continue
 			}
 
-			e := &intern.DirectedEdge{
+			e := &pb.DirectedEdge{
 				Op:     edge.Op,
 				Entity: edge.GetEntity(),
 				Attr:   "_predicate_",
@@ -117,7 +128,7 @@ func verifyUid(ctx context.Context, uid uint64) error {
 
 func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
-	num := &intern.Num{}
+	num := &pb.Num{}
 	var err error
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
@@ -153,7 +164,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 
 	num.Val = uint64(len(newUids))
 	if int(num.Val) > 0 {
-		var res *api.AssignedIds
+		var res *pb.AssignedIds
 		// TODO: Optimize later by prefetching. Also consolidate all the UID requests into a single
 		// pending request from this server to zero.
 		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {
@@ -174,18 +185,18 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 }
 
 func ToInternal(gmu *gql.Mutation,
-	newUids map[string]uint64) (edges []*intern.DirectedEdge, err error) {
+	newUids map[string]uint64) (edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
 	var wnq *gql.NQuad
 
-	parse := func(nq *api.NQuad, op intern.DirectedEdge_Op) error {
-		wnq = &gql.NQuad{nq}
+	parse := func(nq *api.NQuad, op pb.DirectedEdge_Op) error {
+		wnq = &gql.NQuad{NQuad: nq}
 		if len(nq.Subject) == 0 {
 			return nil
 		}
 		// Get edge from nquad using newUids.
-		var edge *intern.DirectedEdge
+		var edge *pb.DirectedEdge
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {
 			return x.Wrap(err)
@@ -199,7 +210,7 @@ func ToInternal(gmu *gql.Mutation,
 		if err := facets.SortAndValidate(nq.Facets); err != nil {
 			return edges, err
 		}
-		if err := parse(nq, intern.DirectedEdge_SET); err != nil {
+		if err := parse(nq, pb.DirectedEdge_SET); err != nil {
 			return edges, err
 		}
 	}
@@ -207,7 +218,7 @@ func ToInternal(gmu *gql.Mutation,
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 			return edges, errors.New("Predicate deletion should be called via alter.")
 		}
-		if err := parse(nq, intern.DirectedEdge_DEL); err != nil {
+		if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
 			return edges, err
 		}
 	}

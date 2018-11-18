@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package bulk
@@ -11,9 +20,9 @@ import (
 	"bytes"
 	"sync/atomic"
 
-	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -43,7 +52,7 @@ func (r *reducer) run() {
 func (r *reducer) reduce(job shuffleOutput) {
 	var currentKey []byte
 	var uids []uint64
-	pl := new(intern.PostingList)
+	pl := new(pb.PostingList)
 	txn := job.db.NewTransactionAt(r.state.writeTs, true)
 
 	outputPostingList := func() {
@@ -52,18 +61,13 @@ func (r *reducer) reduce(job shuffleOutput) {
 		// For a UID-only posting list, the badger value is a delta packed UID
 		// list. The UserMeta indicates to treat the value as a delta packed
 		// list when the value is read by dgraph.  For a value posting list,
-		// the full intern.Posting type is used (which intern.y contains the
+		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
 		meta := posting.BitCompletePosting
-		if len(pl.Postings) == 0 {
-			meta |= posting.BitUidPosting
-			txn.SetWithMeta(currentKey, bp128.DeltaPack(uids), meta)
-		} else {
-			pl.Uids = bp128.DeltaPack(uids)
-			val, err := pl.Marshal()
-			x.Check(err)
-			txn.SetWithMeta(currentKey, val, meta)
-		}
+		pl.Pack = codec.Encode(uids, 256)
+		val, err := pl.Marshal()
+		x.Check(err)
+		x.Check(txn.SetWithMeta(currentKey, val, meta))
 
 		uids = uids[:0]
 		pl.Reset()

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 // Copyright 2015 The etcd Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -182,9 +198,10 @@ func TestStorageFirstIndex(t *testing.T) {
 		t.Errorf("first = %d, want %d", first, 4)
 	}
 
-	u := ds.newUnifier()
-	require.NoError(t, ds.deleteUntil(u, 4))
-	require.NoError(t, u.Done())
+	batch := db.NewWriteBatch()
+	require.NoError(t, ds.deleteUntil(batch, 4))
+	require.NoError(t, batch.Flush())
+	ds.cache.firstIndex = 0
 	first, err = ds.FirstIndex()
 	if err != nil {
 		t.Errorf("err = %v, want nil", err)
@@ -221,12 +238,13 @@ func TestStorageCompact(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		u := ds.newUnifier()
-		err := ds.deleteUntil(u, tt.i)
-		require.NoError(t, u.Done())
+		batch := db.NewWriteBatch()
+		err := ds.deleteUntil(batch, tt.i)
+		require.NoError(t, batch.Flush())
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
+		ds.cache.firstIndex = 0
 		index, err := ds.FirstIndex()
 		require.NoError(t, err)
 		// Do the minus one here to get the index of the snapshot.
@@ -332,12 +350,12 @@ func TestStorageAppend(t *testing.T) {
 
 	for i, tt := range tests {
 		require.NoError(t, ds.reset(ents))
-		u := ds.newUnifier()
-		err := ds.addEntries(u, tt.entries)
+		batch := db.NewWriteBatch()
+		err := ds.addEntries(batch, tt.entries)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
-		require.NoError(t, u.Done())
+		require.NoError(t, batch.Flush())
 		all, err := ds.allEntries(0, math.MaxUint64, math.MaxUint64)
 		require.NoError(t, err)
 		if !reflect.DeepEqual(all, tt.wentries) {

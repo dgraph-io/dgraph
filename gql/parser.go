@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package gql
@@ -15,8 +24,9 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 const (
@@ -25,7 +35,7 @@ const (
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
-// intern.y used query.SubGraph before processing the query.
+// pb.y used query.SubGraph before processing the query.
 type GraphQuery struct {
 	UID        []uint64
 	Attr       string
@@ -41,7 +51,7 @@ type GraphQuery struct {
 
 	Args map[string]string
 	// Query can have multiple sort parameters.
-	Order        []*intern.Order
+	Order        []*pb.Order
 	Children     []*GraphQuery
 	Filter       *FilterTree
 	MathExp      *MathTree
@@ -50,7 +60,7 @@ type GraphQuery struct {
 	RecurseArgs  RecurseArgs
 	Cascade      bool
 	IgnoreReflex bool
-	Facets       *intern.FacetParams
+	Facets       *pb.FacetParams
 	FacetsFilter *FilterTree
 	GroupbyAttrs []GroupByAttr
 	FacetVar     map[string]string
@@ -149,43 +159,37 @@ type Function struct {
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
-var filterOpPrecedence map[string]int
-var mathOpPrecedence map[string]int
+var filterOpPrecedence = map[string]int{
+	"not": 3,
+	"and": 2,
+	"or":  1,
+}
+var mathOpPrecedence = map[string]int{
+	"u-":      500,
+	"floor":   105,
+	"ceil":    104,
+	"since":   103,
+	"exp":     100,
+	"ln":      99,
+	"sqrt":    98,
+	"cond":    90,
+	"pow":     89,
+	"logbase": 88,
+	"max":     85,
+	"min":     84,
 
-func init() {
-	filterOpPrecedence = map[string]int{
-		"not": 3,
-		"and": 2,
-		"or":  1,
-	}
-	mathOpPrecedence = map[string]int{
-		"u-":      500,
-		"floor":   105,
-		"ceil":    104,
-		"since":   103,
-		"exp":     100,
-		"ln":      99,
-		"sqrt":    98,
-		"cond":    90,
-		"pow":     89,
-		"logbase": 88,
-		"max":     85,
-		"min":     84,
+	"/": 50,
+	"*": 49,
+	"%": 48,
+	"-": 47,
+	"+": 46,
 
-		"/": 50,
-		"*": 49,
-		"%": 48,
-		"-": 47,
-		"+": 46,
-
-		"<":  10,
-		">":  9,
-		"<=": 8,
-		">=": 7,
-		"==": 6,
-		"!=": 5,
-	}
-
+	"<":  10,
+	">":  9,
+	"<=": 8,
+	">=": 7,
+	"==": 6,
+	"!=": 5,
 }
 
 func (f *Function) IsAggregator() bool {
@@ -198,7 +202,7 @@ func (f *Function) IsPasswordVerifier() bool {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	x.Printf("%s[%x %q %q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
+	glog.Infof("%s[%x %q %q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -449,7 +453,7 @@ type Vars struct {
 type Result struct {
 	Query     []*GraphQuery
 	QueryVars []*Vars
-	Schema    *intern.SchemaRequest
+	Schema    *pb.SchemaRequest
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -539,7 +543,25 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 	}
 
+	if err := validateResult(&res); err != nil {
+		return res, err
+	}
+
 	return res, nil
+}
+
+func validateResult(res *Result) error {
+	seenQueryAliases := make(map[string]bool)
+	for _, q := range res.Query {
+		if q.Alias == "var" || q.Alias == "shortest" {
+			continue
+		}
+		if _, found := seenQueryAliases[q.Alias]; found {
+			return x.Errorf("Duplicate aliases not allowed: %v", q.Alias)
+		}
+		seenQueryAliases[q.Alias] = true
+	}
+	return nil
 }
 
 func flatten(vl []*Vars) (needs []string, defines []string) {
@@ -865,7 +887,7 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 }
 
 // parses till rightround is found
-func parseSchemaPredicates(it *lex.ItemIterator, s *intern.SchemaRequest) error {
+func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 	// pred should be followed by colon
 	it.Next()
 	item := it.Item()
@@ -901,7 +923,7 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *intern.SchemaRequest) error 
 }
 
 // parses till rightcurl is found
-func parseSchemaFields(it *lex.ItemIterator, s *intern.SchemaRequest) error {
+func parseSchemaFields(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -916,8 +938,8 @@ func parseSchemaFields(it *lex.ItemIterator, s *intern.SchemaRequest) error {
 	return x.Errorf("Invalid schema block.")
 }
 
-func getSchema(it *lex.ItemIterator) (*intern.SchemaRequest, error) {
-	var s intern.SchemaRequest
+func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
+	var s pb.SchemaRequest
 	leftRoundSeen := false
 	for it.Next() {
 		item := it.Item()
@@ -1555,7 +1577,8 @@ L:
 				// uid function could take variables as well as actual uids.
 				// If we can parse the value that means its an uid otherwise a variable.
 				uid, err := strconv.ParseUint(val, 0, 64)
-				if err == nil {
+				switch e := err.(type) {
+				case nil:
 					// It could be uid function at root.
 					if gq != nil {
 						gq.UID = append(gq.UID, uid)
@@ -1564,6 +1587,10 @@ L:
 						function.UID = append(function.UID, uid)
 					}
 					continue
+				case *strconv.NumError:
+					if e.Err == strconv.ErrRange {
+						return nil, x.Errorf("The uid value %q is too large.", val)
+					}
 				}
 				// E.g. @filter(uid(a, b, c))
 				function.NeedsVar = append(function.NeedsVar, VarContext{
@@ -1582,7 +1609,7 @@ L:
 }
 
 type facetRes struct {
-	f          *intern.FacetParams
+	f          *pb.FacetParams
 	ft         *FilterTree
 	vmap       map[string]string
 	facetOrder string
@@ -1677,7 +1704,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	// Skip past '('
 	if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 		it.Restore(savePos)
-		var facets intern.FacetParams
+		var facets pb.FacetParams
 		facets.AllKeys = true
 		res.f = &facets
 		res.vmap = make(map[string]string)
@@ -1685,7 +1712,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	}
 
 	facetVar := make(map[string]string)
-	var facets intern.FacetParams
+	var facets pb.FacetParams
 	var orderdesc bool
 	var orderkey string
 
@@ -1713,7 +1740,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 				}
 				facetVar[facetItem.name] = facetItem.varName
 			}
-			facets.Param = append(facets.Param, &intern.FacetParam{
+			facets.Param = append(facets.Param, &pb.FacetParam{
 				Key:   facetItem.name,
 				Alias: facetItem.alias,
 			})
@@ -1754,7 +1781,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			// We've consumed `'@facets' '(' <facetItem> ',' <facetItem>`, so this is definitely
 			// not a filter.  Return an error.
 			return res, false, x.Errorf(
-				"Expected ',' or ')' in facet list", item.Val)
+				"Expected ',' or ')' in facet list: %s", item.Val)
 		}
 	}
 }
@@ -1926,14 +1953,14 @@ func parseID(val string) ([]uint64, error) {
 	if val[0] != '[' {
 		uid, err := strconv.ParseUint(val, 0, 64)
 		if err != nil {
-			return uids, err
+			return nil, err
 		}
 		uids = append(uids, uid)
 		return uids, nil
 	}
 
 	if val[len(val)-1] != ']' {
-		return uids, x.Errorf("Invalid id list at root. Got: %+v", val)
+		return nil, x.Errorf("Invalid id list at root. Got: %+v", val)
 	}
 	var buf bytes.Buffer
 	for _, c := range val[1:] {
@@ -1943,14 +1970,14 @@ func parseID(val string) ([]uint64, error) {
 			}
 			uid, err := strconv.ParseUint(buf.String(), 0, 64)
 			if err != nil {
-				return uids, err
+				return nil, err
 			}
 			uids = append(uids, uid)
 			buf.Reset()
 			continue
 		}
 		if c == '[' || c == ')' {
-			return uids, x.Errorf("Invalid id list at root. Got: %+v", val)
+			return nil, x.Errorf("Invalid id list at root. Got: %+v", val)
 		}
 		buf.WriteRune(c)
 	}
@@ -2002,7 +2029,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		valid = false
 	}
 	it.Next()
-	// No directive is allowed on intern.subgraph like expand all, value variables.
+	// No directive is allowed on pb.subgraph like expand all, value variables.
 	if !valid || curp == nil || curp.IsInternal {
 		return x.Errorf("Invalid use of directive.")
 	}
@@ -2292,7 +2319,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
 				attr, langs := attrAndLang(val)
-				gq.Order = append(gq.Order, &intern.Order{attr, key == "orderdesc", langs})
+				gq.Order = append(gq.Order,
+					&pb.Order{Attr: attr, Desc: key == "orderdesc", Langs: langs})
 				order[val] = true
 				continue
 			}
@@ -2508,7 +2536,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isExpandFunc(valLower) {
 				if varName != "" {
-					return x.Errorf("expand() cannot be used with a variable", val)
+					return x.Errorf("expand() cannot be used with a variable: %s", val)
 				}
 				if alias != "" {
 					return x.Errorf("expand() cannot have an alias")
@@ -2524,7 +2552,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					Args:       make(map[string]string),
 					IsInternal: true,
 				}
-				if item.Val == value {
+				switch item.Val {
+				case value:
 					count, err := parseVarList(it, child)
 					if err != nil {
 						return err
@@ -2534,9 +2563,13 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = LIST_VAR
 					child.Expand = child.NeedsVar[len(child.NeedsVar)-1].Name
-				} else if item.Val == "_all_" {
+				case "_all_":
 					child.Expand = "_all_"
-				} else {
+				case "_forward_":
+					child.Expand = "_forward_"
+				case "_reverse_":
+					child.Expand = "_reverse_"
+				default:
 					return x.Errorf("Invalid argument %v in expand()", item.Val)
 				}
 				it.Next() // Consume ')'
@@ -2692,7 +2725,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
 					}
 					attr, langs := attrAndLang(p.Val)
-					curp.Order = append(curp.Order, &intern.Order{attr, p.Key == "orderdesc", langs})
+					curp.Order = append(curp.Order,
+						&pb.Order{Attr: attr, Desc: p.Key == "orderdesc", Langs: langs})
 					order[p.Val] = true
 					continue
 				}

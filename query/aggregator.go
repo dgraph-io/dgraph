@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package query
@@ -12,7 +21,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -42,7 +51,7 @@ func isBinary(f string) bool {
 		f == "max" || f == "min" || f == "logbase" || f == "pow"
 }
 
-func convertTo(from *intern.TaskValue) (types.Val, error) {
+func convertTo(from *pb.TaskValue) (types.Val, error) {
 	vh, _ := getValue(from)
 	if bytes.Equal(from.Val, x.Nilbyte) {
 		return vh, ErrEmptyVal
@@ -97,10 +106,8 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 		return isEqual, nil
 	case "!=":
 		return !isEqual, nil
-	default:
-		return false, x.Errorf("Invalid compare function %v", ag)
 	}
-	return false, nil
+	return false, x.Errorf("Invalid compare function %v", ag)
 }
 
 func (ag *aggregator) ApplyVal(v types.Val) error {
@@ -207,11 +214,17 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		if !isIntOrFloat {
 			return x.Errorf("Wrong type encountered for func %v %v %v", ag.name, va.Tid, v.Tid)
 		}
+		if l == 0 {
+			return x.Errorf("Division by zero")
+		}
 		va.Value = va.Value.(float64) / l
 		res = va
 	case "%":
 		if !isIntOrFloat {
 			return x.Errorf("Wrong type encountered for func %v", ag.name)
+		}
+		if l == 0 {
+			return x.Errorf("Division by zero")
 		}
 		va.Value = math.Mod(va.Value.(float64), l)
 		res = va
@@ -292,10 +305,10 @@ func (ag *aggregator) Apply(val types.Val) {
 	ag.result = res
 }
 
-func (ag *aggregator) ValueMarshalled() (*intern.TaskValue, error) {
+func (ag *aggregator) ValueMarshalled() (*pb.TaskValue, error) {
 	data := types.ValueForType(types.BinaryID)
 	ag.divideByCount()
-	res := &intern.TaskValue{ValType: ag.result.Tid.Enum(), Val: x.Nilbyte}
+	res := &pb.TaskValue{ValType: ag.result.Tid.Enum(), Val: x.Nilbyte}
 	if ag.result.Value == nil {
 		return res, nil
 	}

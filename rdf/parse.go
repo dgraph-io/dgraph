@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package rdf
@@ -62,6 +71,7 @@ L:
 		switch item.Typ {
 		case itemSubject:
 			rnq.Subject = strings.Trim(item.Val, " ")
+
 		case itemVarKeyword:
 			it.Next()
 			if item = it.Item(); item.Typ != itemLeftRound {
@@ -75,7 +85,8 @@ L:
 			it.Next() // parse ')'
 
 		case itemPredicate:
-			rnq.Predicate = strings.Trim(item.Val, " ")
+			// Here we split predicate and lang directive (ex: "name@en"), if needed.
+			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.Trim(item.Val, " "))
 
 		case itemObject:
 			rnq.ObjectId = strings.Trim(item.Val, " ")
@@ -86,8 +97,9 @@ L:
 			} else if rnq.Predicate == "" {
 				rnq.Predicate = x.Star
 			} else {
-				rnq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+				rnq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			}
+
 		case itemLiteral:
 			var err error
 			oval, err = strconv.Unquote(item.Val)
@@ -169,7 +181,7 @@ L:
 	// We only want to set default value if we have seen ObjectValue within "" and if we didn't
 	// already set it.
 	if seenOval && rnq.ObjectValue == nil {
-		rnq.ObjectValue = &api.Value{&api.Value_DefaultVal{oval}}
+		rnq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: oval}}
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
@@ -259,16 +271,16 @@ func isNewline(r rune) bool {
 }
 
 var typeMap = map[string]types.TypeID{
-	"xs:string":                                        types.StringID,
-	"xs:date":                                          types.DateTimeID,
-	"xs:dateTime":                                      types.DateTimeID,
-	"xs:int":                                           types.IntID,
-	"xs:positiveInteger":                               types.IntID,
-	"xs:boolean":                                       types.BoolID,
-	"xs:double":                                        types.FloatID,
-	"xs:float":                                         types.FloatID,
-	"xs:base64Binary":                                  types.BinaryID,
-	"geo:geojson":                                      types.GeoID,
+	"xs:string":          types.StringID,
+	"xs:date":            types.DateTimeID,
+	"xs:dateTime":        types.DateTimeID,
+	"xs:int":             types.IntID,
+	"xs:positiveInteger": types.IntID,
+	"xs:boolean":         types.BoolID,
+	"xs:double":          types.FloatID,
+	"xs:float":           types.FloatID,
+	"xs:base64Binary":    types.BinaryID,
+	"geo:geojson":        types.GeoID,
 	"http://www.w3.org/2001/XMLSchema#string":          types.StringID,
 	"http://www.w3.org/2001/XMLSchema#dateTime":        types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#date":            types.DateTimeID,

@@ -23,7 +23,6 @@ import (
 	"container/list"
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -41,7 +40,6 @@ type listCache struct {
 	evicts  uint64
 	ll      *list.List
 	cache   map[string]*list.Element
-	done    int32
 }
 
 type CacheStats struct {
@@ -113,17 +111,17 @@ func (c *listCache) removeOldestLoop() {
 	defer ticker.Stop()
 	for range ticker.C {
 		c.removeOldest()
-		if atomic.LoadInt32(&c.done) > 0 {
-			return
-		}
 	}
 }
 
 func (c *listCache) removeOldest() {
 	c.Lock()
 	defer c.Unlock()
+
+	// Only allow evictions for 10ms out of a second.
+	deadline := time.Now().Add(10 * time.Millisecond)
 	ele := c.ll.Back()
-	for c.curSize > c.MaxSize && atomic.LoadInt32(&c.done) == 0 {
+	for c.curSize > c.MaxSize && time.Now().Before(deadline) {
 		if ele == nil {
 			if c.curSize < 0 {
 				c.curSize = 0
@@ -133,17 +131,15 @@ func (c *listCache) removeOldest() {
 		e := ele.Value.(*entry)
 
 		if !e.pl.SetForDeletion() {
+			// If the posting list has pending mutations, SetForDeletion would
+			// return false, and hence would be skipped.
 			ele = ele.Prev()
 			continue
 		}
-		// If length of mutation layer is zero, then we won't call pstore.SetAsync and the
-		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
-		if committed, err := e.pl.SyncIfDirty(true); err != nil {
-			ele = ele.Prev()
-			continue
-		} else if !committed {
-			delete(c.cache, e.key)
-		}
+
+		// No mutations found and we have marked the PL for deletion. Now we can
+		// safely delete it from the cache.
+		delete(c.cache, e.key)
 
 		// ele gets Reset once it's passed to Remove, so store the prev.
 		prev := ele.Prev()

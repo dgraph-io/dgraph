@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package schema
@@ -11,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -33,14 +42,14 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	for _, update := range updates {
 		State().Set(update.Predicate, *update)
 	}
-	State().Set("_predicate_", intern.SchemaUpdate{
-		ValueType: intern.Posting_STRING,
+	State().Set("_predicate_", pb.SchemaUpdate{
+		ValueType: pb.Posting_STRING,
 		List:      true,
 	})
 	return nil
 }
 
-func parseDirective(it *lex.ItemIterator, schema *intern.SchemaUpdate, t types.TypeID) error {
+func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeID) error {
 	it.Next()
 	next := it.Item()
 	if next.Typ != itemText {
@@ -51,12 +60,12 @@ func parseDirective(it *lex.ItemIterator, schema *intern.SchemaUpdate, t types.T
 		if t != types.UidID {
 			return x.Errorf("Cannot reverse for non-UID type")
 		}
-		schema.Directive = intern.SchemaUpdate_REVERSE
+		schema.Directive = pb.SchemaUpdate_REVERSE
 	case "index":
 		if tokenizer, err := parseIndexDirective(it, schema.Predicate, t); err != nil {
 			return err
 		} else {
-			schema.Directive = intern.SchemaUpdate_INDEX
+			schema.Directive = pb.SchemaUpdate_INDEX
 			schema.Tokenizer = tokenizer
 		}
 	case "count":
@@ -64,7 +73,7 @@ func parseDirective(it *lex.ItemIterator, schema *intern.SchemaUpdate, t types.T
 	case "upsert":
 		schema.Upsert = true
 	case "lang":
-		if t != types.StringID {
+		if t != types.StringID || schema.List {
 			return x.Errorf("@lang directive can only be specified for string type."+
 				" Got: [%v] for attr: [%v]", t.Name(), schema.Predicate)
 		}
@@ -77,18 +86,27 @@ func parseDirective(it *lex.ItemIterator, schema *intern.SchemaUpdate, t types.T
 	return nil
 }
 
-func parseScalarPair(it *lex.ItemIterator, predicate string) (*intern.SchemaUpdate,
-	error) {
+func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, error) {
 	it.Next()
-	if next := it.Item(); next.Typ != itemColon {
+	next := it.Item()
+	switch {
+	// This check might seem redundant but it's necessary. We have two possibilities,
+	//   1) that the schema is of form: name@en: string .
+	//
+	//   2) or this alternate form: <name@en>: string .
+	//
+	// The itemAt test invalidates 1) and string.Contains() tests for 2). We don't allow
+	// '@' in predicate names, so both forms are disallowed. Handling them here avoids
+	// messing with the lexer and IRI values.
+	case next.Typ == itemAt || strings.Contains(predicate, "@"):
+		return nil, x.Errorf("Invalid '@' in name")
+	case next.Typ != itemColon:
 		return nil, x.Errorf("Missing colon")
-	}
-
-	if !it.Next() {
+	case !it.Next():
 		return nil, x.Errorf("Invalid ending while trying to parse schema.")
 	}
-	next := it.Item()
-	schema := &intern.SchemaUpdate{Predicate: predicate}
+	next = it.Item()
+	schema := &pb.SchemaUpdate{Predicate: predicate}
 	// Could be list type.
 	if next.Typ == itemLeftSquare {
 		schema.List = true
@@ -230,12 +248,12 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 }
 
 // resolveTokenizers resolves default tokenizers and verifies tokenizers definitions.
-func resolveTokenizers(updates []*intern.SchemaUpdate) error {
+func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
 
 		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
-			schema.Directive == intern.SchemaUpdate_INDEX {
+			schema.Directive == pb.SchemaUpdate_INDEX {
 			return x.Errorf("Indexing not allowed on predicate %s of type %s",
 				schema.Predicate, typ.Name())
 		}
@@ -244,10 +262,10 @@ func resolveTokenizers(updates []*intern.SchemaUpdate) error {
 			continue
 		}
 
-		if len(schema.Tokenizer) == 0 && schema.Directive == intern.SchemaUpdate_INDEX {
+		if len(schema.Tokenizer) == 0 && schema.Directive == pb.SchemaUpdate_INDEX {
 			return x.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
 				schema.Predicate, typ.Name())
-		} else if len(schema.Tokenizer) > 0 && schema.Directive != intern.SchemaUpdate_INDEX {
+		} else if len(schema.Tokenizer) > 0 && schema.Directive != pb.SchemaUpdate_INDEX {
 			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
 		}
 		// check for valid tokeniser types and duplicates
@@ -282,8 +300,8 @@ func resolveTokenizers(updates []*intern.SchemaUpdate) error {
 }
 
 // Parse parses a schema string and returns the schema representation for it.
-func Parse(s string) ([]*intern.SchemaUpdate, error) {
-	var schemas []*intern.SchemaUpdate
+func Parse(s string) ([]*pb.SchemaUpdate, error) {
+	var schemas []*pb.SchemaUpdate
 	l := lex.Lexer{Input: s}
 	l.Run(lexText)
 	it := l.NewIterator()
@@ -295,16 +313,20 @@ func Parse(s string) ([]*intern.SchemaUpdate, error) {
 				return nil, x.Wrapf(err, "failed to enrich schema")
 			}
 			return schemas, nil
+
 		case itemText:
-			if schema, err := parseScalarPair(it, item.Val); err != nil {
+			schema, err := parseScalarPair(it, item.Val)
+			if err != nil {
 				return nil, err
-			} else {
-				schemas = append(schemas, schema)
 			}
+			schemas = append(schemas, schema)
+
 		case lex.ItemError:
 			return nil, x.Errorf(item.Val)
+
 		case itemNewLine:
 			// pass empty line
+
 		default:
 			return nil, x.Errorf("Unexpected token: %v while parsing schema", item)
 		}

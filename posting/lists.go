@@ -1,14 +1,22 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package posting
 
 import (
-	"crypto/md5"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -17,16 +25,15 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
+	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -53,10 +60,7 @@ const (
 // RAFT entries discarded.
 func init() {
 	x.AddInit(func() {
-		h := md5.New()
-		pl := intern.PostingList{
-			Checksum: h.Sum(nil),
-		}
+		pl := pb.PostingList{}
 		var err error
 		emptyPostingList, err = pl.Marshal()
 		x.Check(err)
@@ -89,7 +93,7 @@ func getMemUsage() int {
 
 	contents, err := ioutil.ReadFile("/proc/self/stat")
 	if err != nil {
-		x.Println("Can't read the proc file", err)
+		glog.Errorf("Can't read the proc file. Err: %v\n", err)
 		return 0
 	}
 
@@ -97,13 +101,13 @@ func getMemUsage() int {
 	// 24th entry of the file is the RSS which denotes the number of pages
 	// used by the process.
 	if len(cont) < 24 {
-		x.Println("Error in RSS from stat")
+		glog.Errorln("Error in RSS from stat")
 		return 0
 	}
 
 	rss, err := strconv.Atoi(cont[23])
 	if err != nil {
-		x.Println(err)
+		glog.Errorln(err)
 		return 0
 	}
 
@@ -128,7 +132,7 @@ func periodicUpdateStats(lc *y.Closer) {
 			inUse := float64(megs)
 
 			stats := lcache.Stats()
-			x.EvictedPls.Set(int64(stats.NumEvicts))
+			x.LcacheEvicts.Set(int64(stats.NumEvicts))
 			x.LcacheSize.Set(int64(stats.Size))
 			x.LcacheLen.Set(int64(stats.Length))
 
@@ -180,30 +184,34 @@ func updateMemoryMetrics(lc *y.Closer) {
 		case <-ticker.C:
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
-			megs := (ms.HeapInuse + ms.StackInuse)
 
-			inUse := float64(megs)
-			idle := float64(ms.HeapIdle - ms.HeapReleased)
+			inUse := ms.HeapInuse + ms.StackInuse
+			// From runtime/mstats.go:
+			// HeapIdle minus HeapReleased estimates the amount of memory
+			// that could be returned to the OS, but is being retained by
+			// the runtime so it can grow the heap without requesting more
+			// memory from the OS. If this difference is significantly
+			// larger than the heap size, it indicates there was a recent
+			// transient spike in live heap size.
+			idle := ms.HeapIdle - ms.HeapReleased
 
 			x.MemoryInUse.Set(int64(inUse))
-			x.HeapIdle.Set(int64(idle))
-			x.TotalOSMemory.Set(int64(getMemUsage()))
+			x.MemoryIdle.Set(int64(idle))
+			x.MemoryProc.Set(int64(getMemUsage()))
 		}
 	}
 }
 
 var (
-	pstore *badger.ManagedDB
+	pstore *badger.DB
 	lcache *listCache
-	btree  *BTree
 	closer *y.Closer
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.ManagedDB) {
+func Init(ps *badger.DB) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
-	btree = newBTree(2)
 	x.LcacheCapacity.Set(math.MaxInt64)
 
 	closer = y.NewCloser(2)
@@ -214,10 +222,6 @@ func Init(ps *badger.ManagedDB) {
 
 func Cleanup() {
 	closer.SignalAndWait()
-}
-
-func StopLRUEviction() {
-	atomic.StoreInt32(&lcache.done, 1)
 }
 
 // Get stores the List corresponding to key, if it's not there already.
@@ -233,10 +237,10 @@ func StopLRUEviction() {
 func Get(key []byte) (rlist *List, err error) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
-		x.CacheHit.Add(1)
+		x.LcacheHit.Add(1)
 		return lp, nil
 	}
-	x.CacheMiss.Add(1)
+	x.LcacheMiss.Add(1)
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
@@ -247,9 +251,7 @@ func Get(key []byte) (rlist *List, err error) {
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
-		x.CacheRace.Add(1)
-	} else if atomic.LoadInt32(&l.onDisk) == 0 {
-		btree.Insert(l.key)
+		x.LcacheRace.Add(1)
 	}
 	return lp, nil
 }
@@ -269,44 +271,8 @@ func GetNoStore(key []byte) (*List, error) {
 	return getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 }
 
-// This doesn't sync, so call this only when you don't care about dirty posting lists in // memory(for example before populating snapshot) or after calling syncAllMarks
+// This doesn't sync, so call this only when you don't care about dirty posting lists in
+// memory(for example before populating snapshot) or after calling syncAllMarks
 func EvictLRU() {
 	lcache.Reset()
-}
-
-func CommitLists(commit func(key []byte) bool) {
-	// We iterate over lru and pushing values (List) into this
-	// channel. Then goroutines right below will commit these lists to data store.
-	workChan := make(chan *List, 10000)
-
-	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for l := range workChan {
-				l.SyncIfDirty(false)
-			}
-		}()
-	}
-
-	lcache.iterate(func(l *List) bool {
-		if commit(l.key) {
-			workChan <- l
-		}
-		return true
-	})
-	close(workChan)
-	wg.Wait()
-
-	// The following hack ensures that all the asynchrously run commits above would have been done
-	// before this completes. Badger now actually gets rid of keys, which are deleted. So, we can
-	// use the Delete function.
-	txn := pstore.NewTransactionAt(1, true)
-	defer txn.Discard()
-	x.Check(txn.Delete(x.DataKey("_dummy_", 1)))
-	// Nothing is being read, so there can't be an ErrConflict. This should go to disk.
-	if err := txn.CommitAt(1, nil); err != nil {
-		x.Printf("Commit unexpectedly failed with error: %v", err)
-	}
 }

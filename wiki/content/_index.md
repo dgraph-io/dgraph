@@ -55,6 +55,19 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
+            <a href="{{< relref "tips/index.md">}}">
+              GraphQL+- Tips and Tricks
+            </a>
+          </div>
+          <p class="section-desc">
+            A list of commonly used GraphQL+- query snippets
+          </p>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6">
+        <div class="section-item">
+          <div class="section-name">
             <a href="{{< relref "clients/index.md">}}">
               Clients
             </a>
@@ -102,7 +115,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "contribute/index.md">}}">
+            <a href="https://github.com/dgraph-io/dgraph/blob/master/CONTRIBUTING.md">
               Contribute to Dgraph
             </a>
           </div>

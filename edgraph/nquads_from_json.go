@@ -1,8 +1,17 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package edgraph
@@ -104,50 +113,52 @@ type mapResponse struct {
 }
 
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
-	switch v.(type) {
+	switch v := v.(type) {
 	case json.Number:
-		n := v.(json.Number)
-		if strings.Index(n.String(), ".") >= 0 {
-			f, err := n.Float64()
+		if strings.ContainsAny(v.String(), ".Ee") {
+			f, err := v.Float64()
 			if err != nil {
 				return err
 			}
-			nq.ObjectValue = &api.Value{&api.Value_DoubleVal{f}}
+			nq.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{DoubleVal: f}}
 			return nil
 		}
-		i, err := n.Int64()
+		i, err := v.Int64()
 		if err != nil {
 			return err
 		}
-		nq.ObjectValue = &api.Value{&api.Value_IntVal{i}}
+		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: i}}
+
 	case string:
-		predWithLang := strings.SplitN(k, "@", 2)
-		if len(predWithLang) == 2 && predWithLang[0] != "" {
-			nq.Predicate = predWithLang[0]
-			nq.Lang = predWithLang[1]
-		}
+		// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
+		// mutations that's the only way to send language for a value.
+		nq.Predicate, nq.Lang = x.PredicateLang(k)
 
 		// Default value is considered as S P * deletion.
 		if v == "" && op == delete {
-			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
 
-		nq.ObjectValue = &api.Value{&api.Value_StrVal{v.(string)}}
+		// In RDF, we assume everything is default (types.DefaultID), but in JSON we assume string
+		// (StringID). But this value will be checked against the schema so we don't overshadow a
+		// password value (types.PasswordID) - Issue#2623
+		nq.ObjectValue = &api.Value{Val: &api.Value_StrVal{StrVal: v}}
+
 	case float64:
 		if v == 0 && op == delete {
-			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
+		nq.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{DoubleVal: v}}
 
-		nq.ObjectValue = &api.Value{&api.Value_DoubleVal{v.(float64)}}
 	case bool:
 		if v == false && op == delete {
-			nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
+		nq.ObjectValue = &api.Value{Val: &api.Value_BoolVal{BoolVal: v}}
 
-		nq.ObjectValue = &api.Value{&api.Value_BoolVal{v.(bool)}}
 	default:
 		return x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 	}
@@ -161,9 +172,28 @@ func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
 		mr.nquads = append(mr.nquads, &api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
-			ObjectValue: &api.Value{&api.Value_DefaultVal{x.Star}},
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 		})
 	}
+}
+
+func handleGeoType(val map[string]interface{}, nq *api.NQuad) (bool, error) {
+	_, hasType := val["type"]
+	_, hasCoordinates := val["coordinates"]
+	if len(val) == 2 && hasType && hasCoordinates {
+		b, err := json.Marshal(val)
+		if err != nil {
+			return false, x.Errorf("Error while trying to parse value: %+v as geo val", val)
+		}
+		ok, err := tryParseAsGeo(b, nq)
+		if err != nil && ok {
+			return true, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
@@ -188,22 +218,20 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 	if uidVal, ok := m["uid"]; ok {
 		var uid uint64
 
-		switch uidVal.(type) {
+		switch uidVal := uidVal.(type) {
 		case json.Number:
-			uidn := uidVal.(json.Number)
-			ui, err := uidn.Int64()
+			ui, err := uidVal.Int64()
 			if err != nil {
 				return mr, err
 			}
 			uid = uint64(ui)
 
 		case string:
-			id := uidVal.(string)
-			if len(id) == 0 {
+			if len(uidVal) == 0 {
 				uid = 0
-			} else if ok := strings.HasPrefix(id, "_:"); ok {
-				mr.uid = id
-			} else if u, err := strconv.ParseUint(id, 0, 64); err != nil {
+			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
+				mr.uid = uidVal
+			} else if u, err := strconv.ParseUint(uidVal, 0, 64); err != nil {
 				return mr, err
 			} else {
 				uid = u
@@ -239,7 +267,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				mr.nquads = append(mr.nquads, &api.NQuad{
 					Subject:     mr.uid,
 					Predicate:   pred,
-					ObjectValue: &api.Value{&api.Value_DefaultVal{x.Star}},
+					ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 				})
 				continue
 			}
@@ -261,44 +289,33 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 
 		if v == nil {
 			if op == delete {
-				nq.ObjectValue = &api.Value{&api.Value_DefaultVal{x.Star}}
+				nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 				mr.nquads = append(mr.nquads, &nq)
 			}
 			continue
 		}
 
-		switch v.(type) {
+		switch v := v.(type) {
 		case string, json.Number, bool:
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
 			}
 			mr.nquads = append(mr.nquads, &nq)
 		case map[string]interface{}:
-			val := v.(map[string]interface{})
-			if len(val) == 0 {
+			if len(v) == 0 {
 				continue
 			}
 
-			// Geojson geometry should have type and coordinates.
-			_, hasType := val["type"]
-			_, hasCoordinates := val["coordinates"]
-			if len(val) == 2 && hasType && hasCoordinates {
-				b, err := json.Marshal(val)
-				if err != nil {
-					return mr, x.Errorf("Error while trying to parse "+
-						"value: %+v as geo val", val)
-				}
-				ok, err := tryParseAsGeo(b, &nq)
-				if err != nil {
-					return mr, err
-				}
-				if ok {
-					mr.nquads = append(mr.nquads, &nq)
-					continue
-				}
+			ok, err := handleGeoType(v, &nq)
+			if err != nil {
+				return mr, err
+			}
+			if ok {
+				mr.nquads = append(mr.nquads, &nq)
+				continue
 			}
 
-			cr, err := mapToNquads(v.(map[string]interface{}), idx, op, pred)
+			cr, err := mapToNquads(v, idx, op, pred)
 			if err != nil {
 				return mr, err
 			}
@@ -310,7 +327,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			// Add the nquads that we got for the connecting entity.
 			mr.nquads = append(mr.nquads, cr.nquads...)
 		case []interface{}:
-			for _, item := range v.([]interface{}) {
+			for _, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,
 					Predicate: pred,
@@ -323,6 +340,16 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 					}
 					mr.nquads = append(mr.nquads, &nq)
 				case map[string]interface{}:
+					// map[string]interface{} can mean geojson or a connecting entity.
+					ok, err := handleGeoType(item.(map[string]interface{}), &nq)
+					if err != nil {
+						return mr, err
+					}
+					if ok {
+						mr.nquads = append(mr.nquads, &nq)
+						continue
+					}
+
 					cr, err := mapToNquads(iv, idx, op, pred)
 					if err != nil {
 						return mr, err

@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 // Package rdf package parses N-Quad statements based on
@@ -111,6 +120,7 @@ Loop:
 		case r == '*':
 			l.Depth++
 			l.Emit(itemStar)
+
 		case r == leftRound:
 			if l.Depth > atObject {
 				l.Backup()
@@ -153,8 +163,7 @@ Loop:
 }
 
 // Assumes that caller has consumed initial '<'
-func lexIRIRef(l *lex.Lexer, styp lex.ItemType,
-	sfn lex.StateFn) lex.StateFn {
+func lexIRIRef(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 	if err := lex.LexIRIRef(l, styp); err != nil {
 		return l.Errorf(err.Error())
 	}
@@ -169,8 +178,8 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 	}
 
 	in := l.Input[l.Start:l.Pos]
-	if _, err := strconv.ParseUint(in[:], 0, 64); err != nil {
-		return l.Errorf("Unable to convert '%v' to UID", in[:])
+	if _, err := strconv.ParseUint(in, 0, 64); err != nil {
+		return l.Errorf("Unable to convert '%v' to UID", in)
 	}
 
 	if isSpace(r) {
@@ -242,6 +251,7 @@ func lexPredicate(l *lex.Lexer) lex.StateFn {
 	}
 
 	l.Depth++
+
 	return lexIRIRef(l, itemPredicate, lexText)
 }
 
@@ -273,7 +283,7 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 		r := l.Next()
 		if r == '\u005c' { // backslash
 			r = l.Next()
-			if l.IsEscChar(r) || lex.HasUChars(r, l) {
+			if l.IsEscChar(r) || lex.HasUChars(r, l) || lex.HasXChars(r, l) {
 				continue // This would skip over the escaped rune.
 			}
 			return l.Errorf("Invalid escape character : '%c' in literal", r)

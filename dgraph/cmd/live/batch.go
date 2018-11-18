@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package live
@@ -12,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,12 +29,13 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 )
@@ -53,7 +64,7 @@ var defaultOptions = batchMutationOptions{
 }
 
 type uidProvider struct {
-	zero intern.ZeroClient
+	zero pb.ZeroClient
 	ctx  context.Context
 }
 
@@ -87,18 +98,18 @@ type loader struct {
 func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
 	factor := time.Second
 	for {
-		assignedIds, err := p.zero.AssignUids(context.Background(), &intern.Num{Val: 1000})
+		assignedIds, err := p.zero.AssignUids(context.Background(), &pb.Num{Val: 1000})
 		if err == nil {
 			return assignedIds.StartId, assignedIds.EndId, nil
 		}
-		x.Printf("Error while getting lease %v\n", err)
+		fmt.Printf("Error while getting lease %v\n", err)
 		select {
 		case <-time.After(factor):
 		case <-p.ctx.Done():
 			return 0, 0, p.ctx.Err()
 		}
 		if factor < 256*time.Second {
-			factor = factor * 2
+			factor *= 2
 		}
 	}
 }
@@ -116,13 +127,25 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
+// handleError inspects errors and terminates if the errors are non-recoverable.
+// A gRPC code is Internal if there is an unforseen issue that needs attention.
+// A gRPC code is Unavailable when we can't possibly reach the remote server, most likely the
+// server expects TLS and our certificate does not match or the host name is not verified. When
+// the node certificate is created the name much match the request host name. e.g., localhost not
+// 127.0.0.1.
 func handleError(err error) {
-	errString := grpc.ErrorDesc(err)
-	// Irrecoverable
-	if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
-		x.Fatalf(errString)
-	} else if errString != y.ErrAborted.Error() && errString != y.ErrConflict.Error() {
-		x.Printf("Error while mutating %v\n", errString)
+	s := status.Convert(err)
+	switch {
+	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
+		x.Fatalf(s.Message())
+	case strings.Contains(s.Message(), "x509"):
+		x.Fatalf(s.Message())
+	case strings.Contains(s.Message(), "Server overloaded."):
+		dur := time.Duration(1+rand.Intn(10)) * time.Minute
+		fmt.Printf("Server is overloaded. Will retry after %s.", dur.Round(time.Minute))
+		time.Sleep(dur)
+	case err != y.ErrAborted && err != y.ErrConflict:
+		fmt.Printf("Error while mutating %v\n", s.Message())
 	}
 }
 
@@ -179,10 +202,9 @@ func (l *loader) printCounters() {
 	for range l.ticker.C {
 		counter := l.Counter()
 		rate := float64(counter.Rdfs) / counter.Elapsed.Seconds()
-		elapsed := ((time.Since(start) / time.Second) * time.Second).String()
-		fmt.Printf("Total Txns done: %8d RDFs per second: %7.0f Time Elapsed: %v, Aborts: %d\n",
-			counter.TxnsDone, rate, elapsed, counter.Aborts)
-
+		elapsed := time.Since(start).Round(time.Second)
+		fmt.Printf("[%6s] Txns: %d RDFs: %d RDFs/sec: %5.0f Aborts: %d\n",
+			elapsed, counter.TxnsDone, counter.Rdfs, rate, counter.Aborts)
 	}
 }
 

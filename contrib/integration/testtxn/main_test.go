@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main_test
@@ -13,88 +22,35 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
 type state struct {
-	Commands []*exec.Cmd
-	Dirs     []string
-	dg       *dgo.Dgraph
+	dg *dgo.Dgraph
 }
 
 var s state
+var addr string = "localhost:9180"
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	zero := exec.Command(os.ExpandEnv("dgraph"), "zero", "-w=wz")
-	zero.Stdout = os.Stdout
-	zero.Stderr = os.Stderr
-	if err := zero.Start(); err != nil {
-		log.Fatal(err)
-	}
-	s.Dirs = append(s.Dirs, "wz")
-	s.Commands = append(s.Commands, zero)
-
-	time.Sleep(5 * time.Second)
-	dgraph := exec.Command(os.ExpandEnv("dgraph"),
-		"server",
-		"--lru_mb=2048",
-		fmt.Sprintf("--zero=127.0.0.1:%d", 5080),
-		"-o=1",
-	)
-	dgraph.Stdout = os.Stdout
-	dgraph.Stderr = os.Stderr
-
-	if err := dgraph.Start(); err != nil {
-		log.Fatal(err)
-	}
-	time.Sleep(5 * time.Second)
-
-	s.Commands = append(s.Commands, dgraph)
-	s.Dirs = append(s.Dirs, "p", "w")
-
-	conn, err := grpc.Dial("localhost:9081", grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
 	dc := api.NewDgraphClient(conn)
-
 	dg := dgo.NewDgraphClient(dc)
 	s.dg = dg
-	var wg sync.WaitGroup
-
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			s.dg.NewTxn()
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-
-	op := &api.Operation{}
-	op.Schema = `name: string @index(fulltext) .`
-	if err := s.dg.Alter(context.Background(), op); err != nil {
-		log.Fatal(err)
-	}
 
 	r := m.Run()
-	for _, cmd := range s.Commands {
-		cmd.Process.Kill()
-	}
-	for _, dir := range s.Dirs {
-		os.RemoveAll(dir)
-	}
 	os.Exit(r)
 }
 
@@ -260,12 +216,12 @@ func TestTxnRead5(t *testing.T) {
 
 	require.NoError(t, txn.Commit(context.Background()))
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
-	// We don't supply startTs, it should be fetched from zero by dgraph server.
+	// We don't supply startTs, it should be fetched from zero by dgraph alpha.
 	req := api.Request{
 		Query: q,
 	}
 
-	conn, err := grpc.Dial("localhost:9081", grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -483,8 +439,10 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 
 	txn := s.dg.NewTxn()
 
-	mu := &api.Mutation{}
-	mu.SetJson = []byte(`{"name": "Manish"}`)
+	mu := &api.Mutation{
+		CommitNow: true,
+		SetJson:   []byte(`{"name": "Manish"}`),
+	}
 	assigned, err := txn.Mutate(context.Background(), mu)
 	if err != nil {
 		log.Fatalf("Error while running mutation: %v\n", err)
@@ -497,6 +455,8 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 		uid = u
 	}
 
+	txn = s.dg.NewTxn()
+	defer txn.Discard(context.Background())
 	q := `{ me(func: le(name, "Manish")) { uid }}`
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
@@ -504,6 +464,106 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	}
 	expectedResp := []byte(fmt.Sprintf(`{"me":[{"uid":"%s"}]}`, uid))
 	x.AssertTrue(bytes.Equal(resp.Json, expectedResp))
+}
+
+func TestEmailUpsert(t *testing.T) {
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, s.dg.Alter(context.Background(), op))
+
+	op = &api.Operation{}
+	op.Schema = `email: string @index(exact) @upsert .`
+	if err := s.dg.Alter(context.Background(), op); err != nil {
+		log.Fatal(err)
+	}
+
+	txn1 := s.dg.NewTxn()
+	mu := &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "_:user1", "email": "email@email.org"}`)
+	_, err := txn1.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn2 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "_:user2", "email": "email@email.org"}`)
+	_, err = txn2.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn3 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "_:user3", "email": "email3@email.org"}`)
+	_, err = txn3.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	require.NoError(t, txn1.Commit(context.Background()))
+	require.NotNil(t, txn2.Commit(context.Background()))
+	require.NoError(t, txn3.Commit(context.Background()))
+}
+
+// TestFriendList tests that we are not able to set a node to node edge between
+// the same nodes concurrently.
+func TestFriendList(t *testing.T) {
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, s.dg.Alter(context.Background(), op))
+
+	op = &api.Operation{}
+	op.Schema = `
+	friend: uid @reverse .`
+	if err := s.dg.Alter(context.Background(), op); err != nil {
+		log.Fatal(err)
+	}
+
+	txn1 := s.dg.NewTxn()
+	mu := &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "friend": [{"uid": "0x02"}]}`)
+	_, err := txn1.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn2 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "friend": [{"uid": "0x02"}]}`)
+	_, err = txn2.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn3 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "friend": [{"uid": "0x03"}]}`)
+	_, err = txn3.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	require.NoError(t, txn1.Commit(context.Background()))
+	require.NotNil(t, txn2.Commit(context.Background()))
+	require.NoError(t, txn3.Commit(context.Background()))
+}
+
+// TestNameSet tests that we are not able to set a property edge for the same
+// subject id concurrently.
+func TestNameSet(t *testing.T) {
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, s.dg.Alter(context.Background(), op))
+
+	op = &api.Operation{}
+	op.Schema = `name: string .`
+	if err := s.dg.Alter(context.Background(), op); err != nil {
+		log.Fatal(err)
+	}
+
+	txn1 := s.dg.NewTxn()
+	mu := &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "name": "manish"}`)
+	_, err := txn1.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	txn2 := s.dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(`{"uid": "0x01", "name": "contributor"}`)
+	_, err = txn2.Mutate(context.Background(), mu)
+	assert.Nil(t, err)
+
+	require.NoError(t, txn1.Commit(context.Background()))
+	require.NotNil(t, txn2.Commit(context.Background()))
 }
 
 func TestSPStar(t *testing.T) {

@@ -2,7 +2,7 @@
 title = "Query Language"
 +++
 
-Dgraph's GraphQL+- is based on Facebook's [GraphQL](https://facebook.github.io/graphql/).  GraphQL wasn't developed for Graph databases, but it's graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.  We've modified the language to better support graph operations, adding and removing features to get the best fit for graph databases.  We're calling this simplified, feature rich language, ''GraphQL+-''.
+Dgraph's GraphQL+- is based on Facebook's [GraphQL](https://facebook.github.io/graphql/).  GraphQL wasn't developed for Graph databases, but its graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.  We've modified the language to better support graph operations, adding and removing features to get the best fit for graph databases.  We're calling this simplified, feature rich language, ''GraphQL+-''.
 
 GraphQL+- is a work in progress. We're adding more features and we might further simplify existing ones.
 
@@ -51,7 +51,7 @@ Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x146a6)) {
+  bladerunner(func: uid(0x107b2c)) {
     uid
     name@en
     initial_release_date
@@ -80,11 +80,15 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x146a6, 0x34a7c)) {
+  movies(func: uid(0x107b2c, 0x85f961)) {
     uid
     name@en
     initial_release_date
     netflix_id
+    ~director.film {
+      uid
+      name@en
+    }
   }
 }
 {{< /runnable >}}
@@ -363,42 +367,56 @@ The following steps are applied during index generation and to process full text
 1. Tokenization (according to Unicode word boundaries).
 1. Conversion to lowercase.
 1. Unicode-normalization (to [Normalization Form KC](http://unicode.org/reports/tr15/#Norm_Forms)).
-1. Stemming using language-specific stemmer.
-1. Stop words removal
+1. Stemming using language-specific stemmer (if supported by language).
+1. Stop words removal (if supported by language).
 
-Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing.  See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
+Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
 
-Following table contains all supported languages and corresponding country-codes.
+Following table contains all supported languages, corresponding country-codes, stemming and stop words filtering support.
 
-| Language      | Country Code   |
-| :-----------: | :------------: |
-| Danish        | da             |
-| Dutch         | nl             |
-| English       | en             |
-| Finnish       | fi             |
-| French        | fr             |
-| German        | de             |
-| Hungarian     | hu             |
-| Italian       | it             |
-| Norwegian     | no             |
-| Portuguese    | pt             |
-| Romanian      | ro             |
-| Russian       | ru             |
-| Spanish       | es             |
-| Swedish       | sv             |
-| Turkish       | tr             |
-| Chinese       | zh             |
-| Japanese      | ja             |
-| Korean        | ko             |
+|  Language  | Country Code | Stemming | Stop words |
+| :--------: | :----------: | :------: | :--------: |
+|   Arabic   |      ar      | &#10003; |  &#10003;  |
+|  Armenian  |      hy      |          |  &#10003;  |
+|   Basque   |      eu      |          |  &#10003;  |
+| Bulgarian  |      bg      |          |  &#10003;  |
+|  Catalan   |      ca      |          |  &#10003;  |
+|  Chinese   |      zh      | &#10003; |  &#10003;  |
+|   Czech    |      cs      |          |  &#10003;  |
+|   Danish   |      da      | &#10003; |  &#10003;  |
+|   Dutch    |      nl      | &#10003; |  &#10003;  |
+|  English   |      en      | &#10003; |  &#10003;  |
+|  Finnish   |      fi      | &#10003; |  &#10003;  |
+|   French   |      fr      | &#10003; |  &#10003;  |
+|   Gaelic   |      ga      |          |  &#10003;  |
+|  Galician  |      gl      |          |  &#10003;  |
+|   German   |      de      | &#10003; |  &#10003;  |
+|   Greek    |      el      |          |  &#10003;  |
+|   Hindi    |      hi      | &#10003; |  &#10003;  |
+| Hungarian  |      hu      | &#10003; |  &#10003;  |
+| Indonesian |      id      |          |  &#10003;  |
+|  Italian   |      it      | &#10003; |  &#10003;  |
+|  Japanese  |      ja      | &#10003; |  &#10003;  |
+|   Korean   |      ko      | &#10003; |  &#10003;  |
+| Norwegian  |      no      | &#10003; |  &#10003;  |
+|  Persian   |      fa      |          |  &#10003;  |
+| Portuguese |      pt      | &#10003; |  &#10003;  |
+|  Romanian  |      ro      | &#10003; |  &#10003;  |
+|  Russian   |      ru      | &#10003; |  &#10003;  |
+|  Spanish   |      es      | &#10003; |  &#10003;  |
+|  Swedish   |      sv      | &#10003; |  &#10003;  |
+|  Turkish   |      tr      | &#10003; |  &#10003;  |
 
 
 Query Example: All names that have `run`, `running`, etc and `man`.  Stop word removal eliminates `the` and `maybe`
 
+{{< runnable >}}
 {
   movie(func:alloftext(name@en, "the man maybe runs")) {
 	 name@en
   }
 }
+{{< /runnable >}}
 
 
 ### Inequality
@@ -574,7 +592,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 
 {{< runnable >}}
 {
-  films(func: uid(0xcceb)) {
+  films(func: uid(0x878110)) {
     name@hi
     actor.film {
       performance.film {
@@ -647,15 +665,15 @@ Index Required: none
 
 While the `uid` function filters nodes at the current level based on UID, function `uid_in` allows looking ahead along an edge to check that it leads to a particular UID.  This can often save an extra query block and avoids returning the edge.
 
-`uid_in` cannot be used at root, it accepts one UID constant as it's argument (not a variable).
+`uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
 
 
-Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 597046).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x6777ba).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
-    director.film @filter(uid_in(~director.film, 597046)){
+    director.film @filter(uid_in(~director.film, 0x6777ba)){
       name@en
     }
   }
@@ -703,7 +721,7 @@ Here is how you would add a `Point`.
 {
   set {
     <_:0xeb1dde9c> <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
-    <_:0xf15448e2> <name> "Hamon Tower" .
+    <_:0xeb1dde9c> <name> "Hamon Tower" .
   }
 }
 ```
@@ -985,13 +1003,13 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
 }
 {{< /runnable >}}
 
-The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x52753`.  The results after Strictly Ballroom can now be obtained with `after`.
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x264ce8`.  The results after Strictly Ballroom can now be obtained with `after`.
 
 {{< runnable >}}
 {
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
-    director.film (first:5, after: 0x52753) {
+    director.film (first:5, after: 0x264ce8) {
       uid
       name@en
     }
@@ -1073,6 +1091,8 @@ Sortable Types: `int`, `float`, `String`, `dateTime`, `id`, `default`
 Results can be sorted in ascending, `orderasc` or decending `orderdesc` order by a predicate or variable.
 
 For sorting on predicates with [sortable indices]({{< relref "#sortable-indices">}}), Dgraph sorts on the values and with the index in parallel and returns whichever result is computed first.
+
+Sorted queries retrieve up to 1000 results by default. This can be changed with [first]({{< relref "#first">}}).
 
 
 Query Example: French director Jean-Pierre Jeunet's movies sorted by release date.
@@ -1288,7 +1308,7 @@ Types : `int`, `float`, `String`, `dateTime`, `id`, `default`, `geo`, `bool`
 
 Value variables store scalar values.  Value variables are a map from the UIDs of the enclosing block to the corresponding values.
 
-It therefor only makes sense to use the values from a value variable in a context that matches the same UIDs - if used in a block matching different UIDs the value variable is undefined.
+It therefore only makes sense to use the values from a value variable in a context that matches the same UIDs - if used in a block matching different UIDs the value variable is undefined.
 
 It is an error to define a value variable but not use it elsewhere in the query.
 
@@ -1758,6 +1778,8 @@ Query Example: All predicates from actor Geoffrey Rush and the count of such pre
 Predicates can be stored in a variable and passed to `expand()` to expand all the predicates in the variable.
 
 If `_all_` is passed as an argument to `expand()`, all the predicates at that level are retrieved. More levels can be specfied in a nested fashion under `expand()`.
+If `_forward_` is passed as an argument to `expand()`, all predicates at that level (minus any reverse predicates) are retrieved.
+If `_reverse_` is passed as an argument to `expand()`, only the reverse predicates are retrieved.
 
 Query Example: Predicates saved to a variable and queried with `expand()`.
 {{< runnable >}}
@@ -2174,13 +2196,17 @@ For existing data, Dgraph computes all reverse edges.  For data added after the 
 
 ### Querying Schema
 
-A schema query can query for the whole schema
+A schema query queries for the whole schema:
 
 ```
-schema { }
+schema {}
 ```
 
-with particular schema fields
+{{% notice "note" %}}
+Unlike regular queries, the schema query is not surrounded by curly braces.
+{{% /notice %}}
+
+You can query for particular schema fields in the query body.
 
 ```
 schema {
@@ -2195,7 +2221,7 @@ schema {
 }
 ```
 
-and for particular predicates
+You can also query for particular predicates:
 
 ```
 schema(pred: [name, friend]) {
@@ -2548,9 +2574,9 @@ Calculating the average ratings of users requires a variable that maps users to 
 {{< runnable >}}
 
 {
-  var(func: has(~rated)) {
+  var(func: has(rated)) {
     num_rated as math(1)
-    ~rated @facets(r as rating) {
+    rated @facets(r as rating) {
       avg_rating as math(r / num_rated)
     }
   }
@@ -2567,9 +2593,12 @@ Calculating the average ratings of users requires a variable that maps users to 
 
 The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (atleast one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
 
-By default the shortest path is returned, with `numpaths: k`, the k-shortest paths are returned.
+By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
 
-{{% notice "note" %}}If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.{{% /notice %}}
+{{% notice "note" %}}
+- If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.
+- If you're seeing queries take a long time, you can set a [gRPC deadline](https://grpc.io/blog/deadlines) to stop the query after a certain amount of time.
+{{% /notice %}}
 
 For example:
 ```sh
@@ -2686,31 +2715,19 @@ curl localhost:8080/query -XPOST -d $'{
         "friend": [
           {
             "uid": "0x3",
+            "friend|weight": 0.1,
             "friend": [
               {
                 "uid": "0x4",
+                "friend|weight": 0.2,
                 "friend": [
                   {
                     "uid": "0x5",
-                    "@facets": {
-                      "_": {
-                        "weight": 0.3
-                      }
-                    }
+                    "friend|weight": 0.3
                   }
-                ],
-                "@facets": {
-                  "_": {
-                    "weight": 0.2
-                  }
-                }
+                ]
               }
-            ],
-            "@facets": {
-              "_": {
-                "weight": 0.1
-              }
-            }
+            ]
           }
         ]
       }
@@ -3086,7 +3103,7 @@ understand how `Tokens` method should be implemented.
 
 When Dgraph sees new edges that are to be indexed by your tokenizer, it
 will tokenize the value. The resultant tokens are used as keys for posting
-lists. The edge subject is then added to the posting list for each each token.
+lists. The edge subject is then added to the posting list for each token.
 
 When a query root search occurs, the search value is tokenized. The result of
 the search is all of the nodes in the union or intersection of the correponding

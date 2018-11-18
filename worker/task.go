@@ -1,51 +1,60 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/metadata"
-
 	"github.com/dgraph-io/badger"
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	ctask "github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
-	emptyUIDList   intern.List
-	emptyResult    intern.Result
-	emptyValueList = intern.ValueList{Values: []*intern.TaskValue{}}
+	emptyUIDList   pb.List
+	emptyResult    pb.Result
+	emptyValueList = pb.ValueList{Values: []*pb.TaskValue{}}
 )
 
 func invokeNetworkRequest(
-	ctx context.Context, addr string, f func(context.Context, intern.WorkerClient) (interface{}, error)) (interface{}, error) {
+	ctx context.Context, addr string, f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.Get().Get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
@@ -55,7 +64,7 @@ func invokeNetworkRequest(
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)
 	}
-	c := intern.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(conn)
 	return f(ctx, c)
 }
 
@@ -65,7 +74,7 @@ const backupRequestGracePeriod = time.Second
 func processWithBackupRequest(
 	ctx context.Context,
 	gid uint32,
-	f func(context.Context, intern.WorkerClient) (interface{}, error)) (interface{}, error) {
+	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {
 		return nil, errors.New("no network connection")
@@ -124,11 +133,11 @@ func processWithBackupRequest(
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
-func ProcessTaskOverNetwork(ctx context.Context, q *intern.Query) (*intern.Result, error) {
+func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
 	gid := groups().BelongsTo(attr)
 	if gid == 0 {
-		return &intern.Result{}, errUnservedTablet
+		return &pb.Result{}, errUnservedTablet
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("attr: %v groupId: %v, readTs: %d", attr, gid, q.ReadTs)
@@ -139,23 +148,15 @@ func ProcessTaskOverNetwork(ctx context.Context, q *intern.Query) (*intern.Resul
 		return processTask(ctx, q, gid)
 	}
 
-	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c intern.WorkerClient) (interface{}, error) {
-		if tr, ok := trace.FromContext(ctx); ok {
-			id := fmt.Sprintf("%d", rand.Int())
-			tr.LazyPrintf("Sending request to server, id: %s", id)
-			ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("trace", id))
-		}
+	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
 		return c.ServeTask(ctx, q)
 	})
 	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while worker.ServeTask: %v", err)
-		}
 		return nil, err
 	}
-	reply := result.(*intern.Result)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
+	reply := result.(*pb.Result)
+	if span := otrace.FromContext(ctx); span != nil {
+		span.Annotatef(nil, "Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
 	}
 	return reply, nil
 }
@@ -170,14 +171,14 @@ func convertValue(attr, data string) (types.Val, error) {
 	if !t.IsScalar() {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
-	src := types.Val{types.StringID, []byte(data)}
+	src := types.Val{Tid: types.StringID, Value: []byte(data)}
 	dst, err := types.Convert(src, t)
 	return dst, err
 }
 
 // Returns nil byte on error
-func convertToType(v types.Val, typ types.TypeID) (*intern.TaskValue, error) {
-	result := &intern.TaskValue{ValType: typ.Enum(), Val: x.Nilbyte}
+func convertToType(v types.Val, typ types.TypeID) (*pb.TaskValue, error) {
+	result := &pb.TaskValue{ValType: typ.Enum(), Val: x.Nilbyte}
 	if v.Tid == typ {
 		result.Val = v.Value.([]byte)
 		return result, nil
@@ -215,7 +216,7 @@ const (
 	StandardFn = 100
 )
 
-func parseFuncType(srcFunc *intern.SrcFunction) (FuncType, string) {
+func parseFuncType(srcFunc *pb.SrcFunction) (FuncType, string) {
 	if srcFunc == nil {
 		return NotAFunction, ""
 	}
@@ -275,10 +276,10 @@ type result struct {
 }
 
 type funcArgs struct {
-	q     *intern.Query
+	q     *pb.Query
 	gid   uint32
 	srcFn *functionContext
-	out   *intern.Result
+	out   *pb.Result
 }
 
 // The function tells us whether we want to fetch value posting lists or uid posting lists.
@@ -299,10 +300,8 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 		return false, nil
 	case NotAFunction:
 		return typ.IsScalar(), nil
-	default:
-		return false, x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
 	}
-	return true, nil
+	return false, x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
 }
 
 // Handles fetching of value posting lists and filtering of uids based on that.
@@ -363,10 +362,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				out.Counts = append(out.Counts, 0)
 			} else {
 				out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
-				out.FacetMatrix = append(out.FacetMatrix, &intern.FacetsList{})
+				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				if q.ExpandAll {
 					// To keep the cardinality same as that of ValueMatrix.
-					out.LangMatrix = append(out.LangMatrix, &intern.LangList{})
+					out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
 				}
 			}
 			continue
@@ -379,13 +378,13 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			if err != nil {
 				return err
 			}
-			out.LangMatrix = append(out.LangMatrix, &intern.LangList{langTags})
+			out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
 		}
 
 		valTid := vals[0].Tid
-		newValue := &intern.TaskValue{ValType: valTid.Enum(), Val: x.Nilbyte}
-		uidList := new(intern.List)
-		var vl intern.ValueList
+		newValue := &pb.TaskValue{ValType: valTid.Enum(), Val: x.Nilbyte}
+		uidList := new(pb.List)
+		var vl pb.ValueList
 		for _, val := range vals {
 			newValue, err = convertToType(val, srcFn.atype)
 			if err != nil {
@@ -421,7 +420,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				fs = []*api.Facet{}
 			}
 			out.FacetMatrix = append(out.FacetMatrix,
-				&intern.FacetsList{[]*intern.Facets{{fs}}})
+				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
 		}
 
 		switch {
@@ -507,18 +506,18 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		var perr error
 		filteredRes = make([]*result, 0)
-		err = pl.Postings(opts, func(p *intern.Posting) bool {
+		err = pl.Postings(opts, func(p *pb.Posting) error {
 			res := true
 			res, perr = applyFacetsTree(p.Facets, facetsTree)
 			if perr != nil {
-				return false // break loop.
+				return posting.ErrStopIteration
 			}
 			if res {
 				filteredRes = append(filteredRes, &result{
 					uid:    p.Uid,
 					facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 			}
-			return true // continue iteration.
+			return nil // continue iteration.
 		})
 		if err != nil {
 			return err
@@ -528,11 +527,11 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		// add facets to result.
 		if q.FacetParam != nil {
-			var fcsList []*intern.Facets
+			var fcsList []*pb.Facets
 			for _, fres := range filteredRes {
-				fcsList = append(fcsList, &intern.Facets{fres.facets})
+				fcsList = append(fcsList, &pb.Facets{Facets: fres.facets})
 			}
-			out.FacetMatrix = append(out.FacetMatrix, &intern.FacetsList{fcsList})
+			out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 		}
 
 		switch {
@@ -551,21 +550,20 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 			count := int64(len)
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &intern.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == HasFn:
-			len := pl.Length(args.q.ReadTs, 0)
-			if len == -1 {
-				return posting.ErrTsTooOld
+			empty, err := pl.IsEmpty(args.q.ReadTs, 0)
+			if err != nil {
+				return err
 			}
-			count := int64(len)
-			if EvalCompare("gt", count, 0) {
-				tlist := &intern.List{[]uint64{q.UidList.Uids[i]}}
+			if !empty {
+				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		case srcFn.fnType == UidInFn:
-			reqList := &intern.List{[]uint64{srcFn.uidPresent}}
+			reqList := &pb.List{Uids: []uint64{srcFn.uidPresent}}
 			topts := posting.ListOptions{
 				ReadTs:    args.q.ReadTs,
 				AfterUID:  0,
@@ -576,12 +574,12 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				return err
 			}
 			if len(plist.Uids) > 0 {
-				tlist := &intern.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 		default:
 			// The more usual case: Getting the UIDs.
-			uidList := new(intern.List)
+			uidList := new(pb.List)
 			for _, fres := range filteredRes {
 				uidList.Uids = append(uidList.Uids, fres.uid)
 			}
@@ -592,20 +590,17 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 }
 
 // processTask processes the query, accumulates and returns the result.
-func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Result, error) {
-	n := groups().Node
+func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
+	span := otrace.FromContext(ctx)
+	span.Annotate(nil, "Waiting for startTs")
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Done waiting for maxPending to catch up for Attr %q, readTs: %d\n", q.Attr, q.ReadTs)
+	if span != nil {
+		span.Annotatef(nil, "Done waiting for maxPending to catch up for Attr %q, readTs: %d\n",
+			q.Attr, q.ReadTs)
 	}
-	if err := n.WaitForMinProposal(ctx, q.LinRead); err != nil {
-		return &emptyResult, err
-	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Done waiting for applied watermark attr %q\n", q.Attr)
-	}
+
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it
 	// wouldn't know that this group is no longer serving this predicate.
 	// There's no issue if a we are serving a particular tablet and we get partitioned away from
@@ -617,13 +612,11 @@ func processTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Resu
 	if err != nil {
 		return &emptyResult, err
 	}
-	out.LinRead = &api.LinRead{Ids: make(map[uint32]uint64)}
-	out.LinRead.Ids[n.RaftContext.Group] = n.Applied.DoneUntil()
 	return out, nil
 }
 
-func helpProcessTask(ctx context.Context, q *intern.Query, gid uint32) (*intern.Result, error) {
-	out := new(intern.Result)
+func helpProcessTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
+	out := new(pb.Result)
 	attr := q.Attr
 
 	srcFn, err := parseSrcFn(q)
@@ -776,14 +769,14 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 	}
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
-	empty := intern.List{}
+	empty := pb.List{}
 	uids, err := uidsForRegex(attr, arg, query, &empty)
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
 	if uids != nil {
 		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
-		filtered := &intern.List{}
+		filtered := &pb.List{}
 		for _, uid := range uids.Uids {
 			select {
 			case <-ctx.Done():
@@ -961,7 +954,7 @@ func filterGeoFunction(arg funcArgs) error {
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	isList := schema.State().IsList(attr)
-	filtered := &intern.List{}
+	filtered := &pb.List{}
 	for _, uid := range uids.Uids {
 		pl, err := posting.Get(x.DataKey(attr, uid))
 		if err != nil {
@@ -974,7 +967,7 @@ func filterGeoFunction(arg funcArgs) error {
 			} else if err != nil {
 				return err
 			}
-			newValue := &intern.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
+			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
 			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
 				filtered.Uids = append(filtered.Uids, uid)
 			}
@@ -990,7 +983,7 @@ func filterGeoFunction(arg funcArgs) error {
 			return err
 		}
 		for _, val := range vals {
-			newValue := &intern.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
+			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
 			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
 				filtered.Uids = append(filtered.Uids, uid)
 				break
@@ -1004,12 +997,25 @@ func filterGeoFunction(arg funcArgs) error {
 	return nil
 }
 
+// TODO: This function is really slow when there are a lot of UIDs to filter, for e.g. when used in
+// `has(name)`. We could potentially have a query level cache, which can be used to speed things up
+// a bit. Or, try to reduce the number of UIDs which make it here.
 func filterStringFunction(arg funcArgs) error {
+	if glog.V(3) {
+		glog.Infof("filterStringFunction. arg: %+v\n", arg.q)
+		defer glog.Infof("Done filterStringFunction")
+	}
+
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	var values [][]types.Val
 	filteredUids := make([]uint64, 0, len(uids.Uids))
 	lang := langForFunc(arg.q.Langs)
+
+	// This iteration must be done in a serial order, because we're also storing the values in a
+	// matrix, to check it later.
+	// TODO: This function can be optimized by having a query specific cache, which can be populated
+	// by the handleHasFunction for e.g. for a `has(name)` query.
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
 		pl, err := posting.Get(key)
@@ -1051,7 +1057,7 @@ func filterStringFunction(arg funcArgs) error {
 		}
 	}
 
-	filtered := &intern.List{Uids: filteredUids}
+	filtered := &pb.List{Uids: filteredUids}
 	filter := stringFilter{
 		funcName: arg.srcFn.fname,
 		funcType: arg.srcFn.fnType,
@@ -1105,7 +1111,7 @@ const (
 	eq = "eq" // equal
 )
 
-func ensureArgsCount(srcFunc *intern.SrcFunction, expected int) error {
+func ensureArgsCount(srcFunc *pb.SrcFunction, expected int) error {
 	if len(srcFunc.Args) != expected {
 		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
 			srcFunc.Name, expected, len(srcFunc.Args), srcFunc.Args)
@@ -1113,7 +1119,7 @@ func ensureArgsCount(srcFunc *intern.SrcFunction, expected int) error {
 	return nil
 }
 
-func checkRoot(q *intern.Query, fc *functionContext) {
+func checkRoot(q *pb.Query, fc *functionContext) {
 	if q.UidList == nil {
 		// Fetch Uids from Store and populate in q.UidList.
 		fc.n = 0
@@ -1132,7 +1138,7 @@ func langForFunc(langs []string) string {
 	return langs[0]
 }
 
-func parseSrcFn(q *intern.Query) (*functionContext, error) {
+func parseSrcFn(q *pb.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
 	fc := &functionContext{fnType: fnType, fname: f}
@@ -1161,7 +1167,7 @@ func parseSrcFn(q *intern.Query) (*functionContext, error) {
 		args := q.SrcFunc.Args
 		// Only eq can have multiple args. It should have atleast one.
 		if fc.fname == eq {
-			if len(args) <= 0 {
+			if len(args) < 1 {
 				return nil, x.Errorf("eq expects atleast 1 argument.")
 			}
 		} else { // Others can have only 1 arg.
@@ -1256,7 +1262,8 @@ func parseSrcFn(q *intern.Query) (*functionContext, error) {
 		if !ok {
 			return nil, x.Errorf("Could not find tokenizer with name %q", tokerName)
 		}
-		fc.tokens, err = tok.BuildTokens(valToTok.Value, tokenizer)
+		fc.tokens, err = tok.BuildTokens(valToTok.Value,
+			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		x.AssertTrue(fnName == "allof" || fnName == "anyof")
 		fc.intersectDest = strings.HasSuffix(fnName, "allof")
@@ -1305,7 +1312,10 @@ func parseSrcFn(q *intern.Query) (*functionContext, error) {
 }
 
 // ServeTask is used to respond to a query.
-func (w *grpcWorker) ServeTask(ctx context.Context, q *intern.Query) (*intern.Result, error) {
+func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, error) {
+	ctx, span := otrace.StartSpan(ctx, "worker.ServeTask")
+	defer span.End()
+
 	if ctx.Err() != nil {
 		return &emptyResult, ctx.Err()
 	}
@@ -1315,18 +1325,15 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *intern.Query) (*intern.Re
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
 	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
-	}
+	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	if !groups().ServesGroup(gid) {
-		// TODO(pawan) - Log this when we have debug logs.
 		return nil, fmt.Errorf("Temporary error, attr: %q groupId: %v Request sent to wrong server",
 			q.Attr, gid)
 	}
 
 	type reply struct {
-		result *intern.Result
+		result *pb.Result
 		err    error
 	}
 	c := make(chan reply, 1)
@@ -1470,7 +1477,7 @@ type facetsTree struct {
 	function *facetsFunc
 }
 
-func preprocessFilter(tree *intern.FilterTree) (*facetsTree, error) {
+func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 	if tree == nil {
 		return nil, nil
 	}
@@ -1493,7 +1500,7 @@ func preprocessFilter(tree *intern.FilterTree) (*facetsTree, error) {
 		case CompareAttrFn:
 			ftree.function.val = types.Val{Tid: types.StringID, Value: []byte(tree.Func.Args[0])}
 		case StandardFn:
-			argTokens, aerr := tok.GetTokens(tree.Func.Args)
+			argTokens, aerr := tok.GetTermTokens(tree.Func.Args)
 			if aerr != nil { // query error ; stop processing.
 				return nil, aerr
 			}
@@ -1542,7 +1549,7 @@ type countParams struct {
 	fn      string // function name
 }
 
-func (cp *countParams) evaluate(out *intern.Result) error {
+func (cp *countParams) evaluate(out *pb.Result) error {
 	count := cp.count
 	var illegal bool
 	switch cp.fn {
@@ -1596,13 +1603,13 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 		Attr: cp.attr,
 	}
 	countPrefix := pk.CountPrefix(cp.reverse)
-	it := posting.NewTxnPrefixIterator(txn, itOpt, countPrefix, countKey)
-	defer it.Close()
 
-	for ; it.Valid(); it.Next() {
-		key := it.Key()
-		nk := make([]byte, len(key))
-		copy(nk, key)
+	itr := txn.NewIterator(itOpt)
+	defer itr.Close()
+
+	for itr.Seek(countKey); itr.ValidForPrefix(countPrefix); itr.Next() {
+		item := itr.Item()
+		key := item.KeyCopy(nil)
 		pl, err := posting.Get(key)
 		if err != nil {
 			return err
@@ -1616,44 +1623,69 @@ func (cp *countParams) evaluate(out *intern.Result) error {
 	return nil
 }
 
-// TODO - Check meta for empty PL and skip it.
-// This is not transactionally isolated, add to docs
-func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result) error {
-	tlist := &intern.List{}
+func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
+	if glog.V(3) {
+		glog.Infof("handleHasFunction query: %+v\n", q)
+	}
 
 	txn := pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
 
-	itOpt := badger.DefaultIteratorOptions
-	itOpt.PrefetchValues = false
-
-	pk := x.ParsedKey{
+	initKey := x.ParsedKey{
 		Attr: q.Attr,
 	}
 	startKey := x.DataKey(q.Attr, q.AfterUid+1)
-	prefix := pk.DataPrefix()
+	prefix := initKey.DataPrefix()
 	if q.Reverse {
+		// Reverse does not mean reverse iteration. It means we're looking for
+		// the reverse index.
 		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
-		prefix = pk.ReversePrefix()
+		prefix = initKey.ReversePrefix()
 	}
 
-	w := 0
-	it := posting.NewTxnPrefixIterator(txn, itOpt, prefix, startKey)
+	result := &pb.List{}
+	var prevKey []byte
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.PrefetchValues = false
+	itOpt.AllVersions = true
+	it := txn.NewIterator(itOpt)
 	defer it.Close()
-	for ; it.Valid(); it.Next() {
-		if it.UserMeta() == posting.BitEmptyPosting {
+
+	// This function could be switched to the stream.Lists framework, but after the change to use
+	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
+	// occurs in filterStringFunction (like has(name) queries).
+	for it.Seek(startKey); it.ValidForPrefix(prefix); {
+		item := it.Item()
+		if bytes.Equal(item.Key(), prevKey) {
+			it.Next()
+			continue
+		}
+		prevKey = append(prevKey[:0], item.Key()...)
+
+		// Parse the key upfront, otherwise ReadPostingList would advance the
+		// iterator.
+		pk := x.Parse(item.Key())
+
+		// The following optimization speeds up this iteration considerably, because it avoids
+		// the need to run ReadPostingList.
+		if item.UserMeta()&posting.BitCompletePosting > 0 {
+			// This bit would only be set if there are valid uids in UidPack.
+			result.Uids = append(result.Uids, pk.Uid)
 			continue
 		}
 
-		pl := posting.GetLru(it.Key())
-		if pl != nil && pl.IsEmpty() {
-			// empty pl's can be present in lru
-			// We merge the keys on badger and the keys present in memory so
-			// we need to skip empty pls
-			continue
+		// We do need to copy over the key for ReadPostingList.
+		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
+		if err != nil {
+			return err
 		}
-		pk := x.Parse(it.Key())
-		if w%1000 == 0 {
+		if empty, err := l.IsEmpty(q.ReadTs, 0); err != nil {
+			return err
+		} else if !empty {
+			result.Uids = append(result.Uids, pk.Uid)
+		}
+
+		if len(result.Uids)%100000 == 0 {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -1664,10 +1696,7 @@ func handleHasFunction(ctx context.Context, q *intern.Query, out *intern.Result)
 				}
 			}
 		}
-		w++
-		tlist.Uids = append(tlist.Uids, pk.Uid)
 	}
-
-	out.UidMatrix = append(out.UidMatrix, tlist)
+	out.UidMatrix = append(out.UidMatrix, result)
 	return nil
 }

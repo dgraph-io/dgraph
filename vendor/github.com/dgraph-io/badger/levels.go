@@ -170,6 +170,62 @@ func (s *levelsController) cleanupLevels() error {
 	return firstErr
 }
 
+// This function picks all tables from all levels, creates a manifest changeset,
+// applies it, and then decrements the refs of these tables, which would result
+// in their deletion. It spares one table from L0, to keep the badgerHead key
+// persisted, so we don't lose where we are w.r.t. value log.
+// NOTE: This function in itself isn't sufficient to completely delete all the
+// data. After this, one would still need to iterate over the KV pairs and mark
+// them as deleted.
+func (s *levelsController) deleteLSMTree() (int, error) {
+	var all []*table.Table
+	var keepOne *table.Table
+	for _, l := range s.levels {
+		l.RLock()
+		if l.level == 0 && len(l.tables) > 1 {
+			// Skip the last table. We do this to keep the badgerMove key persisted.
+			lastIdx := len(l.tables) - 1
+			keepOne = l.tables[lastIdx]
+			all = append(all, l.tables[:lastIdx]...)
+		} else {
+			all = append(all, l.tables...)
+		}
+		l.RUnlock()
+	}
+	if len(all) == 0 {
+		return 0, nil
+	}
+
+	// Generate the manifest changes.
+	changes := []*protos.ManifestChange{}
+	for _, table := range all {
+		changes = append(changes, makeTableDeleteChange(table.ID()))
+	}
+	changeSet := protos.ManifestChangeSet{Changes: changes}
+	if err := s.kv.manifest.addChanges(changeSet.Changes); err != nil {
+		return 0, err
+	}
+
+	for _, l := range s.levels {
+		l.Lock()
+		l.totalSize = 0
+		if l.level == 0 && len(l.tables) > 1 {
+			l.tables = []*table.Table{keepOne}
+			l.totalSize += keepOne.Size()
+		} else {
+			l.tables = l.tables[:0]
+		}
+		l.Unlock()
+	}
+	// Now allow deletion of tables.
+	for _, table := range all {
+		if err := table.DecrRef(); err != nil {
+			return 0, err
+		}
+	}
+	return len(all), nil
+}
+
 func (s *levelsController) startCompact(lc *y.Closer) {
 	n := s.kv.opt.NumCompactors
 	lc.AddRunning(n - 1)
@@ -308,10 +364,10 @@ func (s *levelsController) compactBuildTables(
 
 	it.Rewind()
 
-	// Pick up the currently pending transactions' min readTs, so we can discard versions below this
-	// readTs. We should never discard any versions starting from above this timestamp, because that
-	// would affect the snapshot view guarantee provided by transactions.
-	minReadTs := s.kv.orc.readMark.MinReadTs()
+	// Pick a discard ts, so we can discard versions below this ts. We should
+	// never discard any versions starting from above this timestamp, because
+	// that would affect the snapshot view guarantee provided by transactions.
+	discardTs := s.kv.orc.discardAtOrBelow()
 
 	// Start generating new tables.
 	type newTableResult struct {
@@ -350,7 +406,7 @@ func (s *levelsController) compactBuildTables(
 
 			vs := it.Value()
 			version := y.ParseTs(it.Key())
-			if version <= minReadTs {
+			if version <= discardTs {
 				// Keep track of the number of versions encountered for this key. Only consider the
 				// versions which are below the minReadTs, otherwise, we might end up discarding the
 				// only valid version for a running transaction.
@@ -673,8 +729,7 @@ func (s *levelsController) addLevel0Table(t *table.Table) error {
 		// Stall. Make sure all levels are healthy before we unstall.
 		var timeStart time.Time
 		{
-			s.elog.Printf("STALLED STALLED STALLED STALLED STALLED STALLED STALLED STALLED: %v\n",
-				time.Since(lastUnstalled))
+			s.elog.Printf("STALLED STALLED STALLED: %v\n", time.Since(lastUnstalled))
 			s.cstatus.RLock()
 			for i := 0; i < s.kv.opt.MaxLevels; i++ {
 				s.elog.Printf("level=%d. Status=%s Size=%d\n",
@@ -702,8 +757,7 @@ func (s *levelsController) addLevel0Table(t *table.Table) error {
 			}
 		}
 		{
-			s.elog.Printf("UNSTALLED UNSTALLED UNSTALLED UNSTALLED UNSTALLED UNSTALLED: %v\n",
-				time.Since(timeStart))
+			s.elog.Printf("UNSTALLED UNSTALLED UNSTALLED: %v\n", time.Since(timeStart))
 			lastUnstalled = time.Now()
 		}
 	}
@@ -717,12 +771,13 @@ func (s *levelsController) close() error {
 }
 
 // get returns the found value if any. If not found, we return nil.
-func (s *levelsController) get(key []byte) (y.ValueStruct, error) {
+func (s *levelsController) get(key []byte, maxVs *y.ValueStruct) (y.ValueStruct, error) {
 	// It's important that we iterate the levels from 0 on upward.  The reason is, if we iterated
 	// in opposite order, or in parallel (naively calling all the h.RLock() in some order) we could
 	// read level L's tables post-compaction and level L+1's tables pre-compaction.  (If we do
 	// parallelize this, we will need to call the h.RLock() function by increasing order of level
 	// number.)
+	version := y.ParseTs(key)
 	for _, h := range s.levels {
 		vs, err := h.get(key) // Calls h.RLock() and h.RUnlock().
 		if err != nil {
@@ -731,7 +786,15 @@ func (s *levelsController) get(key []byte) (y.ValueStruct, error) {
 		if vs.Value == nil && vs.Meta == 0 {
 			continue
 		}
-		return vs, nil
+		if maxVs == nil || vs.Version == version {
+			return vs, nil
+		}
+		if maxVs.Version < vs.Version {
+			*maxVs = vs
+		}
+	}
+	if maxVs != nil {
+		return *maxVs, nil
 	}
 	return y.ValueStruct{}, nil
 }

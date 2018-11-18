@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package tok
@@ -11,26 +20,29 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-//  Might want to allow user to replace this.
-var termTokenizer TermTokenizer
-var fullTextTokenizer FullTextTokenizer
-
-func GetTokens(funcArgs []string) ([]string, error) {
-	return tokenize(funcArgs, termTokenizer)
+func GetLangTokenizer(t Tokenizer, lang string) Tokenizer {
+	if lang == "" {
+		return t
+	}
+	switch t.(type) {
+	case FullTextTokenizer:
+		// we must return a new instance because another goroutine might be calling this
+		// with a different lang.
+		return FullTextTokenizer{lang: lang}
+	}
+	return t
 }
 
-func GetTextTokens(funcArgs []string, lang string) ([]string, error) {
-	t, found := GetTokenizer("fulltext" + lang)
-	if found {
-		return tokenize(funcArgs, t)
+func GetTermTokens(funcArgs []string) ([]string, error) {
+	if l := len(funcArgs); l != 1 {
+		return nil, x.Errorf("Function requires 1 arguments, but got %d", l)
 	}
-	return nil, x.Errorf("Tokenizer not found for %s", "fulltext"+lang)
+	return BuildTokens(funcArgs[0], TermTokenizer{})
 }
 
-func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {
-	if len(funcArgs) != 1 {
-		return nil, x.Errorf("Function requires 1 arguments, but got %d",
-			len(funcArgs))
+func GetFullTextTokens(funcArgs []string, lang string) ([]string, error) {
+	if l := len(funcArgs); l != 1 {
+		return nil, x.Errorf("Function requires 1 arguments, but got %d", l)
 	}
-	return BuildTokens(funcArgs[0], tokenizer)
+	return BuildTokens(funcArgs[0], FullTextTokenizer{lang: lang})
 }

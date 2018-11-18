@@ -6,19 +6,19 @@ BadgerDB is an embeddable, persistent, simple and fast key-value (KV) database
 written in pure Go. It's meant to be a performant alternative to non-Go-based
 key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
 
-## Project Status
-Badger v1.0 was released in Nov 2017. Check the [Changelog] for the full details.
+## Project Status [Oct 27, 2018]
+
+Badger is stable and is being used to serve data sets worth hundreds of
+terabytes. Badger supports concurrent ACID transactions with serializable
+snapshot isolation (SSI) guarantees. A Jepsen-style bank test runs nightly for
+8h, with `--race` flag and ensures maintainance of transactional guarantees.
+Badger has also been tested to work with filesystem level anomalies, to ensure
+persistence and consistency.
+
+Badger v1.0 was released in Nov 2017, with a Badger v2.0 release coming up in a
+few months. The [Changelog] is kept fairly up-to-date.
 
 [Changelog]:https://github.com/dgraph-io/badger/blob/master/CHANGELOG.md
-
-We introduced transactions in [v0.9.0] which involved a major API change. If you have a Badger
-datastore prior to that, please use [v0.8.1], but we strongly urge you to upgrade. Upgrading from
-both v0.8 and v0.9 will require you to [take backups](#database-backup) and restore using the new
-version.
-
-[v1.0.1]: //github.com/dgraph-io/badger/tree/v1.0.1
-[v0.8.1]: //github.com/dgraph-io/badger/tree/v0.8.1
-[v0.9.0]: //github.com/dgraph-io/badger/tree/v0.9.0
 
 ## Table of Contents
  * [Getting Started](#getting-started)
@@ -171,10 +171,7 @@ code below.
 
 ```go
 // Start a writable transaction.
-txn, err := db.NewTransaction(true)
-if err != nil {
-    return err
-}
+txn := db.NewTransaction(true)
 defer txn.Discard()
 
 // Use the transaction...
@@ -217,14 +214,35 @@ value, we can use the `Txn.Get()` method:
 ```go
 err := db.View(func(txn *badger.Txn) error {
   item, err := txn.Get([]byte("answer"))
-  if err != nil {
-    return err
-  }
-  val, err := item.Value()
-  if err != nil {
-    return err
-  }
-  fmt.Printf("The answer is: %s\n", val)
+  handle(err)
+
+  var valNot, valCopy []byte
+  err := item.Value(func(val []byte) error {
+    // This func with val would only be called if item.Value encounters no error.
+
+    // Accessing val here is valid.
+    fmt.Printf("The answer is: %s\n", val)
+
+    // Copying or parsing val is valid.
+    valCopy = append([]byte{}, val...)
+
+    // Assigning val slice to another variable is NOT OK.
+    valNot = val // Do not do this.
+    return nil
+  })
+  handle(err)
+
+  // DO NOT access val here. It is the most common cause of bugs.
+  fmt.Printf("NEVER do this. %s\n", valNot)
+
+  // You must copy it to use it outside item.Value(...).
+  fmt.Printf("The answer is: %s\n", valCopy)
+
+  // Alternatively, you could also use item.ValueCopy().
+  valCopy, err = item.ValueCopy(nil)
+  handle(err)
+  fmt.Printf("The answer is: %s\n", valCopy)
+
   return nil
 })
 ```
@@ -266,7 +284,7 @@ operation. All values are specified in byte arrays. For e.g., here is a merge
 function (`add`) which adds a `uint64` value to an existing `uint64` value.
 
 ```Go
-uint64ToBytes(i uint64) []byte {
+func uint64ToBytes(i uint64) []byte {
   var buf [8]byte
   binary.BigEndian.PutUint64(buf[:], i)
   return buf[:]
@@ -332,11 +350,13 @@ err := db.View(func(txn *badger.Txn) error {
   for it.Rewind(); it.Valid(); it.Next() {
     item := it.Item()
     k := item.Key()
-    v, err := item.Value()
+    err := item.Value(func(v []byte) error {
+      fmt.Printf("key=%s, value=%s\n", k, v)
+      return nil
+    })
     if err != nil {
       return err
     }
-    fmt.Printf("key=%s, value=%s\n", k, v)
   }
   return nil
 })
@@ -362,11 +382,13 @@ db.View(func(txn *badger.Txn) error {
   for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
     item := it.Item()
     k := item.Key()
-    v, err := item.Value()
+    err := item.Value(func(v []byte) error {
+      fmt.Printf("key=%s, value=%s\n", k, v)
+      return nil
+    })
     if err != nil {
       return err
     }
-    fmt.Printf("key=%s, value=%s\n", k, v)
   }
   return nil
 })
@@ -552,16 +574,23 @@ Below is a list of known projects that use Badger:
 
 * [0-stor](https://github.com/zero-os/0-stor) - Single device object store.
 * [Dgraph](https://github.com/dgraph-io/dgraph) - Distributed graph database.
+* [Dispatch Protocol](https://github.com/dispatchlabs/disgo) - Blockchain protocol for distributed application data analytics.
 * [Sandglass](https://github.com/celrenheit/sandglass) - distributed, horizontally scalable, persistent, time sorted message queue.
 * [Usenet Express](https://usenetexpress.com/) - Serving over 300TB of data with Badger.
 * [go-ipfs](https://github.com/ipfs/go-ipfs) - Go client for the InterPlanetary File System (IPFS), a new hypermedia distribution protocol.
 * [gorush](https://github.com/appleboy/gorush) - A push notification server written in Go.
 * [emitter](https://github.com/emitter-io/emitter) - Scalable, low latency, distributed pub/sub broker with message storage, uses MQTT, gossip and badger.
+* [GarageMQ](https://github.com/valinurovam/garagemq) - AMQP server written in Go.
 
 If you are using Badger in a project please send a pull request to add it to the list.
 
 ## Frequently Asked Questions
 - **My writes are getting stuck. Why?**
+
+**Update: With the new `Value(func(v []byte))` API, this deadlock can no longer
+happen.**
+
+The following is true for users on Badger v1.x.
 
 This can happen if a long running iteration with `Prefetch` is set to false, but
 a `Item::Value` call is made internally in the loop. That causes Badger to
@@ -583,11 +612,28 @@ There are multiple workarounds during iteration:
 
 - **My writes are really slow. Why?**
 
-Are you creating a new transaction for every single key update? This will lead
-to very low throughput. To get best write performance, batch up multiple writes
-inside a transaction using single `DB.Update()` call. You could also have
-multiple such `DB.Update()` calls being made concurrently from multiple
-goroutines.
+Are you creating a new transaction for every single key update, and waiting for
+it to `Commit` fully before creating a new one? This will lead to very low
+throughput.
+
+We have created `WriteBatch` API which provides a way to batch up
+many updates into a single transaction and `Commit` that transaction using
+callbacks to avoid blocking. This amortizes the cost of a transaction really
+well, and provides the most efficient way to do bulk writes.
+
+```go
+wb := db.NewWriteBatch()
+defer wb.Cancel()
+
+for i := 0; i < N; i++ {
+  err := wb.Set(key(i), value(i), 0) // Will create txns as needed.
+  handle(err)
+}
+handle(wb.Flush()) // Wait for all txns to finish.
+```
+
+Note that `WriteBatch` API does not allow any reads. For read-modify-write
+workloads, you should be using the `Transaction` API.
 
 - **I don't see any disk write. Why?**
 
@@ -599,7 +645,7 @@ the database, you'll see these writes on disk.
 
 - **Reverse iteration doesn't give me the right results.**
 
-Just like forward iteration goes to the first key which is equal or greater than the SEEK key, reverse iteration goes to the first key which is equal or lesser than the SEEK key. Therefore, SEEK key would not be part of the results. You can typically add a tilde (~) as a suffix to the SEEK key to include it in the results. See the following issues: [#436](https://github.com/dgraph-io/badger/issues/436) and [#347](https://github.com/dgraph-io/badger/issues/347).
+Just like forward iteration goes to the first key which is equal or greater than the SEEK key, reverse iteration goes to the first key which is equal or lesser than the SEEK key. Therefore, SEEK key would not be part of the results. You can typically add a `0xff` byte as a suffix to the SEEK key to include it in the results. See the following issues: [#436](https://github.com/dgraph-io/badger/issues/436) and [#347](https://github.com/dgraph-io/badger/issues/347).
 
 - **Which instances should I use for Badger?**
 

@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package bulk
@@ -15,30 +24,30 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	wk "github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type schemaStore struct {
 	sync.RWMutex
-	m map[string]*intern.SchemaUpdate
+	m map[string]*pb.SchemaUpdate
 	*state
 }
 
-func newSchemaStore(initial []*intern.SchemaUpdate, opt options, state *state) *schemaStore {
+func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *schemaStore {
 	s := &schemaStore{
-		m: map[string]*intern.SchemaUpdate{
-			"_predicate_": &intern.SchemaUpdate{
-				ValueType: intern.Posting_STRING,
+		m: map[string]*pb.SchemaUpdate{
+			"_predicate_": &pb.SchemaUpdate{
+				ValueType: pb.Posting_STRING,
 				List:      true,
 			},
 		},
 		state: state,
 	}
 	if opt.StoreXids {
-		s.m["xid"] = &intern.SchemaUpdate{
-			ValueType: intern.Posting_STRING,
+		s.m["xid"] = &pb.SchemaUpdate{
+			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"hash"},
 		}
 	}
@@ -53,15 +62,15 @@ func newSchemaStore(initial []*intern.SchemaUpdate, opt options, state *state) *
 	return s
 }
 
-func (s *schemaStore) getSchema(pred string) *intern.SchemaUpdate {
+func (s *schemaStore) getSchema(pred string) *pb.SchemaUpdate {
 	s.RLock()
 	defer s.RUnlock()
 	return s.m[pred]
 }
 
-func (s *schemaStore) validateType(de *intern.DirectedEdge, objectIsUID bool) {
+func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
 	if objectIsUID {
-		de.ValueType = intern.Posting_UID
+		de.ValueType = pb.Posting_UID
 	}
 
 	s.RLock()
@@ -71,7 +80,7 @@ func (s *schemaStore) validateType(de *intern.DirectedEdge, objectIsUID bool) {
 		s.Lock()
 		sch, ok = s.m[de.Attr]
 		if !ok {
-			sch = &intern.SchemaUpdate{ValueType: de.ValueType}
+			sch = &pb.SchemaUpdate{ValueType: de.ValueType}
 			s.m[de.Attr] = sch
 		}
 		s.Unlock()
@@ -83,7 +92,7 @@ func (s *schemaStore) validateType(de *intern.DirectedEdge, objectIsUID bool) {
 	}
 }
 
-func (s *schemaStore) getPredicates(db *badger.ManagedDB) []string {
+func (s *schemaStore) getPredicates(db *badger.DB) []string {
 	txn := db.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 
@@ -108,7 +117,7 @@ func (s *schemaStore) getPredicates(db *badger.ManagedDB) []string {
 	return preds
 }
 
-func (s *schemaStore) write(db *badger.ManagedDB) {
+func (s *schemaStore) write(db *badger.DB) {
 	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
 	// if bulk loader was restarted or other similar scenarios.
 	preds := s.getPredicates(db)

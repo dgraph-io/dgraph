@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package types
@@ -12,15 +21,15 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
 	values [][]Val // Each uid could have multiple values which we need to sort it by.
 	desc   []bool  // Sort orders for different values.
-	ul     *intern.List
-	o      []*intern.Facets
+	ul     *pb.List
+	o      []*pb.Facets
 }
 
 // Len returns size of vector.
@@ -71,7 +80,7 @@ func (s byValue) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func SortWithFacet(v [][]Val, ul *intern.List, l []*intern.Facets, desc []bool) error {
+func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool) error {
 	if len(v) == 0 || len(v[0]) == 0 {
 		return nil
 	}
@@ -91,7 +100,7 @@ func SortWithFacet(v [][]Val, ul *intern.List, l []*intern.Facets, desc []bool) 
 }
 
 // Sort sorts the given array in-place.
-func Sort(v [][]Val, ul *intern.List, desc []bool) error {
+func Sort(v [][]Val, ul *pb.List, desc []bool) error {
 	return SortWithFacet(v, ul, nil, desc)
 }
 

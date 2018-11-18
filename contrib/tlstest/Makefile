@@ -1,63 +1,60 @@
-KEYBITS=2048
-PASS=secret
+#
+# Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
-KEYS=ca.key server.key client.key server_pass.key client_pass.key server3.key
-CERTS=ca.crt server.crt client.crt server_pass.crt client_pass.crt server3.crt
+
+DGRAPH_PATH = $(GOPATH)/src/github.com/dgraph-io/dgraph/dgraph
+DGRAPH_BIN  = $(DGRAPH_PATH)/dgraph
+
+TARGETS     = test1 test2 test3 test4 test5 test6
+KEYBITS     = 2048
+
+.PHONY: all
+all: cert $(TARGETS)
 
 test: all
-	@echo -e "\n\n\nTESTING...\n"
-	@echo "Basic TLS communication, unencrypted keys"
-	@./test.sh ./server_nopass.sh ./client_nocert.sh 0
-	@echo "Basic TLS communication, encrypted keys (with password)"
-	@./test.sh ./server_pass.sh ./client_pass.sh 0
-	@echo "TLS client authentication, unencrypted key"
-	@./test.sh ./server_nopass_client_auth.sh ./client_nopass.sh 0
-	@echo "TLS client authentication, no client cert (failure expected)"
-	@./test.sh ./server_nopass_client_auth.sh ./client_nocert.sh 1
-	@echo "Invalid server name (failure expected)"
-	@./test.sh ./server_nopass.sh ./client_pass.sh 1
-	@echo "TLS protocol versions mismatch (failure expected)"
-	@./test.sh ./server_11.sh ./client_12.sh 1
-	@echo "TLS certificate reloading"
-	@./test_reload.sh
 
-all: ca $(KEYS) $(CERTS)
+cert:
+	@echo "Generating CA cert in 'tls' dir."
+	@$(MAKE) -C $(DGRAPH_PATH) all
+	@$(DGRAPH_BIN) cert --keysize $(KEYBITS) -d $(PWD)/tls -n localhost -c live
+
+test1: cert
+	@echo "Test 1: Alpha non-TLS, Live non-TLS"
+	@(DGRAPH_BIN=$(DGRAPH_BIN) ./test.sh ./alpha_notls.sh ./live_notls.sh 0)
+
+test2: cert
+	@echo "Test 2: Alpha non-TLS, Live TLS"
+	@(DGRAPH_BIN=$(DGRAPH_BIN) ./test.sh ./alpha_notls.sh ./live_tls.sh 1)
+
+test3: cert
+	@echo "Test 3: Alpha TLS, Live non-TLS"
+	@(DGRAPH_BIN=$(DGRAPH_BIN) ./test.sh ./alpha_tls.sh ./live_notls.sh 1)
+
+test4: cert
+	@echo "Test 4: Alpha TLS, Live TLS"
+	@(DGRAPH_BIN=$(DGRAPH_BIN) ./test.sh ./alpha_tls.sh ./live_tls.sh 0)
+
+test5: cert
+	@echo "Test 5: Alpha TLS Auth, Live TLS"
+	@(DGRAPH_BIN=$(DGRAPH_BIN) ./test.sh ./alpha_tls_auth.sh ./live_tls_auth.sh 0)
+
+test6: cert
+	@echo "Test 6: Alpha TLS reload, Live TLS"
+	@(DGRAPH_BIN=$(DGRAPH_BIN) RELOAD_TEST=1 ./test.sh ./alpha_tls.sh ./live_tls.sh 1)
 
 clean:
 	git clean -d -f
 
-ca:
-	@mkdir -p newcerts
-	@touch index.txt
-	@touch index.txt.attr
-	@echo 1000 > serial
-
-ca.crt: ca.key
-	openssl req -key ca.key -new -x509 -extensions v3_ca -out ca.crt -nodes -subj "/C=AU/L=Sydney/O=Dgraph/CN=ca.dgraph.io"
-
-ca.key:
-	openssl genrsa -out ca.key $(KEYBITS)
-
-server.csr server.key:
-	openssl req -new -newkey rsa:$(KEYBITS) -keyout server.key -out server.csr -nodes -subj "/C=AU/L=Sydney/O=Dgraph/CN=server1.dgraph.io"
-
-server3.csr server3.key:
-	openssl req -new -newkey rsa:$(KEYBITS) -keyout server3.key -out server3.csr -nodes -subj "/C=AU/L=Sydney/O=Dgraph/CN=server3.dgraph.io"
-
-client.csr client.key:
-	openssl req -new -newkey rsa:$(KEYBITS) -keyout client.key -out client.csr -nodes -subj "/C=AU/L=Sydney/O=Dgraph/CN=client1.dgraph.io"
-
-server_pass.key:
-	openssl genrsa -aes256 -out server_pass.key -passout pass:$(PASS) $(KEYBITS)
-
-client_pass.key:
-	openssl genrsa -aes256 -out client_pass.key -passout pass:$(PASS) $(KEYBITS)
-
-server_pass.csr: server_pass.key
-	openssl req -new -key server_pass.key -out server_pass.csr -subj "/C=AU/L=Sydney/O=Dgraph/CN=server2.dgraph.io" -passin pass:$(PASS) -passout pass:$(PASS)
-
-client_pass.csr: client_pass.key
-	openssl req -new -key client_pass.key -out client_pass.csr -subj "/C=AU/L=Sydney/O=Dgraph/CN=client2.dgraph.io" -passin pass:$(PASS) -passout pass:$(PASS)
-
-%.crt: %.csr ca.crt ca.key
-	openssl ca -config openssl.cnf -days 365 -notext -cert ca.crt -keyfile ca.key -in $< -out $@ -batch

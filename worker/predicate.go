@@ -1,29 +1,33 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
 
 import (
-	"bytes"
-	"context"
-	"io"
-	"math"
-	"sync"
 	"sync/atomic"
-	"time"
 
+	"github.com/coreos/etcd/raft"
 	"github.com/dgraph-io/badger"
-	"golang.org/x/net/trace"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	ws "github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/x"
-	humanize "github.com/dustin/go-humanize"
 )
 
 const (
@@ -31,210 +35,84 @@ const (
 	MB = 1 << 20
 )
 
-// writeBatch performs a batch write of key value pairs to BadgerDB.
-func writeBatch(ctx context.Context, pstore *badger.ManagedDB, kvChan chan *intern.KVS, che chan error) {
-	var bytesWritten uint64
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
-	go func() {
-		now := time.Now()
-		for range t.C {
-			dur := time.Since(now)
-			durSec := uint64(dur.Seconds())
-			if durSec == 0 {
-				continue
-			}
-			speed := bytesWritten / durSec
-			x.Printf("Getting SNAPSHOT: Time elapsed: %v, bytes written: %s, %s/s\n",
-				x.FixedDuration(dur), humanize.Bytes(bytesWritten), humanize.Bytes(speed))
-		}
-	}()
-
-	var hasError int32
-	var wg sync.WaitGroup // to wait for all callbacks to return
-	for kvs := range kvChan {
-		for _, kv := range kvs.Kv {
-			if kv.Version == 0 {
-				// Ignore this one. Otherwise, we'll get ErrManagedDB back, because every Commit in
-				// managed DB must have a valid commit ts.
-				continue
-			}
-			txn := pstore.NewTransactionAt(math.MaxUint64, true)
-			bytesWritten += uint64(kv.Size())
-			x.Check(txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]))
-			wg.Add(1)
-			rerr := txn.CommitAt(kv.Version, func(err error) {
-				// We don't care about exact error
-				defer wg.Done()
-				if err != nil {
-					x.Printf("Error while committing kv to badger %v\n", err)
-					atomic.StoreInt32(&hasError, 1)
-				}
-			})
-			x.Check(rerr)
-		}
-	}
-	wg.Wait()
-
-	if atomic.LoadInt32(&hasError) == 0 {
-		che <- nil
-	} else {
-		che <- x.Errorf("Error while writing to badger")
-	}
-}
-
-// populateShard gets data for a shard from the leader and writes it to BadgerDB on the follower.
-func (n *node) populateShard(ps *badger.ManagedDB, pl *conn.Pool) (int, error) {
+// populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
+func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
-	c := intern.NewWorkerClient(conn)
+	c := pb.NewWorkerClient(conn)
 
-	n.RLock()
+	// Set my RaftContext on the snapshot, so it's easier to locate me.
 	ctx := n.ctx
-	group := n.gid
-	stream, err := c.PredicateAndSchemaData(ctx,
-		&intern.SnapshotMeta{
-			ClientTs: n.RaftContext.SnapshotTs,
-			GroupId:  group,
-		})
-	n.RUnlock()
-	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
-		}
-		return 0, err
-	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Streaming data for group: %v", group)
-	}
-
-	kvs, err := stream.Recv()
+	snap.Context = n.RaftContext
+	stream, err := c.StreamSnapshot(ctx)
 	if err != nil {
 		return 0, err
 	}
-
-	x.AssertTrue(len(kvs.Kv) == 1)
-	ikv := kvs.Kv[0]
-	// First key has the snapshot ts from the leader.
-	x.AssertTrue(bytes.Equal(ikv.Key, []byte("min_ts")))
-	n.Lock()
-	n.RaftContext.SnapshotTs = ikv.Version
-	n.Unlock()
-
-	kvChan := make(chan *intern.KVS, 1000)
-	che := make(chan error, 1)
-	go writeBatch(ctx, ps, kvChan, che)
+	if err := stream.Send(&snap); err != nil {
+		return 0, err
+	}
+	// Before we write anything, we should drop all the data stored in ps.
+	if err := ps.DropAll(); err != nil {
+		return 0, err
+	}
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
+	writer := x.NewTxnWriter(ps)
+	writer.BlindWrite = true // Do overwrite keys.
 	for {
-		kvs, err = stream.Recv()
-		if err == io.EOF {
-			x.Printf("EOF has been reached\n")
-			break
-		}
+		kvs, err := stream.Recv()
 		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(err.Error())
-			}
-			close(kvChan)
 			return count, err
 		}
-		// We check for errors, if there are no errors we send value to channel.
+		if kvs.Done {
+			glog.V(1).Infoln("All key-values have been received.")
+			break
+		}
 		select {
-		case kvChan <- kvs:
-			count += len(kvs.Kv)
-			// OK
 		case <-ctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Context timed out while streaming group: %v", group)
-			}
-			close(kvChan)
 			return 0, ctx.Err()
-		case err := <-che:
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while doing a batch write for group: %v", group)
-			}
-			close(kvChan)
-			// Important: Don't put return count, err
-			// There was a compiler bug which was fixed in 1.8.1
-			// https://github.com/golang/go/issues/21722.
-			// Probably should be ok to return count, err now
+		default:
+		}
+
+		glog.V(1).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
+		if err := writer.Send(kvs); err != nil {
 			return 0, err
 		}
+		count += len(kvs.Kv)
 	}
-	close(kvChan)
-
-	if err := <-che; err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while doing a batch write for group: %v", group)
-		}
-		return count, err
+	if err := writer.Flush(); err != nil {
+		return 0, err
 	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Streaming complete for group: %v", group)
+	glog.Infof("Snapshot writes DONE. Sending ACK")
+	// Send an acknowledgement back to the leader.
+	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
+		return 0, err
 	}
-	x.Printf("Got %d keys. DONE.\n", count)
+	glog.Infof("Populated snapshot with %d keys.\n", count)
 	return count, nil
 }
 
-func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream intern.Worker_PredicateAndSchemaDataServer) error {
-	clientTs := m.ClientTs
+func doStreamSnapshot(snap *pb.Snapshot, stream pb.Worker_StreamSnapshotServer) error {
+	// We choose not to try and match the requested snapshot from the latest snapshot at the leader.
+	// This is the job of the Raft library. At the leader end, we service whatever is asked of us.
+	// If this snapshot is old, Raft should cause the follower to request another one, to overwrite
+	// the data from this one.
+	//
+	// Snapshot request contains the txn read timestamp to be used to get a consistent snapshot of
+	// the data. This is what we use in orchestrate.
+	//
+	// Note: This would also pick up schema updates done "after" the snapshot index. Guess that
+	// might be OK. Otherwise, we'd want to version the schemas as well. Currently, they're stored
+	// at timestamp=1.
 
-	if !x.IsTestRun() {
-		if !groups().ServesGroup(m.GroupId) {
-			return x.Errorf("Group %d not served.", m.GroupId)
-		}
-		n := groups().Node
-		if !n.AmLeader() {
-			return x.Errorf("Not leader of group: %d", m.GroupId)
-		}
+	var numKeys uint64
+	sl := ws.Lists{Stream: stream, DB: pstore}
+	sl.ChooseKeyFunc = func(_ *badger.Item) bool {
+		// Pick all keys.
+		return true
 	}
-
-	// Any commit which happens in the future will have commitTs greater than
-	// this.
-	// TODO: Ensure all deltas have made to disk and read in memory before checking disk.
-	// BUG: There's a bug here due to which a node which doesn't see any transactions, but has real
-	// data fails to send that over, because of min_ts.
-	min_ts := posting.Txns().MinTs() // Why are we not using last snapshot ts?
-	x.Printf("Got min_ts: %d\n", min_ts)
-	// snap, err := groups().Node.Snapshot()
-	// if err != nil {
-	// 	return err
-	// }
-	// index := snap.Metadata.Index
-
-	// TODO: Why are we using MinTs() in the place when we should be using
-	// snapshot index? This is wrong.
-
-	// TODO: We are not using the snapshot time, because we don't store the
-	// transaction timestamp in the snapshot. If we did, we'd just use that
-	// instead of this. This causes issues if the server had received a snapshot
-	// to begin with, but had no active transactions. Then mints is always zero,
-	// hence nothing is read or sent in the stream.
-
-	// UPDATE: This doesn't look too bad. So, we're keeping track of the
-	// transaction timestamps on the side. And we're using those to figure out
-	// what to stream here. The snapshot index is not really being used for
-	// anything here.
-	// This whole transaction tracking business is complex and must be
-	// simplified to its essence.
-
-	// Send ts as first KV.
-	if err := stream.Send(&intern.KVS{
-		Kv: []*intern.KV{&intern.KV{
-			Key:     []byte("min_ts"),
-			Version: min_ts,
-		}},
-	}); err != nil {
-		return err
-	}
-
-	sl := streamLists{stream: stream, db: pstore}
-	sl.chooseKey = func(key []byte, version uint64) bool {
-		pk := x.Parse(key)
-		return version > clientTs || pk.IsSchema()
-	}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+		atomic.AddUint64(&numKeys, 1)
 		item := itr.Item()
 		pk := x.Parse(key)
 		if pk.IsSchema() {
@@ -242,7 +120,7 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 			if err != nil {
 				return nil, err
 			}
-			kv := &intern.KV{
+			kv := &pb.KV{
 				Key:      key,
 				Val:      val,
 				UserMeta: []byte{item.UserMeta()},
@@ -250,6 +128,10 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 			}
 			return kv, nil
 		}
+		// We should keep reading the posting list instead of copying the key-value pairs directly,
+		// to consolidate the read logic in one place. This is more robust than trying to replicate
+		// a simplified key-value copy logic here, which still understands the BitCompletePosting
+		// and other bits about the way we store posting lists.
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -257,12 +139,56 @@ func (w *grpcWorker) PredicateAndSchemaData(m *intern.SnapshotMeta, stream inter
 		return l.MarshalToKv()
 	}
 
-	if err := sl.orchestrate(stream.Context(), "Sending SNAPSHOT", min_ts); err != nil {
+	if err := sl.Orchestrate(stream.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
 		return err
 	}
-
-	if tr, ok := trace.FromContext(stream.Context()); ok {
-		tr.LazyPrintf("Sent keys. Done.\n")
+	// Indicate that sending is done.
+	if err := stream.Send(&pb.KVS{Done: true}); err != nil {
+		return err
 	}
+	glog.Infof("Key streaming done. Sent %d keys. Waiting for ACK...", numKeys)
+	ack, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	glog.Infof("Received ACK with done: %v\n", ack.Done)
+	return nil
+}
+
+func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error {
+	n := groups().Node
+	if n == nil {
+		return conn.ErrNoNode
+	}
+	// Indicate that we're streaming right now. Used to cancel
+	// calculateSnapshot.  However, this logic isn't foolproof. A leader might
+	// have already proposed a snapshot, which it can apply while this streaming
+	// is going on. That can happen after the reqSnap check we're doing below.
+	// However, I don't think we need to tackle this edge case for now.
+	atomic.AddInt32(&n.streaming, 1)
+	defer atomic.AddInt32(&n.streaming, -1)
+
+	if !x.IsTestRun() {
+		if !n.AmLeader() {
+			return errNotLeader
+		}
+	}
+	snap, err := stream.Recv()
+	if err != nil {
+		// If we don't even receive a request (here or if no StreamSnapshot is called), we can't
+		// report the snapshot to be a failure, because we don't know which follower is asking for
+		// one. Technically, I (the leader) can figure out from my Raft state, but I (Manish) think
+		// this is such a rare scenario, that we don't need to build a mechanism to track that. If
+		// we see it in the wild, we could add a timeout based mechanism to receive this request,
+		// but timeouts are always hard to get right.
+		return err
+	}
+	glog.Infof("Got StreamSnapshot request: %+v\n", snap)
+	if err := doStreamSnapshot(snap, stream); err != nil {
+		glog.Errorf("While streaming snapshot: %v. Reporting failure.", err)
+		n.Raft().ReportSnapshot(snap.Context.GetId(), raft.SnapshotFailure)
+		return err
+	}
+	glog.Infof("Stream snapshot: OK")
 	return nil
 }

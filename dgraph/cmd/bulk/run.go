@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package bulk
@@ -61,12 +70,13 @@ func init() {
 	flag.Int("shufflers", 1,
 		"Number of shufflers to run concurrently. Increasing this can improve performance, and "+
 			"must be less than or equal to the number of reduce shards.")
-	flag.Bool("version", false, "Prints the version of dgraph-bulk-loader.")
+	flag.Bool("version", false, "Prints the version of Dgraph Bulk Loader.")
 	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
 	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
 	// TODO: Potentially move http server to main.
 	flag.String("http", "localhost:8080",
 		"Address to serve http (pprof).")
+	flag.Bool("ignore_errors", false, "ignore line parsing errors in rdf files")
 	flag.Int("map_shards", 1,
 		"Number of map output shards. Must be greater than or equal to the number of reduce "+
 			"shards. Increasing allows more evenly sized reduce shards, at the expense of "+
@@ -93,12 +103,14 @@ func run() {
 		StoreXids:     Bulk.Conf.GetBool("store_xids"),
 		ZeroAddr:      Bulk.Conf.GetString("zero"),
 		HttpAddr:      Bulk.Conf.GetString("http"),
+		IgnoreErrors:  Bulk.Conf.GetBool("ignore_errors"),
 		MapShards:     Bulk.Conf.GetInt("map_shards"),
 		ReduceShards:  Bulk.Conf.GetInt("reduce_shards"),
 	}
 
+	x.PrintVersion()
 	if opt.Version {
-		x.PrintVersionOnly()
+		os.Exit(0)
 	}
 	if opt.RDFDir == "" || opt.SchemaFile == "" {
 		flag.Usage()
@@ -116,7 +128,7 @@ func run() {
 		os.Exit(1)
 	}
 
-	opt.MapBufSize = opt.MapBufSize << 20 // Convert from MB to B.
+	opt.MapBufSize <<= 20 // Convert from MB to B.
 
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")
 	x.Check(err)

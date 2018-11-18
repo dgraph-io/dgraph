@@ -1,8 +1,17 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -14,11 +23,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"testing"
-	"time"
 )
 
+// TODO: Convert this to Docker based test.
 func TestLoaderXidmap(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	check(t, err)
@@ -60,18 +68,18 @@ func TestLoaderXidmap(t *testing.T) {
 	}
 
 	// Restart Dgraph before taking an export.
-	cluster.dgraph.Process.Signal(syscall.SIGINT)
-	if _, err = cluster.dgraph.Process.Wait(); err != nil {
-		cluster.Close()
-		t.Fatalf("Error while waiting for Dgraph process to be killed: %v", err)
-	}
+	// cluster.dgraph.Process.Signal(syscall.SIGINT)
+	// if _, err = cluster.dgraph.Process.Wait(); err != nil {
+	// 	cluster.Close()
+	// 	t.Fatalf("Error while waiting for Dgraph process to be killed: %v", err)
+	// }
 
-	cluster.dgraph.Process = nil
-	if err := cluster.dgraph.Start(); err != nil {
-		cluster.Close()
-		t.Fatalf("Couldn't start Dgraph server again: %v\n", err)
-	}
-	time.Sleep(5 * time.Second)
+	// cluster.dgraph.Process = nil
+	// if err := cluster.dgraph.Start(); err != nil {
+	// 	cluster.Close()
+	// 	t.Fatalf("Couldn't start Dgraph alpha again: %v\n", err)
+	// }
+	// time.Sleep(5 * time.Second)
 
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", cluster.dgraphPortOffset+8080))
 	if err != nil {
@@ -98,7 +106,7 @@ func TestLoaderXidmap(t *testing.T) {
 	}
 
 	expected = `<_:uid1> <age> "13" .
-<_:uid1> <friend> _:uid2711 .
+<_:uid1> <friend> <_:uid2711> .
 <_:uid1> <location> "Wonderland" .
 <_:uid1> <name> "Alice" .
 <_:uid2711> <name> "Bob" .

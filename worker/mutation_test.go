@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
@@ -14,27 +23,27 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 )
 
 func TestConvertEdgeType(t *testing.T) {
 	var testEdges = []struct {
-		input     *intern.DirectedEdge
+		input     *pb.DirectedEdge
 		to        types.TypeID
 		expectErr bool
-		output    *intern.DirectedEdge
+		output    *pb.DirectedEdge
 	}{
 		{
-			input: &intern.DirectedEdge{
+			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
 				Attr:  "name",
 			},
 			to:        types.StringID,
 			expectErr: false,
-			output: &intern.DirectedEdge{
+			output: &pb.DirectedEdge{
 				Value:     []byte("set edge"),
 				Label:     "test-mutation",
 				Attr:      "name",
@@ -42,17 +51,17 @@ func TestConvertEdgeType(t *testing.T) {
 			},
 		},
 		{
-			input: &intern.DirectedEdge{
+			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
 				Attr:  "name",
-				Op:    intern.DirectedEdge_DEL,
+				Op:    pb.DirectedEdge_DEL,
 			},
 			to:        types.StringID,
 			expectErr: true,
 		},
 		{
-			input: &intern.DirectedEdge{
+			input: &pb.DirectedEdge{
 				ValueId: 123,
 				Label:   "test-mutation",
 				Attr:    "name",
@@ -61,7 +70,7 @@ func TestConvertEdgeType(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			input: &intern.DirectedEdge{
+			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
 				Attr:  "name",
@@ -73,8 +82,8 @@ func TestConvertEdgeType(t *testing.T) {
 
 	for _, testEdge := range testEdges {
 		err := ValidateAndConvert(testEdge.input,
-			&intern.SchemaUpdate{
-				ValueType: intern.Posting_ValType(testEdge.to),
+			&pb.SchemaUpdate{
+				ValueType: pb.Posting_ValType(testEdge.to),
 			})
 		if testEdge.expectErr {
 			require.Error(t, err)
@@ -87,28 +96,28 @@ func TestConvertEdgeType(t *testing.T) {
 }
 
 func TestValidateEdgeTypeError(t *testing.T) {
-	edge := &intern.DirectedEdge{
+	edge := &pb.DirectedEdge{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
 		Attr:  "name",
 	}
 
 	err := ValidateAndConvert(edge,
-		&intern.SchemaUpdate{
-			ValueType: intern.Posting_ValType(types.DateTimeID),
+		&pb.SchemaUpdate{
+			ValueType: pb.Posting_ValType(types.DateTimeID),
 		})
 	require.Error(t, err)
 }
 
 func TestPopulateMutationMap(t *testing.T) {
-	edges := []*intern.DirectedEdge{{
+	edges := []*pb.DirectedEdge{{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
 	}}
-	schema := []*intern.SchemaUpdate{{
+	schema := []*pb.SchemaUpdate{{
 		Predicate: "name",
 	}}
-	m := &intern.Mutations{Edges: edges, Schema: schema}
+	m := &pb.Mutations{Edges: edges, Schema: schema}
 
 	mutationsMap := populateMutationMap(m)
 	mu := mutationsMap[1]
@@ -121,51 +130,57 @@ func TestCheckSchema(t *testing.T) {
 	posting.DeleteAll()
 	initTest(t, "name:string @index(term) .")
 	// non uid to uid
-	s1 := &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_UID}
+	s1 := &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_UID}
 	require.NoError(t, checkSchema(s1))
 
 	// uid to non uid
 	err := schema.ParseBytes([]byte("name:uid ."), 1)
 	require.NoError(t, err)
-	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_STRING}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING}
 	require.NoError(t, checkSchema(s1))
 
 	// string to password
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
+	require.Error(t, checkSchema(s1))
+
+	// password to string
+	err = schema.ParseBytes([]byte("name:password ."), 1)
+	require.NoError(t, err)
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING}
 	require.Error(t, checkSchema(s1))
 
 	// int to password
 	err = schema.ParseBytes([]byte("name:int ."), 1)
 	require.NoError(t, err)
-	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
 	require.Error(t, checkSchema(s1))
 
 	// password to password
 	err = schema.ParseBytes([]byte("name:password ."), 1)
 	require.NoError(t, err)
-	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_PASSWORD}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_PASSWORD}
 	require.NoError(t, checkSchema(s1))
 
 	// string to int
 	err = schema.ParseBytes([]byte("name:string ."), 1)
 	require.NoError(t, err)
-	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_FLOAT}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_FLOAT}
 	require.NoError(t, checkSchema(s1))
 
 	// index on uid type
-	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_UID, Directive: intern.SchemaUpdate_INDEX}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
 	require.Error(t, checkSchema(s1))
 
 	// reverse on non-uid type
-	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_REVERSE}
 	require.Error(t, checkSchema(s1))
 
-	s1 = &intern.SchemaUpdate{Predicate: "name", ValueType: intern.Posting_FLOAT, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s1 = &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
 	require.NoError(t, checkSchema(s1))
 
-	s1 = &intern.SchemaUpdate{Predicate: "friend", ValueType: intern.Posting_UID, Directive: intern.SchemaUpdate_REVERSE}
+	s1 = &pb.SchemaUpdate{Predicate: "friend", ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
 	require.NoError(t, checkSchema(s1))
 
 	s := `jobs: string @upsert .`
@@ -188,23 +203,23 @@ func TestCheckSchema(t *testing.T) {
 }
 
 func TestNeedReindexing(t *testing.T) {
-	s1 := intern.SchemaUpdate{ValueType: intern.Posting_UID}
-	s2 := intern.SchemaUpdate{ValueType: intern.Posting_UID}
+	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
+	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
 	require.False(t, needReindexing(s1, s2))
 
-	s1 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
 	require.False(t, needReindexing(s1, s2))
 
-	s1 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
-	s2 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX}
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX}
 	require.True(t, needReindexing(s1, s2))
 
-	s1 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = intern.SchemaUpdate{ValueType: intern.Posting_FLOAT, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
 	require.True(t, needReindexing(s1, s2))
 
-	s1 = intern.SchemaUpdate{ValueType: intern.Posting_STRING, Directive: intern.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = intern.SchemaUpdate{ValueType: intern.Posting_FLOAT, Directive: intern.SchemaUpdate_NONE}
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_NONE}
 	require.True(t, needReindexing(s1, s2))
 }

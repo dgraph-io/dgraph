@@ -15,7 +15,7 @@ Clients can communicate with the server in two different ways:
 - **Via [gRPC](http://www.grpc.io/).** Internally this uses [Protocol
   Buffers](https://developers.google.com/protocol-buffers) (the proto file
 used by Dgraph is located at
-[api.proto](https://github.com/dgraph-io/dgraph/blob/master/protos/api.proto)).
+[api.proto](https://github.com/dgraph-io/dgo/blob/master/protos/api.proto)).
 
 - **Via HTTP.** There are various endpoints, each accepting and returning JSON.
   There is a one to one correspondence between the HTTP endpoints and the gRPC
@@ -54,7 +54,7 @@ documentation for the client API along with examples showing how to use it.
 ### Create the client
 
 To create a client, dial a connection to Dgraph's external Grpc port (typically
-9080). The following code snippet shows just one connection. You can connect to multiple Dgraph servers to distribute the workload evenly.
+9080). The following code snippet shows just one connection. You can connect to multiple Dgraph alphas to distribute the workload evenly.
 
 ```go
 func newClient() *dgo.Dgraph {
@@ -212,7 +212,7 @@ type Person struct {
 		Age      int        `json:"age,omitempty"`
 		Dob      *time.Time `json:"dob,omitempty"`
 		Married  bool       `json:"married,omitempty"`
-		Raw      []byte     `json:"raw_bytes",omitempty`
+		Raw      []byte     `json:"raw_bytes,omitempty"`
 		Friends  []Person   `json:"friend,omitempty"`
 		Location loc        `json:"loc,omitempty"`
 		School   []School   `json:"school,omitempty"`
@@ -330,7 +330,7 @@ fmt.Println(string(resp.Json))
 ## Java
 
 The official Java client [can be found here](https://github.com/dgraph-io/dgraph4j)
-and it fully supports Dgraph v0.9.0. Follow the instructions in the
+and it fully supports Dgraph v1.0.x. Follow the instructions in the
 [README](https://github.com/dgraph-io/dgraph4j#readme)
 to get it up and running.
 
@@ -342,7 +342,7 @@ working example of how to use the Java client.
 ## Javascript
 
 The official Javascript client [can be found here](https://github.com/dgraph-io/dgraph-js)
-and it fully supports Dgraph v0.9.4. Follow the instructions in the
+and it fully supports Dgraph v1.0.x. Follow the instructions in the
 [README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
 
 We also have a [simple example](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple)
@@ -352,7 +352,7 @@ for Node.js >= v6.
 ## Python
 
 The official Python client [can be found here](https://github.com/dgraph-io/pydgraph)
-and it fully supports Dgraph v1.0.0 and Python versions >= 2.7 and >= 3.5. Follow the
+and it fully supports Dgraph v1.0.x and Python versions >= 2.7 and >= 3.5. Follow the
 instructions in the [README](https://github.com/dgraph-io/pydgraph#readme) to get it
 up and running.
 

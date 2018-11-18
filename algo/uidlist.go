@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package algo
@@ -11,14 +20,14 @@ import (
 	"container/heap"
 	"sort"
 
-	"github.com/dgraph-io/dgraph/bp128"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/codec"
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 const jump = 32 // Jump size in InsersectWithJump.
 
 // ApplyFilter applies a filter to our UIDList.
-func ApplyFilter(u *intern.List, f func(uint64, int) bool) {
+func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
 	out := u.Uids[:0]
 	for i, uid := range u.Uids {
 		if f(uid, i) {
@@ -28,10 +37,13 @@ func ApplyFilter(u *intern.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
-func IntersectCompressedWith(u []byte, afterUID uint64, v, o *intern.List) {
-	var bi bp128.BPackIterator
-	bi.Init(u, afterUID)
-	n := bi.Length() - bi.StartIdx()
+func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
+	if pack == nil {
+		return
+	}
+	dec := codec.Decoder{Pack: pack}
+	dec.Seek(afterUID)
+	n := dec.ApproxLen()
 	m := len(v.Uids)
 
 	if n > m {
@@ -44,31 +56,25 @@ func IntersectCompressedWith(u []byte, afterUID uint64, v, o *intern.List) {
 
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
-
 	if ratio < 500 {
-		IntersectCompressedWithLinJump(&bi, v.Uids, &dst)
+		IntersectCompressedWithLinJump(&dec, v.Uids, &dst)
 	} else {
-		IntersectCompressedWithBin(&bi, v.Uids, &dst)
+		IntersectCompressedWithBin(&dec, v.Uids, &dst)
 	}
 	o.Uids = dst
 }
 
-func IntersectCompressedWithLinJump(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
+func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64) {
 	m := len(v)
 	k := 0
-	u := bi.Uids()
-	_, off := IntersectWithLin(u, v[k:], o)
+	_, off := IntersectWithLin(dec.Uids(), v[k:], o)
 	k += off
 
-	for k < m && bi.Valid() {
-		maxId := bi.MaxIntInBlock()
-		if v[k] > maxId {
-			bi.SkipNext()
-			continue
-		} else {
-			bi.Next()
+	for k < m {
+		u := dec.LinearSeek(v[k])
+		if len(u) == 0 {
+			break
 		}
-		u := bi.Uids()
 		_, off := IntersectWithLin(u, v[k:], o)
 		k += off
 	}
@@ -77,42 +83,41 @@ func IntersectCompressedWithLinJump(bi *bp128.BPackIterator, v []uint64, o *[]ui
 // IntersectWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
-func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64) {
-	ld := bi.Length() - bi.StartIdx()
+func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
+	ld := dec.ApproxLen()
 	lq := len(q)
 
-	// TODO: Try SIMD
 	if ld == 0 || lq == 0 {
 		return
 	}
 	// Pick the shorter list and do binary search
 	if ld < lq {
-		bi.AfterUid(q[0] - 1)
-		for bi.Valid() {
-			uids := bi.Uids()
+		uids := dec.Uids()
+		for len(uids) > 0 {
 			for _, u := range uids {
 				qidx := sort.Search(len(q), func(idx int) bool {
 					return q[idx] >= u
 				})
 				if qidx >= len(q) {
 					return
-				} else if q[qidx] == u {
+				}
+				if q[qidx] == u {
 					*o = append(*o, u)
 					qidx++
 				}
 				q = q[qidx:]
 			}
-			bi.Next()
+			uids = dec.Next()
 		}
 		return
 	}
 
 	for _, u := range q {
-		if !bi.Valid() {
+		uids := dec.Seek(u)
+		if len(uids) == 0 {
 			return
 		}
-		found := bi.AfterUid(u)
-		if found {
+		if uids[0] == u {
 			*o = append(*o, u)
 		}
 	}
@@ -120,7 +125,7 @@ func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64
 
 // IntersectWith intersects u with v. The update is made to o.
 // u, v should be sorted.
-func IntersectWith(u, v, o *intern.List) {
+func IntersectWith(u, v, o *pb.List) {
 	n := len(u.Uids)
 	m := len(v.Uids)
 
@@ -180,9 +185,9 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 			k++
 			i++
 		} else if k+jump < m && uid > v[k+jump] {
-			k = k + jump
+			k += jump
 		} else if i+jump < n && vid > u[i+jump] {
-			i = i + jump
+			i += jump
 		} else if uid > vid {
 			for k = k + 1; k < m && v[k] < uid; k++ {
 			}
@@ -261,13 +266,13 @@ func binIntersect(d, q []uint64, final *[]uint64) {
 }
 
 type listInfo struct {
-	l      *intern.List
+	l      *pb.List
 	length int
 }
 
-func IntersectSorted(lists []*intern.List) *intern.List {
+func IntersectSorted(lists []*pb.List) *pb.List {
 	if len(lists) == 0 {
-		return &intern.List{}
+		return &pb.List{}
 	}
 	ls := make([]listInfo, 0, len(lists))
 	for _, list := range lists {
@@ -280,7 +285,7 @@ func IntersectSorted(lists []*intern.List) *intern.List {
 	sort.Slice(ls, func(i, j int) bool {
 		return ls[i].length < ls[j].length
 	})
-	out := &intern.List{Uids: make([]uint64, ls[0].length)}
+	out := &pb.List{Uids: make([]uint64, ls[0].length)}
 	if len(ls) == 1 {
 		copy(out.Uids, ls[0].l.Uids)
 		return out
@@ -299,9 +304,9 @@ func IntersectSorted(lists []*intern.List) *intern.List {
 	return out
 }
 
-func Difference(u, v *intern.List) *intern.List {
+func Difference(u, v *pb.List) *pb.List {
 	if u == nil || v == nil {
-		return &intern.List{Uids: make([]uint64, 0)}
+		return &pb.List{Uids: make([]uint64, 0)}
 	}
 	n := len(u.Uids)
 	m := len(v.Uids)
@@ -327,13 +332,13 @@ func Difference(u, v *intern.List) *intern.List {
 		out = append(out, u.Uids[i])
 		i++
 	}
-	return &intern.List{Uids: out}
+	return &pb.List{Uids: out}
 }
 
 // MergeSorted merges sorted lists.
-func MergeSorted(lists []*intern.List) *intern.List {
+func MergeSorted(lists []*pb.List) *pb.List {
 	if len(lists) == 0 {
-		return new(intern.List)
+		return new(pb.List)
 	}
 
 	h := &uint64Heap{}
@@ -377,12 +382,12 @@ func MergeSorted(lists []*intern.List) *intern.List {
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
-	return &intern.List{Uids: output}
+	return &pb.List{Uids: output}
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
-func IndexOf(u *intern.List, uid uint64) int {
+func IndexOf(u *pb.List, uid uint64) int {
 	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
 	if i < len(u.Uids) && u.Uids[i] == uid {
 		return i
@@ -391,7 +396,7 @@ func IndexOf(u *intern.List, uid uint64) int {
 }
 
 // ToUintsListForTest converts to list of uints for testing purpose only.
-func ToUintsListForTest(ul []*intern.List) [][]uint64 {
+func ToUintsListForTest(ul []*pb.List) [][]uint64 {
 	out := make([][]uint64, 0, len(ul))
 	for _, u := range ul {
 		out = append(out, u.Uids)

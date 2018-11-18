@@ -4,7 +4,7 @@ basedir=$GOPATH/src/github.com/dgraph-io/dgraph
 set -e
 
 source $basedir/contrib/scripts/functions.sh
-runCluster
+restartCluster
 
 # Create a temporary directory to use for running live loader.
 mkdir -p tmp
@@ -34,7 +34,7 @@ done
 rm -f alter.txt
 
 echo -e "\nRunning dgraph live."
-dgraph live -r goldendata.rdf.gz -d "127.0.0.1:9180" -z "127.0.0.1:5080" -c 1 -b 1000
+dgraph live -r goldendata.rdf.gz -d "127.0.0.1:9180" -z "127.0.0.1:5080" -c 10
 popd
 rm -Rf tmp
 

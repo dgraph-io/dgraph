@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -12,31 +21,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
+// TestSystem uses the externally run Dgraph cluster for testing. Most other
+// tests in this package are using a suite struct system, which runs Dgraph and
+// loads data with bulk and live loader.
 func TestSystem(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	cluster := NewDgraphCluster(dir)
-	require.NoError(t, cluster.Start())
-	defer cluster.Close()
-
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			require.NoError(t, cluster.client.Alter(
+			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+			x.Check(err)
+			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))
-			fn(t, cluster.client)
+			fn(t, dg)
 		}
 	}
 
@@ -67,13 +76,18 @@ func TestSystem(t *testing.T) {
 	t.Run("regex query vars", wrap(RegexQueryWithVars))
 	t.Run("graphql var child", wrap(GraphQLVarChild))
 	t.Run("math ge", wrap(MathGe))
+	t.Run("has should not have deleted edge", wrap(HasDeletedEdge))
+	t.Run("has should have reverse edges", wrap(HasReverseEdge))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `list: [string] @lang .`,
+		Schema: `
+			list: [string] .
+			name: string @lang .
+		`,
 	})))
 
 	txn := c.NewTxn()
@@ -89,10 +103,7 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 			<0x2> <name> "abc_ja"@ja .
 			<0x3> <name> "abcd" .
 			<0x1> <number> "99"^^<xs:int> .
-
 			<0x1> <list> "first" .
-			<0x1> <list> "first_en"@en .
-			<0x1> <list> "first_it"@it .
 			<0x1> <list> "second" .
 		`),
 	})
@@ -126,9 +137,7 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 				"list": [
 					"second",
 					"first"
-				],
-				"list@en": "first_en",
-				"list@it": "first_it"
+				]
 			}
 		]
 	}
@@ -138,60 +147,10 @@ func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
 func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
-	check(t, (c.Alter(ctx, &api.Operation{
+	err := c.Alter(ctx, &api.Operation{
 		Schema: `pred: [string] @lang .`,
-	})))
-
-	txn := c.NewTxn()
-	defer txn.Discard(ctx)
-	_, err := txn.Mutate(ctx, &api.Mutation{
-		CommitNow: true,
-		SetNquads: []byte(`
-			<0x1> <pred> "first" .
-			<0x1> <pred> "second" .
-			<0x1> <pred> "dutch"@nl .
-		`),
 	})
-	check(t, err)
-
-	resp, err := c.NewTxn().Query(context.Background(), `
-	{
-		q(func: uid(0x1)) {
-			pred
-		}
-	}
-	`)
-	check(t, err)
-	CompareJSON(t, `
-	{
-		"q": [
-			{
-				"pred": [
-					"first",
-					"second"
-				]
-			}
-		]
-	}
-	`, string(resp.GetJson()))
-
-	resp, err = c.NewTxn().Query(context.Background(), `
-	{
-		q(func: uid(0x1)) {
-			pred@nl
-		}
-	}
-	`)
-	check(t, err)
-	CompareJSON(t, `
-	{
-		"q": [
-			{
-				"pred@nl": "dutch"
-			}
-		]
-	}
-	`, string(resp.GetJson()))
+	require.Error(t, err)
 }
 
 func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
@@ -275,27 +234,47 @@ func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
 func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "link: uid @reverse ."}))
-	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+	assignedIds, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		SetNquads: []byte("<0x1> <link> <0x2> ."),
+		SetNquads: []byte("_:a <link> _:b ."),
 	})
 	require.NoError(t, err)
+	aId := assignedIds.Uids["a"]
+	bId := assignedIds.Uids["b"]
+
+	/**
+	we must run a query first before the next delete transaction, the
+	reason is that a mutation does not wait for the previous mutation
+	to finish completely with a commitTs from zero. If we run the
+	deletion directly, and the previous mutation has not received a
+	commitTs from zero yet, then the deletion will skip the link, and
+	essentially be treated as a no-op. As a result, when we query it
+	again following the reverse link, the link would still exist, and
+	the test would fail.
+
+	Running a query would make sure that the previous mutation for
+	creating the link has completed with a commitTs from zero, and the
+	subsequent deletion is done *AFTER* the link creation.
+	 */
+	c.NewReadOnlyTxn().Query(ctx,  fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		DelNquads: []byte("<0x1> <link> * ."),
+		DelNquads: []byte(fmt.Sprintf("<%s> <link> * .", aId)),
 	})
-	resp, err := c.NewTxn().Query(ctx, "{ q(func: uid(0x2)) { ~link { uid } }}")
+	resp, err := c.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", bId))
 	require.NoError(t, err)
 	CompareJSON(t, `{"q":[]}`, string(resp.Json))
 
-	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+	assignedIds, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
-		SetNquads: []byte("<0x1> <link> <0x3> ."),
+		SetNquads: []byte(fmt.Sprintf("<%s> <link> _:c .", aId)),
 	})
-	resp, err = c.NewTxn().Query(ctx, "{ q(func: uid(0x3)) { ~link { uid } }}")
+	cId := assignedIds.Uids["c"]
+
+	resp, err = c.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", cId))
 	require.NoError(t, err)
-	CompareJSON(t, `{"q":[{"~link": [{"uid": "0x1"}]}]}`, string(resp.Json))
+	CompareJSON(t, fmt.Sprintf(`{"q":[{"~link": [{"uid": "%s"}]}]}`, aId), string(resp.Json))
 }
 
 func ExpandAllReversePredicatesTest(t *testing.T, c *dgo.Dgraph) {
@@ -552,6 +531,7 @@ func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
 		SetNquads: []byte(`
 			_:michael <name> "Michael" .
 			_:michael <friend> _:sang .
@@ -560,6 +540,10 @@ func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 			_:sang <name> "Sang Hyun"@en .
 		`),
 	})
+	require.NoError(t, err)
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
 	resp, err := txn.Query(ctx, `
 	{
 	  q(func: eq(name, "Michael")) {
@@ -879,7 +863,7 @@ func SetAfterDeletionListType(t *testing.T, c *dgo.Dgraph) {
 
 func EmptyNamesWithExact(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) .`})
+	err := c.Alter(ctx, &api.Operation{Schema: `name: string @index(exact) @lang .`})
 	require.NoError(t, err)
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
@@ -1459,4 +1443,156 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 		  ]
 		}
 	`, string(resp.GetJson()))
+}
+
+func HasDeletedEdge(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <end> "" .
+			_:b <end> "" .
+			_:c <end> "" .
+			_:d <start> "" .
+			_:d2 <start> "" .
+		`),
+	})
+	check(t, err)
+
+	var ids []string
+	for key, uid := range assigned.Uids {
+		if !strings.HasPrefix(key, "d") {
+			ids = append(ids, uid)
+		}
+	}
+	sort.Strings(ids)
+
+	type U struct {
+		Uid string `json:"uid"`
+	}
+
+	getUids := func(txn *dgo.Txn) []string {
+		resp, err := txn.Query(ctx, `{
+			me(func: has(end)) { uid }
+			you(func: has(end)) { count(uid) }
+		}`)
+		check(t, err)
+		t.Logf("resp: %s\n", resp.GetJson())
+		m := make(map[string][]U)
+		err = json.Unmarshal(resp.GetJson(), &m)
+		check(t, err)
+		uids := m["me"]
+		var result []string
+		for _, uid := range uids {
+			result = append(result, uid.Uid)
+		}
+		return result
+	}
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	uids := getUids(txn)
+	require.Equal(t, 3, len(uids))
+	for _, uid := range uids {
+		require.Contains(t, ids, uid)
+	}
+
+	deleteMu := &api.Mutation{
+		CommitNow: true,
+	}
+	deleteMu.DelNquads = []byte(fmt.Sprintf(`
+		<%s> <end> * .
+	`, ids[len(ids)-1]))
+	t.Logf("deleteMu: %+v\n", deleteMu)
+	_, err = txn.Mutate(ctx, deleteMu)
+	check(t, err)
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	uids = getUids(txn)
+	require.Equal(t, 2, len(uids))
+	for _, uid := range uids {
+		require.Contains(t, ids, uid)
+	}
+	// Remove the last entry from ids.
+	ids = ids[:len(ids)-1]
+
+	// We must commit mutations before we expect them to show up as results in
+	// queries, involving secondary indices.
+	assigned, err = txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:d <end> "" .
+		`),
+	})
+	check(t, err)
+
+	require.Equal(t, 1, len(assigned.Uids))
+	for _, uid := range assigned.Uids {
+		ids = append(ids, uid)
+	}
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	uids = getUids(txn)
+	require.Equal(t, 3, len(uids))
+	for _, uid := range uids {
+		require.Contains(t, ids, uid)
+	}
+}
+
+func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			follow: uid @reverse .
+		`,
+	}))
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:alice <name> "alice" .
+			_:bob <name> "bob" .
+			_:carol <name> "carol" .
+			_:alice <follow> _:carol .
+			_:bob <follow> _:carol .
+		`),
+	})
+	check(t, err)
+
+	type F struct {
+		Name string `json:"name"`
+	}
+
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	resp, err := txn.Query(ctx, `{
+		fwd(func: has(follow)) { name }
+		rev(func: has(~follow)) { name }
+		}`)
+	check(t, err)
+
+	t.Logf("resp: %s\n", resp.GetJson())
+	m := make(map[string][]F)
+	err = json.Unmarshal(resp.GetJson(), &m)
+	check(t, err)
+
+	fwds := m["fwd"]
+	revs := m["rev"]
+
+	require.Equal(t, len(fwds), 2)
+	require.Contains(t, []string{"alice", "bob"}, fwds[0].Name)
+	require.Contains(t, []string{"alice", "bob"}, fwds[1].Name)
+	require.NotEqual(t, fwds[0].Name, fwds[1].Name)
+
+	require.Equal(t, len(revs), 1)
+	require.Equal(t, revs[0].Name, "carol")
 }

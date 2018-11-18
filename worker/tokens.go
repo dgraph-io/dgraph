@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
@@ -13,7 +22,7 @@ import (
 	"github.com/dgraph-io/badger"
 
 	"bytes"
-	"github.com/dgraph-io/dgraph/posting"
+
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -64,9 +73,9 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	}
 	switch funcType {
 	case FullTextSearchFn:
-		return tok.GetTextTokens(funcArgs, lang)
+		return tok.GetFullTextTokens(funcArgs, lang)
 	default:
-		return tok.GetTokens(funcArgs)
+		return tok.GetTermTokens(funcArgs)
 	}
 }
 
@@ -119,17 +128,21 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	}
 
 	// Get the token for the value passed in function.
-	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer)
+	// XXX: the lang should be query.Langs, but it only matters in edge case test below.
+	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tok.GetLangTokenizer(tokenizer, "en"))
 	if err != nil {
 		return nil, "", err
 	}
 
-	if len(ineqTokens) == 0 {
+	switch {
+	case len(ineqTokens) == 0:
 		return nil, "", nil
-	} else if f == "eq" && (tokenizer.Name() == "term" || tokenizer.Name() == "fulltext") {
-		// Allow eq with term/fulltext tokenizers, even though they give
-		// multiple tokens.
-	} else if len(ineqTokens) > 1 {
+
+	// Allow eq with term/fulltext tokenizers, even though they give multiple tokens.
+	case f == "eq" && (tokenizer.Name() == "term" || tokenizer.Name() == "fulltext"):
+		break
+
+	case len(ineqTokens) > 1:
 		return nil, "", x.Errorf("Attribute %s does not have a valid tokenizer.", attr)
 	}
 	ineqToken := ineqTokens[0]
@@ -150,11 +163,15 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	var out []string
 	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
 	seekKey := x.IndexKey(attr, ineqToken)
-	it := posting.NewTxnPrefixIterator(txn, itOpt, indexPrefix, seekKey)
+
+	itr := txn.NewIterator(itOpt)
+	defer itr.Close()
+
 	ineqTokenInBytes := []byte(ineqToken) //used for inequality comparison below
-	defer it.Close()
-	for ; it.Valid(); it.Next() {
-		key := it.Key()
+
+	for itr.Seek(seekKey); itr.ValidForPrefix(indexPrefix); itr.Next() {
+		item := itr.Item()
+		key := item.Key()
 		k := x.Parse(key)
 		if k == nil {
 			continue

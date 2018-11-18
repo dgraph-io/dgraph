@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package types
@@ -10,7 +19,7 @@ package types
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,12 +44,12 @@ func getInput(t *testing.T, tid TypeID, in []string) [][]Val {
 	return list
 }
 
-func getUIDList(n int) *intern.List {
+func getUIDList(n int) *pb.List {
 	data := make([]uint64, 0, n)
 	for i := 1; i <= n; i++ {
 		data = append(data, uint64(i*100))
 	}
-	return &intern.List{data}
+	return &pb.List{Uids: data}
 }
 
 func TestSortStrings(t *testing.T) {
@@ -67,7 +76,7 @@ func TestSortFloats(t *testing.T) {
 	require.NoError(t, Sort(list, ul, []bool{false}))
 	require.EqualValues(t, []uint64{400, 200, 300, 100}, ul.Uids)
 	require.EqualValues(t,
-		[]string{"2.12E+00", "1.12E+01", "1.15E+01", "2.22E+01"},
+		[]string{"2.12", "11.2", "11.5", "22.2"},
 		toString(t, list, FloatID))
 }
 
@@ -77,7 +86,7 @@ func TestSortFloatsDesc(t *testing.T) {
 	require.NoError(t, Sort(list, ul, []bool{true}))
 	require.EqualValues(t, []uint64{100, 300, 200, 400}, ul.Uids)
 	require.EqualValues(t,
-		[]string{"2.22E+01", "1.15E+01", "1.12E+01", "2.12E+00"},
+		[]string{"22.2", "11.5", "11.2", "2.12"},
 		toString(t, list, FloatID))
 }
 
@@ -108,7 +117,7 @@ func TestSortIntAndFloat(t *testing.T) {
 	require.NoError(t, Sort(list, ul, []bool{false}))
 	require.EqualValues(t, []uint64{200, 100, 300}, ul.Uids)
 	require.EqualValues(t,
-		[]string{"2.15E+01", "55", "100"},
+		[]string{"21.5", "55", "100"},
 		toString(t, list, DateTimeID))
 
 }

@@ -1,14 +1,24 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package types
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -101,6 +111,52 @@ func TestConversionToDateTime(t *testing.T) {
 			t.Errorf("Unexpected error converting string to datetime: %v", err)
 		} else if !tc.out.Equal(val.Value.(time.Time)) {
 			t.Errorf("Converting string to datetime: Expected %+v, got %+v", tc.out, val.Value)
+		}
+	}
+}
+
+func TestConvertFromPassword(t *testing.T) {
+	data := []struct {
+		in  Val
+		out Val
+		typ TypeID
+	}{
+		{Val{PasswordID, []byte("")}, Val{StringID, ""}, StringID},
+		{Val{PasswordID, []byte("testing")}, Val{StringID, "testing"}, StringID},
+	}
+
+	for _, tc := range data {
+		if val, err := Convert(tc.in, tc.typ); err != nil {
+			t.Errorf("Unexpected error converting to string: %v", err)
+		} else if !reflect.DeepEqual(val, tc.out) {
+			t.Errorf("Converting password to string: Expected %+v, got %+v", tc.out, val)
+		}
+	}
+}
+
+func TestConvertToPassword(t *testing.T) {
+	data := []struct {
+		in       Val
+		out      Val
+		hasError bool
+	}{
+		{Val{IntID, []byte{0, 0, 0, 0, 0, 0, 0, 1}}, Val{PasswordID, ""}, true},
+		{Val{FloatID, []byte{0, 0, 0, 0, 0, 0, 0, 1}}, Val{PasswordID, ""}, true},
+		{Val{BoolID, []byte{1}}, Val{PasswordID, ""}, true},
+		{Val{StringID, []byte("")}, Val{PasswordID, ""}, true},
+		{Val{StringID, []byte("testing")}, Val{PasswordID, "$2a$10$"}, false},
+		{Val{PasswordID, []byte("testing")}, Val{PasswordID, "testing"}, false},
+		{Val{DefaultID, []byte("testing")}, Val{PasswordID, "$2a$10$"}, false},
+	}
+
+	for i, tc := range data {
+		val, err := Convert(tc.in, PasswordID)
+		if err != nil && !tc.hasError {
+			t.Errorf("test#%d Unexpected error converting to string: %v", i+1, err)
+		} else if err == nil && tc.hasError {
+			t.Errorf("test#%d Expected an error but got instead: %+v", i+1, val)
+		} else if !strings.HasPrefix(val.Value.(string), tc.out.Value.(string)) {
+			t.Errorf("test#%d Converting string to password: Expected %+v, got %+v", i+1, tc.out, val)
 		}
 	}
 }

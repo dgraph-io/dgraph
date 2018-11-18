@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
@@ -15,13 +24,15 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -33,12 +44,12 @@ var (
 )
 
 // size of kvs won't be too big, we would take care before proposing.
-func populateKeyValues(ctx context.Context, kvs []*intern.KV) error {
+func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 	// No new deletion/background cleanup would start after we start streaming tablet,
 	// so all the proposals for a particular tablet would atmost wait for deletion of
 	// single tablet.
 	groups().waitForBackgroundDeletion()
-	x.Printf("Writing %d keys\n", len(kvs))
+	glog.Infof("Writing %d keys\n", len(kvs))
 
 	var hasError uint32
 	var wg sync.WaitGroup
@@ -78,16 +89,16 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if pl == nil {
 		return x.Errorf("Unable to find a connection for group: %d\n", gid)
 	}
-	c := intern.NewWorkerClient(pl.Get())
-	stream, err := c.ReceivePredicate(ctx)
+	c := pb.NewWorkerClient(pl.Get())
+	s, err := c.ReceivePredicate(ctx)
 	if err != nil {
 		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
 
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
-	sl := streamLists{stream: stream, predicate: predicate, db: pstore}
-	sl.itemToKv = func(key []byte, itr *badger.Iterator) (*intern.KV, error) {
+	sl := stream.Lists{Stream: s, Predicate: predicate, DB: pstore}
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -96,7 +107,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	}
 
 	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
-	if err := sl.orchestrate(ctx, prefix, math.MaxUint64); err != nil {
+	if err := sl.Orchestrate(ctx, prefix, math.MaxUint64); err != nil {
 		return err
 	}
 
@@ -111,23 +122,23 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	} else if err != nil {
 		return err
 	} else {
-		val, err := item.Value()
+		val, err := item.ValueCopy(nil)
 		if err != nil {
 			return err
 		}
-		kvs := &intern.KVS{}
-		kv := &intern.KV{}
+		kvs := &pb.KVS{}
+		kv := &pb.KV{}
 		kv.Key = schemaKey
 		kv.Val = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		kvs.Kv = append(kvs.Kv, kv)
-		if err := stream.Send(kvs); err != nil {
+		if err := s.Send(kvs); err != nil {
 			return err
 		}
 	}
 
-	payload, err := stream.CloseAndRecv()
+	payload, err := s.CloseAndRecv()
 	if err != nil {
 		return err
 	}
@@ -135,14 +146,14 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if err != nil {
 		return err
 	}
-	x.Printf("Received %d keys\n", recvCount)
+	glog.Infof("Received %d keys\n", recvCount)
 	return nil
 }
 
-func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
-	x.Println("Receiving predicate. Batching and proposing key values")
+func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
+	glog.Infoln("Receiving predicate. Batching and proposing key values")
 	n := groups().Node
-	proposal := &intern.Proposal{}
+	proposal := &pb.Proposal{}
 	size := 0
 	var pk *x.ParsedKey
 
@@ -159,11 +170,11 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 			if pk == nil {
 				pk = x.Parse(kv.Key)
 				// Delete on all nodes.
-				p := &intern.Proposal{CleanPredicate: pk.Attr}
-				x.Printf("Predicate being received: %v", pk.Attr)
+				p := &pb.Proposal{CleanPredicate: pk.Attr}
+				glog.Infof("Predicate being received: %v", pk.Attr)
 				err := groups().Node.proposeAndWait(ctx, p)
 				if err != nil {
-					x.Printf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+					glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 					return err
 				}
 			}
@@ -182,16 +193,16 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *intern.KVS) error {
 
 // Returns count which can be used to verify whether we have moved all keys
 // for a predicate or not.
-func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServer) error {
+func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) error {
 	// Values can be pretty big so having less buffer is safer.
-	kvs := make(chan *intern.KVS, 10)
+	kvs := make(chan *pb.KVS, 10)
 	che := make(chan error, 1)
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	ctx := stream.Context()
 	payload := &api.Payload{}
 
-	x.Printf("Got ReceivePredicate. Group: %d. Am leader: %v",
+	glog.Infof("Got ReceivePredicate. Group: %d. Am leader: %v",
 		groups().groupId(), groups().Node.AmLeader())
 
 	go func() {
@@ -206,7 +217,7 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 			break
 		}
 		if err != nil {
-			x.Printf("Received %d keys. Error in loop: %v\n", count, err)
+			glog.Errorf("Received %d keys. Error in loop: %v\n", count, err)
 			return err
 		}
 		count += len(kvBatch.Kv)
@@ -216,21 +227,21 @@ func (w *grpcWorker) ReceivePredicate(stream intern.Worker_ReceivePredicateServe
 		case <-ctx.Done():
 			close(kvs)
 			<-che
-			x.Printf("Received %d keys. Context deadline\n", count)
+			glog.Infof("Received %d keys. Context deadline\n", count)
 			return ctx.Err()
 		case err := <-che:
-			x.Printf("Received %d keys. Error via channel: %v\n", count, err)
+			glog.Infof("Received %d keys. Error via channel: %v\n", count, err)
 			return err
 		}
 	}
 	close(kvs)
 	err := <-che
-	x.Printf("Proposed %d keys. Error: %v\n", count, err)
+	glog.Infof("Proposed %d keys. Error: %v\n", count, err)
 	return err
 }
 
 func (w *grpcWorker) MovePredicate(ctx context.Context,
-	in *intern.MovePredicatePayload) (*api.Payload, error) {
+	in *pb.MovePredicatePayload) (*api.Payload, error) {
 	if groups().gid != in.SourceGroupId {
 		return &emptyPayload,
 			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
@@ -247,18 +258,18 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errNotLeader
 	}
 
-	x.Printf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
+	glog.Infof("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
 		in.SourceGroupId, in.DestGroupId)
 
 	// Ensures that all future mutations beyond this point are rejected.
-	if err := n.proposeAndWait(ctx, &intern.Proposal{State: in.State}); err != nil {
+	if err := n.proposeAndWait(ctx, &pb.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
 	aborted := false
 	for i := 0; i < 12; i++ {
 		// Try a dozen times, then give up.
-		x.Printf("Trying to abort pending mutations. Loop: %d", i)
-		tctxs := posting.Txns().Iterate(func(key []byte) bool {
+		glog.Infof("Trying to abort pending mutations. Loop: %d", i)
+		tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
 			pk := x.Parse(key)
 			return pk.Attr == in.Predicate
 		})

@@ -1,4 +1,4 @@
-files=$(find . ! -path "./vendor/*" ! -path "./bp128/*" -type f -name "*.go")
+files=$(find . ! -path "./vendor/*" ! -path "./bp128/*" ! -path "./protos/*" -type f -name "*.go")
 
 for f in $files; do
   echo "Processing $f"
@@ -13,4 +13,3 @@ for f in $files; do
   # Format it.
   gofmt -w $f
 done
-

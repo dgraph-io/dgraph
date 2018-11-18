@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package zero
@@ -16,14 +25,15 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
 )
 
 var (
-	emptyMembershipState intern.MembershipState
-	emptyConnectionState intern.ConnectionState
+	emptyMembershipState pb.MembershipState
+	emptyConnectionState pb.ConnectionState
 	errInvalidId         = errors.New("Invalid server id")
 	errInvalidAddress    = errors.New("Invalid address")
 	errEmptyPredicate    = errors.New("Empty predicate")
@@ -42,10 +52,11 @@ type Server struct {
 	orc  *Oracle
 
 	NumReplicas int
-	state       *intern.MembershipState
+	state       *pb.MembershipState
 
 	nextLeaseId uint64
 	nextTxnTs   uint64
+	readOnlyTs  uint64
 	leaseLock   sync.Mutex // protects nextLeaseId, nextTxnTs and corresponding proposals.
 
 	// groupMap    map[uint32]*Group
@@ -61,9 +72,9 @@ func (s *Server) Init() {
 
 	s.orc = &Oracle{}
 	s.orc.Init()
-	s.state = &intern.MembershipState{
-		Groups: make(map[uint32]*intern.Group),
-		Zeros:  make(map[uint64]*intern.Member),
+	s.state = &pb.MembershipState{
+		Groups: make(map[uint32]*pb.Group),
+		Zeros:  make(map[uint64]*pb.Member),
 	}
 	s.nextLeaseId = 1
 	s.nextTxnTs = 1
@@ -72,6 +83,37 @@ func (s *Server) Init() {
 	s.shutDownCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
 	go s.purgeOracle()
+}
+
+func (s *Server) periodicallyPostTelemetry() {
+	glog.V(2).Infof("Starting telemetry data collection...")
+	start := time.Now()
+
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	var lastPostedAt time.Time
+	for range ticker.C {
+		if !s.Node.AmLeader() {
+			continue
+		}
+		if time.Since(lastPostedAt) < time.Hour {
+			continue
+		}
+		ms := s.membershipState()
+		t := newTelemetry(ms)
+		if t == nil {
+			continue
+		}
+		t.SinceHours = int(time.Since(start).Hours())
+		glog.V(2).Infof("Posting Telemetry data: %+v", t)
+
+		err := t.post()
+		glog.V(2).Infof("Telemetry data posted with error: %v", err)
+		if err == nil {
+			lastPostedAt = time.Now()
+		}
+	}
 }
 
 func (s *Server) triggerLeaderChange() {
@@ -87,7 +129,7 @@ func (s *Server) leaderChangeChannel() chan struct{} {
 	return s.leaderChangeCh
 }
 
-func (s *Server) member(addr string) *intern.Member {
+func (s *Server) member(addr string) *pb.Member {
 	s.AssertRLock()
 	for _, m := range s.state.Zeros {
 		if m.Addr == addr {
@@ -110,7 +152,7 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 	if s.state == nil {
 		return nil
 	}
-	var members map[uint64]*intern.Member
+	var members map[uint64]*pb.Member
 	if gid == 0 {
 		members = s.state.Zeros
 	} else {
@@ -159,15 +201,15 @@ func (s *Server) hasLeader(gid uint32) bool {
 	return false
 }
 
-func (s *Server) SetMembershipState(state *intern.MembershipState) {
+func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	s.Lock()
 	defer s.Unlock()
 	s.state = state
 	if state.Zeros == nil {
-		state.Zeros = make(map[uint64]*intern.Member)
+		state.Zeros = make(map[uint64]*pb.Member)
 	}
 	if state.Groups == nil {
-		state.Groups = make(map[uint32]*intern.Group)
+		state.Groups = make(map[uint32]*pb.Group)
 	}
 	// Create connections to all members.
 	for _, g := range state.Groups {
@@ -175,7 +217,7 @@ func (s *Server) SetMembershipState(state *intern.MembershipState) {
 			conn.Get().Connect(m.Addr)
 		}
 		if g.Tablets == nil {
-			g.Tablets = make(map[string]*intern.Tablet)
+			g.Tablets = make(map[string]*pb.Tablet)
 		}
 	}
 	s.nextGroup = uint32(len(state.Groups) + 1)
@@ -187,13 +229,13 @@ func (s *Server) MarshalMembershipState() ([]byte, error) {
 	return s.state.Marshal()
 }
 
-func (s *Server) membershipState() *intern.MembershipState {
+func (s *Server) membershipState() *pb.MembershipState {
 	s.RLock()
 	defer s.RUnlock()
-	return proto.Clone(s.state).(*intern.MembershipState)
+	return proto.Clone(s.state).(*pb.MembershipState)
 }
 
-func (s *Server) storeZero(m *intern.Member) {
+func (s *Server) storeZero(m *pb.Member) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -221,12 +263,12 @@ func (s *Server) removeZero(nodeId uint64) {
 		return
 	}
 	delete(s.state.Zeros, nodeId)
-	conn.Get().Remove(m.Addr)
+	go conn.Get().Remove(m.Addr)
 	s.state.Removed = append(s.state.Removed, m)
 }
 
 // ServingTablet returns the Tablet called tablet.
-func (s *Server) ServingTablet(tablet string) *intern.Tablet {
+func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -240,7 +282,7 @@ func (s *Server) ServingTablet(tablet string) *intern.Tablet {
 	return nil
 }
 
-func (s *Server) servingTablet(tablet string) *intern.Tablet {
+func (s *Server) servingTablet(tablet string) *pb.Tablet {
 	s.AssertRLock()
 
 	for _, group := range s.state.Groups {
@@ -253,8 +295,8 @@ func (s *Server) servingTablet(tablet string) *intern.Tablet {
 	return nil
 }
 
-func (s *Server) createProposals(dst *intern.Group) ([]*intern.ZeroProposal, error) {
-	var res []*intern.ZeroProposal
+func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
+	var res []*pb.ZeroProposal
 	if len(dst.Members) > 1 {
 		return res, errInvalidQuery
 	}
@@ -274,7 +316,7 @@ func (s *Server) createProposals(dst *intern.Group) ([]*intern.ZeroProposal, err
 		if srcMember.Addr != dstMember.Addr ||
 			srcMember.Leader != dstMember.Leader {
 
-			proposal := &intern.ZeroProposal{
+			proposal := &pb.ZeroProposal{
 				Member: dstMember,
 			}
 			res = append(res, proposal)
@@ -299,7 +341,7 @@ func (s *Server) createProposals(dst *intern.Group) ([]*intern.ZeroProposal, err
 		d := float64(dstTablet.Space)
 		if dstTablet.Remove || (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
 			dstTablet.Force = false
-			proposal := &intern.ZeroProposal{
+			proposal := &pb.ZeroProposal{
 				Tablet: dstTablet,
 			}
 			res = append(res, proposal)
@@ -313,8 +355,8 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 	if groupId == 0 {
 		return s.Node.ProposePeerRemoval(ctx, nodeId)
 	}
-	zp := &intern.ZeroProposal{}
-	zp.Member = &intern.Member{Id: nodeId, GroupId: groupId, AmDead: true}
+	zp := &pb.ZeroProposal{}
+	zp.Member = &pb.Member{Id: nodeId, GroupId: groupId, AmDead: true}
 	if _, ok := s.state.Groups[groupId]; !ok {
 		return x.Errorf("No group with groupId %d found", groupId)
 	}
@@ -326,21 +368,22 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 
 // Connect is used to connect the very first time with group zero.
 func (s *Server) Connect(ctx context.Context,
-	m *intern.Member) (resp *intern.ConnectionState, err error) {
+	m *pb.Member) (resp *pb.ConnectionState, err error) {
 	// Ensures that connect requests are always serialized
 	s.connectLock.Lock()
 	defer s.connectLock.Unlock()
-	x.Printf("Got connection request: %+v\n", m)
-	defer x.Println("Connected")
+	glog.Infof("Got connection request: %+v\n", m)
+	defer glog.Infof("Connected: %+v\n", m)
 
 	if ctx.Err() != nil {
+		x.Errorf("Context has error: %v\n", ctx.Err())
 		return &emptyConnectionState, ctx.Err()
 	}
 	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
 		ms, err := s.latestMembershipState(ctx)
-		cs := &intern.ConnectionState{
+		cs := &pb.ConnectionState{
 			State:      ms,
 			MaxPending: s.orc.MaxPending(),
 		}
@@ -374,11 +417,11 @@ func (s *Server) Connect(ctx context.Context,
 	// Create a connection and check validity of the address by doing an Echo.
 	conn.Get().Connect(m.Addr)
 
-	createProposal := func() *intern.ZeroProposal {
+	createProposal := func() *pb.ZeroProposal {
 		s.Lock()
 		defer s.Unlock()
 
-		proposal := new(intern.ZeroProposal)
+		proposal := new(pb.ZeroProposal)
 		// Check if we already have this member.
 		for _, group := range s.state.Groups {
 			if _, has := group.Members[m.Id]; has {
@@ -434,7 +477,7 @@ func (s *Server) Connect(ctx context.Context,
 			return &emptyConnectionState, err
 		}
 	}
-	resp = &intern.ConnectionState{
+	resp = &pb.ConnectionState{
 		State:  s.membershipState(),
 		Member: m,
 	}
@@ -442,7 +485,7 @@ func (s *Server) Connect(ctx context.Context,
 }
 
 func (s *Server) ShouldServe(
-	ctx context.Context, tablet *intern.Tablet) (resp *intern.Tablet, err error) {
+	ctx context.Context, tablet *pb.Tablet) (resp *pb.Tablet, err error) {
 	if len(tablet.Predicate) == 0 {
 		return resp, errEmptyPredicate
 	}
@@ -460,7 +503,7 @@ func (s *Server) ShouldServe(
 	}
 
 	// Set the tablet to be served by this server's group.
-	var proposal intern.ZeroProposal
+	var proposal pb.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
 	tablet.Force = false
 	proposal.Tablet = tablet
@@ -472,7 +515,7 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
-func (s *Server) receiveUpdates(stream intern.Zero_UpdateServer) error {
+func (s *Server) receiveUpdates(stream pb.Zero_UpdateServer) error {
 	for {
 		group, err := stream.Recv()
 		// Due to closeSend on client Side
@@ -485,13 +528,16 @@ func (s *Server) receiveUpdates(stream intern.Zero_UpdateServer) error {
 		}
 		proposals, err := s.createProposals(group)
 		if err != nil {
-			x.Printf("Error while creating proposals in stream %v\n", err)
+			// Sleep here so the caller doesn't keep on retrying indefinitely, creating a busy
+			// wait.
+			time.Sleep(time.Second)
+			glog.Errorf("Error while creating proposals in stream %v\n", err)
 			return err
 		}
 
 		errCh := make(chan error)
 		for _, pr := range proposals {
-			go func(pr *intern.ZeroProposal) {
+			go func(pr *pb.ZeroProposal) {
 				errCh <- s.Node.proposeAndWait(context.Background(), pr)
 			}(pr)
 		}
@@ -500,13 +546,13 @@ func (s *Server) receiveUpdates(stream intern.Zero_UpdateServer) error {
 			// We Don't care about these errors
 			// Ideally shouldn't error out.
 			if err := <-errCh; err != nil {
-				x.Printf("Error while applying proposal in update stream %v\n", err)
+				glog.Errorf("Error while applying proposal in update stream %v\n", err)
 			}
 		}
 	}
 }
 
-func (s *Server) Update(stream intern.Zero_UpdateServer) error {
+func (s *Server) Update(stream pb.Zero_UpdateServer) error {
 	che := make(chan error, 1)
 	// Server side cancellation can only be done by existing the handler
 	// since Recv is blocking we need to run it in a goroutine.
@@ -514,16 +560,8 @@ func (s *Server) Update(stream intern.Zero_UpdateServer) error {
 		che <- s.receiveUpdates(stream)
 	}()
 
-	// Check every minute that whether we caught upto read index or not.
-	ticker := time.NewTicker(time.Minute)
+	// Send MembershipState right away. So, the connection is correctly established.
 	ctx := stream.Context()
-	// node sends struct{} on this channel whenever membership state is updated
-	changeCh := make(chan struct{}, 1)
-
-	id := s.Node.RegisterForUpdates(changeCh)
-	defer s.Node.Deregister(id)
-	// Send MembershipState immediately after registering. (Or there could be race
-	// condition between registering and change in membership state).
 	ms, err := s.latestMembershipState(ctx)
 	if err != nil {
 		return err
@@ -535,9 +573,13 @@ func (s *Server) Update(stream intern.Zero_UpdateServer) error {
 		}
 	}
 
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
-		case <-changeCh:
+		case <-ticker.C:
+			// Send an update every second.
 			ms, err := s.latestMembershipState(ctx)
 			if err != nil {
 				return err
@@ -549,11 +591,6 @@ func (s *Server) Update(stream intern.Zero_UpdateServer) error {
 		case err := <-che:
 			// Error while receiving updates.
 			return err
-		case <-ticker.C:
-			// Check Whether we caught upto read index or not.
-			if _, err := s.latestMembershipState(ctx); err != nil {
-				return err
-			}
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-s.shutDownCh:
@@ -562,7 +599,7 @@ func (s *Server) Update(stream intern.Zero_UpdateServer) error {
 	}
 }
 
-func (s *Server) latestMembershipState(ctx context.Context) (*intern.MembershipState, error) {
+func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState, error) {
 	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
 		return nil, err
 	}

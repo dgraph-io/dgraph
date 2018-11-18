@@ -1,16 +1,25 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
+	"context"
 	"io/ioutil"
 	"math"
 	"os"
@@ -23,7 +32,8 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 
@@ -56,7 +66,7 @@ func populateGraphExport(t *testing.T) {
 	for _, edge := range rdfEdges {
 		nq, err := rdf.Parse(edge)
 		require.NoError(t, err)
-		rnq := gql.NQuad{&nq}
+		rnq := gql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
@@ -68,7 +78,7 @@ func populateGraphExport(t *testing.T) {
 func initTestExport(t *testing.T, schemaStr string) {
 	schema.ParseBytes([]byte(schemaStr), 1)
 
-	val, err := (&intern.SchemaUpdate{ValueType: intern.Posting_UID}).Marshal()
+	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
@@ -78,7 +88,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	txn.Discard()
 
 	require.NoError(t, err)
-	val, err = (&intern.SchemaUpdate{ValueType: intern.Posting_UID}).Marshal()
+	val, err = (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
@@ -101,13 +111,20 @@ func TestExport(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	err = export(bdir, timestamp())
+	Config.ExportPath = bdir
+	readTs := timestamp()
+	// Do the following so export won't block forever for readTs.
+	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
+	err = export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1})
 	require.NoError(t, err)
 
 	searchDir := bdir
 	fileList := []string{}
 	schemaFileList := []string{}
 	err = filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
+		if f.IsDir() {
+			return nil
+		}
 		if path != bdir {
 			if strings.Contains(path, "schema") {
 				schemaFileList = append(schemaFileList, path)
@@ -118,7 +135,7 @@ func TestExport(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	require.Equal(t, 1, len(fileList))
+	require.Equal(t, 1, len(fileList), "filelist=%v", fileList)
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -136,10 +153,10 @@ func TestExport(t *testing.T) {
 		if nq.ObjectValue != nil {
 			switch nq.Subject {
 			case "_:uid1", "_:uid2":
-				require.Equal(t, &api.Value{&api.Value_DefaultVal{"pho\ton"}},
+				require.Equal(t, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "pho\ton"}},
 					nq.ObjectValue)
 			case "_:uid3":
-				require.Equal(t, &api.Value{&api.Value_DefaultVal{"First Line\nSecondLine"}},
+				require.Equal(t, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "First Line\nSecondLine"}},
 					nq.ObjectValue)
 			case "_:uid4":
 			case "_:uid5":
@@ -148,7 +165,7 @@ func TestExport(t *testing.T) {
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
 			if nq.Subject == "_:uid1" || nq.Subject == "_:uid2" {
-				require.Equal(t, &api.Value{&api.Value_DefaultVal{"pho\ton"}},
+				require.Equal(t, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "pho\ton"}},
 					nq.ObjectValue)
 			}
 		}
@@ -181,12 +198,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, 0, int(nq.Facets[2].ValType))
 			require.Equal(t, 4, int(nq.Facets[4].ValType))
 		}
-		// Test label
-		if nq.Subject != "_:uid3" && nq.Subject != "_:uid5" {
-			require.Equal(t, "author0", nq.Label)
-		} else {
-			require.Equal(t, "", nq.Label)
-		}
+		// Labels have been removed.
 		count++
 	}
 	require.NoError(t, scanner.Err())
@@ -221,6 +233,11 @@ func TestExport(t *testing.T) {
 	require.Equal(t, 1, count)
 }
 
+type skv struct {
+	attr   string
+	schema pb.SchemaUpdate
+}
+
 func TestToSchema(t *testing.T) {
 	testCases := []struct {
 		skv      *skv
@@ -229,10 +246,10 @@ func TestToSchema(t *testing.T) {
 		{
 			skv: &skv{
 				attr: "Alice",
-				schema: &intern.SchemaUpdate{
+				schema: pb.SchemaUpdate{
 					Predicate: "mother",
-					ValueType: intern.Posting_STRING,
-					Directive: intern.SchemaUpdate_REVERSE,
+					ValueType: pb.Posting_STRING,
+					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
 					Count:     true,
 					Upsert:    true,
@@ -244,10 +261,10 @@ func TestToSchema(t *testing.T) {
 		{
 			skv: &skv{
 				attr: "Alice:best",
-				schema: &intern.SchemaUpdate{
+				schema: pb.SchemaUpdate{
 					Predicate: "mother",
-					ValueType: intern.Posting_STRING,
-					Directive: intern.SchemaUpdate_REVERSE,
+					ValueType: pb.Posting_STRING,
+					Directive: pb.SchemaUpdate_REVERSE,
 					List:      false,
 					Count:     false,
 					Upsert:    false,
@@ -258,9 +275,9 @@ func TestToSchema(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		buf := new(bytes.Buffer)
-		toSchema(buf, testCase.skv)
-		require.Equal(t, testCase.expected, buf.String())
+		kv, err := toSchema(testCase.skv.attr, testCase.skv.schema)
+		require.NoError(t, err)
+		require.Equal(t, testCase.expected, string(kv.Val))
 	}
 }
 
@@ -289,9 +306,9 @@ func TestToSchema(t *testing.T) {
 // 	benchItems := []kv{
 // 		{
 // 			prefix: "testString",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_STRING,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_STRING,
 // 					Value:   []byte("手機裡的眼淚"),
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
@@ -299,36 +316,36 @@ func TestToSchema(t *testing.T) {
 // 			},
 // 		},
 // 		{prefix: "testGeo",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_GEO,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_GEO,
 // 					Value:   geoData,
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
 // 			}},
 // 		{prefix: "testPassword",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_PASSWORD,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_PASSWORD,
 // 					Value:   []byte("test"),
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
 // 			}},
 // 		{prefix: "testInt",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_INT,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_INT,
 // 					Value:   byteInt,
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},
 // 			}},
 // 		{prefix: "testUid",
-// 			list: &intern.PostingList{
-// 				Postings: []*intern.Posting{{
-// 					ValType: intern.Posting_INT,
+// 			list: &pb.PostingList{
+// 				Postings: []*pb.Posting{{
+// 					ValType: pb.Posting_INT,
 // 					Uid:     uint64(65454),
 // 					Facets:  fac,
 // 				}},

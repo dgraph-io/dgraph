@@ -4,7 +4,111 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
-## [Unreleased]
+## [1.0.10] - 2018-11-05
+
+**Note: This release requires you to export and re-import data. We have changed the underlying storage format.**
+
+### Added
+
+- The Alter endpoint can be protected by an auth token that is set on the Dgraph Alphas via the `--auth_token` option. This can help prevent accidental schema updates and drop all operations. (#2692)
+- Optimize has function (#2724)
+- Expose the health check API via gRPC. (#2721)
+
+### Changed
+
+- Dgraph is relicensed to Apache 2.0. (#2652)
+- **Breaking change**. Rename Dgraph Server to Dgraph Alpha to clarify discussions of the Dgraph cluster. The top-level command `dgraph server` is now `dgraph alpha`. (#2667)
+- Prometheus metrics have been renamed for consistency for alpha, memory, and lru cache metrics. (#2636, #2670, #2714)
+- The `dgraph-converter` command is available as the subcommand `dgraph conv`. (#2635)
+- Updating protobuf version. (#2639)
+- Allow checkpwd to be aliased (#2641)
+- Better control excessive traffic to Dgraph (#2678)
+- Export format now exports on the Alpha receiving the export request. The naming scheme of the export files has been simplified.
+- Improvements to the `dgraph debug` tool that can be used to inspect the contents of the posting lists directory.
+- Bring in Badger updates (#2697)
+
+### Fixed
+
+- Make raft leader resume probing after snapshot crash (#2707)
+- **Breaking change:** Create a lot simpler sorted uint64 codec (#2716)
+- Increase the size of applyCh, to give Raft some breathing space. Otherwise, it fails to maintain quorum health.
+- Zero should stream last commit update
+- Send commit timestamps in order (#2687)
+- Query blocks with the same name are no longer allowed.
+- Fix out-of-range values in query parser. (#2690)
+
+## [1.0.9] - 2018-10-02
+
+### Added
+
+- This version switches Badger Options to reasonable settings for p and w directories. This removes the need to expose `--badger.options` option and removes the `none` option from `--badger.vlog`. (#2605)
+- Add support for ignoring parse errors in bulk loader with the option `--ignore_error`. (#2599)
+- Introduction of new command `dgraph cert` to simplify initial TLS setup. See [TLS configuration docs](https://docs.dgraph.io/deploy/#tls-configuration) for more info.
+- Add `expand(_forward_)` and `expand(_reverse_)` to GraphQL+- query language. If `_forward_` is passed as an argument to `expand()`, all predicates at that level (minus any reverse predicates) are retrieved.
+If `_reverse_` is passed as an argument to `expand()`, only the reverse predicates are retrieved.
+
+### Changed
+
+- Rename intern pkg to pb (#2608)
+
+### Fixed
+
+- Remove LinRead map logic from Dgraph (#2570)
+- Sanity length check for facets mostly.
+- Make has function correct w.r.t. transactions (#2585)
+- Increase the snapshot calculation interval, while decreasing the min number of entries required; so we take snapshots even when there's little activity.
+- Convert an assert during DropAll to inf retry. (#2578)
+- Fix a bug which caused all transactions to abort if `--expand_edge` was set to false. Fixes #2547.
+- Set the Applied index in Raft directly, so it does not pick up an index older than the snapshot. Ensure that it is in sync with the Applied watermark. Fixes #2581.
+- Pull in Badger updates. This also fixes the Unable to find log file, retry error.
+- Improve efficiency of readonly transactions by reusing the same read ts (#2604)
+- Fix a bug in Raft.Run loop. (#2606)
+- Fix a few issues regarding snapshot.Index for raft.Cfg.Applied. Do not overwrite any existing data when apply txn commits. Do not let CreateSnapshot fail.
+- Consider all future versions of the key as well, when deciding whether to write a key or not during txn commits. Otherwise, we'll end up in an endless loop of trying to write a stale key but failing to do so.
+- When testing inequality value vars with non-matching values, the response was sent as an error although it should return empty result if the query has correct syntax. (#2611)
+- Switch traces to glogs in worker/export.go (#2614)
+- Improve error handling for `dgraph live` for errors when processing RDF and schema files. (#2596)
+- Fix task conversion from bool to int that used uint32 (#2621)
+- Fix `expand(_all_)` in recurse queries (#2600).
+- Add language aliases for broader support for full text indices. (#2602)
+
+## [1.0.8] - 2018-08-29
+
+### Added
+
+- Introduce a new /assignIds HTTP endpoint in Zero, so users can allocate UIDs to nodes externally.
+- Add a new tool which retrieves and increments a counter by 1 transactionally. This can be used to test the sanity of Dgraph cluster.
+
+### Changed
+
+- This version introduces tracking of a few anonymous metrics to measure Dgraph adoption (#2554). These metrics do not contain any specifically identifying information about the user, so most users can leave it on. This can be turned off by setting `--telemetry=false` flag if needed in Dgraph Zero.
+
+### Fixed
+
+- Correctly handle a list of type geo in json (#2482, #2485).
+- Fix the graceful shutdown of Dgraph server, so a single Ctrl+C would now suffice to stop it.
+- Fix various deadlocks in Dgraph and set ConfState in Raft correctly (#2548).
+- Significantly decrease the number of transaction aborts by using SPO as key for entity to entity connections. (#2556).
+- Do not print error while sending Raft message by default. No action needs to be taken by the user, so it is set to V(3) level.
+
+## [1.0.7] - 2018-08-10
+
+### Changed
+
+- Set the `--conc` flag in live loader default to 1, as a temporary fix to avoid tons of aborts.
+
+### Fixed
+
+- All Oracle delta streams are applied via Raft proposals. This deals better with network partition like edge-cases. #2463
+- Fix deadlock in 10-node cluster convergence. Fixes #2286.
+- Make ReadIndex work safely. #2469
+- Simplify snapshots, leader now calculates and proposes snapshots to the group. #2475.
+- Make snapshot streaming more robust. #2487
+- Consolidate all txn tracking logic into Oracle, remove inSnapshot logic. #2480.
+- Bug fix in Badger, to stop panics when exporting.
+- Use PreVote to avoid leader change on a node join.
+- Fix a long-standing bug where `raft.Step` was being called via goroutines. It is now called serially.
+- Fix context deadline issues with proposals. #2501.
 
 ## [1.0.6] - 2018-06-20
 
@@ -26,6 +130,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Fix bugs in snapshot move, refactor code and improve performance significantly. #2440, #2442
 * Add error handling to GetNoStore. Fixes #2373.
 * Fix bugs in Bulk loader. #2449
+* Posting List and Raft bug fixes. #2457
 
 ### Changed
 
@@ -35,7 +140,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 * Trace how node.Run loop performs.
 * Allow tweaking Badger options.
 
-*Warning: This change modifies some flag names. In particular, Badger options
+**Note:** This change modifies some flag names. In particular, Badger options
 are now exposed via flags named with `--badger.` prefix.
 
 ## [1.0.5] - 2018-04-20

@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package zero
@@ -12,9 +21,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
@@ -57,7 +67,7 @@ func (s *Server) rebalanceTablets() {
 				break
 			}
 			if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
-				x.Println(err)
+				glog.Errorln(err)
 			}
 		}
 	}
@@ -70,7 +80,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	// if this node is a follower node.
 	tab := s.ServingTablet(predicate)
 	x.AssertTruef(tab != nil, "Tablet to be moved: [%v] should not be nil", predicate)
-	x.Printf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
+	glog.Infof("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
 		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), predicateMoveTimeout)
@@ -85,7 +95,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 				break
 			}
 
-			x.Printf("Sleeping before we run recovery for tablet move")
+			glog.Infof("Sleeping before we run recovery for tablet move")
 			// We might have initiated predicate move on some other node, give it some
 			// time to get cancelled. On cancellation the other node would set the predicate
 			// to write mode again and we need to be sure that it doesn't happen after we
@@ -106,7 +116,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		return x.Errorf("Error while trying to move predicate %v from %d to %d: %v", predicate,
 			srcGroup, dstGroup, err)
 	}
-	x.Printf("Predicate move done for: [%v] from group %d to %d\n", predicate, srcGroup, dstGroup)
+	glog.Infof("Predicate move done for: [%v] from group %d to %d\n", predicate, srcGroup, dstGroup)
 	return nil
 }
 
@@ -116,12 +126,12 @@ func (s *Server) runRecovery() {
 	if s.state == nil {
 		return
 	}
-	var proposals []*intern.ZeroProposal
+	var proposals []*pb.ZeroProposal
 	for _, group := range s.state.Groups {
 		for _, tab := range group.Tablets {
 			if tab.ReadOnly {
-				p := &intern.ZeroProposal{}
-				p.Tablet = &intern.Tablet{
+				p := &pb.ZeroProposal{}
+				p.Tablet = &pb.Tablet{
 					GroupId:   tab.GroupId,
 					Predicate: tab.Predicate,
 					Space:     tab.Space,
@@ -134,7 +144,7 @@ func (s *Server) runRecovery() {
 
 	errCh := make(chan error)
 	for _, pr := range proposals {
-		go func(pr *intern.ZeroProposal) {
+		go func(pr *pb.ZeroProposal) {
 			errCh <- s.Node.proposeAndWait(context.Background(), pr)
 		}(pr)
 	}
@@ -143,7 +153,7 @@ func (s *Server) runRecovery() {
 		// We Don't care about these errors
 		// Ideally shouldn't error out.
 		if err := <-errCh; err != nil {
-			x.Printf("Error while applying proposal in update stream %v\n", err)
+			glog.Errorf("Error while applying proposal in update stream %v\n", err)
 		}
 	}
 }
@@ -176,12 +186,12 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 		return groups[i].size < groups[j].size
 	})
 
-	x.Printf("\n\nGroups sorted by size: %+v\n\n", groups)
+	glog.Infof("\n\nGroups sorted by size: %+v\n\n", groups)
 	for lastGroup := numGroups - 1; lastGroup > 0; lastGroup-- {
 		srcGroup = groups[lastGroup].gid
 		dstGroup = groups[0].gid
 		size_diff := groups[lastGroup].size - groups[0].size
-		x.Printf("size_diff %v\n", size_diff)
+		glog.Infof("size_diff %v\n", size_diff)
 		// Don't move a node unless you receive atleast one update regarding tablet size.
 		// Tablet size would have come up with leader update.
 		if !s.hasLeader(dstGroup) {
@@ -218,7 +228,7 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 		// If no error, then return immediately.
 		return nil
 	}
-	x.Printf("Got error during move: %v", err)
+	glog.Errorf("Got error during move: %v", err)
 	if !s.Node.AmLeader() {
 		s.runRecovery()
 		return err
@@ -226,15 +236,15 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 
 	stab := s.ServingTablet(predicate)
 	x.AssertTrue(stab != nil)
-	p := &intern.ZeroProposal{}
-	p.Tablet = &intern.Tablet{
+	p := &pb.ZeroProposal{}
+	p.Tablet = &pb.Tablet{
 		GroupId:   srcGroup,
 		Predicate: predicate,
 		Space:     stab.Space,
 		Force:     true,
 	}
 	if nerr := s.Node.proposeAndWait(context.Background(), p); nerr != nil {
-		x.Printf("Error while reverting group %d to RW: %+v\n", srcGroup, nerr)
+		glog.Errorf("Error while reverting group %d to RW: %+v\n", srcGroup, nerr)
 		return nerr
 	}
 	return err
@@ -246,8 +256,8 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 	stab := s.ServingTablet(predicate)
 	x.AssertTrue(stab != nil)
 	// Propose that predicate in read only
-	p := &intern.ZeroProposal{}
-	p.Tablet = &intern.Tablet{
+	p := &pb.ZeroProposal{}
+	p.Tablet = &pb.Tablet{
 		GroupId:   srcGroup,
 		Predicate: predicate,
 		Space:     stab.Space,
@@ -262,8 +272,8 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
 	}
 
-	c := intern.NewWorkerClient(pl.Get())
-	in := &intern.MovePredicatePayload{
+	c := pb.NewWorkerClient(pl.Get())
+	in := &pb.MovePredicatePayload{
 		Predicate:     predicate,
 		State:         s.membershipState(),
 		SourceGroupId: srcGroup,
@@ -274,7 +284,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 	}
 
 	// Propose that predicate is served by dstGroup in RW.
-	p.Tablet = &intern.Tablet{
+	p.Tablet = &pb.Tablet{
 		GroupId:   dstGroup,
 		Predicate: predicate,
 		Space:     stab.Space,

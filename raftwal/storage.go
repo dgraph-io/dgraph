@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package raftwal
@@ -17,61 +26,35 @@ import (
 	"github.com/coreos/etcd/raft"
 	pb "github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type txnUnifier struct {
-	txn *badger.Txn
-	db  *badger.DB
-}
-
-func (w *DiskStorage) newUnifier() *txnUnifier {
-	return &txnUnifier{txn: w.db.NewTransaction(true), db: w.db}
-}
-
-func (u *txnUnifier) run(k, v []byte, delete bool) error {
-	var err error
-	if delete {
-		err = u.txn.Delete(k)
-	} else {
-		err = u.txn.Set(k, v)
-	}
-	if err != badger.ErrTxnTooBig {
-		// Error can be nil, and we can return here.
-		return err
-	}
-	err = u.txn.Commit(nil)
-	if err != nil {
-		return err
-	}
-	u.txn = u.db.NewTransaction(true)
-	if delete {
-		return u.txn.Delete(k)
-	} else {
-		return u.txn.Set(k, v)
-	}
-	return nil
-}
-
-func (u *txnUnifier) Done() error {
-	return u.txn.Commit(nil)
-}
-
-func (u *txnUnifier) Cancel() {
-	u.txn.Discard()
-}
-
 type localCache struct {
 	sync.RWMutex
-	snap pb.Snapshot
+	firstIndex uint64
+	snap       pb.Snapshot
+}
+
+func (c *localCache) setFirst(first uint64) {
+	c.Lock()
+	defer c.Unlock()
+	c.firstIndex = first
+}
+
+func (c *localCache) first() uint64 {
+	c.RLock()
+	defer c.RUnlock()
+	return c.firstIndex
 }
 
 func (c *localCache) setSnapshot(s pb.Snapshot) {
 	c.Lock()
 	defer c.Unlock()
 	c.snap = s
+	c.firstIndex = 0 // Reset firstIndex.
 }
 
 func (c *localCache) snapshot() pb.Snapshot {
@@ -119,12 +102,10 @@ func RaftId(db *badger.DB) (uint64, error) {
 		if err != nil {
 			return err
 		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		id = binary.BigEndian.Uint64(val)
-		return nil
+		return item.Value(func(val []byte) error {
+			id = binary.BigEndian.Uint64(val)
+			return nil
+		})
 	})
 	if err == badger.ErrKeyNotFound {
 		return 0, nil
@@ -218,16 +199,14 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint6
 		if !itr.ValidForPrefix(w.entryPrefix()) {
 			return errNotFound
 		}
-		index = w.parseIndex(itr.Item().Key())
+		item := itr.Item()
+		index = w.parseIndex(item.Key())
 		if e == nil {
 			return nil
 		}
-		item := itr.Item()
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		return e.Unmarshal(val)
+		return item.Value(func(val []byte) error {
+			return e.Unmarshal(val)
+		})
 	})
 	return index, err
 }
@@ -240,7 +219,16 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 	if !raft.IsEmptySnap(snap) {
 		return snap.Metadata.Index + 1, nil
 	}
+	if first := w.cache.first(); first > 0 {
+		return first, nil
+	}
 	index, err := w.seekEntry(nil, 0, false)
+	if err == nil {
+		glog.V(2).Infof("Setting first index: %d", index+1)
+		w.cache.setFirst(index + 1)
+	} else if glog.V(2) {
+		glog.Errorf("While seekEntry. Error: %v", err)
+	}
 	return index + 1, err
 }
 
@@ -253,7 +241,7 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 // Keep the entry at the snapshot index, for simplification of logic.
 // It is the application's responsibility to not attempt to deleteUntil an index
 // greater than raftLog.applied.
-func (w *DiskStorage) deleteUntil(u *txnUnifier, until uint64) error {
+func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
@@ -284,7 +272,7 @@ func (w *DiskStorage) deleteUntil(u *txnUnifier, until uint64) error {
 	if err != nil {
 		return err
 	}
-	return w.deleteKeys(u, keys)
+	return w.deleteKeys(batch, keys)
 }
 
 // Snapshot returns the most recent snapshot.
@@ -300,11 +288,9 @@ func (w *DiskStorage) Snapshot() (snap pb.Snapshot, rerr error) {
 		if err != nil {
 			return err
 		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		return snap.Unmarshal(val)
+		return item.Value(func(val []byte) error {
+			return snap.Unmarshal(val)
+		})
 	})
 	if err == badger.ErrKeyNotFound {
 		return snap, nil
@@ -315,7 +301,7 @@ func (w *DiskStorage) Snapshot() (snap pb.Snapshot, rerr error) {
 // setSnapshot would store the snapshot. We can delete all the entries up until the snapshot
 // index. But, keep the raft entry at the snapshot index, to make it easier to build the logic; like
 // the dummy entry in MemoryStorage.
-func (w *DiskStorage) setSnapshot(u *txnUnifier, s pb.Snapshot) error {
+func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s pb.Snapshot) error {
 	if raft.IsEmptySnap(s) {
 		return nil
 	}
@@ -323,7 +309,7 @@ func (w *DiskStorage) setSnapshot(u *txnUnifier, s pb.Snapshot) error {
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal snapshot")
 	}
-	if err := u.run(w.snapshotKey(), data, false); err != nil {
+	if err := batch.Set(w.snapshotKey(), data, 0); err != nil {
 		return err
 	}
 
@@ -332,7 +318,7 @@ func (w *DiskStorage) setSnapshot(u *txnUnifier, s pb.Snapshot) error {
 	if err != nil {
 		return err
 	}
-	if err := u.run(w.entryKey(e.Index), data, false); err != nil {
+	if err := batch.Set(w.entryKey(e.Index), data, 0); err != nil {
 		return err
 	}
 
@@ -342,7 +328,7 @@ func (w *DiskStorage) setSnapshot(u *txnUnifier, s pb.Snapshot) error {
 }
 
 // SetHardState saves the current HardState.
-func (w *DiskStorage) setHardState(u *txnUnifier, st pb.HardState) error {
+func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st pb.HardState) error {
 	if raft.IsEmptyHardState(st) {
 		return nil
 	}
@@ -350,16 +336,16 @@ func (w *DiskStorage) setHardState(u *txnUnifier, st pb.HardState) error {
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal hardstate")
 	}
-	return u.run(w.hardStateKey(), data, false)
+	return batch.Set(w.hardStateKey(), data, 0)
 }
 
 // reset resets the entries. Used for testing.
 func (w *DiskStorage) reset(es []pb.Entry) error {
 	// Clean out the state.
-	u := w.newUnifier()
-	defer u.Cancel()
+	batch := w.db.NewWriteBatch()
+	defer batch.Cancel()
 
-	if err := w.deleteFrom(u, 0); err != nil {
+	if err := w.deleteFrom(batch, 0); err != nil {
 		return err
 	}
 
@@ -369,20 +355,20 @@ func (w *DiskStorage) reset(es []pb.Entry) error {
 			return x.Wrapf(err, "wal.Store: While marshal entry")
 		}
 		k := w.entryKey(e.Index)
-		if err := u.run(k, data, false); err != nil {
+		if err := batch.Set(k, data, 0); err != nil {
 			return err
 		}
 	}
-	return u.Done()
+	return batch.Flush()
 }
 
-func (w *DiskStorage) deleteKeys(u *txnUnifier, keys []string) error {
+func (w *DiskStorage) deleteKeys(batch *badger.WriteBatch, keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
 
 	for _, k := range keys {
-		if err := u.run([]byte(k), nil, true); err != nil {
+		if err := batch.Delete([]byte(k)); err != nil {
 			return err
 		}
 	}
@@ -390,7 +376,7 @@ func (w *DiskStorage) deleteKeys(u *txnUnifier, keys []string) error {
 }
 
 // Delete entries in the range of index [from, inf).
-func (w *DiskStorage) deleteFrom(u *txnUnifier, from uint64) error {
+func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		start := w.entryKey(from)
@@ -409,7 +395,7 @@ func (w *DiskStorage) deleteFrom(u *txnUnifier, from uint64) error {
 	if err != nil {
 		return err
 	}
-	return w.deleteKeys(u, keys)
+	return w.deleteKeys(batch, keys)
 }
 
 func (w *DiskStorage) HardState() (hd pb.HardState, rerr error) {
@@ -420,11 +406,9 @@ func (w *DiskStorage) HardState() (hd pb.HardState, rerr error) {
 		if err != nil {
 			return err
 		}
-		val, err := item.Value()
-		if err != nil {
-			return err
-		}
-		return hd.Unmarshal(val)
+		return item.Value(func(val []byte) error {
+			return hd.Unmarshal(val)
+		})
 	})
 	if err == badger.ErrKeyNotFound {
 		return hd, nil
@@ -473,16 +457,14 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 			if err != nil {
 				return err
 			}
-			val, err := item.Value()
-			if err != nil {
-				return err
-			}
-			var e pb.Entry
-			if err = e.Unmarshal(val); err != nil {
-				return err
-			}
-			es = append(es, e)
-			return nil
+			return item.Value(func(val []byte) error {
+				var e pb.Entry
+				if err = e.Unmarshal(val); err != nil {
+					return err
+				}
+				es = append(es, e)
+				return nil
+			})
 		}
 
 		itr := txn.NewIterator(badger.DefaultIteratorOptions)
@@ -497,11 +479,9 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 			item := itr.Item()
 			var e pb.Entry
-			val, err := item.Value()
-			if err != nil {
-				return err
-			}
-			if err = e.Unmarshal(val); err != nil {
+			if err := item.Value(func(val []byte) error {
+				return e.Unmarshal(val)
+			}); err != nil {
 				return err
 			}
 			// If this Assert does not fail, then we can safely remove that strange append fix
@@ -549,11 +529,13 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error
 }
 
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) error {
+	glog.V(2).Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
 	first, err := w.FirstIndex()
 	if err != nil {
 		return err
 	}
 	if i < first {
+		glog.Errorf("i=%d<first=%d, ErrSnapOutOfDate", i, first)
 		return raft.ErrSnapOutOfDate
 	}
 
@@ -568,20 +550,19 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 	var snap pb.Snapshot
 	snap.Metadata.Index = i
 	snap.Metadata.Term = e.Term
-	if cs != nil {
-		snap.Metadata.ConfState = *cs
-	}
+	x.AssertTrue(cs != nil)
+	snap.Metadata.ConfState = *cs
 	snap.Data = data
 
-	u := w.newUnifier()
-	defer u.Cancel()
-	if err := w.setSnapshot(u, snap); err != nil {
+	batch := w.db.NewWriteBatch()
+	defer batch.Cancel()
+	if err := w.setSnapshot(batch, snap); err != nil {
 		return err
 	}
-	if err := w.deleteUntil(u, snap.Metadata.Index); err != nil {
+	if err := w.deleteUntil(batch, snap.Metadata.Index); err != nil {
 		return err
 	}
-	return u.Done()
+	return batch.Flush()
 }
 
 // Save would write Entries, HardState and Snapshot to persistent storage in order, i.e. Entries
@@ -589,23 +570,23 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 // writes then all of them can be written together. Note that when writing an Entry with Index i,
 // any previously-persisted entries with Index >= i must be discarded.
 func (w *DiskStorage) Save(h pb.HardState, es []pb.Entry, snap pb.Snapshot) error {
-	u := w.newUnifier()
-	defer u.Cancel()
+	batch := w.db.NewWriteBatch()
+	defer batch.Cancel()
 
-	if err := w.addEntries(u, es); err != nil {
+	if err := w.addEntries(batch, es); err != nil {
 		return err
 	}
-	if err := w.setHardState(u, h); err != nil {
+	if err := w.setHardState(batch, h); err != nil {
 		return err
 	}
-	if err := w.setSnapshot(u, snap); err != nil {
+	if err := w.setSnapshot(batch, snap); err != nil {
 		return err
 	}
-	return u.Done()
+	return batch.Flush()
 }
 
 // Append the new entries to storage.
-func (w *DiskStorage) addEntries(u *txnUnifier, entries []pb.Entry) error {
+func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) error {
 	if len(entries) == 0 {
 		return nil
 	}
@@ -636,13 +617,13 @@ func (w *DiskStorage) addEntries(u *txnUnifier, entries []pb.Entry) error {
 		if err != nil {
 			return x.Wrapf(err, "wal.Append: While marshal entry")
 		}
-		if err := u.run(k, data, false); err != nil {
+		if err := batch.Set(k, data, 0); err != nil {
 			return err
 		}
 	}
 	laste := entries[len(entries)-1].Index
 	if laste < last {
-		return w.deleteFrom(u, laste+1)
+		return w.deleteFrom(batch, laste+1)
 	}
 	return nil
 }

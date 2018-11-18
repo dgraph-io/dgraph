@@ -14,7 +14,20 @@
 
 package index
 
-import "github.com/blevesearch/bleve/document"
+import (
+	"reflect"
+
+	"github.com/blevesearch/bleve/analysis"
+	"github.com/blevesearch/bleve/document"
+	"github.com/blevesearch/bleve/size"
+)
+
+var reflectStaticSizeAnalysisResult int
+
+func init() {
+	var ar AnalysisResult
+	reflectStaticSizeAnalysisResult = int(reflect.TypeOf(ar).Size())
+}
 
 type IndexRow interface {
 	KeySize() int
@@ -29,6 +42,20 @@ type IndexRow interface {
 type AnalysisResult struct {
 	DocID string
 	Rows  []IndexRow
+
+	// scorch
+	Document *document.Document
+	Analyzed []analysis.TokenFrequencies
+	Length   []int
+}
+
+func (a *AnalysisResult) Size() int {
+	rv := reflectStaticSizeAnalysisResult
+	for _, analyzedI := range a.Analyzed {
+		rv += analyzedI.Size()
+	}
+	rv += len(a.Length) * size.SizeOfInt
+	return rv
 }
 
 type AnalysisWork struct {

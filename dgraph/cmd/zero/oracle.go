@@ -1,21 +1,31 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package zero
 
 import (
-	"encoding/base64"
 	"errors"
 	"math/rand"
 	"time"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
@@ -28,26 +38,24 @@ type Oracle struct {
 	x.SafeMutex
 	commits map[uint64]uint64 // startTs -> commitTs
 	// TODO: Check if we need LRU.
-	rowCommit  map[string]uint64   // fp(key) -> commitTs. Used to detect conflict.
-	aborts     map[uint64]struct{} // key is startTs
-	maxPending uint64              // max transaction startTs given out by us.
+	keyCommit   map[string]uint64 // fp(key) -> commitTs. Used to detect conflict.
+	maxAssigned uint64            // max transaction assigned by us.
 
 	// timestamp at the time of start of server or when it became leader. Used to detect conflicts.
 	tmax uint64
 	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
-	subscribers map[int]chan *intern.OracleDelta
-	updates     chan *intern.OracleDelta
-	doneUntil   x.WaterMark
+	subscribers map[int]chan *pb.OracleDelta
+	updates     chan *pb.OracleDelta
+	doneUntil   y.WaterMark
 	syncMarks   []syncMark
 }
 
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
-	o.rowCommit = make(map[string]uint64)
-	o.aborts = make(map[uint64]struct{})
-	o.subscribers = make(map[int]chan *intern.OracleDelta)
-	o.updates = make(chan *intern.OracleDelta, 100000) // Keeping 1 second worth of updates.
+	o.keyCommit = make(map[string]uint64)
+	o.subscribers = make(map[int]chan *pb.OracleDelta)
+	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init()
 	go o.sendDeltasToSubscribers()
 }
@@ -56,7 +64,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.Lock()
 	defer o.Unlock()
 	o.startTxnTs = ts
-	o.rowCommit = make(map[string]uint64)
+	o.keyCommit = make(map[string]uint64)
 }
 
 func (o *Oracle) hasConflict(src *api.TxnContext) bool {
@@ -65,7 +73,7 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 		return true
 	}
 	for _, k := range src.Keys {
-		if last := o.rowCommit[k]; last > src.StartTs {
+		if last := o.keyCommit[k]; last > src.StartTs {
 			return true
 		}
 	}
@@ -73,9 +81,6 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 }
 
 func (o *Oracle) purgeBelow(minTs uint64) {
-	x.Printf("purging below ts:%d, len(o.commits):%d, len(o.aborts):%d"+
-		", len(o.rowCommit):%d\n",
-		minTs, len(o.commits), len(o.aborts), len(o.rowCommit))
 	o.Lock()
 	defer o.Unlock()
 
@@ -85,19 +90,17 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 			delete(o.commits, ts)
 		}
 	}
-	for ts := range o.aborts {
-		if ts < minTs {
-			delete(o.aborts, ts)
-		}
-	}
 	// There is no transaction running with startTs less than minTs
 	// So we can delete everything from rowCommit whose commitTs < minTs
-	for key, ts := range o.rowCommit {
+	for key, ts := range o.keyCommit {
 		if ts < minTs {
-			delete(o.rowCommit, key)
+			delete(o.keyCommit, key)
 		}
 	}
 	o.tmax = minTs
+	glog.Infof("Purged below ts:%d, len(o.commits):%d"+
+		", len(o.rowCommit):%d\n",
+		minTs, len(o.commits), len(o.keyCommit))
 }
 
 func (o *Oracle) commit(src *api.TxnContext) error {
@@ -108,34 +111,23 @@ func (o *Oracle) commit(src *api.TxnContext) error {
 		return errConflict
 	}
 	for _, k := range src.Keys {
-		o.rowCommit[k] = src.CommitTs // CommitTs is handed out before calling this func.
+		o.keyCommit[k] = src.CommitTs // CommitTs is handed out before calling this func.
 	}
 	return nil
 }
 
-func (o *Oracle) aborted(startTs uint64) bool {
-	o.Lock()
-	defer o.Unlock()
-	_, ok := o.aborts[startTs]
-	return ok
-}
-
-func (o *Oracle) currentState() *intern.OracleDelta {
+func (o *Oracle) currentState() *pb.OracleDelta {
 	o.AssertRLock()
-	resp := &intern.OracleDelta{
-		Commits: make(map[uint64]uint64, len(o.commits)),
-	}
+	resp := &pb.OracleDelta{}
 	for start, commit := range o.commits {
-		resp.Commits[start] = commit
+		resp.Txns = append(resp.Txns,
+			&pb.TxnStatus{StartTs: start, CommitTs: commit})
 	}
-	for abort := range o.aborts {
-		resp.Aborts = append(resp.Aborts, abort)
-	}
-	resp.MaxPending = o.maxPending
+	resp.MaxAssigned = o.maxAssigned
 	return resp
 }
 
-func (o *Oracle) newSubscriber() (<-chan *intern.OracleDelta, int) {
+func (o *Oracle) newSubscriber() (<-chan *pb.OracleDelta, int) {
 	o.Lock()
 	defer o.Unlock()
 	var id int
@@ -145,7 +137,7 @@ func (o *Oracle) newSubscriber() (<-chan *intern.OracleDelta, int) {
 			break
 		}
 	}
-	ch := make(chan *intern.OracleDelta, 1000)
+	ch := make(chan *pb.OracleDelta, 1000)
 	ch <- o.currentState() // Queue up the full state as the first entry.
 	o.subscribers[id] = ch
 	return ch, id
@@ -158,35 +150,53 @@ func (o *Oracle) removeSubscriber(id int) {
 }
 
 func (o *Oracle) sendDeltasToSubscribers() {
-	delta := &intern.OracleDelta{
-		Commits: make(map[uint64]uint64),
+	delta := &pb.OracleDelta{}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	waitFor := func() uint64 {
+		w := delta.MaxAssigned
+		for _, txn := range delta.Txns {
+			w = x.Max(w, txn.CommitTs)
+		}
+		return w
 	}
+
 	for {
-		update, open := <-o.updates
-		if !open {
-			return
+	get_update:
+		var update *pb.OracleDelta
+		select {
+		case update = <-o.updates:
+		case <-ticker.C:
+			wait := waitFor()
+			if wait == 0 || o.doneUntil.DoneUntil() < wait {
+				goto get_update
+			}
+			// Send empty update.
+			update = &pb.OracleDelta{}
 		}
 	slurp_loop:
 		for {
-			// Consume tctx.
-			if update.MaxPending > delta.MaxPending {
-				delta.MaxPending = update.MaxPending
-			}
-			for _, startTs := range update.Aborts {
-				delta.Aborts = append(delta.Aborts, startTs)
-			}
-			for startTs, commitTs := range update.Commits {
-				delta.Commits[startTs] = commitTs
-			}
+			delta.MaxAssigned = x.Max(delta.MaxAssigned, update.MaxAssigned)
+			delta.Txns = append(delta.Txns, update.Txns...)
 			select {
-			case update, open = <-o.updates:
-				if !open {
-					return
-				}
+			case update = <-o.updates:
 			default:
 				break slurp_loop
 			}
 		}
+		// No need to sort the txn updates here. Alpha would sort them before
+		// applying.
+
+		// Let's ensure that we have all the commits up until the max here.
+		// Otherwise, we'll be sending commit timestamps out of order, which
+		// would cause Alphas to drop some of them, during writes to Badger.
+		if o.doneUntil.DoneUntil() < waitFor() {
+			continue // The for loop doing blocking reads from o.updates.
+			// We need at least one entry from the updates channel to pick up a missing update.
+			// Don't goto slurp_loop, because it would break from select immediately.
+		}
+
 		o.Lock()
 		for id, ch := range o.subscribers {
 			select {
@@ -197,9 +207,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			}
 		}
 		o.Unlock()
-		delta = &intern.OracleDelta{
-			Commits: make(map[uint64]uint64),
-		}
+		delta = &pb.OracleDelta{}
 	}
 }
 
@@ -209,11 +217,8 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 	if _, ok := o.commits[src.StartTs]; ok {
 		return false
 	}
-	if _, ok := o.aborts[src.StartTs]; ok {
-		return false
-	}
 	if src.Aborted {
-		o.aborts[src.StartTs] = struct{}{}
+		o.commits[src.StartTs] = 0
 	} else {
 		o.commits[src.StartTs] = src.CommitTs
 	}
@@ -222,14 +227,13 @@ func (o *Oracle) updateCommitStatusHelper(index uint64, src *api.TxnContext) boo
 }
 
 func (o *Oracle) updateCommitStatus(index uint64, src *api.TxnContext) {
+	// TODO: We should check if the tablet is in read-only status here.
 	if o.updateCommitStatusHelper(index, src) {
-		delta := new(intern.OracleDelta)
-		if src.Aborted {
-			delta.Aborts = append(delta.Aborts, src.StartTs)
-		} else {
-			delta.Commits = make(map[uint64]uint64)
-			delta.Commits[src.StartTs] = src.CommitTs
-		}
+		delta := new(pb.OracleDelta)
+		delta.Txns = append(delta.Txns, &pb.TxnStatus{
+			StartTs:  src.StartTs,
+			CommitTs: o.commitTs(src.StartTs),
+		})
 		o.updates <- delta
 	}
 }
@@ -240,35 +244,51 @@ func (o *Oracle) commitTs(startTs uint64) uint64 {
 	return o.commits[startTs]
 }
 
-func (o *Oracle) storePending(ids *api.AssignedIds) {
+func (o *Oracle) storePending(ids *pb.AssignedIds) {
 	// Wait to finish up processing everything before start id.
-	o.doneUntil.WaitForMark(context.Background(), ids.EndId)
+	max := x.Max(ids.EndId, ids.ReadOnly)
+	o.doneUntil.WaitForMark(context.Background(), max)
 	// Now send it out to updates.
-	o.updates <- &intern.OracleDelta{MaxPending: ids.EndId}
+	o.updates <- &pb.OracleDelta{MaxAssigned: max}
+
 	o.Lock()
 	defer o.Unlock()
-	max := ids.EndId
-	if o.maxPending < max {
-		o.maxPending = max
-	}
+	o.maxAssigned = x.Max(o.maxAssigned, max)
 }
 
 func (o *Oracle) MaxPending() uint64 {
 	o.RLock()
 	defer o.RUnlock()
-	return o.maxPending
+	return o.maxAssigned
 }
 
 var errConflict = errors.New("Transaction conflict")
 
+// proposeTxn proposes a txn update, and then updates src to reflect the state
+// of the commit after proposal is run.
 func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
-	var zp intern.ZeroProposal
+	var zp pb.ZeroProposal
 	zp.Txn = &api.TxnContext{
 		StartTs:  src.StartTs,
 		CommitTs: src.CommitTs,
 		Aborted:  src.Aborted,
 	}
-	return s.Node.proposeAndWait(ctx, &zp)
+	if err := s.Node.proposeAndWait(ctx, &zp); err != nil {
+		return err
+	}
+
+	// There might be race between this proposal trying to commit and predicate
+	// move aborting it. A predicate move, triggered by Zero, would abort all
+	// pending transactions.  At the same time, a client which has already done
+	// mutations, can proceed to commit it. A race condition can happen here,
+	// with both proposing their respective states, only one can succeed after
+	// the proposal is done. So, check again to see the fate of the transaction
+	// here.
+	src.CommitTs = s.orc.commitTs(src.StartTs)
+	if src.CommitTs == 0 {
+		src.Aborted = true
+	}
+	return nil
 }
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
@@ -293,17 +313,17 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	// _predicate_ expansion is enabled, and a move for this predicate is happening, NO transactions
 	// across the entire cluster would commit. Sorry! But if we don't do this, we might lose commits
 	// which sneaked in during the move.
-	preds["_predicate_"] = struct{}{}
 
-	for _, k := range src.Keys {
-		key, err := base64.StdEncoding.DecodeString(k)
-		if err != nil {
-			continue
-		}
-		pk := x.Parse(key)
-		if pk != nil {
-			preds[pk.Attr] = struct{}{}
-		}
+	// Ensure that we only consider checking _predicate_, if expand_edge flag is
+	// set to true, i.e. we are actually serving _predicate_. Otherwise, the
+	// code below, which checks if a tablet is present or is readonly, causes
+	// ALL txns to abort. See #2547.
+	if tablet := s.ServingTablet("_predicate_"); tablet != nil {
+		preds["_predicate_"] = struct{}{}
+	}
+
+	for _, k := range src.Preds {
+		preds[k] = struct{}{}
 	}
 	for pred := range preds {
 		tablet := s.ServingTablet(pred)
@@ -313,34 +333,20 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		}
 	}
 
-	// TODO: We could take fingerprint of the keys, and store them in uint64, allowing the rowCommit
-	// map to be keyed by uint64, which would be cheaper. But, unsure about the repurcussions of
-	// that. It would save some memory. So, worth a try.
-
-	var num intern.Num
-	num.Val = 1
+	num := pb.Num{Val: 1}
 	assigned, err := s.lease(ctx, &num, true)
 	if err != nil {
 		return err
 	}
 	src.CommitTs = assigned.StartId
+	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
+	defer s.orc.doneUntil.Done(src.CommitTs)
 
 	if err := s.orc.commit(src); err != nil {
 		src.Aborted = true
 	}
 	// Propose txn should be used to set watermark as done.
-	err = s.proposeTxn(ctx, src)
-	// There might be race between this proposal trying to commit and predicate
-	// move aborting it. A predicate move, triggered by Zero, would abort all pending transactions.
-	// At the same time, a client which has already done mutations, can proceed to commit it. A race
-	// condition can happen here, with both proposing their respective states, only one can succeed
-	// after the proposal is done. So, check again to see the fate of the transaction here.
-	if s.orc.aborted(src.StartTs) {
-		src.Aborted = true
-	}
-	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
-	s.orc.doneUntil.Done(src.CommitTs)
-	return err
+	return s.proposeTxn(ctx, src)
 }
 
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
@@ -357,7 +363,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 var errClosed = errors.New("Streaming closed by Oracle.")
 var errNotLeader = errors.New("Node is no longer leader.")
 
-func (s *Server) Oracle(unused *api.Payload, server intern.Zero_OracleServer) error {
+func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error {
 	if !s.Node.AmLeader() {
 		return errNotLeader
 	}
@@ -383,7 +389,6 @@ func (s *Server) Oracle(unused *api.Payload, server intern.Zero_OracleServer) er
 			return errServerShutDown
 		}
 	}
-	return nil
 }
 
 func (s *Server) SyncedUntil() uint64 {
@@ -406,7 +411,7 @@ func (s *Server) SyncedUntil() uint64 {
 }
 
 func (s *Server) purgeOracle() {
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 30)
 	defer ticker.Stop()
 
 	var lastPurgeTs uint64
@@ -418,13 +423,13 @@ OUTER:
 		for _, group := range groups {
 			pl := s.Leader(group)
 			if pl == nil {
-				x.Printf("No healthy connection found to leader of group %d\n", group)
+				glog.Errorf("No healthy connection found to leader of group %d\n", group)
 				goto OUTER
 			}
-			c := intern.NewWorkerClient(pl.Get())
-			num, err := c.MinTxnTs(context.Background(), &api.Payload{})
+			c := pb.NewWorkerClient(pl.Get())
+			num, err := c.PurgeTs(context.Background(), &api.Payload{})
 			if err != nil {
-				x.Printf("Error while fetching minTs from group %d, err: %v\n", group, err)
+				glog.Errorf("Error while fetching minTs from group %d, err: %v\n", group, err)
 				goto OUTER
 			}
 			if minTs == 0 || num.Val < minTs {
@@ -439,30 +444,40 @@ OUTER:
 	}
 }
 
-func (s *Server) TryAbort(ctx context.Context, txns *intern.TxnTimestamps) (*intern.TxnTimestamps, error) {
-	commitTimestamps := new(intern.TxnTimestamps)
+func (s *Server) TryAbort(ctx context.Context,
+	txns *pb.TxnTimestamps) (*pb.OracleDelta, error) {
+	delta := &pb.OracleDelta{}
 	for _, startTs := range txns.Ts {
 		// Do via proposals to avoid race
 		tctx := &api.TxnContext{StartTs: startTs, Aborted: true}
 		if err := s.proposeTxn(ctx, tctx); err != nil {
-			return commitTimestamps, err
+			return delta, err
 		}
 		// Txn should be aborted if not already committed.
-		commitTimestamps.Ts = append(commitTimestamps.Ts, s.orc.commitTs(startTs))
+		delta.Txns = append(delta.Txns, &pb.TxnStatus{
+			StartTs:  startTs,
+			CommitTs: s.orc.commitTs(startTs)})
 	}
-	return commitTimestamps, nil
+	return delta, nil
 }
 
 // Timestamps is used to assign startTs for a new transaction
-func (s *Server) Timestamps(ctx context.Context, num *intern.Num) (*api.AssignedIds, error) {
+func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}
 
 	reply, err := s.lease(ctx, num, true)
 	if err == nil {
-		s.orc.doneUntil.Done(reply.EndId)
+		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(reply)
+
+	} else if err == servedFromMemory {
+		// Avoid calling doneUntil.Done, and storePending.
+		err = nil
+
+	} else {
+		glog.Errorf("Got error: %v while leasing timestamps: %+v", err, num)
 	}
 	return reply, err
 }

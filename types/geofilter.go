@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package types
@@ -15,7 +24,7 @@ import (
 	"github.com/golang/geo/s2"
 	"github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -33,7 +42,7 @@ const (
 	QueryTypeNear
 )
 
-// GeoQueryData is intern.data used by the geo query filter to additionally filter the geometries.
+// GeoQueryData is pb.data used by the geo query filter to additionally filter the geometries.
 type GeoQueryData struct {
 	pt    *s2.Point  // If not nil, the input data was a point
 	loops []*s2.Loop // If not empty, the input data was a polygon/multipolygon or it was a near query.
@@ -52,7 +61,7 @@ func IsGeoFunc(str string) bool {
 
 // GetGeoTokens returns the corresponding index keys based on the type
 // of function.
-func GetGeoTokens(srcFunc *intern.SrcFunction) ([]string, *GeoQueryData, error) {
+func GetGeoTokens(srcFunc *pb.SrcFunction) ([]string, *GeoQueryData, error) {
 	x.AssertTruef(len(srcFunc.Name) > 0, "Invalid function")
 	funcName := strings.ToLower(srcFunc.Name)
 	switch funcName {
@@ -395,7 +404,7 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 
 // MatchGeo matches values and GeoQueryData and ensures that the value actually
 // matches the query criteria.
-func MatchGeo(value *intern.TaskValue, q *GeoQueryData) bool {
+func MatchGeo(value *pb.TaskValue, q *GeoQueryData) bool {
 	valBytes := value.Val
 	if bytes.Equal(valBytes, nil) {
 		return false

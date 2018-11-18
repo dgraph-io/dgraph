@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package tok
@@ -10,10 +19,10 @@ package tok
 import (
 	"encoding/binary"
 	"plugin"
-	"strings"
 	"time"
 
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -31,7 +40,7 @@ type Tokenizer interface {
 
 	// Tokens return tokens for a given value. The tokens shouldn't be encoded
 	// with the byte identifier.
-	Tokens(value interface{}) ([]string, error)
+	Tokens(interface{}) ([]string, error)
 
 	// Identifier returns the prefix byte for this token type. This should be
 	// unique. The range 0x80 to 0xff (inclusive) is reserved for user-provided
@@ -45,6 +54,25 @@ type Tokenizer interface {
 	// during tokenization. If a predicate is tokenized using an IsLossy() tokenizer,
 	// then we need to fetch the actual value and compare.
 	IsLossy() bool
+}
+
+var tokenizers = make(map[string]Tokenizer)
+
+func init() {
+	registerTokenizer(GeoTokenizer{})
+	registerTokenizer(IntTokenizer{})
+	registerTokenizer(FloatTokenizer{})
+	registerTokenizer(YearTokenizer{})
+	registerTokenizer(HourTokenizer{})
+	registerTokenizer(MonthTokenizer{})
+	registerTokenizer(DayTokenizer{})
+	registerTokenizer(ExactTokenizer{})
+	registerTokenizer(BoolTokenizer{})
+	registerTokenizer(TrigramTokenizer{})
+	registerTokenizer(HashTokenizer{})
+	registerTokenizer(TermTokenizer{})
+	registerTokenizer(FullTextTokenizer{})
+	setupBleve()
 }
 
 // BuildTokens tokenizes a value, creating strings that can be used to create
@@ -61,31 +89,12 @@ func BuildTokens(val interface{}, t Tokenizer) ([]string, error) {
 	return tokens, nil
 }
 
-var tokenizers map[string]Tokenizer
-
-func init() {
-	registerTokenizer(GeoTokenizer{})
-	registerTokenizer(IntTokenizer{})
-	registerTokenizer(FloatTokenizer{})
-	registerTokenizer(YearTokenizer{})
-	registerTokenizer(HourTokenizer{})
-	registerTokenizer(MonthTokenizer{})
-	registerTokenizer(DayTokenizer{})
-	registerTokenizer(TermTokenizer{})
-	registerTokenizer(ExactTokenizer{})
-	registerTokenizer(BoolTokenizer{})
-	registerTokenizer(TrigramTokenizer{})
-	registerTokenizer(HashTokenizer{})
-	initFullTextTokenizers()
-}
-
 func LoadCustomTokenizer(soFile string) {
-	x.Printf("Loading custom tokenizer from %q", soFile)
+	glog.Infof("Loading custom tokenizer from %q", soFile)
 	pl, err := plugin.Open(soFile)
 	x.Checkf(err, "could not open custom tokenizer plugin file")
 	symb, err := pl.Lookup("Tokenizer")
-	x.Checkf(err, "could not find symbol \"Tokenizer\" "+
-		"while loading custom tokenizer: %v", err)
+	x.Checkf(err, `could not find symbol "Tokenizer" while loading custom tokenizer: %v`, err)
 
 	// Let any type assertion panics occur, since they will contain a message
 	// telling the user what went wrong. Otherwise it's hard to capture this
@@ -105,21 +114,11 @@ func GetTokenizer(name string) (Tokenizer, bool) {
 }
 
 func registerTokenizer(t Tokenizer) {
-	if tokenizers == nil {
-		tokenizers = make(map[string]Tokenizer)
-	}
-	name := t.Name()
-	_, found := tokenizers[name]
-	x.AssertTruef(!found, "Duplicate tokenizer name %s", name)
-	for _, tok := range tokenizers {
-		// all full-text tokenizers share the same Identifier, so they skip the test
-		isFTS := strings.HasPrefix(tok.Name(), FTSTokenizerName)
-		x.AssertTruef(isFTS || tok.Identifier() != t.Identifier(),
-			"Duplicate tokenizer id byte %#x, %s and %s", tok.Identifier(), tok.Name(), t.Name())
-	}
-	_, validType := types.TypeForName(t.Type())
-	x.AssertTruef(validType, "t.Type() returned %q which isn't a valid type name", t.Type())
-	tokenizers[name] = t
+	_, ok := tokenizers[t.Name()]
+	x.AssertTruef(!ok, "Duplicate tokenizer: %s", t.Name())
+	_, ok = types.TypeForName(t.Type())
+	x.AssertTruef(ok, "Invalid type %q for tokenizer %s", t.Type(), t.Name())
+	tokenizers[t.Name()] = t
 }
 
 type GeoTokenizer struct{}
@@ -222,7 +221,12 @@ type TermTokenizer struct{}
 func (t TermTokenizer) Name() string { return "term" }
 func (t TermTokenizer) Type() string { return "string" }
 func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
-	return getBleveTokens(t.Name(), v.(string))
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return []string{str}, nil
+	}
+	tokens := termAnalyzer.Analyze([]byte(str))
+	return uniqueTerms(tokens), nil
 }
 func (t TermTokenizer) Identifier() byte { return 0x1 }
 func (t TermTokenizer) IsSortable() bool { return false }
@@ -233,48 +237,37 @@ type ExactTokenizer struct{}
 func (t ExactTokenizer) Name() string { return "exact" }
 func (t ExactTokenizer) Type() string { return "string" }
 func (t ExactTokenizer) Tokens(v interface{}) ([]string, error) {
-	term, ok := v.(string)
-	if !ok {
-		return nil, x.Errorf("Exact indices only supported for string types")
+	if term, ok := v.(string); ok {
+		return []string{term}, nil
 	}
-	return []string{term}, nil
+	return nil, x.Errorf("Exact indices only supported for string types")
 }
 func (t ExactTokenizer) Identifier() byte { return 0x2 }
 func (t ExactTokenizer) IsSortable() bool { return true }
 func (t ExactTokenizer) IsLossy() bool    { return false }
 
-// Full text tokenizer, with language support
-type FullTextTokenizer struct {
-	Lang string
-}
+type FullTextTokenizer struct{ lang string }
 
-func (t FullTextTokenizer) Name() string { return FtsTokenizerName(t.Lang) }
+func (t FullTextTokenizer) Name() string { return "fulltext" }
 func (t FullTextTokenizer) Type() string { return "string" }
 func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
-	return getBleveTokens(t.Name(), v.(string))
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return []string{}, nil
+	}
+	lang := langBase(t.lang)
+	// pass 1 - lowercase and normalize input
+	tokens := fulltextAnalyzer.Analyze([]byte(str))
+	// pass 2 - filter stop words
+	tokens = filterStopwords(lang, tokens)
+	// pass 3 - filter stems
+	tokens = filterStemmers(lang, tokens)
+	// finally, return the terms.
+	return uniqueTerms(tokens), nil
 }
 func (t FullTextTokenizer) Identifier() byte { return 0x8 }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
-
-func getBleveTokens(name string, str string) ([]string, error) {
-	analyzer, err := bleveCache.AnalyzerNamed(name)
-	if err != nil {
-		return nil, err
-	}
-	if name == "term" && str == "" {
-		terms := make([]string, 1)
-		terms[0] = str
-		return terms, nil
-	}
-	tokenStream := analyzer.Analyze([]byte(str))
-	terms := make([]string, len(tokenStream))
-	for i, token := range tokenStream {
-		terms[i] = string(token.Term)
-	}
-	terms = x.RemoveDuplicates(terms)
-	return terms, nil
-}
 
 func encodeInt(val int64) string {
 	buf := make([]byte, 9)
@@ -367,14 +360,12 @@ func (t HashTokenizer) IsLossy() bool    { return true }
 type PluginTokenizer interface {
 	Name() string
 	Type() string
-	Tokens(value interface{}) ([]string, error)
+	Tokens(interface{}) ([]string, error)
 	Identifier() byte
 }
 
-type CustomTokenizer struct {
-	PluginTokenizer
-}
+type CustomTokenizer struct{ PluginTokenizer }
 
 // It doesn't make sense for plugins to implement the following methods, so they're hardcoded.
-func (CustomTokenizer) IsSortable() bool { return false }
-func (CustomTokenizer) IsLossy() bool    { return true }
+func (t CustomTokenizer) IsSortable() bool { return false }
+func (t CustomTokenizer) IsLossy() bool    { return true }

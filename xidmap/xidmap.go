@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package xidmap
@@ -17,10 +26,10 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 )
 
 // Options controls the performance characteristics of the XidMap.
@@ -41,7 +50,7 @@ type XidMap struct {
 	shards    []shard
 	kv        *badger.DB
 	opt       Options
-	newRanges chan *api.AssignedIds
+	newRanges chan *pb.AssignedIds
 
 	noMapMu sync.Mutex
 	noMap   block // block for allocating uids without an xid to uid mapping
@@ -68,7 +77,7 @@ type block struct {
 	start, end uint64
 }
 
-func (b *block) assign(ch <-chan *api.AssignedIds) uint64 {
+func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 	if b.end == 0 || b.start > b.end {
 		newRange := <-ch
 		b.start, b.end = newRange.StartId, newRange.EndId
@@ -87,7 +96,7 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		shards:    make([]shard, opt.NumShards),
 		kv:        kv,
 		opt:       opt,
-		newRanges: make(chan *api.AssignedIds),
+		newRanges: make(chan *pb.AssignedIds),
 	}
 	for i := range xm.shards {
 		xm.shards[i].elems = make(map[string]*list.Element)
@@ -95,20 +104,20 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		xm.shards[i].xm = xm
 	}
 	go func() {
-		zc := intern.NewZeroClient(zero)
+		zc := pb.NewZeroClient(zero)
 		const initBackoff = 10 * time.Millisecond
 		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := zc.AssignUids(ctx, &intern.Num{Val: 10000})
+			assigned, err := zc.AssignUids(ctx, &pb.Num{Val: 10000})
 			cancel()
 			if err == nil {
 				backoff = initBackoff
 				xm.newRanges <- assigned
 				continue
 			}
-			x.Printf("Error while getting lease: %v\n", err)
+			glog.Errorf("Error while getting lease: %v\n", err)
 			backoff *= 2
 			if backoff > maxBackoff {
 				backoff = maxBackoff
@@ -141,14 +150,14 @@ func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool) {
 			return nil
 		}
 		x.Check(err)
-		uidBuf, err := item.Value()
-		x.Check(err)
-		x.AssertTrue(len(uidBuf) > 0)
-		var n int
-		uid, n = binary.Uvarint(uidBuf)
-		x.AssertTrue(n == len(uidBuf))
-		ok = true
-		return nil
+		return item.Value(func(uidBuf []byte) error {
+			x.AssertTrue(len(uidBuf) > 0)
+			var n int
+			uid, n = binary.Uvarint(uidBuf)
+			x.AssertTrue(n == len(uidBuf))
+			ok = true
+			return nil
+		})
 	}))
 	if ok {
 		sh.add(xid, uid, true)
@@ -196,10 +205,10 @@ func (s *shard) add(xid string, uid uint64, persisted bool) {
 }
 
 func (m *XidMap) EvictAll() {
-	for _, s := range m.shards {
-		s.Lock()
-		s.evict(1.0)
-		s.Unlock()
+	for i := range make([]struct{}, len(m.shards)) {
+		m.shards[i].Lock()
+		m.shards[i].evict(1.0)
+		m.shards[i].Unlock()
 	}
 }
 
@@ -219,7 +228,6 @@ func (s *shard) evict(ratio float64) {
 		}
 
 	}
-	err := txn.Commit(nil)
-	x.Check(err)
+	x.Check(txn.Commit())
 	s.beingEvicted = nil
 }

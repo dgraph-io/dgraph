@@ -33,6 +33,22 @@ The quickest way to install Dgraph is to run this command on Linux or Mac.
 curl https://get.dgraph.io -sSf | bash
 ```
 
+## Install with Docker
+
+If you're using Docker, you can use the [official Dgraph image](https://hub.docker.com/r/dgraph/dgraph/).
+
+```bash
+docker pull dgraph/dgraph:latest
+```
+
+## Install from Source
+
+If you want to install from source, you can use `go get` to install to `$GOPATH/bin`.
+
+```bash
+go get -u -v github.com/dgraph-io/dgraph/dgraph
+```
+
 ## Get Started
 **To get started with Dgraph, follow:**
 
@@ -68,7 +84,7 @@ makes it easy to build applications with it.
 | Full Text Search | Native support | Native support | Via External Indexing System |
 | Regular Expressions | Native support | Native support | Via External Indexing System |
 | Geo Search | Native support | External support only | Via External Indexing System |
-| License | Apache 2.0 + Commons Clause | GPL v3 | Apache 2.0 |
+| License | Apache 2.0 | GPL v3 | Apache 2.0 |
 
 ## Users
 - **Dgraph official documentation is present at [docs.dgraph.io](https://docs.dgraph.io).**
@@ -87,12 +103,12 @@ makes it easy to build applications with it.
 
 ## Developers
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
-- Please see [contributing to Dgraph](https://docs.dgraph.io/contribute/) for guidelines on contributions.
+- Please see [Contributing to Dgraph](https://github.com/dgraph-io/dgraph/blob/master/CONTRIBUTING.md) for guidelines on contributions.
 
 ## Unofficial Client Libraries
 The Dgraph team maintain a number of [officially supported client libraries](https://docs.dgraph.io/clients/).  The following libraries are contributed by the community.
 
-**C# .NET**  
+**C# .NET**
 
 * [https://github.com/AlexandreDaSilva/DgraphNet](https://github.com/AlexandreDaSilva/DgraphNet)
 * [https://github.com/MichaelJCompton/Dgraph-dotnet](https://github.com/MichaelJCompton/Dgraph-dotnet)

@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package conn
@@ -16,8 +25,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 
 	"google.golang.org/grpc"
 )
@@ -27,7 +37,7 @@ var (
 	ErrUnhealthyConnection = fmt.Errorf("Unhealthy connection")
 	errNoPeerPoolEntry     = fmt.Errorf("no peerPool entry")
 	errNoPeerPool          = fmt.Errorf("no peerPool pool, could not connect")
-	echoDuration           = 10 * time.Second
+	echoDuration           = time.Second
 )
 
 // "Pool" is used to manage the grpc client connection(s) for communicating with other
@@ -95,7 +105,7 @@ func (p *Pools) Connect(addr string) *Pool {
 
 	pool, err := NewPool(addr)
 	if err != nil {
-		x.Printf("Unable to connect to host: %s", addr)
+		glog.Errorf("Unable to connect to host: %s", addr)
 		return nil
 	}
 
@@ -105,7 +115,7 @@ func (p *Pools) Connect(addr string) *Pool {
 		p.Unlock()
 		return existingPool
 	}
-	x.Printf("== CONNECT ==> Setting %v\n", addr)
+	glog.Infof("CONNECTED to %v\n", addr)
 	p.all[addr] = pool
 	p.Unlock()
 	return pool
@@ -117,13 +127,13 @@ func NewPool(addr string) (*Pool, error) {
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-		grpc.WithBackoffMaxDelay(10*time.Second),
+		grpc.WithBackoffMaxDelay(time.Second),
 		grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
 	pl := &Pool{conn: conn, Addr: addr, lastEcho: time.Now()}
-	pl.UpdateHealthStatus()
+	pl.UpdateHealthStatus(true)
 
 	// Initialize ticker before running monitor health.
 	pl.ticker = time.NewTicker(echoDuration)
@@ -143,32 +153,47 @@ func (p *Pool) shutdown() {
 	p.conn.Close()
 }
 
-func (p *Pool) UpdateHealthStatus() {
+func (p *Pool) SetUnhealthy() {
+	p.Lock()
+	p.lastEcho = time.Time{}
+	p.Unlock()
+}
+
+func (p *Pool) UpdateHealthStatus(printError bool) error {
 	conn := p.Get()
 
 	query := new(api.Payload)
 	query.Data = make([]byte, 10)
 	x.Check2(rand.Read(query.Data))
 
-	c := intern.NewRaftClient(conn)
-	resp, err := c.Echo(context.Background(), query)
-	var lastEcho time.Time
+	c := pb.NewRaftClient(conn)
+	// Ensure that we have a timeout here, otherwise a network partition could
+	// end up causing this RPC to get stuck forever.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	resp, err := c.Echo(ctx, query)
 	if err == nil {
 		x.AssertTruef(bytes.Equal(resp.Data, query.Data),
 			"non-matching Echo response value from %v", p.Addr)
-		lastEcho = time.Now()
-	} else {
-		x.Printf("Echo error from %v. Err: %v\n", p.Addr, err)
+		p.Lock()
+		p.lastEcho = time.Now()
+		p.Unlock()
+	} else if printError {
+		glog.Errorf("Echo error from %v. Err: %v\n", p.Addr, err)
 	}
-	p.Lock()
-	p.lastEcho = lastEcho
-	p.Unlock()
+	return err
 }
 
 // MonitorHealth monitors the health of the connection via Echo. This function blocks forever.
 func (p *Pool) MonitorHealth() {
+	var lastErr error
 	for range p.ticker.C {
-		p.UpdateHealthStatus()
+		err := p.UpdateHealthStatus(lastErr == nil)
+		if lastErr != nil && err == nil {
+			glog.Infof("Connection established with %v\n", p.Addr)
+		}
+		lastErr = err
 	}
 }
 

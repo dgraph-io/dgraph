@@ -4,7 +4,7 @@ title = "Mutations"
 
 Adding or removing data in Dgraph is called a mutation.
 
-A mutation that adds triples, does so with the `set` keyword.
+A mutation that adds triples is done with the `set` keyword.
 ```
 {
   set {
@@ -260,6 +260,38 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
 
+## Mutations using cURL
+
+Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl.
+
+To run a `set` mutation:
+
+```sh
+curl -X POST localhost:8080/mutate -d $'
+{
+  set {
+    _:alice <name> "Alice" .
+  }
+}'
+```
+
+To run a `delete` mutation:
+
+```sh
+curl -X POST localhost:8080/mutate -d $'
+{
+  delete {
+    _:alice <name> "Alice" .
+  }
+}'
+```
+
+To run an RDF mutation stored in a file, use curl's `--data-binary` option so that, unlike the `-d` option, the data is not URL encoded.
+
+```
+curl -X POST localhost:8080/mutate --data-binary @mutation.txt
+```
+
 ## JSON Mutation Format
 
 Mutations can also be specified using JSON objects. This can allow mutations to
@@ -273,8 +305,7 @@ multiple RDFs that are then processed as normal.
 Each JSON object represents a single node in the graph.
 
 {{% notice "note" %}}
-JSON mutations are only available via gRPC clients, such as the Go client, JS
-client, and Java client. They're not available via the raw HTTP interface.
+JSON mutations are available via gRPC clients such as the Go client, JS client, and Java client, and are available to HTTP clients with [dgraph-js-http](https://github.com/dgraph-io/dgraph-js-http) and cURL. See more about cURL [here]({{< relref "#using-json-operations-via-curl" >}})
 {{% /notice %}}
 
 ### Setting literal values
@@ -384,10 +415,13 @@ E.g. to link two existing nodes:
   }
 }
 ```
+
 Will be converted to:
-```
+
+```JSON
 <0x123> <link> <0x456> .
 ```
+
 {{% notice "note" %}}
 A common mistake is to attempt to use `{"uid":"0x123","link":"0x456"}`.  This
 will result in an error. Dgraph interprets this JSON object as setting the
@@ -399,6 +433,8 @@ will result in an error. Dgraph interprets this JSON object as setting the
 Deletion mutations can also be sent in JSON format. To send a delete mutation,
 use the `delete_json` field instead of the `set_json` field in the `Mutation`
 message.
+
+{{% notice "note" %}} Check the [JSON Syntax using Raw HTTP or Ratel UI]({{< relref "#json-syntax-using-raw-http-or-ratel-ui">}}) section if you're using the dgraph-js-http client or Ratel UI. {{% /notice %}}
 
 When using delete mutations, an existing node always has to be referenced. So
 the `"uid"` field for each JSON object must be present. Predicates that should
@@ -464,16 +500,151 @@ _:blank-0 <friend> _:blank-1 (close=yes) .
 _:blank-1 <name> "Daryl" .
 ```
 
+### Creating a list with JSON and interacting with
+
+Schema:
+
+```JSON
+testList: [string] .
+```
+
+```JSON
+{
+  "testList": [
+    "Grape",
+    "Apple",
+    "Strawberry",
+    "Banana",
+    "watermelon"
+  ]
+}
+```
+
+Let’s then remove "Apple" from this list (Remember, it’s case sensitive):
+
+```JSON
+{  
+   "uid": "0xd", #UID of the list.
+   "testList": "Apple"
+}
+```
+
+{{% notice "note" %}} Check the [JSON Syntax using Raw HTTP or Ratel UI]({{< relref "#json-syntax-using-raw-http-or-ratel-ui">}}) section if you're using the dgraph-js-http client or Ratel UI. {{% /notice %}}
+
+
+Add another fruit:
+
+```JSON
+{
+   "uid": "0xd", #UID of the list.
+   "testList": "Pineapple"
+}
+```
+
 ### Specifying multiple operations
 
-When specifying add or delete mutations, multiple operations can be specified
+When specifying add or delete mutations, multiple nodes can be specified
 at the same time using JSON arrays.
 
 For example, the following JSON object can be used to add two new nodes, each
 with a `name`:
-```json
+
+```JSON
 [
-  { "name": "Edward" },
-  { "name": "Fredric" }
+  {
+    "name": "Edward"
+  },
+  {
+    "name": "Fredric"
+  }
 ]
 ```
+
+### JSON Syntax using Raw HTTP or Ratel UI
+
+This syntax can be used in the most current version of Ratel, in the [dgraph-js-http](https://github.com/dgraph-io/dgraph-js-http) client or even via cURL.
+
+You can also [download the Ratel UI for Linux, macOS, or Windows](https://discuss.dgraph.io/t/ratel-installer-for-linux-macos-and-windows-preview-version-ratel-update-from-v1-0-6/2884/).
+
+Mutate:
+```JSON
+{
+  "set": [
+    {
+      # One JSON obj in here
+    },
+    {
+      # Another JSON obj in here for multiple operations
+    }
+  ]
+}
+```
+
+Delete:
+
+Deletion operations are the same as [Deleting literal values]({{< relref "#deleting-literal-values">}}) and [Deleting edges]({{< relref "#deleting-edges">}}).
+
+```JSON
+{
+  "delete": [
+    {
+      # One JSON obj in here
+    },
+    {
+      # Another JSON obj in here for multiple operations
+    }
+  ]
+}
+```
+
+### Using JSON operations via cURL
+
+First you have to configure the HTTP headers. There are two in this case. One to
+inform Dgraph that is a JSON mutation and another to commit now.
+
+```BASH
+-H 'X-Dgraph-MutationType: json'
+-H 'X-Dgraph-CommitNow: true'
+```
+
+{{% notice "note" %}}
+In order to use `jq` for JSON formatting you need the `jq` package. See the
+[`jq` downloads](https://stedolan.github.io/jq/download/) page for installation
+details. You can also use Python's built in `json.tool` module with `python -m
+json.tool` to do JSON formatting.
+{{% /notice %}}
+
+```BASH
+curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
+    {
+      "set": [
+        {
+          "name": "Alice"
+        },
+        {
+          "name": "Bob"
+        }
+      ]
+    }' | jq
+
+```
+
+To delete:
+
+```BASH
+curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
+    {
+      "delete": [
+        {
+          "uid": "0xa"
+        }
+      ]
+    }' | jq
+```
+
+Mutation with a JSON file:
+
+```
+curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d @data.json
+```
+

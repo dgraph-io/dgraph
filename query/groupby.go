@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package query
@@ -13,7 +22,7 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -69,7 +78,7 @@ type groupResults struct {
 }
 
 type groupElements struct {
-	entities *intern.List
+	entities *pb.List
 	key      types.Val
 }
 
@@ -110,7 +119,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	if value.Tid == types.UidID {
 		strKey = strconv.FormatUint(value.Value.(uint64), 10)
 	} else {
-		valC := types.Val{types.StringID, ""}
+		valC := types.Val{Tid: types.StringID, Value: ""}
 		err := types.Marshal(value, &valC)
 		if err != nil {
 			return
@@ -122,7 +131,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 		// If this is the first element of the group.
 		cur.elements[strKey] = groupElements{
 			key:      value,
-			entities: &intern.List{make([]uint64, 0)},
+			entities: &pb.List{Uids: []uint64{}},
 		}
 	}
 	curEntity := cur.elements[strKey].entities
@@ -156,7 +165,7 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 
 // formGroup creates all possible groups with the list of uids that belong to that
 // group.
-func (res *groupResults) formGroups(dedupMap dedup, cur *intern.List, groupVal []groupPair) {
+func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []groupPair) {
 	l := len(groupVal)
 	if len(dedupMap.groups) == 0 || (l != 0 && len(cur.Uids) == 0) {
 		// This group is already empty or no group can be formed. So stop.
@@ -176,7 +185,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *intern.List, groupVal [
 	}
 
 	for _, v := range dedupMap.groups[l].elements {
-		temp := new(intern.List)
+		temp := new(pb.List)
 		groupVal = append(groupVal, groupPair{
 			key:  v.key,
 			attr: dedupMap.groups[l].attr,
@@ -192,7 +201,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *intern.List, groupVal [
 	}
 }
 
-func (sg *SubGraph) formResult(ul *intern.List) (*groupResults, error) {
+func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 	var dedupMap dedup
 	res := new(groupResults)
 
@@ -235,7 +244,7 @@ func (sg *SubGraph) formResult(ul *intern.List) (*groupResults, error) {
 	}
 
 	// Create all the groups here.
-	res.formGroups(dedupMap, &intern.List{}, []groupPair{})
+	res.formGroups(dedupMap, &pb.List{}, []groupPair{})
 
 	// Go over the groups and aggregate the values.
 	for _, child := range sg.Children {
@@ -313,7 +322,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 
 	// Create all the groups here.
 	res := new(groupResults)
-	res.formGroups(dedupMap, &intern.List{}, []groupPair{})
+	res.formGroups(dedupMap, &pb.List{}, []groupPair{})
 
 	// Go over the groups and aggregate the values.
 	for _, child := range sg.Children {

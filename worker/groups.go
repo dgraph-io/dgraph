@@ -1,30 +1,44 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
 
 import (
 	"fmt"
+	"io"
 	"math"
+	"sort"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 type groupi struct {
@@ -32,12 +46,13 @@ type groupi struct {
 	// TODO: Is this context being used?
 	ctx       context.Context
 	cancel    context.CancelFunc
-	state     *intern.MembershipState
+	state     *pb.MembershipState
 	Node      *node
 	gid       uint32
-	tablets   map[string]*intern.Tablet
+	tablets   map[string]*pb.Tablet
 	triggerCh chan struct{} // Used to trigger membership sync
 	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
+	closer    *y.Closer
 }
 
 var gr *groupi
@@ -61,12 +76,12 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		ok := x.ValidateAddress(Config.MyAddr)
 		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
 		if !bindall {
-			x.Printf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
+			glog.Errorln("--my flag is provided without bindall, Did you forget to specify bindall?")
 		}
 	}
 
-	x.AssertTruefNoTrace(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
-	x.AssertTruefNoTrace(Config.ZeroAddr != Config.MyAddr,
+	x.AssertTruef(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
+	x.AssertTruef(Config.ZeroAddr != Config.MyAddr,
 		"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
 
 	if Config.RaftId == 0 {
@@ -74,24 +89,24 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		x.Check(err)
 		Config.RaftId = id
 	}
-	x.Printf("Current Raft Id: %d\n", Config.RaftId)
+	glog.Infof("Current Raft Id: %d\n", Config.RaftId)
 
 	// Successfully connect with dgraphzero, before doing anything else.
 	p := conn.Get().Connect(Config.ZeroAddr)
 
 	// Connect with dgraphzero and figure out what group we should belong to.
-	zc := intern.NewZeroClient(p.Get())
-	var connState *intern.ConnectionState
-	m := &intern.Member{Id: Config.RaftId, Addr: Config.MyAddr}
+	zc := pb.NewZeroClient(p.Get())
+	var connState *pb.ConnectionState
+	m := &pb.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 	delay := 50 * time.Millisecond
-	maxHalfDelay := 15 * time.Second
+	maxHalfDelay := 3 * time.Second
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
 		connState, err = zc.Connect(gr.ctx, m)
 		if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
 			break
 		}
-		x.Printf("Error while connecting with group zero: %v", err)
+		glog.Errorf("Error while connecting with group zero: %v", err)
 		time.Sleep(delay)
 		if delay <= maxHalfDelay {
 			delay *= 2
@@ -101,12 +116,13 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}
-	x.Printf("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
+	glog.Infof("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
 	Config.RaftId = connState.GetMember().GetId()
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
 	// not get any data.
-	posting.Oracle().SetMaxPending(connState.MaxPending)
+	// TODO: Do we really need this?
+	// posting.Oracle().SetMaxPending(connState.MaxPending)
 	gr.applyState(connState.GetState())
 
 	gid := gr.groupId()
@@ -122,6 +138,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.Node.InitAndStartNode()
 
 	x.UpdateHealthStatus(true)
+	gr.closer = y.NewCloser(3)       // Match CLOSER:1 in this file.
 	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
 	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
@@ -140,12 +157,12 @@ func (g *groupi) proposeInitialSchema() {
 	}
 
 	// Propose schema mutation.
-	var m intern.Mutations
+	var m pb.Mutations
 	// schema for _predicate_ is not changed once set.
 	m.StartTs = 1
-	m.Schema = append(m.Schema, &intern.SchemaUpdate{
+	m.Schema = append(m.Schema, &pb.SchemaUpdate{
 		Predicate: x.PredicateListAttr,
-		ValueType: intern.Posting_STRING,
+		ValueType: pb.Posting_STRING,
 		List:      true,
 	})
 
@@ -156,7 +173,7 @@ func (g *groupi) proposeInitialSchema() {
 		if err == nil {
 			break
 		}
-		x.Println("Error while proposing initial schema: ", err)
+		glog.Errorf("Error while proposing initial schema: %v\n", err)
 		time.Sleep(100 * time.Millisecond)
 	}
 }
@@ -169,7 +186,7 @@ func (g *groupi) groupId() uint32 {
 
 // calculateTabletSizes iterates through badger and gets a size of the space occupied by each
 // predicate (including data and indexes). All data for a predicate forms a Tablet.
-func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
+func (g *groupi) calculateTabletSizes() map[string]*pb.Tablet {
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchValues = false
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
@@ -178,7 +195,7 @@ func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 	defer itr.Close()
 
 	gid := g.groupId()
-	tablets := make(map[string]*intern.Tablet)
+	tablets := make(map[string]*pb.Tablet)
 
 	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
@@ -203,7 +220,7 @@ func (g *groupi) calculateTabletSizes() map[string]*intern.Tablet {
 				}
 				continue
 			}
-			tablet = &intern.Tablet{GroupId: gid, Predicate: pk.Attr}
+			tablet = &pb.Tablet{GroupId: gid, Predicate: pk.Attr}
 			tablets[pk.Attr] = tablet
 		}
 		tablet.Space += item.EstimatedSize()
@@ -229,8 +246,8 @@ func UpdateMembershipState(ctx context.Context) error {
 		return x.Errorf("don't have the address of any dgraphzero server")
 	}
 
-	c := intern.NewZeroClient(p.Get())
-	state, err := c.Connect(ctx, &intern.Member{ClusterInfoOnly: true})
+	c := pb.NewZeroClient(p.Get())
+	state, err := c.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
 	if err != nil {
 		return err
 	}
@@ -238,7 +255,7 @@ func UpdateMembershipState(ctx context.Context) error {
 	return nil
 }
 
-func (g *groupi) applyState(state *intern.MembershipState) {
+func (g *groupi) applyState(state *pb.MembershipState) {
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
@@ -265,7 +282,7 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 	}
 
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
-	g.tablets = make(map[string]*intern.Tablet)
+	g.tablets = make(map[string]*pb.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if Config.RaftId == member.Id {
@@ -284,7 +301,6 @@ func (g *groupi) applyState(state *intern.MembershipState) {
 			conn.Get().Connect(member.Addr)
 		}
 	}
-
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {
@@ -325,7 +341,7 @@ func (g *groupi) ServesTablet(key string) bool {
 }
 
 // Do not modify the returned Tablet
-func (g *groupi) Tablet(key string) *intern.Tablet {
+func (g *groupi) Tablet(key string) *pb.Tablet {
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
 	tablet, ok := g.tablets[key]
@@ -340,12 +356,12 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 	if pl == nil {
 		return nil
 	}
-	zc := intern.NewZeroClient(pl.Get())
+	zc := pb.NewZeroClient(pl.Get())
 
-	tablet = &intern.Tablet{GroupId: g.groupId(), Predicate: key}
+	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key}
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
-		x.Printf("Error while ShouldServe grpc call %v", err)
+		glog.Errorf("Error while ShouldServe grpc call %v", err)
 		return nil
 	}
 	g.Lock()
@@ -353,7 +369,7 @@ func (g *groupi) Tablet(key string) *intern.Tablet {
 	g.Unlock()
 
 	if out.GroupId == groups().groupId() {
-		x.Printf("Serving tablet for: %v\n", key)
+		glog.Infof("Serving tablet for: %v\n", key)
 	}
 	return out
 }
@@ -396,7 +412,7 @@ func (g *groupi) AnyTwoServers(gid uint32) []string {
 	return res
 }
 
-func (g *groupi) members(gid uint32) map[uint64]*intern.Member {
+func (g *groupi) members(gid uint32) map[uint64]*pb.Member {
 	g.RLock()
 	defer g.RUnlock()
 
@@ -476,52 +492,97 @@ func (g *groupi) triggerMembershipSync() {
 	}
 }
 
+// TODO: This function needs to be refactored into smaller functions. It gets hard to reason about.
 func (g *groupi) periodicMembershipUpdate() {
-	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
-	ticker := time.NewTicker(time.Minute * 5)
+	defer g.closer.Done() // CLOSER:1
+
 	// Node might not be the leader when we are calculating size.
 	// We need to send immediately on start so no leader check inside calculatesize.
 	tablets := g.calculateTabletSizes()
 
+	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
+	slowTicker := time.NewTicker(time.Minute * 5)
+	defer slowTicker.Stop()
+
+	fastTicker := time.NewTicker(10 * time.Second)
+	defer fastTicker.Stop()
+
 START:
+	select {
+	case <-g.closer.HasBeenClosed():
+		return
+	default:
+	}
+
 	pl := g.AnyServer(0)
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
-		x.Printf("WARNING: We don't have address of any Zero server.")
+		glog.Warningln("Membership update: No Zero server known.")
 		time.Sleep(time.Second)
 		goto START
 	}
-	x.Printf("Got address of a Zero server: %s", pl.Addr)
+	glog.Infof("Got address of a Zero server: %s", pl.Addr)
 
-	c := intern.NewZeroClient(pl.Get())
+	c := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := c.Update(ctx)
 	if err != nil {
-		x.Printf("Error while calling update %v\n", err)
+		glog.Errorf("Error while calling update %v\n", err)
 		time.Sleep(time.Second)
 		goto START
 	}
 
+	stateCh := make(chan *pb.MembershipState, 10)
 	go func() {
-		for {
+		glog.Infof("Starting a new membership stream receive from %s.", pl.Addr)
+		for i := 0; ; i++ {
 			// Blocking, should return if sending on stream fails(Need to verify).
 			state, err := stream.Recv()
 			if err != nil || state == nil {
-				x.Printf("Unable to sync memberships. Error: %v", err)
+				if err == io.EOF {
+					glog.Infoln("Membership sync stream closed.")
+				} else {
+					glog.Errorf("Unable to sync memberships. Error: %v. State: %v", err, state)
+				}
 				// If zero server is lagging behind leader.
 				if ctx.Err() == nil {
 					cancel()
 				}
 				return
 			}
-			g.applyState(state)
+			if i == 0 {
+				glog.Infof("Received first state update from Zero: %+v", state)
+			}
+			select {
+			case stateCh <- state:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
+	lastRecv := time.Now()
 	g.triggerMembershipSync() // Ticker doesn't start immediately
 OUTER:
 	for {
 		select {
+		case <-g.closer.HasBeenClosed():
+			stream.CloseSend()
+			break OUTER
+		case <-ctx.Done():
+			stream.CloseSend()
+			break OUTER
+		case state := <-stateCh:
+			lastRecv = time.Now()
+			g.applyState(state)
+		case <-fastTicker.C:
+			if time.Since(lastRecv) > 10*time.Second {
+				// Zero might have gone under partition. We should recreate our connection.
+				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
+				stream.CloseSend()
+				cancel()
+				break OUTER
+			}
 		case <-g.triggerCh:
 			if !g.Node.AmLeader() {
 				tablets = nil
@@ -531,20 +592,20 @@ OUTER:
 				stream.CloseSend()
 				break OUTER
 			}
-		case <-ticker.C:
+		case <-slowTicker.C:
 			// dgraphzero just adds to the map so check that no data is present for the tablet
 			// before we remove it to avoid the race condition where a tablet is added recently
 			// and mutation has not been persisted to disk.
-			var allTablets map[string]*intern.Tablet
+			var allTablets map[string]*pb.Tablet
 			if g.Node.AmLeader() {
 				prevTablets := tablets
 				tablets = g.calculateTabletSizes()
 				if prevTablets != nil {
-					allTablets = make(map[string]*intern.Tablet)
+					allTablets = make(map[string]*pb.Tablet)
 					g.RLock()
 					for attr := range g.tablets {
 						if tablets[attr] == nil && prevTablets[attr] == nil {
-							allTablets[attr] = &intern.Tablet{
+							allTablets[attr] = &pb.Tablet{
 								GroupId:   g.gid,
 								Predicate: attr,
 								Remove:    true,
@@ -562,13 +623,10 @@ OUTER:
 			// Let's send update even if not leader, zero will know that this node is still
 			// active.
 			if err := g.sendMembership(allTablets, stream); err != nil {
-				x.Printf("Error while updating tablets size %v\n", err)
+				glog.Errorf("Error while updating tablets size %v\n", err)
 				stream.CloseSend()
 				break OUTER
 			}
-		case <-ctx.Done():
-			stream.CloseSend()
-			break OUTER
 		}
 	}
 	goto START
@@ -600,8 +658,14 @@ func (g *groupi) hasReadOnlyTablets() bool {
 }
 
 func (g *groupi) cleanupTablets() {
+	defer g.closer.Done() // CLOSER:1
+
 	ticker := time.NewTimer(time.Minute * 10)
+	defer ticker.Stop()
+
 	select {
+	case <-g.closer.HasBeenClosed():
+		return
 	case <-ticker.C:
 		func() {
 			opt := badger.DefaultIteratorOptions
@@ -632,6 +696,7 @@ func (g *groupi) cleanupTablets() {
 						return
 					}
 					g.delPred <- struct{}{}
+					glog.Warningf("Deleting predicate: %v. Tablet: %+v", pk.Attr, tablet)
 					// Predicate moves are disabled during deletion, deletePredicate purges everything.
 					posting.DeletePredicate(context.Background(), pk.Attr)
 					<-g.delPred
@@ -647,18 +712,18 @@ func (g *groupi) cleanupTablets() {
 	}
 }
 
-func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
-	stream intern.Zero_UpdateClient) error {
+func (g *groupi) sendMembership(tablets map[string]*pb.Tablet,
+	stream pb.Zero_UpdateClient) error {
 	leader := g.Node.AmLeader()
-	member := &intern.Member{
+	member := &pb.Member{
 		Id:         Config.RaftId,
 		GroupId:    g.groupId(),
 		Addr:       Config.MyAddr,
 		Leader:     leader,
 		LastUpdate: uint64(time.Now().Unix()),
 	}
-	group := &intern.Group{
-		Members: make(map[uint64]*intern.Member),
+	group := &pb.Group{
+		Members: make(map[uint64]*pb.Member),
 	}
 	group.Members[member.Id] = member
 	if leader {
@@ -668,79 +733,148 @@ func (g *groupi) sendMembership(tablets map[string]*intern.Tablet,
 	return stream.Send(group)
 }
 
-func (g *groupi) proposeDelta(oracleDelta *intern.OracleDelta) {
-	if !g.Node.AmLeader() {
-		return
-	}
-
-	// Only the leader of a group proposes the commit proposal for a group after getting delta from
-	// Zero.
-	for startTs, commitTs := range oracleDelta.Commits {
-		// The leader might not have yet applied the mutation and hence may not have the txn in the
-		// map. Its ok we can just continue, processOracleDeltaStream checks the oracle map every
-		// minute and calls proposeDelta.
-		if posting.Txns().Get(startTs) == nil {
-			// Don't mark oracle as done here as then it would be deleted the entry from map and it
-			// won't be proposed to the group. This could eventually block snapshots from happening
-			// in a replicated cluster.
-			continue
-		}
-		tctx := &api.TxnContext{StartTs: startTs, CommitTs: commitTs}
-		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
-	}
-	for _, startTs := range oracleDelta.Aborts {
-		if posting.Txns().Get(startTs) == nil {
-			continue
-		}
-		tctx := &api.TxnContext{StartTs: startTs}
-		go g.Node.proposeAndWait(context.Background(), &intern.Proposal{TxnContext: tctx})
-	}
-}
-
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
 // Zero sends information about aborted/committed transactions and maxPending.
 func (g *groupi) processOracleDeltaStream() {
-	go func() {
-		// TODO (pawan) - What is this for? Comment says this is required when there is no leader
-		// but proposeDelta returns if the current node is not leader.
+	defer g.closer.Done() // CLOSER:1
 
-		// In the event where there in no leader for a group, commit/abort won't get proposed.
-		// So periodically check oracle and propose
-		// Ticker time should be long enough so that same startTs
-		// doesn't get proposed again and again.
-		ticker := time.NewTicker(time.Minute)
-		for range ticker.C {
-			g.proposeDelta(posting.Oracle().CurrentState())
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	blockingReceiveAndPropose := func() {
+		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
+		defer elog.Finish()
+		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
+			g.Node.Id, g.groupId())
+
+		pl := g.Leader(0)
+		if pl == nil {
+			glog.Warningln("Oracle delta stream: No Zero leader known.")
+			elog.Errorf("Dgraph zero leader address unknown")
+			time.Sleep(time.Second)
+			return
 		}
-	}()
 
-START:
-	pl := g.Leader(0)
-	// We should always have some connection to dgraphzero.
-	if pl == nil {
-		x.Printf("WARNING: We don't have address of any dgraphzero leader.")
-		time.Sleep(time.Second)
-		goto START
-	}
+		// The following code creates a stream. Then runs a goroutine to pick up events from the
+		// stream and pushes them to a channel. The main loop loops over the channel, doing smart
+		// batching. Once a batch is created, it gets proposed. Thus, we can reduce the number of
+		// times proposals happen, which is a great optimization to have (and a common one in our
+		// code base).
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		c := pb.NewZeroClient(pl.Get())
+		// The first entry send by Zero contains the entire state of transactions. Zero periodically
+		// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
+		// safe way to get the status of all the transactions.
+		stream, err := c.Oracle(ctx, &api.Payload{})
+		if err != nil {
+			glog.Errorf("Error while calling Oracle %v\n", err)
+			elog.Errorf("Error while calling Oracle %v", err)
+			time.Sleep(time.Second)
+			return
+		}
 
-	c := intern.NewZeroClient(pl.Get())
-	stream, err := c.Oracle(context.Background(), &api.Payload{})
-	if err != nil {
-		x.Printf("Error while calling Oracle %v\n", err)
-		time.Sleep(time.Second)
-		goto START
+		deltaCh := make(chan *pb.OracleDelta, 100)
+		go func() {
+			// This would exit when either a Recv() returns error. Or, cancel() is called by
+			// something outside of this goroutine.
+			defer stream.CloseSend()
+			defer close(deltaCh)
+
+			for {
+				delta, err := stream.Recv()
+				if err != nil || delta == nil {
+					glog.Errorf("Error in oracle delta stream. Error: %v", err)
+					return
+				}
+
+				select {
+				case deltaCh <- delta:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+
+		for {
+			var delta *pb.OracleDelta
+			var batch int
+			select {
+			case delta = <-deltaCh:
+				if delta == nil {
+					return
+				}
+				batch++
+			case <-ticker.C:
+				newLead := g.Leader(0)
+				if newLead == nil || newLead.Addr != pl.Addr {
+					glog.Infof("Zero leadership changed. Renewing oracle delta stream.")
+					return
+				}
+				continue
+
+			case <-ctx.Done():
+				return
+			case <-g.closer.HasBeenClosed():
+				return
+			}
+
+		SLURP:
+			for {
+				select {
+				case more := <-deltaCh:
+					if more == nil {
+						return
+					}
+					batch++
+					delta.Txns = append(delta.Txns, more.Txns...)
+					delta.MaxAssigned = x.Max(delta.MaxAssigned, more.MaxAssigned)
+				default:
+					break SLURP
+				}
+			}
+
+			// Only the leader needs to propose the oracleDelta retrieved from Zero.
+			// The leader and the followers would not directly apply or use the
+			// oracleDelta streaming in from Zero. They would wait for the proposal to
+			// go through and be applied via node.Run.  This saves us from many edge
+			// cases around network partitions and race conditions between prewrites and
+			// commits, etc.
+			if !g.Node.AmLeader() {
+				glog.Errorf("No longer the leader of group %d. Exiting", g.groupId())
+				return
+			}
+
+			// We should always sort the txns before applying. Otherwise, we might lose some of
+			// these updates, becuase we never write over a new version.
+			sort.Slice(delta.Txns, func(i, j int) bool {
+				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
+			})
+			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
+			if glog.V(3) {
+				glog.Infof("Batched %d updates. Proposing Delta: %v.", batch, delta)
+			}
+			for {
+				// Block forever trying to propose this.
+				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
+				if err == nil {
+					break
+				}
+				glog.Errorf("While proposing delta: %v. Error=%v. Retrying...\n", delta, err)
+			}
+		}
 	}
 
 	for {
-		oracleDelta, err := stream.Recv()
-		if err != nil || oracleDelta == nil {
-			x.Printf("Error in oracle delta stream. Error: %v", err)
-			break
+		select {
+		case <-g.closer.HasBeenClosed():
+			return
+		case <-ticker.C:
+			// Only the leader needs to connect to Zero and get transaction
+			// updates.
+			if g.Node.AmLeader() {
+				blockingReceiveAndPropose()
+			}
 		}
-		posting.Oracle().ProcessOracleDelta(oracleDelta)
-		// Do Immediately so that index keys are written.
-		g.proposeDelta(oracleDelta)
 	}
-	time.Sleep(time.Second)
-	goto START
 }

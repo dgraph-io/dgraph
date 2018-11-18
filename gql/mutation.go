@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package gql
@@ -13,7 +22,7 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -56,26 +65,26 @@ type NQuad struct {
 func typeValFrom(val *api.Value) types.Val {
 	switch val.Val.(type) {
 	case *api.Value_BytesVal:
-		return types.Val{types.BinaryID, val.GetBytesVal()}
+		return types.Val{Tid: types.BinaryID, Value: val.GetBytesVal()}
 	case *api.Value_IntVal:
-		return types.Val{types.IntID, val.GetIntVal()}
+		return types.Val{Tid: types.IntID, Value: val.GetIntVal()}
 	case *api.Value_StrVal:
-		return types.Val{types.StringID, val.GetStrVal()}
+		return types.Val{Tid: types.StringID, Value: val.GetStrVal()}
 	case *api.Value_BoolVal:
-		return types.Val{types.BoolID, val.GetBoolVal()}
+		return types.Val{Tid: types.BoolID, Value: val.GetBoolVal()}
 	case *api.Value_DoubleVal:
-		return types.Val{types.FloatID, val.GetDoubleVal()}
+		return types.Val{Tid: types.FloatID, Value: val.GetDoubleVal()}
 	case *api.Value_GeoVal:
-		return types.Val{types.GeoID, val.GetGeoVal()}
+		return types.Val{Tid: types.GeoID, Value: val.GetGeoVal()}
 	case *api.Value_DatetimeVal:
-		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
+		return types.Val{Tid: types.DateTimeID, Value: val.GetDatetimeVal()}
 	case *api.Value_PasswordVal:
-		return types.Val{types.PasswordID, val.GetPasswordVal()}
+		return types.Val{Tid: types.PasswordID, Value: val.GetPasswordVal()}
 	case *api.Value_DefaultVal:
-		return types.Val{types.DefaultID, val.GetDefaultVal()}
+		return types.Val{Tid: types.DefaultID, Value: val.GetDefaultVal()}
 	}
 
-	return types.Val{types.StringID, ""}
+	return types.Val{Tid: types.StringID, Value: ""}
 }
 
 func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
@@ -106,13 +115,13 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 	return 0, x.Errorf("uid not found/generated for xid %s\n", subject)
 }
 
-var emptyEdge intern.DirectedEdge
+var emptyEdge pb.DirectedEdge
 
-func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*intern.DirectedEdge, error) {
+func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*pb.DirectedEdge, error) {
 	var err error
 	var objectUid uint64
 
-	out := &intern.DirectedEdge{
+	out := &pb.DirectedEdge{
 		Entity: subjectUid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
@@ -138,8 +147,8 @@ func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*inte
 	return out, nil
 }
 
-func (nq NQuad) createEdgePrototype(subjectUid uint64) *intern.DirectedEdge {
-	return &intern.DirectedEdge{
+func (nq NQuad) createEdgePrototype(subjectUid uint64) *pb.DirectedEdge {
+	return &pb.DirectedEdge{
 		Entity: subjectUid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
@@ -148,13 +157,13 @@ func (nq NQuad) createEdgePrototype(subjectUid uint64) *intern.DirectedEdge {
 	}
 }
 
-func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *intern.DirectedEdge {
+func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *pb.DirectedEdge {
 	out := nq.createEdgePrototype(subjectUid)
 	out.ValueId = objectUid
 	return out
 }
 
-func (nq NQuad) CreateValueEdge(subjectUid uint64) (*intern.DirectedEdge, error) {
+func (nq NQuad) CreateValueEdge(subjectUid uint64) (*pb.DirectedEdge, error) {
 	var err error
 
 	out := nq.createEdgePrototype(subjectUid)
@@ -164,12 +173,12 @@ func (nq NQuad) CreateValueEdge(subjectUid uint64) (*intern.DirectedEdge, error)
 	return out, nil
 }
 
-func (nq NQuad) ToDeletePredEdge() (*intern.DirectedEdge, error) {
+func (nq NQuad) ToDeletePredEdge() (*pb.DirectedEdge, error) {
 	if nq.Subject != x.Star && nq.ObjectValue.String() != x.Star {
 		return &emptyEdge, x.Errorf("Subject and object both should be *. Got: %+v", nq)
 	}
 
-	out := &intern.DirectedEdge{
+	out := &pb.DirectedEdge{
 		// This along with edge.ObjectValue == x.Star would indicate
 		// that we want to delete the predicate.
 		Entity: 0,
@@ -177,7 +186,7 @@ func (nq NQuad) ToDeletePredEdge() (*intern.DirectedEdge, error) {
 		Label:  nq.Label,
 		Lang:   nq.Lang,
 		Facets: nq.Facets,
-		Op:     intern.DirectedEdge_DEL,
+		Op:     pb.DirectedEdge_DEL,
 	}
 
 	if err := copyValue(out, nq); err != nil {
@@ -188,8 +197,8 @@ func (nq NQuad) ToDeletePredEdge() (*intern.DirectedEdge, error) {
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
-func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*intern.DirectedEdge, error) {
-	var edge *intern.DirectedEdge
+func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*pb.DirectedEdge, error) {
+	var edge *pb.DirectedEdge
 	sUid, err := toUid(nq.Subject, newToUid)
 	if err != nil {
 		return nil, err
@@ -220,7 +229,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*intern.DirectedEdge, e
 	return edge, nil
 }
 
-func copyValue(out *intern.DirectedEdge, nq NQuad) error {
+func copyValue(out *pb.DirectedEdge, nq NQuad) error {
 	var err error
 	var t types.TypeID
 	if out.Value, t, err = byteVal(nq); err != nil {

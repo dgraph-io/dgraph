@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package worker
@@ -10,10 +19,11 @@ package worker
 import (
 	"strings"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 type matchFn func(types.Val, stringFilter) bool
@@ -28,8 +38,8 @@ type stringFilter struct {
 	eqVals    []types.Val
 }
 
-func matchStrings(uids *intern.List, values [][]types.Val, filter stringFilter) *intern.List {
-	rv := &intern.List{}
+func matchStrings(uids *pb.List, values [][]types.Val, filter stringFilter) *pb.List {
+	rv := &pb.List{}
 	for i := 0; i < len(values); i++ {
 		for j := 0; j < len(values[i]); j++ {
 			if filter.match(values[i][j], filter) {
@@ -88,16 +98,17 @@ func tokenizeValue(value types.Val, filter stringFilter) []string {
 	case StandardFn:
 		tokName = "term"
 	case FullTextSearchFn:
-		tokName = tok.FtsTokenizerName(filter.lang)
+		tokName = "fulltext"
 	}
 
 	tokenizer, found := tok.GetTokenizer(tokName)
-
 	// tokenizer was used in previous stages of query proccessing, it has to be available
 	x.AssertTrue(found)
-	tokens, err := tok.BuildTokens(value.Value, tokenizer)
-	if err == nil {
-		return tokens
+
+	tokens, err := tok.BuildTokens(value.Value, tok.GetLangTokenizer(tokenizer, filter.lang))
+	if err != nil {
+		glog.Errorf("Error while building tokens: %s", err)
+		return []string{}
 	}
-	return []string{}
+	return tokens
 }

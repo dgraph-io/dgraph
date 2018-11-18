@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package conn
@@ -12,30 +21,35 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
 var (
 	ErrDuplicateRaftId = x.Errorf("Node is already part of group")
+	ErrNoNode          = x.Errorf("No node has been set up yet")
 )
-
-type sendmsg struct {
-	to   uint64
-	data []byte
-}
 
 type Node struct {
 	x.SafeMutex
+
+	joinLock sync.Mutex
+
+	// Used to keep track of lin read requests.
+	requestCh chan linReadReq
 
 	// SafeMutex is for fields which can be changed after init.
 	_confState *raftpb.ConfState
@@ -48,48 +62,94 @@ type Node struct {
 	peers       map[uint64]string
 	confChanges map[uint64]chan error
 	messages    chan sendmsg
-	RaftContext *intern.RaftContext
+	RaftContext *pb.RaftContext
 	Store       *raftwal.DiskStorage
+	Rand        *rand.Rand
 
+	Proposals proposals
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to BadgerDB).
-	Applied x.WaterMark
+	Applied y.WaterMark
 }
 
-func NewNode(rc *intern.RaftContext, store *raftwal.DiskStorage) *Node {
+type raftLogger struct {
+}
+
+func (rl *raftLogger) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
+func (rl *raftLogger) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
+func (rl *raftLogger) Error(v ...interface{})                   { glog.Error(v...) }
+func (rl *raftLogger) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
+func (rl *raftLogger) Info(v ...interface{})                    { glog.Info(v...) }
+func (rl *raftLogger) Infof(format string, v ...interface{})    { glog.Infof(format, v...) }
+func (rl *raftLogger) Warning(v ...interface{})                 { glog.Warning(v...) }
+func (rl *raftLogger) Warningf(format string, v ...interface{}) { glog.Warningf(format, v...) }
+func (rl *raftLogger) Fatal(v ...interface{})                   { glog.Fatal(v...) }
+func (rl *raftLogger) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
+func (rl *raftLogger) Panic(v ...interface{})                   { log.Panic(v...) }
+func (rl *raftLogger) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
+
+func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
+	snap, err := store.Snapshot()
+	x.Check(err)
+
 	n := &Node{
 		Id:     rc.Id,
 		MyAddr: rc.Addr,
 		Store:  store,
 		Cfg: &raft.Config{
 			ID:              rc.Id,
-			ElectionTick:    100, // 200 ms if we call Tick() every 20 ms.
-			HeartbeatTick:   1,   // 20 ms if we call Tick() every 20 ms.
+			ElectionTick:    100, // 2s if we call Tick() every 20 ms.
+			HeartbeatTick:   1,   // 20ms if we call Tick() every 20 ms.
 			Storage:         store,
-			MaxSizePerMsg:   256 << 10,
+			MaxSizePerMsg:   1 << 20, // 1MB should allow more batching.
 			MaxInflightMsgs: 256,
-			Logger:          &raft.DefaultLogger{Logger: x.Logger},
-			// We use lease-based linearizable ReadIndex for performance, at the cost of
-			// correctness.  With it, communication goes follower->leader->follower, instead of
-			// follower->leader->majority_of_followers->leader->follower.  We lose correctness
-			// because the Raft ticker might not arrive promptly, in which case the leader would
-			// falsely believe that its lease is still good.
-			CheckQuorum:    true,
-			ReadOnlyOption: raft.ReadOnlyLeaseBased,
+			// We don't need lease based reads. They cause issues because they
+			// require CheckQuorum to be true, and that causes a lot of issues
+			// for us during cluster bootstrapping and later. A seemingly
+			// healthy cluster would just cause leader to step down due to
+			// "inactive" quorum, and then disallow anyone from becoming leader.
+			// So, let's stick to default options.  Let's achieve correctness,
+			// then we achieve performance. Plus, for the Dgraph alphas, we'll
+			// be soon relying only on Timestamps for blocking reads and
+			// achieving linearizability, than checking quorums (Zero would
+			// still check quorums).
+			ReadOnlyOption: raft.ReadOnlySafe,
+			// When a disconnected node joins back, it forces a leader change,
+			// as it starts with a higher term, as described in Raft thesis (not
+			// the paper) in section 9.6. This setting can avoid that by only
+			// increasing the term, if the node has a good chance of becoming
+			// the leader.
+			PreVote: true,
+
+			// We can explicitly set Applied to the first index in the Raft log,
+			// so it does not derive it separately, thus avoiding a crash when
+			// the Applied is set to below snapshot index by Raft.
+			// In case this is a new Raft log, first would be 1, and therefore
+			// Applied would be zero, hence meeting the condition by the library
+			// that Applied should only be set during a restart.
+			//
+			// Update: Set the Applied to the latest snapshot, because it seems
+			// like somehow the first index can be out of sync with the latest
+			// snapshot.
+			Applied: snap.Metadata.Index,
+
+			Logger: &raftLogger{},
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		peers:       make(map[uint64]string),
-		confChanges: make(map[uint64]chan error),
+		Applied:     y.WaterMark{Name: fmt.Sprintf("Applied watermark")},
 		RaftContext: rc,
+		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
+		confChanges: make(map[uint64]chan error),
 		messages:    make(chan sendmsg, 100),
-		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		peers:       make(map[uint64]string),
+		requestCh:   make(chan linReadReq),
 	}
 	n.Applied.Init()
-	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.
-	// This can happen once we get rid of groups.
-	n_ = n
+	// This should match up to the Applied index set above.
+	n.Applied.SetDoneUntil(n.Cfg.Applied)
+	glog.Infof("Setting raft.Config to: %+v\n", n.Cfg)
 	return n
 }
 
@@ -111,9 +171,9 @@ func (n *Node) Raft() raft.Node {
 
 // SetConfState would store the latest ConfState generated by ApplyConfChange.
 func (n *Node) SetConfState(cs *raftpb.ConfState) {
+	glog.Infof("Setting conf state to %+v\n", cs)
 	n.Lock()
 	defer n.Unlock()
-	x.Printf("Setting conf state to %+v\n", cs)
 	n._confState = cs
 }
 
@@ -167,12 +227,21 @@ func (n *Node) Send(m raftpb.Message) {
 	x.AssertTruef(n.Id != m.To, "Sending message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
-	select {
-	case n.messages <- sendmsg{to: m.To, data: data}:
-		// pass
-	default:
-		// ignore
-	}
+
+	// As long as leadership is stable, any attempted Propose() calls should be reflected in the
+	// next raft.Ready.Messages. Leaders will send MsgApps to the followers; followers will send
+	// MsgProp to the leader. It is up to the transport layer to get those messages to their
+	// destination. If a MsgApp gets dropped by the transport layer, it will get retried by raft
+	// (i.e. it will appear in a future Ready.Messages), but MsgProp will only be sent once. During
+	// leadership transitions, proposals may get dropped even if the network is reliable.
+	//
+	// We can't do a select default here. The messages must be sent to the channel, otherwise we
+	// should block until the channel can accept these messages. BatchAndSendMessages would take
+	// care of dropping messages which can't be sent due to network issues to the corresponding
+	// node. But, we shouldn't take the liberty to do that here. It would take us more time to
+	// repropose these dropped messages anyway, than to block here a bit waiting for the messages
+	// channel to clear out.
+	n.messages <- sendmsg{to: m.To, data: data}
 }
 
 func (n *Node) Snapshot() (raftpb.Snapshot, error) {
@@ -183,7 +252,13 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 }
 
 func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
-	x.Check(n.Store.Save(h, es, s))
+	for {
+		if err := n.Store.Save(h, es, s); err != nil {
+			glog.Errorf("While trying to save Raft update: %v. Retrying...", err)
+		} else {
+			return
+		}
+	}
 }
 
 func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
@@ -193,7 +268,7 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptySnap(sp) {
-		x.Printf("Found Snapshot, Metadata: %+v\n", sp.Metadata)
+		glog.Infof("Found Snapshot.Metadata: %+v\n", sp.Metadata)
 		restart = true
 		idx = sp.Metadata.Index
 	}
@@ -204,7 +279,7 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptyHardState(hd) {
-		x.Printf("Found hardstate: %+v\n", hd)
+		glog.Infof("Found hardstate: %+v\n", hd)
 		restart = true
 	}
 
@@ -213,7 +288,7 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 	if rerr != nil {
 		return
 	}
-	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, num)
+	glog.Infof("Group %d found %d entries\n", n.RaftContext.Group, num)
 	// We'll always have at least one entry.
 	if num > 1 {
 		restart = true
@@ -270,7 +345,8 @@ func (n *Node) BatchAndSendMessages() {
 				if exists := failedConn[to]; !exists {
 					// So that we print error only the first time we are not able to connect.
 					// Otherwise, the log is polluted with multiple errors.
-					x.Printf("No healthy connection found to node Id: %d, err: %v\n", to, err)
+					glog.Warningf("No healthy connection to node Id: %d addr: [%s], err: %v\n",
+						to, addr, err)
 					failedConn[to] = true
 				}
 				continue
@@ -279,38 +355,42 @@ func (n *Node) BatchAndSendMessages() {
 			failedConn[to] = false
 			data := make([]byte, buf.Len())
 			copy(data, buf.Bytes())
-			go n.doSendMessage(pool, data)
+			go n.doSendMessage(to, pool, data)
 			buf.Reset()
 		}
 	}
 }
 
-func (n *Node) doSendMessage(pool *Pool, data []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+func (n *Node) doSendMessage(to uint64, pool *Pool, data []byte) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	client := pool.Get()
 
-	c := intern.NewRaftClient(client)
+	c := pb.NewRaftClient(client)
 	p := &api.Payload{Data: data}
-
-	ch := make(chan error, 1)
-	go func() {
-		_, err := c.RaftMessage(ctx, p)
-		if err != nil {
-			x.Printf("Error while sending message to node with addr: %s, err: %v\n", pool.Addr, err)
-		}
-		ch <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return
-	case <-ch:
-		// We don't need to do anything if we receive any error while sending message.
-		// RAFT would automatically retry.
-		return
+	batch := &pb.RaftBatch{
+		Context: n.RaftContext,
+		Payload: p,
 	}
+
+	// We don't need to run this in a goroutine, because doSendMessage is
+	// already being run in one.
+	_, err := c.RaftMessage(ctx, batch)
+	if err != nil {
+		switch {
+		case strings.Contains(err.Error(), "TransientFailure"):
+			glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
+			n.Raft().ReportUnreachable(to)
+			pool.SetUnhealthy()
+		default:
+			glog.V(3).Infof("Error while sending Raft message to node with addr: %s, err: %v\n",
+				pool.Addr, err)
+		}
+	}
+	// We don't need to do anything if we receive any error while sending message.
+	// RAFT would automatically retry.
+	return
 }
 
 // Connects the node and makes its peerPool refer to the constructed pool and address
@@ -329,7 +409,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 	// a nil *pool.
 	if addr == n.MyAddr {
 		// TODO: Note this fact in more general peer health info somehow.
-		x.Printf("Peer %d claims same host as me\n", pid)
+		glog.Infof("Peer %d claims same host as me\n", pid)
 		n.SetPeer(pid, addr)
 		return
 	}
@@ -346,10 +426,37 @@ func (n *Node) DeletePeer(pid uint64) {
 	delete(n.peers, pid)
 }
 
+var errInternalRetry = errors.New("Retry proposal again")
+
+func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) error {
+	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	ch := make(chan error, 1)
+	id := n.storeConfChange(ch)
+	// TODO: Delete id from the map.
+	pb.ID = id
+	if err := n.Raft().ProposeConfChange(cctx, pb); err != nil {
+		if cctx.Err() != nil {
+			return errInternalRetry
+		}
+		glog.Warningf("Error while proposing conf change: %v", err)
+		return err
+	}
+	select {
+	case err := <-ch:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-cctx.Done():
+		return errInternalRetry
+	}
+}
+
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr, ok := n.Peer(pid)
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
-	rc := &intern.RaftContext{
+	rc := &pb.RaftContext{
 		Addr:  addr,
 		Group: n.RaftContext.Group,
 		Id:    pid,
@@ -357,174 +464,130 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	rcBytes, err := rc.Marshal()
 	x.Check(err)
 
-	ch := make(chan error, 1)
-	id := n.storeConfChange(ch)
-	err = n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
-		ID:      id,
+	cc := raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
 		Context: rcBytes,
-	})
-	if err != nil {
-		return err
 	}
-	err = <-ch
+	err = errInternalRetry
+	for err == errInternalRetry {
+		glog.Infof("Trying to add %d to cluster. Addr: %v\n", pid, addr)
+		glog.Infof("Current confstate at %d: %+v\n", n.Id, n.ConfState())
+		err = n.proposeConfChange(ctx, cc)
+	}
 	return err
 }
 
 func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 	if n.Raft() == nil {
-		return errNoNode
+		return ErrNoNode
 	}
 	if _, ok := n.Peer(id); !ok && id != n.RaftContext.Id {
 		return x.Errorf("Node %d not part of group", id)
 	}
-	ch := make(chan error, 1)
-	pid := n.storeConfChange(ch)
-	err := n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
-		ID:     pid,
+	cc := raftpb.ConfChange{
 		Type:   raftpb.ConfChangeRemoveNode,
 		NodeID: id,
-	})
-	if err != nil {
-		return err
 	}
-	err = <-ch
+	err := errInternalRetry
+	for err == errInternalRetry {
+		err = n.proposeConfChange(ctx, cc)
+	}
 	return err
 }
 
-// TODO: Get rid of this in the upcoming changes.
-var n_ *Node
-
-func (w *RaftServer) GetNode() *Node {
-	w.nodeLock.RLock()
-	defer w.nodeLock.RUnlock()
-	return w.Node
+type linReadReq struct {
+	// A one-shot chan which we send a raft index upon.
+	indexCh chan<- uint64
 }
 
-type RaftServer struct {
-	nodeLock sync.RWMutex // protects Node.
-	Node     *Node
-}
+var errReadIndex = x.Errorf("cannot get linearized read (time expired or no configured leader)")
 
-func (w *RaftServer) IsPeer(ctx context.Context, rc *intern.RaftContext) (*intern.PeerResponse,
-	error) {
-	node := w.GetNode()
-	if node == nil || node.Raft() == nil {
-		return &intern.PeerResponse{}, errNoNode
-	}
-
-	if node._confState == nil {
-		return &intern.PeerResponse{}, nil
-	}
-
-	for _, raftIdx := range node._confState.Nodes {
-		if rc.Id == raftIdx {
-			return &intern.PeerResponse{Status: true}, nil
-		}
-	}
-	return &intern.PeerResponse{}, nil
-}
-
-func (w *RaftServer) JoinCluster(ctx context.Context,
-	rc *intern.RaftContext) (*api.Payload, error) {
-	if ctx.Err() != nil {
-		return &api.Payload{}, ctx.Err()
-	}
-	// Commenting out the following checks for now, until we get rid of groups.
-	// TODO: Uncomment this after groups is removed.
-	node := w.GetNode()
-	if node == nil || node.Raft() == nil {
-		return nil, errNoNode
-	}
-	// Check that the new node is from the same group as me.
-	if rc.Group != node.RaftContext.Group {
-		return nil, x.Errorf("Raft group mismatch")
-	}
-	// Also check that the new node is not me.
-	if rc.Id == node.RaftContext.Id {
-		return nil, ErrDuplicateRaftId
-	}
-	// Check that the new node is not already part of the group.
-	if addr, ok := node.peers[rc.Id]; ok && rc.Addr != addr {
-		Get().Connect(addr)
-		// There exists a healthy connection to server with same id.
-		if _, err := Get().Get(addr); err == nil {
-			return &api.Payload{}, ErrDuplicateRaftId
-		}
-	}
-	node.Connect(rc.Id, rc.Addr)
-
-	c := make(chan error, 1)
-	go func() { c <- node.AddToCluster(ctx, rc.Id) }()
+func (n *Node) WaitLinearizableRead(ctx context.Context) error {
+	indexCh := make(chan uint64, 1)
 
 	select {
-	case <-ctx.Done():
-		return &api.Payload{}, ctx.Err()
-	case err := <-c:
-		return &api.Payload{}, err
-	}
-}
-
-var (
-	errNoNode = fmt.Errorf("No node has been set up yet")
-)
-
-func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error {
-	var rc intern.RaftContext
-	x.Check(rc.Unmarshal(msg.Context))
-
-	node := w.GetNode()
-	if node == nil || node.Raft() == nil {
-		return errNoNode
-	}
-	if rc.Group != node.RaftContext.Group {
-		return errNoNode
-	}
-	node.Connect(msg.From, rc.Addr)
-
-	c := make(chan error, 1)
-	go func() { c <- node.Raft().Step(ctx, msg) }()
-
-	select {
+	case n.requestCh <- linReadReq{indexCh: indexCh}:
 	case <-ctx.Done():
 		return ctx.Err()
-	case err := <-c:
-		return err
+	}
+
+	select {
+	case index := <-indexCh:
+		if index == 0 {
+			return errReadIndex
+		}
+		return n.Applied.WaitForMark(ctx, index)
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
-func (w *RaftServer) RaftMessage(ctx context.Context,
-	query *api.Payload) (*api.Payload, error) {
-	if ctx.Err() != nil {
-		return &api.Payload{}, ctx.Err()
+
+func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
+	defer closer.Done()
+	readIndex := func() (uint64, error) {
+		// Read Request can get rejected then we would wait idefinitely on the channel
+		// so have a timeout.
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		var activeRctx [8]byte
+		x.Check2(n.Rand.Read(activeRctx[:]))
+		if err := n.Raft().ReadIndex(ctx, activeRctx[:]); err != nil {
+			glog.Errorf("Error while trying to call ReadIndex: %v\n", err)
+			return 0, err
+		}
+
+	again:
+		select {
+		case <-closer.HasBeenClosed():
+			return 0, errors.New("closer has been called")
+		case rs := <-readStateCh:
+			if !bytes.Equal(activeRctx[:], rs.RequestCtx) {
+				goto again
+			}
+			return rs.Index, nil
+		case <-ctx.Done():
+			glog.Warningf("[%d] Read index context timed out\n", n.Id)
+			return 0, errInternalRetry
+		}
+	} // end of readIndex func
+
+	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
+	// requestCh.
+	requests := []linReadReq{}
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return
+		case rs := <-readStateCh:
+			// Do nothing, discard ReadState as we don't have any pending ReadIndex requests.
+			glog.Warningf("Received a read state unexpectedly: %+v\n", rs)
+		case req := <-n.requestCh:
+		slurpLoop:
+			for {
+				requests = append(requests, req)
+				select {
+				case req = <-n.requestCh:
+				default:
+					break slurpLoop
+				}
+			}
+			for {
+				index, err := readIndex()
+				if err == errInternalRetry {
+					continue
+				}
+				if err != nil {
+					index = 0
+					glog.Errorf("[%d] While trying to do lin read index: %v", n.Id, err)
+				}
+				for _, req := range requests {
+					req.indexCh <- index
+				}
+				break
+			}
+			requests = requests[:0]
+		}
 	}
-
-	for idx := 0; idx < len(query.Data); {
-		x.AssertTruef(len(query.Data[idx:]) >= 4,
-			"Slice left of size: %v. Expected at least 4.", len(query.Data[idx:]))
-
-		sz := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
-		idx += 4
-		msg := raftpb.Message{}
-		if idx+sz > len(query.Data) {
-			return &api.Payload{}, x.Errorf(
-				"Invalid query. Specified size %v overflows slice [%v,%v)\n",
-				sz, idx, len(query.Data))
-		}
-		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
-			x.Check(err)
-		}
-		if err := w.applyMessage(ctx, msg); err != nil {
-			return &api.Payload{}, err
-		}
-		idx += sz
-	}
-	// fmt.Printf("Got %d messages\n", count)
-	return &api.Payload{}, nil
-}
-
-// Hello rpc call is used to check connection with other workers after worker
-// tcp server for this instance starts.
-func (w *RaftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
-	return &api.Payload{Data: in.Data}, nil
 }

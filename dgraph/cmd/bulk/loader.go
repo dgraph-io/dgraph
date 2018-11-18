@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package bulk
@@ -24,8 +33,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -47,6 +55,7 @@ type options struct {
 	StoreXids     bool
 	ZeroAddr      string
 	HttpAddr      string
+	IgnoreErrors  bool
 
 	MapShards    int
 	ReduceShards int
@@ -62,7 +71,7 @@ type state struct {
 	shards     *shardMap
 	rdfChunkCh chan *bytes.Buffer
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	dbs        []*badger.ManagedDB
+	dbs        []*badger.DB
 	writeTs    uint64 // All badger writes use this timestamp
 }
 
@@ -74,7 +83,7 @@ type loader struct {
 }
 
 func newLoader(opt options) *loader {
-	x.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
+	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
 	zero, err := grpc.Dial(opt.ZeroAddr,
 		grpc.WithBlock(),
 		grpc.WithInsecure(),
@@ -102,20 +111,20 @@ func newLoader(opt options) *loader {
 }
 
 func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
-	client := intern.NewZeroClient(zero)
+	client := pb.NewZeroClient(zero)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ts, err := client.Timestamps(ctx, &intern.Num{Val: 1})
+		ts, err := client.Timestamps(ctx, &pb.Num{Val: 1})
 		cancel()
 		if err == nil {
 			return ts.GetStartId()
 		}
-		x.Printf("error communicating with dgraph zero, retrying: %v", err)
+		fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
 		time.Sleep(time.Second)
 	}
 }
 
-func readSchema(filename string) []*intern.SchemaUpdate {
+func readSchema(filename string) []*pb.SchemaUpdate {
 	f, err := os.Open(filename)
 	x.Check(err)
 	defer f.Close()
@@ -180,7 +189,7 @@ func findRDFFiles(dir string) []string {
 }
 
 type uidRangeResponse struct {
-	uids *api.AssignedIds
+	uids *pb.AssignedIds
 	err  error
 }
 
@@ -202,17 +211,17 @@ func (ld *loader) mapStage() {
 		LRUSize:   1 << 19,
 	})
 
-	var readers []*bufio.Reader
+	readers := make(map[string]*bufio.Reader)
 	for _, rdfFile := range findRDFFiles(ld.opt.RDFDir) {
 		f, err := os.Open(rdfFile)
 		x.Check(err)
 		defer f.Close()
 		if !strings.HasSuffix(rdfFile, ".gz") {
-			readers = append(readers, bufio.NewReaderSize(f, 1<<20))
+			readers[rdfFile] = bufio.NewReaderSize(f, 1<<20)
 		} else {
 			gzr, err := gzip.NewReader(f)
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
-			readers = append(readers, bufio.NewReader(gzr))
+			readers[rdfFile] = bufio.NewReader(gzr)
 		}
 	}
 
@@ -232,8 +241,11 @@ func (ld *loader) mapStage() {
 
 	// This is the main map loop.
 	thr := x.NewThrottle(ld.opt.NumGoroutines)
-	for _, r := range readers {
+	var fileCount int
+	for rdfFile, r := range readers {
 		thr.Start()
+		fileCount++
+		fmt.Printf("Processing file (%d out of %d): %s\n", fileCount, len(readers), rdfFile)
 		go func(r *bufio.Reader) {
 			defer thr.Done()
 			for {
@@ -265,8 +277,8 @@ func (ld *loader) mapStage() {
 }
 
 type shuffleOutput struct {
-	db         *badger.ManagedDB
-	mapEntries []*intern.MapEntry
+	db         *badger.DB
+	mapEntries []*pb.MapEntry
 }
 
 func (ld *loader) reduceStage() {

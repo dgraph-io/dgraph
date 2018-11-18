@@ -1,4 +1,4 @@
-# This is the service that should be used by the clients of Dgraph to talk to the server.
+# This is the service that should be used by the clients of Dgraph to talk to the cluster.
 apiVersion: v1
 kind: Service
 metadata:
@@ -16,17 +16,17 @@ spec:
     name: zero-http
   - port: 8080
     targetPort: 8080
-    name: server-http
+    name: alpha-http
   - port: 9080
     targetPort: 9080
-    name: server-grpc
+    name: alpha-grpc
   - port: 8000
     targetPort: 8000
     name: ratel-http
   selector:
     app: dgraph
 ---
-# This StatefulSet runs 1 pod with one Zero, one Server & one Ratel containers.
+# This StatefulSet runs 1 pod with one Zero, one Alpha & one Ratel containers.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -68,14 +68,14 @@ spec:
           - |
             set -ex
             dgraph zero --my=$(hostname -f):5080
-      - name: server
+      - name: alpha
         image: dgraph/dgraph:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
-          name: server-http
+          name: alpha-http
         - containerPort: 9080
-          name: server-grpc
+          name: alpha-grpc
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -84,7 +84,7 @@ spec:
           - "-c"
           - |
             set -ex
-            dgraph server --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-0.dgraph.default.svc.cluster.local:5080
+            dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-0.dgraph.default.svc.cluster.local:5080
       terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir

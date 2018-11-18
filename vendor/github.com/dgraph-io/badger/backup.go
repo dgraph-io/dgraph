@@ -20,12 +20,10 @@ import (
 	"bufio"
 	"encoding/binary"
 	"io"
-	"log"
 	"sync"
 
-	"github.com/dgraph-io/badger/y"
-
 	"github.com/dgraph-io/badger/protos"
+	"github.com/dgraph-io/badger/y"
 )
 
 func writeTo(entry *protos.KVPair, w io.Writer) error {
@@ -61,15 +59,15 @@ func (db *DB) Backup(w io.Writer, since uint64) (uint64, error) {
 				// Ignore versions less than given timestamp
 				continue
 			}
-			val, err := item.Value()
+			valCopy, err := item.ValueCopy(nil)
 			if err != nil {
-				log.Printf("Key [%x]. Error while fetching value [%v]\n", item.Key(), err)
+				Errorf("Key [%x]. Error while fetching value [%v]\n", item.Key(), err)
 				continue
 			}
 
 			entry := &protos.KVPair{
 				Key:       y.Copy(item.Key()),
-				Value:     y.Copy(val),
+				Value:     valCopy,
 				UserMeta:  []byte{item.UserMeta()},
 				Version:   item.Version(),
 				ExpiresAt: item.ExpiresAt(),
@@ -144,10 +142,10 @@ func (db *DB) Load(r io.Reader) error {
 			UserMeta:  e.UserMeta[0],
 			ExpiresAt: e.ExpiresAt,
 		})
-		// Update nextCommit, memtable stores this timestamp in badger head
+		// Update nextTxnTs, memtable stores this timestamp in badger head
 		// when flushed.
-		if e.Version >= db.orc.commitTs() {
-			db.orc.nextCommit = e.Version + 1
+		if e.Version >= db.orc.nextTxnTs {
+			db.orc.nextTxnTs = e.Version + 1
 		}
 
 		if len(entries) == 1000 {
@@ -163,14 +161,14 @@ func (db *DB) Load(r io.Reader) error {
 			return err
 		}
 	}
-
 	wg.Wait()
 
 	select {
 	case err := <-errChan:
 		return err
 	default:
-		db.orc.curRead = db.orc.commitTs() - 1
+		// Mark all versions done up until nextTxnTs.
+		db.orc.txnMark.Done(db.orc.nextTxnTs - 1)
 		return nil
 	}
 }

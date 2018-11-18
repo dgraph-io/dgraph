@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package zero
@@ -19,14 +28,15 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
-	bopts "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 )
 
@@ -48,9 +58,9 @@ var Zero x.SubCommand
 func init() {
 	Zero.Cmd = &cobra.Command{
 		Use:   "zero",
-		Short: "Run Dgraph zero server",
+		Short: "Run Dgraph Zero",
 		Long: `
-A Dgraph zero instance manages the Dgraph cluster.  Typically, a single Zero
+A Dgraph Zero instance manages the Dgraph cluster.  Typically, a single Zero
 instance is sufficient for the cluster; however, one can run multiple Zero
 instances to achieve high-availability.
 `,
@@ -62,10 +72,8 @@ instances to achieve high-availability.
 	Zero.EnvPrefix = "DGRAPH_ZERO"
 
 	flag := Zero.Cmd.Flags()
-	flag.Bool("bindall", true,
-		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	flag.String("my", "",
-		"addr:port of this server, so other Dgraph servers can talk to this.")
+		"addr:port of this server, so other Dgraph alphas can talk to this.")
 	flag.IntP("port_offset", "o", 0,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
 	flag.Uint64("idx", 1, "Unique node index for this server.")
@@ -74,11 +82,12 @@ instances to achieve high-availability.
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
+	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
 	laddr := fmt.Sprintf("%s:%d", addr, port)
-	fmt.Printf("Setting up %s listener at: %v\n", kind, laddr)
+	glog.Infof("Setting up %s listener at: %v\n", kind, laddr)
 	return net.Listen("tcp", laddr)
 }
 
@@ -94,7 +103,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
 
-	rc := intern.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
+	rc := pb.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
 	m := conn.NewNode(&rc, store)
 	st.rs = &conn.RaftServer{Node: m}
 
@@ -103,13 +112,13 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 	st.zero.Init()
 	st.node.server = st.zero
 
-	intern.RegisterZeroServer(s, st.zero)
-	intern.RegisterRaftServer(s, st.rs)
+	pb.RegisterZeroServer(s, st.zero)
+	pb.RegisterRaftServer(s, st.rs)
 
 	go func() {
 		defer wg.Done()
 		err := s.Serve(l)
-		log.Printf("gRpc server stopped : %s", err.Error())
+		glog.Infof("gRpc server stopped : %v", err)
 		st.node.stop <- struct{}{}
 
 		// Attempt graceful stop (waits for pending RPCs), but force a stop if
@@ -123,7 +132,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 		select {
 		case <-done:
 		case <-time.After(timeout):
-			log.Printf("Stopping grpc gracefully is taking longer than %v."+
+			glog.Infof("Stopping grpc gracefully is taking longer than %v."+
 				" Force stopping now. Pending RPCs will be abandoned.", timeout)
 			s.Stop()
 		}
@@ -131,6 +140,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 }
 
 func run() {
+	x.PrintVersion()
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		myAddr:            Zero.Conf.GetString("my"),
@@ -142,6 +152,16 @@ func run() {
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 	}
 
+	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
+		log.Fatalf("ERROR: Number of replicas must be odd for consensus. Found: %d",
+			opts.numReplicas)
+	}
+
+	if Zero.Conf.GetBool("expose_trace") {
+		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
+			return true, true
+		}
+	}
 	grpc.EnableTracing = false
 
 	addr := "localhost"
@@ -162,11 +182,12 @@ func run() {
 
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.DefaultOptions
+	kvOpt := badger.LSMOnlyOptions
 	kvOpt.SyncWrites = true
+	kvOpt.Truncate = true
 	kvOpt.Dir = opts.w
 	kvOpt.ValueDir = opts.w
-	kvOpt.ValueLogLoadingMode = bopts.FileIO
+	kvOpt.ValueLogFileSize = 64 << 20
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
@@ -182,9 +203,14 @@ func run() {
 	http.HandleFunc("/state", st.getState)
 	http.HandleFunc("/removeNode", st.removeNode)
 	http.HandleFunc("/moveTablet", st.moveTablet)
+	http.HandleFunc("/assignIds", st.assignUids)
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
+
+	if Zero.Conf.GetBool("telemetry") {
+		go st.zero.periodicallyPostTelemetry()
+	}
 
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -192,7 +218,7 @@ func run() {
 	go func() {
 		defer wg.Done()
 		<-sdCh
-		fmt.Println("Shutting down...")
+		glog.Infof("Shutting down...")
 		// Close doesn't close already opened connections.
 		httpListener.Close()
 		grpcListener.Close()
@@ -200,7 +226,7 @@ func run() {
 		st.node.trySnapshot(0)
 	}()
 
-	fmt.Println("Running Dgraph zero...")
+	glog.Infof("Running Dgraph Zero...")
 	wg.Wait()
-	fmt.Println("All done.")
+	glog.Infof("All done.")
 }

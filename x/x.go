@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package x
@@ -102,7 +111,7 @@ func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers",
 		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, "+
-			"Cache-Control, X-Requested-With, X-Dgraph-CommitNow, X-Dgraph-LinRead, X-Dgraph-Vars, "+
+			"Cache-Control, X-Requested-With, X-Dgraph-CommitNow, X-Dgraph-Vars, "+
 			"X-Dgraph-MutationType, X-Dgraph-IgnoreIndexConflict")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
@@ -145,11 +154,41 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
+func Min(a, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func Max(a, b uint64) uint64 {
 	if a > b {
 		return a
 	}
 	return b
+}
+
+func RetryUntilSuccess(maxRetries int, sleepDurationOnFailure time.Duration,
+	f func() error) error  {
+	var err error
+	for retry := maxRetries; retry != 0; retry-- {
+		if err = f(); err == nil {
+			return nil
+		}
+		if sleepDurationOnFailure > 0 {
+			time.Sleep(sleepDurationOnFailure)
+		}
+	}
+	return err
+}
+
+func HasString(a []string, b string) bool {
+	for _, k := range a {
+		if k == b {
+			return true
+		}
+	}
+	return false
 }
 
 var Nilbyte []byte
@@ -164,7 +203,7 @@ func ReadLine(r *bufio.Reader, buf *bytes.Buffer) error {
 	buf.Reset()
 	for isPrefix && err == nil {
 		var line []byte
-		// The returned line is an intern.buffer in bufio and is only
+		// The returned line is an pb.buffer in bufio and is only
 		// valid until the next call to ReadLine. It needs to be copied
 		// over to our own buffer.
 		line, isPrefix, err = r.ReadLine()
@@ -350,4 +389,14 @@ func (t *Timer) Total() time.Duration {
 
 func (t *Timer) All() []time.Duration {
 	return t.records
+}
+
+// PredicateLang extracts the language from a predicate (or facet) name.
+// Returns the predicate and the language tag, if any.
+func PredicateLang(s string) (string, string) {
+	i := strings.LastIndex(s, "@")
+	if i <= 0 {
+		return s, ""
+	}
+	return s[0:i], s[i+1:]
 }

@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -20,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-var addr = flag.String("addr", "localhost:9080", "Dgraph server addr")
+var addr = flag.String("addr", "localhost:9080", "Dgraph alpha addr")
 var insert = flag.Bool("add", false, "Insert")
 
 func main() {
@@ -55,7 +64,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	quad := &api.NQuad{
 		Subject:     "200",
 		Predicate:   "name",
-		ObjectValue: &api.Value{&api.Value_StrVal{"ok 200"}},
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "ok 200"}},
 	}
 	mu.Set = []*api.NQuad{quad}
 	_, err := txn.Mutate(ctx, mu)
@@ -67,7 +76,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	quad = &api.NQuad{
 		Subject:     "300",
 		Predicate:   "name",
-		ObjectValue: &api.Value{&api.Value_StrVal{"ok 300"}},
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "ok 300"}},
 	}
 	mu.Set = []*api.NQuad{quad}
 	// mu.SetNquads = []byte(`<300> <name> "ok 300" .`)
@@ -80,7 +89,7 @@ func TestInsert3Quads(ctx context.Context, c *dgo.Dgraph) {
 	quad = &api.NQuad{
 		Subject:     "400",
 		Predicate:   "name",
-		ObjectValue: &api.Value{&api.Value_StrVal{"ok 400"}},
+		ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "ok 400"}},
 	}
 	mu.Set = []*api.NQuad{quad}
 	// mu.SetNquads = []byte(`<400> <name> "ok 400" .`)

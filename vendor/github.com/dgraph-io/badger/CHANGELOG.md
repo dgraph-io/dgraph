@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.5.3] - 2018-07-11
+Bug Fixes:
+* Fix a panic caused due to item.vptr not copying over vs.Value, when looking
+    for a move key.
+
+## [1.5.2] - 2018-06-19
+Bug Fixes:
+* Fix the way move key gets generated.
+* If a transaction has unclosed, or multiple iterators running simultaneously,
+    throw a panic. Every iterator must be properly closed. At any point in time,
+    only one iterator per transaction can be running. This is to avoid bugs in a
+    transaction data structure which is thread unsafe.
+
+* *Warning: This change might cause panics in user code. Fix is to properly
+    close your iterators, and only have one running at a time per transaction.*
+
 ## [1.5.1] - 2018-06-04
 Bug Fixes:
 * Fix for infinite yieldItemValue recursion. #503
@@ -71,7 +87,9 @@ Bug fix:
 ## [1.0.1] - 2017-11-06
 * Fix an uint16 overflow when resizing key slice
 
-[Unreleased]: https://github.com/dgraph-io/badger/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/dgraph-io/badger/compare/v1.5.3...HEAD
+[1.5.3]: https://github.com/dgraph-io/badger/compare/v1.5.2...v1.5.3
+[1.5.2]: https://github.com/dgraph-io/badger/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/dgraph-io/badger/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/dgraph-io/badger/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/dgraph-io/badger/compare/v1.3.0...v1.4.0

@@ -1,8 +1,17 @@
 /*
- * Copyright 2018 Dgraph Labs, Inc.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package zero
@@ -10,15 +19,16 @@ package zero
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/golang/glog"
 )
 
 // intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.
@@ -40,8 +50,39 @@ func intFromQueryParam(w http.ResponseWriter, r *http.Request, name string) (uin
 	return val, true
 }
 
+func (st *state) assignUids(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+	val, ok := intFromQueryParam(w, r, "num")
+	if !ok {
+		return
+	}
+	num := &pb.Num{Val: uint64(val)}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	ids, err := st.zero.AssignUids(ctx, num)
+	if err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	m := jsonpb.Marshaler{}
+	if err := m.Marshal(w, ids); err != nil {
+		x.SetStatus(w, x.ErrorNoData, err.Error())
+		return
+	}
+}
+
 // removeNode can be used to remove a node from the cluster. It takes in the RAFT id of the node
-// and the group it belongs to. It can be used to remove Dgraph server and Zero nodes(group=0).
+// and the group it belongs to. It can be used to remove Dgraph alpha and Zero nodes(group=0).
 func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {
@@ -138,6 +179,13 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := st.node.WaitLinearizableRead(ctx); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
 	mstate := st.zero.membershipState()
 	if mstate == nil {
 		x.SetStatus(w, x.ErrorNoData, "No membership state found.")
@@ -161,13 +209,13 @@ func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	go func() {
 		defer wg.Done()
 		err := srv.Serve(l)
-		log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
+		glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
 		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 		defer cancel()
 		err = srv.Shutdown(ctx)
-		log.Printf("All http(s) requests finished.")
+		glog.Infoln("All http(s) requests finished.")
 		if err != nil {
-			log.Printf("Http(s) shutdown err: %v", err.Error())
+			glog.Errorf("Http(s) shutdown err: %v", err)
 		}
 	}()
 }

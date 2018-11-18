@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package types
@@ -10,7 +19,7 @@ package types
 import (
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	geom "github.com/twpayne/go-geom"
 )
 
@@ -23,16 +32,16 @@ const (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	BinaryID   = TypeID(intern.Posting_BINARY)
-	IntID      = TypeID(intern.Posting_INT)
-	FloatID    = TypeID(intern.Posting_FLOAT)
-	BoolID     = TypeID(intern.Posting_BOOL)
-	DateTimeID = TypeID(intern.Posting_DATETIME)
-	StringID   = TypeID(intern.Posting_STRING)
-	GeoID      = TypeID(intern.Posting_GEO)
-	UidID      = TypeID(intern.Posting_UID)
-	PasswordID = TypeID(intern.Posting_PASSWORD)
-	DefaultID  = TypeID(intern.Posting_DEFAULT)
+	DefaultID  = TypeID(pb.Posting_DEFAULT)
+	BinaryID   = TypeID(pb.Posting_BINARY)
+	IntID      = TypeID(pb.Posting_INT)
+	FloatID    = TypeID(pb.Posting_FLOAT)
+	BoolID     = TypeID(pb.Posting_BOOL)
+	DateTimeID = TypeID(pb.Posting_DATETIME)
+	GeoID      = TypeID(pb.Posting_GEO)
+	UidID      = TypeID(pb.Posting_UID)
+	PasswordID = TypeID(pb.Posting_PASSWORD)
+	StringID   = TypeID(pb.Posting_STRING)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -47,10 +56,10 @@ var typeNameMap = map[string]TypeID{
 	"default":  DefaultID,
 }
 
-type TypeID intern.Posting_ValType
+type TypeID pb.Posting_ValType
 
-func (t TypeID) Enum() intern.Posting_ValType {
-	return intern.Posting_ValType(t)
+func (t TypeID) Enum() pb.Posting_ValType {
+	return pb.Posting_ValType(t)
 }
 
 func (t TypeID) Name() string {

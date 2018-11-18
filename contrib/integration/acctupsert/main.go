@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -12,6 +21,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,13 +36,14 @@ import (
 
 var (
 	addr    = flag.String("addr", "localhost:9080", "dgraph address")
-	concurr = flag.Int("c", 5, "number of concurrent upserts per account")
+	concurr = flag.Int("c", 3, "number of concurrent upserts per account")
 )
 
 var (
 	firsts = []string{"Paul", "Eric", "Jack", "John", "Martin"}
 	lasts  = []string{"Brown", "Smith", "Robinson", "Waters", "Taylor"}
 	ages   = []int{20, 25, 30, 35}
+	types  = []string{"CEO", "COO", "CTO", "CFO"}
 )
 
 type account struct {
@@ -61,7 +72,9 @@ func main() {
 	flag.Parse()
 	c := newClient()
 	setup(c)
+	fmt.Println("Doing upserts")
 	doUpserts(c)
+	fmt.Println("Checking integrity")
 	checkIntegrity(c)
 }
 
@@ -111,7 +124,7 @@ var (
 func upsert(c *dgo.Dgraph, acc account) {
 	for {
 		if time.Since(lastStatus) > 100*time.Millisecond {
-			fmt.Printf("Success: %d Retries: %d\n",
+			fmt.Printf("[%s] Success: %d Retries: %d\n", time.Now().Format(time.Stamp),
 				atomic.LoadUint64(&successCount), atomic.LoadUint64(&retryCount))
 			lastStatus = time.Now()
 		}
@@ -119,9 +132,10 @@ func upsert(c *dgo.Dgraph, acc account) {
 		if err == nil {
 			atomic.AddUint64(&successCount, 1)
 			return
-		}
-		if err != y.ErrAborted {
-			x.Check(err)
+		} else if err == y.ErrAborted {
+			// pass
+		} else {
+			fmt.Printf("ERROR: %v", err)
 		}
 		atomic.AddUint64(&retryCount, 1)
 	}
@@ -136,6 +150,7 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 		{
 			get(func: eq(first, %q)) @filter(eq(last, %q) AND eq(age, %d)) {
 				uid
+				expand(_all_) {uid}
 			}
 		}
 	`, acc.first, acc.last, acc.age)
@@ -150,6 +165,8 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 	x.Check(json.Unmarshal(resp.GetJson(), &decode))
 
 	x.AssertTrue(len(decode.Get) <= 1)
+	t := rand.Intn(len(types))
+
 	var uid string
 	if len(decode.Get) == 1 {
 		x.AssertTrue(decode.Get[0].Uid != nil)
@@ -159,8 +176,9 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 			_:acct <first> %q .
 			_:acct <last>  %q .
 			_:acct <age>   "%d"^^<xs:int> .
-		`,
-			acc.first, acc.last, acc.age,
+			_:acct <%s> "" .
+		 `,
+			acc.first, acc.last, acc.age, types[t],
 		)
 		mu := &api.Mutation{SetNquads: []byte(nqs)}
 		assigned, err := txn.Mutate(ctx, mu)
@@ -169,7 +187,6 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 		}
 		uid = assigned.GetUids()["acct"]
 		x.AssertTrue(uid != "")
-
 	}
 
 	nq := fmt.Sprintf(`

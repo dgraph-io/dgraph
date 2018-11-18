@@ -1,11 +1,20 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-// Package worker contains code for intern.worker communication to perform
+// Package worker contains code for pb.worker communication to perform
 // queries and mutations.
 package worker
 
@@ -15,21 +24,18 @@ import (
 	"math"
 	"net"
 	"sync"
-	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
+	"github.com/golang/glog"
 	"google.golang.org/grpc"
 )
 
 var (
-	pstore           *badger.ManagedDB
+	pstore           *badger.DB
 	workerServer     *grpc.Server
 	raftServer       conn.RaftServer
 	pendingProposals chan struct{}
@@ -43,7 +49,7 @@ func workerPort() int {
 	return x.Config.PortOffset + x.PortInternal
 }
 
-func Init(ps *badger.ManagedDB) {
+func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
 	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
@@ -56,25 +62,10 @@ func Init(ps *badger.ManagedDB) {
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
 	sync.Mutex
-	reqids map[uint64]bool
-}
-
-// addIfNotPresent returns false if it finds the reqid already present.
-// Otherwise, adds the reqid in the list, and returns true.
-func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
-	w.Lock()
-	defer w.Unlock()
-	if w.reqids == nil {
-		w.reqids = make(map[uint64]bool)
-	} else if _, has := w.reqids[reqid]; has {
-		return false
-	}
-	w.reqids[reqid] = true
-	return true
 }
 
 // RunServer initializes a tcp server on port which listens to requests from
-// other workers for intern.communication.
+// other workers for pb.communication.
 func RunServer(bindall bool) {
 	laddr := "localhost"
 	if bindall {
@@ -84,12 +75,11 @@ func RunServer(bindall bool) {
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, workerPort()))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
-		return
 	}
-	x.Printf("Worker listening at address: %v", ln.Addr())
+	glog.Infof("Worker listening at address: %v", ln.Addr())
 
-	intern.RegisterWorkerServer(workerServer, &grpcWorker{})
-	intern.RegisterRaftServer(workerServer, &raftServer)
+	pb.RegisterWorkerServer(workerServer, &grpcWorker{})
+	pb.RegisterRaftServer(workerServer, &raftServer)
 	workerServer.Serve(ln)
 }
 
@@ -100,13 +90,12 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	// Sleep for 5 seconds to ensure that commit/abort is proposed.
-	time.Sleep(5 * time.Second)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	groups().Node.Stop()        // blocking stop raft node.
-	workerServer.GracefulStop() // blocking stop server
-	groups().Node.applyAllMarks(ctx)
-	posting.StopLRUEviction()
-	groups().Node.snapshot(0)
+	glog.Infof("Stopping group...")
+	groups().closer.SignalAndWait()
+
+	glog.Infof("Stopping node...")
+	groups().Node.closer.SignalAndWait()
+
+	glog.Infof("Stopping worker server...")
+	workerServer.Stop()
 }

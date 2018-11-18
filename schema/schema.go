@@ -1,8 +1,17 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc.
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package schema
@@ -13,9 +22,10 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/protos/intern"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -23,18 +33,18 @@ import (
 
 var (
 	pstate *state
-	pstore *badger.ManagedDB
+	pstore *badger.DB
 )
 
 func (s *state) init() {
-	s.predicate = make(map[string]*intern.SchemaUpdate)
+	s.predicate = make(map[string]*pb.SchemaUpdate)
 	s.elog = trace.NewEventLog("Dgraph", "Schema")
 }
 
 type state struct {
 	sync.RWMutex
 	// Map containing predicate to type information.
-	predicate map[string]*intern.SchemaUpdate
+	predicate map[string]*pb.SchemaUpdate
 	elog      trace.EventLog
 }
 
@@ -60,7 +70,7 @@ func (s *state) Delete(attr string) error {
 	s.Lock()
 	defer s.Unlock()
 
-	x.Printf("Deleting schema for predicate: [%s]", attr)
+	glog.Infof("Deleting schema for predicate: [%s]", attr)
 	delete(s.predicate, attr)
 	txn := pstore.NewTransactionAt(1, true)
 	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
@@ -70,7 +80,7 @@ func (s *state) Delete(attr string) error {
 	return txn.CommitAt(1, nil)
 }
 
-func logUpdate(schema intern.SchemaUpdate, pred string) string {
+func logUpdate(schema pb.SchemaUpdate, pred string) string {
 	typ := types.TypeID(schema.ValueType).Name()
 	if schema.List {
 		typ = fmt.Sprintf("[%s]", typ)
@@ -82,7 +92,7 @@ func logUpdate(schema intern.SchemaUpdate, pred string) string {
 // Set sets the schema for given predicate in memory
 // schema mutations must flow through update function, which are
 // synced to db
-func (s *state) Set(pred string, schema intern.SchemaUpdate) {
+func (s *state) Set(pred string, schema pb.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
@@ -90,12 +100,12 @@ func (s *state) Set(pred string, schema intern.SchemaUpdate) {
 }
 
 // Get gets the schema for given predicate
-func (s *state) Get(pred string) (intern.SchemaUpdate, bool) {
+func (s *state) Get(pred string) (pb.SchemaUpdate, bool) {
 	s.RLock()
 	defer s.RUnlock()
 	schema, has := s.predicate[pred]
 	if !has {
-		return intern.SchemaUpdate{}, false
+		return pb.SchemaUpdate{}, false
 	}
 	return *schema, true
 }
@@ -137,7 +147,7 @@ func (s *state) IndexedFields() []string {
 func (s *state) Predicates() []string {
 	s.RLock()
 	defer s.RUnlock()
-	out := make([]string, 0, len(s.predicate))
+	var out []string
 	for k := range s.predicate {
 		out = append(out, k)
 	}
@@ -152,8 +162,8 @@ func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 	x.AssertTruef(ok, "schema state not found for %s", pred)
 	var tokenizers []tok.Tokenizer
 	for _, it := range schema.Tokenizer {
-		t, has := tok.GetTokenizer(it)
-		x.AssertTruef(has, "Invalid tokenizer %s", it)
+		t, found := tok.GetTokenizer(it)
+		x.AssertTruef(found, "Invalid tokenizer %s", it)
 		tokenizers = append(tokenizers, t)
 	}
 	return tokenizers
@@ -161,17 +171,12 @@ func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 
 // TokenizerNames returns the tokenizer names for given predicate
 func (s *state) TokenizerNames(pred string) []string {
-	s.RLock()
-	defer s.RUnlock()
-	schema, ok := s.predicate[pred]
-	x.AssertTruef(ok, "schema state not found for %s", pred)
-	var tokenizers []string
-	for _, it := range schema.Tokenizer {
-		t, found := tok.GetTokenizer(it)
-		x.AssertTruef(found, "Tokenizer not found for %s", it)
-		tokenizers = append(tokenizers, t.Name())
+	var names []string
+	tokenizers := s.Tokenizer(pred)
+	for _, t := range tokenizers {
+		names = append(names, t.Name())
 	}
-	return tokenizers
+	return names
 }
 
 // IsReversed returns whether the predicate has reverse edge or not
@@ -179,7 +184,7 @@ func (s *state) IsReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
-		return schema.Directive == intern.SchemaUpdate_REVERSE
+		return schema.Directive == pb.SchemaUpdate_REVERSE
 	}
 	return false
 }
@@ -222,7 +227,7 @@ func (s *state) HasLang(pred string) bool {
 	return false
 }
 
-func Init(ps *badger.ManagedDB) {
+func Init(ps *badger.DB) {
 	pstore = ps
 	reset()
 }
@@ -241,15 +246,17 @@ func Load(predicate string) error {
 	if err != nil {
 		return err
 	}
-	val, err := item.Value()
+	var s pb.SchemaUpdate
+	err = item.Value(func(val []byte) error {
+		x.Check(s.Unmarshal(val))
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	var s intern.SchemaUpdate
-	x.Check(s.Unmarshal(val))
 	State().Set(predicate, s)
 	State().elog.Printf(logUpdate(s, predicate))
-	x.Printf(logUpdate(s, predicate))
+	glog.Infoln(logUpdate(s, predicate))
 	return nil
 }
 
@@ -272,16 +279,18 @@ func LoadFromDb() error {
 			continue
 		}
 		attr := pk.Attr
-		var s intern.SchemaUpdate
-		val, err := item.Value()
+		var s pb.SchemaUpdate
+		err := item.Value(func(val []byte) error {
+			if len(val) == 0 {
+				return nil
+			}
+			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
+			State().Set(attr, s)
+			return nil
+		})
 		if err != nil {
 			return err
 		}
-		if len(val) == 0 {
-			continue
-		}
-		x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
-		State().Set(attr, s)
 	}
 	return nil
 }

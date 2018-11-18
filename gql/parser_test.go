@@ -1,8 +1,17 @@
 /*
- * Copyright 2015-2018 Dgraph Labs, Inc.
+ * Copyright 2015-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package gql
@@ -59,12 +68,93 @@ func TestParseVarError(t *testing.T) {
 	require.Contains(t, err.Error(), "Cannot do uid() of a variable")
 }
 
+func TestDuplicateQueryAliasesError(t *testing.T) {
+	query := `
+{
+  find_michael(func: eq(name@., "Michael")) {
+    uid
+    name@.
+    age
+  }
+    find_michael(func: eq(name@., "Amit")) {
+      uid
+      name@.
+    }
+}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+
+	queryInOpType := `
+{
+  find_michael(func: eq(name@., "Michael")) {
+    uid
+    name@.
+    age
+  }
+}
+query {find_michael(func: eq(name@., "Amit")) {
+      uid
+      name@.
+    }
+}
+`
+	_, err = Parse(Request{Str: queryInOpType})
+	require.Error(t, err)
+
+	queryWithDuplicateShortestPaths := `
+{
+ path as shortest(from: 0x1, to: 0x4) {
+  friend
+ }
+ path2 as shortest(from: 0x2, to: 0x3) {
+    friend
+ }
+ pathQuery1(func: uid(path)) {
+   name
+ }
+ pathQuery2(func: uid(path2)) {
+   name
+ }
+
+}`
+	_, err = Parse(Request{Str: queryWithDuplicateShortestPaths})
+	require.NoError(t, err)
+}
+
 func TestParseQueryListPred1(t *testing.T) {
 	query := `
 	{
 		var(func: uid( 0x0a)) {
 			friends {
 				expand(_all_)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestParseQueryExpandForward(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(_forward_)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
+func TestParseQueryExpandReverse(t *testing.T) {
+	query := `
+	{
+		var(func: uid( 0x0a)) {
+			friends {
+				expand(_reverse_)
 			}
 		}
 	}
@@ -2955,12 +3045,12 @@ func TestParseFacetsDuplicateVarError(t *testing.T) {
 func TestParseFacetsOrderVar(t *testing.T) {
 	query := `
 	query {
-		me(func: uid(0x1)) {
+		me1(func: uid(0x1)) {
 			friends @facets(orderdesc: a as b) {
 				name
 			}
 		}
-		me(func: uid(a)) { }
+		me2(func: uid(a)) { }
 	}
 `
 	_, err := Parse(Request{Str: query})
@@ -3592,6 +3682,34 @@ func TestMathWithoutVarAlias(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function math should be used with a variable or have an alias")
+}
+
+func TestMathDiv0(t *testing.T) {
+	tests := []struct {
+		in       string
+		hasError bool
+	}{
+		{`{f(func: uid(1)){x:math(1+1)}}`, false},
+		{`{f(func: uid(1)){x:math(1/0)}}`, true},
+		{`{f(func: uid(1)){x:math(1/-0)}}`, true},
+		{`{f(func: uid(1)){x:math(1/ln(1))}}`, true},
+		{`{f(func: uid(1)){x:math(1/sqrt(0))}}`, true},
+		{`{f(func: uid(1)){x:math(1/floor(0))}}`, true},
+		{`{f(func: uid(1)){x:math(1/floor(0.5))}}`, true},
+		{`{f(func: uid(1)){x:math(1/floor(1.01))}}`, false},
+		{`{f(func: uid(1)){x:math(1/ceil(0))}}`, true},
+		{`{f(func: uid(1)){x:math(1%0}}`, true},
+		{`{f(func: uid(1)){x:math(1%floor(0)}}`, true},
+		{`{f(func: uid(1)){x:math(1 + 0)}}`, false},
+	}
+	for _, tc := range tests {
+		_, err := Parse(Request{Str: tc.in})
+		if tc.hasError {
+			require.Error(t, err, "Expected an error for %q", tc.in)
+		} else {
+			require.NoError(t, err, "Unexpected error for %q: %s", tc.in, err)
+		}
+	}
 }
 
 func TestMultipleEqual(t *testing.T) {

@@ -1,8 +1,17 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc.
+ * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
  *
- * This file is available under the Apache License, Version 2.0,
- * with the Commons Clause restriction.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package main
@@ -23,6 +32,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,7 +64,7 @@ func waitForConvergence(t *testing.T, c *DgraphCluster) {
 			break
 		}
 
-		x.Println("Couldn't find leader, waiting...")
+		glog.Infoln("Couldn't find leader, waiting...")
 		time.Sleep(time.Second)
 	}
 }
@@ -108,7 +118,7 @@ func matchExportCount(opts matchExport) error {
 	if count != strconv.Itoa(opts.expectedSchema) {
 		return x.Errorf("Schema export count mismatch. Got: %s", count)
 	}
-	x.Println("Export count matched.")
+	glog.Infoln("Export count matched.")
 	return nil
 }
 
@@ -117,7 +127,7 @@ func waitForNodeToBeHealthy(t *testing.T, port int) {
 		// Ignore error, server might be unhealthy temporarily.
 		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/health", port))
 		if err != nil {
-			x.Printf("Server running on: [%v] is not up yet, waiting...\n", port)
+			glog.Infof("Server running on: [%v] is not up yet, waiting...\n", port)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -128,7 +138,7 @@ func waitForNodeToBeHealthy(t *testing.T, port int) {
 			break
 		}
 
-		x.Printf("Server running on: [%v] not healthy, retrying...\n", port)
+		glog.Infof("Server running on: [%v] not healthy, retrying...\n", port)
 		time.Sleep(2 * time.Second)
 	}
 }
@@ -140,9 +150,9 @@ func restart(cmd *exec.Cmd) error {
 	}
 
 	cmd.Process = nil
-	fmt.Println("Trying to restart Dgraph Server")
+	glog.Infoln("Trying to restart Dgraph Alpha")
 	if err := cmd.Start(); err != nil {
-		return x.Errorf("Couldn't start Dgraph server again: %v\n", err)
+		return x.Errorf("Couldn't start Dgraph alpha again: %v\n", err)
 	}
 	return nil
 }
@@ -236,7 +246,7 @@ func DONOTRUN_TestClusterSnapshot(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	cmd.Process = nil
-	fmt.Println("Trying to restart Dgraph Server")
+	glog.Infoln("Trying to restart Dgraph Alpha")
 	if err := cmd.Start(); err != nil {
 		shutdownCluster()
 		log.Fatal(err)
