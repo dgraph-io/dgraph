@@ -142,7 +142,7 @@ func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*pb.D
 			return &emptyEdge, err
 		}
 	default:
-		return &emptyEdge, errors.New("unknow value type")
+		return &emptyEdge, errors.New("unknown value type")
 	}
 	return out, nil
 }
