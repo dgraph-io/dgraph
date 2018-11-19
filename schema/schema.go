@@ -146,7 +146,7 @@ func (s *state) IndexedFields() []string {
 func (s *state) Predicates() []string {
 	s.RLock()
 	defer s.RUnlock()
-	out := make([]string, 0, len(s.predicate))
+	var out []string
 	for k := range s.predicate {
 		out = append(out, k)
 	}
@@ -161,8 +161,8 @@ func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 	x.AssertTruef(ok, "schema state not found for %s", pred)
 	var tokenizers []tok.Tokenizer
 	for _, it := range schema.Tokenizer {
-		t, has := tok.GetTokenizer(it)
-		x.AssertTruef(has, "Invalid tokenizer %s", it)
+		t, found := tok.GetTokenizer(it)
+		x.AssertTruef(found, "Invalid tokenizer %s", it)
 		tokenizers = append(tokenizers, t)
 	}
 	return tokenizers
@@ -170,17 +170,12 @@ func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 
 // TokenizerNames returns the tokenizer names for given predicate
 func (s *state) TokenizerNames(pred string) []string {
-	s.RLock()
-	defer s.RUnlock()
-	schema, ok := s.predicate[pred]
-	x.AssertTruef(ok, "schema state not found for %s", pred)
-	var tokenizers []string
-	for _, it := range schema.Tokenizer {
-		t, found := tok.GetTokenizer(it)
-		x.AssertTruef(found, "Tokenizer not found for %s", it)
-		tokenizers = append(tokenizers, t.Name())
+	var names []string
+	tokenizers := s.Tokenizer(pred)
+	for _, t := range tokenizers {
+		names = append(names, t.Name())
 	}
-	return tokenizers
+	return names
 }
 
 // IsReversed returns whether the predicate has reverse edge or not

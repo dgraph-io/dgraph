@@ -4,7 +4,7 @@ title = "Mutations"
 
 Adding or removing data in Dgraph is called a mutation.
 
-A mutation that adds triples, does so with the `set` keyword.
+A mutation that adds triples is done with the `set` keyword.
 ```
 {
   set {
@@ -260,6 +260,38 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
 
+## Mutations using cURL
+
+Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl.
+
+To run a `set` mutation:
+
+```sh
+curl -X POST localhost:8080/mutate -d $'
+{
+  set {
+    _:alice <name> "Alice" .
+  }
+}'
+```
+
+To run a `delete` mutation:
+
+```sh
+curl -X POST localhost:8080/mutate -d $'
+{
+  delete {
+    _:alice <name> "Alice" .
+  }
+}'
+```
+
+To run an RDF mutation stored in a file, use curl's `--data-binary` option so that, unlike the `-d` option, the data is not URL encoded.
+
+```
+curl -X POST localhost:8080/mutate --data-binary @mutation.txt
+```
+
 ## JSON Mutation Format
 
 Mutations can also be specified using JSON objects. This can allow mutations to
@@ -478,13 +510,13 @@ testList: [string] .
 
 ```JSON
 {
-  "testList":
-      [ "Grape",
-        "Apple",
-        "Strawberry",
-        "Banana",
-        "watermelon"
-        ]
+  "testList": [
+    "Grape",
+    "Apple",
+    "Strawberry",
+    "Banana",
+    "watermelon"
+  ]
 }
 ```
 
@@ -503,7 +535,7 @@ Let’s then remove "Apple" from this list (Remember, it’s case sensitive):
 Add another fruit:
 
 ```JSON
-{  
+{
    "uid": "0xd", #UID of the list.
    "testList": "Pineapple"
 }
@@ -511,7 +543,7 @@ Add another fruit:
 
 ### Specifying multiple operations
 
-When specifying add or delete mutations, multiple operations can be specified
+When specifying add or delete mutations, multiple nodes can be specified
 at the same time using JSON arrays.
 
 For example, the following JSON object can be used to add two new nodes, each
@@ -519,8 +551,12 @@ with a `name`:
 
 ```JSON
 [
-  { "name": "Edward" },
-  { "name": "Fredric" }
+  {
+    "name": "Edward"
+  },
+  {
+    "name": "Fredric"
+  }
 ]
 ```
 
@@ -532,18 +568,16 @@ You can also [download the Ratel UI for Linux, macOS, or Windows](https://discus
 
 Mutate:
 ```JSON
-
 {
   "set": [
-      {
-          # One JSON obj in here
-      },
-      {
-         # Another JSON obj in here for multiple operations
-      }
+    {
+      # One JSON obj in here
+    },
+    {
+      # Another JSON obj in here for multiple operations
+    }
   ]
 }
-
 ```
 
 Delete:
@@ -551,39 +585,47 @@ Delete:
 Deletion operations are the same as [Deleting literal values]({{< relref "#deleting-literal-values">}}) and [Deleting edges]({{< relref "#deleting-edges">}}).
 
 ```JSON
-
 {
   "delete": [
-      {
-          # One JSON obj in here
-      },
-      {
-         # Another JSON obj in here for multiple operations
-      }
+    {
+      # One JSON obj in here
+    },
+    {
+      # Another JSON obj in here for multiple operations
+    }
   ]
 }
-
 ```
 
 ### Using JSON operations via cURL
 
-First you have to configure the Headers. There are two in this case. One to inform Dgraph that is a JSON mutation and another to commit now.
+First you have to configure the HTTP headers. There are two in this case. One to
+inform Dgraph that is a JSON mutation and another to commit now.
 
 ```BASH
 -H 'X-Dgraph-MutationType: json'
 -H 'X-Dgraph-CommitNow: true'
 ```
 
->Ps. In order to use `jq` you need the `jq` package. See the [`jq` downloads](https://stedolan.github.io/jq/download/) page for installation details.
+{{% notice "note" %}}
+In order to use `jq` for JSON formatting you need the `jq` package. See the
+[`jq` downloads](https://stedolan.github.io/jq/download/) page for installation
+details. You can also use Python's built in `json.tool` module with `python -m
+json.tool` to do JSON formatting.
+{{% /notice %}}
 
 ```BASH
 curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
     {
       "set": [
-      {"name": "Alice"},
-      {"name": "Bob"}
-    ]
-      }' | jq
+        {
+          "name": "Alice"
+        },
+        {
+          "name": "Bob"
+        }
+      ]
+    }' | jq
 
 ```
 
@@ -593,17 +635,16 @@ To delete:
 curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
     {
       "delete": [
-      {"uid": "0xa"}
-    ]
-      }' | jq
+        {
+          "uid": "0xa"
+        }
+      ]
+    }' | jq
 ```
 
-Other way to mutate:
+Mutation with a JSON file:
 
-```BASH
-curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d $'
-    { "set":
-      [
-      { "name": "Bob Dylan" }]
-      }' | python -m json.tool | less
 ```
+curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d @data.json
+```
+

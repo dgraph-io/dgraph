@@ -73,9 +73,9 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	}
 	switch funcType {
 	case FullTextSearchFn:
-		return tok.GetTextTokens(funcArgs, lang)
+		return tok.GetFullTextTokens(funcArgs, lang)
 	default:
-		return tok.GetTokens(funcArgs)
+		return tok.GetTermTokens(funcArgs)
 	}
 }
 
@@ -128,17 +128,21 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	}
 
 	// Get the token for the value passed in function.
-	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer)
+	// XXX: the lang should be query.Langs, but it only matters in edge case test below.
+	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tok.GetLangTokenizer(tokenizer, "en"))
 	if err != nil {
 		return nil, "", err
 	}
 
-	if len(ineqTokens) == 0 {
+	switch {
+	case len(ineqTokens) == 0:
 		return nil, "", nil
-	} else if f == "eq" && (tokenizer.Name() == "term" || tokenizer.Name() == "fulltext") {
-		// Allow eq with term/fulltext tokenizers, even though they give
-		// multiple tokens.
-	} else if len(ineqTokens) > 1 {
+
+	// Allow eq with term/fulltext tokenizers, even though they give multiple tokens.
+	case f == "eq" && (tokenizer.Name() == "term" || tokenizer.Name() == "fulltext"):
+		break
+
+	case len(ineqTokens) > 1:
 		return nil, "", x.Errorf("Attribute %s does not have a valid tokenizer.", attr)
 	}
 	ineqToken := ineqTokens[0]

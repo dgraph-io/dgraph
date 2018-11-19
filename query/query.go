@@ -381,7 +381,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	}
 
 	var invalidUids map[uint64]bool
-	var facetsNode outputNode
 	// We go through all predicate children of the subprotos.
 	for _, pc := range sg.Children {
 		if pc.Params.ignoreResult {
@@ -540,9 +539,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	if sg.Params.IgnoreReflex {
 		// Lets pop the stack.
 		sg.Params.parentIds = (sg.Params.parentIds)[:len(sg.Params.parentIds)-1]
-	}
-	if facetsNode != nil && !facetsNode.IsEmpty() {
-		dst.AddMapChild("@facets", facetsNode, false)
 	}
 
 	// Only for shortest path query we wan't to return uid always if there is
