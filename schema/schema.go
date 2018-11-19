@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 
@@ -267,9 +268,13 @@ func LoadFromDb() error {
 	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
 	defer itr.Close()
 
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+	for itr.Seek(prefix); itr.Valid(); itr.Next() {
 		item := itr.Item()
-		pk := x.Parse(item.Key())
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		pk := x.Parse(key)
 		if pk == nil {
 			continue
 		}
