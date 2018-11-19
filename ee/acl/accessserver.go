@@ -3,7 +3,6 @@ package acl
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -14,11 +13,6 @@ import (
 
 // Server implements protos.DgraphAccessServer
 type AccessServer struct{}
-
-func (accessServer *AccessServer) DeleteUser(ctx context.Context,
-	request *api.DeleteUserRequest) (resp *api.DeleteUserResponse, err error) {
-	panic("implement me")
-}
 
 type AccessOptions struct {
 	HmacSecret []byte
@@ -68,47 +62,6 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 	return resp, nil
 }
 
-func (accessServer *AccessServer) CreateUser(ctx context.Context,
-	request *api.CreateUserRequest) (*api.CreateUserResponse, error) {
-	err := validateCreateUserRequest(request)
-	if err != nil {
-		glog.Errorf("Error while validating create user request: %v", err)
-		return nil, err
-	}
-
-	// initiating a transaction on the server side
-	txnContext := &api.TxnContext{}
-
-	dbUser, err := queryDBUser(ctx, txnContext, request.User.Userid)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &api.CreateUserResponse{}
-	if dbUser != nil {
-		resp.Uid = dbUser.Uid
-		resp.Code = api.AclResponseCode_CONFLICT
-		return resp, nil
-	}
-
-	createUserNQuads := getCreateUserNQuads(request)
-	mu := &api.Mutation{
-		StartTs:   txnContext.StartTs, // required so that the query and mutation is run as a single transaction
-		CommitNow: true,
-		Set:       createUserNQuads,
-	}
-
-	assignedIds, err := (&edgraph.Server{}).Mutate(ctx, mu)
-	if err != nil {
-		glog.Errorf("Unable to create user: %v", err)
-		return nil, err
-	}
-	dgo.MergeContext(txnContext, assignedIds.Context)
-
-	resp.Uid = assignedIds.Uids[x.NewUserLabel]
-	glog.Infof("Created new user with id %v", request.User.Userid)
-	return resp, nil
-}
 
 // parse the response and check existing of the uid
 type DBGroup struct {
@@ -185,29 +138,3 @@ func queryDBUser(ctx context.Context, txnContext *api.TxnContext,
 	return dbUser, nil
 }
 
-func getCreateUserNQuads(request *api.CreateUserRequest) []*api.NQuad {
-	createUserNQuads := []*api.NQuad{
-		{
-			Subject:     "_:" + x.NewUserLabel,
-			Predicate:   x.Acl_XId,
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: request.User.Userid}},
-		},
-		{
-			Subject:     "_:" + x.NewUserLabel,
-			Predicate:   x.Acl_Password,
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: request.User.Password}},
-		}}
-
-	// TODO: encode the user's attrs as a json blob and store under the x.Acl_UserBlob predicate
-	return createUserNQuads
-}
-
-func validateCreateUserRequest(request *api.CreateUserRequest) error {
-	if len(request.User.Userid) == 0 {
-		return fmt.Errorf("The userid must not be empty.")
-	}
-	if len(request.User.Password) == 0 {
-		return fmt.Errorf("The password must not be empty.")
-	}
-	return nil
-}
