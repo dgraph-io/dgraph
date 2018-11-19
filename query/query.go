@@ -210,11 +210,12 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 	if gf == nil {
 		return
 	}
-	sg.SrcFunc = new(Function)
-	sg.SrcFunc.Name = gf.Name
-	sg.SrcFunc.Args = append(sg.SrcFunc.Args, gf.Args...)
-	sg.SrcFunc.IsCount = gf.IsCount
-	sg.SrcFunc.IsValueVar = gf.IsValueVar
+	sg.SrcFunc = &Function{
+		Name:       gf.Name,
+		Args:       append(gf.Args[:0:0], gf.Args...),
+		IsCount:    gf.IsCount,
+		IsValueVar: gf.IsValueVar,
+	}
 	if gf.Lang != "" {
 		sg.Params.Langs = append(sg.Params.Langs, gf.Lang)
 	}
@@ -1600,6 +1601,8 @@ func (sg *SubGraph) replaceVarInFunc() error {
 			}
 			if _, ok := seenArgs[data.Value.(string)]; ok {
 				continue
+			} else {
+				seenArgs[data.Value.(string)] = struct{}{}
 			}
 			args = append(args, gql.Arg{Value: data.Value.(string)})
 		}
