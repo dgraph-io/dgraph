@@ -87,6 +87,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		defer n.Proposals.Delete(key)
 		proposal.Key = key
 
+		// TODO: Remove this and use OpenCensus spans.
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Proposing with key: %X", key)
 		}
@@ -529,7 +530,6 @@ func (n *node) Run() {
 				n.Applied.Done(entry.Index)
 			}
 
-			// TODO: Should we move this to the top?
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
 					glog.Infoln("I've become the leader, updating leases.")
