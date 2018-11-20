@@ -689,7 +689,8 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			Facet:          gchild.Facets,
 		}
 
-		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
+		args.NeedsVar = append(gchild.NeedsVar[:0:0], gchild.NeedsVar...)
+
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
 				return errors.New("Node with count cannot have child attributes")
@@ -999,17 +1000,19 @@ type varValue struct {
 }
 
 func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (map[uint64]types.Val, error) {
+	var mp map[uint64]types.Val
+
 	if parent == nil {
 		return nil, ErrWrongAgg
 	}
 
 	needsVar := sg.Params.NeedsVar[0].Name
-	mp := make(map[uint64]types.Val)
 	if parent.Params.IsEmpty {
 		// The aggregated value doesn't really belong to a uid, we put it in uidToVal map
 		// corresponding to uid 0 to avoid defining another field in SubGraph.
 		vals := doneVars[needsVar].Vals
 		if len(vals) == 0 {
+			mp = make(map[uint64]types.Val)
 			mp[0] = types.Val{Tid: types.FloatID, Value: 0.0}
 			return mp, nil
 		}
@@ -1025,6 +1028,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (map[uint6
 			return nil, err
 		}
 		if v.Value != nil {
+			mp = make(map[uint64]types.Val)
 			mp[0] = v
 		}
 		return mp, nil
@@ -1067,6 +1071,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (map[uint6
 			return nil, err
 		}
 		if v.Value != nil {
+			mp = make(map[uint64]types.Val)
 			mp[relSG.SrcUIDs.Uids[i]] = v
 		}
 	}
@@ -1599,12 +1604,12 @@ func (sg *SubGraph) replaceVarInFunc() error {
 			if err := types.Marshal(v, &data); err != nil {
 				return err
 			}
-			if _, ok := seenArgs[data.Value.(string)]; ok {
+			val := data.Value.(string)
+			if _, ok := seenArgs[val]; ok {
 				continue
-			} else {
-				seenArgs[data.Value.(string)] = struct{}{}
 			}
-			args = append(args, gql.Arg{Value: data.Value.(string)})
+			seenArgs[val] = struct{}{}
+			args = append(args, gql.Arg{Value: val})
 		}
 	}
 	sg.SrcFunc.Args = args
@@ -2337,7 +2342,7 @@ func getNodePredicates(ctx context.Context, sg *SubGraph) ([]*pb.ValueList, erro
 }
 
 func GetAllPredicates(subGraphs []*SubGraph) []string {
-	predicatesMap := make(map[string]bool)
+	predicatesMap := make(map[string]struct{})
 	for _, sg := range subGraphs {
 		sg.getAllPredicates(predicatesMap)
 	}
@@ -2348,15 +2353,15 @@ func GetAllPredicates(subGraphs []*SubGraph) []string {
 	return predicates
 }
 
-func (sg *SubGraph) getAllPredicates(predicates map[string]bool) {
+func (sg *SubGraph) getAllPredicates(predicates map[string]struct{}) {
 	if len(sg.Attr) != 0 {
-		predicates[sg.Attr] = true
+		predicates[sg.Attr] = struct{}{}
 	}
 	for _, o := range sg.Params.Order {
-		predicates[o.Attr] = true
+		predicates[o.Attr] = struct{}{}
 	}
 	for _, pred := range sg.Params.groupbyAttrs {
-		predicates[pred.Attr] = true
+		predicates[pred.Attr] = struct{}{}
 	}
 	for _, filter := range sg.Filters {
 		filter.getAllPredicates(predicates)
