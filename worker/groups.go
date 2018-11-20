@@ -852,7 +852,7 @@ func (g *groupi) processOracleDeltaStream() {
 			})
 			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
 			if glog.V(2) {
-				glog.Infof("Batched %d updates. Proposing Deltas:", batch)
+				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:", batch, delta.MaxAssigned)
 				for _, txn := range delta.Txns {
 					if txn.CommitTs == 0 {
 						glog.Infof("Aborted: %d", txn.StartTs)

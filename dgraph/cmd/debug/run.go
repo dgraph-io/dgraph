@@ -161,7 +161,7 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 	var total int
 	for uid, key := range keys {
 		a := readAmount(txn, uid)
-		fmt.Printf("uid: %-5d key: %d amount: %d\n", uid, key, a)
+		fmt.Printf("uid: %-5d %x key: %d amount: %d\n", uid, uid, key, a)
 		total += a
 	}
 	fmt.Printf("Total @ %d = %d\n", readTs, total)
