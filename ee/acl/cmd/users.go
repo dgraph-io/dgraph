@@ -24,8 +24,7 @@ func userAdd(dc *dgo.Dgraph) error {
 
 	err := validateAclUser(&aclUser)
 	if err != nil {
-		glog.Errorf("Error while validating create user request: %v", err)
-		return err
+		return fmt.Errorf("Error while validating create user request: %v", err)
 	}
 
 	ctx := context.Background()
@@ -50,8 +49,7 @@ func userAdd(dc *dgo.Dgraph) error {
 
 	_, err = txn.Mutate(ctx, mu)
 	if err != nil {
-		glog.Errorf("Unable to create user: %v", err)
-		return err
+		return fmt.Errorf("Unable to create user: %v", err)
 	}
 
 	glog.Infof("Created new user with id %v", aclUser.Userid)
@@ -87,8 +85,7 @@ func userDel(dc *dgo.Dgraph) error {
 
 	_, err = txn.Mutate(ctx, mu)
 	if err != nil {
-		glog.Errorf("Unable to delete user: %v", err)
-		return err
+		return fmt.Errorf("Unable to delete user: %v", err)
 	}
 
 	glog.Infof("Deleted user with id %v", userid)
@@ -102,11 +99,10 @@ func userLogin(dc *dgo.Dgraph) error {
 	}
 
 	ctx := context.Background()
-	glog.Infof("Logging with user:%+v", aclUser)
+
 	err := dc.Login(ctx, aclUser.Userid, aclUser.Password)
 	if err != nil {
-		glog.Errorf("Unable to login:%v", err)
-		return err
+		return fmt.Errorf("Unable to login:%v", err)
 	}
 	glog.Infof("Login successfully with jwt:\n%v", dc.GetJwt())
 	return nil
@@ -137,8 +133,7 @@ func queryDBUser(txn *dgo.Txn, ctx context.Context, userid string) (dbUser *DBUs
 
 	queryResp, err := txn.QueryWithVars(ctx, queryUid, queryVars)
 	if err != nil {
-		glog.Errorf("Error while query user with id %s: %v", userid, err)
-		return nil, err
+		return nil, fmt.Errorf("Error while query user with id %s: %v", userid, err)
 	}
 	dbUser, err = UnmarshallDBUser(queryResp, "user")
 	if err != nil {
@@ -153,8 +148,7 @@ func UnmarshallDBUser(queryResp *api.Response, userKey string) (dbUser *DBUser, 
 
 	err = json.Unmarshal(queryResp.GetJson(), &m)
 	if err != nil {
-		glog.Errorf("Unable to unmarshal the query user response for user")
-		return nil, err
+		return nil, fmt.Errorf("Unable to unmarshal the query user response for user")
 	}
 	users := m[userKey]
 	if len(users) == 0 {
@@ -168,12 +162,12 @@ func UnmarshallDBUser(queryResp *api.Response, userKey string) (dbUser *DBUser, 
 func getCreateUserNQuads(userid string, password string) []*api.NQuad {
 	createUserNQuads := []*api.NQuad{
 		{
-			Subject:     "_:" + x.NewUserLabel,
+			Subject:     "_:" + x.NewEntityLabel,
 			Predicate:   x.Acl_XId,
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: userid}},
 		},
 		{
-			Subject:     "_:" + x.NewUserLabel,
+			Subject:     "_:" + x.NewEntityLabel,
 			Predicate:   x.Acl_Password,
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: password}},
 		}}

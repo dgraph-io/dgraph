@@ -24,6 +24,8 @@ var UserAdd x.SubCommand
 var UserDel x.SubCommand
 var LogIn x.SubCommand
 
+var GroupAdd x.SubCommand
+
 const (
 	tlsAclCert = "client.acl.crt"
 	tlsAclKey  = "client.acl.key"
@@ -45,7 +47,7 @@ func init() {
 	initSubcommands()
 
 	var subcommands = []*x.SubCommand{
-		&UserAdd, &UserDel, &LogIn,
+		&UserAdd, &UserDel, &LogIn, &GroupAdd,
 	}
 
 	for _, sc := range subcommands {
@@ -58,7 +60,7 @@ func init() {
 }
 
 func initSubcommands() {
-	// add sub commands under acl
+	// user creation command
 	UserAdd.Cmd = &cobra.Command{
 		Use:   "useradd",
 		Short: "Run Dgraph acl tool to add a user",
@@ -81,6 +83,7 @@ func initSubcommands() {
 	userDelFlags := UserDel.Cmd.Flags()
 	userDelFlags.StringP("user", "u", "", "The user id to be deleted")
 
+	// login command
 	LogIn.Cmd = &cobra.Command{
 		Use:   "login",
 		Short: "Login to dgraph in order to get a jwt token",
@@ -91,12 +94,24 @@ func initSubcommands() {
 	loginFlags := LogIn.Cmd.Flags()
 	loginFlags.StringP("user", "u", "", "The user id to be created")
 	loginFlags.StringP("password", "p", "", "The password for the user")
+
+	// group creation command
+	GroupAdd.Cmd = &cobra.Command{
+		Use:   "groupadd",
+		Short: "Run Dgraph acl tool to add a group",
+		Run: func(cmd *cobra.Command, args []string) {
+			runTxn(GroupAdd.Conf, groupAdd)
+		},
+	}
+	groupAddFlags := GroupAdd.Cmd.Flags()
+	groupAddFlags.StringP("group", "g", "", "The group id to be created")
 }
 
 func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 	opt = options{
 		dgraph: conf.GetString("dgraph"),
 	}
+	glog.Infof("running transaction with dgraph endpoint: %v", opt.dgraph)
 
 	if len(opt.dgraph) == 0 {
 		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
@@ -119,6 +134,7 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 	dgraphClient := dgo.NewDgraphClient(clients...)
 	dgraphClient.SetAccessClients(accessClients...)
 	if err := f(dgraphClient); err != nil {
+		glog.Errorf("error while running transaction: %v", err)
 		os.Exit(1)
 	}
 }

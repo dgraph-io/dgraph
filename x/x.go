@@ -23,8 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -33,6 +31,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"golang.org/x/net/trace"
 )
@@ -73,13 +74,12 @@ const (
 )
 
 const (
-	NewUserLabel string = "newuser"
-	Acl_XId      string = "dgraph.xid"
-	Acl_Password string = "dgraph.password"
+	NewEntityLabel  string = "newid"
+	Acl_XId       string = "dgraph.xid"
+	Acl_Password  string = "dgraph.password"
 	Acl_UserGroup string = "dgraph.user.group"
-	Acl_UserBlob string = "dgraph.userblob"
+	Acl_UserBlob  string = "dgraph.userblob"
 )
-
 
 var (
 	// Useful for running multiple servers on the same machine.
@@ -181,7 +181,7 @@ func Max(a, b uint64) uint64 {
 }
 
 func RetryUntilSuccess(maxRetries int, sleepDurationOnFailure time.Duration,
-	f func() error) error  {
+	f func() error) error {
 	var err error
 	for retry := maxRetries; retry != 0; retry-- {
 		if err = f(); err == nil {
@@ -442,4 +442,3 @@ func SetupConnection(host string, insecure bool, tlsConf *TLSHelperConfig,
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
 }
-
