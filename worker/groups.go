@@ -545,6 +545,8 @@ func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
 }
 
 // TODO: This function needs to be refactored into smaller functions. It gets hard to reason about.
+// TODO: The updates have to be sent to Zero leader. But, the membership update receives can be from
+// any Zero server. Let's break that up into two different endpoints.
 func (g *groupi) periodicMembershipUpdate() {
 	defer g.closer.Done() // CLOSER:1
 
