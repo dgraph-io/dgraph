@@ -136,6 +136,10 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 
 	rc := pb.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
 	m := conn.NewNode(&rc, store)
+
+	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
+	// were calculated in a previous Zero leader.
+	m.Cfg.DisableProposalForwarding = true
 	st.rs = &conn.RaftServer{Node: m}
 
 	st.node = &node{Node: m, ctx: context.Background(), stop: make(chan struct{})}

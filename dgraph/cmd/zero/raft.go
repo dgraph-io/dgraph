@@ -70,6 +70,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 	}
 
 	propose := func(timeout time.Duration) error {
+		if !n.AmLeader() {
+			return x.Errorf("Not Zero leader. Aborting proposal: %+v", proposal)
+		}
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 

@@ -92,26 +92,37 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	glog.Infof("Current Raft Id: %d\n", Config.RaftId)
 
 	// Successfully connect with dgraphzero, before doing anything else.
-	p := conn.Get().Connect(Config.ZeroAddr)
 
-	// Connect with dgraphzero and figure out what group we should belong to.
-	zc := pb.NewZeroClient(p.Get())
-	var connState *pb.ConnectionState
+	// Connect with Zero leader and figure out what group we should belong to.
 	m := &pb.Member{Id: Config.RaftId, Addr: Config.MyAddr}
-	delay := 50 * time.Millisecond
-	maxHalfDelay := 3 * time.Second
+	var connState *pb.ConnectionState
 	var err error
-	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+	for {
+		pl := gr.connToZeroLeader(Config.ZeroAddr)
+		if pl == nil {
+			continue
+		}
+		zc := pb.NewZeroClient(pl.Get())
 		connState, err = zc.Connect(gr.ctx, m)
 		if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
 			break
 		}
-		glog.Errorf("Error while connecting with group zero: %v", err)
-		time.Sleep(delay)
-		if delay <= maxHalfDelay {
-			delay *= 2
-		}
 	}
+
+	// delay := 50 * time.Millisecond
+	// maxHalfDelay := 3 * time.Second
+	// var err error
+	// for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+	// 	connState, err = zc.Connect(gr.ctx, m)
+	// 	if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
+	// 		break
+	// 	}
+	// 	glog.Errorf("Error while connecting with group zero: %v", err)
+	// 	time.Sleep(delay)
+	// 	if delay <= maxHalfDelay {
+	// 		delay *= 2
+	// 	}
+	// }
 	x.CheckfNoTrace(err)
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
@@ -121,8 +132,6 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
 	// not get any data.
-	// TODO: Do we really need this?
-	// posting.Oracle().SetMaxPending(connState.MaxPending)
 	gr.applyState(connState.GetState())
 
 	gid := gr.groupId()
@@ -352,7 +361,7 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
-	pl := g.AnyServer(0)
+	pl := g.Leader(0)
 	if pl == nil {
 		return nil
 	}
@@ -494,7 +503,7 @@ func (g *groupi) triggerMembershipSync() {
 
 const connBaseDelay = 100 * time.Millisecond
 
-func (g *groupi) connToZeroLeader() *conn.Pool {
+func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
 	pl := g.Leader(0)
 	if pl != nil {
 		return pl
@@ -509,10 +518,15 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		if delay <= maxHalfDelay {
 			delay *= 2
 		}
-		pl := g.AnyServer(0)
-		if pl == nil {
-			glog.V(1).Infof("No healthy Zero server found. Retrying...")
-			continue
+		var pl *conn.Pool
+		if len(addr) > 0 {
+			pl = conn.Get().Connect(addr)
+		} else {
+			pl = g.AnyServer(0)
+			if pl == nil {
+				glog.V(1).Infof("No healthy Zero server found. Retrying...")
+				continue
+			}
 		}
 		zc := pb.NewZeroClient(pl.Get())
 		connState, err := zc.Connect(gr.ctx, &pb.Member{ClusterInfoOnly: true})
@@ -552,7 +566,7 @@ START:
 	default:
 	}
 
-	pl := g.connToZeroLeader()
+	pl := g.connToZeroLeader("")
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		glog.Warningln("Membership update: No Zero server known.")
