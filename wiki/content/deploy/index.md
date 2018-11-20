@@ -681,7 +681,7 @@ You would need to edit the `docker-machine` security group to open inbound traff
 If you are on AWS, below is the security group (**docker-machine**) after necessary changes.
 
 
-![AWS Security Group](./aws.png)
+![AWS Security Group](./images/aws.png)
 
 Copy the following file on your host machine and name it as docker-compose.yml
 
