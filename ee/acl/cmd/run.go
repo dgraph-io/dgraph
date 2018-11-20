@@ -1,14 +1,15 @@
 package acl
 
 import (
+	"os"
+	"strings"
+
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"os"
-	"strings"
 )
 
 type options struct {
@@ -20,6 +21,7 @@ var tlsConf x.TLSHelperConfig
 
 var Acl x.SubCommand
 var UserAdd x.SubCommand
+var UserDel x.SubCommand
 var LogIn x.SubCommand
 
 const (
@@ -29,7 +31,7 @@ const (
 
 func init() {
 	Acl.Cmd = &cobra.Command{
-		Use: "acl",
+		Use:   "acl",
 		Short: "Run the Dgraph acl tool",
 	}
 
@@ -42,8 +44,8 @@ func init() {
 
 	initSubcommands()
 
-	var subcommands = []*x.SubCommand {
-		&UserAdd, &LogIn,
+	var subcommands = []*x.SubCommand{
+		&UserAdd, &UserDel, &LogIn,
 	}
 
 	for _, sc := range subcommands {
@@ -68,8 +70,19 @@ func initSubcommands() {
 	userAddFlags.StringP("user", "u", "", "The user id to be created")
 	userAddFlags.StringP("password", "p", "", "The password for the user")
 
+	// user deletion command
+	UserDel.Cmd = &cobra.Command{
+		Use:   "userdel",
+		Short: "Run Dgraph acl tool to delete a user",
+		Run: func(cmd *cobra.Command, args []string) {
+			runTxn(UserDel.Conf, userDel)
+		},
+	}
+	userDelFlags := UserDel.Cmd.Flags()
+	userDelFlags.StringP("user", "u", "", "The user id to be deleted")
+
 	LogIn.Cmd = &cobra.Command{
-		Use: "login",
+		Use:   "login",
 		Short: "Login to dgraph in order to get a jwt token",
 		Run: func(cmd *cobra.Command, args []string) {
 			runTxn(LogIn.Conf, userLogin)
@@ -110,11 +123,8 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 	}
 }
 
-
-
 // parse the response and check existing of the uid
 type DBGroup struct {
-	Uid string `json:"uid"`
+	Uid     string `json:"uid"`
 	GroupID string `json:"dgraph.xid"`
 }
-

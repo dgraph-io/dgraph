@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
@@ -11,13 +12,13 @@ import (
 )
 
 type AclUser struct {
-	Userid string
+	Userid   string
 	Password string
 }
 
 func userAdd(dc *dgo.Dgraph) error {
 	aclUser := AclUser{
-		Userid: UserAdd.Conf.GetString("user"),
+		Userid:   UserAdd.Conf.GetString("user"),
 		Password: UserAdd.Conf.GetString("password"),
 	}
 
@@ -57,16 +58,54 @@ func userAdd(dc *dgo.Dgraph) error {
 	return nil
 }
 
+func userDel(dc *dgo.Dgraph) error {
+	userid := UserDel.Conf.GetString("user")
+	// validate the userid
+	if len(userid) == 0 {
+		return fmt.Errorf("the user id should not be empty")
+	}
+
+	ctx := context.Background()
+	txn := dc.NewTxn()
+	defer txn.Discard(ctx)
+
+	dbUser, err := queryDBUser(txn, ctx, userid)
+	if err != nil {
+		return err
+	}
+	glog.Infof("Got xid %v for user %v", dbUser.Uid, userid)
+
+	if dbUser == nil || len(dbUser.Uid) == 0 {
+		glog.Infof("The user with id %v does not exist.", userid)
+		return fmt.Errorf("Unable to delete user because it does not exist: %v", userid)
+	}
+
+	deleteUserNQuads := getDeleteUserOrGroupNQuads(dbUser.Uid)
+	mu := &api.Mutation{
+		CommitNow: true,
+		Del:       deleteUserNQuads,
+	}
+
+	_, err = txn.Mutate(ctx, mu)
+	if err != nil {
+		glog.Errorf("Unable to delete user: %v", err)
+		return err
+	}
+
+	glog.Infof("Deleted user with id %v", userid)
+	return nil
+}
+
 func userLogin(dc *dgo.Dgraph) error {
 	aclUser := AclUser{
-		Userid: UserAdd.Conf.GetString("user"),
+		Userid:   UserAdd.Conf.GetString("user"),
 		Password: UserAdd.Conf.GetString("password"),
 	}
 
 	ctx := context.Background()
 	err := dc.Login(ctx, aclUser.Userid, aclUser.Password)
 	if err != nil {
-		glog.Errorf("Unable to login:", err)
+		glog.Errorf("Unable to login:%v", err)
 		return err
 	}
 	glog.Info("Login successfully with jwt:\n%v", dc.GetJwt())
@@ -74,10 +113,10 @@ func userLogin(dc *dgo.Dgraph) error {
 }
 
 type DBUser struct {
-	Uid string `json:"uid"`
-	UserID string `json:"dgraph.xid"`
-	Password string `json:"dgraph.password"`
-	Groups []DBGroup `json:"dgraph.user.group"`
+	Uid      string    `json:"uid"`
+	UserID   string    `json:"dgraph.xid"`
+	Password string    `json:"dgraph.password"`
+	Groups   []DBGroup `json:"dgraph.user.group"`
 }
 
 func queryDBUser(txn *dgo.Txn, ctx context.Context, userid string) (dbUser *DBUser, err error) {
@@ -85,8 +124,8 @@ func queryDBUser(txn *dgo.Txn, ctx context.Context, userid string) (dbUser *DBUs
     query search($userid: string){
       user(func: eq(` + x.Acl_XId + `, $userid)) {
 	    uid,
-        `+x.Acl_Password+`
-        `+x.Acl_UserGroup+` {
+        ` + x.Acl_Password + `
+        ` + x.Acl_UserGroup + ` {
           uid
           dgraph.xid
         }
@@ -140,8 +179,18 @@ func getCreateUserNQuads(userid string, password string) []*api.NQuad {
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: password}},
 		}}
 
-	// TODO: encode the user's attrs as a json blob and store under the x.Acl_UserBlob predicate
 	return createUserNQuads
+}
+
+func getDeleteUserOrGroupNQuads(xid string) []*api.NQuad {
+	deleteUserNQuads := []*api.NQuad{
+		{
+			Subject:     xid,
+			Predicate:   x.Star,
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
+		}}
+
+	return deleteUserNQuads
 }
 
 func validateAclUser(aclUser *AclUser) error {
@@ -153,5 +202,3 @@ func validateAclUser(aclUser *AclUser) error {
 	}
 	return nil
 }
-
-

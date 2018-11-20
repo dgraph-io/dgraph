@@ -384,6 +384,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 		Edges:   edges,
 		StartTs: mu.StartTs,
 	}
+	glog.Infof("About to apply mutation:%+v", m)
 	span.Annotate(nil, "Applying mutations")
 	resp.Context, err = query.ApplyMutations(ctx, m)
 	if !mu.CommitNow {
