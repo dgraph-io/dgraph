@@ -73,7 +73,6 @@ func userDel(dc *dgo.Dgraph) error {
 	}
 
 	if dbUser == nil || len(dbUser.Uid) == 0 {
-		glog.Infof("The user with id %v does not exist.", userid)
 		return fmt.Errorf("Unable to delete user because it does not exist: %v", userid)
 	}
 

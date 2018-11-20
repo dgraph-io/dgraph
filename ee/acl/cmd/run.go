@@ -25,6 +25,7 @@ var UserDel x.SubCommand
 var LogIn x.SubCommand
 
 var GroupAdd x.SubCommand
+var GroupDel x.SubCommand
 
 const (
 	tlsAclCert = "client.acl.crt"
@@ -47,7 +48,7 @@ func init() {
 	initSubcommands()
 
 	var subcommands = []*x.SubCommand{
-		&UserAdd, &UserDel, &LogIn, &GroupAdd,
+		&UserAdd, &UserDel, &LogIn, &GroupAdd, &GroupDel,
 	}
 
 	for _, sc := range subcommands {
@@ -105,6 +106,18 @@ func initSubcommands() {
 	}
 	groupAddFlags := GroupAdd.Cmd.Flags()
 	groupAddFlags.StringP("group", "g", "", "The group id to be created")
+
+	// group deletion command
+	GroupDel.Cmd = &cobra.Command{
+		Use:   "groupdel",
+		Short: "Run Dgraph acl tool to delete a group",
+		Run: func(cmd *cobra.Command, args []string) {
+			runTxn(GroupDel.Conf, groupDel)
+		},
+	}
+	groupDelFlags := GroupDel.Cmd.Flags()
+	groupDelFlags.StringP("group", "g", "", "The group id to be deleted")
+
 }
 
 func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
