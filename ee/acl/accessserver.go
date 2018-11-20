@@ -2,12 +2,14 @@ package acl
 
 import (
 	"context"
+	"fmt"
+	"time"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/acl/cmd"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"time"
 )
 
 // Server implements protos.DgraphAccessServer
@@ -25,6 +27,12 @@ func SetAccessConfiguration(newConfig AccessOptions) {
 
 func (accessServer *AccessServer) LogIn(ctx context.Context,
 	request *api.LogInRequest) (*api.LogInResponse, error) {
+	glog.Infof("login request:%+v", request)
+	err := validateLoginRequest(request)
+	if err != nil {
+		return nil, err
+	}
+
 	resp := &api.LogInResponse{
 		Context: &api.TxnContext{},
 	}
@@ -33,6 +41,17 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 	if err != nil {
 		glog.Infof("Unable to login user with user id: %v", request.Userid)
 		return nil, err
+	}
+	if dbUser == nil {
+		errMsg := fmt.Sprintf("user not found for user id %v", request.Userid)
+		glog.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
+	if len(dbUser.Password) == 0 {
+		errMsg := "Unable to authenticate since the user's password is empty"
+		glog.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 
 	if dbUser.Password != request.Password {
@@ -43,13 +62,12 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 
 	jwt := &Jwt{
 		Header: StdJwtHeader,
-		Payload:JwtPayload{
+		Payload: JwtPayload{
 			Userid: request.Userid,
 			Groups: toJwtGroups(dbUser.Groups),
-			Exp: time.Now().AddDate(0, 0, 30).Unix(), // set the jwt valid for 30 days
+			Exp:    time.Now().AddDate(0, 0, 30).Unix(), // set the jwt valid for 30 days
 		},
 	}
-
 
 	resp.Context.Jwt, err = jwt.EncodeToString(accessConfig.HmacSecret)
 	if err != nil {
@@ -60,13 +78,26 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 	return resp, nil
 }
 
+func validateLoginRequest(request *api.LogInRequest) error {
+	if request == nil {
+		return fmt.Errorf("the request should not be nil")
+	}
+	if len(request.Userid) == 0 {
+		return fmt.Errorf("the userid should not be empty")
+	}
+	if len(request.Password) == 0 {
+		return fmt.Errorf("the password should not be empty")
+	}
+	return nil
+}
+
 func queryDBUser(ctx context.Context, userid string) (dbUser *acl.DBUser, err error) {
 	queryUid := `
     query search($userid: string){
       user(func: eq(` + x.Acl_XId + `, $userid)) {
 	    uid,
-        `+x.Acl_Password+`
-        `+x.Acl_UserGroup+` {
+        ` + x.Acl_Password + `
+        ` + x.Acl_UserGroup + ` {
           uid
           dgraph.xid
         }
@@ -76,8 +107,8 @@ func queryDBUser(ctx context.Context, userid string) (dbUser *acl.DBUser, err er
 	queryVars := make(map[string]string)
 	queryVars["$userid"] = userid
 	queryRequest := api.Request{
-		Query:    queryUid,
-		Vars:     queryVars,
+		Query: queryUid,
+		Vars:  queryVars,
 	}
 
 	queryResp, err := (&edgraph.Server{}).Query(ctx, &queryRequest)
@@ -97,13 +128,9 @@ func toJwtGroups(groups []acl.DBGroup) []JwtGroup {
 
 	for _, g := range groups {
 		jwtGroups = append(jwtGroups, JwtGroup{
-			Group: g.GroupID,
+			Group:       g.GroupID,
 			Wildcardacl: "", // TODO set it to the wild card acl returned from DB
 		})
 	}
 	return jwtGroups
 }
-
-
-
-

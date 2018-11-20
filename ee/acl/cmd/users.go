@@ -73,7 +73,6 @@ func userDel(dc *dgo.Dgraph) error {
 	if err != nil {
 		return err
 	}
-	glog.Infof("Got xid %v for user %v", dbUser.Uid, userid)
 
 	if dbUser == nil || len(dbUser.Uid) == 0 {
 		glog.Infof("The user with id %v does not exist.", userid)
@@ -98,17 +97,18 @@ func userDel(dc *dgo.Dgraph) error {
 
 func userLogin(dc *dgo.Dgraph) error {
 	aclUser := AclUser{
-		Userid:   UserAdd.Conf.GetString("user"),
-		Password: UserAdd.Conf.GetString("password"),
+		Userid:   LogIn.Conf.GetString("user"),
+		Password: LogIn.Conf.GetString("password"),
 	}
 
 	ctx := context.Background()
+	glog.Infof("Logging with user:%+v", aclUser)
 	err := dc.Login(ctx, aclUser.Userid, aclUser.Password)
 	if err != nil {
 		glog.Errorf("Unable to login:%v", err)
 		return err
 	}
-	glog.Info("Login successfully with jwt:\n%v", dc.GetJwt())
+	glog.Infof("Login successfully with jwt:\n%v", dc.GetJwt())
 	return nil
 }
 
@@ -162,8 +162,7 @@ func UnmarshallDBUser(queryResp *api.Response, userKey string) (dbUser *DBUser, 
 		return nil, nil
 	}
 
-	dbUser = &users[0]
-	return dbUser, nil
+	return &users[0], nil
 }
 
 func getCreateUserNQuads(userid string, password string) []*api.NQuad {
