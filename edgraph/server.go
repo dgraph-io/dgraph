@@ -527,18 +527,9 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	if tc.StartTs == 0 {
 		return &api.TxnContext{}, fmt.Errorf("StartTs cannot be zero while committing a transaction.")
 	}
+	annotateStartTs(span, tc.StartTs)
 
 	span.Annotatef(nil, "Txn Context received: %+v", tc)
-	var attrs []otrace.Attribute
-	for _, key := range tc.Keys {
-		attrs = append(attrs, otrace.StringAttribute("conflict", key))
-	}
-	for _, pred := range tc.Preds {
-		attrs = append(attrs, otrace.StringAttribute("pred", pred))
-	}
-	span.Annotate(attrs, "Conflict Keys and Preds")
-
-	annotateStartTs(span, tc.StartTs)
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == y.ErrAborted {
 		tctx.Aborted = true

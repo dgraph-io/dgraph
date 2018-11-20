@@ -598,7 +598,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	}
 	if span != nil {
 		maxAssigned := posting.Oracle().MaxAssigned()
-		span.Annotatef(nil, "Done waiting for maxAssigned to catch up for Attr %q, readTs: %d max: %d\n",
+		span.Annotatef(nil, "Done waiting for maxAssigned. Attr: %q ReadTs: %d Max: %d",
 			q.Attr, q.ReadTs, maxAssigned)
 	}
 

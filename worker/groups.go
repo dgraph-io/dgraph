@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
@@ -97,7 +96,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	m := &pb.Member{Id: Config.RaftId, Addr: Config.MyAddr}
 	var connState *pb.ConnectionState
 	var err error
-	for {
+	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
 		pl := gr.connToZeroLeader(Config.ZeroAddr)
 		if pl == nil {
 			continue
@@ -108,21 +107,6 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 			break
 		}
 	}
-
-	// delay := 50 * time.Millisecond
-	// maxHalfDelay := 3 * time.Second
-	// var err error
-	// for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
-	// 	connState, err = zc.Connect(gr.ctx, m)
-	// 	if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
-	// 		break
-	// 	}
-	// 	glog.Errorf("Error while connecting with group zero: %v", err)
-	// 	time.Sleep(delay)
-	// 	if delay <= maxHalfDelay {
-	// 		delay *= 2
-	// 	}
-	// }
 	x.CheckfNoTrace(err)
 	if connState.GetMember() == nil || connState.GetState() == nil {
 		x.Fatalf("Unable to join cluster via dgraphzero")
@@ -521,7 +505,8 @@ func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
 		var pl *conn.Pool
 		if len(addr) > 0 {
 			pl = conn.Get().Connect(addr)
-		} else {
+		}
+		if pl == nil {
 			pl = g.AnyServer(0)
 			if pl == nil {
 				glog.V(1).Infof("No healthy Zero server found. Retrying...")
@@ -799,15 +784,12 @@ func (g *groupi) processOracleDeltaStream() {
 	defer ticker.Stop()
 
 	blockingReceiveAndPropose := func() {
-		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
-		defer elog.Finish()
 		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
 			g.Node.Id, g.groupId())
 
 		pl := g.Leader(0)
 		if pl == nil {
 			glog.Warningln("Oracle delta stream: No Zero leader known.")
-			elog.Errorf("Dgraph zero leader address unknown")
 			time.Sleep(time.Second)
 			return
 		}
@@ -826,7 +808,6 @@ func (g *groupi) processOracleDeltaStream() {
 		stream, err := c.Oracle(ctx, &api.Payload{})
 		if err != nil {
 			glog.Errorf("Error while calling Oracle %v\n", err)
-			elog.Errorf("Error while calling Oracle %v", err)
 			time.Sleep(time.Second)
 			return
 		}
@@ -907,9 +888,9 @@ func (g *groupi) processOracleDeltaStream() {
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
-			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
 			if glog.V(2) {
-				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:", batch, delta.MaxAssigned)
+				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:",
+					batch, delta.MaxAssigned)
 				for _, txn := range delta.Txns {
 					if txn.CommitTs == 0 {
 						glog.Infof("Aborted: %d", txn.StartTs)

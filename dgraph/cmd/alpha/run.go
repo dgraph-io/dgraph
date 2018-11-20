@@ -94,7 +94,6 @@ they form a Raft group and provide synchronous replication.
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
-	// flag.String("jaeger.agent", "", "Send opencensus traces to Jaeger.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")

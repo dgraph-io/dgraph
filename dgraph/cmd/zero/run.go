@@ -90,7 +90,6 @@ instances to achieve high-availability.
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
-	// flag.String("jaeger.agent", "", "Send opencensus traces to Jaeger.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 }
 

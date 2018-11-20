@@ -532,8 +532,7 @@ func (n *node) Run() {
 			// TODO: Should we move this to the top?
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
-					// I've become the leader.
-					glog.Infoln("I've become the leader, updating leases")
+					glog.Infoln("I've become the leader, updating leases.")
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader
