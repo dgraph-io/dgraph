@@ -27,7 +27,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/y"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -565,7 +564,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 
 		le := pl.Length(r.startTs, 0)
 		if le == 0 {
-			y.AssertTruef(le > 0, "Unexpected list of size zero: %q", key)
+			continue
 		}
 		kv, err := pl.MarshalToKv()
 		if err != nil {
