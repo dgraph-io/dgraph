@@ -1053,6 +1053,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (map[uint6
 	}
 
 	vals := doneVars[needsVar].Vals
+	mp = make(map[uint64]types.Val)
 	// Go over the sibling node and aggregate.
 	for i, list := range relSG.uidMatrix {
 		ag := aggregator{
@@ -1068,7 +1069,6 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (map[uint6
 			return nil, err
 		}
 		if v.Value != nil {
-			mp = make(map[uint64]types.Val)
 			mp[relSG.SrcUIDs.Uids[i]] = v
 		}
 	}
@@ -1373,7 +1373,9 @@ AssignStep:
 
 // Updates the doneVars map by picking up uid/values from the current Subgraph
 func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	if len(doneVars) == 0 || (sg.Params.Var == "" && len(sg.Params.FacetVar) == 0) {
+	// NOTE: although we initialize doneVars (req.vars) in ProcessQuery, this nil check is for
+	// non-root lookups that happen to other nodes. Don't use len(doneVars) == 0 !
+	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
 		return nil
 	}
 

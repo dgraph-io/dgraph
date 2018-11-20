@@ -1487,7 +1487,7 @@ func TestMathCeil1(t *testing.T) {
 
 	query := `
 	{
-		me as var(func: eq(name, "Xyz"))
+		me as var(func: eq(name, "XxXUnknownXxX"))
 		var(func: uid(me)) {
 			friend {
 				x as age
@@ -1501,8 +1501,9 @@ func TestMathCeil1(t *testing.T) {
 		}
 	}
 	`
-	js := processToFastJsonNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me": []}}`, js)
+	// this has to fail
+	_, err := processToFastJson(t, query)
+	require.Error(t, err)
 }
 
 func TestMathCeil2(t *testing.T) {
