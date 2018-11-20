@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
@@ -149,22 +149,14 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 
 	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
-		if tr, ok := trace.FromContext(ctx); ok {
-			id := fmt.Sprintf("%d", rand.Int())
-			tr.LazyPrintf("Sending request to server, id: %s", id)
-			ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("trace", id))
-		}
 		return c.ServeTask(ctx, q)
 	})
 	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while worker.ServeTask: %v", err)
-		}
 		return nil, err
 	}
 	reply := result.(*pb.Result)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
+	if span := otrace.FromContext(ctx); span != nil {
+		span.Annotatef(nil, "Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
 	}
 	return reply, nil
 }
@@ -599,11 +591,13 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
+	span := otrace.FromContext(ctx)
+	span.Annotate(nil, "Waiting for startTs")
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Done waiting for maxPending to catch up for Attr %q, readTs: %d\n",
+	if span != nil {
+		span.Annotatef(nil, "Done waiting for maxPending to catch up for Attr %q, readTs: %d\n",
 			q.Attr, q.ReadTs)
 	}
 
@@ -1268,7 +1262,8 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if !ok {
 			return nil, x.Errorf("Could not find tokenizer with name %q", tokerName)
 		}
-		fc.tokens, err = tok.BuildTokens(valToTok.Value, tokenizer)
+		fc.tokens, err = tok.BuildTokens(valToTok.Value,
+			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		x.AssertTrue(fnName == "allof" || fnName == "anyof")
 		fc.intersectDest = strings.HasSuffix(fnName, "allof")
@@ -1318,6 +1313,9 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 
 // ServeTask is used to respond to a query.
 func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, error) {
+	ctx, span := otrace.StartSpan(ctx, "worker.ServeTask")
+	defer span.End()
+
 	if ctx.Err() != nil {
 		return &emptyResult, ctx.Err()
 	}
@@ -1327,12 +1325,9 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
 	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
-	}
+	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	if !groups().ServesGroup(gid) {
-		// TODO(pawan) - Log this when we have debug logs.
 		return nil, fmt.Errorf("Temporary error, attr: %q groupId: %v Request sent to wrong server",
 			q.Attr, gid)
 	}
@@ -1505,7 +1500,7 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 		case CompareAttrFn:
 			ftree.function.val = types.Val{Tid: types.StringID, Value: []byte(tree.Func.Args[0])}
 		case StandardFn:
-			argTokens, aerr := tok.GetTokens(tree.Func.Args)
+			argTokens, aerr := tok.GetTermTokens(tree.Func.Args)
 			if aerr != nil { // query error ; stop processing.
 				return nil, aerr
 			}

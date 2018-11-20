@@ -25,11 +25,8 @@ import (
 	"time"
 
 	"golang.org/x/net/trace"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/y"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -38,8 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
-
-const maxBatchSize = 32 * (1 << 20)
 
 var emptyCountParams countParams
 
@@ -53,40 +48,25 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 	if !schema.State().IsIndexed(attr) {
 		return nil, x.Errorf("Attribute %s is not indexed.", attr)
 	}
-	s := schemaType
-	sv, err := types.Convert(src, s)
+	sv, err := types.Convert(src, schemaType)
 	if err != nil {
 		return nil, err
 	}
 	// Schema will know the mapping from attr to tokenizer.
 	var tokens []string
-	tokenizers := schema.State().Tokenizer(attr)
-	for _, it := range tokenizers {
-		if tok.FtsTokenizerName("") == it.Name() && len(lang) > 0 {
-			newTokenizer, ok := tok.GetTokenizer(tok.FtsTokenizerName(lang))
-			if ok {
-				it = newTokenizer
-			} else {
-				return nil, status.Errorf(codes.Internal, "Tokenizer not available for language: %s", lang)
-			}
-		}
-		if schemaType == types.StringID {
-			exactTok, ok := tok.GetTokenizer("exact")
-			x.AssertTruef(ok, "Couldn't find exact tokenizer.")
+	for _, it := range schema.State().Tokenizer(attr) {
+		if it.Name() == "exact" && schemaType == types.StringID && len(sv.Value.(string)) > 100 {
 			// Exact index can only be applied for strings so we can safely try to convert Value to
 			// string.
-			if (it.Identifier() == exactTok.Identifier()) && len(sv.Value.(string)) > 100 {
-				glog.Infof("Long term for exact index on predicate: [%s]. "+
-					"Consider switching to hash for better performance.\n", attr)
-			}
+			glog.Infof("Long term for exact index on predicate: [%s]. "+
+				"Consider switching to hash for better performance.\n", attr)
 		}
-		toks, err := tok.BuildTokens(sv.Value, it)
+		toks, err := tok.BuildTokens(sv.Value, tok.GetLangTokenizer(it, lang))
 		if err != nil {
 			return tokens, err
 		}
 		tokens = append(tokens, toks...)
 	}
-
 	return tokens, nil
 }
 
@@ -584,7 +564,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 
 		le := pl.Length(r.startTs, 0)
 		if le == 0 {
-			y.AssertTruef(le > 0, "Unexpected list of size zero: %q", key)
+			continue
 		}
 		kv, err := pl.MarshalToKv()
 		if err != nil {

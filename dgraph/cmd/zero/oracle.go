@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -46,7 +47,7 @@ type Oracle struct {
 	startTxnTs  uint64
 	subscribers map[int]chan *pb.OracleDelta
 	updates     chan *pb.OracleDelta
-	doneUntil   x.WaterMark
+	doneUntil   y.WaterMark
 	syncMarks   []syncMark
 }
 

@@ -70,7 +70,7 @@ type Node struct {
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to BadgerDB).
-	Applied x.WaterMark
+	Applied y.WaterMark
 }
 
 type raftLogger struct {
@@ -138,7 +138,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
-		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
+		Applied:     y.WaterMark{Name: fmt.Sprintf("Applied watermark")},
 		RaftContext: rc,
 		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		confChanges: make(map[uint64]chan error),

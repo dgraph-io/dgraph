@@ -22,18 +22,17 @@ used by Dgraph is located at
 service methods.
 
 
-It's possible to interface with dgraph directly via gRPC or HTTP. However, if a
+It's possible to interface with Dgraph directly via gRPC or HTTP. However, if a
 client library exists for you language, this will be an easier option.
 
 {{% notice "tip" %}}
-For multi-node setups, predicates are assigned to the group that first sees
-that predicate. Dgraph also automatically moves predicate data to different
-groups in order to make the predicate distribution more even. This occurs
-automatically every 10 minutes.  It's possible for clients to aid this process
-by by communicating with all dgraph instances. For the Go client, this means
-passing in one `*grpc.ClientConn` per dgraph instance.  Mutations will be made
-in a round robin fashion, resulting in an initially semi random predicate
-distribution.
+For multi-node setups, predicates are assigned to the group that first sees that
+predicate. Dgraph also automatically moves predicate data to different groups in
+order to balance predicate distribution. This occurs automatically every 10
+minutes. It's possible for clients to aid this process by communicating with all
+Dgraph instances. For the Go client, this means passing in one
+`*grpc.ClientConn` per Dgraph instance. Mutations will be made in a round robin
+fashion, resulting in an initially semi random predicate distribution.
 {{% /notice %}}
 
 ## Go
@@ -358,6 +357,21 @@ up and running.
 
 We also have a [simple example](https://github.com/dgraph-io/pydgraph/tree/master/examples/simple)
 project, which contains an end-to-end working example of how to use the Python client.
+
+## Unofficial Dgraph Clients
+
+{{% notice "note" %}}
+These third-party clients are contributed by the community and are not officially supported by Dgraph.
+{{% /notice %}}
+
+### C\#
+
+- https://github.com/AlexandreDaSilva/DgraphNet
+- https://github.com/MichaelJCompton/Dgraph-dotnet
+
+### Elixir
+
+- https://github.com/ospaarmann/exdgraph
 
 ## Raw HTTP
 

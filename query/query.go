@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/metadata"
 
@@ -372,7 +373,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	}
 
 	var invalidUids map[uint64]bool
-	var facetsNode outputNode
 	// We go through all predicate children of the subprotos.
 	for _, pc := range sg.Children {
 		if pc.Params.ignoreResult {
@@ -531,9 +531,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	if sg.Params.IgnoreReflex && len(sg.Params.parentIds) > 0 {
 		// Lets pop the stack.
 		sg.Params.parentIds = (sg.Params.parentIds)[:len(sg.Params.parentIds)-1]
-	}
-	if facetsNode != nil && !facetsNode.IsEmpty() {
-		dst.AddMapChild("@facets", facetsNode, false)
 	}
 
 	// Only for shortest path query we wan't to return uid always if there is
@@ -1813,6 +1810,9 @@ func getReversePredicates(ctx context.Context) ([]string, error) {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
+	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph")
+	defer span.End()
+
 	if sg.Attr == "uid" {
 		// We dont need to call ProcessGraph for uid, as we already have uids
 		// populated from parent and there is nothing to process but uidMatrix
@@ -2397,6 +2397,9 @@ type QueryRequest struct {
 // Fills Subgraphs and Vars.
 // It optionally also returns a map of the allocated uids in case of an upsert request.
 func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
+	ctx, span := otrace.StartSpan(ctx, "query.ProcessQuery")
+	defer span.End()
+
 	// doneVars stores the processed variables.
 	req.vars = make(map[string]varValue)
 	loopStart := time.Now()
@@ -2406,11 +2409,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
 			gq.Alias != "shortest" && !gq.IsEmpty) {
-			err := x.Errorf("Invalid query, query pb.id is zero and generator is nil")
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(err.Error())
-			}
-			return err
+			return x.Errorf("Invalid query, query pb.id is zero and generator is nil")
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
@@ -2419,9 +2418,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs
 		})
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Query parsed")
-		}
+		span.Annotate(nil, "Query parsed")
 		req.Subgraphs = append(req.Subgraphs, sg)
 	}
 	req.Latency.Parsing += time.Since(loopStart)

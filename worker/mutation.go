@@ -100,7 +100,7 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 	if err := runSchemaMutationHelper(ctx, update, startTs); err != nil {
 		// on error, we restore the memory state to be the same as the disk
 		maxRetries := 10
-		loadErr := x.RetryUntilSuccess(maxRetries, 10 * time.Millisecond, func() error {
+		loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
 			return schema.Load(update.Predicate)
 		})
 
@@ -553,15 +553,25 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 
 // CommitOverNetwork makes a proxy call to Zero to commit or abort a transaction.
 func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) {
+	ctx, span := otrace.StartSpan(ctx, "worker.CommitOverNetwork")
+	defer span.End()
+
 	pl := groups().Leader(0)
 	if pl == nil {
 		return 0, conn.ErrNoConnection
 	}
 	zc := pb.NewZeroClient(pl.Get())
 	tctx, err := zc.CommitOrAbort(ctx, tc)
+
 	if err != nil {
+		span.Annotatef(nil, "Error=%v", err)
 		return 0, err
 	}
+	var attributes []otrace.Attribute
+	attributes = append(attributes, otrace.Int64Attribute("commitTs", int64(tctx.CommitTs)))
+	attributes = append(attributes, otrace.BoolAttribute("committed", tctx.CommitTs > 0))
+	span.Annotate(attributes, "")
+
 	if tctx.Aborted {
 		return 0, y.ErrAborted
 	}

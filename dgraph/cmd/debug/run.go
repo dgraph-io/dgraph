@@ -20,14 +20,17 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"math"
+	"strconv"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 )
@@ -44,6 +47,7 @@ type flagOptions struct {
 	readOnly   bool
 	pdir       string
 	itemMeta   bool
+	jepsen     bool
 }
 
 func init() {
@@ -58,11 +62,202 @@ func init() {
 	flag := Debug.Cmd.Flags()
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
 	flag.BoolVar(&opt.vals, "vals", false, "Output values along with keys.")
+	flag.BoolVar(&opt.jepsen, "jepsen", false, "Disect Jepsen output.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.BoolVarP(&opt.keyHistory, "history", "y", false, "Show all versions of a key.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
+}
+
+func readAmount(txn *badger.Txn, uid uint64) int {
+	iopt := badger.DefaultIteratorOptions
+	iopt.AllVersions = true
+	itr := txn.NewIterator(iopt)
+	defer itr.Close()
+
+	key := x.DataKey("amount_0", uid)
+	for itr.Seek(key); itr.Valid(); {
+		item := itr.Item()
+		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+		if err != nil {
+			log.Fatalf("Unable to read posting list: %v", err)
+		}
+		var times int
+		var amount int
+		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
+			from := types.Val{
+				Tid:   types.TypeID(o.ValType),
+				Value: o.Value,
+			}
+			out, err := types.Convert(from, types.StringID)
+			x.Check(err)
+			val := out.Value.(string)
+			a, err := strconv.Atoi(val)
+			x.Check(err)
+			amount = a
+			times++
+			return nil
+		})
+		x.AssertTrue(times <= 1)
+		x.Check(err)
+		return amount
+	}
+	return 0
+}
+
+func seekTotal(db *badger.DB, readTs uint64) int {
+	txn := db.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+
+	pk := x.ParsedKey{Attr: "key_0"}
+	prefix := pk.DataPrefix()
+
+	iopt := badger.DefaultIteratorOptions
+	iopt.AllVersions = true
+	iopt.PrefetchValues = false
+	itr := txn.NewIterator(iopt)
+	defer itr.Close()
+
+	keys := make(map[uint64]int)
+	var lastKey []byte
+	for itr.Seek(prefix); itr.ValidForPrefix(prefix); {
+		item := itr.Item()
+		if bytes.Equal(lastKey, item.Key()) {
+			itr.Next()
+			continue
+		}
+		lastKey = append(lastKey[:0], item.Key()...)
+		pk := x.Parse(item.Key())
+
+		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
+		if err != nil {
+			log.Fatalf("Unable to read posting list: %v", err)
+		}
+		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
+			from := types.Val{
+				Tid:   types.TypeID(o.ValType),
+				Value: o.Value,
+			}
+			out, err := types.Convert(from, types.StringID)
+			x.Check(err)
+			key := out.Value.(string)
+			k, err := strconv.Atoi(key)
+			x.Check(err)
+			keys[pk.Uid] = k
+			// fmt.Printf("Type: %v Uid=%d key=%s. commit=%d hex %x\n",
+			// 	o.ValType, pk.Uid, key, o.CommitTs, lastKey)
+			return nil
+		})
+		x.Checkf(err, "during iterate")
+	}
+
+	var total int
+	for uid, key := range keys {
+		a := readAmount(txn, uid)
+		fmt.Printf("uid: %-5d key: %d amount: %d\n", uid, key, a)
+		total += a
+	}
+	fmt.Printf("Total @ %d = %d\n", readTs, total)
+	return total
+}
+
+func findFirstInvalidTxn(db *badger.DB, lowTs, highTs uint64) uint64 {
+	fmt.Println()
+	if highTs-lowTs < 1 {
+		fmt.Printf("Checking at lowTs: %d\n", lowTs)
+		if total := seekTotal(db, lowTs); total != 100 {
+			fmt.Printf("==> VIOLATION at ts: %d\n", lowTs)
+			return lowTs
+		}
+		fmt.Printf("No violation found at ts: %d\n", lowTs)
+		return 0
+	}
+
+	midTs := (lowTs + highTs) / 2
+	fmt.Printf("Checking. low=%d. high=%d. mid=%d\n", lowTs, highTs, midTs)
+	if total := seekTotal(db, midTs); total == 100 {
+		// If no failure, move to higher ts.
+		return findFirstInvalidTxn(db, midTs+1, highTs)
+	} else {
+		// Found an error.
+		return findFirstInvalidTxn(db, lowTs, midTs)
+	}
+}
+
+func showAllPostingsAt(db *badger.DB, readTs uint64) {
+	txn := db.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+
+	itr := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer itr.Close()
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "SHOWING all postings at %d\n", readTs)
+	for itr.Rewind(); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		if item.Version() != readTs {
+			continue
+		}
+
+		pk := x.Parse(item.Key())
+		if !pk.IsData() || pk.Attr == "_predicate_" {
+			continue
+		}
+		fmt.Fprintf(&buf, "\nkey: %+v hex: %x\n", pk, item.Key())
+		val, err := item.ValueCopy(nil)
+		x.Check(err)
+		var plist pb.PostingList
+		x.Check(plist.Unmarshal(val))
+
+		for _, p := range plist.Postings {
+			appendPosting(&buf, p)
+		}
+	}
+	fmt.Println(buf.String())
+}
+
+func getMinMax(db *badger.DB, readTs uint64) (uint64, uint64) {
+	var min, max uint64 = math.MaxUint64, 0
+	txn := db.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+
+	iopt := badger.DefaultIteratorOptions
+	iopt.AllVersions = true
+	itr := txn.NewIterator(iopt)
+	defer itr.Close()
+
+	for itr.Rewind(); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		if min > item.Version() {
+			min = item.Version()
+		}
+		if max < item.Version() {
+			max = item.Version()
+		}
+	}
+	return min, max
+}
+
+func jepsen(db *badger.DB) {
+	min, max := getMinMax(db, math.MaxUint64)
+	fmt.Printf("min=%d. max=%d\n", min, max)
+
+	ts := findFirstInvalidTxn(db, min, max)
+	fmt.Println()
+	if ts == 0 {
+		fmt.Println("Nothing found. Exiting.")
+		return
+	}
+	showAllPostingsAt(db, ts)
+	seekTotal(db, ts-1)
+
+	for i := 0; i < 5; i++ {
+		// Get a few previous commits.
+		_, ts = getMinMax(db, ts-1)
+		showAllPostingsAt(db, ts)
+		seekTotal(db, ts-1)
+	}
 }
 
 func history(lookup []byte, itr *badger.Iterator) {
@@ -95,8 +290,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 			plist := &pb.PostingList{}
 			x.Check(plist.Unmarshal(val))
 			for _, p := range plist.Postings {
-				buf.WriteString(p.String())
-				buf.WriteString("\n")
+				appendPosting(&buf, p)
 			}
 		}
 		if meta&posting.BitCompletePosting > 0 {
@@ -104,8 +298,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 			x.Check(plist.Unmarshal(val))
 
 			for _, p := range plist.Postings {
-				buf.WriteString(p.String())
-				buf.WriteString("\n")
+				appendPosting(&buf, p)
 			}
 
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
@@ -120,6 +313,25 @@ func history(lookup []byte, itr *badger.Iterator) {
 		buf.WriteString("\n")
 	}
 	fmt.Println(buf.String())
+}
+
+func appendPosting(w io.Writer, o *pb.Posting) {
+	fmt.Fprintf(w, " Uid: %d Op: %d ", o.Uid, o.Op)
+
+	if len(o.Value) > 0 {
+		fmt.Fprintf(w, " Type: %v. ", o.ValType)
+		from := types.Val{
+			Tid:   types.TypeID(o.ValType),
+			Value: o.Value,
+		}
+		out, err := types.Convert(from, types.StringID)
+		if err != nil {
+			fmt.Fprintf(w, " Value: %q Error: %v", o.Value, err)
+		} else {
+			fmt.Fprintf(w, " String Value: %q", out.Value)
+		}
+	}
+	fmt.Fprintln(w, "")
 }
 
 func lookup(db *badger.DB) {
@@ -155,8 +367,7 @@ func lookup(db *badger.DB) {
 	fmt.Fprintf(&buf, " Key: %x", item.Key())
 	fmt.Fprintf(&buf, " Length: %d\n", pl.Length(math.MaxUint64, 0))
 	err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
-		fmt.Fprintf(&buf, " Uid: %d\n", o.Uid)
-		// TODO: Extend this to output more fields.
+		appendPosting(&buf, o)
 		return nil
 	})
 	if err != nil {
@@ -238,6 +449,8 @@ func run() {
 	switch {
 	case len(opt.keyLookup) > 0:
 		lookup(db)
+	case opt.jepsen:
+		jepsen(db)
 	default:
 		printKeys(db)
 	}
