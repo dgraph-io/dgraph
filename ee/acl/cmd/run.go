@@ -7,6 +7,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"os"
 	"strings"
 )
 
@@ -19,6 +20,7 @@ var tlsConf x.TLSHelperConfig
 
 var Acl x.SubCommand
 var UserAdd x.SubCommand
+var LogIn x.SubCommand
 
 const (
 	tlsAclCert = "client.acl.crt"
@@ -41,7 +43,7 @@ func init() {
 	initSubcommands()
 
 	var subcommands = []*x.SubCommand {
-		&UserAdd,
+		&UserAdd, &LogIn,
 	}
 
 	for _, sc := range subcommands {
@@ -65,6 +67,17 @@ func initSubcommands() {
 	userAddFlags := UserAdd.Cmd.Flags()
 	userAddFlags.StringP("user", "u", "", "The user id to be created")
 	userAddFlags.StringP("password", "p", "", "The password for the user")
+
+	LogIn.Cmd = &cobra.Command{
+		Use: "login",
+		Short: "Login to dgraph in order to get a jwt token",
+		Run: func(cmd *cobra.Command, args []string) {
+			runTxn(LogIn.Conf, userLogin)
+		},
+	}
+	loginFlags := LogIn.Cmd.Flags()
+	loginFlags.StringP("user", "u", "", "The user id to be created")
+	loginFlags.StringP("password", "p", "", "The password for the user")
 }
 
 func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
@@ -78,6 +91,7 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
+	var accessClients []api.DgraphAccessClient
 	for _, d := range ds {
 		conn, err := x.SetupConnection(d, !tlsConf.CertRequired, &tlsConf, tlsAclCert, tlsAclKey)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
@@ -85,9 +99,15 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 
 		dc := api.NewDgraphClient(conn)
 		clients = append(clients, dc)
+
+		dgraphAccess := api.NewDgraphAccessClient(conn)
+		accessClients = append(accessClients, dgraphAccess)
 	}
 	dgraphClient := dgo.NewDgraphClient(clients...)
-	f(dgraphClient)
+	dgraphClient.SetAccessClients(accessClients...)
+	if err := f(dgraphClient); err != nil {
+		os.Exit(1)
+	}
 }
 
 

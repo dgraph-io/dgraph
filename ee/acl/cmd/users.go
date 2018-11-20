@@ -55,7 +55,22 @@ func userAdd(dc *dgo.Dgraph) error {
 
 	glog.Infof("Created new user with id %v", aclUser.Userid)
 	return nil
+}
 
+func userLogin(dc *dgo.Dgraph) error {
+	aclUser := AclUser{
+		Userid: UserAdd.Conf.GetString("user"),
+		Password: UserAdd.Conf.GetString("password"),
+	}
+
+	ctx := context.Background()
+	err := dc.Login(ctx, aclUser.Userid, aclUser.Password)
+	if err != nil {
+		glog.Errorf("Unable to login:", err)
+		return err
+	}
+	glog.Info("Login successfully with jwt:\n%v", dc.GetJwt())
+	return nil
 }
 
 type DBUser struct {
