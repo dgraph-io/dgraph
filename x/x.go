@@ -23,8 +23,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"net"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -409,3 +412,34 @@ func PredicateLang(s string) (string, string) {
 	}
 	return s[0:i], s[i+1:]
 }
+
+func SetupConnection(host string, insecure bool, tlsConf *TLSHelperConfig,
+	tlsCertFile string, tlsKeyFile string) (*grpc.ClientConn,
+	error) {
+	if insecure {
+		return grpc.Dial(host,
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(GrpcMaxSize),
+				grpc.MaxCallSendMsgSize(GrpcMaxSize)),
+			grpc.WithInsecure(),
+			grpc.WithBlock(),
+			grpc.WithTimeout(10*time.Second))
+	}
+
+	tlsConf.ConfigType = TLSClientConfig
+	tlsConf.Cert = filepath.Join(tlsConf.CertDir, tlsCertFile)
+	tlsConf.Key = filepath.Join(tlsConf.CertDir, tlsKeyFile)
+	tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
+	if err != nil {
+		return nil, err
+	}
+
+	return grpc.Dial(host,
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(GrpcMaxSize),
+			grpc.MaxCallSendMsgSize(GrpcMaxSize)),
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
+		grpc.WithBlock(),
+		grpc.WithTimeout(10*time.Second))
+}
+

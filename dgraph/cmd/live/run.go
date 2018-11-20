@@ -34,8 +34,6 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
@@ -239,34 +237,6 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	return nil
 }
 
-func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
-	if insecure {
-		return grpc.Dial(host,
-			grpc.WithDefaultCallOptions(
-				grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
-				grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-			grpc.WithInsecure(),
-			grpc.WithBlock(),
-			grpc.WithTimeout(10*time.Second))
-	}
-
-	tlsConf.ConfigType = x.TLSClientConfig
-	tlsConf.Cert = filepath.Join(tlsConf.CertDir, tlsLiveCert)
-	tlsConf.Key = filepath.Join(tlsConf.CertDir, tlsLiveKey)
-	tlsCfg, _, err := x.GenerateTLSConfig(tlsConf)
-	if err != nil {
-		return nil, err
-	}
-
-	return grpc.Dial(host,
-		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
-			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
-		grpc.WithBlock(),
-		grpc.WithTimeout(10*time.Second))
-}
-
 func fileList(files string) []string {
 	if len(files) == 0 {
 		return []string{}
@@ -285,7 +255,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	connzero, err := setupConnection(opt.zero, true)
+	connzero, err := x.SetupConnection(opt.zero, true, &tlsConf, tlsLiveCert, tlsLiveKey)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(
@@ -344,7 +314,7 @@ func run() error {
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
-		conn, err := setupConnection(d, !tlsConf.CertRequired)
+		conn, err := x.SetupConnection(d, !tlsConf.CertRequired, &tlsConf, tlsLiveCert, tlsLiveKey)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 
