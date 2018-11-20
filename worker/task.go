@@ -592,13 +592,14 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
 	span := otrace.FromContext(ctx)
-	span.Annotate(nil, "Waiting for startTs")
+	span.Annotatef(nil, "Waiting for startTs: %d", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}
 	if span != nil {
-		span.Annotatef(nil, "Done waiting for maxPending to catch up for Attr %q, readTs: %d\n",
-			q.Attr, q.ReadTs)
+		maxAssigned := posting.Oracle().MaxAssigned()
+		span.Annotatef(nil, "Done waiting for maxAssigned. Attr: %q ReadTs: %d Max: %d",
+			q.Attr, q.ReadTs, maxAssigned)
 	}
 
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it

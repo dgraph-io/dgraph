@@ -70,6 +70,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 	}
 
 	propose := func(timeout time.Duration) error {
+		if !n.AmLeader() {
+			return x.Errorf("Not Zero leader. Aborting proposal: %+v", proposal)
+		}
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
@@ -84,6 +87,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		defer n.Proposals.Delete(key)
 		proposal.Key = key
 
+		// TODO: Remove this and use OpenCensus spans.
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Proposing with key: %X", key)
 		}
@@ -119,6 +123,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 	for err == errInternalRetry {
 		err = propose(timeout)
 		timeout *= 2 // Exponential backoff
+		if timeout > time.Minute {
+			timeout = 32 * time.Second
+		}
 	}
 	return err
 }
@@ -523,9 +530,9 @@ func (n *node) Run() {
 				n.Applied.Done(entry.Index)
 			}
 
-			// TODO: Should we move this to the top?
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
+					glog.Infoln("I've become the leader, updating leases.")
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader

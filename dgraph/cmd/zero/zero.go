@@ -247,11 +247,7 @@ func (s *Server) updateZeroLeader() {
 	defer s.Unlock()
 	leader := s.Node.Raft().Status().Lead
 	for _, m := range s.state.Zeros {
-		if m.Id == leader {
-			m.Leader = true
-		} else {
-			m.Leader = false
-		}
+		m.Leader = m.Id == leader
 	}
 }
 

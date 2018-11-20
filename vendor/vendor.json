@@ -399,20 +399,20 @@
 			"revisionTime": "2016-10-10T02:54:55Z"
 		},
 		{
-			"checksumSHA1": "h1nLibY0IliypSG0cwbXpSpcsMA=",
+			"checksumSHA1": "4VUg2Be1lkd0wm8iVTkoMTa58Ow=",
 			"path": "github.com/coreos/etcd/raft",
-			"revision": "c9504f61fc7f29b0ad30bf8bab02d9e1b600e962",
-			"revisionTime": "2018-06-15T16:40:41Z",
-			"version": "v3.2.23",
-			"versionExact": "v3.2.23"
+			"revision": "27fc7e2296f506182f58ce846e48f36b34fe6842",
+			"revisionTime": "2018-10-10T17:17:54Z",
+			"version": "v3.3.10",
+			"versionExact": "v3.3.10"
 		},
 		{
-			"checksumSHA1": "9UUP0nQdKxvJZOFg7e8FP4gzzgA=",
+			"checksumSHA1": "cwEnAGl7uzwDepjDZcIocMVEVEE=",
 			"path": "github.com/coreos/etcd/raft/raftpb",
-			"revision": "c9504f61fc7f29b0ad30bf8bab02d9e1b600e962",
-			"revisionTime": "2018-06-15T16:40:41Z",
-			"version": "v3.2.23",
-			"versionExact": "v3.2.23"
+			"revision": "27fc7e2296f506182f58ce846e48f36b34fe6842",
+			"revisionTime": "2018-10-10T17:17:54Z",
+			"version": "v3.3.10",
+			"versionExact": "v3.3.10"
 		},
 		{
 			"checksumSHA1": "Lf3uUXTkKK5DJ37BxQvxO1Fq+K8=",
@@ -565,10 +565,10 @@
 			"revisionTime": "2016-01-25T20:49:56Z"
 		},
 		{
-			"checksumSHA1": "GaJLoEuMGnP5ofXvuweAI4wx06U=",
+			"checksumSHA1": "MVW67aGwWsD1pGmL04HlQlaOfKE=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "d3de96c4c28ef8af3aa1a892fc481e0f103c01ff",
-			"revisionTime": "2018-10-25T22:50:59Z"
+			"revision": "882cf97a83ad205fd22af574246a3bc647d7a7d2",
+			"revisionTime": "2018-11-20T00:18:57Z"
 		},
 		{
 			"checksumSHA1": "z4copNgeTN77OymdDKqLaIK/vSI=",

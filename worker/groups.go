@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
@@ -92,24 +91,20 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	glog.Infof("Current Raft Id: %d\n", Config.RaftId)
 
 	// Successfully connect with dgraphzero, before doing anything else.
-	p := conn.Get().Connect(Config.ZeroAddr)
 
-	// Connect with dgraphzero and figure out what group we should belong to.
-	zc := pb.NewZeroClient(p.Get())
-	var connState *pb.ConnectionState
+	// Connect with Zero leader and figure out what group we should belong to.
 	m := &pb.Member{Id: Config.RaftId, Addr: Config.MyAddr}
-	delay := 50 * time.Millisecond
-	maxHalfDelay := 3 * time.Second
+	var connState *pb.ConnectionState
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+		pl := gr.connToZeroLeader(Config.ZeroAddr)
+		if pl == nil {
+			continue
+		}
+		zc := pb.NewZeroClient(pl.Get())
 		connState, err = zc.Connect(gr.ctx, m)
 		if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
 			break
-		}
-		glog.Errorf("Error while connecting with group zero: %v", err)
-		time.Sleep(delay)
-		if delay <= maxHalfDelay {
-			delay *= 2
 		}
 	}
 	x.CheckfNoTrace(err)
@@ -121,8 +116,6 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
 	// not get any data.
-	// TODO: Do we really need this?
-	// posting.Oracle().SetMaxPending(connState.MaxPending)
 	gr.applyState(connState.GetState())
 
 	gid := gr.groupId()
@@ -352,7 +345,7 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
-	pl := g.AnyServer(0)
+	pl := g.Leader(0)
 	if pl == nil {
 		return nil
 	}
@@ -492,7 +485,53 @@ func (g *groupi) triggerMembershipSync() {
 	}
 }
 
+const connBaseDelay = 100 * time.Millisecond
+
+func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
+	pl := g.Leader(0)
+	if pl != nil {
+		return pl
+	}
+	glog.V(1).Infof("No healthy Zero leader found. Trying to find a Zero leader...")
+
+	// No leader found. Let's get the latest membership state from Zero.
+	delay := connBaseDelay
+	maxHalfDelay := time.Second
+	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+		time.Sleep(delay)
+		if delay <= maxHalfDelay {
+			delay *= 2
+		}
+		var pl *conn.Pool
+		if len(addr) > 0 {
+			pl = conn.Get().Connect(addr)
+		}
+		if pl == nil {
+			pl = g.AnyServer(0)
+			if pl == nil {
+				glog.V(1).Infof("No healthy Zero server found. Retrying...")
+				continue
+			}
+		}
+		zc := pb.NewZeroClient(pl.Get())
+		connState, err := zc.Connect(gr.ctx, &pb.Member{ClusterInfoOnly: true})
+		if err != nil || connState == nil {
+			glog.V(1).Infof("While retrieving Zero leader info. Error: %v. Retrying...", err)
+			continue
+		}
+		for _, mz := range connState.State.GetZeros() {
+			if mz.Leader {
+				pl := conn.Get().Connect(mz.GetAddr())
+				return pl
+			}
+		}
+		glog.V(1).Infof("Unable to connect to a healthy Zero leader. Retrying...")
+	}
+}
+
 // TODO: This function needs to be refactored into smaller functions. It gets hard to reason about.
+// TODO: The updates have to be sent to Zero leader. But, the membership update receives can be from
+// any Zero server. Let's break that up into two different endpoints.
 func (g *groupi) periodicMembershipUpdate() {
 	defer g.closer.Done() // CLOSER:1
 
@@ -514,14 +553,14 @@ START:
 	default:
 	}
 
-	pl := g.AnyServer(0)
+	pl := g.connToZeroLeader("")
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		glog.Warningln("Membership update: No Zero server known.")
 		time.Sleep(time.Second)
 		goto START
 	}
-	glog.Infof("Got address of a Zero server: %s", pl.Addr)
+	glog.Infof("Got address of a Zero leader: %s", pl.Addr)
 
 	c := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -593,6 +632,9 @@ OUTER:
 				break OUTER
 			}
 		case <-slowTicker.C:
+			// TODO: Zero should have two different RPCs. One for receiving updates, and one for
+			// sending updates.
+
 			// dgraphzero just adds to the map so check that no data is present for the tablet
 			// before we remove it to avoid the race condition where a tablet is added recently
 			// and mutation has not been persisted to disk.
@@ -742,15 +784,12 @@ func (g *groupi) processOracleDeltaStream() {
 	defer ticker.Stop()
 
 	blockingReceiveAndPropose := func() {
-		elog := trace.NewEventLog("Dgraph", "ProcessOracleStream")
-		defer elog.Finish()
 		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
 			g.Node.Id, g.groupId())
 
 		pl := g.Leader(0)
 		if pl == nil {
 			glog.Warningln("Oracle delta stream: No Zero leader known.")
-			elog.Errorf("Dgraph zero leader address unknown")
 			time.Sleep(time.Second)
 			return
 		}
@@ -769,7 +808,6 @@ func (g *groupi) processOracleDeltaStream() {
 		stream, err := c.Oracle(ctx, &api.Payload{})
 		if err != nil {
 			glog.Errorf("Error while calling Oracle %v\n", err)
-			elog.Errorf("Error while calling Oracle %v", err)
 			time.Sleep(time.Second)
 			return
 		}
@@ -850,9 +888,16 @@ func (g *groupi) processOracleDeltaStream() {
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
-			elog.Printf("Batched %d updates. Proposing Delta: %v.", batch, delta)
-			if glog.V(3) {
-				glog.Infof("Batched %d updates. Proposing Delta: %v.", batch, delta)
+			if glog.V(2) {
+				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:",
+					batch, delta.MaxAssigned)
+				for _, txn := range delta.Txns {
+					if txn.CommitTs == 0 {
+						glog.Infof("Aborted: %d", txn.StartTs)
+					} else {
+						glog.Infof("Committed: %d -> %d", txn.StartTs, txn.CommitTs)
+					}
+				}
 			}
 			for {
 				// Block forever trying to propose this.

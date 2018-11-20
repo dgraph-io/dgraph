@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
 
@@ -67,6 +68,7 @@ func (o *Oracle) updateStartTxnTs(ts uint64) {
 	o.keyCommit = make(map[string]uint64)
 }
 
+// TODO: This should be done during proposal application for Txn status.
 func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 	// This transaction was started before I became leader.
 	if src.StartTs < o.startTxnTs {
@@ -83,6 +85,10 @@ func (o *Oracle) hasConflict(src *api.TxnContext) bool {
 func (o *Oracle) purgeBelow(minTs uint64) {
 	o.Lock()
 	defer o.Unlock()
+
+	// TODO: HACK. Remove this later.
+	glog.Infof("Not purging below: %d", minTs)
+	return
 
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
@@ -197,6 +203,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			// Don't goto slurp_loop, because it would break from select immediately.
 		}
 
+		glog.V(2).Infof("DoneUntil: %d. Sending delta: %+v\n", o.doneUntil.DoneUntil(), delta)
 		o.Lock()
 		for id, ch := range o.subscribers {
 			select {
@@ -273,6 +280,21 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 		CommitTs: src.CommitTs,
 		Aborted:  src.Aborted,
 	}
+
+	// NOTE: It is important that we continue retrying proposeTxn until we succeed. This should
+	// happen, irrespective of what the user context timeout might be. We check for it before
+	// reaching this stage, but now that we're here, we have to ensure that the commit proposal goes
+	// through. Otherwise, we should block here forever. If we don't do this, we'll see txn
+	// violations in Jepsen, because we'll send out a MaxAssigned higher than a commit, which would
+	// cause newer txns to see older data.
+
+	// We could consider adding a wrapper around the user proposal, so we can access any key-values.
+	// Something like this:
+	// https://github.com/golang/go/commit/5d39260079b5170e6b4263adb4022cc4b54153c4
+	ctx = context.Background() // Use a new context with no timeout.
+
+	// If this node stops being the leader, we want this proposal to not be forwarded to the leader,
+	// and get aborted.
 	if err := s.Node.proposeAndWait(ctx, &zp); err != nil {
 		return err
 	}
@@ -292,6 +314,8 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 }
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
+	span := otrace.FromContext(ctx)
+	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(src.StartTs))}, "")
 	if src.Aborted {
 		return s.proposeTxn(ctx, src)
 	}
@@ -301,6 +325,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	conflict := s.orc.hasConflict(src)
 	s.orc.RUnlock()
 	if conflict {
+		span.Annotate(nil, "Oracle found conflict")
 		src.Aborted = true
 		return s.proposeTxn(ctx, src)
 	}
@@ -328,6 +353,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	for pred := range preds {
 		tablet := s.ServingTablet(pred)
 		if tablet == nil || tablet.GetReadOnly() {
+			span.Annotate(nil, "Tablet is readonly. Aborting.")
 			src.Aborted = true
 			return s.proposeTxn(ctx, src)
 		}
@@ -341,8 +367,15 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	src.CommitTs = assigned.StartId
 	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
 	defer s.orc.doneUntil.Done(src.CommitTs)
+	span.Annotatef([]otrace.Attribute{otrace.Int64Attribute("commitTs", int64(src.CommitTs))},
+		"Node Id: %d. Proposing TxnContext: %+v", s.Node.Id, src)
 
 	if err := s.orc.commit(src); err != nil {
+		span.Annotatef(nil, "Found a conflict. Aborting.")
+		src.Aborted = true
+	}
+	if err := ctx.Err(); err != nil {
+		span.Annotatef(nil, "Aborting txn due to context timing out.")
 		src.Aborted = true
 	}
 	// Propose txn should be used to set watermark as done.
@@ -353,6 +386,9 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	ctx, span := otrace.StartSpan(ctx, "Zero.CommitOrAbort")
+	defer span.End()
+
 	if !s.Node.AmLeader() {
 		return nil, x.Errorf("Only leader can decide to commit or abort")
 	}
