@@ -492,6 +492,44 @@ func (g *groupi) triggerMembershipSync() {
 	}
 }
 
+const connBaseDelay = 100 * time.Millisecond
+
+func (g *groupi) connToZeroLeader() *conn.Pool {
+	pl := g.Leader(0)
+	if pl != nil {
+		return pl
+	}
+	glog.V(1).Infof("No healthy Zero leader found. Trying to find a Zero leader...")
+
+	// No leader found. Let's get the latest membership state from Zero.
+	delay := connBaseDelay
+	maxHalfDelay := time.Second
+	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+		time.Sleep(delay)
+		if delay <= maxHalfDelay {
+			delay *= 2
+		}
+		pl := g.AnyServer(0)
+		if pl == nil {
+			glog.V(1).Infof("No healthy Zero server found. Retrying...")
+			continue
+		}
+		zc := pb.NewZeroClient(pl.Get())
+		connState, err := zc.Connect(gr.ctx, &pb.Member{ClusterInfoOnly: true})
+		if err != nil || connState == nil {
+			glog.V(1).Infof("While retrieving Zero leader info. Error: %v. Retrying...", err)
+			continue
+		}
+		for _, mz := range connState.State.GetZeros() {
+			if mz.Leader {
+				pl := conn.Get().Connect(mz.GetAddr())
+				return pl
+			}
+		}
+		glog.V(1).Infof("Unable to connect to a healthy Zero leader. Retrying...")
+	}
+}
+
 // TODO: This function needs to be refactored into smaller functions. It gets hard to reason about.
 func (g *groupi) periodicMembershipUpdate() {
 	defer g.closer.Done() // CLOSER:1
@@ -514,14 +552,14 @@ START:
 	default:
 	}
 
-	pl := g.AnyServer(0)
+	pl := g.connToZeroLeader()
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		glog.Warningln("Membership update: No Zero server known.")
 		time.Sleep(time.Second)
 		goto START
 	}
-	glog.Infof("Got address of a Zero server: %s", pl.Addr)
+	glog.Infof("Got address of a Zero leader: %s", pl.Addr)
 
 	c := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
@@ -593,6 +631,9 @@ OUTER:
 				break OUTER
 			}
 		case <-slowTicker.C:
+			// TODO: Zero should have two different RPCs. One for receiving updates, and one for
+			// sending updates.
+
 			// dgraphzero just adds to the map so check that no data is present for the tablet
 			// before we remove it to avoid the race condition where a tablet is added recently
 			// and mutation has not been persisted to disk.

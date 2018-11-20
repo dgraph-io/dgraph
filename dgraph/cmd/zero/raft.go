@@ -119,6 +119,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 	for err == errInternalRetry {
 		err = propose(timeout)
 		timeout *= 2 // Exponential backoff
+		if timeout > time.Minute {
+			timeout = 32 * time.Second
+		}
 	}
 	return err
 }

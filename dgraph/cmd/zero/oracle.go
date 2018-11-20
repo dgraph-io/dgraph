@@ -203,6 +203,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			// Don't goto slurp_loop, because it would break from select immediately.
 		}
 
+		glog.V(2).Infof("DoneUntil: %d. Sending delta: %+v\n", o.doneUntil.DoneUntil(), delta)
 		o.Lock()
 		for id, ch := range o.subscribers {
 			select {
@@ -279,6 +280,17 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 		CommitTs: src.CommitTs,
 		Aborted:  src.Aborted,
 	}
+
+	// NOTE: It is important that we continue retrying proposeTxn until we succeed. This should
+	// happen, irrespective of what the user context timeout might be. We check for it before
+	// reaching this stage, but not that we're here, we have to ensure that the commit proposal goes
+	// through. Otherwise, we should block here forever.
+	// If we don't do this, we'll see txn violations in Jepsen, because we'll send out a MaxAssigned
+	// higher than a commit, which would cause newer txns to see older data.
+	ctx = context.Background() // Use a new context with no timeout.
+
+	// If this node stops being the leader, we want this proposal to not be forwarded to the leader,
+	// and get aborted.
 	if err := s.Node.proposeAndWait(ctx, &zp); err != nil {
 		return err
 	}
@@ -356,6 +368,10 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 
 	if err := s.orc.commit(src); err != nil {
 		span.Annotatef(nil, "Found a conflict. Aborting.")
+		src.Aborted = true
+	}
+	if err := ctx.Err(); err != nil {
+		span.Annotatef(nil, "Aborting txn due to context timing out.")
 		src.Aborted = true
 	}
 	// Propose txn should be used to set watermark as done.
