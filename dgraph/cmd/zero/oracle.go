@@ -378,13 +378,11 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	return s.proposeTxn(ctx, src)
 }
 
-var startOpt = otrace.WithSampler(otrace.AlwaysSample())
-
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	ctx, span := otrace.StartSpan(ctx, "Zero.CommitOrAbort", startOpt)
+	ctx, span := otrace.StartSpan(ctx, "Zero.CommitOrAbort")
 	defer span.End()
 
 	if !s.Node.AmLeader() {

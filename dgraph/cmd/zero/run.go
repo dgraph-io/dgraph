@@ -30,6 +30,7 @@ import (
 	"go.opencensus.io/exporter/jaeger"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
+	"go.opencensus.io/zpages"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -87,7 +88,9 @@ instances to achieve high-availability.
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 
-	flag.String("jaeger.agent", "", "Send opencensus traces to Jaeger.")
+	// OpenCensus flags.
+	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
+	// flag.String("jaeger.agent", "", "Send opencensus traces to Jaeger.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 }
 
@@ -104,16 +107,12 @@ type state struct {
 }
 
 func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.DiskStorage) {
-	if agent := Zero.Conf.GetString("jaeger.agent"); len(agent) > 0 {
+	if collector := Zero.Conf.GetString("jaeger.collector"); len(collector) > 0 {
 		// Port details: https://www.jaegertracing.io/docs/getting-started/
-		// Default endpoints are:
-		// agentEndpointURI := "localhost:6831"
-		// collectorEndpointURI := "http://localhost:14268"
-		collector := Zero.Conf.GetString("jaeger.collector")
+		// Default collectorEndpointURI := "http://localhost:14268"
 		je, err := jaeger.NewExporter(jaeger.Options{
-			AgentEndpoint: agent,
-			Endpoint:      collector,
-			ServiceName:   "dgraph.zero",
+			Endpoint:    collector,
+			ServiceName: "dgraph.zero",
 		})
 		if err != nil {
 			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
@@ -121,18 +120,17 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 		// And now finally register it as a Trace Exporter
 		otrace.RegisterExporter(je)
 	}
+	// Exclusively for stats, metrics, etc. Not for tracing.
+	// var views = append(ocgrpc.DefaultServerViews, ocgrpc.DefaultClientViews...)
+	// if err := view.Register(views...); err != nil {
+	// 	glog.Fatalf("Unable to register OpenCensus stats: %v", err)
+	// }
 
-	handler := &ocgrpc.ServerHandler{
-		IsPublicEndpoint: false,
-		StartOptions: otrace.StartOptions{
-			Sampler: otrace.AlwaysSample(),
-		},
-	}
 	s := grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
-		grpc.StatsHandler(handler))
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
 
 	rc := pb.RaftContext{Id: opts.nodeId, Addr: opts.myAddr, Group: 0}
 	m := conn.NewNode(&rc, store)
@@ -198,6 +196,8 @@ func run() {
 		}
 	}
 	grpc.EnableTracing = false
+	otrace.ApplyConfig(otrace.Config{
+		DefaultSampler: otrace.ProbabilitySampler(Zero.Conf.GetFloat64("trace"))})
 
 	addr := "localhost"
 	if opts.bindall {
@@ -239,6 +239,7 @@ func run() {
 	http.HandleFunc("/removeNode", st.removeNode)
 	http.HandleFunc("/moveTablet", st.moveTablet)
 	http.HandleFunc("/assignIds", st.assignUids)
+	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
