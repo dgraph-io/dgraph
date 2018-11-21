@@ -374,6 +374,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	if err != nil {
 		return resp, err
 	}
+	glog.Infof("new uids:%+v", newUids)
 	resp.Uids = query.ConvertUidsToHex(query.StripBlankNode(newUids))
 	edges, err := query.ToInternal(gmu, newUids)
 	if err != nil {

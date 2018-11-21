@@ -27,6 +27,8 @@ var LogIn x.SubCommand
 var GroupAdd x.SubCommand
 var GroupDel x.SubCommand
 
+var UserMod x.SubCommand
+
 const (
 	tlsAclCert = "client.acl.crt"
 	tlsAclKey  = "client.acl.key"
@@ -48,7 +50,7 @@ func init() {
 	initSubcommands()
 
 	var subcommands = []*x.SubCommand{
-		&UserAdd, &UserDel, &LogIn, &GroupAdd, &GroupDel,
+		&UserAdd, &UserDel, &LogIn, &GroupAdd, &GroupDel, &UserMod,
 	}
 
 	for _, sc := range subcommands {
@@ -118,6 +120,17 @@ func initSubcommands() {
 	groupDelFlags := GroupDel.Cmd.Flags()
 	groupDelFlags.StringP("group", "g", "", "The group id to be deleted")
 
+	// the usermod command used to set a user's groups
+	UserMod.Cmd = &cobra.Command{
+		Use:   "usermod",
+		Short: "Run Dgraph acl tool to change a user's groups",
+		Run: func(cmd *cobra.Command, args []string) {
+			runTxn(UserMod.Conf, userMod)
+		},
+	}
+	userModFlags := UserMod.Cmd.Flags()
+	userModFlags.StringP("user", "u", "", "The user id to be changed")
+	userModFlags.StringP("groups", "G", "", "The groups to be set for the user")
 }
 
 func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
@@ -150,10 +163,4 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 		glog.Errorf("error while running transaction: %v", err)
 		os.Exit(1)
 	}
-}
-
-// parse the response and check existing of the uid
-type DBGroup struct {
-	Uid     string `json:"uid"`
-	GroupID string `json:"dgraph.xid"`
 }

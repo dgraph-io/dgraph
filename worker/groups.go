@@ -150,29 +150,36 @@ func (g *groupi) proposeInitialSchema() {
 	if !Config.ExpandEdge {
 		return
 	}
-	g.upsertSchema(x.PredicateListAttr, &pb.SchemaUpdate {
+	g.upsertSchema(&pb.SchemaUpdate{
 		Predicate: x.PredicateListAttr,
 		ValueType: pb.Posting_STRING,
-		List: true,
+		List:      true,
 	})
 
 	// propose the schema update for acl predicates
-	g.upsertSchema(x.Acl_XId, &pb.SchemaUpdate {
+	g.upsertSchema(&pb.SchemaUpdate{
 		Predicate: x.Acl_XId,
 		ValueType: pb.Posting_STRING,
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"},
 	})
 
-	g.upsertSchema(x.Acl_Password, &pb.SchemaUpdate {
+	g.upsertSchema(&pb.SchemaUpdate{
 		Predicate: x.Acl_Password,
 		ValueType: pb.Posting_STRING,
 	})
+
+	g.upsertSchema(&pb.SchemaUpdate{
+		Predicate: x.Acl_UserGroup,
+		Directive: pb.SchemaUpdate_REVERSE,
+		ValueType: pb.Posting_UID,
+	})
+
 }
 
-func (g *groupi) upsertSchema(pred string, schema *pb.SchemaUpdate) {
+func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 	g.RLock()
-	_, ok := g.tablets[pred]
+	_, ok := g.tablets[schema.Predicate]
 	g.RUnlock()
 	if ok {
 		return

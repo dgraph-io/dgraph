@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 var (
@@ -198,6 +199,8 @@ func (nq NQuad) ToDeletePredEdge() (*pb.DirectedEdge, error) {
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*pb.DirectedEdge, error) {
+	glog.Infof("ToEdgeUsing with nquad:%v", nq.NQuad)
+
 	var edge *pb.DirectedEdge
 	sUid, err := toUid(nq.Subject, newToUid)
 	if err != nil {
@@ -207,6 +210,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*pb.DirectedEdge, error
 	if sUid == 0 {
 		return nil, fmt.Errorf("Subject should be > 0 for nquad: %+v", nq)
 	}
+	glog.Infof("value type: %v", nq.valueType())
 
 	switch nq.valueType() {
 	case x.ValueUid:
