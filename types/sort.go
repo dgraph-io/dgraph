@@ -178,15 +178,25 @@ func equal(a, b Val) bool {
 	}
 	switch a.Tid {
 	case DateTimeID:
-		return a.Value.(time.Time).Equal((b.Value.(time.Time)))
+		aVal, aOk := a.Value.(time.Time)
+		bVal, bOk := b.Value.(time.Time)
+		return aOk && bOk && aVal.Equal(bVal)
 	case IntID:
-		return (a.Value.(int64)) == (b.Value.(int64))
+		aVal, aOk := a.Value.(int64)
+		bVal, bOk := b.Value.(int64)
+		return aOk && bOk && aVal == bVal
 	case FloatID:
-		return (a.Value.(float64)) == (b.Value.(float64))
+		aVal, aOk := a.Value.(float64)
+		bVal, bOk := b.Value.(float64)
+		return aOk && bOk && aVal == bVal
 	case StringID, DefaultID:
-		return (a.Value.(string)) == (b.Value.(string))
+		aVal, aOk := a.Value.(string)
+		bVal, bOk := b.Value.(string)
+		return aOk && bOk && aVal == bVal
 	case BoolID:
-		return a.Value.(bool) == (b.Value.(bool))
+		aVal, aOk := a.Value.(bool)
+		bVal, bOk := b.Value.(bool)
+		return aOk && bOk && aVal == bVal
 	}
 	return false
 }

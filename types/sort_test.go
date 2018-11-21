@@ -122,6 +122,30 @@ func TestSortIntAndFloat(t *testing.T) {
 
 }
 
+func TestEqual(t *testing.T) {
+	require.True(t, equal(Val{Tid: IntID, Value: int64(3)}, Val{Tid: IntID, Value: int64(3)}),
+		"equal should return true for two equal values")
+
+	require.False(t, equal(Val{Tid: IntID, Value: int64(3)}, Val{Tid: IntID, Value: int64(4)}),
+		"equal should return false for two different values")
+
+	// not equal when the types are different
+	require.False(t, equal(Val{Tid: IntID, Value: int64(3)}, Val{Tid: FloatID, Value: float64(3.0)}),
+		"equal should return false for two values with different types")
+
+	// not equal when either parameter has the Value field being nil
+	require.False(t, equal(Val{Tid: IntID, Value: int64(3)}, Val{Tid: IntID}), "equal should return false when either parameter cannot have its value converted")
+	require.False(t, equal(Val{Tid: IntID}, Val{Tid: IntID, Value: int64(3)}), "equal should return false when either parameter cannot have its value converted")
+	require.False(t, equal(Val{Tid: IntID}, Val{Tid: IntID}), "equal should return false when either parameter cannot have its value converted")
+
+	// not equal when there is a type mismatch between value and tid for either parameter
+	require.False(t, equal(Val{Tid: IntID, Value: float64(3.0)}, Val{Tid: FloatID, Value: float64(3.0)}),
+		"equal should return false when either parameter's value has a type mismatch with its Tid")
+	require.False(t, equal(Val{Tid: FloatID, Value: float64(3.0)}, Val{Tid: IntID, Value: float64(3.0)}),
+		"equal should return false when either parameter's value has a type mismatch with its Tid")
+
+}
+
 func findIndex(t *testing.T, uids []uint64, uid uint64) int {
 	for i := range uids {
 		if uids[i] == uid {
