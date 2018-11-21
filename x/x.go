@@ -74,11 +74,11 @@ const (
 )
 
 const (
-	NewEntityLabel  string = "newid"
-	Acl_XId       string = "dgraph.xid"
-	Acl_Password  string = "dgraph.password"
-	Acl_UserGroup string = "dgraph.user.group"
-	Acl_UserBlob  string = "dgraph.userblob"
+	NewEntityLabel string = "newid"
+	Acl_XId        string = "dgraph.xid"
+	Acl_Password   string = "dgraph.password"
+	Acl_UserGroup  string = "dgraph.user.group"
+	Acl_UserBlob   string = "dgraph.userblob"
 )
 
 var (
