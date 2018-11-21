@@ -19,8 +19,9 @@ package cmd
 import (
 	goflag "flag"
 	"fmt"
-	"github.com/dgraph-io/dgraph/ee/acl/cmd"
 	"os"
+
+	"github.com/dgraph-io/dgraph/ee/acl/cmd"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"

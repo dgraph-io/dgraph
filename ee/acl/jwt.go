@@ -14,24 +14,24 @@ type JwtHeader struct {
 	Typ string // the header type "JWT"
 }
 
-var StdJwtHeader = JwtHeader {
+var StdJwtHeader = JwtHeader{
 	Alg: "HS256",
 	Typ: "JWT",
 }
 
 type JwtGroup struct {
-	Group string
+	Group       string
 	Wildcardacl string `json:",omitempty"`
 }
 
 type JwtPayload struct {
 	Userid string
-	Exp int64 // the unix time sinch epoch
+	Exp    int64 // the unix time sinch epoch
 	Groups []JwtGroup
 }
 
 type Jwt struct {
-	Header JwtHeader
+	Header  JwtHeader
 	Payload JwtPayload
 }
 
@@ -120,4 +120,3 @@ func (jwt *Jwt) DecodeString(input string, checkSignature bool, key []byte) erro
 	}
 	return nil
 }
-
