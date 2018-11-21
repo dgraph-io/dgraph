@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/trace"
 )
 
@@ -154,6 +155,16 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
+func SpanAddString(span *otrace.Span, key, value string) {
+	span.Annotate([]otrace.Attribute{otrace.StringAttribute(key, value)}, "")
+}
+func SpanAddInt(span *otrace.Span, key string, value int64) {
+	span.Annotate([]otrace.Attribute{otrace.Int64Attribute(key, value)}, "")
+}
+func SpanSet(span *otrace.Span, code int32, msg string) {
+	span.SetStatus(otrace.Status{Code: code, Message: msg})
+}
+
 func Min(a, b uint64) uint64 {
 	if a < b {
 		return a
@@ -169,7 +180,7 @@ func Max(a, b uint64) uint64 {
 }
 
 func RetryUntilSuccess(maxRetries int, sleepDurationOnFailure time.Duration,
-	f func() error) error  {
+	f func() error) error {
 	var err error
 	for retry := maxRetries; retry != 0; retry-- {
 		if err = f(); err == nil {

@@ -264,7 +264,11 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
+	defer span.End()
+
 	// Always print out Alter operations because they are important and rare.
+	span.Annotatef(nil, "Received ALTER op: %+v", op)
 	glog.Infof("Received ALTER op: %+v", op)
 
 	// The following code block checks if the operation should run or not.
@@ -275,16 +279,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Request rejected %v", err)
-		}
+		x.SpanSet(span, otrace.StatusCodeUnavailable, err.Error())
 		return empty, err
 	}
 	if !isMutationAllowed(ctx) {
+		x.SpanSet(span, otrace.StatusCodeAborted, "No mutations allowed.")
 		return nil, x.Errorf("No mutations allowed by server.")
 	}
 	if err := isAlterAllowed(ctx); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
+		x.SpanSet(span, otrace.StatusCodePermissionDenied, err.Error())
 		return nil, err
 	}
 	// All checks done.
@@ -542,9 +546,6 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version, err error) {
 	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("request rejected %v", err)
-		}
 		return v, err
 	}
 

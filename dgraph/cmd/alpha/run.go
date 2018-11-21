@@ -43,7 +43,9 @@ import (
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"go.opencensus.io/exporter/jaeger"
+	"go.opencensus.io/exporter/prometheus"
 	"go.opencensus.io/plugin/ocgrpc"
+	"go.opencensus.io/stats/view"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
 	"golang.org/x/net/context"
@@ -428,8 +430,23 @@ func run() {
 			return true, true
 		}
 	}
+
+	// OpenCensus registrations.
 	otrace.ApplyConfig(otrace.Config{
 		DefaultSampler: otrace.ProbabilitySampler(worker.Config.Tracing)})
+	pe, err := prometheus.NewExporter(prometheus.Options{Namespace: "dgraph_alpha"})
+	x.Check(err)
+	view.RegisterExporter(pe)
+	x.Check(view.Register(worker.LatencyView))
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", pe)
+		if err := http.ListenAndServe(":8888", mux); err != nil {
+			log.Fatalf("Failed to run Prometheus scrape endpoint: %v", err)
+		}
+	}()
+	// http.Handle("/debug/pmetrics", pe)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

@@ -24,6 +24,7 @@ import (
 	"math"
 	"time"
 
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
@@ -111,8 +112,8 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 
 	x.AssertTrue(plist != nil)
 	if err = plist.AddMutation(ctx, txn, edge); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error adding/deleting %s for attr %s entity %d: %v",
+		if span := otrace.FromContext(ctx); span != nil {
+			span.Annotatef(nil, "Error adding/deleting %s for attr %s entity %d: %v",
 				token, edge.Attr, edge.Entity, err)
 		}
 		return err
@@ -182,8 +183,8 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 	hasCountIndex := schema.State().HasCount(t.Attr)
 	cp, err := txn.addReverseMutationHelper(ctx, plist, hasCountIndex, edge)
 	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error adding/deleting reverse edge for attr %s entity %d: %v",
+		if span := otrace.FromContext(ctx); span != nil {
+			span.Annotatef(nil, "Error adding/deleting reverse edge for attr %s entity %d: %v",
 				t.Attr, t.Entity, err)
 		}
 		return err
@@ -260,8 +261,8 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
 	if err = plist.AddMutation(ctx, txn, t); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error adding/deleting count edge for attr %s count %d dst %d: %v",
+		if span := otrace.FromContext(ctx); span != nil {
+			span.Annotatef(nil, "Error adding/deleting count edge for attr %s count %d dst %d: %v",
 				t.Attr, count, t.ValueId, err)
 		}
 		return err

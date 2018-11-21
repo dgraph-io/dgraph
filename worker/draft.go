@@ -22,12 +22,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/stats/view"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
@@ -373,7 +376,17 @@ func (n *node) processRollups() {
 	}
 }
 
+var mLatencyMs = stats.Float64("latency", "the latency", "ms")
+var LatencyView = &view.View{
+	Name:        "latency",
+	Description: "the latency",
+	Measure:     mLatencyMs,
+	Aggregation: view.Distribution(0, 4, 16, 64, 256, 1024, 4096, 8192, 16384)}
+
 func (n *node) processApplyCh() {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	defer n.closer.Done() // CLOSER:1
 
 	type P struct {
@@ -383,9 +396,12 @@ func (n *node) processApplyCh() {
 	}
 	previous := make(map[string]*P)
 
+	ctxb := context.Background()
+
 	// This function must be run serially.
 	handle := func(proposals []*pb.Proposal) {
 		for _, proposal := range proposals {
+			start := time.Now()
 			// We use the size as a double check to ensure that we're
 			// working with the same proposal as before.
 			psz := proposal.Size()
@@ -413,6 +429,8 @@ func (n *node) processApplyCh() {
 
 			n.Proposals.Done(proposal.Key, perr)
 			n.Applied.Done(proposal.Index)
+			dur := float64(time.Since(start)) / 1e6
+			stats.Record(ctxb, mLatencyMs.M(dur))
 		}
 	}
 
