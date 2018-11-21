@@ -83,7 +83,7 @@ func main() {
 	Opt = options{
 		RDFDir:      "../../data",
 		SchemaFile:  "../../data.schema",
-		DgraphsDir:  "../" + xid.New().String() + "-dgraph-out",
+		DgraphsDir:  "../" + xid.New().String() + "-dgraph-p",
 		ExpandEdges: true,
 		StoreXids:   false,
 	}

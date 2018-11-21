@@ -22,7 +22,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
+	// farm "github.com/dgryski/go-farm"
 )
 
 type opts struct {
@@ -39,7 +39,7 @@ type opts struct {
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
-	shards []shard
+    lru shard
 	kv     *badger.DB
 	opt    opts
 }
@@ -71,24 +71,20 @@ func NewXidmap(badgerPath string) *XidMap {
 	}
 
 	xm := &XidMap{
-		shards: make([]shard, opt.NumShards),
-		kv:     kv,
-		opt:    opt,
+        kv:     kv,
+        opt:    opt,
+		lru:    shard{
+            elems: make(map[string]*list.Element),
+            queue: list.New(),
+        },
 	}
-	for i := range xm.shards {
-		xm.shards[i].elems = make(map[string]*list.Element)
-		xm.shards[i].queue = list.New()
-		xm.shards[i].xm = xm
-	}
+    xm.lru.xm = xm
+
 	return xm
 }
 
 func (m *XidMap) LookupUid(xid string) (uid uint64, ok bool) {
-	fp := farm.Fingerprint64([]byte(xid))
-	idx := fp % uint64(m.opt.NumShards)
-	sh := &m.shards[idx]
-
-	uid, ok = sh.lookup(xid)
+	uid, ok = m.lru.lookup(xid)
 	if ok {
 		return uid, true
 	}
@@ -109,7 +105,7 @@ func (m *XidMap) LookupUid(xid string) (uid uint64, ok bool) {
 		})
 	}))
 	if ok {
-		sh.add(xid, uid)
+		m.lru.add(xid, uid)
 		return uid, true
 	}
 	return 0, false
@@ -129,8 +125,7 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 }
 
 func (s *shard) add(xid string, uid uint64) {
-	lruSizePerShard := s.xm.opt.LRUSize / s.xm.opt.NumShards
-	if s.queue.Len() >= lruSizePerShard && len(s.beingEvicted) == 0 {
+	if s.queue.Len() >= s.xm.opt.LRUSize && len(s.beingEvicted) == 0 {
 		s.evict(0.5)
 	}
 

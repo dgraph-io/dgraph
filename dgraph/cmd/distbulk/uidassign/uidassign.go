@@ -83,10 +83,9 @@ func main() {
 		Distinct("unique UID", flow.Field(1)).
 		// Printlnf("%s %d")
 		OutputRow(func(row *util.Row) error {
-			node := gio.ToString(row.K[0])
 			var uidBuf [binary.MaxVarintLen64]byte
 			n := binary.PutUvarint(uidBuf[:], row.V[0].(uint64))
-			return wb.Set([]byte(node), uidBuf[:n], 0)
+			return wb.Set([]byte(row.K[0].(string)), uidBuf[:n], 0)
 		})
 
 	if *isDistributed {
@@ -106,13 +105,14 @@ func parseRdf(row []interface{}) error {
 		return err
 	}
 
-	gio.Emit(nq.GetSubject())
-	objId := nq.GetObjectId()
-	if objId == "" {
-		gio.Emit(nq.GetObjectValue().GetDefaultVal())
-	} else {
-		gio.Emit(objId)
+    // always assign a UID to a Subject XID
+    gio.Emit(nq.GetSubject())
+
+    // only assign a UID to an Object XID if it's not a value
+	if nq.GetObjectValue() == nil {
+        gio.Emit(nq.GetObjectId())
 	}
+
 	return nil
 }
 

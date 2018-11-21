@@ -83,7 +83,7 @@ func init() {
 }
 
 func run() {
-    cmd := exec.Command("go", "run", "main/main.go")
+    cmd := exec.Command("go", "run", "mapreduce/*.go")
     var stdout, stderr bytes.Buffer
     cmd.Stdout = &stdout
     cmd.Stderr = &stderr

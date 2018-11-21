@@ -23,6 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
+    "github.com/dgraph-io/dgraph/dgraph/cmd/distbulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/conv"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debug"
@@ -83,7 +84,7 @@ func init() {
 		"Dgraph always sets this flag to 0. It can't be overwritten."))
 
 	var subcommands = []*x.SubCommand{
-		&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero,
+		&bulk.Bulk, &distbulk.Distbulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero,
 		&version.Version, &debug.Debug,
 	}
 	for _, sc := range subcommands {
