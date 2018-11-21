@@ -104,8 +104,8 @@ func userDel(dc *dgo.Dgraph) error {
 }
 
 func userLogin(dc *dgo.Dgraph) error {
-	userid := UserAdd.Conf.GetString("user")
-	password := UserAdd.Conf.GetString("password")
+	userid := LogIn.Conf.GetString("user")
+	password := LogIn.Conf.GetString("password")
 
 	if len(userid) == 0 {
 		return fmt.Errorf("The user must not be empty.")
