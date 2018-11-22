@@ -1835,7 +1835,14 @@ func getReversePredicates(ctx context.Context) ([]string, error) {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
-	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph")
+	var suffix string
+	if len(sg.Params.Alias) > 0 {
+		suffix += "." + sg.Params.Alias
+	}
+	if len(sg.Attr) > 0 {
+		suffix += "." + sg.Attr
+	}
+	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph"+suffix)
 	defer span.End()
 
 	if sg.Attr == "uid" {
