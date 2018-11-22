@@ -28,6 +28,9 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
@@ -158,8 +161,26 @@ func detectPendingTxns(attr string) error {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error {
+func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (aerr error) {
+	startTime := time.Now()
 	span := otrace.FromContext(ctx)
+
+	octx := x.ObservabilityEnabledContextWithMethod(ctx, "worker/(*node).applyMutations")
+	tr := trace.New("Dgraph.Node", "ApplyMutations")
+
+	var measurements []ostats.Measurement
+	defer func() {
+		tr.Finish()
+		if aerr == nil {
+			octx, _ = tag.New(octx, tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
+		} else {
+			octx, _ = tag.New(octx, tag.Upsert(x.KeyStatus, x.TagValueStatusError), tag.Upsert(x.KeyError, aerr.Error()))
+		}
+
+		timeSpentMs := x.SinceInMilliseconds(startTime)
+		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
+		ostats.Record(octx, measurements...)
+	}()
 
 	if proposal.Mutations.DropAll {
 		// Ensures nothing get written to disk due to commit proposals.
@@ -230,8 +251,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 	}
 
 	total := len(proposal.Mutations.Edges)
-	x.ActiveMutations.Add(int64(total))
-	defer x.ActiveMutations.Add(-int64(total))
+
+	// TODO: Active mutations values can go up or down but with
+	// OpenCensus stats bucket boundaries start from 0, hence
+	// recording negative and positive values skews up values.
+	measurements = append(measurements, x.ActiveMutations.M(int64(total)))
+	defer func() {
+		measurements = append(measurements, x.ActiveMutations.M(int64(-total)))
+	}()
 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {

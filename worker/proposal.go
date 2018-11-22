@@ -26,7 +26,11 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+
+	ostats "go.opencensus.io/stats"
+	tag "go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
+
 	"golang.org/x/net/context"
 )
 
@@ -43,7 +47,7 @@ func newTimeout(retry int) time.Duration {
 var limiter rateLimiter
 
 func init() {
-	go limiter.bleed()
+	go limiter.bleed(x.ObservabilityEnabledParentContext())
 }
 
 type rateLimiter struct {
@@ -54,14 +58,16 @@ type rateLimiter struct {
 // allows a certain number of ops per second, without taking any feedback into
 // account. We however, limit solely based on feedback, allowing a certain
 // number of ops to remain pending, and not anymore.
-func (rl *rateLimiter) bleed() {
+func (rl *rateLimiter) bleed(ctx context.Context) {
+	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, "work/proposal/(*rateLimiter).bleed"))
+
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 
 	for range tick.C {
 		if atomic.AddInt32(&rl.iou, -1) >= 0 {
 			<-pendingProposals
-			x.PendingProposals.Add(-1)
+			ostats.Record(ctx, x.PendingProposals.M(-1))
 		} else {
 			atomic.AddInt32(&rl.iou, 1)
 		}
@@ -69,13 +75,15 @@ func (rl *rateLimiter) bleed() {
 }
 
 func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
+	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, "work/proposal/(*rateLimiter).incr"))
+
 	// Let's not wait here via time.Sleep or similar. Let pendingProposals
 	// channel do its natural rate limiting.
 	weight := 1 << uint(retry) // Use an exponentially increasing weight.
 	for i := 0; i < weight; i++ {
 		select {
 		case pendingProposals <- struct{}{}:
-			x.PendingProposals.Add(1)
+			ostats.Record(ctx, x.PendingProposals.M(1))
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -84,10 +92,12 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 }
 
 // Done would slowly bleed the retries out.
-func (rl *rateLimiter) decr(retry int) {
+func (rl *rateLimiter) decr(ctx context.Context, retry int) {
+	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, "work/proposal/(*rateLimiter).deccr"))
+
 	if retry == 0 {
 		<-pendingProposals
-		x.PendingProposals.Add(-1)
+		ostats.Record(ctx, x.PendingProposals.M(-1))
 		return
 	}
 	weight := 1 << uint(retry) // Ensure that the weight calculation is a copy of incr.
@@ -104,7 +114,23 @@ var errUnableToServe = errors.New("Server overloaded with pending proposals. Ple
 
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
-func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error {
+func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr error) {
+	startTime := time.Now()
+	var measurements []ostats.Measurement
+
+	ctx = x.ObservabilityEnabledContextWithMethod(ctx, "worker/(*node).proposeAndWait")
+	defer func() {
+		if perr == nil {
+			ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
+		} else {
+			ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusError), tag.Upsert(x.KeyError, perr.Error()))
+		}
+
+		timeMs := x.SinceInMilliseconds(startTime)
+		measurements = append(measurements, x.LatencyMs.M(timeMs))
+		ostats.Record(ctx, measurements...)
+	}()
+
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")
 	}
@@ -217,7 +243,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		if err := limiter.incr(ctx, i); err != nil {
 			return err
 		}
-		defer limiter.decr(i)
+		defer limiter.decr(ctx, i)
 
 		if err := propose(newTimeout(i)); err != errInternalRetry {
 			return err

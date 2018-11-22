@@ -40,12 +40,15 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
 )
 
 type ServerState struct {
@@ -437,19 +440,38 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Response, err error) {
+	startTime := time.Now()
+
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
-	ctx, span := otrace.StartSpan(ctx, "Server.Query")
-	defer span.End()
+
+	var measurements []ostats.Measurement
+	methodName := "Server.Query"
+	ctx, span := otrace.StartSpan(ctx, methodName)
+	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, methodName))
+	defer func() {
+		span.End()
+		if err == nil {
+			ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
+		} else {
+			ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusError), tag.Upsert(x.KeyError, err.Error()))
+		}
+
+		timeSpentMs := x.SinceInMilliseconds(startTime)
+		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
+		ostats.Record(ctx, measurements...)
+	}()
 
 	if err := x.HealthCheck(); err != nil {
 		return resp, err
 	}
 
-	x.PendingQueries.Add(1)
-	x.NumQueries.Add(1)
-	defer x.PendingQueries.Add(-1)
+	ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
+	defer func() {
+		measurements = append(measurements, x.PendingQueries.M(-1))
+	}()
+
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
 	}
