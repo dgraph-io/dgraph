@@ -68,14 +68,7 @@ func init() {
 	})
 }
 
-func getMemUsage(ctx context.Context) (imem int) {
-	startTime := time.Now()
-	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, "getMemUsage"))
-	defer func() {
-		timeSpentMs := float64(time.Since(startTime)) / 1e6
-		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs), x.MemoryInUse.M(int64(imem)))
-	}()
-
+func getMemUsage() int {
 	if runtime.GOOS != "linux" {
 		pid := os.Getpid()
 		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
@@ -86,25 +79,16 @@ func getMemUsage(ctx context.Context) (imem int) {
 			runtime.ReadMemStats(&ms)
 			megs := ms.Alloc
 
-			// Otherwise we succeeded in getting the Memory usage from the runtime.
-			ctx, _ = tag.New(ctx, tag.Insert(x.KeyStatus, x.TagValueStatusOK))
-
 			return int(megs)
 		}
 
 		rss := strings.Split(string(c1), " ")[0]
 		kbs, err := strconv.Atoi(rss)
 		if err != nil {
-			ctx, _ = tag.New(ctx,
-				tag.Insert(x.KeyError, err.Error()),
-				tag.Insert(x.KeyStatus, x.TagValueStatusError))
 			return 0
 		}
 
 		megs := kbs << 10
-
-		// Otherwise we succeeded in getting the Memory usage
-		ctx, _ = tag.New(ctx, tag.Insert(x.KeyStatus, x.TagValueStatusOK))
 
 		return megs
 	}
@@ -112,9 +96,6 @@ func getMemUsage(ctx context.Context) (imem int) {
 	contents, err := ioutil.ReadFile("/proc/self/stat")
 	if err != nil {
 		errMsg := fmt.Sprintf("Can't read the proc file. Err: %v\n", err)
-		ctx, _ = tag.New(ctx,
-			tag.Insert(x.KeyError, errMsg),
-			tag.Insert(x.KeyStatus, x.TagValueStatusError))
 		glog.Errorf(errMsg)
 		return 0
 	}
@@ -124,24 +105,15 @@ func getMemUsage(ctx context.Context) (imem int) {
 	// used by the process.
 	if len(cont) < 24 {
 		errMsg := "Error in RSS from stat"
-		ctx, _ = tag.New(ctx,
-			tag.Insert(x.KeyError, errMsg),
-			tag.Insert(x.KeyStatus, x.TagValueStatusError))
 		glog.Errorln(errMsg)
 		return 0
 	}
 
 	rss, err := strconv.Atoi(cont[23])
 	if err != nil {
-		ctx, _ = tag.New(ctx,
-			tag.Insert(x.KeyError, err.Error()),
-			tag.Insert(x.KeyStatus, x.TagValueStatusError))
 		glog.Errorln(err)
 		return 0
 	}
-
-	// Otherwise we succeeded in getting the Memory usage
-	ctx, _ = tag.New(ctx, tag.Insert(x.KeyStatus, x.TagValueStatusOK))
 
 	return rss * os.Getpagesize()
 }
@@ -245,7 +217,7 @@ func updateMemoryMetrics(ctx context.Context, lc *y.Closer) {
 			ostats.Record(context.Background(),
 				x.MemoryInUse.M(int64(inUse)),
 				x.MemoryIdle.M(int64(idle)),
-				x.MemoryProc.M(int64(getMemUsage(ctx))))
+				x.MemoryProc.M(int64(getMemUsage())))
 		}
 	}
 }
@@ -258,15 +230,16 @@ var (
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
-	pstore = ps
-	lcache = newListCache(math.MaxUint64)
-
-	closer = y.NewCloser(2)
-
 	// At the beginning add some distinguishing information
 	// to the context as tags that will be propagated when
 	// collecting metrics.
 	ctx := x.ObservabilityEnabledParentContext()
+
+	pstore = ps
+	lcache = newListCache(math.MaxUint64)
+	ostats.Record(ctx, x.LcacheCapacity.M(math.MaxInt64))
+
+	closer = y.NewCloser(2)
 
 	go periodicUpdateStats(ctx, closer)
 	go updateMemoryMetrics(ctx, closer)
