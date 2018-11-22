@@ -57,6 +57,11 @@ import (
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
 )
 
+const (
+	tlsNodeCert = "node.crt"
+	tlsNodeKey  = "node.key"
+)
+
 var (
 	bindall bool
 	tlsConf x.TLSHelperConfig
@@ -124,7 +129,7 @@ they form a Raft group and provide synchronous replication.
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
 	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
-		" that is used for signing the JWT")
+		" that is used for signing the JWT. Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
@@ -403,7 +408,7 @@ func run() {
 	if secretFile != "" {
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
-			glog.Fatalf("unable to read hmac secret from file: %v", secretFile)
+			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
 		}
 
 		acl.SetAccessConfiguration(acl.AccessOptions{
@@ -426,7 +431,7 @@ func run() {
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 	}
 
-	x.LoadTLSConfig(&tlsConf, Alpha.Conf)
+	x.LoadTLSConfig(&tlsConf, Alpha.Conf, tlsNodeCert, tlsNodeKey)
 	tlsConf.ClientAuth = Alpha.Conf.GetString("tls_client_auth")
 
 	setupCustomTokenizers()

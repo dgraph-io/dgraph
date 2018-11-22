@@ -27,12 +27,12 @@ func userAdd(dc *dgo.Dgraph) error {
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	dbUser, err := queryDBUser(txn, ctx, userid)
+	user, err := queryUser(txn, ctx, userid)
 	if err != nil {
 		return err
 	}
 
-	if dbUser != nil {
+	if user != nil {
 		return fmt.Errorf("Unable to create user because of conflict: %v", userid)
 	}
 
@@ -66,25 +66,25 @@ func userDel(dc *dgo.Dgraph) error {
 	userid := UserDel.Conf.GetString("user")
 	// validate the userid
 	if len(userid) == 0 {
-		return fmt.Errorf("the user id should not be empty")
+		return fmt.Errorf("The user id should not be empty")
 	}
 
 	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	dbUser, err := queryDBUser(txn, ctx, userid)
+	user, err := queryUser(txn, ctx, userid)
 	if err != nil {
 		return err
 	}
 
-	if dbUser == nil || len(dbUser.Uid) == 0 {
+	if user == nil || len(user.Uid) == 0 {
 		return fmt.Errorf("Unable to delete user because it does not exist: %v", userid)
 	}
 
 	deleteUserNQuads := []*api.NQuad{
 		{
-			Subject:     dbUser.Uid,
+			Subject:     user.Uid,
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 		}}
@@ -124,14 +124,14 @@ func userLogin(dc *dgo.Dgraph) error {
 	return nil
 }
 
-type DBUser struct {
-	Uid      string    `json:"uid"`
-	UserID   string    `json:"dgraph.xid"`
-	Password string    `json:"dgraph.password"`
-	Groups   []DBGroup `json:"dgraph.user.group"`
+type User struct {
+	Uid      string  `json:"uid"`
+	UserID   string  `json:"dgraph.xid"`
+	Password string  `json:"dgraph.password"`
+	Groups   []Group `json:"dgraph.user.group"`
 }
 
-func queryDBUser(txn *dgo.Txn, ctx context.Context, userid string) (dbUser *DBUser, err error) {
+func queryUser(txn *dgo.Txn, ctx context.Context, userid string) (user *User, err error) {
 	queryUid := `
     query search($userid: string){
       user(func: eq(` + x.Acl_XId + `, $userid)) {
@@ -151,16 +151,16 @@ func queryDBUser(txn *dgo.Txn, ctx context.Context, userid string) (dbUser *DBUs
 	if err != nil {
 		return nil, fmt.Errorf("Error while query user with id %s: %v", userid, err)
 	}
-	dbUser, err = UnmarshallDBUser(queryResp, "user")
+	user, err = UnmarshallUser(queryResp, "user")
 	if err != nil {
 		return nil, err
 	}
-	return dbUser, nil
+	return user, nil
 }
 
-// Extract the first DBUser pointed by the userKey in the query response
-func UnmarshallDBUser(queryResp *api.Response, userKey string) (dbUser *DBUser, err error) {
-	m := make(map[string][]DBUser)
+// Extract the first User pointed by the userKey in the query response
+func UnmarshallUser(queryResp *api.Response, userKey string) (user *User, err error) {
+	m := make(map[string][]User)
 
 	err = json.Unmarshal(queryResp.GetJson(), &m)
 	if err != nil {
@@ -179,18 +179,18 @@ func userMod(dc *dgo.Dgraph) error {
 	userid := UserMod.Conf.GetString("user")
 	groups := UserMod.Conf.GetString("groups")
 	if len(userid) == 0 {
-		return fmt.Errorf("the user must not be empty")
+		return fmt.Errorf("The user must not be empty")
 	}
 
 	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	dbUser, err := queryDBUser(txn, ctx, userid)
+	user, err := queryUser(txn, ctx, userid)
 	if err != nil {
 		return err
 	}
-	if dbUser == nil {
+	if user == nil {
 		return fmt.Errorf("The user does not exist: %v", userid)
 	}
 
@@ -202,7 +202,7 @@ func userMod(dc *dgo.Dgraph) error {
 	}
 
 	existingGroupsMap := make(map[string]bool)
-	for _, g := range dbUser.Groups {
+	for _, g := range user.Groups {
 		existingGroupsMap[g.GroupID] = true
 	}
 	newGroups, groupsToBeDeleted := calcDiffs(targetGroupsMap, existingGroupsMap)
@@ -215,7 +215,7 @@ func userMod(dc *dgo.Dgraph) error {
 
 	for _, g := range newGroups {
 		glog.Infof("adding user %v to group %v", userid, g)
-		nquad, err := getUserModNQuad(txn, ctx, dbUser.Uid, g)
+		nquad, err := getUserModNQuad(txn, ctx, user.Uid, g)
 		if err != nil {
 			return fmt.Errorf("error while getting the user mod nquad:%v", err)
 		}
@@ -225,7 +225,7 @@ func userMod(dc *dgo.Dgraph) error {
 
 	for _, g := range groupsToBeDeleted {
 		glog.Infof("deleting user %v from group %v", userid, g)
-		nquad, err := getUserModNQuad(txn, ctx, dbUser.Uid, g)
+		nquad, err := getUserModNQuad(txn, ctx, user.Uid, g)
 		if err != nil {
 			return fmt.Errorf("error while getting the user mod nquad:%v", err)
 		}
@@ -246,18 +246,18 @@ func userMod(dc *dgo.Dgraph) error {
 }
 
 func getUserModNQuad(txn *dgo.Txn, ctx context.Context, useruid string, groupid string) (*api.NQuad, error) {
-	dbGroup, err := queryDBGroup(txn, ctx, groupid)
+	group, err := queryGroup(txn, ctx, groupid)
 	if err != nil {
 		return nil, err
 	}
-	if dbGroup == nil {
-		return nil, fmt.Errorf("the group does not exist:%v", groupid)
+	if group == nil {
+		return nil, fmt.Errorf("The group does not exist:%v", groupid)
 	}
 
 	createUserGroupNQuads := &api.NQuad{
 		Subject:   useruid,
 		Predicate: x.Acl_UserGroup,
-		ObjectId:  dbGroup.Uid,
+		ObjectId:  group.Uid,
 	}
 
 	return createUserGroupNQuads, nil
