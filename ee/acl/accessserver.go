@@ -63,7 +63,8 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 		Payload: JwtPayload{
 			Userid: request.Userid,
 			Groups: toJwtGroups(user.Groups),
-			Exp:    time.Now().AddDate(0, 0, 30).Unix(), // set the jwt valid for 30 days
+			// TODO add the token refresh mechanism and reduce the expiration interval
+			Exp: time.Now().AddDate(0, 0, 30).Unix(), // set the jwt valid for 30 days
 		},
 	}
 
