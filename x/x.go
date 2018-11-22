@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -403,8 +402,7 @@ func PredicateLang(s string) (string, string) {
 	return s[0:i], s[i+1:]
 }
 
-func SetupConnection(host string, insecure bool, tlsConf *TLSHelperConfig,
-	tlsCertFile string, tlsKeyFile string) (*grpc.ClientConn,
+func SetupConnection(host string, insecure bool, tlsConf *TLSHelperConfig) (*grpc.ClientConn,
 	error) {
 	if insecure {
 		return grpc.Dial(host,
@@ -417,8 +415,6 @@ func SetupConnection(host string, insecure bool, tlsConf *TLSHelperConfig,
 	}
 
 	tlsConf.ConfigType = TLSClientConfig
-	tlsConf.Cert = filepath.Join(tlsConf.CertDir, tlsCertFile)
-	tlsConf.Key = filepath.Join(tlsConf.CertDir, tlsKeyFile)
 	tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
 	if err != nil {
 		return nil, err

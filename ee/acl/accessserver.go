@@ -27,35 +27,33 @@ func SetAccessConfiguration(newConfig AccessOptions) {
 
 func (accessServer *AccessServer) LogIn(ctx context.Context,
 	request *api.LogInRequest) (*api.LogInResponse, error) {
-	err := validateLoginRequest(request)
-	if err != nil {
+	if err := validateLoginRequest(request); err != nil {
 		return nil, err
 	}
 
 	resp := &api.LogInResponse{
-		Code:    api.AclResponseCode_UNAUTHENTICATED,
-		Context: &api.TxnContext{},
+		Code: api.AclResponseCode_UNAUTHENTICATED,
 	}
 
-	dbUser, err := queryDBUser(ctx, request.Userid)
+	user, err := queryUser(ctx, request.Userid)
 	if err != nil {
-		glog.Infof("Unable to login user with user id: %v", request.Userid)
+		glog.Warningf("Unable to login user with user id: %v", request.Userid)
 		return nil, err
 	}
-	if dbUser == nil {
-		errMsg := fmt.Sprintf("user not found for user id %v", request.Userid)
+	if user == nil {
+		errMsg := fmt.Sprintf("User not found for user id %v", request.Userid)
 		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	if len(dbUser.Password) == 0 {
-		errMsg := "Unable to authenticate since the user's password is empty"
-		glog.Errorf(errMsg)
+	if len(user.Password) == 0 {
+		errMsg := fmt.Sprintf("Unable to authenticate since the user's password is empty: %v", request.Userid)
+		glog.Warning(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	if dbUser.Password != request.Password {
-		glog.Infof("Password mismatch for user: %v", request.Userid)
+	if user.Password != request.Password {
+		glog.Warningf("Password mismatch for user: %v", request.Userid)
 		resp.Code = api.AclResponseCode_UNAUTHENTICATED
 		return resp, nil
 	}
@@ -64,7 +62,7 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 		Header: StdJwtHeader,
 		Payload: JwtPayload{
 			Userid: request.Userid,
-			Groups: toJwtGroups(dbUser.Groups),
+			Groups: toJwtGroups(user.Groups),
 			Exp:    time.Now().AddDate(0, 0, 30).Unix(), // set the jwt valid for 30 days
 		},
 	}
@@ -91,18 +89,18 @@ func validateLoginRequest(request *api.LogInRequest) error {
 	return nil
 }
 
-func queryDBUser(ctx context.Context, userid string) (dbUser *acl.DBUser, err error) {
-	queryUid := `
+func queryUser(ctx context.Context, userid string) (user *acl.User, err error) {
+	queryUid := fmt.Sprintf(`
     query search($userid: string){
-      user(func: eq(` + x.Acl_XId + `, $userid)) {
+      user(func: eq(%v, $userid)) {
 	    uid,
-        ` + x.Acl_Password + `
-        ` + x.Acl_UserGroup + ` {
+        %v
+        %v {
           uid
           dgraph.xid
         }
       }
-    }`
+    }`, x.Acl_XId, x.Acl_Password, x.Acl_UserGroup)
 
 	queryVars := make(map[string]string)
 	queryVars["$userid"] = userid
@@ -116,14 +114,14 @@ func queryDBUser(ctx context.Context, userid string) (dbUser *acl.DBUser, err er
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
 	}
-	dbUser, err = acl.UnmarshallDBUser(queryResp, "user")
+	user, err = acl.UnmarshallUser(queryResp, "user")
 	if err != nil {
 		return nil, err
 	}
-	return dbUser, nil
+	return user, nil
 }
 
-func toJwtGroups(groups []acl.DBGroup) []JwtGroup {
+func toJwtGroups(groups []acl.Group) []JwtGroup {
 	jwtGroups := make([]JwtGroup, len(groups))
 
 	for _, g := range groups {
