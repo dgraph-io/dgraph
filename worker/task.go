@@ -465,8 +465,6 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOptions) error {
 	srcFn := args.srcFn
 	q := args.q
-	attr := q.Attr
-	out := args.out
 
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
 	if err != nil {
@@ -492,17 +490,15 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			break
 		}
 	}
-	glog.Infof("Width: %d. NumGo: %d", width, numGo)
 	x.AssertTrue(width > 0)
-	span.Annotatef(nil, "width: %d. numGo: %d", width, numGo)
+	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
 	errCh := make(chan error, 1)
 	outputs := make([]*pb.Result, numGo)
 
 	calculate := func(start, end int) error {
-		glog.Infof("start, end: %d, %d\n", start, end)
 		x.AssertTrue(start%width == 0)
-		out = &pb.Result{}
+		out := &pb.Result{}
 		outputs[start/width] = out
 
 		for i := start; i < end; i++ {
@@ -517,14 +513,14 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			switch srcFn.fnType {
 			case NotAFunction, CompareScalarFn, HasFn, UidInFn:
 				if q.Reverse {
-					key = x.ReverseKey(attr, q.UidList.Uids[i])
+					key = x.ReverseKey(q.Attr, q.UidList.Uids[i])
 				} else {
-					key = x.DataKey(attr, q.UidList.Uids[i])
+					key = x.DataKey(q.Attr, q.UidList.Uids[i])
 				}
 			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn:
-				key = x.IndexKey(attr, srcFn.tokens[i])
+				key = x.IndexKey(q.Attr, srcFn.tokens[i])
 			case CompareAttrFn:
-				key = x.IndexKey(attr, srcFn.tokens[i])
+				key = x.IndexKey(q.Attr, srcFn.tokens[i])
 			default:
 				return x.Errorf("Unhandled function in handleUidPostings: %s", srcFn.fname)
 			}
@@ -654,13 +650,12 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		}
 	}
 	// All goroutines are done. Now attach their results.
+	out := args.out
 	for _, chunk := range outputs {
 		out.FacetMatrix = append(out.FacetMatrix, chunk.FacetMatrix...)
 		out.Counts = append(out.Counts, chunk.Counts...)
 		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
 	}
-
-	glog.Infof("Size of uidmatrix: %d", len(out.UidMatrix))
 	return nil
 }
 
