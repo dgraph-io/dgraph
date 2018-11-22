@@ -482,7 +482,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		return nil
 	}
 
-	// Divide the task into many Goroutines.
+	// Divide the task into many goroutines.
 	numGo, width := 64, 0
 	for ; numGo >= 1; numGo /= 2 {
 		width = srcFn.n / numGo
