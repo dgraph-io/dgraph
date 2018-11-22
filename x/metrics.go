@@ -85,81 +85,92 @@ var (
 )
 
 var (
-	defaultBytesDistribution     = view.Distribution(0, 1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296)
-	defaultLatencyMsDistribution = view.Distribution(0, 0.01, 0.05, 0.1, 0.3, 0.6, 0.8, 1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 20, 25, 30, 40, 50, 65, 80, 100, 130, 160, 200, 250, 300, 400, 500, 650, 800, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
+	defaultBytesDistribution = view.Distribution(
+		0, 1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304,
+		16777216, 67108864, 268435456, 1073741824, 4294967296)
+
+	defaultLatencyMsDistribution = view.Distribution(
+		0, 0.01, 0.05, 0.1, 0.3, 0.6, 0.8, 1, 2, 3, 4, 5, 6, 8, 10, 13, 16,
+		20, 25, 30, 40, 50, 65, 80, 100, 130, 160, 200, 250, 300, 400, 500,
+		650, 800, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
 )
 
-var Views = []*view.View{
+var allTagKeys = []tag.Key{
+	KeyPid, KeyOS, KeyArch, KeyStatus,
+	KeyError, KeyGoVersion, KeyMethod,
+}
+
+var AllViews = []*view.View{
 
 	{
 		Name:        "dgraph/latency",
 		Measure:     LatencyMs,
 		Description: "The latency distributions of the various methods",
 		Aggregation: defaultLatencyMsDistribution,
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/posting_reads",
 		Measure:     PostingReads,
 		Description: "The number of posting reads",
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/posting_writes",
 		Measure:     PostingWrites,
 		Description: "The number of posting writes",
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/bytes_read",
 		Measure:     BytesRead,
 		Description: "The number of bytes read",
 		Aggregation: defaultBytesDistribution,
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/bytes_write",
 		Measure:     BytesWrite,
 		Description: "The number of bytes written",
 		Aggregation: defaultBytesDistribution,
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/queries",
 		Measure:     NumQueries,
 		Description: "The number of queries",
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/lcache_hit",
 		Measure:     LcacheHit,
 		Description: "The number of hits from the LRU cache",
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/lcache_miss",
 		Measure:     LcacheMiss,
 		Description: "The number of misses from the LRU cache",
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/lcache_evict",
 		Measure:     LcacheEvicts,
 		Description: "The number of evictions from the LRU cache",
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/lcache_race",
 		Measure:     LcacheRace,
 		Description: "The number of races in the LRU cache",
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 
 	// Last value aggregations
@@ -168,98 +179,98 @@ var Views = []*view.View{
 		Measure:     PendingQueries,
 		Description: "The number of pending queries",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/pending_proposals",
 		Measure:     PendingProposals,
 		Description: "The number of pending proposals",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/lcache_size",
 		Measure:     LcacheSize,
 		Description: "The size of the LRU cache",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/lcache_len",
 		Measure:     LcacheLen,
 		Description: "The length of the LRU cache",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/lcache_capcaity",
 		Measure:     LcacheCapacity,
 		Description: "The number of items in the LRU cache",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/dirtymap_size",
 		Measure:     DirtyMapSize,
 		Description: "The number of elements in the dirty map",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/goroutines",
 		Measure:     NumGoRoutines,
 		Description: "The number of goroutines",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/memory_in_use",
 		Measure:     MemoryInUse,
 		Description: "The amount of memory in use",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/memory_idle",
 		Measure:     MemoryIdle,
 		Description: "The amount of memory in idle spans",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/memory_proc",
 		Measure:     MemoryProc,
 		Description: "The amount of memory used in processes",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/active_mutations",
 		Measure:     ActiveMutations,
 		Description: "The number of active mutations",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/alpha_status",
 		Measure:     AlphaHealth,
 		Description: "The status of the alphas",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/max_list_bytes",
 		Measure:     MaxPlSize,
 		Description: "The maximum value of bytes of the list",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 	{
 		Name:        "dgraph/max_list_length",
 		Measure:     MaxPlLength,
 		Description: "The maximum length of the list",
 		Aggregation: view.LastValue(),
-		TagKeys:     []tag.Key{KeyPid, KeyOS, KeyArch, KeyStatus, KeyError, KeyGoVersion, KeyMethod},
+		TagKeys:     allTagKeys,
 	},
 }
 
@@ -331,5 +342,8 @@ func SinceInMilliseconds(startTime time.Time) float64 {
 	return float64(durNs) / 1e6
 }
 
-func RegisterStatsViews() {
+// RegisterAllViews is a convenience function to be invoked when the
+// OpenCensus stats exporter is registered, to allow collection of stats.
+func RegisterAllViews() error {
+	return view.Register(AllViews...)
 }
