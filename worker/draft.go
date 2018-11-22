@@ -172,7 +172,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (aerr 
 	defer func() {
 		tr.Finish()
 		if aerr == nil {
-			octx, _ = tag.New(octx, tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
+			octx, _ = tag.New(octx,
+				tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
 		} else {
 			octx, _ = tag.New(octx,
 				tag.Upsert(x.KeyStatus, x.TagValueStatusError),

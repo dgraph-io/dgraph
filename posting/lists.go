@@ -256,7 +256,9 @@ func Cleanup() {
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
 func Get(key []byte) (rlist *List, err error) {
-	ctx, _ := tag.New(context.Background(), tag.Upsert(x.KeyMethod, "lcache.Get"),
+	ctx := x.ObservabilityEnabledParentContext()
+	ctx, _ = tag.New(ctx,
+		tag.Upsert(x.KeyMethod, "lcache.Get"),
 		// For majority of the cases, the status is OK,
 		// if an error occurs this will be changed anyways.
 		tag.Upsert(x.KeyStatus, x.TagValueStatusOK))

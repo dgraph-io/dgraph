@@ -78,7 +78,8 @@ func (c *listCache) UpdateMaxSize(size uint64) uint64 {
 		size = 50 << 20
 	}
 	c.MaxSize = size
-	ostats.Record(x.ObservabilityEnabledParentContext(), x.LcacheCapacity.M(int64(c.MaxSize)))
+	ostats.Record(x.ObservabilityEnabledParentContext(),
+		x.LcacheCapacity.M(int64(c.MaxSize)))
 	return c.MaxSize
 }
 

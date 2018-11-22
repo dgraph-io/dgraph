@@ -255,7 +255,8 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	l.Unlock()
 
 	// Record the size
-	stats.Record(x.ObservabilityEnabledParentContext(), x.BytesRead.M(int64(size)))
+	stats.Record(x.ObservabilityEnabledParentContext(),
+		x.BytesRead.M(int64(size)))
 
 	atomic.StoreInt32(&l.estimatedSize, size)
 	return l, nil
