@@ -59,7 +59,8 @@ type rateLimiter struct {
 // account. We however, limit solely based on feedback, allowing a certain
 // number of ops to remain pending, and not anymore.
 func (rl *rateLimiter) bleed(ctx context.Context) {
-	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, "work/proposal/(*rateLimiter).bleed"))
+	ctx, _ = tag.New(ctx,
+		tag.Upsert(x.KeyMethod, "worker/proposal/(*rateLimiter).bleed"))
 
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
@@ -75,7 +76,8 @@ func (rl *rateLimiter) bleed(ctx context.Context) {
 }
 
 func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
-	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, "work/proposal/(*rateLimiter).incr"))
+	ctx, _ = tag.New(ctx,
+		tag.Upsert(x.KeyMethod, "worker/proposal/(*rateLimiter).incr"))
 
 	// Let's not wait here via time.Sleep or similar. Let pendingProposals
 	// channel do its natural rate limiting.
@@ -93,7 +95,8 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 
 // Done would slowly bleed the retries out.
 func (rl *rateLimiter) decr(ctx context.Context, retry int) {
-	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, "work/proposal/(*rateLimiter).deccr"))
+	ctx, _ = tag.New(ctx,
+		tag.Upsert(x.KeyMethod, "worker/proposal/(*rateLimiter).deccr"))
 
 	if retry == 0 {
 		<-pendingProposals
@@ -123,7 +126,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		if perr == nil {
 			ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
 		} else {
-			ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusError), tag.Upsert(x.KeyError, perr.Error()))
+			ctx, _ = tag.New(ctx,
+				tag.Upsert(x.KeyStatus, x.TagValueStatusError),
+				tag.Upsert(x.KeyError, perr.Error()))
 		}
 
 		timeMs := x.SinceInMilliseconds(startTime)

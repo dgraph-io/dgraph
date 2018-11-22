@@ -78,7 +78,6 @@ func getMemUsage() int {
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
 			megs := ms.Alloc
-
 			return int(megs)
 		}
 
@@ -89,14 +88,12 @@ func getMemUsage() int {
 		}
 
 		megs := kbs << 10
-
 		return megs
 	}
 
 	contents, err := ioutil.ReadFile("/proc/self/stat")
 	if err != nil {
-		errMsg := fmt.Sprintf("Can't read the proc file. Err: %v\n", err)
-		glog.Errorf(errMsg)
+		glog.Errorf("Can't read the proc file. Err: %v\n", err)
 		return 0
 	}
 
@@ -104,8 +101,7 @@ func getMemUsage() int {
 	// 24th entry of the file is the RSS which denotes the number of pages
 	// used by the process.
 	if len(cont) < 24 {
-		errMsg := "Error in RSS from stat"
-		glog.Errorln(errMsg)
+		glog.Errorln("Error in RSS from stat")
 		return 0
 	}
 
@@ -277,7 +273,12 @@ func Get(key []byte) (rlist *List, err error) {
 	// to the map, any other goroutine can retrieve it.
 	l, err := getNew(key, pstore)
 	if err != nil {
-		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusError), tag.Upsert(x.KeyError, err.Error()))
+		ctx, _ = tag.New(ctx,
+			tag.Upsert(x.KeyStatus, x.TagValueStatusError),
+			// TODO: Examine if the backends can accept long err.Error
+			// values since that helps with better root cause analyses
+			// and can easily be grouped/filtered.
+			tag.Upsert(x.KeyError, "Get failed"))
 		ostats.Record(ctx, x.LcacheMiss.M(1))
 		return nil, err
 	}
@@ -285,7 +286,8 @@ func Get(key []byte) (rlist *List, err error) {
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
 		ostats.Record(ctx, x.LcacheRace.M(1), x.LcacheMiss.M(1))
-	} else { // Otherwise we didn't race, so record the previously encountered cache niss.
+	} else {
+		// We didn't race, so record the previously encountered cache niss.
 		ostats.Record(ctx, x.LcacheMiss.M(1))
 	}
 	return lp, nil

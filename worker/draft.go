@@ -164,8 +164,8 @@ func detectPendingTxns(attr string) error {
 func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (aerr error) {
 	startTime := time.Now()
 	span := otrace.FromContext(ctx)
-
-	octx := x.ObservabilityEnabledContextWithMethod(ctx, "worker/(*node).applyMutations")
+	octx := x.ObservabilityEnabledContextWithMethod(context.Background(),
+		"worker/(*node).applyMutations")
 	tr := trace.New("Dgraph.Node", "ApplyMutations")
 
 	var measurements []ostats.Measurement
@@ -174,7 +174,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (aerr 
 		if aerr == nil {
 			octx, _ = tag.New(octx, tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
 		} else {
-			octx, _ = tag.New(octx, tag.Upsert(x.KeyStatus, x.TagValueStatusError), tag.Upsert(x.KeyError, aerr.Error()))
+			octx, _ = tag.New(octx,
+				tag.Upsert(x.KeyStatus, x.TagValueStatusError),
+				tag.Upsert(x.KeyError, aerr.Error()))
 		}
 
 		timeSpentMs := x.SinceInMilliseconds(startTime)
