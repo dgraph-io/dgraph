@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.opencensus.io/stats"
+
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -251,7 +253,10 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	l.Lock()
 	size := l.calculateSize()
 	l.Unlock()
-	x.BytesRead.Add(int64(size))
+
+        // Record the size
+	stats.Record(x.ObservabilityEnabledParentContext(), x.BytesRead.M(int64(size)))
+
 	atomic.StoreInt32(&l.estimatedSize, size)
 	return l, nil
 }

@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -28,6 +29,9 @@ import (
 	"time"
 
 	"golang.org/x/net/trace"
+
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
@@ -68,7 +72,14 @@ func init() {
 	elog = trace.NewEventLog("Memory", "")
 }
 
-func getMemUsage() int {
+func getMemUsage(ctx context.Context) int {
+        startTime := time.Now()
+	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, "getMemUsage"))
+	defer func() {
+                timeSpentMs := float64(time.Since(startTime))/1e6
+		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
+	}()
+
 	if runtime.GOOS != "linux" {
 		pid := os.Getpid()
 		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
@@ -78,22 +89,37 @@ func getMemUsage() int {
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
 			megs := ms.Alloc
+
+			// Otherwise we succeeded in getting the Memory usage from the runtime.
+			ctx, _ = tag.New(ctx, tag.Insert(x.KeyStatus, x.TagValueStatusOK))
+
 			return int(megs)
 		}
 
 		rss := strings.Split(string(c1), " ")[0]
 		kbs, err := strconv.Atoi(rss)
 		if err != nil {
+			ctx, _ = tag.New(ctx,
+				tag.Insert(x.KeyError, err.Error()),
+				tag.Insert(x.KeyStatus, x.TagValueStatusError))
 			return 0
 		}
 
 		megs := kbs << 10
+
+		// Otherwise we succeeded in getting the Memory usage
+		ctx, _ = tag.New(ctx, tag.Insert(x.KeyStatus, x.TagValueStatusOK))
+
 		return megs
 	}
 
 	contents, err := ioutil.ReadFile("/proc/self/stat")
 	if err != nil {
-		glog.Errorf("Can't read the proc file. Err: %v\n", err)
+		errMsg := fmt.Sprintf("Can't read the proc file. Err: %v\n", err)
+		ctx, _ = tag.New(ctx,
+			tag.Insert(x.KeyError, errMsg),
+			tag.Insert(x.KeyStatus, x.TagValueStatusError))
+		glog.Errorf(errMsg)
 		return 0
 	}
 
@@ -101,23 +127,40 @@ func getMemUsage() int {
 	// 24th entry of the file is the RSS which denotes the number of pages
 	// used by the process.
 	if len(cont) < 24 {
-		glog.Errorln("Error in RSS from stat")
+		errMsg := "Error in RSS from stat"
+		ctx, _ = tag.New(ctx,
+			tag.Insert(x.KeyError, errMsg),
+			tag.Insert(x.KeyStatus, x.TagValueStatusError))
+		glog.Errorln(errMsg)
 		return 0
 	}
 
 	rss, err := strconv.Atoi(cont[23])
 	if err != nil {
+		ctx, _ = tag.New(ctx,
+			tag.Insert(x.KeyError, err.Error()),
+			tag.Insert(x.KeyStatus, x.TagValueStatusError))
 		glog.Errorln(err)
 		return 0
 	}
 
+	// Otherwise we succeeded in getting the Memory usage
+	ctx, _ = tag.New(ctx, tag.Insert(x.KeyStatus, x.TagValueStatusOK))
+
 	return rss * os.Getpagesize()
 }
 
-func periodicUpdateStats(lc *y.Closer) {
+func periodicUpdateStats(ctx context.Context, lc *y.Closer) {
 	defer lc.Done()
-	ticker := time.NewTicker(10 * time.Second)
+
+	period := 10 * time.Second
+	ctx, _ = tag.New(ctx,
+		tag.Insert(x.KeyMethod, "periodicUpdateStats"),
+		tag.Insert(x.KeyPeriod, period.String()))
+
+	ticker := time.NewTicker(period)
 	defer ticker.Stop()
+
 	setLruMemory := true
 	var maxSize uint64
 	var lastUse float64
@@ -132,13 +175,15 @@ func periodicUpdateStats(lc *y.Closer) {
 			inUse := float64(megs)
 
 			stats := lcache.Stats()
-			x.LcacheEvicts.Set(int64(stats.NumEvicts))
-			x.LcacheSize.Set(int64(stats.Size))
-			x.LcacheLen.Set(int64(stats.Length))
+
+			ostats.Record(ctx,
+				x.LcacheEvicts.M(int64(stats.NumEvicts)),
+				x.LcacheSize.M(int64(stats.Size)),
+				x.LcacheLen.M(int64(stats.Length)),
+				x.NumGoRoutines.M(int64(runtime.NumGoroutine())))
 
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
-			x.NumGoRoutines.Set(int64(runtime.NumGoroutine()))
 			Config.Mu.Lock()
 			mem := Config.AllottedMemory
 			Config.Mu.Unlock()
@@ -173,10 +218,16 @@ func periodicUpdateStats(lc *y.Closer) {
 	}
 }
 
-func updateMemoryMetrics(lc *y.Closer) {
+func updateMemoryMetrics(ctx context.Context, lc *y.Closer) {
 	defer lc.Done()
-	ticker := time.NewTicker(time.Minute)
+	period := time.Minute
+	ticker := time.NewTicker(period)
 	defer ticker.Stop()
+
+	ctx, _ = tag.New(ctx,
+		tag.Insert(x.KeyMethod, "updateMemoryMetrics"),
+		tag.Insert(x.KeyPeriod, period.String()))
+
 	for {
 		select {
 		case <-lc.HasBeenClosed():
@@ -195,9 +246,10 @@ func updateMemoryMetrics(lc *y.Closer) {
 			// transient spike in live heap size.
 			idle := ms.HeapIdle - ms.HeapReleased
 
-			x.MemoryInUse.Set(int64(inUse))
-			x.MemoryIdle.Set(int64(idle))
-			x.MemoryProc.Set(int64(getMemUsage()))
+			ostats.Record(context.Background(),
+				x.MemoryInUse.M(int64(inUse)),
+				x.MemoryIdle.M(int64(idle)),
+				x.MemoryProc.M(int64(getMemUsage(ctx))))
 		}
 	}
 }
@@ -212,12 +264,16 @@ var (
 func Init(ps *badger.DB) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
-	x.LcacheCapacity.Set(math.MaxInt64)
 
 	closer = y.NewCloser(2)
 
-	go periodicUpdateStats(closer)
-	go updateMemoryMetrics(closer)
+	// At the beginning add some distinguishing information
+	// to the context as tags that will be propagated when
+	// collecting metrics.
+	ctx := x.ObservabilityEnabledParentContext()
+
+	go periodicUpdateStats(ctx, closer)
+	go updateMemoryMetrics(ctx, closer)
 }
 
 func Cleanup() {
@@ -235,23 +291,33 @@ func Cleanup() {
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
 func Get(key []byte) (rlist *List, err error) {
+	ctx, _ := tag.New(context.Background(), tag.Upsert(x.KeyMethod, "lcache.Get"),
+		// For majority of the cases, the status is OK,
+		// if an error occurs this will be changed anyways.
+		tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
+
 	lp := lcache.Get(string(key))
 	if lp != nil {
-		x.LcacheHit.Add(1)
+		ostats.Record(ctx, x.LcacheHit.M(1))
 		return lp, nil
 	}
-	x.LcacheMiss.Add(1)
+
+	// From this point on we encountered a cache miss.
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l, err := getNew(key, pstore)
 	if err != nil {
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusError), tag.Upsert(x.KeyError, err.Error()))
+		ostats.Record(ctx, x.LcacheMiss.M(1))
 		return nil, err
 	}
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
-		x.LcacheRace.Add(1)
+		ostats.Record(ctx, x.LcacheRace.M(1), x.LcacheMiss.M(1))
+	} else { // Otherwise we didn't race, so record the previously encountered cache niss.
+		ostats.Record(ctx, x.LcacheMiss.M(1))
 	}
 	return lp, nil
 }
