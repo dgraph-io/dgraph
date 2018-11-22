@@ -169,7 +169,7 @@ func Max(a, b uint64) uint64 {
 }
 
 func RetryUntilSuccess(maxRetries int, sleepDurationOnFailure time.Duration,
-	f func() error) error  {
+	f func() error) error {
 	var err error
 	for retry := maxRetries; retry != 0; retry-- {
 		if err = f(); err == nil {
