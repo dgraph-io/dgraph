@@ -552,12 +552,15 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 	if leader {
 		// Do not send tablet information, if I'm not the leader.
 		group.Tablets = tablets
+		if snap, err := g.Node.Snapshot(); err == nil {
+			group.SnapshotTs = snap.ReadTs
+		}
 	}
 
 	c := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	reply, err := c.Update(ctx, group)
+	reply, err := c.UpdateMembership(ctx, group)
 	if err != nil {
 		return err
 	}
@@ -654,7 +657,7 @@ START:
 
 	c := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
-	stream, err := c.Membership(ctx, &api.Payload{})
+	stream, err := c.StreamMembership(ctx, &api.Payload{})
 	if err != nil {
 		glog.Errorf("Error while calling update %v\n", err)
 		time.Sleep(time.Second)

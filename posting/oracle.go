@@ -120,15 +120,6 @@ func (o *oracle) MinPendingStartTs() uint64 {
 	return min
 }
 
-// PurgeTs gives a start ts, below which all entries can be purged by Zero,
-// because their status has been successfully applied to Raft group.
-func (o *oracle) PurgeTs() uint64 {
-	// o.MinPendingStartTs can be inf, but we don't want Zero to delete new
-	// records that haven't yet reached us. So, we also consider MaxAssigned
-	// that we have received so far, so only records below MaxAssigned are purged.
-	return x.Min(o.MinPendingStartTs()-1, o.MaxAssigned())
-}
-
 func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {
 	o.RLock()
 	defer o.RUnlock()

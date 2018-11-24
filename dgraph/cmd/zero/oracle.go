@@ -86,10 +86,6 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	o.Lock()
 	defer o.Unlock()
 
-	// TODO: HACK. Remove this later.
-	glog.Infof("Not purging below: %d", minTs)
-	return
-
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
 		if ts < minTs {
@@ -446,40 +442,6 @@ func (s *Server) SyncedUntil() uint64 {
 	}
 	s.orc.syncMarks = s.orc.syncMarks[idx:]
 	return syncUntil
-}
-
-func (s *Server) purgeOracle() {
-	ticker := time.NewTicker(time.Second * 30)
-	defer ticker.Stop()
-
-	var lastPurgeTs uint64
-OUTER:
-	for {
-		<-ticker.C
-		groups := s.KnownGroups()
-		var minTs uint64
-		for _, group := range groups {
-			pl := s.Leader(group)
-			if pl == nil {
-				glog.Errorf("No healthy connection found to leader of group %d\n", group)
-				goto OUTER
-			}
-			c := pb.NewWorkerClient(pl.Get())
-			num, err := c.PurgeTs(context.Background(), &api.Payload{})
-			if err != nil {
-				glog.Errorf("Error while fetching minTs from group %d, err: %v\n", group, err)
-				goto OUTER
-			}
-			if minTs == 0 || num.Val < minTs {
-				minTs = num.Val
-			}
-		}
-
-		if minTs > 0 && minTs != lastPurgeTs {
-			s.orc.purgeBelow(minTs)
-			lastPurgeTs = minTs
-		}
-	}
 }
 
 func (s *Server) TryAbort(ctx context.Context,

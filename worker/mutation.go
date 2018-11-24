@@ -578,13 +578,6 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	return tctx.CommitTs, nil
 }
 
-func (w *grpcWorker) PurgeTs(ctx context.Context,
-	payload *api.Payload) (*pb.Num, error) {
-	n := &pb.Num{}
-	n.Val = posting.Oracle().PurgeTs()
-	return n, nil
-}
-
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	txnCtx := &api.TxnContext{}

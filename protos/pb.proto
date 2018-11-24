@@ -131,9 +131,11 @@ message Member {
 message Group {
 	map<uint64, Member> members = 1; // Raft ID is the key.
 	map<string, Tablet> tablets = 2; // Predicate + others are key.
+	uint64 snapshot_ts          = 3; // Stores Snapshot transaction ts.
 }
 
 message ZeroProposal {
+	map<uint32, uint64> snapshot_ts = 1; // Group ID -> Snapshot Ts.
 	Member member = 2;
 	Tablet tablet = 3;
 	uint64 maxLeaseId = 4;
@@ -401,8 +403,8 @@ service Raft {
 service Zero {
 	// These 3 endpoints are for handling membership.
 	rpc Connect (Member)               returns (ConnectionState) {}
-	rpc Update (Group)                 returns (api.Payload) {}
-	rpc Membership (api.Payload)       returns (stream MembershipState) {}
+	rpc UpdateMembership (Group)                 returns (api.Payload) {}
+	rpc StreamMembership (api.Payload)       returns (stream MembershipState) {}
 
 	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)           returns (Tablet) {}
@@ -419,7 +421,6 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc PurgeTs (api.Payload)               returns (Num) {}
 	rpc Backup (BackupRequest)							returns (Status) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}

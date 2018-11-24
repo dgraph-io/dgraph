@@ -77,7 +77,6 @@ func (s *Server) Init() {
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.shutDownCh = make(chan struct{}, 1)
 	go s.rebalanceTablets()
-	go s.purgeOracle()
 }
 
 func (s *Server) periodicallyPostTelemetry() {
@@ -316,6 +315,11 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 			// Don't continue to tablets if request is not from the leader.
 			return res, nil
 		}
+		if dst.SnapshotTs > group.SnapshotTs {
+			res = append(res, &pb.ZeroProposal{
+				SnapshotTs: map[uint32]uint64{dstMember.GroupId: dst.SnapshotTs},
+			})
+		}
 	}
 	for key, dstTablet := range dst.Tablets {
 		group, has := s.state.Groups[dstTablet.GroupId]
@@ -506,7 +510,7 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
-func (s *Server) Update(ctx context.Context, group *pb.Group) (*api.Payload, error) {
+func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Payload, error) {
 	proposals, err := s.createProposals(group)
 	if err != nil {
 		// Sleep here so the caller doesn't keep on retrying indefinitely, creating a busy
@@ -537,7 +541,7 @@ func (s *Server) Update(ctx context.Context, group *pb.Group) (*api.Payload, err
 	return &api.Payload{Data: []byte("OK")}, nil
 }
 
-func (s *Server) Membership(_ *api.Payload, stream pb.Zero_MembershipServer) error {
+func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershipServer) error {
 	// Send MembershipState right away. So, the connection is correctly established.
 	ctx := stream.Context()
 	ms, err := s.latestMembershipState(ctx)
