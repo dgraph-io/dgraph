@@ -347,10 +347,7 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
-	pl := g.Leader(0)
-	if pl == nil {
-		return nil
-	}
+	pl := g.connToZeroLeader("")
 	zc := pb.NewZeroClient(pl.Get())
 
 	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key}
