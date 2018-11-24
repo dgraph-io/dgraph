@@ -399,8 +399,11 @@ service Raft {
 }
 
 service Zero {
+	// These 3 endpoints are for handling membership.
 	rpc Connect (Member)               returns (ConnectionState) {}
-	rpc Update (stream Group)          returns (stream MembershipState) {}
+	rpc Update (Group)                 returns (api.Payload) {}
+	rpc Membership (api.Payload)       returns (stream MembershipState) {}
+
 	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)           returns (Tablet) {}
 	rpc AssignUids (Num)               returns (AssignedIds) {}

@@ -203,7 +203,9 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			// Don't goto slurp_loop, because it would break from select immediately.
 		}
 
-		glog.V(2).Infof("DoneUntil: %d. Sending delta: %+v\n", o.doneUntil.DoneUntil(), delta)
+		if glog.V(3) {
+			glog.Infof("DoneUntil: %d. Sending delta: %+v\n", o.doneUntil.DoneUntil(), delta)
+		}
 		o.Lock()
 		for id, ch := range o.subscribers {
 			select {

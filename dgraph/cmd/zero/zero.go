@@ -24,6 +24,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -34,13 +35,7 @@ import (
 var (
 	emptyMembershipState pb.MembershipState
 	emptyConnectionState pb.ConnectionState
-	errInvalidId         = errors.New("Invalid server id")
-	errInvalidAddress    = errors.New("Invalid address")
-	errEmptyPredicate    = errors.New("Empty predicate")
-	errInvalidGroup      = errors.New("Invalid group id")
-	errInvalidQuery      = errors.New("Invalid query")
 	errInternalError     = errors.New("Internal server error")
-	errJoinCluster       = errors.New("Unable to join cluster")
 	errUnknownMember     = errors.New("Unknown cluster member")
 	errUpdatedMember     = errors.New("Cluster member has updated credentials.")
 	errServerShutDown    = errors.New("Server is being shut down.")
@@ -294,7 +289,7 @@ func (s *Server) servingTablet(tablet string) *pb.Tablet {
 func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 	var res []*pb.ZeroProposal
 	if len(dst.Members) > 1 {
-		return res, errInvalidQuery
+		return res, x.Errorf("Create Proposal: Invalid group: %+v", dst)
 	}
 
 	s.RLock()
@@ -386,7 +381,7 @@ func (s *Server) Connect(ctx context.Context,
 		return cs, err
 	}
 	if len(m.Addr) == 0 {
-		return &emptyConnectionState, errInvalidAddress
+		return &emptyConnectionState, x.Errorf("No address provided: %+v", m)
 	}
 
 	for _, member := range s.membershipState().Removed {
@@ -483,10 +478,10 @@ func (s *Server) Connect(ctx context.Context,
 func (s *Server) ShouldServe(
 	ctx context.Context, tablet *pb.Tablet) (resp *pb.Tablet, err error) {
 	if len(tablet.Predicate) == 0 {
-		return resp, errEmptyPredicate
+		return resp, x.Errorf("Tablet predicate is empty in %+v", tablet)
 	}
 	if tablet.GroupId == 0 {
-		return resp, errInvalidGroup
+		return resp, x.Errorf("Group ID is Zero in %+v", tablet)
 	}
 
 	// Check who is serving this tablet.
@@ -511,67 +506,50 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
-func (s *Server) receiveUpdates(stream pb.Zero_UpdateServer) error {
-	for {
-		group, err := stream.Recv()
-		// Due to closeSend on client Side
-		if group == nil {
-			return nil
-		}
-		// Could be EOF also, but we don't care about error type.
-		if err != nil {
-			return err
-		}
-		proposals, err := s.createProposals(group)
-		if err != nil {
-			// Sleep here so the caller doesn't keep on retrying indefinitely, creating a busy
-			// wait.
-			time.Sleep(time.Second)
-			glog.Errorf("Error while creating proposals in stream %v\n", err)
-			return err
-		}
+func (s *Server) Update(ctx context.Context, group *pb.Group) (*api.Payload, error) {
+	proposals, err := s.createProposals(group)
+	if err != nil {
+		// Sleep here so the caller doesn't keep on retrying indefinitely, creating a busy
+		// wait.
+		time.Sleep(time.Second)
+		glog.Errorf("Error while creating proposals in Update: %v\n", err)
+		return nil, err
+	}
 
-		errCh := make(chan error)
-		for _, pr := range proposals {
-			go func(pr *pb.ZeroProposal) {
-				errCh <- s.Node.proposeAndWait(context.Background(), pr)
-			}(pr)
-		}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-		for range proposals {
-			// We Don't care about these errors
-			// Ideally shouldn't error out.
-			if err := <-errCh; err != nil {
-				glog.Errorf("Error while applying proposal in update stream %v\n", err)
-			}
+	errCh := make(chan error)
+	for _, pr := range proposals {
+		go func(pr *pb.ZeroProposal) {
+			errCh <- s.Node.proposeAndWait(ctx, pr)
+		}(pr)
+	}
+
+	for range proposals {
+		// We Don't care about these errors
+		// Ideally shouldn't error out.
+		if err := <-errCh; err != nil {
+			glog.Errorf("Error while applying proposal in Update stream: %v\n", err)
+			return nil, err
 		}
 	}
+	return &api.Payload{Data: []byte("OK")}, nil
 }
 
-func (s *Server) Update(stream pb.Zero_UpdateServer) error {
-	che := make(chan error, 1)
-	// Server side cancellation can only be done by existing the handler
-	// since Recv is blocking we need to run it in a goroutine.
-	go func() {
-		che <- s.receiveUpdates(stream)
-	}()
-
+func (s *Server) Membership(_ *api.Payload, stream pb.Zero_MembershipServer) error {
 	// Send MembershipState right away. So, the connection is correctly established.
 	ctx := stream.Context()
 	ms, err := s.latestMembershipState(ctx)
 	if err != nil {
 		return err
 	}
-	if ms != nil {
-		// grpc will error out during marshalling if we send nil.
-		if err := stream.Send(ms); err != nil {
-			return err
-		}
+	if err := stream.Send(ms); err != nil {
+		return err
 	}
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ticker.C:
@@ -580,13 +558,9 @@ func (s *Server) Update(stream pb.Zero_UpdateServer) error {
 			if err != nil {
 				return err
 			}
-			// TODO: Don't send if only lease has changed.
 			if err := stream.Send(ms); err != nil {
 				return err
 			}
-		case err := <-che:
-			// Error while receiving updates.
-			return err
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-s.shutDownCh:
@@ -599,5 +573,9 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 	if err := s.Node.WaitLinearizableRead(ctx); err != nil {
 		return nil, err
 	}
-	return s.membershipState(), nil
+	ms := s.membershipState()
+	if ms == nil {
+		return &pb.MembershipState{}, nil
+	}
+	return ms, nil
 }

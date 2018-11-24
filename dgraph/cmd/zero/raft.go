@@ -176,7 +176,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		m := n.server.member(p.Member.Addr)
 		// Ensures that different nodes don't have same address.
 		if m != nil && (m.Id != p.Member.Id || m.GroupId != p.Member.GroupId) {
-			return p.Key, errInvalidAddress
+			return p.Key, x.Errorf("Found another member %d with same address: %v", m.Id, m.Addr)
 		}
 		if p.Member.GroupId == 0 {
 			state.Zeros[p.Member.Id] = p.Member
@@ -359,12 +359,12 @@ func (n *node) initAndStartNode() error {
 	} else if len(opts.peer) > 0 {
 		p := conn.Get().Connect(opts.peer)
 		if p == nil {
-			return errInvalidAddress
+			return x.Errorf("Unhealthy connection to %v", opts.peer)
 		}
 
 		gconn := p.Get()
 		c := pb.NewRaftClient(gconn)
-		err := errJoinCluster
+		err := x.Errorf("Unable to join cluster")
 		timeout := 8 * time.Second
 		for i := 0; err != nil; i++ {
 			ctx, cancel := context.WithTimeout(n.ctx, timeout)

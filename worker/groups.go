@@ -129,12 +129,14 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.Node = gr.Node.Node
 	gr.Node.InitAndStartNode()
-
 	x.UpdateHealthStatus(true)
-	gr.closer = y.NewCloser(3)       // Match CLOSER:1 in this file.
-	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
+
+	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
+	go gr.sendMembershipUpdates()
+	go gr.receiveMembershipUpdates()
 	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
+
 	gr.proposeInitialSchema()
 }
 
@@ -529,22 +531,110 @@ func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
 	}
 }
 
-// TODO: This function needs to be refactored into smaller functions. It gets hard to reason about.
-// TODO: The updates have to be sent to Zero leader. But, the membership update receives can be from
-// any Zero server. Let's break that up into two different endpoints.
-func (g *groupi) periodicMembershipUpdate() {
-	defer g.closer.Done() // CLOSER:1
+func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
+	pl := g.Leader(0)
+	if pl == nil {
+		return errConnection
+	}
 
-	// Node might not be the leader when we are calculating size.
-	// We need to send immediately on start so no leader check inside calculatesize.
-	tablets := g.calculateTabletSizes()
+	leader := g.Node.AmLeader()
+	member := &pb.Member{
+		Id:         Config.RaftId,
+		GroupId:    g.groupId(),
+		Addr:       Config.MyAddr,
+		Leader:     leader,
+		LastUpdate: uint64(time.Now().Unix()),
+	}
+	group := &pb.Group{
+		Members: make(map[uint64]*pb.Member),
+	}
+	group.Members[member.Id] = member
+	if leader {
+		// Do not send tablet information, if I'm not the leader.
+		group.Tablets = tablets
+	}
+
+	c := pb.NewZeroClient(pl.Get())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	reply, err := c.Update(ctx, group)
+	if err != nil {
+		return err
+	}
+	if string(reply.GetData()) == "OK" {
+		return nil
+	}
+	return x.Errorf(string(reply.GetData()))
+}
+
+// sendMembershipUpdates sends the membership update to Zero leader. If this Alpha is the leader, it
+// would also calculate the tablet sizes and send them to Zero.
+func (g *groupi) sendMembershipUpdates() {
+	defer g.closer.Done() // CLOSER:1
 
 	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
 	slowTicker := time.NewTicker(time.Minute * 5)
 	defer slowTicker.Stop()
 
-	fastTicker := time.NewTicker(10 * time.Second)
+	fastTicker := time.NewTicker(time.Second)
 	defer fastTicker.Stop()
+
+	g.triggerMembershipSync() // Ticker doesn't start immediately
+	var lastSent time.Time
+	for {
+		select {
+		case <-g.closer.HasBeenClosed():
+			return
+		case <-fastTicker.C:
+			if time.Since(lastSent) > 10*time.Second {
+				// On start of node if it becomes a leader, we would send tablets size for sure.
+				g.triggerMembershipSync()
+			}
+		case <-g.triggerCh:
+			// Let's send update even if not leader, zero will know that this node is still active.
+			// We don't need to send tablet information everytime. So, let's only send it when we
+			// calculate it.
+			if err := g.doSendMembership(nil); err != nil {
+				glog.Errorf("While sending membership update: %v", err)
+			} else {
+				lastSent = time.Now()
+			}
+		case <-slowTicker.C:
+			if !g.Node.AmLeader() {
+				break
+			}
+			tablets := g.calculateTabletSizes()
+			g.RLock()
+			for attr := range g.tablets {
+				if tablets[attr] == nil {
+					// Found an attribute, which is present in the group state by Zero, but not on
+					// disk. So, we can do some cleanup here by asking Zero to remove this predicate
+					// from the group's state.
+					tablets[attr] = &pb.Tablet{
+						GroupId:   g.gid,
+						Predicate: attr,
+						Remove:    true,
+					}
+				}
+			}
+			g.RUnlock()
+			if err := g.doSendMembership(tablets); err != nil {
+				glog.Errorf("While sending membership update with tablet: %v", err)
+			} else {
+				lastSent = time.Now()
+			}
+		}
+	}
+}
+
+// receiveMembershipUpdates receives membership updates from ANY Zero server. This is the main
+// connection which tells Alpha about the state of the cluster, including the latest Zero leader.
+// All the other connections to Zero, are only made only to the leader.
+func (g *groupi) receiveMembershipUpdates() {
+	defer g.closer.Done() // CLOSER:1
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 
 START:
 	select {
@@ -564,7 +654,7 @@ START:
 
 	c := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
-	stream, err := c.Update(ctx)
+	stream, err := c.Membership(ctx, &api.Payload{})
 	if err != nil {
 		glog.Errorf("Error while calling update %v\n", err)
 		time.Sleep(time.Second)
@@ -601,7 +691,6 @@ START:
 	}()
 
 	lastRecv := time.Now()
-	g.triggerMembershipSync() // Ticker doesn't start immediately
 OUTER:
 	for {
 		select {
@@ -614,63 +703,16 @@ OUTER:
 		case state := <-stateCh:
 			lastRecv = time.Now()
 			g.applyState(state)
-		case <-fastTicker.C:
+		case <-ticker.C:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
-				stream.CloseSend()
-				cancel()
-				break OUTER
-			}
-		case <-g.triggerCh:
-			if !g.Node.AmLeader() {
-				tablets = nil
-			}
-			// On start of node if it becomes a leader, we would send tablets size for sure.
-			if err := g.sendMembership(tablets, stream); err != nil {
-				stream.CloseSend()
-				break OUTER
-			}
-		case <-slowTicker.C:
-			// TODO: Zero should have two different RPCs. One for receiving updates, and one for
-			// sending updates.
-
-			// dgraphzero just adds to the map so check that no data is present for the tablet
-			// before we remove it to avoid the race condition where a tablet is added recently
-			// and mutation has not been persisted to disk.
-			var allTablets map[string]*pb.Tablet
-			if g.Node.AmLeader() {
-				prevTablets := tablets
-				tablets = g.calculateTabletSizes()
-				if prevTablets != nil {
-					allTablets = make(map[string]*pb.Tablet)
-					g.RLock()
-					for attr := range g.tablets {
-						if tablets[attr] == nil && prevTablets[attr] == nil {
-							allTablets[attr] = &pb.Tablet{
-								GroupId:   g.gid,
-								Predicate: attr,
-								Remove:    true,
-							}
-						}
-					}
-					g.RUnlock()
-					for attr, tab := range tablets {
-						allTablets[attr] = tab
-					}
-				} else {
-					allTablets = tablets
-				}
-			}
-			// Let's send update even if not leader, zero will know that this node is still
-			// active.
-			if err := g.sendMembership(allTablets, stream); err != nil {
-				glog.Errorf("Error while updating tablets size %v\n", err)
 				stream.CloseSend()
 				break OUTER
 			}
 		}
 	}
+	cancel()
 	goto START
 }
 
@@ -752,27 +794,6 @@ func (g *groupi) cleanupTablets() {
 			}
 		}()
 	}
-}
-
-func (g *groupi) sendMembership(tablets map[string]*pb.Tablet,
-	stream pb.Zero_UpdateClient) error {
-	leader := g.Node.AmLeader()
-	member := &pb.Member{
-		Id:         Config.RaftId,
-		GroupId:    g.groupId(),
-		Addr:       Config.MyAddr,
-		Leader:     leader,
-		LastUpdate: uint64(time.Now().Unix()),
-	}
-	group := &pb.Group{
-		Members: make(map[uint64]*pb.Member),
-	}
-	group.Members[member.Id] = member
-	if leader {
-		group.Tablets = tablets
-	}
-
-	return stream.Send(group)
 }
 
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
@@ -888,7 +909,7 @@ func (g *groupi) processOracleDeltaStream() {
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
-			if glog.V(2) {
+			if glog.V(3) {
 				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:",
 					batch, delta.MaxAssigned)
 				for _, txn := range delta.Txns {
