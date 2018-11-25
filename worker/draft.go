@@ -115,11 +115,10 @@ func (h *header) Decode(in []byte) {
 }
 
 func (n *node) Ctx(key string) context.Context {
-	ctx := context.Background()
 	if pctx := n.Proposals.Get(key); pctx != nil {
-		ctx = pctx.Ctx
+		return pctx.Ctx
 	}
-	return ctx
+	return context.Background()
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -159,9 +158,8 @@ func detectPendingTxns(attr string) error {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(proposal *pb.Proposal) error {
-	tr := trace.New("Dgraph.Node", "ApplyMutations")
-	defer tr.Finish()
+func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error {
+	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropAll {
 		// Ensures nothing get written to disk due to commit proposals.
@@ -173,14 +171,10 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 	if proposal.Mutations.StartTs == 0 {
 		return errors.New("StartTs must be provided.")
 	}
-
 	startTs := proposal.Mutations.StartTs
-	ctx := n.Ctx(proposal.Key)
-	ctx, span := otrace.StartSpan(ctx, "node.applyMutations")
-	defer span.End()
 
 	if len(proposal.Mutations.Schema) > 0 {
-		tr.LazyPrintf("Applying Schema")
+		span.Annotatef(nil, "Applying schema")
 		for _, supdate := range proposal.Mutations.Schema {
 			// This is neceassry to ensure that there is no race between when we start reading
 			// from badger and new mutation getting commited via raft and getting applied.
@@ -213,19 +207,17 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-			tr.LazyPrintf("Predicate Moving")
-			tr.SetError()
+			span.Annotatef(nil, "Tablet moving: %+v. Retry later.", tablet)
 			return errPredicateMoving
 		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only drop the predicate if there is no pending
 			// transaction.
 			if err := detectPendingTxns(edge.Attr); err != nil {
-				tr.LazyPrintf("Found pending transactions which obstruct operation.")
-				tr.SetError()
+				span.Annotatef(nil, "Found pending transactions. Retry later.")
 				return err
 			}
-			tr.LazyPrintf("Deleting predicate")
+			span.Annotatef(nil, "Deleting predicate: %s", edge.Attr)
 			return posting.DeletePredicate(ctx, edge.Attr)
 		}
 		// Dont derive schema when doing deletion.
@@ -254,12 +246,10 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 	m := proposal.Mutations
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
-		tr.LazyPrintf("Should Abort")
-		tr.SetError()
+		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return dy.ErrConflict
 	}
 
-	tr.LazyPrintf("Applying %d edges", len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges", len(m.Edges))
 	var retries int
 	for _, edge := range m.Edges {
@@ -269,7 +259,6 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 				break
 			}
 			if err != posting.ErrRetry {
-				tr.SetError()
 				return err
 			}
 			retries++
@@ -278,20 +267,26 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 	if retries > 0 {
 		span.Annotatef(nil, "retries=true num=%d", retries)
 	}
-	tr.LazyPrintf("Done applying %d edges", len(m.Edges))
 	return nil
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal) error {
-	if proposal.Mutations != nil {
-		// syncmarks for this shouldn't be marked done until it's comitted.
-		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
-		return n.applyMutations(proposal)
-	}
-
 	ctx := n.Ctx(proposal.Key)
 	ctx, span := otrace.StartSpan(ctx, "node.applyCommitted")
 	defer span.End()
+	span.Annotatef(nil, "Node id: %d. Group id: %d. Got proposal key: %s",
+		n.Id, n.gid, proposal.Key)
+
+	if proposal.Mutations != nil {
+		// syncmarks for this shouldn't be marked done until it's comitted.
+		span.Annotate(nil, "Applying mutations")
+		if err := n.applyMutations(ctx, proposal); err != nil {
+			span.Annotatef(nil, "While applying mutations: %v", err)
+			return err
+		}
+		span.Annotate(nil, "Done")
+		return nil
+	}
 
 	switch {
 	case len(proposal.Kv) > 0:
@@ -856,12 +851,12 @@ func (n *node) rollupLists(readTs uint64) error {
 	return nil
 }
 
-var errConnection = errors.New("No connection exists")
+var errNoConnection = errors.New("No connection exists")
 
 func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 	pl := groups().Leader(0)
 	if pl == nil {
-		return errConnection
+		return errNoConnection
 	}
 	zc := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

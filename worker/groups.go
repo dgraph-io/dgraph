@@ -97,7 +97,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	var connState *pb.ConnectionState
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
-		pl := gr.connToZeroLeader(Config.ZeroAddr)
+		pl := gr.connToZeroLeader()
 		if pl == nil {
 			continue
 		}
@@ -129,12 +129,14 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.Node = gr.Node.Node
 	gr.Node.InitAndStartNode()
-
 	x.UpdateHealthStatus(true)
-	gr.closer = y.NewCloser(3)       // Match CLOSER:1 in this file.
-	go gr.periodicMembershipUpdate() // Now set it to be run periodically.
+
+	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
+	go gr.sendMembershipUpdates()
+	go gr.receiveMembershipUpdates()
 	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
+
 	gr.proposeInitialSchema()
 }
 
@@ -328,14 +330,7 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 }
 
 func (g *groupi) BelongsTo(key string) uint32 {
-	g.RLock()
-	tablet, ok := g.tablets[key]
-	g.RUnlock()
-
-	if ok {
-		return tablet.GroupId
-	}
-	tablet = g.Tablet(key)
+	tablet := g.Tablet(key)
 	if tablet != nil {
 		return tablet.GroupId
 	}
@@ -370,10 +365,7 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
-	pl := g.Leader(0)
-	if pl == nil {
-		return nil
-	}
+	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 
 	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key}
@@ -512,12 +504,29 @@ func (g *groupi) triggerMembershipSync() {
 
 const connBaseDelay = 100 * time.Millisecond
 
-func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
+func (g *groupi) connToZeroLeader() *conn.Pool {
 	pl := g.Leader(0)
 	if pl != nil {
 		return pl
 	}
 	glog.V(1).Infof("No healthy Zero leader found. Trying to find a Zero leader...")
+
+	getLeaderConn := func(zc pb.ZeroClient) *conn.Pool {
+		ctx, cancel := context.WithTimeout(gr.ctx, 10*time.Second)
+		defer cancel()
+
+		connState, err := zc.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
+		if err != nil || connState == nil {
+			glog.V(1).Infof("While retrieving Zero leader info. Error: %v. Retrying...", err)
+			return nil
+		}
+		for _, mz := range connState.State.GetZeros() {
+			if mz.Leader {
+				return conn.Get().Connect(mz.GetAddr())
+			}
+		}
+		return nil
+	}
 
 	// No leader found. Let's get the latest membership state from Zero.
 	delay := connBaseDelay
@@ -527,49 +536,140 @@ func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
 		if delay <= maxHalfDelay {
 			delay *= 2
 		}
-		var pl *conn.Pool
-		if len(addr) > 0 {
-			pl = conn.Get().Connect(addr)
+		pl := g.AnyServer(0)
+		if pl == nil {
+			pl = conn.Get().Connect(Config.ZeroAddr)
 		}
 		if pl == nil {
-			pl = g.AnyServer(0)
-			if pl == nil {
-				glog.V(1).Infof("No healthy Zero server found. Retrying...")
-				continue
-			}
-		}
-		zc := pb.NewZeroClient(pl.Get())
-		connState, err := zc.Connect(gr.ctx, &pb.Member{ClusterInfoOnly: true})
-		if err != nil || connState == nil {
-			glog.V(1).Infof("While retrieving Zero leader info. Error: %v. Retrying...", err)
+			glog.V(1).Infof("No healthy Zero server found. Retrying...")
 			continue
 		}
-		for _, mz := range connState.State.GetZeros() {
-			if mz.Leader {
-				pl := conn.Get().Connect(mz.GetAddr())
-				return pl
-			}
+		zc := pb.NewZeroClient(pl.Get())
+		if pl := getLeaderConn(zc); pl != nil {
+			return pl
 		}
 		glog.V(1).Infof("Unable to connect to a healthy Zero leader. Retrying...")
 	}
 }
 
-// TODO: This function needs to be refactored into smaller functions. It gets hard to reason about.
-// TODO: The updates have to be sent to Zero leader. But, the membership update receives can be from
-// any Zero server. Let's break that up into two different endpoints.
-func (g *groupi) periodicMembershipUpdate() {
-	defer g.closer.Done() // CLOSER:1
+func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
+	leader := g.Node.AmLeader()
+	member := &pb.Member{
+		Id:         Config.RaftId,
+		GroupId:    g.groupId(),
+		Addr:       Config.MyAddr,
+		Leader:     leader,
+		LastUpdate: uint64(time.Now().Unix()),
+	}
+	group := &pb.Group{
+		Members: make(map[uint64]*pb.Member),
+	}
+	group.Members[member.Id] = member
+	if leader {
+		// Do not send tablet information, if I'm not the leader.
+		group.Tablets = tablets
+		if snap, err := g.Node.Snapshot(); err == nil {
+			group.SnapshotTs = snap.ReadTs
+		}
+	}
 
-	// Node might not be the leader when we are calculating size.
-	// We need to send immediately on start so no leader check inside calculatesize.
-	tablets := g.calculateTabletSizes()
+	pl := g.connToZeroLeader()
+	if pl == nil {
+		return errNoConnection
+	}
+	c := pb.NewZeroClient(pl.Get())
+	ctx, cancel := context.WithTimeout(g.ctx, 10*time.Second)
+	defer cancel()
+	reply, err := c.UpdateMembership(ctx, group)
+	if err != nil {
+		return err
+	}
+	if string(reply.GetData()) == "OK" {
+		return nil
+	}
+	return x.Errorf(string(reply.GetData()))
+}
+
+// sendMembershipUpdates sends the membership update to Zero leader. If this Alpha is the leader, it
+// would also calculate the tablet sizes and send them to Zero.
+func (g *groupi) sendMembershipUpdates() {
+	defer g.closer.Done() // CLOSER:1
 
 	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
 	slowTicker := time.NewTicker(time.Minute * 5)
 	defer slowTicker.Stop()
 
-	fastTicker := time.NewTicker(10 * time.Second)
+	fastTicker := time.NewTicker(time.Second)
 	defer fastTicker.Stop()
+
+	consumeTriggers := func() {
+		for {
+			select {
+			case <-g.triggerCh:
+			default:
+				return
+			}
+		}
+	}
+
+	g.triggerMembershipSync() // Ticker doesn't start immediately
+	var lastSent time.Time
+	for {
+		select {
+		case <-g.closer.HasBeenClosed():
+			return
+		case <-fastTicker.C:
+			if time.Since(lastSent) > 10*time.Second {
+				// On start of node if it becomes a leader, we would send tablets size for sure.
+				g.triggerMembershipSync()
+			}
+		case <-g.triggerCh:
+			// Let's send update even if not leader, zero will know that this node is still active.
+			// We don't need to send tablet information everytime. So, let's only send it when we
+			// calculate it.
+			consumeTriggers()
+			if err := g.doSendMembership(nil); err != nil {
+				glog.Errorf("While sending membership update: %v", err)
+			} else {
+				lastSent = time.Now()
+			}
+		case <-slowTicker.C:
+			if !g.Node.AmLeader() {
+				break // breaks select case, not for loop.
+			}
+			tablets := g.calculateTabletSizes()
+			g.RLock()
+			for attr := range g.tablets {
+				if tablets[attr] == nil {
+					// Found an attribute, which is present in the group state by Zero, but not on
+					// disk. So, we can do some cleanup here by asking Zero to remove this predicate
+					// from the group's state.
+					tablets[attr] = &pb.Tablet{
+						GroupId:   g.gid,
+						Predicate: attr,
+						Remove:    true,
+					}
+					glog.Warningf("Removing tablet: %+v", tablets[attr])
+				}
+			}
+			g.RUnlock()
+			if err := g.doSendMembership(tablets); err != nil {
+				glog.Errorf("While sending membership update with tablet: %v", err)
+			} else {
+				lastSent = time.Now()
+			}
+		}
+	}
+}
+
+// receiveMembershipUpdates receives membership updates from ANY Zero server. This is the main
+// connection which tells Alpha about the state of the cluster, including the latest Zero leader.
+// All the other connections to Zero, are only made only to the leader.
+func (g *groupi) receiveMembershipUpdates() {
+	defer g.closer.Done() // CLOSER:1
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 
 START:
 	select {
@@ -578,7 +678,7 @@ START:
 	default:
 	}
 
-	pl := g.connToZeroLeader("")
+	pl := g.connToZeroLeader()
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		glog.Warningln("Membership update: No Zero server known.")
@@ -589,7 +689,7 @@ START:
 
 	c := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithCancel(context.Background())
-	stream, err := c.Update(ctx)
+	stream, err := c.StreamMembership(ctx, &api.Payload{})
 	if err != nil {
 		glog.Errorf("Error while calling update %v\n", err)
 		time.Sleep(time.Second)
@@ -626,7 +726,6 @@ START:
 	}()
 
 	lastRecv := time.Now()
-	g.triggerMembershipSync() // Ticker doesn't start immediately
 OUTER:
 	for {
 		select {
@@ -639,63 +738,16 @@ OUTER:
 		case state := <-stateCh:
 			lastRecv = time.Now()
 			g.applyState(state)
-		case <-fastTicker.C:
+		case <-ticker.C:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
-				stream.CloseSend()
-				cancel()
-				break OUTER
-			}
-		case <-g.triggerCh:
-			if !g.Node.AmLeader() {
-				tablets = nil
-			}
-			// On start of node if it becomes a leader, we would send tablets size for sure.
-			if err := g.sendMembership(tablets, stream); err != nil {
-				stream.CloseSend()
-				break OUTER
-			}
-		case <-slowTicker.C:
-			// TODO: Zero should have two different RPCs. One for receiving updates, and one for
-			// sending updates.
-
-			// dgraphzero just adds to the map so check that no data is present for the tablet
-			// before we remove it to avoid the race condition where a tablet is added recently
-			// and mutation has not been persisted to disk.
-			var allTablets map[string]*pb.Tablet
-			if g.Node.AmLeader() {
-				prevTablets := tablets
-				tablets = g.calculateTabletSizes()
-				if prevTablets != nil {
-					allTablets = make(map[string]*pb.Tablet)
-					g.RLock()
-					for attr := range g.tablets {
-						if tablets[attr] == nil && prevTablets[attr] == nil {
-							allTablets[attr] = &pb.Tablet{
-								GroupId:   g.gid,
-								Predicate: attr,
-								Remove:    true,
-							}
-						}
-					}
-					g.RUnlock()
-					for attr, tab := range tablets {
-						allTablets[attr] = tab
-					}
-				} else {
-					allTablets = tablets
-				}
-			}
-			// Let's send update even if not leader, zero will know that this node is still
-			// active.
-			if err := g.sendMembership(allTablets, stream); err != nil {
-				glog.Errorf("Error while updating tablets size %v\n", err)
 				stream.CloseSend()
 				break OUTER
 			}
 		}
 	}
+	cancel()
 	goto START
 }
 
@@ -777,27 +829,6 @@ func (g *groupi) cleanupTablets() {
 			}
 		}()
 	}
-}
-
-func (g *groupi) sendMembership(tablets map[string]*pb.Tablet,
-	stream pb.Zero_UpdateClient) error {
-	leader := g.Node.AmLeader()
-	member := &pb.Member{
-		Id:         Config.RaftId,
-		GroupId:    g.groupId(),
-		Addr:       Config.MyAddr,
-		Leader:     leader,
-		LastUpdate: uint64(time.Now().Unix()),
-	}
-	group := &pb.Group{
-		Members: make(map[uint64]*pb.Member),
-	}
-	group.Members[member.Id] = member
-	if leader {
-		group.Tablets = tablets
-	}
-
-	return stream.Send(group)
 }
 
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
@@ -913,7 +944,7 @@ func (g *groupi) processOracleDeltaStream() {
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
-			if glog.V(2) {
+			if glog.V(3) {
 				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:",
 					batch, delta.MaxAssigned)
 				for _, txn := range delta.Txns {
