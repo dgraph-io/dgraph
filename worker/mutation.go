@@ -522,14 +522,12 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	defer span.End()
 
 	tctx := &api.TxnContext{StartTs: m.StartTs}
-	span.Annotatef(nil, "state: %+v", groups().state)
 	mutationMap := populateMutationMap(m)
-	span.Annotatef(nil, "Mutation map: %+v", mutationMap)
-	span.Annotatef(nil, "state: %+v", groups().state)
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
+			span.Annotatef(nil, "state: %+v", groups().state)
 			span.Annotatef(nil, "Group id zero for mutation: %+v", mu)
 			return tctx, errUnservedTablet
 		}

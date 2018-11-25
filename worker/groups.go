@@ -528,11 +528,6 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 }
 
 func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
-	pl := g.connToZeroLeader()
-	if pl == nil {
-		return errConnection
-	}
-
 	leader := g.Node.AmLeader()
 	member := &pb.Member{
 		Id:         Config.RaftId,
@@ -553,8 +548,12 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 		}
 	}
 
+	pl := g.connToZeroLeader()
+	if pl == nil {
+		return errNoConnection
+	}
 	c := pb.NewZeroClient(pl.Get())
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(g.ctx, 10*time.Second)
 	defer cancel()
 	reply, err := c.UpdateMembership(ctx, group)
 	if err != nil {
@@ -578,6 +577,16 @@ func (g *groupi) sendMembershipUpdates() {
 	fastTicker := time.NewTicker(time.Second)
 	defer fastTicker.Stop()
 
+	consumeTriggers := func() {
+		for {
+			select {
+			case <-g.triggerCh:
+			default:
+				return
+			}
+		}
+	}
+
 	g.triggerMembershipSync() // Ticker doesn't start immediately
 	var lastSent time.Time
 	for {
@@ -597,10 +606,11 @@ func (g *groupi) sendMembershipUpdates() {
 				glog.Errorf("While sending membership update: %v", err)
 			} else {
 				lastSent = time.Now()
+				consumeTriggers()
 			}
 		case <-slowTicker.C:
 			if !g.Node.AmLeader() {
-				break
+				break // breaks select case, not for loop.
 			}
 			tablets := g.calculateTabletSizes()
 			g.RLock()
@@ -614,6 +624,7 @@ func (g *groupi) sendMembershipUpdates() {
 						Predicate: attr,
 						Remove:    true,
 					}
+					glog.Warningf("Removing tablet: %+v", tablets[attr])
 				}
 			}
 			g.RUnlock()

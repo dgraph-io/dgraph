@@ -851,12 +851,12 @@ func (n *node) rollupLists(readTs uint64) error {
 	return nil
 }
 
-var errConnection = errors.New("No connection exists")
+var errNoConnection = errors.New("No connection exists")
 
 func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 	pl := groups().Leader(0)
 	if pl == nil {
-		return errConnection
+		return errNoConnection
 	}
 	zc := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
