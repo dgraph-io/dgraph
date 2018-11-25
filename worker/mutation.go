@@ -58,7 +58,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	if !groups().ServesTabletRW(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
-		return errUnservedTablet
+		return x.Errorf("runMutation: Tablet isn't being served by this group.")
 	}
 
 	su, ok := schema.State().Get(edge.Attr)
@@ -116,7 +116,8 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	n := groups().Node
 	if !groups().ServesTablet(update.Predicate) {
-		return errUnservedTablet
+		tablet := groups().Tablet(update.Predicate)
+		return x.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
 	}
 	if err := checkSchema(update); err != nil {
 		return err
@@ -526,6 +527,8 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
+			span.Annotatef(nil, "state: %+v", groups().state)
+			span.Annotatef(nil, "Group id zero for mutation: %+v", mu)
 			return tctx, errUnservedTablet
 		}
 		mu.StartTs = m.StartTs
@@ -576,13 +579,6 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		return 0, y.ErrAborted
 	}
 	return tctx.CommitTs, nil
-}
-
-func (w *grpcWorker) PurgeTs(ctx context.Context,
-	payload *api.Payload) (*pb.Num, error) {
-	n := &pb.Num{}
-	n.Val = posting.Oracle().PurgeTs()
-	return n, nil
 }
 
 // Mutate is used to apply mutations over the network on other instances.
