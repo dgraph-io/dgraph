@@ -525,6 +525,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	span.Annotatef(nil, "state: %+v", groups().state)
 	mutationMap := populateMutationMap(m)
 	span.Annotatef(nil, "Mutation map: %+v", mutationMap)
+	span.Annotatef(nil, "state: %+v", groups().state)
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {

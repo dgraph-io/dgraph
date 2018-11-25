@@ -227,18 +227,19 @@ func (n *node) handleTabletProposal(state *pb.MembershipState, tablet *pb.Tablet
 	// There's a edge case that we're handling.
 	// Two servers ask to serve the same tablet, then we need to ensure that
 	// only the first one succeeds.
-	if tablet := n.server.servingTablet(tablet.Predicate); tablet != nil {
+	if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
 		if tablet.Force {
+			// TODO: Try and remove this whole Force flag logic.
 			originalGroup := state.Groups[tablet.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
 		} else {
-			if tablet.GroupId != tablet.GroupId {
+			if prev.GroupId != tablet.GroupId {
 				return x.Errorf(
 					"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
-					tablet.Predicate, tablet.GroupId, tablet.GroupId)
+					prev.Predicate, tablet.GroupId, prev.GroupId)
 			}
 			// This update can come from tablet size.
-			tablet.ReadOnly = tablet.ReadOnly
+			tablet.ReadOnly = prev.ReadOnly
 		}
 	}
 	group.Tablets[tablet.Predicate] = tablet
