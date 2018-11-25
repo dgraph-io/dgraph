@@ -144,7 +144,10 @@ func newGroup() *pb.Group {
 	}
 }
 
-func (n *node) handleMemberProposal(state *pb.MembershipState, member *pb.Member) error {
+func (n *node) handleMemberProposal(member *pb.Member) error {
+	n.server.AssertLock()
+	state := n.server.state
+
 	m := n.server.member(member.Addr)
 	// Ensures that different nodes don't have same address.
 	if m != nil && (m.Id != member.Id || m.GroupId != member.GroupId) {
@@ -208,7 +211,10 @@ func (n *node) handleMemberProposal(state *pb.MembershipState, member *pb.Member
 	return nil
 }
 
-func (n *node) handleTabletProposal(state *pb.MembershipState, tablet *pb.Tablet) error {
+func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
+	n.server.AssertLock()
+	state := n.server.state
+
 	if tablet.GroupId == 0 {
 		return x.Errorf("Tablet group id is zero: %+v", tablet)
 	}
@@ -231,7 +237,7 @@ func (n *node) handleTabletProposal(state *pb.MembershipState, tablet *pb.Tablet
 	if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
 		if tablet.Force {
 			// TODO: Try and remove this whole Force flag logic.
-			originalGroup := state.Groups[tablet.GroupId]
+			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
 		} else {
 			if prev.GroupId != tablet.GroupId {
@@ -294,14 +300,14 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		}
 	}
 	if p.Member != nil {
-		if err := n.handleMemberProposal(state, p.Member); err != nil {
+		if err := n.handleMemberProposal(p.Member); err != nil {
 			span.Annotatef(nil, "While applying membership proposal: %+v", err)
 			glog.Errorf("While applying membership proposal: %+v", err)
 			return p.Key, err
 		}
 	}
 	if p.Tablet != nil {
-		if err := n.handleTabletProposal(state, p.Tablet); err != nil {
+		if err := n.handleTabletProposal(p.Tablet); err != nil {
 			span.Annotatef(nil, "While applying tablet proposal: %+v", err)
 			glog.Errorf("While applying tablet proposal: %+v", err)
 			return p.Key, err
@@ -401,14 +407,13 @@ func (n *node) initAndStartNode() error {
 
 		gconn := p.Get()
 		c := pb.NewRaftClient(gconn)
-		err := x.Errorf("Unable to join cluster")
 		timeout := 8 * time.Second
-		for i := 0; err != nil; i++ {
+		for {
 			ctx, cancel := context.WithTimeout(n.ctx, timeout)
 			defer cancel()
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
-			_, err = c.JoinCluster(ctx, n.RaftContext)
+			_, err := c.JoinCluster(ctx, n.RaftContext)
 			if err == nil {
 				break
 			}
@@ -423,9 +428,6 @@ func (n *node) initAndStartNode() error {
 				timeout = 32 * time.Second
 			}
 			time.Sleep(timeout) // This is useful because JoinCluster can exit immediately.
-		}
-		if err != nil {
-			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
 		}
 		glog.Infof("[%d] Starting node\n", n.Id)
 		n.SetRaft(raft.StartNode(n.Cfg, nil))

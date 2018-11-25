@@ -97,7 +97,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	var connState *pb.ConnectionState
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
-		pl := gr.connToZeroLeader(Config.ZeroAddr)
+		pl := gr.connToZeroLeader()
 		if pl == nil {
 			continue
 		}
@@ -340,7 +340,7 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 
 	// We don't know about this tablet.
 	// Check with dgraphzero if we can serve it.
-	pl := g.connToZeroLeader("")
+	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 
 	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key}
@@ -479,12 +479,29 @@ func (g *groupi) triggerMembershipSync() {
 
 const connBaseDelay = 100 * time.Millisecond
 
-func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
+func (g *groupi) connToZeroLeader() *conn.Pool {
 	pl := g.Leader(0)
 	if pl != nil {
 		return pl
 	}
 	glog.V(1).Infof("No healthy Zero leader found. Trying to find a Zero leader...")
+
+	getLeaderConn := func(zc pb.ZeroClient) *conn.Pool {
+		ctx, cancel := context.WithTimeout(gr.ctx, 10*time.Second)
+		defer cancel()
+
+		connState, err := zc.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
+		if err != nil || connState == nil {
+			glog.V(1).Infof("While retrieving Zero leader info. Error: %v. Retrying...", err)
+			return nil
+		}
+		for _, mz := range connState.State.GetZeros() {
+			if mz.Leader {
+				return conn.Get().Connect(mz.GetAddr())
+			}
+		}
+		return nil
+	}
 
 	// No leader found. Let's get the latest membership state from Zero.
 	delay := connBaseDelay
@@ -494,35 +511,24 @@ func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
 		if delay <= maxHalfDelay {
 			delay *= 2
 		}
-		var pl *conn.Pool
-		if len(addr) > 0 {
-			pl = conn.Get().Connect(addr)
+		pl := g.AnyServer(0)
+		if pl == nil {
+			pl = conn.Get().Connect(Config.ZeroAddr)
 		}
 		if pl == nil {
-			pl = g.AnyServer(0)
-			if pl == nil {
-				glog.V(1).Infof("No healthy Zero server found. Retrying...")
-				continue
-			}
-		}
-		zc := pb.NewZeroClient(pl.Get())
-		connState, err := zc.Connect(gr.ctx, &pb.Member{ClusterInfoOnly: true})
-		if err != nil || connState == nil {
-			glog.V(1).Infof("While retrieving Zero leader info. Error: %v. Retrying...", err)
+			glog.V(1).Infof("No healthy Zero server found. Retrying...")
 			continue
 		}
-		for _, mz := range connState.State.GetZeros() {
-			if mz.Leader {
-				pl := conn.Get().Connect(mz.GetAddr())
-				return pl
-			}
+		zc := pb.NewZeroClient(pl.Get())
+		if pl := getLeaderConn(zc); pl != nil {
+			return pl
 		}
 		glog.V(1).Infof("Unable to connect to a healthy Zero leader. Retrying...")
 	}
 }
 
 func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
-	pl := g.connToZeroLeader(Config.ZeroAddr)
+	pl := g.connToZeroLeader()
 	if pl == nil {
 		return errConnection
 	}
@@ -636,7 +642,7 @@ START:
 	default:
 	}
 
-	pl := g.connToZeroLeader("")
+	pl := g.connToZeroLeader()
 	// We should always have some connection to dgraphzero.
 	if pl == nil {
 		glog.Warningln("Membership update: No Zero server known.")
