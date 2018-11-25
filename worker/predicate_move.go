@@ -159,6 +159,20 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 
 	for kvBatch := range kvs {
 		for _, kv := range kvBatch.Kv {
+			if pk == nil {
+				// This only happens once.
+				pk = x.Parse(kv.Key)
+				// Delete on all nodes.
+				p := &pb.Proposal{CleanPredicate: pk.Attr}
+				glog.Infof("Predicate being received: %v", pk.Attr)
+				if err := groups().Node.proposeAndWait(ctx, p); err != nil {
+					glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+					return err
+				}
+			}
+
+			proposal.Kv = append(proposal.Kv, kv)
+			size += len(kv.Key) + len(kv.Val)
 			if size >= 32<<20 { // 32 MB
 				if err := n.proposeAndWait(ctx, proposal); err != nil {
 					return err
@@ -166,20 +180,6 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				proposal.Kv = proposal.Kv[:0]
 				size = 0
 			}
-
-			if pk == nil {
-				pk = x.Parse(kv.Key)
-				// Delete on all nodes.
-				p := &pb.Proposal{CleanPredicate: pk.Attr}
-				glog.Infof("Predicate being received: %v", pk.Attr)
-				err := groups().Node.proposeAndWait(ctx, p)
-				if err != nil {
-					glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
-					return err
-				}
-			}
-			proposal.Kv = append(proposal.Kv, kv)
-			size += len(kv.Key) + len(kv.Val)
 		}
 	}
 	if size > 0 {
@@ -195,7 +195,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 // for a predicate or not.
 func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) error {
 	// Values can be pretty big so having less buffer is safer.
-	kvs := make(chan *pb.KVS, 10)
+	kvs := make(chan *pb.KVS, 3)
 	che := make(chan error, 1)
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0

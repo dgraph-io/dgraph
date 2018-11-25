@@ -123,6 +123,12 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !st.node.AmLeader() {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, "This Zero server is not the leader. Re-run command on leader.")
+		return
+	}
+
 	tablet := r.URL.Query().Get("tablet")
 	if len(tablet) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
