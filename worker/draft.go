@@ -115,11 +115,10 @@ func (h *header) Decode(in []byte) {
 }
 
 func (n *node) Ctx(key string) context.Context {
-	ctx := context.Background()
 	if pctx := n.Proposals.Get(key); pctx != nil {
-		ctx = pctx.Ctx
+		return pctx.Ctx
 	}
-	return ctx
+	return context.Background()
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {

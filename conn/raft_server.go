@@ -78,6 +78,13 @@ func (p *proposals) Store(key string, pctx *ProposalCtx) bool {
 	return true
 }
 
+func (p *proposals) Ctx(key string) context.Context {
+	if pctx := p.Get(key); pctx != nil {
+		return pctx.Ctx
+	}
+	return context.Background()
+}
+
 func (p *proposals) Get(key string) *ProposalCtx {
 	p.RLock()
 	defer p.RUnlock()

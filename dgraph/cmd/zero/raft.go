@@ -23,6 +23,7 @@ import (
 	"math"
 	"time"
 
+	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc"
 
 	"github.com/coreos/etcd/raft"
@@ -234,9 +235,10 @@ func (n *node) handleTabletProposal(state *pb.MembershipState, tablet *pb.Tablet
 			delete(originalGroup.Tablets, tablet.Predicate)
 		} else {
 			if prev.GroupId != tablet.GroupId {
-				return x.Errorf(
+				glog.Infof(
 					"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
 					prev.Predicate, tablet.GroupId, prev.GroupId)
+				return errTabletAlreadyServed
 			}
 			// This update can come from tablet size.
 			tablet.ReadOnly = prev.ReadOnly
@@ -258,6 +260,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	if len(p.Key) == 0 {
 		return p.Key, errInvalidProposal
 	}
+	span := otrace.FromContext(n.Proposals.Ctx(p.Key))
 
 	n.server.Lock()
 	defer n.server.Unlock()
@@ -292,12 +295,14 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	}
 	if p.Member != nil {
 		if err := n.handleMemberProposal(state, p.Member); err != nil {
+			span.Annotatef(nil, "While applying membership proposal: %+v", err)
 			glog.Errorf("While applying membership proposal: %+v", err)
 			return p.Key, err
 		}
 	}
 	if p.Tablet != nil {
 		if err := n.handleTabletProposal(state, p.Tablet); err != nil {
+			span.Annotatef(nil, "While applying tablet proposal: %+v", err)
 			glog.Errorf("While applying tablet proposal: %+v", err)
 			return p.Key, err
 		}
@@ -551,7 +556,7 @@ func (n *node) Run() {
 
 				} else if entry.Type == raftpb.EntryNormal {
 					key, err := n.applyProposal(entry)
-					if err != nil && err != errTabletAlreadyServed {
+					if err != nil {
 						glog.Errorf("While applying proposal: %v\n", err)
 					}
 					n.Proposals.Done(key, err)

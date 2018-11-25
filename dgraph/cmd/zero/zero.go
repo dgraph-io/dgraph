@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -481,6 +482,9 @@ func (s *Server) Connect(ctx context.Context,
 
 func (s *Server) ShouldServe(
 	ctx context.Context, tablet *pb.Tablet) (resp *pb.Tablet, err error) {
+	ctx, span := otrace.StartSpan(ctx, "Zero.ShouldServe")
+	defer span.End()
+
 	if len(tablet.Predicate) == 0 {
 		return resp, x.Errorf("Tablet predicate is empty in %+v", tablet)
 	}
@@ -490,6 +494,7 @@ func (s *Server) ShouldServe(
 
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
+	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
 	if tab != nil {
 		// Someone is serving this tablet. Could be the caller as well.
 		// The caller should compare the returned group against the group it holds to check who's
@@ -503,10 +508,12 @@ func (s *Server) ShouldServe(
 	tablet.Force = false
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
+		span.Annotatef(nil, "While proposing tablet: %v", err)
 		return tablet, err
 	}
 	tab = s.ServingTablet(tablet.Predicate)
 	x.AssertTrue(tab != nil)
+	span.Annotatef(nil, "Now serving tablet for %s: %+v", tablet.Predicate, tab)
 	return tab, nil
 }
 

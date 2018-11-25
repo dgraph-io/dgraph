@@ -530,6 +530,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
+			span.Annotatef(nil, "Group id zero for mutation: %+v", mu)
 			return tctx, errUnservedTablet
 		}
 		mu.StartTs = m.StartTs
