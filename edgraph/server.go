@@ -264,6 +264,10 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
+	defer span.End()
+	span.Annotatef(nil, "Alter operation: %+v", op)
+
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
 

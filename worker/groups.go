@@ -305,14 +305,7 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 }
 
 func (g *groupi) BelongsTo(key string) uint32 {
-	g.RLock()
-	tablet, ok := g.tablets[key]
-	g.RUnlock()
-
-	if ok {
-		return tablet.GroupId
-	}
-	tablet = g.Tablet(key)
+	tablet := g.Tablet(key)
 	if tablet != nil {
 		return tablet.GroupId
 	}
@@ -529,7 +522,7 @@ func (g *groupi) connToZeroLeader(addr string) *conn.Pool {
 }
 
 func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
-	pl := g.Leader(0)
+	pl := g.connToZeroLeader(Config.ZeroAddr)
 	if pl == nil {
 		return errConnection
 	}

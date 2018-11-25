@@ -58,7 +58,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	if !groups().ServesTabletRW(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
-		return errUnservedTablet
+		return x.Errorf("runMutation: Tablet isn't being served by this group.")
 	}
 
 	su, ok := schema.State().Get(edge.Attr)
@@ -116,7 +116,8 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	n := groups().Node
 	if !groups().ServesTablet(update.Predicate) {
-		return errUnservedTablet
+		tablet := groups().Tablet(update.Predicate)
+		return x.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
 	}
 	if err := checkSchema(update); err != nil {
 		return err
@@ -521,7 +522,9 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	defer span.End()
 
 	tctx := &api.TxnContext{StartTs: m.StartTs}
+	span.Annotatef(nil, "state: %+v", groups().state)
 	mutationMap := populateMutationMap(m)
+	span.Annotatef(nil, "Mutation map: %+v", mutationMap)
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
