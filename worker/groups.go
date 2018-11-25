@@ -602,11 +602,11 @@ func (g *groupi) sendMembershipUpdates() {
 			// Let's send update even if not leader, zero will know that this node is still active.
 			// We don't need to send tablet information everytime. So, let's only send it when we
 			// calculate it.
+			consumeTriggers()
 			if err := g.doSendMembership(nil); err != nil {
 				glog.Errorf("While sending membership update: %v", err)
 			} else {
 				lastSent = time.Now()
-				consumeTriggers()
 			}
 		case <-slowTicker.C:
 			if !g.Node.AmLeader() {
