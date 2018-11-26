@@ -10,6 +10,9 @@ import (
 	"github.com/dgraph-io/dgraph/ee/acl/cmd"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"go.opencensus.io/trace"
+	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/peer"
 )
 
 // Server implements protos.DgraphAccessServer
@@ -27,6 +30,17 @@ func SetAccessConfiguration(newConfig AccessOptions) {
 
 func (accessServer *AccessServer) LogIn(ctx context.Context,
 	request *api.LogInRequest) (*api.LogInResponse, error) {
+	ctx, span := otrace.StartSpan(ctx, "accessserver.LogIn")
+	defer span.End()
+
+	// record the client ip for this login request
+	clientPeer, ok := peer.FromContext(ctx)
+	if ok {
+		span.Annotate([]trace.Attribute{
+			trace.StringAttribute("client_ip", clientPeer.Addr.String()),
+		}, "peer info for acl login")
+	}
+
 	if err := validateLoginRequest(request); err != nil {
 		return nil, err
 	}
