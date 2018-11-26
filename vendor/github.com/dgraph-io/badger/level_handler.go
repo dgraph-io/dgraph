@@ -272,7 +272,7 @@ func (s *levelHandler) appendIterators(iters []y.Iterator, opt *IteratorOptions)
 
 	tables := make([]*table.Table, 0, len(s.tables))
 	for _, t := range s.tables {
-		if opt.PickTable(t.Smallest(), t.Biggest()) {
+		if opt.PickTable(t) {
 			tables = append(tables, t)
 		}
 	}

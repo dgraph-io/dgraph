@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/table"
 
 	"github.com/dgraph-io/badger/y"
 )
@@ -318,14 +319,19 @@ type IteratorOptions struct {
 	PrefetchValues bool
 	// How many KV pairs to prefetch while iterating. Valid only if PrefetchValues is true.
 	PrefetchSize int
-	Prefix       []byte // Only iterate over this given prefix.
-	Reverse      bool   // Direction of iteration. False is forward, true is backward.
-	AllVersions  bool   // Fetch all valid versions of the same key.
+	Reverse      bool // Direction of iteration. False is forward, true is backward.
+	AllVersions  bool // Fetch all valid versions of the same key.
+
+	// The following option is used to narrow down the SSTables that iterator picks up. If
+	// Prefix is specified, only tables which could have this prefix are picked based on their range
+	// of keys.
+	Prefix      []byte // Only iterate over this given prefix.
+	prefixIsKey bool   // If set, use the prefix for bloom filter lookup.
 
 	internalAccess bool // Used to allow internal access to badger keys.
 }
 
-func (opt *IteratorOptions) PickTable(left, right []byte) bool {
+func (opt *IteratorOptions) PickTable(t table.TableInterface) bool {
 	if len(opt.Prefix) == 0 {
 		return true
 	}
@@ -335,8 +341,18 @@ func (opt *IteratorOptions) PickTable(left, right []byte) bool {
 		}
 		return key
 	}
-	return bytes.Compare(trim(left), opt.Prefix) <= 0 &&
-		bytes.Compare(trim(right), opt.Prefix) >= 0
+	if bytes.Compare(trim(t.Smallest()), opt.Prefix) > 0 {
+		return false
+	}
+	if bytes.Compare(trim(t.Biggest()), opt.Prefix) < 0 {
+		return false
+	}
+	// Bloom filter lookup would only work if opt.Prefix does NOT have the read
+	// timestamp as part of the key.
+	if opt.prefixIsKey && t.DoesNotHave(opt.Prefix) {
+		return false
+	}
+	return true
 }
 
 // DefaultIteratorOptions contains default options when iterating over Badger key-value stores.
@@ -400,6 +416,18 @@ func (txn *Txn) NewIterator(opt IteratorOptions) *Iterator {
 		readTs: txn.readTs,
 	}
 	return res
+}
+
+// NewKeyIterator is just like NewIterator, but allows the user to iterate over all versions of a
+// single key. Internally, it sets the Prefix option in provided opt, and uses that prefix to
+// additionally run bloom filter lookups before picking tables from the LSM tree.
+func (txn *Txn) NewKeyIterator(key []byte, opt IteratorOptions) *Iterator {
+	if len(opt.Prefix) > 0 {
+		panic("opt.Prefix should be nil for NewKeyIterator.")
+	}
+	opt.Prefix = key // This key must be without the timestamp.
+	opt.prefixIsKey = true
+	return txn.NewIterator(opt)
 }
 
 func (it *Iterator) newItem() *Item {
