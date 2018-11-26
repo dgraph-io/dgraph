@@ -318,10 +318,25 @@ type IteratorOptions struct {
 	PrefetchValues bool
 	// How many KV pairs to prefetch while iterating. Valid only if PrefetchValues is true.
 	PrefetchSize int
-	Reverse      bool // Direction of iteration. False is forward, true is backward.
-	AllVersions  bool // Fetch all valid versions of the same key.
+	Prefix       []byte // Only iterate over this given prefix.
+	Reverse      bool   // Direction of iteration. False is forward, true is backward.
+	AllVersions  bool   // Fetch all valid versions of the same key.
 
 	internalAccess bool // Used to allow internal access to badger keys.
+}
+
+func (opt *IteratorOptions) PickTable(left, right []byte) bool {
+	if len(opt.Prefix) == 0 {
+		return true
+	}
+	trim := func(key []byte) []byte {
+		if len(key) > len(opt.Prefix) {
+			return key[:len(opt.Prefix)]
+		}
+		return key
+	}
+	return bytes.Compare(trim(left), opt.Prefix) <= 0 &&
+		bytes.Compare(trim(right), opt.Prefix) >= 0
 }
 
 // DefaultIteratorOptions contains default options when iterating over Badger key-value stores.
@@ -365,6 +380,8 @@ func (txn *Txn) NewIterator(opt IteratorOptions) *Iterator {
 		panic("Only one iterator can be active at one time, for a RW txn.")
 	}
 
+	// TODO: If Prefix is set, only pick those memtables which have keys with
+	// the prefix.
 	tables, decr := txn.db.getMemTables()
 	defer decr()
 	txn.db.vlog.incrIteratorCount()
@@ -375,7 +392,7 @@ func (txn *Txn) NewIterator(opt IteratorOptions) *Iterator {
 	for i := 0; i < len(tables); i++ {
 		iters = append(iters, tables[i].NewUniIterator(opt.Reverse))
 	}
-	iters = txn.db.lc.appendIterators(iters, opt.Reverse) // This will increment references.
+	iters = txn.db.lc.appendIterators(iters, &opt) // This will increment references.
 	res := &Iterator{
 		txn:    txn,
 		iitr:   y.NewMergeIterator(iters, opt.Reverse),
@@ -402,12 +419,17 @@ func (it *Iterator) Item() *Item {
 }
 
 // Valid returns false when iteration is done.
-func (it *Iterator) Valid() bool { return it.item != nil }
+func (it *Iterator) Valid() bool {
+	if it.item == nil {
+		return false
+	}
+	return bytes.HasPrefix(it.item.key, it.opt.Prefix)
+}
 
 // ValidForPrefix returns false when iteration is done
 // or when the current key is not prefixed by the specified prefix.
 func (it *Iterator) ValidForPrefix(prefix []byte) bool {
-	return it.item != nil && bytes.HasPrefix(it.item.key, prefix)
+	return it.Valid() && bytes.HasPrefix(it.item.key, prefix)
 }
 
 // Close would close the iterator. It is important to call this when you're done with iteration.
@@ -603,6 +625,9 @@ func (it *Iterator) Seek(key []byte) {
 
 	it.lastKey = it.lastKey[:0]
 	if len(key) == 0 {
+		key = it.opt.Prefix
+	}
+	if len(key) == 0 {
 		it.iitr.Rewind()
 		it.prefetch()
 		return
@@ -621,14 +646,5 @@ func (it *Iterator) Seek(key []byte) {
 // smallest key if iterating forward, and largest if iterating backward. It does not keep track of
 // whether the cursor started with a Seek().
 func (it *Iterator) Rewind() {
-	i := it.data.pop()
-	for i != nil {
-		i.wg.Wait() // Just cleaner to wait before pushing. No ref counting needed.
-		it.waste.push(i)
-		i = it.data.pop()
-	}
-
-	it.lastKey = it.lastKey[:0]
-	it.iitr.Rewind()
-	it.prefetch()
+	it.Seek(nil)
 }

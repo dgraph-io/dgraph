@@ -246,17 +246,18 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 }
 
 func hasEdges(attr string, startTs uint64) bool {
+	pk := x.ParsedKey{Attr: attr}
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
+	iterOpt.Prefix = pk.DataPrefix()
+
 	txn := pstore.NewTransactionAt(startTs, false)
 	defer txn.Discard()
+
 	it := txn.NewIterator(iterOpt)
 	defer it.Close()
-	pk := x.ParsedKey{
-		Attr: attr,
-	}
-	prefix := pk.DataPrefix()
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+
+	for it.Rewind(); it.Valid(); it.Next() {
 		// Check for non-empty posting
 		// BitEmptyPosting is also a complete posting,
 		// so checking for CompletePosting&BitCompletePosting > 0 would

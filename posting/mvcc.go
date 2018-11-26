@@ -238,6 +238,7 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		l.minTs = item.Version()
 	} else {
 		iterOpts := badger.DefaultIteratorOptions
+		iterOpts.Prefix = key
 		iterOpts.AllVersions = true
 		it := txn.NewIterator(iterOpts)
 		defer it.Close()

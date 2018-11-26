@@ -23,6 +23,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -1115,6 +1116,21 @@ func (db *DB) GetSequence(key []byte, bandwidth uint64) (*Sequence, error) {
 
 func (db *DB) Tables() []TableInfo {
 	return db.lc.getTableInfo()
+}
+
+// KeySplits can be used to get rough key ranges to divide up iteration over
+// the DB.
+func (db *DB) KeySplits(prefix []byte) []string {
+	var splits []string
+	for _, ti := range db.Tables() {
+		// We don't use ti.Left, because that has a tendency to store !badger
+		// keys.
+		if bytes.HasPrefix(ti.Right, prefix) {
+			splits = append(splits, string(ti.Right))
+		}
+	}
+	sort.Strings(splits)
+	return splits
 }
 
 // MaxBatchCount returns max possible entries in batch

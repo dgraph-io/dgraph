@@ -152,14 +152,6 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	}
 
 	order := ts.Order[0]
-	r := new(pb.SortResult)
-	// Iterate over every bucket / token.
-	iterOpt := badger.DefaultIteratorOptions
-	iterOpt.PrefetchValues = false
-	iterOpt.Reverse = order.Desc
-	txn := pstore.NewTransactionAt(ts.ReadTs, false)
-	defer txn.Discard()
-
 	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
 		return &sortresult{&emptySortResult, nil, fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
@@ -192,11 +184,17 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		return &sortresult{&emptySortResult, nil, x.Errorf("Attribute:%s is not sortable.", order.Attr)}
 	}
 
-	indexPrefix := x.IndexKey(order.Attr, string(tokenizer.Identifier()))
+	// Iterate over every bucket / token.
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.PrefetchValues = false
+	iterOpt.Reverse = order.Desc
+	iterOpt.Prefix = x.IndexKey(order.Attr, string(tokenizer.Identifier()))
+	txn := pstore.NewTransactionAt(ts.ReadTs, false)
+	defer txn.Discard()
 	var seekKey []byte
 	if !order.Desc {
 		// We need to seek to the first key of this index type.
-		seekKey = indexPrefix
+		seekKey = nil // Would automatically seek to iterOpt.Prefix.
 	} else {
 		// We need to reach the last key of this index type.
 		seekKey = x.IndexKey(order.Attr, string(tokenizer.Identifier()+1))
@@ -204,10 +202,10 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	itr := txn.NewIterator(iterOpt)
 	defer itr.Close()
 
+	r := new(pb.SortResult)
 BUCKETS:
-
 	// Outermost loop is over index buckets.
-	for itr.Seek(seekKey); itr.ValidForPrefix(indexPrefix); itr.Next() {
+	for itr.Seek(seekKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.Key() // No need to copy.
 		select {

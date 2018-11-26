@@ -191,12 +191,13 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint6
 	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
+		opt.Prefix = w.entryPrefix()
 		opt.Reverse = reverse
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
 		itr.Seek(w.entryKey(seekTo))
-		if !itr.ValidForPrefix(w.entryPrefix()) {
+		if !itr.Valid() {
 			return errNotFound
 		}
 		item := itr.Item()
@@ -246,14 +247,14 @@ func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error 
 	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
+		opt.Prefix = w.entryPrefix()
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
 		start := w.entryKey(0)
-		prefix := w.entryPrefix()
 		first := true
 		var index uint64
-		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+		for itr.Seek(start); itr.Valid(); itr.Next() {
 			item := itr.Item()
 			index = w.parseIndex(item.Key())
 			if first {
@@ -380,13 +381,13 @@ func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		start := w.entryKey(from)
-		prefix := w.entryPrefix()
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
+		opt.Prefix = w.entryPrefix()
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+		for itr.Seek(start); itr.Valid(); itr.Next() {
 			key := itr.Item().Key()
 			keys = append(keys, string(key))
 		}
@@ -437,12 +438,12 @@ func (w *DiskStorage) NumEntries() (int, error) {
 	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
+		opt.Prefix = w.entryPrefix()
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
 		start := w.entryKey(0)
-		prefix := w.entryPrefix()
-		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+		for itr.Seek(start); itr.Valid(); itr.Next() {
 			count++
 		}
 		return nil
@@ -467,16 +468,17 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 			})
 		}
 
-		itr := txn.NewIterator(badger.DefaultIteratorOptions)
+		iopt := badger.DefaultIteratorOptions
+		iopt.Prefix = w.entryPrefix()
+		itr := txn.NewIterator(iopt)
 		defer itr.Close()
 
 		start := w.entryKey(lo)
 		end := w.entryKey(hi) // Not included in results.
-		prefix := w.entryPrefix()
 
 		var size, lastIndex uint64
 		first := true
-		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+		for itr.Seek(start); itr.Valid(); itr.Next() {
 			item := itr.Item()
 			var e pb.Entry
 			if err := item.Value(func(val []byte) error {
