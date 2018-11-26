@@ -38,13 +38,13 @@ func userAdd(dc *dgo.Dgraph) error {
 
 	createUserNQuads := []*api.NQuad{
 		{
-			Subject:     "_:" + x.NewEntityLabel,
-			Predicate:   x.Acl_XId,
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.xid",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: userid}},
 		},
 		{
-			Subject:     "_:" + x.NewEntityLabel,
-			Predicate:   x.Acl_Password,
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.password",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: password}},
 		}}
 
@@ -125,19 +125,19 @@ func userLogin(dc *dgo.Dgraph) error {
 }
 
 type User struct {
-	Uid      string  `json:"uid"`
-	UserID   string  `json:"dgraph.xid"`
-	Password string  `json:"dgraph.password"`
-	Groups   []Group `json:"dgraph.user.group"`
+	Uid           string  `json:"uid"`
+	UserID        string  `json:"dgraph.xid"`
+	Password      string  `json:"dgraph.password"`
+	PasswordMatch bool    `json:"password_match"`
+	Groups        []Group `json:"dgraph.user.group"`
 }
 
 func queryUser(txn *dgo.Txn, ctx context.Context, userid string) (user *User, err error) {
 	queryUid := `
     query search($userid: string){
-      user(func: eq(` + x.Acl_XId + `, $userid)) {
+      user(func: eq(dgraph.xid, $userid)) {
 	    uid
-        ` + x.Acl_Password + `
-        ` + x.Acl_UserGroup + ` {
+        dgraph.user.group {
           uid
           dgraph.xid
         }
@@ -256,7 +256,7 @@ func getUserModNQuad(txn *dgo.Txn, ctx context.Context, useruid string, groupid 
 
 	createUserGroupNQuads := &api.NQuad{
 		Subject:   useruid,
-		Predicate: x.Acl_UserGroup,
+		Predicate: "dgraph.user.group",
 		ObjectId:  group.Uid,
 	}
 

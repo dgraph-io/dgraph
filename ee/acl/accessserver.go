@@ -8,7 +8,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/ee/acl/cmd"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
@@ -46,30 +45,24 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 	}
 
 	resp := &api.LogInResponse{
-		Code: api.AclResponseCode_UNAUTHENTICATED,
+		Context: &api.TxnContext{},
+		Code:    api.AclResponseCode_UNAUTHENTICATED,
 	}
 
-	user, err := queryUser(ctx, request.Userid)
+	user, err := queryUser(ctx, request.Userid, request.Password)
 	if err != nil {
 		glog.Warningf("Unable to login user with user id: %v", request.Userid)
 		return nil, err
 	}
 	if user == nil {
 		errMsg := fmt.Sprintf("User not found for user id %v", request.Userid)
-		glog.Errorf(errMsg)
+		glog.Warningf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-
-	if len(user.Password) == 0 {
-		errMsg := fmt.Sprintf("Unable to authenticate since the user's password is empty: %v", request.Userid)
-		glog.Warning(errMsg)
+	if !user.PasswordMatch {
+		errMsg := fmt.Sprintf("Password mismatch for user: %v", request.Userid)
+		glog.Warningf(errMsg)
 		return nil, fmt.Errorf(errMsg)
-	}
-
-	if user.Password != request.Password {
-		glog.Warningf("Password mismatch for user: %v", request.Userid)
-		resp.Code = api.AclResponseCode_UNAUTHENTICATED
-		return resp, nil
 	}
 
 	jwt := &Jwt{
@@ -87,6 +80,7 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 		glog.Errorf("Unable to encode jwt to string: %v", err)
 		return nil, err
 	}
+
 	resp.Code = api.AclResponseCode_OK
 	return resp, nil
 }
@@ -104,21 +98,22 @@ func validateLoginRequest(request *api.LogInRequest) error {
 	return nil
 }
 
-func queryUser(ctx context.Context, userid string) (user *acl.User, err error) {
-	queryUid := fmt.Sprintf(`
-    query search($userid: string){
-      user(func: eq(%v, $userid)) {
-	    uid,
-        %v
-        %v {
+func queryUser(ctx context.Context, userid string, password string) (user *acl.User, err error) {
+	queryUid := `
+    query search($userid: string, $password: string){
+      user(func: eq(dgraph.xid, $userid)) {
+	    uid
+        password_match: checkpwd(dgraph.password, $password)
+        dgraph.user.group {
           uid
           dgraph.xid
         }
       }
-    }`, x.Acl_XId, x.Acl_Password, x.Acl_UserGroup)
+    }`
 
 	queryVars := make(map[string]string)
 	queryVars["$userid"] = userid
+	queryVars["$password"] = password
 	queryRequest := api.Request{
 		Query: queryUid,
 		Vars:  queryVars,
@@ -137,8 +132,12 @@ func queryUser(ctx context.Context, userid string) (user *acl.User, err error) {
 }
 
 func toJwtGroups(groups []acl.Group) []JwtGroup {
-	jwtGroups := make([]JwtGroup, len(groups))
+	if groups == nil {
+		// the user does not have any groups
+		return nil
+	}
 
+	jwtGroups := make([]JwtGroup, len(groups))
 	for _, g := range groups {
 		jwtGroups = append(jwtGroups, JwtGroup{
 			Group:       g.GroupID,
