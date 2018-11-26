@@ -432,8 +432,15 @@ func TestMillion(t *testing.T) {
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+		if i%10000 == 0 {
+			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
+			// list.
+			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
+			require.NoError(t, ol.Rollup(math.MaxUint64))
+		}
 		commits++
 	}
+	t.Logf("Completed a million writes.\n")
 	opt := ListOptions{ReadTs: uint64(N) + 1}
 	l, err := ol.Uids(opt)
 	require.NoError(t, err)
