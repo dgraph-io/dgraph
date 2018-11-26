@@ -214,7 +214,7 @@ func userMod(dc *dgo.Dgraph) error {
 	}
 
 	for _, g := range newGroups {
-		glog.Infof("adding user %v to group %v", userid, g)
+		glog.Infof("Adding user %v to group %v", userid, g)
 		nquad, err := getUserModNQuad(txn, ctx, user.Uid, g)
 		if err != nil {
 			return fmt.Errorf("error while getting the user mod nquad:%v", err)
@@ -224,7 +224,7 @@ func userMod(dc *dgo.Dgraph) error {
 	}
 
 	for _, g := range groupsToBeDeleted {
-		glog.Infof("deleting user %v from group %v", userid, g)
+		glog.Infof("Deleting user %v from group %v", userid, g)
 		nquad, err := getUserModNQuad(txn, ctx, user.Uid, g)
 		if err != nil {
 			return fmt.Errorf("error while getting the user mod nquad:%v", err)
@@ -232,7 +232,7 @@ func userMod(dc *dgo.Dgraph) error {
 		mu.Del = append(mu.Del, nquad)
 	}
 	if len(mu.Del) == 0 && len(mu.Set) == 0 {
-		glog.Infof("nothing nees to be changed")
+		glog.Infof("Nothing nees to be changed for the groups of user:%v", userid)
 		return nil
 	}
 
