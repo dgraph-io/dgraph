@@ -434,7 +434,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 
 	if sg.Params.isGroupBy {
 		if len(sg.GroupbyRes) == 0 {
-			return fmt.Errorf("Expected GroupbyRes to have length > 0.")
+			return x.Errorf("Expected GroupbyRes to have length > 0.")
 		}
 		n.addGroupby(sg, sg.GroupbyRes[0], sg.Params.Alias)
 		return nil

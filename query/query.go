@@ -402,7 +402,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 		if pc.Params.isGroupBy {
 			if len(pc.GroupbyRes) <= idx {
-				return fmt.Errorf("Unexpected length while adding Groupby. Idx: [%v], len: [%v]",
+				return x.Errorf("Unexpected length while adding Groupby. Idx: [%v], len: [%v]",
 					idx, len(pc.GroupbyRes))
 			}
 			dst.addGroupby(pc, pc.GroupbyRes[idx], pc.fieldName())
@@ -723,14 +723,14 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		if gchild.Func != nil &&
 			(gchild.Func.IsAggregator() || gchild.Func.IsPasswordVerifier()) {
 			if len(gchild.Children) != 0 {
-				return fmt.Errorf("Node with %q cant have child attr", gchild.Func.Name)
+				return x.Errorf("Node with %q cant have child attr", gchild.Func.Name)
 			}
 			// embedded filter will cause ambiguous output like following,
 			// director.film @filter(gt(initial_release_date, "2016")) {
 			//    min(initial_release_date @filter(gt(initial_release_date, "1986"))
 			// }
 			if gchild.Filter != nil {
-				return fmt.Errorf(
+				return x.Errorf(
 					"Node with %q cant have filter, please place the filter on the upper level",
 					gchild.Func.Name)
 			}
@@ -1558,7 +1558,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				sg.Params.uidToVal = l.Vals
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && len(l.Vals) != 0 {
 				// Derive the UID list from value var.
-				var uids []uint64
+				uids := make([]uint64, 0, len(l.Vals))
 				for k := range l.Vals {
 					uids = append(uids, k)
 				}
@@ -1678,7 +1678,7 @@ func uniquePreds(vl []*pb.ValueList) []string {
 		}
 	}
 
-	var preds []string
+	preds := make([]string, 0, len(predMap))
 	for pred := range predMap {
 		preds = append(preds, pred)
 	}
@@ -1704,8 +1704,8 @@ func recursiveCopy(dst *SubGraph, src *SubGraph) {
 }
 
 func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
-	var out []*SubGraph
 	var err error
+	out := make([]*SubGraph, 0, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 
@@ -1795,8 +1795,8 @@ func getReversePredicates(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var preds []string
 	var pred strings.Builder
+	preds := make([]string, 0, len(schs))
 	for _, sch := range schs {
 		if !sch.Reverse {
 			continue
@@ -2156,7 +2156,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		// The order of uids in the lists which are part of the uidMatrix would have been changed
 		// after sort. We want to update the order of lists in the facetMatrix accordingly.
 		for idx, rl := range result.UidMatrix {
-			var fl []*pb.Facets
+			fl := make([]*pb.Facets, 0, len(sg.facetsMatrix[idx].FacetsList))
 			for _, uid := range rl.Uids {
 				// Find index of this uid in original sorted uid list.
 				oidx := algo.IndexOf(sg.uidMatrix[idx], uid)
@@ -2199,7 +2199,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
-		uids := ul.Uids[:0:0]
+		uids := ul.Uids[:0]
 		values := make([][]types.Val, 0, len(ul.Uids))
 		facetList := fl.FacetsList[:0]
 		for j := 0; j < len(ul.Uids); j++ {
@@ -2254,7 +2254,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
-		uids := ul.Uids[:0:0]
+		uids := make([]uint64, 0, len(ul.Uids))
 		values := make([][]types.Val, 0, len(ul.Uids))
 		for _, uid := range ul.Uids {
 			v, ok := sg.Params.uidToVal[uid]
@@ -2348,7 +2348,7 @@ func GetAllPredicates(subGraphs []*SubGraph) []string {
 	for _, sg := range subGraphs {
 		sg.getAllPredicates(predicatesMap)
 	}
-	var predicates []string
+	predicates := make([]string, 0, len(predicatesMap))
 	for predicate := range predicatesMap {
 		predicates = append(predicates, predicate)
 	}
