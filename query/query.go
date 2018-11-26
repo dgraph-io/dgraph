@@ -667,26 +667,25 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:          gchild.Alias,
-			Langs:          gchild.Langs,
-			GetUid:         sg.Params.GetUid,
-			Var:            gchild.Var,
-			Normalize:      sg.Params.Normalize,
-			isInternal:     gchild.IsInternal,
-			Expand:         gchild.Expand,
-			isGroupBy:      gchild.IsGroupby,
-			groupbyAttrs:   gchild.GroupbyAttrs,
-			FacetVar:       gchild.FacetVar,
-			uidCount:       gchild.UidCount,
-			uidCountAlias:  gchild.UidCountAlias,
 			Cascade:        sg.Params.Cascade,
+			Expand:         gchild.Expand,
+			Facet:          gchild.Facets,
 			FacetOrder:     gchild.FacetOrder,
 			FacetOrderDesc: gchild.FacetDesc,
+			FacetVar:       gchild.FacetVar,
+			GetUid:         sg.Params.GetUid,
 			IgnoreReflex:   sg.Params.IgnoreReflex,
+			Langs:          gchild.Langs,
+			NeedsVar:       append(gchild.NeedsVar[:0:0], gchild.NeedsVar...),
+			Normalize:      sg.Params.Normalize,
 			Order:          gchild.Order,
-			Facet:          gchild.Facets,
+			Var:            gchild.Var,
+			groupbyAttrs:   gchild.GroupbyAttrs,
+			isGroupBy:      gchild.IsGroupby,
+			isInternal:     gchild.IsInternal,
+			uidCount:       gchild.UidCount,
+			uidCountAlias:  gchild.UidCountAlias,
 		}
-
-		args.NeedsVar = append(gchild.NeedsVar[:0:0], gchild.NeedsVar...)
 
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
@@ -856,25 +855,24 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		GetUid:        isDebug(ctx),
 		Alias:         gq.Alias,
-		Langs:         gq.Langs,
-		Var:           gq.Var,
-		ParentVars:    make(map[string]varValue),
-		Normalize:     gq.Normalize,
 		Cascade:       gq.Cascade,
-		isGroupBy:     gq.IsGroupby,
-		groupbyAttrs:  gq.GroupbyAttrs,
-		uidCount:      gq.UidCount,
-		uidCountAlias: gq.UidCountAlias,
+		GetUid:        isDebug(ctx),
 		IgnoreReflex:  gq.IgnoreReflex,
 		IsEmpty:       gq.IsEmpty,
+		Langs:         gq.Langs,
+		NeedsVar:      append(gq.NeedsVar[:0:0], gq.NeedsVar...),
+		Normalize:     gq.Normalize,
 		Order:         gq.Order,
+		ParentVars:    make(map[string]varValue),
 		Recurse:       gq.Recurse,
 		RecurseArgs:   gq.RecurseArgs,
+		Var:           gq.Var,
+		groupbyAttrs:  gq.GroupbyAttrs,
+		isGroupBy:     gq.IsGroupby,
+		uidCount:      gq.UidCount,
+		uidCountAlias: gq.UidCountAlias,
 	}
-
-	args.NeedsVar = append(gq.NeedsVar[:0:0], gq.NeedsVar...)
 
 	for argk := range gq.Args {
 		if !isValidArg(argk) {
@@ -1795,16 +1793,12 @@ func getReversePredicates(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var pred strings.Builder
 	preds := make([]string, 0, len(schs))
 	for _, sch := range schs {
 		if !sch.Reverse {
 			continue
 		}
-		pred.WriteRune('~')
-		pred.WriteString(sch.Predicate)
-		preds = append(preds, pred.String())
-		pred.Reset()
+		preds := append(preds, "~"+sch.Predicate)
 	}
 	return preds, nil
 }

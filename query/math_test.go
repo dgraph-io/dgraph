@@ -173,7 +173,8 @@ func TestProcessBinaryBoolean(t *testing.T) {
 		{in: &mathTree{
 			Fn: "<",
 			Child: []*mathTree{
-				&mathTree{Val: map[uint64]types.Val{0: types.Val{Tid: types.IntID, Value: int64(1)}}},
+				&mathTree{Val: map[uint64]types.Val{
+					0: types.Val{Tid: types.IntID, Value: int64(1)}}},
 				&mathTree{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: true},
@@ -181,7 +182,8 @@ func TestProcessBinaryBoolean(t *testing.T) {
 		{in: &mathTree{
 			Fn: ">",
 			Child: []*mathTree{
-				&mathTree{Val: map[uint64]types.Val{0: types.Val{Tid: types.IntID, Value: int64(1)}}},
+				&mathTree{Val: map[uint64]types.Val{
+					0: types.Val{Tid: types.IntID, Value: int64(1)}}},
 				&mathTree{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: false},
@@ -189,7 +191,8 @@ func TestProcessBinaryBoolean(t *testing.T) {
 		{in: &mathTree{
 			Fn: "<=",
 			Child: []*mathTree{
-				&mathTree{Val: map[uint64]types.Val{0: types.Val{Tid: types.IntID, Value: int64(1)}}},
+				&mathTree{Val: map[uint64]types.Val{
+					0: types.Val{Tid: types.IntID, Value: int64(1)}}},
 				&mathTree{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: true},
@@ -197,7 +200,8 @@ func TestProcessBinaryBoolean(t *testing.T) {
 		{in: &mathTree{
 			Fn: ">=",
 			Child: []*mathTree{
-				&mathTree{Val: map[uint64]types.Val{0: types.Val{Tid: types.IntID, Value: int64(1)}}},
+				&mathTree{Val: map[uint64]types.Val{
+					0: types.Val{Tid: types.IntID, Value: int64(1)}}},
 				&mathTree{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: false},
@@ -205,7 +209,8 @@ func TestProcessBinaryBoolean(t *testing.T) {
 		{in: &mathTree{
 			Fn: "==",
 			Child: []*mathTree{
-				&mathTree{Val: map[uint64]types.Val{0: types.Val{Tid: types.IntID, Value: int64(1)}}},
+				&mathTree{Val: map[uint64]types.Val{
+					0: types.Val{Tid: types.IntID, Value: int64(1)}}},
 				&mathTree{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: false},
@@ -213,7 +218,8 @@ func TestProcessBinaryBoolean(t *testing.T) {
 		{in: &mathTree{
 			Fn: "!=",
 			Child: []*mathTree{
-				&mathTree{Val: map[uint64]types.Val{0: types.Val{Tid: types.IntID, Value: int64(1)}}},
+				&mathTree{Val: map[uint64]types.Val{
+					0: types.Val{Tid: types.IntID, Value: int64(1)}}},
 				&mathTree{Const: types.Val{Tid: types.IntID, Value: int64(2)}},
 			}},
 			out: types.Val{Tid: types.BoolID, Value: true},
