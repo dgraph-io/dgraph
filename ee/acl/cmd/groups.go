@@ -32,8 +32,8 @@ func groupAdd(dc *dgo.Dgraph) error {
 
 	createGroupNQuads := []*api.NQuad{
 		{
-			Subject:     "_:" + x.NewEntityLabel,
-			Predicate:   x.Acl_XId,
+			Subject:     "_:newgroup",
+			Predicate:   "dgraph.xid",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: groupId}},
 		},
 	}
@@ -94,9 +94,9 @@ func groupDel(dc *dgo.Dgraph) error {
 func queryGroup(txn *dgo.Txn, ctx context.Context, groupid string) (group *Group, err error) {
 	queryUid := `
     query search($groupid: string){
-      group(func: eq(` + x.Acl_XId + `, $groupid)) {
+      group(func: eq(dgraph.xid, $groupid)) {
 	    uid,
-        ` + x.Acl_XId + `
+        dgraph.xid
       }
     }`
 
