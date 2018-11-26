@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/table"
 
 	"github.com/dgraph-io/badger/y"
 )
@@ -321,7 +322,37 @@ type IteratorOptions struct {
 	Reverse      bool // Direction of iteration. False is forward, true is backward.
 	AllVersions  bool // Fetch all valid versions of the same key.
 
+	// The following option is used to narrow down the SSTables that iterator picks up. If
+	// Prefix is specified, only tables which could have this prefix are picked based on their range
+	// of keys.
+	Prefix      []byte // Only iterate over this given prefix.
+	prefixIsKey bool   // If set, use the prefix for bloom filter lookup.
+
 	internalAccess bool // Used to allow internal access to badger keys.
+}
+
+func (opt *IteratorOptions) PickTable(t table.TableInterface) bool {
+	if len(opt.Prefix) == 0 {
+		return true
+	}
+	trim := func(key []byte) []byte {
+		if len(key) > len(opt.Prefix) {
+			return key[:len(opt.Prefix)]
+		}
+		return key
+	}
+	if bytes.Compare(trim(t.Smallest()), opt.Prefix) > 0 {
+		return false
+	}
+	if bytes.Compare(trim(t.Biggest()), opt.Prefix) < 0 {
+		return false
+	}
+	// Bloom filter lookup would only work if opt.Prefix does NOT have the read
+	// timestamp as part of the key.
+	if opt.prefixIsKey && t.DoesNotHave(opt.Prefix) {
+		return false
+	}
+	return true
 }
 
 // DefaultIteratorOptions contains default options when iterating over Badger key-value stores.
@@ -365,6 +396,8 @@ func (txn *Txn) NewIterator(opt IteratorOptions) *Iterator {
 		panic("Only one iterator can be active at one time, for a RW txn.")
 	}
 
+	// TODO: If Prefix is set, only pick those memtables which have keys with
+	// the prefix.
 	tables, decr := txn.db.getMemTables()
 	defer decr()
 	txn.db.vlog.incrIteratorCount()
@@ -375,7 +408,7 @@ func (txn *Txn) NewIterator(opt IteratorOptions) *Iterator {
 	for i := 0; i < len(tables); i++ {
 		iters = append(iters, tables[i].NewUniIterator(opt.Reverse))
 	}
-	iters = txn.db.lc.appendIterators(iters, opt.Reverse) // This will increment references.
+	iters = txn.db.lc.appendIterators(iters, &opt) // This will increment references.
 	res := &Iterator{
 		txn:    txn,
 		iitr:   y.NewMergeIterator(iters, opt.Reverse),
@@ -383,6 +416,18 @@ func (txn *Txn) NewIterator(opt IteratorOptions) *Iterator {
 		readTs: txn.readTs,
 	}
 	return res
+}
+
+// NewKeyIterator is just like NewIterator, but allows the user to iterate over all versions of a
+// single key. Internally, it sets the Prefix option in provided opt, and uses that prefix to
+// additionally run bloom filter lookups before picking tables from the LSM tree.
+func (txn *Txn) NewKeyIterator(key []byte, opt IteratorOptions) *Iterator {
+	if len(opt.Prefix) > 0 {
+		panic("opt.Prefix should be nil for NewKeyIterator.")
+	}
+	opt.Prefix = key // This key must be without the timestamp.
+	opt.prefixIsKey = true
+	return txn.NewIterator(opt)
 }
 
 func (it *Iterator) newItem() *Item {
@@ -402,12 +447,17 @@ func (it *Iterator) Item() *Item {
 }
 
 // Valid returns false when iteration is done.
-func (it *Iterator) Valid() bool { return it.item != nil }
+func (it *Iterator) Valid() bool {
+	if it.item == nil {
+		return false
+	}
+	return bytes.HasPrefix(it.item.key, it.opt.Prefix)
+}
 
 // ValidForPrefix returns false when iteration is done
 // or when the current key is not prefixed by the specified prefix.
 func (it *Iterator) ValidForPrefix(prefix []byte) bool {
-	return it.item != nil && bytes.HasPrefix(it.item.key, prefix)
+	return it.Valid() && bytes.HasPrefix(it.item.key, prefix)
 }
 
 // Close would close the iterator. It is important to call this when you're done with iteration.
@@ -603,6 +653,9 @@ func (it *Iterator) Seek(key []byte) {
 
 	it.lastKey = it.lastKey[:0]
 	if len(key) == 0 {
+		key = it.opt.Prefix
+	}
+	if len(key) == 0 {
 		it.iitr.Rewind()
 		it.prefetch()
 		return
@@ -621,14 +674,5 @@ func (it *Iterator) Seek(key []byte) {
 // smallest key if iterating forward, and largest if iterating backward. It does not keep track of
 // whether the cursor started with a Seek().
 func (it *Iterator) Rewind() {
-	i := it.data.pop()
-	for i != nil {
-		i.wg.Wait() // Just cleaner to wait before pushing. No ref counting needed.
-		it.waste.push(i)
-		i = it.data.pop()
-	}
-
-	it.lastKey = it.lastKey[:0]
-	it.iitr.Rewind()
-	it.prefetch()
+	it.Seek(nil)
 }

@@ -1677,20 +1677,19 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 	x.AssertTrue(count >= 1)
 	countKey = x.CountKey(cp.attr, uint32(count), cp.reverse)
 
+	txn := pstore.NewTransactionAt(cp.readTs, false)
+	defer txn.Discard()
+
+	pk := x.ParsedKey{Attr: cp.attr}
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = cp.fn == "le" || cp.fn == "lt"
-	txn := pstore.NewTransactionAt(cp.readTs, false)
-	defer txn.Discard()
-	pk := x.ParsedKey{
-		Attr: cp.attr,
-	}
-	countPrefix := pk.CountPrefix(cp.reverse)
+	itOpt.Prefix = pk.CountPrefix(cp.reverse)
 
 	itr := txn.NewIterator(itOpt)
 	defer itr.Close()
 
-	for itr.Seek(countKey); itr.ValidForPrefix(countPrefix); itr.Next() {
+	for itr.Seek(countKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.KeyCopy(nil)
 		pl, err := posting.Get(key)
@@ -1732,13 +1731,14 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.AllVersions = true
+	itOpt.Prefix = prefix
 	it := txn.NewIterator(itOpt)
 	defer it.Close()
 
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
 	// occurs in filterStringFunction (like has(name) queries).
-	for it.Seek(startKey); it.ValidForPrefix(prefix); {
+	for it.Seek(startKey); it.Valid(); {
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
 			it.Next()

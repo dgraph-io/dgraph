@@ -394,13 +394,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *pb.DirectedEdge,
 func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 	return pstore.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
+		opt.Prefix = prefix
 		opt.PrefetchValues = false
 
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
 		writer := x.NewTxnWriter(pstore)
-		for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+		for itr.Rewind(); itr.Valid(); itr.Next() {
 			item := itr.Item()
 			if !remove(item.Key()) {
 				continue
@@ -490,6 +491,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 		r.startTs, hex.Dump(r.prefix))
 	opts := badger.DefaultIteratorOptions
 	opts.AllVersions = true
+	opts.Prefix = r.prefix
 	it := t.NewIterator(opts)
 	defer it.Close()
 
@@ -516,7 +518,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 	}
 
 	var prevKey []byte
-	for it.Seek(r.prefix); it.ValidForPrefix(r.prefix); {
+	for it.Rewind(); it.Valid(); {
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
 			it.Next()
