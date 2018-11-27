@@ -133,7 +133,7 @@ type User struct {
 }
 
 func queryUser(txn *dgo.Txn, ctx context.Context, userid string) (user *User, err error) {
-	queryUid := `
+	query := `
     query search($userid: string){
       user(func: eq(dgraph.xid, $userid)) {
 	    uid
@@ -147,7 +147,7 @@ func queryUser(txn *dgo.Txn, ctx context.Context, userid string) (user *User, er
 	queryVars := make(map[string]string)
 	queryVars["$userid"] = userid
 
-	queryResp, err := txn.QueryWithVars(ctx, queryUid, queryVars)
+	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
 		return nil, fmt.Errorf("Error while query user with id %s: %v", userid, err)
 	}

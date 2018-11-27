@@ -109,12 +109,12 @@ func queryGroup(txn *dgo.Txn, ctx context.Context, groupid string, fields []stri
       }
     }`)
 
-	queryUid := queryBuilder.String()
+	query := queryBuilder.String()
 
 	queryVars := make(map[string]string)
 	queryVars["$groupid"] = groupid
 
-	queryResp, err := txn.QueryWithVars(ctx, queryUid, queryVars)
+	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
 		glog.Errorf("Error while query group with id %s: %v", groupid, err)
 		return nil, err
@@ -183,7 +183,7 @@ func chMod(dc *dgo.Dgraph) error {
 	currentAcls := []Acl{}
 	if len(group.Acls) != 0 {
 		if err := json.Unmarshal([]byte(group.Acls), &currentAcls); err != nil {
-			return fmt.Errorf("Unable to unmarshal the acls associated with the group:%v", groupId)
+			return fmt.Errorf("Unable to unmarshal the acls associated with the group %v:%v", groupId, err)
 		}
 	}
 

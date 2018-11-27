@@ -27,26 +27,26 @@ func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
 }
 
 func CreateAndDeleteUsers(t *testing.T) {
-	createUserCmd1 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", "lucas",
-		"-p", "haha")
+	createUserCmd1 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
+		"-p", userpassword)
 	createUserOutput1 := checkOutput(t, createUserCmd1, false)
 	t.Logf("Got output when creating user:%v", createUserOutput1)
 
-	createUserCmd2 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", "lucas",
-		"-p", "haha")
+	createUserCmd2 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
+		"-p", userpassword)
 
 	// create the user again should fail
 	createUserOutput2 := checkOutput(t, createUserCmd2, true)
 	t.Logf("Got output when creating user:%v", createUserOutput2)
 
 	// delete the user
-	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", "lucas")
+	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", userid)
 	deleteUserOutput := checkOutput(t, deleteUserCmd, false)
 	t.Logf("Got output when deleting user:%v", deleteUserOutput)
 
 	// now we should be able to create the user again
-	createUserCmd3 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", "lucas",
-		"-p", "haha")
+	createUserCmd3 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
+		"-p", userpassword)
 	createUserOutput3 := checkOutput(t, createUserCmd3, false)
 	t.Logf("Got output when creating user:%v", createUserOutput3)
 }
