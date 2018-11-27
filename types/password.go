@@ -17,9 +17,12 @@
 package types
 
 import (
+	"strings"
+
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 const (
@@ -29,6 +32,13 @@ const (
 func Encrypt(plain string) (string, error) {
 	if len(plain) < pwdLenLimit {
 		return "", x.Errorf("Password too short, i.e. should has at least 6 chars")
+	}
+
+	// already encrypted, most likely live import.
+	// NOTE: update cost (10) if value is changed below.
+	if strings.HasPrefix(plain, "$2a$10$") {
+		glog.V(3).Infof("Encrypt password already encrypted, using it.")
+		return plain, nil
 	}
 
 	encrypted, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
