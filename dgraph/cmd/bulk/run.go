@@ -18,7 +18,6 @@ package bulk
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -112,8 +111,11 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
-	if opt.RDFDir == "" || opt.SchemaFile == "" {
-		flag.Usage()
+	if opt.SkipMapPhase && (opt.RDFDir != "" || opt.SchemaFile != "") {
+		fmt.Fprint(os.Stderr, "RDF and schema file(s) are not used when skipping map phase.\n")
+		os.Exit(1)
+	}
+	if !opt.SkipMapPhase && (opt.RDFDir == "" || opt.SchemaFile == "") {
 		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
 		os.Exit(1)
 	}
