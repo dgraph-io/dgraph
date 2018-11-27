@@ -35,7 +35,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 )
 
 type node struct {
@@ -70,6 +69,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	span := otrace.FromContext(ctx)
 
 	propose := func(timeout time.Duration) error {
 		if !n.AmLeader() {
@@ -88,17 +88,14 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key)
 		proposal.Key = key
-
-		// TODO: Remove this and use OpenCensus spans.
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Proposing with key: %X", key)
+		if span != nil {
+			span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
 		}
 
 		data, err := proposal.Marshal()
 		if err != nil {
 			return err
 		}
-
 		// Propose the change.
 		if err := n.Raft().Propose(cctx, data); err != nil {
 			return x.Wrapf(err, "While proposing")
@@ -505,9 +502,6 @@ func (n *node) trySnapshot(skip uint64) {
 	data, err := n.server.MarshalMembershipState()
 	x.Check(err)
 
-	if tr, ok := trace.FromContext(n.ctx); ok {
-		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
-	}
 	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
 	x.Checkf(err, "While creating snapshot")
 	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())

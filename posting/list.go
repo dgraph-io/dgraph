@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"golang.org/x/net/trace"
-
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 
@@ -310,9 +308,6 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("DELETEME set to true. Temporary error.")
-		}
 		return ErrRetry
 	}
 	if txn.ShouldAbort() {

@@ -19,7 +19,6 @@ package x
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,8 +29,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/net/trace"
 )
 
 // Error constants representing different types of errors.
@@ -169,7 +166,7 @@ func Max(a, b uint64) uint64 {
 }
 
 func RetryUntilSuccess(maxRetries int, sleepDurationOnFailure time.Duration,
-	f func() error) error  {
+	f func() error) error {
 	var err error
 	for retry := maxRetries; retry != 0; retry-- {
 		if err = f(); err == nil {
@@ -291,12 +288,12 @@ func RemoveDuplicates(s []string) (out []string) {
 	return
 }
 
-func NewTrace(title string, ctx context.Context) (trace.Trace, context.Context) {
-	tr := trace.New("Dgraph", title)
-	tr.SetMaxEvents(1000)
-	ctx = trace.NewContext(ctx, tr)
-	return tr, ctx
-}
+// func NewTrace(title string, ctx context.Context) (trace.Trace, context.Context) {
+// 	tr := trace.New("Dgraph", title)
+// 	tr.SetMaxEvents(1000)
+// 	ctx = trace.NewContext(ctx, tr)
+// 	return tr, ctx
+// }
 
 type BytesBuffer struct {
 	data [][]byte

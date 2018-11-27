@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
@@ -46,8 +46,8 @@ type sortresult struct {
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, error) {
 	gid := groups().BelongsTo(q.Order[0].Attr)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Order[0].Attr, gid)
+	if span := otrace.FromContext(ctx); span != nil {
+		span.Annotatef(nil, "worker.SortOverNetwork. Attr: %s. Group: %d", q.Order[0].Attr, gid)
 	}
 
 	if groups().ServesGroup(gid) {
@@ -59,9 +59,6 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 		return c.Sort(ctx, q)
 	})
 	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while calling worker.Sort: %v", err)
-		}
 		return nil, err
 	}
 	return result.(*pb.SortResult), nil
@@ -72,16 +69,16 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 	if ctx.Err() != nil {
 		return &emptySortResult, ctx.Err()
 	}
+	ctx, span := otrace.StartSpan(ctx, "worker.Sort")
+	defer span.End()
 
 	gid := groups().BelongsTo(s.Order[0].Attr)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sorting: Attribute: %q groupId: %v Sort", s.Order[0].Attr, gid)
+	span.Annotatef(nil, "Sorting: Attribute: %q groupId: %v Sort", s.Order[0].Attr, gid)
+	if gid != groups().groupId() {
+		return nil, x.Errorf("attr: %q groupId: %v Request sent to wrong server.", s.Order[0].Attr, gid)
 	}
 
 	var reply *pb.SortResult
-	x.AssertTruef(groups().ServesGroup(gid),
-		"attr: %q groupId: %v Request sent to wrong server.", s.Order[0].Attr, gid)
-
 	c := make(chan error, 1)
 	go func() {
 		var err error
@@ -103,6 +100,9 @@ var (
 )
 
 func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
+	span := otrace.FromContext(ctx)
+	span.Annotate(nil, "sortWithoutIndex")
+
 	n := len(ts.UidMatrix)
 	r := new(pb.SortResult)
 	multiSortVals := make([][]types.Val, n)
@@ -139,6 +139,9 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 }
 
 func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
+	span := otrace.FromContext(ctx)
+	span.Annotate(nil, "sortWithIndex")
+
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	values := make([][]types.Val, 0, n) // Values corresponding to uids in the uid matrix.
@@ -219,9 +222,6 @@ BUCKETS:
 
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("processSort: Token: %s", token)
-			}
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
 			err := intersectBucket(ctx, ts, token, out)
@@ -259,6 +259,9 @@ type orderResult struct {
 }
 
 func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
+	span := otrace.FromContext(ctx)
+	span.Annotate(nil, "multiSort")
+
 	// SrcUids for other queries are all the uids present in the response of the first sort.
 	dest := destUids(r.reply.UidMatrix)
 
@@ -369,9 +372,13 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
 func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error) {
+	span := otrace.FromContext(ctx)
+	span.Annotatef(nil, "Waiting for readTs: %d", ts.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, ts.ReadTs); err != nil {
 		return &emptySortResult, err
 	}
+	span.Annotate(nil, "Done waiting")
+
 	if ts.Count < 0 {
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Order[0].Attr, ts.Count)
@@ -405,9 +412,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 		// wait for other goroutine to get cancelled
 		<-resCh
 	} else {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(r.err.Error())
-		}
+		span.Annotatef(nil, "processSort error: %v", r.err)
 		r = <-resCh
 	}
 
