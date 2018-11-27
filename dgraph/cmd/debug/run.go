@@ -24,6 +24,7 @@ import (
 	"log"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -70,15 +71,34 @@ func init() {
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 }
 
+func toInt(o *pb.Posting) int {
+	from := types.Val{
+		Tid:   types.TypeID(o.ValType),
+		Value: o.Value,
+	}
+	out, err := types.Convert(from, types.StringID)
+	x.Check(err)
+	val := out.Value.(string)
+	a, err := strconv.Atoi(val)
+	if err != nil {
+		return 0
+	}
+	return a
+}
+
 func readAmount(txn *badger.Txn, uid uint64) int {
 	iopt := badger.DefaultIteratorOptions
 	iopt.AllVersions = true
 	itr := txn.NewIterator(iopt)
 	defer itr.Close()
 
-	key := x.DataKey("amount_0", uid)
-	for itr.Seek(key); itr.Valid(); {
+	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
+		pk := x.Parse(item.Key())
+		if !pk.IsData() || pk.Uid != uid || !strings.HasPrefix(pk.Attr, "amount_") {
+			itr.Next()
+			continue
+		}
 		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 		if err != nil {
 			log.Fatalf("Unable to read posting list: %v", err)
@@ -86,21 +106,16 @@ func readAmount(txn *badger.Txn, uid uint64) int {
 		var times int
 		var amount int
 		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
-			from := types.Val{
-				Tid:   types.TypeID(o.ValType),
-				Value: o.Value,
-			}
-			out, err := types.Convert(from, types.StringID)
-			x.Check(err)
-			val := out.Value.(string)
-			a, err := strconv.Atoi(val)
-			x.Check(err)
-			amount = a
+			amount = toInt(o)
 			times++
 			return nil
 		})
-		x.AssertTrue(times <= 1)
 		x.Check(err)
+		if times == 0 {
+			itr.Next()
+			continue
+		}
+		x.AssertTrue(times <= 1)
 		return amount
 	}
 	return 0
@@ -110,9 +125,6 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 	txn := db.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
-	pk := x.ParsedKey{Attr: "key_0"}
-	prefix := pk.DataPrefix()
-
 	iopt := badger.DefaultIteratorOptions
 	iopt.AllVersions = true
 	iopt.PrefetchValues = false
@@ -121,7 +133,7 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 
 	keys := make(map[uint64]int)
 	var lastKey []byte
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); {
+	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
 		if bytes.Equal(lastKey, item.Key()) {
 			itr.Next()
@@ -129,6 +141,12 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 		}
 		lastKey = append(lastKey[:0], item.Key()...)
 		pk := x.Parse(item.Key())
+		if !pk.IsData() || !strings.HasPrefix(pk.Attr, "key_") {
+			continue
+		}
+		if pk.IsSchema() {
+			continue
+		}
 
 		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 		if err != nil {
@@ -155,7 +173,7 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 	var total int
 	for uid, key := range keys {
 		a := readAmount(txn, uid)
-		fmt.Printf("uid: %-5d key: %d amount: %d\n", uid, key, a)
+		fmt.Printf("uid: %-5d %x key: %d amount: %d\n", uid, uid, key, a)
 		total += a
 	}
 	fmt.Printf("Total @ %d = %d\n", readTs, total)
@@ -192,6 +210,12 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 	itr := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer itr.Close()
 
+	type account struct {
+		Key int
+		Amt int
+	}
+	keys := make(map[uint64]*account)
+
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "SHOWING all postings at %d\n", readTs)
 	for itr.Rewind(); itr.Valid(); itr.Next() {
@@ -204,15 +228,39 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		if !pk.IsData() || pk.Attr == "_predicate_" {
 			continue
 		}
-		fmt.Fprintf(&buf, "\nkey: %+v hex: %x\n", pk, item.Key())
+
+		var acc *account
+		if pk.Attr == "key_0" || pk.Attr == "amount_0" {
+			var has bool
+			acc, has = keys[pk.Uid]
+			if !has {
+				acc = &account{}
+				keys[pk.Uid] = acc
+			}
+		}
+		fmt.Fprintf(&buf, "  key: %+v hex: %x\n", pk, item.Key())
 		val, err := item.ValueCopy(nil)
 		x.Check(err)
 		var plist pb.PostingList
 		x.Check(plist.Unmarshal(val))
 
+		x.AssertTrue(len(plist.Postings) <= 1)
+		var num int
 		for _, p := range plist.Postings {
+			num = toInt(p)
 			appendPosting(&buf, p)
 		}
+		if num > 0 && acc != nil {
+			switch pk.Attr {
+			case "key_0":
+				acc.Key = num
+			case "amount_0":
+				acc.Amt = num
+			}
+		}
+	}
+	for uid, acc := range keys {
+		fmt.Fprintf(&buf, "Uid: %d %x Key: %d Amount: %d\n", uid, uid, acc.Key, acc.Amt)
 	}
 	fmt.Println(buf.String())
 }

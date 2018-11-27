@@ -44,8 +44,8 @@ import (
 	"github.com/spf13/cobra"
 	"go.opencensus.io/exporter/jaeger"
 	"go.opencensus.io/plugin/ocgrpc"
-	"go.opencensus.io/stats/view"
 	otrace "go.opencensus.io/trace"
+	"go.opencensus.io/zpages"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -92,7 +92,8 @@ they form a Raft group and provide synchronous replication.
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
 
-	flag.String("jaeger.agent", "", "Send opencensus traces to Jaeger.")
+	// OpenCensus flags.
+	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
@@ -103,7 +104,6 @@ they form a Raft group and provide synchronous replication.
 	flag.String("export", "export", "Folder in which to store exports.")
 	flag.Int("pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
-	flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	flag.String("my", "",
 		"IP_ADDRESS:PORT of this Dgraph Alpha, so other Dgraph Alphas can talk to this.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
@@ -242,42 +242,34 @@ func setupListener(addr string, port int, reload func()) (net.Listener, error) {
 
 func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
-		glog.Fatalf("Unable to register opencensus: %v", err)
-	}
 
-	handler := &ocgrpc.ServerHandler{
-		IsPublicEndpoint: true,
-		StartOptions: otrace.StartOptions{
-			Sampler: otrace.AlwaysSample(),
-		},
-	}
-	opt := []grpc.ServerOption{
-		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-		grpc.MaxSendMsgSize(x.GrpcMaxSize),
-		grpc.MaxConcurrentStreams(1000),
-		grpc.StatsHandler(handler),
-	}
-	if tlsCfg != nil {
-		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
-	}
-
-	if agent := Alpha.Conf.GetString("jaeger.agent"); len(agent) > 0 {
+	if collector := Alpha.Conf.GetString("jaeger.collector"); len(collector) > 0 {
 		// Port details: https://www.jaegertracing.io/docs/getting-started/
-		// Default endpoints are:
-		// agentEndpointURI := "localhost:6831"
-		// collectorEndpointURI := "http://localhost:14268"
-		collector := Alpha.Conf.GetString("jaeger.collector")
+		// Default collectorEndpointURI := "http://localhost:14268"
 		je, err := jaeger.NewExporter(jaeger.Options{
-			AgentEndpoint: agent,
-			Endpoint:      collector,
-			ServiceName:   "dgraph.alpha",
+			Endpoint:    collector,
+			ServiceName: "dgraph.alpha",
 		})
 		if err != nil {
 			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
 		}
 		// And now finally register it as a Trace Exporter
 		otrace.RegisterExporter(je)
+	}
+	// Exclusively for stats, metrics, etc. Not for tracing.
+	// var views = append(ocgrpc.DefaultServerViews, ocgrpc.DefaultClientViews...)
+	// if err := view.Register(views...); err != nil {
+	// 	glog.Fatalf("Unable to register OpenCensus stats: %v", err)
+	// }
+
+	opt := []grpc.ServerOption{
+		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
+		grpc.MaxSendMsgSize(x.GrpcMaxSize),
+		grpc.MaxConcurrentStreams(1000),
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+	}
+	if tlsCfg != nil {
+		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
 
 	s := grpc.NewServer(opt...)
@@ -350,11 +342,17 @@ func setupServer() {
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/share", shareHandler)
+
+	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
+
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
+
+	// Add OpenCensus z-pages.
+	zpages.Handle(http.DefaultServeMux, "/z")
 
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/ui/keywords", keywordHandler)
@@ -426,10 +424,13 @@ func run() {
 	}()
 
 	if Alpha.Conf.GetBool("expose_trace") {
+		// TODO: Remove this once we get rid of event logs.
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
 	}
+	otrace.ApplyConfig(otrace.Config{
+		DefaultSampler: otrace.ProbabilitySampler(worker.Config.Tracing)})
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

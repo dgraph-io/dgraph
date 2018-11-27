@@ -25,6 +25,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/metadata"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
@@ -34,10 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/trace"
-	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -1805,7 +1805,14 @@ func getReversePredicates(ctx context.Context) ([]string, error) {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
-	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph")
+	var suffix string
+	if len(sg.Params.Alias) > 0 {
+		suffix += "." + sg.Params.Alias
+	}
+	if len(sg.Attr) > 0 {
+		suffix += "." + sg.Attr
+	}
+	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph"+suffix)
 	defer span.End()
 
 	if sg.Attr == "uid" {
@@ -1863,17 +1870,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		} else {
 			taskQuery, err := createTaskQuery(sg)
 			if err != nil {
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while processing task: %+v", err)
-				}
 				rch <- err
 				return
 			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 			if err != nil {
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while processing task: %+v", err)
-				}
 				rch <- err
 				return
 			}
@@ -1888,9 +1889,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
 					// If there is a filter, we need to do more work to get the actual count.
-					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf("Zero uids. Only count requested")
-					}
 					rch <- nil
 					return
 				}
@@ -1912,8 +1910,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
+		if span != nil {
+			span.Annotatef(nil, "Zero uids for %q", sg.Attr)
 		}
 		out := sg.Children[:0]
 		for _, child := range sg.Children {
@@ -1954,9 +1952,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				// Store error in a variable and wait for all filters to run
 				// before returning. Else tracing causes crashes.
 				filterErr = err
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while processing filter task: %+v", err)
-				}
 			}
 		}
 
@@ -2077,9 +2072,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 		if err = <-childChan; err != nil {
 			childErr = err
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while processing child task: %+v", err)
-			}
 		}
 	}
 	rch <- childErr
@@ -2486,9 +2478,6 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Graph processed")
-			}
 		}
 
 		var ferr error
@@ -2496,9 +2485,6 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 		for i := 0; i < len(idxList); i++ {
 			if err = <-errChan; err != nil {
 				ferr = err
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while processing Query: %+v", err)
-				}
 				continue
 			}
 		}

@@ -115,11 +115,10 @@ func (h *header) Decode(in []byte) {
 }
 
 func (n *node) Ctx(key string) context.Context {
-	ctx := context.Background()
 	if pctx := n.Proposals.Get(key); pctx != nil {
-		ctx = pctx.Ctx
+		return pctx.Ctx
 	}
-	return ctx
+	return context.Background()
 }
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -159,9 +158,8 @@ func detectPendingTxns(attr string) error {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(proposal *pb.Proposal) error {
-	tr := trace.New("Dgraph.Node", "ApplyMutations")
-	defer tr.Finish()
+func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error {
+	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropAll {
 		// Ensures nothing get written to disk due to commit proposals.
@@ -173,14 +171,10 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 	if proposal.Mutations.StartTs == 0 {
 		return errors.New("StartTs must be provided.")
 	}
-
 	startTs := proposal.Mutations.StartTs
-	ctx := n.Ctx(proposal.Key)
-	ctx, span := otrace.StartSpan(ctx, "node.applyMutations")
-	defer span.End()
 
 	if len(proposal.Mutations.Schema) > 0 {
-		tr.LazyPrintf("Applying Schema")
+		span.Annotatef(nil, "Applying schema")
 		for _, supdate := range proposal.Mutations.Schema {
 			// This is neceassry to ensure that there is no race between when we start reading
 			// from badger and new mutation getting commited via raft and getting applied.
@@ -213,19 +207,17 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
 		if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-			tr.LazyPrintf("Predicate Moving")
-			tr.SetError()
+			span.Annotatef(nil, "Tablet moving: %+v. Retry later.", tablet)
 			return errPredicateMoving
 		}
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only drop the predicate if there is no pending
 			// transaction.
 			if err := detectPendingTxns(edge.Attr); err != nil {
-				tr.LazyPrintf("Found pending transactions which obstruct operation.")
-				tr.SetError()
+				span.Annotatef(nil, "Found pending transactions. Retry later.")
 				return err
 			}
-			tr.LazyPrintf("Deleting predicate")
+			span.Annotatef(nil, "Deleting predicate: %s", edge.Attr)
 			return posting.DeletePredicate(ctx, edge.Attr)
 		}
 		// Dont derive schema when doing deletion.
@@ -254,12 +246,10 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 	m := proposal.Mutations
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
-		tr.LazyPrintf("Should Abort")
-		tr.SetError()
+		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return dy.ErrConflict
 	}
 
-	tr.LazyPrintf("Applying %d edges", len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges", len(m.Edges))
 	var retries int
 	for _, edge := range m.Edges {
@@ -269,7 +259,6 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 				break
 			}
 			if err != posting.ErrRetry {
-				tr.SetError()
 				return err
 			}
 			retries++
@@ -278,20 +267,26 @@ func (n *node) applyMutations(proposal *pb.Proposal) error {
 	if retries > 0 {
 		span.Annotatef(nil, "retries=true num=%d", retries)
 	}
-	tr.LazyPrintf("Done applying %d edges", len(m.Edges))
 	return nil
 }
 
 func (n *node) applyCommitted(proposal *pb.Proposal) error {
-	if proposal.Mutations != nil {
-		// syncmarks for this shouldn't be marked done until it's comitted.
-		n.elog.Printf("Applying mutations for key: %s", proposal.Key)
-		return n.applyMutations(proposal)
-	}
-
 	ctx := n.Ctx(proposal.Key)
 	ctx, span := otrace.StartSpan(ctx, "node.applyCommitted")
 	defer span.End()
+	span.Annotatef(nil, "Node id: %d. Group id: %d. Got proposal key: %s",
+		n.Id, n.gid, proposal.Key)
+
+	if proposal.Mutations != nil {
+		// syncmarks for this shouldn't be marked done until it's comitted.
+		span.Annotate(nil, "Applying mutations")
+		if err := n.applyMutations(ctx, proposal); err != nil {
+			span.Annotatef(nil, "While applying mutations: %v", err)
+			return err
+		}
+		span.Annotate(nil, "Done")
+		return nil
+	}
 
 	switch {
 	case len(proposal.Kv) > 0:
@@ -654,10 +649,10 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			var tr trace.Trace
-			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) || !raft.IsEmptyHardState(rd.HardState) {
+			var span *otrace.Span
+			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
 				// Optionally, trace this run.
-				tr = trace.New("Dgraph.Raft", "RunLoop")
+				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop")
 			}
 
 			if rd.SoftState != nil {
@@ -671,8 +666,8 @@ func (n *node) Run() {
 					n.Send(msg)
 				}
 			}
-			if tr != nil {
-				tr.LazyPrintf("Handled ReadStates and SoftState.")
+			if span != nil {
+				span.Annotate(nil, "Handled ReadStates and SoftState.")
 			}
 
 			// We move the retrieval of snapshot before we store the rd.Snapshot, so that in case
@@ -716,15 +711,15 @@ func (n *node) Run() {
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d [SELF]. Ignoring.\n",
 						snap, n.gid, rc.Id)
 				}
-				if tr != nil {
-					tr.LazyPrintf("Applied or retrieved snapshot.")
+				if span != nil {
+					span.Annotate(nil, "Applied or retrieved snapshot.")
 				}
 			}
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-			if tr != nil {
-				tr.LazyPrintf("Saved %d entries. Snapshot, HardState empty? (%v, %v)",
+			if span != nil {
+				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
@@ -771,8 +766,8 @@ func (n *node) Run() {
 				n.applyCh <- proposals
 			}
 
-			if tr != nil {
-				tr.LazyPrintf("Handled %d committed entries.", len(rd.CommittedEntries))
+			if span != nil {
+				span.Annotatef(nil, "Handled %d committed entries.", len(rd.CommittedEntries))
 			}
 
 			if !leader {
@@ -782,8 +777,8 @@ func (n *node) Run() {
 					n.Send(msg)
 				}
 			}
-			if tr != nil {
-				tr.LazyPrintf("Follower queued messages.")
+			if span != nil {
+				span.Annotate(nil, "Followed queued messages.")
 			}
 
 			n.Raft().Advance()
@@ -791,9 +786,9 @@ func (n *node) Run() {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
-			if tr != nil {
-				tr.LazyPrintf("Advanced Raft. Done.")
-				tr.Finish()
+			if span != nil {
+				span.Annotate(nil, "Advanced Raft. Done.")
+				span.End()
 			}
 		}
 	}
@@ -856,12 +851,12 @@ func (n *node) rollupLists(readTs uint64) error {
 	return nil
 }
 
-var errConnection = errors.New("No connection exists")
+var errNoConnection = errors.New("No connection exists")
 
 func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 	pl := groups().Leader(0)
 	if pl == nil {
-		return errConnection
+		return errNoConnection
 	}
 	zc := pb.NewZeroClient(pl.Get())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -938,33 +933,31 @@ func (n *node) abortOldTransactions() {
 // At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
 // At i7, max commit ts = C1, therefore readTs = C1.
 func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
-	tr := trace.New("Dgraph.Internal", "Propose.Snapshot")
-	defer tr.Finish()
+	_, span := otrace.StartSpan(n.ctx, "Propose.Snapshot")
+	defer span.End()
 
 	if atomic.LoadInt32(&n.streaming) > 0 {
-		tr.LazyPrintf("Skipping calculateSnapshot due to streaming")
+		span.Annotate(nil, "Skipping calculateSnapshot due to streaming")
 		return nil, nil
 	}
 
 	first, err := n.Store.FirstIndex()
 	if err != nil {
-		tr.LazyPrintf("Error: %v", err)
-		tr.SetError()
+		span.Annotatef(nil, "Error: %v", err)
 		return nil, err
 	}
-	tr.LazyPrintf("First index: %d", first)
+	span.Annotatef(nil, "First index: %d", first)
 
 	last := n.Applied.DoneUntil()
 	if int(last-first) < discardN {
-		tr.LazyPrintf("Skipping due to insufficient entries")
+		span.Annotate(nil, "Skipping due to insufficient entries")
 		return nil, nil
 	}
-	tr.LazyPrintf("Found Raft entries: %d", last-first)
+	span.Annotatef(nil, "Found Raft entries: %d", last-first)
 
 	entries, err := n.Store.Entries(first, last+1, math.MaxUint64)
 	if err != nil {
-		tr.LazyPrintf("Error: %v", err)
-		tr.SetError()
+		span.Annotatef(nil, "Error: %v", err)
 		return nil, err
 	}
 
@@ -987,8 +980,7 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		}
 		var proposal pb.Proposal
 		if err := proposal.Unmarshal(entry.Data); err != nil {
-			tr.LazyPrintf("Error: %v", err)
-			tr.SetError()
+			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
 		if proposal.Mutations != nil {
@@ -1005,21 +997,23 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		}
 	}
 	if maxCommitTs == 0 {
-		tr.LazyPrintf("maxCommitTs is zero")
+		span.Annotate(nil, "maxCommitTs is zero")
 		return nil, nil
 	}
 	if snapshotIdx <= 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
-		tr.LazyPrintf("Using maxCommitIdx as snapshotIdx: %d", maxCommitIdx)
+		span.Annotatef(nil, "Using maxCommitIdx as snapshotIdx: %d", maxCommitIdx)
 		snapshotIdx = maxCommitIdx
 	}
 
 	numDiscarding := snapshotIdx - first + 1
-	tr.LazyPrintf("Got snapshotIdx: %d. MaxCommitTs: %d. Discarding: %d. MinPendingStartTs: %d",
+	span.Annotatef(nil,
+		"Got snapshotIdx: %d. MaxCommitTs: %d. Discarding: %d. MinPendingStartTs: %d",
 		snapshotIdx, maxCommitTs, numDiscarding, minPendingStart)
+
 	if int(numDiscarding) < discardN {
-		tr.LazyPrintf("Skipping snapshot because insufficient discard entries")
+		span.Annotate(nil, "Skipping snapshot because insufficient discard entries")
 		glog.Infof("Skipping snapshot at index: %d. Insufficient discard entries: %d."+
 			" MinPendingStartTs: %d\n", snapshotIdx, numDiscarding, minPendingStart)
 		return nil, nil
@@ -1030,7 +1024,7 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
 	}
-	tr.LazyPrintf("Got snapshot: %+v", snap)
+	span.Annotatef(nil, "Got snapshot: %+v", snap)
 	return snap, nil
 }
 
