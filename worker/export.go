@@ -101,12 +101,25 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
 				}
 				buf.WriteString(f.Key)
 				buf.WriteByte('=')
-				fVal := &types.Val{Tid: types.StringID}
-				x.Check(types.Marshal(facets.ValFor(f), fVal))
-				if facets.TypeIDFor(f) == types.StringID {
-					buf.WriteString(strconv.Quote(fVal.Value.(string)))
+
+				fVal, err := facets.ValFor(f)
+				if err != nil {
+					return err
+				}
+
+				fStringVal := &types.Val{Tid: types.StringID}
+				if err = types.Marshal(fVal, fStringVal); err != nil {
+					return err
+				}
+				facetTid, err := facets.TypeIDFor(f)
+				if err != nil {
+					return err
+				}
+
+				if facetTid == types.StringID {
+					buf.WriteString(strconv.Quote(fStringVal.Value.(string)))
 				} else {
-					buf.WriteString(fVal.Value.(string))
+					buf.WriteString(fStringVal.Value.(string))
 				}
 			}
 			buf.WriteByte(')')

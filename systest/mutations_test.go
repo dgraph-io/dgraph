@@ -255,8 +255,8 @@ func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	Running a query would make sure that the previous mutation for
 	creating the link has completed with a commitTs from zero, and the
 	subsequent deletion is done *AFTER* the link creation.
-	 */
-	c.NewReadOnlyTxn().Query(ctx,  fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
+	*/
+	c.NewReadOnlyTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -976,7 +976,7 @@ func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	require.Equal(t, 0, len(r.Me))
 }
 
-func FacetsUsingNQuadsError(t *testing.T, c *dgo.Dgraph) {
+func testTimeValue(t *testing.T, c *dgo.Dgraph, timeBytes []byte) {
 	nquads := []*api.NQuad{
 		&api.NQuad{
 			Subject:   "0x01",
@@ -985,7 +985,7 @@ func FacetsUsingNQuadsError(t *testing.T, c *dgo.Dgraph) {
 			Facets: []*api.Facet{
 				{
 					Key:     "since",
-					Value:   []byte(time.Now().Format(time.RFC3339)),
+					Value:   timeBytes,
 					ValType: api.Facet_DATETIME,
 				},
 			},
@@ -994,14 +994,6 @@ func FacetsUsingNQuadsError(t *testing.T, c *dgo.Dgraph) {
 	mu := &api.Mutation{Set: nquads, CommitNow: true}
 	ctx := context.Background()
 	_, err := c.NewTxn().Mutate(ctx, mu)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Error while parsing facet")
-
-	nquads[0].Facets[0].Value, err = time.Now().MarshalBinary()
-	require.NoError(t, err)
-
-	mu = &api.Mutation{Set: nquads, CommitNow: true}
-	_, err = c.NewTxn().Mutate(context.Background(), mu)
 	require.NoError(t, err)
 
 	q := `query test($id: string) {
@@ -1013,6 +1005,21 @@ func FacetsUsingNQuadsError(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewTxn().QueryWithVars(ctx, q, map[string]string{"$id": "0x1"})
 	require.NoError(t, err)
 	require.Contains(t, string(resp.Json), "since")
+}
+
+func FacetsUsingNQuadsError(t *testing.T, c *dgo.Dgraph) {
+	// test time in go binary format
+	timeBinary, err := time.Now().MarshalBinary()
+	require.NoError(t, err)
+	testTimeValue(t, c, timeBinary)
+
+	// test time in full RFC3339 string format
+	testTimeValue(t, c, []byte(time.Now().Format(time.RFC3339)))
+
+	// test time in partial string formats
+	testTimeValue(t, c, []byte("2018"))
+	testTimeValue(t, c, []byte("2018-01"))
+	testTimeValue(t, c, []byte("2018-01-01"))
 }
 
 func SkipEmptyPLForHas(t *testing.T, c *dgo.Dgraph) {
