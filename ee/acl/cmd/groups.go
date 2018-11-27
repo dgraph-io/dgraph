@@ -146,7 +146,7 @@ func UnmarshallGroup(queryResp *api.Response, groupKey string) (group *Group, er
 
 type Acl struct {
 	Predicate string `json:"predicate"`
-	Perm      uint32 `json:"perm"`
+	Perm      int32  `json:"perm"`
 }
 
 // parse the response and check existing of the uid
@@ -159,7 +159,7 @@ type Group struct {
 func chMod(dc *dgo.Dgraph) error {
 	groupId := ChMod.Conf.GetString("group")
 	predicate := ChMod.Conf.GetString("pred")
-	perm := uint32(ChMod.Conf.GetInt("perm"))
+	perm := ChMod.Conf.GetInt("perm")
 	if len(groupId) == 0 {
 		return fmt.Errorf("the groupid must not be empty")
 	}
@@ -187,9 +187,9 @@ func chMod(dc *dgo.Dgraph) error {
 		}
 	}
 
-	newAcls, updated := addAcl(currentAcls, &Acl{
+	newAcls, updated := updateAcl(currentAcls, &Acl{
 		Predicate: predicate,
-		Perm:      perm,
+		Perm:      int32(perm),
 	})
 	if !updated {
 		glog.Infof("Nothing needs to be changed for the permission of group:%v", groupId)
@@ -220,11 +220,16 @@ func chMod(dc *dgo.Dgraph) error {
 }
 
 // returns whether the existing acls slice is changed
-func addAcl(acls []Acl, newAcl *Acl) ([]Acl, bool) {
+func updateAcl(acls []Acl, newAcl *Acl) ([]Acl, bool) {
 	for idx, acl := range acls {
 		if acl.Predicate == newAcl.Predicate {
 			if acl.Perm == newAcl.Perm {
 				return acls, false
+			}
+			if newAcl.Perm < 0 {
+				// remove the current acl from the array
+				copy(acls[idx:], acls[idx+1:])
+				return acls[:len(acls)-1], true
 			}
 			acls[idx].Perm = newAcl.Perm
 			return acls, true
