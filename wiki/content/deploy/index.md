@@ -1044,17 +1044,23 @@ to see useful information, like the following:
 
 * `/state` Information about the nodes that are part of the cluster. Also contains information about
   size of predicates and groups they belong to.
-* `/assignIds?num=100` This would allocate `num` ids and return a JSON map
+* `/assign?what=uids&num=100` This would allocate `num` uids and return a JSON map
 containing `startId` and `endId`, both inclusive. This id range can be safely assigned
-externally to new nodes, during data ingestion.
-* `/removeNode?id=3&group=2` If a replica goes down and can't be recovered, you can remove it and add a new node to the quorum.
-This endpoint can be used to remove a dead Zero or Dgraph alpha node. To remove dead Zero nodes, just pass `group=0` and the
-id of the Zero node.
-{{% notice "note" %}}
-Before using the api ensure that the node is down and ensure that it doesn't come back up ever again.
+externally to new nodes during data ingestion.
+* `/assign?what=timestamps&num=100` This would request timestamps from Zero.
+  This is useful to fast forward Zero state when starting from a postings
+  directory, which already has commits higher than Zero's leased timestamp.
+* `/removeNode?id=3&group=2` If a replica goes down and can't be recovered, you
+can remove it and add a new node to the quorum. This endpoint can be used to
+remove a dead Zero or Dgraph Alpha node. To remove dead Zero nodes, justjust pass
+`group=0` and the id of the Zero node.
 
-You should not use the same `idx` as that of a node that was removed earlier.
+{{% notice "note" %}}
+Before using the API ensure that the node is down and ensure that it doesn't come back up ever again.
+
+You should not use the same `idx` of a node that was removed earlier.
 {{% /notice %}}
+
 * `/moveTablet?tablet=name&group=2` This endpoint can be used to move a tablet to a group. Zero
   already does shard rebalancing every 8 mins, this endpoint can be used to force move a tablet.
 
