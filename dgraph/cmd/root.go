@@ -85,7 +85,7 @@ func init() {
 
 	var subcommands = []*x.SubCommand{
 		&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero,
-		&version.Version, &debug.Debug, &acl.Acl,
+		&version.Version, &debug.Debug, &acl.CmdAcl,
 	}
 	for _, sc := range subcommands {
 		RootCmd.AddCommand(sc.Cmd)

@@ -19,7 +19,7 @@ type options struct {
 var opt options
 var tlsConf x.TLSHelperConfig
 
-var Acl x.SubCommand
+var CmdAcl x.SubCommand
 var UserAdd x.SubCommand
 var UserDel x.SubCommand
 var LogIn x.SubCommand
@@ -36,12 +36,12 @@ const (
 )
 
 func init() {
-	Acl.Cmd = &cobra.Command{
+	CmdAcl.Cmd = &cobra.Command{
 		Use:   "acl",
 		Short: "Run the Dgraph acl tool",
 	}
 
-	flag := Acl.Cmd.PersistentFlags()
+	flag := CmdAcl.Cmd.PersistentFlags()
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
 
 	// TLS configuration
@@ -55,10 +55,10 @@ func init() {
 	}
 
 	for _, sc := range subcommands {
-		Acl.Cmd.AddCommand(sc.Cmd)
+		CmdAcl.Cmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()
 		sc.Conf.BindPFlags(sc.Cmd.Flags())
-		sc.Conf.BindPFlags(Acl.Cmd.PersistentFlags())
+		sc.Conf.BindPFlags(CmdAcl.Cmd.PersistentFlags())
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
 	}
 }
@@ -143,8 +143,8 @@ func initSubcommands() {
 	}
 	chModFlags := ChMod.Cmd.Flags()
 	chModFlags.StringP("group", "g", "", "The group whose permission is to be changed")
-	chModFlags.StringP("predicate", "p", "", "The predicates whose acls are to be changed")
-	chModFlags.IntP("acl", "a", 0, "The acl represented using an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
+	chModFlags.StringP("pred", "p", "", "The predicates whose acls are to be changed")
+	chModFlags.IntP("perm", "P", 0, "The acl represented using an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
 }
 
 func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
@@ -157,8 +157,8 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
 	}
 
-	x.LoadTLSConfig(&tlsConf, Acl.Conf, tlsAclCert, tlsAclKey)
-	tlsConf.ServerName = Acl.Conf.GetString("tls_server_name")
+	x.LoadTLSConfig(&tlsConf, CmdAcl.Conf, tlsAclCert, tlsAclKey)
+	tlsConf.ServerName = CmdAcl.Conf.GetString("tls_server_name")
 
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
