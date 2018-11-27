@@ -19,6 +19,7 @@ package query
 import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 type mathTree struct {
@@ -103,7 +104,6 @@ func processBinary(mNode *mathTree) error {
 		mNode.Const, err = ag.Value()
 		return err
 	}
-	x.Fatalf("Empty maps and constant")
 	return nil
 }
 
@@ -216,7 +216,7 @@ func evalMathTree(mNode *mathTree) error {
 	}
 	if mNode.Var != "" {
 		if len(mNode.Val) == 0 {
-			return x.Errorf("Variable %v not yet populated or missing.", mNode.Var)
+			glog.V(2).Infof("Variable %v not yet populated or missing.", mNode.Var)
 		}
 		// This is a leaf node whose value is already populated. So return.
 		return nil

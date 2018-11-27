@@ -25,11 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/trace"
-	"google.golang.org/grpc/metadata"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
@@ -39,6 +34,10 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
+	"golang.org/x/net/trace"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -1239,7 +1238,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			doneVars[sg.Params.Var] = it
 			sg.Params.uidToVal = mp
 		} else {
-			return x.Errorf("Missing values/constant in math expression")
+			glog.Errorf("Missing values/constant in math expression")
 		}
 		// Put it in this node.
 	} else if len(sg.Params.NeedsVar) > 0 {
@@ -1798,7 +1797,7 @@ func getReversePredicates(ctx context.Context) ([]string, error) {
 		if !sch.Reverse {
 			continue
 		}
-		preds := append(preds, "~"+sch.Predicate)
+		preds = append(preds, "~"+sch.Predicate)
 	}
 	return preds, nil
 }

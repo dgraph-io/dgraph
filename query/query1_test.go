@@ -1501,9 +1501,8 @@ func TestMathCeil1(t *testing.T) {
 		}
 	}
 	`
-	// this has to fail
-	_, err := processToFastJson(t, query)
-	require.Error(t, err)
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me": []}}`, js)
 }
 
 func TestMathCeil2(t *testing.T) {
