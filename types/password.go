@@ -77,8 +77,5 @@ func isBcryptHash(es []byte) bool {
 		n++ // skip over minor
 	}
 	cost, err := strconv.Atoi(string(es[n : n+2]))
-	if err != nil {
-		return false
-	}
-	return cost >= bcrypt.MinCost && cost <= bcrypt.MaxCost
+	return err == nil && cost >= bcrypt.MinCost && cost <= bcrypt.MaxCost
 }
