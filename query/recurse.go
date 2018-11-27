@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"math"
 
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -47,15 +45,9 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 	select {
 	case err = <-rrch:
 		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while processing child task: %+v", err)
-			}
 			return err
 		}
 	case <-ctx.Done():
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
-		}
 		return ctx.Err()
 	}
 
@@ -82,17 +74,11 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			select {
 			case err = <-rrch:
 				if err != nil {
-					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf("Error while processing child task: %+v", err)
-					}
 					if recurseErr == nil {
 						recurseErr = err
 					}
 				}
 			case <-ctx.Done():
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
-				}
 				if recurseErr == nil {
 					recurseErr = ctx.Err()
 				}

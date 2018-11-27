@@ -24,11 +24,10 @@ import (
 	"math"
 	"time"
 
-	"golang.org/x/net/trace"
+	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
-	"github.com/golang/glog"
-
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -111,10 +110,6 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 
 	x.AssertTrue(plist != nil)
 	if err = plist.AddMutation(ctx, txn, edge); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error adding/deleting %s for attr %s entity %d: %v",
-				token, edge.Attr, edge.Entity, err)
-		}
 		return err
 	}
 	x.PredicateStats.Add("i."+edge.Attr, 1)
@@ -182,10 +177,6 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 	hasCountIndex := schema.State().HasCount(t.Attr)
 	cp, err := txn.addReverseMutationHelper(ctx, plist, hasCountIndex, edge)
 	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error adding/deleting reverse edge for attr %s entity %d: %v",
-				t.Attr, t.Entity, err)
-		}
 		return err
 	}
 	x.PredicateStats.Add(fmt.Sprintf("r.%s", edge.Attr), 1)
@@ -260,10 +251,6 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
 	if err = plist.AddMutation(ctx, txn, t); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error adding/deleting count edge for attr %s count %d dst %d: %v",
-				t.Attr, count, t.ValueId, err)
-		}
 		return err
 	}
 	x.PredicateStats.Add(fmt.Sprintf("c.%s", t.Attr), 1)
@@ -302,9 +289,9 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	l.Lock()
 	defer l.Unlock()
 	if dur := time.Since(t1); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("acquired lock %v %v %v", dur, t.Attr, t.Entity)
-		}
+		span := otrace.FromContext(ctx)
+		span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-lock", true)},
+			"Acquired lock %v %v %v", dur, t.Attr, t.Entity)
 	}
 
 	if doUpdateIndex {

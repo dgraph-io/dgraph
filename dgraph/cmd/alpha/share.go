@@ -24,8 +24,6 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
@@ -54,12 +52,8 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
-	ctx := context.Background()
 	defer r.Body.Close()
 	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while reading the stringified query payload: %+v", err)
-		}
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
