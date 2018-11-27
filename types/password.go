@@ -34,13 +34,15 @@ func Encrypt(plain string) (string, error) {
 		return "", x.Errorf("Password too short, i.e. should has at least 6 chars")
 	}
 
+	b := []byte(plain)
+
 	// maybe already encrypted, most likely live import.
-	if isBcryptHash([]byte(plain)) {
+	if isBcryptHash(b) {
 		glog.V(3).Infof("Encrypt password already encrypted, using it.")
 		return plain, nil
 	}
 
-	encrypted, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+	encrypted, err := bcrypt.GenerateFromPassword(b, bcrypt.DefaultCost)
 	if err != nil {
 		return "", err
 	}
