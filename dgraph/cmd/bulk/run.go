@@ -111,11 +111,7 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
-	if opt.SkipMapPhase && (opt.RDFDir != "" || opt.SchemaFile != "") {
-		fmt.Fprint(os.Stderr, "RDF and schema file(s) are not used when skipping map phase.\n")
-		os.Exit(1)
-	}
-	if !opt.SkipMapPhase && (opt.RDFDir == "" || opt.SchemaFile == "") {
+	if opt.RDFDir == "" || opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
 		os.Exit(1)
 	}
