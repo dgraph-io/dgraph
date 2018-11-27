@@ -61,6 +61,7 @@ const (
 	Del uint32 = 0x02
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
+	BitSchemaPosting   byte = 0x01
 	BitDeltaPosting    byte = 0x04
 	BitCompletePosting byte = 0x08
 	BitEmptyPosting    byte = 0x10 | BitCompletePosting

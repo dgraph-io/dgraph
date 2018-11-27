@@ -226,7 +226,7 @@ func updateSchema(attr string, s pb.SchemaUpdate) error {
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
-	if err := txn.Set(x.SchemaKey(attr), data); err != nil {
+	if err := txn.SetWithMeta(x.SchemaKey(attr), data, posting.BitSchemaPosting); err != nil {
 		return err
 	}
 	return txn.CommitAt(1, nil)
