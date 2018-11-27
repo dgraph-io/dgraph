@@ -20,8 +20,7 @@ var StdJwtHeader = JwtHeader{
 }
 
 type JwtGroup struct {
-	Group       string
-	Wildcardacl string `json:",omitempty"`
+	Group string
 }
 
 type JwtPayload struct {

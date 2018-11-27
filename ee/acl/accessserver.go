@@ -38,7 +38,7 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 	if ok {
 		span.Annotate([]trace.Attribute{
 			trace.StringAttribute("client_ip", clientPeer.Addr.String()),
-		}, "peer info for acl login")
+		}, "client ip for login")
 	}
 
 	if err := validateLoginRequest(request); err != nil {
@@ -46,7 +46,7 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 	}
 
 	resp := &api.LogInResponse{
-		Context: &api.TxnContext{},
+		Context: &api.TxnContext{}, // context needed in order to set the jwt below
 		Code:    api.AclResponseCode_UNAUTHENTICATED,
 	}
 
@@ -71,7 +71,7 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 		Payload: JwtPayload{
 			Userid: request.Userid,
 			Groups: toJwtGroups(user.Groups),
-			// TODO add the token refresh mechanism and reduce the expiration interval
+			// TODO add the token refresh mechanism
 			Exp: time.Now().Add(accessConfig.JwtTtl).Unix(), // set the jwt valid for 30 days
 		},
 	}
@@ -141,8 +141,7 @@ func toJwtGroups(groups []acl.Group) []JwtGroup {
 	jwtGroups := make([]JwtGroup, len(groups))
 	for _, g := range groups {
 		jwtGroups = append(jwtGroups, JwtGroup{
-			Group:       g.GroupID,
-			Wildcardacl: "", // TODO set it to the wild card acl returned from DB
+			Group: g.GroupID,
 		})
 	}
 	return jwtGroups
