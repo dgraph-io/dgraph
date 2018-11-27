@@ -246,7 +246,7 @@ func userMod(dc *dgo.Dgraph) error {
 }
 
 func getUserModNQuad(txn *dgo.Txn, ctx context.Context, useruid string, groupid string) (*api.NQuad, error) {
-	group, err := queryGroup(txn, ctx, groupid)
+	group, err := queryGroup(txn, ctx, groupid, []string{"uid"})
 	if err != nil {
 		return nil, err
 	}
