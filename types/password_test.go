@@ -147,3 +147,52 @@ func TestVerifyPassword(t *testing.T) {
 		})
 	}
 }
+
+func TestIsBcryptHash(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		out  bool
+	}{
+		{name: "test 1",
+			in:  "",
+			out: false,
+		},
+		{name: "test 2",
+			in:  "$2",
+			out: false,
+		},
+		{name: "test 3",
+			in:  "$2y$30$",
+			out: false,
+		},
+		{name: "test 4",
+			in:  "$2a$10$WdCWNpOP6c4l7ECv3hEWKeD3oSiszlRJFmT4uRT1P/W9V9zUye8pS",
+			out: true,
+		},
+		{name: "test 5",
+			in:  "$2y$4$WdCWNpOP6c4l7ECv3hEWKeD3oSiszlRJFmT4uRT1P/W9V9zUye8pS",
+			out: false,
+		},
+		{name: "test 6",
+			in:  "$2z$04$WdCWNpOP6c4l7ECv3hEWKeD3oSiszlRJFmT4uRT1P/W9V9zUye8pS",
+			out: true,
+		},
+		{name: "test 7",
+			in:  "$2$01$WdCWNpOP6c4l7ECv3hEWKeD3oSiszlRJFmT4uRT1P/W9V9zUye8pS",
+			out: false,
+		},
+		{name: "test 8",
+			in:  "$2$11$WdCWNpOP6c4l7ECv3hEWKeD3oSiszlRJFmT4uRT1P/W9V9zUye8pS",
+			out: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := isBcryptHash([]byte(tc.in))
+			if actual != tc.out {
+				t.Errorf("isBcryptHash() value = %v, expected = %v", actual, tc.out)
+			}
+		})
+	}
+}
