@@ -255,8 +255,8 @@ func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	Running a query would make sure that the previous mutation for
 	creating the link has completed with a commitTs from zero, and the
 	subsequent deletion is done *AFTER* the link creation.
-	 */
-	c.NewReadOnlyTxn().Query(ctx,  fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
+	*/
+	c.NewReadOnlyTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
