@@ -16,7 +16,7 @@ set -e
 
 INFO "running bulk load schema test"
 
-WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXX)
+WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
 cd $WORKDIR
 
@@ -43,7 +43,7 @@ EOF
   mkfifo 1million.rdf.gz
   curl -LsS 'https://github.com/dgraph-io/tutorial/blob/master/resources/1million.rdf.gz?raw=true' >> 1million.rdf.gz &
   dgraph bulk -z localhost:$ZERO_PORT -s 1million.schema -r 1million.rdf.gz \
-     >bulk.log 1>&1 </dev/null
+     >bulk.log 2>&1 </dev/null
 }
 
 function StartAlpha
@@ -80,7 +80,8 @@ function QuerySchema
   INFO "running schema query"
   local out_file=${1:?no out file}
   curl -sS localhost:$HTTP_PORT/query -XPOST -d'schema {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2,separators=(',',': '))" > $out_file
-  #INFO "schema is: " && cat $out_file && echo
+  echo >> $out_file
+  #INFO "schema is: " && cat $out_file
 }
 
 function DoExport
@@ -94,9 +95,38 @@ function BulkLoadExportedData
 {
   INFO "bulk loading exported data"
   dgraph bulk -z localhost:$ZERO_PORT \
-	      -s ../dir1/export/*/g01.schema.gz \
-	      -r ../dir1/export/*/g01.rdf.gz \
-     >bulk.log 1>&1 </dev/null
+              -s ../dir1/export/*/g01.schema.gz \
+              -r ../dir1/export/*/g01.rdf.gz \
+     >bulk.log 2>&1 </dev/null
+  mv out/0/p .
+}
+
+function BulkLoadFixtureData
+{
+  INFO "bulk loading fixture data"
+
+  # schema test cases:
+  #
+  # 1. predicate with non-default type (name)
+  # 2. predicate with default type (genre)
+  # 3. predicate not used in rdf (language)
+  cat >fixture.schema <<EOF
+name:string @index(term) .
+genre:default .
+language:string .
+EOF
+
+  # rdf test cases:
+  #
+  # 4. predicate not in schema (revenue)
+  cat >fixture.rdf <<EOF
+_:et <name> "E.T. the Extra-Terrestrial" .
+_:et <genre> "Science Fiction" .
+_:et <revenue> "792.9" .
+EOF
+
+  dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -r fixture.rdf \
+     >bulk.log 2>&1 </dev/null
   mv out/0/p .
 }
 
@@ -105,6 +135,7 @@ function StopServers
   INFO "killing zero server at pid $ZERO_PID"
   INFO "killing alpha server at pid $ALPHA_PID"
   kill $ZERO_PID $ALPHA_PID
+  sleep 1
 }
 
 function Cleanup
@@ -138,6 +169,55 @@ popd >/dev/null
 
 INFO "verifing schema is same before export and after bulk import"
 diff dir1/schema.out dir2/schema.out || FATAL "schema incorrect"
+INFO "schema is correct"
+
+mkdir dir3
+pushd dir3 >/dev/null
+
+StartZero
+BulkLoadFixtureData
+StartAlpha
+QuerySchema "schema.out"
+StopServers
+
+popd >/dev/null
+
+# final schema should include *all* predicates regardless of whether they were
+# introduced by the schema or rdf file, used or not used, or of default type
+# or non-default type
+INFO "verifying schema contains all predicates"
+diff - dir3/schema.out <<EOF || FATAL "schema incorrect"
+{
+  "schema": [
+    {
+      "list": true,
+      "predicate": "_predicate_",
+      "type": "string"
+    },
+    {
+      "predicate": "genre",
+      "type": "default"
+    },
+    {
+      "predicate": "language",
+      "type": "string"
+    },
+    {
+      "index": true,
+      "predicate": "name",
+      "tokenizer": [
+        "term"
+      ],
+      "type": "string"
+    },
+    {
+      "predicate": "revenue",
+      "type": "default"
+    }
+  ]
+}
+EOF
+
 INFO "schema is correct"
 
 Cleanup
