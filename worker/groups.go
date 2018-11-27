@@ -818,12 +818,13 @@ func (g *groupi) processOracleDeltaStream() {
 		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
 			g.Node.Id, g.groupId())
 
-		pl := g.Leader(0)
+		pl := g.connToZeroLeader()
 		if pl == nil {
 			glog.Warningln("Oracle delta stream: No Zero leader known.")
 			time.Sleep(time.Second)
 			return
 		}
+		glog.Infof("Got Zero leader: %s", pl.Addr)
 
 		// The following code creates a stream. Then runs a goroutine to pick up events from the
 		// stream and pushes them to a channel. The main loop loops over the channel, doing smart

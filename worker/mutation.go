@@ -402,7 +402,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 }
 
 func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	pl := groups().Leader(0)
+	pl := groups().connToZeroLeader()
 	if pl == nil {
 		return nil, conn.ErrNoConnection
 	}
