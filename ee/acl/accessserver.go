@@ -19,6 +19,7 @@ type AccessServer struct{}
 
 type AccessOptions struct {
 	HmacSecret []byte
+	JwtTtl     time.Duration
 }
 
 var accessConfig AccessOptions
@@ -71,7 +72,7 @@ func (accessServer *AccessServer) LogIn(ctx context.Context,
 			Userid: request.Userid,
 			Groups: toJwtGroups(user.Groups),
 			// TODO add the token refresh mechanism and reduce the expiration interval
-			Exp: time.Now().AddDate(0, 0, 30).Unix(), // set the jwt valid for 30 days
+			Exp: time.Now().Add(accessConfig.JwtTtl).Unix(), // set the jwt valid for 30 days
 		},
 	}
 
