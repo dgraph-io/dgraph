@@ -19,7 +19,6 @@ package query
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	otrace "go.opencensus.io/trace"
@@ -116,7 +115,7 @@ func verifyUid(ctx context.Context, uid uint64) error {
 		return x.Wrapf(err, "updating error state")
 	}
 	if lease := worker.MaxLeaseId(); uid > lease {
-		return fmt.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
+		return x.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
 	}
 	return nil
 }
@@ -132,7 +131,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 		}
 
 		if len(nq.Subject) == 0 {
-			return nil, fmt.Errorf("Subject must not be empty for nquad: %+v", nq)
+			return nil, x.Errorf("Subject must not be empty for nquad: %+v", nq)
 		}
 		var uid uint64
 		if strings.HasPrefix(nq.Subject, "_:") {

@@ -1487,7 +1487,7 @@ func TestMathCeil1(t *testing.T) {
 
 	query := `
 	{
-		me as var(func: eq(name, "Xyz"))
+		me as var(func: eq(name, "XxXUnknownXxX"))
 		var(func: uid(me)) {
 			friend {
 				x as age
