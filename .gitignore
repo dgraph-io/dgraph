@@ -24,3 +24,9 @@ dgraph.iml
 
 # Output of the go coverage tool
 *.out
+
+// SIVA
+
+dgraph/cmd/distbulk/sandbox/
+dgraph/cmd/data.schema
+tags

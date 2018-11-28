@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
+    "os"
 
 	"github.com/dgraph-io/badger"
 	"github.com/golang/glog"
@@ -271,6 +272,7 @@ func LoadFromDb() error {
 	for itr.Seek(prefix); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.Key()
+        fmt.Fprintf(os.Stderr, "SIVA: found key '%s' while searching for schema prefix\n", key)
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}

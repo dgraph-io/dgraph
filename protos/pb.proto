@@ -289,6 +289,10 @@ message PostingList {
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 }
 
+message SivaPostingList {
+  repeated Posting postings = 1;
+}
+
 message FacetParam {
 	string key = 1;
 	string alias = 2;
