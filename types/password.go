@@ -17,9 +17,12 @@
 package types
 
 import (
+	"strconv"
+
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 const (
@@ -31,7 +34,15 @@ func Encrypt(plain string) (string, error) {
 		return "", x.Errorf("Password too short, i.e. should has at least 6 chars")
 	}
 
-	encrypted, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+	b := []byte(plain)
+
+	// maybe already encrypted, most likely live import.
+	if isBcryptHash(b) {
+		glog.V(3).Infof("Encrypt password already encrypted, using it.")
+		return plain, nil
+	}
+
+	encrypted, err := bcrypt.GenerateFromPassword(b, bcrypt.DefaultCost)
 	if err != nil {
 		return "", err
 	}
@@ -45,4 +56,26 @@ func VerifyPassword(plain, encrypted string) error {
 	}
 
 	return bcrypt.CompareHashAndPassword([]byte(encrypted), []byte(plain))
+}
+
+const bcryptMinHashSize = 59
+
+// isBcryptHash checks if the slice es resembles a bcrypt hash.
+// Returns true if es looks like a bcrypt hash, false otherwise.
+func isBcryptHash(es []byte) bool {
+	if len(es) < bcryptMinHashSize {
+		return false
+	}
+	if es[0] != '$' {
+		return false
+	}
+	if es[1] != '2' {
+		return false
+	}
+	n := 3
+	if es[2] != '$' {
+		n++ // skip over minor
+	}
+	cost, err := strconv.Atoi(string(es[n : n+2]))
+	return err == nil && cost >= bcrypt.MinCost && cost <= bcrypt.MaxCost
 }
