@@ -1,3 +1,5 @@
+// +build !oss
+
 /*
  * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
  *
