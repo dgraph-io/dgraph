@@ -9,16 +9,12 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Added
 
 - Integrate OpenCensus in Dgraph. (#2739) (eccd2506, 9e7fa056)
-- Feature: full backups. (#2710)
+- Add Dgraph Community License for proprietary features.
+- Feature: Full binary backups. This is an enterprise feature licensed under the Dgraph Community License. (#2710)
+- Add `--enterprise_features` flag to enable
 - Add minio dep and its deps in govendor. (94daeaf7, 35a73e81)
 - Add network partitioning tests with blockade tool. (fd4e3872, dada74f4, e59cbfb2, 50b0484f, 3c4df36c, bec18bc8, c8ccb943)
-- Add the `/assign` Zero endpoint to assign UIDs or transaction timestamp leases.
-  - UIDs: `/assign?what=uids&num=10` to request (replaces the previous `/assignIds` endpoint).
-  - Timestamps: `/assign?what=timestamps&num=10` to request timestamps from
-    Zero. This is useful to fast forward Zero state when starting from a
-    postings directory, which already has commits higher than Zero's leased
-    timestamp.
-
+  - Add the `/assign?what=uids&num10` and `/assign?what=timestamps&num=10` Zero endpoints to assign UIDs or transaction timestamp leases.
 
 ### Changed
 
@@ -39,13 +35,13 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Optimize query: UID expansion. (#2772)
 - Split membership sync endpoints and remove PurgeTs endpoint. (#2773)
 - Set the Prefix option during iteration. (#2780)
-- Replace Zero's /assignIds?num=10 endpoint with /assign?what=uids&num=10 (see Added section).
+- Replace Zero's `/assignIds?num=10` endpoint with `/assign?what=uids&num=10` (see Added section).
 
 ### Removed
 
 - Remove type hinting for JSON and RDF schema-less types. (#2742)
 - Remove deprecated logic that was found using vet. (#2758)
-  - Remove assert for zero-length posting lists. (#2763)
+- Remove assert for zero-length posting lists. (#2763)
 
 ### Fixed
 
@@ -55,7 +51,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Fix Test: TestMillion.
 - Fix Jepsen bank test. (#2764)
 - Fix link to help_wanted. (#2774)
-
+- Fix invalid division by zero error. Fixes #2733.
 
 ## [1.0.10] - 2018-11-05
 
