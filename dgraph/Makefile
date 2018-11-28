@@ -39,7 +39,7 @@ endif
 all: $(BIN)
 
 $(BIN): clean
-	go build $(BUILD_FLAGS) -o $(BIN)
+	@go build $(BUILD_FLAGS) -o $(BIN)
 
 clean:
 	@rm -f $(BIN)
