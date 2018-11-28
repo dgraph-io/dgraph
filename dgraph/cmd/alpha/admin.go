@@ -73,6 +73,11 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r, http.MethodPost) {
 		return
 	}
+	if !Alpha.Conf.GetBool("enterprise_features") {
+		err := x.Errorf("You must enable Alpha enterprise features")
+		x.SetStatus(w, err.Error(), "Backup failed.")
+		return
+	}
 	target := r.FormValue("destination")
 	if target == "" {
 		err := x.Errorf("You must specify a 'destination' value")
