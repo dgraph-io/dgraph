@@ -74,7 +74,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !Alpha.Conf.GetBool("enterprise_features") {
-		err := x.Errorf("You must enable Alpha enterprise features")
+		err := x.Errorf("You must enable Dgraph enterprise features.")
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}

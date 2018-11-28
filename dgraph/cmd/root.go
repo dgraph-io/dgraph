@@ -75,7 +75,7 @@ func init() {
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
 	RootCmd.PersistentFlags().Bool("enterprise_features", false,
-		"Enable enterprise features")
+		"Enable Dgraph enterprise features. If you set this to true, you agree to the Dgraph Community License.")
 	rootConf.BindPFlags(RootCmd.PersistentFlags())
 
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
