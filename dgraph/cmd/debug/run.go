@@ -24,6 +24,7 @@ import (
 	"log"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -91,9 +92,13 @@ func readAmount(txn *badger.Txn, uid uint64) int {
 	itr := txn.NewIterator(iopt)
 	defer itr.Close()
 
-	key := x.DataKey("amount_0", uid)
-	for itr.Seek(key); itr.Valid(); {
+	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
+		pk := x.Parse(item.Key())
+		if !pk.IsData() || pk.Uid != uid || !strings.HasPrefix(pk.Attr, "amount_") {
+			itr.Next()
+			continue
+		}
 		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 		if err != nil {
 			log.Fatalf("Unable to read posting list: %v", err)
@@ -105,8 +110,12 @@ func readAmount(txn *badger.Txn, uid uint64) int {
 			times++
 			return nil
 		})
-		x.AssertTrue(times <= 1)
 		x.Check(err)
+		if times == 0 {
+			itr.Next()
+			continue
+		}
+		x.AssertTrue(times <= 1)
 		return amount
 	}
 	return 0
@@ -116,9 +125,6 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 	txn := db.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
-	pk := x.ParsedKey{Attr: "key_0"}
-	prefix := pk.DataPrefix()
-
 	iopt := badger.DefaultIteratorOptions
 	iopt.AllVersions = true
 	iopt.PrefetchValues = false
@@ -127,7 +133,7 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 
 	keys := make(map[uint64]int)
 	var lastKey []byte
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); {
+	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
 		if bytes.Equal(lastKey, item.Key()) {
 			itr.Next()
@@ -135,6 +141,12 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 		}
 		lastKey = append(lastKey[:0], item.Key()...)
 		pk := x.Parse(item.Key())
+		if !pk.IsData() || !strings.HasPrefix(pk.Attr, "key_") {
+			continue
+		}
+		if pk.IsSchema() {
+			continue
+		}
 
 		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 		if err != nil {

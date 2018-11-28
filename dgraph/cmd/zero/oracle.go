@@ -463,11 +463,17 @@ func (s *Server) TryAbort(ctx context.Context,
 
 // Timestamps is used to assign startTs for a new transaction
 func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
+	ctx, span := otrace.StartSpan(ctx, "Zero.Timestamps")
+	defer span.End()
+
+	span.Annotatef(nil, "Zero id: %d. Timestamp request: %+v", s.Node.Id, num)
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}
 
 	reply, err := s.lease(ctx, num, true)
+	span.Annotatef(nil, "Response: %+v. Error: %v", reply, err)
+
 	if err == nil {
 		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(reply)

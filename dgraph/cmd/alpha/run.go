@@ -424,6 +424,7 @@ func run() {
 	}()
 
 	if Alpha.Conf.GetBool("expose_trace") {
+		// TODO: Remove this once we get rid of event logs.
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}

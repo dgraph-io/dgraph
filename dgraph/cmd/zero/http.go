@@ -50,7 +50,7 @@ func intFromQueryParam(w http.ResponseWriter, r *http.Request, name string) (uin
 	return val, true
 }
 
-func (st *state) assignUids(w http.ResponseWriter, r *http.Request) {
+func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method == "OPTIONS" {
@@ -65,10 +65,27 @@ func (st *state) assignUids(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+
 	num := &pb.Num{Val: uint64(val)}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	ids, err := st.zero.AssignUids(ctx, num)
+
+	var ids *pb.AssignedIds
+	var err error
+	what := r.URL.Query().Get("what")
+	switch what {
+	case "uids":
+		ids, err = st.zero.AssignUids(ctx, num)
+	case "timestamps":
+		if num.Val == 0 {
+			num.ReadOnly = true
+		}
+		ids, err = st.zero.Timestamps(ctx, num)
+	default:
+		x.SetStatus(w, x.Error,
+			fmt.Sprintf("Invalid what: [%s]. Must be one of uids or timestamps", what))
+		return
+	}
 	if err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return

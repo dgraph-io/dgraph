@@ -52,6 +52,7 @@ go get -u github.com/prometheus/client_golang/prometheus
 go get -u github.com/dgraph-io/dgo
 # go get github.com/stretchr/testify/require
 go get -u github.com/karalabe/xgo
+docker pull karalabe/xgo-latest
 
 pushd $GOPATH/src/google.golang.org/grpc
   git checkout v1.13.0

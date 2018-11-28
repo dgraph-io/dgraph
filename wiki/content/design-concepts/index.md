@@ -229,6 +229,11 @@ expensive. Instead, every mutation gets logged and synced to disk via append onl
 from a system crash, by replaying all the mutations since the last write to `Posting List`.
 
 ### Mutations
+
+{{% notice "outdated" %}}
+This section needs to be improved.
+{{% /notice %}}
+
 In addition to being written to `Write Ahead Logs`, a mutation also gets stored in memory as an
 overlay over immutable `Posting list` in a mutation layer. This mutation layer allows us to iterate
 over `Posting`s as though they're sorted, without requiring re-creating the posting list.

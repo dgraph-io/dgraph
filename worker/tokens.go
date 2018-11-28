@@ -151,25 +151,26 @@ func getInequalityTokens(readTs uint64, attr, f string,
 		return []string{ineqToken}, ineqToken, nil
 	}
 
+	// If some new index key was written as part of same transaction it won't be on disk
+	// until the txn is committed. This is OK, we don't need to overlay in-memory contents on the
+	// DB, to keep the design simple and efficient.
+	txn := pstore.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+
+	seekKey := x.IndexKey(attr, ineqToken)
+
 	isgeOrGt := f == "ge" || f == "gt"
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = !isgeOrGt
-	// TODO(txn): If some new index key was written as part of same transaction it won't be on disk
-	// until the txn is committed. Merge it with inmemory keys.
-	txn := pstore.NewTransactionAt(readTs, false)
-	defer txn.Discard()
-
-	var out []string
-	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
-	seekKey := x.IndexKey(attr, ineqToken)
-
+	itOpt.Prefix = x.IndexKey(attr, string(tokenizer.Identifier()))
 	itr := txn.NewIterator(itOpt)
 	defer itr.Close()
 
 	ineqTokenInBytes := []byte(ineqToken) //used for inequality comparison below
 
-	for itr.Seek(seekKey); itr.ValidForPrefix(indexPrefix); itr.Next() {
+	var out []string
+	for itr.Seek(seekKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.Key()
 		k := x.Parse(key)

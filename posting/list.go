@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"golang.org/x/net/trace"
-
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 
@@ -63,6 +61,7 @@ const (
 	Del uint32 = 0x02
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
+	BitSchemaPosting   byte = 0x01
 	BitDeltaPosting    byte = 0x04
 	BitCompletePosting byte = 0x08
 	BitEmptyPosting    byte = 0x10 | BitCompletePosting
@@ -310,9 +309,6 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("DELETEME set to true. Temporary error.")
-		}
 		return ErrRetry
 	}
 	if txn.ShouldAbort() {
