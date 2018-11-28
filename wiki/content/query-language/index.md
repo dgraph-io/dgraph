@@ -1997,9 +1997,38 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
-{{% notice "note" %}} If your predicate is a URI or has special characters, then you should wrap
-it with angular brackets while doing the schema mutation. E.g. `<first:name>`{{% /notice %}}
+#### Internationalization (i18n) Support
 
+If your predicate is a URI or has laguange-specific vocabs, then enclose
+it with angle brackets `<>` when executing the schema mutation.
+
+{{% notice "note" %}}Dgraph supports [Internationalized Resource Identifier](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRI) for predicate names and values.{{% /notice  %}}
+
+Schema syntax:
+```
+<职业>: string @index(exact) .
+<年龄>: int @index(int) .
+<地点>: geo @index(geo) .
+<公司>: string .
+```
+
+This syntax allows for internationalized predicate, but fulltext indexing still defaults to English.
+To use the right tokenizer for your language, you need to use the `@lang` directive and enter values using your
+language tag.
+
+Schema:
+```
+<公司>: string @index(exact, fulltext) @lang .
+```
+Mutation:
+```
+{
+  set {
+    _:a <公司> "Dgraph Labs Inc"@en
+    _:b <公司> "夏新科技有限责任公司"@zh
+  }
+}
+```
 
 ### Upsert directive
 
