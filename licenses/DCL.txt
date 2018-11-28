@@ -101,17 +101,17 @@ Dgraph Community License Agreement
 
             http://www.apache.org/licenses/LICENSE-2.0
 
-        for full terms.  Dgraph Core is a no-cost, entry-level
-        license and as such, contains the following disclaimers: NOTWITHSTANDING
-        ANYTHING TO THE CONTRARY HEREIN, DGRAPH CORE IS
-        PROVIDED "AS IS" AND "AS AVAILABLE", AND ALL EXPRESS OR IMPLIED
-        WARRANTIES ARE EXCLUDED AND DISCLAIMED, INCLUDING WITHOUT LIMITATION THE
-        IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
-        NON-INFRINGEMENT, AND ANY WARRANTIES ARISING BY STATUTE OR OTHERWISE IN
-        LAW OR FROM COURSE OF DEALING, COURSE OF PERFORMANCE, OR USE IN TRADE.
-        For clarity, the terms of this Agreement, other than the relevant
-        definitions in Section 1 and this Section 2(a) do not apply to
-        Dgraph Core.
+        for full terms.  Dgraph Core is a no-cost, entry-level license and as
+        such, contains the following disclaimers: NOTWITHSTANDING ANYTHING TO
+        THE CONTRARY HEREIN, DGRAPH CORE IS PROVIDED "AS IS" AND "AS
+        AVAILABLE", AND ALL EXPRESS OR IMPLIED WARRANTIES ARE EXCLUDED AND
+        DISCLAIMED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF
+        MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT,
+        AND ANY WARRANTIES ARISING BY STATUTE OR OTHERWISE IN LAW OR FROM
+        COURSE OF DEALING, COURSE OF PERFORMANCE, OR USE IN TRADE.  For
+        clarity, the terms of this Agreement, other than the relevant
+        definitions in Section 1 and this Section 2(a) do not apply to Dgraph
+        Core.
 
     (b) License to Dgraph Enterprise Edition.
 
