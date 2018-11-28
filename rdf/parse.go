@@ -129,6 +129,14 @@ L:
 			if oval == "" && t != types.StringID {
 				return rnq, x.Errorf("Invalid ObjectValue")
 			}
+			// if this is a password value dont re-encrypt.
+			if t == types.PasswordID {
+				var err error
+				if rnq.ObjectValue, err = types.ObjectValue(t, oval); err != nil {
+					return rnq, err
+				}
+				break
+			}
 			src := types.ValueForType(types.StringID)
 			src.Value = []byte(oval)
 			p, err := types.Convert(src, t)
@@ -271,6 +279,7 @@ func isNewline(r rune) bool {
 }
 
 var typeMap = map[string]types.TypeID{
+	"xs:password":        types.PasswordID,
 	"xs:string":          types.StringID,
 	"xs:date":            types.DateTimeID,
 	"xs:dateTime":        types.DateTimeID,
