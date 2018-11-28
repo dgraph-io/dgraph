@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -57,6 +58,11 @@ func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 	first := true
 	var predicate string
 	for _, kv := range kvs {
+		if kv.Version == 0 {
+			glog.Errorf("Got a KV with version=0. Ignoring... UserMeta=%b key=\n%s\n",
+				kv.UserMeta, kv.Key)
+			continue
+		}
 		if first {
 			pk := x.Parse(kv.Key)
 			predicate = pk.Attr
@@ -85,6 +91,8 @@ func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 }
 
 func movePredicateHelper(ctx context.Context, predicate string, gid uint32) error {
+	span := otrace.FromContext(ctx)
+
 	pl := groups().Leader(gid)
 	if pl == nil {
 		return x.Errorf("Unable to find a connection for group: %d\n", gid)
@@ -106,6 +114,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 		return l.MarshalToKv()
 	}
 
+	span.Annotatef(nil, "Starting stream list orchestrate")
 	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
 	if err := sl.Orchestrate(ctx, prefix, math.MaxUint64); err != nil {
 		return err
@@ -146,7 +155,10 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	if err != nil {
 		return err
 	}
-	glog.Infof("Received %d keys\n", recvCount)
+
+	msg := fmt.Sprintf("Receiver says it got %d keys.\n", recvCount)
+	span.Annotate(nil, msg)
+	glog.Infof(msg)
 	return nil
 }
 
@@ -242,6 +254,9 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 
 func (w *grpcWorker) MovePredicate(ctx context.Context,
 	in *pb.MovePredicatePayload) (*api.Payload, error) {
+	ctx, span := otrace.StartSpan(ctx, "worker.MovePredicate")
+	defer span.End()
+
 	if groups().gid != in.SourceGroupId {
 		return &emptyPayload,
 			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
@@ -258,13 +273,18 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errNotLeader
 	}
 
-	glog.Infof("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
+	msg := fmt.Sprintf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
 		in.SourceGroupId, in.DestGroupId)
+	glog.Info(msg)
+
+	span.Annotate(nil, msg)
+	span.Annotatef(nil, "Applying state: %+v", in.State)
 
 	// Ensures that all future mutations beyond this point are rejected.
 	if err := n.proposeAndWait(ctx, &pb.Proposal{State: in.State}); err != nil {
 		return &emptyPayload, err
 	}
+	span.Annotate(nil, "State applied. Cancelling txns.")
 	aborted := false
 	for i := 0; i < 12; i++ {
 		// Try a dozen times, then give up.
@@ -282,9 +302,13 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if !aborted {
 		return &emptyPayload, errUnableToAbort
 	}
+	span.Annotate(nil, "Txns cancelled.")
 	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
 	n.applyAllMarks(ctx)
 
 	err := movePredicateHelper(ctx, in.Predicate, in.DestGroupId)
+	if err != nil {
+		span.Annotatef(nil, "Error while movePredicateHelper: %v", err)
+	}
 	return &emptyPayload, err
 }
