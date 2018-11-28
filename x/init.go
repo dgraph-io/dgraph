@@ -71,7 +71,8 @@ For Dgraph official documentation, visit https://docs.dgraph.io.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 To say hi to the community       , visit https://dgraph.slack.com.
 
-Licensed under Apache 2.0. Copyright 2015-2018 Dgraph Labs, Inc.
+Licensed variously under Apache 2.0 and Dgraph Community License.
+Copyright 2015-2018 Dgraph Labs, Inc.
 
 `,
 		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch, runtime.Version())
