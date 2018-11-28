@@ -32,7 +32,9 @@ BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${
 # Insert build tags if specified
 ifneq ($(strip $(BUILD_TAGS)),)
 	BUILD_FLAGS += -tags '$(BUILD_TAGS)'
-	BUILD_VERSION := $(BUILD_VERSION)_oss
+	ifneq (,$(findstring oss,$(BUILD_TAGS)))
+		BUILD_VERSION := $(BUILD_VERSION)_oss
+	endif
 endif
 
 .PHONY: all $(BIN)
