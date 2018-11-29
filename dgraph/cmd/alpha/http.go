@@ -105,7 +105,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// If ro is set, run this as a readonly query.
 	if ro := r.URL.Query().Get("ro"); len(ro) > 0 && req.StartTs == 0 {
-		req.ReadOnly = true
+		if ro == "true" || ro == "1" {
+			req.ReadOnly = true
+		}
 	}
 
 	// Core processing happens here.
