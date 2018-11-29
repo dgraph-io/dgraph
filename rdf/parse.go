@@ -129,16 +129,12 @@ L:
 			if oval == "" && t != types.StringID {
 				return rnq, x.Errorf("Invalid ObjectValue")
 			}
-			// if this is a password value dont re-encrypt.
-			if t == types.PasswordID {
-				var err error
-				if rnq.ObjectValue, err = types.ObjectValue(t, oval); err != nil {
-					return rnq, err
-				}
-				break
-			}
 			src := types.ValueForType(types.StringID)
 			src.Value = []byte(oval)
+			// if this is a password value dont re-encrypt. issue#2765
+			if t == types.PasswordID {
+				src.Tid = t
+			}
 			p, err := types.Convert(src, t)
 			if err != nil {
 				return rnq, err
