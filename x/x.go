@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -29,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 // Error constants representing different types of errors.
@@ -68,9 +69,18 @@ const (
 
 var (
 	// Useful for running multiple servers on the same machine.
-	regExpHostName    = regexp.MustCompile(ValidHostnameRegex)
-	ErrReuseRemovedId = errors.New("Reusing RAFT index of a removed node.")
+	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 )
+
+func ShouldCrash(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := grpc.ErrorDesc(err)
+	return strings.Contains(errStr, "REUSE_RAFTID") ||
+		strings.Contains(errStr, "REUSE_ADDR") ||
+		strings.Contains(errStr, "NO_ADDR")
+}
 
 // WhiteSpace Replacer removes spaces and tabs from a string.
 var WhiteSpace = strings.NewReplacer(" ", "", "\t", "")

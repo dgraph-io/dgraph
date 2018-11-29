@@ -168,14 +168,15 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	}
 	// Also check that the new node is not me.
 	if rc.Id == node.RaftContext.Id {
-		return nil, ErrDuplicateRaftId
+		return nil, x.Errorf("REUSE_RAFTID: Raft ID duplicates mine: %+v", rc)
 	}
 
 	// Check that the new node is not already part of the group.
 	if addr, ok := node.Peer(rc.Id); ok && rc.Addr != addr {
 		// There exists a healthy connection to server with same id.
 		if _, err := Get().Get(addr); err == nil {
-			return &api.Payload{}, ErrDuplicateRaftId
+			return &api.Payload{}, x.Errorf(
+				"REUSE_ADDR: IP Address same as existing peer: %s", addr)
 		}
 	}
 	node.Connect(rc.Id, rc.Addr)
