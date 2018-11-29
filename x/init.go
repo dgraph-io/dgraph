@@ -19,6 +19,7 @@ package x
 import (
 	"fmt"
 	"runtime"
+	"strings"
 
 	"github.com/golang/glog"
 )
@@ -60,6 +61,10 @@ func Init() {
 }
 
 func BuildDetails() string {
+	licenseInfo := `Licensed under the Apache Public License 2.0`
+	if !strings.HasSuffix(dgraphVersion, "-oss") {
+		licenseInfo = `Licensed variously under the Apache Public License 2.0 and Dgraph Community License`
+	}
 	return fmt.Sprintf(`
 Dgraph version   : %v
 Commit SHA-1     : %v
@@ -71,10 +76,11 @@ For Dgraph official documentation, visit https://docs.dgraph.io.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 To say hi to the community       , visit https://dgraph.slack.com.
 
-Licensed under Apache 2.0. Copyright 2015-2018 Dgraph Labs, Inc.
+%s.
+Copyright 2015-2018 Dgraph Labs, Inc.
 
 `,
-		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch, runtime.Version())
+		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch, runtime.Version(), licenseInfo)
 }
 
 // PrintVersionOnly prints version and other helpful information if --version.
