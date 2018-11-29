@@ -408,8 +408,8 @@ func run() {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
 		}
 
-	    edgraphOptions.HmacSecret = hmacSecret
-	    edgraphOptions.JwtTtl = Alpha.Conf.GetDuration("jwt_ttl")
+		edgraphOptions.HmacSecret = hmacSecret
+		edgraphOptions.JwtTtl = Alpha.Conf.GetDuration("jwt_ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}

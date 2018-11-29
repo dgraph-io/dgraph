@@ -111,8 +111,12 @@ func (jwt *Jwt) DecodeString(input string, checkSignature bool, key []byte) erro
 		}
 
 		mac := hmac.New(sha256.New, key)
-		mac.Write(header)
-		mac.Write(payload)
+		if _, err := mac.Write(header); err != nil {
+			return fmt.Errorf("Error while writing header to construct signature: %v", err)
+		}
+		if _, err := mac.Write(payload); err != nil {
+			return fmt.Errorf("Error while writing payload to construct signature: %v", err)
+		}
 		expectedSignature := mac.Sum(nil)
 		if !hmac.Equal(signature, expectedSignature) {
 			return fmt.Errorf("Signature mismatch")

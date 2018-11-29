@@ -9,7 +9,6 @@
  *
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
-
 package acl
 
 import (
@@ -17,10 +16,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/ee/acl"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -140,12 +139,10 @@ func queryGroup(txn *dgo.Txn, ctx context.Context, groupid string,
 	return group, nil
 }
 
-
 type Acl struct {
 	Predicate string `json:"predicate"`
 	Perm      int32  `json:"perm"`
 }
-
 
 func chMod(dc *dgo.Dgraph) error {
 	groupId := ChMod.Conf.GetString("group")
