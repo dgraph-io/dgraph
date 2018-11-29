@@ -199,7 +199,6 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) ([]*api
 			return nil, ctx.Err()
 		}
 	}
-	close(results)
 
 	return schemaNodes, nil
 }
