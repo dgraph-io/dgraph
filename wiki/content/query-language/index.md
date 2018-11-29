@@ -1999,10 +1999,10 @@ Reverse edges are also computed if specified by a schema mutation.
 
 ### Predicates i18n
 
-If your predicate is a URI or has laguange-specific vocabs, then enclose
+If your predicate is a URI or has language-specific characters, then enclose
 it with angle brackets `<>` when executing the schema mutation.
 
-{{% notice "note" %}}Dgraph supports [Internationalized Resource Identifier](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRI) for predicate names and values.{{% /notice  %}}
+{{% notice "note" %}}Dgraph supports [Internationalized Resource Identifiers](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRIs) for predicate names and values.{{% /notice  %}}
 
 Schema syntax:
 ```
@@ -2012,7 +2012,7 @@ Schema syntax:
 <公司>: string .
 ```
 
-This syntax allows for internationalized predicate, but fulltext indexing still defaults to English.
+This syntax allows for internationalized predicate names, but full-text indexing still defaults to English.
 To use the right tokenizer for your language, you need to use the `@lang` directive and enter values using your
 language tag.
 
@@ -2385,9 +2385,9 @@ All facets on an edge are queried with `@facets`.
 
 ### Facets i18n
 
-Facets keys and values can use language vocabs directly when mutating. But facet keys need to be enclosed in angle brackets `<>` when querying. This is similar to predicates. See [Predicates i18n](#predicates-i18n) for more info.
+Facets keys and values can use language-specific characters directly when mutating. But facet keys need to be enclosed in angle brackets `<>` when querying. This is similar to predicates. See [Predicates i18n](#predicates-i18n) for more info.
 
-{{% notice "note" %}}Dgraph supports [Internationalized Resource Identifier](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRI) for facet keys when querying.{{% /notice  %}}
+{{% notice "note" %}}Dgraph supports [Internationalized Resource Identifiers](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRIs) for facet keys when querying.{{% /notice  %}}
 
 Example:
 ```
@@ -2402,7 +2402,7 @@ Example:
 Query, notice the `<>`'s:
 ```
 {
-  q (func: has(name)) {
+  q(func: has(name)) {
     name @facets(<वंश>)
   }
 }
