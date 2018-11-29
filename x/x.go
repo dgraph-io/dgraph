@@ -67,6 +67,9 @@ const (
 	// If the difference between AppliedUntil - TxnMarks.DoneUntil() is greater than this, we
 	// start aborting old transactions.
 	ForceAbortDifference = 5000
+
+	TlsClientCert = "client.crt"
+	TlsClientKey  = "client.key"
 )
 
 var (
@@ -440,4 +443,23 @@ func SetupConnection(host string, insecure bool, tlsConf *TLSHelperConfig) (*grp
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
+}
+
+func CalcDiffs(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]string,
+	[]string) {
+	var newGroups []string
+	var groupsToBeDeleted []string
+
+	for g := range targetMap {
+		if _, ok := existingMap[g]; !ok {
+			newGroups = append(newGroups, g)
+		}
+	}
+	for g := range existingMap {
+		if _, ok := targetMap[g]; !ok {
+			groupsToBeDeleted = append(groupsToBeDeleted, g)
+		}
+	}
+
+	return newGroups, groupsToBeDeleted
 }

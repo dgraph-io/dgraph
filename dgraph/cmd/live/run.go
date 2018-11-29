@@ -46,11 +46,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	tlsLiveCert = "client.live.crt"
-	tlsLiveKey  = "client.live.key"
-)
-
 type options struct {
 	files               string
 	schemaFile          string
@@ -299,7 +294,7 @@ func run() error {
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
 	}
-	x.LoadTLSConfig(&tlsConf, Live.Conf, tlsLiveCert, tlsLiveKey)
+	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
 	go http.ListenAndServe("localhost:6060", nil)

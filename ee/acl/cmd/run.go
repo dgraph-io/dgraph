@@ -1,3 +1,15 @@
+// +build !oss
+
+/*
+ * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ *
+ * Licensed under the Dgraph Community License (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
+ *
+ *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ */
+
 package acl
 
 import (
@@ -29,11 +41,6 @@ var GroupDel x.SubCommand
 
 var UserMod x.SubCommand
 var ChMod x.SubCommand
-
-const (
-	tlsAclCert = "client.acl.crt"
-	tlsAclKey  = "client.acl.key"
-)
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
@@ -131,7 +138,7 @@ func initSubcommands() {
 	}
 	userModFlags := UserMod.Cmd.Flags()
 	userModFlags.StringP("user", "u", "", "The user id to be changed")
-	userModFlags.StringP("groups", "G", "", "The groups to be set for the user")
+	userModFlags.StringP("groups", "g", "", "The groups to be set for the user")
 
 	// the chmod command is used to change a group's permissions
 	ChMod.Cmd = &cobra.Command{
@@ -142,9 +149,12 @@ func initSubcommands() {
 		},
 	}
 	chModFlags := ChMod.Cmd.Flags()
-	chModFlags.StringP("group", "g", "", "The group whose permission is to be changed")
-	chModFlags.StringP("pred", "p", "", "The predicates whose acls are to be changed")
-	chModFlags.IntP("perm", "P", 0, "The acl represented using an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
+	chModFlags.StringP("group", "g", "", "The group whose permission " +
+		"is to be changed")
+	chModFlags.StringP("pred", "p", "", "The predicates whose acls" +
+		" are to be changed")
+	chModFlags.IntP("perm", "P", 0, "The acl represented using " +
+		"an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
 }
 
 func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
@@ -157,12 +167,11 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
 	}
 
-	x.LoadTLSConfig(&tlsConf, CmdAcl.Conf, tlsAclCert, tlsAclKey)
+	x.LoadTLSConfig(&tlsConf, CmdAcl.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = CmdAcl.Conf.GetString("tls_server_name")
 
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
-	var accessClients []api.DgraphAccessClient
 	for _, d := range ds {
 		conn, err := x.SetupConnection(d, !tlsConf.CertRequired, &tlsConf)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
@@ -170,12 +179,8 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 
 		dc := api.NewDgraphClient(conn)
 		clients = append(clients, dc)
-
-		dgraphAccess := api.NewDgraphAccessClient(conn)
-		accessClients = append(accessClients, dgraphAccess)
 	}
 	dgraphClient := dgo.NewDgraphClient(clients...)
-	dgraphClient.SetAccessClients(accessClients...)
 	if err := f(dgraphClient); err != nil {
 		glog.Errorf("Error while running transaction: %v", err)
 		os.Exit(1)

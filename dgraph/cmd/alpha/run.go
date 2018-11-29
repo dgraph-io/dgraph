@@ -35,7 +35,6 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -284,7 +283,6 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
-	api.RegisterDgraphAccessServer(s, &acl.AccessServer{})
 	hapi.RegisterHealthServer(s, health.NewServer())
 	err := s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)
@@ -391,7 +389,7 @@ var shutdownCh chan struct{}
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
-	edgraph.SetConfiguration(edgraph.Options{
+	edgraphOptions := edgraph.Options{
 		BadgerTables: Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
 
@@ -401,7 +399,7 @@ func run() {
 		Nomutations:    Alpha.Conf.GetBool("nomutations"),
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
-	})
+	}
 
 	secretFile := Alpha.Conf.GetString("hmac_secret_file")
 	if secretFile != "" {
@@ -410,12 +408,12 @@ func run() {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
 		}
 
-		acl.SetAccessConfiguration(acl.AccessOptions{
-			HmacSecret: hmacSecret,
-			JwtTtl:     Alpha.Conf.GetDuration("jwt_ttl"),
-		})
+	    edgraphOptions.HmacSecret = hmacSecret
+	    edgraphOptions.JwtTtl = Alpha.Conf.GetDuration("jwt_ttl")
+
 		glog.Info("HMAC secret loaded successfully.")
 	}
+	edgraph.SetConfiguration(edgraphOptions)
 
 	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)

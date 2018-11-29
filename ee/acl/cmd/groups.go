@@ -1,3 +1,15 @@
+// +build !oss
+
+/*
+ * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ *
+ * Licensed under the Dgraph Community License (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
+ *
+ *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ */
+
 package acl
 
 import (
@@ -5,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/dgraph/ee/acl"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -92,7 +105,8 @@ func groupDel(dc *dgo.Dgraph) error {
 	return nil
 }
 
-func queryGroup(txn *dgo.Txn, ctx context.Context, groupid string, fields []string) (group *Group, err error) {
+func queryGroup(txn *dgo.Txn, ctx context.Context, groupid string,
+	fields []string) (group *acl.Group, err error) {
 	var queryBuilder bytes.Buffer
 	// write query header
 	queryBuilder.WriteString(`    
@@ -119,42 +133,19 @@ func queryGroup(txn *dgo.Txn, ctx context.Context, groupid string, fields []stri
 		glog.Errorf("Error while query group with id %s: %v", groupid, err)
 		return nil, err
 	}
-	group, err = UnmarshallGroup(queryResp, "group")
+	group, err = acl.UnmarshallGroup(queryResp, "group")
 	if err != nil {
 		return nil, err
 	}
 	return group, nil
 }
 
-// Extract the first User pointed by the userKey in the query response
-func UnmarshallGroup(queryResp *api.Response, groupKey string) (group *Group, err error) {
-	m := make(map[string][]Group)
-
-	err = json.Unmarshal(queryResp.GetJson(), &m)
-	if err != nil {
-		glog.Errorf("Unable to unmarshal the query group response:%v", err)
-		return nil, err
-	}
-	groups := m[groupKey]
-	if len(groups) == 0 {
-		// the group does not exist
-		return nil, nil
-	}
-
-	return &groups[0], nil
-}
 
 type Acl struct {
 	Predicate string `json:"predicate"`
 	Perm      int32  `json:"perm"`
 }
 
-// parse the response and check existing of the uid
-type Group struct {
-	Uid     string `json:"uid"`
-	GroupID string `json:"dgraph.xid"`
-	Acls    string `json:"dgraph.group.acl"`
-}
 
 func chMod(dc *dgo.Dgraph) error {
 	groupId := ChMod.Conf.GetString("group")

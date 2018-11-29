@@ -1,9 +1,21 @@
+// +build !oss
+
+/*
+ * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ *
+ * Licensed under the Dgraph Community License (the "License"); you
+ * may not use this file except in compliance with the License. You
+ * may obtain a copy of the License at
+ *
+ *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+ */
+
 package acl
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"strings"
 
 	"github.com/dgraph-io/dgo"
@@ -27,7 +39,7 @@ func userAdd(dc *dgo.Dgraph) error {
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	user, err := queryUser(txn, ctx, userid)
+	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
 		return err
 	}
@@ -73,7 +85,7 @@ func userDel(dc *dgo.Dgraph) error {
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	user, err := queryUser(txn, ctx, userid)
+	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
 		return err
 	}
@@ -124,15 +136,7 @@ func userLogin(dc *dgo.Dgraph) error {
 	return nil
 }
 
-type User struct {
-	Uid           string  `json:"uid"`
-	UserID        string  `json:"dgraph.xid"`
-	Password      string  `json:"dgraph.password"`
-	PasswordMatch bool    `json:"password_match"`
-	Groups        []Group `json:"dgraph.user.group"`
-}
-
-func queryUser(txn *dgo.Txn, ctx context.Context, userid string) (user *User, err error) {
+func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *acl.User, err error) {
 	query := `
     query search($userid: string){
       user(func: eq(dgraph.xid, $userid)) {
@@ -151,29 +155,14 @@ func queryUser(txn *dgo.Txn, ctx context.Context, userid string) (user *User, er
 	if err != nil {
 		return nil, fmt.Errorf("Error while query user with id %s: %v", userid, err)
 	}
-	user, err = UnmarshallUser(queryResp, "user")
+	user, err = acl.UnmarshallUser(queryResp, "user")
 	if err != nil {
 		return nil, err
 	}
 	return user, nil
 }
 
-// Extract the first User pointed by the userKey in the query response
-func UnmarshallUser(queryResp *api.Response, userKey string) (user *User, err error) {
-	m := make(map[string][]User)
 
-	err = json.Unmarshal(queryResp.GetJson(), &m)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal the query user response for user:%v", err)
-	}
-	users := m[userKey]
-	if len(users) == 0 {
-		// the user does not exist
-		return nil, nil
-	}
-
-	return &users[0], nil
-}
 
 func userMod(dc *dgo.Dgraph) error {
 	userid := UserMod.Conf.GetString("user")
@@ -186,7 +175,7 @@ func userMod(dc *dgo.Dgraph) error {
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	user, err := queryUser(txn, ctx, userid)
+	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
 		return err
 	}
@@ -194,18 +183,19 @@ func userMod(dc *dgo.Dgraph) error {
 		return fmt.Errorf("The user does not exist: %v", userid)
 	}
 
-	targetGroupsMap := make(map[string]bool)
+	targetGroupsMap := make(map[string]struct{})
+	var exists = struct{}{}
 	if len(groups) > 0 {
 		for _, g := range strings.Split(groups, ",") {
-			targetGroupsMap[g] = true
+			targetGroupsMap[g] = exists
 		}
 	}
 
-	existingGroupsMap := make(map[string]bool)
+	existingGroupsMap := make(map[string]struct{})
 	for _, g := range user.Groups {
-		existingGroupsMap[g.GroupID] = true
+		existingGroupsMap[g.GroupID] = exists
 	}
-	newGroups, groupsToBeDeleted := calcDiffs(targetGroupsMap, existingGroupsMap)
+	newGroups, groupsToBeDeleted := x.CalcDiffs(targetGroupsMap, existingGroupsMap)
 
 	mu := &api.Mutation{
 		CommitNow: true,
@@ -215,7 +205,7 @@ func userMod(dc *dgo.Dgraph) error {
 
 	for _, g := range newGroups {
 		glog.Infof("Adding user %v to group %v", userid, g)
-		nquad, err := getUserModNQuad(txn, ctx, user.Uid, g)
+		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
 			return fmt.Errorf("error while getting the user mod nquad:%v", err)
 		}
@@ -225,7 +215,7 @@ func userMod(dc *dgo.Dgraph) error {
 
 	for _, g := range groupsToBeDeleted {
 		glog.Infof("Deleting user %v from group %v", userid, g)
-		nquad, err := getUserModNQuad(txn, ctx, user.Uid, g)
+		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
 			return fmt.Errorf("error while getting the user mod nquad:%v", err)
 		}
@@ -245,13 +235,14 @@ func userMod(dc *dgo.Dgraph) error {
 	return nil
 }
 
-func getUserModNQuad(txn *dgo.Txn, ctx context.Context, useruid string, groupid string) (*api.NQuad, error) {
+func getUserModNQuad(ctx context.Context, txn *dgo.Txn, useruid string,
+	groupid string) (*api.NQuad, error) {
 	group, err := queryGroup(txn, ctx, groupid, []string{"uid"})
 	if err != nil {
 		return nil, err
 	}
 	if group == nil {
-		return nil, fmt.Errorf("The group does not exist:%v", groupid)
+		return nil, fmt.Errorf("the group does not exist:%v", groupid)
 	}
 
 	createUserGroupNQuads := &api.NQuad{
@@ -261,23 +252,4 @@ func getUserModNQuad(txn *dgo.Txn, ctx context.Context, useruid string, groupid 
 	}
 
 	return createUserGroupNQuads, nil
-}
-
-func calcDiffs(targetMap map[string]bool, existingMap map[string]bool) ([]string, []string) {
-
-	newGroups := []string{}
-	groupsToBeDeleted := []string{}
-
-	for g, _ := range targetMap {
-		if _, ok := existingMap[g]; !ok {
-			newGroups = append(newGroups, g)
-		}
-	}
-	for g, _ := range existingMap {
-		if _, ok := targetMap[g]; !ok {
-			groupsToBeDeleted = append(groupsToBeDeleted, g)
-		}
-	}
-
-	return newGroups, groupsToBeDeleted
 }
