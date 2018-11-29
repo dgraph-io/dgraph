@@ -16,25 +16,19 @@
  * limitations under the License.
  */
 
-package worker
+package edgraph
 
 import (
-	"github.com/dgraph-io/dgraph/oss"
-	"github.com/dgraph-io/dgraph/protos/pb"
+	"context"
+
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 )
 
+func (s *Server) Login(ctx context.Context,
+	request *api.LogInRequest) (*api.LogInResponse, error) {
 
-
-// Backup implements the Worker interface.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
-	glog.Infof("Backup failed: %s", oss.ErrNotSupported)
-	return &pb.Status{}, nil
-}
-
-// BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(pctx context.Context, target string) error {
-	return x.Errorf("Backup failed: %s", oss.ErrNotSupported)
+	glog.Warningf("Login failed: %s", x.ErrNotSupported)
+	return &api.LogInResponse{}, x.ErrNotSupported
 }

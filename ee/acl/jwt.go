@@ -1,7 +1,7 @@
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -82,13 +82,13 @@ func (jwt *Jwt) EncodeToString(key []byte) (string, error) {
 
 // Decode the input string into the current Jwt struct, and also verify
 // that the signature in the input is valid using the key if checkSignature is true
-func (jwt *Jwt) DecodeString(input string, checkSignature bool, key []byte) error {
-	if len(input) == 0 {
-		return fmt.Errorf("The input jwt should not be empty")
-	}
+func (jwt *Jwt) DecodeString(input string, key []byte) error {
 	components := strings.Split(input, ".")
 	if len(components) != 3 {
 		return fmt.Errorf("Input is not in format xxx.yyy.zzz")
+	}
+	if len(key) == 0 {
+		return fmt.Errorf("The key should not be empty")
 	}
 
 	header, err := base64.StdEncoding.DecodeString(components[0])
@@ -99,36 +99,27 @@ func (jwt *Jwt) DecodeString(input string, checkSignature bool, key []byte) erro
 	if err != nil {
 		return fmt.Errorf("Unable to base64 decode the payload: %v", components[1])
 	}
-
-	if checkSignature {
-		if len(key) == 0 {
-			return fmt.Errorf("The key should not be empty")
-		}
-
-		signature, err := base64.StdEncoding.DecodeString(components[2])
-		if err != nil {
-			return fmt.Errorf("Unable to base64 decode the signature: %v", components[2])
-		}
-
-		mac := hmac.New(sha256.New, key)
-		if _, err := mac.Write(header); err != nil {
-			return fmt.Errorf("Error while writing header to construct signature: %v", err)
-		}
-		if _, err := mac.Write(payload); err != nil {
-			return fmt.Errorf("Error while writing payload to construct signature: %v", err)
-		}
-		expectedSignature := mac.Sum(nil)
-		if !hmac.Equal(signature, expectedSignature) {
-			return fmt.Errorf("Signature mismatch")
-		}
+	signature, err := base64.StdEncoding.DecodeString(components[2])
+	if err != nil {
+		return fmt.Errorf("Unable to base64 decode the signature: %v", components[2])
 	}
 
-	err = json.Unmarshal(header, &jwt.Header)
-	if err != nil {
+	mac := hmac.New(sha256.New, key)
+	if _, err := mac.Write(header); err != nil {
+		return fmt.Errorf("Error while writing header to construct signature: %v", err)
+	}
+	if _, err := mac.Write(payload); err != nil {
+		return fmt.Errorf("Error while writing payload to construct signature: %v", err)
+	}
+	expectedSignature := mac.Sum(nil)
+	if !hmac.Equal(signature, expectedSignature) {
+		return fmt.Errorf("JWT signature mismatch")
+	}
+
+	if err = json.Unmarshal(header, &jwt.Header); err != nil {
 		return err
 	}
-	err = json.Unmarshal(payload, &jwt.Payload)
-	if err != nil {
+	if err = json.Unmarshal(payload, &jwt.Payload); err != nil {
 		return err
 	}
 	return nil

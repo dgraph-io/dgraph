@@ -35,6 +35,10 @@ import (
 )
 
 // Error constants representing different types of errors.
+var (
+	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition.")
+)
+
 const (
 	Success                 = "Success"
 	ErrorUnauthorized       = "ErrorUnauthorized"
@@ -47,7 +51,8 @@ const (
 	ErrorNoPermission       = "ErrorNoPermission"
 	ErrorInvalidMutation    = "ErrorInvalidMutation"
 	ErrorServiceUnavailable = "ErrorServiceUnavailable"
-	ValidHostnameRegex      = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+
+	ValidHostnameRegex = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
 
@@ -418,31 +423,27 @@ func DivideAndRule(num int) (numGo, width int) {
 	return
 }
 
-func SetupConnection(host string, insecure bool, tlsConf *TLSHelperConfig) (*grpc.ClientConn,
-	error) {
-	if insecure {
-		return grpc.Dial(host,
-			grpc.WithDefaultCallOptions(
-				grpc.MaxCallRecvMsgSize(GrpcMaxSize),
-				grpc.MaxCallSendMsgSize(GrpcMaxSize)),
-			grpc.WithInsecure(),
-			grpc.WithBlock(),
-			grpc.WithTimeout(10*time.Second))
-	}
+func SetupConnection(host string, insecure bool,
+	tlsConf *TLSHelperConfig) (*grpc.ClientConn, error) {
 
-	tlsConf.ConfigType = TLSClientConfig
-	tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
-	if err != nil {
-		return nil, err
-	}
-
-	return grpc.Dial(host,
+	opts := append([]grpc.DialOption{},
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(GrpcMaxSize),
 			grpc.MaxCallSendMsgSize(GrpcMaxSize)),
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
+
+	if insecure {
+		opts = append(opts, grpc.WithInsecure())
+	} else {
+		tlsConf.ConfigType = TLSClientConfig
+		tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	}
+	return grpc.Dial(host, opts...)
 }
 
 func CalcDiffs(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]string,

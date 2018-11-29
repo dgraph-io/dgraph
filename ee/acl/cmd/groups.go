@@ -1,7 +1,7 @@
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -12,10 +12,11 @@
 package acl
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -34,7 +35,7 @@ func groupAdd(dc *dgo.Dgraph) error {
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	group, err := queryGroup(txn, ctx, groupId, []string{"uid"})
+	group, err := queryGroup(ctx, txn, groupId, "uid")
 	if err != nil {
 		return err
 	}
@@ -71,15 +72,16 @@ func groupDel(dc *dgo.Dgraph) error {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	group, err := queryGroup(txn, ctx, groupId, []string{"uid"})
+	group, err := queryGroup(ctx, txn, groupId, "uid")
 	if err != nil {
 		return err
 	}
-
 	if group == nil || len(group.Uid) == 0 {
 		return fmt.Errorf("Unable to delete group because it does not exist: %v", groupId)
 	}
@@ -89,14 +91,13 @@ func groupDel(dc *dgo.Dgraph) error {
 			Subject:     group.Uid,
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
-		}}
+		},
+	}
 	mu := &api.Mutation{
 		CommitNow: true,
 		Del:       deleteGroupNQuads,
 	}
-
-	_, err = txn.Mutate(ctx, mu)
-	if err != nil {
+	if _, err := txn.Mutate(ctx, mu); err != nil {
 		return fmt.Errorf("Unable to delete group: %v", err)
 	}
 
@@ -104,30 +105,17 @@ func groupDel(dc *dgo.Dgraph) error {
 	return nil
 }
 
-func queryGroup(txn *dgo.Txn, ctx context.Context, groupid string,
-	fields []string) (group *acl.Group, err error) {
-	var queryBuilder bytes.Buffer
+func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
+	fields ...string) (group *acl.Group, err error) {
+
 	// write query header
-	queryBuilder.WriteString(`    
-      query search($groupid: string){
-        group(func: eq(dgraph.xid, $groupid)) {
-    `)
-
-	for _, f := range fields {
-		queryBuilder.WriteString(f)
-		queryBuilder.WriteString("\n")
-	}
-	// write query footer
-	queryBuilder.WriteString(`
-      }
-    }`)
-
-	query := queryBuilder.String()
+	query := fmt.Sprintf(`query search($groupid: string){
+        group(func: eq(dgraph.xid, $groupid)) { %s }}`, strings.Join(fields, ", "))
 
 	queryVars := make(map[string]string)
 	queryVars["$groupid"] = groupid
 
-	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
+	queryResp, err := txn.QueryWithVars(context.Background(), query, queryVars)
 	if err != nil {
 		glog.Errorf("Error while query group with id %s: %v", groupid, err)
 		return nil, err
@@ -159,7 +147,7 @@ func chMod(dc *dgo.Dgraph) error {
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	group, err := queryGroup(txn, ctx, groupId, []string{"uid", "dgraph.group.acl"})
+	group, err := queryGroup(txn, ctx, groupId, "uid", "dgraph.group.acl")
 	if err != nil {
 		return err
 	}

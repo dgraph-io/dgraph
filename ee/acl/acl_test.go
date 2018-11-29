@@ -1,7 +1,7 @@
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -63,21 +63,22 @@ func CreateAndDeleteUsers(t *testing.T) {
 	t.Logf("Got output when creating user:%v", createUserOutput3)
 }
 
-func LogIn(t *testing.T) {
-	// delete and recreate the user to ensure a clean state
-	/*
-		deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", "lucas")
-		deleteUserOutput := checkOutput(t, deleteUserCmd, false)
-		createUserCmd := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", "lucas",
-			"-p", "haha")
-		createUserOutput := checkOutput(t, createUserCmd, false)
-	*/
+// TODO(gitlw): Finish this later.
+// func LogIn(t *testing.T) {
+// delete and recreate the user to ensure a clean state
+/*
+	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", "lucas")
+	deleteUserOutput := checkOutput(t, deleteUserCmd, false)
+	createUserCmd := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", "lucas",
+		"-p", "haha")
+	createUserOutput := checkOutput(t, createUserCmd, false)
+*/
 
-	// now try to login with the wrong password
+// now try to login with the wrong password
 
-	//loginWithWrongPassword(t, ctx, adminClient)
-	//loginWithCorrectPassword(t, ctx, adminClient)
-}
+//loginWithWrongPassword(t, ctx, adminClient)
+//loginWithCorrectPassword(t, ctx, adminClient)
+// }
 
 /*
 func loginWithCorrectPassword(t *testing.T, ctx context.Context,

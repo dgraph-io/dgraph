@@ -389,7 +389,7 @@ var shutdownCh chan struct{}
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
-	edgraphOptions := edgraph.Options{
+	opts := edgraph.Options{
 		BadgerTables: Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
 
@@ -408,12 +408,12 @@ func run() {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
 		}
 
-		edgraphOptions.HmacSecret = hmacSecret
-		edgraphOptions.JwtTtl = Alpha.Conf.GetDuration("jwt_ttl")
+		opts.HmacSecret = hmacSecret
+		opts.JwtTtl = Alpha.Conf.GetDuration("jwt_ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}
-	edgraph.SetConfiguration(edgraphOptions)
+	edgraph.SetConfiguration(opts)
 
 	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
