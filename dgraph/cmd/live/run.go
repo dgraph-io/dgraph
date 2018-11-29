@@ -255,7 +255,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	connzero, err := x.SetupConnection(opt.zero, true, &tlsConf, tlsLiveCert, tlsLiveKey)
+	connzero, err := x.SetupConnection(opt.zero, true, &tlsConf)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(
@@ -299,7 +299,7 @@ func run() error {
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
 	}
-	x.LoadTLSConfig(&tlsConf, Live.Conf)
+	x.LoadTLSConfig(&tlsConf, Live.Conf, tlsLiveCert, tlsLiveKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
 	go http.ListenAndServe("localhost:6060", nil)
@@ -315,7 +315,7 @@ func run() error {
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
-		conn, err := x.SetupConnection(d, !tlsConf.CertRequired, &tlsConf, tlsLiveCert, tlsLiveKey)
+		conn, err := x.SetupConnection(d, !tlsConf.CertRequired, &tlsConf)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 

@@ -55,12 +55,10 @@ func (jwt *Jwt) EncodeToString(key []byte) (string, error) {
 
 	// generate the signature
 	mac := hmac.New(sha256.New, key)
-	_, err = mac.Write(header)
-	if err != nil {
+	if _, err := mac.Write(header); err != nil {
 		return "", err
 	}
-	_, err = mac.Write(payload)
-	if err != nil {
+	if _, err := mac.Write(payload); err != nil {
 		return "", err
 	}
 	signature := mac.Sum(nil)
@@ -75,30 +73,30 @@ func (jwt *Jwt) EncodeToString(key []byte) (string, error) {
 // that the signature in the input is valid using the key if checkSignature is true
 func (jwt *Jwt) DecodeString(input string, checkSignature bool, key []byte) error {
 	if len(input) == 0 {
-		return fmt.Errorf("the input jwt should not be empty")
+		return fmt.Errorf("The input jwt should not be empty")
 	}
 	components := strings.Split(input, ".")
 	if len(components) != 3 {
-		return fmt.Errorf("input is not in format xxx.yyy.zzz")
+		return fmt.Errorf("Input is not in format xxx.yyy.zzz")
 	}
 
 	header, err := base64.StdEncoding.DecodeString(components[0])
 	if err != nil {
-		return fmt.Errorf("unable to base64 decode the header: %v", components[0])
+		return fmt.Errorf("Unable to base64 decode the header: %v", components[0])
 	}
 	payload, err := base64.StdEncoding.DecodeString(components[1])
 	if err != nil {
-		return fmt.Errorf("unable to base64 decode the payload: %v", components[1])
+		return fmt.Errorf("Unable to base64 decode the payload: %v", components[1])
 	}
 
 	if checkSignature {
 		if len(key) == 0 {
-			return fmt.Errorf("the key should not be empty")
+			return fmt.Errorf("The key should not be empty")
 		}
 
 		signature, err := base64.StdEncoding.DecodeString(components[2])
 		if err != nil {
-			return fmt.Errorf("unable to base64 decode the signature: %v", components[2])
+			return fmt.Errorf("Unable to base64 decode the signature: %v", components[2])
 		}
 
 		mac := hmac.New(sha256.New, key)

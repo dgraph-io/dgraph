@@ -151,17 +151,20 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 	opt = options{
 		dgraph: conf.GetString("dgraph"),
 	}
-	glog.Infof("running transaction with dgraph endpoint: %v", opt.dgraph)
+	glog.Infof("Running transaction with dgraph endpoint: %v", opt.dgraph)
 
 	if len(opt.dgraph) == 0 {
 		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
 	}
 
+	x.LoadTLSConfig(&tlsConf, Acl.Conf, tlsAclCert, tlsAclKey)
+	tlsConf.ServerName = Acl.Conf.GetString("tls_server_name")
+
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	var accessClients []api.DgraphAccessClient
 	for _, d := range ds {
-		conn, err := x.SetupConnection(d, !tlsConf.CertRequired, &tlsConf, tlsAclCert, tlsAclKey)
+		conn, err := x.SetupConnection(d, !tlsConf.CertRequired, &tlsConf)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 
@@ -174,7 +177,7 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 	dgraphClient := dgo.NewDgraphClient(clients...)
 	dgraphClient.SetAccessClients(accessClients...)
 	if err := f(dgraphClient); err != nil {
-		glog.Errorf("error while running transaction: %v", err)
+		glog.Errorf("Error while running transaction: %v", err)
 		os.Exit(1)
 	}
 }

@@ -21,12 +21,12 @@ func groupAdd(dc *dgo.Dgraph) error {
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	dbGroup, err := queryDBGroup(txn, ctx, groupId)
+	group, err := queryGroup(txn, ctx, groupId)
 	if err != nil {
 		return err
 	}
 
-	if dbGroup != nil {
+	if group != nil {
 		return fmt.Errorf("The group with id %v already exists.", groupId)
 	}
 
@@ -62,18 +62,18 @@ func groupDel(dc *dgo.Dgraph) error {
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	dbGroup, err := queryDBGroup(txn, ctx, groupId)
+	group, err := queryGroup(txn, ctx, groupId)
 	if err != nil {
 		return err
 	}
 
-	if dbGroup == nil || len(dbGroup.Uid) == 0 {
+	if group == nil || len(group.Uid) == 0 {
 		return fmt.Errorf("Unable to delete group because it does not exist: %v", groupId)
 	}
 
 	deleteGroupNQuads := []*api.NQuad{
 		{
-			Subject:     dbGroup.Uid,
+			Subject:     group.Uid,
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 		}}
@@ -91,7 +91,7 @@ func groupDel(dc *dgo.Dgraph) error {
 	return nil
 }
 
-func queryDBGroup(txn *dgo.Txn, ctx context.Context, groupid string) (dbGroup *DBGroup, err error) {
+func queryGroup(txn *dgo.Txn, ctx context.Context, groupid string) (group *Group, err error) {
 	queryUid := `
     query search($groupid: string){
       group(func: eq(` + x.Acl_XId + `, $groupid)) {
@@ -108,16 +108,16 @@ func queryDBGroup(txn *dgo.Txn, ctx context.Context, groupid string) (dbGroup *D
 		glog.Errorf("Error while query group with id %s: %v", groupid, err)
 		return nil, err
 	}
-	dbGroup, err = UnmarshallDBGroup(queryResp, "group")
+	group, err = UnmarshallGroup(queryResp, "group")
 	if err != nil {
 		return nil, err
 	}
-	return dbGroup, nil
+	return group, nil
 }
 
-// Extract the first DBUser pointed by the userKey in the query response
-func UnmarshallDBGroup(queryResp *api.Response, groupKey string) (dbGroup *DBGroup, err error) {
-	m := make(map[string][]DBGroup)
+// Extract the first User pointed by the userKey in the query response
+func UnmarshallGroup(queryResp *api.Response, groupKey string) (group *Group, err error) {
+	m := make(map[string][]Group)
 
 	err = json.Unmarshal(queryResp.GetJson(), &m)
 	if err != nil {
@@ -134,7 +134,7 @@ func UnmarshallDBGroup(queryResp *api.Response, groupKey string) (dbGroup *DBGro
 }
 
 // parse the response and check existing of the uid
-type DBGroup struct {
+type Group struct {
 	Uid     string `json:"uid"`
 	GroupID string `json:"dgraph.xid"`
 }
@@ -154,16 +154,16 @@ func chMod(dc *dgo.Dgraph) error {
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	dbGroup, err := queryDBGroup(txn, ctx, groupId)
+	group, err := queryGroup(txn, ctx, groupId)
 	if err != nil {
 		return err
 	}
 
-	if dbGroup == nil || len(dbGroup.Uid) == 0 {
+	if group == nil || len(group.Uid) == 0 {
 		return fmt.Errorf("Unable to change permission for group because it does not exist: %v", groupId)
 	}
 	chModNQuads := &api.NQuad{
-		Subject:     dbGroup.Uid,
+		Subject:     group.Uid,
 		Predicate:   predicate,
 		ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: acl}},
 	}
