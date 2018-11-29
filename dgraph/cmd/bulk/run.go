@@ -47,6 +47,8 @@ func init() {
 	flag := Bulk.Cmd.Flags()
 	flag.StringP("rdfs", "r", "",
 		"Directory containing *.rdf or *.rdf.gz files to load.")
+	flag.String("jsons", "",
+		"Directory containing *.json or *.json.gz files to load.")
 	flag.StringP("schema_file", "s", "",
 		"Location of schema file to load.")
 	flag.String("out", "out",
@@ -89,6 +91,7 @@ func init() {
 func run() {
 	opt := options{
 		RDFDir:        Bulk.Conf.GetString("rdfs"),
+		JSONDir:	   Bulk.Conf.GetString("jsons"),
 		SchemaFile:    Bulk.Conf.GetString("schema_file"),
 		DgraphsDir:    Bulk.Conf.GetString("out"),
 		TmpDir:        Bulk.Conf.GetString("tmp"),
@@ -111,8 +114,16 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
-	if opt.RDFDir == "" || opt.SchemaFile == "" {
-		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
+	if opt.SchemaFile == "" {
+		fmt.Fprint(os.Stderr, "schema file must be specified.\n")
+		os.Exit(1)
+	}
+	if opt.RDFDir == "" && opt.JSONDir == "" {
+		fmt.Fprint(os.Stderr, "RDF or JSON file(s) must be specified.\n")
+		os.Exit(1)
+	} else if opt.RDFDir != "" && opt.JSONDir != "" {
+		fmt.Fprintf(os.Stderr, "Invalid flags: only one of rdfs(%q) of jsons(%q) may be specified.\n",
+			opt.RDFDir, opt.JSONDir)
 		os.Exit(1)
 	}
 	if opt.ReduceShards > opt.MapShards {

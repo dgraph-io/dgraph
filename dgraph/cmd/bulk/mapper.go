@@ -119,7 +119,7 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 }
 
 func (m *mapper) run() {
-	for chunkBuf := range m.rdfChunkCh {
+	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {
 			rdf, err := chunkBuf.ReadString('\n')

@@ -26,7 +26,7 @@ gitBranch      = github.com/dgraph-io/dgraph/x.gitBranch
 lastCommitSHA  = github.com/dgraph-io/dgraph/x.lastCommitSHA
 lastCommitTime = github.com/dgraph-io/dgraph/x.lastCommitTime
 
-BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X ${dgraphVersion}=${BUILD_VERSION} -X ${gitBranch}=${BUILD_BRANCH}'
+BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X ${dgraphVersion}=${BUILD_VERSION} -X ${gitBranch}=${BUILD_BRANCH}' -gcflags="-N -l" -x
 
 .PHONY: all $(BIN)
 all: $(BIN)

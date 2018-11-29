@@ -12,6 +12,9 @@ gql/fuzz-data/suppressions
 .idea
 dgraph.iml
 
+# vim session backups
+.*.swp
+
 # Binaries for programs and plugins
 *.exe
 *.exe~

@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"io"
 	"io/ioutil"
 	"os"
@@ -42,6 +43,7 @@ import (
 
 type options struct {
 	RDFDir        string
+	JSONDir       string
 	SchemaFile    string
 	DgraphsDir    string
 	TmpDir        string
@@ -64,15 +66,15 @@ type options struct {
 }
 
 type state struct {
-	opt        options
-	prog       *progress
-	xids       *xidmap.XidMap
-	schema     *schemaStore
-	shards     *shardMap
-	rdfChunkCh chan *bytes.Buffer
-	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	dbs        []*badger.DB
-	writeTs    uint64 // All badger writes use this timestamp
+	opt           options
+	prog          *progress
+	xids          *xidmap.XidMap
+	schema        *schemaStore
+	shards        *shardMap
+	readerChunkCh chan *bytes.Buffer
+	mapFileId     uint32 // Used atomically to name the output files of the mappers.
+	dbs           []*badger.DB
+	writeTs       uint64 // All badger writes use this timestamp
 }
 
 type loader struct {
@@ -94,8 +96,8 @@ func newLoader(opt options) *loader {
 		prog:   newProgress(),
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
-		rdfChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
-		writeTs:    getWriteTimestamp(zero),
+		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
+		writeTs:       getWriteTimestamp(zero),
 	}
 	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
 	ld := &loader{
@@ -142,9 +144,9 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func readRDFChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
-	batch.Grow(10 << 20)
+	batch.Grow(1 << 20)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
 		slc, err := r.ReadSlice('\n')
 		if err == io.EOF {
@@ -174,13 +176,43 @@ func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
-func findRDFFiles(dir string) []string {
+func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
+	batch := new(bytes.Buffer)
+	batch.Grow(1 << 20)
+	// FIXME don't read entire file at once
+	slc, err := r.ReadSlice(0)
+	fmt.Fprintf(os.Stderr, "Read %d bytes of JSON, err = %v\n",len(slc), err)
+	if len(slc) == 0 && err == io.EOF {
+		return batch, err
+	}
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	nqd, err := edgraph.NquadsFromJson(slc)
+	fmt.Fprintf(os.Stderr, "Got %d nquads\n, err = %v\n", len(nqd), err)
+	for i := 0; i < len(nqd); i++ {
+//		batch.WriteString("<" + nqd[i].Subject + "> ")
+//		batch.WriteString("<" + nqd[i].Predicate + "> ")
+		rdf := "<" + nqd[i].Subject + "> <" + nqd[i].Predicate + "> "
+		if nqd[i].ObjectId == "" {
+			rdf += "\"" + nqd[i].ObjectValue.GetStrVal() + "\""
+		} else {
+			rdf += "<" + nqd[i].ObjectId + ">"
+		}
+		fmt.Fprintln(os.Stderr, rdf)
+		batch.WriteString(rdf + " .\n")
+	}
+//	fmt.Fprintf(os.Stderr,"batch = %v\n", batch)
+	return batch, nil
+}
+
+func findDataFiles(dir string, ext string) []string {
 	var files []string
 	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if strings.HasSuffix(path, ".rdf") || strings.HasSuffix(path, ".rdf.gz") {
+		if strings.HasSuffix(path, ext) || strings.HasSuffix(path, ext + ".gz") {
 			files = append(files, path)
 		}
 		return nil
@@ -212,21 +244,31 @@ func (ld *loader) mapStage() {
 	})
 
 	readers := make(map[string]*bufio.Reader)
-	for _, rdfFile := range findRDFFiles(ld.opt.RDFDir) {
-		f, err := os.Open(rdfFile)
+	var files []string
+	var chunker func(r *bufio.Reader) (*bytes.Buffer, error)
+	if ld.opt.RDFDir != "" {
+		files = findDataFiles(ld.opt.RDFDir, ".rdf")
+		chunker = readRDFChunk
+	} else {
+		files = findDataFiles(ld.opt.JSONDir, ".json")
+		chunker = readJSONChunk
+	}
+	for _, file := range files {
+		f, err := os.Open(file)
 		x.Check(err)
 		defer f.Close()
-		if !strings.HasSuffix(rdfFile, ".gz") {
-			readers[rdfFile] = bufio.NewReaderSize(f, 1<<20)
+		// TODO detect compressed input instead of relying on filename
+		if !strings.HasSuffix(file, ".gz") {
+			readers[file] = bufio.NewReaderSize(f, 1<<20)
 		} else {
 			gzr, err := gzip.NewReader(f)
-			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
-			readers[rdfFile] = bufio.NewReader(gzr)
+			x.Checkf(err, "Could not create gzip reader for data file %q.", file)
+			readers[file] = bufio.NewReader(gzr)
 		}
 	}
 
 	if len(readers) == 0 {
-		fmt.Println("No rdf files found.")
+		fmt.Println("No data files found.")
 		os.Exit(1)
 	}
 
@@ -242,28 +284,28 @@ func (ld *loader) mapStage() {
 	// This is the main map loop.
 	thr := x.NewThrottle(ld.opt.NumGoroutines)
 	var fileCount int
-	for rdfFile, r := range readers {
+	for file, r := range readers {
 		thr.Start()
 		fileCount++
-		fmt.Printf("Processing file (%d out of %d): %s\n", fileCount, len(readers), rdfFile)
+		fmt.Printf("Processing file (%d out of %d): %s\n", fileCount, len(readers), file)
 		go func(r *bufio.Reader) {
 			defer thr.Done()
 			for {
-				chunkBuf, err := readChunk(r)
+				chunkBuf, err := chunker(r)
 				if err == io.EOF {
 					if chunkBuf.Len() != 0 {
-						ld.rdfChunkCh <- chunkBuf
+						ld.readerChunkCh <- chunkBuf
 					}
 					break
 				}
 				x.Check(err)
-				ld.rdfChunkCh <- chunkBuf
+				ld.readerChunkCh <- chunkBuf
 			}
 		}(r)
 	}
 	thr.Wait()
 
-	close(ld.rdfChunkCh)
+	close(ld.readerChunkCh)
 	mapperWg.Wait()
 
 	// Allow memory to GC before the reduce phase.
