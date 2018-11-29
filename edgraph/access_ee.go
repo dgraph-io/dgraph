@@ -15,11 +15,12 @@ package edgraph
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/golang/glog"
 	"google.golang.org/grpc/peer"
-	"time"
 
 	otrace "go.opencensus.io/trace"
 )
@@ -30,14 +31,17 @@ func (s *Server) Login(ctx context.Context,
 	defer span.End()
 
 	// record the client ip for this login request
-	clientPeer, ok := peer.FromContext(ctx)
-	if ok {
+	var addr string
+	if ip, ok := peer.FromContext(ctx); ok {
+		addr = ip.Addr.String()
+		glog.Infof("Login request from: %s", addr)
 		span.Annotate([]otrace.Attribute{
-			otrace.StringAttribute("client_ip", clientPeer.Addr.String()),
+			otrace.StringAttribute("client_ip", addr),
 		}, "client ip for login")
 	}
 
 	if err := acl.ValidateLoginRequest(request); err != nil {
+		glog.Warningf("Invalid login from: %s", addr)
 		return nil, err
 	}
 
@@ -48,16 +52,16 @@ func (s *Server) Login(ctx context.Context,
 
 	user, err := s.queryUser(ctx, request.Userid, request.Password)
 	if err != nil {
-		glog.Warningf("Unable to login user with user id: %v", request.Userid)
+		glog.Warningf("Unable to login user id: %v. Addr: %s", request.Userid, addr)
 		return nil, err
 	}
 	if user == nil {
-		errMsg := fmt.Sprintf("User not found for user id %v", request.Userid)
+		errMsg := fmt.Sprintf("User not found for user id %v. Addr: %s", request.Userid, addr)
 		glog.Warningf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
 	if !user.PasswordMatch {
-		errMsg := fmt.Sprintf("Password mismatch for user: %v", request.Userid)
+		errMsg := fmt.Sprintf("Password mismatch for user: %v. Addr: %s", request.Userid, addr)
 		glog.Warningf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
@@ -96,9 +100,10 @@ const queryUser = `
 
 func (s *Server) queryUser(ctx context.Context, userid string, password string) (user *acl.User,
 	err error) {
-	queryVars := make(map[string]string)
-	queryVars["$userid"] = userid
-	queryVars["$password"] = password
+	queryVars := map[string]string{
+		"$userid":   userid,
+		"$password": password,
+	}
 	queryRequest := api.Request{
 		Query: queryUser,
 		Vars:  queryVars,
@@ -109,7 +114,7 @@ func (s *Server) queryUser(ctx context.Context, userid string, password string) 
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
 	}
-	user, err = acl.UnmarshallUser(queryResp, "user")
+	user, err = acl.UnmarshalUser(queryResp, "user")
 	if err != nil {
 		return nil, err
 	}

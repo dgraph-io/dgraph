@@ -444,7 +444,7 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig) (*grpc.ClientConn, e
 	return grpc.Dial(host, opts...)
 }
 
-func CalcDiffs(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]string,
+func Diff(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]string,
 	[]string) {
 	var newGroups []string
 	var groupsToBeDeleted []string

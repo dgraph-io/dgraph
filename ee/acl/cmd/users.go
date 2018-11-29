@@ -183,7 +183,7 @@ func userMod(ctx context.Context, dc *dgo.Dgraph) error {
 	for _, g := range user.Groups {
 		existingGroupsMap[g.GroupID] = exists
 	}
-	newGroups, groupsToBeDeleted := x.CalcDiffs(targetGroupsMap, existingGroupsMap)
+	newGroups, groupsToBeDeleted := x.Diff(targetGroupsMap, existingGroupsMap)
 
 	mu := &api.Mutation{
 		CommitNow: true,

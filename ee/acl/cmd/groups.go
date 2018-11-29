@@ -37,7 +37,6 @@ func groupAdd(ctx context.Context, dc *dgo.Dgraph) error {
 	if err != nil {
 		return err
 	}
-
 	if group != nil {
 		return fmt.Errorf("The group with id %v already exists.", groupId)
 	}
@@ -54,9 +53,7 @@ func groupAdd(ctx context.Context, dc *dgo.Dgraph) error {
 		CommitNow: true,
 		Set:       createGroupNQuads,
 	}
-
-	_, err = txn.Mutate(ctx, mu)
-	if err != nil {
+	if _, err = txn.Mutate(ctx, mu); err != nil {
 		return fmt.Errorf("Unable to create user: %v", err)
 	}
 
@@ -109,10 +106,11 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 			uid
 		    %s }}`, strings.Join(fields, ", "))
 
-	queryVars := make(map[string]string)
-	queryVars["$groupid"] = groupid
+	queryVars := map[string]string{
+		"$groupid": groupid,
+	}
 
-	queryResp, err := txn.QueryWithVars(context.Background(), query, queryVars)
+	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
 		glog.Errorf("Error while query group with id %s: %v", groupid, err)
 		return nil, err
@@ -160,7 +158,7 @@ func chMod(ctx context.Context, dc *dgo.Dgraph) error {
 		}
 	}
 
-	newAcls, updated := updateAcl(currentAcls, &Acl{
+	newAcls, updated := updateAcl(currentAcls, Acl{
 		Predicate: predicate,
 		Perm:      int32(perm),
 	})
@@ -194,7 +192,7 @@ func chMod(ctx context.Context, dc *dgo.Dgraph) error {
 }
 
 // returns whether the existing acls slice is changed
-func updateAcl(acls []Acl, newAcl *Acl) ([]Acl, bool) {
+func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
 	for idx, acl := range acls {
 		if acl.Predicate == newAcl.Predicate {
 			if acl.Perm == newAcl.Perm {
@@ -211,5 +209,5 @@ func updateAcl(acls []Acl, newAcl *Acl) ([]Acl, bool) {
 	}
 
 	// we do not find any existing acl matching the newAcl predicate
-	return append(acls, *newAcl), true
+	return append(acls, newAcl), true
 }

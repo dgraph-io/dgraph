@@ -25,7 +25,7 @@ const (
 
 func TestAcl(t *testing.T) {
 	t.Run("create user", CreateAndDeleteUsers)
-	t.Run("login", LogIn)
+	// t.Run("login", LogIn)
 }
 
 func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
