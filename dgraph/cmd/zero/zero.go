@@ -37,9 +37,7 @@ var (
 	emptyMembershipState pb.MembershipState
 	emptyConnectionState pb.ConnectionState
 	errInternalError     = errors.New("Internal server error")
-	// errUnknownMember     = errors.New("Unknown cluster member")
-	errUpdatedMember  = errors.New("Cluster member has updated credentials.")
-	errServerShutDown = errors.New("Server is being shut down.")
+	errServerShutDown    = errors.New("Server is being shut down.")
 )
 
 type Server struct {

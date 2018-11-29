@@ -361,7 +361,6 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
-				// TODO: Is this unused?
 				err := x.Errorf("REUSE_RAFTID: Reusing removed id: %d.\n", m.Id)
 				n.DoneConfChange(cc.ID, err)
 				// Cancel configuration change.

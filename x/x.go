@@ -70,7 +70,6 @@ const (
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
-	// ErrReuseRemovedId = errors.New("REUSE_RAFTID: Reusing RAFT index of a removed node.")
 )
 
 func ShouldCrash(err error) bool {
