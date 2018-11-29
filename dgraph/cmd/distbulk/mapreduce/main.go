@@ -19,6 +19,8 @@ package main
 import (
 	"flag"
     "sort"
+    "context"
+    "time"
 
 	"github.com/chrislusf/gleam/distributed"
 	"github.com/chrislusf/gleam/flow"
@@ -34,10 +36,10 @@ import (
     "github.com/dgraph-io/dgraph/protos/pb"
     "github.com/dgraph-io/dgraph/posting"
     "github.com/dgraph-io/dgraph/codec"
+    "google.golang.org/grpc"
 
-    // "fmt"
+    "fmt"
     // "github.com/chrislusf/gleam/util"
-    "math"
 )
 
 type options struct {
@@ -63,10 +65,10 @@ var (
 )
 
 const (
-	NUM_SHARDS                 = 1
-	REQUESTED_PREDICATE_SHARDS = 1
-    PATH_PREFIX = "./"
-    // PATH_PREFIX = "../../"
+	NUM_SHARDS                 = 4
+	REQUESTED_PREDICATE_SHARDS = 4
+    // PATH_PREFIX = "./"
+    PATH_PREFIX = "../../"
 )
 
 func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
@@ -86,7 +88,7 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 func main() {
     var err error
 	Opt = options{
-		RDFDir:      PATH_PREFIX + "data",
+		RDFDir:      "./data",
 		SchemaFile:  PATH_PREFIX + "data.schema",
 		DgraphsDir:  PATH_PREFIX + xid.New().String() + "-dgraph-p",
 		ExpandEdges: true,
@@ -113,7 +115,7 @@ func main() {
     Outdb, err = badger.OpenManaged(badgeropts)
     x.Check(err)
 
-    Outtx = Outdb.NewTransactionAt(math.MaxUint64, true)
+    Outtx = Outdb.NewTransactionAt(WriteTs, true)
 	Schema = newSchemaStore(readSchema(Opt.SchemaFile), Opt)
 
     gio.RegisterCleanup(cleanup)
@@ -144,8 +146,8 @@ func main() {
         // })
 		PartitionByKey("shard by predicate", REQUESTED_PREDICATE_SHARDS).
 		LocalReduceBy("create postings", TestDeserialize, flow.Field(2)).
-        Map("write to badger out", WriteToBadger).
-        Printlnf("%v %v %v")
+        Map("write to badger out", WriteToBadger)
+        // Printlnf("%v %v %v")
 
 	if *isDistributed {
 		f.Run(distributed.Option())
@@ -186,23 +188,18 @@ func writeToBadger(row []interface{}) error {
     }
 
     err = Outtx.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting)
-    if err == badger.ErrTxnTooBig {
-        err = Outtx.CommitAt(WriteTs, nil)
-        if err != nil {
-            return err
-        }
-
-        // try again, if it fails, this time it's serious
-        err = Outtx.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting)
-        if err != nil {
-            return err
-        }
-    } else if err != nil {
+    if err != badger.ErrTxnTooBig {
         return err
     }
 
-    gio.Emit(row...)
-    return nil
+    // txn got too big
+    if err = Outtx.CommitAt(WriteTs, nil); err != nil {
+        return err
+    }
+    Outtx = Outdb.NewTransactionAt(WriteTs, true)
+
+    // try again, if it fails, this time it's serious
+    return Outtx.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting)
 }
 
 func cleanup() {
