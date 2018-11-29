@@ -61,9 +61,9 @@ func Init() {
 }
 
 func BuildDetails() string {
-	licenseInfo := `Licensed variously under Apache 2.0`
+	licenseInfo := `Licensed under the Apache Public License 2.0`
 	if !strings.HasSuffix(dgraphVersion, "-oss") {
-		licenseInfo += ` and Dgraph Community License`
+		licenseInfo = `Licensed variously under the Apache Public License 2.0 and Dgraph Community License`
 	}
 	return fmt.Sprintf(`
 Dgraph version   : %v
