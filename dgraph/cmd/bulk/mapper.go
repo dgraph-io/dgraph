@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"io"
 	"log"
 	"math"
@@ -118,28 +119,52 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 }
 
-func (m *mapper) run() {
+func (m *mapper) run(loaderType int) {
 	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {
-			rdf, err := chunkBuf.ReadString('\n')
-			if err == io.EOF {
-				// Process the last RDF rather than breaking immediately.
-				done = true
-			} else {
-				x.Check(err)
-			}
-			rdf = strings.TrimSpace(rdf)
-
-			// process RDF line
-			if err := m.processRDF(rdf); err != nil {
-				atomic.AddInt64(&m.prog.errCount, 1)
-				if !m.opt.IgnoreErrors {
+			if loaderType == rdfLoader {
+				str, err := chunkBuf.ReadString('\n')
+				if err == io.EOF {
+					// Process the last chunk rather than breaking immediately.
+					done = true
+				} else {
 					x.Check(err)
+				}
+				str = strings.TrimSpace(str)
+
+				// process RDF line
+				if err := m.processRDF(str); err != nil {
+					atomic.AddInt64(&m.prog.errCount, 1)
+					if !m.opt.IgnoreErrors {
+						x.Check(err)
+					}
+				}
+
+				atomic.AddInt64(&m.prog.rdfCount, 1)
+			} else {
+				// process JSON chunk
+				str, err := chunkBuf.ReadBytes(0)
+				nquads, err := edgraph.NquadsFromJson(str)
+				if err != nil {
+					atomic.AddInt64(&m.prog.errCount, 1)
+					if !m.opt.IgnoreErrors {
+						x.Check(err)
+					}
+				}
+
+				for _, nq := range nquads {
+					if err := facets.SortAndValidate(nq.Facets); err != nil {
+						if !m.opt.IgnoreErrors {
+							x.Check(err)
+						}
+					}
+
+					m.processNQuad(gql.NQuad{NQuad: nq})
+					atomic.AddInt64(&m.prog.rdfCount, 1)
 				}
 			}
 
-			atomic.AddInt64(&m.prog.rdfCount, 1)
 			for i := range m.shards {
 				sh := &m.shards[i]
 				if len(sh.entriesBuf) >= int(m.opt.MapBufSize) {

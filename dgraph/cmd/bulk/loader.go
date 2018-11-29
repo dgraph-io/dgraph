@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"github.com/dgraph-io/dgraph/edgraph"
 	"io"
 	"io/ioutil"
 	"os"
@@ -64,6 +63,11 @@ type options struct {
 
 	shardOutputDirs []string
 }
+
+const (
+	rdfLoader int = iota
+	jsonLoader
+)
 
 type state struct {
 	opt           options
@@ -188,7 +192,7 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
-	nqd, err := edgraph.NquadsFromJson(slc)
+/*	nqd, err := edgraph.NquadsFromJson(slc)
 	fmt.Fprintf(os.Stderr, "Got %d nquads\n, err = %v\n", len(nqd), err)
 	for i := 0; i < len(nqd); i++ {
 //		batch.WriteString("<" + nqd[i].Subject + "> ")
@@ -202,6 +206,9 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		fmt.Fprintln(os.Stderr, rdf)
 		batch.WriteString(rdf + " .\n")
 	}
+*/
+	batch.Write(slc)
+//	batch.WriteByte(0)
 //	fmt.Fprintf(os.Stderr,"batch = %v\n", batch)
 	return batch, nil
 }
@@ -243,32 +250,40 @@ func (ld *loader) mapStage() {
 		LRUSize:   1 << 19,
 	})
 
-	readers := make(map[string]*bufio.Reader)
 	var files []string
+	var ext string
+	var loaderType int
 	var chunker func(r *bufio.Reader) (*bytes.Buffer, error)
 	if ld.opt.RDFDir != "" {
-		files = findDataFiles(ld.opt.RDFDir, ".rdf")
+		loaderType = rdfLoader
+		ext = ".rdf"
+		files = findDataFiles(ld.opt.RDFDir, ext)
 		chunker = readRDFChunk
 	} else {
-		files = findDataFiles(ld.opt.JSONDir, ".json")
+		loaderType = jsonLoader
+		ext = ".json"
+		files = findDataFiles(ld.opt.JSONDir, ext)
 		chunker = readJSONChunk
 	}
+
+	readers := make(map[string]*bufio.Reader)
 	for _, file := range files {
 		f, err := os.Open(file)
 		x.Check(err)
 		defer f.Close()
 		// TODO detect compressed input instead of relying on filename
+		//      so data can be streamed in
 		if !strings.HasSuffix(file, ".gz") {
 			readers[file] = bufio.NewReaderSize(f, 1<<20)
 		} else {
 			gzr, err := gzip.NewReader(f)
-			x.Checkf(err, "Could not create gzip reader for data file %q.", file)
+			x.Checkf(err, "Could not create gzip reader for file %q.", file)
 			readers[file] = bufio.NewReader(gzr)
 		}
 	}
 
 	if len(readers) == 0 {
-		fmt.Println("No data files found.")
+		fmt.Printf("No *.%s files found.\n", ext)
 		os.Exit(1)
 	}
 
@@ -276,7 +291,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run()
+			m.run(loaderType)
 			mapperWg.Done()
 		}(m)
 	}
