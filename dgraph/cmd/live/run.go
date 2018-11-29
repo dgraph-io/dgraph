@@ -250,7 +250,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	connzero, err := x.SetupConnection(opt.zero, true, &tlsConf)
+	connzero, err := x.SetupConnection(opt.zero, &tlsConf)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(
@@ -310,7 +310,7 @@ func run() error {
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
-		conn, err := x.SetupConnection(d, !tlsConf.CertRequired, &tlsConf)
+		conn, err := x.SetupConnection(d, &tlsConf)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 

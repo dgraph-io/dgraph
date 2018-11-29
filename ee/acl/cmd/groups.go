@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -25,17 +24,16 @@ import (
 	"github.com/golang/glog"
 )
 
-func groupAdd(dc *dgo.Dgraph) error {
+func groupAdd(ctx context.Context, dc *dgo.Dgraph) error {
 	groupId := GroupAdd.Conf.GetString("group")
 	if len(groupId) == 0 {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
-	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	group, err := queryGroup(ctx, txn, groupId, "uid")
+	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
 		return err
 	}
@@ -66,19 +64,16 @@ func groupAdd(dc *dgo.Dgraph) error {
 	return nil
 }
 
-func groupDel(dc *dgo.Dgraph) error {
+func groupDel(ctx context.Context, dc *dgo.Dgraph) error {
 	groupId := GroupDel.Conf.GetString("group")
 	if len(groupId) == 0 {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	group, err := queryGroup(ctx, txn, groupId, "uid")
+	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
 		return err
 	}
@@ -110,7 +105,9 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 
 	// write query header
 	query := fmt.Sprintf(`query search($groupid: string){
-        group(func: eq(dgraph.xid, $groupid)) { %s }}`, strings.Join(fields, ", "))
+        group(func: eq(dgraph.xid, $groupid)) {
+			uid
+		    %s }}`, strings.Join(fields, ", "))
 
 	queryVars := make(map[string]string)
 	queryVars["$groupid"] = groupid
@@ -120,7 +117,7 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 		glog.Errorf("Error while query group with id %s: %v", groupid, err)
 		return nil, err
 	}
-	group, err = acl.UnmarshallGroup(queryResp, "group")
+	group, err = acl.UnmarshalGroup(queryResp, "group")
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +129,7 @@ type Acl struct {
 	Perm      int32  `json:"perm"`
 }
 
-func chMod(dc *dgo.Dgraph) error {
+func chMod(ctx context.Context, dc *dgo.Dgraph) error {
 	groupId := ChMod.Conf.GetString("group")
 	predicate := ChMod.Conf.GetString("pred")
 	perm := ChMod.Conf.GetInt("perm")
@@ -143,23 +140,23 @@ func chMod(dc *dgo.Dgraph) error {
 		return fmt.Errorf("the predicate must not be empty")
 	}
 
-	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	group, err := queryGroup(txn, ctx, groupId, "uid", "dgraph.group.acl")
+	group, err := queryGroup(ctx, txn, groupId, "dgraph.group.acl")
 	if err != nil {
 		return err
 	}
-
 	if group == nil || len(group.Uid) == 0 {
-		return fmt.Errorf("Unable to change permission for group because it does not exist: %v", groupId)
+		return fmt.Errorf("Unable to change permission for group because it does not exist: %v",
+			groupId)
 	}
 
 	currentAcls := []Acl{}
 	if len(group.Acls) != 0 {
 		if err := json.Unmarshal([]byte(group.Acls), &currentAcls); err != nil {
-			return fmt.Errorf("Unable to unmarshal the acls associated with the group %v:%v", groupId, err)
+			return fmt.Errorf("Unable to unmarshal the acls associated with the group %v:%v",
+				groupId, err)
 		}
 	}
 
@@ -187,11 +184,12 @@ func chMod(dc *dgo.Dgraph) error {
 		Set:       []*api.NQuad{chModNQuads},
 	}
 
-	_, err = txn.Mutate(ctx, mu)
-	if err != nil {
-		return fmt.Errorf("Unable to change mutations for the group %v on predicate %v: %v", groupId, predicate, err)
+	if _, err = txn.Mutate(ctx, mu); err != nil {
+		return fmt.Errorf("Unable to change mutations for the group %v on predicate %v: %v",
+			groupId, predicate, err)
 	}
-	glog.Infof("Successfully changed permission for group %v on predicate %v to %v", groupId, predicate, perm)
+	glog.Infof("Successfully changed permission for group %v on predicate %v to %v",
+		groupId, predicate, perm)
 	return nil
 }
 

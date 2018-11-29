@@ -24,7 +24,7 @@ import (
 	"github.com/golang/glog"
 )
 
-func userAdd(dc *dgo.Dgraph) error {
+func userAdd(ctx context.Context, dc *dgo.Dgraph) error {
 	userid := UserAdd.Conf.GetString("user")
 	password := UserAdd.Conf.GetString("password")
 
@@ -35,15 +35,12 @@ func userAdd(dc *dgo.Dgraph) error {
 		return fmt.Errorf("The password must not be empty.")
 	}
 
-	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
-
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
 		return err
 	}
-
 	if user != nil {
 		return fmt.Errorf("Unable to create user because of conflict: %v", userid)
 	}
@@ -65,8 +62,7 @@ func userAdd(dc *dgo.Dgraph) error {
 		Set:       createUserNQuads,
 	}
 
-	_, err = txn.Mutate(ctx, mu)
-	if err != nil {
+	if _, err := txn.Mutate(ctx, mu); err != nil {
 		return fmt.Errorf("Unable to create user: %v", err)
 	}
 
@@ -74,14 +70,13 @@ func userAdd(dc *dgo.Dgraph) error {
 	return nil
 }
 
-func userDel(dc *dgo.Dgraph) error {
+func userDel(ctx context.Context, dc *dgo.Dgraph) error {
 	userid := UserDel.Conf.GetString("user")
 	// validate the userid
 	if len(userid) == 0 {
 		return fmt.Errorf("The user id should not be empty")
 	}
 
-	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -106,8 +101,7 @@ func userDel(dc *dgo.Dgraph) error {
 		Del:       deleteUserNQuads,
 	}
 
-	_, err = txn.Mutate(ctx, mu)
-	if err != nil {
+	if _, err = txn.Mutate(ctx, mu); err != nil {
 		return fmt.Errorf("Unable to delete user: %v", err)
 	}
 
@@ -115,7 +109,7 @@ func userDel(dc *dgo.Dgraph) error {
 	return nil
 }
 
-func userLogin(dc *dgo.Dgraph) error {
+func userLogin(ctx context.Context, dc *dgo.Dgraph) error {
 	userid := LogIn.Conf.GetString("user")
 	password := LogIn.Conf.GetString("password")
 
@@ -126,10 +120,7 @@ func userLogin(dc *dgo.Dgraph) error {
 		return fmt.Errorf("The password must not be empty.")
 	}
 
-	ctx := context.Background()
-
-	err := dc.Login(ctx, userid, password)
-	if err != nil {
+	if err := dc.Login(ctx, userid, password); err != nil {
 		return fmt.Errorf("Unable to login:%v", err)
 	}
 	glog.Infof("Login successfully with jwt:\n%v", dc.GetJwt())
@@ -155,21 +146,20 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *acl.User
 	if err != nil {
 		return nil, fmt.Errorf("Error while query user with id %s: %v", userid, err)
 	}
-	user, err = acl.UnmarshallUser(queryResp, "user")
+	user, err = acl.UnmarshalUser(queryResp, "user")
 	if err != nil {
 		return nil, err
 	}
 	return user, nil
 }
 
-func userMod(dc *dgo.Dgraph) error {
+func userMod(ctx context.Context, dc *dgo.Dgraph) error {
 	userid := UserMod.Conf.GetString("user")
 	groups := UserMod.Conf.GetString("groups")
 	if len(userid) == 0 {
 		return fmt.Errorf("The user must not be empty")
 	}
 
-	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -207,7 +197,6 @@ func userMod(dc *dgo.Dgraph) error {
 		if err != nil {
 			return fmt.Errorf("error while getting the user mod nquad:%v", err)
 		}
-
 		mu.Set = append(mu.Set, nquad)
 	}
 
@@ -224,18 +213,16 @@ func userMod(dc *dgo.Dgraph) error {
 		return nil
 	}
 
-	_, err = txn.Mutate(ctx, mu)
-	if err != nil {
+	if _, err := txn.Mutate(ctx, mu); err != nil {
 		return err
 	}
-
 	glog.Infof("Successfully modifed groups for user %v", userid)
 	return nil
 }
 
 func getUserModNQuad(ctx context.Context, txn *dgo.Txn, useruid string,
 	groupid string) (*api.NQuad, error) {
-	group, err := queryGroup(txn, ctx, groupid, []string{"uid"})
+	group, err := queryGroup(ctx, txn, groupid, "uid")
 	if err != nil {
 		return nil, err
 	}

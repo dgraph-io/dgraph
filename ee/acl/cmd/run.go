@@ -13,8 +13,10 @@
 package acl
 
 import (
+	"context"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -157,7 +159,7 @@ func initSubcommands() {
 		"an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
 }
 
-func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
+func runTxn(conf *viper.Viper, f func(ctx context.Context, dc *dgo.Dgraph) error) {
 	opt = options{
 		dgraph: conf.GetString("dgraph"),
 	}
@@ -173,7 +175,7 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
-		conn, err := x.SetupConnection(d, !tlsConf.CertRequired, &tlsConf)
+		conn, err := x.SetupConnection(d, &tlsConf)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 
@@ -181,7 +183,11 @@ func runTxn(conf *viper.Viper, f func(dgraph *dgo.Dgraph) error) {
 		clients = append(clients, dc)
 	}
 	dgraphClient := dgo.NewDgraphClient(clients...)
-	if err := f(dgraphClient); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := f(ctx, dgraphClient); err != nil {
 		glog.Errorf("Error while running transaction: %v", err)
 		os.Exit(1)
 	}

@@ -15,7 +15,9 @@ package acl
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -32,9 +34,8 @@ func ValidateLoginRequest(request *api.LogInRequest) error {
 	return nil
 }
 
-
 func ToJwtGroups(groups []Group) []JwtGroup {
-	if groups == nil {
+	if len(groups) == 0 {
 		// the user does not have any groups
 		return nil
 	}
@@ -48,7 +49,6 @@ func ToJwtGroups(groups []Group) []JwtGroup {
 	return jwtGroups
 }
 
-
 type User struct {
 	Uid           string  `json:"uid"`
 	UserID        string  `json:"dgraph.xid"`
@@ -58,10 +58,10 @@ type User struct {
 }
 
 // Extract the first User pointed by the userKey in the query response
-func UnmarshallUser(queryResp *api.Response, userKey string) (user *User, err error) {
+func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 	m := make(map[string][]User)
 
-	err = json.Unmarshal(queryResp.GetJson(), &m)
+	err = json.Unmarshal(resp.GetJson(), &m)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to unmarshal the query user response for user:%v", err)
 	}
@@ -70,7 +70,9 @@ func UnmarshallUser(queryResp *api.Response, userKey string) (user *User, err er
 		// the user does not exist
 		return nil, nil
 	}
-
+	if len(users) > 1 {
+		return nil, x.Errorf("Found multiple users: %s", resp.GetJson())
+	}
 	return &users[0], nil
 }
 
@@ -81,12 +83,11 @@ type Group struct {
 	Acls    string `json:"dgraph.group.acl"`
 }
 
-
 // Extract the first User pointed by the userKey in the query response
-func UnmarshallGroup(queryResp *api.Response, groupKey string) (group *Group, err error) {
+func UnmarshalGroup(resp *api.Response, groupKey string) (group *Group, err error) {
 	m := make(map[string][]Group)
 
-	err = json.Unmarshal(queryResp.GetJson(), &m)
+	err = json.Unmarshal(resp.GetJson(), &m)
 	if err != nil {
 		glog.Errorf("Unable to unmarshal the query group response:%v", err)
 		return nil, err
@@ -96,6 +97,8 @@ func UnmarshallGroup(queryResp *api.Response, groupKey string) (group *Group, er
 		// the group does not exist
 		return nil, nil
 	}
-
+	if len(groups) > 1 {
+		return nil, x.Errorf("Found multiple groups: %s", resp.GetJson())
+	}
 	return &groups[0], nil
 }
